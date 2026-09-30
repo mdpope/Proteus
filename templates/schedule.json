@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "workspace-review",
+  "name": "Workspace review",
+  "enabled": false,
+  "cron": "0 9 * * 1-5",
+  "timezone": "America/Denver",
+  "provider": "copilot",
+  "model": "gpt-6-sol",
+  "reasoningEffort": "medium",
+  "workspace": { "cwd": "/absolute/path/to/workspace", "additionalDirectories": [] },
+  "misfire": "skip",
+  "prompt": "Read the workspace instructions and summarize what needs attention. Ask for feedback when needed."
+}

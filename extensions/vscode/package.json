@@ -1,0 +1,19 @@
+{
+  "name": "proteus-workspace",
+  "displayName": "Proteus Workspace",
+  "version": "0.1.0",
+  "publisher": "proteus",
+  "engines": { "vscode": "^1.96.0" },
+  "main": "./extension.cjs",
+  "activationEvents": ["onCommand:proteus.startChat"],
+  "contributes": {
+    "commands": [{ "command": "proteus.startChat", "title": "Proteus: Start Chat with This Workspace" }],
+    "configuration": {
+      "title": "Proteus",
+      "properties": {
+        "proteus.dataDirectory": { "type": "string", "default": "", "description": "Override the local Proteus data directory." },
+        "proteus.model": { "type": "string", "default": "gpt-6-sol", "description": "Explicit Copilot model for new chats." }
+      }
+    }
+  }
+}
