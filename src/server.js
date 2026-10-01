@@ -5,6 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { randomBytes } from 'node:crypto';
 import { Engine } from './engine.js';
 import { CopilotProvider } from './copilot.js';
+import { SettingsStore } from './settings.js';
 import { atomicJSON, defaultHome, readJSON, isWithin } from './files.js';
 import { nextRuns, revision, validateSchedule } from './schedules.js';
 
@@ -35,10 +36,11 @@ async function body(req) {
   let text = ''; for await (const chunk of req) { text += chunk; if (text.length > 2_000_000) throw new Error('Request too large.'); }
   return text ? JSON.parse(text) : {};
 }
-export async function startServer({ home = defaultHome(), port = 4317, providers, timers = true, withSeed = true } = {}) {
+export async function startServer({ home = defaultHome(), port = 4317, providers, browser, timers = true, withSeed = true } = {}) {
   const unlock = lock(home);
   if (withSeed) seed(home);
-  const copilot = new CopilotProvider();
+  const settings = new SettingsStore(home, root);
+  const copilot = new CopilotProvider({}, { browser });
   const engine = new Engine(home, providers || { copilot });
   const token = randomBytes(32).toString('hex'); let origin; let providerStatus = null; const schedulerErrors = [];
   engine.on('scheduler-error', error => { schedulerErrors.push(error); if (schedulerErrors.length > 20) schedulerErrors.shift(); atomicJSON(path.join(home, 'scheduler-errors.json'), schedulerErrors); });
@@ -60,9 +62,10 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (req.method !== 'GET' && !req.headers['content-type']?.startsWith('application/json')) return json(415, { error: 'Send JSON.' });
       if (url.pathname === '/api/state') return json(200, {
         schedules: engine.schedules.list(), runs: engine.listRuns(), providerStatus,
-        home, schedulerErrors, recoveryErrors: engine.recoveryErrors || [], version: '0.1.0',
+        home, settings: settings.get(), browserAvailable: !!browser, schedulerErrors, recoveryErrors: engine.recoveryErrors || [], version: '0.1.0',
         scheduler: { running: true, background: false, message: 'Schedules run while this prototype is open. Missed runs follow each schedule’s policy.' }
       });
+      if (url.pathname === '/api/settings' && req.method === 'POST') { const value = await body(req); return json(200, settings.save(value.settings, value.expectedRevision)); }
       if (url.pathname === '/api/preview' && req.method === 'POST') { const value = await body(req); return json(200, { nextRuns: nextRuns(value.cron, value.timezone) }); }
       if (url.pathname === '/api/schedules' && req.method === 'POST') {
         const { schedule, expectedRevision } = await body(req); return json(200, engine.schedules.save(schedule, expectedRevision));
@@ -78,11 +81,12 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       }
       if (url.pathname === '/api/run' && req.method === 'POST') { const { id } = await body(req); return json(200, engine.createRun(engine.schedules.get(id))); }
       if (url.pathname === '/api/chat' && req.method === 'POST') {
-        const value = await body(req); const schedule = validateSchedule({
+        const value = await body(req); const defaults = settings.get(); const schedule = validateSchedule({
           schemaVersion: 1, id: `chat-${Date.now()}`, name: value.name || 'Workspace chat', enabled: false,
-          cron: '0 9 * * 1-5', timezone: value.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
-          provider: value.provider || 'copilot', model: value.model || 'gpt-6-sol',
-          workspace: value.workspace, misfire: 'skip', prompt: value.prompt
+          cron: '0 9 * * 1-5', timezone: value.timezone || defaults.timezone,
+          provider: value.provider || defaults.provider, model: value.model || defaults.model,
+          workspace: value.workspace || defaults.workspace, skillDirectories: value.skillDirectories || defaults.skillDirectories,
+          mcpServers: value.mcpServers || defaults.mcpServers, editorContext: value.editorContext, misfire: 'skip', prompt: value.prompt
         });
         return json(200, engine.createRun(schedule, 'chat'));
       }
@@ -96,7 +100,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (url.pathname === '/api/provider' && req.method === 'POST') { providerStatus = await copilot.status(); return json(200, providerStatus); }
       if (url.pathname === '/api/markdown' && req.method === 'POST') {
         const { file } = await body(req);
-        const roots = engine.schedules.list().filter(s => !s.error).flatMap(s => [s.workspace.cwd, ...s.workspace.additionalDirectories]);
+        const roots = [settings.get().workspace.cwd, ...settings.get().workspace.additionalDirectories, ...engine.schedules.list().filter(s => !s.error).flatMap(s => [s.workspace.cwd, ...s.workspace.additionalDirectories])];
         if (typeof file !== 'string' || !file.endsWith('.md') || !isWithin(file, roots)) throw new Error('Choose a Markdown file inside a configured workspace.');
         if (fs.statSync(file).size > 1_000_000) throw new Error('Markdown file is too large.');
         return json(200, { file, content: fs.readFileSync(file, 'utf8') });
@@ -113,7 +117,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   origin = `http://127.0.0.1:${server.address().port}`;
   atomicJSON(path.join(home, 'connection.json'), { origin, token, pid: process.pid });
   const timer = timers ? setInterval(() => { try { engine.tick(); } catch (error) { engine.emit('scheduler-error', { error: error.message, at: new Date().toISOString() }); } }, 1000) : null;
-  return { engine, origin, token, home, url: `${origin}/?token=${token}`, async close() {
+  return { engine, settings, origin, token, home, url: `${origin}/?token=${token}`, async close() {
     if (timer) clearInterval(timer); await engine.close(); await copilot.close();
     await new Promise(resolve => server.close(resolve)); server.closeAllConnections();
     fs.rmSync(path.join(home, 'connection.json'), { force: true }); unlock();

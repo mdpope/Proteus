@@ -1,7 +1,8 @@
 import { CopilotClient } from '@github/copilot-sdk';
+import { browserTools } from './browser-tools.js';
 
 export class CopilotProvider {
-  constructor(options = {}) { this.options = options; this.client = null; this.starting = null; this.sessions = new Map(); }
+  constructor(options = {}, { browser } = {}) { this.browser = browser; this.options = options; this.client = null; this.starting = null; this.sessions = new Map(); }
   async connect() {
     if (!this.starting) {
       this.client = new CopilotClient({ ...this.options });
@@ -34,9 +35,11 @@ export class CopilotProvider {
       additionalDirectories: run.schedule.workspace.additionalDirectories,
       skillDirectories: run.schedule.skillDirectories || [],
       mcpServers: run.schedule.mcpServers || {},
+      tools: browserTools(this.browser, run.id),
+      systemMessage: { mode: 'append', content: `Proteus workspace roots (read the relevant AGENTS.md and .github/copilot-instructions.md in each before work):\n${[run.schedule.workspace.cwd, ...run.schedule.workspace.additionalDirectories].join('\n')}\n${this.browser ? 'Embedded browser access is available through proteus_browser. Use it for visible authenticated website reads. The user can interact with those same tabs; ask for sign-in if needed.' : 'Embedded browser access is unavailable in this server-only session.'}\nEditor context supplied by the user: ${JSON.stringify(run.schedule.editorContext || null)}` },
       onPermissionRequest: async request => {
         const answer = await ask({ type: 'permission', question: 'Copilot needs permission for a tool operation.', details: request });
-        return answer === 'approve' ? { kind: 'approved' } : { kind: 'denied-interactively-by-user' };
+        return answer === 'approve' ? { kind: 'approve-once' } : { kind: 'reject', feedback: 'The user declined this operation in Proteus.' };
       },
       onUserInputRequest: async request => ({ answer: await ask({ type: 'question', question: request.question, choices: request.choices }), wasFreeform: true })
     };
@@ -48,7 +51,7 @@ export class CopilotProvider {
     const unsubscribe = session.on(event => {
       if (event.type === 'assistant.message') emit('assistant', event.data.content || '');
       if (event.type === 'tool.execution_start') emit('tool', event.data.toolName || 'Tool started');
-      if (event.type === 'tool.execution_complete') emit('tool', event.data.success === false ? 'Tool failed' : 'Tool finished');
+      if (event.type === 'tool.execution_complete') emit('tool', event.data.success === false ? `Tool failed: ${event.data.error?.message || JSON.stringify(event.data.error || 'Provider returned no error details.')}` : 'Tool finished');
       if (event.type === 'assistant.usage') {
         run.usage.inputTokens += event.data.inputTokens || 0; run.usage.outputTokens += event.data.outputTokens || 0;
         run.usage.observed = true; update();

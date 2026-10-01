@@ -80,3 +80,68 @@ test('loopback API enforces authentication, origin, duplicate IDs, and paused im
     await assert.rejects(startServer({home:dir,port:0,timers:false}),/already owns/);
   }finally{await app.close();fs.rmSync(dir,{recursive:true,force:true});}
 });
+
+test('settings persist defaults, preserve extensions, and reject stale or unavailable paths', async () => {
+  const { SettingsStore }=await import('../src/settings.js'); const dir=temp();
+  try { const store=new SettingsStore(dir,dir); const initial=store.get();
+    store.save({...initial,extension:{retained:true},workspace:{cwd:dir,additionalDirectories:[dir]}},initial.revision);
+    assert.deepEqual(new SettingsStore(dir,dir).get().extension,{retained:true});
+    assert.throws(()=>store.save(initial,initial.revision),/changed outside/);
+    const current=store.get();assert.throws(()=>store.save({...current,workspace:{cwd:'/directory-that-does-not-exist',additionalDirectories:[]}},current.revision));
+  } finally { fs.rmSync(dir,{recursive:true,force:true}); }
+});
+
+test('new chat snapshots all configured roots, skills, MCP, and editor context', async () => {
+  const dir=temp(); const provider={run:async()=>{}};
+  const app=await startServer({home:dir,port:0,timers:false,withSeed:false,providers:{copilot:provider}});
+  const headers={'Content-Type':'application/json',Authorization:`Bearer ${app.token}`};
+  try { const initial=app.settings.get(); app.settings.save({...initial,workspace:{cwd:dir,additionalDirectories:[os.tmpdir()]},skillDirectories:[dir],mcpServers:{example:{type:'local',command:'example',tools:['*']}}},initial.revision);
+    const response=await fetch(app.origin+'/api/chat',{method:'POST',headers,body:JSON.stringify({prompt:'Inspect workspace',editorContext:{activeFile:path.join(dir,'README.md')}})});
+    assert.equal(response.status,200); const run=await response.json();
+    assert.deepEqual(run.schedule.workspace.additionalDirectories,[os.tmpdir()]);assert.deepEqual(run.schedule.skillDirectories,[dir]);assert.ok(run.schedule.mcpServers.example);assert.equal(run.schedule.editorContext.activeFile,path.join(dir,'README.md'));
+  } finally { await app.close();fs.rmSync(dir,{recursive:true,force:true}); }
+});
+
+test('browser provider tools bind access to the actual run identity', async () => {
+  const { browserTools }=await import('../src/browser-tools.js');const calls=[];
+  assert.deepEqual(browserTools(null,'run'),[]);
+  const tool=browserTools({agent:async(args,id)=>{calls.push({args,id});return {title:'Visible page'};}},'actual-run')[0];
+  const result=await tool.handler({action:'snapshot',tabId:'one'});assert.match(result,/Visible page/);assert.equal(calls[0].id,'actual-run');
+  assert.ok(!tool.parameters.properties.action.enum.includes('evaluate'));
+});
+
+
+test('parallel provider permissions queue without losing earlier requests', async () => {
+  const dir=temp();const answers=[];
+  const provider={run:async({ask})=>{answers.push(...await Promise.all(['one','two','three'].map(question=>ask({type:'permission',question}))));}};
+  const engine=new Engine(dir,{copilot:provider});
+  try { const run=engine.createRun({...example(dir),provider:'copilot',model:'test-model'});
+    for(const question of ['one','two','three']) {
+      await until(()=>run.pending?.question===question);engine.reply(run.id,'approve',run.pending.id);
+    }
+    await until(()=>run.status==='completed');assert.deepEqual(answers,['approve','approve','approve']);assert.equal(engine.questionQueues.size,0);
+  } finally { await engine.close();fs.rmSync(dir,{recursive:true,force:true}); }
+});
+
+test('cancellation rejects both visible and queued permissions', async () => {
+  const dir=temp();const answers=[];
+  const provider={run:async({ask})=>{answers.push(...await Promise.allSettled(['one','two'].map(question=>ask({type:'permission',question}))));}};
+  const engine=new Engine(dir,{copilot:provider});
+  try { const run=engine.createRun({...example(dir),provider:'copilot',model:'test-model'});
+    await until(()=>run.status==='awaiting_input');engine.cancel(run.id);await until(()=>run.status==='cancelled');assert.deepEqual(answers.map(a=>a.status),['rejected','rejected']);
+  } finally { await engine.close();fs.rmSync(dir,{recursive:true,force:true}); }
+});
+
+test('Copilot adapter forwards explicit approval and rejection using current SDK decisions', async () => {
+  const { CopilotProvider }=await import('../src/copilot.js');
+  for(const answer of ['approve','deny']) {
+    let decision;
+    const provider=new CopilotProvider();
+    const session={sessionId:'fixture',on:()=>()=>{},disconnect:async()=>{},rpc:{usage:{getMetrics:async()=>({})}}};
+    provider.connect=async()=>({listModels:async()=>[{id:'fixture'}],createSession:async config=>{
+      session.sendAndWait=async()=>{decision=await config.onPermissionRequest({kind:'read',path:'/fixture'});};return session;
+    }});
+    await provider.run({run:{id:'fixture',schedule:{model:'fixture',workspace:{cwd:'/fixture',additionalDirectories:[]}},usage:{inputTokens:0,outputTokens:0}},prompt:'fixture',signal:new AbortController().signal,update:()=>{},emit:()=>{},ask:async()=>answer});
+    assert.equal(decision.kind,answer==='approve'?'approve-once':'reject');
+  }
+});

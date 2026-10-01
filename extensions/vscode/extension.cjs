@@ -13,9 +13,11 @@ exports.activate = context => {
       const home = config.get('dataDirectory') || path.join(os.homedir(), 'Library', 'Application Support', 'Proteus');
       const connection = JSON.parse(await fs.readFile(path.join(home, 'connection.json'), 'utf8'));
       const origin = new URL(connection.origin); if (origin.hostname !== '127.0.0.1' || origin.protocol !== 'http:') throw new Error('Proteus connection must point to the local runner.');
+      const editor = vscode.window.activeTextEditor;
+      const editorContext = { workspaceFile: vscode.workspace.workspaceFile?.fsPath, activeFile: editor?.document.uri.scheme === 'file' ? editor.document.uri.fsPath : undefined, selection: editor ? { startLine: editor.selection.start.line + 1, endLine: editor.selection.end.line + 1 } : undefined, openFiles: vscode.window.visibleTextEditors.filter(e => e.document.uri.scheme === 'file').map(e => e.document.uri.fsPath) };
       const response = await fetch(new URL('/api/chat', origin), {
         method: 'POST', headers: { 'Content-Type':'application/json', Authorization:`Bearer ${connection.token}` },
-        body: JSON.stringify({ name: vscode.workspace.name || 'Workspace chat', prompt, provider:'copilot', model:config.get('model'), workspace:{ cwd:folders[0].uri.fsPath, additionalDirectories:folders.slice(1).map(f=>f.uri.fsPath) } })
+        body: JSON.stringify({ editorContext, name: vscode.workspace.name || 'Workspace chat', prompt, provider:'copilot', model:config.get('model'), workspace:{ cwd:folders[0].uri.fsPath, additionalDirectories:folders.slice(1).map(f=>f.uri.fsPath) } })
       });
       const run = await response.json(); if (!response.ok) throw new Error(run.error);
       await vscode.window.showInformationMessage(`Proteus started ${run.title}. Open its Run history to continue.`);

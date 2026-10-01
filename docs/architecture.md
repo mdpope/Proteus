@@ -25,11 +25,16 @@ run per schedule. Already-active schedules skip overlapping occurrences.
 
 1. Installable macOS background service with a separately restartable desktop client.
 2. Explicit unattended permission profiles and workflow completion validators.
-3. A browser broker with profile ownership, a human/agent control toggle, and scoped Playwright MCP.
-4. Packaged VS Code companion, workspace picker, and active-file attachments.
+3. Browser profile selection, persisted open tabs, and MCP exposure of the existing scoped broker.
+4. Packaged VS Code companion, workspace profiles, and richer editor context.
 5. Additional provider adapters; capability-aware model, usage, and session handling.
 6. A paginated run store as history grows; notifications and usage budgets.
 
 The initial app deliberately owns its generic schemas, templates, and client implementation.
 Operating-system repositories own their own schedules, workflow policy, and durable knowledge.
 Neither side imports the other's private operational content into its source repository.
+
+Embedded Playwright uses a per-tab Electron debugger bridge. Only the browser broker can select
+targets; provider tools cannot access the app window or arbitrary CDP methods. See `browser.md`.
+Settings defaults are captured into each new chat/schedule. Parallel provider permission requests
+are queued and shown one at a time; cancellation rejects both visible and queued requests.

@@ -3,10 +3,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import assert from 'node:assert/strict';
+import http from 'node:http';
 
 const home = fs.mkdtempSync(path.join(os.tmpdir(),'proteus-ui-'));
 const output = process.env.PROTEUS_SCREENSHOT || path.join(home,'proteus.png');
 const launch = () => electron.launch({ args:['.',`--user-data-dir=${path.join(home,'electron')}`], env:{...process.env,PROTEUS_HOME:home,PORT:'0'}, timeout:30000 });
+const site=http.createServer((req,res)=>{res.setHeader('Content-Type','text/html');res.end(req.url==='/next'?'<title>Second site</title><h1>Next page</h1>':'<title>Test knowledge hub</title><h1>Knowledge hub</h1><label>Search<input aria-label="Search"></label><button onclick="document.querySelector(\'output\').textContent=document.querySelector(\'input\').value">Find</button><output></output><a href="/next">Next page</a><a href="/next" target="_blank">Open another tab</a>');});
+await new Promise(resolve=>site.listen(0,'127.0.0.1',resolve));
+const siteURL=`http://127.0.0.1:${site.address().port}`;
 let app;
 try {
   app=await launch();let page=await app.firstWindow();await page.getByRole('heading',{name:'Work that keeps moving.'}).waitFor();
@@ -22,9 +26,29 @@ try {
   await page.locator('[data-page="runs"]').click();await page.locator(`[data-run="${runId}"]`).click();
   await page.locator('#followup').fill('Continue the saved checkpoint.');await page.locator('#continue').click();await page.locator('#answer').waitFor();await page.locator('#answer').fill('Check the documentation next.');await page.locator('#reply').click();await page.getByText('Turn complete',{exact:true}).waitFor();
   assert.equal(fs.readdirSync(path.join(home,'runs')).length,1);
-  await page.locator('#browser').click();await page.locator('#browser-go').click();
-  await page.waitForTimeout(1500);
-  const urls=await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].contentView.children.map(view=>view.webContents?.getURL()).filter(Boolean));
-  assert.ok(urls.some(url=>url.startsWith('https://example.com')));
-  console.log(JSON.stringify({passed:true,checks:['cron edit and preview','atomic file save','feedback reply','restart and resume same run','interactive browser tab'],screenshot:output}));
-} finally { if(app)await app.close();fs.rmSync(home,{recursive:true,force:true}); }
+  await page.locator('[data-page="settings"]').click();await page.locator('#settings-cwd').fill(home);await page.locator('#settings-roots').fill(process.cwd());await page.locator('#save-settings').click();await page.getByText('Settings saved.',{exact:true}).waitFor();
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(home,'settings.json'))).workspace.additionalDirectories,[process.cwd()]);
+  await page.locator('#new-chat').click();assert.equal(await page.locator('#chat-roots').inputValue(),process.cwd());await page.locator('#close-dialog').click();
+  await page.locator('#browser').click();await page.locator('#browser-url').fill(siteURL);await page.locator('#browser-url').press('Enter');
+  await page.locator('[data-tab]').filter({hasText:'Test knowledge hub'}).waitFor();
+  const firstId=await page.locator('.tabitem.selected [data-tab]').getAttribute('data-tab');
+  const agent=args=>app.evaluate(async(_electron,args)=>process.mainModule.require(process.cwd()+'/desktop/main.cjs').getBrowser().agent(args,'test-run'),args);
+  assert.deepEqual(await agent({action:'list'}),[]);
+  await assert.rejects(agent({action:'snapshot',tabId:firstId}),/private/);
+  await page.locator('#browser-share').check();
+  assert.match((await agent({action:'snapshot',tabId:firstId})).snapshot,/Knowledge hub/);
+  await agent({action:'fill',tabId:firstId,role:'textbox',name:'Search',value:'Playwright in the same tab'});
+  const read=await agent({action:'click',tabId:firstId,role:'button',name:'Find'});assert.match(read.snapshot,/Playwright in the same tab/);
+  await agent({action:'click',tabId:firstId,role:'link',name:'Next page'});
+  await page.locator('[data-tab]').filter({hasText:'Second site'}).waitFor();assert.equal(await page.locator('#browser-url').inputValue(),siteURL+'/next');
+  await page.locator('#browser-back').click();await page.locator('[data-tab]').filter({hasText:'Test knowledge hub'}).waitFor();
+  await page.locator('#browser').click();await page.locator('#browser-url').fill(siteURL+'/next');await page.locator('#browser-url').press('Enter');await page.locator('[data-tab]').filter({hasText:'Second site'}).waitFor();
+  await page.locator(`[data-tab="${firstId}"]`).click();assert.equal(await page.locator('#browser-url').inputValue(),siteURL+'/');
+  await page.setViewportSize({width:1200,height:800});await page.waitForTimeout(100);
+  await page.screenshot({path:output});
+  await page.locator('#browser-share').uncheck();await assert.rejects(agent({action:'snapshot',tabId:firstId}),/private/);
+  await page.locator(`[data-close="${firstId}"]`).click();
+  assert.equal((await agent({action:'list'})).length,0);
+  const owned=await agent({action:'open',url:siteURL});assert.match((await agent({action:'snapshot',tabId:owned.id})).snapshot,/Knowledge hub/);await agent({action:'close',tabId:owned.id});
+  console.log(JSON.stringify({passed:true,checks:['cron edit and preview','atomic file save','feedback reply','restart and resume same run','settings and multi-root chat defaults','Enter navigation and site titles','multiple persistent tabs and back navigation','scoped embedded Playwright read/fill/click','private tab exclusion and access revocation'],screenshot:output}));
+} finally { if(app)await app.close();site.close();fs.rmSync(home,{recursive:true,force:true}); }

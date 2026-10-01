@@ -13,7 +13,7 @@ export class Engine extends EventEmitter {
     this.schedules = new ScheduleStore(path.join(home, 'schedules'));
     this.runsDir = path.join(home, 'runs');
     this.providers = { rehearsal: new RehearsalProvider(), ...providers };
-    this.pending = new Map(); this.running = null; this.stopping = false;
+    this.pending = new Map(); this.questionQueues = new Map(); this.running = null; this.stopping = false;
     fs.mkdirSync(this.runsDir, { recursive: true, mode: 0o700 });
     this.journal = readJSON(path.join(home, 'scheduler.json'), { lastPoll: clock().toISOString(), slots: {} });
     this.runs = new Map();
@@ -66,6 +66,14 @@ export class Engine extends EventEmitter {
     this.event(run, 'user', answer); pending.resolve(answer); return run;
   }
   ask(run, request, signal) {
+    const previous = this.questionQueues.get(run.id) || Promise.resolve();
+    const response = previous.catch(() => {}).then(() => this.askNext(run, request, signal));
+    this.questionQueues.set(run.id, response);
+    const cleanup = () => { if (this.questionQueues.get(run.id) === response) this.questionQueues.delete(run.id); };
+    response.then(cleanup, cleanup);
+    return response;
+  }
+  askNext(run, request, signal) {
     if (signal.aborted) return Promise.reject(new Error('Cancelled'));
     return new Promise((resolve, reject) => {
       const onAbort = () => { this.pending.delete(run.id); reject(new Error('Cancelled')); };

@@ -28,7 +28,7 @@ selects an available port. `PROTEUS_HOME` overrides the application-data directo
 - GitHub Copilot SDK adapter, explicit model selection, account quota display, and observed
   per-run token usage. Copilot authentication uses the official runtime's existing sign-in.
 - Local rehearsal provider for trying the feedback flow without an AI call.
-- Tabs for schedules, conversations, Markdown source, and a human-interactive browser.
+- Tabs for schedules, conversations, Markdown source, and shared browser tabs with embedded Playwright control.
 - Small VS Code companion that starts a chat using all roots of a local multi-root workspace.
 
 ## Prototype boundaries
@@ -38,10 +38,10 @@ packaging/signing, notifications, and independent concurrent workspaces remain f
 The single execution queue avoids concurrent mutations; a run waiting for feedback holds that
 queue until answered or stopped. Missed occurrences of an already-active schedule are skipped.
 
-The embedded browser is interactive, persists its own sign-in session, and is isolated from the
-privileged app UI. Playwright does **not** yet control that embedded tab. A separately configured
-Playwright MCP browser can be supplied to the Copilot provider in a schedule's `mcpServers`.
-See [browser design](docs/browser.md). Real authenticated Slack coverage has not been validated.
+The embedded browser has site titles, an address bar with Enter navigation, history, and multiple
+persistent tabs. Playwright uses the same pages through a scoped bridge; human-created tabs require
+Agent access before a run can use them. See [browser design](docs/browser.md). Authenticated Slack
+coverage requires a real signed-in read; synthetic browser tests do not establish Slack coverage.
 Markdown is displayed as escaped source; it does not execute embedded HTML.
 
 Only Copilot and rehearsal providers are implemented. Provider neutrality is an architectural
@@ -95,8 +95,41 @@ node test/ui-smoke.mjs
 ```
 
 The UI smoke test opens two temporary desktop sessions and verifies cron edits, persisted files,
-feedback, restart/resume, and an interactive browser. It uses isolated temporary data and a
+feedback, restart/resume, settings, multi-root chat defaults, navigation, and embedded Playwright control. It uses isolated temporary data and a
 rehearsal provider. The core suite covers DST behavior, unsafe paths, external edits, duplicate
 schedule occurrences, recovery, paused imports, and loopback authentication.
 
 See [architecture](docs/architecture.md) and [provider interface](docs/providers.md).
+
+## Settings and workspace context
+
+**Settings → Paths & defaults** edits `settings.json` in the app data directory: default working
+root, additional repositories/directories, provider/model, time zone, skill directories, and
+MCP servers. These defaults apply to new chats and new schedules. Existing schedules and run
+snapshots retain their configuration. `PROTEUS_HOME` selects a different data directory before
+launch; changing it does not move existing history. Settings are plain JSON and support atomic
+saves, external-edit detection, and directory validation. Keep credentials outside this file.
+
+A Proteus Copilot session receives every listed workspace root, configured skills/MCP tools, and
+an explicit instruction to read each relevant repository's local instructions. The VS Code
+companion additionally supplies the active file, selection line range, workspace file, and visible
+file paths. It does not transfer VS Code's semantic index, extension tool implementations, unsaved
+buffers, or existing chat history. All-root file access is supported; full VS Code feature parity
+is not claimed. The companion must be installed or run in an Extension Development Host.
+
+An app-created schedule is saved to `<app data>/schedules/<id>.json`, paused. A source-owned organization workflows
+schedule stays canonical in `organization workflows/automations/<id>.json`; the editor shows its source path.
+After changing and exporting that manifest with organization workflows, validate and refresh the local copy:
+
+```sh
+npm run cli -- validate /path/to/export.json
+npm run cli -- refresh /path/to/export.json
+```
+
+Refresh requires matching source ownership and existing IDs, preserves run/session history, and
+leaves schedules paused. The app does not automatically write UI edits back into another repository.
+
+For an opt-in live Copilot check, run `node test/copilot-smoke.mjs`. It consumes a small amount of
+Copilot usage, creates a temporary synthetic file, approves only a read of that exact file, and
+verifies that the model received its contents. It catches SDK/CLI permission-protocol mismatches
+that rehearsal tests cannot detect. It does not read professional sources.
