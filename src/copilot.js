@@ -66,6 +66,10 @@ export class CopilotProvider {
       await session.sendAndWait({ prompt }, 30 * 60 * 1000);
       if (providerError) throw new Error(providerError);
       try { run.metrics = await session.rpc.usage.getMetrics({}); update(); } catch { /* Optional runtime capability. */ }
+    } catch (error) {
+      // Disconnect alone does not stop a timed-out provider turn.
+      await session.abort().catch(() => {});
+      throw error;
     } finally {
       signal.removeEventListener('abort', abort); unsubscribe(); this.sessions.delete(run.id); await session.disconnect();
     }

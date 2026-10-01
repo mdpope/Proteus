@@ -103,6 +103,9 @@ export class Engine extends EventEmitter {
       run.status = controller.signal.aborted ? (this.stopping ? 'interrupted' : 'cancelled') : 'failed';
       this.event(run, 'system', error.message);
     } finally {
+      // Provider errors/timeouts can leave permission promises pending. Settle them
+      // before another turn reuses this run's serialized question queue.
+      controller.abort();
       this.pending.delete(run.id); run.pending = null; this.persist(run); this.running = null;
       queueMicrotask(() => this.drain());
     }

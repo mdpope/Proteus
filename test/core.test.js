@@ -145,3 +145,37 @@ test('Copilot adapter forwards explicit approval and rejection using current SDK
     assert.equal(decision.kind,answer==='approve'?'approve-once':'reject');
   }
 });
+
+
+test('provider failure settles unanswered permissions before the same run resumes', async () => {
+  const dir=temp();let attempt=0;let stale;
+  const provider={run:async({ask})=>{
+    if(attempt++===0) {
+      stale=Promise.allSettled(['old one','old two'].map(question=>ask({type:'permission',question})));
+      await new Promise(resolve=>setImmediate(resolve));
+      throw new Error('Provider turn timed out');
+    }
+    assert.equal(await ask({type:'permission',question:'resumed request'}),'approve');
+  }};
+  const engine=new Engine(dir,{copilot:provider});
+  try {
+    const run=engine.createRun({...example(dir),provider:'copilot',model:'test-model'});
+    await until(()=>run.status==='failed');
+    await until(()=>engine.questionQueues.size===0);
+    assert.deepEqual((await stale).map(result=>result.status),['rejected','rejected']);
+    assert.equal(engine.pending.size,0);
+    engine.resume(run.id,'Continue after the timeout');
+    await until(()=>run.pending?.question==='resumed request');
+    engine.reply(run.id,'approve',run.pending.id);
+    await until(()=>run.status==='completed');
+  } finally { await engine.close();fs.rmSync(dir,{recursive:true,force:true}); }
+});
+
+test('Copilot aborts a timed-out provider turn before disconnecting', async () => {
+  const { CopilotProvider }=await import('../src/copilot.js');const calls=[];
+  const session={sessionId:'fixture',on:()=>()=>{},sendAndWait:async()=>{throw new Error('Timed out');},abort:async()=>calls.push('abort'),disconnect:async()=>calls.push('disconnect')};
+  const provider=new CopilotProvider();
+  provider.connect=async()=>({listModels:async()=>[{id:'fixture'}],createSession:async()=>session});
+  await assert.rejects(provider.run({run:{id:'fixture',schedule:{model:'fixture',workspace:{cwd:'/fixture',additionalDirectories:[]}},usage:{inputTokens:0,outputTokens:0}},prompt:'fixture',signal:new AbortController().signal,update:()=>{},emit:()=>{},ask:async()=>{throw new Error('Unexpected permission request');}}),/Timed out/);
+  assert.deepEqual(calls,['abort','disconnect']);
+});
