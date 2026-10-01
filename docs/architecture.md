@@ -14,7 +14,8 @@ Schedule files are portable definitions with host-resolved workspace directories
 before saving and uses a revision hash to reject overwriting edits made by an editor or AI agent.
 Unknown fields survive a form edit. A run snapshots the schedule and is bound to its provider
 session ID. Resume reuses that ID and reapplies directories and tools; it does not follow a newly
-edited schedule accidentally.
+edited schedule accidentally. An explicit idle-chat context refresh preserves the initial schedule
+and prior context snapshots before replacing the effective context for the next turn.
 
 The runner serializes execution and takes a process lock for its data directory. A saved run
 claims a scheduled occurrence even if the process stops before the scheduler journal is saved.
@@ -24,9 +25,9 @@ run per schedule. Already-active schedules skip overlapping occurrences.
 ## Next milestones
 
 1. Installable macOS background service with a separately restartable desktop client.
-2. Explicit unattended permission profiles and workflow completion validators.
-3. Browser profile selection, persisted open tabs, and MCP exposure of the existing scoped broker.
-4. Packaged VS Code companion, workspace profiles, and richer editor context.
+2. Workflow completion validators and notifications.
+3. Browser profile selection and broader authentication adapters.
+4. Packaged VS Code companion and richer editor context.
 5. Additional provider adapters; capability-aware model, usage, and session handling.
 6. A paginated run store as history grows; notifications and usage budgets.
 
@@ -38,3 +39,9 @@ Embedded Playwright uses a per-tab Electron debugger bridge. Only the browser br
 targets; provider tools cannot access the app window or arbitrary CDP methods. See `browser.md`.
 Settings defaults are captured into each new chat/schedule. Parallel provider permission requests
 are queued and shown one at a time; cancellation rejects both visible and queued requests.
+
+Managed context discovery and exact source snapshots sit above provider adapters. Copilot automatic
+configuration/instruction loading is disabled for managed sessions; selected sources are supplied
+explicitly. Context changes cold-reconnect the provider for reliable MCP removal. The credential
+broker is a separate main-process boundary and has no agent/API entry point. See `workspaces.md`
+and `credentials.md` for persistence and authentication details.

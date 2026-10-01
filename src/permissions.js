@@ -29,7 +29,7 @@ export function canonicalPath(value, cwd) {
 export function permissionContext(schedule) {
   const cwd = canonicalPath(schedule.workspace.cwd, schedule.workspace.cwd) || schedule.workspace.cwd;
   const roots = [...new Set([cwd, ...schedule.workspace.additionalDirectories.map(dir => canonicalPath(dir, cwd) || dir)])].sort();
-  const context = { provider: schedule.provider, cwd, roots, integrations: hash({ mcp: schedule.mcpServers || {}, skills: (schedule.skillDirectories || []).map(dir => canonicalPath(dir, cwd) || dir).sort() }) };
+  const context = { provider: schedule.provider, cwd, roots, integrations: hash({ mcp: schedule.mcpServers || {}, selectedTools: (schedule.context?.entries || []).filter(entry => ['mcp', 'skill', 'agent'].includes(entry.kind)).map(entry => ({ id: entry.id, hash: entry.hash })), skills: (schedule.skillDirectories || []).map(dir => canonicalPath(dir, cwd) || dir).sort() }) };
   return { ...context, id: hash(context), label: schedule.name || path.basename(cwd) };
 }
 const protectedRequest = request => request.managedApprovalRequired === true || request.requestSandboxBypass === true;

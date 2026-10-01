@@ -98,7 +98,7 @@ test('new chat snapshots all configured roots, skills, MCP, and editor context',
   try { const initial=app.settings.get(); app.settings.save({...initial,workspace:{cwd:dir,additionalDirectories:[os.tmpdir()]},skillDirectories:[dir],mcpServers:{example:{type:'local',command:'example',tools:['*']}}},initial.revision);
     const response=await fetch(app.origin+'/api/chat',{method:'POST',headers,body:JSON.stringify({prompt:'Inspect workspace',editorContext:{activeFile:path.join(dir,'README.md')}})});
     assert.equal(response.status,200); const run=await response.json();
-    assert.deepEqual(run.schedule.workspace.additionalDirectories,[os.tmpdir()]);assert.deepEqual(run.schedule.skillDirectories,[dir]);assert.ok(run.schedule.mcpServers.example);assert.equal(run.schedule.editorContext.activeFile,path.join(dir,'README.md'));
+    assert.deepEqual(run.schedule.workspace.additionalDirectories,[fs.realpathSync(os.tmpdir())]);assert.deepEqual(run.schedule.skillDirectories,[dir]);assert.ok(run.schedule.mcpServers.example);assert.equal(run.schedule.editorContext.activeFile,path.join(dir,'README.md'));
   } finally { await app.close();fs.rmSync(dir,{recursive:true,force:true}); }
 });
 

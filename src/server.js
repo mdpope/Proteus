@@ -6,6 +6,9 @@ import { randomBytes } from 'node:crypto';
 import { Engine } from './engine.js';
 import { CopilotProvider } from './copilot.js';
 import { SettingsStore } from './settings.js';
+import { ContextStore } from './context.js';
+import { StandupStore } from './standup.js';
+import { storagePaths, exportTranscript } from './transcripts.js';
 import { atomicJSON, defaultHome, readJSON, isWithin } from './files.js';
 import { nextRuns, revision, validateSchedule } from './schedules.js';
 
@@ -40,8 +43,27 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   const unlock = lock(home);
   if (withSeed) seed(home);
   const settings = new SettingsStore(home, root);
-  const copilot = new CopilotProvider({}, { browser });
+  const context = new ContextStore(home, settings);
+  const standup = new StandupStore(home, settings.get().timezone);
+  const copilot = new CopilotProvider({}, { browser, context, settings });
   const engine = new Engine(home, providers || { copilot });
+  engine.prepareSchedule = schedule => {
+    if (schedule.context) return schedule;
+    const snapshot = context.capture({ workspace: schedule.workspace });
+    return { ...schedule, context: snapshot, workspace: snapshot.workspace };
+  };
+  const permissionPreviews = new Map();
+  function permissionSchedule(schedule) {
+    if (schedule.context) return schedule;
+    const catalog = context.get();
+    const key = JSON.stringify([schedule, catalog.revision, catalog.refreshedAt]);
+    if (!permissionPreviews.has(key)) {
+      if (permissionPreviews.size > 100) permissionPreviews.clear();
+      try { permissionPreviews.set(key, engine.prepareSchedule(schedule)); }
+      catch { return null; } // Invalid context must not hide the UI needed to repair it.
+    }
+    return permissionPreviews.get(key);
+  }
   const token = randomBytes(32).toString('hex'); let origin; let providerStatus = null; const schedulerErrors = [];
   engine.on('scheduler-error', error => { schedulerErrors.push(error); if (schedulerErrors.length > 20) schedulerErrors.shift(); atomicJSON(path.join(home, 'scheduler-errors.json'), schedulerErrors); });
   const server = http.createServer(async (req, res) => {
@@ -61,22 +83,89 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (req.method !== 'GET' && req.headers.origin && req.headers.origin !== origin) return json(403, { error: 'Cross-origin request rejected.' });
       if (req.method !== 'GET' && !req.headers['content-type']?.startsWith('application/json')) return json(415, { error: 'Send JSON.' });
       if (url.pathname === '/api/state') return json(200, {
-        schedules: engine.schedules.list(), runs: engine.listRuns().map(run => ({ ...run, permissionContext: engine.permissions.describe(run.schedule) })), providerStatus,
+        schedules: engine.schedules.list(), runs: engine.listRuns().map(run => ({ ...run, storage: storagePaths(home, run), permissionContext: engine.permissions.describe(run.schedule) })), providerStatus,
         permissions: engine.permissions.get(), permissionWorkspaces: [...new Map([
           { ...settings.get(), name: 'Default workspace', ref: { defaults: true } },
           ...engine.schedules.list().filter(schedule => !schedule.error).map(schedule => ({ ...schedule, ref: { scheduleId: schedule.id } })),
           ...engine.listRuns().map(run => ({ ...run.schedule, ref: { runId: run.id } }))
-        ].map(schedule => { const context = engine.permissions.describe(schedule); return [context.id, { ...context, ref: schedule.ref }]; })).values()],
-        home, settings: settings.get(), browserAvailable: !!browser, schedulerErrors, recoveryErrors: engine.recoveryErrors || [], version: '0.1.0',
+        ].map(permissionSchedule).filter(Boolean).map(schedule => { const context = engine.permissions.describe(schedule); return [context.id, { ...context, ref: schedule.ref }]; })).values()],
+        home, settings: settings.get(), context: context.get(), standup: standup.get(), browserAvailable: !!browser, schedulerErrors, recoveryErrors: engine.recoveryErrors || [], version: '0.1.0',
         scheduler: { running: true, background: false, message: 'Schedules run while this prototype is open. Missed runs follow each schedule’s policy.' }
       });
-      if (url.pathname === '/api/settings' && req.method === 'POST') { const value = await body(req); return json(200, settings.save(value.settings, value.expectedRevision)); }
+      if (url.pathname === '/api/settings' && req.method === 'POST') {
+        const value = await body(req); const old = settings.get();
+        const saved = settings.save(value.settings, value.expectedRevision);
+        if (JSON.stringify(old.workspace) !== JSON.stringify(saved.workspace)) {
+          const config = context.config();
+          context.mutate(config => Object.assign(config.workspaces.find(w => w.id === config.defaultWorkspaceId), saved.workspace), config.revision);
+        }
+        return json(200, saved);
+      }
+      if (url.pathname === '/api/context/refresh' && req.method === 'POST') return json(200, context.refresh());
+      if (url.pathname === '/api/context' && req.method === 'POST') {
+        const value = await body(req);
+        if (value.action === 'import') return json(200, context.importWorkspace(value.file, value.expectedRevision));
+        const result = context.mutate(config => {
+          if (value.action === 'mode') {
+            if (!context.get().entries.some(entry => entry.id === value.id)) throw new Error('Context entry no longer exists.');
+            config.modes[value.id] = value.mode;
+            if (value.mode === 'universal') config.libraryFolders = [...new Set([...config.libraryFolders, ...context.get().entries.find(entry => entry.id === value.id).roots])];
+          } else if (value.action === 'add-folders') {
+            if (value.library) config.libraryFolders.push(...value.folders);
+            else {
+              const profile = config.workspaces.find(w => w.id === value.workspaceId);
+              if (!profile) throw new Error('Workspace not found.');
+              profile.additionalDirectories.push(...value.folders);
+            }
+          } else if (value.action === 'universal-folder') {
+            config.universalFolders = config.universalFolders.filter(folder => folder !== value.folder);
+            if (value.enabled) config.universalFolders.push(value.folder);
+          } else if (value.action === 'remove-folder') {
+            const profile = config.workspaces.find(w => w.id === value.workspaceId);
+            if (value.library) { config.libraryFolders = config.libraryFolders.filter(root => root !== value.folder); config.universalFolders = config.universalFolders.filter(root => root !== value.folder); }
+            else if (!profile || profile.cwd === value.folder) throw new Error('Choose another command folder before removing it.');
+            else profile.additionalDirectories = profile.additionalDirectories.filter(root => root !== value.folder);
+          } else if (value.action === 'document') config.documents.push({ path: value.file, kind: value.kind });
+          else if (value.action === 'workspace') {
+            if (value.create) config.workspaces.push({ id: 'workspace-' + Date.now().toString(36), name: value.name, cwd: value.cwd, additionalDirectories: [] });
+            else {
+              const profile = config.workspaces.find(w => w.id === value.workspaceId);
+              if (!profile) throw new Error('Workspace not found.');
+              Object.assign(profile, { name: value.name, cwd: value.cwd, additionalDirectories: [...new Set([profile.cwd, ...profile.additionalDirectories])].filter(root => root !== value.cwd) });
+              if (value.makeDefault) config.defaultWorkspaceId = profile.id;
+            }
+          } else throw new Error('Unknown context action.');
+        }, value.expectedRevision);
+        const defaultProfile = result.workspaces.find(profile => profile.id === result.defaultWorkspaceId);
+        const currentSettings = settings.get();
+        settings.save({ ...currentSettings, workspace: { cwd: defaultProfile.cwd, additionalDirectories: defaultProfile.additionalDirectories } }, currentSettings.revision);
+        return json(200, result);
+      }
+      if (url.pathname === '/api/standup' && req.method === 'POST') {
+        const value = await body(req);
+        return json(200, value.action === 'generate' ? standup.generate(value.expectedRevision) : standup.save(value.settings, value.expectedRevision));
+      }
+      if (url.pathname === '/api/run-context' && req.method === 'POST') {
+        const value = await body(req); const run = engine.getRun(value.runId);
+        if (['running', 'queued', 'awaiting_input'].includes(run.status)) throw new Error('Wait for this turn to finish before changing context.');
+        context.refresh();
+        const old = run.schedule.context;
+        const snapshot = context.capture({ workspaceId: old?.workspaceId, ...(old?.followsWorkspace ? {} : { workspace: old?.baseWorkspace || run.schedule.workspace }), selectedIds: value.selectedIds ?? old?.selectedIds ?? [], agentId: value.agentId ?? old?.agentId });
+        run.initialSchedule ??= structuredClone(run.schedule);
+        run.contextHistory ??= []; if (old) run.contextHistory.push(old);
+        run.schedule = { ...run.schedule, context: snapshot, workspace: snapshot.workspace };
+        engine.event(run, 'system', 'Workspace context refreshed for the next turn. Existing conversation history is retained.');
+        return json(200, { ok: true });
+      }
+      if (url.pathname === '/api/export' && req.method === 'POST') {
+        const value = await body(req); return json(200, exportTranscript(home, engine.getRun(value.runId), value.format));
+      }
       if (url.pathname === '/api/permissions' && req.method === 'POST') {
         const value = await body(req);
         if (typeof value.expectedRevision !== 'string') throw new Error('Reload permissions before saving.');
         if (value.action === 'revoke') engine.permissions.revoke(value.id, value.expectedRevision);
         else if (value.action === 'set-mode') {
-          const schedule = value.runId ? engine.getRun(value.runId).schedule : value.scheduleId ? engine.schedules.get(value.scheduleId) : value.defaults === true ? settings.get() : null;
+          const schedule = value.runId ? engine.getRun(value.runId).schedule : value.scheduleId ? engine.prepareSchedule(engine.schedules.get(value.scheduleId)) : value.defaults === true ? engine.prepareSchedule(settings.get()) : null;
           if (!schedule) throw new Error('Choose a saved run, schedule, or default workspace.');
           if (engine.permissions.describe(schedule).id !== value.expectedContextId) throw new Error('Workspace configuration changed. Review its folders and integrations before authorizing.');
           engine.permissions.setMode(schedule, value.mode, value.expectedRevision);
@@ -98,11 +187,13 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       }
       if (url.pathname === '/api/run' && req.method === 'POST') { const { id } = await body(req); return json(200, engine.createRun(engine.schedules.get(id))); }
       if (url.pathname === '/api/chat' && req.method === 'POST') {
-        const value = await body(req); const defaults = settings.get(); const schedule = validateSchedule({
+        const value = await body(req); const defaults = settings.get();
+        const snapshot = context.capture({ workspaceId: value.workspaceId, workspace: value.workspace || (!value.workspaceId ? defaults.workspace : undefined), selectedIds: value.selectedIds, agentId: value.agentId });
+        const schedule = validateSchedule({
           schemaVersion: 1, id: `chat-${Date.now()}`, name: value.name || 'Workspace chat', enabled: false,
           cron: '0 9 * * 1-5', timezone: value.timezone || defaults.timezone,
           provider: value.provider || defaults.provider, model: value.model || defaults.model,
-          workspace: value.workspace || defaults.workspace, skillDirectories: value.skillDirectories || defaults.skillDirectories,
+          workspace: snapshot.workspace, context: snapshot, skillDirectories: value.skillDirectories || defaults.skillDirectories,
           mcpServers: value.mcpServers || defaults.mcpServers, editorContext: value.editorContext, misfire: 'skip', prompt: value.prompt
         });
         return json(200, engine.createRun(schedule, 'chat'));
@@ -117,12 +208,12 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (url.pathname === '/api/provider' && req.method === 'POST') { providerStatus = await copilot.status(); return json(200, providerStatus); }
       if (url.pathname === '/api/markdown' && req.method === 'POST') {
         const { file } = await body(req);
-        const roots = [settings.get().workspace.cwd, ...settings.get().workspace.additionalDirectories, ...engine.schedules.list().filter(s => !s.error).flatMap(s => [s.workspace.cwd, ...s.workspace.additionalDirectories])];
+        const roots = [...context.roots(), ...context.config().documents.map(doc => path.dirname(doc.path)), settings.get().workspace.cwd, ...settings.get().workspace.additionalDirectories, ...engine.schedules.list().filter(s => !s.error).flatMap(s => [s.workspace.cwd, ...s.workspace.additionalDirectories])];
         if (typeof file !== 'string' || !file.endsWith('.md') || !isWithin(file, roots)) throw new Error('Choose a Markdown file inside a configured workspace.');
         if (fs.statSync(file).size > 1_000_000) throw new Error('Markdown file is too large.');
         return json(200, { file, content: fs.readFileSync(file, 'utf8') });
       }
-      const assets = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'] };
+      const assets = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'], '/features.js': ['features.js', 'text/javascript'] };
       if (req.method === 'GET' && assets[url.pathname]) {
         const [file, type] = assets[url.pathname]; res.writeHead(200, { 'Content-Type': type }); res.end(fs.readFileSync(path.join(root, 'public', file))); return;
       }
@@ -134,7 +225,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   origin = `http://127.0.0.1:${server.address().port}`;
   atomicJSON(path.join(home, 'connection.json'), { origin, token, pid: process.pid });
   const timer = timers ? setInterval(() => { try { engine.tick(); } catch (error) { engine.emit('scheduler-error', { error: error.message, at: new Date().toISOString() }); } }, 1000) : null;
-  return { engine, settings, origin, token, home, url: `${origin}/?token=${token}`, async close() {
+  return { engine, settings, context, standup, origin, token, home, url: `${origin}/?token=${token}`, async close() {
     if (timer) clearInterval(timer); await engine.close(); await copilot.close();
     await new Promise(resolve => server.close(resolve)); server.closeAllConnections();
     fs.rmSync(path.join(home, 'connection.json'), { force: true }); unlock();

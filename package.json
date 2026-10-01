@@ -12,7 +12,7 @@
     "start": "node src/server.js",
     "desktop": "electron .",
     "test": "node --test test/*.test.js",
-    "check": "node --check src/server.js && node --check src/engine.js && node --check src/copilot.js && node --check public/app.js && node --check desktop/main.cjs && node --check desktop/browser.cjs && node --check desktop/playwright-bridge.cjs && node --check src/settings.js && node --check src/permissions.js",
+    "check": "node scripts/check.mjs",
     "cli": "node src/cli.js"
   },
   "dependencies": {

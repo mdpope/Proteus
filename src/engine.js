@@ -39,6 +39,7 @@ export class Engine extends EventEmitter {
   listRuns() { return [...this.runs.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)); }
   getRun(id) { const run = this.runs.get(id); if (!run) throw new Error('Run not found.'); return run; }
   createRun(schedule, trigger = 'manual', slot = null) {
+    schedule = this.prepareSchedule ? this.prepareSchedule(schedule, trigger) : schedule;
     validateSchedule(schedule);
     if (this.stopping) throw new Error('Runner is stopping.');
     if ([...this.runs.values()].some(run => run.schedule.id === schedule.id && active.has(run.status))) throw new Error('This schedule already has an active run.');

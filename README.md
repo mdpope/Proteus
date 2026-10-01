@@ -23,12 +23,14 @@ selects an available port. `PROTEUS_HOME` overrides the application-data directo
 - Editable five-field cron expressions with IANA time zones and next-five-run previews.
 - Plain JSON schedules, atomic saves, external-edit conflict detection, and JSON Schema.
 - Manual and scheduled runs, serial execution, overlap prevention, and skip/coalesce policies.
-- Immutable schedule snapshots per run; persisted conversations, feedback, permissions, and
-  continuation. Interrupted runs require explicit continuation after restart.
+- Captured schedule/context versions per run; persisted conversations, feedback, permissions, and
+  continuation. Explicit context refresh retains the previous versions. Interrupted runs require explicit continuation after restart.
 - GitHub Copilot SDK adapter, explicit model selection, account quota display, and observed
   per-run token usage. Copilot authentication uses the official runtime's existing sign-in.
 - Local rehearsal provider for trying the feedback flow without an AI call.
 - Tabs for schedules, conversations, Markdown source, and shared browser tabs with embedded Playwright control.
+- Named multi-folder workspaces, live context discovery, universal/per-chat source controls.
+- Standup utility, visible session paths, transcript export, and desktop Bitwarden login assistance.
 - Small VS Code companion that starts a chat using all roots of a local multi-root workspace.
 
 ## Prototype boundaries
@@ -49,8 +51,7 @@ boundary, not a claim that other providers already work. A `completed` run means
 ended; workflow-specific checks determine whether the underlying task really succeeded.
 Raw Copilot conversations remain in Copilot's own persistent session store; Proteus keeps their
 IDs, event history, schedule snapshots, and measured usage locally. Cross-provider context transfer
-is not implemented. Permission requests are interactive; unattended tool approval profiles are
-not yet implemented.
+is not implemented. Persistent workspace and tool approvals support unattended execution within their configured scope.
 
 ## Schedule files
 
@@ -92,6 +93,7 @@ published to the marketplace by this prototype.
 npm test
 npm run check
 node test/ui-smoke.mjs
+node test/workspace-ui.mjs
 ```
 
 The UI smoke test opens two temporary desktop sessions and verifies cron edits, persisted files,
@@ -110,12 +112,20 @@ snapshots retain their configuration. `PROTEUS_HOME` selects a different data di
 launch; changing it does not move existing history. Settings are plain JSON and support atomic
 saves, external-edit detection, and directory validation. Keep credentials outside this file.
 
-A Proteus Copilot session receives every listed workspace root, configured skills/MCP tools, and
-an explicit instruction to read each relevant repository's local instructions. The VS Code
-companion additionally supplies the active file, selection line range, workspace file, and visible
-file paths. It does not transfer VS Code's semantic index, extension tool implementations, unsaved
-buffers, or existing chat history. All-root file access is supported; full VS Code feature parity
-is not claimed. The companion must be installed or run in an Extension Development Host.
+**Workspaces** manages named profiles, native folder selection, VS Code imports, and a discovered
+inventory of instructions, skills, agents, and MCPs. Select Every chat, With workspace, Choose per
+chat, or Disabled for each source. Imported MCPs start disabled. Refresh rescans without restarting;
+idle chats can explicitly refresh their captured context before continuing. See
+[workspace and context behavior](docs/workspaces.md).
+
+The Copilot adapter receives the chosen folders and explicit managed context. The VS Code companion
+also supplies active file/selection metadata; it does not transfer VS Code's index, unsaved buffers,
+extension tools, or old chat history. Chat details show exactly which source versions were supplied,
+the execution directory, native session path, and Open/Copy/export controls.
+
+**Standup** persists one dated order and editable roster/agenda. **Credentials** configures the
+desktop Bitwarden CLI provider and exact login bindings. Browser Fill login makes a tab private;
+passkeys and verification remain interactive. See [credential setup](docs/credentials.md).
 
 An app-created schedule is saved to `<app data>/schedules/<id>.json`, paused. A source-owned organization workflows
 schedule stays canonical in `organization workflows/automations/<id>.json`; the editor shows its source path.
@@ -149,3 +159,6 @@ Runtime-marked enterprise approvals, sandbox escapes, and genuine questions stil
 `node test/permissions-ui.mjs` tests the permission UI with a synthetic provider.
 `node test/permissions-smoke.mjs --run-live` is an opt-in Copilot test that reads, writes, and checks
 synthetic temporary files with zero manual approvals. It uses provider credits, not professional data.
+
+`node test/context-copilot-smoke.mjs --run-live` checks explicit instruction delivery and changed
+context on a resumed native session using only synthetic sources. It consumes Copilot usage.
