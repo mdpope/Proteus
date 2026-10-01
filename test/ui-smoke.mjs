@@ -28,6 +28,13 @@ try {
   assert.equal(fs.readdirSync(path.join(home,'runs')).length,1);
   await page.locator('[data-page="settings"]').click();await page.locator('#settings-cwd').fill(home);await page.locator('#settings-roots').fill(process.cwd());await page.locator('#save-settings').click();await page.getByText('Settings saved.',{exact:true}).waitFor();
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(home,'settings.json'))).workspace.additionalDirectories,[process.cwd()]);
+  const defaultPermissions=page.locator('.permission-workspace').filter({hasText:'Default workspace'});
+  await defaultPermissions.locator('[data-permission-mode]').selectOption('trusted');await defaultPermissions.locator('[data-save-permissions]').click();await page.getByText('Permissions saved.',{exact:true}).waitFor();
+  assert.ok(JSON.parse(fs.readFileSync(path.join(home,'permissions.json'))).workspaces.some(profile=>profile.mode==='trusted'));
+  await page.reload();await page.locator('[data-page="settings"]').click();
+  assert.equal(await page.locator('.permission-workspace').filter({hasText:'Default workspace'}).locator('[data-permission-mode]').inputValue(),'trusted');
+  await page.locator('[data-revoke-permissions]').click();await page.getByText('Authorization revoked. Future tool requests will ask.',{exact:true}).waitFor();
+  assert.equal(JSON.parse(fs.readFileSync(path.join(home,'permissions.json'))).workspaces.length,0);
   await page.locator('#new-chat').click();assert.equal(await page.locator('#chat-roots').inputValue(),process.cwd());await page.locator('#close-dialog').click();
   await page.locator('#browser').click();await page.locator('#browser-url').fill(siteURL);await page.locator('#browser-url').press('Enter');
   await page.locator('[data-tab]').filter({hasText:'Test knowledge hub'}).waitFor();
@@ -50,5 +57,5 @@ try {
   await page.locator(`[data-close="${firstId}"]`).click();
   assert.equal((await agent({action:'list'})).length,0);
   const owned=await agent({action:'open',url:siteURL});assert.match((await agent({action:'snapshot',tabId:owned.id})).snapshot,/Knowledge hub/);await agent({action:'close',tabId:owned.id});
-  console.log(JSON.stringify({passed:true,checks:['cron edit and preview','atomic file save','feedback reply','restart and resume same run','settings and multi-root chat defaults','Enter navigation and site titles','multiple persistent tabs and back navigation','scoped embedded Playwright read/fill/click','private tab exclusion and access revocation'],screenshot:output}));
+  console.log(JSON.stringify({passed:true,checks:['cron edit and preview','atomic file save','feedback reply','restart and resume same run','settings and multi-root chat defaults','workspace trust persistence and revocation','Enter navigation and site titles','multiple persistent tabs and back navigation','scoped embedded Playwright read/fill/click','private tab exclusion and access revocation'],screenshot:output}));
 } finally { if(app)await app.close();site.close();fs.rmSync(home,{recursive:true,force:true}); }

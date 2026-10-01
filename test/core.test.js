@@ -134,7 +134,7 @@ test('cancellation rejects both visible and queued permissions', async () => {
 
 test('Copilot adapter forwards explicit approval and rejection using current SDK decisions', async () => {
   const { CopilotProvider }=await import('../src/copilot.js');
-  for(const answer of ['approve','deny']) {
+  for(const answer of ['approve','approve-auto','deny']) {
     let decision;
     const provider=new CopilotProvider();
     const session={sessionId:'fixture',on:()=>()=>{},disconnect:async()=>{},rpc:{usage:{getMetrics:async()=>({})}}};
@@ -142,7 +142,8 @@ test('Copilot adapter forwards explicit approval and rejection using current SDK
       session.sendAndWait=async()=>{decision=await config.onPermissionRequest({kind:'read',path:'/fixture'});};return session;
     }});
     await provider.run({run:{id:'fixture',schedule:{model:'fixture',workspace:{cwd:'/fixture',additionalDirectories:[]}},usage:{inputTokens:0,outputTokens:0}},prompt:'fixture',signal:new AbortController().signal,update:()=>{},emit:()=>{},ask:async()=>answer});
-    assert.equal(decision.kind,answer==='approve'?'approve-once':'reject');
+    assert.equal(decision.kind,answer==='deny'?'reject':'approve-once');
+    assert.equal(decision.approvedInteractively,answer==='approve'?true:undefined);
   }
 });
 

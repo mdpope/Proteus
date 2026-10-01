@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Proteus host-local permissions",
+  "type": "object",
+  "required": ["schemaVersion", "workspaces"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "workspaces": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "provider", "cwd", "roots", "integrations", "mode", "folders", "rules"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "provider": {"type": "string"},
+          "cwd": {"type": "string"},
+          "roots": {"type": "array", "items": {"type": "string"}},
+          "integrations": {"type": "string"},
+          "label": {"type": "string"},
+          "mode": {"enum": ["ask", "trusted", "autopilot"]},
+          "readOnlyTools": {"type": "boolean"},
+          "folders": {"type": "array", "items": {"type": "object", "required": ["path", "access"], "properties": {"path": {"type": "string"}, "access": {"enum": ["read", "read-write"]}}}},
+          "rules": {"type": "array", "items": {"oneOf": [
+            {"type": "object", "required": ["kind", "command"], "properties": {"kind": {"const": "shell"}, "command": {"type": "string"}}},
+            {"type": "object", "required": ["kind", "server", "tool"], "properties": {"kind": {"const": "mcp"}, "server": {"type": "string"}, "tool": {"type": "string"}, "action": {"type": "string"}}},
+            {"type": "object", "required": ["kind", "tool"], "properties": {"kind": {"const": "custom-tool"}, "tool": {"type": "string"}, "action": {"type": "string"}}},
+            {"type": "object", "required": ["kind", "origin"], "properties": {"kind": {"const": "url"}, "origin": {"type": "string"}}}
+          ]}},
+          "updatedAt": {"type": "string", "format": "date-time"}
+        }
+      }
+    }
+  }
+}

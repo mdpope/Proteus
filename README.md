@@ -133,3 +133,19 @@ For an opt-in live Copilot check, run `node test/copilot-smoke.mjs`. It consumes
 Copilot usage, creates a temporary synthetic file, approves only a read of that exact file, and
 verifies that the model received its contents. It catches SDK/CLI permission-protocol mismatches
 that rehearsal tests cannot detect. It does not read professional sources.
+
+## Persistent tool approvals
+
+Use **Settings → Workspace permissions**, or **Tool approvals** in a run, to select Ask each time,
+Trusted workspace, or Auto-approve tools. Prompts also offer folder trust and Always allow for the
+current command/tool operation. Saved approvals apply to matching workspace contexts across chats,
+schedules, and restarts, and can be revoked. Policies live in host-local `permissions.json`;
+see [permission behavior and scope](docs/permissions.md). Importing a schedule never grants trust.
+
+Auto-approve tools supports unattended tool execution, including terminal commands with the
+runner's normal access. It is not a filesystem sandbox or a promise to answer user questions.
+Runtime-marked enterprise approvals, sandbox escapes, and genuine questions still pause.
+
+`node test/permissions-ui.mjs` tests the permission UI with a synthetic provider.
+`node test/permissions-smoke.mjs --run-live` is an opt-in Copilot test that reads, writes, and checks
+synthetic temporary files with zero manual approvals. It uses provider credits, not professional data.

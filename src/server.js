@@ -61,11 +61,28 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (req.method !== 'GET' && req.headers.origin && req.headers.origin !== origin) return json(403, { error: 'Cross-origin request rejected.' });
       if (req.method !== 'GET' && !req.headers['content-type']?.startsWith('application/json')) return json(415, { error: 'Send JSON.' });
       if (url.pathname === '/api/state') return json(200, {
-        schedules: engine.schedules.list(), runs: engine.listRuns(), providerStatus,
+        schedules: engine.schedules.list(), runs: engine.listRuns().map(run => ({ ...run, permissionContext: engine.permissions.describe(run.schedule) })), providerStatus,
+        permissions: engine.permissions.get(), permissionWorkspaces: [...new Map([
+          { ...settings.get(), name: 'Default workspace', ref: { defaults: true } },
+          ...engine.schedules.list().filter(schedule => !schedule.error).map(schedule => ({ ...schedule, ref: { scheduleId: schedule.id } })),
+          ...engine.listRuns().map(run => ({ ...run.schedule, ref: { runId: run.id } }))
+        ].map(schedule => { const context = engine.permissions.describe(schedule); return [context.id, { ...context, ref: schedule.ref }]; })).values()],
         home, settings: settings.get(), browserAvailable: !!browser, schedulerErrors, recoveryErrors: engine.recoveryErrors || [], version: '0.1.0',
         scheduler: { running: true, background: false, message: 'Schedules run while this prototype is open. Missed runs follow each schedule’s policy.' }
       });
       if (url.pathname === '/api/settings' && req.method === 'POST') { const value = await body(req); return json(200, settings.save(value.settings, value.expectedRevision)); }
+      if (url.pathname === '/api/permissions' && req.method === 'POST') {
+        const value = await body(req);
+        if (typeof value.expectedRevision !== 'string') throw new Error('Reload permissions before saving.');
+        if (value.action === 'revoke') engine.permissions.revoke(value.id, value.expectedRevision);
+        else if (value.action === 'set-mode') {
+          const schedule = value.runId ? engine.getRun(value.runId).schedule : value.scheduleId ? engine.schedules.get(value.scheduleId) : value.defaults === true ? settings.get() : null;
+          if (!schedule) throw new Error('Choose a saved run, schedule, or default workspace.');
+          if (engine.permissions.describe(schedule).id !== value.expectedContextId) throw new Error('Workspace configuration changed. Review its folders and integrations before authorizing.');
+          engine.permissions.setMode(schedule, value.mode, value.expectedRevision);
+        } else throw new Error('Unknown permission action.');
+        engine.recheckPermissions(); return json(200, engine.permissions.get());
+      }
       if (url.pathname === '/api/preview' && req.method === 'POST') { const value = await body(req); return json(200, { nextRuns: nextRuns(value.cron, value.timezone) }); }
       if (url.pathname === '/api/schedules' && req.method === 'POST') {
         const { schedule, expectedRevision } = await body(req); return json(200, engine.schedules.save(schedule, expectedRevision));

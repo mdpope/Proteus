@@ -39,7 +39,9 @@ export class CopilotProvider {
       systemMessage: { mode: 'append', content: `Proteus workspace roots (read the relevant AGENTS.md and .github/copilot-instructions.md in each before work):\n${[run.schedule.workspace.cwd, ...run.schedule.workspace.additionalDirectories].join('\n')}\n${this.browser ? 'Embedded browser access is available through proteus_browser. Use it for visible authenticated website reads. The user can interact with those same tabs; ask for sign-in if needed.' : 'Embedded browser access is unavailable in this server-only session.'}\nEditor context supplied by the user: ${JSON.stringify(run.schedule.editorContext || null)}` },
       onPermissionRequest: async request => {
         const answer = await ask({ type: 'permission', question: 'Copilot needs permission for a tool operation.', details: request });
-        return answer === 'approve' ? { kind: 'approve-once' } : { kind: 'reject', feedback: 'The user declined this operation in Proteus.' };
+        return ['approve', 'approve-auto'].includes(answer)
+          ? { kind: 'approve-once', ...(answer === 'approve' ? { approvedInteractively: true } : {}) }
+          : { kind: 'reject', feedback: 'The user declined this operation in Proteus.' };
       },
       onUserInputRequest: async request => ({ answer: await ask({ type: 'question', question: request.question, choices: request.choices }), wasFreeform: true })
     };

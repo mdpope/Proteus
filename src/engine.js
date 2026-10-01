@@ -5,12 +5,14 @@ import { EventEmitter } from 'node:events';
 import { atomicJSON, jsonFiles, readJSON } from './files.js';
 import { ScheduleStore, lastDue, revision, validateSchedule } from './schedules.js';
 import { RehearsalProvider } from './rehearsal.js';
+import { PermissionStore } from './permissions.js';
 
 const active = new Set(['queued', 'running', 'awaiting_input']);
 export class Engine extends EventEmitter {
   constructor(home, providers = {}, clock = () => new Date()) {
     super(); this.home = home; this.clock = clock;
     this.schedules = new ScheduleStore(path.join(home, 'schedules'));
+    this.permissions = new PermissionStore(home);
     this.runsDir = path.join(home, 'runs');
     this.providers = { rehearsal: new RehearsalProvider(), ...providers };
     this.pending = new Map(); this.questionQueues = new Map(); this.running = null; this.stopping = false;
@@ -61,9 +63,18 @@ export class Engine extends EventEmitter {
     const run = this.getRun(id); const pending = this.pending.get(id);
     if (!pending || run.pending?.id !== requestId) throw new Error('This request is no longer waiting for an answer.');
     if (typeof answer !== 'string' || !answer.trim()) throw new Error('A reply is required.');
-    if (run.pending.type === 'permission' && !['approve', 'deny'].includes(answer)) throw new Error('Choose approve or deny.');
+    const isPermission = run.pending.type === 'permission';
+    if (isPermission) {
+      if (!['approve', 'deny'].includes(answer)) {
+        const offered = run.pending.permissionChoices?.find(choice => choice.value === answer);
+        const current = this.permissions.choices(run.schedule, run.pending.details || {}).find(choice => choice.value === answer);
+        if (!offered || offered.label !== current?.label) throw new Error('Permission scope changed. Review the workspace permissions before continuing.');
+        this.permissions.remember(run.schedule, run.pending.details, answer);
+      }
+      this.event(run, 'system', answer === 'deny' ? 'Permission denied.' : `Permission approved: ${answer}.`, { permission: { kind: run.pending.details?.kind, decision: answer, automatic: false } });
+    }
     this.pending.delete(id); run.pending = null; run.status = 'running';
-    this.event(run, 'user', answer); pending.resolve(answer); return run;
+    this.event(run, 'user', answer); pending.resolve(isPermission && !['approve','deny'].includes(answer) ? 'approve' : answer); return run;
   }
   ask(run, request, signal) {
     const previous = this.questionQueues.get(run.id) || Promise.resolve();
@@ -75,6 +86,11 @@ export class Engine extends EventEmitter {
   }
   askNext(run, request, signal) {
     if (signal.aborted) return Promise.reject(new Error('Cancelled'));
+    if (request.type === 'permission') {
+      const decision = this.permissions.decide(run.schedule, request.details || {});
+      if (decision.allowed) { this.recordAutomaticPermission(run, request.details, decision); return Promise.resolve('approve-auto'); }
+      request = { ...request, permissionChoices: this.permissions.choices(run.schedule, request.details || {}), permissionReason: decision.reason };
+    }
     return new Promise((resolve, reject) => {
       const onAbort = () => { this.pending.delete(run.id); reject(new Error('Cancelled')); };
       signal.addEventListener('abort', onAbort, { once: true });
@@ -84,6 +100,19 @@ export class Engine extends EventEmitter {
       });
       run.pending = { ...request, id: randomUUID() }; run.status = 'awaiting_input'; this.persist(run);
     });
+  }
+  recordAutomaticPermission(run, request, decision) {
+    run.automaticApprovals = (run.automaticApprovals || 0) + 1;
+    this.event(run, 'system', `Auto-approved ${request?.kind || 'tool'}: ${decision.reason}.`, { permission: { kind: request?.kind, automatic: true, reason: decision.reason, mode: decision.mode } });
+  }
+  recheckPermissions() {
+    for (const [id, waiting] of this.pending) {
+      const run = this.getRun(id); if (run.pending?.type !== 'permission') continue;
+      const decision = this.permissions.decide(run.schedule, run.pending.details || {});
+      if (!decision.allowed) continue;
+      this.recordAutomaticPermission(run, run.pending.details, decision);
+      this.pending.delete(id); run.pending = null; run.status = 'running'; this.persist(run); waiting.resolve('approve-auto');
+    }
   }
   async drain() {
     if (this.running || this.stopping) return;
@@ -117,6 +146,7 @@ export class Engine extends EventEmitter {
     else { run.status = 'cancelled'; delete run.nextPrompt; this.persist(run); }
   }
   tick() {
+    this.recheckPermissions();
     const now = this.clock(); const after = new Date(this.journal.lastPoll);
     if (now <= after) return;
     for (const scheduleInfo of this.schedules.list()) {
