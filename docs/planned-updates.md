@@ -15,6 +15,23 @@ Implemented in the workspace-context release:
 
 See [workspaces](workspaces.md) and [credentials](credentials.md) for behavior and limitations.
 
+## Queued chat presentation updates
+
+Keep these changes focused on presentation, after resolving stalled browser navigation:
+
+- Mac and iOS: show a concise tool activity summary with its running/completed/failed state;
+  expand it for arguments and results. Pair tool start and completion by call ID, omit empty
+  assistant messages, and retain the complete formatted final response.
+- Clarify approval controls in both clients: distinguish individually saved folder/tool rules
+  from full Trusted workspace mode. Describe Trusted workspace (authorized file access and
+  read-only tools) and Auto-approve tools (broader tool execution) without expanding existing grants.
+- Use the same provider model catalog and refresh behavior as New Chat for schedule Model ID.
+  Preserve a saved unavailable model visibly; never silently switch models.
+- Mac chat layout: fill the viewport below the application header and tab strip. Scroll the
+  conversation and details pane independently, without a third outer page scrollbar. Preserve
+  follow-at-bottom behavior and the reading position when the user has scrolled up. Check narrow
+  windows and wrapped sidebar content.
+
 Still deferred:
 
 - Background service, packaging/signing, independent concurrent execution, notifications.

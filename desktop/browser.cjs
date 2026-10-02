@@ -1,6 +1,7 @@
 const { WebContentsView, session } = require('electron');
 const { randomUUID } = require('node:crypto');
 const { connectPage } = require('./playwright-bridge.cjs');
+const { loadURLWithTimeout, cancelNavigation } = require('./navigation.cjs');
 
 function normalizeURL(input) {
   const value = String(input || '').trim();
@@ -53,8 +54,13 @@ class BrowserTabs {
   }
   address(value) { const url = normalizeURL(value); if (new URL(url).origin === this.appOrigin) throw new Error('The application is not a browser target.'); return url; }
   async navigate(id, url) {
-    const tab = this.get(id); tab.error = null;
-    try { await tab.view.webContents.loadURL(this.address(url)); } catch (error) { tab.error = error.message; }
+    const tab = this.get(id); const wc = tab.view.webContents;
+    const navigation = Symbol(); tab.navigation = navigation; tab.error = null;
+    try { await loadURLWithTimeout(wc, this.address(url)); }
+    catch (error) {
+      if (tab.navigation !== navigation || wc.isDestroyed()) throw error;
+      tab.error = error.message;
+    }
     this.changed(); return this.state(tab);
   }
   show(id, bounds) {
@@ -67,6 +73,7 @@ class BrowserTabs {
   }
   async close(id) {
     const tab = this.get(id); tab.shared = false; tab.owner = null;
+    cancelNavigation(tab.view.webContents, 'Browser tab closed during navigation.');
     await this.disconnect(tab); this.window.contentView.removeChildView(tab.view); tab.view.webContents.close();
     this.tabs.delete(id); if (this.active === id) this.active = null; this.changed();
   }
@@ -83,10 +90,11 @@ class BrowserTabs {
     if (action === 'close') return this.close(id);
     if (action === 'navigate') return this.navigate(id, value.url);
     const tab = this.get(id); const wc = tab.view.webContents;
+    if (['back', 'forward', 'reload'].includes(action)) cancelNavigation(wc, 'Navigation replaced by a browser command.');
     if (action === 'back' && wc.navigationHistory.canGoBack()) wc.navigationHistory.goBack();
     else if (action === 'forward' && wc.navigationHistory.canGoForward()) wc.navigationHistory.goForward();
     else if (action === 'reload') wc.reload();
-    else if (action === 'stop') wc.stop();
+    else if (action === 'stop' && !cancelNavigation(wc)) wc.stop();
     else if (action === 'share') {
       tab.shared = value.shared === true;
       if (!tab.shared) { tab.owner = null; await this.disconnect(tab); }

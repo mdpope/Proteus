@@ -8,7 +8,7 @@ import http from 'node:http';
 const home = fs.mkdtempSync(path.join(os.tmpdir(),'proteus-ui-'));
 const output = process.env.PROTEUS_SCREENSHOT || path.join(home,'proteus.png');
 const launch = () => electron.launch({ args:['.',`--user-data-dir=${path.join(home,'electron')}`], env:{...process.env,PROTEUS_HOME:home,PORT:'0'}, timeout:30000 });
-const site=http.createServer((req,res)=>{res.setHeader('Content-Type','text/html');res.end(req.url==='/next'?'<title>Second site</title><h1>Next page</h1>':'<title>Test knowledge hub</title><h1>Knowledge hub</h1><label>Search<input aria-label="Search"></label><button onclick="document.querySelector(\'output\').textContent=document.querySelector(\'input\').value">Find</button><output></output><a href="/next">Next page</a><a href="/next" target="_blank">Open another tab</a>');});
+const site=http.createServer((req,res)=>{if(req.url==='/stalled')return;res.setHeader('Content-Type','text/html');res.end(req.url==='/next'?'<title>Second site</title><h1>Next page</h1>':'<title>Test knowledge hub</title><h1>Knowledge hub</h1><label>Search<input aria-label="Search"></label><button onclick="document.querySelector(\'output\').textContent=document.querySelector(\'input\').value">Find</button><output></output><a href="/next">Next page</a><a href="/next" target="_blank">Open another tab</a>');});
 await new Promise(resolve=>site.listen(0,'127.0.0.1',resolve));
 const siteURL=`http://127.0.0.1:${site.address().port}`;
 let app;
@@ -57,5 +57,11 @@ try {
   await page.locator(`[data-close="${firstId}"]`).click();
   assert.equal((await agent({action:'list'})).length,0);
   const owned=await agent({action:'open',url:siteURL});assert.match((await agent({action:'snapshot',tabId:owned.id})).snapshot,/Knowledge hub/);await agent({action:'close',tabId:owned.id});
-  console.log(JSON.stringify({passed:true,checks:['cron edit and preview','atomic file save','feedback reply','restart and resume same run','settings and multi-root chat defaults','workspace trust persistence and revocation','Enter navigation and site titles','multiple persistent tabs and back navigation','scoped embedded Playwright read/fill/click','private tab exclusion and access revocation'],screenshot:output}));
-} finally { if(app)await app.close();site.close();fs.rmSync(home,{recursive:true,force:true}); }
+  const stalled=await agent({action:'open',url:siteURL+'/stalled'});
+  assert.match(stalled.error,/Navigation timed out after 30 seconds/);
+  const recovered=await agent({action:'navigate',tabId:stalled.id,url:siteURL});
+  assert.equal(recovered.error,null);
+  assert.match((await agent({action:'snapshot',tabId:stalled.id})).snapshot,/Knowledge hub/);
+  await agent({action:'close',tabId:stalled.id});
+  console.log(JSON.stringify({passed:true,checks:['cron edit and preview','atomic file save','feedback reply','restart and resume same run','settings and multi-root chat defaults','workspace trust persistence and revocation','Enter navigation and site titles','multiple persistent tabs and back navigation','scoped embedded Playwright read/fill/click','private tab exclusion and access revocation','stalled browser tool deadline and same-tab recovery'],screenshot:output}));
+} finally { if(app)await app.close();site.closeAllConnections();site.close();fs.rmSync(home,{recursive:true,force:true}); }
