@@ -5,6 +5,7 @@ import Combine
     @Published var state: JSON = .null
     @Published var chats: [String: JSON] = [:]
     @Published var models: [JSON] = []
+    @Published var modelStatus: JSON = .null
     @Published var status = "Not paired"
     @Published var connected = false
     @Published var error: String?
@@ -174,6 +175,7 @@ import Combine
         var object = value.object; let ids = Set(value["runs"].array.map { $0["id"].string })
         object["runs"] = .array(value["runs"].array + state["runs"].array.filter { !ids.contains($0["id"].string) })
         state = .object(object)
+        if value["providerStatus"] != .null { modelStatus = value["providerStatus"]; models = modelStatus["models"].array }
     }
     func loadMoreRuns() async {
         do { let more = try await request("runs.list", ["offset": .number(Double(state["runs"].array.count))]); var object = state.object; let ids = Set(state["runs"].array.map { $0["id"].string }); object["runs"] = .array(state["runs"].array + more.array.filter { !ids.contains($0["id"].string) }); state = .object(object) }
@@ -196,8 +198,8 @@ import Combine
         merged["eventStart"] = .number(Double(min(first, previous))); merged["earlier"] = merged["eventStart"]
         chats[id] = .object(merged)
     }
-    func loadModels() async {
-        do { let value = try await request("provider.status"); models = value["models"].array; if !value["available"].bool { error = value["error"].string.isEmpty ? "Copilot is not available on the Mac." : value["error"].string } }
+    func loadModels(force: Bool = false) async {
+        do { let value = try await request("provider.status", ["force": .bool(force)]); modelStatus = value; models = value["models"].array; if !value["available"].bool { error = value["error"].string.isEmpty ? "Copilot is not available on the Mac." : value["error"].string } }
         catch { self.error = error.localizedDescription }
     }
     func activity(_ isActive: Bool) { active = isActive; if active { connect() } else { disconnect() } }

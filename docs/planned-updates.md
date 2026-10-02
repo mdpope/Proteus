@@ -1,4 +1,7 @@
-# Workspace and chat update status
+# Implementation status and backlog
+
+Maintain this as the single backlog. Design rationale is in `decisions.md`; recent changes are in
+`../CHANGELOG.md`. Items below are status, not promises of completed validation.
 
 Implemented in the workspace-context release:
 
@@ -33,9 +36,25 @@ See [workspaces](workspaces.md) and [credentials](credentials.md) for behavior a
 - Browser navigation has a deadline. Background agent tabs receive usable viewports; detailed
   Playwright errors reach the tool result instead of becoming a generic failure.
 
-Still deferred:
+## Model settings, external edits and Mac identity
 
-- Background service, packaging/signing, independent concurrent execution, notifications.
+- Capability-backed effort and context tier on Mac/iOS, captured on runs and supplied on resume.
+- Host catalog refresh at launch, every five minutes and manually, with visible stale state.
+- Fresh schedule reads on reopen/reload; revision conflicts protect external edits and app drafts.
+- Local branded Mac bundle and Dock artwork matching iOS; see `mac-app.md`.
+- Handoff guide, design decisions, feature references and changelog.
+
+## Deferred (no implementation yet)
+
+- Detached background daemon/login item, Developer ID distribution signing/notarization, automatic
+  updates, independent concurrent execution, workflow completion validators and notifications.
+- Automatic reconciliation of foreign workflow manifests; currently use the owning repository
+  exporter and explicit import/refresh.
+- Changing model/effort/context tier of an existing idle chat through the UI; current controls apply
+  to new chats and future scheduled runs, and existing chats display their captured settings.
+- Additional provider adapters beyond Copilot and rehearsal, with provider-specific option mapping.
+- Browser tab restoration across app restarts (website sign-in profiles already persist).
+- Paginated on-disk run storage as history grows.
 - Standalone MCP connection/OAuth/input adapters and editor-specific agent hook and extension-tool mappings.
 - Bitwarden extension compatibility and broader token-broker/Keychain bootstrap integrations.
 - Automatic VS Code index, unsaved buffers, or existing chat-history transfer.

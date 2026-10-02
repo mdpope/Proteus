@@ -22,14 +22,8 @@ claims a scheduled occurrence even if the process stops before the scheduler jou
 Restart marks active work interrupted. Catch-up coalesces missed occurrences to at most one new
 run per schedule. Already-active schedules skip overlapping occurrences.
 
-## Next milestones
-
-1. Packaged macOS app and opt-in login item; the current host already survives window closure.
-2. Workflow completion validators and notifications.
-3. Browser profile selection and broader authentication adapters.
-4. Packaged VS Code companion and richer editor context.
-5. Additional provider adapters; capability-aware model, usage, and session handling.
-6. A paginated run store as history grows; notifications and usage budgets.
+Module map: [agent handoff](handoff.md). Rationale: [design decisions](decisions.md).
+Remaining work: [backlog](planned-updates.md). Live capabilities: [providers](providers.md).
 
 The initial app deliberately owns its generic schemas, templates, and client implementation.
 Operating-system repositories own their own schedules, workflow policy, and durable knowledge.

@@ -37,17 +37,45 @@ struct ToolActivityView: View {
     }
 }
 
-struct CopilotModelPicker: View {
+func modelTokenSize(_ value: JSON) -> String {
+    let count = value.int
+    guard count > 0 else { return "Capacity not reported" }
+    return count % 1_000_000 == 0 ? "\(count / 1_000_000)M" : count % 1000 == 0 ? "\(count / 1000)K" : "\(count)"
+}
+func modelContextLabel(_ tier: JSON) -> String {
+    let id = tier["id"].string
+    return "\(modelTokenSize(tier["promptTokens"])) · \(id == "default" ? "Default" : id == "long_context" ? "Long context" : id)"
+}
+struct ProviderModelPicker: View {
     @EnvironmentObject var store: RemoteStore
     @Binding var model: String
+    @Binding var effort: String
+    @Binding var contextTier: String
     var disabled = false
+    private var controls: JSON { store.models.first { $0["id"].string == model }?["controls"] ?? .null }
+    private var efforts: [String] { controls["reasoningEfforts"].array.map(\.string) }
+    private var tiers: [JSON] { controls["contextTiers"].array }
     var body: some View {
         Picker("Model", selection: $model) {
             Text("Choose model").tag("")
             if !model.isEmpty && !store.models.contains(where: { $0["id"].string == model }) { Text("\(model) · \(store.models.isEmpty ? "catalog not loaded" : "unavailable")").tag(model) }
             ForEach(store.models, id: \.self) { Text($0["name"].string.isEmpty ? $0["id"].string : "\($0["name"].string) · \($0["id"].string)").tag($0["id"].string) }
         }.disabled(disabled).accessibilityIdentifier("model-picker")
-        Button("Refresh available models") { Task { await store.loadModels() } }.disabled(!store.connected)
+        Picker("Thinking effort", selection: $effort) {
+            Text("Provider default" + (controls["defaultReasoningEffort"].string.isEmpty ? "" : " · " + controls["defaultReasoningEffort"].string)).tag("")
+            ForEach(efforts, id: \.self) { Text($0).tag($0) }
+            if !effort.isEmpty && !efforts.contains(effort) { Text("\(effort) · unavailable (saved)").tag(effort) }
+        }.disabled(disabled).accessibilityIdentifier("effort-picker")
+        Picker("Context size", selection: $contextTier) {
+            if tiers.isEmpty { Text("Default · capacity not reported").tag("default") }
+            ForEach(tiers, id: \.self) { Text(modelContextLabel($0)).tag($0["id"].string) }
+            if contextTier != "default" && !tiers.contains(where: { $0["id"].string == contextTier }) { Text("\(contextTier) · unavailable (saved)").tag(contextTier) }
+        }.disabled(disabled).accessibilityIdentifier("context-tier-picker")
+        if efforts.isEmpty { Text(controls["reasoningSupported"] == .bool(false) ? "This model does not support thinking effort." : "Thinking effort choices are not reported.").font(.caption).foregroundStyle(.secondary) }
+        if controls["maxOutputTokens"].int > 0 { Text("Context size is the prompt budget. Maximum output: \(modelTokenSize(controls["maxOutputTokens"])) tokens.").font(.caption).foregroundStyle(.secondary) }
+        Text(store.modelStatus["checkedAt"].string.isEmpty ? "Catalog not checked yet." : "Catalog checked \(store.modelStatus["checkedAt"].string). Refreshes at Mac launch and every five minutes.").font(.caption).foregroundStyle(.secondary)
+        if store.modelStatus["stale"].bool { Text("Using last known choices. \(store.modelStatus["error"].string)").font(.caption).foregroundStyle(.orange) }
+        Button("Refresh available models") { Task { await store.loadModels(force: true) } }.disabled(!store.connected)
     }
 }
 

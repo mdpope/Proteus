@@ -4,17 +4,21 @@ const { BrowserTabs } = require('./browser.cjs');
 let service, window, browser, credentials, tray, standupWindow, closing = false;
 const showWindow = () => { if (window) { if (window.isMinimized()) window.restore(); window.show(); window.focus(); } };
 app.setName('Proteus');
+// Finder launches lack the interactive shell PATH; match the repository launcher.
+if (process.platform === 'darwin') process.env.PATH = [...new Set(['/opt/homebrew/bin', '/usr/local/bin', ...(process.env.PATH || '/usr/bin:/bin:/usr/sbin:/sbin').split(':')])].join(':');
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on('second-instance', showWindow);
   app.on('activate', showWindow);
   app.whenReady().then(async () => {
+    const appIcon = nativeImage.createFromPath(path.join(__dirname, 'icon.png'));
+    app.dock?.setIcon(appIcon);
     const { startServer } = await import('../src/server.js');
     const { isWithin } = await import('../src/files.js');
     const { CredentialBroker } = await import('../src/credentials.js');
     // The provider only receives this bounded interface, never Electron or a CDP endpoint.
     service = await startServer({ port: Number(process.env.PORT || 4317), browser: { agent: (...args) => browser.agent(...args) }, background: true });
-    window = new BrowserWindow({ width: 1440, height: 960, minWidth: 850, minHeight: 650, title: 'Proteus', backgroundColor: '#111716',
+    window = new BrowserWindow({ width: 1440, height: 960, minWidth: 850, minHeight: 650, title: 'Proteus', icon: appIcon, backgroundColor: '#111716',
       webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
     browser = new BrowserTabs(window, service.origin);
     credentials = new CredentialBroker(service.home);

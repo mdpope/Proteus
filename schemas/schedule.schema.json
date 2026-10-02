@@ -3,33 +3,132 @@
   "$id": "https://github.com/mdpope/Proteus/blob/main/schemas/schedule.schema.json",
   "title": "Proteus schedule",
   "type": "object",
-  "required": ["schemaVersion", "id", "name", "enabled", "cron", "timezone", "provider", "model", "workspace", "misfire", "prompt"],
+  "required": [
+    "schemaVersion",
+    "id",
+    "name",
+    "enabled",
+    "cron",
+    "timezone",
+    "provider",
+    "model",
+    "workspace",
+    "misfire",
+    "prompt"
+  ],
   "properties": {
-    "schemaVersion": { "const": 1 },
-    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,79}$" },
-    "name": { "type": "string", "minLength": 1 },
-    "enabled": { "type": "boolean" },
-    "cron": { "type": "string", "description": "Five-field cron in the named time zone." },
-    "timezone": { "type": "string", "description": "IANA time zone." },
-    "provider": { "enum": ["copilot", "rehearsal"] },
-    "model": { "type": "string", "description": "An explicit provider model ID; empty only for rehearsal." },
-    "reasoningEffort": { "enum": ["low", "medium", "high", "xhigh", "max"] },
-    "workspace": { "type": "object", "required": ["cwd", "additionalDirectories"], "properties": { "cwd": { "type": "string" }, "additionalDirectories": { "type": "array", "items": { "type": "string" } } } },
-    "misfire": { "enum": ["skip", "coalesce"] },
-    "prompt": { "type": "string", "minLength": 1 },
-    "skillDirectories": { "type": "array", "items": { "type": "string" } },
-    "mcpServers": { "type": "object", "description": "Provider-compatible MCP definitions. Use local environment or keychain for credentials." },
-    "contextSelection": {
-      "type": "object", "description": "Source IDs from the local context catalog, resolved for each new run. Omit for workspace defaults.",
-      "required": ["includeDefaults", "selectedIds"],
+    "schemaVersion": {
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,79}$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "cron": {
+      "type": "string",
+      "description": "Five-field cron in the named time zone."
+    },
+    "timezone": {
+      "type": "string",
+      "description": "IANA time zone."
+    },
+    "provider": {
+      "enum": [
+        "copilot",
+        "rehearsal"
+      ]
+    },
+    "model": {
+      "type": "string",
+      "description": "An explicit provider model ID; empty only for rehearsal."
+    },
+    "reasoningEffort": {
+      "type": "string",
+      "maxLength": 80,
+      "description": "Provider-advertised reasoning effort ID; omit or empty for provider default. Validated against the live model at execution."
+    },
+    "workspace": {
+      "type": "object",
+      "required": [
+        "cwd",
+        "additionalDirectories"
+      ],
       "properties": {
-        "includeDefaults": { "type": "boolean", "description": "False loads only selected sources/main agent and excludes legacy skillDirectories/mcpServers." },
-        "selectedIds": { "type": "array", "items": { "type": "string", "minLength": 1 } },
-        "agentId": { "type": ["string", "null"] }
+        "cwd": {
+          "type": "string"
+        },
+        "additionalDirectories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "misfire": {
+      "enum": [
+        "skip",
+        "coalesce"
+      ]
+    },
+    "prompt": {
+      "type": "string",
+      "minLength": 1
+    },
+    "skillDirectories": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "mcpServers": {
+      "type": "object",
+      "description": "Provider-compatible MCP definitions. Use local environment or keychain for credentials."
+    },
+    "contextSelection": {
+      "type": "object",
+      "description": "Source IDs from the local context catalog, resolved for each new run. Omit for workspace defaults.",
+      "required": [
+        "includeDefaults",
+        "selectedIds"
+      ],
+      "properties": {
+        "includeDefaults": {
+          "type": "boolean",
+          "description": "False loads only selected sources/main agent and excludes legacy skillDirectories/mcpServers."
+        },
+        "selectedIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "agentId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
       },
       "additionalProperties": true
     },
-    "source": { "type": "object", "description": "Optional upstream manifest provenance. Host-resolved paths stay outside Git." }
+    "source": {
+      "type": "object",
+      "description": "Optional upstream manifest provenance. Host-resolved paths stay outside Git."
+    },
+    "contextTier": {
+      "type": "string",
+      "maxLength": 80,
+      "description": "Provider-advertised context tier ID; omit or default for provider default. Copilot currently advertises default and, where available, long_context."
+    }
   },
   "additionalProperties": true
 }

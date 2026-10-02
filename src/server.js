@@ -1,3 +1,4 @@
+import { ModelCatalog } from './model-catalog.js';
 import http from 'node:http';
 import { contextPlan } from '../public/context-plan.js';
 import { agentName } from '../public/agent-name.js';
@@ -58,6 +59,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
     const snapshot = context.capture({ workspace: schedule.workspace, selectedIds: schedule.contextSelection?.selectedIds, agentId: schedule.contextSelection?.agentId, includeDefaults: schedule.contextSelection?.includeDefaults });
     return { ...schedule, context: snapshot, workspace: snapshot.workspace };
   };
+  const catalog = new ModelCatalog(() => (providers?.copilot || copilot).status());
   const permissionPreviews = new Map();
   function permissionSchedule(schedule) {
     if (schedule.context && !schedule.contextSelection) return schedule;
@@ -70,7 +72,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
     }
     return permissionPreviews.get(key);
   }
-  const token = randomBytes(32).toString('hex'); let origin; let remote; let providerStatus = null; const schedulerErrors = []; const eventClients = new Set();
+  const token = randomBytes(32).toString('hex'); let origin; let remote; const schedulerErrors = []; const eventClients = new Set();
   const notify = () => { for (const client of eventClients) client.write('event: change\ndata: {}\n\n'); };
   engine.on('change', notify);
   engine.on('scheduler-error', error => { schedulerErrors.push(error); if (schedulerErrors.length > 20) schedulerErrors.shift(); atomicJSON(path.join(home, 'scheduler-errors.json'), schedulerErrors); });
@@ -103,7 +105,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         throw new Error('Unknown remote action.');
       }
       if (url.pathname === '/api/state') return json(200, {
-        schedules: engine.schedules.list(), runs: engine.listRuns().map(run => ({ ...run, storage: storagePaths(home, run), permissionContext: engine.permissions.describe(run.schedule) })), providerStatus,
+        schedules: engine.schedules.list(), runs: engine.listRuns().map(run => ({ ...run, storage: storagePaths(home, run), permissionContext: engine.permissions.describe(run.schedule) })), providerStatus: catalog.value,
         permissions: engine.permissions.get(), permissionWorkspaces: [...new Map([
           { ...settings.get(), name: 'Default workspace', ref: { defaults: true } },
           ...engine.schedules.list().filter(schedule => !schedule.error).map(schedule => ({ ...schedule, ref: { scheduleId: schedule.id } })),
@@ -219,6 +221,8 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
           schemaVersion: 1, id: `chat-${Date.now()}-${randomBytes(4).toString('hex')}`, name: value.name || 'Workspace chat', enabled: false,
           cron: '0 9 * * 1-5', timezone: value.timezone || defaults.timezone,
           provider: value.provider || defaults.provider, model: value.model || defaults.model,
+          reasoningEffort: value.reasoningEffort ?? ((value.model || defaults.model) === defaults.model && (value.provider || defaults.provider) === defaults.provider ? defaults.reasoningEffort : undefined),
+          contextTier: value.contextTier ?? ((value.model || defaults.model) === defaults.model && (value.provider || defaults.provider) === defaults.provider ? defaults.contextTier : undefined),
           workspace: snapshot.workspace, context: snapshot, skillDirectories: value.skillDirectories || defaults.skillDirectories,
           mcpServers: value.mcpServers || defaults.mcpServers, editorContext: value.editorContext, misfire: 'skip', prompt: value.prompt
         });
@@ -232,7 +236,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         engine.cancel(id); return json(200, { ok: true });
       }
       if (url.pathname === '/api/usage' && req.method === 'POST') return json(200, await usage.get((await body(req)).force === true));
-      if (url.pathname === '/api/provider' && req.method === 'POST') { providerStatus = await copilot.status(); return json(200, providerStatus); }
+      if (url.pathname === '/api/provider' && req.method === 'POST') { const value = await body(req); const result = await catalog.get(value.force !== false); notify(); remote.changed(); return json(200, result); }
       if (url.pathname === '/api/chat-image' && req.method === 'POST') {
         const value = await body(req);
         return json(200, readChatImage(engine.getRun(value.id), value.source));
@@ -259,13 +263,17 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   origin = `http://127.0.0.1:${server.address().port}`;
   atomicJSON(path.join(home, 'connection.json'), { origin, token, pid: process.pid });
   const timer = timers ? setInterval(() => { try { engine.tick(); } catch (error) { engine.emit('scheduler-error', { error: error.message, at: new Date().toISOString() }); } }, 1000) : null;
-  const service = { engine, settings, context, standup, origin, token, home, url: `${origin}/?token=${token}`, async close() {
-    if (timer) clearInterval(timer); await remote.close(); await engine.close(); await copilot.close();
+  const service = { engine, settings, context, standup, catalog, origin, token, home, url: `${origin}/?token=${token}`, async close() {
+    if (timer) clearInterval(timer); if (catalogTimer) clearInterval(catalogTimer); await catalog.pending; await remote.close(); await engine.close(); await copilot.close();
     for (const client of eventClients) client.end(); eventClients.clear();
     await new Promise(resolve => server.close(resolve)); server.closeAllConnections();
     fs.rmSync(path.join(home, 'connection.json'), { force: true }); unlock();
   } };
-  remote = service.remote = new RemoteHost(service); await remote.start(); return service;
+  remote = service.remote = new RemoteHost(service); await remote.start();
+  const refreshCatalog = () => catalog.get().then(() => { notify(); remote.changed(); });
+  const catalogTimer = timers ? setInterval(refreshCatalog, 60_000) : null;
+  if (timers) void refreshCatalog();
+  return service;
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const app = await startServer({ port: Number(process.env.PORT || 4317) });

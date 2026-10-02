@@ -97,3 +97,35 @@ extension RemoteUITests {
         app.buttons["Stop"].tap()
     }
 }
+
+extension RemoteUITests {
+    @MainActor func testModelCapabilities() async throws {
+        let (data, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/pair?models=1")!)
+        let fixture = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        let app = XCUIApplication(); app.launchArguments = ["--reset-pairing"]; app.launch()
+        let link = app.textFields["pairing-link"]; XCTAssertTrue(link.waitForExistence(timeout: 15)); link.tap(); link.typeText(fixture["code"] as! String)
+        app.buttons["pair-mac"].tap(); let newChat = app.buttons["new-chat"]; XCTAssertTrue(newChat.waitForExistence(timeout: 25)); newChat.tap()
+        let prompt = app.textFields["chat-prompt"]; XCTAssertTrue(prompt.waitForExistence(timeout: 10)); prompt.tap(); prompt.typeText("Model options rehearsal")
+        let effort = app.descendants(matching: .any)["effort-picker"].firstMatch
+        for _ in 0..<12 {
+            if effort.exists && effort.isHittable { break }
+            let list = app.collectionViews["new-chat-form"]
+            list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45)).press(forDuration: 0.05, thenDragTo: list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25)))
+        }
+        guard effort.waitForExistence(timeout: 10) else { XCTFail("Effort picker missing"); return }; effort.tap(); app.buttons["none"].tap()
+        let context = app.descendants(matching: .any)["context-tier-picker"].firstMatch
+        for _ in 0..<12 {
+            if context.exists && context.isHittable { break }
+            let list = app.collectionViews["new-chat-form"]
+            list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45)).press(forDuration: 0.05, thenDragTo: list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25)))
+        }
+        guard context.waitForExistence(timeout: 10) else { XCTFail("Context picker missing"); return }
+        context.tap(); app.buttons["872K · Long context"].tap()
+        let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Live effort and context controls"; screenshot.lifetime = .keepAlways; add(screenshot)
+        app.buttons["start-chat"].tap(); XCTAssertTrue(app.staticTexts["Your input is needed"].waitForExistence(timeout: 20))
+        let (latest, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/latest")!)
+        let value = try JSONSerialization.jsonObject(with: latest) as! [String: Any]
+        XCTAssertEqual(value["reasoningEffort"] as? String, "none"); XCTAssertEqual(value["contextTier"] as? String, "long_context")
+        if app.buttons["Stop"].exists { app.buttons["Stop"].tap() }
+    }
+}

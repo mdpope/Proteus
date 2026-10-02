@@ -9,6 +9,7 @@ import { secret, seal } from '../src/remote-crypto.js';
 import { startServer } from '../src/server.js';
 import { RehearsalProvider } from '../src/rehearsal.js';
 import { startRelay } from '../relay/server.js';
+import { copilotModel } from '../src/model-catalog.js';
 import { until } from './remote-client.mjs';
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-mobile-test-'));
 const workspace = path.join(home, 'workspace'); fs.mkdirSync(workspace);
@@ -22,7 +23,7 @@ if (process.env.PROTEUS_TEST_CONTAINER === '1') {
   relay = { port: 4328, close: async () => execFileSync('docker', ['--context', 'colima-proteus', 'stop', 'proteus-relay-test'], { stdio: 'ignore' }) };
 } else relay = await startRelay({ port: 4328, token });
 const rehearsal = new RehearsalProvider();
-const app = await startServer({ home, port: 0, timers: false, providers: { rehearsal: {
+const app = await startServer({ home, port: 0, timers: false, providers: { copilot: { status: async () => ({available:true,models:[copilotModel({id:"synthetic-mobile",name:"Synthetic mobile",supportedReasoningEfforts:["none","high"],capabilities:{supports:{reasoningEffort:true},limits:{max_output_tokens:128000}},billing:{tokenPrices:{maxPromptTokens:272000,longContext:{maxPromptTokens:872000}}}})]}), run: args => rehearsal.run(args) }, rehearsal: {
   async run(args) {
     args.emit('tool', 'Read synthetic notes', { tool: { callId: 'synthetic-read', name: 'view', summary: 'Read synthetic notes', status: 'completed', arguments: '{"path":"fixture.md"}', output: 'Expanded synthetic tool result', durationMs: 120 } });
     if (args.prompt.includes('Permission rehearsal')) await args.ask({ type: 'permission', question: 'Read synthetic fixture?', details: { kind: 'read', path: workspace } });
@@ -35,11 +36,13 @@ await until(() => app.remote.status === 'online', 20_000);
 const receive = app.remote.receive.bind(app.remote);
 app.remote.receive = async (...args) => { try { return await receive(...args); } catch (error) { console.log('Synthetic protocol rejection: ' + error.message); throw error; } };
 const fixture = http.createServer(async (req, res) => {
-  if (req.url === '/latest') { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ context: app.engine.listRuns()[0]?.schedule.context })); return; }
-  if (req.url !== '/pair') { res.writeHead(404); res.end(); return; }
+  if (req.url === '/latest') { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ context: app.engine.listRuns()[0]?.schedule.context, reasoningEffort: app.engine.listRuns()[0]?.schedule.reasoningEffort, contextTier: app.engine.listRuns()[0]?.schedule.contextTier })); return; }
+  if (!req.url.startsWith('/pair')) { res.writeHead(404); res.end(); return; }
   // Every native test starts with an idle synthetic runner, including after a failed test.
   for (const run of app.engine.listRuns()) if (['running', 'queued', 'awaiting_input'].includes(run.status)) app.engine.cancel(run.id);
   app.context.mutate(config => { config.favorites = []; }, app.context.config().revision);
+  const defaults = app.settings.get();
+  app.settings.save({...defaults,provider:req.url.includes("models=1")?"copilot":"rehearsal",model:req.url.includes("models=1")?"synthetic-mobile":"",reasoningEffort:"",contextTier:"default"},defaults.revision);
   const key = secret(); const aad = 'synthetic:cross-platform';
   const invite = await app.remote.pairing();
   res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ code: invite.code, key, aad, box: seal(key, { test: 'CryptoKit ↔ Node' }, aad) }));

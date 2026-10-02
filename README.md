@@ -192,3 +192,16 @@ Chats and schedules have Favorites, Check all favorites, an explicit source-load
 preview of which instructions, skills, agents and MCPs will load. Favorites sync with paired
 mobile devices. See [context loading](docs/context-loading.md) for automatic defaults, token
 estimate limits, and the plain-file schedule format.
+
+## Handoff and current behavior
+
+For another agent, start with [the handoff guide](docs/handoff.md), which links design decisions,
+the module map, validation commands, feature docs, the [changelog](CHANGELOG.md), and
+[remaining work](docs/planned-updates.md). Runtime/private context stays outside this repository.
+
+Thinking effort and context size are beside the model picker on Mac and iOS. Mac Settings also
+sets defaults. All choices come from the refreshed provider catalog; see [providers](docs/providers.md).
+Opening/reloading a schedule reads its latest local JSON, with conflict protection for unsaved
+edits. organization workflows source manifests still require export/reconciliation; see [schedules](docs/schedules.md).
+
+For the native Proteus name and iOS artwork in Finder/Dock, build the [local Mac app](docs/mac-app.md).

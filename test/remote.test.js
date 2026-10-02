@@ -144,3 +144,17 @@ test('favorites and explicit schedule selections sync across devices without ena
   const { runId } = await a.request('schedule.run', { id: original.id });
   const run = await a.request('chat.get', { id: runId }); assert.equal(run.context.includeDefaults, false); assert.deepEqual(run.context.entries.map(e => e.id), [instruction.id]);
 });
+
+test('remote model options and provider capabilities round trip through encrypted commands', async t => {
+  const { copilotModel }=await import('../src/model-catalog.js');
+  const model=copilotModel({id:'fixture',supportedReasoningEfforts:['none'],billing:{tokenPrices:{maxPromptTokens:100,longContext:{maxPromptTokens:200}}}});
+  const {app,connect}=await fixture(t,{copilot:{status:async()=>({available:true,models:[model]}),run:async()=>{}}});
+  const client=await connect();const catalog=await client.request('provider.status',{force:true});
+  assert.deepEqual(catalog.models[0].controls,model.controls);
+  const schedule=app.engine.schedules.list()[0];
+  await client.request('schedule.save',{id:schedule.id,expectedRevision:schedule.revision,changes:{provider:'copilot',model:'fixture',reasoningEffort:'none',contextTier:'long_context'}});
+  assert.equal(app.engine.schedules.get(schedule.id).reasoningEffort,'none');
+  const sync=await client.request('sync');assert.equal(sync.state.schedules[0].contextTier,'long_context');
+  const result=await client.request('chat.start',{prompt:'Model options fixture',provider:'copilot',model:'fixture',reasoningEffort:'none',contextTier:'long_context',workspaceId:sync.state.context.defaultWorkspaceId});
+  const run=await client.request('chat.get',{id:result.runId});assert.equal(run.schedule.reasoningEffort,'none');assert.equal(run.schedule.contextTier,'long_context');
+});

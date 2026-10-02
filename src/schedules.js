@@ -1,3 +1,4 @@
+import { validateModelOptionShape } from './model-catalog.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -21,7 +22,7 @@ export function validateSchedule(value) {
   if (!value.workspace || typeof value.workspace.cwd !== 'string' || !path.isAbsolute(value.workspace.cwd)) throw new Error('workspace.cwd must be an absolute directory.');
   if (!Array.isArray(value.workspace.additionalDirectories) || value.workspace.additionalDirectories.some(p => typeof p !== 'string' || !path.isAbsolute(p))) throw new Error('workspace.additionalDirectories must be absolute paths.');
   if (value.misfire !== 'skip' && value.misfire !== 'coalesce') throw new Error('misfire must be skip or coalesce.');
-  if (value.reasoningEffort && !['low','medium','high','xhigh','max'].includes(value.reasoningEffort)) throw new Error('Unsupported reasoning effort.');
+  validateModelOptionShape(value);
   if (value.contextSelection !== undefined) validateContextSelection(value.contextSelection);
   nextRuns(value.cron, value.timezone);
   return value;

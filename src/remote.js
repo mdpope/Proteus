@@ -11,14 +11,14 @@ import { seal, unseal, secret } from './remote-crypto.js';
 import { startRelay } from '../relay/server.js';
 
 const pick = (value, keys) => Object.fromEntries(keys.filter(key => value?.[key] !== undefined).map(key => [key, value[key]]));
-const scheduleKeys = ['id', 'name', 'enabled', 'cron', 'timezone', 'provider', 'model', 'workspace', 'misfire', 'prompt', 'revision', 'nextRuns', 'error', 'source', 'contextSelection'];
+const scheduleKeys = ['id', 'name', 'enabled', 'cron', 'timezone', 'provider', 'model', 'reasoningEffort', 'contextTier', 'workspace', 'misfire', 'prompt', 'revision', 'nextRuns', 'error', 'source', 'contextSelection'];
 const entryKeys = ['id', 'name', 'description', 'kind', 'path', 'sources', 'roots', 'mode', 'scope', 'warnings', 'unsupportedAgentFields', 'error', 'missing', 'characters'];
 const remoteEntry = entry => ({ ...pick(entry, entryKeys), ...(entry.agent ? { userInvocable: entry.agent.userInvocable } : {}) });
 const mutationMethods = new Set(['chat.start', 'chat.reply', 'chat.resume', 'chat.cancel', 'schedule.run', 'schedule.save', 'context.mode', 'context.favorite', 'context.addFolders', 'chat.context', 'chat.permissions']);
 const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
 export function remoteRun(run, offset = 0, permissions) {
   const end = Math.max(0, run.events.length - offset); const start = Math.max(0, end - 100);
-  return { ...(permissions ? { permissionContext: permissions.describe(run.schedule), permissionRevision: permissions.get().revision } : {}), agentName: agentName(run), ...pick(run, ['id', 'title', 'trigger', 'status', 'createdAt', 'updatedAt', 'pending', 'usage', 'contextUsage', 'providerSessionId', 'nativeSessionPath', 'automaticApprovals']),
+  return { ...(permissions ? { permissionContext: permissions.describe(run.schedule), permissionRevision: permissions.get().revision } : {}), agentName: agentName(run), ...pick(run, ['id', 'title', 'trigger', 'status', 'createdAt', 'updatedAt', 'pending', 'usage', 'contextUsage', 'providerSessionId', 'nativeSessionPath', 'automaticApprovals', 'modelCapabilities']),
     events: run.events.slice(start, end), eventStart: start, eventCount: run.events.length, earlier: start, schedule: pick(run.schedule, scheduleKeys),
     context: { ...pick(run.schedule.context, ['workspaceId', 'selectedIds', 'agentId', 'includeDefaults', 'baseWorkspace', 'capturedAt']), entries: (run.schedule.context?.entries || []).map(remoteEntry) }, liveMessages: structuredClone(run.liveMessages || {}) };
 }
@@ -27,7 +27,7 @@ export function remoteState(service) {
   return { hostName: os.hostname(), schedules: service.engine.schedules.list().map(s => pick(s, scheduleKeys)),
     runs: service.engine.listRuns().slice(0, 100).map(r => pick(r, ['id', 'title', 'status', 'createdAt', 'updatedAt'])), runCount: service.engine.listRuns().length,
     context: { ...pick(context, ['revision', 'refreshedAt', 'defaultWorkspaceId', 'workspaces', 'universalFolders', 'libraryFolders', 'favorites', 'errors']), entries: context.entries.map(remoteEntry) },
-    defaults: pick(defaults, ['provider', 'model', 'timezone']), protocol: 1 };
+    defaults: pick(defaults, ['provider', 'model', 'reasoningEffort', 'contextTier', 'timezone']), providerStatus: service.catalog?.value || null, protocol: 1 };
 }
 function validateRelayURL(value) {
   const url = new URL(value);
@@ -173,11 +173,11 @@ export class RemoteHost {
     if (method === 'runs.list') { const offset = Math.max(0, Math.floor(Number(args.offset) || 0)); return engine.listRuns().slice(offset, offset + 100).map(r => pick(r, ['id', 'title', 'status', 'createdAt', 'updatedAt'])); }
     if (method === 'chat.get') { const run = engine.getRun(args.id); peer.runId = run.id; return remoteRun(run, Math.max(0, Math.floor(Number(args.offset) || 0)), engine.permissions); }
     if (method === 'chat.image') return this.api('/api/chat-image', pick(args, ['id', 'source']));
-    if (method === 'provider.status') return this.api('/api/provider', {});
+    if (method === 'provider.status') return this.api('/api/provider', pick(args, ['force']));
     if (method === 'context.refresh') { this.service.context.refresh(); this.changed(); return remoteState(this.service).context; }
     if (method === 'schedule.preview') return this.api('/api/preview', pick(args, ['cron', 'timezone']));
     if (method === 'chat.start') {
-      const run = await this.api('/api/chat', pick(args, ['name', 'prompt', 'provider', 'model', 'workspaceId', 'selectedIds', 'agentId', 'includeDefaults']));
+      const run = await this.api('/api/chat', pick(args, ['name', 'prompt', 'provider', 'model', 'reasoningEffort', 'contextTier', 'workspaceId', 'selectedIds', 'agentId', 'includeDefaults']));
       peer.runId = run.id; return { runId: run.id };
     }
     if (method === 'schedule.run') { const run = await this.api('/api/run', { id: args.id }); peer.runId = run.id; return { runId: run.id }; }
@@ -198,7 +198,7 @@ export class RemoteHost {
       const original = engine.schedules.get(args.id);
       if (original.source?.manifest) throw new Error('This schedule is repository-owned. Update its source manifest and reconcile it on the Mac.');
       if (revision(original) !== args.expectedRevision) throw new Error('Schedule changed. Refresh before saving.');
-      await this.api('/api/schedules', { schedule: { ...original, ...pick(args.changes, ['name', 'enabled', 'cron', 'timezone', 'provider', 'model', 'prompt', 'misfire', 'contextSelection']) }, expectedRevision: args.expectedRevision }); return { ok: true };
+      await this.api('/api/schedules', { schedule: { ...original, ...pick(args.changes, ['name', 'enabled', 'cron', 'timezone', 'provider', 'model', 'reasoningEffort', 'contextTier', 'prompt', 'misfire', 'contextSelection']) }, expectedRevision: args.expectedRevision }); return { ok: true };
     }
     throw new Error('Unsupported remote command.');
   }

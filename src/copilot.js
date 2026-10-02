@@ -6,6 +6,7 @@ import os from 'node:os';
 import { revision } from './schedules.js';
 import { selectedAgentToolScope } from './agent-tools.js';
 import { toolActivity, displayText } from './tool-activity.js';
+import { copilotModel, validateModelOptions } from './model-catalog.js';
 import { TurnWaiter } from './turn-waiter.js';
 
 export class CopilotProvider {
@@ -25,11 +26,18 @@ export class CopilotProvider {
     const client = this.starting ? (await this.starting, this.client) : await this.connect();
     return await client.rpc.account.getQuota({});
   }
+  async models(client) {
+    // listModels() retains its first result until disconnect. Use the public RPC
+    // to refresh without tearing down a client that owns an active conversation.
+    const result = client.rpc?.models?.list ? (await client.rpc.models.list({})).models : await client.listModels();
+    return result.map(copilotModel);
+  }
   async status() {
     try {
-      const client = await this.connect(); const auth = await client.getAuthStatus();
+      const client = this.starting ? (await this.starting, this.client) : await this.connect(); const auth = await client.getAuthStatus();
       if (!auth.isAuthenticated) return { available: false, error: 'Sign in with Copilot CLI, then refresh.', auth };
-      const [models, quota] = await Promise.allSettled([client.listModels(), client.rpc.account.getQuota({})]);
+      const [models, quota] = await Promise.allSettled([this.models(client), client.rpc.account.getQuota({})]);
+      if (models.status === 'rejected') throw models.reason;
       return {
         available: true, auth,
         models: models.status === 'fulfilled' ? models.value : [],
@@ -63,12 +71,16 @@ export class CopilotProvider {
     this.configurationFingerprint = fingerprint;
     run.providerHome ??= this.dataDirectory();
     const client = await this.connect(run.providerHome);
-    const models = await client.listModels();
+    const models = await this.models(client);
     if (!models.some(model => model.id === run.schedule.model)) throw new Error(`Model ${run.schedule.model} is unavailable for this Copilot account. Choose a model from the provider panel.`);
+    const model = models.find(model => model.id === run.schedule.model);
+    validateModelOptions(run.schedule, model);
+    run.modelCapabilities = { capturedAt: new Date().toISOString(), id: model.id, controls: model.controls };
     const includeLegacy = snapshot?.includeDefaults !== false;
     const config = {
       model: run.schedule.model, streaming: true,
       ...(run.schedule.reasoningEffort ? { reasoningEffort: run.schedule.reasoningEffort } : {}),
+      ...(run.schedule.contextTier ? { contextTier: run.schedule.contextTier } : {}),
       workingDirectory: run.schedule.workspace.cwd,
       additionalDirectories: run.schedule.workspace.additionalDirectories,
       skillDirectories: includeLegacy ? run.schedule.skillDirectories || [] : [],

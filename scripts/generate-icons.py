@@ -30,6 +30,8 @@ def draw(size, template=False):
 (ROOT / 'desktop/trayTemplate.png').write_bytes(draw(64, True))
 icon = ROOT / 'ios/Proteus/Assets.xcassets/AppIcon.appiconset'
 icon.mkdir(parents=True, exist_ok=True)
-(icon / 'AppIcon.png').write_bytes(draw(1024))
+artwork = draw(1024)
+(icon / 'AppIcon.png').write_bytes(artwork)
+(ROOT / 'desktop/icon.png').write_bytes(artwork)
 (icon / 'Contents.json').write_text('{"images":[{"filename":"AppIcon.png","idiom":"universal","platform":"ios","size":"1024x1024"}],"info":{"author":"xcode","version":1}}\n')
 (icon.parent / 'Contents.json').write_text('{"info":{"author":"xcode","version":1}}\n')

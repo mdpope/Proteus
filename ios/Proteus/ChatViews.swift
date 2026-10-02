@@ -30,11 +30,14 @@ struct NewChatView: View {
     @State private var prompt = ""
     @State private var provider = "copilot"
     @State private var model = ""
+    @State private var effort = ""
+    @State private var contextTier = "default"
     @State private var workspace = ""
     @State private var selected = Set<String>()
     @State private var agent = ""
     @State private var includeDefaults = true
     @State private var sending = false
+    @State private var loading = true
     var body: some View {
         NavigationStack {
             Form {
@@ -43,14 +46,14 @@ struct NewChatView: View {
                     Picker("Workspace", selection: $workspace) { ForEach(store.state["context"]["workspaces"].array, id: \.self) { Text($0["name"].string).tag($0["id"].string) } }
                     Picker("Provider", selection: $provider) { Text("GitHub Copilot").tag("copilot"); Text("Local rehearsal").tag("rehearsal") }.accessibilityIdentifier("chat-provider")
                     if provider == "copilot" {
-                        CopilotModelPicker(model: $model)
+                        ProviderModelPicker(model: $model, effort: $effort, contextTier: $contextTier)
                     }
                 }
                 ContextSelection(selected: $selected, agent: $agent, includeDefaults: $includeDefaults, workspaceID: workspace)
-            }.accessibilityIdentifier("new-chat-form").navigationTitle("New chat").toolbar {
+            }.scrollDismissesKeyboard(.interactively).disabled(loading).accessibilityIdentifier("new-chat-form").navigationTitle("New chat").toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button { start() } label: { if sending { ProgressView() } else { Text("Start chat") } }.disabled(sending || !store.connected || prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || workspace.isEmpty || (provider == "copilot" && model.isEmpty)).accessibilityIdentifier("start-chat") }
-            }.task { workspace = store.state["context"]["defaultWorkspaceId"].string; provider = store.state["defaults"]["provider"].string; model = store.state["defaults"]["model"].string; if provider == "copilot" { await store.loadModels() } }
+                ToolbarItem(placement: .confirmationAction) { Button { start() } label: { if sending { ProgressView() } else { Text("Start chat") } }.disabled(loading || sending || !store.connected || prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || workspace.isEmpty || (provider == "copilot" && model.isEmpty)).accessibilityIdentifier("start-chat") }
+            }.task { await store.refresh(); workspace = store.state["context"]["defaultWorkspaceId"].string; provider = store.state["defaults"]["provider"].string; model = store.state["defaults"]["model"].string; effort = store.state["defaults"]["reasoningEffort"].string; contextTier = store.state["defaults"]["contextTier"].string.isEmpty ? "default" : store.state["defaults"]["contextTier"].string; if provider == "copilot" { await store.loadModels() }; loading = false }
         }
     }
     private func start() {
@@ -58,7 +61,7 @@ struct NewChatView: View {
         Task { defer { sending = false }
             do {
                 var ids = selected; if !agent.isEmpty { ids.insert(agent) }
-                let result = try await store.request("chat.start", ["name": .string(name.isEmpty ? String(prompt.prefix(64)) : name), "prompt": .string(prompt), "provider": .string(provider), "model": .string(provider == "copilot" ? model : ""), "workspaceId": .string(workspace), "selectedIds": .array(ids.sorted().map(JSON.string)), "agentId": .string(agent), "includeDefaults": .bool(includeDefaults)])
+                let result = try await store.request("chat.start", ["name": .string(name.isEmpty ? String(prompt.prefix(64)) : name), "prompt": .string(prompt), "provider": .string(provider), "model": .string(provider == "copilot" ? model : ""), "reasoningEffort": .string(effort), "contextTier": .string(contextTier), "workspaceId": .string(workspace), "selectedIds": .array(ids.sorted().map(JSON.string)), "agentId": .string(agent), "includeDefaults": .bool(includeDefaults)])
                 await store.refresh(); onStarted(result["runId"].string)
             } catch { store.error = error.localizedDescription }
         }
@@ -101,6 +104,7 @@ struct ChatView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(run["schedule"]["workspace"]["cwd"].string).font(.caption.monospaced()).textSelection(.enabled)
                         Text("Model: \(run["schedule"]["model"].string)").font(.caption)
+                        Text("Thinking effort: \(run["schedule"]["reasoningEffort"].string.isEmpty ? "Provider default" : run["schedule"]["reasoningEffort"].string) · Context: \(run["schedule"]["contextTier"].string.isEmpty ? "default" : run["schedule"]["contextTier"].string)").font(.caption)
                         ChatPermissionsView(run: run)
                         if !run["nativeSessionPath"].string.isEmpty { Text(run["nativeSessionPath"].string).font(.caption.monospaced()).textSelection(.enabled) }
                         ForEach(run["context"]["entries"].array, id: \.self) { entry in Text("\(entry["kind"].string): \(entry["name"].string)").font(.caption) }

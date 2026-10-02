@@ -14,3 +14,10 @@ Run `npm test` and `npm run check` after changing execution or persistence. Exer
 UI after interface changes. Mark rehearsal output explicitly and never invent provider usage.
 Only one runner process owns an application-data directory. Do not permit concurrent turns in
 one session. A completed model turn is not proof that an external workflow finished successfully.
+
+Start with `docs/handoff.md` for reading order, module ownership and validation commands.
+Update the relevant feature documentation, `CHANGELOG.md`, and `docs/planned-updates.md` when
+behavior or scope changes. Record significant design choices in `docs/decisions.md`. Distinguish
+implemented, verified and deferred work; a clean build alone does not verify a live workflow.
+Model effort/context choices must come from refreshed provider metadata, never a model-name table.
+Schedule reload must read current disk state and preserve revision conflict protection.
