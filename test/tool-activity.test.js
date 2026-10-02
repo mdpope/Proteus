@@ -81,3 +81,14 @@ test('duplicate permission checks share one decision only within the exact activ
   assert.equal(asked.filter(r => r.managedApprovalRequired).length, 2);
   assert.equal(asked.filter(r => r.path === '/fixture/b').length, 1);
 });
+
+test('nonzero shell exit is visible even when the SDK reports successful tool execution', () => {
+  const events = []; const receive = toolActivity({ emit: (role, text, data) => events.push({ role, text, data }), update() {} });
+  for (const code of [0, 1]) {
+    receive({ type: 'tool.execution_start', data: { toolCallId: String(code), toolName: 'bash', arguments: { command: 'synthetic validator' } } });
+    receive({ type: 'tool.execution_complete', data: { toolCallId: String(code), success: true, result: { content: `Validation result\n<shellId: ${code} completed with exit code ${code}>` } } });
+  }
+  assert.equal(events[0].data.tool.status, 'completed');
+  assert.equal(events[1].data.tool.status, 'failed');
+  assert.equal(events[1].data.tool.error, 'Command exited with code 1.');
+});

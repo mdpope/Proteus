@@ -3,6 +3,10 @@ import SwiftUI
 struct ToolActivityView: View {
     let tool: JSON
     @State private var expanded = false
+    private var failedCommand: Bool {
+        ["bash", "shell", "powershell"].contains(tool["name"].string) && tool["output"].string.range(of: #"<shellId: [^<>\r\n]+ completed with exit code [1-9]\d*>\s*$"#, options: .regularExpression) != nil
+    }
+    private var status: String { failedCommand ? "failed" : tool["status"].string }
     private func display(_ key: String) -> String {
         let text = tool[key].string
         guard key == "output", let data = text.data(using: .utf8), let value = try? JSONDecoder().decode(JSON.self, from: data) else { return text }
@@ -21,11 +25,11 @@ struct ToolActivityView: View {
             }.padding(.top, 8)
         } label: {
             HStack(alignment: .top, spacing: 8) {
-                if tool["status"].string == "running" { ProgressView().controlSize(.small) }
-                else { Image(systemName: tool["status"].string == "completed" ? "checkmark.circle" : "exclamationmark.circle").foregroundStyle(tool["status"].string == "completed" ? Color.green : Color.orange) }
+                if status == "running" { ProgressView().controlSize(.small) }
+                else { Image(systemName: status == "completed" ? "checkmark.circle" : "exclamationmark.circle").foregroundStyle(status == "completed" ? Color.green : Color.orange) }
                 VStack(alignment: .leading, spacing: 3) {
                     Text(tool["summary"].string).font(.subheadline)
-                    Text(tool["status"].string.capitalized + (tool["durationMs"] != .null ? " · \(String(format: "%.1f", Double(tool["durationMs"].int) / 1000))s" : "")).font(.caption).foregroundStyle(.secondary)
+                    Text(status.capitalized + (tool["durationMs"] != .null ? " · \(String(format: "%.1f", Double(tool["durationMs"].int) / 1000))s" : "")).font(.caption).foregroundStyle(.secondary)
                 }
             }
         }.padding(12).background(Color.secondary.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))

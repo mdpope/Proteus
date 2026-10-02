@@ -38,7 +38,9 @@ export function conversation(target, run, options) {
   for (const entry of entries) {
     let node = nodes.get(entry.key);
     if (entry.data?.tool) {
-      const tool = entry.data.tool;
+      let tool = entry.data.tool;
+      const exitCode = ['bash', 'shell', 'powershell'].includes(tool.name) && tool.output?.match(/<shellId: [^<>\r\n]+ completed with exit code ([1-9]\d*)>\s*$/)?.[1];
+      if (exitCode) tool = { ...tool, status: 'failed', error: tool.error || `Command exited with code ${exitCode}.` };
       if (!node) { node = document.createElement('details'); node.dataset.key = entry.key; node.innerHTML = '<summary><span class="tool-icon"></span><span class="tool-summary"></span><span class="tool-status"></span></summary><div class="tool-content"></div>'; }
       node.className = `tool-activity ${tool.status}`;
       node.querySelector('.tool-icon').className = 'tool-icon' + (tool.status === 'running' ? ' spinner' : '');

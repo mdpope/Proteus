@@ -46,7 +46,10 @@ export function toolActivity({ run, emit, update }) {
       item.status = d.success === false || browserError ? 'failed' : 'completed';
       item.finishedAt = event.timestamp || new Date().toISOString();
       item.durationMs = Math.max(0, Date.parse(item.finishedAt) - Date.parse(item.startedAt));
-      item.output = displayText(resultText(d.result?.detailedContent || d.result?.content || d.result?.structuredContent || item.output || ''));
+      const output = resultText(d.result?.detailedContent || d.result?.content || d.result?.structuredContent || item.output || '');
+      item.output = displayText(output);
+      const exitCode = ['bash', 'shell', 'powershell'].includes(item.name) && typeof output === 'string' && output.match(/<shellId: [^<>\r\n]+ completed with exit code ([1-9]\d*)>\s*$/)?.[1];
+      if (exitCode) { item.status = 'failed'; item.error = `Command exited with code ${exitCode}.`; }
       if (d.error || browserError) item.error = displayText(d.error?.message || d.error || browserError);
       if (d.result?.contents?.some(c => c.type !== 'text') || d.result?.binaryResultsForLlm?.length) item.attachments = 'This tool also returned media or a resource. See the provider session for the original payload.';
     }

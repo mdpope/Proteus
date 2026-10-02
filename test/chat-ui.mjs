@@ -18,6 +18,7 @@ try {
     const run = engine.createRun(schedule); run.status = 'running';
     run.events = Array.from({ length: 25 }, (_, i) => ({ role: i % 2 ? 'assistant' : 'user', at: engine.now(), text: `Earlier message ${i}\n\nA paragraph to read while new output arrives.` }));
     run.events.push({ role: 'tool', at: engine.now(), text: 'Read notes', data: { tool: { callId: 'fixture-read', name: 'view', summary: 'Read · notes.md', status: 'completed', arguments: '{"path":"notes.md"}', output: JSON.stringify({title:'Fixture',url:'https://example.test',snapshot:'The full tool result\nA readable second line'}), durationMs: 250 } } });
+    run.events.push({ role: 'tool', at: engine.now(), text: 'Synthetic validation', data: { tool: { callId: 'fixture-failed', name: 'bash', summary: 'Run · synthetic validation', status: 'completed', output: 'Needs correction\n<shellId: 2 completed with exit code 1>' } } });
     run.events.push({ role: 'assistant', at: engine.now(), text: '' });
     run.events.push({ role: 'assistant', at: engine.now(), text: fixture }); engine.persist(run); return run.id;
   }, { home, fixture });
@@ -27,9 +28,10 @@ try {
   assert.ok(layout.pane > 250 && layout.pane < 900); assert.ok(layout.conversation > layout.pane - 160, 'Conversation fills available card height');
   assert.ok(layout.details <= layout.pane + 3 && layout.detailContent > layout.details, 'Long details scroll independently');
   assert.ok(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight + 1 && document.querySelector('#main').scrollHeight <= document.querySelector('#main').clientHeight + 1), 'No outer chat scrollbar');
-  await page.locator('.tool-activity summary').click();
+  assert.equal(await page.locator('.tool-activity.failed').count(), 1, 'Stored nonzero exits are visible as failures');
+  await page.locator('.tool-activity summary').first().click();
   await page.getByText('The full tool result', { exact: false }).waitFor();
-  assert.match(await page.locator('.tool-content').textContent(), /The full tool result\nA readable second line/);
+  assert.match(await page.locator('.tool-content').first().textContent(), /The full tool result\nA readable second line/);
   assert.equal(await page.locator('.message.assistant').count(), 13);
   await page.locator('.jump-latest').click();
   await page.locator('.chat-details').evaluate(e => { e.scrollTop = 400; });
