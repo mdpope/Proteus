@@ -65,7 +65,8 @@ identifier for updates, and avoid revoking the other Mac's signing identities du
 ## Implemented controls
 
 - Paginated Proteus chat history, start/continue/cancel, live assistant text and tool activity.
-- Pending questions, approve/deny, and the host's offered persistent approval choices.
+- Pending questions, approve/deny, and the host's offered persistent approval choices. Chat details
+  can change the active permission mode immediately, including releasing an already-waiting tool.
 - Workspace/model selection, per-chat context and main agent, and idle-chat context refresh.
 - Instructions, skills, agents, MCP catalog refresh and individual universal/workspace/available/
   disabled modes; add an existing Mac folder by its absolute path. MCPs are never auto-enabled.

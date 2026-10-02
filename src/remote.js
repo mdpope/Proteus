@@ -14,11 +14,11 @@ const pick = (value, keys) => Object.fromEntries(keys.filter(key => value?.[key]
 const scheduleKeys = ['id', 'name', 'enabled', 'cron', 'timezone', 'provider', 'model', 'workspace', 'misfire', 'prompt', 'revision', 'nextRuns', 'error', 'source', 'contextSelection'];
 const entryKeys = ['id', 'name', 'description', 'kind', 'path', 'sources', 'roots', 'mode', 'scope', 'warnings', 'unsupportedAgentFields', 'error', 'missing', 'characters'];
 const remoteEntry = entry => ({ ...pick(entry, entryKeys), ...(entry.agent ? { userInvocable: entry.agent.userInvocable } : {}) });
-const mutationMethods = new Set(['chat.start', 'chat.reply', 'chat.resume', 'chat.cancel', 'schedule.run', 'schedule.save', 'context.mode', 'context.favorite', 'context.addFolders', 'chat.context']);
+const mutationMethods = new Set(['chat.start', 'chat.reply', 'chat.resume', 'chat.cancel', 'schedule.run', 'schedule.save', 'context.mode', 'context.favorite', 'context.addFolders', 'chat.context', 'chat.permissions']);
 const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
-export function remoteRun(run, offset = 0) {
+export function remoteRun(run, offset = 0, permissions) {
   const end = Math.max(0, run.events.length - offset); const start = Math.max(0, end - 100);
-  return { agentName: agentName(run), ...pick(run, ['id', 'title', 'trigger', 'status', 'createdAt', 'updatedAt', 'pending', 'usage', 'contextUsage', 'providerSessionId', 'nativeSessionPath']),
+  return { ...(permissions ? { permissionContext: permissions.describe(run.schedule), permissionRevision: permissions.get().revision } : {}), agentName: agentName(run), ...pick(run, ['id', 'title', 'trigger', 'status', 'createdAt', 'updatedAt', 'pending', 'usage', 'contextUsage', 'providerSessionId', 'nativeSessionPath', 'automaticApprovals']),
     events: run.events.slice(start, end), eventStart: start, eventCount: run.events.length, earlier: start, schedule: pick(run.schedule, scheduleKeys),
     context: { ...pick(run.schedule.context, ['workspaceId', 'selectedIds', 'agentId', 'includeDefaults', 'baseWorkspace', 'capturedAt']), entries: (run.schedule.context?.entries || []).map(remoteEntry) }, liveMessages: structuredClone(run.liveMessages || {}) };
 }
@@ -171,7 +171,7 @@ export class RemoteHost {
       return { state: remoteState(this.service), cursor: `${this.epoch}:${this.sequence}` };
     }
     if (method === 'runs.list') { const offset = Math.max(0, Math.floor(Number(args.offset) || 0)); return engine.listRuns().slice(offset, offset + 100).map(r => pick(r, ['id', 'title', 'status', 'createdAt', 'updatedAt'])); }
-    if (method === 'chat.get') { const run = engine.getRun(args.id); peer.runId = run.id; return remoteRun(run, Math.max(0, Math.floor(Number(args.offset) || 0))); }
+    if (method === 'chat.get') { const run = engine.getRun(args.id); peer.runId = run.id; return remoteRun(run, Math.max(0, Math.floor(Number(args.offset) || 0)), engine.permissions); }
     if (method === 'chat.image') return this.api('/api/chat-image', pick(args, ['id', 'source']));
     if (method === 'provider.status') return this.api('/api/provider', {});
     if (method === 'context.refresh') { this.service.context.refresh(); this.changed(); return remoteState(this.service).context; }
@@ -184,6 +184,10 @@ export class RemoteHost {
     if (['chat.reply', 'chat.resume', 'chat.cancel'].includes(method)) {
       engine.getRun(args.id); const action = method.split('.')[1];
       await this.api(`/api/runs/${args.id}/${action}`, pick(args, ['answer', 'requestId', 'prompt'])); return { runId: args.id };
+    }
+    if (method === 'chat.permissions') {
+      await this.api('/api/permissions', { action: 'set-mode', runId: args.id, ...pick(args, ['mode', 'expectedContextId', 'expectedRevision']) });
+      this.changed(); return remoteRun(engine.getRun(args.id), 0, engine.permissions);
     }
     if (method === 'chat.context') { await this.api('/api/run-context', { runId: args.id, ...pick(args, ['selectedIds', 'agentId', 'includeDefaults']) }); return { runId: args.id }; }
     if (method === 'context.preview') return this.api('/api/context/preview', pick(args, ['workspace', 'workspaceId', 'selectedIds', 'agentId', 'includeDefaults']));
@@ -204,7 +208,7 @@ export class RemoteHost {
     if (signature !== this.signature) { this.signature = signature; this.broadcast('state', state); }
     const watched = new Set([...this.peers.values()].filter(p => p.device).map(p => p.runId).filter(Boolean));
     for (const id of watched) {
-      const run = remoteRun(this.service.engine.getRun(id)); const hash = JSON.stringify(run);
+      const run = remoteRun(this.service.engine.getRun(id), 0, this.service.engine.permissions); const hash = JSON.stringify(run);
       if (this.runSignatures?.get(id) === hash) continue;
       this.runSignatures ??= new Map(); this.runSignatures.set(id, hash); this.broadcast('run', run, id);
     }

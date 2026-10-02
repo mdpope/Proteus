@@ -12,10 +12,17 @@ text arrives. Unknown code languages remain readable as plain code.
 On the Mac, opening a chat starts at the latest message. While near the bottom (40px), new messages,
 streamed text, and delayed image layout keep the view at the bottom. Scrolling up preserves the
 reading position; Jump to latest resumes following. Each open chat keeps its own reading position.
-Completed and streamed messages occupy the same scroll area. The conversation fills a card whose
-height follows the viewport, with a 1,100px ceiling. The details column has its own bounded scroll
-area and retains its reading position; at narrow widths it stacks below the chat in the page. Selecting text temporarily defers
-background re-rendering so the selection can be copied.
+Completed and streamed messages occupy the same scroll area. The conversation and details fill the
+remaining window height and scroll independently. Narrow windows switch between Chat and Details
+without adding an outer page scrollbar. Selecting text temporarily defers background re-rendering
+so the selection can be copied.
+
+Tools appear as compact, expandable activities with their name, arguments, progress, output,
+duration, and failure details. One activity is updated throughout each call. Automatic approval
+reasons appear inside tool details, with a count in chat details; the audit events remain in the run
+record. Provider warnings, compaction, and interrupted partial output are visible. Empty assistant
+messages are omitted and the final response remains complete Markdown. Long tool displays are
+bounded and marked as shortened; provider session files retain the original output.
 
 Raw HTML is displayed as text. Scripts, iframes, dangerous URL schemes, and arbitrary HTML attributes
 are never interpreted. External image URLs have a Load image button; loading them sends the request

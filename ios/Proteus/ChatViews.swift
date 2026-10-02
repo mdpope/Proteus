@@ -43,12 +43,11 @@ struct NewChatView: View {
                     Picker("Workspace", selection: $workspace) { ForEach(store.state["context"]["workspaces"].array, id: \.self) { Text($0["name"].string).tag($0["id"].string) } }
                     Picker("Provider", selection: $provider) { Text("GitHub Copilot").tag("copilot"); Text("Local rehearsal").tag("rehearsal") }.accessibilityIdentifier("chat-provider")
                     if provider == "copilot" {
-                        Picker("Model", selection: $model) { Text("Choose model").tag(""); if !model.isEmpty && !store.models.contains(where: { $0["id"].string == model }) { Text(model).tag(model) }; ForEach(store.models, id: \.self) { Text($0["name"].string.isEmpty ? $0["id"].string : $0["name"].string).tag($0["id"].string) } }
-                        Button("Refresh available models") { Task { await store.loadModels() } }
+                        CopilotModelPicker(model: $model)
                     }
                 }
                 ContextSelection(selected: $selected, agent: $agent, includeDefaults: $includeDefaults, workspaceID: workspace)
-            }.navigationTitle("New chat").toolbar {
+            }.accessibilityIdentifier("new-chat-form").navigationTitle("New chat").toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) { Button { start() } label: { if sending { ProgressView() } else { Text("Start chat") } }.disabled(sending || !store.connected || prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || workspace.isEmpty || (provider == "copilot" && model.isEmpty)).accessibilityIdentifier("start-chat") }
             }.task { workspace = store.state["context"]["defaultWorkspaceId"].string; provider = store.state["defaults"]["provider"].string; model = store.state["defaults"]["model"].string; if provider == "copilot" { await store.loadModels() } }
@@ -83,7 +82,9 @@ struct ChatView: View {
             LazyVStack(alignment: .leading, spacing: 18) {
                 HStack { if run["status"].string == "running" { ProgressView() }; Text(statusLabel(run["status"].string)).font(.subheadline).foregroundStyle(.secondary); Spacer(); if active { Button("Stop", role: .destructive) { act("chat.cancel", [:]) }.disabled(busy || !store.connected) } }
                 if run["earlier"].int > 0 { Button("Load earlier messages") { loadEarlier() } }
-                ForEach(Array(run["events"].array.enumerated()), id: \.offset) { _, event in MessageView(role: event["role"].string == "assistant" ? (event["agentName"].string.isEmpty ? mainAgentName : event["agentName"].string) : event["role"].string, text: event["text"].string, runID: id) { if followLatest { Task { @MainActor in await Task.yield(); proxy.scrollTo("chat-end", anchor: .bottom) } } } }
+                ForEach(Array(run["events"].array.enumerated()).filter { ($0.element["role"].string != "assistant" || !$0.element["text"].string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) && !$0.element["data"]["permission"]["automatic"].bool }, id: \.offset) { _, event in
+                    if event["data"]["tool"] != .null { ToolActivityView(tool: event["data"]["tool"]) }
+                    else { MessageView(role: event["role"].string == "assistant" ? (event["agentName"].string.isEmpty ? mainAgentName : event["agentName"].string) : event["role"].string, text: event["text"].string, runID: id) { if followLatest { Task { @MainActor in await Task.yield(); proxy.scrollTo("chat-end", anchor: .bottom) } } } } }
                 ForEach(run["liveMessages"].object.keys.sorted(), id: \.self) { key in MessageView(role: "\(mainAgentName) · streaming", text: run["liveMessages"][key].string, runID: id) { if followLatest { Task { @MainActor in await Task.yield(); proxy.scrollTo("chat-end", anchor: .bottom) } } } }
                 if pending != .null {
                     VStack(alignment: .leading, spacing: 12) {
@@ -100,6 +101,7 @@ struct ChatView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(run["schedule"]["workspace"]["cwd"].string).font(.caption.monospaced()).textSelection(.enabled)
                         Text("Model: \(run["schedule"]["model"].string)").font(.caption)
+                        ChatPermissionsView(run: run)
                         if !run["nativeSessionPath"].string.isEmpty { Text(run["nativeSessionPath"].string).font(.caption.monospaced()).textSelection(.enabled) }
                         ForEach(run["context"]["entries"].array, id: \.self) { entry in Text("\(entry["kind"].string): \(entry["name"].string)").font(.caption) }
                         Button("Change context for next turn") { context = true }.disabled(active || !store.connected)
@@ -108,7 +110,7 @@ struct ChatView: View {
                 Color.clear.frame(height: 1).id("chat-end").onAppear { followLatest = true }.onDisappear { followLatest = false }
             }.padding()
         }.scrollDismissesKeyboard(.interactively)
-            .onChange(of: run["events"].array.count) { _, _ in if followLatest { proxy.scrollTo("chat-end", anchor: .bottom) } }
+            .onChange(of: run["events"]) { _, _ in if followLatest { proxy.scrollTo("chat-end", anchor: .bottom) } }
             .onChange(of: run["liveMessages"]) { _, _ in if followLatest { proxy.scrollTo("chat-end", anchor: .bottom) } }
         }.navigationTitle(run["title"].string.isEmpty ? "Conversation" : run["title"].string).navigationBarTitleDisplayMode(.inline)
             .safeAreaInset(edge: .bottom) {

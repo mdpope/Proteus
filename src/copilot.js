@@ -5,6 +5,8 @@ import path from 'node:path';
 import os from 'node:os';
 import { revision } from './schedules.js';
 import { selectedAgentToolScope } from './agent-tools.js';
+import { toolActivity, displayText } from './tool-activity.js';
+import { TurnWaiter } from './turn-waiter.js';
 
 export class CopilotProvider {
   constructor(options = {}, { browser, context, settings } = {}) { this.browser = browser; this.context = context; this.settings = settings; this.options = options; this.client = null; this.starting = null; this.sessions = new Map(); }
@@ -38,6 +40,21 @@ export class CopilotProvider {
     } catch (error) { return { available: false, error: error.message, quota: null }; }
   }
   async run({ run, prompt, emit, ask, update, signal, stream }) {
+    let turn;
+    const askUser = async request => { turn?.pause(); try { return await ask(request); } finally { turn?.resume(); } };
+    const decisions = new Map();
+    const permission = request => {
+      // The runtime can ask separately for path access and the read operation,
+      // presenting the same request twice for one tool call. Reuse only that
+      // identical in-flight decision, never a grant for another operation.
+      const key = request.toolCallId && !request.managedApprovalRequired && !request.requestSandboxBypass ? revision(request) : null;
+      if (key && decisions.has(key)) return decisions.get(key).answer;
+      const answer = askUser({ type: 'permission', question: 'Copilot needs permission for a tool operation.', details: request }).then(answer => ['approve', 'approve-auto'].includes(answer)
+        ? { kind: 'approve-once', ...(answer === 'approve' ? { approvedInteractively: true } : {}) }
+        : { kind: 'reject', feedback: 'The user declined this operation in Proteus.' });
+      if (key) decisions.set(key, { toolCallId: request.toolCallId, answer });
+      return answer;
+    };
     const snapshot = run.schedule.context;
     const managed = snapshot && this.context ? this.context.providerContext(snapshot) : null;
     const fingerprint = revision({ context: snapshot || null, mcp: run.schedule.mcpServers || {} });
@@ -59,13 +76,8 @@ export class CopilotProvider {
       ...(managed ? { skipCustomInstructions: true, enableConfigDiscovery: false, enableOnDemandInstructionDiscovery: false, enableSkills: includeLegacy && !!run.schedule.skillDirectories?.length, disabledSkills: managed.disabledSkills, enableFileHooks: false, customAgents: managed.customAgents, agent: managed.agent, availableTools: selectedAgentToolScope(managed) } : {}),
       tools: browserTools(this.browser, run.id),
       systemMessage: { mode: 'append', content: `Proteus workspace roots (${managed ? 'use the explicitly selected context below; do not automatically load other instruction/skill/agent files' : 'read relevant AGENTS.md and .github/copilot-instructions.md before work'}):\n${[run.schedule.workspace.cwd, ...run.schedule.workspace.additionalDirectories].join('\n')}\n${this.browser ? 'Embedded browser access is available through proteus_browser. Use it for visible authenticated website reads. The user can interact with those same tabs; ask for sign-in if needed.' : 'Embedded browser access is unavailable in this server-only session.'}\nEditor context supplied by the user: ${JSON.stringify(run.schedule.editorContext || null)}\n${managed?.instructionText || ''}` },
-      onPermissionRequest: async request => {
-        const answer = await ask({ type: 'permission', question: 'Copilot needs permission for a tool operation.', details: request });
-        return ['approve', 'approve-auto'].includes(answer)
-          ? { kind: 'approve-once', ...(answer === 'approve' ? { approvedInteractively: true } : {}) }
-          : { kind: 'reject', feedback: 'The user declined this operation in Proteus.' };
-      },
-      onUserInputRequest: async request => ({ answer: await ask({ type: 'question', question: request.question, choices: request.choices }), wasFreeform: true })
+      onPermissionRequest: permission,
+      onUserInputRequest: async request => ({ answer: await askUser({ type: 'question', question: request.question, choices: request.choices }), wasFreeform: true })
     };
     const session = run.providerSessionId
       ? await client.resumeSession(run.providerSessionId, config)
@@ -78,14 +90,21 @@ export class CopilotProvider {
     run.explicitProviderContext = { mcpNames: Object.keys(config.mcpServers), skillDirectories: config.skillDirectories, disabledSkills: config.disabledSkills || [] };
     update(); this.sessions.set(run.id, session);
     let providerError;
+    const activity = toolActivity({ run, emit, update });
     const unsubscribe = session.on(event => {
       if (event.type === 'assistant.message_delta') stream?.(event.data.messageId, event.data.deltaContent || '');
       if (event.type === 'assistant.message') {
+        const content = event.data.content || run.liveMessages?.[event.data.messageId] || '';
         if (run.liveMessages) delete run.liveMessages[event.data.messageId];
-        emit('assistant', event.data.content || '');
+        if (content.trim()) emit('assistant', content);
+        else update();
       }
-      if (event.type === 'tool.execution_start') emit('tool', event.data.toolName || 'Tool started');
-      if (event.type === 'tool.execution_complete') emit('tool', event.data.success === false ? `Tool failed: ${event.data.error?.message || JSON.stringify(event.data.error || 'Provider returned no error details.')}` : 'Tool finished');
+      activity(event);
+      if (event.type === 'tool.execution_complete') for (const [key, value] of decisions) if (value.toolCallId === event.data.toolCallId) decisions.delete(key);
+      if (event.type === 'session.warning') emit('system', displayText(event.data.message || 'Provider warning'));
+      if (event.type === 'session.compaction_start') emit('system', 'Copilot is compacting the conversation context.');
+      if (event.type === 'session.compaction_complete') emit('system', 'Conversation context compacted.');
+      if (event.type === 'session.task_complete' && event.data.summary?.trim() && !run.events?.some(e => e.role === 'assistant' && e.text === event.data.summary)) emit('assistant', event.data.summary);
       if (event.type === 'assistant.usage') {
         run.usage.inputTokens += event.data.inputTokens || 0; run.usage.outputTokens += event.data.outputTokens || 0;
         run.usage.observed = true; update();
@@ -97,7 +116,8 @@ export class CopilotProvider {
     signal.addEventListener('abort', abort, { once: true });
     try {
       if (signal.aborted) throw new Error('Cancelled');
-      await session.sendAndWait({ prompt }, 30 * 60 * 1000);
+      turn = new TurnWaiter(session, signal);
+      await turn.run(prompt);
       if (providerError) throw new Error(providerError);
       try { run.metrics = await session.rpc.usage.getMetrics({}); update(); } catch { /* Optional runtime capability. */ }
     } catch (error) {
@@ -105,6 +125,11 @@ export class CopilotProvider {
       await session.abort().catch(() => {});
       throw error;
     } finally {
+      for (const [id, text] of Object.entries(run.liveMessages || {})) {
+        if (text.trim()) emit('assistant', text, { interrupted: true });
+        delete run.liveMessages[id];
+      }
+      activity.finish();
       signal.removeEventListener('abort', abort); unsubscribe(); this.sessions.delete(run.id); await session.disconnect();
     }
   }

@@ -81,7 +81,10 @@ export class Engine extends EventEmitter {
       this.event(run, 'system', answer === 'deny' ? 'Permission denied.' : `Permission approved: ${answer}.`, { permission: { kind: run.pending.details?.kind, decision: answer, automatic: false } });
     }
     this.pending.delete(id); run.pending = null; run.status = 'running';
-    this.event(run, 'user', answer); pending.resolve(isPermission && !['approve','deny'].includes(answer) ? 'approve' : answer); return run;
+    if (!isPermission) this.event(run, 'user', answer); else this.persist(run);
+    pending.resolve(isPermission && !['approve','deny'].includes(answer) ? 'approve' : answer);
+    if (isPermission) this.recheckPermissions();
+    return run;
   }
   ask(run, request, signal) {
     const previous = this.questionQueues.get(run.id) || Promise.resolve();
@@ -110,6 +113,8 @@ export class Engine extends EventEmitter {
   }
   recordAutomaticPermission(run, request, decision) {
     run.automaticApprovals = (run.automaticApprovals || 0) + 1;
+    const tool = request?.toolCallId ? run.events.findLast(event => event.data?.tool?.callId === request.toolCallId)?.data?.tool : null;
+    if (tool) tool.approval = decision.reason;
     this.event(run, 'system', `Auto-approved ${request?.kind || 'tool'}: ${decision.reason}.`, { permission: { kind: request?.kind, automatic: true, reason: decision.reason, mode: decision.mode } });
   }
   recheckPermissions() {

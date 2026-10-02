@@ -2,6 +2,21 @@ import XCTest
 
 final class RemoteUITests: XCTestCase {
     override func setUp() { super.setUp(); continueAfterFailure = false }
+    @MainActor func testExpandableToolOutput() async throws {
+        let (data, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/pair")!)
+        let fixture = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        let app = XCUIApplication(); app.launchArguments = ["--reset-pairing"]; app.launch()
+        let link = app.textFields["pairing-link"]; XCTAssertTrue(link.waitForExistence(timeout: 15)); link.tap(); link.typeText(fixture["code"] as! String)
+        app.buttons["pair-mac"].tap(); let newChat = app.buttons["new-chat"]; XCTAssertTrue(newChat.waitForExistence(timeout: 25)); newChat.tap()
+        let prompt = app.textFields["chat-prompt"]; XCTAssertTrue(prompt.waitForExistence(timeout: 10)); prompt.tap(); prompt.typeText("Tool display rehearsal")
+        app.buttons["start-chat"].tap(); XCTAssertTrue(app.staticTexts["Your input is needed"].waitForExistence(timeout: 20))
+        let tool = app.buttons["tool-activity-synthetic-read"]
+        for _ in 0..<8 { if tool.exists && tool.isHittable { break }; app.swipeDown() }
+        XCTAssertTrue(tool.waitForExistence(timeout: 10)); tool.tap()
+        XCTAssertTrue(app.staticTexts["Expanded synthetic tool result"].waitForExistence(timeout: 10))
+        let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Expanded tool activity"; screenshot.lifetime = .keepAlways; add(screenshot)
+        if app.buttons["Stop"].exists { app.buttons["Stop"].tap() }
+    }
     @MainActor func testPairStartAndReply() async throws {
         let (data, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/pair")!)
         let fixture = try JSONSerialization.jsonObject(with: data) as! [String: Any]
@@ -59,7 +74,7 @@ extension RemoteUITests {
         let favorite = app.buttons["Add to favorites: Synthetic skill"]
         for _ in 0..<12 {
             if favorite.exists && favorite.isHittable { break }
-            let list = app.collectionViews.element(boundBy: app.collectionViews.count - 1)
+            let list = app.collectionViews["new-chat-form"]
             list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45)).press(forDuration: 0.05, thenDragTo: list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2)))
         }
         guard favorite.waitForExistence(timeout: 10) else { XCTFail("Favorite action is missing"); return }
@@ -67,7 +82,7 @@ extension RemoteUITests {
         let check = app.buttons["Check all favorites"]
         for _ in 0..<12 {
             if check.exists && check.isHittable { break }
-            let list = app.collectionViews.element(boundBy: app.collectionViews.count - 1)
+            let list = app.collectionViews["new-chat-form"]
             list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2)).press(forDuration: 0.05, thenDragTo: list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45)))
         }
         guard check.waitForExistence(timeout: 10) else { XCTFail("Check all favorites is missing"); return }

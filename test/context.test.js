@@ -1,3 +1,4 @@
+import { fakeSession } from './fake-copilot.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -222,7 +223,7 @@ test('only-selected Copilot configuration removes legacy MCP/skill discovery and
   const { CopilotProvider } = await import('../src/copilot.js');
   let config;
   const provider = new CopilotProvider({}, { context: { providerContext: () => ({ disabledLegacyMcp: [], disabledSkills: [], customAgents: [], mcpServers: { selected: { command: 'false', tools: ['read'] } }, mcpMappings: {}, instructionText: 'Selected instructions' }) } });
-  const session = { sessionId: 'synthetic', on: () => () => {}, disconnect: async () => {}, sendAndWait: async () => {}, rpc: { agent: { deselect: async () => {} }, usage: { getMetrics: async () => ({}) } } };
+  const session = fakeSession({ sessionId: 'synthetic', rpc: { agent: { deselect: async () => {} }, usage: { getMetrics: async () => ({}) } } });
   provider.connect = async () => ({ listModels: async () => [{ id: 'synthetic' }], createSession: async value => { config = value; return session; } });
   const run = { id: 'synthetic', schedule: { model: 'synthetic', workspace: { cwd: '/tmp', additionalDirectories: [] }, context: { includeDefaults: false, entries: [] }, skillDirectories: ['/legacy/skills'], mcpServers: { unwanted: { command: 'false' } } }, usage: { inputTokens: 0, outputTokens: 0 } };
   await provider.run({ run, prompt: 'Synthetic task', signal: new AbortController().signal, emit() {}, update() {}, ask() {} });

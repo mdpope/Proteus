@@ -4,7 +4,8 @@ import { createHash } from 'node:crypto';
 import { atomicJSON, readJSON } from './files.js';
 import { revision } from './schedules.js';
 
-export const permissionModes = ['ask', 'trusted', 'autopilot'];
+export const permissionModes = ['ask', 'custom', 'trusted', 'autopilot'];
+export const effectivePermissionMode = profile => profile?.mode === 'trusted' && profile.readOnlyTools !== true ? 'custom' : profile?.mode || 'ask';
 const browserReads = new Set(['list', 'open', 'navigate', 'snapshot', 'scroll', 'close']);
 const knownKinds = new Set(['read', 'write', 'shell', 'mcp', 'url', 'custom-tool']);
 const stable = value => Array.isArray(value) ? value.map(stable) : value && typeof value === 'object'
@@ -63,7 +64,7 @@ export class PermissionStore {
   }
   describe(schedule) {
     const context = permissionContext(schedule); const saved = this.get().workspaces.find(value => value.id === context.id);
-    return { ...context, mode: saved?.mode || 'ask', readOnlyTools: saved?.readOnlyTools === true, folders: saved?.folders || [], rules: saved?.rules || [] };
+    return { ...context, mode: effectivePermissionMode(saved), readOnlyTools: saved?.readOnlyTools === true, folders: saved?.folders || [], rules: saved?.rules || [] };
   }
   mutate(schedule, change, expectedRevision) {
     const value = this.get();
@@ -75,11 +76,11 @@ export class PermissionStore {
     delete value.file; delete value.revision; atomicJSON(this.file, value); return this.describe(schedule);
   }
   setMode(schedule, mode, expectedRevision) {
-    if (!permissionModes.includes(mode)) throw new Error('Choose Ask, Trusted workspace, or Auto-approve tools.');
+    if (!permissionModes.includes(mode)) throw new Error('Choose Ask, Saved rules only, Trusted workspace, or Auto-approve tools.');
     return this.mutate(schedule, profile => {
       profile.mode = mode;
-      profile.readOnlyTools = mode !== 'ask';
-      if (mode !== 'ask') for (const root of permissionContext(schedule).roots) {
+      profile.readOnlyTools = ['trusted', 'autopilot'].includes(mode);
+      if (profile.readOnlyTools) for (const root of permissionContext(schedule).roots) {
         if (!fs.statSync(root).isDirectory()) throw new Error(`Workspace directory unavailable: ${root}`);
         const old = profile.folders.find(folder => folder.path === root);
         if (old) old.access = 'read-write'; else profile.folders.push({ path: root, access: 'read-write' });
@@ -117,7 +118,7 @@ export class PermissionStore {
     if (!this.choices(schedule, request).some(choice => choice.value === answer)) throw new Error('That persistent approval is not available for this request.');
     if (answer === 'trust-workspace' || answer === 'autopilot-workspace') return this.setMode(schedule, answer === 'trust-workspace' ? 'trusted' : 'autopilot');
     return this.mutate(schedule, profile => {
-      if (profile.mode === 'ask') profile.mode = 'trusted';
+      if (profile.mode === 'ask') profile.mode = 'custom';
       if (answer === 'trust-folder') {
         const folder = this.folderOffer(schedule, request); const old = profile.folders.find(value => value.path === folder.path);
         if (old && folder.access === 'read-write') old.access = folder.access; else if (!old) profile.folders.push(folder);

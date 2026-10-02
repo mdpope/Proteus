@@ -33,6 +33,26 @@ test('AES-GCM authenticates the payload and routing context', () => {
   assert.throws(() => unseal(secret(), box, 'connection:client:1'));
   const corrupt = Buffer.from(box, 'base64'); corrupt[14] ^= 1; assert.throws(() => unseal(key, corrupt.toString('base64'), 'connection:client:1'));
 });
+test('a paired client can apply permissions to the current waiting chat and receive tool details', async t => {
+  const { app, connect, workspace } = await fixture(t, { copilot: { run: async ({ ask, emit }) => {
+    emit('tool', 'Read fixture', { tool: { callId: 'fixture-read', name: 'view', summary: 'Read fixture', status: 'running', arguments: '{"path":"fixture.md"}', output: 'Visible progress' } });
+    await ask({ type: 'permission', details: { kind: 'read', path: workspace } });
+    await ask({ type: 'question', question: 'Keep this result?' });
+    emit('assistant', 'Complete final response');
+  } } });
+  const client = await connect();
+  const schedule = { ...app.engine.schedules.list()[0], provider: 'copilot', model: 'fixture', workspace: { cwd: workspace, additionalDirectories: [] } };
+  const run = app.engine.createRun(schedule); await until(() => run.pending?.type === 'permission');
+  const before = await client.request('chat.get', { id: run.id });
+  assert.equal(before.events.find(e => e.data?.tool).data.tool.output, 'Visible progress');
+  await assert.rejects(client.request('chat.permissions', { id: run.id, mode: 'trusted', expectedContextId: 'stale', expectedRevision: before.permissionRevision }), /configuration changed/);
+  await client.request('chat.permissions', { id: run.id, mode: 'trusted', expectedContextId: before.permissionContext.id, expectedRevision: before.permissionRevision });
+  await until(() => run.pending?.type === 'question');
+  assert.equal(run.automaticApprovals, 1);
+  const after = await client.request('chat.get', { id: run.id }); assert.equal(after.permissionContext.mode, 'trusted');
+  await client.request('chat.reply', { id: run.id, requestId: run.pending.id, answer: 'Keep' });
+  await until(() => run.status === 'completed');
+});
 test('pair, start, stream feedback, resume from second device, and reject duplicate commands', async t => {
   const { app, connect } = await fixture(t); const a = await connect(); const b = await connect();
   const sync = await a.request('sync'); assert.equal(sync.state.context.entries.find(e => e.kind === 'mcp').mode, 'disabled');

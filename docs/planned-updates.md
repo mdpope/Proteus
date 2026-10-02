@@ -15,22 +15,23 @@ Implemented in the workspace-context release:
 
 See [workspaces](workspaces.md) and [credentials](credentials.md) for behavior and limitations.
 
-## Queued chat presentation updates
+## Chat presentation and active-run approvals
 
-Keep these changes focused on presentation, after resolving stalled browser navigation:
-
-- Mac and iOS: show a concise tool activity summary with its running/completed/failed state;
-  expand it for arguments and results. Pair tool start and completion by call ID, omit empty
-  assistant messages, and retain the complete formatted final response.
-- Clarify approval controls in both clients: distinguish individually saved folder/tool rules
-  from full Trusted workspace mode. Describe Trusted workspace (authorized file access and
-  read-only tools) and Auto-approve tools (broader tool execution) without expanding existing grants.
-- Use the same provider model catalog and refresh behavior as New Chat for schedule Model ID.
-  Preserve a saved unavailable model visibly; never silently switch models.
-- Mac chat layout: fill the viewport below the application header and tab strip. Scroll the
-  conversation and details pane independently, without a third outer page scrollbar. Preserve
-  follow-at-bottom behavior and the reading position when the user has scrolled up. Check narrow
-  windows and wrapped sidebar content.
+- Mac and iOS show one expandable activity per tool call, with arguments, progress, output,
+  duration, and success/failure. Empty assistant messages are omitted; final Markdown stays complete.
+  Long tool displays are bounded and labeled; original output remains in the provider session.
+- Individually saved folder/tool grants display as Saved rules only. Trusted workspace and
+  Auto-approve tools remain explicit broader choices. Changes apply immediately to the active chat,
+  including a waiting tool; adding context still requires authorization for the new configuration.
+- Both clients can change a chat's permission mode. The host checks the context and permission
+  revision before applying it. Existing individual grants never become broader trust automatically.
+- Provider execution time excludes time waiting for human input. Genuine questions remain interactive.
+- Schedule model selection shares the New Chat catalog, including refresh and visibly unavailable
+  saved models. Mac default-model settings use the same picker.
+- Mac chat and details fill the remaining viewport and scroll independently. Narrow windows switch
+  between Chat and Details. Scrolling upward retains the reading position while output arrives.
+- Browser navigation has a deadline. Background agent tabs receive usable viewports; detailed
+  Playwright errors reach the tool result instead of becoming a generic failure.
 
 Still deferred:
 

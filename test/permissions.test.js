@@ -31,6 +31,7 @@ test('saved operations are exact commands and action-scoped MCP rules', () => {
     const store=new PermissionStore(home);const s=schedule(home);
     const query={kind:'mcp',serverName:'tracker',toolName:'items',readOnly:false,args:{action:'get',id:1}};
     store.remember(s,query,'always-tool');
+    assert.equal(store.describe(s).mode, 'custom');
     assert.equal(store.decide(s,{kind:'mcp',serverName:'other',toolName:'unrelated',readOnly:true}).allowed,false);
     assert.equal(store.decide(s,{...query,args:{action:'get',id:2}}).allowed,true);
     assert.equal(store.decide(s,{...query,args:{action:'delete',id:1}}).allowed,false);
@@ -43,6 +44,39 @@ test('saved operations are exact commands and action-scoped MCP rules', () => {
     assert.equal(store.decide(s,query).allowed,false);
     assert.throws(()=>store.setMode(s,'trusted',before.revision),/changed outside/);
   } finally {fs.rmSync(home,{recursive:true,force:true});}
+});
+
+test('permission API changes resolve an already waiting tool in the same active chat', async () => {
+  const home = temp(); const answers = [];
+  const app = await startServer({ home, port: 0, timers: false, providers: { copilot: { run: async ({ ask }) => {
+    answers.push(await ask({ type: 'permission', details: { kind: 'custom-tool', toolName: 'proteus_browser', args: { action: 'snapshot' } } }));
+    answers.push(await ask({ type: 'permission', details: { kind: 'read', path: home } }));
+    answers.push(await ask({ type: 'question', question: 'A real decision' }));
+  } } } });
+  try {
+    const run = app.engine.createRun(schedule(home)); await until(() => run.pending?.type === 'permission');
+    const context = app.engine.permissions.describe(run.schedule);
+    const response = await fetch(app.origin + '/api/permissions', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${app.token}` }, body: JSON.stringify({ action: 'set-mode', runId: run.id, mode: 'trusted', expectedContextId: context.id, expectedRevision: app.engine.permissions.get().revision }) });
+    assert.equal(response.status, 200);
+    await until(() => run.pending?.type === 'question');
+    assert.deepEqual(answers, ['approve-auto', 'approve-auto']);
+    assert.equal(app.engine.getRun(run.id).pending.question, 'A real decision');
+    app.engine.reply(run.id, 'Reviewed decision', run.pending.id); await until(() => run.status === 'completed');
+    assert.deepEqual(run.events.filter(e => e.role === 'user').map(e => e.text), ['Fixture', 'Reviewed decision']);
+  } finally { await app.close(); fs.rmSync(home, { recursive: true, force: true }); }
+});
+
+test('legacy partial trusted labels become saved rules without gaining any permissions', () => {
+  const home = temp(); try {
+    const store = new PermissionStore(home); const s = schedule(home);
+    store.remember(s, { kind: 'read', path: home }, 'trust-folder');
+    const saved = JSON.parse(fs.readFileSync(store.file)); saved.workspaces[0].mode = 'trusted';
+    fs.writeFileSync(store.file, JSON.stringify(saved));
+    assert.equal(store.describe(s).mode, 'custom');
+    assert.equal(store.decide(s, { kind: 'read', path: home }).allowed, true);
+    assert.equal(store.decide(s, { kind: 'write', fileName: path.join(home, 'new') }).allowed, false);
+    assert.equal(store.decide(s, { kind: 'custom-tool', toolName: 'proteus_browser', args: { action: 'snapshot' } }).allowed, false);
+  } finally { fs.rmSync(home, { recursive: true, force: true }); }
 });
 test('trust is invalidated by new roots, providers, MCP configuration, or skill directories', () => {
   const home=temp();fs.mkdirSync(path.join(home,'other'));try {

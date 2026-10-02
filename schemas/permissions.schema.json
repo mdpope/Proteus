@@ -17,7 +17,7 @@
           "roots": {"type": "array", "items": {"type": "string"}},
           "integrations": {"type": "string"},
           "label": {"type": "string"},
-          "mode": {"enum": ["ask", "trusted", "autopilot"]},
+          "mode": {"enum": ["ask", "custom", "trusted", "autopilot"]},
           "readOnlyTools": {"type": "boolean"},
           "folders": {"type": "array", "items": {"type": "object", "required": ["path", "access"], "properties": {"path": {"type": "string"}, "access": {"enum": ["read", "read-write"]}}}},
           "rules": {"type": "array", "items": {"oneOf": [

@@ -1,3 +1,4 @@
+import { fakeSession } from './fake-copilot.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -42,7 +43,7 @@ test('selected agent restrictions reach Copilot on create and resume and survive
   const snapshot = context.capture({ selectedIds: [entry.id], agentId: entry.id });
   const run = { id: 'synthetic-agent', schedule: { provider: 'copilot', model: 'fixture', workspace: snapshot.workspace, context: snapshot }, usage: { inputTokens: 0, outputTokens: 0 } };
   const configs = [];
-  const session = { sessionId: run.id, on: () => () => {}, sendAndWait: async () => {}, disconnect: async () => {} };
+  const session = fakeSession({ sessionId: run.id });
   const provider = new CopilotProvider({}, { context });
   provider.connect = async () => ({ listModels: async () => [{ id: 'fixture' }], createSession: async config => { configs.push(config); return session; }, resumeSession: async (_id, config) => { configs.push(config); return session; } });
   for (let i = 0; i < 2; i++) {

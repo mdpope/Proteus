@@ -32,9 +32,14 @@ class BrowserTabs {
   get(id) { const tab = this.tabs.get(id); if (!tab) throw new Error('Browser tab is closed or unavailable.'); return tab; }
   async create(url, owner = null) {
     const tab = { id: randomUUID(), shared: false, owner, view: new WebContentsView({ webPreferences: {
-      session: this.partition, nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true
+      session: this.partition, nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true, backgroundThrottling: false
     } }) };
-    this.tabs.set(tab.id, tab); this.window.contentView.addChildView(tab.view); tab.view.setVisible(false);
+    this.tabs.set(tab.id, tab); this.window.contentView.addChildView(tab.view);
+    // Agent-created tabs may never have been selected. Give them a real viewport
+    // so Playwright can interact while the user keeps the conversation visible.
+    const { width, height } = this.window.getContentBounds();
+    tab.view.setBounds(this.bounds || { x: 0, y: 0, width, height });
+    tab.view.setVisible(false);
     const wc = tab.view.webContents;
     wc.on('before-input-event', (event, input) => {
       if (input.type === 'keyDown' && (input.meta || input.control) && input.key.toLowerCase() === 'l') {

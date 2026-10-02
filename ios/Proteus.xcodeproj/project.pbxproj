@@ -12,6 +12,7 @@
 		2DA06CE96BFC9F1B53D5955C /* MarkdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8599964FC6EFDA8704A9F1CF /* MarkdownView.swift */; };
 		398B9FDDC1D1B5A441D3E044 /* markdown in Resources */ = {isa = PBXBuildFile; fileRef = 4FA0511E62085A38609D5D2C /* markdown */; };
 		54B2034637BB14023E216F1B /* RemoteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD304CE5E2D4AA434F2B24CC /* RemoteTests.swift */; };
+		5740FAB8AE1ED396820BEC60 /* ToolActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2C219FBBECD427ED9810FAF /* ToolActivityView.swift */; };
 		5F7A96C7CCAC62FF1B3C0FE2 /* ChatViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A814582040CD2B969E3FED0 /* ChatViews.swift */; };
 		68FFA33EBE3DB02F0593900F /* RemoteCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B068C230D5ED165EE25D9DD /* RemoteCrypto.swift */; };
 		6BF7A7A42FCA9E2E7B40DD85 /* RemoteUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5F927DCF4BF815F06256F2A /* RemoteUITests.swift */; };
@@ -57,6 +58,7 @@
 		C3669D14C35D62493F9512B7 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		CF35BFD81ECE37D5F8218105 /* ContextViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextViews.swift; sourceTree = "<group>"; };
 		E79E4AFD22E1C4D4C5FAA5EE /* ProteusUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = ProteusUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		F2C219FBBECD427ED9810FAF /* ToolActivityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolActivityView.swift; sourceTree = "<group>"; };
 		FAE0DEDA1094847BDFC976EB /* QRScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRScanner.swift; sourceTree = "<group>"; };
 		FD304CE5E2D4AA434F2B24CC /* RemoteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -103,6 +105,7 @@
 				2B068C230D5ED165EE25D9DD /* RemoteCrypto.swift */,
 				9023FEA1077763EA7555C94D /* RemoteStore.swift */,
 				99814D317E2043305330CB8E /* ScheduleViews.swift */,
+				F2C219FBBECD427ED9810FAF /* ToolActivityView.swift */,
 			);
 			path = Proteus;
 			sourceTree = "<group>";
@@ -243,6 +246,7 @@
 				68FFA33EBE3DB02F0593900F /* RemoteCrypto.swift in Sources */,
 				0251FE479F24F5A96EA70F96 /* RemoteStore.swift in Sources */,
 				1162CF50A47019EEE0F0B91C /* ScheduleViews.swift in Sources */,
+				5740FAB8AE1ED396820BEC60 /* ToolActivityView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

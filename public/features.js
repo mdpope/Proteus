@@ -102,25 +102,32 @@ export function bindContextPicker(prefix = 'chat', options = {}) {
   root.querySelector('[data-refresh-picker]').onclick = () => act(async () => { u.state.data.context = await u.api('/api/context/refresh', {}); rebuild(); });
   update();
 }
+function modelOptions(models, selected) {
+  const missing = selected && !models.some(model => model.id === selected);
+  return '<option value="">Choose a model</option>' + (missing ? `<option value="${esc(selected)}" selected>${esc(selected)} · ${models.length ? 'unavailable' : 'catalog not loaded'}</option>` : '') + models.map(model => `<option value="${esc(model.id)}" ${model.id === selected ? 'selected' : ''}>${esc(model.name || model.id)} · ${esc(model.id)}</option>`).join('');
+}
 export function modelPicker(id, selected) {
-  const models = u.state.data.providerStatus?.models || [];
-  return `<select id="${id}" data-selected="${esc(selected)}" aria-label="Model">${models.map(model => `<option value="${esc(model.id)}" ${model.id === selected ? 'selected' : ''}>${esc(model.name || model.id)} · ${esc(model.id)}</option>`).join('') || '<option value="">Loading model catalog…</option>'}</select>`;
+  return `<select id="${id}" data-selected="${esc(selected)}" aria-label="Model">${modelOptions(u.state.data.providerStatus?.models || [], selected)}</select>`;
 }
 export async function refreshModels(id, providerId, force = false) {
   const select = $('#' + id); if (!select) return;
   if ($('#' + providerId)?.value === 'rehearsal') { select.disabled = true; return; }
+  const current = select.value || select.dataset.selected || '';
   select.disabled = true;
   try {
-    const current = select.dataset.selected || select.value;
     const data = !force && u.state.data.providerStatus?.models?.length ? u.state.data.providerStatus : await u.api('/api/provider', {});
     u.state.data.providerStatus = data;
     if ($('#' + id) !== select) return;
-    if (!data.models?.length) throw new Error(data.error || 'No models available. Check the Copilot connection.');
-    select.innerHTML = `<option value="">Choose a model</option>` + data.models.map(model => `<option value="${esc(model.id)}">${esc(model.name || model.id)} · ${esc(model.id)}</option>`).join('');
-    select.value = data.models.some(model => model.id === current) ? current : '';
-    select.disabled = $('#' + providerId)?.value === 'rehearsal';
-    select.onchange = () => select.dataset.selected = select.value;
-  } catch (error) { if ($('#' + id)) select.innerHTML = '<option value="">Model catalog unavailable</option>'; u.toast(error.message); }
+    select.innerHTML = modelOptions(data.models || [], current);
+    select.value = current;
+    if (!data.models?.length) u.toast(data.error || 'Model catalog unavailable. The saved model is preserved.');
+  } catch (error) { u.toast(error.message); }
+  finally {
+    if ($('#' + id) === select) {
+      select.disabled = $('#' + providerId)?.value === 'rehearsal';
+      select.onchange = () => select.dataset.selected = select.value;
+    }
+  }
 }
 export function sessionDetails(run) {
   const snapshot = run.schedule.context;

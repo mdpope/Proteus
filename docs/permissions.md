@@ -9,6 +9,7 @@ Choose a mode under **Settings → Workspace permissions**, or in a run's **Tool
 | Mode | Behavior |
 | --- | --- |
 | Ask each time | Show each permission request received from the provider. |
+| Saved rules only | Use individually approved folders and operations. Other requests still ask. |
 | Trusted workspace | Allow structured file reads/writes inside the listed roots, MCP calls marked read-only, and embedded-browser reading/navigation. Other operations need a saved rule or approval. |
 | Auto-approve tools | Also allow terminal commands, configured MCP tools, URLs, and custom tools without prompts. Structured file requests outside trusted folders still ask. |
 
@@ -36,7 +37,8 @@ Symbolic links and new-file ancestors are resolved before checking file access.
 
 Use **Revoke** in Settings to remove an authorization, or choose **Ask each time** to suspend it.
 Policy is re-read for every request and queued requests are checked after the previous reply.
-Changes from the UI or plain file also recheck a waiting permission request. Revocation applies
+Changes from either the Mac or mobile chat details, or the plain file, immediately recheck a waiting
+permission request in the same chat. Revocation applies
 to future decisions; it cannot undo an operation already running. Human-created browser tabs
 still require their separate **Agent access** toggle.
 
@@ -49,3 +51,8 @@ The provider adapter returns the current SDK's `approve-once` decision for every
 operation. Proteus remembers the rule itself, so revocation takes effect without a hidden provider
 cache of permanent grants. History records automatic approvals and their policy reason; only a
 direct approval response is attributed as interactive.
+
+Legacy partial grants previously labeled Trusted workspace now display as Saved rules only; no
+authorizations are broadened during migration. Duplicate SDK checks for the identical active tool
+call share its one-time decision; the decision expires when the tool completes. Approval waits do
+not consume the provider turn's active execution timeout.

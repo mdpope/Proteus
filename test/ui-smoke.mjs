@@ -56,7 +56,10 @@ try {
   await page.locator('#browser-share').uncheck();await assert.rejects(agent({action:'snapshot',tabId:firstId}),/private/);
   await page.locator(`[data-close="${firstId}"]`).click();
   assert.equal((await agent({action:'list'})).length,0);
-  const owned=await agent({action:'open',url:siteURL});assert.match((await agent({action:'snapshot',tabId:owned.id})).snapshot,/Knowledge hub/);await agent({action:'close',tabId:owned.id});
+  const owned=await agent({action:'open',url:siteURL});assert.match((await agent({action:'snapshot',tabId:owned.id})).snapshot,/Knowledge hub/);
+  await agent({action:'fill',tabId:owned.id,role:'textbox',name:'Search',value:'Read from a background tab'});
+  assert.match((await agent({action:'click',tabId:owned.id,role:'button',name:'Find'})).snapshot,/Read from a background tab/);
+  await agent({action:'close',tabId:owned.id});
   const stalled=await agent({action:'open',url:siteURL+'/stalled'});
   assert.match(stalled.error,/Navigation timed out after 30 seconds/);
   const recovered=await agent({action:'navigate',tabId:stalled.id,url:siteURL});

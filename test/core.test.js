@@ -1,3 +1,4 @@
+import { fakeSession } from './fake-copilot.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -108,6 +109,13 @@ test('browser provider tools bind access to the actual run identity', async () =
   const tool=browserTools({agent:async(args,id)=>{calls.push({args,id});return {title:'Visible page'};}},'actual-run')[0];
   const result=await tool.handler({action:'snapshot',tabId:'one'});assert.match(result,/Visible page/);assert.equal(calls[0].id,'actual-run');
   assert.ok(!tool.parameters.properties.action.enum.includes('evaluate'));
+  const empty = browserTools({agent:async()=>[]},'actual-run')[0];
+  const listed = JSON.parse(await empty.handler({action:'list'}));
+  assert.equal(listed.available,true);assert.deepEqual(listed.tabs,[]);
+  assert.match(listed.nextStep,/Use open/);
+  const failing=browserTools({agent:async()=>{throw new Error('locator.click: Timeout waiting for Search');}},'actual-run')[0];
+  const failure=await failing.handler({action:'click',tabId:'one'});
+  assert.equal(failure.resultType,'failure');assert.match(failure.error,/Timeout waiting for Search/);
 });
 
 
@@ -137,9 +145,9 @@ test('Copilot adapter forwards explicit approval and rejection using current SDK
   for(const answer of ['approve','approve-auto','deny']) {
     let decision;
     const provider=new CopilotProvider();
-    const session={sessionId:'fixture',on:()=>()=>{},disconnect:async()=>{},rpc:{usage:{getMetrics:async()=>({})}}};
+    const session=fakeSession({rpc:{usage:{getMetrics:async()=>({})}}});
     provider.connect=async()=>({listModels:async()=>[{id:'fixture'}],createSession:async config=>{
-      session.sendAndWait=async()=>{decision=await config.onPermissionRequest({kind:'read',path:'/fixture'});};return session;
+      session.send=async()=>{decision=await config.onPermissionRequest({kind:'read',path:'/fixture'});session.event('session.idle');};return session;
     }});
     await provider.run({run:{id:'fixture',schedule:{model:'fixture',workspace:{cwd:'/fixture',additionalDirectories:[]}},usage:{inputTokens:0,outputTokens:0}},prompt:'fixture',signal:new AbortController().signal,update:()=>{},emit:()=>{},ask:async()=>answer});
     assert.equal(decision.kind,answer==='deny'?'reject':'approve-once');
@@ -174,7 +182,7 @@ test('provider failure settles unanswered permissions before the same run resume
 
 test('Copilot aborts a timed-out provider turn before disconnecting', async () => {
   const { CopilotProvider }=await import('../src/copilot.js');const calls=[];
-  const session={sessionId:'fixture',on:()=>()=>{},sendAndWait:async()=>{throw new Error('Timed out');},abort:async()=>calls.push('abort'),disconnect:async()=>calls.push('disconnect')};
+  const session=fakeSession({send:async()=>{throw new Error('Timed out');},abort:async()=>calls.push('abort'),disconnect:async()=>calls.push('disconnect')});
   const provider=new CopilotProvider();
   provider.connect=async()=>({listModels:async()=>[{id:'fixture'}],createSession:async()=>session});
   await assert.rejects(provider.run({run:{id:'fixture',schedule:{model:'fixture',workspace:{cwd:'/fixture',additionalDirectories:[]}},usage:{inputTokens:0,outputTokens:0}},prompt:'fixture',signal:new AbortController().signal,update:()=>{},emit:()=>{},ask:async()=>{throw new Error('Unexpected permission request');}}),/Timed out/);

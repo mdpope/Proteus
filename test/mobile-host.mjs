@@ -7,6 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { atomicJSON } from '../src/files.js';
 import { secret, seal } from '../src/remote-crypto.js';
 import { startServer } from '../src/server.js';
+import { RehearsalProvider } from '../src/rehearsal.js';
 import { startRelay } from '../relay/server.js';
 import { until } from './remote-client.mjs';
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-mobile-test-'));
@@ -20,7 +21,14 @@ if (process.env.PROTEUS_TEST_CONTAINER === '1') {
   execFileSync('docker', ['--context', 'colima-proteus', 'run', '--detach', '--rm', '--name', 'proteus-relay-test', '--read-only', '--cap-drop=ALL', '--security-opt=no-new-privileges', '--env-file', envFile, '-p', '127.0.0.1:4328:4318', 'proteus-relay:local'], { stdio: 'ignore' });
   relay = { port: 4328, close: async () => execFileSync('docker', ['--context', 'colima-proteus', 'stop', 'proteus-relay-test'], { stdio: 'ignore' }) };
 } else relay = await startRelay({ port: 4328, token });
-const app = await startServer({ home, port: 0, timers: false });
+const rehearsal = new RehearsalProvider();
+const app = await startServer({ home, port: 0, timers: false, providers: { rehearsal: {
+  async run(args) {
+    args.emit('tool', 'Read synthetic notes', { tool: { callId: 'synthetic-read', name: 'view', summary: 'Read synthetic notes', status: 'completed', arguments: '{"path":"fixture.md"}', output: 'Expanded synthetic tool result', durationMs: 120 } });
+    if (args.prompt.includes('Permission rehearsal')) await args.ask({ type: 'permission', question: 'Read synthetic fixture?', details: { kind: 'read', path: workspace } });
+    return rehearsal.run(args);
+  }
+} } });
 const schedule = app.engine.schedules.list()[0]; app.engine.schedules.save({ ...app.engine.schedules.get(schedule.id), workspace: { cwd: workspace, additionalDirectories: [] } }, schedule.revision);
 await app.remote.configure({ enabled: true, mode: 'external', relayURL: 'ws://127.0.0.1:4328', publicURL: 'ws://127.0.0.1:4328', relayToken: token });
 await until(() => app.remote.status === 'online', 20_000);
