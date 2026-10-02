@@ -11,22 +11,22 @@ import { seal, unseal, secret } from './remote-crypto.js';
 import { startRelay } from '../relay/server.js';
 
 const pick = (value, keys) => Object.fromEntries(keys.filter(key => value?.[key] !== undefined).map(key => [key, value[key]]));
-const scheduleKeys = ['id', 'name', 'enabled', 'cron', 'timezone', 'provider', 'model', 'workspace', 'misfire', 'prompt', 'revision', 'nextRuns', 'error', 'source'];
-const entryKeys = ['id', 'name', 'description', 'kind', 'path', 'sources', 'roots', 'mode', 'scope', 'warnings', 'unsupportedAgentFields', 'error', 'missing'];
+const scheduleKeys = ['id', 'name', 'enabled', 'cron', 'timezone', 'provider', 'model', 'workspace', 'misfire', 'prompt', 'revision', 'nextRuns', 'error', 'source', 'contextSelection'];
+const entryKeys = ['id', 'name', 'description', 'kind', 'path', 'sources', 'roots', 'mode', 'scope', 'warnings', 'unsupportedAgentFields', 'error', 'missing', 'characters'];
 const remoteEntry = entry => ({ ...pick(entry, entryKeys), ...(entry.agent ? { userInvocable: entry.agent.userInvocable } : {}) });
-const mutationMethods = new Set(['chat.start', 'chat.reply', 'chat.resume', 'chat.cancel', 'schedule.run', 'schedule.save', 'context.mode', 'context.addFolders', 'chat.context']);
+const mutationMethods = new Set(['chat.start', 'chat.reply', 'chat.resume', 'chat.cancel', 'schedule.run', 'schedule.save', 'context.mode', 'context.favorite', 'context.addFolders', 'chat.context']);
 const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
 export function remoteRun(run, offset = 0) {
   const end = Math.max(0, run.events.length - offset); const start = Math.max(0, end - 100);
   return { agentName: agentName(run), ...pick(run, ['id', 'title', 'trigger', 'status', 'createdAt', 'updatedAt', 'pending', 'usage', 'contextUsage', 'providerSessionId', 'nativeSessionPath']),
     events: run.events.slice(start, end), eventStart: start, eventCount: run.events.length, earlier: start, schedule: pick(run.schedule, scheduleKeys),
-    context: { ...pick(run.schedule.context, ['workspaceId', 'selectedIds', 'agentId', 'capturedAt']), entries: (run.schedule.context?.entries || []).map(remoteEntry) }, liveMessages: structuredClone(run.liveMessages || {}) };
+    context: { ...pick(run.schedule.context, ['workspaceId', 'selectedIds', 'agentId', 'includeDefaults', 'baseWorkspace', 'capturedAt']), entries: (run.schedule.context?.entries || []).map(remoteEntry) }, liveMessages: structuredClone(run.liveMessages || {}) };
 }
 export function remoteState(service) {
   const context = service.context.get(); const defaults = service.settings.get();
   return { hostName: os.hostname(), schedules: service.engine.schedules.list().map(s => pick(s, scheduleKeys)),
     runs: service.engine.listRuns().slice(0, 100).map(r => pick(r, ['id', 'title', 'status', 'createdAt', 'updatedAt'])), runCount: service.engine.listRuns().length,
-    context: { ...pick(context, ['revision', 'refreshedAt', 'defaultWorkspaceId', 'workspaces', 'universalFolders', 'libraryFolders', 'errors']), entries: context.entries.map(remoteEntry) },
+    context: { ...pick(context, ['revision', 'refreshedAt', 'defaultWorkspaceId', 'workspaces', 'universalFolders', 'libraryFolders', 'favorites', 'errors']), entries: context.entries.map(remoteEntry) },
     defaults: pick(defaults, ['provider', 'model', 'timezone']), protocol: 1 };
 }
 function validateRelayURL(value) {
@@ -177,7 +177,7 @@ export class RemoteHost {
     if (method === 'context.refresh') { this.service.context.refresh(); this.changed(); return remoteState(this.service).context; }
     if (method === 'schedule.preview') return this.api('/api/preview', pick(args, ['cron', 'timezone']));
     if (method === 'chat.start') {
-      const run = await this.api('/api/chat', pick(args, ['name', 'prompt', 'provider', 'model', 'workspaceId', 'selectedIds', 'agentId']));
+      const run = await this.api('/api/chat', pick(args, ['name', 'prompt', 'provider', 'model', 'workspaceId', 'selectedIds', 'agentId', 'includeDefaults']));
       peer.runId = run.id; return { runId: run.id };
     }
     if (method === 'schedule.run') { const run = await this.api('/api/run', { id: args.id }); peer.runId = run.id; return { runId: run.id }; }
@@ -185,14 +185,16 @@ export class RemoteHost {
       engine.getRun(args.id); const action = method.split('.')[1];
       await this.api(`/api/runs/${args.id}/${action}`, pick(args, ['answer', 'requestId', 'prompt'])); return { runId: args.id };
     }
-    if (method === 'chat.context') { await this.api('/api/run-context', { runId: args.id, ...pick(args, ['selectedIds', 'agentId']) }); return { runId: args.id }; }
+    if (method === 'chat.context') { await this.api('/api/run-context', { runId: args.id, ...pick(args, ['selectedIds', 'agentId', 'includeDefaults']) }); return { runId: args.id }; }
+    if (method === 'context.preview') return this.api('/api/context/preview', pick(args, ['workspace', 'workspaceId', 'selectedIds', 'agentId', 'includeDefaults']));
+    if (method === 'context.favorite') { await this.api('/api/context', { action: 'favorite', ...pick(args, ['id', 'enabled', 'expectedRevision']) }); return { ok: true }; }
     if (method === 'context.mode') { await this.api('/api/context', { action: 'mode', ...pick(args, ['id', 'mode', 'expectedRevision']) }); return { ok: true }; }
     if (method === 'context.addFolders') { await this.api('/api/context', { action: 'add-folders', ...pick(args, ['workspaceId', 'folders', 'expectedRevision']) }); return { ok: true }; }
     if (method === 'schedule.save') {
       const original = engine.schedules.get(args.id);
       if (original.source?.manifest) throw new Error('This schedule is repository-owned. Update its source manifest and reconcile it on the Mac.');
       if (revision(original) !== args.expectedRevision) throw new Error('Schedule changed. Refresh before saving.');
-      await this.api('/api/schedules', { schedule: { ...original, ...pick(args.changes, ['name', 'enabled', 'cron', 'timezone', 'provider', 'model', 'prompt', 'misfire']) }, expectedRevision: args.expectedRevision }); return { ok: true };
+      await this.api('/api/schedules', { schedule: { ...original, ...pick(args.changes, ['name', 'enabled', 'cron', 'timezone', 'provider', 'model', 'prompt', 'misfire', 'contextSelection']) }, expectedRevision: args.expectedRevision }); return { ok: true };
     }
     throw new Error('Unsupported remote command.');
   }

@@ -12,7 +12,9 @@ text arrives. Unknown code languages remain readable as plain code.
 On the Mac, opening a chat starts at the latest message. While near the bottom (40px), new messages,
 streamed text, and delayed image layout keep the view at the bottom. Scrolling up preserves the
 reading position; Jump to latest resumes following. Each open chat keeps its own reading position.
-Completed and streamed messages occupy the same scroll area. Selecting text temporarily defers
+Completed and streamed messages occupy the same scroll area. The conversation fills a card whose
+height follows the viewport, with a 1,100px ceiling. The details column has its own bounded scroll
+area and retains its reading position; at narrow widths it stacks below the chat in the page. Selecting text temporarily defers
 background re-rendering so the selection can be copied.
 
 Raw HTML is displayed as text. Scripts, iframes, dangerous URL schemes, and arbitrary HTML attributes

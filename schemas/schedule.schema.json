@@ -19,6 +19,16 @@
     "prompt": { "type": "string", "minLength": 1 },
     "skillDirectories": { "type": "array", "items": { "type": "string" } },
     "mcpServers": { "type": "object", "description": "Provider-compatible MCP definitions. Use local environment or keychain for credentials." },
+    "contextSelection": {
+      "type": "object", "description": "Source IDs from the local context catalog, resolved for each new run. Omit for workspace defaults.",
+      "required": ["includeDefaults", "selectedIds"],
+      "properties": {
+        "includeDefaults": { "type": "boolean", "description": "False loads only selected sources/main agent and excludes legacy skillDirectories/mcpServers." },
+        "selectedIds": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "agentId": { "type": ["string", "null"] }
+      },
+      "additionalProperties": true
+    },
     "source": { "type": "object", "description": "Optional upstream manifest provenance. Host-resolved paths stay outside Git." }
   },
   "additionalProperties": true

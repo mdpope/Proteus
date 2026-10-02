@@ -48,14 +48,15 @@ export class CopilotProvider {
     const client = await this.connect(run.providerHome);
     const models = await client.listModels();
     if (!models.some(model => model.id === run.schedule.model)) throw new Error(`Model ${run.schedule.model} is unavailable for this Copilot account. Choose a model from the provider panel.`);
+    const includeLegacy = snapshot?.includeDefaults !== false;
     const config = {
       model: run.schedule.model, streaming: true,
       ...(run.schedule.reasoningEffort ? { reasoningEffort: run.schedule.reasoningEffort } : {}),
       workingDirectory: run.schedule.workspace.cwd,
       additionalDirectories: run.schedule.workspace.additionalDirectories,
-      skillDirectories: run.schedule.skillDirectories || [],
-      mcpServers: managed ? { ...Object.fromEntries(Object.entries(run.schedule.mcpServers || {}).filter(([name]) => !managed.disabledLegacyMcp.includes(name))), ...managed.mcpServers } : run.schedule.mcpServers || {},
-      ...(managed ? { skipCustomInstructions: true, enableConfigDiscovery: false, enableOnDemandInstructionDiscovery: false, enableSkills: !!run.schedule.skillDirectories?.length, disabledSkills: managed.disabledSkills, enableFileHooks: false, customAgents: managed.customAgents, agent: managed.agent, availableTools: selectedAgentToolScope(managed) } : {}),
+      skillDirectories: includeLegacy ? run.schedule.skillDirectories || [] : [],
+      mcpServers: managed ? { ...Object.fromEntries(Object.entries(includeLegacy ? run.schedule.mcpServers || {} : {}).filter(([name]) => !managed.disabledLegacyMcp.includes(name))), ...managed.mcpServers } : run.schedule.mcpServers || {},
+      ...(managed ? { skipCustomInstructions: true, enableConfigDiscovery: false, enableOnDemandInstructionDiscovery: false, enableSkills: includeLegacy && !!run.schedule.skillDirectories?.length, disabledSkills: managed.disabledSkills, enableFileHooks: false, customAgents: managed.customAgents, agent: managed.agent, availableTools: selectedAgentToolScope(managed) } : {}),
       tools: browserTools(this.browser, run.id),
       systemMessage: { mode: 'append', content: `Proteus workspace roots (${managed ? 'use the explicitly selected context below; do not automatically load other instruction/skill/agent files' : 'read relevant AGENTS.md and .github/copilot-instructions.md before work'}):\n${[run.schedule.workspace.cwd, ...run.schedule.workspace.additionalDirectories].join('\n')}\n${this.browser ? 'Embedded browser access is available through proteus_browser. Use it for visible authenticated website reads. The user can interact with those same tabs; ask for sign-in if needed.' : 'Embedded browser access is unavailable in this server-only session.'}\nEditor context supplied by the user: ${JSON.stringify(run.schedule.editorContext || null)}\n${managed?.instructionText || ''}` },
       onPermissionRequest: async request => {

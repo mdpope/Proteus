@@ -22,7 +22,12 @@ export function validateSchedule(value) {
   if (!Array.isArray(value.workspace.additionalDirectories) || value.workspace.additionalDirectories.some(p => typeof p !== 'string' || !path.isAbsolute(p))) throw new Error('workspace.additionalDirectories must be absolute paths.');
   if (value.misfire !== 'skip' && value.misfire !== 'coalesce') throw new Error('misfire must be skip or coalesce.');
   if (value.reasoningEffort && !['low','medium','high','xhigh','max'].includes(value.reasoningEffort)) throw new Error('Unsupported reasoning effort.');
+  if (value.contextSelection !== undefined) validateContextSelection(value.contextSelection);
   nextRuns(value.cron, value.timezone);
+  return value;
+}
+export function validateContextSelection(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || typeof value.includeDefaults !== 'boolean' || !Array.isArray(value.selectedIds) || value.selectedIds.some(id => typeof id !== 'string' || !id) || (value.agentId != null && typeof value.agentId !== 'string')) throw new Error('Context selection needs includeDefaults, selectedIds, and an optional agentId.');
   return value;
 }
 export const revision = value => crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');

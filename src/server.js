@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { contextPlan } from '../public/context-plan.js';
 import { agentName } from '../public/agent-name.js';
 import { UsageCache } from './usage.js';
 import fs from 'node:fs';
@@ -53,13 +54,13 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   const engine = new Engine(home, providers || { copilot });
   const usage = new UsageCache(() => (providers?.copilot || copilot).quota());
   engine.prepareSchedule = schedule => {
-    if (schedule.context) return schedule;
-    const snapshot = context.capture({ workspace: schedule.workspace });
+    if (schedule.context && !schedule.contextSelection) return schedule;
+    const snapshot = context.capture({ workspace: schedule.workspace, selectedIds: schedule.contextSelection?.selectedIds, agentId: schedule.contextSelection?.agentId, includeDefaults: schedule.contextSelection?.includeDefaults });
     return { ...schedule, context: snapshot, workspace: snapshot.workspace };
   };
   const permissionPreviews = new Map();
   function permissionSchedule(schedule) {
-    if (schedule.context) return schedule;
+    if (schedule.context && !schedule.contextSelection) return schedule;
     const catalog = context.get();
     const key = JSON.stringify([schedule, catalog.revision, catalog.refreshedAt]);
     if (!permissionPreviews.has(key)) {
@@ -120,9 +121,11 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         }
         return json(200, saved);
       }
+      if (url.pathname === '/api/context/preview' && req.method === 'POST') { const value = await body(req); return json(200, contextPlan(context.get(), value)); }
       if (url.pathname === '/api/context/refresh' && req.method === 'POST') return json(200, context.refresh());
       if (url.pathname === '/api/context' && req.method === 'POST') {
         const value = await body(req);
+        if (value.action === 'favorite') { const result = context.favorite(value.id, value.enabled, value.expectedRevision); notify(); return json(200, result); }
         if (value.action === 'import') return json(200, context.importWorkspace(value.file, value.expectedRevision));
         const result = context.mutate(config => {
           if (value.action === 'mode') {
@@ -169,7 +172,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         if (['running', 'queued', 'awaiting_input'].includes(run.status)) throw new Error('Wait for this turn to finish before changing context.');
         context.refresh();
         const old = run.schedule.context;
-        const snapshot = context.capture({ workspaceId: old?.workspaceId, ...(old?.followsWorkspace ? {} : { workspace: old?.baseWorkspace || run.schedule.workspace }), selectedIds: value.selectedIds ?? old?.selectedIds ?? [], agentId: value.agentId ?? old?.agentId });
+        const snapshot = context.capture({ workspaceId: old?.workspaceId, ...(old?.followsWorkspace ? {} : { workspace: old?.baseWorkspace || run.schedule.workspace }), selectedIds: value.selectedIds ?? old?.selectedIds ?? [], agentId: value.agentId === undefined ? old?.agentId : value.agentId, includeDefaults: value.includeDefaults ?? old?.includeDefaults ?? true });
         run.initialSchedule ??= structuredClone(run.schedule);
         run.contextHistory ??= []; if (old) run.contextHistory.push(old);
         for (const event of run.events) if (event.role === 'assistant' && !event.agentName) event.agentName = agentName(run);
@@ -194,7 +197,10 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       }
       if (url.pathname === '/api/preview' && req.method === 'POST') { const value = await body(req); return json(200, { nextRuns: nextRuns(value.cron, value.timezone) }); }
       if (url.pathname === '/api/schedules' && req.method === 'POST') {
-        const { schedule, expectedRevision } = await body(req); return json(200, engine.schedules.save(schedule, expectedRevision));
+        const { schedule, expectedRevision } = await body(req);
+        validateSchedule(schedule);
+        if (schedule.contextSelection) context.capture({ workspace: schedule.workspace, selectedIds: schedule.contextSelection?.selectedIds, agentId: schedule.contextSelection?.agentId, includeDefaults: schedule.contextSelection?.includeDefaults });
+        return json(200, engine.schedules.save(schedule, expectedRevision));
       }
       if (url.pathname === '/api/import' && req.method === 'POST') {
         const { schedules } = await body(req); if (!Array.isArray(schedules)) throw new Error('Expected an array of schedules.');
@@ -208,7 +214,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (url.pathname === '/api/run' && req.method === 'POST') { const { id } = await body(req); return json(200, engine.createRun(engine.schedules.get(id))); }
       if (url.pathname === '/api/chat' && req.method === 'POST') {
         const value = await body(req); const defaults = settings.get();
-        const snapshot = context.capture({ workspaceId: value.workspaceId, workspace: value.workspace || (!value.workspaceId ? defaults.workspace : undefined), selectedIds: value.selectedIds, agentId: value.agentId });
+        const snapshot = context.capture({ workspaceId: value.workspaceId, workspace: value.workspace || (!value.workspaceId ? defaults.workspace : undefined), selectedIds: value.selectedIds, agentId: value.agentId, includeDefaults: value.includeDefaults });
         const schedule = validateSchedule({
           schemaVersion: 1, id: `chat-${Date.now()}-${randomBytes(4).toString('hex')}`, name: value.name || 'Workspace chat', enabled: false,
           cron: '0 9 * * 1-5', timezone: value.timezone || defaults.timezone,
@@ -241,7 +247,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       }
       const assets = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'], '/features.js': ['features.js', 'text/javascript'], '/remote.js': ['remote.js', 'text/javascript'] };
       for (const file of ['runtime.js', 'style.css']) assets['/markdown/' + file] = ['markdown/' + file, file.endsWith('.css') ? 'text/css' : 'text/javascript'];
-      for (const file of ['conversation.js', 'agent-name.js', 'usage.js']) assets['/' + file] = [file, 'text/javascript'];
+      for (const file of ['conversation.js', 'agent-name.js', 'usage.js', 'context-plan.js']) assets['/' + file] = [file, 'text/javascript'];
       if (req.method === 'GET' && assets[url.pathname]) {
         const [file, type] = assets[url.pathname]; res.writeHead(200, { 'Content-Type': type }); res.end(fs.readFileSync(path.join(root, 'public', file))); return;
       }

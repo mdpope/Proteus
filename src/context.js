@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { contextPlan } from '../public/context-plan.js';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { atomicJSON, readJSON, isWithin } from './files.js';
@@ -50,7 +51,8 @@ export class ContextStore {
   config() {
     const data = readJSON(this.file);
     if (data.schemaVersion !== 1 || !Array.isArray(data.workspaces) || !data.workspaces.length || !data.modes || !Array.isArray(data.libraryFolders) || !Array.isArray(data.documents) || !Array.isArray(data.workspaceFiles)) throw new Error('Invalid context.json.');
-    return { ...data, universalFolders: data.universalFolders || [], file: this.file, revision: revision(data) };
+    if (data.favorites !== undefined && (!Array.isArray(data.favorites) || data.favorites.some(id => typeof id !== 'string'))) throw new Error('Favorites must be source IDs.');
+    return { ...data, favorites: data.favorites || [], universalFolders: data.universalFolders || [], file: this.file, revision: revision(data) };
   }
   roots(config = this.config()) { return unique([...config.workspaces.flatMap(w => [w.cwd, ...w.additionalDirectories]), ...config.libraryFolders, ...(config.universalFolders || [])]); }
   get() {
@@ -72,7 +74,17 @@ export class ContextStore {
     for (const doc of config.documents) if (!path.isAbsolute(doc.path) || !['instruction', 'skill', 'agent'].includes(doc.kind) || !fs.statSync(doc.path).isFile()) throw new Error('Choose an existing instruction, skill, or agent file.');
     for (const file of config.workspaceFiles) if (!path.isAbsolute(file) || !file.endsWith('.code-workspace')) throw new Error('Choose a VS Code workspace file.');
     for (const mode of Object.values(config.modes)) if (!modes.has(mode)) throw new Error('Invalid context selection mode.');
+    if (!Array.isArray(config.favorites || []) || (config.favorites || []).some(id => typeof id !== 'string')) throw new Error('Favorites must be source IDs.');
+    config.favorites = unique(config.favorites || []);
     atomicJSON(this.file, config); this.refresh(); return this.get();
+  }
+  favorite(id, enabled, expectedRevision) {
+    if (typeof enabled !== 'boolean' || !this.get().entries.some(e => e.id === id)) throw new Error('Choose an existing context source.');
+    const config = this.config();
+    if (config.revision !== expectedRevision) throw new Error('Workspace settings changed. Refresh before saving.');
+    config.favorites = config.favorites.filter(value => value !== id);
+    if (enabled) config.favorites.push(id);
+    delete config.file; delete config.revision; atomicJSON(this.file, config); return this.get();
   }
   mutate(change, expectedRevision) {
     const config = this.config(); change(config); return this.save(config, expectedRevision);
@@ -106,7 +118,7 @@ export class ContextStore {
         const scope = meta.applyTo || (['AGENTS.md', 'CLAUDE.md'].includes(path.basename(file)) ? path.dirname(file) : path.basename(file) === 'copilot-instructions.md' ? root : 'Selected task');
         const agent = kind === 'agent' ? agentMetadata(text) : undefined;
         const defaultMode = kind === 'instruction' && [path.join(root, 'AGENTS.md'), path.join(root, 'CLAUDE.md'), path.join(root, '.github/copilot-instructions.md')].includes(file) ? 'workspace' : 'available';
-        entries.set(id, { id, kind, path: canonical, sources: [file], roots: [root], name: meta.name, description: meta.description, runtimeName: meta.fields.name || path.basename(path.dirname(file)), agent, unsupportedAgentFields: agent?.issues || [], scope, hash: hash(text), defaultMode });
+        entries.set(id, { id, kind, path: canonical, sources: [file], roots: [root], name: meta.name, characters: text.length, description: meta.description, runtimeName: meta.fields.name || path.basename(path.dirname(file)), agent, unsupportedAgentFields: agent?.issues || [], scope, hash: hash(text), defaultMode });
       } catch (error) { errors.push({ path: file, message: error.message }); }
     };
     const walk = (dir, root) => {
@@ -140,18 +152,21 @@ export class ContextStore {
       } catch (error) { errors.push({ path: source.file, message: error.message }); }
     }
     // Retain missing selected entries so disappearance cannot look like successful loading.
-    for (const previous of this.catalog?.entries || []) if (!entries.has(previous.id) && config.modes[previous.id]) entries.set(previous.id, { ...previous, missing: true });
+    for (const previous of this.catalog?.entries || []) if (!entries.has(previous.id) && (config.modes[previous.id] || config.favorites.includes(previous.id))) entries.set(previous.id, { ...previous, missing: true });
     this.catalog = { refreshedAt: new Date().toISOString(), entries: [...entries.values()].sort((a, b) => a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name)), errors };
     atomicJSON(this.catalogFile, this.catalog);
     return this.get();
   }
-  capture({ workspaceId, workspace, selectedIds = [], agentId } = {}) {
+  capture({ workspaceId, workspace, selectedIds = [], agentId, includeDefaults = true } = {}) {
+    if (typeof includeDefaults !== 'boolean') throw new Error('Choose whether to include default context.');
+    if (agentId != null && typeof agentId !== 'string') throw new Error('Main agent must be a source ID.');
     const catalog = this.get(); const profile = workspaceId ? catalog.workspaces.find(w => w.id === workspaceId) : workspace ? null : catalog.workspaces.find(w => w.id === catalog.defaultWorkspaceId);
     if (!profile && !workspace) throw new Error('Workspace no longer exists.');
     const original = workspace || { cwd: profile.cwd, additionalDirectories: profile.additionalDirectories };
     const cwd = directory(original.cwd); const roots = unique([cwd, ...original.additionalDirectories.map(directory), ...catalog.universalFolders.map(directory)]);
     if (!Array.isArray(selectedIds) || selectedIds.some(id => !catalog.entries.some(e => e.id === id))) throw new Error('Refresh the context list before selecting sources.');
-    const chosen = catalog.entries.filter(entry => entry.mode !== 'disabled' && (entry.mode === 'universal' || selectedIds.includes(entry.id) || (entry.mode === 'workspace' && entry.roots.some(root => roots.includes(root)))));
+    if (!includeDefaults && selectedIds.some(id => catalog.entries.find(e => e.id === id)?.mode === 'disabled')) throw new Error('A selected source is disabled. Update this selection before running.');
+    const chosen = contextPlan(catalog, { workspace: { cwd, additionalDirectories: original.additionalDirectories }, selectedIds, agentId, includeDefaults }).entries;
     const records = []; let total = 0;
     for (const entry of chosen) {
       if (entry.missing) throw new Error('Selected source is missing: ' + entry.path);
@@ -169,7 +184,7 @@ export class ContextStore {
     }
     if (agentId && records.find(e => e.id === agentId)?.agent?.userInvocable === false) throw new Error('This agent cannot be selected as the main agent.');
     if (agentId && !records.some(e => e.id === agentId && e.kind === 'agent')) throw new Error('Select the agent in this chat context first.');
-    return { schemaVersion: 1, baseWorkspace: { cwd, additionalDirectories: original.additionalDirectories }, followsWorkspace: !!profile && revision({ cwd, additionalDirectories: original.additionalDirectories }) === revision({ cwd: profile.cwd, additionalDirectories: profile.additionalDirectories }), workspaceId: profile?.id || null, workspaceName: profile?.name || path.basename(cwd), selectedIds, agentId: agentId || null, capturedAt: new Date().toISOString(), workspace: { cwd, additionalDirectories: roots.filter(root => root !== cwd) }, entries: records };
+    return { schemaVersion: 1, baseWorkspace: { cwd, additionalDirectories: original.additionalDirectories }, followsWorkspace: !!profile && revision({ cwd, additionalDirectories: original.additionalDirectories }) === revision({ cwd: profile.cwd, additionalDirectories: profile.additionalDirectories }), workspaceId: profile?.id || null, workspaceName: profile?.name || path.basename(cwd), includeDefaults, selectedIds, agentId: agentId || null, capturedAt: new Date().toISOString(), workspace: { cwd, additionalDirectories: roots.filter(root => root !== cwd) }, entries: records };
   }
   resolveMcp(record, resolveEnvironment = true) {
     const data = parseJSONC(fs.readFileSync(record.path, 'utf8')); const cfg = record.workspaceFile ? data.mcp || data.settings?.mcp || {} : data;

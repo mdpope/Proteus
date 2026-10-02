@@ -1,6 +1,7 @@
 import XCTest
 
 final class RemoteUITests: XCTestCase {
+    override func setUp() { super.setUp(); continueAfterFailure = false }
     @MainActor func testPairStartAndReply() async throws {
         let (data, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/pair")!)
         let fixture = try JSONSerialization.jsonObject(with: data) as! [String: Any]
@@ -41,5 +42,43 @@ extension RemoteUITests {
         XCTAssertTrue(copy.waitForExistence(timeout: 15), "Rendered code toolbar should be accessible")
         let image = XCTAttachment(screenshot: app.screenshot()); image.name = "Rich conversation on device"; image.lifetime = .keepAlways; add(image)
         if app.buttons["Stop"].exists { app.buttons["Stop"].tap() }
+    }
+}
+
+extension RemoteUITests {
+    @MainActor func testContextFavoritesSelection() async throws {
+        let (data, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/pair")!)
+        let fixture = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        let app = XCUIApplication(); app.launchArguments = ["--reset-pairing"]; app.launch()
+        let link = app.textFields["pairing-link"]; XCTAssertTrue(link.waitForExistence(timeout: 15)); link.tap(); link.typeText(fixture["code"] as! String)
+        app.buttons["pair-mac"].tap(); let newChat = app.buttons["new-chat"]; XCTAssertTrue(newChat.waitForExistence(timeout: 25)); newChat.tap()
+        let prompt = app.textFields["chat-prompt"]; XCTAssertTrue(prompt.waitForExistence(timeout: 10)); prompt.tap(); prompt.typeText("Selected sources only")
+        let loading = app.buttons["source-loading"]
+        guard loading.waitForExistence(timeout: 10) else { XCTFail("Source loading picker is missing"); return }
+        loading.tap(); app.buttons["Only selected sources"].tap()
+        let favorite = app.buttons["Add to favorites: Synthetic skill"]
+        for _ in 0..<12 {
+            if favorite.exists && favorite.isHittable { break }
+            let list = app.collectionViews.element(boundBy: app.collectionViews.count - 1)
+            list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45)).press(forDuration: 0.05, thenDragTo: list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2)))
+        }
+        guard favorite.waitForExistence(timeout: 10) else { XCTFail("Favorite action is missing"); return }
+        favorite.tap()
+        let check = app.buttons["Check all favorites"]
+        for _ in 0..<12 {
+            if check.exists && check.isHittable { break }
+            let list = app.collectionViews.element(boundBy: app.collectionViews.count - 1)
+            list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2)).press(forDuration: 0.05, thenDragTo: list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45)))
+        }
+        guard check.waitForExistence(timeout: 10) else { XCTFail("Check all favorites is missing"); return }
+        check.tap()
+        XCTAssertTrue(app.buttons["Remove from favorites: Synthetic skill"].exists)
+        let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Mobile favorites and selected sources"; screenshot.lifetime = .keepAlways; add(screenshot)
+        app.buttons["start-chat"].tap(); guard app.staticTexts["Your input is needed"].waitForExistence(timeout: 20) else { XCTFail("Chat did not start"); return }
+        let (latest, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/latest")!)
+        let value = try JSONSerialization.jsonObject(with: latest) as! [String: Any]; let context = try XCTUnwrap(value["context"] as? [String: Any])
+        XCTAssertEqual(context["includeDefaults"] as? Bool, false)
+        let entries = context["entries"] as! [[String: Any]]; XCTAssertEqual(entries.count, 1); XCTAssertEqual(entries.first?["kind"] as? String, "skill")
+        app.buttons["Stop"].tap()
     }
 }

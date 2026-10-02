@@ -106,3 +106,21 @@ test('paired clients receive only workspace images referenced by the selected ch
   await assert.rejects(client.request('chat.image', { id: runId, source: 'AGENTS.md' }), /not referenced/);
   app.engine.cancel(runId);
 });
+
+test('favorites and explicit schedule selections sync across devices without enabling sources', async t => {
+  const { app, connect, workspace } = await fixture(t); const a = await connect(); const b = await connect();
+  let state = (await a.request('sync')).state; const mcp = state.context.entries.find(e => e.kind === 'mcp');
+  await a.request('context.favorite', { id: mcp.id, enabled: true, expectedRevision: state.context.revision });
+  state = (await b.request('sync')).state; assert.deepEqual(state.context.favorites, [mcp.id]); assert.equal(state.context.entries.find(e => e.id === mcp.id).mode, 'disabled');
+  const instruction = state.context.entries.find(e => e.kind === 'instruction');
+  const plan = await b.request('context.preview', { includeDefaults: false, selectedIds: [instruction.id], workspaceId: state.context.defaultWorkspaceId });
+  assert.equal(plan.entries.length, 1); assert.ok(plan.estimatedTextTokens > 0); assert.ok(!JSON.stringify(plan).includes('SECRET_MUST_STAY_ON_MAC'));
+  const original = state.schedules[0];
+  const local = app.engine.schedules.get(original.id); local.workspace = { cwd: workspace, additionalDirectories: [] }; app.engine.schedules.save(local, original.revision);
+  state = (await b.request('sync')).state;
+  const selection = { includeDefaults: false, selectedIds: [instruction.id], agentId: null };
+  await b.request('schedule.save', { id: original.id, expectedRevision: state.schedules[0].revision, changes: { contextSelection: selection } });
+  state = (await a.request('sync')).state; assert.deepEqual(state.schedules[0].contextSelection, selection);
+  const { runId } = await a.request('schedule.run', { id: original.id });
+  const run = await a.request('chat.get', { id: runId }); assert.equal(run.context.includeDefaults, false); assert.deepEqual(run.context.entries.map(e => e.id), [instruction.id]);
+});

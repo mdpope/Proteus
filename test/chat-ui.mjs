@@ -14,13 +14,17 @@ try {
     const engine = process.mainModule.require(process.cwd() + '/desktop/main.cjs').getService().engine;
     engine.drain = async () => {};
     const schedule = { ...engine.schedules.list()[0], workspace: { cwd: home, additionalDirectories: [] } };
-    schedule.context = { agentId: 'main', entries: [{ id: 'main', kind: 'agent', name: 'Milo', hash: 'synthetic-fixture' }] };
+    schedule.context = { agentId: 'main', entries: [{ id: 'main', kind: 'agent', name: 'Milo', hash: 'synthetic-fixture' }, ...Array.from({length: 35}, (_, i) => ({id: 'detail-' + i, kind: 'instruction', name: 'Loaded source ' + i, path: '/synthetic/source/' + i, hash: 'synthetic-fixture'}))] };
     const run = engine.createRun(schedule); run.status = 'running';
     run.events = Array.from({ length: 25 }, (_, i) => ({ role: i % 2 ? 'assistant' : 'user', at: engine.now(), text: `Earlier message ${i}\n\nA paragraph to read while new output arrives.` }));
     run.events.push({ role: 'assistant', at: engine.now(), text: fixture }); engine.persist(run); return run.id;
   }, { home, fixture });
   await page.locator('[data-page="runs"]').click(); await page.locator(`[data-run="${id}"]`).click();
   assert.match(await page.locator('.message.assistant .role').last().textContent(), /Milo/);
+  const layout = await page.evaluate(() => ({ pane: document.querySelector('.chat-pane').clientHeight, details: document.querySelector('.chat-details').clientHeight, detailContent: document.querySelector('.chat-details').scrollHeight, conversation: document.querySelector('#conversation').clientHeight }));
+  assert.ok(layout.pane <= 1100 && layout.pane >= 640); assert.ok(layout.conversation > layout.pane - 160, 'Conversation fills available card height');
+  assert.ok(layout.details <= layout.pane + 3 && layout.detailContent > layout.details, 'Long details scroll independently');
+  await page.locator('.chat-details').evaluate(e => { e.scrollTop = 400; });
   const scroll = page.locator('#conversation'); const bottomGap = () => scroll.evaluate(e => e.scrollHeight - e.clientHeight - e.scrollTop);
   await page.waitForFunction(() => { const e = document.querySelector('#conversation'); return e && e.scrollHeight - e.clientHeight - e.scrollTop < 3; });
   await page.locator('.md-image img').waitFor(); await page.waitForFunction(() => document.querySelector('.md-image img').naturalWidth > 0);
@@ -44,6 +48,7 @@ try {
   await update({ text: 'Completed response\n\n' + fixture });
   await page.waitForFunction(() => document.querySelector('#conversation').textContent.includes('Completed response'));
   assert.ok(Math.abs(await scroll.evaluate(e => e.scrollTop) - saved) < 3, 'Reading position survives completed message');
+  assert.ok(Math.abs(await page.locator('.chat-details').evaluate(e => e.scrollTop) - 400) < 3, 'Details keep reading position');
   await page.locator('.jump-latest').click(); assert.ok(await bottomGap() < 3);
   await update({ text: 'Final new message' }); await page.getByText('Final new message', { exact: true }).waitFor();
   await page.waitForFunction(() => { const e = document.querySelector('#conversation'); return e.scrollHeight - e.clientHeight - e.scrollTop < 3; });
@@ -51,6 +56,12 @@ try {
   await page.locator('.md-image img').evaluateAll(images => images.forEach(image => image.style.maxHeight = '100px'));
   await page.getByRole('heading', { name: 'Release checkpoint' }).last().scrollIntoViewIfNeeded();
   await page.screenshot({ path: '/private/tmp/proteus-rich-chat.png' });
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(900, 800));
+  await page.waitForFunction(() => getComputedStyle(document.querySelector('.chat-grid')).gridTemplateColumns.split(' ').length === 1);
+  assert.ok(await page.locator('.chat-pane').evaluate(e => e.clientHeight) <= 1100);
+  await page.locator('.chat-details').locator('section').last().scrollIntoViewIfNeeded();
+  assert.ok(await page.locator('.chat-details').locator('section').last().isVisible());
+  await page.screenshot({ path: '/private/tmp/proteus-chat-narrow.png' });
   assert.deepEqual(errors, []);
   console.log(JSON.stringify({ passed: true, checks: ['tables and highlighted code', 'copy code', 'workspace inline image', 'inert HTML', 'follow streaming at bottom', 'preserve reading position through streaming and completion', 'jump to latest resumes following'] }));
 } finally { if (app) await app.close(); fs.rmSync(home, { recursive: true, force: true }); }

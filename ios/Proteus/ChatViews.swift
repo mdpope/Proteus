@@ -33,6 +33,7 @@ struct NewChatView: View {
     @State private var workspace = ""
     @State private var selected = Set<String>()
     @State private var agent = ""
+    @State private var includeDefaults = true
     @State private var sending = false
     var body: some View {
         NavigationStack {
@@ -46,7 +47,7 @@ struct NewChatView: View {
                         Button("Refresh available models") { Task { await store.loadModels() } }
                     }
                 }
-                ContextSelection(selected: $selected, agent: $agent)
+                ContextSelection(selected: $selected, agent: $agent, includeDefaults: $includeDefaults, workspaceID: workspace)
             }.navigationTitle("New chat").toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) { Button { start() } label: { if sending { ProgressView() } else { Text("Start chat") } }.disabled(sending || !store.connected || prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || workspace.isEmpty || (provider == "copilot" && model.isEmpty)).accessibilityIdentifier("start-chat") }
@@ -58,7 +59,7 @@ struct NewChatView: View {
         Task { defer { sending = false }
             do {
                 var ids = selected; if !agent.isEmpty { ids.insert(agent) }
-                let result = try await store.request("chat.start", ["name": .string(name.isEmpty ? String(prompt.prefix(64)) : name), "prompt": .string(prompt), "provider": .string(provider), "model": .string(provider == "copilot" ? model : ""), "workspaceId": .string(workspace), "selectedIds": .array(ids.sorted().map(JSON.string)), "agentId": .string(agent)])
+                let result = try await store.request("chat.start", ["name": .string(name.isEmpty ? String(prompt.prefix(64)) : name), "prompt": .string(prompt), "provider": .string(provider), "model": .string(provider == "copilot" ? model : ""), "workspaceId": .string(workspace), "selectedIds": .array(ids.sorted().map(JSON.string)), "agentId": .string(agent), "includeDefaults": .bool(includeDefaults)])
                 await store.refresh(); onStarted(result["runId"].string)
             } catch { store.error = error.localizedDescription }
         }

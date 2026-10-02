@@ -187,3 +187,8 @@ Standup → Floating standup opens one always-on-top window at the upper left of
 screen. It matches the sidebar width and fills the usable screen height, leaving the menu bar and
 Dock available. Regeneration updates the floating order automatically. The bottom Close button
 closes only that window. `node test/standup-ui.mjs` validates the desktop behavior.
+
+Chats and schedules have Favorites, Check all favorites, an explicit source-loading mode, and a
+preview of which instructions, skills, agents and MCPs will load. Favorites sync with paired
+mobile devices. See [context loading](docs/context-loading.md) for automatic defaults, token
+estimate limits, and the plain-file schedule format.

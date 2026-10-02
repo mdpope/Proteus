@@ -27,9 +27,11 @@ await until(() => app.remote.status === 'online', 20_000);
 const receive = app.remote.receive.bind(app.remote);
 app.remote.receive = async (...args) => { try { return await receive(...args); } catch (error) { console.log('Synthetic protocol rejection: ' + error.message); throw error; } };
 const fixture = http.createServer(async (req, res) => {
+  if (req.url === '/latest') { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ context: app.engine.listRuns()[0]?.schedule.context })); return; }
   if (req.url !== '/pair') { res.writeHead(404); res.end(); return; }
   // Every native test starts with an idle synthetic runner, including after a failed test.
   for (const run of app.engine.listRuns()) if (['running', 'queued', 'awaiting_input'].includes(run.status)) app.engine.cancel(run.id);
+  app.context.mutate(config => { config.favorites = []; }, app.context.config().revision);
   const key = secret(); const aad = 'synthetic:cross-platform';
   const invite = await app.remote.pairing();
   res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ code: invite.code, key, aad, box: seal(key, { test: 'CryptoKit ↔ Node' }, aad) }));

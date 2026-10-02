@@ -175,3 +175,58 @@ test('default workspace authorization uses the same shared context as a new chat
   assert.equal(service.engine.permissions.describe(run.schedule).id, authorization.id);
   assert.equal(service.engine.permissions.describe(run.schedule).mode, 'autopilot');
 });
+
+test('favorites persist across refresh/restart without changing source modes or loading', t => {
+  const f = fixture(t); f.write(path.join(f.repo, 'skills/check/SKILL.md'), '# Favorite skill\nOnly for selected work.');
+  const skill = f.context.refresh().entries.find(e => e.kind === 'skill'); const before = f.context.get();
+  const saved = f.context.favorite(skill.id, true, before.revision);
+  assert.deepEqual(saved.favorites, [skill.id]); assert.equal(saved.refreshedAt, before.refreshedAt);
+  assert.equal(saved.entries.find(e => e.id === skill.id).mode, 'available'); assert.equal(f.context.capture().entries.length, 0);
+  assert.throws(() => f.context.favorite(skill.id, false, before.revision), /changed/);
+  const restarted = new ContextStore(path.join(f.home, 'app'), f.settings); assert.deepEqual(restarted.get().favorites, [skill.id]);
+  assert.deepEqual(restarted.favorite(skill.id, false, restarted.get().revision).favorites, []);
+});
+test('only selected sources skips workspace/universal documents while preserving folder access and selected main agent', t => {
+  const f = fixture(t); f.write(path.join(f.repo, 'AGENTS.md'), '# Workspace default');
+  f.write(path.join(f.library, 'identity.md'), '# Universal identity');
+  f.write(path.join(f.library, 'skills/check/SKILL.md'), '# Check\nSpecific skill.');
+  f.write(path.join(f.library, 'agents/review.agent.md'), '---\nname: Review\ntools: [read]\n---\nSpecific review.');
+  f.context.mutate(c => { c.libraryFolders.push(f.library); c.universalFolders.push(f.library); c.documents.push({ path: path.join(f.library, 'identity.md'), kind: 'instruction' }); }, f.context.config().revision);
+  const entries = f.context.get().entries; const identity = entries.find(e => e.name === 'Universal identity'); f.mode(identity, 'universal');
+  const skill = entries.find(e => e.kind === 'skill'); const agent = entries.find(e => e.kind === 'agent');
+  const snapshot = f.context.capture({ includeDefaults: false, selectedIds: [skill.id], agentId: agent.id });
+  assert.deepEqual(new Set(snapshot.entries.map(e => e.id)), new Set([skill.id, agent.id]));
+  assert.ok(snapshot.workspace.additionalDirectories.includes(f.library));
+  assert.equal(snapshot.includeDefaults, false); assert.equal(f.context.capture({ includeDefaults: false }).entries.length, 0);
+  const supplied = f.context.providerContext(snapshot); assert.match(supplied.instructionText, /Specific skill/); assert.doesNotMatch(supplied.instructionText, /Workspace default|Universal identity/);
+  f.mode(skill, 'disabled'); assert.throws(() => f.context.capture({ includeDefaults: false, selectedIds: [skill.id] }), /disabled/);
+});
+test('schedule selections are validated, persist in plain JSON and capture only selected sources on each run', async t => {
+  const f = fixture(t); f.write(path.join(f.repo, 'AGENTS.md'), '# Automatic source'); f.write(path.join(f.repo, 'skills/check/SKILL.md'), '# Schedule skill\nVersion one.');
+  const { startServer } = await import('../src/server.js'); const { revision } = await import('../src/schedules.js');
+  const app = await startServer({ home: path.join(f.home, 'app'), port: 0, timers: false }); t.after(() => app.close()); app.engine.drain = async () => {};
+  const skill = app.context.get().entries.find(e => e.kind === 'skill');
+  const schedule = app.engine.schedules.get('workspace-pulse'); schedule.workspace = { cwd: f.repo, additionalDirectories: [] };
+  const selection = { includeDefaults: false, selectedIds: [skill.id], agentId: null, extension: 'retained' };
+  const post = async (schedule, expectedRevision) => fetch(app.origin + '/api/schedules', { method: 'POST', headers: { authorization: 'Bearer ' + app.token, 'content-type': 'application/json' }, body: JSON.stringify({ schedule, expectedRevision }) });
+  const originalRevision = revision(app.engine.schedules.get(schedule.id));
+  assert.equal((await post({ ...schedule, contextSelection: { includeDefaults: 'no', selectedIds: [] } }, originalRevision)).status, 400);
+  assert.equal((await post({ ...schedule, contextSelection: { ...selection, selectedIds: ['missing'] } }, originalRevision)).status, 400);
+  assert.equal((await post({ ...schedule, contextSelection: selection }, originalRevision)).status, 200);
+  const saved = app.engine.schedules.get(schedule.id); assert.deepEqual(saved.contextSelection, selection); assert.equal(saved.enabled, false);
+  const first = app.engine.createRun(saved); assert.deepEqual(first.schedule.context.entries.map(e => e.id), [skill.id]); first.status = 'completed';
+  f.write(skill.path, '# Schedule skill\nVersion two.'); app.context.refresh();
+  const second = app.engine.createRun(saved); assert.match(second.schedule.context.entries[0].content, /Version two/); assert.match(first.schedule.context.entries[0].content, /Version one/);
+});
+test('only-selected Copilot configuration removes legacy MCP/skill discovery and supplies selected tools', async () => {
+  const { CopilotProvider } = await import('../src/copilot.js');
+  let config;
+  const provider = new CopilotProvider({}, { context: { providerContext: () => ({ disabledLegacyMcp: [], disabledSkills: [], customAgents: [], mcpServers: { selected: { command: 'false', tools: ['read'] } }, mcpMappings: {}, instructionText: 'Selected instructions' }) } });
+  const session = { sessionId: 'synthetic', on: () => () => {}, disconnect: async () => {}, sendAndWait: async () => {}, rpc: { agent: { deselect: async () => {} }, usage: { getMetrics: async () => ({}) } } };
+  provider.connect = async () => ({ listModels: async () => [{ id: 'synthetic' }], createSession: async value => { config = value; return session; } });
+  const run = { id: 'synthetic', schedule: { model: 'synthetic', workspace: { cwd: '/tmp', additionalDirectories: [] }, context: { includeDefaults: false, entries: [] }, skillDirectories: ['/legacy/skills'], mcpServers: { unwanted: { command: 'false' } } }, usage: { inputTokens: 0, outputTokens: 0 } };
+  await provider.run({ run, prompt: 'Synthetic task', signal: new AbortController().signal, emit() {}, update() {}, ask() {} });
+  assert.deepEqual(config.skillDirectories, []); assert.equal(config.enableSkills, false); assert.deepEqual(Object.keys(config.mcpServers), ['selected']);
+  assert.equal(config.skipCustomInstructions, true); assert.equal(config.enableConfigDiscovery, false); assert.equal(config.enableOnDemandInstructionDiscovery, false);
+  assert.match(config.systemMessage.content, /Selected instructions/);
+});

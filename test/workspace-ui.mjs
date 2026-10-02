@@ -42,7 +42,7 @@ try {
   await page.locator('#chat-model option[value="synthetic-fast"]').waitFor({ state: 'attached' });
   assert.equal(await page.locator('#chat-model').inputValue(), 'synthetic-openai');
   await page.locator('#chat-provider').selectOption('rehearsal');
-  await page.locator('.context-picker summary').click();
+  await page.locator('.context-picker > summary').click();
   await page.locator('[data-context-option]').filter({ hasText: 'Evidence check' }).locator('input[type=checkbox]').check();
   assert.ok(await page.locator('[data-context-option]').filter({ hasText: 'Shared persona' }).locator('input').isDisabled());
   assert.ok(await page.locator('[data-context-option]').filter({ hasText: 'Unsupported helper' }).locator('input').isDisabled());
