@@ -150,10 +150,10 @@ test('universal folders follow every workspace and explicit document roles overr
   assert.match(f.context.providerContext(snapshot).instructionText, /Follow domain routing/);
 });
 test('agent tool controls cannot be silently discarded by the host adapter', t => {
-  const f = fixture(t); f.write(path.join(f.repo, '.github/agents/review.agent.md'), '---\nname: Review\ntools: [read]\n---\nReview only.');
+  const f = fixture(t); f.write(path.join(f.repo, '.github/agents/review.agent.md'), '---\nname: Review\ntools: [read]\nhooks: {}\n---\nReview only.');
   const entry = f.context.refresh().entries.find(e => e.kind === 'agent');
-  assert.deepEqual(entry.unsupportedAgentFields, ['tools']);
-  assert.throws(() => f.context.capture({ selectedIds: [entry.id] }), /need an adapter/);
+  assert.deepEqual(entry.unsupportedAgentFields, ['Adapter required for hooks']);
+  assert.throws(() => f.context.capture({ selectedIds: [entry.id] }), /Agent is unavailable/);
 });
 
 test('default workspace authorization uses the same shared context as a new chat', async t => {

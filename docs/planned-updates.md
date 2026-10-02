@@ -18,7 +18,7 @@ See [workspaces](workspaces.md) and [credentials](credentials.md) for behavior a
 Still deferred:
 
 - Background service, packaging/signing, independent concurrent execution, notifications.
-- Standalone MCP connection/OAuth/input adapters and editor-specific agent tool/hook mappings.
+- Standalone MCP connection/OAuth/input adapters and editor-specific agent hook and extension-tool mappings.
 - Bitwarden extension compatibility and broader token-broker/Keychain bootstrap integrations.
 - Automatic VS Code index, unsaved buffers, or existing chat-history transfer.
 - Native session relocation or cross-provider conversation migration.

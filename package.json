@@ -19,7 +19,8 @@
     "@github/copilot-sdk": "1.0.16",
     "cron-parser": "5.10.1",
     "playwright": "1.58.2",
-    "ws": "8.22.0"
+    "ws": "8.22.0",
+    "yaml": "2.9.1"
   },
   "devDependencies": {
     "electron": "44.5.1"

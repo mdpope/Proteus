@@ -162,3 +162,6 @@ synthetic temporary files with zero manual approvals. It uses provider credits, 
 
 `node test/context-copilot-smoke.mjs --run-live` checks explicit instruction delivery and changed
 context on a resumed native session using only synthetic sources. It consumes Copilot usage.
+
+`node test/agent-copilot-smoke.mjs --run-live` verifies a synthetic custom agent can read and resume,
+while read-only and no-tool profiles retain their restrictions in the actual Copilot runtime.

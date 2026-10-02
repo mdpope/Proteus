@@ -9,6 +9,8 @@ const appHome = path.join(home, 'app'); const root = path.join(home, 'project');
 const write = (file, content) => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, content); };
 const data = value => JSON.stringify(value, null, 2);
 write(path.join(root, 'AGENTS.md'), '# Project rules\nUse synthetic fixtures.');
+write(path.join(library, '.github/agents/portable.agent.md'), '---\nname: Portable helper\ntools: [read, search, edit, execute]\n---\nUse synthetic evidence only.');
+write(path.join(library, '.github/agents/unsupported.agent.md'), '---\nname: Unsupported helper\nhooks: {}\n---\nRequires another adapter.');
 write(path.join(library, 'persona.md'), '# Shared persona\nBe concise.');
 write(path.join(extra, 'AGENTS.md'), '# Documentation rules\nPreserve evidence.');
 write(path.join(appHome, 'settings.json'), data({ schemaVersion: 1, workspace: { cwd: root, additionalDirectories: [] }, provider: 'rehearsal', model: 'synthetic-openai', timezone: 'America/Denver', skillDirectories: [], mcpServers: {} }));
@@ -43,12 +45,18 @@ try {
   await page.locator('.context-picker summary').click();
   await page.locator('[data-context-option]').filter({ hasText: 'Evidence check' }).locator('input[type=checkbox]').check();
   assert.ok(await page.locator('[data-context-option]').filter({ hasText: 'Shared persona' }).locator('input').isDisabled());
+  assert.ok(await page.locator('[data-context-option]').filter({ hasText: 'Unsupported helper' }).locator('input').isDisabled());
+  assert.ok(await page.locator('#chat-agent option').filter({ hasText: 'Unsupported helper' }).isDisabled());
+  await page.locator('#chat-agent').selectOption({ label: 'Portable helper' });
   await page.locator('#chat-prompt').fill('Review the synthetic workspace.');
   await page.locator('#dialog-submit').click(); await page.locator('#answer').waitFor();
   const runFiles = fs.readdirSync(path.join(appHome, 'runs')); assert.equal(runFiles.length, 1);
   const runFile = path.join(appHome, 'runs', runFiles[0]); let run = JSON.parse(fs.readFileSync(runFile));
   assert.ok(run.schedule.context.entries.some(e => e.name === 'Shared persona'));
   assert.ok(run.schedule.context.entries.some(e => e.kind === 'skill'));
+  const agent = run.schedule.context.entries.find(e => e.name === 'Portable helper');
+  assert.equal(run.schedule.context.agentId, agent.id);
+  assert.ok(agent.agent.tools.includes('view')); assert.ok(agent.agent.tools.includes('edit'));
   await page.locator('#answer').fill('Continue with the synthetic checklist.'); await page.locator('#reply').click();
   await page.getByText('Turn complete', { exact: true }).waitFor();
   await page.locator('[data-copy-path]').first().click();
@@ -94,5 +102,5 @@ try {
   await page.locator('[data-page="context"]').click();
   const screenshot = process.env.PROTEUS_SCREENSHOT || '/private/tmp/proteus-workspace-context.png'; await page.screenshot({ path: screenshot });
   assert.equal(await page.getByRole('row').filter({ hasText: 'Shared persona' }).locator('[data-context-mode]').inputValue(), 'universal');
-  console.log(JSON.stringify({ passed: true, screenshot, checks: ['native Add folder', 'refresh discovers skill without restart', 'universal and per-chat context', 'provider model catalog', 'context refresh preserves original snapshot', 'copy path and transcript export', 'standup restart persistence', 'Bitwarden adapter UI', 'origin-bound private browser fill', 'no credential values in persistence'] }));
+  console.log(JSON.stringify({ passed: true, screenshot, checks: ['native Add folder', 'refresh discovers skill without restart', 'universal and per-chat context', 'portable agent starts successfully', 'unsupported agents disabled in picker', 'provider model catalog', 'context refresh preserves original snapshot', 'copy path and transcript export', 'standup restart persistence', 'Bitwarden adapter UI', 'origin-bound private browser fill', 'no credential values in persistence'] }));
 } finally { if (app) await app.close(); fs.rmSync(home, { recursive: true, force: true }); }

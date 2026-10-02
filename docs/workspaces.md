@@ -34,8 +34,14 @@ and domain routing remain applicable when a document is included universally.
 For managed Copilot sessions, Proteus disables automatic instruction/configuration/hook discovery
 and supplies the selected instruction and skill text explicitly. Agents are registered as SDK
 custom agents; selecting an agent makes it available, not proof that the model invoked it. Agents
-with editor-specific `tools`, `mcp-servers`, or `hooks` metadata currently require an adapter and
-cannot be enabled silently. This does not override GitHub organization policy or provider system
+with inline `mcp-servers` or `hooks` metadata still require an adapter and are visibly unavailable
+in the chat picker. The `tools` field accepts YAML lists or comma-separated strings. Supported portable groups
+(`read`, `search`, `edit`, `execute`, `agent`, `web`) map to Copilot runtime tools. Read/search stays read-only; `tools: []` provides no
+tools; an omitted list or `['*']` inherits configured tools. Unknown names fail visibly instead of
+dropping restrictions. The selected main agent also sets the session tool ceiling, including an empty list, so provider-added
+planning tools cannot bypass it. Delegation cannot expand that session ceiling. Source declarations
+do not approve operations or enable MCP servers.
+`infer`, `disable-model-invocation`, and `user-invocable` controls are respected. This does not override GitHub organization policy or provider system
 instructions, which Proteus cannot enumerate. Selected source paths may reference other documents;
 those later tool reads are not automatically promoted into the managed source inventory.
 
@@ -91,3 +97,8 @@ the desired order, agenda, and timezone. Generate shuffles the random group, app
 group, and saves today's result. Editing settings does not change the current result until Generate.
 The result survives app restarts. No daily document or model call is created. This utility does not
 claim completion of a separate workflow that requires durable artifacts.
+
+Tool mappings follow [GitHub agent configuration](https://docs.github.com/en/copilot/reference/custom-agents-configuration)
+and [SDK agent tool scoping](https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/custom-agents).
+Source-qualified MCP tools remain limited to the configured servers; extension-only tools need
+a provider adapter. The model and normal workspace permission policy still come from the chat.

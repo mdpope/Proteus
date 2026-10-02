@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { revision } from './schedules.js';
+import { selectedAgentToolScope } from './agent-tools.js';
 
 export class CopilotProvider {
   constructor(options = {}, { browser, context, settings } = {}) { this.browser = browser; this.context = context; this.settings = settings; this.options = options; this.client = null; this.starting = null; this.sessions = new Map(); }
@@ -49,7 +50,7 @@ export class CopilotProvider {
       additionalDirectories: run.schedule.workspace.additionalDirectories,
       skillDirectories: run.schedule.skillDirectories || [],
       mcpServers: managed ? { ...Object.fromEntries(Object.entries(run.schedule.mcpServers || {}).filter(([name]) => !managed.disabledLegacyMcp.includes(name))), ...managed.mcpServers } : run.schedule.mcpServers || {},
-      ...(managed ? { skipCustomInstructions: true, enableConfigDiscovery: false, enableOnDemandInstructionDiscovery: false, enableSkills: !!run.schedule.skillDirectories?.length, disabledSkills: managed.disabledSkills, enableFileHooks: false, customAgents: managed.customAgents, agent: managed.agent } : {}),
+      ...(managed ? { skipCustomInstructions: true, enableConfigDiscovery: false, enableOnDemandInstructionDiscovery: false, enableSkills: !!run.schedule.skillDirectories?.length, disabledSkills: managed.disabledSkills, enableFileHooks: false, customAgents: managed.customAgents, agent: managed.agent, availableTools: selectedAgentToolScope(managed) } : {}),
       tools: browserTools(this.browser, run.id),
       systemMessage: { mode: 'append', content: `Proteus workspace roots (${managed ? 'use the explicitly selected context below; do not automatically load other instruction/skill/agent files' : 'read relevant AGENTS.md and .github/copilot-instructions.md before work'}):\n${[run.schedule.workspace.cwd, ...run.schedule.workspace.additionalDirectories].join('\n')}\n${this.browser ? 'Embedded browser access is available through proteus_browser. Use it for visible authenticated website reads. The user can interact with those same tabs; ask for sign-in if needed.' : 'Embedded browser access is unavailable in this server-only session.'}\nEditor context supplied by the user: ${JSON.stringify(run.schedule.editorContext || null)}\n${managed?.instructionText || ''}` },
       onPermissionRequest: async request => {
@@ -63,6 +64,7 @@ export class CopilotProvider {
     const session = run.providerSessionId
       ? await client.resumeSession(run.providerSessionId, config)
       : await client.createSession({ ...config, sessionId: run.id });
+    if (managed && !managed.agent) await session.rpc.agent.deselect();
     run.providerSessionId = session.sessionId;
     const nativePath = path.join(run.providerHome, 'session-state', session.sessionId);
     if (fs.existsSync(nativePath)) run.nativeSessionPath = nativePath;

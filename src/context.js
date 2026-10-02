@@ -3,6 +3,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { atomicJSON, readJSON, isWithin } from './files.js';
 import { revision } from './schedules.js';
+import { agentMetadata } from './agent-tools.js';
 
 const hash = value => createHash('sha256').update(value).digest('hex');
 const modes = new Set(['universal', 'workspace', 'available', 'disabled']);
@@ -98,13 +99,14 @@ export class ContextStore {
         const canonical = fs.realpathSync(file); const id = hash(canonical); const existing = entries.get(id);
         if (existing) {
           existing.sources = unique([...existing.sources, file]); existing.roots = unique([...existing.roots, root]);
-          if (explicitKind) { existing.kind = explicitKind; existing.unsupportedAgentFields = explicitKind === 'agent' ? existing.unsupportedAgentFields : []; }
+          if (explicitKind) { existing.kind = explicitKind; existing.agent = explicitKind === 'agent' ? agentMetadata(readDocument(canonical)) : undefined; existing.unsupportedAgentFields = existing.agent?.issues || []; }
           return;
         }
         const text = readDocument(canonical); const meta = markdownMetadata(text, canonical); const kind = explicitKind || kindFor(file);
         const scope = meta.applyTo || (['AGENTS.md', 'CLAUDE.md'].includes(path.basename(file)) ? path.dirname(file) : path.basename(file) === 'copilot-instructions.md' ? root : 'Selected task');
+        const agent = kind === 'agent' ? agentMetadata(text) : undefined;
         const defaultMode = kind === 'instruction' && [path.join(root, 'AGENTS.md'), path.join(root, 'CLAUDE.md'), path.join(root, '.github/copilot-instructions.md')].includes(file) ? 'workspace' : 'available';
-        entries.set(id, { id, kind, path: canonical, sources: [file], roots: [root], name: meta.name, description: meta.description, runtimeName: meta.fields.name || path.basename(path.dirname(file)), unsupportedAgentFields: kind === 'agent' ? ['tools', 'mcp-servers', 'hooks'].filter(key => key in meta.fields) : [], scope, hash: hash(text), defaultMode });
+        entries.set(id, { id, kind, path: canonical, sources: [file], roots: [root], name: meta.name, description: meta.description, runtimeName: meta.fields.name || path.basename(path.dirname(file)), agent, unsupportedAgentFields: agent?.issues || [], scope, hash: hash(text), defaultMode });
       } catch (error) { errors.push({ path: file, message: error.message }); }
     };
     const walk = (dir, root) => {
@@ -153,7 +155,7 @@ export class ContextStore {
     const records = []; let total = 0;
     for (const entry of chosen) {
       if (entry.missing) throw new Error('Selected source is missing: ' + entry.path);
-      if (entry.kind === 'agent' && entry.unsupportedAgentFields?.length) throw new Error('Agent has editor-specific tool controls that need an adapter: ' + entry.name + ' (' + entry.unsupportedAgentFields.join(', ') + ')');
+      if (entry.kind === 'agent' && entry.unsupportedAgentFields?.length) throw new Error('Agent is unavailable: ' + entry.name + '. ' + entry.unsupportedAgentFields.join('; '));
       const record = { ...entry }; delete record.defaultMode;
       if (entry.kind !== 'mcp') {
         const text = readDocument(entry.path);
@@ -165,6 +167,7 @@ export class ContextStore {
       records.push(record);
       for (const root of entry.roots) if (fs.existsSync(root) && !roots.includes(root)) roots.push(directory(root));
     }
+    if (agentId && records.find(e => e.id === agentId)?.agent?.userInvocable === false) throw new Error('This agent cannot be selected as the main agent.');
     if (agentId && !records.some(e => e.id === agentId && e.kind === 'agent')) throw new Error('Select the agent in this chat context first.');
     return { schemaVersion: 1, baseWorkspace: { cwd, additionalDirectories: original.additionalDirectories }, followsWorkspace: !!profile && revision({ cwd, additionalDirectories: original.additionalDirectories }) === revision({ cwd: profile.cwd, additionalDirectories: profile.additionalDirectories }), workspaceId: profile?.id || null, workspaceName: profile?.name || path.basename(cwd), selectedIds, agentId: agentId || null, capturedAt: new Date().toISOString(), workspace: { cwd, additionalDirectories: roots.filter(root => root !== cwd) }, entries: records };
   }
@@ -202,7 +205,12 @@ export class ContextStore {
         if (fingerprints.has(fingerprint)) { mcpMappings[entry.id] = fingerprints.get(fingerprint); continue; }
         if (mcpServers[name]) throw new Error('Two selected MCP sources have the same name. Disable an alternative: ' + entry.name);
         mcpServers[name] = definition; fingerprints.set(fingerprint, name); mcpMappings[entry.id] = name;
-      } else if (entry.kind === 'agent') customAgents.push({ name: 'agent-' + entry.id.slice(0, 16), displayName: entry.name, description: entry.description || entry.name, prompt: `Source: ${entry.path}\nScope: ${entry.scope}\n\n${entry.content}`, infer: true });
+      } else if (entry.kind === 'agent') {
+        // Parse the captured version on resume too; do not trust stale catalog metadata.
+        const agent = agentMetadata(entry.content);
+        if (agent.issues.length) throw new Error('Agent is unavailable: ' + entry.name + '. ' + agent.issues.join('; '));
+        customAgents.push({ name: 'agent-' + entry.id.slice(0, 16), displayName: entry.name, description: entry.description || entry.name, tools: agent.tools, prompt: `Source: ${entry.path}\nScope: ${entry.scope}\n\n${entry.content}`, infer: agent.infer });
+      }
       else instructions.push(`## ${entry.kind}: ${entry.name}\nSource: ${entry.path}\nApplies to: ${entry.mode === 'universal' ? 'Every chat; preserve task, domain, and file limits written in the source' : entry.scope}\nUse referenced relative paths from this source's directory. Preserve the source's domain and scope.\n\n${entry.content}`);
     }
     return { mcpServers, mcpMappings, customAgents, disabledSkills: catalog.entries.filter(e => e.kind === 'skill' && catalog.modes[e.id] === 'disabled').map(e => e.runtimeName), disabledLegacyMcp: catalog.entries.filter(e => e.kind === 'mcp' && catalog.modes[e.id] === 'disabled').map(e => e.name), agent: snapshot.agentId ? 'agent-' + snapshot.agentId.slice(0, 16) : undefined, instructionText: instructions.join('\n\n') };
