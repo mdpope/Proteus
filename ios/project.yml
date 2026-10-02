@@ -13,8 +13,13 @@ settings:
 targets:
   ProteusMobile:
     type: application
+    productName: Proteus
     platform: iOS
-    sources: [Proteus]
+    sources:
+      - Proteus
+      - path: ../public/markdown
+        type: folder
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: org.proteusapp.proteus.mobile

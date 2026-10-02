@@ -9,12 +9,15 @@
 /* Begin PBXBuildFile section */
 		0251FE479F24F5A96EA70F96 /* RemoteStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9023FEA1077763EA7555C94D /* RemoteStore.swift */; };
 		1162CF50A47019EEE0F0B91C /* ScheduleViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99814D317E2043305330CB8E /* ScheduleViews.swift */; };
+		2DA06CE96BFC9F1B53D5955C /* MarkdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8599964FC6EFDA8704A9F1CF /* MarkdownView.swift */; };
+		398B9FDDC1D1B5A441D3E044 /* markdown in Resources */ = {isa = PBXBuildFile; fileRef = 4FA0511E62085A38609D5D2C /* markdown */; };
 		54B2034637BB14023E216F1B /* RemoteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD304CE5E2D4AA434F2B24CC /* RemoteTests.swift */; };
 		5F7A96C7CCAC62FF1B3C0FE2 /* ChatViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A814582040CD2B969E3FED0 /* ChatViews.swift */; };
 		68FFA33EBE3DB02F0593900F /* RemoteCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B068C230D5ED165EE25D9DD /* RemoteCrypto.swift */; };
 		6BF7A7A42FCA9E2E7B40DD85 /* RemoteUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5F927DCF4BF815F06256F2A /* RemoteUITests.swift */; };
 		72DBBD6D208FC0DF6672ED87 /* ContextViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF35BFD81ECE37D5F8218105 /* ContextViews.swift */; };
 		94928203EE4720AE61143A35 /* JSON.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EE5D84DB0FFFCF87E643DDA /* JSON.swift */; };
+		A4B6B84AF204B4F3F0EC0971 /* MarkdownTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCFA7F851DB57CA3BDECDDF2 /* MarkdownTests.swift */; };
 		BE2EFD83DC4255BFC6852B7C /* ProteusApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89BCB9A523FAD7012BFBFBE2 /* ProteusApp.swift */; };
 		D5382767A692259B940198E9 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C3669D14C35D62493F9512B7 /* Assets.xcassets */; };
 		E3CCE5A289BFA2C55DB7BBA0 /* QRScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAE0DEDA1094847BDFC976EB /* QRScanner.swift */; };
@@ -39,7 +42,10 @@
 
 /* Begin PBXFileReference section */
 		2B068C230D5ED165EE25D9DD /* RemoteCrypto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteCrypto.swift; sourceTree = "<group>"; };
+		3B1F7B75CFDD99F635051F0D /* Proteus.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Proteus.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		4FA0511E62085A38609D5D2C /* markdown */ = {isa = PBXFileReference; lastKnownFileType = folder; name = markdown; path = ../public/markdown; sourceTree = SOURCE_ROOT; };
 		7DB8DB7C2A0FFB5C4A9E2425 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		8599964FC6EFDA8704A9F1CF /* MarkdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownView.swift; sourceTree = "<group>"; };
 		89BCB9A523FAD7012BFBFBE2 /* ProteusApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProteusApp.swift; sourceTree = "<group>"; };
 		8EE5D84DB0FFFCF87E643DDA /* JSON.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSON.swift; sourceTree = "<group>"; };
 		9023FEA1077763EA7555C94D /* RemoteStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteStore.swift; sourceTree = "<group>"; };
@@ -47,8 +53,8 @@
 		9A814582040CD2B969E3FED0 /* ChatViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViews.swift; sourceTree = "<group>"; };
 		A381A2CE3D0727C537781BBD /* ProteusTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = ProteusTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B5F927DCF4BF815F06256F2A /* RemoteUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteUITests.swift; sourceTree = "<group>"; };
+		BCFA7F851DB57CA3BDECDDF2 /* MarkdownTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownTests.swift; sourceTree = "<group>"; };
 		C3669D14C35D62493F9512B7 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		CF291565C28538140C840C17 /* ProteusMobile.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = ProteusMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		CF35BFD81ECE37D5F8218105 /* ContextViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextViews.swift; sourceTree = "<group>"; };
 		E79E4AFD22E1C4D4C5FAA5EE /* ProteusUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = ProteusUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		FAE0DEDA1094847BDFC976EB /* QRScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRScanner.swift; sourceTree = "<group>"; };
@@ -67,7 +73,7 @@
 		2644A56053EF1E9F5888BD13 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				CF291565C28538140C840C17 /* ProteusMobile.app */,
+				3B1F7B75CFDD99F635051F0D /* Proteus.app */,
 				A381A2CE3D0727C537781BBD /* ProteusTests.xctest */,
 				E79E4AFD22E1C4D4C5FAA5EE /* ProteusUITests.xctest */,
 			);
@@ -77,6 +83,7 @@
 		5C6398D9D5D93C4A2C09CE1A /* ProteusTests */ = {
 			isa = PBXGroup;
 			children = (
+				BCFA7F851DB57CA3BDECDDF2 /* MarkdownTests.swift */,
 				FD304CE5E2D4AA434F2B24CC /* RemoteTests.swift */,
 			);
 			path = ProteusTests;
@@ -90,6 +97,7 @@
 				CF35BFD81ECE37D5F8218105 /* ContextViews.swift */,
 				7DB8DB7C2A0FFB5C4A9E2425 /* Info.plist */,
 				8EE5D84DB0FFFCF87E643DDA /* JSON.swift */,
+				8599964FC6EFDA8704A9F1CF /* MarkdownView.swift */,
 				89BCB9A523FAD7012BFBFBE2 /* ProteusApp.swift */,
 				FAE0DEDA1094847BDFC976EB /* QRScanner.swift */,
 				2B068C230D5ED165EE25D9DD /* RemoteCrypto.swift */,
@@ -102,6 +110,7 @@
 		E5A0B9D29E75EE34F49DF94D = {
 			isa = PBXGroup;
 			children = (
+				4FA0511E62085A38609D5D2C /* markdown */,
 				9C9312C0FF80BE614739AEAC /* Proteus */,
 				5C6398D9D5D93C4A2C09CE1A /* ProteusTests */,
 				1E9395FBB4AAB39B4DC82C89 /* ProteusUITests */,
@@ -145,7 +154,7 @@
 			packageProductDependencies = (
 			);
 			productName = ProteusMobile;
-			productReference = CF291565C28538140C840C17 /* ProteusMobile.app */;
+			productReference = 3B1F7B75CFDD99F635051F0D /* Proteus.app */;
 			productType = "com.apple.product-type.application";
 		};
 		D15C24FCA188B183AF8753B8 /* ProteusTests */ = {
@@ -214,6 +223,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				D5382767A692259B940198E9 /* Assets.xcassets in Resources */,
+				398B9FDDC1D1B5A441D3E044 /* markdown in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -227,6 +237,7 @@
 				5F7A96C7CCAC62FF1B3C0FE2 /* ChatViews.swift in Sources */,
 				72DBBD6D208FC0DF6672ED87 /* ContextViews.swift in Sources */,
 				94928203EE4720AE61143A35 /* JSON.swift in Sources */,
+				2DA06CE96BFC9F1B53D5955C /* MarkdownView.swift in Sources */,
 				BE2EFD83DC4255BFC6852B7C /* ProteusApp.swift in Sources */,
 				E3CCE5A289BFA2C55DB7BBA0 /* QRScanner.swift in Sources */,
 				68FFA33EBE3DB02F0593900F /* RemoteCrypto.swift in Sources */,
@@ -239,6 +250,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A4B6B84AF204B4F3F0EC0971 /* MarkdownTests.swift in Sources */,
 				54B2034637BB14023E216F1B /* RemoteTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

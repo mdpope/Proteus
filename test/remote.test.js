@@ -94,3 +94,15 @@ test('relay rejects browser origins and incorrect host credentials', async t => 
     await new Promise(resolve => { ws.on('error', error => { assert.match(error.message, /403/); resolve(); }); });
   }
 });
+
+test('paired clients receive only workspace images referenced by the selected chat', async t => {
+  const { app, connect, workspace } = await fixture(t); const client = await connect();
+  const png = fs.readFileSync(new URL('../ios/Proteus/Assets.xcassets/AppIcon.appiconset/AppIcon.png', import.meta.url));
+  fs.writeFileSync(path.join(workspace, 'plot.png'), png);
+  const sync = await client.request('sync');
+  const { runId } = await client.request('chat.start', { prompt: '![Preview](plot.png)', provider: 'rehearsal', workspaceId: sync.state.context.defaultWorkspaceId });
+  const image = await client.request('chat.image', { id: runId, source: 'plot.png' });
+  assert.equal(image.dataURL, 'data:image/png;base64,' + png.toString('base64'));
+  await assert.rejects(client.request('chat.image', { id: runId, source: 'AGENTS.md' }), /not referenced/);
+  app.engine.cancel(runId);
+});

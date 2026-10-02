@@ -73,6 +73,7 @@ struct ChatView: View {
     @State private var followLatest = true
     @FocusState private var composerFocused: Bool
     private var run: JSON { store.chats[id] ?? .null }
+    private var mainAgentName: String { run["agentName"].string.isEmpty ? "Proteus" : run["agentName"].string }
     private var pending: JSON { run["pending"] }
     private var active: Bool { ["running", "queued", "awaiting_input"].contains(run["status"].string) }
     var body: some View {
@@ -81,8 +82,8 @@ struct ChatView: View {
             LazyVStack(alignment: .leading, spacing: 18) {
                 HStack { if run["status"].string == "running" { ProgressView() }; Text(statusLabel(run["status"].string)).font(.subheadline).foregroundStyle(.secondary); Spacer(); if active { Button("Stop", role: .destructive) { act("chat.cancel", [:]) }.disabled(busy || !store.connected) } }
                 if run["earlier"].int > 0 { Button("Load earlier messages") { loadEarlier() } }
-                ForEach(Array(run["events"].array.enumerated()), id: \.offset) { _, event in MessageView(role: event["role"].string, text: event["text"].string) }
-                ForEach(run["liveMessages"].object.keys.sorted(), id: \.self) { key in MessageView(role: "assistant · streaming", text: run["liveMessages"][key].string) }
+                ForEach(Array(run["events"].array.enumerated()), id: \.offset) { _, event in MessageView(role: event["role"].string == "assistant" ? (event["agentName"].string.isEmpty ? mainAgentName : event["agentName"].string) : event["role"].string, text: event["text"].string, runID: id) { if followLatest { Task { @MainActor in await Task.yield(); proxy.scrollTo("chat-end", anchor: .bottom) } } } }
+                ForEach(run["liveMessages"].object.keys.sorted(), id: \.self) { key in MessageView(role: "\(mainAgentName) · streaming", text: run["liveMessages"][key].string, runID: id) { if followLatest { Task { @MainActor in await Task.yield(); proxy.scrollTo("chat-end", anchor: .bottom) } } } }
                 if pending != .null {
                     VStack(alignment: .leading, spacing: 12) {
                         Label("Your input is needed", systemImage: "person.crop.circle.badge.questionmark").font(.headline)
@@ -130,12 +131,19 @@ struct ChatView: View {
     private func loadEarlier() { followLatest = false; Task { do { let value = try await store.request("chat.get", ["id": .string(id), "offset": .number(Double(run["events"].array.count))]); store.mergeChat(value) } catch { store.error = error.localizedDescription } } }
 }
 struct MessageView: View {
+    @EnvironmentObject var store: RemoteStore
+    @State private var height: CGFloat = 0
     let role: String
     let text: String
+    let runID: String
+    var onResize: () -> Void = {}
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(role.uppercased()).font(.caption2.weight(.bold)).foregroundStyle(.secondary)
-            Text(text).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+            ZStack(alignment: .topLeading) {
+                if height == 0 { Text(text).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
+                MarkdownView(text: text, runID: runID, store: store, height: $height, onResize: onResize).frame(height: max(height, 1)).opacity(height > 0 ? 1 : 0)
+            }.frame(maxWidth: .infinity, alignment: .leading)
         }.padding().background(role == "user" ? Color.accentColor.opacity(0.13) : Color.secondary.opacity(0.09), in: RoundedRectangle(cornerRadius: 16))
     }
 }

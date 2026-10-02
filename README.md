@@ -25,12 +25,12 @@ selects an available port. `PROTEUS_HOME` overrides the application-data directo
 - Manual and scheduled runs, serial execution, overlap prevention, and skip/coalesce policies.
 - Captured schedule/context versions per run; persisted conversations, feedback, permissions, and
   continuation. Explicit context refresh retains the previous versions. Interrupted runs require explicit continuation after restart.
-- GitHub Copilot SDK adapter, explicit model selection, account quota display, and observed
+- GitHub Copilot SDK adapter, explicit model selection, a sidebar premium-request usage bar, and observed
   per-run token usage. Copilot authentication uses the official runtime's existing sign-in.
 - Local rehearsal provider for trying the feedback flow without an AI call.
-- Tabs for schedules, conversations, Markdown source, and shared browser tabs with embedded Playwright control.
+- Tabs for schedules, conversations, formatted Markdown, and shared browser tabs with embedded Playwright control.
 - Named multi-folder workspaces, live context discovery, universal/per-chat source controls.
-- Standup utility, visible session paths, transcript export, and desktop Bitwarden login assistance.
+- Standup utility with a live, always-on-top floating window, visible session paths, transcript export, and desktop Bitwarden login assistance.
 - Small VS Code companion that starts a chat using all roots of a local multi-root workspace.
 
 ## Prototype boundaries
@@ -44,7 +44,7 @@ The embedded browser has site titles, an address bar with Enter navigation, hist
 persistent tabs. Playwright uses the same pages through a scoped bridge; human-created tabs require
 Agent access before a run can use them. See [browser design](docs/browser.md). Authenticated Slack
 coverage requires a real signed-in read; synthetic browser tests do not establish Slack coverage.
-Markdown is displayed as escaped source; it does not execute embedded HTML.
+Markdown renders formatted text, tables, code, and inline images; embedded HTML remains escaped.
 
 Only Copilot and rehearsal providers are implemented. Provider neutrality is an architectural
 boundary, not a claim that other providers already work. A `completed` run means its model turn
@@ -176,3 +176,14 @@ Open **Remote access** for built-in LAN pairing, or run `npm run relay:local` to
 a local Docker relay. Open `ios/Proteus.xcodeproj` on your iOS development Mac to install the app.
 See [remote setup, signing, protocol, and validation](docs/remote.md) for the full workflow and
 current prototype limits. Imported MCPs and schedules keep their existing enabled/disabled state.
+
+Chat labels use the selected main agent’s saved name. Chat messages and Markdown tabs support rich formatting on Mac, iPhone, and iPad. See [rich chat rendering](docs/chat-rendering.md) for behavior, supported images, and validation.
+
+The sidebar shows account-wide Copilot premium requests remaining and used, refreshed every five
+minutes or with its refresh button. Missing quota is shown as unavailable; unlimited and stale
+results are labeled explicitly. This is separate from per-chat token counts.
+
+Standup → Floating standup opens one always-on-top window at the upper left of the main window’s
+screen. It matches the sidebar width and fills the usable screen height, leaving the menu bar and
+Dock available. Regeneration updates the floating order automatically. The bottom Close button
+closes only that window. `node test/standup-ui.mjs` validates the desktop behavior.

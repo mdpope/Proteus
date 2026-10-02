@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { agentName } from '../public/agent-name.js';
 import os from 'node:os';
 import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
@@ -17,7 +18,7 @@ const mutationMethods = new Set(['chat.start', 'chat.reply', 'chat.resume', 'cha
 const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
 export function remoteRun(run, offset = 0) {
   const end = Math.max(0, run.events.length - offset); const start = Math.max(0, end - 100);
-  return { ...pick(run, ['id', 'title', 'trigger', 'status', 'createdAt', 'updatedAt', 'pending', 'usage', 'contextUsage', 'providerSessionId', 'nativeSessionPath']),
+  return { agentName: agentName(run), ...pick(run, ['id', 'title', 'trigger', 'status', 'createdAt', 'updatedAt', 'pending', 'usage', 'contextUsage', 'providerSessionId', 'nativeSessionPath']),
     events: run.events.slice(start, end), eventStart: start, eventCount: run.events.length, earlier: start, schedule: pick(run.schedule, scheduleKeys),
     context: { ...pick(run.schedule.context, ['workspaceId', 'selectedIds', 'agentId', 'capturedAt']), entries: (run.schedule.context?.entries || []).map(remoteEntry) }, liveMessages: structuredClone(run.liveMessages || {}) };
 }
@@ -171,6 +172,7 @@ export class RemoteHost {
     }
     if (method === 'runs.list') { const offset = Math.max(0, Math.floor(Number(args.offset) || 0)); return engine.listRuns().slice(offset, offset + 100).map(r => pick(r, ['id', 'title', 'status', 'createdAt', 'updatedAt'])); }
     if (method === 'chat.get') { const run = engine.getRun(args.id); peer.runId = run.id; return remoteRun(run, Math.max(0, Math.floor(Number(args.offset) || 0))); }
+    if (method === 'chat.image') return this.api('/api/chat-image', pick(args, ['id', 'source']));
     if (method === 'provider.status') return this.api('/api/provider', {});
     if (method === 'context.refresh') { this.service.context.refresh(); this.changed(); return remoteState(this.service).context; }
     if (method === 'schedule.preview') return this.api('/api/preview', pick(args, ['cron', 'timezone']));

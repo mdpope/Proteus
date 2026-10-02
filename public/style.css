@@ -12,3 +12,10 @@
 .device-row { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:14px 0; border-bottom:1px solid var(--border); }
 #remote-screen label { display:block; margin:16px 0; }
 #remote-screen label input, #remote-screen label select, #remote-screen label textarea { display:block; width:100%; margin-top:8px; }
+
+/* Conversation content stays mounted across live updates. */
+.conversation-shell{position:relative;min-width:0}.conversation{overflow-anchor:none;max-height:64vh;overscroll-behavior:contain}.conversation-messages{display:flow-root;min-width:0}.conversation .text{white-space:normal}.jump-latest{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);border-radius:24px;background:#d0edb5;color:#192719;box-shadow:0 3px 18px #0007;z-index:1}.jump-latest[hidden]{display:none}.grid>section{min-width:0}.markdown-preview{max-width:100%;overflow:hidden}.message{min-width:0}.message.user{margin-left:24px}
+
+.chat-grid{grid-template-columns:minmax(0,2fr) minmax(280px,1fr)}@media(max-width:1050px){.chat-grid{grid-template-columns:minmax(0,1fr)}}
+
+#copilot-usage{padding-bottom:16px;margin-bottom:16px;border-bottom:1px solid var(--line)}.usage-heading{display:flex;align-items:center;justify-content:space-between}.usage-heading button{padding:2px 7px;font-size:18px}#copilot-usage strong{display:block;color:var(--ink);font-size:15px;font-weight:550;margin:4px 0}#copilot-usage progress{display:block;width:100%;height:7px;border:0;border-radius:5px;overflow:hidden;margin:9px 0;accent-color:var(--accent)}#copilot-usage progress[hidden]{display:none}#copilot-usage progress::-webkit-progress-bar{background:#364239}#copilot-usage progress::-webkit-progress-value{background:var(--accent)}.usage-detail{font-size:11px}

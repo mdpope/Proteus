@@ -1,4 +1,6 @@
 import http from 'node:http';
+import { agentName } from '../public/agent-name.js';
+import { UsageCache } from './usage.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -11,6 +13,7 @@ import { StandupStore } from './standup.js';
 import { storagePaths, exportTranscript } from './transcripts.js';
 import { atomicJSON, defaultHome, readJSON, isWithin } from './files.js';
 import { nextRuns, revision, validateSchedule } from './schedules.js';
+import { readChatImage, readImage } from './chat-images.js';
 import { RemoteHost } from './remote.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -48,6 +51,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   const standup = new StandupStore(home, settings.get().timezone);
   const copilot = new CopilotProvider({}, { browser, context, settings });
   const engine = new Engine(home, providers || { copilot });
+  const usage = new UsageCache(() => (providers?.copilot || copilot).quota());
   engine.prepareSchedule = schedule => {
     if (schedule.context) return schedule;
     const snapshot = context.capture({ workspace: schedule.workspace });
@@ -75,7 +79,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (req.headers.host !== new URL(origin).host) return json(403, { error: 'Invalid host.' });
       res.setHeader('Cache-Control', 'no-store'); res.setHeader('Referrer-Policy', 'no-referrer');
       res.setHeader('X-Content-Type-Options', 'nosniff');
-      res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'");
+      res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https: http:; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'");
       const url = new URL(req.url, origin);
       if (url.pathname === '/' && url.searchParams.get('token') === token) {
         res.setHeader('Set-Cookie', `proteus=${token}; HttpOnly; SameSite=Strict; Path=/`);
@@ -168,6 +172,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         const snapshot = context.capture({ workspaceId: old?.workspaceId, ...(old?.followsWorkspace ? {} : { workspace: old?.baseWorkspace || run.schedule.workspace }), selectedIds: value.selectedIds ?? old?.selectedIds ?? [], agentId: value.agentId ?? old?.agentId });
         run.initialSchedule ??= structuredClone(run.schedule);
         run.contextHistory ??= []; if (old) run.contextHistory.push(old);
+        for (const event of run.events) if (event.role === 'assistant' && !event.agentName) event.agentName = agentName(run);
         run.schedule = { ...run.schedule, context: snapshot, workspace: snapshot.workspace };
         engine.event(run, 'system', 'Workspace context refreshed for the next turn. Existing conversation history is retained.');
         return json(200, { ok: true });
@@ -220,15 +225,23 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         if (action === 'resume') return json(200, engine.resume(id, value.prompt));
         engine.cancel(id); return json(200, { ok: true });
       }
+      if (url.pathname === '/api/usage' && req.method === 'POST') return json(200, await usage.get((await body(req)).force === true));
       if (url.pathname === '/api/provider' && req.method === 'POST') { providerStatus = await copilot.status(); return json(200, providerStatus); }
+      if (url.pathname === '/api/chat-image' && req.method === 'POST') {
+        const value = await body(req);
+        return json(200, readChatImage(engine.getRun(value.id), value.source));
+      }
       if (url.pathname === '/api/markdown' && req.method === 'POST') {
-        const { file } = await body(req);
+        const { file, image } = await body(req);
         const roots = [...context.roots(), ...context.config().documents.map(doc => path.dirname(doc.path)), settings.get().workspace.cwd, ...settings.get().workspace.additionalDirectories, ...engine.schedules.list().filter(s => !s.error).flatMap(s => [s.workspace.cwd, ...s.workspace.additionalDirectories])];
         if (typeof file !== 'string' || !file.endsWith('.md') || !isWithin(file, roots)) throw new Error('Choose a Markdown file inside a configured workspace.');
         if (fs.statSync(file).size > 1_000_000) throw new Error('Markdown file is too large.');
-        return json(200, { file, content: fs.readFileSync(file, 'utf8') });
+        const content = fs.readFileSync(file, 'utf8');
+        return json(200, image ? readImage({ source: image, texts: [content], cwd: path.dirname(file), roots }) : { file, content });
       }
       const assets = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'], '/features.js': ['features.js', 'text/javascript'], '/remote.js': ['remote.js', 'text/javascript'] };
+      for (const file of ['runtime.js', 'style.css']) assets['/markdown/' + file] = ['markdown/' + file, file.endsWith('.css') ? 'text/css' : 'text/javascript'];
+      for (const file of ['conversation.js', 'agent-name.js', 'usage.js']) assets['/' + file] = [file, 'text/javascript'];
       if (req.method === 'GET' && assets[url.pathname]) {
         const [file, type] = assets[url.pathname]; res.writeHead(200, { 'Content-Type': type }); res.end(fs.readFileSync(path.join(root, 'public', file))); return;
       }

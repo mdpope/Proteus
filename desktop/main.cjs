@@ -1,7 +1,7 @@
-const { app, BrowserWindow, ipcMain, shell, dialog, clipboard, Tray, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, clipboard, Tray, Menu, nativeImage, screen } = require('electron');
 const path = require('node:path');
 const { BrowserTabs } = require('./browser.cjs');
-let service, window, browser, credentials, tray, closing = false;
+let service, window, browser, credentials, tray, standupWindow, closing = false;
 const showWindow = () => { if (window) { if (window.isMinimized()) window.restore(); window.show(); window.focus(); } };
 app.setName('Proteus');
 if (!app.requestSingleInstanceLock()) app.quit();
@@ -43,6 +43,21 @@ else {
       return result.canceled ? [] : result.filePaths;
     });
     ipcMain.handle('proteus:browser', (event, value) => { trusted(event); return browser.command(value); });
+    ipcMain.handle('proteus:standup-popout', async (event, width) => {
+      trusted(event);
+      if (standupWindow && !standupWindow.isDestroyed()) { standupWindow.show(); standupWindow.focus(); return; }
+      const area = screen.getDisplayMatching(window.getBounds()).workArea;
+      standupWindow = new BrowserWindow({ x: area.x, y: area.y, width: Math.round(Math.max(180, Math.min(320, Number(width) || 230))), height: area.height,
+        title: 'Proteus Standup', frame: false, alwaysOnTop: true, minimizable: false, fullscreenable: false, minWidth: 180, minHeight: 300, backgroundColor: '#19201e',
+        webPreferences: { preload: path.join(__dirname, 'standup-preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
+      standupWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+      standupWindow.webContents.on('will-navigate', event => event.preventDefault());
+      standupWindow.on('closed', () => { standupWindow = null; });
+      await standupWindow.loadFile(path.join(__dirname, 'standup.html'));
+    });
+    const trustedStandup = event => { if (!standupWindow || event.sender !== standupWindow.webContents || event.senderFrame !== standupWindow.webContents.mainFrame) throw new Error('Untrusted standup renderer.'); };
+    ipcMain.handle('proteus:standup-current', event => { trustedStandup(event); return service.standup.get().current; });
+    ipcMain.handle('proteus:standup-close', event => { trustedStandup(event); standupWindow.close(); });
     window.on('resize', () => window.webContents.send('proteus:browser-resize'));
     window.on('close', event => { if (!closing) { event.preventDefault(); window.hide(); } });
     const icon = nativeImage.createFromPath(path.join(__dirname, 'trayTemplate.png')).resize({ width: 18, height: 18 }); icon.setTemplateImage(true);

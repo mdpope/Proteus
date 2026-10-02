@@ -18,6 +18,11 @@ export class CopilotProvider {
     }
     await this.starting; return this.client;
   }
+  async quota() {
+    // A usage refresh must never restart a client running a chat in another profile.
+    const client = this.starting ? (await this.starting, this.client) : await this.connect();
+    return await client.rpc.account.getQuota({});
+  }
   async status() {
     try {
       const client = await this.connect(); const auth = await client.getAuthStatus();

@@ -7,6 +7,8 @@ import { ScheduleStore, lastDue, revision, validateSchedule } from './schedules.
 import { RehearsalProvider } from './rehearsal.js';
 import { PermissionStore } from './permissions.js';
 
+import { agentName } from '../public/agent-name.js';
+
 const active = new Set(['queued', 'running', 'awaiting_input']);
 export class Engine extends EventEmitter {
   constructor(home, providers = {}, clock = () => new Date()) {
@@ -34,7 +36,7 @@ export class Engine extends EventEmitter {
   now() { return this.clock().toISOString(); }
   persist(run) { run.updatedAt = this.now(); atomicJSON(path.join(this.runsDir, `${run.id}.json`), run); this.emit('change'); }
   event(run, role, text, data) {
-    run.events.push({ role, text, ...(data ? { data } : {}), at: this.now() }); this.persist(run);
+    run.events.push({ role, text, ...(role === 'assistant' ? { agentName: agentName(run) } : {}), ...(data ? { data } : {}), at: this.now() }); this.persist(run);
   }
   stream(run, messageId, text) {
     run.liveMessages ??= {}; run.liveMessages[messageId] = (run.liveMessages[messageId] || '') + text;

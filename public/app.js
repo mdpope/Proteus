@@ -1,3 +1,5 @@
+import { mountUsage } from './usage.js';
+import { conversation, forgetConversation } from './conversation.js';
 import { renderRemote } from './remote.js';
 import { initFeatures, renderContext, renderStandup, renderCredentials, fillBrowserLogin, contextPicker, contextSelection, bindContextPicker, modelPicker, refreshModels, sessionDetails, bindSessionDetails, bindPaths } from './features.js';
 const $ = selector => document.querySelector(selector);
@@ -6,13 +8,22 @@ const state = { data: null, page: 'schedules', selected: null, tab: 'overview', 
 const friendly = value => ({ awaiting_input:'Needs feedback', completed:'Turn complete', queued:'Queued', running:'Running', cancelled:'Cancelled', interrupted:'Interrupted', failed:'Failed' }[value] || value);
 const badge = status => `<span class="badge ${escape(status)}">${escape(friendly(status))}</span>`;
 const time = (value, timezone) => new Date(value).toLocaleString(undefined, { ...(timezone ? { timeZone: timezone } : {}), month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
-let toastTimer;
+let toastTimer, usageValue = null, usageBusy = false;
+const renderUsage = () => mountUsage($('#copilot-usage'), usageValue, () => refreshUsage(true), usageBusy);
+async function refreshUsage(force = false) {
+  if (usageBusy) return;
+  usageBusy = true; renderUsage();
+  try { usageValue = await api('/api/usage', { force }); }
+  catch (error) { usageValue = { ...usageValue, error: error.message }; }
+  finally { usageBusy = false; renderUsage(); }
+}
 function toast(text) { $('#toast').textContent = text; $('#toast').style.display = 'block'; clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').style.display = 'none', 5500); }
 async function api(url, data) {
   const response = await fetch(url, data === undefined ? {} : { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(data) });
   const result = await response.json(); if (!response.ok) throw new Error(result.error || response.statusText); return result;
 }
 async function refresh(force = false) {
+  if (!force && window.getSelection()?.isCollapsed === false) return;
   const data = await api('/api/state'); const signature = JSON.stringify(data);
   state.data = data;
   if (force || signature !== state.signature) { state.signature = signature; render(); }
@@ -32,7 +43,8 @@ function render() {
   const waiting = data.runs.filter(r => ['awaiting_input','failed','interrupted'].includes(r.status)).length;
   $('#sidebar').innerHTML = `<div class="brand"><span class="brandmark">⤨</span>Proteus</div><div class="subtitle">Your agent control room</div>${[
     ['schedules','◷','Schedules', data.schedules.length], ['runs','◉','Run history', data.runs.length], ['attention','◇','Needs attention',waiting], ['context','▦','Workspaces',''], ['standup','☷','Standup',''], ['credentials','⚿','Credentials',''], ['providers','⌘','Providers',''], ['remote','⇄','Remote access',''], ['settings','⚙','Settings','']
-  ].map(([id,icon,label,count]) => `<button class="navitem ${state.page === id ? 'active':''}" data-page="${id}"><span><span>${icon}</span><span class="navlabel">${label}</span></span>${count !== '' ? `<span class="count">${count}</span>`:''}</button>`).join('')}<div class="sidebottom"><div><span class="dot"></span>Local runner online</div><p>Prototype · v${data.version}<br>${data.scheduler.background ? 'Keeps running in the menu bar.' : 'Runs while the host is running.'}</p><button class="subtle" id="data-folder">Open data folder ↗</button></div>`;
+  ].map(([id,icon,label,count]) => `<button class="navitem ${state.page === id ? 'active':''}" data-page="${id}"><span><span>${icon}</span><span class="navlabel">${label}</span></span>${count !== '' ? `<span class="count">${count}</span>`:''}</button>`).join('')}<div class="sidebottom"><section id="copilot-usage" aria-label="Copilot account usage"></section><div><span class="dot"></span>Local runner online</div><p>Prototype · v${data.version}<br>${data.scheduler.background ? 'Keeps running in the menu bar.' : 'Runs while the host is running.'}</p><button class="subtle" id="data-folder">Open data folder ↗</button></div>`;
+  renderUsage();
   $('#topbar').innerHTML = `<div><span class="eyebrow">Local workspace</span><div class="small muted">Plain files. Your tools. Your schedule.</div></div><div class="actions"><button id="markdown">＋ Markdown</button><button id="browser">＋ Browser</button><button class="primary" id="new-chat">＋ New chat</button></div>`;
   renderTabs();
   $('#main').classList.remove('browser-main');
@@ -88,7 +100,12 @@ function renderRuns() {
 function renderRun(id) {
   const run=state.data.runs.find(r=>r.id===id);if(!run)return;
   const pending=run.pending;
-  $('#main').innerHTML=`<div class="heading"><div><div class="eyebrow">${escape(run.schedule.provider)} / ${run.id.slice(0,8)}</div><h1>${escape(run.title)}</h1><div class="muted">${time(run.createdAt)} · ${escape(run.schedule.model || 'Local rehearsal, no AI calls')}</div></div><div class="actions">${badge(run.status)}${['running','queued','awaiting_input'].includes(run.status)?'<button class="danger" id="cancel">Stop run</button>':''}</div></div><div class="grid"><section class="card"><div class="conversation" id="conversation">${run.events.map(e=>`<div class="message ${escape(e.role)}"><div class="role">${escape(e.role)} · ${time(e.at)}</div><div class="text">${escape(e.text)}</div></div>`).join('')}</div>${Object.values(run.liveMessages || {}).map(text=>`<div class="message assistant"><div class="role">Assistant · streaming</div><div class="text">${escape(text)}</div></div>`).join('')}${pending?`<div class="pending"><div class="eyebrow">Your input is needed</div><p>${escape(pending.question)}</p>${pending.details?`<pre>${escape(JSON.stringify(pending.details,null,2))}</pre>`:''}${pending.type==='permission'?'<div class="actions"><button id="deny">Deny</button><button class="primary" id="approve">Approve once</button></div>'+permissionChoices(pending):`<textarea id="answer" placeholder="Add your feedback…" rows="2"></textarea><div class="actions"><button class="primary" id="reply">Send feedback</button></div>`}</div>`:!['queued','running'].includes(run.status)?'<div class="composer"><textarea id="followup" placeholder="Continue this conversation…" rows="2"></textarea><div class="actions"><button class="primary" id="continue">Continue session →</button></div></div>':(run.status==='running'?'<p class="note" role="status"><span class="spinner" aria-hidden="true"></span>Working… updates appear here.</p>':'<p class="note">Queued · waiting for the runner.</p>')}</section><div class="stack"><section class="card"><h2>Run details</h2>${permissionControls(run.permissionContext,{runId:run.id})}<p class="note">The original schedule and earlier context versions are retained when you refresh this chat.</p><div class="filepath">${[run.schedule.workspace.cwd,...run.schedule.workspace.additionalDirectories].map(escape).join('<br>')}</div><hr class="divider"><div class="usagegrid"><div class="usagebox"><span class="eyebrow">Input tokens</span><strong>${run.usage.observed?run.usage.inputTokens.toLocaleString():'—'}</strong></div><div class="usagebox"><span class="eyebrow">Output tokens</span><strong>${run.usage.observed?run.usage.outputTokens.toLocaleString():'—'}</strong></div></div><p class="note">${run.usage.observed?'Observed provider usage.':'No provider usage reported. Rehearsals make no model calls.'}</p><div class="note">${run.providerSessionId?'Provider session: '+escape(run.providerSessionId):'Session history saved locally.'}</div></section>${sessionDetails(run)}<section class="card"><h2>Completion means a turn ended</h2><p class="note">Workflow completion still depends on its own validation and source coverage. A model finishing its response doesn’t certify external work.</p><details><summary>Schedule snapshot</summary><pre>${escape(JSON.stringify(run.schedule,null,2))}</pre></details></section></div></div>`;
+  $('#main').innerHTML=`<div class="heading"><div><div class="eyebrow">${escape(run.schedule.provider)} / ${run.id.slice(0,8)}</div><h1>${escape(run.title)}</h1><div class="muted">${time(run.createdAt)} · ${escape(run.schedule.model || 'Local rehearsal, no AI calls')}</div></div><div class="actions">${badge(run.status)}${['running','queued','awaiting_input'].includes(run.status)?'<button class="danger" id="cancel">Stop run</button>':''}</div></div><div class="grid chat-grid"><section class="card"><div id="conversation-host"></div>${pending?`<div class="pending"><div class="eyebrow">Your input is needed</div><p>${escape(pending.question)}</p>${pending.details?`<pre>${escape(JSON.stringify(pending.details,null,2))}</pre>`:''}${pending.type==='permission'?'<div class="actions"><button id="deny">Deny</button><button class="primary" id="approve">Approve once</button></div>'+permissionChoices(pending):`<textarea id="answer" placeholder="Add your feedback…" rows="2"></textarea><div class="actions"><button class="primary" id="reply">Send feedback</button></div>`}</div>`:!['queued','running'].includes(run.status)?'<div class="composer"><textarea id="followup" placeholder="Continue this conversation…" rows="2"></textarea><div class="actions"><button class="primary" id="continue">Continue session →</button></div></div>':(run.status==='running'?'<p class="note" role="status"><span class="spinner" aria-hidden="true"></span>Working… updates appear here.</p>':'<p class="note">Queued · waiting for the runner.</p>')}</section><div class="stack"><section class="card"><h2>Run details</h2>${permissionControls(run.permissionContext,{runId:run.id})}<p class="note">The original schedule and earlier context versions are retained when you refresh this chat.</p><div class="filepath">${[run.schedule.workspace.cwd,...run.schedule.workspace.additionalDirectories].map(escape).join('<br>')}</div><hr class="divider"><div class="usagegrid"><div class="usagebox"><span class="eyebrow">Input tokens</span><strong>${run.usage.observed?run.usage.inputTokens.toLocaleString():'—'}</strong></div><div class="usagebox"><span class="eyebrow">Output tokens</span><strong>${run.usage.observed?run.usage.outputTokens.toLocaleString():'—'}</strong></div></div><p class="note">${run.usage.observed?'Observed provider usage.':'No provider usage reported. Rehearsals make no model calls.'}</p><div class="note">${run.providerSessionId?'Provider session: '+escape(run.providerSessionId):'Session history saved locally.'}</div></section>${sessionDetails(run)}<section class="card"><h2>Completion means a turn ended</h2><p class="note">Workflow completion still depends on its own validation and source coverage. A model finishing its response doesn’t certify external work.</p><details><summary>Schedule snapshot</summary><pre>${escape(JSON.stringify(run.schedule,null,2))}</pre></details></section></div></div>`;
+  conversation($('#conversation-host'), run, {
+    time, copy: text => window.desktop ? window.desktop.copyText(text) : navigator.clipboard.writeText(text),
+    link: source => openMessageLink(source, run.schedule.workspace.cwd),
+    image: async source => (await api('/api/chat-image', { id: run.id, source })).dataURL
+  });
   bindSessionDetails(run);
   const submit=async(action,data)=>{try{await api(`/api/runs/${id}/${action}`,data);await refresh(true);}catch(e){toast(e.message);}};
   $('#cancel')?.addEventListener('click',()=>submit('cancel',{}));
@@ -134,12 +151,35 @@ function newSchedule() {
 }
 function importDialog() { showDialog('<h2>Import schedules</h2><p class="note">Paste a JSON schedule or array. Imports are always paused.</p><textarea id="import-json" rows="10" placeholder="[{ … }]"></textarea><div class="actions"><button id="close-dialog">Cancel</button><button class="primary" id="dialog-submit">Import</button></div>',async()=>{const value=JSON.parse($('#import-json').value);await api('/api/import',{schedules:Array.isArray(value)?value:[value]});}); }
 function markdownDialog() { showDialog('<h2>Open Markdown</h2><p class="note">Choose a file within a configured schedule workspace.</p><input id="markdown-path" placeholder="/absolute/path/README.md"><div class="actions"><button id="close-dialog">Cancel</button><button class="primary" id="dialog-submit">Open tab</button></div>',async()=>{state.markdown=await api('/api/markdown',{file:$('#markdown-path').value});openTab({id:'markdown',type:'markdown',label:state.markdown.file.split('/').pop()});}); }
-function renderMarkdown() { const markdown=state.tabs.find(t=>t.id===state.tab)?.markdown || state.markdown; $('#main').innerHTML=`<div class="heading"><div><div class="eyebrow">Markdown source</div><h1>${escape(markdown?.file.split('/').pop())}</h1><div class="filepath">${escape(markdown?.file)}</div></div></div><pre class="markdown">${escape(markdown?.content||'')}</pre>`; }
+function renderMarkdown() {
+  const markdown=state.tabs.find(t=>t.id===state.tab)?.markdown || state.markdown;
+  $('#main').innerHTML=`<div class="heading"><div><div class="eyebrow">Markdown preview</div><h1>${escape(markdown?.file.split('/').pop())}</h1><div class="filepath">${escape(markdown?.file)}</div></div></div><article class="card markdown-preview"></article><details><summary>Markdown source</summary><pre class="markdown">${escape(markdown?.content||'')}</pre></details>`;
+  ProteusMarkdown.mount($('.markdown-preview'), markdown?.content || '', {
+    copy: text => window.desktop ? window.desktop.copyText(text) : navigator.clipboard.writeText(text),
+    link: source => openMessageLink(source, markdown.file.slice(0, markdown.file.lastIndexOf('/'))),
+    image: async source => (await api('/api/markdown', { file: markdown.file, image: source })).dataURL
+  });
+}
+async function openMessageLink(source, cwd) {
+  try {
+    const kind = ProteusMarkdown.linkKind(source);
+    if (kind === 'web') {
+      if (!window.desktop) { window.open(source, '_blank', 'noopener,noreferrer'); return; }
+      const info = await window.desktop.browser({ action: 'create', url: source });
+      openTab({ id: info.id, type: 'browser', label: info.title || 'New tab', info });
+    } else if (kind === 'file') {
+      const file = decodeURIComponent(new URL(source, 'file://' + cwd.replace(/\/$/, '') + '/').pathname);
+      if (file.endsWith('.md')) { const markdown = await api('/api/markdown', { file }); openTab({ id: 'markdown:' + file, type: 'markdown', label: file.split('/').pop(), markdown }); }
+      else if (window.desktop) await window.desktop.openPath(file);
+      else toast(file);
+    } else if (kind === 'mail') { await navigator.clipboard.writeText(source.slice(7)); toast('Email address copied.'); }
+  } catch (error) { toast(error.message); }
+}
 
 function renderTabs() {
   $('#tabs').innerHTML=state.tabs.map(tab=>`<div class="tabitem ${state.tab===tab.id?'selected':''}"><button data-tab="${escape(tab.id)}" title="${escape(tab.info?.url || tab.label)}">${tab.type==='browser' ? (tab.info?.loading?'◌':'◎') : tab.type==='run'?'◉':tab.type==='markdown'?'▤':'◷'} &nbsp;${escape(tab.label || 'New tab')}</button>${tab.id!=='overview'?`<button class="tabclose" aria-label="Close ${escape(tab.label || 'tab')}" data-close="${escape(tab.id)}">×</button>`:''}</div>`).join('');
   document.querySelectorAll('[data-tab]').forEach(button=>button.onclick=()=>{state.tab=button.dataset.tab;const tab=state.tabs.find(t=>t.id===state.tab);if(tab.type==='schedule')schedule(tab.id);else render();});
-  document.querySelectorAll('[data-close]').forEach(button=>button.onclick=async()=>{try{const id=button.dataset.close;const tab=state.tabs.find(t=>t.id===id);if(tab?.type==='browser')await window.desktop.browser({action:'close',id});state.tabs=state.tabs.filter(t=>t.id!==id);if(state.tab===id)state.tab='overview';render();}catch(e){toast(e.message);}});
+  document.querySelectorAll('[data-close]').forEach(button=>button.onclick=async()=>{try{const id=button.dataset.close;const tab=state.tabs.find(t=>t.id===id);if(tab?.type==='browser')await window.desktop.browser({action:'close',id});forgetConversation(id);state.tabs=state.tabs.filter(t=>t.id!==id);if(state.tab===id)state.tab='overview';render();}catch(e){toast(e.message);}});
 }
 function browserBounds() {
   const area=$('#browser-area');const tab=state.tabs.find(t=>t.id===state.tab);if(!area || tab?.type!=='browser')return;
@@ -208,7 +248,8 @@ window.desktop?.onBrowserResize(()=>requestAnimationFrame(browserBounds));
 window.addEventListener('resize',()=>requestAnimationFrame(browserBounds));
 window.addEventListener('keydown',event=>{if((event.metaKey||event.ctrlKey)&&event.key==='l'&&$('#browser-url')){event.preventDefault();$('#browser-url').focus();}});
 initFeatures({state,escape,api,toast,refresh,openTab,showDialog,lines,restoreBrowser:()=>requestAnimationFrame(browserBounds)});
-refresh().catch(e=>toast(e.message));
+refresh().then(() => refreshUsage()).catch(e=>toast(e.message));
+setInterval(() => refreshUsage(), 60_000);
 setInterval(()=>{if(!document.activeElement?.matches('input,textarea,select')&&!$('#dialog').open)refresh().catch(()=>{});},1500);
 
 window.desktop?.onRemote(() => { state.page = 'remote'; state.tab = 'overview'; render(); });
