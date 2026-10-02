@@ -7,3 +7,8 @@
 .folder-list,.loaded-context{list-style:none;padding:0}.folder-list li{display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid var(--line);padding:10px 0}.loaded-context li{padding:10px 0;border-bottom:1px solid var(--line)}.path-control{margin:14px 0}.path-control .actions{margin-top:6px}.context-card{margin-top:22px}.context-table{overflow:auto}.context-table td{vertical-align:top}.context-table select{min-width:155px}#context-search{max-width:270px}.context-options{max-height:260px;overflow:auto;margin:10px 0}.context-options>label{display:flex;align-items:flex-start;gap:10px;border-bottom:1px solid var(--line);padding:10px 0}.context-options input{width:auto;margin-top:4px}.context-options>label[hidden]{display:none}.context-picker{margin:18px 0}.context-picker summary{cursor:pointer}.subtabs{margin-bottom:18px}.standup-order{max-width:900px}.standup-order li{padding:12px 10px;border-bottom:1px solid var(--line);font-size:19px}.standup-instructions{white-space:pre-wrap;line-height:1.7}dialog{max-height:90vh;overflow:auto}#sidebar{overflow:auto}.sidebottom{padding-top:18px}.credential-fields{display:grid;gap:14px}
 
 .folder-list{max-height:240px;overflow:auto}.credential-provider{padding:16px 0;border-bottom:1px solid var(--line)}
+
+.pairing-qr { display:block; width: min(100%, 280px); height: auto; margin: 20px 0; border-radius: 16px; }
+.device-row { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:14px 0; border-bottom:1px solid var(--border); }
+#remote-screen label { display:block; margin:16px 0; }
+#remote-screen label input, #remote-screen label select, #remote-screen label textarea { display:block; width:100%; margin-top:8px; }

@@ -2,7 +2,7 @@
 
 Proteus has four boundaries: file-backed schedules, the runner, provider adapters, and clients.
 The scheduler has no model API knowledge. The desktop UI and VS Code companion use an authenticated
-loopback service. A future service mode can keep that runner alive independently of both clients.
+loopback service. The Electron host stays in the menu bar when its window closes. Native iPhone/iPad clients connect through an encrypted relay protocol; see `remote.md`.
 
 The Electron shell hosts the trusted local interface and a separate sandboxed WebContentsView
 for remote browsing. Remote content never receives the app preload bridge. URLs in the app shell
@@ -24,7 +24,7 @@ run per schedule. Already-active schedules skip overlapping occurrences.
 
 ## Next milestones
 
-1. Installable macOS background service with a separately restartable desktop client.
+1. Packaged macOS app and opt-in login item; the current host already survives window closure.
 2. Workflow completion validators and notifications.
 3. Browser profile selection and broader authentication adapters.
 4. Packaged VS Code companion and richer editor context.
@@ -45,3 +45,8 @@ configuration/instruction loading is disabled for managed sessions; selected sou
 explicitly. Context changes cold-reconnect the provider for reliable MCP removal. The credential
 broker is a separate main-process boundary and has no agent/API entry point. See `workspaces.md`
 and `credentials.md` for persistence and authentication details.
+
+Remote access is opt-in. A relay can run locally, in Docker, or behind TLS on Linux. Only the Mac
+host executes tools and owns persistence. iOS uses a Keychain device credential, encrypted cache,
+versioned edits, deduplicated mutation IDs, and replay/snapshot recovery. Relay routes carry no
+provider credentials. Desktop IPC and the credential broker remain inaccessible to remote clients.

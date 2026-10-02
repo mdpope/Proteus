@@ -1,0 +1,36 @@
+import { _electron as electron } from 'playwright';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import { startRelay } from '../relay/server.js';
+import { secret } from '../src/remote-crypto.js';
+import { RemoteClient, until } from './remote-client.mjs';
+const home = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-remote-ui-'));
+const token = secret(); const relay = await startRelay({ port: 0, token }); const url = `ws://127.0.0.1:${relay.port}`;
+let app, client;
+try {
+  app = await electron.launch({ args: ['.', '--user-data-dir=' + path.join(home, 'electron')], env: { ...process.env, PROTEUS_HOME: home, PORT: '0' } });
+  const page = await app.firstWindow(); const errors = []; page.on('pageerror', error => errors.push(error.message));
+  await page.locator('[data-page="remote"]').click(); await page.getByRole('heading', { name: 'Remote access.' }).waitFor();
+  await page.locator('#remote-mode').selectOption('external'); await page.locator('#remote-url').fill(url); await page.locator('#remote-public').fill(url); await page.locator('#remote-token').fill(token);
+  await page.locator('#remote-enable').click();
+  await until(() => fs.existsSync(path.join(home, 'remote.json')));
+  await page.locator('#remote-refresh').click(); await page.locator('#remote-pair:enabled').waitFor(); await page.locator('#remote-pair').click(); await page.locator('#remote-code').waitFor();
+  const capsule = RemoteClient.capsule(await page.locator('#remote-code').inputValue()); client = await new RemoteClient(capsule).connect();
+  await page.locator('#remote-refresh').click(); await page.getByText('Synthetic mobile client', { exact: true }).waitFor();
+  assert.equal(await app.evaluate(() => !process.mainModule.require(process.cwd() + '/desktop/main.cjs').getTray().isDestroyed()), true);
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].close());
+  assert.equal(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isVisible()), false);
+  const { runId } = await client.request('chat.start', { prompt: 'Run while the Mac window is closed', provider: 'rehearsal' });
+  let run;
+  await until(() => { try { run = JSON.parse(fs.readFileSync(path.join(home, 'runs', runId + '.json'))); return run.status === 'awaiting_input'; } catch { return false; } });
+  await client.request('chat.reply', { id: runId, answer: 'Continue remotely', requestId: run.pending.id });
+  await until(() => JSON.parse(fs.readFileSync(path.join(home, 'runs', runId + '.json'))).status === 'completed');
+  await app.evaluate(({ app }) => app.emit('activate'));
+  assert.equal(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isVisible()), true);
+  await page.locator('[data-revoke-device]').click(); await until(() => client.failure === 'revoked');
+  await page.screenshot({ path: '/private/tmp/proteus-remote-access.png' });
+  assert.deepEqual(errors, []);
+  console.log(JSON.stringify({ passed: true, checks: ['menu bar icon', 'pairing UI', 'window close retains host', 'remote run/reply while hidden', 'Dock activation restores window', 'device revocation'] }));
+} finally { client?.close(); if (app) await app.close(); await relay.close(); fs.rmSync(home, { recursive: true, force: true }); }

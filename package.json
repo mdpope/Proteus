@@ -13,12 +13,17 @@
     "desktop": "electron .",
     "test": "node --test test/*.test.js",
     "check": "node scripts/check.mjs",
-    "cli": "node src/cli.js"
+    "cli": "node src/cli.js",
+    "relay": "node relay/server.js",
+    "relay:local": "node scripts/local-relay.mjs",
+    "test:remote-ui": "node test/remote-ui.mjs",
+    "ios:generate": "xcodegen generate --spec ios/project.yml"
   },
   "dependencies": {
     "@github/copilot-sdk": "1.0.16",
     "cron-parser": "5.10.1",
     "playwright": "1.58.2",
+    "qrcode": "1.5.4",
     "ws": "8.22.0",
     "yaml": "2.9.1"
   },

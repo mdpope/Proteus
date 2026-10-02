@@ -23,7 +23,7 @@ export class Engine extends EventEmitter {
       try {
         const run = readJSON(file);
         if (active.has(run.status)) {
-          run.status = 'interrupted'; run.pending = null;
+          run.status = 'interrupted'; run.pending = null; delete run.liveMessages;
           run.events.push({ role: 'system', text: 'The runner stopped. Continue this session to recover; no work was silently replayed.', at: clock().toISOString() });
           atomicJSON(file, run);
         }
@@ -35,6 +35,10 @@ export class Engine extends EventEmitter {
   persist(run) { run.updatedAt = this.now(); atomicJSON(path.join(this.runsDir, `${run.id}.json`), run); this.emit('change'); }
   event(run, role, text, data) {
     run.events.push({ role, text, ...(data ? { data } : {}), at: this.now() }); this.persist(run);
+  }
+  stream(run, messageId, text) {
+    run.liveMessages ??= {}; run.liveMessages[messageId] = (run.liveMessages[messageId] || '') + text;
+    this.emit('change');
   }
   listRuns() { return [...this.runs.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)); }
   getRun(id) { const run = this.runs.get(id); if (!run) throw new Error('Run not found.'); return run; }
@@ -125,6 +129,7 @@ export class Engine extends EventEmitter {
       await provider.run({
         run, prompt, signal: controller.signal,
         emit: (role, text, data) => this.event(run, role, text, data),
+        stream: (id, text) => this.stream(run, id, text),
         update: () => this.persist(run),
         ask: request => this.ask(run, request, controller.signal)
       });
@@ -136,7 +141,7 @@ export class Engine extends EventEmitter {
       // Provider errors/timeouts can leave permission promises pending. Settle them
       // before another turn reuses this run's serialized question queue.
       controller.abort();
-      this.pending.delete(run.id); run.pending = null; this.persist(run); this.running = null;
+      this.pending.delete(run.id); run.pending = null; delete run.liveMessages; this.persist(run); this.running = null;
       queueMicrotask(() => this.drain());
     }
   }

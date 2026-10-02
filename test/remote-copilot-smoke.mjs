@@ -1,0 +1,30 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import { startServer } from '../src/server.js';
+import { startRelay } from '../relay/server.js';
+import { atomicJSON } from '../src/files.js';
+import { secret } from '../src/remote-crypto.js';
+import { RemoteClient, until } from './remote-client.mjs';
+const home = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-remote-copilot-')); const workspace = path.join(home, 'workspace'); fs.mkdirSync(workspace);
+fs.writeFileSync(path.join(workspace, 'AGENTS.md'), '# Synthetic validation\nAnswer the supplied prompt without using tools.');
+atomicJSON(path.join(home, 'settings.json'), { schemaVersion: 1, provider: 'copilot', model: process.env.PROTEUS_TEST_MODEL || 'gpt-6-luna', timezone: 'UTC', workspace: { cwd: workspace, additionalDirectories: [] }, skillDirectories: [], mcpServers: {} });
+const token = secret(); const relay = await startRelay({ port: 0, token });
+const app = await startServer({ home, port: 0, timers: false, withSeed: false }); let client;
+try {
+  const url = `ws://127.0.0.1:${relay.port}`;
+  await app.remote.configure({ enabled: true, mode: 'external', relayURL: url, publicURL: url, relayToken: token }); await until(() => app.remote.status === 'online');
+  client = await new RemoteClient(RemoteClient.capsule((await app.remote.pairing()).code)).connect();
+  const provider = await client.request('provider.status'); assert.equal(provider.available, true, provider.error);
+  const model = app.settings.get().model; assert.ok(provider.models.some(m => m.id === model), 'Requested model must be in the live catalog.');
+  const { runId } = await client.request('chat.start', { prompt: 'Reply exactly PROTEUS_REMOTE_OK. Do not use tools.', provider: 'copilot', model });
+  await client.request('chat.get', { id: runId });
+  await until(() => ['completed', 'failed', 'awaiting_input'].includes(app.engine.getRun(runId).status), 120_000);
+  const first = app.engine.getRun(runId); assert.equal(first.status, 'completed', first.events.at(-1)?.text); assert.match(first.events.filter(e => e.role === 'assistant').at(-1).text, /PROTEUS_REMOTE_OK/);
+  const sessionId = first.providerSessionId; assert.ok(sessionId);
+  await client.request('chat.resume', { id: runId, prompt: 'Reply exactly PROTEUS_REMOTE_RESUMED. Do not use tools.' });
+  await until(() => ['completed', 'failed', 'awaiting_input'].includes(app.engine.getRun(runId).status), 120_000);
+  assert.equal(first.status, 'completed'); assert.equal(first.providerSessionId, sessionId); assert.match(first.events.filter(e => e.role === 'assistant').at(-1).text, /PROTEUS_REMOTE_RESUMED/);
+  console.log(JSON.stringify({ passed: true, model, checks: ['live Copilot model catalog', 'encrypted remote new chat', 'OpenAI model response', 'same native session resumed'], observedUsage: first.usage }));
+} finally { client?.close(); await app.close(); await relay.close(); fs.rmSync(home, { recursive: true, force: true }); }

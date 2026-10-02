@@ -32,7 +32,7 @@ export class CopilotProvider {
       };
     } catch (error) { return { available: false, error: error.message, quota: null }; }
   }
-  async run({ run, prompt, emit, ask, update, signal }) {
+  async run({ run, prompt, emit, ask, update, signal, stream }) {
     const snapshot = run.schedule.context;
     const managed = snapshot && this.context ? this.context.providerContext(snapshot) : null;
     const fingerprint = revision({ context: snapshot || null, mcp: run.schedule.mcpServers || {} });
@@ -73,7 +73,11 @@ export class CopilotProvider {
     update(); this.sessions.set(run.id, session);
     let providerError;
     const unsubscribe = session.on(event => {
-      if (event.type === 'assistant.message') emit('assistant', event.data.content || '');
+      if (event.type === 'assistant.message_delta') stream?.(event.data.messageId, event.data.deltaContent || '');
+      if (event.type === 'assistant.message') {
+        if (run.liveMessages) delete run.liveMessages[event.data.messageId];
+        emit('assistant', event.data.content || '');
+      }
       if (event.type === 'tool.execution_start') emit('tool', event.data.toolName || 'Tool started');
       if (event.type === 'tool.execution_complete') emit('tool', event.data.success === false ? `Tool failed: ${event.data.error?.message || JSON.stringify(event.data.error || 'Provider returned no error details.')}` : 'Tool finished');
       if (event.type === 'assistant.usage') {

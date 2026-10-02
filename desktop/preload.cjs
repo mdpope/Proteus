@@ -1,5 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('desktop', {
+  onRemote: handler => { const listener = () => handler(); ipcRenderer.on('proteus:remote', listener); return () => ipcRenderer.removeListener('proteus:remote', listener); },
   credentials: value => ipcRenderer.invoke('proteus:credentials', value),
   copyText: text => ipcRenderer.invoke('proteus:copy-text', text),
   choosePaths: options => ipcRenderer.invoke('proteus:choose-paths', options),

@@ -6,3 +6,8 @@ coverage/
 dist/
 .runtime/
 *.vsix
+
+DerivedData/
+xcuserdata/
+*.xcuserstate
+*.xcresult

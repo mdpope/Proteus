@@ -11,6 +11,7 @@ import { StandupStore } from './standup.js';
 import { storagePaths, exportTranscript } from './transcripts.js';
 import { atomicJSON, defaultHome, readJSON, isWithin } from './files.js';
 import { nextRuns, revision, validateSchedule } from './schedules.js';
+import { RemoteHost } from './remote.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export function seed(home, cwd = root) {
@@ -39,7 +40,7 @@ async function body(req) {
   let text = ''; for await (const chunk of req) { text += chunk; if (text.length > 2_000_000) throw new Error('Request too large.'); }
   return text ? JSON.parse(text) : {};
 }
-export async function startServer({ home = defaultHome(), port = 4317, providers, browser, timers = true, withSeed = true } = {}) {
+export async function startServer({ home = defaultHome(), port = 4317, providers, browser, timers = true, withSeed = true, background = false } = {}) {
   const unlock = lock(home);
   if (withSeed) seed(home);
   const settings = new SettingsStore(home, root);
@@ -64,7 +65,9 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
     }
     return permissionPreviews.get(key);
   }
-  const token = randomBytes(32).toString('hex'); let origin; let providerStatus = null; const schedulerErrors = [];
+  const token = randomBytes(32).toString('hex'); let origin; let remote; let providerStatus = null; const schedulerErrors = []; const eventClients = new Set();
+  const notify = () => { for (const client of eventClients) client.write('event: change\ndata: {}\n\n'); };
+  engine.on('change', notify);
   engine.on('scheduler-error', error => { schedulerErrors.push(error); if (schedulerErrors.length > 20) schedulerErrors.shift(); atomicJSON(path.join(home, 'scheduler-errors.json'), schedulerErrors); });
   const server = http.createServer(async (req, res) => {
     const json = (status, value) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(value)); };
@@ -82,6 +85,18 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (!authorized) return json(401, { error: 'Open the app using the local launch URL.' });
       if (req.method !== 'GET' && req.headers.origin && req.headers.origin !== origin) return json(403, { error: 'Cross-origin request rejected.' });
       if (req.method !== 'GET' && !req.headers['content-type']?.startsWith('application/json')) return json(415, { error: 'Send JSON.' });
+      if (url.pathname === '/api/events' && req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'text/event-stream', Connection: 'keep-alive' }); res.write(': connected\n\n');
+        eventClients.add(res); req.on('close', () => eventClients.delete(res)); return;
+      }
+      if (url.pathname === '/api/remote' && req.method === 'GET') return json(200, remote.info());
+      if (url.pathname === '/api/remote' && req.method === 'POST') {
+        const value = await body(req);
+        if (value.action === 'configure') return json(200, await remote.configure(value));
+        if (value.action === 'pair') return json(200, await remote.pairing(value.publicURL));
+        if (value.action === 'revoke') return json(200, remote.revoke(value.id));
+        throw new Error('Unknown remote action.');
+      }
       if (url.pathname === '/api/state') return json(200, {
         schedules: engine.schedules.list(), runs: engine.listRuns().map(run => ({ ...run, storage: storagePaths(home, run), permissionContext: engine.permissions.describe(run.schedule) })), providerStatus,
         permissions: engine.permissions.get(), permissionWorkspaces: [...new Map([
@@ -90,7 +105,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
           ...engine.listRuns().map(run => ({ ...run.schedule, ref: { runId: run.id } }))
         ].map(permissionSchedule).filter(Boolean).map(schedule => { const context = engine.permissions.describe(schedule); return [context.id, { ...context, ref: schedule.ref }]; })).values()],
         home, settings: settings.get(), context: context.get(), standup: standup.get(), browserAvailable: !!browser, schedulerErrors, recoveryErrors: engine.recoveryErrors || [], version: '0.1.0',
-        scheduler: { running: true, background: false, message: 'Schedules run while this prototype is open. Missed runs follow each schedule’s policy.' }
+        scheduler: { running: true, background, message: background ? 'The menu bar host keeps running when its window is closed. Quit Proteus stops execution. The Mac must be awake.' : 'Schedules run while this host process is running.' }
       });
       if (url.pathname === '/api/settings' && req.method === 'POST') {
         const value = await body(req); const old = settings.get();
@@ -190,7 +205,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         const value = await body(req); const defaults = settings.get();
         const snapshot = context.capture({ workspaceId: value.workspaceId, workspace: value.workspace || (!value.workspaceId ? defaults.workspace : undefined), selectedIds: value.selectedIds, agentId: value.agentId });
         const schedule = validateSchedule({
-          schemaVersion: 1, id: `chat-${Date.now()}`, name: value.name || 'Workspace chat', enabled: false,
+          schemaVersion: 1, id: `chat-${Date.now()}-${randomBytes(4).toString('hex')}`, name: value.name || 'Workspace chat', enabled: false,
           cron: '0 9 * * 1-5', timezone: value.timezone || defaults.timezone,
           provider: value.provider || defaults.provider, model: value.model || defaults.model,
           workspace: snapshot.workspace, context: snapshot, skillDirectories: value.skillDirectories || defaults.skillDirectories,
@@ -213,7 +228,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         if (fs.statSync(file).size > 1_000_000) throw new Error('Markdown file is too large.');
         return json(200, { file, content: fs.readFileSync(file, 'utf8') });
       }
-      const assets = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'], '/features.js': ['features.js', 'text/javascript'] };
+      const assets = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'], '/features.js': ['features.js', 'text/javascript'], '/remote.js': ['remote.js', 'text/javascript'] };
       if (req.method === 'GET' && assets[url.pathname]) {
         const [file, type] = assets[url.pathname]; res.writeHead(200, { 'Content-Type': type }); res.end(fs.readFileSync(path.join(root, 'public', file))); return;
       }
@@ -225,11 +240,13 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   origin = `http://127.0.0.1:${server.address().port}`;
   atomicJSON(path.join(home, 'connection.json'), { origin, token, pid: process.pid });
   const timer = timers ? setInterval(() => { try { engine.tick(); } catch (error) { engine.emit('scheduler-error', { error: error.message, at: new Date().toISOString() }); } }, 1000) : null;
-  return { engine, settings, context, standup, origin, token, home, url: `${origin}/?token=${token}`, async close() {
-    if (timer) clearInterval(timer); await engine.close(); await copilot.close();
+  const service = { engine, settings, context, standup, origin, token, home, url: `${origin}/?token=${token}`, async close() {
+    if (timer) clearInterval(timer); await remote.close(); await engine.close(); await copilot.close();
+    for (const client of eventClients) client.end(); eventClients.clear();
     await new Promise(resolve => server.close(resolve)); server.closeAllConnections();
     fs.rmSync(path.join(home, 'connection.json'), { force: true }); unlock();
   } };
+  remote = service.remote = new RemoteHost(service); await remote.start(); return service;
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const app = await startServer({ port: Number(process.env.PORT || 4317) });

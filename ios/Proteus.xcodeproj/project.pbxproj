@@ -1,0 +1,543 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0251FE479F24F5A96EA70F96 /* RemoteStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9023FEA1077763EA7555C94D /* RemoteStore.swift */; };
+		1162CF50A47019EEE0F0B91C /* ScheduleViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99814D317E2043305330CB8E /* ScheduleViews.swift */; };
+		54B2034637BB14023E216F1B /* RemoteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD304CE5E2D4AA434F2B24CC /* RemoteTests.swift */; };
+		5F7A96C7CCAC62FF1B3C0FE2 /* ChatViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A814582040CD2B969E3FED0 /* ChatViews.swift */; };
+		68FFA33EBE3DB02F0593900F /* RemoteCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B068C230D5ED165EE25D9DD /* RemoteCrypto.swift */; };
+		6BF7A7A42FCA9E2E7B40DD85 /* RemoteUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5F927DCF4BF815F06256F2A /* RemoteUITests.swift */; };
+		72DBBD6D208FC0DF6672ED87 /* ContextViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF35BFD81ECE37D5F8218105 /* ContextViews.swift */; };
+		94928203EE4720AE61143A35 /* JSON.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EE5D84DB0FFFCF87E643DDA /* JSON.swift */; };
+		BE2EFD83DC4255BFC6852B7C /* ProteusApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89BCB9A523FAD7012BFBFBE2 /* ProteusApp.swift */; };
+		D5382767A692259B940198E9 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C3669D14C35D62493F9512B7 /* Assets.xcassets */; };
+		E3CCE5A289BFA2C55DB7BBA0 /* QRScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAE0DEDA1094847BDFC976EB /* QRScanner.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		64CD5AFA76DB7A50E2EA854A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = BB0687B6B789E03544D5CF60 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3A337EA4ED2581D7E6D2C50B;
+			remoteInfo = ProteusMobile;
+		};
+		F4FD9C114AE8513FF20225AE /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = BB0687B6B789E03544D5CF60 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3A337EA4ED2581D7E6D2C50B;
+			remoteInfo = ProteusMobile;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		2B068C230D5ED165EE25D9DD /* RemoteCrypto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteCrypto.swift; sourceTree = "<group>"; };
+		7DB8DB7C2A0FFB5C4A9E2425 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		89BCB9A523FAD7012BFBFBE2 /* ProteusApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProteusApp.swift; sourceTree = "<group>"; };
+		8EE5D84DB0FFFCF87E643DDA /* JSON.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSON.swift; sourceTree = "<group>"; };
+		9023FEA1077763EA7555C94D /* RemoteStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteStore.swift; sourceTree = "<group>"; };
+		99814D317E2043305330CB8E /* ScheduleViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleViews.swift; sourceTree = "<group>"; };
+		9A814582040CD2B969E3FED0 /* ChatViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViews.swift; sourceTree = "<group>"; };
+		A381A2CE3D0727C537781BBD /* ProteusTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = ProteusTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B5F927DCF4BF815F06256F2A /* RemoteUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteUITests.swift; sourceTree = "<group>"; };
+		C3669D14C35D62493F9512B7 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		CF291565C28538140C840C17 /* ProteusMobile.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = ProteusMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CF35BFD81ECE37D5F8218105 /* ContextViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextViews.swift; sourceTree = "<group>"; };
+		E79E4AFD22E1C4D4C5FAA5EE /* ProteusUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = ProteusUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		FAE0DEDA1094847BDFC976EB /* QRScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRScanner.swift; sourceTree = "<group>"; };
+		FD304CE5E2D4AA434F2B24CC /* RemoteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteTests.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		1E9395FBB4AAB39B4DC82C89 /* ProteusUITests */ = {
+			isa = PBXGroup;
+			children = (
+				B5F927DCF4BF815F06256F2A /* RemoteUITests.swift */,
+			);
+			path = ProteusUITests;
+			sourceTree = "<group>";
+		};
+		2644A56053EF1E9F5888BD13 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				CF291565C28538140C840C17 /* ProteusMobile.app */,
+				A381A2CE3D0727C537781BBD /* ProteusTests.xctest */,
+				E79E4AFD22E1C4D4C5FAA5EE /* ProteusUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		5C6398D9D5D93C4A2C09CE1A /* ProteusTests */ = {
+			isa = PBXGroup;
+			children = (
+				FD304CE5E2D4AA434F2B24CC /* RemoteTests.swift */,
+			);
+			path = ProteusTests;
+			sourceTree = "<group>";
+		};
+		9C9312C0FF80BE614739AEAC /* Proteus */ = {
+			isa = PBXGroup;
+			children = (
+				C3669D14C35D62493F9512B7 /* Assets.xcassets */,
+				9A814582040CD2B969E3FED0 /* ChatViews.swift */,
+				CF35BFD81ECE37D5F8218105 /* ContextViews.swift */,
+				7DB8DB7C2A0FFB5C4A9E2425 /* Info.plist */,
+				8EE5D84DB0FFFCF87E643DDA /* JSON.swift */,
+				89BCB9A523FAD7012BFBFBE2 /* ProteusApp.swift */,
+				FAE0DEDA1094847BDFC976EB /* QRScanner.swift */,
+				2B068C230D5ED165EE25D9DD /* RemoteCrypto.swift */,
+				9023FEA1077763EA7555C94D /* RemoteStore.swift */,
+				99814D317E2043305330CB8E /* ScheduleViews.swift */,
+			);
+			path = Proteus;
+			sourceTree = "<group>";
+		};
+		E5A0B9D29E75EE34F49DF94D = {
+			isa = PBXGroup;
+			children = (
+				9C9312C0FF80BE614739AEAC /* Proteus */,
+				5C6398D9D5D93C4A2C09CE1A /* ProteusTests */,
+				1E9395FBB4AAB39B4DC82C89 /* ProteusUITests */,
+				2644A56053EF1E9F5888BD13 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		2F3BC77248A8410275F9DC4E /* ProteusUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C242977CEF36675A41E7A206 /* Build configuration list for PBXNativeTarget "ProteusUITests" */;
+			buildPhases = (
+				C359806CB37DF2C8DE85E831 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				9B69A5C273B4846C411CAFE1 /* PBXTargetDependency */,
+			);
+			name = ProteusUITests;
+			packageProductDependencies = (
+			);
+			productName = ProteusUITests;
+			productReference = E79E4AFD22E1C4D4C5FAA5EE /* ProteusUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		3A337EA4ED2581D7E6D2C50B /* ProteusMobile */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 141AAE0E26DAF72FD6C624E2 /* Build configuration list for PBXNativeTarget "ProteusMobile" */;
+			buildPhases = (
+				69240DC91871F598BC6F1FB5 /* Sources */,
+				4B1EC731AA31F4D14C98CC6E /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ProteusMobile;
+			packageProductDependencies = (
+			);
+			productName = ProteusMobile;
+			productReference = CF291565C28538140C840C17 /* ProteusMobile.app */;
+			productType = "com.apple.product-type.application";
+		};
+		D15C24FCA188B183AF8753B8 /* ProteusTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AF36C146C3EDC52B85C0474E /* Build configuration list for PBXNativeTarget "ProteusTests" */;
+			buildPhases = (
+				89C5022FD516CED6086ACAD5 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				1DEEA67E611A094982791336 /* PBXTargetDependency */,
+			);
+			name = ProteusTests;
+			packageProductDependencies = (
+			);
+			productName = ProteusTests;
+			productReference = A381A2CE3D0727C537781BBD /* ProteusTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		BB0687B6B789E03544D5CF60 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					2F3BC77248A8410275F9DC4E = {
+						ProvisioningStyle = Automatic;
+						TestTargetID = 3A337EA4ED2581D7E6D2C50B;
+					};
+					3A337EA4ED2581D7E6D2C50B = {
+						ProvisioningStyle = Automatic;
+					};
+					D15C24FCA188B183AF8753B8 = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 9FF0F52A8DDFA5D1E3F50956 /* Build configuration list for PBXProject "Proteus" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = E5A0B9D29E75EE34F49DF94D;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 2644A56053EF1E9F5888BD13 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				3A337EA4ED2581D7E6D2C50B /* ProteusMobile */,
+				D15C24FCA188B183AF8753B8 /* ProteusTests */,
+				2F3BC77248A8410275F9DC4E /* ProteusUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		4B1EC731AA31F4D14C98CC6E /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D5382767A692259B940198E9 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		69240DC91871F598BC6F1FB5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5F7A96C7CCAC62FF1B3C0FE2 /* ChatViews.swift in Sources */,
+				72DBBD6D208FC0DF6672ED87 /* ContextViews.swift in Sources */,
+				94928203EE4720AE61143A35 /* JSON.swift in Sources */,
+				BE2EFD83DC4255BFC6852B7C /* ProteusApp.swift in Sources */,
+				E3CCE5A289BFA2C55DB7BBA0 /* QRScanner.swift in Sources */,
+				68FFA33EBE3DB02F0593900F /* RemoteCrypto.swift in Sources */,
+				0251FE479F24F5A96EA70F96 /* RemoteStore.swift in Sources */,
+				1162CF50A47019EEE0F0B91C /* ScheduleViews.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		89C5022FD516CED6086ACAD5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				54B2034637BB14023E216F1B /* RemoteTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C359806CB37DF2C8DE85E831 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6BF7A7A42FCA9E2E7B40DD85 /* RemoteUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		1DEEA67E611A094982791336 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 3A337EA4ED2581D7E6D2C50B /* ProteusMobile */;
+			targetProxy = F4FD9C114AE8513FF20225AE /* PBXContainerItemProxy */;
+		};
+		9B69A5C273B4846C411CAFE1 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 3A337EA4ED2581D7E6D2C50B /* ProteusMobile */;
+			targetProxy = 64CD5AFA76DB7A50E2EA854A /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		024752E0362A8120E2B2A0E3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.proteusapp.ProteusUITests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = ProteusMobile;
+			};
+			name = Release;
+		};
+		3209546664A1B847E78C6571 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		568C93593059064877E6492C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Proteus/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.proteusapp.proteus.mobile;
+				PRODUCT_NAME = Proteus;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		792B0D99DF6986453E25FA68 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Proteus/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.proteusapp.proteus.mobile;
+				PRODUCT_NAME = Proteus;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		7F339306C8CA0856F40AA64E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		CA63BFF32701139719DE82D6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.proteusapp.ProteusTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Proteus.app/Proteus";
+			};
+			name = Debug;
+		};
+		D539F8CCBAD43F1BD5C1C2C3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.proteusapp.ProteusUITests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = ProteusMobile;
+			};
+			name = Debug;
+		};
+		F69A4FDC97A7195111FD0C99 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.proteusapp.ProteusTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Proteus.app/Proteus";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		141AAE0E26DAF72FD6C624E2 /* Build configuration list for PBXNativeTarget "ProteusMobile" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				792B0D99DF6986453E25FA68 /* Debug */,
+				568C93593059064877E6492C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		9FF0F52A8DDFA5D1E3F50956 /* Build configuration list for PBXProject "Proteus" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3209546664A1B847E78C6571 /* Debug */,
+				7F339306C8CA0856F40AA64E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		AF36C146C3EDC52B85C0474E /* Build configuration list for PBXNativeTarget "ProteusTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CA63BFF32701139719DE82D6 /* Debug */,
+				F69A4FDC97A7195111FD0C99 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		C242977CEF36675A41E7A206 /* Build configuration list for PBXNativeTarget "ProteusUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D539F8CCBAD43F1BD5C1C2C3 /* Debug */,
+				024752E0362A8120E2B2A0E3 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = BB0687B6B789E03544D5CF60 /* Project object */;
+}

@@ -165,3 +165,14 @@ context on a resumed native session using only synthetic sources. It consumes Co
 
 `node test/agent-copilot-smoke.mjs --run-live` verifies a synthetic custom agent can read and resume,
 while read-only and no-tool profiles retain their restrictions in the actual Copilot runtime.
+
+## iPhone/iPad and menu bar host
+
+Closing the Mac window now leaves Proteus running in the menu bar. Choose **Quit Proteus and stop
+runs** to stop the host. Native iPhone/iPad clients can pair with it, see and resume chats, edit
+app-owned schedules, and select workspace context while all execution stays on the Mac.
+
+Open **Remote access** for built-in LAN pairing, or run `npm run relay:local` to build and connect
+a local Docker relay. Open `ios/Proteus.xcodeproj` on your iOS development Mac to install the app.
+See [remote setup, signing, protocol, and validation](docs/remote.md) for the full workflow and
+current prototype limits. Imported MCPs and schedules keep their existing enabled/disabled state.

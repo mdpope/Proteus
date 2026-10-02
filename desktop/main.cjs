@@ -1,17 +1,19 @@
-const { app, BrowserWindow, ipcMain, shell, dialog, clipboard } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, clipboard, Tray, Menu, nativeImage } = require('electron');
 const path = require('node:path');
 const { BrowserTabs } = require('./browser.cjs');
-let service, window, browser, credentials;
+let service, window, browser, credentials, tray, closing = false;
+const showWindow = () => { if (window) { if (window.isMinimized()) window.restore(); window.show(); window.focus(); } };
 app.setName('Proteus');
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
-  app.on('second-instance', () => { window?.show(); window?.focus(); });
+  app.on('second-instance', showWindow);
+  app.on('activate', showWindow);
   app.whenReady().then(async () => {
     const { startServer } = await import('../src/server.js');
     const { isWithin } = await import('../src/files.js');
     const { CredentialBroker } = await import('../src/credentials.js');
     // The provider only receives this bounded interface, never Electron or a CDP endpoint.
-    service = await startServer({ port: Number(process.env.PORT || 4317), browser: { agent: (...args) => browser.agent(...args) } });
+    service = await startServer({ port: Number(process.env.PORT || 4317), browser: { agent: (...args) => browser.agent(...args) }, background: true });
     window = new BrowserWindow({ width: 1440, height: 960, minWidth: 850, minHeight: 650, title: 'Proteus', backgroundColor: '#111716',
       webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
     browser = new BrowserTabs(window, service.origin);
@@ -42,16 +44,27 @@ else {
     });
     ipcMain.handle('proteus:browser', (event, value) => { trusted(event); return browser.command(value); });
     window.on('resize', () => window.webContents.send('proteus:browser-resize'));
-    window.on('close', event => { if (!closing) { event.preventDefault(); app.quit(); } });
+    window.on('close', event => { if (!closing) { event.preventDefault(); window.hide(); } });
+    const icon = nativeImage.createFromPath(path.join(__dirname, 'trayTemplate.png')).resize({ width: 18, height: 18 }); icon.setTemplateImage(true);
+    tray = new Tray(icon); tray.setToolTip('Proteus — schedules and chats');
+    tray.setContextMenu(Menu.buildFromTemplate([
+      { label: 'Open Proteus', click: showWindow },
+      { label: 'Remote Access…', click: () => { showWindow(); window.webContents.send('proteus:remote'); } },
+      { type: 'separator' },
+      { label: 'Closing the window keeps the host running', enabled: false },
+      { label: 'Quit Proteus and stop runs', click: () => app.quit() }
+    ]));
+    tray.on('double-click', showWindow);
     await window.loadURL(service.url);
   }).catch(error => { console.error(error.message); app.quit(); });
-  app.on('window-all-closed', () => app.quit());
-  let closing = false;
+  app.on('window-all-closed', () => {});
   app.on('before-quit', event => {
     if (closing || !service) return;
     event.preventDefault(); closing = true;
-    (async () => { credentials?.close(); await browser?.dispose(); await service.close(); })().finally(() => app.quit());
+    (async () => { credentials?.close(); await browser?.dispose(); await service.close(); })().finally(() => { tray?.destroy(); app.quit(); });
   });
 }
 // Main-process integration tests use the same broker as the provider adapter.
 module.exports.getBrowser = () => browser;
+module.exports.getService = () => service;
+module.exports.getTray = () => tray;
