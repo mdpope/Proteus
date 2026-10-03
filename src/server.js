@@ -1,4 +1,4 @@
-import { ModelCatalog } from './model-catalog.js';
+import { ModelCatalog, chatModelOptions, validateModelOptions } from './model-catalog.js';
 import http from 'node:http';
 import { contextPlan } from '../public/context-plan.js';
 import { agentName } from '../public/agent-name.js';
@@ -9,6 +9,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { randomBytes } from 'node:crypto';
 import { Engine } from './engine.js';
 import { CopilotProvider } from './copilot.js';
+import { CodexProvider } from './codex.js';
 import { SettingsStore } from './settings.js';
 import { ContextStore } from './context.js';
 import { StandupStore } from './standup.js';
@@ -45,21 +46,25 @@ async function body(req) {
   let text = ''; for await (const chunk of req) { text += chunk; if (text.length > 2_000_000) throw new Error('Request too large.'); }
   return text ? JSON.parse(text) : {};
 }
-export async function startServer({ home = defaultHome(), port = 4317, providers, browser, timers = true, withSeed = true, background = false } = {}) {
+export async function startServer({ home = defaultHome(), port = 4317, providers, browser, openExternal, timers = true, withSeed = true, background = false } = {}) {
   const unlock = lock(home);
   if (withSeed) seed(home);
   const settings = new SettingsStore(home, root);
   const context = new ContextStore(home, settings);
   const standup = new StandupStore(home, settings.get().timezone);
   const copilot = new CopilotProvider({}, { browser, context, settings });
-  const engine = new Engine(home, providers || { copilot });
+  const codex = new CodexProvider({}, { browser, context });
+  const adapters = providers || { copilot, codex };
+  const engine = new Engine(home, adapters);
   const usage = new UsageCache(() => (providers?.copilot || copilot).quota());
   engine.prepareSchedule = schedule => {
     if (schedule.context && !schedule.contextSelection) return schedule;
     const snapshot = context.capture({ workspace: schedule.workspace, selectedIds: schedule.contextSelection?.selectedIds, agentId: schedule.contextSelection?.agentId, includeDefaults: schedule.contextSelection?.includeDefaults });
     return { ...schedule, context: snapshot, workspace: snapshot.workspace };
   };
-  const catalog = new ModelCatalog(() => (providers?.copilot || copilot).status());
+  const catalogs = Object.fromEntries(Object.entries(adapters).filter(([, adapter]) => adapter.status).map(([id, adapter]) => [id, new ModelCatalog(() => adapter.status())]));
+  const catalog = catalogs.copilot || new ModelCatalog(() => copilot.status());
+  const providerStatuses = () => Object.fromEntries(Object.entries(catalogs).map(([id, catalog]) => [id, catalog.value]));
   const permissionPreviews = new Map();
   function permissionSchedule(schedule) {
     if (schedule.context && !schedule.contextSelection) return schedule;
@@ -105,7 +110,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         throw new Error('Unknown remote action.');
       }
       if (url.pathname === '/api/state') return json(200, {
-        schedules: engine.schedules.list(), runs: engine.listRuns().map(run => ({ ...run, storage: storagePaths(home, run), permissionContext: engine.permissions.describe(run.schedule) })), providerStatus: catalog.value,
+        schedules: engine.schedules.list(), runs: engine.listRuns().map(run => ({ ...run, storage: storagePaths(home, run), permissionContext: engine.permissions.describe(run.schedule) })), providerStatus: catalog.value, providerStatuses: providerStatuses(),
         permissions: engine.permissions.get(), permissionWorkspaces: [...new Map([
           { ...settings.get(), name: 'Default workspace', ref: { defaults: true } },
           ...engine.schedules.list().filter(schedule => !schedule.error).map(schedule => ({ ...schedule, ref: { scheduleId: schedule.id } })),
@@ -223,20 +228,70 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
           provider: value.provider || defaults.provider, model: value.model || defaults.model,
           reasoningEffort: value.reasoningEffort ?? ((value.model || defaults.model) === defaults.model && (value.provider || defaults.provider) === defaults.provider ? defaults.reasoningEffort : undefined),
           contextTier: value.contextTier ?? ((value.model || defaults.model) === defaults.model && (value.provider || defaults.provider) === defaults.provider ? defaults.contextTier : undefined),
+          serviceTier: value.serviceTier ?? ((value.model || defaults.model) === defaults.model && (value.provider || defaults.provider) === defaults.provider ? defaults.serviceTier : undefined),
           workspace: snapshot.workspace, context: snapshot, skillDirectories: value.skillDirectories || defaults.skillDirectories,
           mcpServers: value.mcpServers || defaults.mcpServers, editorContext: value.editorContext, misfire: 'skip', prompt: value.prompt
         });
         return json(200, engine.createRun(schedule, 'chat'));
       }
-      const match = url.pathname.match(/^\/api\/runs\/([a-f0-9-]+)\/(reply|resume|cancel)$/);
+      const match = url.pathname.match(/^\/api\/runs\/([a-f0-9-]+)\/(reply|resume|cancel|send|remove-queued)$/);
       if (match && req.method === 'POST') {
         const value = await body(req); const [, id, action] = match;
         if (action === 'reply') return json(200, engine.reply(id, value.answer, value.requestId));
+        if (action === 'send' && typeof value.prompt === 'string' && /^\/mcp\s+auth(?:\s|$)/i.test(value.prompt.trim())) {
+          const run = engine.getRun(id); const provider = engine.providers[run.schedule.provider];
+          if (!provider?.mcpLogin) throw new Error('MCP sign-in commands are currently supported for Copilot chats.');
+          if (!openExternal) throw new Error('Use MCP connections in chat details to open the sign-in link.');
+          if (engine.running && engine.running.id !== id) throw new Error('Wait for the other chat to finish before signing in.');
+          const name = value.prompt.trim().replace(/^\/mcp\s+auth\s*/i, '').trim();
+          if (!name) throw new Error('Use /mcp auth <server>, or Manage connections in chat details.');
+          if (run.events.some(e => e.data?.delivery?.id === value.messageId && value.messageId)) return json(200, run);
+          const configured = Object.keys(provider.selectedMcp(run));
+          const named = run.schedule.context?.entries.filter(e => e.kind === 'mcp' && e.name.toLowerCase() === name.toLowerCase()).map(e => e.runtimeName).filter(Boolean) || [];
+          const matches = configured.filter(key => key.toLowerCase() === name.toLowerCase() || named.includes(key));
+          if (matches.length !== 1) throw new Error('Choose an exact server from MCP connections: ' + configured.join(', '));
+          engine.event(run, 'user', value.prompt, {delivery:{id:value.messageId,state:'delivered'}});
+          try { const result = await provider.mcpLogin(run, matches[0]);
+            if (result.authorizationUrl) await openExternal(result.authorizationUrl);
+            engine.event(run,'system',result.authorizationUrl ? 'MCP sign-in opened in the Mac browser. Finish signing in, refresh MCP connections, then continue or steer this chat to retry.' : 'MCP connection restored. Continue or steer this chat to retry.');
+          } catch(error) { engine.event(run,'system','MCP sign-in failed: '+error.message); throw error; }
+          return json(200, run);
+        }
+        if (action === 'send') {
+          const run = engine.getRun(id);
+          if (value.modelOptions && value.mode !== 'steer') {
+            const options = chatModelOptions(value.modelOptions);
+            if (run.schedule.provider !== 'rehearsal') {
+              const catalog = await catalogs[run.schedule.provider]?.get();
+              const model = catalog?.models?.find(m => m.id === options.model);
+              if (!model) throw new Error('Selected model is unavailable. Refresh models and choose an available model.');
+              validateModelOptions(options, model);
+            }
+          }
+          return json(200, await engine.send(id, value.prompt, value.mode, value.messageId, value.modelOptions));
+        }
+        if (action === 'remove-queued') return json(200, engine.removeQueued(id, value.messageId));
         if (action === 'resume') return json(200, engine.resume(id, value.prompt));
         engine.cancel(id); return json(200, { ok: true });
       }
+      if (url.pathname === '/api/mcp' && req.method === 'POST') {
+        const value = await body(req); const run = engine.getRun(value.runId);
+        const provider = engine.providers[run.schedule.provider];
+        if (!provider?.mcpStatus) throw new Error('MCP sign-in controls are currently supported for Copilot chats.');
+        if (engine.running && engine.running.id !== run.id) throw new Error('Wait for the other chat to finish before opening these connections.');
+        if (value.action === 'login') {
+          const result = await provider.mcpLogin(run, value.server);
+          if (result.authorizationUrl && value.openOnMac) {
+            if (!openExternal) throw new Error('Open Proteus on the Mac to finish browser sign-in.');
+            await openExternal(result.authorizationUrl); return json(200, {server:result.server,status:result.status,openedOnMac:true});
+          }
+          return json(200, result);
+        }
+        if (value.action !== 'status') throw new Error('Unknown MCP connection action.');
+        return json(200, await provider.mcpStatus(run));
+      }
       if (url.pathname === '/api/usage' && req.method === 'POST') return json(200, await usage.get((await body(req)).force === true));
-      if (url.pathname === '/api/provider' && req.method === 'POST') { const value = await body(req); const result = await catalog.get(value.force !== false); notify(); remote.changed(); return json(200, result); }
+      if (url.pathname === '/api/provider' && req.method === 'POST') { const value = await body(req); const selectedCatalog = value.provider ? catalogs[value.provider] : catalog; if (!selectedCatalog) throw new Error('Provider catalog is unavailable.'); const result = await selectedCatalog.get(value.force !== false); notify(); remote.changed(); return json(200, result); }
       if (url.pathname === '/api/chat-image' && req.method === 'POST') {
         const value = await body(req);
         return json(200, readChatImage(engine.getRun(value.id), value.source));
@@ -251,7 +306,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       }
       const assets = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'], '/features.js': ['features.js', 'text/javascript'], '/remote.js': ['remote.js', 'text/javascript'] };
       for (const file of ['runtime.js', 'style.css']) assets['/markdown/' + file] = ['markdown/' + file, file.endsWith('.css') ? 'text/css' : 'text/javascript'];
-      for (const file of ['conversation.js', 'agent-name.js', 'usage.js', 'context-plan.js']) assets['/' + file] = [file, 'text/javascript'];
+      for (const file of ['conversation.js', 'tool-presentation.js', 'agent-name.js', 'usage.js', 'context-plan.js']) assets['/' + file] = [file, 'text/javascript'];
       if (req.method === 'GET' && assets[url.pathname]) {
         const [file, type] = assets[url.pathname]; res.writeHead(200, { 'Content-Type': type }); res.end(fs.readFileSync(path.join(root, 'public', file))); return;
       }
@@ -263,14 +318,14 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   origin = `http://127.0.0.1:${server.address().port}`;
   atomicJSON(path.join(home, 'connection.json'), { origin, token, pid: process.pid });
   const timer = timers ? setInterval(() => { try { engine.tick(); } catch (error) { engine.emit('scheduler-error', { error: error.message, at: new Date().toISOString() }); } }, 1000) : null;
-  const service = { engine, settings, context, standup, catalog, origin, token, home, url: `${origin}/?token=${token}`, async close() {
-    if (timer) clearInterval(timer); if (catalogTimer) clearInterval(catalogTimer); await catalog.pending; await remote.close(); await engine.close(); await copilot.close();
+  const service = { engine, settings, context, standup, catalog, catalogs, origin, token, home, url: `${origin}/?token=${token}`, async close() {
+    if (timer) clearInterval(timer); if (catalogTimer) clearInterval(catalogTimer); await Promise.all(Object.values(catalogs).map(c => c.pending)); await remote.close(); await engine.close(); await copilot.close(); await codex.close();
     for (const client of eventClients) client.end(); eventClients.clear();
     await new Promise(resolve => server.close(resolve)); server.closeAllConnections();
     fs.rmSync(path.join(home, 'connection.json'), { force: true }); unlock();
   } };
   remote = service.remote = new RemoteHost(service); await remote.start();
-  const refreshCatalog = () => catalog.get().then(() => { notify(); remote.changed(); });
+  const refreshCatalog = () => Promise.allSettled(Object.values(catalogs).map(c => c.get())).then(() => { notify(); remote.changed(); });
   const catalogTimer = timers ? setInterval(refreshCatalog, 60_000) : null;
   if (timers) void refreshCatalog();
   return service;

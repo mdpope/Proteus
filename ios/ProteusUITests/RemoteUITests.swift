@@ -15,7 +15,7 @@ final class RemoteUITests: XCTestCase {
         XCTAssertTrue(tool.waitForExistence(timeout: 10)); tool.tap()
         XCTAssertTrue(app.staticTexts["Expanded synthetic tool result"].waitForExistence(timeout: 10))
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Expanded tool activity"; screenshot.lifetime = .keepAlways; add(screenshot)
-        if app.buttons["Stop"].exists { app.buttons["Stop"].tap() }
+        if app.buttons["stop-turn"].exists { app.buttons["stop-turn"].tap() }
     }
     @MainActor func testPairStartAndReply() async throws {
         let (data, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/pair")!)
@@ -34,7 +34,7 @@ final class RemoteUITests: XCTestCase {
         let inputNeeded = app.staticTexts["Your input is needed"]
         XCTAssertTrue(inputNeeded.waitForExistence(timeout: 20))
         reply.tap(); reply.typeText("Follow up from my iPhone")
-        app.buttons["Send message"].tap()
+        app.buttons["Send feedback"].tap()
         XCTAssertTrue(app.staticTexts["Turn complete"].waitForExistence(timeout: 20))
         XCTAssertTrue(app.webViews.staticTexts["Follow up from my iPhone"].firstMatch.waitForExistence(timeout: 15))
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Proteus mobile conversation"; screenshot.lifetime = .keepAlways; add(screenshot)
@@ -56,7 +56,7 @@ extension RemoteUITests {
         for _ in 0..<6 { if copy.exists && copy.isHittable { break }; app.swipeDown() }
         XCTAssertTrue(copy.waitForExistence(timeout: 15), "Rendered code toolbar should be accessible")
         let image = XCTAttachment(screenshot: app.screenshot()); image.name = "Rich conversation on device"; image.lifetime = .keepAlways; add(image)
-        if app.buttons["Stop"].exists { app.buttons["Stop"].tap() }
+        if app.buttons["stop-turn"].exists { app.buttons["stop-turn"].tap() }
     }
 }
 
@@ -94,7 +94,7 @@ extension RemoteUITests {
         let value = try JSONSerialization.jsonObject(with: latest) as! [String: Any]; let context = try XCTUnwrap(value["context"] as? [String: Any])
         XCTAssertEqual(context["includeDefaults"] as? Bool, false)
         let entries = context["entries"] as! [[String: Any]]; XCTAssertEqual(entries.count, 1); XCTAssertEqual(entries.first?["kind"] as? String, "skill")
-        app.buttons["Stop"].tap()
+        app.buttons["stop-turn"].tap()
     }
 }
 
@@ -126,6 +126,21 @@ extension RemoteUITests {
         let (latest, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/latest")!)
         let value = try JSONSerialization.jsonObject(with: latest) as! [String: Any]
         XCTAssertEqual(value["reasoningEffort"] as? String, "none"); XCTAssertEqual(value["contextTier"] as? String, "long_context")
-        if app.buttons["Stop"].exists { app.buttons["Stop"].tap() }
+        XCTAssertTrue(app.buttons["composer-model"].exists)
+        XCTAssertTrue(app.buttons["composer-context"].exists)
+        XCTAssertTrue(app.buttons["steer-message"].exists); XCTAssertFalse(app.buttons["steer-message"].isEnabled)
+        XCTAssertTrue(app.buttons["stop-turn"].exists)
+        app.buttons["composer-effort"].tap(); app.buttons["high"].tap()
+        let reply = app.textFields["reply-text"]; reply.tap(); reply.typeText("Queued with new effort")
+        app.buttons["send-message"].tap()
+        XCTAssertTrue(app.buttons["Remove"].waitForExistence(timeout: 10))
+        let (queued, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/latest")!)
+        let queuedValue = try JSONSerialization.jsonObject(with: queued) as! [String: Any]
+        XCTAssertEqual(queuedValue["reasoningEffort"] as? String, "none")
+        let messages = queuedValue["queuedMessages"] as! [[String: Any]]
+        XCTAssertEqual((messages.first?["modelOptions"] as? [String: Any])?["reasoningEffort"] as? String, "high")
+        let composerShot = XCTAttachment(screenshot: app.screenshot()); composerShot.name = "Compact composer menus and separate actions"; composerShot.lifetime = .keepAlways; add(composerShot)
+        app.buttons["Remove"].tap()
+        if app.buttons["stop-turn"].exists { app.buttons["stop-turn"].tap() }
     }
 }

@@ -7,8 +7,8 @@ import { revision } from './schedules.js';
 export function validateSettings(value) {
   if (value?.schemaVersion !== 1) throw new Error('Settings schemaVersion must be 1.');
   validateModelOptionShape(value);
-  if (!['copilot','rehearsal'].includes(value.provider)) throw new Error('Choose a supported default provider.');
-  if (value.provider === 'copilot' && (!value.model?.trim() || value.model === 'auto')) throw new Error('Choose an explicit default model.');
+  if (!['copilot','codex','rehearsal'].includes(value.provider)) throw new Error('Choose a supported default provider.');
+  if (value.provider !== 'rehearsal' && (!value.model?.trim() || value.model === 'auto')) throw new Error('Choose an explicit default model.');
   if (value.copilotDataDirectory && (!path.isAbsolute(value.copilotDataDirectory) || !fs.statSync(value.copilotDataDirectory).isDirectory())) throw new Error('Choose an existing Copilot data folder.');
   new Intl.DateTimeFormat('en', { timeZone: value.timezone }).format();
   for (const directory of [value.workspace?.cwd, ...(value.workspace?.additionalDirectories || []), ...(value.skillDirectories || [])]) {

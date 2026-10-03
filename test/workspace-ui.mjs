@@ -86,10 +86,10 @@ try {
   });
   await page.locator('#browser').click(); await page.locator('#browser-url').fill('https://login.example.test'); await page.locator('#browser-url').press('Enter');
   await page.locator('[data-tab]').filter({ hasText: 'Synthetic login' }).waitFor();
-  await page.locator('#browser-share').check(); const browserId = await page.locator('.tabitem.selected [data-tab]').getAttribute('data-tab');
+  await page.locator('#browser-share').click(); const browserId = await page.locator('.tabitem.selected [data-tab]').getAttribute('data-tab');
   await page.locator('#browser-fill-login').click(); await page.locator('#dialog-submit').click();
   await page.getByText('Login fields filled. Continue sign-in in the private tab.', { exact: true }).waitFor();
-  assert.equal(await page.locator('#browser-share').isChecked(), false);
+  assert.equal(await page.locator('#browser-share').getAttribute('aria-pressed'), 'false');
   assert.equal(await app.evaluate(async (_electron, id) => {
     const browser = process.mainModule.require(process.cwd() + '/desktop/main.cjs').getBrowser();
     return browser.get(id).view.webContents.executeJavaScript("document.querySelector('input[type=password]').value === 'SYNTHETIC_PASSWORD' && document.querySelector('input[type=email]').value === 'synthetic@example.test'");

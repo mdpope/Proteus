@@ -36,7 +36,7 @@ await until(() => app.remote.status === 'online', 20_000);
 const receive = app.remote.receive.bind(app.remote);
 app.remote.receive = async (...args) => { try { return await receive(...args); } catch (error) { console.log('Synthetic protocol rejection: ' + error.message); throw error; } };
 const fixture = http.createServer(async (req, res) => {
-  if (req.url === '/latest') { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ context: app.engine.listRuns()[0]?.schedule.context, reasoningEffort: app.engine.listRuns()[0]?.schedule.reasoningEffort, contextTier: app.engine.listRuns()[0]?.schedule.contextTier })); return; }
+  if (req.url === '/latest') { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ context: app.engine.listRuns()[0]?.schedule.context, reasoningEffort: app.engine.listRuns()[0]?.schedule.reasoningEffort, contextTier: app.engine.listRuns()[0]?.schedule.contextTier, queuedMessages: app.engine.listRuns()[0]?.queuedMessages })); return; }
   if (!req.url.startsWith('/pair')) { res.writeHead(404); res.end(); return; }
   // Every native test starts with an idle synthetic runner, including after a failed test.
   for (const run of app.engine.listRuns()) if (['running', 'queued', 'awaiting_input'].includes(run.status)) app.engine.cancel(run.id);

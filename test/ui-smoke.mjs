@@ -42,7 +42,7 @@ try {
   const agent=args=>app.evaluate(async(_electron,args)=>process.mainModule.require(process.cwd()+'/desktop/main.cjs').getBrowser().agent(args,'test-run'),args);
   assert.deepEqual(await agent({action:'list'}),[]);
   await assert.rejects(agent({action:'snapshot',tabId:firstId}),/private/);
-  await page.locator('#browser-share').check();
+  await page.locator('#browser-share').click();
   assert.match((await agent({action:'snapshot',tabId:firstId})).snapshot,/Knowledge hub/);
   await agent({action:'fill',tabId:firstId,role:'textbox',name:'Search',value:'Playwright in the same tab'});
   const read=await agent({action:'click',tabId:firstId,role:'button',name:'Find'});assert.match(read.snapshot,/Playwright in the same tab/);
@@ -53,7 +53,7 @@ try {
   await page.locator(`[data-tab="${firstId}"]`).click();assert.equal(await page.locator('#browser-url').inputValue(),siteURL+'/');
   await page.setViewportSize({width:1200,height:800});await page.waitForTimeout(100);
   await page.screenshot({path:output});
-  await page.locator('#browser-share').uncheck();await assert.rejects(agent({action:'snapshot',tabId:firstId}),/private/);
+  await page.locator('#browser-share').click();await assert.rejects(agent({action:'snapshot',tabId:firstId}),/private/);
   await page.locator(`[data-close="${firstId}"]`).click();
   assert.equal((await agent({action:'list'})).length,0);
   const owned=await agent({action:'open',url:siteURL});assert.match((await agent({action:'snapshot',tabId:owned.id})).snapshot,/Knowledge hub/);

@@ -1,3 +1,4 @@
+import { toolPresentation, mountStructured } from './tool-presentation.js';
 import { agentName } from './agent-name.js';
 const views = new Map();
 function readableOutput(value) {
@@ -48,18 +49,26 @@ export function conversation(target, run, options) {
       node.querySelector('.tool-summary').textContent = tool.summary;
       node.querySelector('.tool-status').textContent = tool.status + (tool.durationMs !== undefined ? ` · ${(tool.durationMs / 1000).toFixed(1)}s` : '');
       const content = node.querySelector('.tool-content');
-      const fields = [['Progress', tool.progress], ['Approval', tool.approval], ['Arguments', tool.arguments], ['Output', readableOutput(tool.output)], ['Error', tool.error], ['Attachments', tool.attachments]].filter(([, value]) => value);
-      const signature = JSON.stringify(fields);
+      const presentation = toolPresentation(tool);
+      const signature = JSON.stringify([presentation,tool.arguments,tool.output]);
       if (node.toolSignature !== signature) {
         const oldTop = content.scrollTop; content.replaceChildren();
-        for (const [label, value] of fields) { const heading = document.createElement('div'); heading.className = 'note'; heading.textContent = label; const pre = document.createElement('pre'); pre.textContent = value; content.append(heading, pre); }
+        const add=(tag,text,cls)=>{const element=document.createElement(tag);element.textContent=text;if(cls)element.className=cls;content.append(element);return element;};
+        for(const file of presentation.targets) { const button=add('button',file,'tool-target');button.onclick=()=>options.link(file); }
+        if(presentation.facts.length){const facts=add('div','');mountStructured(facts,{kind:'facts',facts:presentation.facts});}
+        if(presentation.command)add('pre',presentation.command,'tool-command');
+        if(presentation.progress)add('p',presentation.progress,'tool-progress');
+        if(presentation.error)add('p',presentation.error,'tool-error');
+        const output=add('div','','tool-result');mountStructured(output,presentation.output);
+        if(presentation.approval)add('p',presentation.approval,'note');
+        const raw=add('details','','raw-details');const summary=document.createElement('summary');summary.textContent='Raw arguments & output';const pre=document.createElement('pre');pre.textContent=[tool.arguments,tool.output,tool.attachments].filter(Boolean).join('\n\n');raw.append(summary,pre);
         content.scrollTop = oldTop; node.toolSignature = signature;
       }
       view.messages.append(node); nodes.delete(entry.key); continue;
     }
     if (!node) { node = document.createElement('div'); node.className = 'message'; node.dataset.key = entry.key; node.innerHTML = '<div class="role"></div><div class="text"></div>'; }
     node.className = `message ${['user', 'assistant', 'tool', 'system'].includes(entry.role) ? entry.role : 'system'}`;
-    node.firstChild.textContent = `${entry.role === 'assistant' ? entry.agentName || agentName(run) : entry.role}${entry.streaming ? ' · streaming' : entry.at ? ' · ' + options.time(entry.at) : ''}`;
+    node.firstChild.textContent = `${entry.data?.delivery ? ({queued:'Queued next',steered:'Steering',sending:'Sending steering',failed:'Not delivered',removed:'Removed from queue',delivered:'Queued message delivered'}[entry.data.delivery.state] || '') + ' · ' : ''}${entry.role === 'assistant' ? entry.agentName || agentName(run) : entry.role}${entry.streaming ? ' · streaming' : entry.at ? ' · ' + options.time(entry.at) : ''}`;
     ProteusMarkdown.mount(node.lastChild, entry.text, { ...options, resize: view.position });
     view.messages.append(node); nodes.delete(entry.key);
   }

@@ -4,6 +4,7 @@ import Combine
 @MainActor final class RemoteStore: ObservableObject {
     @Published var state: JSON = .null
     @Published var chats: [String: JSON] = [:]
+    @Published var providerStatuses: [String: JSON] = [:]
     @Published var models: [JSON] = []
     @Published var modelStatus: JSON = .null
     @Published var status = "Not paired"
@@ -175,6 +176,7 @@ import Combine
         var object = value.object; let ids = Set(value["runs"].array.map { $0["id"].string })
         object["runs"] = .array(value["runs"].array + state["runs"].array.filter { !ids.contains($0["id"].string) })
         state = .object(object)
+        providerStatuses = value["providerStatuses"].object
         if value["providerStatus"] != .null { modelStatus = value["providerStatus"]; models = modelStatus["models"].array }
     }
     func loadMoreRuns() async {
@@ -198,8 +200,8 @@ import Combine
         merged["eventStart"] = .number(Double(min(first, previous))); merged["earlier"] = merged["eventStart"]
         chats[id] = .object(merged)
     }
-    func loadModels(force: Bool = false) async {
-        do { let value = try await request("provider.status", ["force": .bool(force)]); modelStatus = value; models = value["models"].array; if !value["available"].bool { error = value["error"].string.isEmpty ? "Copilot is not available on the Mac." : value["error"].string } }
+    func loadModels(force: Bool = false, provider: String = "copilot") async {
+        do { let value = try await request("provider.status", ["force": .bool(force), "provider": .string(provider)]); providerStatuses[provider] = value; if provider == "copilot" { modelStatus = value; models = value["models"].array }; if !value["available"].bool { error = value["error"].string.isEmpty ? "Provider is not available on the Mac." : value["error"].string } }
         catch { self.error = error.localizedDescription }
     }
     func activity(_ isActive: Bool) { active = isActive; if active { connect() } else { disconnect() } }

@@ -44,18 +44,28 @@ See [workspaces](workspaces.md) and [credentials](credentials.md) for behavior a
 - Local branded Mac bundle and Dock artwork matching iOS; see `mac-app.md`.
 - Handoff guide, design decisions, feature references and changelog.
 
+## Chat steering, Codex and MCP recovery
+
+- Implemented Mac/iOS structured tool results, durable queue, live steering and compact Mac browser.
+- Compact composer model/effort/speed/context menus and separate Queue/Steer/Stop buttons.
+  Captured next-turn choices support model changes within an existing provider session.
+- Implemented separate provider catalogs and Codex native execution/continuation with selected
+  instruction/skill context and explicit tool-scope compatibility errors. See `providers.md`.
+- Implemented Copilot per-chat MCP status and OAuth sign-in on the Mac, available from both clients
+  and `/mcp auth <server>`. See `mcp-auth.md` for callback and credential boundaries.
+- Validation details for the release are recorded in the PR and handoff notes; distinguish synthetic
+  protocol/UI checks from any real corporate OAuth completion, which requires user interaction.
+
 ## Deferred (no implementation yet)
 
 - Detached background daemon/login item, Developer ID distribution signing/notarization, automatic
   updates, independent concurrent execution, workflow completion validators and notifications.
 - Automatic reconciliation of foreign workflow manifests; currently use the owning repository
   exporter and explicit import/refresh.
-- Changing model/effort/context tier of an existing idle chat through the UI; current controls apply
-  to new chats and future scheduled runs, and existing chats display their captured settings.
-- Additional provider adapters beyond Copilot and rehearsal, with provider-specific option mapping.
+- Provider adapters beyond Copilot/Codex/rehearsal; Codex native agent tool-filter parity and per-tool MCP approval interception; changing the provider of an existing chat.
 - Browser tab restoration across app restarts (website sign-in profiles already persist).
 - Paginated on-disk run storage as history grows.
-- Standalone MCP connection/OAuth/input adapters and editor-specific agent hook and extension-tool mappings.
+- Codex MCP OAuth controls, generic MCP elicitation/input forms, and editor-specific agent hook and extension-tool mappings. Copilot OAuth recovery is implemented per chat.
 - Bitwarden extension compatibility and broader token-broker/Keychain bootstrap integrations.
 - Automatic VS Code index, unsaved buffers, or existing chat-history transfer.
 - Native session relocation or cross-provider conversation migration.

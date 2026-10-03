@@ -2,7 +2,7 @@
 
 A local control room for scheduled AI work: set the cadence, watch each run, and return to the
 conversation when it needs you. Provider-independent scheduling and storage, with GitHub Copilot
-as the first real provider.
+and Codex adapters.
 
 ## Run the desktop prototype
 
@@ -27,6 +27,12 @@ selects an available port. `PROTEUS_HOME` overrides the application-data directo
   continuation. Explicit context refresh retains the previous versions. Interrupted runs require explicit continuation after restart.
 - GitHub Copilot SDK adapter, explicit model selection, a sidebar premium-request usage bar, and observed
   per-run token usage. Copilot authentication uses the official runtime's existing sign-in.
+- Codex native app-server adapter using the Mac’s existing sign-in, with separate live model, effort,
+  and speed controls. See [provider compatibility](docs/providers.md).
+- Queue next and Steer now during active chats; readable tool cards and complete Markdown responses
+  on Mac, iPhone and iPad. See [chat controls](docs/chat-controls.md).
+- Copilot MCP connection status and browser OAuth recovery, including `/mcp auth <server>`.
+  See [MCP sign-in](docs/mcp-auth.md).
 - Local rehearsal provider for trying the feedback flow without an AI call.
 - Tabs for schedules, conversations, formatted Markdown, and shared browser tabs with embedded Playwright control.
 - Named multi-folder workspaces, live context discovery, universal/per-chat source controls.
@@ -36,7 +42,8 @@ selects an available port. `PROTEUS_HOME` overrides the application-data directo
 ## Prototype boundaries
 
 The scheduler runs while the desktop app or server is open. Background service installation,
-packaging/signing, notifications, and independent concurrent workspaces remain future work.
+distribution signing/notarization, notifications, and independent concurrent workspaces remain future work.
+A locally signed, branded Mac bundle is available; closing its window keeps the menu bar host running.
 The single execution queue avoids concurrent mutations; a run waiting for feedback holds that
 queue until answered or stopped. Missed occurrences of an already-active schedule are skipped.
 
@@ -46,8 +53,8 @@ Agent access before a run can use them. See [browser design](docs/browser.md). A
 coverage requires a real signed-in read; synthetic browser tests do not establish Slack coverage.
 Markdown renders formatted text, tables, code, and inline images; embedded HTML remains escaped.
 
-Only Copilot and rehearsal providers are implemented. Provider neutrality is an architectural
-boundary, not a claim that other providers already work. A `completed` run means its model turn
+Copilot, Codex and rehearsal providers are implemented. Provider adapters retain different native
+capabilities; unsupported context/tool restrictions fail explicitly. A `completed` run means its model turn
 ended; workflow-specific checks determine whether the underlying task really succeeded.
 Raw Copilot conversations remain in Copilot's own persistent session store; Proteus keeps their
 IDs, event history, schedule snapshots, and measured usage locally. Cross-provider context transfer

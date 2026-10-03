@@ -40,6 +40,23 @@ final class RemoteTests: XCTestCase {
         XCTAssertEqual(store.chats["synthetic"]?["events"].array.count, 100)
         XCTAssertEqual(store.chats["synthetic"]?["earlier"].int, 1000)
     }
+    @MainActor func testQueueWhileWaitingRunsAfterReply() async throws {
+        let (data, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/pair")!)
+        let fixture = try JSONDecoder().decode(JSON.self, from: data)
+        let store = RemoteStore(); store.forget(); try store.pair(fixture["code"].string)
+        defer { store.forget() }
+        try await wait { store.connected && store.state["context"]["workspaces"].array.count > 0 }
+        let result = try await store.request("chat.start", ["prompt":.string("First queued rehearsal"),"provider":.string("rehearsal"),"workspaceId":store.state["context"]["defaultWorkspaceId"]])
+        let id = result["runId"].string; await store.openChat(id)
+        try await wait { store.chats[id]?["status"].string == "awaiting_input" }
+        let pending = store.chats[id]!["pending"]["id"]
+        _ = try await store.request("chat.send", ["id":.string(id),"prompt":.string("Second queued rehearsal"),"mode":.string("queue"),"messageId":.string(UUID().uuidString)])
+        await store.openChat(id); XCTAssertEqual(store.chats[id]?["queuedMessages"].array.count, 1)
+        _ = try await store.request("chat.reply", ["id":.string(id),"answer":.string("First feedback"),"requestId":pending])
+        try await wait { store.chats[id]?["status"].string == "awaiting_input" && store.chats[id]?["pending"]["id"] != pending }
+        XCTAssertEqual(store.chats[id]?["queuedMessages"].array.count, 0)
+        _ = try await store.request("chat.cancel", ["id":.string(id)])
+    }
     @MainActor private func wait(_ predicate: () -> Bool) async throws {
         for _ in 0..<200 { if predicate() { return }; try await Task.sleep(for: .milliseconds(100)) }
         XCTFail("Native client did not reach expected state"); throw RemoteError(message: "Timed out")

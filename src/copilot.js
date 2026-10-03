@@ -10,7 +10,7 @@ import { copilotModel, validateModelOptions } from './model-catalog.js';
 import { TurnWaiter } from './turn-waiter.js';
 
 export class CopilotProvider {
-  constructor(options = {}, { browser, context, settings } = {}) { this.browser = browser; this.context = context; this.settings = settings; this.options = options; this.client = null; this.starting = null; this.sessions = new Map(); }
+  constructor(options = {}, { browser, context, settings } = {}) { this.browser = browser; this.context = context; this.settings = settings; this.options = options; this.client = null; this.starting = null; this.sessions = new Map(); this.authSessions = new Map(); }
   dataDirectory() { return this.settings?.get().copilotDataDirectory || this.options.baseDirectory || process.env.COPILOT_HOME || path.join(os.homedir(), '.copilot'); }
   async connect(baseDirectory = this.dataDirectory()) {
     if (this.client && this.baseDirectory !== baseDirectory) await this.close();
@@ -47,6 +47,56 @@ export class CopilotProvider {
       };
     } catch (error) { return { available: false, error: error.message, quota: null }; }
   }
+  selectedMcp(run) {
+    const snapshot = run.schedule.context;
+    const managed = snapshot && this.context ? this.context.providerContext(snapshot) : null;
+    return managed ? { ...Object.fromEntries(Object.entries(snapshot.includeDefaults !== false ? run.schedule.mcpServers || {} : {}).filter(([name]) => !managed.disabledLegacyMcp.includes(name))), ...managed.mcpServers } : run.schedule.mcpServers || {};
+  }
+  async mcpSession(run) {
+    const active = this.sessions.get(run.id) || this.authSessions.get(run.id);
+    if (active) return active;
+    if (!run.providerSessionId || ['queued','running','awaiting_input'].includes(run.status)) throw new Error('Wait for this chat’s provider session to finish starting, then refresh connections.');
+    const fingerprint = revision({context:run.schedule.context || null,mcp:run.schedule.mcpServers || {}});
+    if (this.configurationFingerprint && this.configurationFingerprint !== fingerprint) await this.close();
+    this.configurationFingerprint = fingerprint;
+    const client = await this.connect(run.providerHome || this.dataDirectory());
+    const session = await client.resumeSession(run.providerSessionId, {
+      model: run.schedule.model, workingDirectory: run.schedule.workspace.cwd,
+      additionalDirectories: run.schedule.workspace.additionalDirectories,
+      mcpServers: this.selectedMcp(run), skipCustomInstructions: true, enableConfigDiscovery: false,
+      enableOnDemandInstructionDiscovery: false, enableSkills: false, enableFileHooks: false,
+      onPermissionRequest: async () => ({kind:'reject',feedback:'Authentication-only session.'})
+    });
+    this.authSessions.set(run.id, session); return session;
+  }
+  async mcpStatus(run) {
+    const configured = this.selectedMcp(run); const session = await this.mcpSession(run);
+    const value = await session.rpc.mcp.list();
+    return { servers: Object.entries(configured).map(([name, config]) => {
+      const item = value.servers.find(server => server.name === name);
+      const error = item?.error || value.host?.failedServers?.[name]?.message;
+      return {name, status: item?.status || (value.host?.needsAuthServers?.[name] ? 'needs-auth' : 'not-connected'), remote: ['http','sse'].includes(config.type), ...(error ? {error:displayText(error,1000)} : {})}; }) };
+  }
+  async mcpLogin(run, name) {
+    const config = this.selectedMcp(run)[name];
+    if (!config || !['http','sse'].includes(config.type)) throw new Error('Choose a selected remote MCP server.');
+    const session = await this.mcpSession(run);
+    const item = (await session.rpc.mcp.list()).servers.find(server => server.name === name);
+    let params = {serverName:name,clientName:'Proteus',callbackSuccessMessage:'Connected. Return to Proteus and refresh connections.'};
+    if (item?.owned?.installationId) {
+      const expectedInstallationId = item.owned.installationId;
+      const prepared = await session.rpc.mcp.oauth.prepareLogin({...params,expectedInstallationId});
+      params = {serverName:name,expectedInstallationId,loginId:prepared.loginId};
+    }
+    const result = await session.rpc.mcp.oauth.login(params);
+    if (result.authorizationUrl && !/^https:\/\//i.test(result.authorizationUrl)) throw new Error('Provider returned an unsafe sign-in URL.');
+    return {server:name,status:result.authorizationUrl ? 'sign-in-required' : 'connected',authorizationUrl:result.authorizationUrl || null};
+  }
+  async steer(run, prompt) {
+    const session = this.sessions.get(run.id);
+    if (!session) throw new Error('Copilot is still starting. Queue this message or try steering again.');
+    await session.send({ prompt, mode: 'immediate' });
+  }
   async run({ run, prompt, emit, ask, update, signal, stream }) {
     let turn;
     const askUser = async request => { turn?.pause(); try { return await ask(request); } finally { turn?.resume(); } };
@@ -79,7 +129,7 @@ export class CopilotProvider {
     const includeLegacy = snapshot?.includeDefaults !== false;
     const config = {
       model: run.schedule.model, streaming: true,
-      ...(run.schedule.reasoningEffort ? { reasoningEffort: run.schedule.reasoningEffort } : {}),
+      ...((run.schedule.reasoningEffort || model.controls.defaultReasoningEffort) ? { reasoningEffort: run.schedule.reasoningEffort || model.controls.defaultReasoningEffort } : {}),
       ...(run.schedule.contextTier ? { contextTier: run.schedule.contextTier } : {}),
       workingDirectory: run.schedule.workspace.cwd,
       additionalDirectories: run.schedule.workspace.additionalDirectories,
@@ -91,6 +141,8 @@ export class CopilotProvider {
       onPermissionRequest: permission,
       onUserInputRequest: async request => ({ answer: await askUser({ type: 'question', question: request.question, choices: request.choices }), wasFreeform: true })
     };
+    const authSession = this.authSessions.get(run.id);
+    if (authSession) { await authSession.disconnect(); this.authSessions.delete(run.id); }
     const session = run.providerSessionId
       ? await client.resumeSession(run.providerSessionId, config)
       : await client.createSession({ ...config, sessionId: run.id });
@@ -113,6 +165,10 @@ export class CopilotProvider {
       }
       activity(event);
       if (event.type === 'tool.execution_complete') for (const [key, value] of decisions) if (value.toolCallId === event.data.toolCallId) decisions.delete(key);
+      if (event.type === 'session.mcp_server_status_changed') {
+        const d = event.data; run.mcpConnections ??= {}; run.mcpConnections[d.serverName || d.name] = {status:d.status,error:displayText(d.error || '',1000)};
+        if (d.status === 'needs-auth' || d.status === 'failed') emit('system', `MCP ${d.serverName || d.name}: ${d.status}. Open MCP connections in chat details to sign in or inspect the error.`); else update();
+      }
       if (event.type === 'session.warning') emit('system', displayText(event.data.message || 'Provider warning'));
       if (event.type === 'session.compaction_start') emit('system', 'Copilot is compacting the conversation context.');
       if (event.type === 'session.compaction_complete') emit('system', 'Conversation context compacted.');
@@ -145,5 +201,5 @@ export class CopilotProvider {
       signal.removeEventListener('abort', abort); unsubscribe(); this.sessions.delete(run.id); await session.disconnect();
     }
   }
-  async close() { if (this.client) await this.client.stop(); this.client = null; this.starting = null; }
+  async close() { if (this.client) await this.client.stop(); this.client = null; this.starting = null; this.sessions.clear(); this.authSessions.clear(); }
 }

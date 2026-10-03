@@ -108,12 +108,13 @@ function modelOptions(models, selected) {
 }
 export const tokenSize = value => Number.isFinite(value) ? (value >= 1_000_000 ? value / 1_000_000 + 'M' : value >= 1000 ? value / 1000 + 'K' : String(value)) : 'Not reported';
 export const contextSize = tier => `${tier.promptTokens ? tokenSize(tier.promptTokens) : 'Capacity not reported'} · ${tier.id === 'default' ? 'Default' : tier.id === 'long_context' ? 'Long context' : tier.id}`;
-export function modelSelection(id) { return { reasoningEffort: $('#' + id + '-effort').value, contextTier: $('#' + id + '-context').value }; }
-export function modelPicker(id, selected) {
-  return `<select id="${id}" data-selected="${esc(selected)}" aria-label="Model">${modelOptions(u.state.data.providerStatus?.models || [], selected)}</select>`;
+export function modelSelection(id) { return { reasoningEffort: $('#' + id + '-effort').value, contextTier: $('#' + id + '-context').value, serviceTier: $('#' + id + '-speed').value }; }
+const catalogFor = provider => u.state.data.providerStatuses?.[provider] || (provider === 'copilot' ? u.state.data.providerStatus : null);
+export function modelPicker(id, selected, provider = 'copilot') {
+  return `<select id="${id}" data-selected="${esc(selected)}" data-provider="${esc(provider)}" aria-label="Model">${modelOptions(catalogFor(provider)?.models || [], selected)}</select>`;
 }
-export function modelControls(id, options = {}) {
-  return `<div class="model-controls" data-model-picker="${id}"><div><label for="${id}-effort">Thinking effort</label><select id="${id}-effort"><option value="${esc(options.reasoningEffort || '')}">${esc(options.reasoningEffort || 'Provider default')}</option></select></div><div><label for="${id}-context">Context size</label><select id="${id}-context"><option value="${esc(options.contextTier || 'default')}">${esc(options.contextTier || 'default')}</option></select></div><p class="note" id="${id}-capabilities" aria-live="polite"></p></div>`;
+export function modelControls(id, options = {}, compact = false) {
+  return `<div class="model-controls ${compact ? 'compact-model-controls' : ''}" data-model-picker="${id}"><div><label for="${id}-effort">Thinking effort</label><select id="${id}-effort"><option value="${esc(options.reasoningEffort || '')}">${esc(options.reasoningEffort || 'Provider default')}</option></select></div><div><label for="${id}-context">Context size</label><select id="${id}-context"><option value="${esc(options.contextTier || 'default')}">${esc(options.contextTier || 'default')}</option></select></div><div><label for="${id}-speed">Speed / service tier</label><select id="${id}-speed"><option value="${esc(options.serviceTier || '')}">${esc(options.serviceTier || 'Provider default')}</option></select></div><p class="note" id="${id}-capabilities" aria-live="polite"></p></div>`;
 }
 function optionList(choices, current) {
   if (current && !choices.some(option => option.id === current)) choices.push({ id: current, label: current + ' · unavailable (saved)' });
@@ -121,39 +122,65 @@ function optionList(choices, current) {
 }
 function updateModelControls(id, providerId) {
   const select = $('#' + id); if (!select) return;
-  const data = u.state.data.providerStatus;
-  const model = data?.models?.find(model => model.id === select.value);
-  const controls = model?.controls;
-  const local = $('#' + providerId)?.value === 'rehearsal';
-  const effort = $('#' + id + '-effort'), context = $('#' + id + '-context');
+  const provider = $('#' + providerId)?.value || select.dataset.provider;
+  const data = catalogFor(provider); const model = data?.models?.find(model => model.id === select.value);
+  const controls = model?.controls; const local = provider === 'rehearsal';
+  const effort = $('#' + id + '-effort'), context = $('#' + id + '-context'), speed = $('#' + id + '-speed');
   const efforts = controls?.reasoningEfforts || [];
   effort.innerHTML = optionList([{ id: '', label: 'Provider default' + (controls?.defaultReasoningEffort ? ' · ' + controls.defaultReasoningEffort : '') }, ...efforts.map(id => ({ id, label: id }))], effort.value);
-  const tiers = controls?.contextTiers || [{ id: 'default' }];
-  context.innerHTML = optionList(tiers.map(tier => ({ id: tier.id, label: contextSize(tier) })), context.value || 'default');
-  select.disabled = local; effort.disabled = local; context.disabled = local;
+  context.innerHTML = optionList((controls?.contextTiers || [{ id: 'default' }]).map(tier => ({ id: tier.id, label: contextSize(tier) })), context.value || 'default');
+  speed.innerHTML = optionList([{id:'',label:'Provider default'},...(controls?.serviceTiers || []).map(t=>({id:t.id,label:t.name || t.id}))], speed.value);
+  const compact = select.closest('.composer');
+  if (compact) {
+    for (const option of select.options) { const item = data?.models?.find(m => m.id === option.value); if (item) option.textContent = item.name || item.id; }
+    effort.options[0].textContent = 'Effort · ' + (controls?.defaultReasoningEffort || 'default');
+    speed.options[0].textContent = 'Speed · default';
+    effort.parentElement.hidden = !efforts.length && !effort.value;
+    context.parentElement.hidden = (controls?.contextTiers?.length || 0) < 2 && context.value === 'default';
+    speed.parentElement.hidden = !controls?.serviceTiers?.length && !speed.value;
+    for (const [input, label] of [[select, 'Model'], [effort, 'Thinking effort'], [context, 'Context size'], [speed, 'Speed / service tier']]) {
+      input.title = label + ' · applies to your next turn. Steering keeps the running turn’s settings.'; input.setAttribute('aria-label', label);
+    }
+  }
+  select.disabled = local; effort.disabled = local; context.disabled = local; speed.disabled = local;
   $('#' + id + '-capabilities').textContent = local ? 'Local rehearsal uses no model.' : [
     !model ? 'Selected model is unavailable or the catalog has not loaded.' : !efforts.length ? (controls?.reasoningSupported === false ? 'This model does not support thinking effort.' : 'Thinking effort choices are not reported.') : '',
-    controls?.maxOutputTokens ? 'Maximum output: ' + tokenSize(controls.maxOutputTokens) + ' tokens. Context size is the prompt budget; output is separate.' : '',
+    controls?.maxOutputTokens ? 'Maximum output: ' + tokenSize(controls.maxOutputTokens) + ' tokens. Context size is the prompt budget; output is separate.' : 'Context capacity is not advertised by this catalog; actual usage appears during a run.',
+    provider === 'codex' ? 'Uses the Mac’s Codex sign-in. Selected instructions and skills are supplied; editor-specific agent tool filters are not supported. MCP servers require a grant for all their selected tools.' : '',
     data?.checkedAt ? 'Catalog checked ' + new Date(data.checkedAt).toLocaleTimeString() + '. Refreshes every five minutes.' : 'Catalog has not been checked.',
     data?.stale ? 'Using last known choices. Refresh failed: ' + data.error : ''
   ].filter(Boolean).join(' ');
 }
 export async function refreshModels(id, providerId, force = false) {
   const select = $('#' + id); if (!select) return;
+  const provider = $('#' + providerId)?.value || 'copilot';
   select.dataset.providerId = providerId;
-  select.onchange = () => { select.dataset.selected = select.value; updateModelControls(id, providerId); };
-  updateModelControls(id, providerId);
-  if ($('#' + providerId)?.value === 'rehearsal') return;
-  const old = u.state.data.providerStatus;
-  const checked = old?.attemptedAt || old?.checkedAt;
+  if (select.dataset.provider !== provider) {
+    select.dataset.provider = provider; select.dataset.selected = ''; select.innerHTML = modelOptions(catalogFor(provider)?.models || [], '');
+    $('#' + id + '-effort').value = ''; $('#' + id + '-context').value = 'default'; $('#' + id + '-speed').value = '';
+  }
+  select.onchange = () => {
+    select.dataset.selected = select.value;
+    if (select.closest('.composer')) {
+      const controls = catalogFor(provider)?.models?.find(m => m.id === select.value)?.controls;
+      const effort = $('#' + id + '-effort'), context = $('#' + id + '-context'), speed = $('#' + id + '-speed');
+      if (!controls?.reasoningEfforts?.includes(effort.value)) effort.value = '';
+      if (!controls?.contextTiers?.some(t => t.id === context.value)) context.value = 'default';
+      if (!controls?.serviceTiers?.some(t => t.id === speed.value)) speed.value = '';
+    }
+    updateModelControls(id, providerId);
+  };
+  updateModelControls(id, providerId); if (provider === 'rehearsal') return;
+  const old = catalogFor(provider), checked = old?.attemptedAt || old?.checkedAt;
   if (!force && checked && Date.now() - Date.parse(checked) < (old.refreshIntervalMs || 300_000)) return;
   select.disabled = true;
   try {
-    const data = await u.api('/api/provider', { force });
-    u.state.data.providerStatus = data;
+    const data = await u.api('/api/provider', { force, provider });
+    u.state.data.providerStatuses ??= {}; u.state.data.providerStatuses[provider] = data;
+    if (provider === 'copilot') u.state.data.providerStatus = data;
     document.querySelectorAll('[data-model-picker]').forEach(root => {
-      const input = $('#' + root.dataset.modelPicker); const current = input.value || input.dataset.selected || '';
-      input.innerHTML = modelOptions(data.models || [], current); input.value = current;
+      const input = $('#' + root.dataset.modelPicker); if (input.dataset.provider !== provider) return;
+      const current = input.value || input.dataset.selected || ''; input.innerHTML = modelOptions(data.models || [], current); input.value = current;
       updateModelControls(input.id, input.dataset.providerId);
     });
   } catch (error) { u.toast(error.message); }
@@ -163,7 +190,7 @@ export async function refreshModels(id, providerId, force = false) {
 setInterval(() => { const root = document.querySelector('[data-model-picker]'); const select = root && $('#' + root.dataset.modelPicker); if (select?.dataset.providerId) void refreshModels(select.id, select.dataset.providerId); }, 60_000);
 export function sessionDetails(run) {
   const snapshot = run.schedule.context;
-  return `<section class="card"><h2>Session files & context</h2><p class="note">Thinking effort: ${esc(run.schedule.reasoningEffort || 'Provider default')}<br>Context tier: ${esc(run.schedule.contextTier || 'default')}${run.modelCapabilities?.controls?.contextTiers ? ' · ' + esc(contextSize(run.modelCapabilities.controls.contextTiers.find(t => t.id === (run.schedule.contextTier || 'default')) || {})) : ''}</p><p class="note">Run ID: ${esc(run.id)}<br>Provider session: ${esc(run.providerSessionId || 'Not created yet')}</p>${pathControl(run.storage?.run, 'Proteus run record')}${pathControl(run.storage?.nativeSession, 'Provider session folder')}<div class="actions"><button data-export="markdown">Export Markdown</button><button data-export="json">Export JSON</button></div><hr class="divider"><h3>${esc(snapshot?.workspaceName || 'Saved workspace')}</h3><p class="filepath">Commands start in ${esc(run.schedule.workspace.cwd)}</p><p class="note">${snapshot?.suppliedAt ? 'Supplied to provider ' + esc(new Date(snapshot.suppliedAt).toLocaleString()) : snapshot ? 'Selected context captured; provider delivery not yet confirmed.' : 'This older session did not record individual context sources.'}</p><ul class="loaded-context">${(snapshot?.entries || []).map(entry => `<li><strong>${esc(entry.name)}</strong> · ${esc(entry.kind === 'agent' ? 'registered agent' : entry.kind === 'mcp' ? 'configured MCP' : entry.kind)}<div class="filepath">${esc(entry.path)}</div><span class="note">Version ${entry.hash.slice(0, 12)}${entry.kind === 'agent' && entry.agent ? '<br>Tools: ' + esc(entry.agent.tools === null ? 'All configured tools' : entry.agent.tools.join(', ') || 'None') : ''}</span></li>`).join('')}</ul>${run.explicitProviderContext ? `<details><summary>Explicit provider configuration</summary><p class="note">Configured MCPs: ${run.explicitProviderContext.mcpNames.map(esc).join(', ') || 'None'}<br>Schedule skill directories: ${run.explicitProviderContext.skillDirectories.map(esc).join(', ') || 'None'}<br>Disabled skills: ${run.explicitProviderContext.disabledSkills.map(esc).join(', ') || 'None'}</p></details>` : ''}<button id="refresh-run-context" ${['queued', 'running', 'awaiting_input'].includes(run.status) ? 'disabled' : ''}>↻ Refresh / choose context</button><p class="note">Updates apply to the next turn. They do not erase earlier conversation context.</p></section>`;
+  return `<section class="card"><h2>Session files & context</h2><p class="note">Thinking effort: ${esc(run.schedule.reasoningEffort || 'Provider default')}<br>Speed: ${esc(run.schedule.serviceTier || 'Provider default')}<br>Context tier: ${esc(run.schedule.contextTier || 'default')}${run.modelCapabilities?.controls?.contextTiers ? ' · ' + esc(contextSize(run.modelCapabilities.controls.contextTiers.find(t => t.id === (run.schedule.contextTier || 'default')) || {})) : ''}</p>${run.contextUsage?.modelContextWindow ? `<p class="note">Runtime context window: ${esc(tokenSize(run.contextUsage.modelContextWindow))} tokens${run.contextUsage.last?.totalTokens ? ' · latest request ' + esc(tokenSize(run.contextUsage.last.totalTokens)) : ''}</p>` : ''}<p class="note">Run ID: ${esc(run.id)}<br>Provider session: ${esc(run.providerSessionId || 'Not created yet')}</p>${pathControl(run.storage?.run, 'Proteus run record')}${pathControl(run.storage?.nativeSession, 'Provider session folder')}<div class="actions"><button data-export="markdown">Export Markdown</button><button data-export="json">Export JSON</button></div><hr class="divider"><h3>${esc(snapshot?.workspaceName || 'Saved workspace')}</h3><p class="filepath">Commands start in ${esc(run.schedule.workspace.cwd)}</p><p class="note">${snapshot?.suppliedAt ? 'Supplied to provider ' + esc(new Date(snapshot.suppliedAt).toLocaleString()) : snapshot ? 'Selected context captured; provider delivery not yet confirmed.' : 'This older session did not record individual context sources.'}</p><ul class="loaded-context">${(snapshot?.entries || []).map(entry => `<li><strong>${esc(entry.name)}</strong> · ${esc(entry.kind === 'agent' ? (run.schedule.provider === 'codex' ? 'agent instructions' : 'registered agent') : entry.kind === 'mcp' ? 'configured MCP' : entry.kind)}<div class="filepath">${esc(entry.path)}</div><span class="note">Version ${entry.hash.slice(0, 12)}${entry.kind === 'agent' && entry.agent ? '<br>Tools: ' + esc(entry.agent.tools === null ? 'All configured tools' : entry.agent.tools.join(', ') || 'None') : ''}</span></li>`).join('')}</ul>${run.explicitProviderContext ? `<details><summary>Explicit provider configuration</summary><p class="note">Configured MCPs: ${run.explicitProviderContext.mcpNames.map(esc).join(', ') || 'None'}<br>Schedule skill directories: ${run.explicitProviderContext.skillDirectories.map(esc).join(', ') || 'None'}<br>Disabled skills: ${run.explicitProviderContext.disabledSkills.map(esc).join(', ') || 'None'}</p></details>` : ''}<button id="refresh-run-context" ${['queued', 'running', 'awaiting_input'].includes(run.status) ? 'disabled' : ''}>↻ Refresh / choose context</button><p class="note">Updates apply to the next turn. They do not erase earlier conversation context.</p></section>`;
 }
 export function bindSessionDetails(run) {
   bindPaths();

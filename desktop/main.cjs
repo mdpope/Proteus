@@ -17,7 +17,7 @@ else {
     const { isWithin } = await import('../src/files.js');
     const { CredentialBroker } = await import('../src/credentials.js');
     // The provider only receives this bounded interface, never Electron or a CDP endpoint.
-    service = await startServer({ port: Number(process.env.PORT || 4317), browser: { agent: (...args) => browser.agent(...args) }, background: true });
+    service = await startServer({ port: Number(process.env.PORT || 4317), openExternal: url => shell.openExternal(url), browser: { agent: (...args) => browser.agent(...args) }, background: true });
     window = new BrowserWindow({ width: 1440, height: 960, minWidth: 850, minHeight: 650, title: 'Proteus', icon: appIcon, backgroundColor: '#111716',
       webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
     browser = new BrowserTabs(window, service.origin);

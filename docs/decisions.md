@@ -31,3 +31,16 @@ These decisions describe implemented behavior. Proposed work belongs in `planned
 - **Local Mac packaging first.** The local .app uses the existing iOS artwork and a stable Proteus
   bundle identity. Local ad-hoc signing requires no Apple certificate and is not notarized
   distribution. Developer ID signing, notarization and update delivery remain separate work.
+
+- **Native provider processes, common UI.** Codex uses an app-server adapter with explicit context;
+  Copilot uses its SDK. Model metadata remains separate. Tool restrictions unsupported by another
+  provider are refused rather than silently widened.
+- **Queue versus steer.** A queued message is durable future work and runs only after success;
+  steering targets one active native turn. Delivery acknowledgments are distinct from completion.
+- **Mac-owned OAuth.** Connection recovery invokes the provider's OAuth client. Corporate sign-in
+  opens on the Mac even when requested from iOS, keeping loopback callbacks and tokens on the host.
+
+- **Message-scoped model choices.** The composer captures settings on submission. Queued messages
+  retain independent choices, applied only when their turn starts. A steering request never mutates
+  a running model. This avoids a late dropdown change altering already queued work, while preserving
+  the native conversation and audit history. The source schedule remains unchanged.

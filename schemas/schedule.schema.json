@@ -42,6 +42,7 @@
     "provider": {
       "enum": [
         "copilot",
+        "codex",
         "rehearsal"
       ]
     },
@@ -128,6 +129,10 @@
       "type": "string",
       "maxLength": 80,
       "description": "Provider-advertised context tier ID; omit or default for provider default. Copilot currently advertises default and, where available, long_context."
+    },
+    "serviceTier": {
+      "type": "string",
+      "description": "Provider-advertised service tier ID; empty or omitted for provider default."
     }
   },
   "additionalProperties": true

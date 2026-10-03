@@ -11,7 +11,7 @@ npm run package:mac
 ```
 
 This creates `dist/Proteus-darwin-<architecture>/Proteus.app`, with display/executable name Proteus
-and bundle ID `org.proteusapp.proteus.desktop`. Copy it into `~/Applications` and open it normally.
+and bundle ID `org.proteusapp.proteus.desktop`. Copy it into `/Applications` (or `~/Applications` for a per-user installation) and open it normally.
 Quit the existing host before replacing/launching the bundle, and check for running or waiting
 chats first. A local package is a snapshot of the source: rebuild/reinstall after app updates.
 `npm run desktop` still runs directly from the repository with the matching Dock icon, but its

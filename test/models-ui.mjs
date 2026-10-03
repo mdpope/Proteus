@@ -13,8 +13,8 @@ try {
   const controls = { reasoningEfforts: ['none', 'high', 'future'], contextTiers: [{id:'default',promptTokens:272000},{id:'long_context',promptTokens:872000}], maxOutputTokens:128000 };
   let models = [{ id: 'synthetic-one', name: 'Synthetic One', controls }, { id: 'synthetic-two', name: 'Synthetic Two', controls }];
   const catalog = () => ({ available:true, models, checkedAt:new Date().toISOString(), refreshIntervalMs:300000 });
-  await page.route('**/api/state', async route => { const response = await route.fetch(); const value = await response.json(); value.providerStatus = catalog(); await route.fulfill({json:value}); });
-  await page.route('**/api/provider', route => route.fulfill({ json: catalog() }));
+  await page.route('**/api/state', async route => { const response = await route.fetch(); const value = await response.json(); value.providerStatus = catalog(); value.providerStatuses = {copilot:catalog(),codex:{...catalog(),models:[{id:"codex-fixture",name:"Codex fixture",controls:{...controls,serviceTiers:[{id:"fast",name:"Fast"}]}}]}}; await route.fulfill({json:value}); });
+  await page.route('**/api/provider', route => route.fulfill({ json: route.request().postDataJSON().provider === 'codex' ? {...catalog(),models:[{id:'codex-fixture',name:'Codex fixture',controls:{...controls,serviceTiers:[{id:'fast',name:'Fast'}]}}]} : catalog() }));
   await page.getByRole('heading', { name: 'Work that keeps moving.' }).waitFor();
   await page.locator('[data-schedule]').first().click();
   await page.locator('#provider').selectOption('copilot');
@@ -59,6 +59,11 @@ try {
   await page.locator('#chat-model-effort').selectOption('none');
   await page.locator('#chat-model-context').selectOption('long_context');
   assert.match(await page.locator('#chat-model-context option:checked').textContent(),/872K/);
+  await page.locator('#chat-provider').selectOption('codex');
+  await page.locator('#chat-model').selectOption('codex-fixture');
+  assert.equal(await page.locator('#chat-model-effort').inputValue(),'');
+  await page.locator('#chat-model-speed').selectOption('fast');
+  assert.equal(await page.locator('#chat-model option[value="synthetic-one"]').count(),0);
   await page.screenshot({path:'/private/tmp/proteus-model-settings-mac.png'});
   assert.deepEqual(errors, []);
   console.log(JSON.stringify({ passed: true, checks: ['catalog selection persists', 'missing saved model retained', 'settings and chat share capabilities', 'effort and context persist', 'external reload and conflict protection'] }));

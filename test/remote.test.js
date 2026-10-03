@@ -158,3 +158,17 @@ test('remote model options and provider capabilities round trip through encrypte
   const result=await client.request('chat.start',{prompt:'Model options fixture',provider:'copilot',model:'fixture',reasoningEffort:'none',contextTier:'long_context',workspaceId:sync.state.context.defaultWorkspaceId});
   const run=await client.request('chat.get',{id:result.runId});assert.equal(run.schedule.reasoningEffort,'none');assert.equal(run.schedule.contextTier,'long_context');
 });
+
+test('remote provider catalogs, speed, live steering and queued tool presentations remain distinct',async t=>{
+  let finish;const steers=[];
+  const codex={status:async()=>({available:true,models:[{id:'codex-fixture',controls:{reasoningEfforts:['future'],contextTiers:[{id:'default',promptTokens:null}],serviceTiers:[{id:'priority',name:'Fast'}]}}]}),steer:async(_,text)=>steers.push(text),run:async({emit})=>{emit('tool','Read fixture',{tool:{callId:'t',name:'view',status:'completed',arguments:'{"path":"fixture.md"}',output:'[{"name":"Fixture","status":"Ready"}]'}});await new Promise(r=>finish=r);}};
+  const {app,connect}=await fixture(t,{codex,copilot:{status:async()=>({available:true,models:[{id:'copilot-fixture'}]})}});const client=await connect();
+  const catalog=await client.request('provider.status',{provider:'codex',force:true});assert.equal(catalog.models[0].id,'codex-fixture');
+  const sync=await client.request('sync');assert.equal(sync.state.providerStatuses.codex.models[0].id,'codex-fixture');
+  const {runId}=await client.request('chat.start',{prompt:'Synthetic provider',provider:'codex',model:'codex-fixture',serviceTier:'priority',workspaceId:sync.state.context.defaultWorkspaceId});await until(()=>!!finish);
+  await client.request('chat.send',{id:runId,prompt:'Adjust',mode:'steer',messageId:'steer-native'});assert.deepEqual(steers,['Adjust']);
+  await assert.rejects(client.request('chat.send',{id:runId,prompt:'Invalid',mode:'queue',messageId:'queue-invalid',modelOptions:{model:'codex-fixture',reasoningEffort:'invented'}}),/unavailable/);
+  await client.request('chat.send',{id:runId,prompt:'Follow up',mode:'queue',messageId:'queue-native',modelOptions:{model:'codex-fixture',reasoningEffort:'future',serviceTier:'',contextTier:'default'}});
+  const run=await client.request('chat.get',{id:runId});assert.equal(run.schedule.serviceTier,'priority');assert.equal(run.queuedMessages.length,1);assert.equal(run.queuedMessages[0].modelOptions.reasoningEffort,'future');assert.equal(run.nextModelOptions.serviceTier,'');assert.equal(run.schedule.reasoningEffort,undefined);assert.equal(run.events.find(e=>e.data?.tool).data.tool.presentation.output.kind,'table');
+  await client.request('chat.remove-queued',{id:runId,messageId:'queue-native'});finish();await until(()=>app.engine.getRun(runId).status==='completed');
+});

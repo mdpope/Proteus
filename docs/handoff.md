@@ -26,11 +26,11 @@ that a previous conversation is available to the next agent.
 | Authenticated loopback API and lifecycle | `src/server.js` |
 | Schedule validation, disk reads, revision conflicts | `src/schedules.js`, `schemas/schedule.schema.json`, `src/cli.js` |
 | Serialized runs, snapshots, resume and scheduler journal | `src/engine.js`, `src/turn-waiter.js` |
-| Copilot execution, model capabilities and refresh | `src/copilot.js`, `src/model-catalog.js` |
+| Provider execution, model capabilities and refresh | `src/copilot.js`, `src/codex.js`, `src/model-catalog.js` |
 | Workspace context, source delivery and tool scopes | `src/context.js`, `src/agent-tools.js`, `public/context-plan.js` |
 | Live tool grants and workspace authorization | `src/permissions.js` |
 | Mac forms, tabs, chat and shared controls | `public/app.js`, `public/features.js`, `public/conversation.js` |
-| Tool event normalization and rendering | `src/tool-activity.js`, `ios/Proteus/ToolActivityView.swift` |
+| Tool event normalization and rendering | `src/tool-activity.js`, `public/tool-presentation.js`, `ios/Proteus/ToolActivityView.swift` |
 | Shared Markdown | `src/markdown-renderer.js`, `public/markdown/`, `ios/Proteus/MarkdownView.swift` |
 | Electron lifecycle, menu bar and browser bridge | `desktop/main.cjs`, `desktop/browser.cjs`, `src/browser-tools.js` |
 | Credential fill | `src/credentials.js` (desktop-only boundary) |
@@ -71,7 +71,8 @@ stay out of commits and test fixtures.
 
 The host currently serializes execution. It stays alive after window closure, but quitting the
 app or sleeping/shutting down the Mac stops execution. There is no detached always-running daemon.
-Existing chats retain schedule/model snapshots; editing a schedule affects future runs. Updating
+Existing chats retain schedule snapshots; editing a schedule affects future runs. The composer can
+change next-turn model settings in that same chat, retaining the initial snapshot and change history. Updating
 a chat's context is explicit; authorization changes apply during active turns. A completed AI
 turn does not certify completion of the external workflow.
 
@@ -82,3 +83,20 @@ paths, ownership or private prompts into this app.
 Native signing is machine/account configuration, not repository configuration. Use an appropriate
 Apple team on the installation Mac. Do not revoke or recreate certificates as an automatic fix;
 coordinate signing across machines. Remote pairing is separate from Apple signing.
+
+See `chat-controls.md` for queue/steer semantics, `mcp-auth.md` for sign-in recovery, and `providers.md` for Codex compatibility limits. Physical iOS installation remains an explicit operation on the operator’s designated signing Mac; simulator verification does not update devices.
+
+
+## Latest validated update: chat controls and second provider
+
+- 99 Node regression tests and static checks passed.
+- Mac compact-composer, rich-chat, model-picker, browser/control, and packaged launch/signature checks passed using
+  disposable data. Draft preservation, queue removal, scrolling, per-provider options and privacy
+  toggle behavior were exercised.
+- Live Codex synthetic tests verified selected instructions, unselected AGENTS exclusion, native
+  continuation with model changes, runtime usage, dynamic browser-tool dispatch and steering during a tool call.
+- iPhone simulator: four native tests plus five UI tests passed. iPad simulator: expanded tool
+  output and model-capability UI tests passed. No physical-device install or signing changes.
+- Copilot OAuth API/command tests verify native delegation and no authorization URL in transcripts.
+  Real corporate consent/sign-in is an operator step; report its actual status rather than equating
+  browser opening with authenticated tool access.

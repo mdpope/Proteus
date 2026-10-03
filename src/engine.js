@@ -7,6 +7,7 @@ import { ScheduleStore, lastDue, revision, validateSchedule } from './schedules.
 import { RehearsalProvider } from './rehearsal.js';
 import { PermissionStore } from './permissions.js';
 
+import { chatModelOptions } from './model-catalog.js';
 import { agentName } from '../public/agent-name.js';
 
 const active = new Set(['queued', 'running', 'awaiting_input']);
@@ -26,6 +27,7 @@ export class Engine extends EventEmitter {
         const run = readJSON(file);
         if (active.has(run.status)) {
           run.status = 'interrupted'; run.pending = null; delete run.liveMessages;
+          for (const event of run.events) if (event.data?.delivery?.state === 'sending') Object.assign(event.data.delivery, {state:'failed',error:'The runner stopped before confirming delivery. Inspect the provider session before retrying.'});
           run.events.push({ role: 'system', text: 'The runner stopped. Continue this session to recover; no work was silently replayed.', at: clock().toISOString() });
           atomicJSON(file, run);
         }
@@ -65,6 +67,53 @@ export class Engine extends EventEmitter {
     if (typeof prompt !== 'string' || !prompt.trim()) throw new Error('A follow-up message is required.');
     run.status = 'queued'; run.pending = null; run.nextPrompt = prompt;
     this.event(run, 'user', prompt); queueMicrotask(() => this.drain()); return run;
+  }
+  async send(id, prompt, mode = 'queue', messageId = randomUUID(), modelOptions) {
+    const run = this.getRun(id);
+    if (typeof prompt !== 'string' || !prompt.trim()) throw new Error('Write a message first.');
+    if (!['queue','steer'].includes(mode)) throw new Error('Choose Queue next or Steer now.');
+    if (typeof messageId !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(messageId)) throw new Error('Invalid message identifier.');
+    if (run.events.some(e => e.data?.delivery?.id === messageId)) return run;
+    if (this.stopping) throw new Error('Runner is stopping.');
+    if (mode === 'steer' && modelOptions) throw new Error('Steering keeps the current turn’s model. Queue a message to change model settings.');
+    const options = mode === 'queue' ? chatModelOptions(modelOptions || run.nextModelOptions || run.schedule) : null;
+    if (options) run.nextModelOptions = options;
+    if (!active.has(run.status)) {
+      if (options) this.applyModelOptions(run, options);
+      run.status = 'queued'; run.pending = null; run.nextPrompt = prompt;
+      this.event(run, 'user', prompt, { delivery: { id: messageId, state: 'delivered' } });
+      queueMicrotask(() => this.drain()); return run;
+    }
+    if (mode === 'queue') {
+      run.queuedMessages ??= []; run.queuedMessages.push({ id: messageId, prompt, at: this.now(), modelOptions: options });
+      this.event(run, 'user', prompt, { delivery: { id: messageId, state: 'queued' } });
+      return run;
+    }
+    if (run.status !== 'running' || this.running?.id !== id) throw new Error('Steering is available during a running turn. Queue this message, or answer the pending request first.');
+    const provider = this.providers[run.schedule.provider];
+    if (!provider.steer) throw new Error('This provider does not support steering. Use Queue next.');
+    this.event(run, 'user', prompt, { delivery: { id: messageId, state: 'sending' } });
+    const delivery = run.events.find(e=>e.data?.delivery?.id === messageId).data.delivery;
+    try { await provider.steer(run, prompt); delivery.state = 'steered'; }
+    catch (error) { delivery.state = 'failed'; delivery.error = error.message; throw error; }
+    finally { this.persist(run); }
+    return run;
+  }
+  applyModelOptions(run, options) {
+    const before = chatModelOptions(run.schedule);
+    if (JSON.stringify(before) === JSON.stringify(options)) return;
+    run.initialSchedule ??= structuredClone(run.schedule);
+    run.modelHistory ??= []; run.modelHistory.push({ at: this.now(), before, after: structuredClone(options) });
+    Object.assign(run.schedule, options);
+    // Persist together with the caller's queue transition; no half-delivered message on a crash.
+    run.events.push({role:'system',at:this.now(),text:`Next turn: ${options.model || 'Local rehearsal'} · effort ${options.reasoningEffort || 'default'} · speed ${options.serviceTier || 'default'} · context ${options.contextTier}. Earlier messages remain in this session; the provider may compact them to fit.`,data:{modelOptions:options}});
+  }
+  removeQueued(id, messageId) {
+    const run = this.getRun(id); const index = run.queuedMessages?.findIndex(m=>m.id===messageId) ?? -1;
+    if (index < 0) throw new Error('This message has already been delivered.');
+    run.queuedMessages.splice(index,1);
+    const event=run.events.find(e=>e.data?.delivery?.id===messageId);if(event)event.data.delivery.state='removed';
+    this.persist(run);return run;
   }
   reply(id, answer, requestId) {
     const run = this.getRun(id); const pending = this.pending.get(id);
@@ -148,7 +197,12 @@ export class Engine extends EventEmitter {
       // Provider errors/timeouts can leave permission promises pending. Settle them
       // before another turn reuses this run's serialized question queue.
       controller.abort();
-      this.pending.delete(run.id); run.pending = null; delete run.liveMessages; this.persist(run); this.running = null;
+      this.pending.delete(run.id); run.pending = null; delete run.liveMessages;
+      if (run.status === 'completed' && run.queuedMessages?.length && !this.stopping) {
+        const next = run.queuedMessages.shift(); if (next.modelOptions) this.applyModelOptions(run, next.modelOptions); run.nextPrompt = next.prompt; run.status = 'queued';
+        const event=run.events.find(e=>e.data?.delivery?.id===next.id);if(event)event.data.delivery.state='delivered';
+      }
+      this.persist(run); this.running = null;
       queueMicrotask(() => this.drain());
     }
   }

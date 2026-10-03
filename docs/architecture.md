@@ -44,3 +44,5 @@ Remote access is opt-in. A relay can run locally, in Docker, or behind TLS on Li
 host executes tools and owns persistence. iOS uses a Keychain device credential, encrypted cache,
 versioned edits, deduplicated mutation IDs, and replay/snapshot recovery. Relay routes carry no
 provider credentials. Desktop IPC and the credential broker remain inaccessible to remote clients.
+
+Copilot and Codex implement the same event, input, approval, cancellation and persistence boundary. Model catalogs are keyed by provider. OAuth recovery is a host command separate from model turns; the provider owns token storage and its Mac loopback callback. See `mcp-auth.md` for remote-client behavior.

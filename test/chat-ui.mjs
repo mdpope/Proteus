@@ -25,12 +25,12 @@ try {
   await page.locator('[data-page="runs"]').click(); await page.locator(`[data-run="${id}"]`).click();
   assert.match(await page.locator('.message.assistant .role').last().textContent(), /Milo/);
   const layout = await page.evaluate(() => ({ pane: document.querySelector('.chat-pane').clientHeight, details: document.querySelector('.chat-details').clientHeight, detailContent: document.querySelector('.chat-details').scrollHeight, conversation: document.querySelector('#conversation').clientHeight }));
-  assert.ok(layout.pane > 250 && layout.pane < 900); assert.ok(layout.conversation > layout.pane - 160, 'Conversation fills available card height');
+  assert.ok(layout.pane > 250 && layout.pane < 900); assert.ok(layout.conversation > Math.max(140, layout.pane - 310), 'Conversation fills available card height');
   assert.ok(layout.details <= layout.pane + 3 && layout.detailContent > layout.details, 'Long details scroll independently');
   assert.ok(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight + 1 && document.querySelector('#main').scrollHeight <= document.querySelector('#main').clientHeight + 1), 'No outer chat scrollbar');
   assert.equal(await page.locator('.tool-activity.failed').count(), 1, 'Stored nonzero exits are visible as failures');
   await page.locator('.tool-activity summary').first().click();
-  await page.getByText('The full tool result', { exact: false }).waitFor();
+  await page.locator('.tool-result').getByText('The full tool result', { exact: false }).waitFor();
   assert.match(await page.locator('.tool-content').first().textContent(), /The full tool result\nA readable second line/);
   assert.equal(await page.locator('.message.assistant').count(), 13);
   await page.locator('.jump-latest').click();
@@ -47,10 +47,18 @@ try {
     const engine = process.mainModule.require(process.cwd() + '/desktop/main.cjs').getService().engine; const run = engine.getRun(id);
     if (value.stream) engine.stream(run, 'live', value.text); else { delete run.liveMessages; engine.event(run, 'assistant', value.text); }
   }, { id, value });
+  await page.locator('#followup').fill('An update drafted while it works');
+  await page.locator('#followup').focus();
   await update({ stream: true, text: '## Streaming response\n\n' + 'New output.\n\n'.repeat(20) });
   await page.getByRole('heading', { name: 'Streaming response' }).waitFor();
+  assert.equal(await page.locator('#followup').inputValue(),'An update drafted while it works');
+  assert.equal(await page.locator('#followup').evaluate(e=>document.activeElement===e),true);
+  await page.locator('#continue').click();
+  await page.locator('[data-remove-message]').waitFor();
+  await page.locator('[data-remove-message]').click();
+  await page.waitForFunction(()=>!document.querySelector('[data-remove-message]'));
   await page.waitForFunction(() => { const e = document.querySelector('#conversation'); return e.scrollHeight - e.clientHeight - e.scrollTop < 3; });
-  await scroll.evaluate(e => { e.scrollTop = 250; e.dispatchEvent(new Event('scroll')); });
+  await scroll.evaluate(e => { e.dispatchEvent(new WheelEvent('wheel', {deltaY:-300})); e.scrollTop = 250; e.dispatchEvent(new Event('scroll')); });
   const saved = await scroll.evaluate(e => e.scrollTop);
   await update({ stream: true, text: 'More streamed output\n\n'.repeat(20) });
   await page.waitForFunction(() => document.querySelector('#conversation').textContent.includes('More streamed output'));

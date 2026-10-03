@@ -34,6 +34,7 @@ struct ScheduleView: View {
     @State private var model = ""
     @State private var effort = ""
     @State private var contextTier = "default"
+    @State private var serviceTier = ""
     @State private var enabled = false
     @State private var selected = Set<String>()
     @State private var agent = ""
@@ -42,7 +43,7 @@ struct ScheduleView: View {
     @State private var next: [JSON] = []
     @State private var busy = false
     @State private var loadedForm: [String] = []
-    private var formValues: [String] { [name, cron, timezone, prompt, provider, model, effort, contextTier, String(enabled), selected.sorted().joined(separator: ","), agent, String(includeDefaults)] }
+    private var formValues: [String] { [name, cron, timezone, prompt, provider, model, effort, contextTier, serviceTier, String(enabled), selected.sorted().joined(separator: ","), agent, String(includeDefaults)] }
     private var schedule: JSON { store.state["schedules"].array.first { $0["id"].string == id } ?? .null }
     private var owned: Bool { !schedule["source"]["manifest"].string.isEmpty }
     var body: some View {
@@ -51,21 +52,21 @@ struct ScheduleView: View {
             if owned { Section("Repository-owned schedule") { Text("Update the source manifest and reconcile it on the Mac. You can start a chat to make that change with your repository instructions."); Text(schedule["source"]["manifest"].string).font(.caption.monospaced()).textSelection(.enabled) } }
             Section("Schedule") { TextField("Name", text: $name); TextField("Cron", text: $cron).autocorrectionDisabled().textInputAutocapitalization(.never).accessibilityIdentifier("schedule-cron"); TextField("Time zone", text: $timezone).autocorrectionDisabled().textInputAutocapitalization(.never); Toggle("Enabled", isOn: $enabled); TextField("Instructions", text: $prompt, axis: .vertical).lineLimit(4...12) }.disabled(owned || busy || !store.connected)
             Section("Provider & model") {
-                Picker("Provider", selection: $provider) { Text("GitHub Copilot").tag("copilot"); Text("Local rehearsal").tag("rehearsal") }
-                if provider == "copilot" { ProviderModelPicker(model: $model, effort: $effort, contextTier: $contextTier, disabled: owned || busy) }
+                Picker("Provider", selection: $provider) { Text("GitHub Copilot").tag("copilot"); Text("Codex").tag("codex"); Text("Local rehearsal").tag("rehearsal") }
+                if provider != "rehearsal" { ProviderModelPicker(model: $model, effort: $effort, contextTier: $contextTier, serviceTier: $serviceTier, provider: provider, disabled: owned || busy) }
             }.disabled(owned || busy || !store.connected)
             ContextSelection(selected: $selected, agent: $agent, includeDefaults: $includeDefaults, workspace: schedule["workspace"]).disabled(owned || busy)
             Section("Next runs") { ForEach(next, id: \.self) { Text($0.string).font(.caption.monospaced()) }; Button("Preview cron") { preview() }.disabled(busy || !store.connected) }
             Section { Button("Save schedule") { save() }.disabled(owned || busy || !store.connected); Button("Reload latest version") { Task { await store.refresh(); load() } }; Button("Run now") { run() }.disabled(busy || !store.connected) }
             if !schedule["error"].string.isEmpty { Section { Text(schedule["error"].string).foregroundStyle(.orange) } }
-        }.navigationTitle(schedule["name"].string).navigationBarTitleDisplayMode(.inline).task { await store.refresh(); load(); if provider == "copilot" { await store.loadModels() } }.onChange(of: schedule["revision"].string) { _, _ in if loadedForm == formValues { load() } }.onChange(of: provider) { _, value in if value == "copilot" { Task { await store.loadModels() } } }
+        }.navigationTitle(schedule["name"].string).navigationBarTitleDisplayMode(.inline).task { await store.refresh(); load(); if provider != "rehearsal" { await store.loadModels(provider: provider) } }.onChange(of: schedule["revision"].string) { _, _ in if loadedForm == formValues { load() } }.onChange(of: provider) { _, value in if value != "rehearsal" { Task { await store.loadModels(provider: provider) } } }
     }
-    private func load() { provider = schedule["provider"].string; model = schedule["model"].string; effort = schedule["reasoningEffort"].string; contextTier = schedule["contextTier"].string.isEmpty ? "default" : schedule["contextTier"].string; name = schedule["name"].string; cron = schedule["cron"].string; timezone = schedule["timezone"].string; prompt = schedule["prompt"].string; enabled = schedule["enabled"].bool; expectedRevision = schedule["revision"].string; next = schedule["nextRuns"].array; selected = Set(schedule["contextSelection"]["selectedIds"].array.map(\.string)); agent = schedule["contextSelection"]["agentId"].string; includeDefaults = schedule["contextSelection"]["includeDefaults"] != .bool(false); loadedForm = formValues }
+    private func load() { provider = schedule["provider"].string; model = schedule["model"].string; effort = schedule["reasoningEffort"].string; serviceTier = schedule["serviceTier"].string; contextTier = schedule["contextTier"].string.isEmpty ? "default" : schedule["contextTier"].string; name = schedule["name"].string; cron = schedule["cron"].string; timezone = schedule["timezone"].string; prompt = schedule["prompt"].string; enabled = schedule["enabled"].bool; expectedRevision = schedule["revision"].string; next = schedule["nextRuns"].array; selected = Set(schedule["contextSelection"]["selectedIds"].array.map(\.string)); agent = schedule["contextSelection"]["agentId"].string; includeDefaults = schedule["contextSelection"]["includeDefaults"] != .bool(false); loadedForm = formValues }
     private func preview() { busy = true; Task { defer { busy = false }; do { next = try await store.request("schedule.preview", ["cron": .string(cron), "timezone": .string(timezone)])["nextRuns"].array } catch { store.error = error.localizedDescription } } }
     private var contextSelection: JSON {
         var value = schedule["contextSelection"].object; var ids = selected; if !agent.isEmpty { ids.insert(agent) }
         value["selectedIds"] = .array(ids.sorted().map(JSON.string)); value["agentId"] = .string(agent); value["includeDefaults"] = .bool(includeDefaults); return .object(value)
     }
-    private func save() { busy = true; Task { defer { busy = false }; do { _ = try await store.request("schedule.save", ["id": .string(id), "expectedRevision": .string(expectedRevision), "changes": .object(["name": .string(name), "provider": .string(provider), "model": .string(provider == "copilot" ? model : ""), "reasoningEffort": .string(effort), "contextTier": .string(contextTier), "cron": .string(cron), "timezone": .string(timezone), "prompt": .string(prompt), "enabled": .bool(enabled), "contextSelection": contextSelection])]); await store.refresh(); load() } catch { store.error = error.localizedDescription } } }
+    private func save() { busy = true; Task { defer { busy = false }; do { _ = try await store.request("schedule.save", ["id": .string(id), "expectedRevision": .string(expectedRevision), "changes": .object(["name": .string(name), "provider": .string(provider), "model": .string(provider != "rehearsal" ? model : ""), "reasoningEffort": .string(effort), "contextTier": .string(contextTier), "serviceTier": .string(serviceTier), "cron": .string(cron), "timezone": .string(timezone), "prompt": .string(prompt), "enabled": .bool(enabled), "contextSelection": contextSelection])]); await store.refresh(); load() } catch { store.error = error.localizedDescription } } }
     private func run() { busy = true; Task { defer { busy = false }; do { let result = try await store.request("schedule.run", ["id": .string(id)]); openRun(result["runId"].string) } catch { store.error = error.localizedDescription } } }
 }
