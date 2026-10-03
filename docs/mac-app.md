@@ -18,7 +18,8 @@ chats first. A local package is a snapshot of the source: rebuild/reinstall afte
 underlying development executable remains Electron. Finder launches include the standard Homebrew
 binary directories, matching the repository launcher for tools such as Node and MCP commands.
 
-The local bundle is ad-hoc signed. This requires no Apple development certificate and does not
+The Proteus application is ad-hoc signed; the two GitHub Copilot runtime binaries keep their
+verified GitHub Developer ID signatures. This requires no Apple development certificate and does not
 change signing on another Mac. It is not a notarized distributable release. Developer ID signing,
 notarization, automatic updates and login-item installation remain in the backlog.
 
@@ -30,3 +31,8 @@ Keychain behavior should be checked when changing bundle/signing identity.
 Verify the result with `codesign --verify --deep --strict <path-to-Proteus.app>`, inspect its
 `Contents/Info.plist`, and launch with a temporary `PROTEUS_HOME` and `--user-data-dir` for a smoke
 test before using the operator's data. `test/packaged-mac.mjs` performs that isolated smoke test.
+
+The packager checks both Copilot vendor signatures before and after packaging, and fails if either
+binary changes. Do not re-sign these helpers: their designated requirements identify the caller
+to macOS Keychain. `test/packaged-mac.mjs` verifies the vendor requirements and byte-for-byte
+preservation in addition to the overall app signature.

@@ -27,7 +27,16 @@ async function refresh(force = false) {
   if (!force && window.getSelection()?.isCollapsed === false) return;
   const data = await api('/api/state'); const signature = JSON.stringify(data);
   state.data = data;
-  if (force || signature !== state.signature) { state.signature = signature; render(); }
+  if (force || signature !== state.signature || $('#main').dataset.deferredControls) {
+    state.signature = signature;
+    const tab=state.tabs.find(t=>t.id===state.tab);
+    if(tab?.type==='run' && $('#main').dataset.runId===tab.id && $('#conversation-host')) {
+      renderRun(tab.id);
+      for(const [page,count] of [['runs',data.runs.length],['attention',data.runs.filter(r=>['awaiting_input','failed','interrupted'].includes(r.status)).length]]) {
+        const node=$(`[data-page="${page}"] .count`);if(node)node.textContent=count;
+      }
+    } else render();
+  }
 }
 function openTab(tab) {
   if (!state.tabs.some(item => item.id === tab.id)) state.tabs.push(tab);
@@ -106,6 +115,13 @@ function renderRuns() {
   $('#main').innerHTML=`<div class="heading"><div><div class="eyebrow">Every run has a story</div><h1>${state.page==='attention'?'Ready for your input.':'Pick up where you left off.'}</h1><div class="muted">Open any run to inspect its history or continue the conversation.</div></div></div><div class="card">${runs.length?`<table><thead><tr><th>Run</th><th>Started</th><th>Provider</th><th>Status</th><th>Tokens</th></tr></thead><tbody>${runs.map(r=>`<tr class="clickable" data-run="${r.id}"><td><strong>${escape(r.title)}</strong><div class="muted">${escape(r.trigger)} · ${r.id.slice(0,8)}</div></td><td>${time(r.createdAt)}</td><td>${escape(r.schedule.provider)}</td><td>${badge(r.status)}</td><td>${r.usage.observed?(r.usage.inputTokens+r.usage.outputTokens).toLocaleString():'—'}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">No runs here yet.<br>Open a schedule and choose Run now to try the feedback flow.</div>'}</div>`;
   document.querySelectorAll('[data-run]').forEach(el=>el.onclick=()=>runTab(state.data.runs.find(r=>r.id===el.dataset.run)));
 }
+function updateConversation(run) {
+  conversation($('#conversation-host'), run, {
+    time, copy: text => window.desktop ? window.desktop.copyText(text) : navigator.clipboard.writeText(text),
+    link: source => openMessageLink(source, run.schedule.workspace.cwd),
+    image: async source => (await api('/api/chat-image', { id: run.id, source })).dataURL
+  });
+}
 function renderRun(id) {
   $('#main').classList.add('run-main');
   $('#main').classList.toggle('show-chat-details', !!state.showChatDetails);
@@ -113,17 +129,29 @@ function renderRun(id) {
   const previousDetails = $('.chat-details');
   if (previousDetails) state.detailScroll[previousDetails.dataset.runId] = previousDetails.scrollTop;
   const run=state.data.runs.find(r=>r.id===id);if(!run)return;
+  const main=$('#main');
+  const controlSignature=JSON.stringify([run.status,run.pending,run.queuedMessages,run.schedule,run.permissionContext,run.permissionRevision,run.providerSessionId,run.nativeSessionPath,run.modelCapabilities,run.nextModelOptions,state.showChatDetails]);
+  const interacting=main.contains(document.activeElement)&&document.activeElement.matches('input,select,textarea')&&document.activeElement.id!=='followup';
+  if(main.dataset.runId===id && $('#conversation-host') && (main.dataset.controlSignature===controlSignature || interacting)) {
+    if(main.dataset.controlSignature!==controlSignature)main.dataset.deferredControls='true';else delete main.dataset.deferredControls;
+    updateConversation(run);
+    const input=$('[data-usage-input]'),output=$('[data-usage-output]'),approvals=$('[data-auto-approvals]');
+    if(input)input.textContent=run.usage.observed?run.usage.inputTokens.toLocaleString():'—';
+    if(output)output.textContent=run.usage.observed?run.usage.outputTokens.toLocaleString():'—';
+    if(approvals)approvals.textContent=run.automaticApprovals || 0;
+    const usage=$('[data-usage-note]');if(usage)usage.textContent=run.usage.observed?'Observed provider usage.':'No provider usage reported. Rehearsals make no model calls.';
+    return;
+  }
+  const expanded=new Set([...main.querySelectorAll('.chat-details details[open]')].map(d=>d.querySelector('summary')?.textContent));
+  delete main.dataset.deferredControls;main.dataset.runId=id;main.dataset.controlSignature=controlSignature;
   const pending=run.pending;
   const active=['queued','running','awaiting_input'].includes(run.status);
   const composerFocus=document.activeElement?.id==='followup';const cursor=$('#followup')?.selectionStart;
   state.chatDrafts ??= {};state.chatModelDrafts ??= {};
   const modelDraft = state.chatModelDrafts[id] || run.nextModelOptions || run.schedule;
-  $('#main').innerHTML=`<div class="heading"><div><div class="eyebrow">${escape(run.schedule.provider)} / ${run.id.slice(0,8)}</div><h1>${escape(run.title)}</h1><div class="muted">${time(run.createdAt)} · ${escape(run.schedule.model || 'Local rehearsal, no AI calls')}</div></div><div class="actions"><button id="toggle-chat-details">${state.showChatDetails?'Chat':'Details'}</button>${badge(run.status)}</div></div><div class="grid chat-grid"><section class="card chat-pane"><div id="conversation-host"></div>${pending?`<div class="pending"><div class="eyebrow">Your input is needed</div><p>${escape(pending.question)}</p>${pending.details?`<div id="request-summary"></div><details class="raw-details"><summary>Raw request</summary><pre>${escape(JSON.stringify(pending.details,null,2))}</pre></details>`:''}${pending.type==='permission'?'<div class="actions"><button id="deny">Deny</button><button class="primary" id="approve">Approve once</button></div>'+permissionChoices(pending):`<textarea id="answer" placeholder="Add your feedback…" rows="2"></textarea><div class="actions"><button class="primary" id="reply">Send feedback</button></div>`}</div>`:run.status==='running'?'<p class="note" role="status"><span class="spinner" aria-hidden="true"></span>Working… you can queue a message or steer this turn.</p>':''}<div class="composer"><textarea id="followup" placeholder="${active?'Add an update while this runs…':'Continue this conversation…'}" rows="2">${escape(state.chatDrafts[id]||'')}</textarea><div class="composer-footer"><div class="composer-models" ${run.schedule.provider==='rehearsal'?'hidden':''}><input type="hidden" id="run-provider" value="${escape(run.schedule.provider)}">${modelPicker('run-model',modelDraft.model,run.schedule.provider)}${modelControls('run-model',modelDraft,true)}<button class="subtle" id="run-model-refresh" aria-label="Refresh model choices" title="Refresh model choices">↻</button></div><div class="composer-actions">${active?`<button id="steer" title="Send into the running turn using its current model settings" ${run.status!=='running'?'disabled':''}>Steer</button>`:''}<button class="primary" id="continue" title="${active?'Send after the current turn finishes':'Send message'}">${active?'Queue':'Send ↑'}</button>${['running','awaiting_input'].includes(run.status)?'<button class="danger" id="cancel" title="Stop the running turn">Stop</button>':''}</div></div>${run.queuedMessages?.length?`<p class="note">${run.queuedMessages.length} message(s) queued for after this turn.</p>${run.queuedMessages.map(m=>`<div class="queued-message"><span>${escape(m.prompt.slice(0,120))}</span><button data-remove-message="${escape(m.id)}" aria-label="Remove queued message">×</button></div>`).join('')}`:''}</div></section><div class="stack chat-details"><section class="card"><h2>Run details</h2>${permissionControls(run.permissionContext,{runId:run.id})}<p class="note">${run.automaticApprovals || 0} tool requests approved automatically. Approval details are retained in the run record.</p><p class="note">The original schedule and earlier context versions are retained when you refresh this chat.</p><div class="filepath">${[run.schedule.workspace.cwd,...run.schedule.workspace.additionalDirectories].map(escape).join('<br>')}</div><hr class="divider"><div class="usagegrid"><div class="usagebox"><span class="eyebrow">Input tokens</span><strong>${run.usage.observed?run.usage.inputTokens.toLocaleString():'—'}</strong></div><div class="usagebox"><span class="eyebrow">Output tokens</span><strong>${run.usage.observed?run.usage.outputTokens.toLocaleString():'—'}</strong></div></div><p class="note">${run.usage.observed?'Observed provider usage.':'No provider usage reported. Rehearsals make no model calls.'}</p><div class="note">${run.providerSessionId?'Provider session: '+escape(run.providerSessionId):'Session history saved locally.'}</div></section>${run.schedule.provider === 'copilot' ? `<section class="card"><h2>MCP connections</h2><p class="note">Connect selected integrations such as Atlassian. Sign-in opens on this Mac; the provider stores tokens outside chat.</p><button id="mcp-connections">Manage connections</button></section>` : ''}${sessionDetails(run)}<section class="card"><h2>Completion means a turn ended</h2><p class="note">Workflow completion still depends on its own validation and source coverage. A model finishing its response doesn’t certify external work.</p><details><summary>Schedule snapshot</summary><pre>${escape(JSON.stringify(run.schedule,null,2))}</pre></details></section></div></div>`;
-  conversation($('#conversation-host'), run, {
-    time, copy: text => window.desktop ? window.desktop.copyText(text) : navigator.clipboard.writeText(text),
-    link: source => openMessageLink(source, run.schedule.workspace.cwd),
-    image: async source => (await api('/api/chat-image', { id: run.id, source })).dataURL
-  });
+  $('#main').innerHTML=`<div class="heading"><div><div class="eyebrow">${escape(run.schedule.provider)} / ${run.id.slice(0,8)}</div><h1>${escape(run.title)}</h1><div class="muted">${time(run.createdAt)} · ${escape(run.schedule.model || 'Local rehearsal, no AI calls')}</div></div><div class="actions"><button id="toggle-chat-details">${state.showChatDetails?'Chat':'Details'}</button>${badge(run.status)}</div></div><div class="grid chat-grid"><section class="card chat-pane"><div id="conversation-host"></div>${pending?`<div class="pending"><div class="eyebrow">Your input is needed</div><p>${escape(pending.question)}</p>${pending.details?`<div id="request-summary"></div><details class="raw-details"><summary>Raw request</summary><pre>${escape(JSON.stringify(pending.details,null,2))}</pre></details>`:''}${pending.type==='permission'?'<div class="actions"><button id="deny">Deny</button><button class="primary" id="approve">Approve once</button></div>'+permissionChoices(pending):`<textarea id="answer" placeholder="Add your feedback…" rows="2"></textarea><div class="actions"><button class="primary" id="reply">Send feedback</button></div>`}</div>`:run.status==='running'?'<p class="note" role="status"><span class="spinner" aria-hidden="true"></span>Working… you can queue a message or steer this turn.</p>':''}<div class="composer"><textarea id="followup" placeholder="${active?'Add an update while this runs…':'Continue this conversation…'}" rows="2">${escape(state.chatDrafts[id]||'')}</textarea><div class="composer-footer"><div class="composer-models" ${run.schedule.provider==='rehearsal'?'hidden':''}><input type="hidden" id="run-provider" value="${escape(run.schedule.provider)}">${modelPicker('run-model',modelDraft.model,run.schedule.provider)}${modelControls('run-model',modelDraft,true)}<button class="subtle" id="run-model-refresh" aria-label="Refresh model choices" title="Refresh model choices">↻</button></div><div class="composer-actions">${active?`<button id="steer" title="Send into the running turn using its current model settings" ${run.status!=='running'?'disabled':''}>Steer</button>`:''}<button class="primary" id="continue" title="${active?'Send after the current turn finishes':'Send message'}">${active?'Queue':'Send ↑'}</button>${['running','awaiting_input'].includes(run.status)?'<button class="danger" id="cancel" title="Stop the running turn">Stop</button>':''}</div></div>${run.queuedMessages?.length?`<p class="note">${run.queuedMessages.length} message(s) queued for after this turn.</p>${run.queuedMessages.map(m=>`<div class="queued-message"><span>${escape(m.prompt.slice(0,120))}</span><button data-remove-message="${escape(m.id)}" aria-label="Remove queued message">×</button></div>`).join('')}`:''}</div></section><div class="stack chat-details"><section class="card"><h2>Run details</h2>${permissionControls(run.permissionContext,{runId:run.id})}<p class="note"><span data-auto-approvals>${run.automaticApprovals || 0}</span> tool requests approved automatically. Approval details are retained in the run record.</p><p class="note">The original schedule and earlier context versions are retained when you refresh this chat.</p><div class="filepath">${[run.schedule.workspace.cwd,...run.schedule.workspace.additionalDirectories].map(escape).join('<br>')}</div><hr class="divider"><div class="usagegrid"><div class="usagebox"><span class="eyebrow">Input tokens</span><strong data-usage-input>${run.usage.observed?run.usage.inputTokens.toLocaleString():'—'}</strong></div><div class="usagebox"><span class="eyebrow">Output tokens</span><strong data-usage-output>${run.usage.observed?run.usage.outputTokens.toLocaleString():'—'}</strong></div></div><p class="note" data-usage-note>${run.usage.observed?'Observed provider usage.':'No provider usage reported. Rehearsals make no model calls.'}</p><div class="note">${run.providerSessionId?'Provider session: '+escape(run.providerSessionId):'Session history saved locally.'}</div></section>${run.schedule.provider === 'copilot' ? `<section class="card"><h2>MCP connections</h2><p class="note">Connect selected integrations such as Atlassian. Sign-in opens on this Mac; the provider stores tokens outside chat.</p><button id="mcp-connections">Manage connections</button></section>` : ''}${sessionDetails(run)}<section class="card"><h2>Completion means a turn ended</h2><p class="note">Workflow completion still depends on its own validation and source coverage. A model finishing its response doesn’t certify external work.</p><details><summary>Schedule snapshot</summary><pre>${escape(JSON.stringify(run.schedule,null,2))}</pre></details></section></div></div>`;
+  updateConversation(run);
+  main.querySelectorAll('.chat-details details').forEach(d=>{if(expanded.has(d.querySelector('summary')?.textContent))d.open=true;});
   const details = $('.chat-details'); details.dataset.runId = id; details.scrollTop = state.detailScroll[id] || 0;
   details.addEventListener('scroll', () => state.detailScroll[id] = details.scrollTop, { passive: true });
   $('#toggle-chat-details').onclick=()=>{state.showChatDetails=!state.showChatDetails;renderRun(id);};
@@ -143,7 +171,7 @@ function renderRun(id) {
   $('#deny')?.addEventListener('click',()=>submit('reply',{answer:'deny',requestId:pending.id}));
   document.querySelectorAll('[data-permission-answer]').forEach(button=>button.onclick=()=>submit('reply',{answer:button.dataset.permissionAnswer,requestId:pending.id}));
   bindPermissionControls();
-  const sendMessage=async mode=>{const text=$('#followup').value;const modelOptions={model:$('#run-model').value,...modelSelection('run-model')};try{await api(`/api/runs/${id}/send`,{prompt:text,mode,messageId:crypto.randomUUID(),...(mode==='queue'&&run.schedule.provider!=='rehearsal'?{modelOptions}:{})});state.chatDrafts[id]='';if(mode==='queue')delete state.chatModelDrafts[id];await refresh(true);}catch(e){toast(e.message);}};
+  const sendMessage=async mode=>{const text=$('#followup').value;const modelOptions={model:$('#run-model').value,...modelSelection('run-model')};try{await api(`/api/runs/${id}/send`,{prompt:text,mode,messageId:crypto.randomUUID(),...(mode==='queue'&&run.schedule.provider!=='rehearsal'?{modelOptions}:{})});state.chatDrafts[id]='';$('#followup').value='';updateButtons();if(mode==='queue')delete state.chatModelDrafts[id];await refresh(true);}catch(e){toast(e.message);}};
   $('#continue').onclick=()=>sendMessage('queue');
   $('#steer')?.addEventListener('click',()=>sendMessage('steer'));
   document.querySelectorAll('[data-remove-message]').forEach(button=>button.onclick=()=>submit('remove-queued',{messageId:button.dataset.removeMessage}));
@@ -162,9 +190,37 @@ function renderProviders() {
   document.querySelectorAll('[data-refresh-provider]').forEach(button=>button.onclick=async()=>{button.disabled=true;try{await api('/api/provider',{provider:button.dataset.refreshProvider,force:true});await refresh(true);}catch(e){toast(e.message);button.disabled=false;}});
 }
 async function manageMcp(run) {
-  showDialog(`<h2>MCP connections</h2><p class="note">Sign in on the Mac, then refresh the connection. Continue or steer the chat to retry its work.</p><div id="mcp-list">Loading connections…</div><div class="actions"><button id="close-dialog">Close</button><button id="dialog-submit">Refresh connections</button></div>`,()=>{});
-  const load=async()=>{try {const value=await api('/api/mcp',{runId:run.id,action:'status'}); $('#mcp-list').innerHTML=value.servers.map(s=>`<section class="card"><strong>${escape(s.name)}</strong> ${badge(s.status)}${s.error?`<p class="note">${escape(s.error)}</p>`:''}${s.remote?`<button data-connect-mcp="${escape(s.name)}">Connect / sign in</button>`:''}</section>`).join('') || '<p>No selected MCP servers.</p>';document.querySelectorAll('[data-connect-mcp]').forEach(button=>button.onclick=async()=>{button.disabled=true;try{const result=await api('/api/mcp',{runId:run.id,action:'login',server:button.dataset.connectMcp,openOnMac:!!window.desktop});if(result.authorizationUrl)window.open(result.authorizationUrl,'_blank','noopener,noreferrer');toast(result.status==='connected'?'Connected.':'Finish sign-in in the browser on this Mac, then refresh connections.');}catch(e){toast(e.message);}finally{button.disabled=false;}});}catch(e){$('#mcp-list').textContent=e.message;}};
-  $('#dialog-submit').onclick=load; await load();
+  showDialog(`<h2>MCP connections</h2><p class="note" id="mcp-status" role="status">Checking connections…</p><div id="mcp-list"></div><div class="actions"><button id="close-dialog">Close</button><button id="dialog-submit">Refresh connections</button></div>`,()=>{});
+  const dialog=$('#dialog'),list=$('#mcp-list'),status=$('#mcp-status');
+  const alive=()=>dialog.open && $('#mcp-list')===list;
+  let busy=false,checking=false,version=0,timer,waiting=null,listSignature='',end=Date.now()+600_000;
+  const connect=async button=>{
+    if(busy)return; busy=true;version++;end=Date.now()+600_000;button.disabled=true;button.textContent='Opening sign-in…';
+    status.textContent='Starting '+button.dataset.connectMcp+' sign-in. Watch for a browser or macOS Keychain prompt.';
+    try {
+      const result=await api('/api/mcp',{runId:run.id,action:'login',server:button.dataset.connectMcp,openOnMac:!!window.desktop});
+      if(!alive())return;
+      if(result.authorizationUrl)window.open(result.authorizationUrl,'_blank','noopener,noreferrer');
+      waiting=result.status==='connected'?null:button.dataset.connectMcp;
+      status.textContent=waiting?'Finish sign-in in the browser on this Mac. Checking automatically for the connection…':'Connected. Continue or steer the chat to retry its work.';
+    }catch(e){if(alive())status.textContent='Sign-in failed: '+e.message;}
+    finally{busy=false;if(alive()){button.disabled=false;button.textContent=waiting?'Restart sign-in':'Connect / sign in';await load();clearTimeout(timer);timer=setTimeout(poll,5000);}}
+  };
+  const load=async()=>{
+    if(busy || checking || !alive())return;checking=true;const current=version;
+    try {
+      const value=await api('/api/mcp',{runId:run.id,action:'status'});if(!alive() || current!==version)return;
+      const signature=JSON.stringify([value.servers,waiting]);
+      if(signature!==listSignature){listSignature=signature;list.innerHTML=value.servers.map(s=>`<section class="card"><strong>${escape(s.name)}</strong> ${badge(s.status)}${s.error?`<p class="note">${escape(s.error)}</p>`:''}${s.remote&&s.status!=='connected'?`<button data-connect-mcp="${escape(s.name)}">${waiting===s.name?'Restart sign-in':'Connect / sign in'}</button>`:''}</section>`).join('') || '<p>No selected MCP servers.</p>';
+      list.querySelectorAll('[data-connect-mcp]').forEach(button=>button.onclick=()=>connect(button));}
+      if(waiting&&value.servers.some(s=>s.name===waiting&&s.status==='connected')){status.textContent='Connected to '+waiting+'. Continue or steer the chat to retry its work.';waiting=null;}
+      else if(status.textContent==='Checking connections…')status.textContent='Connections update automatically while this window is open. Sign-in opens on this Mac.';
+    }catch(e){if(alive() && current===version)status.textContent='Could not check connections: '+e.message;}
+    finally{checking=false;}
+  };
+  const poll=async()=>{if(!alive())return;await load();if(!alive())return;if(Date.now()<end)timer=setTimeout(poll,5000);else if(waiting)status.textContent='Still not connected. The sign-in may have timed out; use Restart sign-in or Refresh connections.';};
+  dialog.addEventListener('close',()=>clearTimeout(timer),{once:true});
+  $('#dialog-submit').onclick=load;await load();timer=setTimeout(poll,5000);
 }
 function showDialog(html, submit) {
   $('#dialog').innerHTML=html;$('#dialog').showModal();$('#close-dialog').onclick=()=>$('#dialog').close();$('#dialog-submit').onclick=async()=>{try{await submit();$('#dialog').close();await refresh(true);}catch(e){toast(e.message);}};
@@ -299,9 +355,9 @@ window.addEventListener('keydown',event=>{if((event.metaKey||event.ctrlKey)&&eve
 initFeatures({state,escape,api,toast,refresh,openTab,showDialog,lines,restoreBrowser:()=>requestAnimationFrame(browserBounds)});
 refresh().then(() => refreshUsage()).catch(e=>toast(e.message));
 setInterval(() => refreshUsage(), 60_000);
-setInterval(()=>{if((!document.activeElement?.matches('input,textarea,select') || document.activeElement?.id==='followup')&&!$('#dialog').open)refresh().catch(()=>{});},1500);
+setInterval(()=>{if((!document.activeElement?.matches('input,textarea,select') || !!$('#conversation-host'))&&!$('#dialog').open)refresh().catch(()=>{});},1500);
 
 window.desktop?.onRemote(() => { state.page = 'remote'; state.tab = 'overview'; render(); });
 let liveRefreshTimer;
 const liveEvents = new EventSource('/api/events');
-liveEvents.addEventListener('change', () => { if (liveRefreshTimer) return; liveRefreshTimer = setTimeout(() => { liveRefreshTimer = null; if ((!document.activeElement?.matches('input,textarea,select') || document.activeElement?.id==='followup') && !$('#dialog').open) refresh().catch(() => {}); }, 120); });
+liveEvents.addEventListener('change', () => { if (liveRefreshTimer) return; liveRefreshTimer = setTimeout(() => { liveRefreshTimer = null; if ((!document.activeElement?.matches('input,textarea,select') || !!$('#conversation-host')) && !$('#dialog').open) refresh().catch(() => {}); }, 120); });

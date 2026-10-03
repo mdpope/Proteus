@@ -23,7 +23,11 @@ if (process.env.PROTEUS_TEST_CONTAINER === '1') {
   relay = { port: 4328, close: async () => execFileSync('docker', ['--context', 'colima-proteus', 'stop', 'proteus-relay-test'], { stdio: 'ignore' }) };
 } else relay = await startRelay({ port: 4328, token });
 const rehearsal = new RehearsalProvider();
-const app = await startServer({ home, port: 0, timers: false, providers: { copilot: { status: async () => ({available:true,models:[copilotModel({id:"synthetic-mobile",name:"Synthetic mobile",supportedReasoningEfforts:["none","high"],capabilities:{supports:{reasoningEffort:true},limits:{max_output_tokens:128000}},billing:{tokenPrices:{maxPromptTokens:272000,longContext:{maxPromptTokens:872000}}}})]}), run: args => rehearsal.run(args) }, rehearsal: {
+let authConnected = false;
+const app = await startServer({ home, port: 0, timers: false, providers: { copilot: {
+  mcpStatus: async () => ({servers:[{name:'synthetic-integration',status:authConnected?'connected':'needs-auth',remote:true}]}),
+  mcpLogin: async () => { setTimeout(()=>{authConnected=true;},1200); return {server:'synthetic-integration',status:'sign-in-required'}; },
+  status: async () => ({available:true,models:[copilotModel({id:"synthetic-mobile",name:"Synthetic mobile",supportedReasoningEfforts:["none","high"],capabilities:{supports:{reasoningEffort:true},limits:{max_output_tokens:128000}},billing:{tokenPrices:{maxPromptTokens:272000,longContext:{maxPromptTokens:872000}}}})]}), run: args => rehearsal.run(args) }, rehearsal: {
   async run(args) {
     args.emit('tool', 'Read synthetic notes', { tool: { callId: 'synthetic-read', name: 'view', summary: 'Read synthetic notes', status: 'completed', arguments: '{"path":"fixture.md"}', output: 'Expanded synthetic tool result', durationMs: 120 } });
     if (args.prompt.includes('Permission rehearsal')) await args.ask({ type: 'permission', question: 'Read synthetic fixture?', details: { kind: 'read', path: workspace } });
@@ -43,6 +47,7 @@ const fixture = http.createServer(async (req, res) => {
   app.context.mutate(config => { config.favorites = []; }, app.context.config().revision);
   const defaults = app.settings.get();
   app.settings.save({...defaults,provider:req.url.includes("models=1")?"copilot":"rehearsal",model:req.url.includes("models=1")?"synthetic-mobile":"",reasoningEffort:"",contextTier:"default"},defaults.revision);
+  authConnected = false;
   const key = secret(); const aad = 'synthetic:cross-platform';
   const invite = await app.remote.pairing();
   res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ code: invite.code, key, aad, box: seal(key, { test: 'CryptoKit ↔ Node' }, aad) }));

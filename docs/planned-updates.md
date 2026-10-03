@@ -53,6 +53,8 @@ See [workspaces](workspaces.md) and [credentials](credentials.md) for behavior a
   instruction/skill context and explicit tool-scope compatibility errors. See `providers.md`.
 - Implemented Copilot per-chat MCP status and OAuth sign-in on the Mac, available from both clients
   and `/mcp auth <server>`. See `mcp-auth.md` for callback and credential boundaries.
+- Preserve verified Copilot vendor signatures in Mac packaging; persistent OAuth progress and
+  bounded automatic status refresh on both clients; stable controls while chat output streams.
 - Validation details for the release are recorded in the PR and handoff notes; distinguish synthetic
   protocol/UI checks from any real corporate OAuth completion, which requires user interaction.
 

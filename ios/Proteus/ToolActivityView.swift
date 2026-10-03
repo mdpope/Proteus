@@ -163,24 +163,54 @@ struct MCPConnectionsView: View {
     @EnvironmentObject var store: RemoteStore
     let runID: String
     @State private var servers: [JSON] = []
-    @State private var message = "Refresh to inspect this chat’s selected integrations."
+    @State private var message = "Checking connections…"
     @State private var busy = false
+    @State private var checking = false
+    @State private var waiting: String?
+    @State private var pollingGeneration = 0
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(message).font(.caption).foregroundStyle(.secondary)
+            Text(message).font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("mcp-status-message")
             ForEach(servers, id: \.self) { server in
                 VStack(alignment: .leading, spacing: 5) {
                     Text(server["name"].string).font(.subheadline.bold())
                     Text(server["status"].string).font(.caption).foregroundStyle(.teal)
                     if !server["error"].string.isEmpty { Text(server["error"].string).font(.caption).foregroundStyle(.orange) }
-                    if server["remote"].bool { Button("Sign in on Mac") { connect(server["name"].string) } }
+                    if server["remote"].bool && server["status"].string != "connected" { Button(waiting == server["name"].string ? "Restart sign-in on Mac" : "Sign in on Mac") { connect(server["name"].string) } }
                 }
             }
-            Button("Refresh MCP connections") { refreshConnections() }
-        }.disabled(busy || !store.connected)
+            Button("Refresh MCP connections") { Task { await refreshConnections() } }
+        }.disabled(busy || !store.connected).task(id: runID + String(pollingGeneration)) {
+            await refreshConnections()
+            for _ in 0..<120 {
+                do { try await Task.sleep(for: .seconds(5)) } catch { return }
+                guard !Task.isCancelled else { return }
+                if store.connected { await refreshConnections() }
+            }
+            if waiting != nil { message = "Still not connected. Sign-in may have timed out; restart sign-in or refresh connections." }
+        }
     }
-    private func refreshConnections() { busy = true; Task { defer { busy = false }; do { let value = try await store.request("mcp.status", ["id":.string(runID)]); servers = value["servers"].array; message = "Sign-in opens on the Mac because the provider’s callback runs there. Refresh after signing in, then continue or steer the chat to retry." } catch { message = error.localizedDescription } } }
-    private func connect(_ server: String) { busy = true; Task { defer { busy = false }; do { let value = try await store.request("mcp.login", ["id":.string(runID),"server":.string(server)]); message = value["openedOnMac"].bool ? "Finish sign-in in the browser on your Mac, then refresh connections." : "Connected. Refresh connections to verify." } catch { message = error.localizedDescription } } }
+    private func refreshConnections() async {
+        guard !busy && !checking else { return }; checking = true; defer { checking = false }
+        do {
+            let value = try await store.request("mcp.status", ["id":.string(runID)])
+            guard !Task.isCancelled && !busy else { return }
+            servers = value["servers"].array
+            if let name = waiting, servers.contains(where: { $0["name"].string == name && $0["status"].string == "connected" }) {
+                message = "Connected to \(name). Continue or steer the chat to retry its work."; waiting = nil
+            } else if message == "Checking connections…" { message = "Connections update automatically while this view is open. Sign-in opens on your Mac." }
+        } catch { message = "Could not check connections: " + error.localizedDescription }
+    }
+    private func connect(_ server: String) {
+        busy = true; pollingGeneration += 1; message = "Starting \(server) sign-in. Watch for a browser or macOS Keychain prompt on your Mac."
+        Task {
+            do { let value = try await store.request("mcp.login", ["id":.string(runID),"server":.string(server)])
+                waiting = value["status"].string == "connected" ? nil : server
+                message = waiting == nil ? "Connected. Continue or steer the chat to retry its work." : "Finish sign-in in the browser on your Mac. Checking automatically for the connection…"
+            } catch { message = "Sign-in failed: " + error.localizedDescription }
+            busy = false; await refreshConnections()
+        }
+    }
 }
 
 // Small, metadata-driven menus live with the next message, on iPhone and iPad.

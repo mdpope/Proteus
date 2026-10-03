@@ -44,3 +44,11 @@ These decisions describe implemented behavior. Proposed work belongs in `planned
   retain independent choices, applied only when their turn starts. A steering request never mutates
   a running model. This avoids a late dropdown change altering already queued work, while preserving
   the native conversation and audit history. The source schedule remains unchanged.
+
+- **Retain vendor signing identity.** The local Mac shell may be ad-hoc signed, but official Copilot
+  binaries keep verified GitHub signatures so provider-owned Keychain ACLs recognize the caller.
+  Only the two explicitly verified binaries skip re-signing; missing/invalid vendor signatures fail
+  packaging. Credential resets or broader Keychain grants are not a packaging workaround.
+- **Stable live controls.** Token/tool updates patch conversation content without rebuilding
+  unrelated controls. Authentication status is polled only while its view is open, with bounded
+  duration and visible feedback, rather than relying on a transient toast or manual refresh.

@@ -33,9 +33,11 @@ export function conversation(target, run, options) {
     view.observer = new ResizeObserver(position); view.observer.observe(messages); view.observer.observe(scroll);
   }
   view.updating = true;
-  target.replaceChildren(view.shell);
+  if(view.shell.parentElement!==target)target.replaceChildren(view.shell);
   const entries = [...run.events.map((event, index) => ({ key: `event-${index}`, ...event })), ...Object.entries(run.liveMessages || {}).map(([id, text]) => ({ key: `stream-${id}`, role: 'assistant', text, streaming: true }))].filter(entry => (entry.role !== 'assistant' || entry.text?.trim()) && !entry.data?.permission?.automatic);
   const nodes = new Map([...view.messages.children].map(node => [node.dataset.key, node]));
+  let next=view.messages.firstElementChild;
+  const place=node=>{if(node===next)next=next.nextElementSibling;else view.messages.insertBefore(node,next);};
   for (const entry of entries) {
     let node = nodes.get(entry.key);
     if (entry.data?.tool) {
@@ -64,13 +66,13 @@ export function conversation(target, run, options) {
         const raw=add('details','','raw-details');const summary=document.createElement('summary');summary.textContent='Raw arguments & output';const pre=document.createElement('pre');pre.textContent=[tool.arguments,tool.output,tool.attachments].filter(Boolean).join('\n\n');raw.append(summary,pre);
         content.scrollTop = oldTop; node.toolSignature = signature;
       }
-      view.messages.append(node); nodes.delete(entry.key); continue;
+      place(node); nodes.delete(entry.key); continue;
     }
     if (!node) { node = document.createElement('div'); node.className = 'message'; node.dataset.key = entry.key; node.innerHTML = '<div class="role"></div><div class="text"></div>'; }
     node.className = `message ${['user', 'assistant', 'tool', 'system'].includes(entry.role) ? entry.role : 'system'}`;
     node.firstChild.textContent = `${entry.data?.delivery ? ({queued:'Queued next',steered:'Steering',sending:'Sending steering',failed:'Not delivered',removed:'Removed from queue',delivered:'Queued message delivered'}[entry.data.delivery.state] || '') + ' · ' : ''}${entry.role === 'assistant' ? entry.agentName || agentName(run) : entry.role}${entry.streaming ? ' · streaming' : entry.at ? ' · ' + options.time(entry.at) : ''}`;
     ProteusMarkdown.mount(node.lastChild, entry.text, { ...options, resize: view.position });
-    view.messages.append(node); nodes.delete(entry.key);
+    place(node); nodes.delete(entry.key);
   }
   for (const node of nodes.values()) node.remove();
   view.position();

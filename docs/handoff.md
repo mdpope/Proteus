@@ -100,3 +100,21 @@ See `chat-controls.md` for queue/steer semantics, `mcp-auth.md` for sign-in reco
 - Copilot OAuth API/command tests verify native delegation and no authorization URL in transcripts.
   Real corporate consent/sign-in is an operator step; report its actual status rather than equating
   browser opening with authenticated tool access.
+
+## Authentication and live-control regression checks
+
+- `node test/mcp-auth-ui.mjs`: synthetic pending sign-in, persistent feedback, automatic connected
+  state, sign-in during a slow background check, stable controls, connected-button removal and
+  polling cleanup after closing the dialog.
+- `node test/chat-ui.mjs`: streaming with a focused permission selector, stable composer/detail DOM,
+  queued drafts and independent scroll positions. `node test/composer-ui.mjs` covers next-turn choices.
+- `test/packaged-mac.mjs` must validate both Copilot vendor signatures and unchanged binary bytes.
+  An app-level ad-hoc signature alone does not prove that provider Keychain identity was preserved.
+- iOS `testMCPConnectionRefresh` uses the synthetic mobile host; it never performs real OAuth.
+  A live provider status check after installation verifies whether prior authorization survived restart.
+
+Validation for the signing/status/scrolling update: 99 Node tests and static checks passed; Mac
+authentication-feedback, chat interaction, composer and packaged-app tests passed. The native MCP
+status UI test passed on both iPhone and iPad simulators. The installed Mac build restored existing
+selected MCP connections after a cold restart, with no new Keychain prompt observed during the
+check. Physical-device installation remains separate.

@@ -40,3 +40,8 @@ A smaller context window may require provider compaction or fail if the provider
 The run retains its initial schedule and a model-change history; the source schedule is unaffected.
 Submitted choices are shared with other clients and retained on reopening; unsent dropdown changes
 are local drafts. Provider switching within an existing chat remains unsupported.
+
+Streaming updates change conversation content and usage in place. They do not detach the composer,
+model/permission menus, navigation or detail panels. Changes to pending requests and other control
+structure wait until an actively edited field loses focus; the conversation continues streaming.
+Expanded detail disclosures survive these less-frequent structural refreshes.

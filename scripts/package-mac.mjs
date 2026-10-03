@@ -6,6 +6,12 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 if (process.platform !== 'darwin') throw new Error('Build the Mac application on macOS.');
+// These helpers access provider-owned Keychain items. Keep GitHub's designated
+// requirements intact: ad-hoc re-signing breaks their existing Keychain trust.
+const vendorFiles = ['copilot-runtime', 'runtime.node'].map(name =>
+  `node_modules/@github/copilot-sdk-darwin-${process.arch}/prebuilds/darwin-${process.arch}/${name}`);
+const vendorRequirement = '=anchor apple generic and certificate leaf[subject.OU] = "VEKTX9H2N7"';
+for (const relative of vendorFiles) execFileSync('codesign', ['--verify', '--strict', '-R', vendorRequirement, path.join(root, relative)], { stdio: 'pipe' });
 const source = path.join(root, 'ios/Proteus/Assets.xcassets/AppIcon.appiconset/AppIcon.png');
 const iconset = path.join(root, 'dist/Proteus.iconset'); fs.mkdirSync(iconset, { recursive: true });
 fs.copyFileSync(source, path.join(root, 'desktop/icon.png'));
@@ -19,6 +25,14 @@ const bundles = await packager({ dir: root, out: path.join(root, 'dist'), overwr
   platform: 'darwin', arch: process.arch, icon, asar: false,
   // Keep runtime files and dependencies; never ship tests, worktrees or local configuration.
   ignore: [/^\/(?:ios|test|docs|scripts|extensions|dist|coverage|\.runtime|\.git|\.github)(?:\/|$)/, /^\/\.env/, /\.(?:log|xcresult)$/],
-  osxSign: { identity: '-', identityValidation: false, preAutoEntitlements: false, gatekeeperAssess: false, optionsForFile: () => ({ hardenedRuntime: false, signatureFlags: '0', timestamp: 'none' }) },
+  osxSign: { ignore: file => vendorFiles.some(relative => file.endsWith('/' + relative)), identity: '-', identityValidation: false, preAutoEntitlements: false, gatekeeperAssess: false, optionsForFile: () => ({ hardenedRuntime: false, signatureFlags: '0', timestamp: 'none' }) },
 });
-for (const bundle of bundles) console.log(path.join(bundle, 'Proteus.app'));
+for (const directory of bundles) {
+  const bundle = path.join(directory, 'Proteus.app');
+  for (const relative of vendorFiles) {
+    const embedded = path.join(bundle, 'Contents/Resources/app', relative);
+    if (!fs.readFileSync(embedded).equals(fs.readFileSync(path.join(root, relative)))) throw new Error('Packaging modified a vendor-signed Copilot binary: ' + relative);
+    execFileSync('codesign', ['--verify', '--strict', '-R', vendorRequirement, embedded], { stdio: 'pipe' });
+  }
+  console.log(bundle);
+}

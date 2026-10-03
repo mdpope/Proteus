@@ -47,6 +47,17 @@ try {
     const engine = process.mainModule.require(process.cwd() + '/desktop/main.cjs').getService().engine; const run = engine.getRun(id);
     if (value.stream) engine.stream(run, 'live', value.text); else { delete run.liveMessages; engine.event(run, 'assistant', value.text); }
   }, { id, value });
+  const originalDetails=await page.locator('.chat-details').elementHandle();
+  const originalComposer=await page.locator('#followup').elementHandle();
+  const permissions=page.locator('[data-permission-mode]').first();
+  await permissions.selectOption('trusted');await permissions.focus();
+  await update({stream:true,text:'Update while choosing tool approvals.\n'});
+  await page.getByText('Update while choosing tool approvals.',{exact:false}).waitFor();
+  assert.equal(await permissions.inputValue(),'trusted','Streaming preserves unsubmitted permission choice');
+  assert.ok(await originalDetails.evaluate(e=>e.isConnected),'Details stay attached during streaming');
+  assert.ok(await originalComposer.evaluate(e=>e.isConnected),'Composer stays attached during streaming');
+  await page.locator('.chat-details details').first().evaluate(e=>e.open=true);
+  await page.locator('.chat-details').evaluate(e=>e.scrollTop=400);
   await page.locator('#followup').fill('An update drafted while it works');
   await page.locator('#followup').focus();
   await update({ stream: true, text: '## Streaming response\n\n' + 'New output.\n\n'.repeat(20) });

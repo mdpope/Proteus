@@ -10,7 +10,10 @@ page in the Mac's default browser. `/mcp auth <server>` in the chat composer per
 host command; it is not sent to the language model as ordinary text. Use the exact connection name,
 or a captured MCP display name when it identifies one runtime server. Sign-in from iOS opens on
 the Mac, because the provider's loopback callback listener runs there. Complete any account choice,
-passkey, Okta or consent yourself. Then refresh connections, and continue or steer the chat to retry.
+passkey, Okta or consent yourself. Status refreshes automatically every five seconds while the
+connection view is open (for up to ten minutes). Continue or steer the chat to retry once connected.
+The view shows persistent starting, browser-waiting, failure and completion messages; already
+connected servers do not show a sign-in button. Manual refresh and explicit restart remain available.
 
 The official SDK owns OAuth registration, callback listener, token exchange, refresh and credential
 storage. Proteus uses `session.rpc.mcp.oauth.login` and `mcp.list`. It does not request tokens from
@@ -29,3 +32,13 @@ alone does not authorize its MCP server. The sign-in button uses the external Ma
 compatibility with corporate account/passkey flows. Codex MCP OAuth UI and MCP elicitation/input
 forms are follow-up work; the current Codex adapter requires its selected servers to be already
 configured for that runtime. No success is inferred from merely opening the browser.
+
+Mac packaging must preserve the official Copilot executable and native module signatures.
+Re-signing them as Proteus or ad-hoc changes the caller identity used by provider Keychain items
+and can cause repeated authorization prompts even when the login keychain itself is unlocked.
+`package:mac` verifies the vendor requirement before packaging, excludes only those two verified
+files from re-signing, and checks unchanged bytes/signatures afterward. Never fix this by clearing
+the login keychain, widening item ACLs, or changing the operator's password.
+
+Background connection checks keep sign-in controls usable and preserve unchanged rows. Restarting
+sign-in renews the monitoring period; an earlier status response cannot overwrite its progress.

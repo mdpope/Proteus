@@ -144,3 +144,30 @@ extension RemoteUITests {
         if app.buttons["stop-turn"].exists { app.buttons["stop-turn"].tap() }
     }
 }
+
+extension RemoteUITests {
+    @MainActor func testMCPConnectionRefresh() async throws {
+        let (data, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/pair?models=1")!)
+        let fixture = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        let app = XCUIApplication(); app.launchArguments = ["--reset-pairing"]; app.launch()
+        let link = app.textFields["pairing-link"]; XCTAssertTrue(link.waitForExistence(timeout: 15)); link.tap(); link.typeText(fixture["code"] as! String)
+        app.buttons["pair-mac"].tap(); let newChat = app.buttons["new-chat"]; XCTAssertTrue(newChat.waitForExistence(timeout: 25)); newChat.tap()
+        let prompt = app.textFields["chat-prompt"]; XCTAssertTrue(prompt.waitForExistence(timeout: 10)); prompt.tap(); prompt.typeText("Synthetic MCP status")
+        app.buttons["start-chat"].tap(); XCTAssertTrue(app.staticTexts["Your input is needed"].waitForExistence(timeout: 20))
+        let details = app.buttons["Chat details & loaded context"]
+        for _ in 0..<5 { if details.isHittable { break }; app.swipeUp() }; details.tap()
+        let mcp = app.buttons["MCP connections"]
+        for _ in 0..<8 { if mcp.exists && mcp.isHittable { break }; app.swipeUp() }; XCTAssertTrue(mcp.waitForExistence(timeout: 10)); mcp.tap()
+        let login = app.buttons["Sign in on Mac"]
+        XCTAssertTrue(login.waitForExistence(timeout: 10))
+        // XCTest can report a control as hittable while the bottom composer covers it.
+        for _ in 0..<5 { if login.isHittable && login.frame.maxY < app.frame.height * 0.7 { break }; app.swipeUp() }
+        XCTAssertTrue(login.isEnabled); login.tap()
+        let status = app.staticTexts["mcp-status-message"]
+        let connected = NSPredicate(format: "label CONTAINS %@", "Connected to synthetic-integration")
+        let completed = expectation(for: connected, evaluatedWith: status); await fulfillment(of: [completed], timeout: 20)
+        XCTAssertFalse(app.buttons["Sign in on Mac"].exists)
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Automatic MCP connection refresh"; shot.lifetime = .keepAlways; add(shot)
+        app.buttons["stop-turn"].tap()
+    }
+}

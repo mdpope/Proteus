@@ -4,6 +4,12 @@ This is a concise behavior log. Git commits and pull requests contain the comple
 
 ## Unreleased
 
+- Preserve and verify GitHub’s Copilot binary signatures during Mac packaging, retaining the
+  provider identity used for Keychain authorization.
+- Show persistent MCP sign-in progress and refresh connection state automatically on Mac/iOS.
+- Keep chat controls and detail panels attached during streaming; preserve focused selections,
+  scroll positions and disclosure state while updating the conversation and usage.
+
 - Move model, effort, speed and applicable context menus into the compact Mac/iOS composer footer.
   Separate Queue/Steer/Stop actions; Stop appears only while running or waiting for input.
 - Capture settings for each queued message, apply model changes on the next turn in the same session,
