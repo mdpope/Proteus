@@ -12,7 +12,7 @@ const state = { data: null, page: 'schedules', selected: null, tab: 'overview', 
 const friendly = value => ({ awaiting_input:'Needs feedback', completed:'Turn complete', queued:'Queued', running:'Running', cancelled:'Cancelled', interrupted:'Interrupted', failed:'Failed' }[value] || value);
 const badge = status => `<span class="badge ${escape(status)}">${escape(friendly(status))}</span>`;
 const time = (value, timezone) => new Date(value).toLocaleString(undefined, { ...(timezone ? { timeZone: timezone } : {}), month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
-let toastTimer, usageValue = null, usageBusy = false;
+let toastTimer, usageValue = null, usageBusy = false, appearanceBusy = false;
 let workspaceReady=false, workspaceRestoring=false, workspaceClosing=false, lastWorkspace='';
 const lifeVisible = () => state.data?.life?.enabled === true && state.data?.life?.configured === true;
 function saveWorkspace() {
@@ -55,21 +55,43 @@ async function restoreWorkspace() {
   finally {workspaceRestoring=false;}
   workspaceReady=true;render();saveWorkspace();
 }
-async function setUsageVisibility(visible) { const settings=state.data.settings;await api('/api/settings',{settings:{...settings,appearance:{...settings.appearance,showProviderUsage:visible}},expectedRevision:settings.revision});await refresh(true);if(visible)void refreshUsage(true); }
+async function saveAppearance(patch) {
+  if(appearanceBusy)return;
+  appearanceBusy=true;
+  const settings=state.data.settings, checkbox=$('#settings-show-usage'), saveButton=$('#save-settings');
+  if(checkbox)checkbox.disabled=true;
+  if(saveButton)saveButton.disabled=true;
+  renderUsage();
+  try {
+    const saved=await api('/api/settings',{settings:{...settings,appearance:{...settings.appearance,...patch}},expectedRevision:settings.revision});
+    state.data.settings=saved;
+    // Keep unrelated Setup edits intact and advance only the revision this form owned.
+    if(checkbox?.dataset.settingsRevision===settings.revision)checkbox.dataset.settingsRevision=saved.revision;
+    state.signature=JSON.stringify(state.data);
+    if(patch.showProviderUsage===true)void refreshUsage(true);
+  } finally {
+    appearanceBusy=false;
+    if(checkbox){checkbox.disabled=false;checkbox.checked=state.data.settings.appearance?.showProviderUsage!==false;}
+    if(saveButton)saveButton.disabled=false;
+    renderUsage();
+  }
+}
 
 const providerNames={copilot:'Copilot',codex:'Codex',claude:'Claude'};
 function renderUsage() {
   const host=$('#provider-usage');if(!host)return;
   host.hidden=state.data?.settings?.appearance?.showProviderUsage===false;
-  host.innerHTML='<div class="usage-heading"><span>AI allowance</span><button id="hide-usage" class="subtle" aria-label="Hide AI usage" title="Hide; restore in Setup">×</button></div>'+Object.entries(providerNames).map(([id,name])=>{
+  const collapsed=state.data?.settings?.appearance?.providerUsageCollapsed===true;
+  host.classList.toggle('usage-collapsed',collapsed);
+  host.innerHTML=`<div class="usage-heading"><span>AI allowance</span><button id="toggle-usage" class="subtle" aria-label="${collapsed?'Expand':'Collapse'} AI usage" aria-expanded="${!collapsed}" aria-controls="provider-usage-rows" ${appearanceBusy?'disabled':''}>${collapsed?'⌄':'⌃'}</button></div><div id="provider-usage-rows">`+Object.entries(providerNames).map(([id,name])=>{
     const entry=usageValue?.providers?.[id];
     const windows=entry?.windows || [];
     const reported=windows.filter(w=>Number.isFinite(w.remainingPercent) && !w.unlimited);
     const remaining=reported.length?Math.max(0,Math.min(100,...reported.map(w=>w.remainingPercent))):null;
     const label=remaining!==null?remaining.toLocaleString(undefined,{maximumFractionDigits:1})+'%':windows.length&&windows.every(w=>w.unlimited)?'Unlimited':'Unavailable';
-    return `<button class="provider-usage-row" data-usage-provider="${id}" aria-label="${name} usage details" title="${name}: ${label} remaining"><span>${name}${entry?.stale?' · stale':''}</span><span class="usage-pill">${remaining!==null?`<progress max="100" value="${remaining}" aria-label="${name} allowance remaining"></progress>`:''}<strong>${remaining!==null?label:label==='Unlimited'?'∞':'—'}</strong></span></button>`;
-  }).join('');
-  $('#hide-usage').onclick=()=>setUsageVisibility(false).catch(e=>toast(e.message));
+    return `<button class="provider-usage-row" data-usage-provider="${id}" aria-label="${name} usage details: ${label} remaining" title="${name}: ${label} remaining"><span>${name}${entry?.stale?' · stale':''}</span><span class="usage-pill">${remaining!==null?`<progress max="100" value="${remaining}" aria-label="${name} allowance remaining"></progress>`:''}<strong>${remaining!==null?label:label==='Unlimited'?'∞':'—'}</strong></span></button>`;
+  }).join('')+'</div>';
+  $('#toggle-usage').onclick=()=>saveAppearance({providerUsageCollapsed:!collapsed}).catch(e=>toast(e.message));
   host.querySelectorAll('[data-usage-provider]').forEach(button=>button.onclick=()=>showUsageDetails(button.dataset.usageProvider));
 }
 function showUsageDetails(id) {
@@ -382,9 +404,9 @@ async function openMessageLink(source, cwd) {
 
 function renderTabs() {
   const icons={markdown:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M6 15V9l3 3 3-3v6m3-4h4m-2-2v6m-2-2 2 2 2-2"/>',browser:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c5 5 5 13 0 18-5-5-5-13 0-18Z"/>',terminal:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m6 8 4 4-4 4m6 0h5"/>',chat:'<path d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-8l-6 4v-4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/>'};
-  $('#tabs').innerHTML='<div class="tab-list">'+state.tabs.map(tab=>`<div class="tabitem ${state.tab===tab.id?'selected':''}"><button data-tab="${escape(tab.id)}" title="${escape(tab.info?.url || tab.label)}">${tab.type==='browser' ? (tab.info?.loading?'◌':'◎') : tab.type==='run'?'◉':tab.type==='markdown'?'▤':tab.type==='life'?'♡':tab.type==='terminal'?'⌘':'◷'} &nbsp;${escape(tab.label || 'New tab')}</button>${tab.id!=='overview'?`<button class="tabclose" aria-label="Close ${escape(tab.label || 'tab')}" data-close="${escape(tab.id)}">×</button>`:''}</div>`).join('')+'</div><div class="tab-actions">'+[['markdown','Markdown','markdown'],['browser','Browser','browser'],['terminal','Terminal','terminal'],['new-chat','New chat','chat']].map(([id,label,icon])=>`<button id="${id}" class="tab-create" aria-label="${label}" title="${label}"><span aria-hidden="true">+</span><svg aria-hidden="true" viewBox="0 0 24 24">${icons[icon]}</svg></button>`).join('')+'</div>';
-  document.querySelectorAll('[data-tab]').forEach(button=>button.onclick=()=>{state.tab=button.dataset.tab;const tab=state.tabs.find(t=>t.id===state.tab);if(tab.type==='schedule')schedule(tab.id);else render();});
-  document.querySelectorAll('[data-close]').forEach(button=>button.onclick=async()=>{try{const id=button.dataset.close;const tab=state.tabs.find(t=>t.id===id);if(tab?.type==='browser')await window.desktop.browser({action:'close',id});if(tab?.type==='terminal'){const current=await window.desktop.terminal({action:'state'});if(current.sessions.some(session=>session.id===tab.terminal.id))await window.desktop.terminal({action:'close',id:tab.terminal.id});disposeTerminalUi(tab.id);}forgetConversation(id);state.tabs=state.tabs.filter(t=>t.id!==id);saveWorkspace();if(state.tab===id)state.tab='overview';render();}catch(e){toast(e.message);}});
+  $('#tabs').innerHTML='<div class="tab-list">'+state.tabs.map(tab=>`<div data-tab-container="${escape(tab.id)}" class="tabitem ${state.tab===tab.id?'selected':''}"><button data-tab="${escape(tab.id)}" title="${escape(tab.info?.url || tab.label)}">${tab.type==='browser' ? (tab.info?.loading?'◌':'◎') : tab.type==='run'?'◉':tab.type==='markdown'?'▤':tab.type==='life'?'♡':tab.type==='terminal'?'⌘':'◷'} &nbsp;${escape(tab.label || 'New tab')}</button>${tab.id!=='overview'?`<button class="tabclose" aria-label="Close ${escape(tab.label || 'tab')}" data-close="${escape(tab.id)}">×</button>`:''}</div>`).join('')+'</div><div class="tab-actions">'+[['markdown','Markdown','markdown'],['browser','Browser','browser'],['terminal','Terminal','terminal'],['new-chat','New chat','chat']].map(([id,label,icon])=>`<button id="${id}" class="tab-create" aria-label="${label}" title="${label}"><span aria-hidden="true">+</span><svg aria-hidden="true" viewBox="0 0 24 24">${icons[icon]}</svg></button>`).join('')+'</div>';
+  document.querySelectorAll('[data-tab-container]').forEach(item=>item.onclick=event=>{if(event.target.closest('[data-close]') || window.getSelection()?.isCollapsed===false)return;state.tab=item.dataset.tabContainer;const tab=state.tabs.find(t=>t.id===state.tab);if(tab.type==='schedule')schedule(tab.id);else render();});
+  document.querySelectorAll('[data-close]').forEach(button=>button.onclick=async event=>{event.stopPropagation();try{const id=button.dataset.close;const tab=state.tabs.find(t=>t.id===id);if(tab?.type==='browser')await window.desktop.browser({action:'close',id});if(tab?.type==='terminal'){const current=await window.desktop.terminal({action:'state'});if(current.sessions.some(session=>session.id===tab.terminal.id))await window.desktop.terminal({action:'close',id:tab.terminal.id});disposeTerminalUi(tab.id);}forgetConversation(id);state.tabs=state.tabs.filter(t=>t.id!==id);saveWorkspace();if(state.tab===id)state.tab='overview';render();}catch(e){toast(e.message);}});
   $('#new-chat').onclick=chatDialog;$('#markdown').onclick=markdownDialog;
   $('#terminal').onclick=()=>openTerminalDialog();
   $('#browser').onclick=async()=>{try{if(!window.desktop)throw new Error('Open the desktop app to use browser tabs.');const info=await window.desktop.browser({action:'create'});openTab({id:info.id,type:'browser',label:info.title||'New tab',info});}catch(error){toast(error.message);}};
@@ -447,10 +469,12 @@ function renderSettings() {
   const settings=state.data.settings;
   $('#main').innerHTML=`<div class="heading"><div><div class="eyebrow">Configuration</div><h1>Setup & settings.</h1><p class="muted">Plain JSON settings for new chats and schedules. Existing runs keep their captured configuration.</p></div><button class="primary" id="save-settings">Save settings</button></div><div class="grid"><section class="card"><h2>Workspace</h2><div class="field"><label>Default working directory</label><input id="settings-cwd" value="${escape(settings.workspace.cwd)}"></div><div class="field"><label>Additional repositories / directories · one per line</label><textarea id="settings-roots" rows="5">${escape(settings.workspace.additionalDirectories.join('\n'))}</textarea></div><div class="row"><div><label>Default provider</label><select id="settings-provider"><option value="copilot" ${settings.provider==='copilot'?'selected':''}>GitHub Copilot</option><option value="codex" ${settings.provider==='codex'?'selected':''}>Codex</option><option value="claude" ${settings.provider==='claude'?'selected':''}>Claude</option><option value="rehearsal" ${settings.provider==='rehearsal'?'selected':''}>Local rehearsal</option></select></div><div><label>Default model</label>${modelPicker('settings-model',settings.model,settings.provider)}<button class="subtle" id="settings-model-refresh">↻ Refresh models</button></div></div>${modelControls('settings-model',settings)}<div class="field"><label>Time zone</label><input id="settings-timezone" value="${escape(settings.timezone)}"></div><div class="field"><label>Skill directories · one per line</label><textarea id="settings-skills" rows="3">${escape(settings.skillDirectories.join('\n'))}</textarea></div><details><summary>Default MCP servers · JSON</summary><p class="note">Use command arguments and environment references. Keep secrets in provider authentication or the system keychain.</p><textarea id="settings-mcp" rows="10">${escape(JSON.stringify(settings.mcpServers,null,2))}</textarea></details></section><section class="card"><h2>Where your files live</h2><p class="note">New app schedules:</p><div class="filepath">${escape(state.data.home)}/schedules/</div><p class="note">Run history:</p><div class="filepath">${escape(state.data.home)}/runs/</div><p class="note">Settings:</p><div class="filepath">${escape(settings.file)}</div><button id="open-settings">Open settings file ↗</button><hr class="divider"><h3>Repository-owned schedules</h3><p class="note">An imported organization workflows schedule remains owned by its organization workflows automation manifest. Change that source with AI, export it, then refresh the local copy. The schedule editor shows both locations.</p><h3>Workspace context</h3><p class="note">Copilot receives all listed roots and can read their instructions and files. The VS Code companion also sends the active file, selection location, and open file paths. VS Code’s code index, extension tools, and existing chat history are not copied.</p><h3>Copilot session storage</h3><p class="note">Choose an existing folder for new Copilot sessions. Existing sessions keep their original location. This also holds Copilot configuration; changing it can require sign-in.</p><input id="settings-copilot-home" placeholder="Provider default (~/.copilot)" value="${escape(settings.copilotDataDirectory || '')}"><h3>Data directory</h3><p class="note">Set PROTEUS_HOME before launching to use another data directory. Moving live run history is not performed by this settings screen.</p></section></div>`;
   $('#main').insertAdjacentHTML('afterbegin',`<section class="card setup-appearance"><h2>Appearance</h2><label><input id="settings-show-usage" type="checkbox" ${settings.appearance?.showProviderUsage!==false?'checked':''}>Show AI usage in the sidebar</label></section><section id="life-setup"></section>`);
+  $('#settings-show-usage').dataset.settingsRevision=settings.revision;
+  $('#settings-show-usage').onchange=event=>saveAppearance({showProviderUsage:event.target.checked}).catch(error=>toast(error.message));
   renderLifeSetup($('#life-setup'));
   $('#main').insertAdjacentHTML('beforeend','<section class="card"><h2>Terminal</h2><p class="note">Manage shell, font, colors and optional startup commands.</p><button id="terminal-profiles">Terminal profiles</button></section>');
   $('#terminal-profiles').onclick=()=>openTerminalProfiles();
-  $('#save-settings').onclick=async()=>{try{await api('/api/settings',{settings:{...settings,appearance:{...settings.appearance,showProviderUsage:$('#settings-show-usage').checked},copilotDataDirectory:$('#settings-copilot-home').value.trim() || undefined,workspace:{cwd:$('#settings-cwd').value.trim(),additionalDirectories:lines($('#settings-roots').value)},provider:$('#settings-provider').value,model:$('#settings-model').value.trim(),...modelSelection('settings-model'),timezone:$('#settings-timezone').value.trim(),skillDirectories:lines($('#settings-skills').value),mcpServers:JSON.parse($('#settings-mcp').value)},expectedRevision:settings.revision});await refresh(true);toast('Settings saved.');}catch(e){toast(e.message);}};
+  $('#save-settings').onclick=async()=>{try{await api('/api/settings',{settings:{...settings,appearance:{...settings.appearance,...state.data.settings.appearance,showProviderUsage:$('#settings-show-usage').checked},copilotDataDirectory:$('#settings-copilot-home').value.trim() || undefined,workspace:{cwd:$('#settings-cwd').value.trim(),additionalDirectories:lines($('#settings-roots').value)},provider:$('#settings-provider').value,model:$('#settings-model').value.trim(),...modelSelection('settings-model'),timezone:$('#settings-timezone').value.trim(),skillDirectories:lines($('#settings-skills').value),mcpServers:JSON.parse($('#settings-mcp').value)},expectedRevision:$('#settings-show-usage').dataset.settingsRevision});await refresh(true);toast('Settings saved.');}catch(e){toast(e.message);}};
   $('#settings-model-refresh').onclick=()=>refreshModels('settings-model','settings-provider',true);
   $('#settings-provider').onchange=()=>refreshModels('settings-model','settings-provider');
   void refreshModels('settings-model','settings-provider');

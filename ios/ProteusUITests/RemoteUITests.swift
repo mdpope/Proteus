@@ -191,3 +191,34 @@ extension RemoteUITests {
         let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Independent Mac destinations"; shot.lifetime = .keepAlways; add(shot)
     }
 }
+
+
+extension RemoteUITests {
+    @MainActor func testEditRelayForOneSavedMacPersistsWithoutRepairing() throws {
+        let app = XCUIApplication(); app.launchArguments = ["--synthetic-destinations"]; app.launch()
+        let picker = app.buttons["destination-picker"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 20)); picker.tap(); app.buttons["Manage Macs"].tap()
+        let work = "10000000-0000-4000-8000-000000000002", personal = "10000000-0000-4000-8000-000000000001"
+        app.buttons["edit-relay-" + work].tap()
+        let field = app.textFields["relay-address"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        func replace(_ value: String) {
+            field.tap(); field.press(forDuration: 1.2)
+            let selectAll = app.menuItems["Select All"]
+            if selectAll.waitForExistence(timeout: 3) { selectAll.tap() }
+            else { let button = app.buttons["Select All"]; XCTAssertTrue(button.waitForExistence(timeout: 3)); button.tap() }
+            field.typeText(value)
+            XCTAssertEqual(field.value as? String, value)
+        }
+        replace("ws://external.example.test"); app.buttons["save-relay"].tap()
+        XCTAssertTrue(app.staticTexts["relay-error"].waitForExistence(timeout: 5))
+        replace("wss://relay.example.test"); app.buttons["save-relay"].tap()
+        XCTAssertTrue(app.buttons["edit-relay-" + personal].waitForExistence(timeout: 5)); app.buttons["edit-relay-" + personal].tap()
+        XCTAssertEqual(field.value as? String, "ws://127.0.0.1:1"); app.buttons["Cancel"].tap(); app.buttons["Done"].tap()
+        XCTAssertTrue(picker.label.contains("Build Mac"))
+        app.terminate(); app.launchArguments = []; app.launch()
+        XCTAssertTrue(picker.waitForExistence(timeout: 20)); picker.tap(); app.buttons["Manage Macs"].tap(); app.buttons["edit-relay-" + work].tap()
+        XCTAssertEqual(field.value as? String, "wss://relay.example.test")
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Edit relay without replacing pairing"; shot.lifetime = .keepAlways; add(shot)
+    }
+}

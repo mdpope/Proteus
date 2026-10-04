@@ -177,3 +177,62 @@ extension DestinationTests {
         XCTFail("Destination did not reach expected state"); throw RemoteError(message: "Timed out")
     }
 }
+
+
+extension DestinationTests {
+    @MainActor func testRelayValidationMatchesOriginAndLocalNetworkRules() throws {
+        for value in ["https://relay.example.test", "ws://relay.example.test", "ws://10.nope.1.2.3", "ws://10.+1.2.3", "ws://10..1.2.3", "wss://user:password@relay.example.test", "wss://relay.example.test/socket", "wss://relay.example.test?host=other", "wss://relay.example.test#fragment", "wss://", "ws://172.32.0.1", "wss://relay.example.test:70000"] {
+            XCTAssertThrowsError(try RemoteStore.validatedRelay(value), value)
+        }
+        for value in ["ws://localhost:4328", "ws://127.0.0.1:4328", "ws://192.168.1.2", "ws://172.16.0.1", "ws://10.2.3.4", "ws://mac.local", "wss://relay.example.test"] { XCTAssertEqual(try RemoteStore.validatedRelay(value), value) }
+        XCTAssertEqual(try RemoteStore.validatedRelay("  wss://relay.example.test/\n"), "wss://relay.example.test")
+    }
+    @MainActor func testEditRelayPreservesCredentialCacheDraftsAndOtherHostAndCancelsPending() async throws {
+        let (root, service) = try fixture(); let destinations = DestinationStore(root: root, keychainService: service)
+        defer { destinations.resetForTesting(); try? FileManager.default.removeItem(at: root) }
+        let a = credential(UUID().uuidString), b = credential(UUID().uuidString)
+        try destinations.register(a, label: "Personal"); let personal = try XCTUnwrap(destinations.selected)
+        personal.chats["chat"] = .object(["title": .string("Keep conversation")]); personal.setDraft("reply:chat", .string("Keep draft")); personal.flushCache()
+        let before = try RemoteCrypto.open(String(contentsOf: personal.cacheURL, encoding: .utf8), key: a.key, aad: "proteus-cache-v1")
+        try destinations.register(b, label: "Work"); let work = try XCTUnwrap(destinations.selected)
+        let otherCache = try Data(contentsOf: work.cacheURL)
+        try destinations.editRelay(a.hostId, address: "wss://new.example.test")
+        XCTAssertTrue(destinations.selected === work); XCTAssertFalse(personal.connected); XCTAssertEqual(destinations.selectedID, b.hostId)
+        XCTAssertEqual(try Data(contentsOf: work.cacheURL), otherCache)
+        let saved = try XCTUnwrap(DeviceKeychain.load(hostID: a.hostId, service: service))
+        XCTAssertEqual(saved.key, a.key); XCTAssertEqual(saved.deviceId, a.deviceId); XCTAssertEqual(saved.hostId, a.hostId); XCTAssertEqual(saved.relay, "wss://new.example.test")
+        XCTAssertEqual(DeviceKeychain.load(hostID: b.hostId, service: service)?.relay, b.relay)
+        let after = try RemoteCrypto.open(String(contentsOf: personal.cacheURL, encoding: .utf8), key: a.key, aad: "proteus-cache-v1")
+        XCTAssertEqual(before, after)
+        try destinations.select(a.hostId, connect: false); personal.activity(true); personal.disconnect(); personal.connected = true
+        let pending = Task { try await personal.request("chat.start", ["prompt": .string("Do not replay")]) }
+        for _ in 0..<20 { if personal.pendingCommandCount == 1 { break }; await Task.yield() }
+        XCTAssertEqual(personal.pendingCommandCount, 1)
+        XCTAssertThrowsError(try destinations.editRelay(a.hostId, address: "ws://external.example.test")); XCTAssertTrue(personal.connected); XCTAssertEqual(personal.pendingCommandCount, 1)
+        try destinations.editRelay(a.hostId, address: "wss://next.example.test")
+        do { _ = try await pending.value; XCTFail("Endpoint change must cancel pending retry") } catch { XCTAssertTrue(error.localizedDescription.contains("Relay address changed")) }
+        XCTAssertEqual(personal.pendingCommandCount, 0); XCTAssertFalse(personal.connected); XCTAssertTrue(destinations.selected === personal)
+        XCTAssertEqual(personal.connection?.key, a.key); XCTAssertEqual(personal.draft("reply:chat").string, "Keep draft")
+        let restored = DestinationStore(root: root, keychainService: service)
+        XCTAssertEqual(restored.selected?.connection?.relay, "wss://next.example.test"); XCTAssertEqual(restored.selected?.connection?.deviceId, a.deviceId)
+        XCTAssertEqual(restored.selected?.draft("reply:chat").string, "Keep draft"); XCTAssertEqual(restored.selected?.chats["chat"]?["title"].string, "Keep conversation")
+        XCTAssertThrowsError(try destinations.editRelay(UUID().uuidString, address: "wss://new.example.test"))
+    }
+    @MainActor func testLiveRelayEditReconnectsSameHostWithSameKey() async throws {
+        let (root, service) = try fixture(); let destinations = DestinationStore(root: root, keychainService: service)
+        defer { destinations.resetForTesting(); try? FileManager.default.removeItem(at: root) }
+        let (data, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/pair")!)
+        destinations.activity(true); try destinations.add(try JSONDecoder().decode(JSON.self, from: data)["code"].string, label: "Personal")
+        try await destinationWait { destinations.selected?.connected == true }
+        let remote = try XCTUnwrap(destinations.selected), original = try XCTUnwrap(remote.connection)
+        remote.setDraft("new-chat", .string("Keep live draft"))
+        // Same fixture relay, different valid address: requires replacing the WebSocket transport.
+        try destinations.editRelay(original.hostId, address: "ws://localhost:4328")
+        XCTAssertFalse(remote.connected); XCTAssertEqual(remote.status, "Connecting…")
+        try await destinationWait { remote.connected }
+        await remote.refresh()
+        XCTAssertTrue(destinations.selected === remote); XCTAssertEqual(remote.connection?.relay, "ws://localhost:4328")
+        XCTAssertEqual(remote.connection?.key, original.key); XCTAssertEqual(remote.connection?.deviceId, original.deviceId); XCTAssertEqual(remote.connection?.hostId, original.hostId)
+        XCTAssertEqual(remote.state["hostName"].string, "Build Mac"); XCTAssertEqual(remote.draft("new-chat").string, "Keep live draft")
+    }
+}

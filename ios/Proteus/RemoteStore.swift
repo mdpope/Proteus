@@ -60,15 +60,35 @@ import Combine
         _ = try RemoteCrypto.key(value["key"].string)
         let formatter = ISO8601DateFormatter(); formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         guard let expiry = formatter.date(from: value["expiresAt"].string), expiry > Date() else { throw RemoteError(message: "Pairing code expired. Create a new one on the Mac.") }
-        guard let url = URL(string: value["relay"].string), ["ws", "wss"].contains(url.scheme ?? ""), url.user == nil, url.password == nil else { throw RemoteError(message: "Invalid relay address.") }
-        let host = url.host ?? ""
-        let parts = host.split(separator: ".").compactMap { Int($0) }
-        let ipv4 = parts.count == 4 && parts.allSatisfy { (0...255).contains($0) }
-        let privateIP = ipv4 && (parts[0] == 10 || (parts[0] == 192 && parts[1] == 168) || (parts[0] == 172 && (16...31).contains(parts[1])))
-        let local = host == "localhost" || host == "127.0.0.1" || host.hasSuffix(".local") || privateIP
-        guard url.scheme == "wss" || local else { throw RemoteError(message: "External relays require wss://.") }
+        let relay = try Self.validatedRelay(value["relay"].string)
         suspend(); if legacyCredentials { DeviceKeychain.clear() }; connection = nil; paired = false; state = .null; chats = [:]; cursor = ""; try? FileManager.default.removeItem(at: cacheURL)
-        invite = value; active = true; connect()
+        var normalized = value.object; normalized["relay"] = .string(relay)
+        invite = .object(normalized); active = true; connect()
+    }
+    /// Same origin-only transport policy as the Mac: plaintext is restricted to local networks.
+    static func validatedRelay(_ value: String) throws -> String {
+        let text = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard var url = URLComponents(string: text), let host = url.host?.lowercased(), !host.isEmpty,
+              ["ws", "wss"].contains(url.scheme ?? ""), url.user == nil, url.password == nil,
+              url.query == nil, url.fragment == nil, ["", "/"].contains(url.path),
+              url.port == nil || (1...65535).contains(url.port!),
+              !text.unicodeScalars.contains(where: { CharacterSet.whitespacesAndNewlines.contains($0) || CharacterSet.controlCharacters.contains($0) })
+        else { throw RemoteError(message: "Enter a relay address such as wss://relay.example.com, without a path, account, query or fragment.") }
+        let octets = host.split(separator: ".", omittingEmptySubsequences: false)
+        let parts = octets.compactMap { Int($0) }
+        let ipv4 = octets.count == 4 && octets.allSatisfy { !$0.isEmpty && $0.utf8.allSatisfy { (48...57).contains($0) } } && parts.count == 4 && parts.allSatisfy { (0...255).contains($0) }
+        let privateIP = ipv4 && (parts[0] == 10 || (parts[0] == 192 && parts[1] == 168) || (parts[0] == 172 && (16...31).contains(parts[1])))
+        let local = ["localhost", "127.0.0.1", "::1", "[::1]"].contains(host) || host.hasSuffix(".local") || privateIP
+        guard url.scheme == "wss" || local else { throw RemoteError(message: "External relays require wss://.") }
+        url.host = host; url.path = ""
+        guard let normalized = url.string, url.url != nil else { throw RemoteError(message: "Invalid relay address.") }
+        return normalized
+    }
+    // Called only after the destination's existing credential was durably updated.
+    fileprivate func changeRelay(_ relay: String, reconnect: Bool) {
+        suspend(reason: "Relay address changed. An unconfirmed action may have reached this Mac; refresh its history before retrying.")
+        connection?.relay = relay; error = nil
+        activity(reconnect)
     }
     func connect() {
         guard active, socket == nil, connection != nil || invite != nil else { return }
@@ -177,10 +197,20 @@ import Combine
                 if let continuation = waiting.removeValue(forKey: id) { continuation.resume(throwing: RemoteError(message: "The host did not confirm the action. Refresh before trying again.")) }
                 pendingCommands.removeValue(forKey: id); timeouts.removeValue(forKey: id)
             }
-            Task { do { try await transmit(command) } catch { if connected { self.error = error.localizedDescription } } }
+            let requestGeneration = generation
+            Task {
+                guard requestGeneration == generation, pendingCommands[id] != nil else { return }
+                do { try await transmit(command) } catch { if requestGeneration == generation && connected { self.error = error.localizedDescription } }
+            }
         }
     }
-    private func retryPending() async { for command in pendingCommands.values { try? await transmit(command) } }
+    private func retryPending() async {
+        let retryGeneration = generation
+        for (id, command) in pendingCommands {
+            guard generation == retryGeneration, pendingCommands[id] != nil else { return }
+            try? await transmit(command)
+        }
+    }
     func refresh() async {
         do { let value = try await request("sync", ["cursor": .string(cursor)]); cursor = value["cursor"].string; updateState(value["state"]); saveCache() }
         catch { self.error = error.localizedDescription }
@@ -226,9 +256,9 @@ import Combine
     func disconnect() { generation = UUID(); readTask?.cancel(); retryTask?.cancel(); socket?.cancel(with: .goingAway, reason: nil); socket = nil; connected = false; status = paired ? "Offline · cached history" : "Not paired" }
     func forget() { active = false; suspend(); if legacyCredentials { DeviceKeychain.clear() }; connection = nil; invite = nil; paired = false; state = .null; chats = [:]; drafts = [:]; selectedChat = nil; cursor = ""; cacheTimer?.cancel(); try? FileManager.default.removeItem(at: cacheURL); for c in waiting.values { c.resume(throwing: RemoteError(message: "Device forgotten.")) }; waiting.removeAll(); pendingCommands.removeAll(); timeouts.values.forEach { $0.cancel() }; timeouts.removeAll() }
     // A host switch never leaves a retry behind. Commands already accepted by the Mac continue there.
-    func suspend() {
+    func suspend(reason: String = "Mac selection changed. An unconfirmed action may have reached that Mac; refresh its history before retrying.") {
         flushCache(); active = false; disconnect(); sendTask?.cancel(); sendTask = nil
-        for continuation in waiting.values { continuation.resume(throwing: RemoteError(message: "Mac selection changed. An unconfirmed action may have reached that Mac; refresh its history before retrying.")) }
+        for continuation in waiting.values { continuation.resume(throwing: RemoteError(message: reason)) }
         waiting.removeAll(); pendingCommands.removeAll(); timeouts.values.forEach { $0.cancel() }; timeouts.removeAll()
     }
     func flushCache() {
@@ -310,6 +340,22 @@ private struct DestinationIndex: Codable {
         if selectedID != id || selected !== remote { selected?.suspend() }
         selectedID = id; selected = remote; try persist()
         if connect && active { remote.activity(true) }
+    }
+    func relayAddress(for id: String) -> String? {
+        guard destinations.contains(where: { $0.id == id }) else { return nil }
+        return stores[id]?.connection?.relay ?? DeviceKeychain.load(hostID: id, service: service)?.relay
+    }
+    func editRelay(_ id: String, address: String) throws {
+        guard destinations.contains(where: { $0.id == id }), var connection = DeviceKeychain.load(hostID: id, service: service), connection.hostId == id else {
+            throw RemoteError(message: "This Mac’s pairing key is unavailable. Unlock the device and try again.")
+        }
+        let relay = try RemoteStore.validatedRelay(address)
+        guard relay != connection.relay else { return }
+        // Save first. A failed Keychain write leaves the live socket and old endpoint untouched.
+        connection.relay = relay
+        try DeviceKeychain.save(connection, hostID: id, service: service)
+        stores[id]?.changeRelay(relay, reconnect: selectedID == id && active)
+        objectWillChange.send()
     }
     func rename(_ id: String, label: String) throws {
         let name = label.trimmingCharacters(in: .whitespacesAndNewlines)

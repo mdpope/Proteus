@@ -4,6 +4,15 @@ This is a concise behavior log. Git commits and pull requests contain the comple
 
 ## Unreleased
 
+- Edit a saved Mac’s relay address on iPhone/iPad without replacing its identity, pairing key,
+  cached history or drafts. Reconnect only the selected destination and stop old transport retries.
+
+- Collapse AI allowance to a compact three-provider summary with a persistent expand control.
+  Only the Setup visibility flag hides the panel; its checkbox now saves immediately without
+  discarding other Setup edits. Existing disabled preferences remain disabled.
+- Select desktop tabs by clicking anywhere in their rectangle; closing a background tab does
+  not activate it, and title buttons retain keyboard activation.
+
 - Read authenticated Claude account allowances with available reset details; distinguish real quota
   from per-turn token counts and explicitly unavailable timestamps.
 - Apply Codex workspace writes only to currently trusted canonical roots, retain separate command

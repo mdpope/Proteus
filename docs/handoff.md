@@ -58,6 +58,10 @@ that a previous conversation is available to the next agent.
 - Model settings: `node test/models-ui.mjs`; chat presentation: `node test/chat-ui.mjs`;
   permissions: `node test/permissions-ui.mjs`; context: `node test/context-controls-ui.mjs`.
   These use disposable data and synthetic content; do not substitute the real application home.
+- Sidebar visibility/collapse and whole-tab activation: `node test/sidebar-tabs-ui.mjs` uses
+  disposable app data and a real isolated restart. `appearance.showProviderUsage` is the Setup
+  feature flag; `appearance.providerUsageCollapsed` independently retains the compact sidebar.
+  Both save immediately. Existing hidden preferences are preserved; do not globally migrate them.
 - Native UI: start `node test/mobile-host.mjs`, then use the checked-in Xcode project and an
   available simulator (`xcrun simctl list devices available`). Run the relevant `ProteusTests`
   and `ProteusUITests`; fixture ports 4328/4329 must be free. Stop the fixture afterward.
@@ -98,7 +102,8 @@ See `chat-controls.md` for queue/steer semantics, `mcp-auth.md` for sign-in reco
 ## October 4 continuation: Transcription, terminals and remote clients
 
 This section supersedes earlier deployment/timeout statements below. Desktop and physical mobile
-updates are installed. Live Life activation and processing ownership handoff remain held as noted.
+updates are installed. Life is active and verified through the installed app; processing ownership
+handoff remains held as noted.
 
 - Transcription now separates **Omi** from **private notes & MacWhisper**, with independent execution
   gates and ordinary schedules. Existing five IDs/history remain compatible. Both general schedules
@@ -138,14 +143,23 @@ updates are installed. Live Life activation and processing ownership handoff rem
 - Native Life backup restoration verification and the separately approved additive version-2 upgrade
   have completed. Core table schemas/row hashes and the nutrition digest remained unchanged; only
   two native audit ledgers were added. All seven database-referenced original evidence files were
-  read and hash-verified through approved SFTP. Life remains configured but off pending Keychain
-  access and final app acceptance; no production evidence upload/test record was created. Personal
-  and work hosts keep independent pairing keys, caches and permissions on web/mobile destinations.
+  read and hash-verified through approved SFTP. Keychain access approval is complete. The installed
+  app reviewed schema v2 with no migrations, enabled Life, and read all seven sections through its
+  actual Keychain resolver and SSH route; activation changed no database records. No production
+  evidence upload/test record was created. The four new deployment credentials were explicitly
+  approved, saved to the authoritative vault, and verified by exact-content retrieval after sync;
+  private item references remain in the website operations project. Personal and work hosts retain
+  independent pairing keys, caches and permissions. Both Mac relay hosts are online. The signed-in web client is paired with the personal host and
+  has read its schedules; the work host’s separate browser invitation requires its local approval.
+  Existing work-host mobile authorizations and its previous container remain available for rollback.
 
 - Live installed Claude allowance now resolves through the authenticated bundled Claude Code
   `/usage` path. Both five-hour and weekly percentages and the available weekly reset were verified
   in the installed UI; missing reset timestamps remain explicitly unavailable. Usage observations
   stay outside Git. Provider metadata still governs available models/effort/speed.
+- Native Manage Macs now offers **Edit relay**, preserving the Mac identity, pairing credentials,
+  history and drafts. Eight destination tests plus edit/restart UI checks passed on both iPhone and
+  iPad simulators; a synthetic relay verified same-key reconnect.
 - The development-signed Mac update restored the existing four tabs and active private browser tab.
   Both physical iPhone and iPad were updated in place and independently observed running. Pairings
   and encrypted cache migration were preserved; real relay commands were not dispatched from them.
@@ -155,7 +169,8 @@ updates are installed. Live Life activation and processing ownership handoff rem
   native turn. Shell approvals remain separate, so this does not establish unattended transcript
   execution. No permission mode or saved operational command rule was changed.
 
-Validation: 198 Node tests and static checks passed. The native Codex sandbox smoke test verified
+Validation: 199 Node tests and static checks passed. The sidebar/tab regression check passed ten
+groups including settings persistence across actual restart, compact meters, and whole-tab selection. The native Codex sandbox smoke test verified
 writes to two selected roots, denial of sibling/symlink escapes and network access, and native
 approval settings. The full desktop shell passed 21 groups; the signed Ghostty terminal check
 passed eight groups including reconnecting a failed renderer to the same PTY. Eleven browser/tab
@@ -163,8 +178,8 @@ checks cover restart, transition lifetime and bounded pinch behavior; physical t
 unverified. Signed packaging preserved Copilot vendor bytes/signatures. The production website's
 49 Laravel tests (276 assertions), 17 remote protocol checks and 11 browser checks passed before
 deployment. Native Life has 19 backend and 14 renderer checks; actual database reads and original
-attachment hashes were separately verified. Real mobile pairing through the new relay, protected
-Keychain access for installed Life, and processing cutover remain outstanding.
+attachment hashes and installed Keychain-backed Life access were separately verified. Real mobile use through the new relay and processing cutover remain outstanding. The work-host
+relay cutover is confirmed by its owning chat; its browser pairing is still awaiting local approval. The earlier credential-approval blockers are resolved.
 
 ## October 3: Omi, native Life and Claude expansion (earlier snapshot)
 

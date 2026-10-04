@@ -134,6 +134,7 @@ struct DestinationsView: View {
     @State private var renameID: String?
     @State private var renameLabel = ""
     @State private var forgetID: String?
+    @State private var editingRelay: MacDestination?
     var body: some View {
         List {
             Section("Saved Macs") {
@@ -144,6 +145,7 @@ struct DestinationsView: View {
                         HStack {
                             Button("Use Mac") { do { try destinations.select(destination.id) } catch { destinations.error = error.localizedDescription } }.disabled(destination.id == destinations.selectedID).accessibilityIdentifier("select-" + destination.id)
                             Button("Rename") { renameID = destination.id; renameLabel = destination.label }.accessibilityIdentifier("rename-" + destination.id)
+                            Button("Edit relay") { editingRelay = destination }.accessibilityIdentifier("edit-relay-" + destination.id)
                             Button("Forget", role: .destructive) { forgetID = destination.id }.accessibilityIdentifier("forget-" + destination.id)
                         }.buttonStyle(.bordered)
                     }.padding(.vertical, 5)
@@ -151,8 +153,33 @@ struct DestinationsView: View {
             }
             Section { Button("Add Mac", systemImage: "plus", action: addMac); Text("Switching stops local retries to the previous Mac. Work already accepted by that Mac continues there. Unconfirmed actions should be checked in that Mac’s history before retrying.").font(.footnote).foregroundStyle(.secondary) }
         }.navigationTitle("Mac destinations")
+            .sheet(item: $editingRelay) { destination in NavigationStack { RelayEditor(destination: destination, address: destinations.relayAddress(for: destination.id) ?? "") } }
             .alert("Rename Mac", isPresented: Binding(get: { renameID != nil }, set: { if !$0 { renameID = nil } })) { TextField("Mac name", text: $renameLabel); Button("Cancel", role: .cancel) { renameID = nil }; Button("Save") { if let id = renameID { do { try destinations.rename(id, label: renameLabel) } catch { destinations.error = error.localizedDescription } }; renameID = nil } }
             .confirmationDialog("Forget this Mac? Its key, cached history and local drafts will be removed from this device. Other Macs are unchanged.", isPresented: Binding(get: { forgetID != nil }, set: { if !$0 { forgetID = nil } }), titleVisibility: .visible) { Button("Forget Mac", role: .destructive) { if let id = forgetID { do { try destinations.forget(id) } catch { destinations.error = error.localizedDescription } }; forgetID = nil } }
+    }
+}
+struct RelayEditor: View {
+    @EnvironmentObject var destinations: DestinationStore
+    @Environment(\.dismiss) private var dismiss
+    let destination: MacDestination
+    @State var address: String
+    @State private var failure: String?
+    var body: some View {
+        Form {
+            Section(destination.label) {
+                TextField("Relay address", text: $address).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL).accessibilityIdentifier("relay-address")
+                Text("Use wss:// for an internet relay, or ws:// for a local network relay. Configure this Mac to use the same relay first.").font(.footnote).foregroundStyle(.secondary)
+            }
+            Section {
+                Text("Your Mac identity, device key, cached history and drafts stay the same. Only this Mac’s relay address on this device changes. The selected Mac reconnects immediately.")
+                Text("Unconfirmed actions will stop retrying. Check this Mac’s refreshed history before submitting them again.").font(.footnote).foregroundStyle(.secondary)
+                if let failure { Text(failure).foregroundStyle(.orange).accessibilityIdentifier("relay-error") }
+            }
+        }.navigationTitle("Edit relay")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button("Save") { do { try destinations.editRelay(destination.id, address: address); dismiss() } catch { failure = error.localizedDescription } }.accessibilityIdentifier("save-relay").disabled(address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
+            }
     }
 }
 struct ConnectionView: View {

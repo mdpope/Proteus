@@ -59,10 +59,10 @@ try{
  await page.locator('[data-tab="feature-omi"]').click();
  await page.getByRole('tab',{name:'Logs',exact:true}).waitFor();
  await page.reload();await page.locator('[data-tab="feature-omi"]').waitFor();
- await page.locator('#hide-usage').click();await page.locator('#provider-usage').waitFor({state:'hidden'});
+ await page.locator('[data-page="settings"]').click();await page.locator('#settings-show-usage').uncheck();await page.locator('#provider-usage').waitFor({state:'hidden'});
  await page.reload();await page.locator('[data-page="settings"]').click();
  assert.equal(await page.locator('#settings-show-usage').isChecked(),false);
- await page.locator('#settings-show-usage').check();await page.locator('#save-settings').click();
+ await page.locator('#settings-show-usage').check();
  await page.locator('#provider-usage').waitFor({state:'visible'});
 
  // Real WebContentsView must disappear while the HTML file picker is modal.

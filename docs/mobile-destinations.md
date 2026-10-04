@@ -7,11 +7,33 @@ as **Build Mac** or **Work Mac**. The Macs may share `wss://relay.proteus.exampl
 retaining separate host IDs, device authorizations and encryption keys. The phone does not need
 provider credentials.
 
-**Manage Macs** offers selection, rename and independent forgetting. A saved Mac that is not
+**Manage Macs** offers selection, rename, **Edit relay**, and independent forgetting. A saved Mac that is not
 selected is not continuously polled; its row shows saved/offline status rather than claiming
 current reachability. Renaming changes only this device's label. Forgetting removes that Mac's
 local Keychain entry, encrypted history and drafts. It does not delete server records or revoke
 another device. Revoke the phone from the relevant Mac to remove its server-side authorization.
+
+## Change a relay without pairing again
+
+After moving a Mac to a different relay, open the destination menu on each iPhone/iPad,
+choose **Manage Macs**, then **Edit relay** on that Mac's row. Enter the new relay origin
+(for example `wss://relay.example.com`) and choose **Save**. Configure the Mac's remote host
+first, retaining its existing host identity and device authorizations. No fresh invitation,
+forgetting, reinstall, or device-key replacement is needed. To undo an unreachable address,
+open the same editor and restore the previous address; cached history remains available.
+
+Saving changes only that destination's relay field in its existing Keychain record. The host ID,
+device ID, encryption key, label, cached history, cursor and drafts are retained. The selected Mac
+reconnects when the app is active; editing another saved Mac leaves it offline until selected.
+A failed validation or Keychain update leaves the previous endpoint and transport unchanged.
+Changing transport cancels pending local retries: work already accepted by the Mac can continue,
+so inspect its refreshed history before resubmitting an unconfirmed action.
+
+External endpoints require `wss://`; `ws://` is allowed for loopback, private IPv4 and `.local`
+hosts. Addresses cannot include credentials, a path, query, or fragment. Trailing `/` is removed.
+The editor cannot change host identity or redirect a command to a different saved Mac. Its
+end-to-end device authentication is unchanged. An unreachable relay stays a connection error,
+not evidence that the pairing was lost.
 
 ## Isolation and switching
 
@@ -66,3 +88,17 @@ and `--only ProteusTests/DestinationTests`,
 `--only ProteusUITests/RemoteUITests/testMacDestinationPickerRenameAndIndependentForget`,
 and `--only ProteusUITests/RemoteUITests/testPairStartAndReply`. Select an iPad simulator with
 `--device` when validating the tablet layout.
+
+### Endpoint editor validation
+
+Focused destination tests cover origin validation, same-key credential persistence, unchanged
+encrypted-cache contents after decryption, drafts/history/cursor retention, independent host
+selection, cancellation of pending commands, and a live synthetic relay reconnect using the
+same host/device/key. The native UI test edits an unselected Mac, rejects an external plaintext
+endpoint, verifies the other Mac remains unchanged, restarts the app, and reads the saved address.
+Physical endpoint changes remain a separate deployment/operator step.
+
+October 4 endpoint-editor verification: iPhone 17 Pro and iPad Pro 13-inch (M5) simulators each
+passed all eight destination tests and the edit/invalid-address/restart UI test. The iPad run
+also includes strict rejection of nonnumeric private-IPv4 lookalikes. Screenshots were reviewed;
+Xcode result bundles remain temporary local artifacts. No physical device endpoint was changed.

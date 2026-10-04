@@ -8,7 +8,7 @@ Maintain this as the single backlog. Design rationale is in `decisions.md`; rece
 Implemented in source: separate Omi and general transcription areas, independently gated native
 and Codex schedules, canonical source parity checks, per-native-job lanes, full Proteus-branded
 website, native Life setup/records, all-root Markdown browsing, Ghostty terminal tabs/profiles,
-full desktop tab restoration/browser gestures, hideable allowance meters, Claude support, and
+full desktop tab restoration/browser gestures, collapsible allowance meters with a separate Setup visibility flag, Claude support, and
 separately paired Mac destinations on mobile/web. See the handoff for actual validation.
 
 Website code-only deployment and live relay TLS/two-host routing checks have completed. The
@@ -16,8 +16,13 @@ Mac, physical iPhone and physical iPad updates are installed; actual paired-clie
 new shared relay remains separate. Native
 Life backup restoration and the approved additive v2 upgrade are verified, preserving core table
 schemas/row hashes and the nutrition digest. Original evidence-file hashes also match. Life is
-configured but off pending Keychain access and final app acceptance; no production record writes
-or evidence uploads were used for verification.
+enabled and ready after Keychain approval; all seven sections read through the installed app’s
+actual credential resolver and SSH connection. No production record writes or evidence uploads
+were used for acceptance. The four deployment credentials are saved in the authoritative vault
+and verified after sync. Both Mac relay hosts are online; the personal host is paired with the
+signed-in web client and its schedules were read. The work-host browser invitation is pending
+approval in its owning chat. Mobile Manage Macs can edit a relay address while preserving the
+existing pairing key and history; actual device endpoint changes remain separate from installation.
 
 Existing native Omi services and Codex automations still own processing. Installed Codex catalog
 and two no-tools synthetic turns now pass, but real workflow tools, claims, context effects and
