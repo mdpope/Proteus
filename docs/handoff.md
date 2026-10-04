@@ -145,6 +145,13 @@ acceptance step. Do not infer installation from a build or simulator test.
   both cases. Mobile's first Markdown layout now explicitly reports its height so rich content
   appears without relying on a deferred ResizeObserver; subsequent height updates still work.
 
+The independently managed work Mac subsequently installed runtime `14b9819` through its owning
+chat and verified actual restart. All 91 runtime files matched; shared relay is online with no
+errors. Its host identity, three pairings, two tabs and five schedule files were preserved. Life
+remains off, no desktop peer was created, the primary checkout was untouched, and the old relay
+and an app rollback remain available. The local Build Mac and physical mobile installation
+holds above are still in effect; do not apply the work Mac result to them.
+
 Validation: 212 Node tests and static checks; 59 Laravel tests / 409 assertions; 15 desktop-peer
 UI groups plus three peer backend/persistence tests; 17 website remote groups; 12 website shell
 checks; 13 actual-restart/history-menu groups; 15 native desktop Life groups. Native mobile has
