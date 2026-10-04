@@ -1,0 +1,42 @@
+// Persist navigation keys only. Labels, routes, user records and remote state never enter storage.
+export function initShell(document=globalThis.document,window=globalThis.window) {
+    const host=document.querySelector('#shell-tabs'),account=document.body.dataset.browserAccount;
+    if(!host||!account)return;
+    const keys=['life','chats','schedules','workspaces','inbox','fuel','nutrition','connections','security'];
+    let source;try{source=JSON.parse(document.querySelector('#shell-sections').textContent);}catch{return;}
+    const sections=Object.fromEntries(keys.flatMap(key=>{
+        const value=source[key];if(!value||typeof value.label!=='string'||typeof value.url!=='string')return [];
+        try{const url=new URL(value.url,window.location.origin);if(url.origin!==window.location.origin||url.username||url.password)return [];return [[key,{label:value.label,url:url.href,icon:value.icon||''}]];}catch{return [];}
+    }));
+    if(!sections.life)return;
+    const storageKey='proteus.sections.v1.'+account;
+    let active=keys.includes(document.body.dataset.shellSection)?document.body.dataset.shellSection:'life';
+    const clean=value=>['life',...(Array.isArray(value)?value:[]).filter(key=>typeof key==='string'&&key!=='life'&&sections[key]&&keys.includes(key))].filter((key,index,array)=>array.indexOf(key)===index).slice(0,keys.length);
+    let tabs=['life'];try{tabs=clean(JSON.parse(window.localStorage.getItem(storageKey)));}catch{}
+    const persist=()=>{try{window.localStorage.setItem(storageKey,JSON.stringify(tabs));}catch{}};
+    function render() {
+        host.replaceChildren();
+        for(const key of tabs){
+            const section=sections[key],item=document.createElement('div'),link=document.createElement('a');
+            item.className='shell-tab'+(key===active?' selected':'');item.dataset.shellTab=key;
+            link.href=section.url;link.textContent=section.icon+' '+section.label;link.dataset.shellLink=key;if(key===active)link.setAttribute('aria-current','page');item.append(link);
+            if(key!=='life'){
+                const close=document.createElement('button');close.type='button';close.className='shell-tab-close';close.setAttribute('aria-label','Close '+section.label);close.textContent='×';close.dataset.shellClose=key;
+                close.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();tabs=tabs.filter(item=>item!==key);persist();if(active===key)window.location.assign(sections.life.url);else render();});item.append(close);
+            }
+            item.addEventListener('click',event=>{if(event.target.closest('a,button'))return;if(window.getSelection()?.isCollapsed===false)return;link.click();});
+            host.append(item);
+        }
+        document.querySelectorAll('[data-shell-nav]').forEach(link=>{const current=link.dataset.shellNav===active;link.classList.toggle('active',current);if(current)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');});
+    }
+    function visit(key){if(!sections[key])return;active=key;document.body.dataset.shellSection=key;tabs=clean([...tabs,key]);persist();render();}
+    visit(active);
+    document.addEventListener('proteus:section',event=>{if(['chats','schedules','workspaces'].includes(event.detail?.key))visit(event.detail.key);});
+    const clear=()=>{try{window.localStorage.removeItem(storageKey);window.localStorage.removeItem(`proteus-remote-ui:${account}`);}catch{}};
+    document.querySelector('form[action$="/logout"]')?.addEventListener('submit',clear);
+    window.addEventListener('storage',event=>{if(event.key===storageKey){try{tabs=clean(JSON.parse(event.newValue));if(!tabs.includes(active))tabs=clean([...tabs,active]);render();}catch{}}});
+    if(typeof window.BroadcastChannel==='function'){
+        const channel=new window.BroadcastChannel('proteus-remote-account');channel.addEventListener('message',event=>{if(event.data?.type==='logout'&&event.data.account===account)clear();});window.addEventListener('pagehide',()=>channel.close(),{once:true});
+    }
+}
+initShell();

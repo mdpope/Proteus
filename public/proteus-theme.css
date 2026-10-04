@@ -1,0 +1,2 @@
+/* Shared desktop and website palette. Application-specific layouts stay separate. */
+:root{color-scheme:dark;--proteus-bg:#111716;--proteus-sidebar:#141b18;--proteus-panel:#19201e;--proteus-line:#303b36;--proteus-muted:#8e9e95;--proteus-ink:#edf2ec;--proteus-accent:#c2e8a0;--proteus-accent-ink:#182414;--proteus-warn:#eecb87;--proteus-control:#242e29;--proteus-control-hover:#334137;--proteus-input:#111715;--proteus-focus:#83a76e}

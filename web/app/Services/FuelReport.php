@@ -46,13 +46,13 @@ class FuelReport
 
     public function forVehicle(Vehicle $vehicle): array
     {
-        $fills = $vehicle->fills()->orderBy('filled_at')->orderBy('id')->get();
+        $fills = $vehicle->fills()->where('workspace_id', $vehicle->workspace_id)->orderBy('filled_at')->orderBy('id')->get();
         $report = $this->calculate($fills);
         $observations = $fills->map(fn ($f) => ['date' => $f->filled_at->toDateString(), 'miles' => (float) $f->odometer])->all();
-        foreach (OdometerReading::where('vehicle_id', $vehicle->id)->get() as $r) {
+        foreach (OdometerReading::where('workspace_id', $vehicle->workspace_id)->where('vehicle_id', $vehicle->id)->get() as $r) {
             $observations[] = ['date' => $r->observed_on->toDateString(), 'miles' => (float) $r->miles];
         }
-        foreach ($vehicle->services()->whereNotNull('odometer')->where('date_precision', 'day')->where('odometer_approximate', false)->get() as $r) {
+        foreach ($vehicle->services()->where('workspace_id', $vehicle->workspace_id)->whereNotNull('odometer')->where('date_precision', 'day')->where('odometer_approximate', false)->get() as $r) {
             $observations[] = ['date' => $r->occurred_on->toDateString(), 'miles' => (float) $r->odometer];
         }
         usort($observations, fn ($a, $b) => strcmp($a['date'], $b['date']) ?: ($a['miles'] <=> $b['miles']));

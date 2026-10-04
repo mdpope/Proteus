@@ -1,5 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('desktop', {
+  peers: value => ipcRenderer.invoke('proteus:desktop-peers', value),
+  onPeer: handler => { const listener = (_event, value) => handler(value); ipcRenderer.on('proteus:desktop-peer-event', listener); return () => ipcRenderer.removeListener('proteus:desktop-peer-event', listener); },
   terminal: value => ipcRenderer.invoke('proteus:terminal', value),
   onTerminal: handler => { const listener = (_event, value) => handler(value); ipcRenderer.on('proteus:terminal-event', listener); return () => ipcRenderer.removeListener('proteus:terminal-event', listener); },
   workspaceSession: value => ipcRenderer.invoke('proteus:workspace-session', value),

@@ -2,11 +2,29 @@ import SwiftUI
 
 @main struct ProteusApp: App {
     @StateObject private var destinations = DestinationStore()
-    @Environment(\.scenePhase) private var phase
+    @StateObject private var life = LifeStore()
     var body: some Scene {
-        WindowGroup {
-            DestinationRoot().environmentObject(destinations).tint(Color(red: 0.67, green: 0.86, blue: 0.49)).preferredColorScheme(.dark)
-                .onOpenURL { url in do { try destinations.add(url.absoluteString, label: "New Mac") } catch { destinations.error = error.localizedDescription } }
+        WindowGroup { ProteusRoot().environmentObject(destinations).environmentObject(life) }
+    }
+}
+struct ProteusRoot: View {
+    @EnvironmentObject var destinations: DestinationStore
+    @EnvironmentObject var life: LifeStore
+    @State private var area = "macs"
+    @AppStorage("lifeEnabled") private var lifeEnabled = false
+    private var showLife: Bool {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--synthetic-life") { return true }
+        #endif
+        return lifeEnabled
+    }
+    @Environment(\.scenePhase) private var phase
+    var body: some View {
+            TabView(selection:$area) {
+                DestinationRoot().tabItem { Label("Macs",systemImage:"desktopcomputer") }.tag("macs")
+                if showLife { LifeRootView().tabItem { Label("Life",systemImage:"heart.text.square") }.tag("life") }
+            }.overlay { if phase != .active { Color.black.ignoresSafeArea().overlay { Label("Proteus",systemImage:"lock.shield").font(.title2).foregroundStyle(.secondary) } } }.tint(Color(red: 0.67, green: 0.86, blue: 0.49)).preferredColorScheme(.dark)
+                .onOpenURL { url in if url.scheme == "proteus" && url.host == "pair" { area = "macs"; do { try destinations.add(url.absoluteString, label: "New Mac") } catch { destinations.error = error.localizedDescription } } }
                 .task {
                     #if DEBUG
                     if ProcessInfo.processInfo.arguments.contains("--reset-pairing") { destinations.resetForTesting() }
@@ -21,23 +39,26 @@ import SwiftUI
                     destinations.activity(true)
                 }
                 .onChange(of: phase) { _, value in destinations.activity(value == .active) }
+                .onChange(of: lifeEnabled) { _, enabled in if !enabled { area = "macs" } }
                 .alert("Proteus", isPresented: Binding(get: { destinations.error != nil }, set: { if !$0 { destinations.error = nil } })) { Button("OK") { destinations.error = nil } } message: { Text(destinations.error ?? "") }
-        }
     }
 }
 struct DestinationRoot: View {
     @EnvironmentObject var destinations: DestinationStore
     @State private var adding = false
     @State private var managing = false
+    @State private var setup = false
     var body: some View {
         Group {
             if let remote = destinations.selected {
                 VStack(spacing: 0) {
-                    DestinationBar(remote: remote, adding: $adding, managing: $managing)
+                    DestinationBar(remote: remote, adding: $adding, managing: $managing, setup: $setup)
+                    ProviderUsageStrip(store: remote).id(destinations.selectedID)
                     RootView().environmentObject(remote).id(destinations.selectedID)
                 }
-            } else { NavigationStack { PairView() } }
+            } else { NavigationStack { PairView().toolbar { ToolbarItem(placement: .primaryAction) { Button("App setup", systemImage: "gearshape") { setup = true }.accessibilityIdentifier("app-setup") } } } }
         }
+        .sheet(isPresented: $setup) { NavigationStack { NativeSetupView() } }
         .sheet(isPresented: $adding, onDismiss: { destinations.cancelPairing() }) { NavigationStack { PairView().toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { destinations.cancelPairing(); adding = false } } } } }
         .sheet(isPresented: $managing) { NavigationStack { DestinationsView { managing = false; adding = true }.toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { managing = false } } } } }
         .onChange(of: destinations.selectedID) { _, _ in adding = false }
@@ -49,6 +70,7 @@ struct DestinationBar: View {
     @ObservedObject var remote: RemoteStore
     @Binding var adding: Bool
     @Binding var managing: Bool
+    @Binding var setup: Bool
     var body: some View {
         HStack {
             Menu {
@@ -58,11 +80,25 @@ struct DestinationBar: View {
                 Divider()
                 Button("Add Mac", systemImage: "plus") { adding = true }
                 Button("Manage Macs", systemImage: "desktopcomputer") { managing = true }
+                Button("App setup", systemImage: "gearshape") { setup = true }.accessibilityIdentifier("app-setup")
             } label: {
                 HStack(spacing: 9) { Image(systemName: "desktopcomputer"); VStack(alignment: .leading, spacing: 2) { Text(destinations.selectedLabel).font(.subheadline.bold()); Text(remote.status).font(.caption2).foregroundStyle(.secondary) }; Image(systemName: "chevron.down").font(.caption); Spacer() }
             }.accessibilityIdentifier("destination-picker").accessibilityLabel("Mac destination: " + destinations.selectedLabel)
             Circle().fill(remote.connected ? Color.green : Color.orange).frame(width: 7, height: 7)
         }.padding(.horizontal).padding(.vertical, 9).background(.bar)
+    }
+}
+struct NativeSetupView: View {
+    @AppStorage("lifeEnabled") private var lifeEnabled = false
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        Form {
+            Section("Optional features") {
+                Toggle("Show Life", isOn: $lifeEnabled).accessibilityIdentifier("show-life")
+                Text("Add the Life tab for your website account. This preference belongs to this device and is independent of your selected Mac. Website sign-in is required separately.").font(.footnote).foregroundStyle(.secondary)
+                Text("Hiding Life keeps its secure sign-in. To remove that session, sign out from Life account first.").font(.footnote).foregroundStyle(.secondary)
+            }
+        }.navigationTitle("App setup").toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
     }
 }
 private enum Page: String, CaseIterable, Identifiable {

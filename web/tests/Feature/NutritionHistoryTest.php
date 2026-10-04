@@ -148,6 +148,30 @@ class NutritionHistoryTest extends TestCase
             ->assertSee('&lt;script&gt;Oats&lt;/script&gt;', false)->assertDontSee('<script>Oats</script>', false)->assertDontSee('Rice');
     }
 
+    public function test_custom_range_filters_history_and_months_without_redefining_standard_periods(): void
+    {
+        $this->travelTo(now('America/Boise')->setDate(2026, 9, 30)->setTime(12, 0));
+        $user = $this->owner();
+        $food = $this->foodFor($user, 'Range fixture', 100);
+        foreach (['2026-08-31', '2026-09-01', '2026-09-30'] as $date) {
+            foreach (['breakfast', 'lunch', 'dinner'] as $meal) $this->entryFor($user, $food, $date, 1, $meal);
+        }
+        $this->entryFor($user, $food, '2026-09-02', 50);
+        $response = $this->signedIn($user)->get('/nutrition?tab=averages&from=2026-09-30&through=2026-09-30');
+        $response->assertOk()->assertSee('Selected range');
+        $this->assertSame(1, (int) $response->viewData('selectedRange')['complete_days']);
+        $this->assertSame(300.0, (float) $response->viewData('selectedRange')['calories']);
+        $this->assertSame(2, (int) $response->viewData('periods')['This month']['complete_days']);
+        $this->assertSame(3, (int) $response->viewData('periods')['All complete days']['complete_days']);
+        $this->assertSame(1, (int) $response->viewData('months')->first()->complete_days);
+        $days = $this->get('/nutrition?tab=days&from=2026-09-30&through=2026-09-30');
+        $days->assertOk()->assertSee('Sep 30, 2026')->assertDontSee('Aug 31, 2026');
+        $this->assertSame(1, $days->viewData('days')->total());
+        $this->assertSame(3, $days->viewData('entryCount'));
+        $this->get('/nutrition?tab=averages&from=2026-09-30&through=2026-09-01')->assertSessionHasErrors('through');
+        $this->get('/nutrition?tab=averages&from=2026-02-30')->assertSessionHasErrors('from');
+    }
+
     private function foodFor(User $user, string $name, float $calories): Food
     {
         $food = Food::factory()->create(['workspace_id' => $user->current_workspace_id, 'user_id' => $user->id, 'name' => $name, 'serving' => '1 serving']);

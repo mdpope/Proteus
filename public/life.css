@@ -52,3 +52,25 @@
 #life-attachment-form input { width:100%; margin-top:8px; }
 @media(max-width:1000px) { .life-columns { grid-template-columns:minmax(0,1fr); } }
 @media(max-width:600px) { .life-fields { grid-template-columns:1fr; }.life-tabs { gap:3px; }.life-tabs button { padding:7px; }.life-plan dl { grid-template-columns:1fr; }.life-plan dd { margin-bottom:7px; } }
+/* Cards expose the same source information as the website, with native editing alongside. */
+.life-summary-cards>article { min-width:0; border:1px solid var(--line); border-radius:12px; padding:16px; background:var(--panel); }
+.life-summary-cards small,.life-period small { display:block; color:var(--soft); font-size:12px; margin-top:7px; }
+.life-period-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; margin:18px 0; }
+.life-period { min-width:0; }.life-period h3 { font-size:17px; margin-top:0; }
+.life-period-calories { display:block; font-size:32px; font-variant-numeric:tabular-nums; margin:20px 0; }
+.life-period-calories small { display:inline; font-size:12px; font-weight:400; }
+.life-period-macros { display:flex; justify-content:space-between; gap:12px; padding-bottom:14px; border-bottom:1px solid var(--line); }
+.life-period-macros span { display:flex; flex-direction:column; gap:5px; font-size:12px; color:var(--soft); text-transform:capitalize; }
+.life-period-macros strong { color:var(--ink); font-size:16px; }
+.life-table td>small { display:block; color:var(--soft); margin-top:6px; }
+.life-food-chip { display:inline-block; margin:2px 6px 2px 0; padding:3px 7px; border-radius:6px; background:var(--panel); font-size:12px; }
+.life-vehicle-grid { grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); }
+.life-vehicle { border:1px solid var(--line); border-radius:14px; gap:12px; }
+.life-vehicle:hover { border-color:var(--accent); }.life-vehicle-mark { display:flex; align-items:center; justify-content:space-between; width:100%; }
+.life-vehicle-art { width:125px; height:66px; color:var(--accent); }
+.life-vehicle-stats { display:grid; grid-template-columns:1fr 1fr; gap:24px; width:100%; padding:12px 0; border-top:1px solid var(--line); }
+.life-vehicle-stats span { font-size:12px; }.life-vehicle-stats b { display:block; color:var(--ink); font-size:24px; margin-bottom:5px; }
+.life-shortcut { font-size:12px; color:var(--accent)!important; }.life-fuel-card { border:1px solid var(--line); border-radius:14px; padding:18px; }
+.life-oil-card>.life-metrics { margin:14px 0; }.life-record details { margin:12px 0; }.life-record summary { cursor:pointer; margin-bottom:10px; }
+@media(max-width:1100px) { .life-period-grid { grid-template-columns:1fr; }.life-period-macros { max-width:450px; } }
+@media(max-width:600px) { .life-vehicle-grid { grid-template-columns:minmax(0,1fr); }.life-period-calories { font-size:28px; } }

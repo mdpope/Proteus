@@ -1,3 +1,4 @@
+import WebKit
 import XCTest
 @testable import Proteus
 
@@ -235,4 +236,174 @@ extension DestinationTests {
         XCTAssertEqual(remote.connection?.key, original.key); XCTAssertEqual(remote.connection?.deviceId, original.deviceId); XCTAssertEqual(remote.connection?.hostId, original.hostId)
         XCTAssertEqual(remote.state["hostName"].string, "Build Mac"); XCTAssertEqual(remote.draft("new-chat").string, "Keep live draft")
     }
+}
+
+
+final class ProviderUsageTests: XCTestCase {
+    func testUnknownQuotaIsNotZeroAndLimitingWindowWins() {
+        XCTAssertNil(ProviderAllowance(value: .null).remaining)
+        XCTAssertEqual(ProviderAllowance(value: .null).label, "Unavailable")
+        let value: JSON = .object(["windows":.array([.object(["remainingPercent":.number(73)]),.object(["remainingPercent":.number(41)]),.object(["remainingPercent":.null])])])
+        XCTAssertEqual(ProviderAllowance(value:value).remaining,41)
+        XCTAssertNil(ProviderAllowance(value:.object(["windows":.array([.object(["remainingPercent":.number(0),"expired":.bool(true)])])])).remaining)
+        XCTAssertTrue(ProviderAllowance(value:.object(["windows":.array([.object(["unlimited":.bool(true)])])])).unlimited)
+    }
+    @MainActor func testQuotaSnapshotIsScopedToMacCacheAndDisabledFlagStopsRefresh() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at:root) }
+        let connection = DeviceConnection(relay:"ws://localhost:1",hostId:UUID().uuidString,deviceId:UUID().uuidString,key:RemoteCrypto.random())
+        let first=RemoteStore(connection:connection,cacheRoot:root.appendingPathComponent("first"),legacyCredentials:false)
+        first.state = .object(["appearance":.object(["showProviderUsage":.bool(false)]),"providerUsage":.object(["providers":.object(["copilot":.object(["windows":.array([.object(["remainingPercent":.number(73)])])])])])])
+        first.connected=true;await first.loadUsage(force:true);XCTAssertEqual(first.pendingCommandCount,0);first.flushCache()
+        let second=RemoteStore(connection:connection,cacheRoot:root.appendingPathComponent("second"),legacyCredentials:false)
+        XCTAssertEqual(second.state["providerUsage"],.null)
+        let restored=RemoteStore(connection:connection,cacheRoot:root.appendingPathComponent("first"),legacyCredentials:false)
+        XCTAssertFalse(restored.usageEnabled);XCTAssertEqual(ProviderAllowance(value:restored.state["providerUsage"]["providers"]["copilot"]).remaining,73)
+    }
+}
+
+final class LifeTestProtocol:URLProtocol,@unchecked Sendable {
+    static var handler:((URLRequest)->(Int,JSON,Double))?
+    override class func canInit(with request:URLRequest)->Bool{true}
+    override class func canonicalRequest(for request:URLRequest)->URLRequest{request}
+    override func startLoading(){
+        let result=Self.handler!(request)
+        DispatchQueue.global().asyncAfter(deadline:.now()+result.2){[self] in
+            client?.urlProtocol(self,didReceive:HTTPURLResponse(url:request.url!,statusCode:result.0,httpVersion:nil,headerFields:["Content-Type":"application/json"])!,cacheStoragePolicy:.notAllowed)
+            client?.urlProtocol(self,didLoad:try! JSONEncoder().encode(result.1));client?.urlProtocolDidFinishLoading(self)
+        }
+    }
+    override func stopLoading(){}
+    static func session()->URLSession{let c=URLSessionConfiguration.ephemeral;c.protocolClasses=[LifeTestProtocol.self];return URLSession(configuration:c)}
+    static func body(_ request:URLRequest)->Data {
+        if let data=request.httpBody{return data}
+        guard let stream=request.httpBodyStream else{return Data()};stream.open();defer{stream.close()}
+        var data=Data();let buffer=UnsafeMutablePointer<UInt8>.allocate(capacity:4096);defer{buffer.deallocate()}
+        while stream.hasBytesAvailable{let n=stream.read(buffer,maxLength:4096);if n<=0{break};data.append(buffer,count:n)}
+        return data
+    }
+}
+final class LifeNativeTests:XCTestCase {
+    private let identity:JSON = .object(["accountId":.string("account-a"),"workspaceId":.string("workspace-a"),"displayName":.string("Synthetic"),"readOnly":.bool(false),"capabilities":.array([.string("nutrition.add")])])
+    @MainActor private func fixture(expired:Bool=false)throws->(LifeStore,String){
+        let service="org.proteusapp.proteus.life.test."+UUID().uuidString
+        let credential=LifeCredential(origin:"https://life.example.test",clientID:"public-client",accessToken:"access-old",refreshToken:"refresh-old",expiresAt:Date().addingTimeInterval(expired ? -1:3600),accountID:"account-a",workspaceID:"workspace-a")
+        try LifeKeychain.save(credential,service:service)
+        return(LifeStore(keychainService:service,session:LifeTestProtocol.session()),service)
+    }
+    func testPKCEAndCallbackOriginStateValidation()throws {
+        let attempt=LifeOAuthAttempt(state:"state",verifier:"dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk")
+        XCTAssertEqual(attempt.challenge,"E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM")
+        XCTAssertEqual(try attempt.code(from:URL(string:"proteus://life-oauth/callback?state=state&code=one")!),"one")
+        for value in ["proteus://pair/callback?state=state&code=one","proteus://life-oauth/wrong?state=state&code=one","proteus://life-oauth/callback?state=wrong&code=one","proteus://life-oauth/callback?state=state&state=state&code=one","proteus://life-oauth/callback?state=state&code=one&code=two","proteus://life-oauth/callback?state=state&error=denied"]{XCTAssertThrowsError(try attempt.code(from:URL(string:value)!))}
+        for value in ["http://life.example.test","https://user:pass@life.example.test","https://life.example.test/path","https://life.example.test?token=x"]{XCTAssertThrowsError(try LifeOAuthAttempt.origin(value))}
+        XCTAssertEqual(try LifeOAuthAttempt.origin("https://life.example.test/"),"https://life.example.test")
+    }
+    @MainActor func testDataIdentityChangeClearsAccountBeforeReturningRecords()async throws{
+        let (store,service)=try fixture();defer{LifeKeychain.clear(service:service)}
+        let identity=self.identity
+        LifeTestProtocol.handler={request in request.url!.path.hasSuffix("/data") ? (200,.object(["accountId":.string("account-b"),"workspaceId":.string("workspace-b"),"foods":.array([.string("Must not display")])]),0):(200,identity,0)}
+        try await store.refreshProfile();XCTAssertTrue(store.connected)
+        do{_ = try await store.data(section:"nutrition");XCTFail("Wrong account must not return data")}catch{XCTAssertTrue(error.localizedDescription.contains("changed"))}
+        XCTAssertFalse(store.signedIn);XCTAssertEqual(store.profile,.null);XCTAssertNil(LifeKeychain.load(service:service))
+    }
+    @MainActor func testMutationIncludesExpectedAccountAndRefreshRevocationClearsCredentials()async throws{
+        let (store,service)=try fixture();defer{LifeKeychain.clear(service:service)}
+        let identity=self.identity;let key=UUID().uuidString
+        LifeTestProtocol.handler={request in
+            if request.url!.path.hasSuffix("/action"){let body=try! JSONDecoder().decode(JSON.self,from:LifeTestProtocol.body(request));XCTAssertEqual(body["expectedAccountId"].string,"account-a");XCTAssertEqual(body["expectedWorkspaceId"].string,"workspace-a");XCTAssertEqual(body["idempotencyKey"].string,key)}
+            return(200,identity,0)
+        }
+        try await store.refreshProfile();_ = try await store.action("meal.log",input:["food_id":.number(1)],idempotencyKey:key)
+        LifeTestProtocol.handler={request in request.url!.path=="/oauth/token" ? (400,.object(["error":.string("invalid_grant")]),0):(401,.null,0)}
+        do{_ = try await store.data(section:"nutrition");XCTFail("Revoked session should fail")}catch{}
+        XCTAssertFalse(store.signedIn);XCTAssertEqual(store.profile,.null);XCTAssertNil(LifeKeychain.load(service:service))
+    }
+    @MainActor func testLogoutSettlesInFlightRefreshAndRevokesRotatedToken()async throws{
+        let (store,service)=try fixture(expired:true);defer{LifeKeychain.clear(service:service)}
+        let refreshed=expectation(description:"Refresh started"),revoked=expectation(description:"Rotated token revoked")
+        let identity=self.identity
+        LifeTestProtocol.handler={request in
+            if request.url!.path=="/oauth/token"{refreshed.fulfill();return(200,.object(["access_token":.string("access-new"),"refresh_token":.string("refresh-new"),"expires_in":.number(3600)]),0.2)}
+            if request.url!.path.hasSuffix("/native-session"){XCTAssertEqual(request.value(forHTTPHeaderField:"Authorization"),"Bearer access-new");revoked.fulfill()}
+            return(200,identity,0)
+        }
+        let pending=Task{try? await store.refreshProfile()}
+        await fulfillment(of:[refreshed],timeout:3);await store.signOut();await pending.value
+        await fulfillment(of:[revoked],timeout:3)
+        XCTAssertFalse(store.signedIn);XCTAssertEqual(store.profile,.null);XCTAssertNil(LifeKeychain.load(service:service))
+    }
+    @MainActor func testDelayedOld401DoesNotRotateAgainOrClearNewToken()async throws{
+        let (store,service)=try fixture();defer{LifeKeychain.clear(service:service)}
+        let identity=self.identity
+        let lock=NSLock();var oldRequests=0;var refreshes=0
+        LifeTestProtocol.handler={request in
+            if request.url!.path=="/oauth/token"{lock.lock();refreshes += 1;lock.unlock();return(200,.object(["access_token":.string("access-new"),"refresh_token":.string("refresh-new"),"expires_in":.number(3600)]),0.01)}
+            if request.value(forHTTPHeaderField:"Authorization")=="Bearer access-old"{lock.lock();oldRequests += 1;let n=oldRequests;lock.unlock();return(401,.null,n==1 ? 0.01:0.15)}
+            return(200,identity,0)
+        }
+        async let first:Void=store.refreshProfile();async let second:Void=store.refreshProfile()
+        _ = try await(first,second)
+        XCTAssertEqual(refreshes,1);XCTAssertEqual(LifeKeychain.load(service:service)?.accessToken,"access-new");XCTAssertTrue(store.connected)
+    }
+}
+
+
+extension DestinationTests {
+    @MainActor func testConnectedHostNameHydratesOnlyLegacyPlaceholderAndPreservesCustomNames() throws {
+        let (root, service) = try fixture(); let destinations = DestinationStore(root: root, keychainService: service)
+        defer { destinations.resetForTesting(); try? FileManager.default.removeItem(at: root) }
+        let a=credential(UUID().uuidString), b=credential(UUID().uuidString)
+        try destinations.register(a,label:"My Mac");let first=try XCTUnwrap(destinations.selected)
+        destinations.hydrateHostLabel("Work Mac",for:a.hostId)
+        XCTAssertEqual(destinations.selectedLabel,"My Mac")
+        first.connected=true;destinations.hydrateHostLabel("Work Mac",for:a.hostId)
+        XCTAssertEqual(destinations.selectedLabel,"Work Mac")
+        destinations.hydrateHostLabel("Changed server name",for:a.hostId)
+        XCTAssertEqual(destinations.selectedLabel,"Work Mac")
+        try destinations.register(b,label:"Personal custom label");destinations.selected?.connected=true
+        destinations.hydrateHostLabel("Build Mac",for:b.hostId)
+        XCTAssertEqual(destinations.selectedLabel,"Personal custom label")
+        try destinations.rename(a.hostId,label:"My Mac");destinations.hydrateHostLabel("Wrong host",for:a.hostId)
+        XCTAssertEqual(destinations.destinations.first(where:{$0.id==a.hostId})?.label,"My Mac")
+        try destinations.select(a.hostId,connect:false);first.connected=true
+        destinations.hydrateHostLabel("Bad\nname",for:a.hostId)
+        XCTAssertEqual(destinations.selectedLabel,"My Mac")
+    }
+}
+
+@MainActor final class NativeMarkdownResourceTests: XCTestCase {
+    func testBundledMarkdownRuntimeRendersAndReportsHeight() async throws {
+        let file = try XCTUnwrap(Bundle.main.url(forResource: "native", withExtension: "html", subdirectory: "markdown"))
+        let delegate = NativeMarkdownProbe()
+        let height = expectation(description: "Native renderer height bridge")
+        delegate.height = { main, file, amount in
+            XCTAssertTrue(main); XCTAssertTrue(file); XCTAssertGreaterThan(amount, 1); height.fulfill()
+        }
+        let configuration = WKWebViewConfiguration()
+        configuration.userContentController.add(delegate, name: "markdown")
+        let web = WKWebView(frame: CGRect(x:0,y:0,width:350,height:400), configuration: configuration)
+        web.navigationDelegate = delegate
+        await withCheckedContinuation { continuation in
+            delegate.finished = { continuation.resume() }
+            web.loadFileURL(file, allowingReadAccessTo: file.deletingLastPathComponent())
+        }
+        let result: Any = try await withCheckedThrowingContinuation { continuation in
+            web.callAsyncJavaScript("window.updateMarkdown('Synthetic **bold**'); return {text:document.body.innerText, height:document.body.getBoundingClientRect().height}", arguments: [:], in: nil, in: .page) { continuation.resume(with: $0) }
+        }
+        let value = try XCTUnwrap(result as? [String:Any])
+        XCTAssertTrue((value["text"] as? String)?.contains("Synthetic bold") == true)
+        XCTAssertGreaterThan(value["height"] as? Double ?? 0, 1)
+        await fulfillment(of: [height], timeout: 5)
+    }
+}
+@MainActor private final class NativeMarkdownProbe: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
+    var height:((Bool,Bool,Double)->Void)?
+    func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+        guard let body=message.body as? [String:Any],body["type"] as? String == "height" else { return }
+        height?(message.frameInfo.isMainFrame,message.frameInfo.request.url?.isFileURL == true,body["height"] as? Double ?? 0);height=nil
+    }
+    var finished:(()->Void)?
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { finished?(); finished=nil }
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { finished?(); finished=nil }
 }

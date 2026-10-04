@@ -172,3 +172,16 @@ test('remote provider catalogs, speed, live steering and queued tool presentatio
   const run=await client.request('chat.get',{id:runId});assert.equal(run.schedule.serviceTier,'priority');assert.equal(run.queuedMessages.length,1);assert.equal(run.queuedMessages[0].modelOptions.reasoningEffort,'future');assert.equal(run.nextModelOptions.serviceTier,'');assert.equal(run.schedule.reasoningEffort,undefined);assert.equal(run.events.find(e=>e.data?.tool).data.tool.presentation.output.kind,'table');
   await client.request('chat.remove-queued',{id:runId,messageId:'queue-native'});finish();await until(()=>app.engine.getRun(runId).status==='completed');
 });
+
+test('provider usage is normalized, selected-host scoped, and blocked when hidden', async t => {
+  let reads=0;
+  const {app,connect}=await fixture(t,{copilot:{quota:async()=>{reads++;return {windows:[{id:'premium',label:'Premium requests',remainingPercent:73,resetAt:null,privateCredential:'NEVER_SEND'}],available:true,credential:'NEVER_SEND'};},status:async()=>({available:true,models:[]})}});
+  const client=await connect();
+  let usage=await client.request('provider.usage',{force:true});
+  assert.equal(usage.enabled,true);assert.equal(usage.providers.copilot.windows[0].remainingPercent,73);assert.equal(usage.providers.copilot.windows[0].resetAt,null);
+  assert.equal(JSON.stringify(usage).includes('NEVER_SEND'),false);assert.ok(usage.providers.copilot.checkedAt);
+  let state=(await client.request('sync')).state;assert.equal(state.appearance.showProviderUsage,true);assert.equal(state.providerUsage.providers.copilot.windows[0].remainingPercent,73);
+  const settings=app.settings.get();app.settings.save({...settings,appearance:{showProviderUsage:false,providerUsageCollapsed:true}},settings.revision);
+  usage=await client.request('provider.usage',{force:true});assert.deepEqual(usage,{enabled:false,providers:{}});assert.equal(reads,1);
+  state=(await client.request('sync')).state;assert.equal(state.appearance.showProviderUsage,false);assert.equal(state.appearance.providerUsageCollapsed,true);assert.equal(state.providerUsage,undefined);
+});

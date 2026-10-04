@@ -1,3 +1,4 @@
+import { renderDesktopDestinations } from './remote-desktops.js';
 let invite = null;
 export async function renderRemote({ api, escape: esc, toast }) {
   const main = document.querySelector('#main');
@@ -17,6 +18,7 @@ export async function renderRemote({ api, escape: esc, toast }) {
       <div id="remote-invite">${invite ? `<img class="pairing-qr" src="${invite.qr}" alt="One-time device pairing QR code"><label>Pairing link<textarea readonly id="remote-code" rows="3">${esc(invite.code)}</textarea></label><button id="remote-copy">Copy pairing link</button><button id="remote-copy-web">Copy web pairing link</button><p class="note">Expires ${esc(new Date(invite.expiresAt).toLocaleTimeString())}</p>` : ''}</div>
       <h2>Paired devices</h2>${data.devices.map(device => `<div class="device-row"><div><strong>${esc(device.name)}</strong><div class="note">${device.online ? 'Connected' : 'Offline'} · Paired ${esc(new Date(device.pairedAt).toLocaleDateString())}</div></div><button data-revoke-device="${esc(device.id)}">Revoke</button></div>`).join('') || '<p class="note">No paired devices yet.</p>'}
       <button id="remote-refresh">Refresh status</button></section></div></div>`;
+    void renderDesktopDestinations(document.querySelector('#remote-screen'));
     const rerender = () => renderRemote({ api, escape: esc, toast });
     document.querySelector('#remote-refresh').onclick = rerender;
     document.querySelector('#remote-enable').onclick = async () => {

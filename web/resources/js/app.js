@@ -1,3 +1,4 @@
+import './shell.js';
 import { Passkeys } from '@laravel/passkeys';
 const status = document.querySelector('#client-status');
 const notice = text => { if(status) { status.textContent=text; status.hidden=false; } };

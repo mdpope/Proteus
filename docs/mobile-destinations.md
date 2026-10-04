@@ -109,3 +109,48 @@ before launch; both apps launched and retained the same saved destination. Exist
 were not changed and production reconnection is not claimed. On each device, use the destination
 menu → **Manage Macs → Edit relay** on the existing Mac, enter the new relay origin, and **Save**
 after the desktop host cutover. See `apple-build.md` for preservation/signing evidence and limits.
+
+## Native usage and Life tabs
+
+The native app now opens in dark appearance. **Macs** is always available; optional **Life**
+is hidden by default. Enable **Show Life** in **App setup**, available from the Mac menu or
+the unpaired screen. The preference belongs to this device, independent of its Mac destinations.
+Macs scopes chats, schedules, context, cached drafts, and provider allowances to the selected
+destination. Life signs directly into the website and works independently of whether either
+Mac is awake; it does not use or duplicate a Mac's database credentials.
+
+A connected Mac can hydrate the legacy exact placeholder **My Mac** from its authenticated
+state's host name. This applies only to the selected, connected destination. Existing custom
+names are never overwritten, including a name already hydrated once. A legacy Example Organization
+pairing can therefore pick up **Work Mac** while the Build Mac pairing, keys,
+history, and drafts remain independent.
+
+The compact AI usage strip shows green percentage capsules for Copilot, Codex, and Claude.
+Hide/collapse defaults come from the selected Mac's appearance settings. **Details** shows
+reported windows, check/observation times, reset information, and unavailable/stale states.
+Missing quota is never converted to zero; expired windows are not counted as current. The
+percentage is the lowest reported finite remaining allowance, never inferred from transcript
+token counts. The bridge allowlists quota fields instead of forwarding raw adapter metadata.
+
+Additional October 4 validation:
+
+- Nine destination tests cover legacy migration, isolation, endpoint-only reconnect,
+  pending-command cancellation, and default-name hydration without changing custom names.
+- Two usage tests cover absent, unlimited, expired, multiple-window and stale data. The usage
+  meter/collapse/reset-details UI test passed on iPhone and iPad simulators.
+- Five Life tests cover PKCE/callback validation, account/workspace mismatch, expected identity
+  on mutations, expired/revoked credentials, concurrent refresh, late 401 responses, and logout
+  during token rotation. They use isolated Keychain services and synthetic HTTPS responses.
+- Nutrition period cards and native food-form submission passed on both simulator layouts.
+  All records are synthetic. Actual consent and physical Life API use require the operator's
+  normal system-browser sign-in after deployment.
+
+See [Life](life.md#native-iphone-and-ipad-account) for account setup and security boundaries.
+
+The additional opt-in UI regression verifies that App setup works before pairing, Life stays
+hidden until enabled, sign-in becomes reachable, and hiding it removes the tab. The bundled
+Markdown regression checks synthetic rendering and its trusted native height bridge. Native
+chat rendering measures its first layout directly, keeping later resize updates for images.
+The final iPhone conversation regression passed pairing/start/reply and rich Markdown/code
+rendering after the initial-height correction. The universal device build was signed with the
+existing team/profile; installation and physical sign-in are recorded separately by deployment.

@@ -1,8 +1,8 @@
-const { app, BrowserWindow, ipcMain, shell, dialog, clipboard, Tray, Menu, nativeImage, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, clipboard, Tray, Menu, nativeImage, screen, safeStorage } = require('electron');
 const path = require('node:path');
 const { BrowserTabs } = require('./browser.cjs');
 const { WorkspaceSession } = require('./workspace-session.cjs');
-let service, window, browser, credentials, terminals, tray, standupWindow, closing = false;
+let service, window, browser, credentials, terminals, peers, tray, standupWindow, closing = false;
 const showWindow = () => { if (window) { if (window.isMinimized()) window.restore(); window.show(); window.focus(); } };
 app.setName('Proteus');
 // Finder launches lack the interactive shell PATH; match the repository launcher.
@@ -31,6 +31,10 @@ else {
     terminals = new TerminalStore(service.home, { workspaceFiles: service.workspaceFiles });
     ipcMain.handle('proteus:terminal', (event, value) => { trusted(event); if (event.senderFrame.parent !== null || event.senderFrame.routingId !== window.webContents.mainFrame.routingId || event.senderFrame.processId !== window.webContents.mainFrame.processId || closing) throw new Error('Terminal access is unavailable.'); return terminals.handle(value); });
     terminals.on('event', value => { if (window && !window.isDestroyed() && new URL(window.webContents.getURL()).origin === service.origin) window.webContents.send('proteus:terminal-event', value); });
+    const { DesktopPeers } = await import('../src/desktop-peers.js');
+    peers = new DesktopPeers(service.home, { safeStorage, localHostId: service.remote.info().hostId });
+    ipcMain.handle('proteus:desktop-peers', (event, value) => { trusted(event); if(event.senderFrame.parent!==null||event.senderFrame.routingId!==window.webContents.mainFrame.routingId||event.senderFrame.processId!==window.webContents.mainFrame.processId||closing)throw new Error('Desktop peer access is unavailable.');return peers.handle(value); });
+    peers.on('event', value => { if(window&&!window.isDestroyed()&&new URL(window.webContents.getURL()).origin===service.origin)window.webContents.send('proteus:desktop-peer-event',value); });
     const workspaceSession = new WorkspaceSession(service.home);
     ipcMain.handle('proteus:workspace-session', (event, value) => { trusted(event); if(value?.action==='get')return workspaceSession.get(); if(value?.action==='save'&&!closing)return workspaceSession.save(value.session); });
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -91,7 +95,7 @@ else {
     if (closing || !service) return;
     event.preventDefault(); closing = true;
     browser?.prepareShutdown(); window?.webContents.send('proteus:shutdown');
-    (async () => { credentials?.close(); await terminals?.dispose(); await browser?.dispose(); await service.close(); })().catch(error => { console.error('Proteus shutdown: ' + error.message); }).finally(() => { tray?.destroy(); app.quit(); });
+    (async () => { credentials?.close(); peers?.close(); await terminals?.dispose(); await browser?.dispose(); await service.close(); })().catch(error => { console.error('Proteus shutdown: ' + error.message); }).finally(() => { tray?.destroy(); app.quit(); });
   });
 }
 // Main-process integration tests use the same broker as the provider adapter.
@@ -100,3 +104,5 @@ module.exports.getService = () => service;
 module.exports.getTray = () => tray;
 
 module.exports.getTerminals = () => terminals;
+
+module.exports.getDesktopPeers = () => peers;

@@ -24,7 +24,9 @@ if (process.env.PROTEUS_TEST_CONTAINER === '1') {
 } else relay = await startRelay({ port: 4328, token });
 const rehearsal = new RehearsalProvider();
 let authConnected = false;
+const syntheticQuota = remaining => async () => ({available:true,windows:[{id:"synthetic",label:"Synthetic account allowance",remainingPercent:remaining,resetAt:"2099-10-05T12:00:00Z"}]});
 const app = await startServer({ home, port: 0, timers: false, providers: { copilot: {
+  quota: syntheticQuota(73),
   mcpStatus: async () => ({servers:[{name:'synthetic-integration',status:authConnected?'connected':'needs-auth',remote:true}]}),
   mcpLogin: async () => { setTimeout(()=>{authConnected=true;},1200); return {server:'synthetic-integration',status:'sign-in-required'}; },
   status: async () => ({available:true,models:[copilotModel({id:"synthetic-mobile",name:"Synthetic mobile",supportedReasoningEfforts:["none","high"],capabilities:{supports:{reasoningEffort:true},limits:{max_output_tokens:128000}},billing:{tokenPrices:{maxPromptTokens:272000,longContext:{maxPromptTokens:872000}}}})]}), run: args => rehearsal.run(args) }, rehearsal: {
@@ -33,7 +35,7 @@ const app = await startServer({ home, port: 0, timers: false, providers: { copil
     if (args.prompt.includes('Permission rehearsal')) await args.ask({ type: 'permission', question: 'Read synthetic fixture?', details: { kind: 'read', path: workspace } });
     return rehearsal.run(args);
   }
-} } });
+}, codex:{status:async()=>({available:false,models:[]}),quota:syntheticQuota(41)},claude:{status:async()=>({available:false,models:[]}),quota:syntheticQuota(88)} } });
 const schedule = app.engine.schedules.list()[0]; app.engine.schedules.save({ ...app.engine.schedules.get(schedule.id), workspace: { cwd: workspace, additionalDirectories: [] } }, schedule.revision);
 await app.remote.configure({ label: 'Build Mac', enabled: true, mode: 'external', relayURL: 'ws://127.0.0.1:4328', publicURL: 'ws://127.0.0.1:4328', relayToken: token });
 await until(() => app.remote.status === 'online', 20_000);

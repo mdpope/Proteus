@@ -23,9 +23,23 @@ export function remoteRun(run, offset = 0, permissions) {
     events: run.events.slice(start, end).map(e=>e.data?.tool ? {...e,data:{...e.data,tool:{...e.data.tool,presentation:toolPresentation(e.data.tool)}}}:e), eventStart: start, eventCount: run.events.length, earlier: start, schedule: pick(run.schedule, scheduleKeys),
     context: { ...pick(run.schedule.context, ['workspaceId', 'selectedIds', 'agentId', 'includeDefaults', 'baseWorkspace', 'capturedAt']), entries: (run.schedule.context?.entries || []).map(remoteEntry) }, liveMessages: structuredClone(run.liveMessages || {}) };
 }
+// Explicit projection: native clients receive allowance metadata, never adapter internals.
+export function remoteUsage(value) {
+  const providers = {};
+  for (const id of ['copilot', 'codex', 'claude']) {
+    const entry = value?.providers?.[id]; if (!entry) continue;
+    providers[id] = { ...pick(entry, ['provider', 'available', 'checkedAt', 'observedAt', 'stale']),
+      source: {copilot:'GitHub Copilot account allowance',codex:'Codex account allowance',claude:'Claude account allowance'}[id],
+      error: entry.error ? 'Account usage could not be refreshed on this Mac. Check its provider connection.' : null,
+      windows: (entry.windows || []).slice(0, 20).map(window => pick(window, ['id', 'label', 'remainingPercent', 'unlimited', 'resetAt', 'windowDurationMins', 'resetNote', 'expired'])) };
+  }
+  return {providers};
+}
 export function remoteState(service) {
   const context = service.context.get(); const defaults = service.settings.get();
-  return { hostName: service.remote?.config.label || os.hostname(), schedules: service.engine.schedules.list().map(s => pick(s, scheduleKeys)),
+  return { hostName: service.remote?.config.label || os.hostname(),
+    appearance: {showProviderUsage:defaults.appearance?.showProviderUsage!==false,providerUsageCollapsed:defaults.appearance?.providerUsageCollapsed===true},
+    ...(defaults.appearance?.showProviderUsage!==false?{providerUsage:remoteUsage({providers:service.usage?.providers})}:{}), schedules: service.engine.schedules.list().map(s => pick(s, scheduleKeys)),
     runs: service.engine.listRuns().slice(0, 100).map(r => pick(r, ['id', 'title', 'status', 'createdAt', 'updatedAt'])), runCount: service.engine.listRuns().length,
     context: { ...pick(context, ['revision', 'refreshedAt', 'defaultWorkspaceId', 'workspaces', 'universalFolders', 'libraryFolders', 'favorites', 'errors']), entries: context.entries.map(remoteEntry) },
     defaults: pick(defaults, ['provider', 'model', 'reasoningEffort', 'contextTier', 'serviceTier', 'timezone']), providerStatus: service.catalog?.value || null, providerStatuses: Object.fromEntries(Object.entries(service.catalogs || {}).map(([id, catalog]) => [id, catalog.value])), protocol: 1 };
@@ -176,6 +190,12 @@ export class RemoteHost {
     if (method === 'chat.get') { const run = engine.getRun(args.id); peer.runId = run.id; return remoteRun(run, Math.max(0, Math.floor(Number(args.offset) || 0)), engine.permissions); }
     if (method === 'chat.image') return this.api('/api/chat-image', pick(args, ['id', 'source']));
     if (method === 'mcp.status' || method === 'mcp.login') return this.api('/api/mcp', {runId:args.id,action:method === 'mcp.login' ? 'login' : 'status',server:args.server,openOnMac:method === 'mcp.login'});
+    if (method === 'provider.usage') {
+      if (this.service.settings.get().appearance?.showProviderUsage === false) return {enabled:false,providers:{}};
+      const value = await this.service.usage.get(args.force === true);
+      if (this.service.settings.get().appearance?.showProviderUsage === false) return {enabled:false,providers:{}};
+      this.changed(); return {enabled:true,...remoteUsage(value)};
+    }
     if (method === 'provider.status') return this.api('/api/provider', pick(args, ['force', 'provider']));
     if (method === 'context.refresh') { this.service.context.refresh(); this.changed(); return remoteState(this.service).context; }
     if (method === 'schedule.preview') return this.api('/api/preview', pick(args, ['cron', 'timezone']));

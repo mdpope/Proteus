@@ -345,10 +345,10 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       }
       const assets = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'], '/features.js': ['features.js', 'text/javascript'], '/remote.js': ['remote.js', 'text/javascript'] };
       for (const file of ['runtime.js', 'style.css']) assets['/markdown/' + file] = ['markdown/' + file, file.endsWith('.css') ? 'text/css' : 'text/javascript'];
-      for (const file of ['conversation.js', 'tool-presentation.js', 'agent-name.js', 'usage.js', 'context-plan.js', 'transcription.js', 'omi.js', 'life.js', 'markdown-picker.js', 'terminals.js']) assets['/' + file] = [file, 'text/javascript'];
+      for (const file of ['conversation.js', 'tool-presentation.js', 'agent-name.js', 'usage.js', 'context-plan.js', 'transcription.js', 'omi.js', 'life.js', 'markdown-picker.js', 'terminals.js', 'remote-desktops.js']) assets['/' + file] = [file, 'text/javascript'];
       assets['/terminal/ghostty.js'] = ['terminal/ghostty.js', 'text/javascript'];
       assets['/terminal/ghostty-vt.wasm'] = ['terminal/ghostty-vt.wasm', 'application/wasm'];
-      for (const file of ['omi.css', 'life.css', 'markdown-picker.css', 'terminals.css']) assets['/' + file] = [file, 'text/css'];
+      for (const file of ['proteus-theme.css', 'omi.css', 'life.css', 'markdown-picker.css', 'terminals.css', 'remote-desktops.css']) assets['/' + file] = [file, 'text/css'];
       if (req.method === 'GET' && assets[url.pathname]) {
         const [file, type] = assets[url.pathname]; res.writeHead(200, { 'Content-Type': type }); res.end(fs.readFileSync(path.join(root, 'public', file))); return;
       }

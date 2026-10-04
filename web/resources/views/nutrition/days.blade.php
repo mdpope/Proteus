@@ -14,7 +14,7 @@
     @endif
 </section>
 @if($summary['complete_days'])
-    <section class="section"><h2>Daily averages</h2><p class="muted">Across all {{ $summary['complete_days'] }} complete days with breakfast, lunch, and dinner recorded. Snacks are included; partial and unlogged days are excluded.</p><div class="numbers">
+    <section class="section"><h2>Daily averages</h2><p class="muted">Across {{ ($from || $through) ? 'the selected' : 'all' }} {{ $summary['complete_days'] }} complete days with breakfast, lunch, and dinner recorded. Snacks are included; partial and unlogged days are excluded.</p><div class="numbers">
     @foreach($macros as $key => $label)<div class="card"><small>{{ $label }}</small><strong>{{ number_format($summary[$key], $key === 'calories' ? 0 : 1) }}</strong><small>{{ $key === 'calories' ? 'kcal' : 'g' }} per complete day</small></div>@endforeach
     </div></section>
 @endif

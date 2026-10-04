@@ -11,14 +11,14 @@ class NutritionReport
 {
     private const MACROS = ['calories', 'protein', 'carbs', 'fat'];
 
-    public function days(int $workspace, int $user): LengthAwarePaginator
+    public function days(int $workspace, int $user, ?string $from = null, ?string $through = null): LengthAwarePaginator
     {
-        return $this->dailyTotals($workspace, $user)->orderByDesc('meal_entries.date')->paginate(15)->withQueryString();
+        return $this->range($this->dailyTotals($workspace, $user), $from, $through)->orderByDesc('meal_entries.date')->paginate(15)->withQueryString();
     }
 
-    public function months(int $workspace, int $user): LengthAwarePaginator
+    public function months(int $workspace, int $user, ?string $from = null, ?string $through = null): LengthAwarePaginator
     {
-        $query = DB::query()->fromSub($this->completeDailyTotals($workspace, $user), 'days')
+        $query = DB::query()->fromSub($this->range($this->completeDailyTotals($workspace, $user), $from, $through), 'days')
             ->selectRaw('SUBSTR(date, 1, 7) AS month, COUNT(*) AS complete_days, SUM(entry_count) AS entry_count')
             ->groupByRaw('SUBSTR(date, 1, 7)')->orderByDesc('month');
         foreach (self::MACROS as $macro) {
@@ -32,10 +32,10 @@ class NutritionReport
     {
         $days = $this->completeDailyTotals($workspace, $user);
         if ($from !== null) {
-            $days->where('meal_entries.date', '>=', $from);
+            $days->whereDate('meal_entries.date', '>=', $from);
         }
         if ($through !== null) {
-            $days->where('meal_entries.date', '<=', $through);
+            $days->whereDate('meal_entries.date', '<=', $through);
         }
         $query = DB::query()->fromSub($days, 'days')->selectRaw('COUNT(*) AS complete_days, COALESCE(SUM(entry_count), 0) AS entry_count, MIN(date) AS first_date, MAX(date) AS last_date');
         foreach (self::MACROS as $macro) {
@@ -43,6 +43,12 @@ class NutritionReport
         }
 
         return (array) $query->first();
+    }
+
+    private function range(Builder $days, ?string $from, ?string $through): Builder
+    {
+        return $days->when($from, fn ($query) => $query->whereDate('meal_entries.date', '>=', $from))
+            ->when($through, fn ($query) => $query->whereDate('meal_entries.date', '<=', $through));
     }
 
     private function completeDailyTotals(int $workspace, int $user): Builder

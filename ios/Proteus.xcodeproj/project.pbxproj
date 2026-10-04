@@ -22,6 +22,11 @@
 		BE2EFD83DC4255BFC6852B7C /* ProteusApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89BCB9A523FAD7012BFBFBE2 /* ProteusApp.swift */; };
 		D5382767A692259B940198E9 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C3669D14C35D62493F9512B7 /* Assets.xcassets */; };
 		E3CCE5A289BFA2C55DB7BBA0 /* QRScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAE0DEDA1094847BDFC976EB /* QRScanner.swift */; };
+		30B1A0694148D8AA25AD8B3C /* UsageViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E775F33FC902E4E594401A1 /* UsageViews.swift */; };
+		7022D275A902DE896A1918FC /* LifeStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61F0564BC9EBE73040AC8CEB /* LifeStore.swift */; };
+		EFB5B876A5E8C0845798EFDB /* LifeViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92BF81FE2FB7FD30E6747EA6 /* LifeViews.swift */; };
+		4FB84798FFDA898F674E687B /* LifeForms.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABF0057B2DB7BDE6C2A5BEA1 /* LifeForms.swift */; };
+		891380DFDF602E8C8B8B7A29 /* LifeFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54D0EA83FA3341E9AD922ED5 /* LifeFixtures.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -61,6 +66,11 @@
 		F2C219FBBECD427ED9810FAF /* ToolActivityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolActivityView.swift; sourceTree = "<group>"; };
 		FAE0DEDA1094847BDFC976EB /* QRScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRScanner.swift; sourceTree = "<group>"; };
 		FD304CE5E2D4AA434F2B24CC /* RemoteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteTests.swift; sourceTree = "<group>"; };
+		0E775F33FC902E4E594401A1 /* UsageViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageViews.swift; sourceTree = "<group>"; };
+		61F0564BC9EBE73040AC8CEB /* LifeStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeStore.swift; sourceTree = "<group>"; };
+		92BF81FE2FB7FD30E6747EA6 /* LifeViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeViews.swift; sourceTree = "<group>"; };
+		ABF0057B2DB7BDE6C2A5BEA1 /* LifeForms.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeForms.swift; sourceTree = "<group>"; };
+		54D0EA83FA3341E9AD922ED5 /* LifeFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeFixtures.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -105,6 +115,11 @@
 				2B068C230D5ED165EE25D9DD /* RemoteCrypto.swift */,
 				9023FEA1077763EA7555C94D /* RemoteStore.swift */,
 				99814D317E2043305330CB8E /* ScheduleViews.swift */,
+				0E775F33FC902E4E594401A1 /* UsageViews.swift */,
+				61F0564BC9EBE73040AC8CEB /* LifeStore.swift */,
+				92BF81FE2FB7FD30E6747EA6 /* LifeViews.swift */,
+				ABF0057B2DB7BDE6C2A5BEA1 /* LifeForms.swift */,
+				54D0EA83FA3341E9AD922ED5 /* LifeFixtures.swift */,
 				F2C219FBBECD427ED9810FAF /* ToolActivityView.swift */,
 			);
 			path = Proteus;
@@ -246,6 +261,11 @@
 				68FFA33EBE3DB02F0593900F /* RemoteCrypto.swift in Sources */,
 				0251FE479F24F5A96EA70F96 /* RemoteStore.swift in Sources */,
 				1162CF50A47019EEE0F0B91C /* ScheduleViews.swift in Sources */,
+				30B1A0694148D8AA25AD8B3C /* UsageViews.swift in Sources */,
+				7022D275A902DE896A1918FC /* LifeStore.swift in Sources */,
+				EFB5B876A5E8C0845798EFDB /* LifeViews.swift in Sources */,
+				4FB84798FFDA898F674E687B /* LifeForms.swift in Sources */,
+				891380DFDF602E8C8B8B7A29 /* LifeFixtures.swift in Sources */,
 				5740FAB8AE1ED396820BEC60 /* ToolActivityView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

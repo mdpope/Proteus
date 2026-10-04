@@ -107,3 +107,32 @@ canonical roots and excluding implicit temporary directories and network access.
 is independent: Trusted does not become unattended shell authorization. Ask/Custom retain the
 existing read-only sandbox. Before starting a turn, validate the native runtime's resolved policy;
 when effective writable roots change, interrupt an active turn before it can keep stale grants.
+
+
+## Shared clients and direct Life (October 4)
+
+The website reuses the desktop color tokens and encrypted client protocol while keeping Laravel
+account authentication and responsive server-rendered Life pages. Electron-only browser views,
+local PTYs and OS credentials remain desktop capabilities. Section tabs store allowlisted section
+keys, not private titles, queries or record contents. Provider allowance comes from the selected
+connected Mac and honors that host's visibility flag; cached/offline values are not live quotas.
+
+Mobile Life connects directly to the website account, independent of either Mac's availability.
+Use the existing account, MFA, PKCE S256 and a fixed application callback. Store tokens in Keychain,
+keep health records in memory, enforce workspace/account identity on responses and writes, and
+reuse the additive native mutation ledger for safe retries. Preserve original nutrition food
+versions and all existing data during deployment; an app download never silently upgrades SQL.
+
+A desktop may also act as a separately paired encrypted client of another desktop. Its peer keys
+live under macOS safeStorage and never enter renderer catalogs. Every request names the destination;
+changing destinations clears old selections and fetches the destination's full live catalog. An
+offline/error response cannot fall back to local execution. New chat always defaults to This Mac,
+independent of the selected history tab. This feature is human-directed remote control, not
+multi-provider agent delegation or a new grant to existing agents.
+
+Projects remain a design discussion. Existing saved multi-folder workspaces continue to provide
+reusable folder/context selections; no new folder-independent project schema is introduced.
+
+Browser persistence stores bounded URL/title entries and index, omitting POST bodies, Chromium
+page state and common authorization callbacks. Native history menus validate their original
+snapshot before jumping, so an open menu cannot apply a stale index after intervening navigation.

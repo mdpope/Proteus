@@ -21,21 +21,25 @@ class NutritionController extends Controller
             'date' => 'nullable|date_format:Y-m-d',
             'tab' => 'nullable|in:days,day,averages,foods',
             'search' => 'nullable|string|max:200',
+            'from' => 'nullable|date_format:Y-m-d',
+            'through' => 'nullable|date_format:Y-m-d'.($request->filled('from') ? '|after_or_equal:from' : ''),
         ]);
         $tab = $v['tab'] ?? (isset($v['date']) ? 'day' : 'days');
         $date = $v['date'] ?? now('America/Boise')->toDateString();
         $macros = ['calories' => 'Calories', 'protein' => 'Protein', 'carbs' => 'Carbs', 'fat' => 'Fat'];
-        $data = compact('tab', 'date', 'macros');
+        $from = $v['from'] ?? null;
+        $through = $v['through'] ?? null;
+        $data = compact('tab', 'date', 'macros', 'from', 'through');
         $foods = Food::where('workspace_id', $workspace)->where('user_id', $user)->with('currentVersion')->orderBy('name');
         $meals = MealEntry::where('workspace_id', $workspace)->where('user_id', $user)->with('version.food');
 
         if ($tab === 'days') {
-            $days = $report->days($workspace, $user);
+            $days = $report->days($workspace, $user, $from, $through);
             $dayFoods = (clone $meals)->whereIn('date', $days->getCollection()->pluck('date'))->orderBy('id')->get()
                 ->groupBy(fn ($meal) => $meal->date->toDateString());
             $data += compact('days', 'dayFoods');
-            $data['entryCount'] = (clone $meals)->count();
-            $data['summary'] = $report->summary($workspace, $user);
+            $data['entryCount'] = (clone $meals)->when($from, fn ($q) => $q->whereDate('date', '>=', $from))->when($through, fn ($q) => $q->whereDate('date', '<=', $through))->count();
+            $data['summary'] = $report->summary($workspace, $user, $from, $through);
         } elseif ($tab === 'averages') {
             $today = now('America/Boise')->startOfDay();
             $data['periods'] = [
@@ -43,7 +47,8 @@ class NutritionController extends Controller
                 'This month' => $report->summary($workspace, $user, $today->copy()->startOfMonth()->toDateString(), $today->toDateString()),
                 'Last 30 calendar days' => $report->summary($workspace, $user, $today->copy()->subDays(29)->toDateString(), $today->toDateString()),
             ];
-            $data['months'] = $report->months($workspace, $user);
+            $data['months'] = $report->months($workspace, $user, $from, $through);
+            $data['selectedRange'] = ($from || $through) ? $report->summary($workspace, $user, $from, $through) : null;
         } elseif ($tab === 'foods') {
             $search = $v['search'] ?? '';
             if ($search !== '') {

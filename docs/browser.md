@@ -3,6 +3,10 @@
 Electron owns the visible WebContentsView tabs, their persistent sign-in session, page titles,
 address bar, navigation history, and lifecycle. Proteus supplies the tab strip and browser controls.
 Enter navigates; Command/Ctrl+L focuses the address; links opening new windows create new tabs.
+Hold Back or Forward for 450 milliseconds to open that direction’s native history menu; right-click,
+Arrow Down and Shift+F10 also open it. A short click navigates one entry. Entries are nearest first.
+Selecting an entry jumps through Chromium history; if navigation changed while the menu was open,
+the stale choice does nothing. The native menu remains visible above the embedded browser view.
 Tabs retain their page and history when switching between chats, schedules, and browser tabs.
 
 Playwright controls those same pages through a private CDP bridge attached to one WebContents.
@@ -27,8 +31,8 @@ Only one model turn runs at a time, but human interaction can still change the p
 Sign in through the website normally. Browser profiles stay in Electron user data, outside Git.
 Sites cannot load the privileged app origin. Downloads and device permissions are not enabled
 in this prototype. Persisted browser authentication is separate from other browsers; no cookies
-or authentication are copied from Safari, Chrome, VS Code, or Codex. Open tabs currently last
-for the app session; sign-in persists across restarts.
+or authentication are copied from Safari, Chrome, VS Code, or Codex. Open tabs and bounded URL navigation history persist across restarts; sign-in persists in the
+existing profile separately from the workspace record.
 
 For Slack, opening a workspace or seeing a tab is not content coverage. A successful integration
 test must read an authenticated message and its thread, preserve the permalink, and report gaps.
@@ -50,12 +54,39 @@ On restart, schedules and chats must still exist. Life opens only when enabled a
 Markdown is reread through the current authorized-root API; a removed or unauthorized file leaves
 an explanatory tab with Retry. Browser HTTP(S) addresses are reopened in new private views:
 Agent access is off, and no former run ownership is restored. Browser login sessions use the
-existing local browser profile. Browser history and page form drafts are not restored.
+existing local browser profile. Each browser tab now retains its ordered URL/title history,
+selected history index, and forward entries. Restore uses Electron 44's native
+`navigationHistory.restore({entries,index})` before any page navigation. Legacy records containing
+only a URL reopen that page. Redirects and same-document entries use Chromium's committed history;
+we do not reconstruct history by visiting every prior page.
 Terminal tabs retain their profile and starting-folder descriptor, but no shell is started;
 Resume new shell rechecks current folder authorization and omits the profile startup command.
 Unsaved schedule edits, chat composer drafts, and webpage form drafts are not part of this record.
 Closing a tab updates the record. Closing the main window keeps the running host and tabs alive;
 quitting suppresses browser-removal notifications before disposing views, preserving the workspace.
+
+History is limited to 50 entries and 32 KiB per tab, with 512 KiB of history across the workspace.
+Entries near the current page are retained in both directions; farther entries are pruned first.
+URLs are capped at 4,096 characters and titles at 200. The complete workspace file is capped at
+2 MiB; an oversized or unreadable source is preserved and reported rather than silently replaced.
+Only HTTP(S) URLs without embedded credentials are eligible. Authentication callback URLs carrying
+common code/token/secret parameters are omitted, and the privileged current Proteus app origin is
+rejected again at the native restore boundary. Malformed entries and indices cannot bypass these
+checks. History and URL metadata remain private local app data, never repository content.
+
+Only URL and title enter the persisted history. Chromium `pageState`, form values, POST bodies,
+custom request headers, referrers, cookies and JavaScript `history.state` are not saved in it.
+Restoring a submitted page loads its URL as a GET; it never replays a form POST. A server that
+requires POST-only state may consequently show an error or its ordinary GET page. Form drafts,
+scroll position and richer native page state are intentionally not restored. Browser startup
+loads have a 15-second restore deadline; failed restores retain the tab and an error for retry.
+Agent-facing browser snapshots/listings do not include the saved history. Reopening a tab does not
+restore Agent access or prior run ownership.
+
+Primary API references: [Electron navigationHistory](https://www.electronjs.org/docs/latest/api/navigation-history)
+and [NavigationEntry](https://www.electronjs.org/docs/latest/api/structures/navigation-entry).
+The pinned local Electron types confirm `pageState` is optional; no sensitive page state is needed
+for the verified URL/index restoration.
 
 Two-finger horizontal wheel gestures navigate back/forward with a progressive edge arrow and
 animated release. Vertical scrolling, horizontally scrollable elements, modified wheels and
@@ -85,3 +116,13 @@ were inspected at `/private/tmp/proteus-workspace-restored.png` and
 `/private/tmp/proteus-workspace-browser.png`. The actual native slide frame is
 `/private/tmp/proteus-browser-slide.png` (the shell screenshot API omits native child views). The complete Node suite passed 190 tests and syntax
 checks passed. Physical trackpad feel remains a hands-on acceptance check.
+
+History validation: `node --test test/browser-history.test.js test/workspace-session.test.js`
+checks bounded history, index preservation, URL/auth filtering, private field omission, legacy
+migration and oversized-file preservation. `node test/browser-history-ui.mjs` uses only a disposable
+Electron profile and synthetic local site. It verifies A/B/C, Back to B, an actual quit/relaunch,
+then Back to A and Forward through B/C; redirects and same-document entries; private restoration;
+no form/POST replay across a second restart; denied privileged origin; legacy URL-only behavior;
+agent history exclusion; persisted removal on tab close; long-press/right-click menus, backward
+and forward selection, short-click behavior, and rejection of stale menu selections. Thirteen groups passed. No production browsing data or
+installed app was used. Screenshot: `/private/tmp/proteus-browser-history-restored.png`.

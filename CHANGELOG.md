@@ -4,6 +4,17 @@ This is a concise behavior log. Git commits and pull requests contain the comple
 
 ## Unreleased
 
+- Share the dark Proteus design across desktop and website, with a compact sidebar, persistent
+  section tabs, machine selection and collapsible real provider allowances in the web remote.
+- Enrich native Life with Garage cards, weighted fuel reports and fixed calendar nutrition periods;
+  retain independent date filters, immutable food versions and scoped evidence access.
+- Add direct website-account Life on iPhone/iPad, with native records/forms, PKCE sign-in,
+  Keychain tokens and retry-safe mutations. Add selected-Mac usage and automatic legacy host labels.
+- Start chats on separately paired desktops using their own folders, agents, skills and provider
+  catalogs. Default new chats to This Mac; split history by destination with This Mac first.
+- Preserve private browser URL/title history and its selected position through restart; hold or
+  right-click Back/Forward to choose a history entry. Never restore agent grants or form POST data.
+
 - Edit a saved Mac’s relay address on iPhone/iPad without replacing its identity, pairing key,
   cached history or drafts. Reconnect only the selected destination and stop old transport retries.
 

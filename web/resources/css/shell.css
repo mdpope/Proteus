@@ -1,0 +1,27 @@
+body[data-browser-account] .shell{grid-template-columns:230px minmax(0,1fr);min-height:100vh}
+body[data-browser-account] .sidebar{padding:24px 18px 20px;background:var(--proteus-sidebar);color:var(--proteus-ink);border-right:1px solid var(--proteus-line);overflow-y:auto}
+body[data-browser-account] .brand{font-size:23px;letter-spacing:-.8px;gap:11px;padding:0 8px}
+body[data-browser-account] .brand span{border:0;border-radius:0;color:var(--proteus-accent);width:auto;font-size:28px}
+body[data-browser-account] .sidebar .eyebrow{font-size:10px;font-weight:500;line-height:1.5;letter-spacing:.13em;margin:7px 9px 20px;color:var(--proteus-muted)}
+body[data-browser-account] .sidebar nav{gap:3px;margin-top:4px}
+body[data-browser-account] .sidebar nav a{display:flex;align-items:center;gap:12px;padding:10px 12px;font-size:13px;border-radius:7px;color:#a7b6ac}
+body[data-browser-account] .sidebar nav a>span:first-child{width:16px;text-align:center;flex-shrink:0}
+body[data-browser-account] .sidebar nav a.active{background:#2b3b2e;color:var(--proteus-accent);font-weight:600}
+body[data-browser-account] .sidebar nav a:hover{background:var(--proteus-control);text-decoration:none}
+body[data-browser-account] .account{padding-top:20px;margin-top:auto;color:var(--proteus-ink);font-size:12px;display:block;border-top:1px solid var(--proteus-line)}
+body[data-browser-account] .account small{display:block;margin-top:5px;color:var(--proteus-muted)}
+body[data-browser-account] .account form button{font-size:12px;margin-top:12px;padding:7px 11px;background:transparent;color:var(--proteus-ink);border-color:var(--proteus-line)}
+.shell-workspace{min-width:0}.shell-tabs{height:49px;border-bottom:1px solid var(--proteus-line);display:flex;align-items:stretch;gap:3px;padding:0 16px;overflow-x:auto;background:var(--proteus-bg);position:sticky;top:0;z-index:5}
+.shell-tab{display:flex;align-items:stretch;flex-shrink:0;max-width:250px;border-bottom:2px solid transparent;cursor:pointer;padding:2px 0 0}.shell-tab.selected{border-bottom-color:var(--proteus-accent);background:#ffffff08}
+.shell-tab a{display:flex;align-items:center;padding:0 13px;color:var(--proteus-muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.shell-tab.selected a{color:var(--proteus-ink)}.shell-tab a:hover{text-decoration:none}
+.shell-tab .shell-tab-close{align-self:center;padding:4px 9px;background:transparent;border:0;border-radius:0;color:var(--proteus-muted);font-size:15px;font-weight:400}.shell-tab .shell-tab-close:hover{background:var(--proteus-control-hover);color:var(--proteus-ink)}
+body[data-browser-account] .main{max-width:1500px;padding:36px 40px 60px}body[data-browser-account] .main:focus{outline:none}
+.shell-skip{position:fixed;left:245px;top:-100px;z-index:100;padding:10px;background:var(--proteus-accent);color:var(--proteus-accent-ink)}.shell-skip:focus{top:5px}
+body[data-browser-account] .sidebar #web-provider-usage{margin-top:auto;padding:14px 0}
+@media(max-width:1050px){body[data-browser-account] .shell{grid-template-columns:200px minmax(0,1fr)}body[data-browser-account] .main{padding:28px}body[data-browser-account] .sidebar{padding:22px 12px}}
+@media(max-width:730px){body[data-browser-account] .shell{display:block}body[data-browser-account] .sidebar{height:auto;position:relative;padding:16px;border-right:0;border-bottom:1px solid var(--proteus-line);display:grid;grid-template-columns:1fr auto;gap:12px}body[data-browser-account] .brand{padding:0;font-size:23px;align-self:start}body[data-browser-account] .sidebar .eyebrow{display:none}body[data-browser-account] .sidebar nav{grid-column:1/-1;grid-row:2;display:flex;margin:0;overflow-x:auto;gap:3px}body[data-browser-account] .sidebar nav a{white-space:nowrap;padding:9px 10px;font-size:12px}body[data-browser-account] .account{display:flex;align-items:center;gap:10px;padding:0;margin:0;border:0;font-size:11px;max-width:210px}body[data-browser-account] .account-name{max-width:100px;overflow-wrap:anywhere}body[data-browser-account] .account small{display:none}body[data-browser-account] .account form button{margin:0;white-space:nowrap;font-size:11px;padding:7px 9px}body[data-browser-account] .sidebar #web-provider-usage{grid-column:1/-1;padding:0;margin:0}.shell-tabs{height:44px;padding:0 8px}.shell-tab a{padding:0 10px;font-size:11px}body[data-browser-account] .main{padding:24px 16px 45px}.shell-skip{left:8px}}
+
+body[data-browser-account] .sidebar #web-provider-usage:not([hidden])+.account{margin-top:0}
+@media(max-width:730px){body[data-browser-account] .sidebar{grid-template-columns:minmax(0,1fr) auto}body[data-browser-account] .account{grid-column:2;grid-row:1;max-width:185px}}
+
+.nutrition-filters{display:flex;align-items:flex-end;flex-wrap:wrap;gap:12px;margin-bottom:24px}.nutrition-filters>label{flex:1 1 140px;min-width:140px}.nutrition-filters>button,.nutrition-filters>.button{flex-shrink:0}@media(max-width:730px){.nutrition-filters{gap:12px}.nutrition-filters>label{flex-basis:140px;max-width:100%}}

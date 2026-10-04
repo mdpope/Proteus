@@ -1,3 +1,4 @@
+import { initRemoteDesktops, attachChatDestinations, mountMachineHistory, renderRemoteRun } from './remote-desktops.js';
 import { requestPresentation, mountStructured } from './tool-presentation.js';
 import { conversation, forgetConversation } from './conversation.js';
 import { renderRemote } from './remote.js';
@@ -17,7 +18,7 @@ let workspaceReady=false, workspaceRestoring=false, workspaceClosing=false, last
 const lifeVisible = () => state.data?.life?.enabled === true && state.data?.life?.configured === true;
 function saveWorkspace() {
   if(!workspaceReady || workspaceRestoring || workspaceClosing)return;
-  const session={schemaVersion:1,active:state.tab,page:state.page,tabs:state.tabs.map(tab=>({id:tab.id,type:tab.type,label:tab.label,...(tab.type==='browser'?{url:tab.info?.url||''}:{}),...(tab.type==='markdown'?{file:tab.markdown?.file}:{}),...(tab.type==='terminal'?{terminal:tab.terminal}:{})}))};
+  const session={schemaVersion:1,active:state.tab,page:state.page,tabs:state.tabs.map(tab=>({id:tab.id,type:tab.type,label:tab.label,...(tab.type==='browser'?{url:tab.info?.url||'',history:tab.info?.history}:{}),...(tab.type==='markdown'?{file:tab.markdown?.file}:{}),...(tab.type==='terminal'?{terminal:tab.terminal}:{}),...(tab.type==='remote-run'?{hostId:tab.hostId,runId:tab.runId}:{})}))};
   const json=JSON.stringify(session);if(json===lastWorkspace)return;lastWorkspace=json;
   if(window.desktop?.workspaceSession)window.desktop.workspaceSession({action:'save',session}).catch(error=>{lastWorkspace='';toast(error.message);});
   else try{localStorage.setItem('proteus.workspace',json);}catch{}
@@ -45,7 +46,7 @@ async function restoreWorkspace() {
         if(!window.desktop)continue;
         // A renderer reload reuses the live view; an app restart creates a private tab.
         const previous=tab.id;let info=existingBrowser.find(info=>info.id===tab.id);
-        if(!info){info=await window.desktop.browser({action:'create'});tab.info={...info,url:tab.url||''};tab.id=info.id;tabs.push(tab);if(saved.active===previous)saved.active=tab.id;if(tab.url)void window.desktop.browser({action:'navigate',id:tab.id,url:tab.url}).catch(error=>toast(error.message));continue;}
+        if(!info){info=await window.desktop.browser({action:'create',restore:true,url:tab.url,history:tab.history});tab.info=info;tab.id=info.id;tabs.push(tab);if(saved.active===previous)saved.active=tab.id;continue;}
         tab.info=info;
       }
       if(!tabs.some(other=>other.id===tab.id))tabs.push(tab);
@@ -160,6 +161,7 @@ function render() {
   const tab = state.tabs.find(t => t.id === state.tab);
   if (tab?.type === 'schedule') renderSchedule(tab.id);
   else if (tab?.type === 'run') renderRun(tab.id);
+  else if (tab?.type === 'remote-run') void renderRemoteRun(tab);
   else if (tab?.type === 'browser') renderBrowser();
   else if (tab?.type === 'markdown') renderMarkdown();
   else if (tab?.type === 'standup') renderStandup();
@@ -226,6 +228,7 @@ function renderRuns() {
   const runs=state.data.runs.filter(r=>state.page!=='attention'||['awaiting_input','failed','interrupted'].includes(r.status));
   $('#main').innerHTML=`<div class="heading"><div><div class="eyebrow">Every run has a story</div><h1>${state.page==='attention'?'Ready for your input.':'Pick up where you left off.'}</h1><div class="muted">Open any run to inspect its history or continue the conversation.</div></div></div><div class="card">${runs.length?`<table><thead><tr><th>Run</th><th>Started</th><th>Provider</th><th>Status</th><th>Tokens</th></tr></thead><tbody>${runs.map(r=>`<tr class="clickable" data-run="${r.id}"><td><strong>${escape(r.title)}</strong><div class="muted">${escape(r.trigger)} · ${r.id.slice(0,8)}</div></td><td>${time(r.createdAt)}</td><td>${escape(r.schedule.provider)}</td><td>${badge(r.status)}</td><td>${r.usage.observed?(r.usage.inputTokens+r.usage.outputTokens).toLocaleString():'—'}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">No runs here yet.<br>Open a schedule and choose Run now to try the feedback flow.</div>'}</div>`;
   document.querySelectorAll('[data-run]').forEach(el=>el.onclick=()=>runTab(state.data.runs.find(r=>r.id===el.dataset.run)));
+  if(state.page==='runs')mountMachineHistory();
 }
 function updateConversation(run) {
   conversation($('#conversation-host'), run, {
@@ -365,6 +368,7 @@ function chatDialog() {
   for (const id of ['chat-cwd', 'chat-roots']) $('#' + id).addEventListener('input', () => $('#chat-context').updatePreview());
   $('#chat-workspace').addEventListener('change', () => $('#chat-context').updatePreview());
   void refreshModels('chat-model','chat-provider');
+  void attachChatDestinations(chatDialog);
 }
 
 function newSchedule() {
@@ -434,7 +438,24 @@ function renderBrowser() {
   $('#browser-fill-login').onclick=()=>fillBrowserLogin(state.tab);
   $('#browser-form').onsubmit=event=>{event.preventDefault();void command('navigate',{url:$('#browser-url').value});$('#browser-url').blur();};
   $('#browser-url').onfocus=()=>$('#browser-url').select();
-  $('#browser-back').onclick=()=>command('back');$('#browser-forward').onclick=()=>command('forward');
+  for (const direction of ['back', 'forward']) {
+    const button = $('#browser-' + direction), tabId = state.tab;
+    let holdTimer = null, held = false;
+    const cancelHold = () => { clearTimeout(holdTimer); holdTimer = null; };
+    const openHistory = () => {
+      cancelHold();
+      if (!button.isConnected || button.disabled || state.tab !== tabId) return;
+      held = true; const bounds = button.getBoundingClientRect();
+      void command('history-menu', {direction, x: bounds.left, y: bounds.bottom});
+    };
+    button.title = (direction === 'back' ? 'Back' : 'Forward') + ' · hold for history';
+    button.setAttribute('aria-haspopup', 'menu');
+    button.onpointerdown = event => { if (event.button !== 0) return; cancelHold(); held = false; holdTimer = setTimeout(openHistory, 450); };
+    button.onpointerup = cancelHold; button.onpointercancel = cancelHold; button.onpointerleave = cancelHold;
+    button.oncontextmenu = event => { event.preventDefault(); openHistory(); };
+    button.onkeydown = event => { if (event.key === 'ArrowDown' || (event.shiftKey && event.key === 'F10')) { event.preventDefault(); openHistory(); } };
+    button.onclick = event => { cancelHold(); if (held && event.detail !== 0) { held = false; return; } void command(direction); };
+  }
   $('#browser-reload').onclick=()=>command(state.tabs.find(t=>t.id===state.tab)?.info?.loading?'stop':'reload');
   $('#browser-share').onclick=()=>command('share',{shared:$('#browser-share').getAttribute('aria-pressed')!=='true'});
   updateBrowserControls();requestAnimationFrame(browserBounds);
@@ -494,6 +515,7 @@ window.desktop?.onAddressFocus(()=>$('#browser-url')?.focus());
 window.desktop?.onBrowserResize(()=>requestAnimationFrame(browserBounds));
 window.addEventListener('resize',()=>requestAnimationFrame(browserBounds));
 window.addEventListener('keydown',event=>{if((event.metaKey||event.ctrlKey)&&event.key==='l'&&$('#browser-url')){event.preventDefault();$('#browser-url').focus();}});
+initRemoteDesktops({state,escape,toast,showDialog,openTab,time});
 initTerminals({state,escape,toast,showDialog,openTab});
 initFeatures({state,escape,api,toast,refresh,openTab,showDialog,lines,restoreBrowser:()=>requestAnimationFrame(browserBounds)});
 initOmi({state,escape,api,toast,refresh,openSchedule:schedule,openRun:id=>{const run=state.data.runs.find(item=>item.id===id);if(run)runTab(run);}});

@@ -238,3 +238,117 @@ These web checks remain valid for the unchanged imported source, separate from n
 Use fresh temporary Laravel storage, in-memory SQLite, a generated test APP_KEY and isolated
 Passport keys for future tests; never run key generation, migration resets or bootstrap against
 an existing installation. No real personal records are needed for verification.
+
+
+## Rich native reports and direct website API
+
+Desktop Life now has vehicle cards with history/open-task counts and latest dated odometers,
+weighted fuel economy cards, detailed oil samples/measurements/originals, and date-precision-aware
+history. Editing, evidence, search, custom ranges, and immutable food versions remain available.
+Life remains optional and off by default.
+
+**Daily averages by period** includes All complete days, This month, and Last 30 calendar days.
+Breakfast, lunch and dinner entries (case-insensitive) make a complete day; explicit zero-valued
+skipped meals count, and snacks contribute nutrients. Each complete day has equal weight.
+The last-30 window is today and the prior 29 calendar dates; the denominator is complete days,
+never 30. Partial and unlogged days are excluded; no complete days returns null, not zero.
+Fixed cards ignore custom ranges/search. Custom-range and monthly summaries retain filters.
+Calendar arithmetic uses workspace timezone dates, including leap days and DST, and returns
+`reportDate`/`reportTimezone`.
+
+The direct website API uses Passport bearer tokens with explicit `brain:read`/`brain:write`
+scopes, independently of relay pairing. `GET /api/v1/life` returns opaque site-scoped `accountId`,
+`workspaceId`, `displayName`, `capabilities`, `sections`, and `readOnly`.
+`POST /api/v1/life/data` accepts `{section,query}` for overview, nutrition, garage, fuel, captures,
+security, or connections. Domain shapes match desktop Life; each includes account/workspace
+identity so native clients can reject stale caches. Keep tokens in account-scoped secure storage,
+clear records on identity change, and never queue offline writes.
+
+Nutrition adds `periodSummaries`: id, label, from/through, completeDays, entryCount, firstDate,
+lastDate, calendarDays, loggedDays, partialDays, unloggedDays, and four macro averages. Meal days
+include entryCount/foodNames; monthly rows include completeDays, entryCount, and caloriesTotal.
+Garage/fuel add `vehicleCards` containing vehicle, history/open-task/oil/fill counts, latest
+observation and fuel/mileage report, plus `vehicleSummary` when selected. Oil rows include safe
+attachment metadata. Nutrition/captures support one-based `query.page` and return page,
+pageSize=100, hasMore. Nutrition paging follows the selected tab; summaries use all scoped data.
+Query fields: tab, date, from, through, search, foodId, vehicleId, captureId, status (review/saved).
+
+`POST /api/v1/life/action` requires `{action,input,idempotencyKey,expectedAccountId,expectedWorkspaceId}`.
+A changed identity fails before writes. Supported actions use desktop input fields: food.save,
+meal.log/update/delete, vehicle.save, task.add/complete, capture.save/accept, attachment.add.
+NutritionLedger and CaptureIngestor remain the website business validators. Actions lock membership
+and use the shared durable retry ledger transactionally; different input with a reused key fails.
+Captures require explicit acceptance. Accepted oil updates retain full validation. Connection
+revocation is website-only (`canRevokeTokens:false`, manageUrl) because it requires fresh identity
+confirmation; separate native logout can revoke that native session.
+
+`GET /api/v1/life/evidence/{id}` returns original bytes as a download after workspace/capture,
+storage-root, size and SHA-256 checks. API responses omit paths, DB credentials, token values and
+credential columns. Nutrition remains private per user even within a shared workspace. Fuel
+report child observations also require the vehicle workspace.
+
+Laravel migration `2026_10_05_000001_add_native_life_retry_ledger` installs exactly the desktop v2
+tables/checksum for fresh sites. Existing compatible tables stay intact; incompatible columns,
+types, primary keys or checksum fail before DDL. Rollback deliberately retains shared replay
+protection and data. It never alters nutrition tables. Deployment remains an administrator
+operation with verified backups; no production data was modified for this implementation.
+
+Verification: 19 Node report/database tests passed (inclusive dates, DST/leap boundaries,
+complete/calendar denominator, historical versions, tenant isolation). The Electron Life smoke
+passed 15 groups including fixed-period cards and retained custom filters. The isolated Laravel
+suite passed 58 tests/402 assertions, including 5 API tests/91 assertions for shared-workspace
+privacy and corrupt cross-workspace child isolation. All fixtures
+use temporary storage/generated test keys/in-memory SQLite.
+
+## Native iPhone and iPad account
+
+The optional native **Life** tab uses SwiftUI cards, filters and forms directly against the website API.
+It is hidden by default. Open **App setup** from the Mac menu or unpaired screen and enable
+**Show Life**. This device preference is independent of Mac destinations; hiding the tab retains
+its secure sign-in, while signing out inside Life explicitly removes/revokes that session.
+It is separate from the **Macs** selector and remains usable while both Macs sleep. The default
+appearance is dark. Nutrition includes fixed period averages, range/search filters, day entries,
+food/version history and meal/food forms. Garage and Fuel include vehicle cards, maintenance,
+service parts, oil measurements/evidence, fill intervals and mileage estimates. Evidence includes
+review, explicit acceptance, typed capture forms and original-file uploads. Account/security
+and connection inventories remain native; credential recovery and revoking other website
+connections open the website for its fresh identity verification.
+
+Open **Life → Sign in securely**, complete the website's existing passkey or authenticator
+verification, and approve account scopes in the system browser. No relay pairing or database
+password is involved. Authentication uses
+[ASWebAuthenticationSession](https://developer.apple.com/documentation/authenticationservices/aswebauthenticationsession)
+and [Passport authorization code with PKCE](https://laravel.com/docs/13.x/passport#authorization-code-grant-with-pkce):
+S256, random state/verifier per attempt, and the exact `proteus://life-oauth/callback` URI.
+API requests reject redirects; the app validates callback, canonical HTTPS issuer, public
+client discovery and returned account/workspace identity.
+
+Website preparation is `php artisan proteus:native-client`, then persist its public
+`PROTEUS_NATIVE_CLIENT_ID` in the private deployment environment and rebuild Laravel's config
+cache. The command verifies an existing registration or creates a public code/refresh client
+with exactly the fixed callback; it creates no user authorization. Discovery at
+`GET /api/v1/native-config` remains disabled until registration is valid. No client secret
+belongs in the native bundle. Account consent remains an operator action.
+
+Tokens use a separate `WhenUnlockedThisDeviceOnly` Keychain service. Health records and drafts
+stay in memory, clear on sign-out/account change, and never enter the Mac cache. An inactive
+scene privacy cover obscures displayed records. Mutations carry expected account/workspace
+and a retry UUID; no offline writes are queued. Data identity is checked before display/cache;
+a mismatch clears the session. Refresh is serialized, late responses cannot replace a newer
+account, and sign-out waits for token rotation before revoking the newest native session.
+If revocation cannot be confirmed, the app reports local sign-out and directs the operator
+to website connections.
+
+Original files are authenticated and limited to 20 MiB. The viewer supports verified raster
+signatures and PDFs; HTML/SVG/executables are not embedded. Unsupported types use the website's
+authenticated download. Accepted non-oil captures remain locked; oil revisions use existing
+server validators. Forms retain input after errors; canceling or leaving their section discards
+the in-memory draft.
+
+Validation: five native account tests and two allowance tests passed on iPhone and iPad;
+nutrition/card/form UI checks passed on both. Nine destination tests verify independent Mac
+storage and safe legacy-name hydration. The native OAuth server suite passed four tests/26
+assertions, including a synthetic authorization-code exchange, session revocation and rejected
+refresh afterward. Tests use disposable records/generated keys, with no live nutrition records
+or user authorization. Real system-browser consent, physical session restoration and app-switcher
+privacy acceptance remain deployment checks.

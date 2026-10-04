@@ -18,6 +18,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
         then: function () {
             require __DIR__.'/../routes/legacy.php';
+            require __DIR__.'/../routes/native.php';
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {

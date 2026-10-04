@@ -34,7 +34,19 @@ struct MarkdownView: UIViewRepresentable {
         func update(_ web: WKWebView) {
             guard loaded, rendered != parent.text else { return }; rendered = parent.text
             // Pass Markdown as data, never interpolate model content into JavaScript or HTML.
-            web.callAsyncJavaScript("window.updateMarkdown(text)", arguments: ["text": parent.text], in: nil, in: .page) { _ in }
+            let text = parent.text
+            // A WKWebView initially hidden behind the native fallback may defer ResizeObserver.
+            // Measure the first render explicitly; later image/layout changes still use the bridge.
+            web.callAsyncJavaScript("window.updateMarkdown(text); return document.body.getBoundingClientRect().height", arguments: ["text": text], in: nil, in: .page) { [weak self] result in
+                guard let self, self.rendered == text else { return }
+                if case .success(let value) = result, let height = value as? Double { self.resize(height) }
+                if case .failure = result { self.rendered = nil }
+            }
+        }
+        private func resize(_ value: Double) {
+            guard value.isFinite, value > 1 else { return }
+            let next = CGFloat(ceil(value))
+            if abs(parent.height - next) > 1 { parent.height = next; parent.onResize() }
         }
         func webView(_ web: WKWebView, didFinish navigation: WKNavigation!) { loaded = true; update(web) }
         func webView(_ web: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
@@ -47,8 +59,7 @@ struct MarkdownView: UIViewRepresentable {
             switch body["type"] as? String {
             case "height":
                 if let value = body["height"] as? Double, value.isFinite, value > 0 {
-                    let next = CGFloat(ceil(value))
-                    if abs(parent.height - next) > 1 { parent.height = next; parent.onResize() }
+                    resize(value)
                 }
             case "copy": if let text = body["text"] as? String { UIPasteboard.general.string = text }
             case "link":

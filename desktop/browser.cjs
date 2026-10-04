@@ -1,4 +1,5 @@
-const { WebContentsView, session, ipcMain } = require('electron');
+const { WebContentsView, session, ipcMain, Menu } = require('electron');
+const { normalizeHistory, safeHistoryURL } = require('./browser-history.cjs');
 const { PageSlide } = require('./browser-transition.cjs');
 const { randomUUID } = require('node:crypto');
 const { connectPage } = require('./playwright-bridge.cjs');
@@ -31,16 +32,16 @@ class BrowserTabs {
       callback({ cancel: new URL(details.url).origin === this.appOrigin });
     });
   }
-  state(tab) {
+  state(tab, includeHistory=false) {
     const wc = tab.view.webContents;
     return { id: tab.id, url: wc.getURL(), title: wc.getTitle() || (wc.getURL() ? new URL(wc.getURL()).hostname : 'New tab'), loading: wc.isLoading(),
-      canGoBack: wc.navigationHistory.canGoBack(), canGoForward: wc.navigationHistory.canGoForward(), shared: tab.shared, owner: tab.owner, error: tab.error || null };
+      canGoBack: wc.navigationHistory.canGoBack(), canGoForward: wc.navigationHistory.canGoForward(), shared: tab.shared, owner: tab.owner, error: tab.error || null, ...(includeHistory?{history:normalizeHistory({entries:wc.navigationHistory.getAllEntries(),index:wc.navigationHistory.getActiveIndex()},this.appOrigin)}:{}) };
   }
-  list() { return [...this.tabs.values()].map(tab => this.state(tab)); }
+  list(includeHistory=false) { return [...this.tabs.values()].map(tab => this.state(tab,includeHistory)); }
   prepareShutdown() { this.shuttingDown = true; this.transition?.cancel(); }
-  changed() { if (!this.shuttingDown && !this.window.isDestroyed()) this.window.webContents.send('proteus:browser-state', this.list()); }
+  changed() { if (!this.shuttingDown && !this.window.isDestroyed()) this.window.webContents.send('proteus:browser-state', this.list(true)); }
   get(id) { const tab = this.tabs.get(id); if (!tab) throw new Error('Browser tab is closed or unavailable.'); return tab; }
-  async create(url, owner = null) {
+  async create(url, owner = null, savedHistory = null) {
     const tab = { id: randomUUID(), shared: false, owner, view: new WebContentsView({ webPreferences: {
       preload: require('node:path').join(__dirname,'browser-preload.cjs'), session: this.partition, nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true, backgroundThrottling: false
     } }) };
@@ -68,7 +69,15 @@ class BrowserTabs {
     for (const name of ['page-title-updated','did-navigate','did-navigate-in-page','did-start-loading','did-stop-loading']) wc.on(name, () => this.changed());
     wc.on('did-fail-load', (_e, code, description, _url, isMainFrame) => { if (isMainFrame && code !== -3) { tab.error = description; this.changed(); } });
     this.changed();
-    if (url) await this.navigate(tab.id, url);
+    const history=normalizeHistory(savedHistory,this.appOrigin);
+    if(history) {
+      // Start before the first loadURL; only sanitized URL/title entries reach Chromium.
+      let timer;
+      try {await Promise.race([wc.navigationHistory.restore(history),new Promise((_,reject)=>{timer=setTimeout(()=>{if(!wc.isDestroyed())wc.stop();reject(new Error('Restoring browser history timed out. Retry the current address.'));},15000);})]);}
+      catch(error){if(!wc.isDestroyed())tab.error=error.message;}
+      finally{clearTimeout(timer);}
+      this.changed();
+    } else if (url) await this.navigate(tab.id, url);
     return this.state(tab);
   }
   address(value) { const url = normalizeURL(value); if (new URL(url).origin === this.appOrigin) throw new Error('The application is not a browser target.'); return url; }
@@ -103,16 +112,44 @@ class BrowserTabs {
     try { const connection = await tab.connecting; await connection?.close(); } catch { /* A closing page may already have disconnected. */ }
     tab.connection = null; tab.connecting = null;
   }
+  historyMenu(tab, value) {
+    if (!['back', 'forward'].includes(value.direction) || this.active !== tab.id) return;
+    const wc = tab.view.webContents, history = wc.navigationHistory;
+    const activeIndex = history.getActiveIndex(), entries = history.getAllEntries();
+    const indices = value.direction === 'back'
+      ? Array.from({length: activeIndex}, (_, offset) => activeIndex - offset - 1)
+      : Array.from({length: Math.max(0, entries.length - activeIndex - 1)}, (_, offset) => activeIndex + offset + 1);
+    const template = indices.filter(index => safeHistoryURL(entries[index]?.url, this.appOrigin)).slice(0, 50).map(index => {
+      const entry = entries[index];
+      return {label: (entry.title || entry.url).replace(/[\r\n\t]/g, ' ').slice(0, 140).replace(/&/g, '&&'), toolTip: entry.url,
+        click: () => {
+          if (this.shuttingDown || wc.isDestroyed() || this.active !== tab.id) return;
+          // A pending navigation can alter indices while the native menu is open.
+          const current = history.getAllEntries();
+          if (history.getActiveIndex() !== activeIndex || current.length !== entries.length || current.some((item, i) => item.url !== entries[i].url)) return;
+          this.transition?.cancel(); cancelNavigation(wc, 'Navigation replaced by history selection.');
+          try { tab.error = null; history.goToIndex(index); this.changed(); } catch { /* Closed or replaced navigation. */ }
+        }};
+    });
+    if (!template.length) return;
+    const bounds = this.window.getContentBounds();
+    const point = key => Number.isFinite(value[key]) ? Math.max(0, Math.min(Math.round(value[key]), key === 'x' ? bounds.width : bounds.height)) : 0;
+    Menu.buildFromTemplate(template).popup({window: this.window, x: point('x'), y: point('y')});
+  }
   async command(value) {
     const { action, id } = value;
     if(!value.gesture&&['back','forward','reload','stop'].includes(action))this.transition?.cancel();
-    if (action === 'list') return this.list();
-    if (action === 'create') return this.create(value.url);
+    if (action === 'list') return this.list(true);
+    if (action === 'create') {
+      const info=await this.create(value.restore===true?safeHistoryURL(value.url,this.appOrigin):value.url,null,value.restore===true?value.history:null);
+      return this.state(this.get(info.id),true);
+    }
     if (action === 'show') { this.show(id, value.bounds); return; }
     if (action === 'hide') { this.show(null); return; }
     if (action === 'close') return this.close(id);
     if (action === 'navigate') return this.navigate(id, value.url);
     const tab = this.get(id); const wc = tab.view.webContents;
+    if (action === 'history-menu') { this.historyMenu(tab, value); return; }
     if (['back', 'forward', 'reload'].includes(action)) cancelNavigation(wc, 'Navigation replaced by a browser command.');
     if (action === 'back' && wc.navigationHistory.canGoBack()) wc.navigationHistory.goBack();
     else if (action === 'forward' && wc.navigationHistory.canGoForward()) wc.navigationHistory.goForward();

@@ -143,3 +143,55 @@ For first-time pairing of a physical iPhone/iPad with Xcode 26, plan on a USB co
 Trust This Computer; later installs can use Wi-Fi. Pairing with another Mac does not remove the
 existing laptop's trust. Newer Device Hub wireless-first pairing requires iOS/iPadOS 27 or later
 and compatible Xcode. Proteus's QR pairing is separate from Xcode's device-installation pairing.
+
+## Desktop-to-desktop destinations
+
+A Proteus Mac can also be a client of separately paired Macs. In **Remote access → Other desktop
+Macs**, paste a fresh one-time code generated on the destination and give it a recognizable name.
+This is a new device pairing; sharing a relay, an Apple account, or an existing website pairing
+never grants access. Host registration and incoming paired devices remain separate settings.
+
+Every **New chat** opens with **This Mac** selected, including after using a remote history tab or
+restarting Proteus. Selecting another Mac connects to that destination, refreshes its context and
+provider catalog, clears the previous selection, and keeps Start disabled until the catalog loads.
+Workspace folders, source folders, instructions, skills, invocable agents and model capability
+choices all come from that Mac. Start requires a model in the selected provider’s refreshed catalog;
+reasoning/context/speed defaults apply only to the matching saved provider and model. Context
+preview uses its existing preview command. The dialog displays the effective configured folders,
+including universal folders and roots supplied by selected/default sources; turning off default
+source loading does not remove universal folder access.
+A failed/offline selection never falls back to local execution. Remote workspace profiles retain
+the command folder configured on the host; this picker does not authorize arbitrary remote paths.
+
+Run history has machine buttons with **This Mac first**, followed by paired destinations and their
+online/offline/unread indicators. Remote rows are hidden while disconnected. Each Mac has separate
+history, event cursor, selected run and in-memory drafts. Pending-answer drafts are scoped to
+host, run and request ID, and are cleared after a successful answer; direct cross-host tab switches
+cannot transfer either answers or followups. A remote conversation opens in a native
+Proteus tab with its destination in the title and composer; followups, queue/steer, permission
+approvals, user-input replies, cancel and earlier history use the same encrypted host commands as
+other clients. Remote tab descriptors restore after restart; reconnecting reads the existing run
+and never resubmits a prompt. Unsent remote drafts and downloaded conversation snapshots are not
+persisted across application restarts. The sidebar's AI allowance still describes This Mac.
+
+`src/desktop-peers.js` owns the desktop client. `desktop-peers.enc` under the app data directory
+contains only OS-encrypted pairing records with owner-only permissions and atomic replacement.
+Electron safeStorage encryption must be available; there is no plaintext fallback. Native IPC
+accepts only the trusted main app frame and explicit destination IDs, and exposes a bounded
+command allowlist. Keys never enter renderer localStorage, workspace descriptors, logs or HTTP
+endpoints. `src/remote-client.js` is shared with the website's WebCrypto transport; the native
+credential callback protects the independent device key before importing it for use in memory.
+The host continues to enforce all workspace, pending-request and provider permission boundaries.
+Mutation retries within a retained composer reuse their request ID after ambiguous failures.
+
+**Forget here** erases this client's protected record and closes its connection. Revoke the device
+on the destination to invalidate that key there. A live revocation clears its local session/drafts
+and hides the conversation. Quitting the client closes only its connections; remote runs remain
+owned by the destination and are not cancelled by closing a chat tab.
+
+Validation: `node --test test/desktop-peers.test.js` exercises actual loopback hosts and encrypted
+storage fixtures, no-plaintext fallback, corrupt-record preservation, host isolation, blocked
+commands, reply, restart and revocation. `node test/desktop-peers-ui.mjs` launches an isolated
+Electron home and two synthetic hosts for the complete pairing/catalog/chat/approval/history/
+restart flow. These tests do not pair production Macs or invoke a real model. Production desktop
+pairing is a separate operator step using a newly issued destination code.

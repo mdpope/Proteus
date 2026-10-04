@@ -14,6 +14,7 @@ import Combine
     @Published var paired = false
     @Published var drafts: [String: JSON] = [:]
     var onPaired: ((DeviceConnection) throws -> Void)?
+    var onHostName: ((String) -> Void)?
     private let cacheRoot: URL?
     private let legacyCredentials: Bool
     private(set) var connection: DeviceConnection?
@@ -220,6 +221,7 @@ import Combine
         var object = value.object; let ids = Set(value["runs"].array.map { $0["id"].string })
         object["runs"] = .array(value["runs"].array + state["runs"].array.filter { !ids.contains($0["id"].string) })
         state = .object(object)
+        if connected { onHostName?(value["hostName"].string) }
         providerStatuses = value["providerStatuses"].object
         if value["providerStatus"] != .null { modelStatus = value["providerStatus"]; models = modelStatus["models"].array }
     }
@@ -247,6 +249,27 @@ import Combine
     func loadModels(force: Bool = false, provider: String = "copilot") async {
         do { let value = try await request("provider.status", ["force": .bool(force), "provider": .string(provider)]); providerStatuses[provider] = value; if provider == "copilot" { modelStatus = value; models = value["models"].array }; if !value["available"].bool { error = value["error"].string.isEmpty ? "Provider is not available on the Mac." : value["error"].string } }
         catch { self.error = error.localizedDescription }
+    }
+    @Published private(set) var usageBusy = false
+    var usageEnabled: Bool { state["appearance"]["showProviderUsage"] != .bool(false) }
+    func loadUsage(force: Bool = false) async {
+        guard usageEnabled, active, connected, !usageBusy else { return }
+        usageBusy = true; let current = generation
+        defer { usageBusy = false }
+        do {
+            let value = try await request("provider.usage", ["force": .bool(force)])
+            guard current == generation, usageEnabled else { return }
+            var snapshot = state.object
+            if value["enabled"] == .bool(false) {
+                var appearance = snapshot["appearance"]?.object ?? [:]; appearance["showProviderUsage"] = .bool(false); snapshot["appearance"] = .object(appearance); snapshot.removeValue(forKey: "providerUsage")
+            } else { snapshot["providerUsage"] = value }
+            state = .object(snapshot); saveCache()
+        } catch {
+            // Offline/older hosts keep the last known snapshot; provider errors appear in details.
+            guard current == generation else { return }
+            var snapshot = state.object; var usage = snapshot["providerUsage"]?.object ?? [:]
+            usage["error"] = .string("Usage could not be refreshed from this Mac."); snapshot["providerUsage"] = .object(usage); state = .object(snapshot)
+        }
     }
     func activity(_ isActive: Bool) { active = isActive; if active { connect() } else { flushCache(); disconnect() } }
     private func lost() {
@@ -338,8 +361,21 @@ private struct DestinationIndex: Codable {
             remote = RemoteStore(connection: credentials, cacheRoot: cacheRoot(id), legacyCredentials: false); stores[id] = remote
         }
         if selectedID != id || selected !== remote { selected?.suspend() }
+        observeHostName(remote, id: id)
         selectedID = id; selected = remote; try persist()
         if connect && active { remote.activity(true) }
+    }
+    private func observeHostName(_ remote: RemoteStore, id: String) {
+        remote.onHostName = { [weak self] label in self?.hydrateHostLabel(label, for: id) }
+    }
+    func hydrateHostLabel(_ label: String, for id: String) {
+        let name = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard selectedID == id, stores[id]?.connected == true,
+              destinations.first(where: { $0.id == id })?.label == "My Mac",
+              !name.isEmpty, name.count <= 80,
+              !name.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) })
+        else { return }
+        do { try rename(id, label: name) } catch { self.error = "The Mac name could not be saved. Try Rename in Manage Macs." }
     }
     func relayAddress(for id: String) -> String? {
         guard destinations.contains(where: { $0.id == id }) else { return nil }
@@ -397,6 +433,7 @@ private struct DestinationIndex: Codable {
         let remote = RemoteStore(connection: connection, cacheRoot: cacheRoot(id), legacyCredentials: false)
         if let old = oldHistory { remote.copyHistory(from: old) }
         else if let history { remote.copyHistory(from: history) }
+        observeHostName(remote, id: id)
         stores[id] = remote; selected = remote; remote.flushCache()
         // Finish the pairing handshake on the candidate, then use only the saved host instance.
         Task { await Task.yield(); history?.suspend(); try? FileManager.default.removeItem(at: self.root.appendingPathComponent("pending-pair")); if self.pairing === history { self.pairing = nil }; if self.active && self.selected === remote { remote.activity(true) } }

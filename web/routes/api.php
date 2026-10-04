@@ -15,3 +15,13 @@ Route::prefix('v1')->middleware(['auth:api', 'throttle:60,1'])->group(function (
     Route::post('/captures', [ApiController::class, 'capture'])->middleware(CheckTokenForAnyScope::using('brain:write', 'mcp:use'));
     Route::post('/uploads', [CaptureController::class, 'store'])->middleware(CheckTokenForAnyScope::using('brain:write', 'mcp:use'));
 });
+
+// Native Life uses explicit read/write grants, independent of desktop relay pairing.
+Route::prefix('v1/life')->middleware(['auth:api', 'throttle:60,1'])->group(function () {
+    Route::middleware(CheckTokenForAnyScope::using('brain:read'))->group(function () {
+        Route::get('/', [\App\Http\Controllers\LifeApiController::class, 'status']);
+        Route::post('/data', [\App\Http\Controllers\LifeApiController::class, 'data']);
+        Route::get('/evidence/{id}', [\App\Http\Controllers\LifeApiController::class, 'evidence'])->whereNumber('id');
+    });
+    Route::post('/action', [\App\Http\Controllers\LifeApiController::class, 'action'])->middleware(CheckTokenForAnyScope::using('brain:write'));
+});

@@ -2,6 +2,10 @@
 <div class="table-wrap"><table class="nutrition-table"><caption class="sr-only">Average macros per complete day</caption><thead><tr><th scope="col">Period</th><th scope="col" class="numeric">Complete days</th>@foreach($macros as $key => $label)<th scope="col" class="numeric">{{ $label }}<small>{{ $key === 'calories' ? 'kcal' : 'g' }} / day</small></th>@endforeach</tr></thead><tbody>
 @foreach($periods as $label => $period)<tr><th scope="row">{{ $label }}@if($period['complete_days'])<small>{{ $period['first_date'] }} to {{ $period['last_date'] }}</small>@endif</th><td class="numeric">{{ $period['complete_days'] }}</td>@foreach($macros as $key => $macro)<td class="numeric">{{ $period['complete_days'] ? number_format($period[$key], $key === 'calories' ? 0 : 1) : '—' }}</td>@endforeach</tr>@endforeach
 </tbody></table></div></section>
+@if($selectedRange)
+<section class="card section"><h2>Selected range</h2><p class="muted">{{ $from ?: 'Earliest record' }} through {{ $through ?: 'Latest record' }} · {{ $selectedRange['complete_days'] }} complete days. The standard periods above always show their full calendar windows.</p>
+<div class="numbers">@foreach($macros as $key => $label)<div><small>{{ $label }} / day</small><strong>{{ $selectedRange['complete_days'] ? number_format($selectedRange[$key], $key === 'calories' ? 0 : 1) : '—' }}</strong></div>@endforeach</div></section>
+@endif
 <section class="card section"><h2>Monthly averages</h2><p class="muted">Per complete day within each month. Only months with complete days appear; entry counts and calorie totals include those days only.</p>
 @if($months->count())
     <div class="table-wrap"><table class="nutrition-table"><caption class="sr-only">Monthly averages and calorie totals for complete days</caption><thead><tr><th scope="col">Month</th><th scope="col" class="numeric">Complete days</th>@foreach($macros as $key => $label)<th scope="col" class="numeric">{{ $label }}<small>{{ $key === 'calories' ? 'kcal' : 'g' }} / day</small></th>@endforeach<th scope="col" class="numeric">Complete-day total<small>kcal</small></th></tr></thead><tbody>

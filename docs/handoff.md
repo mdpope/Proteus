@@ -99,6 +99,74 @@ coordinate signing across machines. Remote pairing is separate from Apple signin
 See `chat-controls.md` for queue/steer semantics, `mcp-auth.md` for sign-in recovery, and `providers.md` for Codex/Claude compatibility limits. Physical iOS installation remains an explicit operation on the operator’s designated signing Mac; simulator verification does not update devices.
 
 
+## October 4 continuation: shared web shell, native mobile Life and desktop peers
+
+This is the current status and supersedes the deployment/pairing statements below. The website
+release is live; new Mac and mobile source is implemented and validated. At this checkpoint the
+new native builds are prepared, but their in-place installation is pending the unlocked-device
+acceptance step. Do not infer installation from a build or simulator test.
+
+- Website uses shared desktop dark theme tokens, responsive sidebar and persistent section tabs.
+  Existing account-scoped browser pairings to both Macs survived and each connected after release.
+  Website provider meters request quota from the selected host and obey its visibility flag;
+  older hosts correctly show unavailable until their provider-usage bridge is updated.
+- Production release `20261004T083033Z` matched 9,193 manifest files. A freshly captured recovery
+  set was restored into an independent database and verified before deployment. Existing native
+  schema-v2 ledgers were checked read-only, and the reviewed additive Laravel migration registered
+  them without altering original schemas or nutrition records. All three nutrition pre/post hashes
+  and counts matched. A public native PKCE client is configured; it grants no account access alone.
+  HTTPS/redirect/authentication/relay checks passed. The only new Apache error was the expected
+  protected `.env` denial from the security smoke test. Private receipts/backup details belong to
+  the separate domain operations project. Two earlier preflight file-access failures retained the
+  old active site and changed no database; the canonical helper now runs a private verified copy.
+- Desktop Life has richer Garage/fuel/oil cards and fixed complete-day nutrition periods alongside
+  custom date filters. Original food-version references and scoped evidence remain intact. Mobile
+  has native views and typed forms for the same Life account, direct website PKCE/MFA sign-in,
+  Keychain credentials and retry-safe mutations. Life defaults hidden on mobile until **App setup
+  → Show Life**; its account is independent of the selected Mac. Real per-device Life consent and
+  production record interaction remain unverified until normal operator sign-in.
+- Mobile usage comes from the connected Mac. Exact legacy **My Mac** labels hydrate from that
+  authenticated host; custom names stay unchanged. The operator corrected both existing mobile
+  relay addresses and confirmed connectivity. Both physical devices were then independently paired
+  to Build Mac, with their previous Example Organization destination retained. The two-entry indices
+  were read back and verified. Pairing keys were not extracted.
+- Desktop can separately pair as a client of other Macs. New Chat defaults to This Mac every time;
+  remote selection reloads that Mac's workspaces, folders, agents, skills, instructions and provider
+  metadata, clearing prior selections and blocking Start while unavailable. Remote commands never
+  fall back locally. History tabs put This Mac first; replies, approvals and pending-answer drafts
+  are scoped to host/run/request. Peer keys stay in native safeStorage. Fresh desktop control
+  pairing is distinct from already-approved website/mobile pairings and remains pending operator
+  confirmation. No production desktop peer was silently added.
+- Browser history now persists URL/title entries and index across actual restart; form/POST state,
+  agent grants and common authentication callback URLs are excluded. Hold or right-click Back/
+  Forward for a native history list; stale menu selections cannot jump an unrelated entry.
+- Independent review reproduced and fixed cross-host pending-answer draft transfer and invalid
+  cross-provider model/default inheritance before packaging. Final destination UI tests include
+  both cases. Mobile's first Markdown layout now explicitly reports its height so rich content
+  appears without relying on a deferred ResizeObserver; subsequent height updates still work.
+
+Validation: 212 Node tests and static checks; 59 Laravel tests / 409 assertions; 15 desktop-peer
+UI groups plus three peer backend/persistence tests; 17 website remote groups; 12 website shell
+checks; 13 actual-restart/history-menu groups; 15 native desktop Life groups. Native mobile has
+17 focused iPhone tests (9 destinations, 5 Life, 2 usage, 1 Markdown), 16 core iPad tests, Life and
+usage UI on both layouts, mobile opt-in and final pairing/start/reply/rich-code UI regressions.
+All test records are disposable. Signed universal mobile build uses the existing identity/profile
+and expires October 10, 2026; distribution renewal remains separate. Mac package verification
+checks the overall signature, Copilot vendor identities, launch and live catalog.
+
+Current devices became passcode-locked before deployment. Automatic approval review rejected the
+physical iPhone/iPad update while locked; do not bypass it. Resume only after unlocking, privately
+copy and compare each app's destination index/encrypted caches, install in place without uninstall,
+then independently verify process/reconnection. The Mac was also locked at the UI check; no active
+or waiting runs or terminal shells were observed. Preserve its six existing tabs and active
+selection during the eventual graceful update. Source and signed packages do not certify actual
+installed UI acceptance. Update this checkpoint with precise receipts after deployment.
+
+Projects remain explicitly on hold. Multi-provider delegation remains a design proposal, not an
+executor. Original Omi services and Codex schedules remain the processing owners; all five Proteus
+replacements remain paused and both execution gates off. The earlier native policy repair timed
+out without changing configuration and must not be retried automatically.
+
 ## October 4 continuation: Transcription, terminals and remote clients
 
 This section supersedes earlier deployment/timeout statements below. Desktop and physical mobile

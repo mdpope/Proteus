@@ -222,3 +222,61 @@ extension RemoteUITests {
         let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Edit relay without replacing pairing"; shot.lifetime = .keepAlways; add(shot)
     }
 }
+
+
+extension RemoteUITests {
+    @MainActor func testSelectedMacProviderUsageMetersAndResetDetails() async throws {
+        let (data, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/pair")!)
+        let fixture = try JSONSerialization.jsonObject(with:data) as! [String:Any]
+        let app=XCUIApplication();app.launchArguments=["--reset-pairing"];app.launch()
+        let link=app.textFields["pairing-link"];XCTAssertTrue(link.waitForExistence(timeout:15));link.tap();link.typeText(fixture["code"] as! String);app.buttons["pair-mac"].tap()
+        let codex=app.buttons["usage-codex"];XCTAssertTrue(codex.waitForExistence(timeout:20))
+        let loaded=NSPredicate(format:"label CONTAINS %@", "41%")
+        await fulfillment(of: [expectation(for:loaded,evaluatedWith:codex)],timeout:20)
+        app.buttons["toggle-provider-usage"].tap();XCTAssertFalse(codex.exists)
+        app.buttons["toggle-provider-usage"].tap();XCTAssertTrue(codex.exists)
+        app.buttons["provider-usage-details"].tap()
+        XCTAssertTrue(app.staticTexts["Synthetic account allowance"].firstMatch.waitForExistence(timeout:10))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format:"label BEGINSWITH %@", "Resets ")).firstMatch.exists)
+        let shot=XCTAttachment(screenshot:app.screenshot());shot.name="Native selected-Mac provider usage";shot.lifetime = .keepAlways;add(shot)
+    }
+}
+
+extension RemoteUITests {
+    @MainActor func testNativeLifeNutritionCardsAndFormsWithoutMacConnection() throws {
+        let app=XCUIApplication();app.launchArguments=["--synthetic-life","--reset-pairing"];app.launch()
+        let life=app.buttons["Life"].firstMatch;XCTAssertTrue(life.waitForExistence(timeout:20));life.tap()
+        let nutrition=app.buttons["Nutrition"].firstMatch
+        if !nutrition.exists {app.navigationBars.buttons.firstMatch.tap()}
+        XCTAssertTrue(nutrition.waitForExistence(timeout:10));nutrition.tap()
+        XCTAssertTrue(app.staticTexts["This month"].waitForExistence(timeout:10))
+        app.swipeUp()
+        XCTAssertTrue(app.staticTexts["Last 30 calendar days"].waitForExistence(timeout:10))
+        let screenshot=XCTAttachment(screenshot:app.screenshot());screenshot.name="Native Life nutrition period cards";screenshot.lifetime = .keepAlways;add(screenshot)
+        app.swipeDown();app.swipeDown()
+        let add=app.buttons["Add food"];XCTAssertTrue(add.waitForExistence(timeout:10));add.tap()
+        let name=app.textFields["Food name *"];XCTAssertTrue(name.waitForExistence(timeout:10));name.tap();name.typeText("Synthetic new food")
+        for field in ["Calories *","Protein *","Carbs *","Fat *"]{let input=app.textFields[field];input.tap();input.typeText("10")}
+        app.buttons["life-save-record"].tap()
+        XCTAssertTrue(app.buttons["Add food"].waitForExistence(timeout:10))
+        XCTAssertFalse(app.staticTexts["life-form-error"].exists)
+    }
+}
+
+
+extension RemoteUITests {
+    @MainActor func testLifeIsOptionalAndSetupWorksWithoutMac() {
+        let app=XCUIApplication();app.launchArguments=["--reset-pairing"];app.launch()
+        let setup=app.buttons["app-setup"];XCTAssertTrue(setup.waitForExistence(timeout:15));setup.tap()
+        let toggle=app.switches["show-life"];XCTAssertTrue(toggle.waitForExistence(timeout:10))
+        if toggle.value as? String == "1" { toggle.coordinate(withNormalizedOffset: CGVector(dx:0.9,dy:0.5)).tap() }
+        app.buttons["Done"].tap()
+        XCTAssertFalse(app.buttons["Life"].exists)
+        setup.tap();toggle.coordinate(withNormalizedOffset: CGVector(dx:0.9,dy:0.5)).tap();XCTAssertEqual(toggle.value as? String,"1");app.buttons["Done"].tap()
+        XCTAssertTrue(app.buttons["Life"].firstMatch.waitForExistence(timeout:5))
+        app.buttons["Life"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["life-sign-in"].waitForExistence(timeout:10))
+        app.buttons["Macs"].firstMatch.tap();setup.tap();toggle.coordinate(withNormalizedOffset: CGVector(dx:0.9,dy:0.5)).tap();app.buttons["Done"].tap()
+        XCTAssertFalse(app.buttons["Life"].exists)
+    }
+}

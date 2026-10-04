@@ -161,3 +161,20 @@ operator can now edit the existing Mac's relay through the supported native UI a
 cutover, without re-pairing. Build Mac remains a separate Add Mac operation. Omi was untouched.
 Private preservation files and signed-build/install/launch receipts are under
 `/private/tmp/proteus-relay-editor-device-update-20261004`, outside Git.
+
+
+### Native Life and usage build ready, October 4
+
+The current universal build adds optional direct website Life, selected-Mac usage, authenticated
+legacy host-name hydration and explicit initial Markdown measurement. App setup defaults Life off;
+operator sign-in is a separate website account step. Seventeen focused iPhone tests, sixteen iPad
+core tests, both Life/usage layouts, opt-in and final chat/rich-code regressions passed.
+
+The existing signing identity, bundle identifier and both device families were verified in the
+signed build. The unchanged development profile expires October 10, 2026 at 17:29 MDT. This build
+has **not yet been installed on physical devices** at this checkpoint: both devices are locked,
+and automatic approval review rejected installation pending unlock. Do not work around that hold.
+The prior relay-editor app remains installed; both indices now preserve two independently paired
+Macs after the authorized Build Mac addition. User-confirmed endpoint correction restored HC
+connectivity. Resume in-place deployment only once unlocked, preserving caches/index/Keychain and
+checking actual launch and destination names. Omi apps and recording data remain untouched.

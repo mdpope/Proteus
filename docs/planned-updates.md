@@ -3,6 +3,20 @@
 Maintain this as the single backlog. Design rationale is in `decisions.md`; recent changes are in
 `../CHANGELOG.md`. Items below are status, not promises of completed validation.
 
+## Shared website, native Life and desktop destinations (October 4)
+
+Implemented: shared dark web/desktop theme and persistent website section tabs; website provider
+meters and retained destination; richer native Garage/fuel/nutrition cards and date filters; direct
+website Life on mobile with PKCE/Keychain, native forms and retry protection; mobile provider usage;
+legacy host-label repair; native desktop peer pairing, full destination catalogs and local-first
+history; browser history restoration and long-press navigation menus.
+
+See the current handoff for deployment and physical acceptance. Website account sign-in on each
+mobile device remains distinct from encrypted Mac pairing. Native Life and allowance require their
+respective account/host connection. Physical trackpad feel, large-history pagination and complete
+website/native presentation parity remain follow-up work. Projects are explicitly on hold pending
+design discussion; the existing saved workspace configuration remains available.
+
 ## Transcription / Life / remote expansion (October 3–4)
 
 Implemented in source: separate Omi and general transcription areas, independently gated native
@@ -20,9 +34,9 @@ enabled and ready after Keychain approval; all seven sections read through the i
 actual credential resolver and SSH connection. No production record writes or evidence uploads
 were used for acceptance. The four deployment credentials are saved in the authoritative vault
 and verified after sync. Both Mac relay hosts are online; the personal host is paired with the
-signed-in web client and its schedules were read. The work-host browser invitation is pending
-approval in its owning chat. Mobile Manage Macs can edit a relay address while preserving the
-existing pairing key and history; actual device endpoint changes remain separate from installation.
+signed-in web client and its schedules were read. The work-host browser pairing has been approved and verified independently of the personal host. Mobile Manage Macs can edit a relay address while preserving the
+existing pairing key and history; the operator changed both existing endpoints to the shared relay and confirmed connectivity. Both
+physical devices now also retain an independently paired Build Mac destination.
 
 Existing native Omi services and Codex automations still own processing. Installed Codex catalog
 and two no-tools synthetic turns now pass, but real workflow tools, claims, context effects and
@@ -105,6 +119,8 @@ pairings do not grant agents new authority, and company-source policy stays in i
   exporter and explicit import/refresh.
 - Provider adapters beyond Copilot/Codex/Claude/rehearsal; Claude MCP/browser/steering parity; Codex native agent tool-filter parity and per-tool MCP approval interception; changing the provider of an existing chat.
 - Paginated on-disk run storage as history grows.
+- Authenticate revocation notices end to end; the current protocol trusts relay disconnect/revocation
+  notices for availability and may require re-pairing after a malicious relay notification.
 - Codex MCP OAuth controls, generic MCP elicitation/input forms, and editor-specific agent hook and extension-tool mappings. Copilot OAuth recovery is implemented per chat.
 - Bitwarden extension compatibility and broader token-broker/Keychain bootstrap integrations.
 - Automatic VS Code index, unsaved buffers, or existing chat-history transfer.

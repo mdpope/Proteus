@@ -135,3 +135,34 @@ new test APP_KEY and temporary Passport keys. Never run test migration resets, o
 key generation against the live site. Production provisioning and deployment are separate parent
 operations and require their own backup, restore validation and smoke evidence. Passing these
 local tests does not assert that either actual Mac or the public relay is deployed or paired.
+
+## Shared shell and transport
+
+The authenticated website uses a compact Proteus sidebar and the same dark color tokens as the
+Mac (`public/proteus-theme.css`). Life cards, tables, forms and authentication stay ordinary Laravel
+pages. The remembered section strip allows whole-tab activation and accessible close buttons;
+Life remains pinned and garage/vehicle details belong to that section. Chats, Schedules and
+Workspaces link to `/remote?view=chats|schedules|workspaces`. On the remote page these links switch
+views in place so in-memory drafts survive; elsewhere they use normal full-page navigation.
+
+Only allowlisted section keys are stored under an account-scoped shell key. Record titles, page
+queries, tokens and content are not remembered by the shell. Remote preferences contain only a
+selected host UUID and per-host usage-collapse choices. Logout from any page clears both UI keys,
+clears the browser's protected pairing store through the shared logout handler, and signals other
+tabs. Mobile layouts retain a visible account/sign-out control. `test/web-shell-ui.mjs` verifies
+12 groups with two synthetic Laravel accounts, including account isolation, malicious storage,
+Life pinning, keyboard/close behavior, responsive overflow and logout.
+
+Connected remote pages show the selected Mac's provider allowance in the sidebar when that host's
+feature flag permits it. Compact and expanded views retain percentage progress meters; native
+`progress` elements comply with the strict stylesheet CSP without inline style attributes.
+Disconnected pages hide allowances instead of presenting stale values as current. Pairing links
+are consumed from the URL fragment before query-view normalization, including later hash changes;
+the fragment is cleared without sending its token to Laravel.
+
+The pure wire client now lives in `src/remote-client.js`; the website wrapper retains its
+nonextractable IndexedDB key store and reexports the same API. The desktop peer client uses this
+same transport with OS-encrypted native storage, without copying website keys or exposing them to
+the desktop renderer. `test/web-remote-ui.mjs` verifies the integrated shell/remote experience in
+17 groups, including initial and later fragment pairing, two destinations, permissions, usage
+collapse, feature flags, deep links and disconnect/logout behavior. No production data is used.

@@ -1,10 +1,21 @@
 import { mount as mountMarkdown } from '../../../src/markdown-renderer.js';
 import { PairingStore, BrowserRemoteClient, parsePairing } from './remote-client.js';
+import { usagePanel } from './remote-usage.js';
 const root = document.querySelector('#remote-workspace');
 const store = new PairingStore(root.dataset.account);
 const hosts = new Map();
 const sessions = new Map();
-let active = '', view = 'chats', switching = 0;
+const sectionNames = ['chats', 'schedules', 'workspaces'];
+const initialView = new URLSearchParams(location.search).get('view');
+let active = '', view = sectionNames.includes(initialView) ? initialView : 'chats', switching = 0;
+const preferenceKey = 'proteus-remote-ui:' + root.dataset.account;
+const readPreferences = () => { try { return JSON.parse(localStorage.getItem(preferenceKey)) || {}; } catch { return {}; } };
+const writePreferences = changes => { try { localStorage.setItem(preferenceKey, JSON.stringify({ ...readPreferences(), ...changes })); } catch {} };
+function setView(value) {
+    view = sectionNames.includes(value) ? value : 'chats';
+    history.replaceState(null, '', location.pathname + '?view=' + view);
+    document.dispatchEvent(new CustomEvent('proteus:section', { detail: { key: view } }));
+}
 const $ = id => document.getElementById(id);
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const text = value => typeof value === 'string' ? value : JSON.stringify(value, null, 2);
@@ -40,18 +51,47 @@ function bindDraft(formId, key, method, args, after) {
     });
 }
 async function connect(hostId) {
-    preserveDrafts(); const generation = ++switching; session()?.client?.close(); active = hostId; notice(''); destinationOptions();
-    if (!hostId) { render(); return; }
+    preserveDrafts(); const generation = ++switching; session()?.client?.close(); active = hosts.has(hostId) ? hostId : ''; writePreferences({ selectedHost: active }); notice(''); destinationOptions();
+    if (!active) { render(); return; }
     const host = hosts.get(hostId); if (!host) return;
     let current = sessions.get(hostId); if (!current) { current = { host, drafts: new Map(), selected: null, run: null, state: null }; sessions.set(hostId, current); }
     current.run = null; current.selected = null; render();
     const client = current.client = new BrowserRemoteClient(host);
     client.addEventListener('status', () => { if (active === hostId && current.client === client) { destinationOptions(); if (client.status === 'closed') { preserveDrafts(); render(); } } });
     client.addEventListener('failure', event => { if (active === hostId && current.client === client) notice(event.detail); });
-    client.addEventListener('revoked', async () => { await store.remove(hostId); hosts.delete(hostId); current.state = null; current.run = null; current.drafts.clear(); if (active === hostId) { active = ''; render(); destinationOptions(); } });
+    client.addEventListener('revoked', async () => { await store.remove(hostId); hosts.delete(hostId); current.state = null; current.run = null; current.drafts.clear(); if (active === hostId) { active = ''; writePreferences({ selectedHost: '' }); render(); destinationOptions(); } });
     client.addEventListener('change', event => { if (current.client !== client) return; const change = event.detail; current.host.cursor = change.cursor; if (change.event === 'state') current.state = change.data; if (change.event === 'run' && change.runId === current.selected) current.run = change.data; if (active === hostId) { preserveDrafts(); render(); } });
-    try { await client.connect(); if (generation !== switching) { client.close(); return; } await refresh(); }
+    try { await client.connect(); if (generation !== switching) { client.close(); return; } await refresh(); void refreshUsage(); }
     catch (error) { if (generation === switching) { notice(error.message); render(); } }
+}
+function renderUsage() {
+    const element = $('web-provider-usage'); if (!element) return;
+    const current = session();
+    const visible = current?.client?.status === 'online' && current.state?.appearance?.showProviderUsage !== false;
+    element.hidden = !visible;
+    if (!visible) { element.innerHTML = ''; delete element.dataset.signature; return; }
+    const collapsed = readPreferences().collapsed?.[active] ?? current.state?.appearance?.providerUsageCollapsed ?? false;
+    const value = current.state?.providerUsage || { providers: {} };
+    const markup = usagePanel(value, { collapsed, destination: current.host.label, error: current.usageError, loading: current.usageLoading });
+    if (element.dataset.signature === markup) return;
+    const opened = new Set([...element.querySelectorAll('details[open]')].map(details => details.dataset.provider));
+    element.innerHTML = markup; element.dataset.signature = markup;
+    for (const details of element.querySelectorAll('details')) details.open = opened.has(details.dataset.provider);
+    element.querySelector('[data-usage-collapse]').onclick = () => { writePreferences({ collapsed: { ...readPreferences().collapsed, [active]: !collapsed } }); renderUsage(); };
+    element.querySelector('[data-usage-refresh]')?.addEventListener('click', () => void refreshUsage(true));
+}
+async function refreshUsage(force = false) {
+    const current = session(), target = active;
+    if (!current?.state || current.client?.status !== 'online' || current.usageLoading || current.state.appearance?.showProviderUsage === false) return;
+    current.usageLoading = true; current.usageError = ''; renderUsage();
+    try {
+        const value = await command('provider.usage', { force });
+        if (active !== target || session() !== current) return;
+        current.state.appearance ||= {};
+        current.state.appearance.showProviderUsage = value.enabled !== false;
+        current.state.providerUsage = value;
+    } catch { if (active === target) current.usageError = 'Usage is unavailable. Check or update Proteus on this Mac.'; }
+    finally { current.usageLoading = false; if (active === target) renderUsage(); }
 }
 function modelFields(values, prefix = '') {
     const current = session(); const statuses = current.state?.providerStatuses || {};
@@ -67,7 +107,7 @@ function contextFields(values) {
 }
 function render() {
     const focused = document.activeElement; const focus = focused?.name && focused.closest('form') ? { form: focused.closest('form').id, name: focused.name, start: focused.selectionStart, end: focused.selectionEnd } : null;
-    const current = session(), online = current?.client?.status === 'online'; destinationOptions();
+    const current = session(), online = current?.client?.status === 'online'; destinationOptions(); renderUsage();
     root.querySelectorAll('[data-remote-view]').forEach(button => button.classList.toggle('active', button.dataset.remoteView === view));
     if (!current?.state || !online) { $('remote-content').innerHTML = `<section class="card"><h2>${active ? 'Connect ' + escape(hosts.get(active)?.label) : 'Choose a paired Mac'}</h2><p>${active ? 'Remote content is hidden while disconnected. Use Connect to request current state.' : 'Use a fresh pairing code from each Mac. Personal and Example Organization destinations keep separate keys, drafts and event cursors.'}</p></section>`; return; }
     if (view === 'chats') renderChats(current); else if (view === 'schedules') renderSchedules(current); else renderWorkspaces(current);
@@ -77,7 +117,7 @@ function bindCatalog(formId, key) {
     const form = $(formId);
     for (const select of form.querySelectorAll('select[name="provider"],select[name="model"]')) select.addEventListener('change', async () => { preserveDrafts(); const draft = session().drafts.get(key); if (select.name === 'provider') { draft.values.model = ''; draft.values.reasoningEffort = ''; draft.values.contextTier = ''; draft.values.serviceTier = ''; try { const status = await command('provider.status', { provider: select.value }); session().state.providerStatuses ||= {}; session().state.providerStatuses[select.value] = status; } catch (error) { notice(error.message); } } render(); });
 }
-async function openChat(id) { preserveDrafts(); const current = session(); current.selected = id; current.run = await command('chat.get', { id }); view = 'chats'; render(); }
+async function openChat(id) { preserveDrafts(); const current = session(); current.selected = id; current.run = await command('chat.get', { id }); setView('chats'); render(); }
 function renderChats(current) {
     const runs = current.state.runs || []; const run = current.run; const key = run ? 'reply:' + run.id : 'new-chat'; const draft = currentDraft(key, run ? { prompt: '', mode: 'queue' } : { ...current.state.defaults, name: '', prompt: '', workspaceId: current.state.context.defaultWorkspaceId, includeDefaults: 'true' }); const values = draft.values;
     const pending = run?.pending; const waiting = pending ? `<section class="remote-pending"><h3>${pending.type === 'permission' ? 'Approval needed on ' + escape(current.host.label) : 'Input requested'}</h3><pre>${escape(pending.question || text(pending.details || pending))}</pre>${pending.type === 'permission' ? '<button data-answer="approve" type="button">Approve once</button><button data-answer="deny" type="button">Deny</button>' : '<form id="remote-answer"><label>Your answer<textarea name="answer" required rows="3"></textarea></label><button type="submit">Send answer</button></form>'}</section>` : '';
@@ -110,15 +150,20 @@ function renderWorkspaces(current) {
     root.querySelectorAll('[data-context]').forEach(box => box.onchange = () => { current.contextSelection ||= new Set(); box.checked ? current.contextSelection.add(box.dataset.context) : current.contextSelection.delete(box.dataset.context); });
     $('remote-context-refresh').onclick = async () => { try { current.state.context = await command('context.refresh'); render(); } catch (error) { notice(error.message); } };
     $('remote-context-preview').onclick = async () => { try { $('remote-context-result').textContent = text(await command('context.preview', { workspaceId: current.workspaceId || workspaceId, selectedIds: [...(current.contextSelection || [])], includeDefaults: false })); } catch (error) { notice(error.message); } };
-    $('remote-context-chat').onclick = () => { current.run = null; current.selected = null; current.drafts.delete('new-chat'); const draft = currentDraft('new-chat', { ...current.state.defaults, workspaceId: current.workspaceId || workspaceId, selectedIds: [...(current.contextSelection || [])], includeDefaults: 'false', prompt: '', name: '' }); draft.selectedIds = [...(current.contextSelection || [])]; view = 'chats'; render(); };
+    $('remote-context-chat').onclick = () => { current.run = null; current.selected = null; current.drafts.delete('new-chat'); const draft = currentDraft('new-chat', { ...current.state.defaults, workspaceId: current.workspaceId || workspaceId, selectedIds: [...(current.contextSelection || [])], includeDefaults: 'false', prompt: '', name: '' }); draft.selectedIds = [...(current.contextSelection || [])]; setView('chats'); render(); };
     root.querySelectorAll('[data-favorite]').forEach(button => button.onclick = async () => { try { await command('context.favorite', { id: button.dataset.favorite, enabled: !(context.favorites || []).includes(button.dataset.favorite), expectedRevision: context.revision }); await refresh(); } catch (error) { notice(error.message); } });
 }
-$('remote-mobile-signout').onclick = () => document.querySelector('form[action$="/logout"]')?.requestSubmit();
 $('remote-host').onchange = event => connect(event.target.value);
 $('remote-connect').onclick = () => connect($('remote-host').value);
-$('remote-disconnect').onclick = () => { preserveDrafts(); session()?.client?.close(); render(); };
-$('remote-forget').onclick = async () => { const id = active; if (!id || !confirm(`Forget this browser's pairing with ${hosts.get(id)?.label}? The Mac can also revoke it in Remote access.`)) return; sessions.get(id)?.client?.close(); sessions.delete(id); hosts.delete(id); await store.remove(id); active = ''; destinationOptions(); render(); };
-root.querySelectorAll('[data-remote-view]').forEach(button => button.onclick = () => { preserveDrafts(); view = button.dataset.remoteView; render(); });
+$('remote-disconnect').onclick = () => { preserveDrafts(); ++switching; session()?.client?.close(); writePreferences({ selectedHost: '' }); render(); };
+$('remote-forget').onclick = async () => { const id = active; if (!id || !confirm(`Forget this browser's pairing with ${hosts.get(id)?.label}? The Mac can also revoke it in Remote access.`)) return; sessions.get(id)?.client?.close(); sessions.delete(id); hosts.delete(id); await store.remove(id); active = ''; writePreferences({ selectedHost: '' }); destinationOptions(); render(); };
+root.querySelectorAll('[data-remote-view]').forEach(button => button.onclick = () => { preserveDrafts(); setView(button.dataset.remoteView); render(); });
+document.addEventListener('click', event => {
+    const link = event.target.closest('a[href]'); if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.target === '_blank') return;
+    const url = new URL(link.href); const requested = url.searchParams.get('view');
+    if (url.origin === location.origin && url.pathname === location.pathname && sectionNames.includes(requested)) { event.preventDefault(); preserveDrafts(); setView(requested); render(); }
+});
+window.addEventListener('popstate', () => { const requested = new URLSearchParams(location.search).get('view'); preserveDrafts(); consumeFragment(); setView(requested); render(); });
 $('remote-pair-form').onsubmit = async event => {
     event.preventDefault(); const code = $('remote-pair-code').value; $('remote-pair-code').value = ''; const button = event.target.querySelector('button'); button.disabled = true; notice('');
     try { const capsule = parsePairing(code); if (capsule.relay !== root.dataset.relay) throw new Error('This invitation uses a different relay. Configure the Mac for this website’s relay before pairing.');
@@ -130,13 +175,14 @@ $('remote-pair-form').onsubmit = async event => {
 };
 function consumeFragment() {
     const fragment = new URLSearchParams(location.hash.slice(1)).get('pair');
-    if (location.hash) history.replaceState(null, '', location.pathname);
+    if (location.hash) history.replaceState(null, '', location.pathname + '?view=' + view);
     if (fragment) { $('remote-pair-code').value = fragment; $('remote-pair-panel').open = true; }
 }
-consumeFragment(); window.addEventListener('hashchange', consumeFragment);
+consumeFragment(); setView(view); window.addEventListener('hashchange', consumeFragment);
 const channel = new BroadcastChannel('proteus-remote-account');
-async function endAccount() { for (const current of sessions.values()) current.client?.close(); sessions.clear(); hosts.clear(); active = ''; await store.clear(); render(); destinationOptions(); notice('Signed out. Sign in again and pair this browser to continue.'); }
+async function endAccount() { try { localStorage.removeItem(preferenceKey); } catch {} for (const current of sessions.values()) current.client?.close(); sessions.clear(); hosts.clear(); active = ''; await store.clear(); render(); destinationOptions(); notice('Signed out. Sign in again and pair this browser to continue.'); }
 channel.onmessage = event => { if (event.data?.type === 'logout' && event.data.account === root.dataset.account) void endAccount(); };
 const sessionTimer = setInterval(async () => { try { const response = await fetch(root.dataset.sessionUrl, { credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' }, redirect: 'manual' }); if (!response.ok || (await response.json()).account !== root.dataset.account) { clearInterval(sessionTimer); await endAccount(); } } catch { for (const current of sessions.values()) current.client?.close(); render(); notice('Website session could not be verified. Reload before reconnecting.'); } }, 60_000);
-window.addEventListener('pagehide', () => { clearInterval(sessionTimer); for (const current of sessions.values()) current.client?.close(); channel.close(); store.close(); });
-try { for (const host of await store.list()) hosts.set(host.hostId, host); destinationOptions(); if (!hosts.size) $('remote-pair-panel').open = true; } catch (error) { notice(error.message); }
+const usageTimer = setInterval(() => { if (!document.hidden) void refreshUsage(); }, 60_000);
+window.addEventListener('pagehide', () => { clearInterval(usageTimer); clearInterval(sessionTimer); for (const current of sessions.values()) current.client?.close(); channel.close(); store.close(); });
+try { for (const host of await store.list()) hosts.set(host.hostId, host); destinationOptions(); if (!hosts.size) $('remote-pair-panel').open = true; const selected = readPreferences().selectedHost; if (hosts.has(selected)) await connect(selected); } catch (error) { notice(error.message); }
