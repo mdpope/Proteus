@@ -11,8 +11,9 @@ website, native Life setup/records, all-root Markdown browsing, Ghostty terminal
 full desktop tab restoration/browser gestures, hideable allowance meters, Claude support, and
 separately paired Mac destinations on mobile/web. See the handoff for actual validation.
 
-Website code-only deployment and live relay TLS/two-host routing checks have completed. Final
-combined desktop/mobile deployment and actual paired-client acceptance remain separate. Native
+Website code-only deployment and live relay TLS/two-host routing checks have completed. The
+Mac, physical iPhone and physical iPad updates are installed; actual paired-client acceptance on the
+new shared relay remains separate. Native
 Life backup restoration and the approved additive v2 upgrade are verified, preserving core table
 schemas/row hashes and the nutrition digest. Original evidence-file hashes also match. Life is
 configured but off pending Keychain access and final app acceptance; no production record writes
@@ -20,8 +21,10 @@ or evidence uploads were used for verification.
 
 Existing native Omi services and Codex automations still own processing. Installed Codex catalog
 and two no-tools synthetic turns now pass, but real workflow tools, claims, context effects and
-retry acceptance remain to be verified. After the final desktop build, prepare replacements while
-disabled, review ownership, drain original transactions, then pause/unload only the corresponding
+retry acceptance remain to be verified. Replacements were refreshed while disabled with current canonical fingerprints. Native cutover
+also requires restoring the configured
+independent policy dependency; general AI schedules need reviewed unattended command approvals.
+Review ownership, drain original transactions, then pause/unload only the corresponding
 original owners before enabling replacements. Observe bounded real outcomes before claiming
 unattended reliability. Bluetooth, recording capture and mobile review remain separate.
 

@@ -6,12 +6,34 @@ import { EventEmitter } from 'node:events';
 import { createInterface } from 'node:readline';
 import { browserTools } from './browser-tools.js';
 import { displayText, toolSummary } from './tool-activity.js';
+import { canonicalPath, effectivePermissionMode } from './permissions.js';
 import { validateModelOptions } from './model-catalog.js';
 
 export const codexExecutable = () => process.env.PROTEUS_CODEX_PATH || ['/opt/homebrew/bin/codex','/usr/local/bin/codex','/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex','/Applications/Codex.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex','/Applications/ChatGPT.app/Contents/Resources/codex','/Applications/Codex.app/Contents/Resources/codex'].find(p=>fs.existsSync(p)) || 'codex';
 export function codexModel(model) {
  const efforts=(model.supportedReasoningEfforts||[]).map(e=>typeof e==='string'?e:e.reasoningEffort);
  return {id:model.model||model.id,name:model.displayName||model.id,isDefault:model.isDefault,description:model.description,controls:{reasoningEfforts:efforts,reasoningSupported:efforts.length>0,defaultReasoningEffort:model.defaultReasoningEffort||null,contextTiers:[{id:'default',promptTokens:null,totalTokens:null}],maxOutputTokens:null,serviceTiers:(model.serviceTiers||[]).map(t=>({id:t.id||t.serviceTier,name:t.displayName||t.name||t.id||t.serviceTier})).filter(t=>t.id)}};
+}
+// Filesystem grants never imply approval of a shell command. Keep native untrusted
+// approval routing; the engine applies the user's separate saved operation rules.
+export function codexSandbox(schedule, profile) {
+ const roots=[schedule.workspace.cwd,...(schedule.workspace.additionalDirectories||[])];
+ const readOnly={cwd:schedule.workspace.cwd,sandbox:'read-only',runtimeWorkspaceRoots:roots,policy:{type:'readOnly',networkAccess:false},config:{}};
+ if(!['trusted','autopilot'].includes(effectivePermissionMode(profile)))return readOnly;
+ const cwd=canonicalPath(schedule.workspace.cwd,schedule.workspace.cwd);
+ if(!cwd)return readOnly;
+ const contains=(root,target)=>{const relative=path.relative(root,target);return relative===''||(!relative.startsWith('..'+path.sep)&&relative!=='..'&&!path.isAbsolute(relative));};
+ const grants=(profile.folders||[]).filter(folder=>folder.access==='read-write'&&canonicalPath(folder.path,cwd)===folder.path);
+ const writable=[...new Set(roots.map(root=>canonicalPath(root,cwd)).filter(root=>root&&grants.some(folder=>contains(folder.path,root))&&fs.existsSync(root)&&fs.statSync(root).isDirectory()))].sort();
+ // cwd is implicitly writable in native workspace-write, so it must be granted.
+ if(!cwd||!writable.includes(cwd))return readOnly;
+ return {cwd,sandbox:'workspace-write',runtimeWorkspaceRoots:writable,policy:{type:'workspaceWrite',writableRoots:writable,networkAccess:false,excludeTmpdirEnvVar:true,excludeSlashTmp:true},config:{sandbox_workspace_write:{writable_roots:writable,network_access:false,exclude_tmpdir_env_var:true,exclude_slash_tmp:true}}};
+}
+export function verifyCodexSandbox(thread, expected, cwd) {
+ if(expected.sandbox!=='workspace-write')return;
+ const sandbox=thread.sandbox;
+ const actual=[...new Set([thread.cwd,...(sandbox?.writableRoots||[])])].sort();
+ if(thread.cwd!==cwd||thread.approvalPolicy!=='untrusted'||thread.approvalsReviewer!=='user'||sandbox?.type!=='workspaceWrite'||sandbox.networkAccess!==false||sandbox.excludeTmpdirEnvVar!==true||sandbox.excludeSlashTmp!==true||JSON.stringify(actual)!==JSON.stringify(expected.runtimeWorkspaceRoots)||JSON.stringify([...(thread.runtimeWorkspaceRoots||[])].sort())!==JSON.stringify(expected.runtimeWorkspaceRoots))throw new Error('Codex did not confirm the exact trusted-folder sandbox and approval policy. No turn was started.');
 }
 export class CodexRPC extends EventEmitter {
  constructor({command=codexExecutable(),args=[],cwd=os.homedir(),env=process.env}={}) {
@@ -45,7 +67,7 @@ export class CodexProvider {
  async status(){try{const client=await this.connect();const [account,models]=await Promise.all([client.request('account/read',{refreshToken:false}),this.models(client)]);return {provider:'codex',available:!!account.account,models,error:account.account?null:'Sign in with codex login on this Mac.',capabilities:{steering:true,context:'Selected instructions and skills; native Codex sessions and approvals.'}};}catch(error){return {provider:'codex',available:false,models:[],error:error.message};}}
  async quota(){const client=await this.connect();return client.request('account/rateLimits/read',{});}
  async steer(run,prompt){const a=this.active;if(!a||a.run.id!==run.id||!a.turnId)throw new Error('Codex is still starting or the turn ended. Queue this message.');await a.client.request('turn/steer',{threadId:run.providerSessionId,expectedTurnId:a.turnId,input:[{type:'text',text:prompt}]});}
- async run({run,prompt,emit,ask,update,signal,stream}){
+ async run({run,prompt,emit,ask,update,signal,stream,permissionProfile}){
   const client=await this.connect();const model=(await this.models(client)).find(m=>m.id===run.schedule.model);if(!model)throw new Error('Choose an available Codex model from the provider catalog.');validateModelOptions(run.schedule,model);
   const snapshot=run.schedule.context, managed=snapshot&&this.context?this.context.providerContext(snapshot):null;
   // Tool scopes are an execution contract. Do not silently drop provider-specific restrictions.
@@ -66,9 +88,16 @@ export class CodexProvider {
     if(def.tools?.length&&!def.tools.includes('*'))mcp[name].enabled_tools=def.tools;
   }
   const roots=[run.schedule.workspace.cwd,...run.schedule.workspace.additionalDirectories];
+  const sandbox=codexSandbox(run.schedule,permissionProfile?.());
   const browser=browserTools(this.browser,run.id);const items=new Map();const calls=new Map();
   let resolveTurn,rejectTurn,settled=false,abortTimer;const completed=new Promise((resolve,reject)=>{resolveTurn=resolve;rejectTurn=reject;});completed.catch(()=>{});
   const active={run,client,turnId:null};this.active=active;
+  active.recheckPermissions=()=>{
+   if(active.permissionRevoked)return true;
+   let changed;try{changed=JSON.stringify(codexSandbox(run.schedule,permissionProfile?.()))!==JSON.stringify(sandbox);}catch{changed=true;}
+   if(changed){active.permissionRevoked=true;abort();}
+   return changed;
+  };
   const onNotification=({method,params:p={}})=>{
    if(p.threadId&&p.threadId!==run.providerSessionId)return;
    if(method==='turn/started')active.turnId=p.turn.id;
@@ -89,9 +118,10 @@ export class CodexProvider {
     }
    }
    if(method==='item/commandExecution/outputDelta'){const tool=calls.get(p.itemId);if(tool){tool.output=displayText((tool.output||'')+p.delta);update();}}
-   if(method==='turn/completed'){settled=true;clearTimeout(abortTimer);if(p.turn.status==='completed')resolveTurn();else rejectTurn(new Error(p.turn.error?.message||'Codex turn '+p.turn.status));}
+   if(method==='turn/completed'){settled=true;clearTimeout(abortTimer);if(active.permissionRevoked)rejectTurn(new Error('Workspace permissions changed during the Codex turn. Its tools were interrupted; continue with the current permissions.'));else if(p.turn.status==='completed')resolveTurn();else rejectTurn(new Error(p.turn.error?.message||'Codex turn '+p.turn.status));}
   };
   const onRequest=async msg=>{const p=msg.params||{};if(p.threadId&&p.threadId!==run.providerSessionId)return client.respond(msg.id,{decision:'decline'});try{
+   if(active.recheckPermissions())throw new Error('Workspace permissions changed; this tool request was cancelled.');
    if(msg.method==='item/tool/call'){
      const tool=browser.find(t=>t.name===p.tool);if(!tool)throw new Error('Unknown Proteus tool.');
      const answer=await ask({type:'permission',question:'Allow browser action?',details:{kind:'custom-tool',toolCallId:p.callId,toolName:p.tool,args:p.arguments,intention:`Browser ${p.arguments?.action||'action'}`}});
@@ -112,13 +142,16 @@ export class CodexProvider {
   const abort=()=>{if(abortTimer)return;if(active.turnId)void client.request('turn/interrupt',{threadId:run.providerSessionId,turnId:active.turnId}).catch(()=>client.close());abortTimer=setTimeout(()=>{client.close();rejectTurn(new Error('Codex did not confirm interruption; its Proteus runtime was stopped.'));},5000);};signal.addEventListener('abort',abort,{once:true});
   try{
    const instructions=`You are working inside Proteus. Use only the selected sources below. Workspace folders:\n${roots.join('\n')}\n${managed?.instructionText||''}\n${(managed?.customAgents||[]).map(a=>`Agent: ${a.displayName}${a.name===managed.agent?' (main identity)':''}\n${a.prompt}`).join('\n\n')}\nEditor context: ${JSON.stringify(run.schedule.editorContext||null)}`;
-   const config={project_doc_max_bytes:0,developer_instructions:instructions,mcp_servers:mcp,features:{skip_host_skill_discovery:true,skill_mcp_dependency_install:false,enable_mcp_apps:false,multi_agent:false},plugins:Object.fromEntries(Object.keys(plugins).map(name=>[name,{enabled:false}])),apps:{_default:{enabled:false}},web_search:'disabled'};
-   const params={model:run.schedule.model,cwd:run.schedule.workspace.cwd,runtimeWorkspaceRoots:roots,approvalPolicy:'untrusted',approvalsReviewer:'user',sandbox:'read-only',developerInstructions:instructions,config};
+   const config={...sandbox.config,project_doc_max_bytes:0,developer_instructions:instructions,mcp_servers:mcp,features:{skip_host_skill_discovery:true,skill_mcp_dependency_install:false,enable_mcp_apps:false,multi_agent:false},plugins:Object.fromEntries(Object.keys(plugins).map(name=>[name,{enabled:false}])),apps:{_default:{enabled:false}},web_search:'disabled'};
+   const params={model:run.schedule.model,cwd:sandbox.cwd,runtimeWorkspaceRoots:sandbox.runtimeWorkspaceRoots,approvalPolicy:'untrusted',approvalsReviewer:'user',sandbox:sandbox.sandbox,developerInstructions:instructions,config};
    const thread=run.providerSessionId?await client.request('thread/resume',{...params,threadId:run.providerSessionId}):await client.request('thread/start',{...params,dynamicTools:browser.map(t=>({type:'function',name:t.name,description:t.description,inputSchema:t.parameters}))});
+   verifyCodexSandbox(thread,sandbox,sandbox.cwd);
    run.providerSessionId=thread.thread.id;run.providerHome=process.env.CODEX_HOME||path.join(os.homedir(),'.codex');run.nativeSessionPath=thread.thread.path||null;run.modelCapabilities={id:model.id,controls:model.controls,capturedAt:new Date().toISOString()};run.explicitProviderContext={mcpNames:Object.keys(selected),skillDirectories:[],disabledSkills:managed?.disabledSkills||[]};if(snapshot){snapshot.suppliedAt=new Date().toISOString();snapshot.delivery='Codex thread configuration accepted';}update();
    if(signal.aborted)throw new Error('Cancelled');
-   const result=await client.request('turn/start',{threadId:run.providerSessionId,input:[{type:'text',text:prompt}],effort:run.schedule.reasoningEffort||model.controls.defaultReasoningEffort||null,serviceTier:run.schedule.serviceTier||null});active.turnId=result.turn.id;if(signal.aborted){clearTimeout(abortTimer);abortTimer=null;abort();}await completed;
+   if(active.recheckPermissions())throw new Error('Workspace permissions changed before the Codex turn started.');
+   const result=await client.request('turn/start',{threadId:run.providerSessionId,sandboxPolicy:sandbox.policy,approvalPolicy:'untrusted',approvalsReviewer:'user',runtimeWorkspaceRoots:sandbox.runtimeWorkspaceRoots,input:[{type:'text',text:prompt}],effort:run.schedule.reasoningEffort||model.controls.defaultReasoningEffort||null,serviceTier:run.schedule.serviceTier||null});active.turnId=result.turn.id;if(signal.aborted||active.permissionRevoked){clearTimeout(abortTimer);abortTimer=null;abort();}await completed;
   }finally{clearTimeout(abortTimer);if(active.turnId&&!settled)await client.close();signal.removeEventListener('abort',abort);client.off('notification',onNotification);client.off('request',onRequest);client.off('closed',closed);for(const tool of calls.values())if(tool.status==='running')tool.status='interrupted';if(this.active===active)this.active=null;update();}
  }
+ recheckPermissions(){this.active?.recheckPermissions?.();}
  async close(){await this.client?.close();this.client=null;this.starting=null;}
 }

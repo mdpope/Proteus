@@ -97,8 +97,8 @@ See `chat-controls.md` for queue/steer semantics, `mcp-auth.md` for sign-in reco
 
 ## October 4 continuation: Transcription, terminals and remote clients
 
-This section supersedes earlier deployment/timeout statements below. Final desktop/mobile
-installation and live Life connection acceptance will be recorded separately after the combined build.
+This section supersedes earlier deployment/timeout statements below. Desktop and physical mobile
+updates are installed. Live Life activation and processing ownership handoff remain held as noted.
 
 - Transcription now separates **Omi** from **private notes & MacWhisper**, with independent execution
   gates and ordinary schedules. Existing five IDs/history remain compatible. Both general schedules
@@ -107,8 +107,11 @@ installation and live Life connection acceptance will be recorded separately aft
 - Fresh observation found all three native LaunchAgents loaded and both source Codex automations
   ACTIVE with canonical parity. Native/general gates and takeover confirmations remain false;
   all five installed replacement schedules remain paused. No processing owner was changed and no
-  live transcription workflow ran through Proteus. The installed legacy schedules need preparation
-  with the new metadata after the combined build. See `transcription.md` for scope and cutover.
+  live transcription workflow ran through Proteus. Existing native semantic retries were traced to
+  missing files in the configured independent organization workflows policy checkout; personal policies are present.
+  Native cutover is held rather than removing the domain policy guard. Installed replacements were
+  refreshed while disabled, with canonical fingerprints on both general jobs and a private rollback
+  snapshot. See `transcription.md` for scope and cutover.
 - Installed-host Codex is now healthy. A forced catalog refresh returned seven models, including
   both transcript workflow models. Two bounded synthetic turns through the already installed signed
   host verified exact selected instructions, no echo of an unselected disposable AGENTS marker,
@@ -139,14 +142,29 @@ installation and live Life connection acceptance will be recorded separately aft
   access and final app acceptance; no production evidence upload/test record was created. Personal
   and work hosts keep independent pairing keys, caches and permissions on web/mobile destinations.
 
-Validation: 19 focused terminal/root/API tests passed, including a real PTY; terminal desktop tests
-passed eight groups including typed interaction, delayed initial output and reconnecting a failed
-renderer to the same process. The signed packaged app passed the seven pre-reconnect terminal groups,
-strict deep signature verification, and unchanged vendor Copilot bytes/signatures. The package rebuilds
-only node-pty in its copied application, preserving the source Node ABI. The existing full desktop
-shell passed 21 groups, including all-root Markdown browsing. Separate workspace restart/mobile/web results are recorded in their feature
-docs and will be included in the combined final validation. No production app was installed by these
-terminal checks. Final deployment must rebuild the latest source after all parallel changes finish.
+- Live installed Claude allowance now resolves through the authenticated bundled Claude Code
+  `/usage` path. Both five-hour and weekly percentages and the available weekly reset were verified
+  in the installed UI; missing reset timestamps remain explicitly unavailable. Usage observations
+  stay outside Git. Provider metadata still governs available models/effort/speed.
+- The development-signed Mac update restored the existing four tabs and active private browser tab.
+  Both physical iPhone and iPad were updated in place and independently observed running. Pairings
+  and encrypted cache migration were preserved; real relay commands were not dispatched from them.
+  Omi capture applications and their recordings/bookmarks were untouched. See `apple-build.md`.
+- Codex Trusted/Autopilot now use exact currently granted canonical workspace roots with no network
+  or implicit temporary-directory writes; Ask/Custom remain read-only. Revocation interrupts the
+  native turn. Shell approvals remain separate, so this does not establish unattended transcript
+  execution. No permission mode or saved operational command rule was changed.
+
+Validation: 198 Node tests and static checks passed. The native Codex sandbox smoke test verified
+writes to two selected roots, denial of sibling/symlink escapes and network access, and native
+approval settings. The full desktop shell passed 21 groups; the signed Ghostty terminal check
+passed eight groups including reconnecting a failed renderer to the same PTY. Eleven browser/tab
+checks cover restart, transition lifetime and bounded pinch behavior; physical trackpad feel remains
+unverified. Signed packaging preserved Copilot vendor bytes/signatures. The production website's
+49 Laravel tests (276 assertions), 17 remote protocol checks and 11 browser checks passed before
+deployment. Native Life has 19 backend and 14 renderer checks; actual database reads and original
+attachment hashes were separately verified. Real mobile pairing through the new relay, protected
+Keychain access for installed Life, and processing cutover remain outstanding.
 
 ## October 3: Omi, native Life and Claude expansion (earlier snapshot)
 

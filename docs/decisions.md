@@ -98,3 +98,12 @@ saved workspace with its intermediate empty state.
   have distinct gates because their current owners and scopes differ. Keep existing schedule IDs,
   verify canonical policy snapshots at execution, and require explicit owner handoff. A successful
   provider turn does not prove guarded workflow publication or downstream context updates.
+
+
+## Codex workspace sandbox and operation approvals
+
+Native filesystem sandbox scope follows explicit Proteus Trusted/Autopilot folder grants, using
+canonical roots and excluding implicit temporary directories and network access. Command approval
+is independent: Trusted does not become unattended shell authorization. Ask/Custom retain the
+existing read-only sandbox. Before starting a turn, validate the native runtime's resolved policy;
+when effective writable roots change, interrupt an active turn before it can keep stale grants.

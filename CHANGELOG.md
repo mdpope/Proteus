@@ -4,6 +4,11 @@ This is a concise behavior log. Git commits and pull requests contain the comple
 
 ## Unreleased
 
+- Read authenticated Claude account allowances with available reset details; distinguish real quota
+  from per-turn token counts and explicitly unavailable timestamps.
+- Apply Codex workspace writes only to currently trusted canonical roots, retain separate command
+  approvals, and interrupt active expanded-sandbox turns when grants change.
+
 - Rename the processing section Transcription, separating Omi from general private notes/MacWhisper
   export intake and follow-up review. Preserve the five existing schedule identities, verify
   canonical policy/cadence, and enforce independent disabled-until-cutover gates.

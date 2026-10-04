@@ -167,6 +167,7 @@ export class Engine extends EventEmitter {
     this.event(run, 'system', `Auto-approved ${request?.kind || 'tool'}: ${decision.reason}.`, { permission: { kind: request?.kind, automatic: true, reason: decision.reason, mode: decision.mode } });
   }
   recheckPermissions() {
+    for (const provider of Object.values(this.providers)) provider.recheckPermissions?.();
     for (const [id, waiting] of this.pending) {
       const run = this.getRun(id); if (run.pending?.type !== 'permission') continue;
       const decision = this.permissions.decide(run.schedule, run.pending.details || {});
@@ -197,6 +198,7 @@ export class Engine extends EventEmitter {
       const provider = this.providers[run.schedule.provider]; if (!provider) throw new Error('Provider is not installed.');
       await provider.run({
         run, prompt, signal: controller.signal,
+        permissionProfile: () => this.permissions.describe(run.schedule),
         emit: (role, text, data) => this.event(run, role, text, data),
         stream: (id, text) => this.stream(run, id, text),
         update: () => this.persist(run),

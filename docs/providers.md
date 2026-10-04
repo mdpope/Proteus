@@ -233,3 +233,41 @@ A subsequent installed-host check created one exact marker file in a disposable 
 Codex apply_patch, received the normal native file-write permission request, approved it once via
 Proteus, and verified the bytes. No persistent permission mode was broadened. This validates the
 approval round trip, not unattended permission coverage for real transcript workflows.
+
+### Codex trusted-folder writes and unattended cutover
+
+Codex now maps an already saved **Trusted workspace** or **Auto-approve tools** profile to a
+`workspaceWrite` sandbox only when its canonical working directory currently has a read-write
+grant. The writable list contains only selected workspace roots covered by still-valid saved
+grants. A changed symlink cannot transfer a grant. Ask and Saved rules only remain read-only;
+no mode or folder grant is enabled by importing, previewing or running a schedule.
+
+The adapter explicitly disables network access and excludes both the implicit `/tmp` and
+`TMPDIR` write allowances. It keeps native `untrusted` approval routing to `user`, and checks the
+thread's resolved policy before starting a model turn. An extra root, different reviewer,
+network allowance, missing temp exclusion or unexpected policy fails closed. Continuations
+reapply the current policy. Permission changes interrupt an active affected Codex turn, allowing
+the native runtime to stop its tools before the existing bounded cancellation fallback.
+
+**Trusted file access does not approve arbitrary shell execution.** A Python helper still needs
+a saved exact-command approval or an explicitly selected Auto-approve tools mode. Existing
+sandbox-expansion and managed-network requests always require a direct response, including in
+Auto-approve tools mode. Consequently, the general transcript workflows remain held from cutover
+until the operator reviews the native folder policy and unattended command approvals. The old
+Codex automations remain the active owners; this change neither activates replacements nor
+silently grants permissions.
+
+The installed runtime schema was generated locally rather than assuming documentation examples
+match this build. [Official app-server documentation](https://learn.chatgpt.com/docs/app-server)
+describes separate sandbox and approval controls and the additional-permissions/managed-network
+request fields. Its newer restricted-read fields are not present in this installed schema;
+this patch does not claim to restrict all native filesystem reads.
+
+Validation: eight focused Codex tests cover unchanged Ask/Custom behavior, canonical root grants,
+policy mismatch refusal, protected requests, continuation parameters and permission-revocation
+interruption. `node test/codex-sandbox-smoke.mjs` starts the actual installed runtime with an empty
+temporary Codex home and no model turn: two authorized folders are writable; an outside sibling,
+a symlink escape and loopback network binding are denied. Empty native threads have no saved
+rollout to resume before a first turn, so native live continuation is not claimed by that smoke
+test; continuation configuration is covered by the synthetic protocol regression. No production
+transcript, vault file, automation state or native permission profile was changed during validation.

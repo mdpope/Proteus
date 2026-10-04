@@ -163,3 +163,12 @@ Codex sources through the Codex automation tool, preserving all source fields; d
 TOML/database directly. Keep source prompt/model/effort/cadence/roots and provider-default speed
 unchanged during the ownership handoff. Final deployment and bounded real processing acceptance
 remain required; these provider smoke tests do not certify semantic publication or context effects.
+
+The October 4 read-only diagnosis of an existing native semantic retry found all required personal
+operator workflows policy files and the private notes intake profile present. The configured independent organization workflows policy
+checkout lacked its required files; its directory was incomplete, not a usable Git checkout. The
+native runner requires those policies when the organization workflows vault is configured, so normal semantic work
+safely stops before processing. Do not remove that policy requirement or copy professional policy
+into this repository. Native ownership handoff is held until the canonical organization workflows checkout is available
+or a separately reviewed domain-availability design is implemented. General scheduling ownership can
+be considered separately, preserving the same explicit native retry/hold rather than claiming it fixed.

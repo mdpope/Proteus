@@ -1,11 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
-import {CodexProvider,codexModel} from '../src/codex.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {PermissionStore} from '../src/permissions.js';
+import {CodexProvider,codexModel,codexSandbox,verifyCodexSandbox} from '../src/codex.js';
 class RPC extends EventEmitter {
  constructor(){super();this.calls=[];this.closed=false;this.turn=0;this.responses=[];}
  async initialize(){this.initialized=true;return this;}
- async request(method,params){this.calls.push({method,params});if(method==='model/list')return {data:[{id:'runtime-model',model:'runtime-model',displayName:'Runtime model',supportedReasoningEfforts:[{reasoningEffort:'future'}],serviceTiers:[{id:'priority',name:'Fast'}]}]};if(method==='config/read')return {config:{plugins:{unselected:{enabled:true}}},layers:[{config:{mcp_servers:{unselected:{command:'do-not-start'}}}}]};if(method==='thread/start'||method==='thread/resume')return {thread:{id:'thread',path:'/synthetic/session.jsonl'}};if(method==='turn/start'){this.turn++;return {turn:{id:'turn-'+this.turn}};}if(method==='turn/interrupt'){queueMicrotask(()=>this.emit('notification',{method:'turn/completed',params:{threadId:'thread',turn:{status:'interrupted'}}}));return {};}return {};}
+ async request(method,params){this.calls.push({method,params});if(method==='model/list')return {data:[{id:'runtime-model',model:'runtime-model',displayName:'Runtime model',supportedReasoningEfforts:[{reasoningEffort:'future'}],serviceTiers:[{id:'priority',name:'Fast'}]}]};if(method==='config/read')return {config:{plugins:{unselected:{enabled:true}}},layers:[{config:{mcp_servers:{unselected:{command:'do-not-start'}}}}]};if(method==='thread/start'||method==='thread/resume')return {thread:{id:'thread',path:'/synthetic/session.jsonl'},cwd:params.cwd,approvalPolicy:params.approvalPolicy,approvalsReviewer:params.approvalsReviewer,runtimeWorkspaceRoots:params.runtimeWorkspaceRoots,sandbox:params.sandbox==='workspace-write'?{type:'workspaceWrite',writableRoots:params.config.sandbox_workspace_write.writable_roots,networkAccess:false,excludeTmpdirEnvVar:true,excludeSlashTmp:true}:{type:'readOnly'}};if(method==='turn/start'){this.turn++;return {turn:{id:'turn-'+this.turn}};}if(method==='turn/interrupt'){queueMicrotask(()=>this.emit('notification',{method:'turn/completed',params:{threadId:'thread',turn:{status:'interrupted'}}}));return {};}return {};}
  respond(id,result){this.responses.push({id,result});}
  write(){}
  close(){this.closed=true;this.emit('closed',new Error('Closed'));}
@@ -19,4 +23,41 @@ test('Codex waits for native interruption and refuses unenforceable agent scopes
 test('Codex missing executable fails promptly and close does not wait for an impossible exit', async()=>{
  const {CodexRPC}=await import('../src/codex.js');const client=new CodexRPC({command:'/nonexistent/proteus-codex-fixture'});
  await assert.rejects(client.initialize(),/ENOENT/);await client.close();
+});
+
+function sandboxFixture(){
+ const home=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'proteus-codex-policy-'))),cwd=path.join(home,'cwd'),extra=path.join(home,'extra'),outside=path.join(home,'outside');for(const root of [cwd,extra,outside])fs.mkdirSync(root);
+ const f=fixture();f.run.schedule.workspace={cwd,additionalDirectories:[extra]};const store=new PermissionStore(home);f.args.permissionProfile=()=>store.describe(f.run.schedule);return {...f,home,cwd,extra,outside,store,dispose:async()=>{await f.provider.close();fs.rmSync(home,{recursive:true,force:true});}};
+}
+test('Codex Ask and Custom remain read-only; Trusted uses only canonical granted workspace roots',async()=>{
+ const f=sandboxFixture();try{
+  for(const mode of ['ask','custom']){f.store.setMode(f.run.schedule,mode);assert.equal(codexSandbox(f.run.schedule,f.store.describe(f.run.schedule)).sandbox,'read-only');}
+  f.store.setMode(f.run.schedule,'trusted');const profile=f.store.describe(f.run.schedule),policy=codexSandbox(f.run.schedule,profile);
+  assert.deepEqual(policy.runtimeWorkspaceRoots,[f.cwd,f.extra].sort());assert.equal(policy.policy.networkAccess,false);assert.equal(policy.policy.excludeTmpdirEnvVar,true);assert.equal(policy.policy.excludeSlashTmp,true);
+  assert.equal(f.store.decide(f.run.schedule,{kind:'shell',fullCommandText:'python3 helper.py'}).allowed,false,'Trusted folder writes do not auto-approve Python');
+  profile.folders=profile.folders.filter(folder=>folder.path!==f.extra);assert.deepEqual(codexSandbox(f.run.schedule,profile).runtimeWorkspaceRoots,[f.cwd]);
+  profile.folders=[];assert.equal(codexSandbox(f.run.schedule,profile).sandbox,'read-only','cwd cannot become implicitly writable without its grant');
+  const oldProfile=f.store.describe(f.run.schedule);fs.rmdirSync(f.extra);fs.symlinkSync(f.outside,f.extra);assert.deepEqual(codexSandbox(f.run.schedule,oldProfile).runtimeWorkspaceRoots,[f.cwd],'retargeted symlink does not transfer trust');assert.equal(codexSandbox(f.run.schedule,f.store.describe(f.run.schedule)).sandbox,'read-only','changed context no longer matches the old saved permission profile');
+ }finally{await f.dispose();}
+});
+test('Codex validates resolved runtime policy and refuses extra roots, network, temp writes or different reviewer',async()=>{
+ const f=sandboxFixture();try{f.store.setMode(f.run.schedule,'trusted');const expected=codexSandbox(f.run.schedule,f.store.describe(f.run.schedule));const good={cwd:f.cwd,approvalPolicy:'untrusted',approvalsReviewer:'user',runtimeWorkspaceRoots:expected.runtimeWorkspaceRoots,sandbox:{...expected.policy,writableRoots:[f.extra]}};
+ assert.doesNotThrow(()=>verifyCodexSandbox(good,expected,f.cwd));
+ for(const alter of [v=>v.sandbox.writableRoots.push(f.outside),v=>v.sandbox.networkAccess=true,v=>v.sandbox.excludeSlashTmp=false,v=>v.sandbox.excludeTmpdirEnvVar=false,v=>v.approvalPolicy='never',v=>v.approvalsReviewer='auto_review',v=>v.runtimeWorkspaceRoots.push(f.outside),v=>v.sandbox.type='dangerFullAccess']){const value=structuredClone(good);alter(value);assert.throws(()=>verifyCodexSandbox(value,expected,f.cwd),/did not confirm/);}
+ }finally{await f.dispose();}
+});
+test('Codex threads and continuation enforce exact trusted policy, retain protected approval gates, and stop on revocation',async()=>{
+ const f=sandboxFixture();try{f.store.setMode(f.run.schedule,'trusted');const requests=[];f.args.ask=async request=>{requests.push(request);return f.store.decide(f.run.schedule,request.details).allowed?'approve-auto':'decline';};
+ const first=f.provider.run(f.args);await until(()=>f.rpc.turn===1);const start=f.rpc.calls.find(c=>c.method==='thread/start').params;assert.equal(start.sandbox,'workspace-write');assert.equal(start.approvalPolicy,'untrusted');assert.deepEqual(f.rpc.calls.find(c=>c.method==='turn/start').params.sandboxPolicy.writableRoots,[f.cwd,f.extra].sort());
+ for(const [id,extra] of [[1,{}],[2,{additionalPermissions:{fileSystem:{write:[f.outside]}}}],[3,{networkApprovalContext:{host:'example.test'}}]]){f.rpc.emit('request',{id,method:'item/commandExecution/requestApproval',params:{threadId:'thread',itemId:'command-'+id,command:'python3 helper.py',...extra}});await until(()=>f.rpc.responses.some(r=>r.id===id));assert.equal(f.rpc.responses.find(r=>r.id===id).result.decision,'decline');}
+ assert.equal(requests[1].details.requestSandboxBypass,true);assert.equal(requests[2].details.managedApprovalRequired,true);
+ f.rpc.notice('turn/completed',{turn:{status:'completed'}});await first;
+ const second=f.provider.run(f.args);await until(()=>f.rpc.turn===2);assert.equal(f.rpc.calls.findLast(c=>c.method==='thread/resume').params.sandbox,'workspace-write');
+ f.store.revoke(f.store.describe(f.run.schedule).id,f.store.get().revision);f.provider.recheckPermissions();await assert.rejects(second,/permissions changed/);assert.equal(f.rpc.closed,false,'wait for native interruption instead of killing the runtime before its tools can stop');assert.ok(f.rpc.calls.some(c=>c.method==='turn/interrupt'));
+ }finally{await f.dispose();}
+});
+test('Codex existing Autopilot never auto-approves sandbox expansion or managed network requests',async()=>{
+ const f=sandboxFixture();try{f.store.setMode(f.run.schedule,'autopilot');for(const request of [{kind:'shell',fullCommandText:'python3 helper.py',requestSandboxBypass:true},{kind:'shell',fullCommandText:'curl example.test',managedApprovalRequired:true}])assert.equal(f.store.decide(f.run.schedule,request).allowed,false);
+ f.store.setMode(f.run.schedule,'custom');assert.equal(codexSandbox(f.run.schedule,f.store.describe(f.run.schedule)).sandbox,'read-only','retained folder rules alone do not opt Custom into workspace-write');
+ }finally{await f.dispose();}
 });

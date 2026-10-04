@@ -17,7 +17,9 @@ Workspace restoration saves a tab descriptor (session ID, profile ID, starting-r
 - `npm run terminal:build` bundles Ghostty JavaScript and WASM into `public/terminal/` and repairs the executable mode on the node-pty spawn helper. `postinstall` also applies the narrowly scoped helper-mode repair.
 - `npm run package:mac` rebuilds **only node-pty** for Electron in the packager's copied application before signing. It does not change the source checkout's Node ABI or rebuild/resign the vendor-owned Copilot binaries. Packaging verifies the Copilot signatures and byte identity afterward.
 - `node --test test/terminals.test.js` covers profiles, root revocation, explicit startup versus resume, buffer/input/resize limits, cleanup, read-only Ghostty import, and real interactive PTY exchange.
-- `node test/terminals-ui.mjs` runs an isolated desktop with disposable settings: Ghostty canvas rendering, real typed input/output, preserved live process on tab switch, profile changes, close cleanup, and absent HTTP terminal API.
+- `node test/terminals-ui.mjs` runs an isolated desktop with disposable settings: Ghostty canvas rendering, real typed input/output, preserved live process on tab switch, profile changes, close cleanup, absent HTTP terminal API, and reconnecting a failed renderer to
+  the existing shell after a real page reload. The delayed-output case covers Ghostty 0.4.0’s
+  zero-length-write edge case; Proteus skips empty initial writes.
 - `node test/workspace-ui.mjs` separately verifies process restart restores descriptors without starting terminal commands.
 
 Primary implementation references: [ghostty-web](https://github.com/coder/ghostty-web), [Ghostty configuration](https://ghostty.org/docs/config/reference), [Ghostty themes](https://ghostty.org/docs/features/theme), [node-pty](https://github.com/microsoft/node-pty).
