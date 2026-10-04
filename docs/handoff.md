@@ -155,10 +155,12 @@ and expires October 10, 2026; distribution renewal remains separate. Mac package
 checks the overall signature, Copilot vendor identities, launch and live catalog.
 
 Current devices became passcode-locked before deployment. Automatic approval review rejected the
-physical iPhone/iPad update while locked; do not bypass it. Resume only after unlocking, privately
+physical iPhone/iPad update while locked; do not bypass it. Both signed packages passed final verification; runtime source is frozen at the reviewed feature
+commit. Resume only after unlocking, privately
 copy and compare each app's destination index/encrypted caches, install in place without uninstall,
 then independently verify process/reconnection. The Mac was also locked at the UI check; no active
-or waiting runs or terminal shells were observed. Preserve its six existing tabs and active
+or waiting runs or terminal shells were observed. Automatic approval review separately rejected
+the prepared Mac in-place update while locked as well; do not retry until the operator unlocks it. Preserve its six existing tabs and active
 selection during the eventual graceful update. Source and signed packages do not certify actual
 installed UI acceptance. Update this checkpoint with precise receipts after deployment.
 
