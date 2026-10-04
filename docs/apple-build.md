@@ -178,3 +178,15 @@ The prior relay-editor app remains installed; both indices now preserve two inde
 Macs after the authorized Build Mac addition. User-confirmed endpoint correction restored HC
 connectivity. Resume in-place deployment only once unlocked, preserving caches/index/Keychain and
 checking actual launch and destination names. Omi apps and recording data remain untouched.
+
+
+### Native Life and usage installed on iPhone, October 4 at 17:26 UTC
+
+After the operator unlocked the iPhone, the prepared signed release was installed in place using
+the original signing identity and bundle ID. All three preserved app-data files were byte-identical
+before first launch. Launch and an independent CoreDevice process inventory passed. A fresh
+destination index retained the same two IDs and selection, with Work Mac and Build Mac
+labels. The Build Mac host independently reported its iPhone peer online, verifying authenticated
+reconnection. iPad installation remains deferred at the operator's request. This supersedes the
+iPhone-only locked-device hold above; no iPad retry was made. Life account sign-in remains separate
+and unverified on physical devices. See `release-validation.md` for the current acceptance record.

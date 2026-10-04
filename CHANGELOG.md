@@ -4,6 +4,22 @@ This is a concise behavior log. Git commits and pull requests contain the comple
 
 ## Unreleased
 
+- Keep website sign-in feedback and cancellation in Setup; space the connected account badge
+  and actions consistently on narrow and wide screens.
+
+- Complete graceful shutdown even when a local HTTP client leaves headers or a request body
+  unfinished; release the runner lock and connection record before restarting.
+- Use the Omi iCloud waveform in the Transcription sidebar. Keep an enabled Life tab visible
+  through sign-out and API migration; show account setup without losing the tab.
+
+- Restore website Mac destinations from the signed-in account across browser sessions, with
+  encrypted credential storage, automatic selected-host reconnection and independent browser sessions.
+- Connect desktop Life through the same authenticated website API as mobile, using PKCE and
+  protected local tokens. Retire direct database setup/access from the desktop runtime.
+
+- Paginate the desktop food library in groups of 25, with stable ordering, matching counts and
+  search resetting to page one; preserve selected-food versions and complete meal choices.
+
 - Share the dark Proteus design across desktop and website, with a compact sidebar, persistent
   section tabs, machine selection and collapsible real provider allowances in the web remote.
 - Enrich native Life with Garage cards, weighted fuel reports and fixed calendar nutrition periods;
@@ -49,8 +65,7 @@ This is a concise behavior log. Git commits and pull requests contain the comple
 - Incorporate Mnemosyne's full Laravel source under `web/` and rebrand it Proteus. Add optional
   native Life screens backed by database records, a local installer, and versioned upgrade plans.
   Keep production deployment and live database changes separate from local installation.
-- Give Life and Omi persistent tabs alongside chats and schedules. Hide Life until configured
-  and enabled in Setup. Make provider usage hideable, with green meters and centered percentages.
+- Give Life and Omi persistent tabs alongside chats and schedules. Hide Life until enabled in Setup. Make provider usage hideable, with green meters and centered percentages.
 - Move icon-only new-tab actions into the tab strip and remove the redundant top header. Add a
   workspace/subfolder Markdown picker with nested folder creation and safe exclusive file creation;
   hide native browser views while dialogs are open.

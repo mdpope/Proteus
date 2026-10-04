@@ -15,7 +15,7 @@ const badge = status => `<span class="badge ${escape(status)}">${escape(friendly
 const time = (value, timezone) => new Date(value).toLocaleString(undefined, { ...(timezone ? { timeZone: timezone } : {}), month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
 let toastTimer, usageValue = null, usageBusy = false, appearanceBusy = false;
 let workspaceReady=false, workspaceRestoring=false, workspaceClosing=false, lastWorkspace='';
-const lifeVisible = () => state.data?.life?.enabled === true && state.data?.life?.configured === true;
+const lifeVisible = () => state.data?.life?.enabled === true;
 function saveWorkspace() {
   if(!workspaceReady || workspaceRestoring || workspaceClosing)return;
   const session={schemaVersion:1,active:state.tab,page:state.page,tabs:state.tabs.map(tab=>({id:tab.id,type:tab.type,label:tab.label,...(tab.type==='browser'?{url:tab.info?.url||'',history:tab.info?.history}:{}),...(tab.type==='markdown'?{file:tab.markdown?.file}:{}),...(tab.type==='terminal'?{terminal:tab.terminal}:{}),...(tab.type==='remote-run'?{hostId:tab.hostId,runId:tab.runId}:{})}))};
@@ -152,7 +152,7 @@ function render() {
   const activePage=['omi','life'].includes(activeTab?.type)?activeTab.type:state.page;
   const waiting = data.runs.filter(r => ['awaiting_input','failed','interrupted'].includes(r.status)).length;
   $('#sidebar').innerHTML = `<div class="brand"><span class="brandmark">⤨</span>Proteus</div><div class="subtitle">Your agent control room</div>${[
-    ['schedules','◷','Schedules', data.schedules.length], ['runs','◉','Run history', data.runs.length], ['attention','◇','Needs attention',waiting], ['omi','◌','Transcription',''], ...(lifeVisible()?[['life','♡','Life','']]:[]), ['context','▦','Workspaces',''], ['standup','☷','Standup',''], ['credentials','⚿','Credentials',''], ['providers','⌘','Providers',''], ['remote','⇄','Remote access',''], ['settings','⚙','Setup','']
+    ['schedules','◷','Schedules', data.schedules.length], ['runs','◉','Run history', data.runs.length], ['attention','◇','Needs attention',waiting], ['omi','<svg class="transcription-nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M2 10v4M6 7v10M10 3v18M14 8v8M18 5v14M22 10v4"/></svg>','Transcription',''], ...(lifeVisible()?[['life','♡','Life','']]:[]), ['context','▦','Workspaces',''], ['standup','☷','Standup',''], ['credentials','⚿','Credentials',''], ['providers','⌘','Providers',''], ['remote','⇄','Remote access',''], ['settings','⚙','Setup','']
   ].map(([id,icon,label,count]) => `<button class="navitem ${activePage === id ? 'active':''}" data-page="${id}"><span><span>${icon}</span><span class="navlabel">${label}</span></span>${count !== '' ? `<span class="count">${count}</span>`:''}</button>`).join('')}<div class="sidebottom"><section id="provider-usage" aria-label="Provider allowance remaining"></section><div><span class="dot"></span>Local runner online</div><p>Prototype · v${data.version}<br>${data.scheduler.background ? 'Keeps running in the menu bar.' : 'Runs while the host is running.'}</p><button class="subtle" id="data-folder">Open data folder ↗</button></div>`;
   renderUsage();
   renderTabs();

@@ -55,7 +55,7 @@ async function body(req, maxBytes = 2_000_000) {
   return bytes ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {};
 }
 
-export async function startServer({ home = defaultHome(), port = 4317, providers, browser, openExternal, timers = true, withSeed = true, background = false } = {}) {
+export async function startServer({ home = defaultHome(), port = 4317, providers, browser, openExternal, timers = true, withSeed = true, background = false, lifeOptions = {} } = {}) {
   const unlock = lock(home);
   if (withSeed) seed(home);
   const settings = new SettingsStore(home, root);
@@ -65,7 +65,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   const codex = new CodexProvider({}, { browser, context });
   const claude = new ClaudeProvider({}, { browser, context });
   const omi = new OmiIntegration(home);
-  const life = new LifeStore(home);
+  const life = new LifeStore(home, {...lifeOptions, openExternal, onChange: () => queueMicrotask(() => notify())});
   const workspaceFiles = new WorkspaceFiles(() => context.config());
   const adapters = { ...(providers || { copilot, codex, claude }), 'local-process': omi.provider() };
   const engine = new Engine(home, adapters);
@@ -147,12 +147,10 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (url.pathname === '/api/life' && req.method === 'POST') {
         const value = await body(req); const saved = await life.save(value.settings || value, value.expectedRevision); notify(); return json(200, saved);
       }
-      if (url.pathname === '/api/life/backup-verify' && req.method === 'POST') return json(200, await life.verifyBackup(await body(req)));
-      if (url.pathname === '/api/life/setup-plan' && req.method === 'POST') return json(200, await life.planSetup(await body(req)));
-      if (url.pathname === '/api/life/setup-apply' && req.method === 'POST') { const result = await life.applySetup(await body(req)); notify(); return json(200, result); }
+      if (['/api/life/backup-verify','/api/life/setup-plan','/api/life/setup-apply'].includes(url.pathname)) return json(410, {error:'Life now connects through the website API. Sign in from Setup; database administration is not available here.'});
       if (url.pathname === '/api/life/data' && req.method === 'POST') { const value = await body(req); return json(200, await life.data(value.section, value.query || {})); }
-      if (url.pathname === '/api/life/action' && req.method === 'POST') { const value = await body(req, 30 * 1024 * 1024); const result = await life.action(value.action, value.input || {}, value.idempotencyKey); notify(); return json(200, result); }
-      if (url.pathname === '/api/life/evidence' && req.method === 'POST') return json(200, await life.evidence((await body(req)).attachmentId));
+      if (url.pathname === '/api/life/action' && req.method === 'POST') { const value = await body(req, 30 * 1024 * 1024); const result = await life.action(value.action, value.input || {}, value.idempotencyKey, value.identity); notify(); return json(200, result); }
+      if (url.pathname === '/api/life/evidence' && req.method === 'POST') { const value=await body(req); return json(200, await life.evidence(value.attachmentId, value.identity)); }
       if (url.pathname === '/api/workspace-files/roots' && req.method === 'GET') return json(200, workspaceFiles.roots());
       if (url.pathname === '/api/workspace-files/list' && req.method === 'POST') return json(200, workspaceFiles.list(await body(req)));
       if (url.pathname === '/api/workspace-files/folder' && req.method === 'POST') return json(200, workspaceFiles.createFolder(await body(req)));
@@ -363,7 +361,11 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   const service = { engine, settings, context, standup, omi, life, workspaceFiles, usage, catalog, catalogs, origin, token, home, url: `${origin}/?token=${token}`, async close() {
     if (timer) clearInterval(timer); if (catalogTimer) clearInterval(catalogTimer); await Promise.all(Object.values(catalogs).map(c => c.pending)); await remote.close(); await engine.close(); await copilot.close(); await codex.close(); await claude.close(); await life.close?.();
     for (const client of eventClients) client.end(); eventClients.clear();
-    await new Promise(resolve => server.close(resolve)); server.closeAllConnections();
+    await new Promise(resolve => {
+      server.close(resolve);
+      // Stop accepting first, then drain sockets: incomplete requests can prevent the close callback.
+      server.closeAllConnections();
+    });
     fs.rmSync(path.join(home, 'connection.json'), { force: true }); unlock();
   } };
   remote = service.remote = new RemoteHost(service); await remote.start();

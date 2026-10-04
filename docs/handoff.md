@@ -99,6 +99,34 @@ coordinate signing across machines. Remote pairing is separate from Apple signin
 See `chat-controls.md` for queue/steer semantics, `mcp-auth.md` for sign-in recovery, and `providers.md` for Codex/Claude compatibility limits. Physical iOS installation remains an explicit operation on the operator’s designated signing Mac; simulator verification does not update devices.
 
 
+## October 4 daytime continuation — API-only Life and account destinations
+
+The website account-destination release `20261004T175555Z` is deployed with one additive
+migration, fresh verified restore point, exact manifest parity and unchanged nutrition hashes.
+The operator's Safari profile loads the new account persistence UI. Live enrollment of both Macs
+remains pending explicit confirmation of encrypted connection-key custody on the website server;
+do not copy nonexportable browser keys or claim an empty browser's connection is fixed.
+
+Build Mac now runs API-only desktop Life and the operator completed website sign-in. The app
+reports ready website-api mode; native food pages show 25 items, 219 total, and next-page reads.
+The legacy database configuration is archived exactly and never opened by runtime Life. All seven
+tabs, three pairings, settings and disabled processing gates were preserved/restored. A migration
+visibility bug and idle HTTP shutdown hang were found during acceptance and fixed with regressions.
+The Transcription sidebar now uses Omi iCloud's waveform convention. Connected Setup spacing and
+pending-auth feedback are installed; final restart verified the same ready API account, seven tabs,
+three pairings and graceful shutdown. Native screen capture was unavailable for the final spacing
+screenshot; narrow/wide source UI checks passed. See `release-validation.md` for exact evidence.
+
+The iPhone was updated in place with the original identity. Its two destinations are correctly
+named Work Mac and Build Mac, and its selected Build Mac authenticated connection
+was observed online. Life sign-in on that physical device remains unverified. The latest iPad
+build is still deferred. No Omi app, recording or processing owner changed.
+
+Final software coverage: 232 Node tests, static checks, 68 Laravel tests/574 assertions, ten
+API-backed Life UI groups, 20 web remote groups, seven account/protocol groups and focused real
+restart checks. Signed-package launch/catalog passed. These results supersede earlier locked
+Build Mac/iPhone installation holds, not the deferred iPad or account-enrollment acceptance.
+
 ## October 4 continuation: shared web shell, native mobile Life and desktop peers
 
 This is the current status and supersedes the deployment/pairing statements below. The website

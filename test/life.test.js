@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
-import { LifeStore, validateLifeSettings } from '../src/life.js';
+import { LifeStore, validateLifeSettings } from '../src/life-admin.js';
 import { readLifeProfile, nutritionFingerprint, openLifeDatabase, LIFE_MIGRATION } from '../src/life-database.js';
 import { fuelReport } from '../src/life-data.js';
 async function fixture(t){const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-life-test-')),store=new LifeStore(home);t.after(async()=>{await store.close();fs.rmSync(home,{recursive:true,force:true});});const plan=await store.planSetup({mode:'local-new',ownerName:'Example',ownerEmail:'example@example.test',workspaceName:'Personal'});await store.applySetup({planId:plan.planId,confirmation:'APPLY'});const profileFile=JSON.parse(fs.readFileSync(path.join(home,'life.json'))).profileFile,profile=readLifeProfile(profileFile);return {home,store,profile,profileFile,action:(name,input,key=randomUUID())=>store.action(name,input,key),raw:()=>new DatabaseSync(profile.database)};}
@@ -30,3 +30,20 @@ test('garage-only permission cannot recover nutrition through overview counts or
 test('evidence write rejects a symlink outside its authorized storage root',async t=>{const f=await fixture(t),outside=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-evidence-outside-'));t.after(()=>fs.rmSync(outside,{recursive:true,force:true}));fs.symlinkSync(outside,path.join(f.profile.storageRoot,'evidence'));const c=(await f.action('capture.save',{kind:'document',title:'Original',payload:{}})).record;await assert.rejects(f.action('attachment.add',{capture_id:c.id,name:'original.txt',mimeType:'text/plain',base64:Buffer.from('private').toString('base64')}),/outside/);assert.equal(fs.readdirSync(outside).length,0);});
 
 test('native fuel preserves fill time and oil revisions must remain complete',async t=>{const f=await fixture(t),vehicle=(await f.action('vehicle.save',{name:'Car',kind:'car',fuel_type:'gasoline'})).record;const fill=(await f.action('capture.save',{vehicle_id:vehicle.id,kind:'fuel',title:'Fill',notes:'Original note',payload:{filled_at:'2026-10-01T12:34',odometer:100,gallons:10,full_tank:true,fuel_type:'gasoline'}})).record;await f.action('capture.accept',{id:fill.id});const fuel=await f.store.data('fuel');assert.equal(fuel.fills[0].filled_at,'2026-10-01 12:34:00');assert.equal(fuel.fills[0].notes,'Original note');const oil=(await f.action('capture.save',{vehicle_id:vehicle.id,kind:'oil_analysis',title:'Sample',payload:{analysis_status:'submitted',lab:'Lab',sample_date:'2026-10-01'}})).record;await f.action('capture.accept',{id:oil.id});await assert.rejects(f.action('capture.save',{id:oil.id,kind:'oil_analysis',title:'Sample',payload:{analysis_status:'reported',lab:'Lab',sample_date:'2026-10-01'}}),/required/);assert.equal((await f.store.data('captures',{captureId:oil.id})).capture.payload.analysis_status,'submitted');});
+
+
+test('desktop food library pages are bounded, stable, searchable and keep selected food history accessible',async t=>{
+ const f=await fixture(t),values={serving:'1 bowl',calories:100,protein:10,carbs:15,fat:2};
+ for(let n=52;n>=1;n--)await f.action('food.save',{...values,name:'Food '+String(n).padStart(2,'0')});
+ await f.action('food.save',{...values,name:'100%_literal! food'});
+ const first=await f.store.data('nutrition',{tab:'foods'}),second=await f.store.data('nutrition',{tab:'foods',foodPage:2}),last=await f.store.data('nutrition',{tab:'foods',foodPage:999});
+ assert.equal(first.foods.length,25);assert.equal(first.foodPagination.total,53);assert.equal(first.foodPagination.page,1);assert.equal(first.foodPagination.hasPrevious,false);assert.equal(second.foodPagination.from,26);assert.equal(last.foodPagination.page,3);assert.equal(last.foods.length,3);assert.equal(last.foodPagination.hasNext,false);
+ const ids=[...first.foods,...second.foods,...last.foods].map(f=>f.id);assert.equal(new Set(ids).size,53);assert.deepEqual((await f.store.data('nutrition',{tab:'foods',foodPage:2})).foods,second.foods);
+ const match=await f.store.data('nutrition',{tab:'foods',foodPage:3,search:'fOoD 5'});assert.equal(match.foodPagination.page,1);assert.equal(match.foodPagination.total,3);
+ const literal=await f.store.data('nutrition',{tab:'foods',search:'%_literal!'});assert.equal(literal.foodPagination.total,1);assert.equal(literal.foods[0].name,'100%_literal! food');
+ const empty=await f.store.data('nutrition',{tab:'foods',foodPage:99,search:'no match'});assert.equal(empty.foodPagination.total,0);assert.equal(empty.foodPagination.from,0);assert.equal(empty.foodPagination.page,1);assert.equal(empty.foodPagination.hasNext,false);
+ const selected=last.foods.at(-1);await f.action('food.save',{...values,food_id:selected.id,name:selected.name,calories:200});
+ const detail=await f.store.data('nutrition',{tab:'versions',foodId:selected.id,foodPage:1,search:'does not match'});assert.equal(detail.foods.length,0);assert.equal(detail.selectedFood.id,selected.id);assert.equal(detail.selectedFood.calories,200);assert.equal(detail.versions.length,2);
+ assert.equal((await f.store.data('nutrition',{tab:'day'})).foods.length,53);
+ const db=f.raw();db.prepare('INSERT INTO users(id,name,email,password,current_workspace_id) VALUES(2,?,?,?,1)').run('Other','other@example.test','disabled');db.prepare('INSERT INTO foods(workspace_id,user_id,name,serving) VALUES(1,2,?,?)').run('Private other food','1');db.close();assert.equal((await f.store.data('nutrition',{tab:'foods'})).foodPagination.total,53);
+});

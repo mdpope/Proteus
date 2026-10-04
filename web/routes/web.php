@@ -5,6 +5,7 @@ use App\Http\Controllers\FuelController;
 use App\Http\Controllers\GarageController;
 use App\Http\Controllers\NutritionController;
 use App\Http\Controllers\RemoteController;
+use App\Http\Controllers\RemoteDestinationController;
 use App\Http\Controllers\SecurityController;
 use App\Http\Controllers\SetupController;
 use Illuminate\Support\Facades\Route;
@@ -20,6 +21,12 @@ Route::middleware('auth')->group(function () {
 Route::middleware(['auth', 'strong'])->group(function () {
     Route::get('/remote', [RemoteController::class, 'index'])->name('remote');
     Route::get('/remote/session', [RemoteController::class, 'session'])->name('remote.session')->middleware('throttle:120,1');
+    Route::prefix('/remote/destinations')->middleware('throttle:60,1')->group(function () {
+        Route::get('/', [RemoteDestinationController::class, 'index'])->name('remote.destinations');
+        Route::post('/', [RemoteDestinationController::class, 'store']);
+        Route::get('/{hostId}/credential', [RemoteDestinationController::class, 'credential'])->whereUuid('hostId');
+        Route::delete('/{hostId}', [RemoteDestinationController::class, 'destroy'])->whereUuid('hostId');
+    });
     Route::get('/garage', [GarageController::class, 'index'])->name('garage');
     Route::get('/garage/{vehicle}', [GarageController::class, 'show'])->name('vehicles.show');
     Route::post('/garage/{vehicle}/tasks', [GarageController::class, 'task'])->name('tasks.store');

@@ -27,13 +27,22 @@ async function vehicles(db){return (await db.all('SELECT * FROM vehicles WHERE w
 export async function lifeData(db,section,query={},reportOptions={}){
  const access=await lifeAccess(db),base={section,capabilities:access.capabilities,readOnly:db.profile.readOnly===true,evidence:evidenceStatus(db.profile)};const w=db.profile.workspaceId,u=db.profile.userId;
  if(section==='nutrition'){
-  requireAbility(access,'nutrition.read');const foods=(await db.all('SELECT f.*,v.calories,v.protein,v.carbs,v.fat,v.source_type,v.source_note,v.is_estimate FROM foods f LEFT JOIN food_versions v ON v.id=f.current_version_id AND v.food_id=f.id WHERE f.workspace_id=? AND f.user_id=? ORDER BY f.name',[w,u])).map(clean);
+  requireAbility(access,'nutrition.read');
+  const foodSelect='SELECT f.*,v.calories,v.protein,v.carbs,v.fat,v.source_type,v.source_note,v.is_estimate FROM foods f LEFT JOIN food_versions v ON v.id=f.current_version_id AND v.food_id=f.id WHERE f.workspace_id=? AND f.user_id=?';
+  let foodPagination=null,foodSQL=foodSelect,foodArgs=[w,u];
+  if(query.tab==='foods'){
+   const search=str(query.search,200);if(search){foodSQL+=" AND LOWER(f.name) LIKE LOWER(?) ESCAPE '!'";foodArgs.push('%'+search.replace(/[!%_]/g,c=>'!'+c)+'%');}
+   const total=num((await db.all('SELECT COUNT(*) n FROM ('+foodSQL+') matching_foods',foodArgs))[0].n),pageSize=25,totalPages=Math.max(1,Math.ceil(total/pageSize)),page=Math.min(totalPages,Math.max(1,Math.floor(Number(query.foodPage)||1)));
+   foodPagination={page,pageSize,total,totalPages,from:total?(page-1)*pageSize+1:0,to:Math.min(total,page*pageSize),hasPrevious:page>1,hasNext:page<totalPages};
+   foodSQL+=' ORDER BY LOWER(f.name),f.id LIMIT '+pageSize+' OFFSET '+((page-1)*pageSize);
+  }else foodSQL+=' ORDER BY LOWER(f.name),f.id';
+  const foods=(await db.all(foodSQL,foodArgs)).map(clean);
   const where='m.workspace_id=? AND m.user_id=? AND f.workspace_id=? AND f.user_id=? AND m.deleted_at IS NULL',args=[w,u,w,u];
   const allEntries=(await db.all(`SELECT m.*,f.id food_id,f.name food_name,v.calories,v.protein,v.carbs,v.fat FROM meal_entries m JOIN food_versions v ON v.id=m.food_version_id JOIN foods f ON f.id=v.food_id WHERE ${where} ORDER BY m.date DESC,m.id DESC`,args)).map(clean);
   const report=nutritionReport(allEntries,{from:query.from,through:query.through,timezone:access.timezone,...reportOptions});
   const entries=allEntries.filter(e=>(!query.from||e.date>=query.from)&&(!query.through||e.date<=query.through));
-  let versions=[];if(query.foodId){const f=await scoped(db,'foods',query.foodId,true);versions=(await db.all('SELECT * FROM food_versions WHERE food_id=? ORDER BY id DESC',[f.id])).map(clean);}
-  return {...base,tab:query.tab||'days',foods:query.search?foods.filter(f=>f.name.toLowerCase().includes(String(query.search).toLowerCase())):foods,...report,entries:query.date?allEntries.filter(e=>e.date===date(query.date)):entries,versions};
+  let versions=[],selectedFood=null;if(query.foodId){const f=await scoped(db,'foods',query.foodId,true);versions=(await db.all('SELECT * FROM food_versions WHERE food_id=? ORDER BY id DESC',[f.id])).map(clean);selectedFood=clean((await db.all(foodSelect+' AND f.id=?',[w,u,f.id]))[0]);}
+  return {...base,tab:query.tab||'days',foods:query.tab!=='foods'&&query.search?foods.filter(f=>f.name.toLowerCase().includes(String(query.search).toLowerCase())):foods,foodPagination,selectedFood,...report,entries:query.date?allEntries.filter(e=>e.date===date(query.date)):entries,versions};
  }
  if(['garage','fuel','captures'].includes(section)){
   requireAbility(access,'garage.read');const list=await vehicles(db);let vehicle=null;if(query.vehicleId)vehicle=clean(await scoped(db,'vehicles',query.vehicleId));

@@ -12,6 +12,8 @@ else {
   // CLI-driven updates and service stops use the same graceful shutdown as Quit.
   for (const signal of ['SIGTERM', 'SIGINT']) process.once(signal, () => app.quit());
   app.on('second-instance', showWindow);
+  let lifeCallback;
+  app.on('open-url', (event, url) => { event.preventDefault(); try { const value=new URL(url); if(value.protocol!=='proteus:'||value.hostname!=='life-oauth'||value.pathname!=='/callback')return; } catch { return; } if(service)void service.life.callback(url).catch(()=>{}); else lifeCallback=url; showWindow(); });
   app.on('activate', showWindow);
   app.whenReady().then(async () => {
     const appIcon = nativeImage.createFromPath(path.join(__dirname, 'icon.png'));
@@ -21,12 +23,14 @@ else {
     const { CredentialBroker } = await import('../src/credentials.js');
     const { TerminalStore } = await import('../src/terminals.js');
     // The provider only receives this bounded interface, never Electron or a CDP endpoint.
-    service = await startServer({ port: Number(process.env.PORT || 4317), openExternal: url => shell.openExternal(url), browser: { agent: (...args) => browser.agent(...args) }, background: true });
+    service = await startServer({ port: Number(process.env.PORT || 4317), openExternal: url => shell.openExternal(url), browser: { agent: (...args) => browser.agent(...args) }, background: true, lifeOptions: { safeStorage } });
+    if (lifeCallback) { const value=lifeCallback; lifeCallback=null; void service.life.callback(value).catch(()=>{}); }
     window = new BrowserWindow({ width: 1440, height: 960, minWidth: 850, minHeight: 650, title: 'Proteus', icon: appIcon, backgroundColor: '#111716',
       webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
     browser = new BrowserTabs(window, service.origin);
     credentials = new CredentialBroker(service.home);
     const trusted = event => { if (new URL(event.senderFrame.url).origin !== service.origin || event.sender !== window.webContents) throw new Error('Untrusted renderer.'); };
+    ipcMain.handle('proteus:life-account', (event, value) => { trusted(event); if(event.senderFrame.parent!==null||event.senderFrame.routingId!==window.webContents.mainFrame.routingId||event.senderFrame.processId!==window.webContents.mainFrame.processId||closing)throw new Error('Life account access is unavailable.'); return service.life.auth(value?.action, value); });
     // PTYs are desktop-only. Neither the HTTP API nor embedded web pages receive this bridge.
     terminals = new TerminalStore(service.home, { workspaceFiles: service.workspaceFiles });
     ipcMain.handle('proteus:terminal', (event, value) => { trusted(event); if (event.senderFrame.parent !== null || event.senderFrame.routingId !== window.webContents.mainFrame.routingId || event.senderFrame.processId !== window.webContents.mainFrame.processId || closing) throw new Error('Terminal access is unavailable.'); return terminals.handle(value); });

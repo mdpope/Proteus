@@ -1,8 +1,11 @@
 import { mount as mountMarkdown } from '../../../src/markdown-renderer.js';
-import { PairingStore, BrowserRemoteClient, parsePairing } from './remote-client.js';
+import { PairingStore, AccountPairingStore, BrowserRemoteClient, parsePairing } from './remote-client.js';
 import { usagePanel } from './remote-usage.js';
 const root = document.querySelector('#remote-workspace');
-const store = new PairingStore(root.dataset.account);
+const legacyStore = new PairingStore(root.dataset.account);
+const accountStore = new AccountPairingStore(root.dataset.account,{sessionURL:root.dataset.sessionUrl});
+let ended=false, suspended=false, reconnectTimer=null, reconnectAttempt=0, verifying=null, channel, sessionTimer, usageTimer;
+const suppressed=new Set(),pendingPairs=new Set();
 const hosts = new Map();
 const sessions = new Map();
 const sectionNames = ['chats', 'schedules', 'workspaces'];
@@ -24,17 +27,20 @@ const field = (name, label, value = '', type = 'text') => `<label>${escape(label
 const notice = message => { $('remote-notice').textContent = message; $('remote-notice').hidden = !message; };
 const session = () => sessions.get(active);
 function destinationOptions() {
-    $('remote-host').innerHTML = '<option value="">Choose a paired Mac</option>' + [...hosts.values()].map(host => `<option value="${escape(host.hostId)}" ${host.hostId === active ? 'selected' : ''}>${escape(host.label)} · ${sessions.get(host.hostId)?.client?.status === 'online' ? 'Connected' : 'Offline'}</option>`).join('');
+    $('remote-forget').textContent=hosts.get(active)?.source==='account'?'Forget from account':'Forget from this browser';
+    $('remote-host').innerHTML = '<option value="">Choose a paired Mac</option>' + [...hosts.values()].map(host => `<option value="${escape(host.hostId)}" ${host.hostId === active ? 'selected' : ''}>${escape(host.label)}${host.source==='legacy'?' · browser only':''} · ${sessions.get(host.hostId)?.client?.status === 'online' ? 'Connected' : 'Offline'}</option>`).join('');
     $('remote-status').textContent = active ? `${hosts.get(active)?.label || 'Mac'} · ${session()?.client?.status === 'online' ? 'Connected' : 'Offline'}` : 'Choose a destination';
 }
 async function command(method, args, commandOptions) {
     const target = active, current = session(); if (!current?.client) throw new Error('Connect the selected Mac first.');
-    const result = await current.client.request(method, args, commandOptions);
-    if (active !== target) throw new Error('The destination changed. Refresh that Mac to review the result.'); return result;
+    await verifyWebsite();
+    if(ended||suspended||active!==target||session()!==current)throw new Error('The website session or destination changed.');
+    const client=current.client,result = await client.request(method, args, commandOptions);
+    if (active !== target||session()!==current||current.client!==client||ended||suspended) throw new Error('The destination changed. Refresh that Mac to review the result.'); return result;
 }
 async function refresh() {
     const target = active, current = session(); const result = await command('sync', { cursor: current.host.cursor || '' });
-    if (target !== active) return; current.state = result.state; current.host.cursor = result.cursor; await store.save(current.host); render();
+    if (target !== active) return; current.state = result.state; current.host.cursor = result.cursor; if(current.host.source==='legacy')await legacyStore.save(current.host); render();
 }
 function preserveDrafts() {
     const current = session(); if (!current) return;
@@ -50,19 +56,47 @@ function bindDraft(formId, key, method, args, after) {
         catch (error) { notice(error.message); } finally { if (button.isConnected) button.disabled = false; }
     });
 }
-async function connect(hostId) {
-    preserveDrafts(); const generation = ++switching; session()?.client?.close(); active = hosts.has(hostId) ? hostId : ''; writePreferences({ selectedHost: active }); notice(''); destinationOptions();
+function stopReconnect() { clearTimeout(reconnectTimer); reconnectTimer=null; }
+async function verifyWebsite() {
+    if(ended||suspended)throw new Error('Sign in and reload this page before reconnecting.');
+    if(!verifying)verifying=accountStore.verifySession().catch(async error=>{if(error.sessionInvalid)await endAccount();else pauseUnverified();throw error;}).finally(()=>{verifying=null;});
+    return verifying;
+}
+function pauseUnverified() {
+    for(const pair of pendingPairs)pair.close();pendingPairs.clear();
+    suspended=true;stopReconnect();++switching;for(const current of sessions.values()){const client=current.client;current.client=null;client?.close();current.state=null;current.run=null;current.images?.clear();if(current.host.source==='account')current.host.key=null;}
+    render();notice('Website session could not be verified. Reload before reconnecting.');
+}
+function reconnect(hostId) {
+    if(ended||suspended||active!==hostId||suppressed.has(hostId)||reconnectTimer||reconnectAttempt>=5)return;
+    const attempt=++reconnectAttempt;
+    reconnectTimer=setTimeout(()=>{reconnectTimer=null;if(active===hostId&&!suppressed.has(hostId))void connect(hostId,{automatic:true});},Math.min(1000*2**(attempt-1),16000));
+}
+async function connect(hostId,{automatic=false}={}) {
+    if(ended||suspended)return;
+    if(automatic&&suppressed.has(hostId))return;
+    stopReconnect();if(!automatic){suppressed.delete(hostId);reconnectAttempt=0;}
+    preserveDrafts(); const generation = ++switching;const previous=session();if(previous?.client){const old=previous.client;previous.client=null;old.close();} active = hosts.has(hostId) ? hostId : ''; writePreferences({ selectedHost: active, autoConnect:true }); notice(''); destinationOptions();
     if (!active) { render(); return; }
-    const host = hosts.get(hostId); if (!host) return;
-    let current = sessions.get(hostId); if (!current) { current = { host, drafts: new Map(), selected: null, run: null, state: null }; sessions.set(hostId, current); }
-    current.run = null; current.selected = null; render();
-    const client = current.client = new BrowserRemoteClient(host);
-    client.addEventListener('status', () => { if (active === hostId && current.client === client) { destinationOptions(); if (client.status === 'closed') { preserveDrafts(); render(); } } });
-    client.addEventListener('failure', event => { if (active === hostId && current.client === client) notice(event.detail); });
-    client.addEventListener('revoked', async () => { await store.remove(hostId); hosts.delete(hostId); current.state = null; current.run = null; current.drafts.clear(); if (active === hostId) { active = ''; writePreferences({ selectedHost: '' }); render(); destinationOptions(); } });
-    client.addEventListener('change', event => { if (current.client !== client) return; const change = event.detail; current.host.cursor = change.cursor; if (change.event === 'state') current.state = change.data; if (change.event === 'run' && change.runId === current.selected) current.run = change.data; if (active === hostId) { preserveDrafts(); render(); } });
-    try { await client.connect(); if (generation !== switching) { client.close(); return; } await refresh(); void refreshUsage(); }
-    catch (error) { if (generation === switching) { notice(error.message); render(); } }
+    const metadata = hosts.get(hostId); if (!metadata) return;
+    let current = sessions.get(hostId); if (!current) { current = { host:metadata, drafts: new Map(), selected: null, run: null, state: null }; sessions.set(hostId, current); }
+    current.run = null; current.selected = null;current.state=null; render();
+    try {
+        await verifyWebsite();
+        const host=metadata.source==='account'?await accountStore.credential(hostId):metadata;
+        if(generation!==switching||ended||suspended)return;
+        if(host.relay!==root.dataset.relay)throw new Error('This saved destination uses a different relay. Pair it again for this website.');
+        if(current.host.deviceId!==host.deviceId){current.drafts.clear();current.images?.clear();host.cursor='';}else host.cursor=current.host.cursor||'';
+        current.host=host;hosts.set(hostId,{...metadata,deviceId:host.deviceId,label:host.label,relay:host.relay,pairedAt:host.pairedAt});
+        const client = current.client = new BrowserRemoteClient(host);
+        const relevant=()=>active===hostId&&current.client===client&&generation===switching&&!ended&&!suspended;
+        client.addEventListener('status', () => { if (relevant()) { destinationOptions(); if (client.status === 'closed') { preserveDrafts();current.state=null;current.run=null;render();reconnect(hostId); } } });
+        client.addEventListener('failure', event => { if (relevant()) notice(event.detail); });
+        // Routing packets are not authenticated revocation proofs. Keep account credentials intact.
+        client.addEventListener('revoked', () => { if(!relevant())return;suppressed.add(hostId);stopReconnect();preserveDrafts();current.state=null;current.run=null;notice('This Mac rejected the connection. Retry or create a fresh pairing; the saved account destination was retained.'); });
+        client.addEventListener('change', event => { if (!relevant()) return; const change = event.detail; current.host.cursor = change.cursor; if (change.event === 'state') current.state = change.data; if (change.event === 'run' && change.runId === current.selected) current.run = change.data; preserveDrafts(); render(); });
+        await client.connect(); if (!relevant()) { client.close(); return; } await refresh();reconnectAttempt=0;void refreshUsage();
+    } catch (error) { if(generation!==switching)return;if(error.sessionInvalid){await endAccount();return;}notice(error.message);render();if(![409,404].includes(error.status))reconnect(hostId); }
 }
 function renderUsage() {
     const element = $('web-provider-usage'); if (!element) return;
@@ -109,7 +143,7 @@ function render() {
     const focused = document.activeElement; const focus = focused?.name && focused.closest('form') ? { form: focused.closest('form').id, name: focused.name, start: focused.selectionStart, end: focused.selectionEnd } : null;
     const current = session(), online = current?.client?.status === 'online'; destinationOptions(); renderUsage();
     root.querySelectorAll('[data-remote-view]').forEach(button => button.classList.toggle('active', button.dataset.remoteView === view));
-    if (!current?.state || !online) { $('remote-content').innerHTML = `<section class="card"><h2>${active ? 'Connect ' + escape(hosts.get(active)?.label) : 'Choose a paired Mac'}</h2><p>${active ? 'Remote content is hidden while disconnected. Use Connect to request current state.' : 'Use a fresh pairing code from each Mac. Personal and Example Organization destinations keep separate keys, drafts and event cursors.'}</p></section>`; return; }
+    if (!current?.state || !online) { $('remote-content').innerHTML = `<section class="card"><h2>${active ? 'Connect ' + escape(hosts.get(active)?.label) : 'Choose a paired Mac'}</h2><p>${active ? 'Remote content is hidden while disconnected. The selected Mac reconnects automatically unless you disconnect it. Use Connect to retry now.' : 'Use a fresh pairing code from each Mac. Personal and Example Organization destinations keep separate keys, drafts and event cursors.'}</p></section>`; return; }
     if (view === 'chats') renderChats(current); else if (view === 'schedules') renderSchedules(current); else renderWorkspaces(current);
     if (focus) { const field = document.getElementById(focus.form)?.elements.namedItem(focus.name); if (field) { field.focus({ preventScroll: true }); if (typeof focus.start === 'number' && field.setSelectionRange) { try { field.setSelectionRange(focus.start, focus.end); } catch {} } } }
 }
@@ -117,10 +151,10 @@ function bindCatalog(formId, key) {
     const form = $(formId);
     for (const select of form.querySelectorAll('select[name="provider"],select[name="model"]')) select.addEventListener('change', async () => { preserveDrafts(); const draft = session().drafts.get(key); if (select.name === 'provider') { draft.values.model = ''; draft.values.reasoningEffort = ''; draft.values.contextTier = ''; draft.values.serviceTier = ''; try { const status = await command('provider.status', { provider: select.value }); session().state.providerStatuses ||= {}; session().state.providerStatuses[select.value] = status; } catch (error) { notice(error.message); } } render(); });
 }
-async function openChat(id) { preserveDrafts(); const current = session(); current.selected = id; current.run = await command('chat.get', { id }); setView('chats'); render(); }
+async function openChat(id) { preserveDrafts(); const current = session(); current.selected = id;setView('chats'); current.run = await command('chat.get', { id }); render(); }
 function renderChats(current) {
     const runs = current.state.runs || []; const run = current.run; const key = run ? 'reply:' + run.id : 'new-chat'; const draft = currentDraft(key, run ? { prompt: '', mode: 'queue' } : { ...current.state.defaults, name: '', prompt: '', workspaceId: current.state.context.defaultWorkspaceId, includeDefaults: 'true' }); const values = draft.values;
-    const pending = run?.pending; const waiting = pending ? `<section class="remote-pending"><h3>${pending.type === 'permission' ? 'Approval needed on ' + escape(current.host.label) : 'Input requested'}</h3><pre>${escape(pending.question || text(pending.details || pending))}</pre>${pending.type === 'permission' ? '<button data-answer="approve" type="button">Approve once</button><button data-answer="deny" type="button">Deny</button>' : '<form id="remote-answer"><label>Your answer<textarea name="answer" required rows="3"></textarea></label><button type="submit">Send answer</button></form>'}</section>` : '';
+    const pending = run?.pending; const answerKey=pending?'answer:'+run.id+':'+pending.id:null;const answerDraft=pending&&pending.type!=='permission'?currentDraft(answerKey,{answer:''}):null; const waiting = pending ? `<section class="remote-pending"><h3>${pending.type === 'permission' ? 'Approval needed on ' + escape(current.host.label) : 'Input requested'}</h3><pre>${escape(pending.question || text(pending.details || pending))}</pre>${pending.type === 'permission' ? '<button data-answer="approve" type="button">Approve once</button><button data-answer="deny" type="button">Deny</button>' : `<form id="remote-answer" data-draft="${escape(answerKey)}"><label>Your answer<textarea name="answer" required rows="3">${escape(answerDraft?.values.answer||'')}</textarea></label><button type="submit">Send answer</button></form>`}</section>` : '';
     const history = run ? `<header class="remote-chat-title"><h2>${escape(run.title || run.schedule?.name || 'Chat')}</h2><span>${escape(run.status)}</span></header><div class="remote-messages">${run.earlier ? '<button id="remote-earlier" type="button">Load earlier messages</button>' : ''}${(run.events || []).map((event, eventIndex) => `<article class="remote-message ${escape(event.role || event.type)}"><div class="eyebrow">${escape(event.role || event.type)}</div><div data-markdown-event="${eventIndex}"></div>${event.data?.tool ? `<details><summary>${escape(event.data.tool.summary || event.data.tool.name || 'Tool details')}</summary><pre>${escape(text(event.data.tool))}</pre></details>` : ''}</article>`).join('')}${Object.values(run.liveMessages || {}).map(message => `<article class="remote-message assistant"><div class="eyebrow">Responding</div><pre>${escape(message)}</pre></article>`).join('')}</div>${waiting}${run.queuedMessages?.length ? `<section class="card"><h3>Queued messages</h3>${run.queuedMessages.map(message => `<p>${escape(message.prompt || message.text)} <button data-unqueue="${escape(message.id)}" type="button">Remove</button></p>`).join('')}</section>` : ''}` : '<h2>Start a conversation</h2>';
     $('remote-content').innerHTML = `<div class="remote-chat-layout"><aside class="card"><button id="remote-new" type="button">New chat</button><div class="remote-run-list">${runs.map(r => `<button type="button" data-run="${escape(r.id)}" ${r.id === current.selected ? 'class="active"' : ''}><strong>${escape(r.title || 'Chat')}</strong><small>${escape(r.status)}</small></button>`).join('') || '<p>No chats on this Mac yet.</p>'}</div>${runs.length < (current.state.runCount || 0) ? '<button id="remote-more-runs" type="button">More chats</button>' : ''}</aside><section class="card remote-chat-main">${history}<form id="remote-composer" data-draft="${escape(key)}">${run ? `<label>Send mode<select name="mode"><option value="queue" ${values.mode === 'queue' ? 'selected' : ''}>Queue next turn</option><option value="steer" ${values.mode === 'steer' ? 'selected' : ''}>Steer current turn</option></select></label>` : `<div class="remote-fields">${field('name', 'Chat title', values.name)}${contextFields(values)}${modelFields(values)}</div>`}${field('prompt', run ? 'Follow-up message' : 'Message', values.prompt, 'textarea')}<button type="submit" class="primary">${run ? 'Send to ' : 'Start on '}${escape(current.host.label)}</button>${run && ['running', 'awaiting_input', 'queued'].includes(run.status) ? '<button id="remote-cancel" type="button">Cancel run</button>' : ''}</form></section></div>`;
     bindDraft('remote-composer', key, run ? (['running', 'awaiting_input'].includes(run.status) ? 'chat.send' : 'chat.resume') : 'chat.start', (input, retained) => { if (!input.prompt?.trim()) throw new Error('Enter a message.'); if (run) return { id: run.id, prompt: input.prompt, mode: input.mode, messageId: retained.id }; return { ...input, selectedIds: retained.selectedIds || [], includeDefaults: input.includeDefaults !== 'false' }; }, async result => { if (result.runId) await openChat(result.runId); });
@@ -130,8 +164,9 @@ function renderChats(current) {
     root.querySelectorAll('[data-run]').forEach(button => button.onclick = () => openChat(button.dataset.run).catch(error => notice(error.message)));
     $('remote-more-runs')?.addEventListener('click', async () => { try { const older = await command('runs.list', { offset: runs.length }); current.state.runs.push(...older); preserveDrafts(); render(); } catch (error) { notice(error.message); } });
     $('remote-earlier')?.addEventListener('click', async () => { try { const older = await command('chat.get', { id: run.id, offset: run.eventCount - run.eventStart }); current.run = { ...run, events: [...older.events, ...run.events], eventStart: older.eventStart, earlier: older.earlier }; preserveDrafts(); render(); } catch (error) { notice(error.message); } });
-    const answer = async value => { try { await command('chat.reply', { id: run.id, requestId: pending.id, answer: value }); await openChat(run.id); } catch (error) { notice(error.message); } };
+    const answer = async value => { try { await command('chat.reply', { id: run.id, requestId: pending.id, answer: value });current.drafts.delete(answerKey);if(view==='chats'&&current.selected===run.id)await openChat(run.id);else await refresh(); } catch (error) { notice(error.message); } };
     root.querySelectorAll('[data-answer]').forEach(button => button.onclick = () => answer(button.dataset.answer));
+    $('remote-answer')?.addEventListener('input',event=>{answerDraft.values.answer=new FormData(event.currentTarget).get('answer');});
     $('remote-answer')?.addEventListener('submit', event => { event.preventDefault(); answer(new FormData(event.target).get('answer')); });
     $('remote-cancel')?.addEventListener('click', async () => { try { await command('chat.cancel', { id: run.id }); await openChat(run.id); } catch (error) { notice(error.message); } });
     root.querySelectorAll('[data-unqueue]').forEach(button => button.onclick = async () => { try { await command('chat.remove-queued', { id: run.id, messageId: button.dataset.unqueue }); await openChat(run.id); } catch (error) { notice(error.message); } });
@@ -155,8 +190,16 @@ function renderWorkspaces(current) {
 }
 $('remote-host').onchange = event => connect(event.target.value);
 $('remote-connect').onclick = () => connect($('remote-host').value);
-$('remote-disconnect').onclick = () => { preserveDrafts(); ++switching; session()?.client?.close(); writePreferences({ selectedHost: '' }); render(); };
-$('remote-forget').onclick = async () => { const id = active; if (!id || !confirm(`Forget this browser's pairing with ${hosts.get(id)?.label}? The Mac can also revoke it in Remote access.`)) return; sessions.get(id)?.client?.close(); sessions.delete(id); hosts.delete(id); await store.remove(id); active = ''; writePreferences({ selectedHost: '' }); destinationOptions(); render(); };
+$('remote-disconnect').onclick = () => { preserveDrafts(); ++switching;stopReconnect();suppressed.add(active);const current=session(),client=current?.client;if(current){current.client=null;current.state=null;current.run=null;}client?.close();writePreferences({ selectedHost:active,autoConnect:false });render(); };
+$('remote-forget').onclick = async () => {
+    const id=active,host=hosts.get(id);if(!host)return;
+    const scope=host.source==='account'?'your account (all browsers)':'this browser only';
+    if(!confirm(`Forget ${host.label} from ${scope}? This does not revoke its device key on the Mac.`))return;
+    try {
+        await verifyWebsite();if(host.source==='account')await accountStore.remove(host);else await legacyStore.remove(id);
+        await legacyStore.remove(id).catch(()=>{});const wasActive=active===id;if(wasActive){++switching;stopReconnect();active='';writePreferences({selectedHost:'',autoConnect:false});}const forgotten=sessions.get(id);sessions.delete(id);hosts.delete(id);forgotten?.client?.close();destinationOptions();render();
+    } catch(error){if(error.sessionInvalid)await endAccount();else notice(error.message);}
+};
 root.querySelectorAll('[data-remote-view]').forEach(button => button.onclick = () => { preserveDrafts(); setView(button.dataset.remoteView); render(); });
 document.addEventListener('click', event => {
     const link = event.target.closest('a[href]'); if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.target === '_blank') return;
@@ -168,8 +211,10 @@ $('remote-pair-form').onsubmit = async event => {
     event.preventDefault(); const code = $('remote-pair-code').value; $('remote-pair-code').value = ''; const button = event.target.querySelector('button'); button.disabled = true; notice('');
     try { const capsule = parsePairing(code); if (capsule.relay !== root.dataset.relay) throw new Error('This invitation uses a different relay. Configure the Mac for this website’s relay before pairing.');
         const host = { hostId: capsule.hostId, relay: capsule.relay, inviteKey: capsule.key, label: $('remote-label').value, cursor: '' };
-        const pair = new BrowserRemoteClient(host, { name: host.label + ' · web browser', onPaired: saved => store.save(saved) });
-        try { await pair.connect(); hosts.set(host.hostId, host); } finally { pair.close(); }
+        await verifyWebsite();let saved;
+        const pair = new BrowserRemoteClient(host, { name: host.label + ' · website account', onCredential: async record => {saved=await accountStore.saveCredential(record);} });
+        pendingPairs.add(pair);
+        try { await pair.connect();if(ended||suspended)throw new Error('Sign in again before using the saved destination.');hosts.set(host.hostId,saved);await legacyStore.remove(host.hostId).catch(()=>{});const old=sessions.get(host.hostId);if(old){old.client?.close();sessions.delete(host.hostId);}} finally { pendingPairs.delete(pair);pair.close(); }
         $('remote-pair-panel').open = false; await connect(host.hostId);
     } catch (error) { notice(error.message); } finally { button.disabled = false; }
 };
@@ -179,10 +224,29 @@ function consumeFragment() {
     if (fragment) { $('remote-pair-code').value = fragment; $('remote-pair-panel').open = true; }
 }
 consumeFragment(); setView(view); window.addEventListener('hashchange', consumeFragment);
-const channel = new BroadcastChannel('proteus-remote-account');
-async function endAccount() { try { localStorage.removeItem(preferenceKey); } catch {} for (const current of sessions.values()) current.client?.close(); sessions.clear(); hosts.clear(); active = ''; await store.clear(); render(); destinationOptions(); notice('Signed out. Sign in again and pair this browser to continue.'); }
-channel.onmessage = event => { if (event.data?.type === 'logout' && event.data.account === root.dataset.account) void endAccount(); };
-const sessionTimer = setInterval(async () => { try { const response = await fetch(root.dataset.sessionUrl, { credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' }, redirect: 'manual' }); if (!response.ok || (await response.json()).account !== root.dataset.account) { clearInterval(sessionTimer); await endAccount(); } } catch { for (const current of sessions.values()) current.client?.close(); render(); notice('Website session could not be verified. Reload before reconnecting.'); } }, 60_000);
-const usageTimer = setInterval(() => { if (!document.hidden) void refreshUsage(); }, 60_000);
-window.addEventListener('pagehide', () => { clearInterval(usageTimer); clearInterval(sessionTimer); for (const current of sessions.values()) current.client?.close(); channel.close(); store.close(); });
-try { for (const host of await store.list()) hosts.set(host.hostId, host); destinationOptions(); if (!hosts.size) $('remote-pair-panel').open = true; const selected = readPreferences().selectedHost; if (hosts.has(selected)) await connect(selected); } catch (error) { notice(error.message); }
+async function endAccount() {
+    if(ended)return;ended=true;++switching;stopReconnect();stopLifecycle();try{localStorage.removeItem(preferenceKey);}catch{}
+    for(const pair of pendingPairs)pair.close();pendingPairs.clear();for(const current of sessions.values())current.client?.close();sessions.clear();hosts.clear();active='';
+    await legacyStore.clear().catch(()=>{});legacyStore.close();render();destinationOptions();notice('Signed out. Sign in again to restore destinations saved to your account. Browser-only pairings were removed.');
+}
+function stopLifecycle(){clearInterval(sessionTimer);clearInterval(usageTimer);channel?.close();channel=null;}
+function startLifecycle(){
+    stopLifecycle();channel=new BroadcastChannel('proteus-remote-account');channel.onmessage=event=>{if(event.data?.type==='logout'&&event.data.account===root.dataset.account)void endAccount();};
+    sessionTimer=setInterval(()=>{void verifyWebsite().catch(()=>{});},60_000);
+    usageTimer=setInterval(()=>{if(!document.hidden)void refreshUsage();},60_000);
+}
+async function startup(){
+    if(ended)return;suspended=false;startLifecycle();
+    try {
+        const account=await accountStore.list();if(ended||suspended)return;
+        let legacy=[];try{legacy=await legacyStore.list();}catch{}
+        if(ended||suspended)return;
+        hosts.clear();for(const host of legacy)hosts.set(host.hostId,{...host,source:'legacy'});for(const host of account)hosts.set(host.hostId,host);
+        destinationOptions();if(!hosts.size)$('remote-pair-panel').open=true;
+        const prefs=readPreferences(),selected=hosts.has(prefs.selectedHost)?prefs.selectedHost:(account[0]?.hostId||hosts.keys().next().value);
+        if(selected){active=selected;destinationOptions();if(prefs.autoConnect===false){suppressed.add(selected);render();}else await connect(selected,{automatic:true});}else render();
+    }catch(error){if(error.sessionInvalid)await endAccount();else{pauseUnverified();notice(error.message+' Reload to try again.');}}
+}
+window.addEventListener('pagehide',()=>{suspended=true;++switching;stopReconnect();stopLifecycle();for(const pair of pendingPairs)pair.close();pendingPairs.clear();for(const current of sessions.values())current.client?.close();sessions.clear();hosts.clear();active='';legacyStore.close();render();});
+window.addEventListener('pageshow',event=>{if(event.persisted&&!ended)void startup();});
+await startup();

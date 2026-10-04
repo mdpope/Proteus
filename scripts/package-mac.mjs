@@ -28,6 +28,7 @@ await import('./build-terminal.mjs');
 const bundles = await packager({ dir: root, out: path.join(root, 'dist'), overwrite: true,
   name: 'Proteus', executableName: 'Proteus', appBundleId: 'org.proteusapp.proteus.desktop',
   platform: 'darwin', arch: process.arch, icon, asar: false,
+  protocols: [{ name: 'Proteus Life sign-in', schemes: ['proteus'] }],
   // Rebuild only our PTY in the copied app. Preserve source Node ABI and vendor signatures.
   afterCopy: [async ({buildPath, electronVersion, arch}) => {
     await rebuild({buildPath, electronVersion, arch, onlyModules:['node-pty'], force:true});

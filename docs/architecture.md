@@ -52,14 +52,14 @@ not recording transport or Bluetooth. Native ownership and the persisted executi
 checked on every run, including saved/resumed runs. Omi and Life occupy persistent, independent
 feature tabs, so opening them does not repurpose the schedules or chat tabs.
 
-Life is opt-in and absent from navigation before setup. Its renderer uses authenticated local JSON
-routes; the trusted host owns SQLite or a private TLS/SSH MariaDB connection and OS credential
-references. No website tab, iframe, database credential or arbitrary SQL reaches its renderer.
-The installer and versioned migrations preserve nutrition records and immutable food versions.
-Remote upgrades require a verified backup and an explicit reviewed operation; merely downloading
-an app never mutates a database. The complete branded Laravel application remains under `web/`
-for later deployment. Website identity, public-origin passkey enrollment and MCP hosting remain
-server responsibilities. Life's setup and database endpoints are not exposed by the mobile relay.
+Life is opt-in and absent from navigation before setup. Native desktop and mobile screens use the
+same authenticated website API, independent of the selected execution Mac. The desktop service
+keeps OAuth credentials in main-process protected storage; its renderer receives scoped record
+DTOs, never tokens, database credentials or arbitrary SQL. PKCE, account/workspace binding,
+serialized refresh and draft identity guards preserve account boundaries. Website-only migrations
+require verified recovery and preserve immutable nutrition versions. Existing direct-database
+configuration is privately archived without opening it; there is no SQL fallback. Database admin
+code is separate from the app runtime, and no Life account tokens travel through the Mac relay.
 
 Markdown creation is bound to configured workspace roots, revalidated for every operation. The
 folder picker rejects escaping links and traversal, creates files exclusively, and bounds reads.

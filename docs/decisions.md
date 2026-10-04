@@ -136,3 +136,18 @@ reusable folder/context selections; no new folder-independent project schema is 
 Browser persistence stores bounded URL/title entries and index, omitting POST bodies, Chromium
 page state and common authorization callbacks. Native history menus validate their original
 snapshot before jumping, so an open menu cannot apply a stale index after intervening navigation.
+
+
+## Account destinations and API-only Life (October 4 continuation)
+
+Website destinations are account-owned records, with device credentials encrypted at rest under
+the website application key. Authenticated strong-auth sessions retrieve only the selected
+destination credential and import it into a nonextractable in-memory browser key. The website
+server is a trusted credential custodian; the relay remains an opaque transport. Distinct browser
+sockets retain independent challenges, sequences and drafts. Sign-out clears local access but
+preserves account enrollment. Explicit removal and Mac revocation have distinct scopes.
+
+All native Life clients use the website API. Centralizing authorization and schema ownership in
+the service avoids database credentials and migrations on every desktop. Preserve old profiles
+for recovery without opening them. Account/workspace/session identity travels with drafts and
+evidence requests; changing sign-in cannot silently retarget old inputs.

@@ -11,6 +11,10 @@ use Tests\{CreatesBrain, TestCase};
 class LifeApiTest extends TestCase
 {
     use CreatesBrain, LazilyRefreshDatabase;
+    protected function setUp(): void {
+        parent::setUp();$key=openssl_pkey_new(['private_key_bits'=>2048]);openssl_pkey_export($key,$private);
+        config(['app.key'=>'base64:'.base64_encode(str_repeat('t',32)),'passport.private_key'=>$private,'passport.public_key'=>openssl_pkey_get_details($key)['key']]);
+    }
     private function login($u, array $scopes = ['brain:read', 'brain:write']): array { Passport::actingAs($u, $scopes, 'api'); return $this->getJson('/api/v1/life')->assertOk()->json(); }
     private function change(array $profile, string $action, array $input, ?string $key = null) { return $this->postJson('/api/v1/life/action', ['action' => $action, 'input' => $input, 'idempotencyKey' => $key ?? (string) \Illuminate\Support\Str::uuid(), 'expectedAccountId' => $profile['accountId'], 'expectedWorkspaceId' => $profile['workspaceId']]); }
     private function data(string $section, array $query = []) { return $this->postJson('/api/v1/life/data', compact('section', 'query')); }
@@ -70,4 +74,24 @@ class LifeApiTest extends TestCase
         $migration = require database_path('migrations/2026_10_05_000001_add_native_life_retry_ledger.php');
         try { $migration->up(); $this->fail('Must reject incompatible schema'); } catch (\RuntimeException) { $this->assertSame(['wrong'], Schema::getColumnListing('proteus_life_mutations')); }
     }
+    public function test_desktop_food_pages_preserve_full_picker_versions_and_mobile_contract(): void {
+        $u=$this->owner(); $profile=$this->login($u); $foods=[];
+        for($i=1;$i<=56;$i++) $foods[]=app(NutritionLedger::class)->saveFood($u,['name'=>sprintf('Synthetic food %03d',$i),'serving'=>'1 cup','calories'=>100,'protein'=>10,'carbs'=>20,'fat'=>3])->getAttributes();
+        $first=$this->data('nutrition',['client'=>'desktop','tab'=>'foods','foodPage'=>1])->assertOk()->assertJsonCount(25,'foods')->assertJsonPath('foodPagination.total',56)->assertJsonPath('foodPagination.totalPages',3)->json();
+        $last=$this->data('nutrition',['client'=>'desktop','tab'=>'foods','foodPage'=>999])->assertOk()->assertJsonCount(6,'foods')->assertJsonPath('foodPagination.page',3)->assertJsonPath('foodPagination.from',51)->json();
+        $this->data('nutrition',['client'=>'desktop','tab'=>'foods','search'=>'056'])->assertOk()->assertJsonCount(1,'foods')->assertJsonPath('foodPagination.total',1);
+        $versions=$this->data('nutrition',['client'=>'desktop','tab'=>'versions','foodId'=>$foods[55]['id'],'search'=>'001'])->assertOk()->assertJsonPath('selectedFood.name','Synthetic food 056')->assertJsonCount(1,'versions')->json();
+        $day=$this->data('nutrition',['client'=>'desktop','tab'=>'day'])->assertOk()->assertJsonCount(56,'foods')->json();
+        $this->data('nutrition',['tab'=>'foods'])->assertOk()->assertJsonCount(56,'foods')->assertJsonPath('pageSize',100);
+        $this->data('nutrition',['client'=>'desktop','foodPage'=>0])->assertUnprocessable();
+        if($output=getenv('PROTEUS_LIFE_API_FIXTURE')){
+            if(!str_starts_with($output,'/private/tmp/proteus-'))throw new \RuntimeException('Use a disposable fixture path.');
+            $second=$this->data('nutrition',['client'=>'desktop','tab'=>'foods','foodPage'=>2])->assertOk()->json();
+            $search=$this->data('nutrition',['client'=>'desktop','tab'=>'foods','search'=>'056'])->assertOk()->json();
+            $empty=$this->data('nutrition',['client'=>'desktop','tab'=>'foods','search'=>'absent'])->assertOk()->json();
+            $sections=[];foreach(['overview','garage','fuel','captures','security','connections'] as $section)$sections[$section]=$this->data($section,['client'=>'desktop'])->assertOk()->json();
+            file_put_contents($output,json_encode(compact('profile','first','second','last','search','empty','versions','day','sections'),JSON_THROW_ON_ERROR));chmod($output,0600);
+        }
+    }
+
 }

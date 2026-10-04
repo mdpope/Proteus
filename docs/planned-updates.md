@@ -3,6 +3,16 @@
 Maintain this as the single backlog. Design rationale is in `decisions.md`; recent changes are in
 `../CHANGELOG.md`. Items below are status, not promises of completed validation.
 
+## Account persistence and Life API consistency (October 4 continuation)
+
+Account-persistent website destinations are deployed; enrollment and cross-browser restoration
+remain pending explicit account-key custody confirmation. API-only desktop Life is installed and
+the operator's website sign-in plus native food pagination were verified. Its old database profile
+is archived and never used by the runtime. Setup sign-in/spacing, signed-out tab restoration and
+graceful HTTP shutdown are covered by focused regression checks. Build Mac/iPhone updates and
+relay connections are verified; physical mobile Life sign-in and latest iPad update are deferred.
+See `release-validation.md` for exact installed versus source-only observations.
+
 ## Shared website, native Life and desktop destinations (October 4)
 
 Implemented: shared dark web/desktop theme and persistent website section tabs; website provider

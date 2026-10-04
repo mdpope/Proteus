@@ -90,8 +90,25 @@ class LifeReadModel
             $versions = [];
             if (isset($query['foodId'])) { $f = Food::where('workspace_id', $w)->where('user_id', $user->id)->findOrFail($query['foodId']); $versions = $this->records(DB::table('food_versions')->where('food_id', $f->id)->orderByDesc('id')->get()); }
             $summary = $this->summary($w, $user->id, $days, $from, $through);
+            $desktop = ($query['client'] ?? null) === 'desktop';
+            $selectedFood = null;
+            if (isset($query['foodId'])) {
+                $model = Food::where('workspace_id', $w)->where('user_id', $user->id)->with('currentVersion')->findOrFail($query['foodId']);
+                $selectedFood = self::clean($model->getAttributes()) + collect($model->currentVersion?->getAttributes() ?? [])->only(['calories','protein','carbs','fat','source_type','source_note','is_estimate'])->all();
+            }
+            $foodPagination = null;
+            $foodRows = $foods->slice(($page - 1) * $size, $size)->values()->all();
+            if ($desktop) {
+                $foods = $foods->sort(fn ($a, $b) => strcasecmp($a['name'], $b['name']) ?: $a['id'] <=> $b['id'])->values();
+                $foodRows = $foods->all();
+                if (($query['tab'] ?? '') === 'foods') {
+                    $foodTotal=$foods->count(); $foodSize=25; $pages=max(1,(int)ceil($foodTotal/$foodSize)); $foodPage=min($pages,max(1,$query['foodPage']??1));
+                    $foodPagination=['page'=>$foodPage,'pageSize'=>$foodSize,'total'=>$foodTotal,'totalPages'=>$pages,'from'=>$foodTotal?($foodPage-1)*$foodSize+1:0,'to'=>min($foodTotal,$foodPage*$foodSize),'hasPrevious'=>$foodPage>1,'hasNext'=>$foodPage<$pages];
+                    $foodRows=$foods->slice(($foodPage-1)*$foodSize,$foodSize)->values()->all();
+                }
+            }
             $tab = $query['tab'] ?? 'days'; $total = match ($tab) { 'foods' => $foods->count(), 'day' => $entries->count(), 'averages' => count($monthly), default => count($selected) };
-            return $base + ['tab' => $tab, 'reportDate' => $today->toDateString(), 'reportTimezone' => $zone, 'periodSummaries' => $periods, 'averages' => ['days' => $summary['completeDays']] + $summary, 'days' => array_slice($selected, ($page - 1) * $size, $size), 'monthly' => array_slice($monthly, ($page - 1) * $size, $size), 'foods' => $foods->slice(($page - 1) * $size, $size)->values()->all(), 'entries' => $this->records($entries->slice(($page - 1) * $size, $size)), 'versions' => $versions, 'page' => $page, 'pageSize' => $size, 'hasMore' => $total > $page * $size];
+            return $base + ['tab' => $tab, 'reportDate' => $today->toDateString(), 'reportTimezone' => $zone, 'periodSummaries' => $periods, 'averages' => ['days' => $summary['completeDays']] + $summary, 'days' => $desktop ? $selected : array_slice($selected, ($page - 1) * $size, $size), 'monthly' => $desktop ? $monthly : array_slice($monthly, ($page - 1) * $size, $size), 'foods' => $foodRows, 'foodPagination' => $foodPagination, 'selectedFood' => $selectedFood, 'entries' => $this->records($desktop ? $entries : $entries->slice(($page - 1) * $size, $size)), 'versions' => $versions, 'page' => $page, 'pageSize' => $size, 'hasMore' => $total > $page * $size];
         }
         if (in_array($section, ['garage', 'fuel', 'captures'])) {
             $vehicles = Vehicle::where('workspace_id', $w)->orderBy('name')->get();

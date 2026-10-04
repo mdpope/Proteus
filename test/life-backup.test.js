@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { LifeStore } from '../src/life.js';
+import { LifeStore } from '../src/life-admin.js';
 import { openLifeDatabase, readLifeProfile } from '../src/life-database.js';
 import { verifyRestoredBackup, validateBackupReceipt, databaseSnapshot } from '../src/life-backup.js';
 import { evidenceStorage, evidenceStatus } from '../src/life-evidence.js';

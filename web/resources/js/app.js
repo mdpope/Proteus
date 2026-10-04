@@ -35,7 +35,7 @@ if (measurementList) {
     });
 }
 
-// Pairings belong to this signed-in site account and are removed on explicit logout.
+// Explicit logout clears browser-only keys and local preferences. Account destinations remain on the server.
 const logoutForm = document.querySelector('form[action$="/logout"]');
 logoutForm?.addEventListener('submit', async event => {
     if (logoutForm.dataset.remoteCleared) return;

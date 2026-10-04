@@ -74,3 +74,16 @@
 .life-oil-card>.life-metrics { margin:14px 0; }.life-record details { margin:12px 0; }.life-record summary { cursor:pointer; margin-bottom:10px; }
 @media(max-width:1100px) { .life-period-grid { grid-template-columns:1fr; }.life-period-macros { max-width:450px; } }
 @media(max-width:600px) { .life-vehicle-grid { grid-template-columns:minmax(0,1fr); }.life-period-calories { font-size:28px; } }
+
+.life-food-pagination { display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap; margin-top:16px; }.life-food-pagination p { margin:0; }
+
+/* Account status and actions occupy distinct rows, including narrow Setup panes. */
+#life-setup-card,#life-setup-body { min-width:0; overflow-wrap:anywhere; }
+#life-setup-card>.heading { flex-wrap:wrap; gap:16px; }
+#life-setup-card>.heading>div { flex:1 1 220px; min-width:0; }
+.life-account-summary { display:grid; gap:14px; min-width:0; margin:18px 0; }
+.life-account-details { display:grid; gap:6px; min-width:0; }
+.life-account-details h3,.life-account-origin { margin:0; overflow-wrap:anywhere; }
+.life-account-badge { display:inline-flex; justify-self:start; max-width:100%; white-space:normal; }
+.life-account-actions { display:flex; gap:10px; flex-wrap:wrap; margin:0; }
+.life-account-actions button { max-width:100%; white-space:normal; }

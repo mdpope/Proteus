@@ -39,3 +39,9 @@ The packager checks both Copilot vendor signatures before and after packaging, a
 binary changes. Do not re-sign these helpers: their designated requirements identify the caller
 to macOS Keychain. `test/packaged-mac.mjs` verifies the vendor requirements and byte-for-byte
 preservation in addition to the overall app signature.
+
+
+The host completes provider/engine shutdown, ends event streams and closes remaining local HTTP
+sockets before waiting for the listener to finish. An unfinished client request cannot retain the
+runner lock indefinitely. Regression tests cover partial headers/body, idle keep-alive sockets,
+connection/lock cleanup and starting a new host with the same disposable application directory.

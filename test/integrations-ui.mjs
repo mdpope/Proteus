@@ -115,8 +115,8 @@ try{
  releaseUsage();await page.waitForTimeout(200);
  assert.equal(await page.locator('#chat-prompt').inputValue(),'Preserve this synthetic draft');
  await page.locator('#close-dialog').click();
- // Exercise full-shell Life wiring with a real database created only in this fixture.
- await app.evaluate(async({app})=>{const service=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getService();const plan=await service.life.planSetup({mode:'local-new',ownerName:'Synthetic owner',ownerEmail:'fixture@example.test',workspaceName:'Synthetic personal records'});await service.life.applySetup({planId:plan.planId,confirmation:'APPLY'});});
+ // Exercise full-shell Life against a synthetic account API; never create a database.
+ await app.evaluate(async({app})=>{const life=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getService().life;const profile={accountId:'a'.repeat(64),workspaceId:'1',displayName:'Synthetic account',readOnly:false,capabilities:['nutrition.read','garage.read'],sections:['overview','nutrition']};const credential={origin:'https://proteus.example',clientId:'synthetic',accessToken:'synthetic',refreshToken:'synthetic',expiresAt:Date.now()+3600000,...profile};life.api.vault={exists:()=>true,load:()=>credential,available(){},save(){},clear(){}};life.api.fetch=async()=>new Response(JSON.stringify({...profile,counts:{vehicles:0,captures:0,review:0,foods:0,meals:0},recentAudit:[],nutrition:null,tasks:[],foods:[],days:[],entries:[],versions:[],monthly:[],averages:{days:0}}));life.save({schemaVersion:3,enabled:true},life.get().revision);await life.refresh();});
  await page.reload();await page.locator('[data-page="life"]').waitFor();
  await page.locator('[data-page="life"]').click();await page.getByRole('heading',{name:'Life',exact:true}).waitFor();
  await page.locator('[data-life-section="overview"]').click();

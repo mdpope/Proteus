@@ -52,22 +52,13 @@ test('Omi API validates paths, revisions and metadata-only logs',async t=>{
   const stale=await f.request('/api/omi/settings',{settings:f.settings,expectedRevision:'stale'});assert.equal(stale.code,400);
   const enable=await f.request('/api/omi/settings',{settings:{...f.settings,enabled:true,takeoverConfirmed:false},expectedRevision:f.settings.revision});assert.equal(enable.code,400);assert.equal(f.executions.length,0);
 });
-test('Life API installs a native database, keeps optional state and rejects unreviewed setup',async t=>{
-  const f=await fixture(t);const state=await f.request('/api/state');const life=state.value.life;
-  assert.equal(life.configured,false);assert.equal(life.enabled,false);
-  const denied=await f.request('/api/life/data',{section:'nutrition'},false);assert.equal(denied.code,401);
-  const disabled=await f.request('/api/life/data',{section:'nutrition'});assert.equal(disabled.code,400);
-  const removed=await f.request('/api/life/open',{section:'nutrition'});assert.equal(removed.code,404);
-  const invalid=await f.request('/api/life',{settings:{schemaVersion:1,websiteUrl:'https://example.test'},expectedRevision:life.revision});assert.equal(invalid.code,400);
-  const plan=await f.request('/api/life/setup-plan',{mode:'local-new',ownerName:'Synthetic owner',ownerEmail:'owner@example.test',workspaceName:'Synthetic Life'});assert.equal(plan.code,200);assert.ok(plan.value.migrations.length);
-  assert.equal((await f.request('/api/state')).value.life.configured,false);
-  const unconfirmed=await f.request('/api/life/setup-apply',{planId:plan.value.planId});assert.equal(unconfirmed.code,400);
-  const applied=await f.request('/api/life/setup-apply',{planId:plan.value.planId,confirmation:'APPLY'});assert.equal(applied.code,200);assert.equal(applied.value.configured,true);assert.equal(applied.value.enabled,true);
-  const current=await f.request('/api/state');assert.equal(current.value.life.schema.current,2);assert.equal(current.value.life.connection.mode,'sqlite');
-  assert.ok(!JSON.stringify(current.value.life).includes('records.sqlite'));assert.ok(!JSON.stringify(current.value.life).includes('profileFile'));
-  const nutrition=await f.request('/api/life/data',{section:'nutrition',query:{tab:'foods'}});assert.equal(nutrition.code,200);
-  const stale=await f.request('/api/life',{settings:{schemaVersion:2,enabled:false},expectedRevision:life.revision});assert.equal(stale.code,400);
-  const saved=await f.request('/api/life',{settings:{schemaVersion:2,enabled:false},expectedRevision:current.value.life.revision});assert.equal(saved.code,200);
-  assert.equal((await f.request('/api/life/data',{section:'nutrition'})).code,400);
-  assert.equal(f.executions.length,0);
+test('Life runtime is optional API-only and retires database administration routes',async t=>{
+ const f=await fixture(t);const life=(await f.request('/api/state')).value.life;
+ assert.equal(life.configured,false);assert.equal(life.enabled,false);assert.equal(life.connection.mode,'website-api');
+ assert.equal((await f.request('/api/life/data',{section:'nutrition'},false)).code,401);
+ assert.equal((await f.request('/api/life/data',{section:'nutrition'})).code,400);
+ for(const route of ['setup-plan','setup-apply','backup-verify'])assert.equal((await f.request('/api/life/'+route,{})).code,410);
+ const enabled=await f.request('/api/life',{settings:{schemaVersion:3,enabled:true},expectedRevision:life.revision});assert.equal(enabled.code,200);
+ const unavailable=await f.request('/api/life/data',{section:'nutrition'});assert.equal(unavailable.code,400);
+ assert.ok(!JSON.stringify(enabled.value).includes('profileFile'));assert.equal(f.executions.length,0);
 });

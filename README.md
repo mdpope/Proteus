@@ -13,10 +13,10 @@ Bluetooth capture and the iCloud recording/review library stay in the separate O
 
 **Life** brings the complete former Mnemosyne application into `web/`: nutrition, garage,
 maintenance, fuel, evidence, account security and OAuth/MCP. Life is an optional native desktop
-section, hidden until enabled and configured in Setup. It reads database records directly through
-the trusted host, with a local SQLite installer and private MariaDB connection profiles. The full
-Proteus-branded website source is retained for future deployment. No browser or iframe supplies the
-native Life screens. See [Life](docs/life.md) for migration and nutrition preservation boundaries.
+section, hidden until enabled and configured in Setup. Desktop, iPhone and iPad use the same
+authenticated website API and account permissions; only the service accesses the database.
+The Proteus-branded website lives under `web/`. No browser or iframe supplies native Life screens.
+See [Life](docs/life.md) for sign-in, migration and nutrition-preservation boundaries.
 
 `npm run ios:doctor`, `npm run ios:build` and `npm run ios:test` use the checked-in Xcode project
 on the designated build Mac without replacing signing settings. See [Apple builds](docs/apple-build.md).
