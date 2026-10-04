@@ -6,6 +6,9 @@ import { createHash } from 'node:crypto';
 import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { DatabaseSync, backup } from 'node:sqlite';
+import { validateBackupReceipt } from './life-backup.js';
+import { atomicJSON } from './files.js';
+import { validateEvidenceProfile } from './life-evidence.js';
 const runFile = promisify(execFile);
 export const LIFE_SCHEMA = JSON.parse(fs.readFileSync(fileURLToPath(new URL('./life-schema.json', import.meta.url)), 'utf8'));
 export const LIFE_VERSION = 2;
@@ -32,13 +35,13 @@ export function readLifeProfile(file) {
     if (!p.ssh && !p.tls) throw new Error('Remote database profiles require TLS or an authenticated SSH tunnel.');
     if (p.ssh && (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/.test(p.ssh.alias || '') || p.host !== '127.0.0.1')) throw new Error('SSH profiles must use a saved SSH alias and the database loopback host.');
   }
+  validateEvidenceProfile(p);
   p.readOnly = p.readOnly !== false;
   return p;
 }
 async function keychainSecret(ref) {
   if (process.platform !== 'darwin') throw new Error('Configure a supported OS credential resolver for this host.');
-  const {stdout}=await runFile('/usr/bin/security',['find-generic-password','-s',ref.service,'-a',ref.account,'-w'],{maxBuffer:64_000});
-  return stdout.replace(/\r?\n$/,'');
+  try { const {stdout}=await runFile('/usr/bin/security',['find-generic-password','-s',ref.service,'-a',ref.account,'-w'],{maxBuffer:64_000,timeout:15_000}); return stdout.replace(/\r?\n$/,''); } catch { const error = new Error('Unlock the login Keychain and approve the Proteus credential prompt, then retry.'); error.keychainLocked = true; throw error; }
 }
 async function sshTunnel(p) {
   const port=await new Promise((resolve,reject)=>{const s=net.createServer();s.once('error',reject);s.listen(0,'127.0.0.1',()=>{const port=s.address().port;s.close(()=>resolve(port));});});
@@ -52,14 +55,15 @@ async function sshTunnel(p) {
   }
   child.kill('SIGTERM');throw new Error('Database tunnel timed out.');
 }
-export async function openLifeDatabase(profile,{resolveSecret=keychainSecret,createConnection}={}) {
+export async function openLifeDatabase(profile,{resolveSecret=keychainSecret,createConnection,evidenceOptions}={}) {
   if(profile.driver==='sqlite') {
     const db=new DatabaseSync(profile.database,{readOnly:profile.readOnly===true});
     db.exec('PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;');
-    return {driver:'sqlite',profile,
+    return {driver:'sqlite',profile,evidenceOptions,
       all:async(sql,args=[])=>db.prepare(sql).all(...args),
       run:async(sql,args=[])=>{const r=db.prepare(sql).run(...args);return {insertId:Number(r.lastInsertRowid),changes:Number(r.changes)};},
       exec:async(sql)=>db.exec(sql),
+      beginSnapshot:async()=>db.exec('BEGIN'),
       begin:async()=>db.exec('BEGIN IMMEDIATE'),commit:async()=>db.exec('COMMIT'),rollback:async()=>db.exec('ROLLBACK'),
       columns:async(table)=>db.prepare('PRAGMA table_info('+ident(table)+')').all().map(x=>x.name),
       tables:async()=>db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all().map(x=>x.name),
@@ -74,15 +78,16 @@ export async function openLifeDatabase(profile,{resolveSecret=keychainSecret,cre
     connection=await (createConnection||mysql.createConnection)({host:tunnel?'127.0.0.1':profile.host,port:tunnel?.port || Number(profile.port || 3306),user:profile.username,password:await resolveSecret(profile.credential),database:profile.database,ssl:tls,connectTimeout:10_000,dateStrings:true,decimalNumbers:false,multipleStatements:false});
     if(profile.readOnly===true)await connection.query('SET SESSION TRANSACTION READ ONLY');
     const writable=()=>{if(profile.readOnly===true)throw new Error('This connection is read-only.');};
-    return {driver:'mysql',profile,
+    const adapter = {driver:'mysql',profile,evidenceOptions,
       all:async(sql,args=[])=>{const [rows]=await connection.execute({sql,timeout:15_000},args);return rows;},
       run:async(sql,args=[])=>{writable();const [r]=await connection.execute({sql,timeout:15_000},args);return {insertId:r.insertId,changes:r.affectedRows};},
-      exec:async(sql)=>{writable();return connection.query({sql,timeout:15_000});},begin:()=>connection.beginTransaction(),commit:()=>connection.commit(),rollback:()=>connection.rollback(),
+      exec:async(sql)=>{writable();return connection.query({sql,timeout:15_000});},beginSnapshot:()=>connection.query({sql:'START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY',timeout:15_000}),begin:()=>connection.beginTransaction(),commit:()=>connection.commit(),rollback:()=>connection.rollback(),
       columns:async(table)=>{const [rows]=await connection.query({sql:'SHOW COLUMNS FROM '+ident(table),timeout:15_000});return rows.map(x=>x.Field);},
       tables:async()=>{const [rows]=await connection.query({sql:'SHOW TABLES',timeout:15_000});return rows.map(x=>Object.values(x)[0]);},
-      backup:async()=>{throw new Error('Remote upgrades require a verified server-native backup receipt in the private profile before Apply.');},
+      backup:async(file,{verificationHome}={})=>{if(!verificationHome)throw new Error('Verify a restored server backup on this Mac before applying the upgrade.');const checked=await validateBackupReceipt(adapter,verificationHome);atomicJSON(file,{...checked,receipt:JSON.parse(fs.readFileSync(profile.backupReceipt,'utf8'))});},
       close:async()=>{try{await connection.end();}finally{tunnel?.close();}}};
-  } catch {await connection?.end().catch(()=>{});tunnel?.close();throw new Error('Database connection failed. Check the private profile, Keychain credential, TLS or SSH access.');}
+    return adapter;
+  } catch (error) {await connection?.end().catch(()=>{});tunnel?.close();if(error.keychainLocked)throw error;throw new Error('Database connection failed. Check the private profile, Keychain credential, TLS or SSH access.');}
 }
 export async function nutritionFingerprint(db) {
   const tables=await db.tables(); const rows={};

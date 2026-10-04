@@ -1,4 +1,5 @@
 import http from 'node:http';
+import fs from 'node:fs';
 import { timingSafeEqual } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { WebSocketServer, WebSocket } from 'ws';
@@ -6,8 +7,30 @@ import { randomUUID } from 'node:crypto';
 
 const equal = (a, b) => typeof a === 'string' && Buffer.byteLength(a) === Buffer.byteLength(b) && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 const send = (ws, value) => { if (ws?.readyState === WebSocket.OPEN) { if (ws.bufferedAmount > 8_000_000) ws.close(1013, 'Slow connection'); else ws.send(JSON.stringify(value)); } };
-export async function startRelay({ port = 4318, bind = '127.0.0.1', token = process.env.PROTEUS_RELAY_TOKEN } = {}) {
-  if (!/^[a-f0-9]{64}$/.test(token || '')) throw new Error('Set a random 32-byte PROTEUS_RELAY_TOKEN (64 hex characters).');
+const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
+export function relayOrigins(values = []) {
+  if (typeof values === 'string') values = values.split(',').map(value => value.trim()).filter(Boolean);
+  if (!Array.isArray(values)) throw new Error('Allowed client origins must be an exact-origin list.');
+  return new Set(values.map(value => {
+    let url; try { url = new URL(value); } catch { throw new Error('Invalid allowed client origin.'); }
+    const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+    if (value.includes('*') || value !== url.origin || url.username || url.password || (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback))) throw new Error('Use exact HTTPS client origins, without paths or wildcards.');
+    return value;
+  }));
+}
+export function relayHostTokens(file) {
+  if (!file) return null;
+  const info = fs.lstatSync(file);
+  if (!info.isFile() || info.mode & 0o077 || (process.getuid && info.uid !== process.getuid()) || info.size > 64_000) throw new Error('Relay host tokens require an owner-only regular file (0600).');
+  let values; try { values = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { throw new Error('Relay host token file must contain valid JSON.'); }
+  if (!values || Array.isArray(values) || typeof values !== 'object' || !Object.keys(values).length || Object.entries(values).some(([hostId, value]) => !uuid.test(hostId) || !/^[a-f0-9]{64}$/.test(value))) throw new Error('Relay token file must map host UUIDs to distinct 64-character hex tokens.');
+  if (new Set(Object.values(values)).size !== Object.keys(values).length) throw new Error('Each host needs a distinct registration token.');
+  return new Map(Object.entries(values));
+}
+export async function startRelay({ port = 4318, bind = '127.0.0.1', token = process.env.PROTEUS_RELAY_TOKEN, allowedClientOrigins = process.env.PROTEUS_RELAY_ALLOWED_CLIENT_ORIGINS || '', hostTokensFile = process.env.PROTEUS_RELAY_HOST_TOKENS_FILE } = {}) {
+  const origins = relayOrigins(allowedClientOrigins);
+  const hostTokens = relayHostTokens(hostTokensFile);
+  if (!hostTokens && !/^[a-f0-9]{64}$/.test(token || '')) throw new Error('Set a random 32-byte PROTEUS_RELAY_TOKEN or an owner-only host token map.');
   const hosts = new Map(); const clients = new Map();
   const server = http.createServer((req, res) => {
     res.setHeader('Cache-Control', 'no-store');
@@ -16,10 +39,12 @@ export async function startRelay({ port = 4318, bind = '127.0.0.1', token = proc
   });
   const wss = new WebSocketServer({ noServer: true, maxPayload: 8_000_000, perMessageDeflate: false });
   server.on('upgrade', (req, socket, head) => {
-    const url = new URL(req.url, 'http://relay'); const hostId = url.searchParams.get('host'); const role = url.searchParams.get('role');
+    let url; try { url = new URL(req.url, 'http://relay'); } catch { socket.destroy(); return; }
+    const hostId = url.searchParams.get('host'); const role = url.searchParams.get('role');
     const reject = () => { socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n'); };
-    if (url.pathname !== '/socket' || !/^[a-f0-9-]{36}$/.test(hostId || '') || !['host', 'client'].includes(role) || req.headers.origin) return reject();
-    if (role === 'host' && (!equal(req.headers.authorization, `Bearer ${token}`) || hosts.has(hostId))) return reject();
+    if (url.pathname !== '/socket' || !uuid.test(hostId || '') || !['host', 'client'].includes(role) || (req.headers.origin && (role !== 'client' || !origins.has(req.headers.origin)))) return reject();
+    const registrationToken = hostTokens ? hostTokens.get(hostId) : token;
+    if (role === 'host' && (!registrationToken || !equal(req.headers.authorization, `Bearer ${registrationToken}`) || hosts.has(hostId))) return reject();
     if (wss.clients.size >= 64) return reject();
     wss.handleUpgrade(req, socket, head, ws => {
       ws.alive = true; ws.on('pong', () => { ws.alive = true; }); ws.on('error', () => {});

@@ -66,7 +66,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   const claude = new ClaudeProvider({}, { browser, context });
   const omi = new OmiIntegration(home);
   const life = new LifeStore(home);
-  const workspaceFiles = new WorkspaceFiles(() => context.config().workspaces);
+  const workspaceFiles = new WorkspaceFiles(() => context.config());
   const adapters = { ...(providers || { copilot, codex, claude }), 'local-process': omi.provider() };
   const engine = new Engine(home, adapters);
   const usage = new ProviderUsageCache(Object.fromEntries(Object.entries(adapters).filter(([id]) => ['copilot', 'codex', 'claude'].includes(id))));
@@ -104,7 +104,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (req.headers.host !== new URL(origin).host) return json(403, { error: 'Invalid host.' });
       res.setHeader('Cache-Control', 'no-store'); res.setHeader('Referrer-Policy', 'no-referrer');
       res.setHeader('X-Content-Type-Options', 'nosniff');
-      res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob: https: http:; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'");
+      res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob: https: http:; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'");
       const url = new URL(req.url, origin);
       if (url.pathname === '/' && url.searchParams.get('token') === token) {
         res.setHeader('Set-Cookie', `proteus=${token}; HttpOnly; SameSite=Strict; Path=/`);
@@ -136,17 +136,18 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         home, life: life.get(), settings: settings.get(), context: context.get(), standup: standup.get(), browserAvailable: !!browser, schedulerErrors, recoveryErrors: engine.recoveryErrors || [], version: '0.1.0',
         scheduler: { running: true, background, message: background ? 'The menu bar host keeps running when its window is closed. Quit Proteus stops execution. The Mac must be awake.' : 'Schedules run while this host process is running.' }
       });
-      if (url.pathname === '/api/omi' && req.method === 'GET') return json(200, { ...await omi.status(), schedules: engine.schedules.list().filter(isOmiSchedule) });
-      if (url.pathname === '/api/omi/settings' && req.method === 'POST') {
+      if (['/api/omi','/api/transcription'].includes(url.pathname) && req.method === 'GET') return json(200, { ...await omi.status(), schedules: engine.schedules.list().filter(isOmiSchedule) });
+      if (['/api/omi/settings','/api/transcription/settings'].includes(url.pathname) && req.method === 'POST') {
         const value = await body(req); const saved = await omi.saveSettings(value.settings, value.expectedRevision); notify(); return json(200, saved);
       }
-      if (url.pathname === '/api/omi/prepare' && req.method === 'POST') {
-        const value = await body(req); const schedules = omi.prepareSchedules(engine.schedules, value.expectedRevision); notify(); return json(200, { schedules });
+      if (['/api/omi/prepare','/api/transcription/prepare'].includes(url.pathname) && req.method === 'POST') {
+        const value = await body(req); const schedules = omi.prepareSchedules(engine.schedules, value.expectedRevision, value.area); notify(); return json(200, { schedules });
       }
-      if (url.pathname === '/api/omi/logs' && req.method === 'GET') return json(200, omi.logs(url.searchParams.get('job'), url.searchParams.get('stream') || 'out', url.searchParams.get('limit') || 50));
+      if (['/api/omi/logs','/api/transcription/logs'].includes(url.pathname) && req.method === 'GET') return json(200, omi.logs(url.searchParams.get('job'), url.searchParams.get('stream') || 'out', url.searchParams.get('limit') || 50));
       if (url.pathname === '/api/life' && req.method === 'POST') {
         const value = await body(req); const saved = await life.save(value.settings || value, value.expectedRevision); notify(); return json(200, saved);
       }
+      if (url.pathname === '/api/life/backup-verify' && req.method === 'POST') return json(200, await life.verifyBackup(await body(req)));
       if (url.pathname === '/api/life/setup-plan' && req.method === 'POST') return json(200, await life.planSetup(await body(req)));
       if (url.pathname === '/api/life/setup-apply' && req.method === 'POST') { const result = await life.applySetup(await body(req)); notify(); return json(200, result); }
       if (url.pathname === '/api/life/data' && req.method === 'POST') { const value = await body(req); return json(200, await life.data(value.section, value.query || {})); }
@@ -344,8 +345,10 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       }
       const assets = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'], '/features.js': ['features.js', 'text/javascript'], '/remote.js': ['remote.js', 'text/javascript'] };
       for (const file of ['runtime.js', 'style.css']) assets['/markdown/' + file] = ['markdown/' + file, file.endsWith('.css') ? 'text/css' : 'text/javascript'];
-      for (const file of ['conversation.js', 'tool-presentation.js', 'agent-name.js', 'usage.js', 'context-plan.js', 'omi.js', 'life.js', 'markdown-picker.js']) assets['/' + file] = [file, 'text/javascript'];
-      for (const file of ['omi.css', 'life.css', 'markdown-picker.css']) assets['/' + file] = [file, 'text/css'];
+      for (const file of ['conversation.js', 'tool-presentation.js', 'agent-name.js', 'usage.js', 'context-plan.js', 'transcription.js', 'omi.js', 'life.js', 'markdown-picker.js', 'terminals.js']) assets['/' + file] = [file, 'text/javascript'];
+      assets['/terminal/ghostty.js'] = ['terminal/ghostty.js', 'text/javascript'];
+      assets['/terminal/ghostty-vt.wasm'] = ['terminal/ghostty-vt.wasm', 'application/wasm'];
+      for (const file of ['omi.css', 'life.css', 'markdown-picker.css', 'terminals.css']) assets['/' + file] = [file, 'text/css'];
       if (req.method === 'GET' && assets[url.pathname]) {
         const [file, type] = assets[url.pathname]; res.writeHead(200, { 'Content-Type': type }); res.end(fs.readFileSync(path.join(root, 'public', file))); return;
       }

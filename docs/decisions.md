@@ -80,3 +80,21 @@ These decisions describe implemented behavior. Proposed work belongs in `planned
 - **Workspace-bound Markdown creation.** The app chooses configured folders and relative names;
   each request revalidates root membership and canonical containment. New notes never overwrite.
   Hide native browser views for the entire lifetime of a modal, including resize events.
+
+### Desktop workspace restoration
+
+Keep desktop tab descriptors in the host's private application-data directory rather than
+origin-scoped localStorage: the authenticated loopback port can change across launches. Persist
+references only, and recheck current files/features when restoring. Reopened browser views revoke
+old agent access. Reopened terminal descriptors do not execute anything until explicit Resume,
+which never repeats a startup command. Browser disposal during app quit must not overwrite the
+saved workspace with its intermediate empty state.
+
+- **Ghostty VT with desktop-only PTYs.** Use the real Ghostty parser compiled to WebAssembly inside
+  the Electron tab, with local node-pty processes owned by the main process. Do not expose shell IPC
+  through the remote protocol. Native Ghostty configuration is read-only input for supported profile
+  fields. Persist tab descriptors, never automatically rerun a saved command after restart.
+- **Independent transcription ownership.** Omi native jobs and general transcript intake/review
+  have distinct gates because their current owners and scopes differ. Keep existing schedule IDs,
+  verify canonical policy snapshots at execution, and require explicit owner handoff. A successful
+  provider turn does not prove guarded workflow publication or downstream context updates.

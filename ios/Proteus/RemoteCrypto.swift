@@ -32,14 +32,19 @@ struct DeviceConnection: Codable {
     var key: String
 }
 enum DeviceKeychain {
-    private static let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: "org.proteusapp.proteus.mobile", kSecAttrAccount as String: "paired-mac"]
-    static func load() -> DeviceConnection? {
-        var q = query; q[kSecReturnData as String] = true; q[kSecMatchLimit as String] = kSecMatchLimitOne
+    private static let legacyQuery: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: "org.proteusapp.proteus.mobile", kSecAttrAccount as String: "paired-mac"]
+    private static func query(hostID: String?, service: String) -> [String: Any] {
+        var q = legacyQuery; q[kSecAttrService as String] = service
+        if let hostID { q[kSecAttrAccount as String] = "paired-mac:" + hostID.lowercased() }; return q
+    }
+    static func load(hostID: String? = nil, service: String = "org.proteusapp.proteus.mobile") -> DeviceConnection? {
+        var q = query(hostID: hostID, service: service); q[kSecReturnData as String] = true; q[kSecMatchLimit as String] = kSecMatchLimitOne
         var item: CFTypeRef?
         guard SecItemCopyMatching(q as CFDictionary, &item) == errSecSuccess, let data = item as? Data else { return nil }
         return try? JSONDecoder().decode(DeviceConnection.self, from: data)
     }
-    static func save(_ connection: DeviceConnection) throws {
+    static func save(_ connection: DeviceConnection, hostID: String? = nil, service: String = "org.proteusapp.proteus.mobile") throws {
+        let query = query(hostID: hostID, service: service)
         let data = try JSONEncoder().encode(connection)
         let attributes: [String: Any] = [kSecValueData as String: data, kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly]
         let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
@@ -49,5 +54,5 @@ enum DeviceKeychain {
         }
         guard status == errSecSuccess else { throw RemoteError(message: "Could not update the paired device in Keychain (\(status)).") }
     }
-    static func clear() { SecItemDelete(query as CFDictionary) }
+    static func clear(hostID: String? = nil, service: String = "org.proteusapp.proteus.mobile") { SecItemDelete(query(hostID: hostID, service: service) as CFDictionary) }
 }

@@ -25,6 +25,8 @@ function automation(f, id, fields = {}) {
   const dir = path.join(f.automationRoot, sourceId); fs.mkdirSync(dir,{recursive:true});
   const value = {id:sourceId,name:'Synthetic personal intake',prompt:'PRIVATE synthetic workflow text',status:'ACTIVE',model:'test-model',reasoning_effort:'low',rrule:id === 'intake' ? 'FREQ=HOURLY;INTERVAL=1;BYMINUTE=15;BYSECOND=0':'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR,SA,SU;BYHOUR=20;BYMINUTE=45;BYSECOND=0',cwds:[f.state],...fields};
   fs.writeFileSync(path.join(dir,'automation.toml'),Object.entries(value).map(([key,item])=>`${key} = ${JSON.stringify(item)}`).join('\n'));
+  const manifestId=id==='intake'?'cerebro-transcript-intake':'cerebro-transcript-review';fs.mkdirSync(path.join(f.policyRoot,'automations'),{recursive:true});
+  fs.writeFileSync(path.join(f.policyRoot,'automations',manifestId+'.json'),JSON.stringify({schema_version:1,id:manifestId,timezone:'America/Denver',schedule:{weekdays:['MO','TU','WE','TH','FR','SA','SU'],hours:id==='intake'?Array.from({length:24},(_,i)=>i):[20],minute:id==='intake'?15:45},prompt:value.prompt,model:value.model,reasoning_effort:value.reasoning_effort}));
 }
 
 test('Omi is disabled without touching native files or creating settings', async t => {
@@ -65,8 +67,10 @@ test('enable is explicit, revision protected and fails while native service is l
   await assert.rejects(f.omi.saveSettings(f.settings,'bad'),/changed/);
 });
 test('Codex replacement cannot run until its source automation is paused', async t => {
-  const f=fixture(t); automation(f,'intake'); await configure(f,true); const schedule=f.omi.prepareSchedules(f.store,f.omi.getSettings().revision).find(s=>s.provider==='codex');
-  await assert.rejects(f.omi.assertRunnable(schedule),/paused/); automation(f,'intake',{status:'PAUSED'}); await f.omi.assertRunnable(schedule);
+  const f=fixture(t); automation(f,'intake'); await configure(f); const schedule=f.omi.prepareSchedules(f.store,f.omi.getSettings().revision).find(s=>s.provider==='codex');
+  await assert.rejects(f.omi.saveSettings({...f.omi.getSettings(),intakeEnabled:true,intakeTakeoverConfirmed:true},f.omi.getSettings().revision),/paused/);
+  automation(f,'intake',{status:'PAUSED'});await f.omi.saveSettings({...f.omi.getSettings(),intakeEnabled:true,intakeTakeoverConfirmed:true},f.omi.getSettings().revision);await f.omi.assertRunnable(schedule);
+  automation(f,'intake');await assert.rejects(f.omi.assertRunnable(schedule),/paused/);
   await assert.rejects(f.omi.assertRunnable({...schedule,integration:undefined}),/Unrecognized/);
 });
 test('changed cadence or missing canonical policy fails before importing', async t => {
@@ -106,4 +110,37 @@ test('cancellation escalates a stubborn descendant after its parent exits', {ski
   assert.ok(descendant>0);
   let alive=true; for(let n=0;n<50;n++){try{process.kill(descendant,0);}catch(error){if(error.code==='ESRCH'){alive=false;break;}}await new Promise(resolve=>setTimeout(resolve,10));}
   assert.equal(alive,false,'descendant must not outlive cancellation completion');
+});
+
+test('general intake works independently of Omi runtime and loaded native services after explicit source cutover',async t=>{
+ const f=fixture(t,{launchdProbe:async()=>({state:'loaded'})});automation(f,'intake',{status:'PAUSED'});automation(f,'followup',{status:'PAUSED'});await configure(f);
+ await f.omi.saveSettings({...f.omi.getSettings(),workflowRoot:f.policyRoot,intakeEnabled:true,intakeTakeoverConfirmed:true,pipelineRoot:path.join(f.root,'missing-native')},f.omi.getSettings().revision);
+ fs.unlinkSync(f.settings.configPath);const schedules=f.omi.prepareSchedules(f.store,f.omi.getSettings().revision,'general');assert.equal(schedules.length,2);assert.ok(schedules.every(s=>s.enabled===false));
+ for(const schedule of schedules){await f.omi.assertRunnable(schedule);assert.equal(schedule.timezone,'America/Denver');assert.equal(schedule.integration.area,'general');assert.ok(schedule.integration.sourceId);assert.ok(schedule.integration.manifestId);}
+ const native={id:'omi-audio-worker',provider:'local-process',integration:{type:'omi',job:'audio'}};await assert.rejects(f.omi.assertRunnable(native),/disabled/);
+ assert.equal(f.calls.length,0);
+});
+test('area preparation never disables or duplicates the other area and keeps stable identities',async t=>{
+ const f=fixture(t);automation(f,'intake');automation(f,'followup');await configure(f);const all=f.omi.prepareSchedules(f.store,f.omi.getSettings().revision);assert.equal(all.length,5);
+ const ai=f.store.list().find(s=>s.integration.job==='intake');f.store.save({...ai,enabled:true},ai.revision);
+ const native=f.omi.prepareSchedules(f.store,f.omi.getSettings().revision,'omi');assert.equal(native.length,3);assert.equal(f.store.get(ai.id).enabled,true);
+ const audio=f.store.list().find(s=>s.id==='omi-audio-worker');f.store.save({...audio,enabled:true},audio.revision);
+ const general=f.omi.prepareSchedules(f.store,f.omi.getSettings().revision,'general');assert.equal(general.length,2);assert.equal(f.store.get(audio.id).enabled,true);assert.equal(f.store.list().length,5);
+ assert.throws(()=>f.omi.prepareSchedules(f.store,f.omi.getSettings().revision,'unknown'),/Choose/);
+});
+test('canonical drift and stale imported snapshots fail closed without exposing policy text in status',async t=>{
+ const f=fixture(t);automation(f,'intake',{status:'PAUSED'});await configure(f);let settings=f.omi.getSettings();await f.omi.saveSettings({...settings,intakeEnabled:true,intakeTakeoverConfirmed:true},settings.revision);
+ const schedule=f.omi.prepareSchedules(f.store,f.omi.getSettings().revision,'general')[0];assert.equal(f.omi.automationInventory()[0].canonicalVerified,true);assert.ok(!JSON.stringify(await f.omi.status()).includes('PRIVATE synthetic'));
+ const file=path.join(f.automationRoot,'cerebro-transcript-intake/automation.toml');fs.appendFileSync(file,'\n'); // Formatting alone does not alter policy identity.
+ await f.omi.assertRunnable(schedule);
+ const stale={...schedule,integration:{...schedule.integration}};delete stale.integration.sourceRevision;await assert.rejects(f.omi.assertRunnable(stale),/legacy snapshot/);
+ const manifest=path.join(f.policyRoot,'automations/cerebro-transcript-intake.json'),value=JSON.parse(fs.readFileSync(manifest));fs.writeFileSync(manifest,JSON.stringify({...value,prompt:'Canonical changed'}));
+ assert.equal(f.omi.automationInventory()[0].canonicalVerified,false);await assert.rejects(f.omi.assertRunnable(schedule),/differ/);assert.throws(()=>f.omi.prepareSchedules(f.store,f.omi.getSettings().revision,'general'),/differ/);
+ automation(f,'intake',{status:'PAUSED',prompt:'Updated canonical and installed source'});await assert.rejects(f.omi.assertRunnable(schedule),/source changed/);assert.throws(()=>f.omi.prepareSchedules(f.store,f.omi.getSettings().revision,'general'),/changed source/);
+});
+test('legacy settings default the general gate off; preparing old snapshots preserves edits and adds source identity',async t=>{
+ const f=fixture(t);automation(f,'intake');await configure(f);const old=JSON.parse(fs.readFileSync(f.omi.file));delete old.intakeEnabled;delete old.intakeTakeoverConfirmed;delete old.workflowRoot;fs.writeFileSync(f.omi.file,JSON.stringify(old));
+ assert.equal(f.omi.getSettings().intakeEnabled,false);f.omi.prepareSchedules(f.store,f.omi.getSettings().revision,'general');const source=f.store.list()[0];const integration={...source.integration};delete integration.sourceRevision;
+ const saved=f.store.save({...source,name:'Operator label',integration},source.revision);const migrated=f.omi.prepareSchedules(f.store,f.omi.getSettings().revision,'general')[0];assert.equal(migrated.id,saved.id);assert.equal(migrated.name,'Operator label');assert.ok(migrated.integration.sourceRevision);assert.equal(migrated.enabled,false);
+ await assert.rejects(f.omi.assertRunnable({...migrated,integration:undefined}),/disabled/);
 });

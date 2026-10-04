@@ -1,4 +1,5 @@
-const { WebContentsView, session } = require('electron');
+const { WebContentsView, session, ipcMain } = require('electron');
+const { PageSlide } = require('./browser-transition.cjs');
 const { randomUUID } = require('node:crypto');
 const { connectPage } = require('./playwright-bridge.cjs');
 const { loadURLWithTimeout, cancelNavigation } = require('./navigation.cjs');
@@ -13,6 +14,14 @@ function normalizeURL(input) {
 class BrowserTabs {
   constructor(window, appOrigin) {
     this.window = window; this.appOrigin = appOrigin; this.tabs = new Map(); this.active = null; this.bounds = null;
+    this.gestureHandler = (event, direction) => {
+      const tab = [...this.tabs.values()].find(tab => tab.view.webContents === event.sender);
+      if(this.shuttingDown || !tab || tab.id !== this.active || event.senderFrame !== event.sender.mainFrame || !['back','forward'].includes(direction))return;
+      if(this.transition)return;
+      const transition=this.transition=new PageSlide(this.window,tab.view.webContents,tab.view.getBounds());
+      void transition.play(direction,()=>{void this.command({action:direction,id:tab.id,gesture:true}).catch(()=>{});},()=>!this.shuttingDown&&this.active===tab.id&&!tab.view.webContents.isDestroyed()).finally(()=>{if(this.transition===transition)this.transition=null;});
+    };
+    ipcMain.on('proteus:browser-gesture',this.gestureHandler);
     this.partition = session.fromPartition('persist:proteus-browser');
     this.partition.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
     this.partition.setPermissionCheckHandler(() => false);
@@ -28,11 +37,12 @@ class BrowserTabs {
       canGoBack: wc.navigationHistory.canGoBack(), canGoForward: wc.navigationHistory.canGoForward(), shared: tab.shared, owner: tab.owner, error: tab.error || null };
   }
   list() { return [...this.tabs.values()].map(tab => this.state(tab)); }
-  changed() { if (!this.window.isDestroyed()) this.window.webContents.send('proteus:browser-state', this.list()); }
+  prepareShutdown() { this.shuttingDown = true; this.transition?.cancel(); }
+  changed() { if (!this.shuttingDown && !this.window.isDestroyed()) this.window.webContents.send('proteus:browser-state', this.list()); }
   get(id) { const tab = this.tabs.get(id); if (!tab) throw new Error('Browser tab is closed or unavailable.'); return tab; }
   async create(url, owner = null) {
     const tab = { id: randomUUID(), shared: false, owner, view: new WebContentsView({ webPreferences: {
-      session: this.partition, nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true, backgroundThrottling: false
+      preload: require('node:path').join(__dirname,'browser-preload.cjs'), session: this.partition, nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true, backgroundThrottling: false
     } }) };
     this.tabs.set(tab.id, tab); this.window.contentView.addChildView(tab.view);
     // Agent-created tabs may never have been selected. Give them a real viewport
@@ -41,6 +51,10 @@ class BrowserTabs {
     tab.view.setBounds(this.bounds || { x: 0, y: 0, width, height });
     tab.view.setVisible(false);
     const wc = tab.view.webContents;
+    wc.setZoomMode('isolated');
+    void wc.setVisualZoomLevelLimits(1, 3).catch(() => {});
+    const sendHistory=()=>{if(!wc.isDestroyed())wc.send('proteus:browser-history',{back:wc.navigationHistory.canGoBack(),forward:wc.navigationHistory.canGoForward()});};
+    for(const event of ['dom-ready','did-navigate','did-navigate-in-page','did-stop-loading'])wc.on(event,sendHistory);
     wc.on('before-input-event', (event, input) => {
       if (input.type === 'keyDown' && (input.meta || input.control) && input.key.toLowerCase() === 'l') {
         event.preventDefault(); this.window.webContents.focus(); this.window.webContents.send('proteus:focus-address');
@@ -59,6 +73,7 @@ class BrowserTabs {
   }
   address(value) { const url = normalizeURL(value); if (new URL(url).origin === this.appOrigin) throw new Error('The application is not a browser target.'); return url; }
   async navigate(id, url) {
+    this.transition?.cancel();
     const tab = this.get(id); const wc = tab.view.webContents;
     const navigation = Symbol(); tab.navigation = navigation; tab.error = null;
     try { await loadURLWithTimeout(wc, this.address(url)); }
@@ -69,6 +84,7 @@ class BrowserTabs {
     this.changed(); return this.state(tab);
   }
   show(id, bounds) {
+    if(id!==this.active || (bounds&&this.bounds&&['x','y','width','height'].some(key=>Math.round(bounds[key])!==this.bounds[key])))this.transition?.cancel();
     if (bounds) {
       for (const key of ['x','y','width','height']) if (!Number.isFinite(bounds[key]) || bounds[key] < 0) throw new Error('Invalid browser bounds.');
       this.bounds = Object.fromEntries(Object.entries(bounds).map(([key, value]) => [key, Math.round(value)]));
@@ -77,6 +93,7 @@ class BrowserTabs {
     for (const tab of this.tabs.values()) { if (tab.id === id && this.bounds) tab.view.setBounds(this.bounds); tab.view.setVisible(tab.id === id && !!this.bounds); }
   }
   async close(id) {
+    if(id===this.active)this.transition?.cancel();
     const tab = this.get(id); tab.shared = false; tab.owner = null;
     cancelNavigation(tab.view.webContents, 'Browser tab closed during navigation.');
     await this.disconnect(tab); this.window.contentView.removeChildView(tab.view); tab.view.webContents.close();
@@ -88,6 +105,7 @@ class BrowserTabs {
   }
   async command(value) {
     const { action, id } = value;
+    if(!value.gesture&&['back','forward','reload','stop'].includes(action))this.transition?.cancel();
     if (action === 'list') return this.list();
     if (action === 'create') return this.create(value.url);
     if (action === 'show') { this.show(id, value.bounds); return; }
@@ -154,6 +172,6 @@ class BrowserTabs {
       catch { throw new Error('Could not fill this page. Check its login fields and complete the step manually.'); }
     });
   }
-  async dispose() { for (const id of [...this.tabs.keys()]) await this.close(id); }
+  async dispose() { this.prepareShutdown(); ipcMain.removeListener('proteus:browser-gesture',this.gestureHandler); for (const id of [...this.tabs.keys()]) await this.close(id); }
 }
 module.exports = { BrowserTabs, normalizeURL };

@@ -1,0 +1,72 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {EventEmitter} from 'node:events';
+import {randomUUID} from 'node:crypto';
+import {atomicJSON,readJSON} from './files.js';
+import {revision} from './schedules.js';
+const MAX_BUFFER=512*1024,MAX_INPUT=64*1024,MAX_SESSIONS=12;
+const colors=['black','red','green','yellow','blue','magenta','cyan','white','brightBlack','brightRed','brightGreen','brightYellow','brightBlue','brightMagenta','brightCyan','brightWhite'];
+const themeKeys=new Set(['background','foreground','cursor','cursorAccent','selectionBackground','selectionForeground',...colors]);
+const defaultProfile=()=>({id:'default',name:'Default shell',shell:process.platform==='win32'?'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe':'/bin/zsh',command:'',workingDirectory:'',fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace',fontSize:14,scrollback:5000,theme:{background:'#111716',foreground:'#edf2ec',cursor:'#c2e8a0'}});
+function text(value,max,label){if(typeof value!=='string'||value.length>max||value.includes('\0'))throw new Error('Invalid '+label+'.');return value;}
+function dimensions(cols=80,rows=24){if(!Number.isInteger(cols)||cols<2||cols>500||!Number.isInteger(rows)||rows<1||rows>300)throw new Error('Terminal size must be 2–500 columns and 1–300 rows.');return {cols,rows};}
+function validateProfile(input){
+ const p={...defaultProfile(),...input};if(!/^[a-zA-Z0-9_-]{1,80}$/.test(p.id))throw new Error('Use a valid profile ID.');text(p.name,100,'profile name');if(!p.name.trim())throw new Error('Name the terminal profile.');text(p.shell,4096,'shell');if(!path.isAbsolute(p.shell))throw new Error('Choose an absolute shell executable.');text(p.command,16000,'startup command');text(p.workingDirectory,4096,'working directory');if(p.workingDirectory&&!path.isAbsolute(p.workingDirectory))throw new Error('Use an absolute starting folder.');text(p.fontFamily,300,'font family');if(!Number.isFinite(p.fontSize)||p.fontSize<8||p.fontSize>40)throw new Error('Font size must be 8–40.');if(!Number.isInteger(p.scrollback)||p.scrollback<0||p.scrollback>10000)throw new Error('Scrollback must be 0–10000 lines.');
+ const theme={};if(!p.theme||typeof p.theme!=='object'||Array.isArray(p.theme))throw new Error('Choose valid theme colors.');for(const [key,value]of Object.entries(p.theme)){if(!themeKeys.has(key)||typeof value!=='string'||!/^#[\da-f]{6}$/i.test(value))throw new Error('Theme values must be six-digit hex colors.');theme[key]=value;}
+ return {id:p.id,name:p.name.trim(),shell:p.shell,command:p.command,workingDirectory:p.workingDirectory,fontFamily:p.fontFamily,fontSize:p.fontSize,scrollback:p.scrollback,theme};
+}
+function boundedText(file){const info=fs.statSync(file);if(!info.isFile()||info.size>256*1024)throw new Error('Ghostty configuration is too large.');return fs.readFileSync(file,'utf8');}
+function expandHome(value){return value.startsWith('~/')?path.join(os.homedir(),value.slice(2)):value;}
+export function importGhosttyProfile({configFiles=[path.join(os.homedir(),'.config/ghostty/config'),path.join(os.homedir(),'Library/Application Support/com.mitchellh.ghostty/config')],themeRoots=[path.join(os.homedir(),'.config/ghostty/themes'),'/Applications/Ghostty.app/Contents/Resources/ghostty/themes']}={}){
+ const profile={...defaultProfile(),id:'ghostty',name:'Ghostty settings'},unsupported=new Set(),sources=[];const explicit=[],themeEntries=[];
+ const parse=source=>source.split(/\r?\n/).map(line=>line.trim()).filter(line=>line&&!line.startsWith('#')).flatMap(line=>{const pos=line.indexOf('=');if(pos<1)return [];let value=line.slice(pos+1).trim();if(value.startsWith('"')&&value.endsWith('"')){try{value=JSON.parse(value);}catch{}}return [[line.slice(0,pos).trim(),value]];});
+ for(const file of configFiles){if(!fs.existsSync(file))continue;sources.push(file);explicit.push(...parse(boundedText(file)));}
+ if(!sources.length)throw new Error('No installed Ghostty configuration was found.');
+ const themeName=explicit.filter(([key])=>key==='theme').at(-1)?.[1];
+ if(themeName){let found=false;for(const root of themeRoots){if(!fs.existsSync(root))continue;const candidate=path.resolve(root,themeName);const relative=path.relative(root,candidate);if(relative.startsWith('..')||path.isAbsolute(relative))continue;if(!fs.existsSync(candidate))continue;const real=fs.realpathSync(candidate),base=fs.realpathSync(root);if(!real.startsWith(base+path.sep))continue;themeEntries.push(...parse(boundedText(real)));found=true;break;}if(!found)unsupported.add('theme: unavailable or adaptive theme');}
+ const mappings={'background':'background','foreground':'foreground','cursor-color':'cursor','selection-background':'selectionBackground','selection-foreground':'selectionForeground'};
+ for(const [key,value]of [...themeEntries,...explicit]){
+  if(key==='theme')continue;
+  if(mappings[key]){const color=value.startsWith('#')?value:'#'+value;if(/^#[\da-f]{6}$/i.test(color))profile.theme[mappings[key]]=color;else unsupported.add(key);}
+  else if(key==='palette'){const match=value.match(/^(\d+)\s*=\s*#?([\da-f]{6})$/i);if(match&&Number(match[1])<16)profile.theme[colors[Number(match[1])]]='#'+match[2];else unsupported.add(key);}
+  else if(key==='font-family')profile.fontFamily=value||defaultProfile().fontFamily;
+  else if(key==='font-size'&&Number(value)>=8&&Number(value)<=40)profile.fontSize=Number(value);
+  else if(key==='command')profile.command=value;
+  else if(key==='working-directory'){const expanded=expandHome(value);if(path.isAbsolute(expanded))profile.workingDirectory=expanded;else unsupported.add(key);}
+  else unsupported.add(key);
+ }
+ return {profile:validateProfile(profile),unsupported:[...unsupported].sort(),source:sources,renderer:'Ghostty VT (WebAssembly)'};
+}
+export class TerminalStore extends EventEmitter {
+ constructor(home,{workspaceFiles,spawnPty,ghosttyOptions,killGroup}={}){super();if(!workspaceFiles)throw new Error('Configured workspace files are required.');this.file=path.join(home,'terminal-profiles.json');this.workspaceFiles=workspaceFiles;this.spawnPty=spawnPty;this.ghosttyOptions=ghosttyOptions;this.sessions=new Map();this.closing=false;this.killGroup=killGroup||((pid,signal)=>{try{process.kill(-pid,signal);}catch{}});}
+ profiles(){const value=readJSON(this.file,{schemaVersion:1,profiles:[defaultProfile()]});if(value.schemaVersion!==1||!Array.isArray(value.profiles)||value.profiles.length<1||value.profiles.length>24)throw new Error('Invalid terminal profiles.');return {...value,profiles:value.profiles.map(validateProfile),revision:revision(value)};}
+ saveProfiles(profiles,expectedRevision){if(this.profiles().revision!==expectedRevision)throw new Error('Terminal profiles changed. Reload before saving.');if(!Array.isArray(profiles)||!profiles.length||profiles.length>24)throw new Error('Keep 1–24 terminal profiles.');const value={schemaVersion:1,profiles:profiles.map(validateProfile)};if(new Set(value.profiles.map(p=>p.id)).size!==value.profiles.length)throw new Error('Terminal profile IDs must be unique.');atomicJSON(this.file,value);return this.profiles();}
+ info(record){return {id:record.id,profileId:record.profile.id,name:record.profile.name,rootId:record.rootId,directory:record.directory,cwd:record.cwd,status:record.status,exitCode:record.exitCode,signal:record.signal,createdAt:record.createdAt,cols:record.cols,rows:record.rows,appearance:{fontFamily:record.profile.fontFamily,fontSize:record.profile.fontSize,scrollback:record.profile.scrollback,theme:record.profile.theme},renderer:'Ghostty VT (WebAssembly)'};}
+ list(){return [...this.sessions.values()].map(record=>this.info(record));}
+ find(id){const session=this.sessions.get(id);if(!session)throw new Error('This terminal process is no longer available. Open a new shell to resume.');return session;}
+ async create({profileId='default',rootId,directory='',cols=80,rows=24,resumeShell=false}={}){
+  if(this.closing)throw new Error('Terminals are shutting down.');if([...this.sessions.values()].filter(s=>s.status==='running').length>=MAX_SESSIONS)throw new Error('Close an active terminal before opening another.');dimensions(cols,rows);if(typeof resumeShell!=='boolean')throw new Error('Invalid terminal restart mode.');
+  const profile=this.profiles().profiles.find(p=>p.id===profileId);if(!profile)throw new Error('Choose an existing terminal profile.');
+  let selected;
+  if(rootId)selected=this.workspaceFiles.resolve(rootId,directory,true);
+  else {const roots=this.workspaceFiles.roots().roots;const preferred=profile.workingDirectory?fs.realpathSync(profile.workingDirectory):null;for(const root of roots){if(!root.available)continue;const base=fs.realpathSync(root.path),relative=preferred?path.relative(base,preferred):'';if(!preferred||relative===''||(!relative.startsWith('..'+path.sep)&&relative!=='..'&&!path.isAbsolute(relative))){selected=this.workspaceFiles.resolve(root.id,relative,true);break;}}}
+  if(!selected)throw new Error('Choose a starting folder inside a configured workspace or repository.');fs.accessSync(profile.shell,fs.constants.X_OK);
+  // Startup commands are explicit profile actions, never replayed during restoration.
+  const args=!resumeShell&&profile.command?['-lc',profile.command]:['-l'];
+  const spawn=this.spawnPty||(await import('node-pty')).spawn;
+  if(this.closing)throw new Error('Terminals are shutting down.');if([...this.sessions.values()].filter(s=>s.status==='running').length>=MAX_SESSIONS)throw new Error('Close an active terminal before opening another.');
+  const child=spawn(profile.shell,args,{name:'xterm-256color',cols,rows,cwd:selected.resolved,env:{...process.env,TERM:'xterm-256color',COLORTERM:'truecolor',TERM_PROGRAM:'Proteus'},encoding:'utf8'});
+  const record={id:randomUUID(),profile,rootId:selected.root.id,directory:selected.relative,cwd:selected.resolved,cols,rows,child,status:'running',createdAt:new Date().toISOString(),data:'',seq:0,truncated:false};this.sessions.set(record.id,record);
+  record.dataSub=child.onData(data=>{if(typeof data!=='string')return;for(let i=0;i<data.length;i+=32768){const chunk=data.slice(i,i+32768);record.data+=chunk;if(Buffer.byteLength(record.data)>MAX_BUFFER){record.data=Buffer.from(record.data).subarray(-MAX_BUFFER).toString('utf8');record.truncated=true;}record.seq++;this.emit('event',{type:'data',id:record.id,seq:record.seq,data:chunk});}});
+  record.exitSub=child.onExit(({exitCode,signal})=>{record.status='exited';record.exitCode=exitCode;record.signal=signal;this.emit('event',{type:'exit',id:record.id,session:this.info(record)});record.resolveExit?.();this.killGroup(child.pid,'SIGTERM');record.killTimer=setTimeout(()=>this.killGroup(child.pid,'SIGKILL'),1000);record.killTimer.unref?.();});
+  for(const item of [...this.sessions.values()])if(this.sessions.size>32&&item.status!=='running'&&item!==record){clearTimeout(item.killTimer);item.dataSub?.dispose();item.exitSub?.dispose();this.sessions.delete(item.id);}
+  return this.info(record);
+ }
+ snapshot(id){const s=this.find(id);return {session:this.info(s),data:s.data,seq:s.seq,truncated:s.truncated};}
+ write(id,data){const s=this.find(id);if(s.status!=='running')throw new Error('This terminal has exited.');if(typeof data!=='string'||Buffer.byteLength(data)>MAX_INPUT)throw new Error('Terminal input is limited to 64 KiB per message.');s.child.write(data);return {ok:true};}
+ resize(id,cols,rows){const s=this.find(id);dimensions(cols,rows);if(s.status==='running'){s.child.resize(cols,rows);s.cols=cols;s.rows=rows;}return {ok:true};}
+ async close(id){const s=this.find(id);if(s.closePromise)return s.closePromise;s.closePromise=(async()=>{if(s.status==='running'){const exit=new Promise(resolve=>s.resolveExit=resolve);this.killGroup(s.child.pid,'SIGTERM');try{s.child.kill('SIGTERM');}catch{}let timer;await Promise.race([exit,new Promise(resolve=>timer=setTimeout(resolve,1000))]);clearTimeout(timer);this.killGroup(s.child.pid,'SIGKILL');try{if(s.status==='running')s.child.kill('SIGKILL');}catch{}if(s.status==='running'){s.status='closed';this.emit('event',{type:'exit',id:s.id,session:this.info(s)});}}if(s.killTimer)this.killGroup(s.child.pid,'SIGKILL');clearTimeout(s.killTimer);s.dataSub?.dispose();s.exitSub?.dispose();this.sessions.delete(id);return {ok:true};})();return s.closePromise;}
+ async handle(value={}){switch(value.action){case 'state':return {profiles:this.profiles(),roots:this.workspaceFiles.roots().roots,sessions:this.list()};case 'save-profiles':return this.saveProfiles(value.profiles,value.expectedRevision);case 'import-ghostty':return importGhosttyProfile(this.ghosttyOptions);case 'create':return this.create(value);case 'snapshot':return this.snapshot(value.id);case 'write':return this.write(value.id,value.data);case 'resize':return this.resize(value.id,value.cols,value.rows);case 'close':return this.close(value.id);default:throw new Error('Unknown terminal action.');}}
+ async dispose(){this.closing=true;await Promise.all([...this.sessions.keys()].map(id=>this.close(id)));this.removeAllListeners();}
+}

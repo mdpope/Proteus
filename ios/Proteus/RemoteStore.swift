@@ -12,8 +12,13 @@ import Combine
     @Published var error: String?
     @Published var selectedChat: String?
     @Published var paired = false
+    @Published var drafts: [String: JSON] = [:]
+    var onPaired: ((DeviceConnection) throws -> Void)?
+    private let cacheRoot: URL?
+    private let legacyCredentials: Bool
     private(set) var connection: DeviceConnection?
     private var invite: JSON?
+    var pairingLabel: String { invite?["label"].string ?? "" }
     private var challenge = ""
     private var prefix = ""
     private var incoming = 0
@@ -28,14 +33,23 @@ import Combine
     private var waiting: [String: CheckedContinuation<JSON, Error>] = [:]
     private var timeouts: [String: Task<Void, Never>] = [:]
     private var pendingCommands: [String: JSON] = [:]
+    var pendingCommandCount: Int { pendingCommands.count }
     private var cacheTimer: Task<Void, Never>?
-    private var cacheURL: URL { FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Proteus/cache.enc") }
-    init() {
-        connection = DeviceKeychain.load(); paired = connection != nil
+    var cacheURL: URL {
+        if let cacheRoot { return cacheRoot.appendingPathComponent("cache.enc") }
+        return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Proteus/cache.enc")
+    }
+    init(connection: DeviceConnection? = DeviceKeychain.load(), cacheRoot: URL? = nil, legacyCredentials: Bool = true) {
+        self.cacheRoot = cacheRoot; self.legacyCredentials = legacyCredentials
+        self.connection = connection; paired = connection != nil
         if let connection, let data = try? Data(contentsOf: cacheURL), let cache = try? RemoteCrypto.open(String(decoding: data, as: UTF8.self), key: connection.key, aad: "proteus-cache-v1") {
-            state = cache["state"]; chats = cache["chats"].object; cursor = cache["cursor"].string; status = "Offline · cached history"
+            state = cache["state"]; chats = cache["chats"].object; cursor = cache["cursor"].string; drafts = cache["drafts"].object; status = "Offline · cached history"
+            providerStatuses = state["providerStatuses"].object; modelStatus = state["providerStatus"]; models = modelStatus["models"].array
         }
     }
+    func draft(_ id: String) -> JSON { drafts[id] ?? .null }
+    func setDraft(_ id: String, _ value: JSON) { if value == .null { drafts.removeValue(forKey: id) } else { drafts[id] = value }; saveCache() }
+    func copyHistory(from other: RemoteStore) { state = other.state; chats = other.chats; cursor = other.cursor; drafts = other.drafts }
     func pair(_ code: String) throws {
         guard let components = URLComponents(string: code.trimmingCharacters(in: .whitespacesAndNewlines)), components.scheme == "proteus", components.host == "pair", let encoded = components.queryItems?.first(where: { $0.name == "data" })?.value else { throw RemoteError(message: "Paste a Proteus pairing link from the Mac’s Remote Access screen.") }
         var base64 = encoded.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
@@ -53,7 +67,7 @@ import Combine
         let privateIP = ipv4 && (parts[0] == 10 || (parts[0] == 192 && parts[1] == 168) || (parts[0] == 172 && (16...31).contains(parts[1])))
         let local = host == "localhost" || host == "127.0.0.1" || host.hasSuffix(".local") || privateIP
         guard url.scheme == "wss" || local else { throw RemoteError(message: "External relays require wss://.") }
-        disconnect(); DeviceKeychain.clear(); connection = nil; paired = false; state = .null; chats = [:]; cursor = ""; try? FileManager.default.removeItem(at: cacheURL)
+        suspend(); if legacyCredentials { DeviceKeychain.clear() }; connection = nil; paired = false; state = .null; chats = [:]; cursor = ""; try? FileManager.default.removeItem(at: cacheURL)
         invite = value; active = true; connect()
     }
     func connect() {
@@ -106,7 +120,7 @@ import Combine
             guard let invite else { throw RemoteError(message: "Unexpected pairing response.") }
             let device = try RemoteCrypto.open(packet["box"].string, key: invite["key"].string, aad: "\(challenge):paired")
             let value = DeviceConnection(relay: invite["relay"].string, hostId: invite["hostId"].string, deviceId: device["id"].string, key: device["key"].string)
-            do { try DeviceKeychain.save(value) } catch { self.error = error.localizedDescription; self.invite = nil; active = false; disconnect(); return }
+            do { if legacyCredentials { try DeviceKeychain.save(value) }; try onPaired?(value) } catch { self.error = error.localizedDescription; self.invite = nil; active = false; disconnect(); return }
             connection = value; self.invite = nil; paired = true
             try await authenticate()
         case "ready":
@@ -152,7 +166,7 @@ import Combine
         sendTask = task; try await task.value
     }
     func request(_ method: String, _ args: [String: JSON] = [:]) async throws -> JSON {
-        guard connected else { throw RemoteError(message: "Mac is offline. Your draft is preserved; reconnect before sending.") }
+        guard active, connected else { throw RemoteError(message: "Mac is offline. Your draft is preserved; reconnect before sending.") }
         let id = UUID().uuidString.lowercased()
         let formatter = ISO8601DateFormatter(); formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let command: JSON = .object(["id": .string(id), "method": .string(method), "args": .object(args), "issuedAt": .string(formatter.string(from: Date()))])
@@ -204,23 +218,155 @@ import Combine
         do { let value = try await request("provider.status", ["force": .bool(force), "provider": .string(provider)]); providerStatuses[provider] = value; if provider == "copilot" { modelStatus = value; models = value["models"].array }; if !value["available"].bool { error = value["error"].string.isEmpty ? "Provider is not available on the Mac." : value["error"].string } }
         catch { self.error = error.localizedDescription }
     }
-    func activity(_ isActive: Bool) { active = isActive; if active { connect() } else { disconnect() } }
+    func activity(_ isActive: Bool) { active = isActive; if active { connect() } else { flushCache(); disconnect() } }
     private func lost() {
         socket?.cancel(with: .goingAway, reason: nil); socket = nil; connected = false; status = paired ? "Mac offline · reconnecting" : "Pairing connection lost"
         if active && (paired || invite != nil) { retryTask?.cancel(); retryTask = Task { try? await Task.sleep(for: .seconds(3)); if !Task.isCancelled { connect() } } }
     }
     func disconnect() { generation = UUID(); readTask?.cancel(); retryTask?.cancel(); socket?.cancel(with: .goingAway, reason: nil); socket = nil; connected = false; status = paired ? "Offline · cached history" : "Not paired" }
-    func forget() { active = false; disconnect(); DeviceKeychain.clear(); connection = nil; invite = nil; paired = false; state = .null; chats = [:]; selectedChat = nil; cursor = ""; cacheTimer?.cancel(); try? FileManager.default.removeItem(at: cacheURL); for c in waiting.values { c.resume(throwing: RemoteError(message: "Device forgotten.")) }; waiting.removeAll(); pendingCommands.removeAll(); timeouts.values.forEach { $0.cancel() }; timeouts.removeAll() }
-    private func saveCache() {
-        cacheTimer?.cancel()
-        cacheTimer = Task { try? await Task.sleep(for: .seconds(1)); guard !Task.isCancelled, let connection else { return }
-            do {
-                let payload: JSON = .object(["state": state, "chats": .object(chats), "cursor": .string(cursor)])
-                let encrypted = try RemoteCrypto.seal(payload, key: connection.key, aad: "proteus-cache-v1")
-                try FileManager.default.createDirectory(at: cacheURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-                try Data(encrypted.utf8).write(to: cacheURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
-                var url = cacheURL; var attributes = URLResourceValues(); attributes.isExcludedFromBackup = true; try url.setResourceValues(attributes)
-            } catch { /* A failed optional cache never changes the authoritative host state. */ }
-        }
+    func forget() { active = false; suspend(); if legacyCredentials { DeviceKeychain.clear() }; connection = nil; invite = nil; paired = false; state = .null; chats = [:]; drafts = [:]; selectedChat = nil; cursor = ""; cacheTimer?.cancel(); try? FileManager.default.removeItem(at: cacheURL); for c in waiting.values { c.resume(throwing: RemoteError(message: "Device forgotten.")) }; waiting.removeAll(); pendingCommands.removeAll(); timeouts.values.forEach { $0.cancel() }; timeouts.removeAll() }
+    // A host switch never leaves a retry behind. Commands already accepted by the Mac continue there.
+    func suspend() {
+        flushCache(); active = false; disconnect(); sendTask?.cancel(); sendTask = nil
+        for continuation in waiting.values { continuation.resume(throwing: RemoteError(message: "Mac selection changed. An unconfirmed action may have reached that Mac; refresh its history before retrying.")) }
+        waiting.removeAll(); pendingCommands.removeAll(); timeouts.values.forEach { $0.cancel() }; timeouts.removeAll()
     }
+    func flushCache() {
+        cacheTimer?.cancel(); guard let connection else { return }
+        do {
+            let payload: JSON = .object(["state": state, "chats": .object(chats), "cursor": .string(cursor), "drafts": .object(drafts)])
+            let encrypted = try RemoteCrypto.seal(payload, key: connection.key, aad: "proteus-cache-v1")
+            try FileManager.default.createDirectory(at: cacheURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data(encrypted.utf8).write(to: cacheURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            var url = cacheURL; var attributes = URLResourceValues(); attributes.isExcludedFromBackup = true; try url.setResourceValues(attributes)
+        } catch { /* A failed optional cache never changes the authoritative host state. */ }
+    }
+    private func saveCache() {
+        cacheTimer?.cancel(); cacheTimer = Task { try? await Task.sleep(for: .seconds(1)); guard !Task.isCancelled else { return }; flushCache() }
+    }
+}
+
+struct MacDestination: Codable, Identifiable, Equatable {
+    var id: String
+    var label: String
+}
+private struct DestinationIndex: Codable {
+    var version = 1
+    var selectedID: String?
+    var destinations: [MacDestination] = []
+}
+
+/// Credentials and cached records are independent even when every Mac uses the same relay.
+@MainActor final class DestinationStore: ObservableObject {
+    @Published private(set) var destinations: [MacDestination] = []
+    @Published private(set) var selectedID: String?
+    @Published private(set) var selected: RemoteStore?
+    @Published var pairing: RemoteStore?
+    @Published var error: String?
+    private var stores: [String: RemoteStore] = [:]
+    private let root: URL
+    private let service: String
+    private var active = false
+    var selectedLabel: String { destinations.first { $0.id == selectedID }?.label ?? "Choose a Mac" }
+    var indexURL: URL { root.appendingPathComponent("destinations.json") }
+    init(root: URL? = nil, keychainService: String = "org.proteusapp.proteus.mobile") {
+        self.root = root ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Proteus")
+        service = keychainService
+        do {
+            if FileManager.default.fileExists(atPath: indexURL.path) {
+                let index = try JSONDecoder().decode(DestinationIndex.self, from: Data(contentsOf: indexURL))
+                guard index.version == 1, index.destinations.allSatisfy({ UUID(uuidString: $0.id) != nil }), Set(index.destinations.map(\.id)).count == index.destinations.count else { throw RemoteError(message: "Saved Mac destinations could not be read. Your pairing keys have been preserved.") }
+                destinations = index.destinations; selectedID = index.selectedID
+            } else if let legacy = DeviceKeychain.load(service: service) {
+                guard UUID(uuidString: legacy.hostId) != nil else { throw RemoteError(message: "The existing Mac pairing is invalid; its key has been preserved.") }
+                try DeviceKeychain.save(legacy, hostID: legacy.hostId, service: service)
+                let old = self.root.appendingPathComponent("cache.enc"), folder = cacheRoot(legacy.hostId)
+                if FileManager.default.fileExists(atPath: old.path) {
+                    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                    let new = folder.appendingPathComponent("cache.enc")
+                    if !FileManager.default.fileExists(atPath: new.path) { try FileManager.default.copyItem(at: old, to: new) }
+                }
+                destinations = [MacDestination(id: legacy.hostId, label: "My Mac")]; selectedID = legacy.hostId
+                try persist(); DeviceKeychain.clear(service: service); try? FileManager.default.removeItem(at: old)
+            }
+            if let id = selectedID ?? destinations.first?.id { try select(id, connect: false) }
+        } catch { self.error = error.localizedDescription }
+    }
+    private func cacheRoot(_ id: String) -> URL { root.appendingPathComponent("hosts").appendingPathComponent(id) }
+    private func persist() throws {
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let index = DestinationIndex(selectedID: selectedID, destinations: destinations)
+        try JSONEncoder().encode(index).write(to: indexURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        var url = indexURL; var attrs = URLResourceValues(); attrs.isExcludedFromBackup = true; try url.setResourceValues(attrs)
+    }
+    func select(_ id: String, connect: Bool = true) throws {
+        guard destinations.contains(where: { $0.id == id }) else { throw RemoteError(message: "Choose a saved Mac.") }
+        let remote: RemoteStore
+        if let cached = stores[id] { remote = cached }
+        else {
+            guard let credentials = DeviceKeychain.load(hostID: id, service: service), credentials.hostId == id else { throw RemoteError(message: "This Mac’s pairing key is unavailable. Add it again using a new pairing code.") }
+            remote = RemoteStore(connection: credentials, cacheRoot: cacheRoot(id), legacyCredentials: false); stores[id] = remote
+        }
+        if selectedID != id || selected !== remote { selected?.suspend() }
+        selectedID = id; selected = remote; try persist()
+        if connect && active { remote.activity(true) }
+    }
+    func rename(_ id: String, label: String) throws {
+        let name = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, name.count <= 80, let index = destinations.firstIndex(where: { $0.id == id }) else { throw RemoteError(message: "Give this Mac a name of 1–80 characters.") }
+        let previous = destinations; destinations[index].label = name
+        do { try persist() } catch { destinations = previous; throw error }
+    }
+    func add(_ code: String, label: String) throws {
+        // Pair independently; a failed/expired invite never removes an existing Mac.
+        let name = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, name.count <= 80 else { throw RemoteError(message: "Enter a name for this Mac (up to 80 characters).") }
+        let candidate = RemoteStore(connection: nil, cacheRoot: root.appendingPathComponent("pending-pair"), legacyCredentials: false)
+        candidate.onPaired = { [weak self, weak candidate] connection in
+            guard let self, let candidate else { throw RemoteError(message: "Pairing was cancelled.") }
+            let suggested = candidate.pairingLabel.trimmingCharacters(in: .whitespacesAndNewlines)
+            let chosen = ["My Mac", "New Mac"].contains(name) && !suggested.isEmpty && suggested.count <= 80 && !suggested.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) ? suggested : name
+            let existingLabel = self.destinations.first { $0.id == connection.hostId }?.label
+            try self.register(connection, label: ["My Mac", "New Mac"].contains(name) ? existingLabel ?? chosen : chosen, history: candidate)
+        }
+        try candidate.pair(code); pairing?.suspend(); pairing = candidate
+    }
+    // Also exercised with synthetic credentials by migration/isolation tests.
+    func register(_ connection: DeviceConnection, label: String, history: RemoteStore? = nil) throws {
+        guard UUID(uuidString: connection.hostId) != nil else { throw RemoteError(message: "Invalid host identity.") }
+        _ = try RemoteCrypto.key(connection.key)
+        let id = connection.hostId
+        let oldCredential = DeviceKeychain.load(hostID: id, service: service)
+        let previous = destinations, previousID = selectedID
+        let oldHistory = stores[id] ?? oldCredential.map { RemoteStore(connection: $0, cacheRoot: cacheRoot(id), legacyCredentials: false) }
+        try DeviceKeychain.save(connection, hostID: id, service: service)
+        if let index = destinations.firstIndex(where: { $0.id == id }) { destinations[index].label = label }
+        else { destinations.append(MacDestination(id: id, label: label)) }
+        selectedID = id
+        do { try persist() } catch {
+            destinations = previous; selectedID = previousID
+            if let oldCredential { try? DeviceKeychain.save(oldCredential, hostID: id, service: service) } else { DeviceKeychain.clear(hostID: id, service: service) }; throw error
+        }
+        selected?.suspend()
+        let remote = RemoteStore(connection: connection, cacheRoot: cacheRoot(id), legacyCredentials: false)
+        if let old = oldHistory { remote.copyHistory(from: old) }
+        else if let history { remote.copyHistory(from: history) }
+        stores[id] = remote; selected = remote; remote.flushCache()
+        // Finish the pairing handshake on the candidate, then use only the saved host instance.
+        Task { await Task.yield(); history?.suspend(); try? FileManager.default.removeItem(at: self.root.appendingPathComponent("pending-pair")); if self.pairing === history { self.pairing = nil }; if self.active && self.selected === remote { remote.activity(true) } }
+    }
+    func cancelPairing() { pairing?.suspend(); pairing = nil; try? FileManager.default.removeItem(at: root.appendingPathComponent("pending-pair")) }
+    func forget(_ id: String) throws {
+        guard destinations.contains(where: { $0.id == id }) else { return }
+        let previous = destinations, previousID = selectedID
+        destinations.removeAll { $0.id == id }; if selectedID == id { selectedID = destinations.first?.id }
+        do { try persist() } catch { destinations = previous; selectedID = previousID; throw error }
+        stores[id]?.suspend(); stores[id]?.forget(); stores.removeValue(forKey: id)
+        DeviceKeychain.clear(hostID: id, service: service); try? FileManager.default.removeItem(at: cacheRoot(id))
+        if previousID == id { selected = nil; if let next = selectedID { try select(next) } }
+    }
+    func remote(for id: String) -> RemoteStore? { stores[id] }
+    func status(_ id: String) -> String { if let remote = stores[id] { return remote.status }; return "Saved · not connected" }
+    func activity(_ value: Bool) { active = value; selected?.activity(value); pairing?.activity(value) }
+    func resetForTesting() { cancelPairing(); for id in destinations.map(\.id) { try? forget(id) }; DeviceKeychain.clear(service: service) }
 }

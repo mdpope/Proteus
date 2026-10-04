@@ -111,3 +111,32 @@ uninstall occurred, and Omi, iPad, existing pairing and relay configuration are 
 Remote reconnection was not newly verified. This development profile expires **October 10,
 2026 at 17:29 MDT**; renew before expiry until paid distribution is configured. Deployment
 receipts and preservation copies remain in the private temporary deployment directory.
+
+### Authorized iPhone and iPad update, October 4
+
+The multi-Mac destination build was installed **in place on both physical devices**. The generic
+iOS build succeeded using the existing project and a command-line development-team override;
+no Xcode project regeneration, certificate change, profile recreation or uninstall occurred.
+Strict/deep signature validation and extracted-certificate fingerprint comparison matched the
+existing Apple Development identity before installation. The existing development profile
+expires **October 10, 2026 at 17:29 MDT** (23:29 UTC).
+
+Before updating, the encrypted Proteus cache was copied privately from each device, with iPad
+preferences also retained. A broad iPhone Library copy encountered an OS-protected launch
+snapshot, so the app-owned Proteus cache was copied directly instead; a separate iPhone preferences
+copy was unavailable. Both encrypted caches were **byte-identical immediately after installation
+and before launch** (iPhone 661,492 bytes; iPad 197,284 bytes).
+
+Both updated apps then launched successfully and were independently found in process inventory.
+Each existing pairing migrated to a one-entry destination index with its existing selected host,
+and a corresponding per-host encrypted cache appeared. The legacy cache was removed after
+migration. Subsequent cache writes change ciphertext/size, so post-launch ciphertext equality is
+not used as proof of semantic data equality. Keychain contents were not extracted. Synthetic
+migration/isolation tests provide the detailed retained-history coverage; physical receipts verify
+in-place cache preservation and the actual on-device migration layout.
+
+The current host pairings and relay endpoints remain unchanged. A live command through the relay
+was not dispatched as part of installation, and a production relay cutover is separate work.
+Omi was not launched, uninstalled, updated or reconfigured. Private device identifiers, signing
+fingerprints, cache preservation copies and install/launch receipts remain under the private
+`/private/tmp/proteus-mobile-update-20261004` deployment directory, outside Git.

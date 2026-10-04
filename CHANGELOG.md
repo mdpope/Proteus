@@ -4,6 +4,19 @@ This is a concise behavior log. Git commits and pull requests contain the comple
 
 ## Unreleased
 
+- Rename the processing section Transcription, separating Omi from general private notes/MacWhisper
+  export intake and follow-up review. Preserve the five existing schedule identities, verify
+  canonical policy/cadence, and enforce independent disabled-until-cutover gates.
+- Browse all configured repository/folder roots in the Markdown chooser, including shared and
+  every-chat folders, while preserving scoped nested creation and revoked-root protections.
+- Add interactive Ghostty VT WebAssembly terminal tabs, local PTYs and editable/importable profiles.
+  Keep terminal access desktop-only; restore terminal descriptors without replaying startup commands.
+- Restore full desktop tab order and selection across restart, including private browser tabs and
+  Markdown documents; support native browser history gestures and bounded pinch zoom.
+- Add separately paired Mac destinations to mobile and a protected Proteus web remote client,
+  keeping per-host keys, drafts, caches and command destinations isolated. Retain the independent
+  encrypted relay and protect existing nutrition data during website code-only deployment.
+
 - Add the Omi control room with status, normal schedules, run history, bounded processing logs,
   private settings and an execution gate that remains disabled until an explicit cutover.
   Three native jobs use independent lanes; AI provider turns remain serialized. Imported personal

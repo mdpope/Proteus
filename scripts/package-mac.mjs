@@ -1,6 +1,8 @@
 // Local development bundle. Optional existing Apple signing identity keeps OS grants stable.
 // Distribution notarization is separate.
 import { packager } from '@electron/packager';
+import { rebuild } from '@electron/rebuild';
+import { preparePty } from './prepare-pty.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -22,9 +24,15 @@ for (const size of [16, 32, 128, 256, 512]) for (const scale of [1, 2]) {
 }
 const icon = path.join(root, 'dist/Proteus.icns');
 execFileSync('iconutil', ['-c', 'icns', iconset, '-o', icon]);
+await import('./build-terminal.mjs');
 const bundles = await packager({ dir: root, out: path.join(root, 'dist'), overwrite: true,
   name: 'Proteus', executableName: 'Proteus', appBundleId: 'org.proteusapp.proteus.desktop',
   platform: 'darwin', arch: process.arch, icon, asar: false,
+  // Rebuild only our PTY in the copied app. Preserve source Node ABI and vendor signatures.
+  afterCopy: [async ({buildPath, electronVersion, arch}) => {
+    await rebuild({buildPath, electronVersion, arch, onlyModules:['node-pty'], force:true});
+    preparePty(buildPath);
+  }],
   // Keep runtime files and dependencies; never ship tests, worktrees or local configuration.
   ignore: [/^\/(?:web|ios|test|docs|scripts|extensions|dist|coverage|\.runtime|\.git|\.github)(?:\/|$)/, /^\/\.env/, /\.(?:log|xcresult)$/],
   osxSign: { ignore: file => vendorFiles.some(relative => file.endsWith('/' + relative)), identity: signingIdentity, identityValidation: false, preAutoEntitlements: false, gatekeeperAssess: false, optionsForFile: () => ({ hardenedRuntime: false, signatureFlags: '0', timestamp: 'none' }) },

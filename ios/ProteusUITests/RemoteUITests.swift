@@ -171,3 +171,23 @@ extension RemoteUITests {
         app.buttons["stop-turn"].tap()
     }
 }
+
+extension RemoteUITests {
+    @MainActor func testMacDestinationPickerRenameAndIndependentForget() throws {
+        let app = XCUIApplication(); app.launchArguments = ["--synthetic-destinations"]; app.launch()
+        let picker = app.buttons["destination-picker"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 20)); XCTAssertTrue(picker.label.contains("Build Mac"))
+        picker.tap(); app.buttons["Work Mac"].tap()
+        XCTAssertTrue(picker.label.contains("Work Mac"))
+        picker.tap(); app.buttons["Manage Macs"].tap()
+        let workID = "10000000-0000-4000-8000-000000000002"
+        app.buttons["rename-" + workID].tap(); let field = app.alerts.textFields.firstMatch
+        field.tap(); field.typeText(" 2"); let renamed = try XCTUnwrap(field.value as? String)
+        XCTAssertNotEqual(renamed, "Work Mac")
+        app.alerts.buttons["Save"].tap(); XCTAssertTrue(app.staticTexts[renamed].waitForExistence(timeout: 5))
+        app.buttons["forget-" + workID].tap(); app.buttons["Forget Mac"].tap()
+        XCTAssertFalse(app.staticTexts[renamed].exists); XCTAssertTrue(app.staticTexts["Build Mac"].exists)
+        app.buttons["Done"].tap(); XCTAssertTrue(picker.label.contains("Build Mac"))
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Independent Mac destinations"; shot.lifetime = .keepAlways; add(shot)
+    }
+}

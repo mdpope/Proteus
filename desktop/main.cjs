@@ -1,7 +1,8 @@
 const { app, BrowserWindow, ipcMain, shell, dialog, clipboard, Tray, Menu, nativeImage, screen } = require('electron');
 const path = require('node:path');
 const { BrowserTabs } = require('./browser.cjs');
-let service, window, browser, credentials, tray, standupWindow, closing = false;
+const { WorkspaceSession } = require('./workspace-session.cjs');
+let service, window, browser, credentials, terminals, tray, standupWindow, closing = false;
 const showWindow = () => { if (window) { if (window.isMinimized()) window.restore(); window.show(); window.focus(); } };
 app.setName('Proteus');
 // Finder launches lack the interactive shell PATH; match the repository launcher.
@@ -18,6 +19,7 @@ else {
     const { startServer } = await import('../src/server.js');
     const { isWithin } = await import('../src/files.js');
     const { CredentialBroker } = await import('../src/credentials.js');
+    const { TerminalStore } = await import('../src/terminals.js');
     // The provider only receives this bounded interface, never Electron or a CDP endpoint.
     service = await startServer({ port: Number(process.env.PORT || 4317), openExternal: url => shell.openExternal(url), browser: { agent: (...args) => browser.agent(...args) }, background: true });
     window = new BrowserWindow({ width: 1440, height: 960, minWidth: 850, minHeight: 650, title: 'Proteus', icon: appIcon, backgroundColor: '#111716',
@@ -25,6 +27,12 @@ else {
     browser = new BrowserTabs(window, service.origin);
     credentials = new CredentialBroker(service.home);
     const trusted = event => { if (new URL(event.senderFrame.url).origin !== service.origin || event.sender !== window.webContents) throw new Error('Untrusted renderer.'); };
+    // PTYs are desktop-only. Neither the HTTP API nor embedded web pages receive this bridge.
+    terminals = new TerminalStore(service.home, { workspaceFiles: service.workspaceFiles });
+    ipcMain.handle('proteus:terminal', (event, value) => { trusted(event); if (event.senderFrame.parent !== null || event.senderFrame.routingId !== window.webContents.mainFrame.routingId || event.senderFrame.processId !== window.webContents.mainFrame.processId || closing) throw new Error('Terminal access is unavailable.'); return terminals.handle(value); });
+    terminals.on('event', value => { if (window && !window.isDestroyed() && new URL(window.webContents.getURL()).origin === service.origin) window.webContents.send('proteus:terminal-event', value); });
+    const workspaceSession = new WorkspaceSession(service.home);
+    ipcMain.handle('proteus:workspace-session', (event, value) => { trusted(event); if(value?.action==='get')return workspaceSession.get(); if(value?.action==='save'&&!closing)return workspaceSession.save(value.session); });
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     window.webContents.on('will-navigate', (event, url) => { if (new URL(url).origin !== service.origin) event.preventDefault(); });
     ipcMain.handle('proteus:open-path', async (event, file) => {
@@ -45,7 +53,7 @@ else {
     ipcMain.handle('proteus:copy-text', (event, text) => { trusted(event); if (typeof text !== 'string' || text.length > 1_000_000) throw new Error('Invalid clipboard text.'); clipboard.writeText(text); });
     ipcMain.handle('proteus:choose-paths', async (event, options) => {
       trusted(event); const folder = options.kind === 'folder';
-      const result = await dialog.showOpenDialog(window, { properties: [folder ? 'openDirectory' : 'openFile', ...(options.multiple ? ['multiSelections'] : [])], ...(folder ? {} : { filters: [{ name: options.kind === 'workspace' ? 'VS Code workspace' : options.kind === 'life-profile' ? 'Private database profile' : 'Markdown', extensions: options.kind === 'workspace' ? ['code-workspace'] : options.kind === 'life-profile' ? ['json'] : ['md'] }] }) });
+      const result = await dialog.showOpenDialog(window, { properties: [folder ? 'openDirectory' : 'openFile', ...(options.multiple ? ['multiSelections'] : [])], ...(folder ? {} : { filters: [{ name: options.kind === 'workspace' ? 'VS Code workspace' : options.kind === 'life-profile' ? 'Private database profile' : options.kind === 'life-backup' ? 'Private SQL backup' : 'Markdown', extensions: options.kind === 'workspace' ? ['code-workspace'] : options.kind === 'life-profile' ? ['json'] : options.kind === 'life-backup' ? ['sql'] : ['md'] }] }) });
       return result.canceled ? [] : result.filePaths;
     });
     ipcMain.handle('proteus:browser', (event, value) => { trusted(event); return browser.command(value); });
@@ -82,10 +90,13 @@ else {
   app.on('before-quit', event => {
     if (closing || !service) return;
     event.preventDefault(); closing = true;
-    (async () => { credentials?.close(); await browser?.dispose(); await service.close(); })().catch(error => { console.error('Proteus shutdown: ' + error.message); }).finally(() => { tray?.destroy(); app.quit(); });
+    browser?.prepareShutdown(); window?.webContents.send('proteus:shutdown');
+    (async () => { credentials?.close(); await terminals?.dispose(); await browser?.dispose(); await service.close(); })().catch(error => { console.error('Proteus shutdown: ' + error.message); }).finally(() => { tray?.destroy(); app.quit(); });
   });
 }
 // Main-process integration tests use the same broker as the provider adapter.
 module.exports.getBrowser = () => browser;
 module.exports.getService = () => service;
 module.exports.getTray = () => tray;
+
+module.exports.getTerminals = () => terminals;

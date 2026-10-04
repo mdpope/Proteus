@@ -1,21 +1,68 @@
 import SwiftUI
 
 @main struct ProteusApp: App {
-    @StateObject private var store = RemoteStore()
+    @StateObject private var destinations = DestinationStore()
     @Environment(\.scenePhase) private var phase
     var body: some Scene {
         WindowGroup {
-            RootView().environmentObject(store).tint(Color(red: 0.67, green: 0.86, blue: 0.49)).preferredColorScheme(.dark)
-                .onOpenURL { url in do { try store.pair(url.absoluteString) } catch { store.error = error.localizedDescription } }
+            DestinationRoot().environmentObject(destinations).tint(Color(red: 0.67, green: 0.86, blue: 0.49)).preferredColorScheme(.dark)
+                .onOpenURL { url in do { try destinations.add(url.absoluteString, label: "New Mac") } catch { destinations.error = error.localizedDescription } }
                 .task {
                     #if DEBUG
-                    if ProcessInfo.processInfo.arguments.contains("--reset-pairing") { store.forget() }
+                    if ProcessInfo.processInfo.arguments.contains("--reset-pairing") { destinations.resetForTesting() }
+                    if ProcessInfo.processInfo.arguments.contains("--synthetic-destinations") {
+                        destinations.resetForTesting()
+                        for (id, label) in [("10000000-0000-4000-8000-000000000001", "Build Mac"), ("10000000-0000-4000-8000-000000000002", "Work Mac")] {
+                            try? destinations.register(DeviceConnection(relay: "ws://127.0.0.1:1", hostId: id, deviceId: UUID().uuidString, key: RemoteCrypto.random()), label: label)
+                        }
+                        try? destinations.select("10000000-0000-4000-8000-000000000001", connect: false)
+                    }
                     #endif
-                    store.activity(true)
+                    destinations.activity(true)
                 }
-                .onChange(of: phase) { _, value in store.activity(value == .active) }
-                .alert("Proteus", isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })) { Button("OK") { store.error = nil } } message: { Text(store.error ?? "") }
+                .onChange(of: phase) { _, value in destinations.activity(value == .active) }
+                .alert("Proteus", isPresented: Binding(get: { destinations.error != nil }, set: { if !$0 { destinations.error = nil } })) { Button("OK") { destinations.error = nil } } message: { Text(destinations.error ?? "") }
         }
+    }
+}
+struct DestinationRoot: View {
+    @EnvironmentObject var destinations: DestinationStore
+    @State private var adding = false
+    @State private var managing = false
+    var body: some View {
+        Group {
+            if let remote = destinations.selected {
+                VStack(spacing: 0) {
+                    DestinationBar(remote: remote, adding: $adding, managing: $managing)
+                    RootView().environmentObject(remote).id(destinations.selectedID)
+                }
+            } else { NavigationStack { PairView() } }
+        }
+        .sheet(isPresented: $adding, onDismiss: { destinations.cancelPairing() }) { NavigationStack { PairView().toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { destinations.cancelPairing(); adding = false } } } } }
+        .sheet(isPresented: $managing) { NavigationStack { DestinationsView { managing = false; adding = true }.toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { managing = false } } } } }
+        .onChange(of: destinations.selectedID) { _, _ in adding = false }
+        .onChange(of: destinations.pairing != nil) { _, pairing in if !pairing { adding = false } }
+    }
+}
+struct DestinationBar: View {
+    @EnvironmentObject var destinations: DestinationStore
+    @ObservedObject var remote: RemoteStore
+    @Binding var adding: Bool
+    @Binding var managing: Bool
+    var body: some View {
+        HStack {
+            Menu {
+                ForEach(destinations.destinations) { destination in
+                    Button { do { try destinations.select(destination.id) } catch { destinations.error = error.localizedDescription } } label: { Label(destination.label, systemImage: destination.id == destinations.selectedID ? "checkmark" : "desktopcomputer") }
+                }
+                Divider()
+                Button("Add Mac", systemImage: "plus") { adding = true }
+                Button("Manage Macs", systemImage: "desktopcomputer") { managing = true }
+            } label: {
+                HStack(spacing: 9) { Image(systemName: "desktopcomputer"); VStack(alignment: .leading, spacing: 2) { Text(destinations.selectedLabel).font(.subheadline.bold()); Text(remote.status).font(.caption2).foregroundStyle(.secondary) }; Image(systemName: "chevron.down").font(.caption); Spacer() }
+            }.accessibilityIdentifier("destination-picker").accessibilityLabel("Mac destination: " + destinations.selectedLabel)
+            Circle().fill(remote.connected ? Color.green : Color.orange).frame(width: 7, height: 7)
+        }.padding(.horizontal).padding(.vertical, 9).background(.bar)
     }
 }
 private enum Page: String, CaseIterable, Identifiable {
@@ -43,7 +90,7 @@ struct RootView: View {
                     }
                 }
             }
-        }
+        }.alert("Proteus", isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })) { Button("OK") { store.error = nil } } message: { Text(store.error ?? "") }
     }
 }
 struct ConnectionStatus: View {
@@ -51,38 +98,72 @@ struct ConnectionStatus: View {
     var body: some View { HStack(spacing: 7) { Circle().fill(store.connected ? Color.green : Color.orange).frame(width: 7, height: 7); Text(store.status).font(.caption).foregroundStyle(.secondary); Spacer() }.accessibilityElement(children: .combine) }
 }
 struct PairView: View {
-    @EnvironmentObject var store: RemoteStore
+    @EnvironmentObject var destinations: DestinationStore
     @State private var code = ""
+    @State private var label = "My Mac"
     @State private var scan = false
     var body: some View {
         Form {
             Section {
                 Image(systemName: "point.3.connected.trianglepath.dotted").font(.system(size: 52)).foregroundStyle(.tint).frame(maxWidth: .infinity).padding()
-                Text("Your Mac. Wherever you are.").font(.title2.bold())
-                Text("Open Remote Access in Proteus on your Mac. Enable the relay, then create a one-time pairing code.").foregroundStyle(.secondary)
+                Text("Your Macs. One app.").font(.title2.bold())
+                Text("Open Remote Access in Proteus on the Mac you want to add, then create a one-time pairing code. Each Mac keeps its own chats, schedules and workspace context.").foregroundStyle(.secondary)
             }
-            Section("Pair with your Mac") {
+            Section("Add a Mac") {
+                TextField("Mac name", text: $label).accessibilityIdentifier("destination-name")
+                Text("For example: Build Mac or Work Mac.").font(.caption).foregroundStyle(.secondary)
                 Button("Scan pairing QR code", systemImage: "qrcode.viewfinder") { scan = true }
                 TextField("Paste pairing link", text: $code, axis: .vertical).textInputAutocapitalization(.never).autocorrectionDisabled().accessibilityIdentifier("pairing-link")
-                Button("Pair Mac") { pair() }.disabled(code.isEmpty).accessibilityIdentifier("pair-mac")
-                ConnectionStatus()
+                Button("Pair Mac") { pair() }.disabled(code.isEmpty || label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty).accessibilityIdentifier("pair-mac")
+                if let remote = destinations.pairing { PairingStatus(remote: remote) }
             }
-            Section { Text("The Mac keeps your repositories, provider logins, and execution. Your paired device receives encrypted chats and controls. For local testing, use the same network and keep the Mac awake.").font(.footnote).foregroundStyle(.secondary) }
-        }.navigationTitle("Proteus")
+            if !destinations.destinations.isEmpty { Section("Saved Macs") { ForEach(destinations.destinations) { destination in Button(destination.label) { do { try destinations.select(destination.id) } catch { destinations.error = error.localizedDescription } } } } }
+            Section { Text("Macs can share the same encrypted relay address. Pair each Mac separately; adding one does not replace another. Life remains your shared website database. Omi pendant capture remains in the separate Omi app.").font(.footnote).foregroundStyle(.secondary) }
+        }.navigationTitle(destinations.destinations.isEmpty ? "Proteus" : "Add Mac")
             .sheet(isPresented: $scan) { QRScanner { value in scan = false; code = value; pair() }.ignoresSafeArea().overlay(alignment: .topTrailing) { Button("Cancel") { scan = false }.padding().buttonStyle(.borderedProminent) } }
     }
-    private func pair() { do { try store.pair(code) } catch { store.error = error.localizedDescription } }
+    private func pair() { do { try destinations.add(code, label: label) } catch { destinations.error = error.localizedDescription } }
+}
+struct PairingStatus: View {
+    @ObservedObject var remote: RemoteStore
+    var body: some View { VStack(alignment: .leading) { Text(remote.status).font(.caption).foregroundStyle(.secondary); if let error = remote.error { Text(error).foregroundStyle(.orange) } } }
+}
+struct DestinationsView: View {
+    @EnvironmentObject var destinations: DestinationStore
+    var addMac: () -> Void
+    @State private var renameID: String?
+    @State private var renameLabel = ""
+    @State private var forgetID: String?
+    var body: some View {
+        List {
+            Section("Saved Macs") {
+                ForEach(destinations.destinations) { destination in
+                    VStack(alignment: .leading, spacing: 9) {
+                        HStack { Label(destination.label, systemImage: "desktopcomputer").font(.headline); Spacer(); if destination.id == destinations.selectedID { Image(systemName: "checkmark.circle.fill").foregroundStyle(.tint) } }
+                        if let remote = destinations.remote(for: destination.id) { PairingStatus(remote: remote) } else { Text("Saved · not connected").font(.caption).foregroundStyle(.secondary) }
+                        HStack {
+                            Button("Use Mac") { do { try destinations.select(destination.id) } catch { destinations.error = error.localizedDescription } }.disabled(destination.id == destinations.selectedID).accessibilityIdentifier("select-" + destination.id)
+                            Button("Rename") { renameID = destination.id; renameLabel = destination.label }.accessibilityIdentifier("rename-" + destination.id)
+                            Button("Forget", role: .destructive) { forgetID = destination.id }.accessibilityIdentifier("forget-" + destination.id)
+                        }.buttonStyle(.bordered)
+                    }.padding(.vertical, 5)
+                }
+            }
+            Section { Button("Add Mac", systemImage: "plus", action: addMac); Text("Switching stops local retries to the previous Mac. Work already accepted by that Mac continues there. Unconfirmed actions should be checked in that Mac’s history before retrying.").font(.footnote).foregroundStyle(.secondary) }
+        }.navigationTitle("Mac destinations")
+            .alert("Rename Mac", isPresented: Binding(get: { renameID != nil }, set: { if !$0 { renameID = nil } })) { TextField("Mac name", text: $renameLabel); Button("Cancel", role: .cancel) { renameID = nil }; Button("Save") { if let id = renameID { do { try destinations.rename(id, label: renameLabel) } catch { destinations.error = error.localizedDescription } }; renameID = nil } }
+            .confirmationDialog("Forget this Mac? Its key, cached history and local drafts will be removed from this device. Other Macs are unchanged.", isPresented: Binding(get: { forgetID != nil }, set: { if !$0 { forgetID = nil } }), titleVisibility: .visible) { Button("Forget Mac", role: .destructive) { if let id = forgetID { do { try destinations.forget(id) } catch { destinations.error = error.localizedDescription } }; forgetID = nil } }
+    }
 }
 struct ConnectionView: View {
     @EnvironmentObject var store: RemoteStore
-    @State private var forget = false
+    @EnvironmentObject var destinations: DestinationStore
+    @State private var adding = false
     var body: some View {
-        Form {
-            Section("Host") { ConnectionStatus(); LabeledContent("Mac", value: store.state["hostName"].string); Text(store.connection?.relay ?? "").textSelection(.enabled); Button("Reconnect") { store.disconnect(); store.activity(true) } }
-            Section("Privacy") { Text("Device keys are stored in this device’s Keychain. Cached history is encrypted. Revoke this device from the Mac’s Remote Access screen to remove access.") }
-            Section { Button("Forget this Mac", role: .destructive) { forget = true } }
-            Section { Text("Closing the Mac window keeps its host running. Quitting Proteus or putting the Mac to sleep makes it unavailable. This local prototype reconnects when opened; push notifications are not configured.").font(.footnote) }
-        }.navigationTitle("Connection").confirmationDialog("Forget this Mac and remove cached history?", isPresented: $forget) { Button("Forget Mac", role: .destructive) { store.forget() } }
+        DestinationsView { adding = true }
+            .safeAreaInset(edge: .bottom) { VStack(alignment: .leading, spacing: 7) { Text(destinations.selectedLabel).font(.headline); ConnectionStatus(); Text(store.connection?.relay ?? "").font(.caption).textSelection(.enabled); Button("Reconnect selected Mac") { store.disconnect(); store.activity(true) } }.padding().frame(maxWidth: .infinity, alignment: .leading).background(.bar) }
+            .sheet(isPresented: $adding, onDismiss: { destinations.cancelPairing() }) { NavigationStack { PairView().toolbar { Button("Cancel") { destinations.cancelPairing(); adding = false } } } }
+            .onChange(of: destinations.selectedID) { _, _ in adding = false }
     }
 }
 func statusLabel(_ value: String) -> String { ["awaiting_input": "Needs feedback", "completed": "Turn complete", "running": "Working", "queued": "Queued", "interrupted": "Interrupted", "failed": "Failed", "cancelled": "Cancelled"][value] ?? value }

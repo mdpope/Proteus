@@ -1,6 +1,9 @@
-# Omi processing
+# Omi processing in Transcription
 
-Proteus can observe the existing Mac Omi pipeline and prepare five ordinary schedules.
+Proteus can observe the existing Mac Omi pipeline and prepare three ordinary native schedules.
+The Transcription section also has a separate private notes & MacWhisper area for the two
+general transcript schedules. See [Transcription](transcription.md) for the verified
+ownership audit, source mapping, independent gates and replacement acceptance plan.
 The integration and all prepared schedules are **disabled by default**. Opening the
 screen, refreshing status, or preparing schedules never runs a worker or changes a
 LaunchAgent, Codex automation, native configuration, recording, iCloud file or vault.
@@ -8,14 +11,15 @@ Bluetooth collection and mobile library/review remain in the separate Omi iCloud
 
 ## Ownership and preparation
 
-The Omi screen has Overview, Schedules, Runs, Logs and Settings tabs. Configure the
+The Omi area within Transcription has Overview, Schedules, Runs, Logs and Settings tabs. Configure the
 existing pipeline state folder, installed Python executable, installed worker,
 native configuration file and Codex automation directory. These host paths stay in
 `omi.json` under the private Proteus data directory. The native configuration remains
 authoritative for models, transcription, semantic policy, domain routing, claims,
 review, retention and publication. Proteus does not copy those policies into its code.
 
-Prepare creates the following disabled schedules, with skipped misfires:
+The two areas prepare the following disabled schedules, with skipped misfires; each
+area touches only its own schedules:
 
 | Schedule | Default cadence | Existing command / responsibility |
 | --- | --- | --- |
@@ -43,17 +47,19 @@ assumed. Missing canonical policy files block preparation. Policy content stays 
 by its source repository. Separate professional routing continues through that existing
 policy; Proteus adds no professional workflow policy or data to this repository.
 
-Preparing again disables previously prepared Omi schedules while preserving their
-operator edits. It requires the current settings revision and rejects conflicting
+Preparing again disables schedules in the selected area while preserving their
+operator edits. General intake uses a separate execution gate and canonical manifest
+verification; its replacement does not require unloading native Omi services. It requires the current settings revision and rejects conflicting
 schedule identities. Preparation does not enable the global integration gate.
 
 ## Later testing and replacement
 
 This implementation does not perform automatic takeover. After independent acceptance
 and an operator-reviewed cutover, unload the three native LaunchAgents separately and
-pause each source Codex automation before activating its replacement. The Settings
+pause each source Codex automation before activating its replacement. The Omi Settings
 screen requires explicit cutover acknowledgment and verifies native services are
-unloaded before enabling. Unknown launchd ownership fails closed. Then enable the
+unloaded before enabling native processing. General intake instead verifies paused
+source automations through its separate settings and does not stop native services. Unknown launchd ownership fails closed. Then enable the
 individual regular schedules that should run. On non-macOS hosts launchd ownership is
 unknown, so native execution is unavailable.
 
@@ -61,7 +67,8 @@ The engine checks the current global gate when preparing and executing a run. Th
 native provider repeats the gate and ownership checks just before spawning. This
 covers disabled schedules manually run through generic paths and old run snapshots.
 Reserved Omi schedule identities cannot bypass checks by losing their integration
-marker. A Codex replacement additionally requires its original automation to be paused.
+marker. A general Codex replacement requires its independent gate, unchanged canonical
+source fingerprint and original source automation to be paused.
 Disabling prevents new execution, while an already-running native transaction is
 allowed to finish. Cancellation is an explicit run action.
 
@@ -118,14 +125,14 @@ across navigation and status refreshes.
 
 ## Validation
 
-Twelve synthetic Node tests verify disabled defaults, no native-file writes during
+Sixteen synthetic Node tests verify disabled defaults, no native-file writes during
 observation, five-schedule preparation, private policy/source import, revision checks,
 repeat-prepare disable behavior, active/unknown native-owner refusal, source automation
 pause enforcement, stale/stripped snapshots, bounded metadata filtering, escaping
 symlinks, argument arrays, cancellation (including stubborn descendant termination), timeout and
 nonzero/missing executables.
 Four authenticated loopback API tests also verify Omi preparation, disabled generic
-run/resume paths, log privacy/path validation, and Life website origin routing.
+run/resume paths, log privacy/path validation, and authenticated integration behavior.
 
 No real worker, Codex automation, native service cutover, audio processing, cleanup,
 retention action or publication was run for these tests. Live replacement acceptance

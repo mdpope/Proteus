@@ -62,3 +62,12 @@ legacy nutrition API and every database migration retain their existing contract
 them as a cosmetic cleanup. Preserve existing `APP_KEY`, Passport keys, data/storage paths,
 session cookie name, cache/Redis prefixes, domain and passkey relying-party configuration when
 preparing a later deployment. This source incorporation does not authorize a production migration.
+
+## Remote workspaces
+
+The strongly authenticated `/remote` page pairs this browser separately with Personal and Health
+Catalyst Macs through the existing encrypted Proteus relay. Chat and schedule content bypasses
+Laravel and remains encrypted in transit through the relay. Build assets from the full Proteus
+repository so the shared safe Markdown renderer is available. See `../docs/web-remote.md` for
+configuration, browser storage boundaries, supported controls and isolated validation. Existing
+Life data and website authentication remain unchanged.

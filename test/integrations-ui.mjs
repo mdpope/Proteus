@@ -52,7 +52,8 @@ try{
  assert.ok(!(await page.locator('#omi-log-output').innerText()).includes('synthetic-secret'));
  assert.equal(await page.locator('[data-page="life"]').count(),0);
  assert.equal(await page.locator('#topbar').count(),0);
- assert.equal(await page.locator('#tabs .tab-actions button').count(),3);
+ assert.equal(await page.locator('#tabs .tab-actions button').count(),4);
+ assert.equal(await page.getByRole('button',{name:'Terminal',exact:true}).count(),1);
  await page.locator('[data-page="schedules"]').click();
  assert.equal(await page.locator('[data-tab="feature-omi"]').count(),1);
  await page.locator('[data-tab="feature-omi"]').click();
@@ -65,7 +66,7 @@ try{
  await page.locator('#provider-usage').waitFor({state:'visible'});
 
  // Real WebContentsView must disappear while the HTML file picker is modal.
- await app.evaluate(async({app},{home})=>{const service=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getService();const fs=process.mainModule.require('node:fs');fs.mkdirSync(home+'/workspace/Nested',{recursive:true});fs.writeFileSync(home+'/workspace/Nested/Existing.md','# Existing note');const config=service.context.config();service.context.mutate(value=>{value.workspaces[0].cwd=home+'/workspace';value.workspaces[0].additionalDirectories=[];},config.revision);},{home});
+ await app.evaluate(async({app},{home})=>{const service=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getService();const fs=process.mainModule.require('node:fs');fs.mkdirSync(home+'/workspace/Nested',{recursive:true});fs.writeFileSync(home+'/workspace/Nested/Existing.md','# Existing note');fs.mkdirSync(home+'/shared-repository/Docs',{recursive:true});fs.writeFileSync(home+'/shared-repository/Docs/Shared.md','# Shared repository note');fs.mkdirSync(home+'/every-chat',{recursive:true});const config=service.context.config();service.context.mutate(value=>{value.workspaces[0].cwd=home+'/workspace';value.workspaces[0].additionalDirectories=[];value.libraryFolders=[home+'/shared-repository'];value.universalFolders=[home+'/every-chat'];},config.revision);},{home});
  await page.locator('#browser').click();await page.locator('#browser-area').waitFor();
  await page.waitForFunction(()=>document.querySelector('#browser-area').getBoundingClientRect().height>100);
  const browserTabId=await page.locator('.tabitem.selected [data-tab]').getAttribute('data-tab');
@@ -91,6 +92,10 @@ try{
  await page.locator('#markdown').click();await page.locator('[data-md-path="Nested"]').click();await page.locator('[data-md-path="Nested/Existing.md"]').click();await page.locator('#dialog-submit').click();
  await page.getByRole('heading',{name:'Updated externally',exact:true}).waitFor();
  assert.equal(await page.locator('[data-tab^="markdown:"]').count(),2,'Reopening refreshes the existing tab');
+ // Browse all configured roots, not only the selected workspace's main directory.
+ await page.locator('#markdown').click();await page.locator('#md-all-roots').click();
+ const allRoots=page.locator('[data-md-root-id]');assert.equal(await allRoots.count(),3);assert.match(await page.locator('#md-picker-list').innerText(),/Shared repositories/);assert.match(await page.locator('#md-picker-list').innerText(),/Every-chat folders/);
+ await allRoots.filter({hasText:'shared-repository'}).click();await page.locator('[data-md-path="Docs"]').click();await page.locator('[data-md-path="Docs/Shared.md"]').click();await page.locator('#dialog-submit').click();await page.getByRole('heading',{name:'Shared repository note',exact:true}).waitFor();assert.equal(await page.locator('[data-tab^="markdown:"]').count(),3);
  // Existing browser tab remains usable, and cancelling a dialog restores its view.
  await page.locator('[data-tab="'+browserTabId+'"]').click();
  await page.locator('#browser-area').waitFor();
@@ -133,5 +138,5 @@ try{
  assert.equal(await page.locator('[data-tab="feature-omi"]').count(),1);
  await page.reload();await page.locator('[data-tab="feature-omi"]').waitFor();
  assert.equal(await page.locator('[data-page="life"]').count(),0);assert.equal(await page.locator('[data-tab="feature-life"]').count(),0);
- assert.deepEqual(errors,[]);console.log(JSON.stringify({passed:true,checks:['Omi disabled gate','five sections','settings draft persistence','three paused native schedules','managed stale-edit preservation','private logs withheld','Life opt-in visibility','persistent Omi tab','usage visibility persistence','compact icon tab actions','browser modal visibility','nested Markdown folders and multiple files','Markdown modal fits','explicit Markdown reopen refreshes','late usage refresh preserves other dialogs','Claude selection','native Life shell','Life and Omi tabs coexist','both feature tabs restore','Life disable removes only Life']}));
+ assert.deepEqual(errors,[]);console.log(JSON.stringify({passed:true,checks:['Omi disabled gate','five sections','settings draft persistence','three paused native schedules','managed stale-edit preservation','private logs withheld','Life opt-in visibility','persistent Omi tab','usage visibility persistence','compact icon tab actions','browser modal visibility','nested Markdown folders and multiple files','Markdown modal fits','all configured repository roots','explicit Markdown reopen refreshes','late usage refresh preserves other dialogs','Claude selection','native Life shell','Life and Omi tabs coexist','both feature tabs restore','Life disable removes only Life']}));
 }finally{if(app)await app.close();fs.rmSync(home,{recursive:true,force:true});}

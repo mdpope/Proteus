@@ -33,3 +33,16 @@ if (measurementList) {
         if (event.target.matches('.remove-measurement')) event.target.closest('.oil-measurement').remove();
     });
 }
+
+// Pairings belong to this signed-in site account and are removed on explicit logout.
+const logoutForm = document.querySelector('form[action$="/logout"]');
+logoutForm?.addEventListener('submit', async event => {
+    if (logoutForm.dataset.remoteCleared) return;
+    event.preventDefault();
+    const { PairingStore } = await import('./remote-client.js');
+    const account = document.body.dataset.browserAccount;
+    const channel = new BroadcastChannel('proteus-remote-account');
+    channel.postMessage({ type: 'logout', account }); channel.close();
+    try { const store = new PairingStore(account); await store.clear(); store.close(); } finally { logoutForm.dataset.remoteCleared = 'true'; logoutForm.requestSubmit(); }
+});
+if (document.querySelector('#remote-workspace')) import('./remote.js');

@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {once} from 'node:events';
-import {ClaudeProvider,ClaudeRPC,claudeModel,stopClaudeProcess,claudeAccountAvailable} from '../src/claude.js';
+import {ClaudeProvider,ClaudeRPC,claudeModel,stopClaudeProcess,claudeAccountAvailable,claudeQuota} from '../src/claude.js';
 import {normalizeProviderUsage,ProviderUsageCache} from '../src/usage.js';
 import {providerUsageSummary} from '../public/usage.js';
 const model={value:'test',displayName:'Synthetic',supportedEffortLevels:['low','high'],supportsFastMode:true};
@@ -119,4 +119,28 @@ test('Claude recognizes authenticated profile-only initialization without exposi
   assert.equal(claudeAccountAvailable({tokenSource:'none',apiProvider:'firstParty'}),false);
   const c=new Fake();c.initialize=async()=>({models:[model],account:{email:'synthetic@example.invalid',organization:'synthetic',subscriptionType:'Claude Pro',apiProvider:'firstParty'}});
   const p=new ClaudeProvider({clientFactory:()=>c});const s=await p.status();assert.equal(s.available,true);assert.equal(s.models.length,1);assert.equal(JSON.stringify(s).includes('synthetic@example.invalid'),false);
+});
+
+test('Claude structured usage uses 0–100 percentages and never exposes session or attribution data',()=>{
+  const q=claudeQuota({rate_limits_available:true,subscription_type:'max',session:{model_usage:{private:123}},behaviors:{skills:['private-skill']},rate_limits:{five_hour:{utilization:0.25,resets_at:null},seven_day:{utilization:20,resets_at:'2026-10-05T19:00:00Z'},seven_day_sonnet:null,model_scoped:[{display_name:'Provider model bucket',utilization:50,resets_at:null}],extra_usage:{is_enabled:false,utilization:100}}});
+  assert.equal(q.windows[0].remainingPercent,99.75);assert.equal(q.windows[1].remainingPercent,80);assert.equal(q.windows[2].remainingPercent,50);assert.equal(q.windows.length,3);
+  assert.equal(JSON.stringify(q).includes('private'),false);assert.equal('subscription_type' in q,false);assert.equal('observedAt' in q,false);
+  assert.equal(claudeQuota({rate_limits_available:true,rate_limits:{five_hour:{utilization:null,resets_at:'invalid'}}}).windows[0].remainingPercent,null);
+  assert.equal(claudeQuota({rate_limits_available:true,rate_limits:{five_hour:{utilization:-1}}}).windows[0].remainingPercent,null);
+  assert.equal(claudeQuota({rate_limits_available:false,rate_limits:null}).available,false);
+});
+test('Claude fresh quota coalesces, is bounded, sends no user turn and closes only its probe',async()=>{
+  let count=0,initTimeout,requestTimeout,requestPayload,args;const probe=new Fake();probe.initialize=async(hooks,timeout)=>{initTimeout=timeout;};probe.request=async(payload,timeout)=>{requestPayload=payload;requestTimeout=timeout;await new Promise(r=>setImmediate(r));return {rate_limits_available:true,rate_limits:{five_hour:{utilization:10}}};};probe.write=()=>assert.fail('Usage must not run a model turn');
+  const p=new ClaudeProvider({quotaTimeoutMs:100,clientFactory:options=>{count++;args=options.args;return probe;}});const active=new Fake();p.active=active;
+  const [a,b]=await Promise.all([p.quota(),p.quota()]);assert.equal(count,1);assert.equal(a.windows[0].remainingPercent,90);assert.deepEqual(a,b);assert.deepEqual(requestPayload,{subtype:'get_usage'});assert.ok(initTimeout<=100&&requestTimeout<=100);assert.ok(args.includes('--no-session-persistence'));assert.equal(probe.closed,true);assert.equal(active.closed,undefined);
+});
+test('Claude unavailable structured quota does not reuse a previous account event',async()=>{
+  const c=new Fake();c.request=async()=>({rate_limits_available:false,rate_limits:null});const p=new ClaudeProvider({clientFactory:()=>c});p.rateLimits=new Map([['five_hour',{id:'five_hour',remainingPercent:80}]]);assert.equal((await p.quota()).available,false);
+});
+test('Claude quota cleanup denial blocks repeated process creation',async()=>{
+  let count=0;const c=new Fake();c.request=async()=>({rate_limits_available:true,rate_limits:{five_hour:{utilization:10}}});c.close=async()=>{throw new Error('cleanup EPERM');};const p=new ClaudeProvider({clientFactory:()=>{count++;return c;}});
+  assert.equal((await p.quota()).available,false);assert.match((await p.quota()).error,/cleanup EPERM/);assert.equal(count,1);
+});
+test('Claude provider shutdown closes an in-flight quota probe',async()=>{
+  const probe=new Fake();let reject;probe.initialize=()=>new Promise((_,r)=>{reject=r;});probe.close=async()=>{probe.closed=true;reject?.(new Error('Closed'));};const p=new ClaudeProvider({clientFactory:()=>probe});const pending=p.quota();await p.close();await pending;assert.equal(probe.closed,true);assert.equal(p.quotaClient,null);
 });

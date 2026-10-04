@@ -13,7 +13,8 @@ and manifests; this repository owns the generic app and provider adapters.
 4. `CHANGELOG.md`: recent changes; `docs/planned-updates.md`: the remaining backlog.
 5. The feature document relevant to your change: `providers.md`, `schedules.md`, `permissions.md`,
    `context-loading.md`, `workspaces.md`, `browser.md`, `credentials.md`, `chat-rendering.md`,
-   `remote.md`, `omi.md`, `life.md`, or `apple-build.md`.
+   `remote.md`, `web-remote.md`, `mobile-destinations.md`, `transcription.md`, `omi.md`,
+   `terminals.md`, `markdown-picker.md`, `life.md`, or `apple-build.md`.
 
 Git and merged PRs are the implementation history. These documents explain behavior and decisions;
 they do not replace reading the relevant module. Update them when behavior changes. Never assume
@@ -38,7 +39,10 @@ that a previous conversation is available to the next agent.
 | Native UI and remote store | `ios/Proteus/`, `ios/project.yml`, `ios/Proteus.xcodeproj` |
 | VS Code companion | `extensions/vscode/` |
 | Local Mac package | `scripts/package-mac.mjs` |
-| Omi integration and native process execution | `src/omi.js`, `src/local-process.js`, `public/omi.js` |
+| Transcription, Omi and native process execution | `src/transcription.js`, `src/omi.js`, `src/local-process.js`, `public/omi.js` |
+| Configured-root Markdown picker | `src/workspace-files.js`, `public/markdown-picker.js` |
+| Ghostty VT terminal profiles and local PTYs | `src/terminals.js`, `public/terminals.js`, desktop IPC |
+| Durable desktop tab descriptors | `desktop/workspace-session.cjs`, `public/app.js` |
 | Life and full website application | `src/life.js`, `public/life.js`, `web/` |
 | Reproducible Apple simulator builds/tests | `scripts/apple-build.mjs` |
 
@@ -91,7 +95,60 @@ coordinate signing across machines. Remote pairing is separate from Apple signin
 See `chat-controls.md` for queue/steer semantics, `mcp-auth.md` for sign-in recovery, and `providers.md` for Codex/Claude compatibility limits. Physical iOS installation remains an explicit operation on the operator’s designated signing Mac; simulator verification does not update devices.
 
 
-## October 3: Omi, native Life and Claude expansion
+## October 4 continuation: Transcription, terminals and remote clients
+
+This section supersedes earlier deployment/timeout statements below. Final desktop/mobile
+installation and live Life connection acceptance will be recorded separately after the combined build.
+
+- Transcription now separates **Omi** from **private notes & MacWhisper**, with independent execution
+  gates and ordinary schedules. Existing five IDs/history remain compatible. Both general schedules
+  verify their installed Codex definition against canonical operator workflows manifests, attach explicit policy
+  paths, and reject changed/replayed source snapshots. Policy remains in operator workflows; organization workflows is unchanged.
+- Fresh observation found all three native LaunchAgents loaded and both source Codex automations
+  ACTIVE with canonical parity. Native/general gates and takeover confirmations remain false;
+  all five installed replacement schedules remain paused. No processing owner was changed and no
+  live transcription workflow ran through Proteus. The installed legacy schedules need preparation
+  with the new metadata after the combined build. See `transcription.md` for scope and cutover.
+- Installed-host Codex is now healthy. A forced catalog refresh returned seven models, including
+  both transcript workflow models. Two bounded synthetic turns through the already installed signed
+  host verified exact selected instructions, no echo of an unselected disposable AGENTS marker,
+  no tool calls, native continuation, and observed usage. A subsequent single-file disposable check
+  also verified a real native write approval, one-time approval reply, and exact written content.
+  Neither test selected operational vault content. This does not certify transcript filing,
+  permissions for real workflow tools, or exclusion of every global instruction source. No runtime,
+  security, global AGENTS, source automation or operational vault change was needed to recover it.
+- Markdown browsing includes every configured workspace main/additional root, shared repository
+  and every-chat folder, with **All folders** navigation. Revoked/retargeted roots are checked again
+  on every operation. Folder creation and filenames remain relative to the selected nested folder.
+- Interactive terminal tabs use Ghostty VT WebAssembly and local PTYs. Profiles support shell,
+  command, starting folder, font and theme; a read-only native Ghostty import maps supported keys.
+  Trusted main-frame desktop IPC is the only terminal control path. Tabs retain live shells across
+  navigation; process restart restores descriptors with explicit **Resume new shell**, suppressing
+  saved startup commands. Renderer failures offer **Reconnect view** without launching a second shell.
+- Desktop session restoration now covers tab order/active selection, chats, schedules, feature tabs,
+  Markdown and private browser views. Browser native horizontal gestures navigate history while
+  preserving horizontal content scrolling; pinch updates bounded zoom. See `browser.md`.
+- Website code has been deployed with Proteus remote views. The relay is an independent encrypted
+  transport service; live TLS, two-host packet routing and host-isolation checks passed. No nutrition
+  migration or production database schema mutation was part of that code deployment. Real paired
+  browser/mobile end-to-end usage remains distinct from transport and synthetic client validation.
+- Native Life backup restoration verification and the separately approved additive version-2 upgrade
+  have completed. Core table schemas/row hashes and the nutrition digest remained unchanged; only
+  two native audit ledgers were added. All seven database-referenced original evidence files were
+  read and hash-verified through approved SFTP. Life remains configured but off pending Keychain
+  access and final app acceptance; no production evidence upload/test record was created. Personal
+  and work hosts keep independent pairing keys, caches and permissions on web/mobile destinations.
+
+Validation: 19 focused terminal/root/API tests passed, including a real PTY; terminal desktop tests
+passed eight groups including typed interaction, delayed initial output and reconnecting a failed
+renderer to the same process. The signed packaged app passed the seven pre-reconnect terminal groups,
+strict deep signature verification, and unchanged vendor Copilot bytes/signatures. The package rebuilds
+only node-pty in its copied application, preserving the source Node ABI. The existing full desktop
+shell passed 21 groups, including all-root Markdown browsing. Separate workspace restart/mobile/web results are recorded in their feature
+docs and will be included in the combined final validation. No production app was installed by these
+terminal checks. Final deployment must rebuild the latest source after all parallel changes finish.
+
+## October 3: Omi, native Life and Claude expansion (earlier snapshot)
 
 - Synced the Source checkout to upstream `1f61b9b`; work is on `codex/omi-life-claude`.
   The separate Mnemosyne checkout is unchanged. Its full 263-file Laravel application is
@@ -149,9 +206,9 @@ authenticated health confirms zero active runs, Life off/unconfigured, all five 
 paused, and all three native Omi owners loaded. Copilot reports 19 live models and Claude 12;
 Codex still reports its startup timeout. This does not certify live MariaDB or Omi cutover.
 
-Next: establish approved read-only server access for live Life records. Omi replacement, production website deployment, schema
-changes, and domain/relay changes remain separate reviewed work. Keep the encrypted relay as
-an independent supervised service; Docker is optional packaging, not a protocol requirement.
+At that earlier validation point, live Life access and website/relay deployment were pending. See
+the October 4 continuation above for their newer status. Keep the encrypted relay as an independent
+supervised service; Docker is optional packaging, not a protocol requirement.
 
 ## Previously validated update: chat controls and second provider
 

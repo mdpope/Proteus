@@ -2,6 +2,7 @@ import { requestPresentation, mountStructured } from './tool-presentation.js';
 import { conversation, forgetConversation } from './conversation.js';
 import { renderRemote } from './remote.js';
 import { initOmi, renderOmi } from './omi.js';
+import { initTerminals, renderTerminal, openTerminalDialog, openTerminalProfiles, disposeTerminalUi } from './terminals.js';
 import { initLife, renderLife, renderLifeSetup } from './life.js';
 import { initMarkdownPicker, openMarkdownPicker } from './markdown-picker.js';
 import { initFeatures, renderContext, renderStandup, renderCredentials, fillBrowserLogin, contextPicker, contextSelection, bindContextPicker, modelPicker, modelControls, modelSelection, contextSize, refreshModels, sessionDetails, bindSessionDetails, bindPaths } from './features.js';
@@ -12,13 +13,47 @@ const friendly = value => ({ awaiting_input:'Needs feedback', completed:'Turn co
 const badge = status => `<span class="badge ${escape(status)}">${escape(friendly(status))}</span>`;
 const time = (value, timezone) => new Date(value).toLocaleString(undefined, { ...(timezone ? { timeZone: timezone } : {}), month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
 let toastTimer, usageValue = null, usageBusy = false;
-let restoredFeatureTabs = false;
+let workspaceReady=false, workspaceRestoring=false, workspaceClosing=false, lastWorkspace='';
 const lifeVisible = () => state.data?.life?.enabled === true && state.data?.life?.configured === true;
-function saveFeatureTabs() { try { localStorage.setItem('proteus.feature-tabs',JSON.stringify(state.tabs.filter(tab=>['omi','life'].includes(tab.type)).map(tab=>tab.type))); } catch {} }
-function openFeatureTab(type) { if(type==='life'&&!lifeVisible())return;openTab({id:'feature-'+type,type,label:type==='omi'?'Omi':'Life'});saveFeatureTabs(); }
+function saveWorkspace() {
+  if(!workspaceReady || workspaceRestoring || workspaceClosing)return;
+  const session={schemaVersion:1,active:state.tab,page:state.page,tabs:state.tabs.map(tab=>({id:tab.id,type:tab.type,label:tab.label,...(tab.type==='browser'?{url:tab.info?.url||''}:{}),...(tab.type==='markdown'?{file:tab.markdown?.file}:{}),...(tab.type==='terminal'?{terminal:tab.terminal}:{})}))};
+  const json=JSON.stringify(session);if(json===lastWorkspace)return;lastWorkspace=json;
+  if(window.desktop?.workspaceSession)window.desktop.workspaceSession({action:'save',session}).catch(error=>{lastWorkspace='';toast(error.message);});
+  else try{localStorage.setItem('proteus.workspace',json);}catch{}
+}
+function openFeatureTab(type) { if(type==='life'&&!lifeVisible())return;openTab({id:'feature-'+type,type,label:type==='omi'?'Transcription':'Life'}); }
 function restoreFeatureTabs() {
-  if(!restoredFeatureTabs){restoredFeatureTabs=true;try{for(const type of JSON.parse(localStorage.getItem('proteus.feature-tabs')||'[]'))if(['omi','life'].includes(type)&&(type!=='life'||lifeVisible())&&!state.tabs.some(t=>t.type===type))state.tabs.push({id:'feature-'+type,type,label:type==='omi'?'Omi':'Life'});}catch{}}
   if(!lifeVisible()){state.tabs=state.tabs.filter(tab=>tab.type!=='life');if(!state.tabs.some(t=>t.id===state.tab))state.tab='overview';}
+}
+async function restoreWorkspace() {
+  workspaceRestoring=true;
+  try {
+    let saved=window.desktop?.workspaceSession?await window.desktop.workspaceSession({action:'get'}):JSON.parse(localStorage.getItem('proteus.workspace')||'null');
+    if(!saved){let legacy=[];try{legacy=JSON.parse(localStorage.getItem('proteus.feature-tabs')||'[]');}catch{}saved={tabs:[...state.tabs,...legacy.filter(type=>['omi','life'].includes(type)).map(type=>({id:'feature-'+type,type,label:type==='omi'?'Transcription':'Life'}))],active:'overview',page:'schedules'};}
+    const tabs=[], existingBrowser=window.desktop?await window.desktop.browser({action:'list'}):[];
+    for(const entry of saved.tabs||[]) {
+      const tab={...entry};
+      if(tab.type==='life'&&!lifeVisible())continue;
+      if(tab.type==='run'&&!state.data.runs.some(run=>run.id===tab.id))continue;
+      if(tab.type==='schedule'&&!state.data.schedules.some(schedule=>schedule.id===tab.id))continue;
+      if(tab.type==='markdown') {
+        try {tab.markdown=await api('/api/markdown',{file:tab.file});}
+        catch(error){tab.markdown={file:tab.file,content:'',error:error.message};}
+      }
+      if(tab.type==='browser') {
+        if(!window.desktop)continue;
+        // A renderer reload reuses the live view; an app restart creates a private tab.
+        const previous=tab.id;let info=existingBrowser.find(info=>info.id===tab.id);
+        if(!info){info=await window.desktop.browser({action:'create'});tab.info={...info,url:tab.url||''};tab.id=info.id;tabs.push(tab);if(saved.active===previous)saved.active=tab.id;if(tab.url)void window.desktop.browser({action:'navigate',id:tab.id,url:tab.url}).catch(error=>toast(error.message));continue;}
+        tab.info=info;
+      }
+      if(!tabs.some(other=>other.id===tab.id))tabs.push(tab);
+    }
+    state.tabs=tabs.length?tabs:state.tabs;state.page=saved.page||'schedules';state.tab=state.tabs.some(tab=>tab.id===saved.active)?saved.active:'overview';
+  } catch(error) {toast(error.message);return;}
+  finally {workspaceRestoring=false;}
+  workspaceReady=true;render();saveWorkspace();
 }
 async function setUsageVisibility(visible) { const settings=state.data.settings;await api('/api/settings',{settings:{...settings,appearance:{...settings.appearance,showProviderUsage:visible}},expectedRevision:settings.revision});await refresh(true);if(visible)void refreshUsage(true); }
 
@@ -55,6 +90,7 @@ async function refreshUsage(force = false) {
 }
 function toast(text) { $('#toast').textContent = text; $('#toast').style.display = 'block'; clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').style.display = 'none', 5500); }
 async function api(url, data) {
+  if(workspaceClosing)throw new Error('Proteus is closing.');
   const response = await fetch(url, data === undefined ? {} : { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(data) });
   const result = await response.json(); if (!response.ok) throw new Error(result.error || response.statusText); return result;
 }
@@ -93,10 +129,11 @@ function render() {
   const activePage=['omi','life'].includes(activeTab?.type)?activeTab.type:state.page;
   const waiting = data.runs.filter(r => ['awaiting_input','failed','interrupted'].includes(r.status)).length;
   $('#sidebar').innerHTML = `<div class="brand"><span class="brandmark">⤨</span>Proteus</div><div class="subtitle">Your agent control room</div>${[
-    ['schedules','◷','Schedules', data.schedules.length], ['runs','◉','Run history', data.runs.length], ['attention','◇','Needs attention',waiting], ['omi','◌','Omi',''], ...(lifeVisible()?[['life','♡','Life','']]:[]), ['context','▦','Workspaces',''], ['standup','☷','Standup',''], ['credentials','⚿','Credentials',''], ['providers','⌘','Providers',''], ['remote','⇄','Remote access',''], ['settings','⚙','Setup','']
+    ['schedules','◷','Schedules', data.schedules.length], ['runs','◉','Run history', data.runs.length], ['attention','◇','Needs attention',waiting], ['omi','◌','Transcription',''], ...(lifeVisible()?[['life','♡','Life','']]:[]), ['context','▦','Workspaces',''], ['standup','☷','Standup',''], ['credentials','⚿','Credentials',''], ['providers','⌘','Providers',''], ['remote','⇄','Remote access',''], ['settings','⚙','Setup','']
   ].map(([id,icon,label,count]) => `<button class="navitem ${activePage === id ? 'active':''}" data-page="${id}"><span><span>${icon}</span><span class="navlabel">${label}</span></span>${count !== '' ? `<span class="count">${count}</span>`:''}</button>`).join('')}<div class="sidebottom"><section id="provider-usage" aria-label="Provider allowance remaining"></section><div><span class="dot"></span>Local runner online</div><p>Prototype · v${data.version}<br>${data.scheduler.background ? 'Keeps running in the menu bar.' : 'Runs while the host is running.'}</p><button class="subtle" id="data-folder">Open data folder ↗</button></div>`;
   renderUsage();
   renderTabs();
+  saveWorkspace();
   $('#main').classList.remove('browser-main', 'run-main');
   const tab = state.tabs.find(t => t.id === state.tab);
   if (tab?.type === 'schedule') renderSchedule(tab.id);
@@ -106,6 +143,7 @@ function render() {
   else if (tab?.type === 'standup') renderStandup();
   else if (tab?.type === 'omi') renderOmi();
   else if (tab?.type === 'life') renderLife();
+  else if (tab?.type === 'terminal') renderTerminal(tab);
   else if (state.page === 'context') renderContext();
   else if (state.page === 'credentials') renderCredentials();
   else if (state.page === 'remote') renderRemote({ api, escape, toast });
@@ -318,6 +356,7 @@ function importDialog() { showDialog('<h2>Import schedules</h2><p class="note">P
 function markdownDialog() { openMarkdownPicker('open'); }
 function renderMarkdown() {
   const markdown=state.tabs.find(t=>t.id===state.tab)?.markdown || state.markdown;
+  if(markdown?.error){$('#main').innerHTML=`<div class="heading"><h1>${escape(markdown.file?.split('/').pop())}</h1></div><p class="banner">${escape(markdown.error)}</p><p class="note">This file must still be inside a currently authorized workspace.</p><button id="markdown-retry">Retry file</button>`;$('#markdown-retry').onclick=async()=>{try{const value=await api('/api/markdown',{file:markdown.file});Object.assign(markdown,value,{error:null});renderMarkdown();}catch(error){toast(error.message);}};return;}
   $('#main').innerHTML=`<div class="heading"><div><div class="eyebrow">Markdown preview</div><h1>${escape(markdown?.file.split('/').pop())}</h1><div class="filepath">${escape(markdown?.file)}</div></div></div><article class="card markdown-preview"></article><details><summary>Markdown source</summary><pre class="markdown">${escape(markdown?.content||'')}</pre></details>`;
   ProteusMarkdown.mount($('.markdown-preview'), markdown?.content || '', {
     copy: text => window.desktop ? window.desktop.copyText(text) : navigator.clipboard.writeText(text),
@@ -342,11 +381,12 @@ async function openMessageLink(source, cwd) {
 }
 
 function renderTabs() {
-  const icons={markdown:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M6 15V9l3 3 3-3v6m3-4h4m-2-2v6m-2-2 2 2 2-2"/>',browser:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c5 5 5 13 0 18-5-5-5-13 0-18Z"/>',chat:'<path d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-8l-6 4v-4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/>'};
-  $('#tabs').innerHTML='<div class="tab-list">'+state.tabs.map(tab=>`<div class="tabitem ${state.tab===tab.id?'selected':''}"><button data-tab="${escape(tab.id)}" title="${escape(tab.info?.url || tab.label)}">${tab.type==='browser' ? (tab.info?.loading?'◌':'◎') : tab.type==='run'?'◉':tab.type==='markdown'?'▤':tab.type==='life'?'♡':'◷'} &nbsp;${escape(tab.label || 'New tab')}</button>${tab.id!=='overview'?`<button class="tabclose" aria-label="Close ${escape(tab.label || 'tab')}" data-close="${escape(tab.id)}">×</button>`:''}</div>`).join('')+'</div><div class="tab-actions">'+[['markdown','Markdown','markdown'],['browser','Browser','browser'],['new-chat','New chat','chat']].map(([id,label,icon])=>`<button id="${id}" class="tab-create" aria-label="${label}" title="${label}"><span aria-hidden="true">+</span><svg aria-hidden="true" viewBox="0 0 24 24">${icons[icon]}</svg></button>`).join('')+'</div>';
+  const icons={markdown:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M6 15V9l3 3 3-3v6m3-4h4m-2-2v6m-2-2 2 2 2-2"/>',browser:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c5 5 5 13 0 18-5-5-5-13 0-18Z"/>',terminal:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m6 8 4 4-4 4m6 0h5"/>',chat:'<path d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-8l-6 4v-4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/>'};
+  $('#tabs').innerHTML='<div class="tab-list">'+state.tabs.map(tab=>`<div class="tabitem ${state.tab===tab.id?'selected':''}"><button data-tab="${escape(tab.id)}" title="${escape(tab.info?.url || tab.label)}">${tab.type==='browser' ? (tab.info?.loading?'◌':'◎') : tab.type==='run'?'◉':tab.type==='markdown'?'▤':tab.type==='life'?'♡':tab.type==='terminal'?'⌘':'◷'} &nbsp;${escape(tab.label || 'New tab')}</button>${tab.id!=='overview'?`<button class="tabclose" aria-label="Close ${escape(tab.label || 'tab')}" data-close="${escape(tab.id)}">×</button>`:''}</div>`).join('')+'</div><div class="tab-actions">'+[['markdown','Markdown','markdown'],['browser','Browser','browser'],['terminal','Terminal','terminal'],['new-chat','New chat','chat']].map(([id,label,icon])=>`<button id="${id}" class="tab-create" aria-label="${label}" title="${label}"><span aria-hidden="true">+</span><svg aria-hidden="true" viewBox="0 0 24 24">${icons[icon]}</svg></button>`).join('')+'</div>';
   document.querySelectorAll('[data-tab]').forEach(button=>button.onclick=()=>{state.tab=button.dataset.tab;const tab=state.tabs.find(t=>t.id===state.tab);if(tab.type==='schedule')schedule(tab.id);else render();});
-  document.querySelectorAll('[data-close]').forEach(button=>button.onclick=async()=>{try{const id=button.dataset.close;const tab=state.tabs.find(t=>t.id===id);if(tab?.type==='browser')await window.desktop.browser({action:'close',id});forgetConversation(id);state.tabs=state.tabs.filter(t=>t.id!==id);saveFeatureTabs();if(state.tab===id)state.tab='overview';render();}catch(e){toast(e.message);}});
+  document.querySelectorAll('[data-close]').forEach(button=>button.onclick=async()=>{try{const id=button.dataset.close;const tab=state.tabs.find(t=>t.id===id);if(tab?.type==='browser')await window.desktop.browser({action:'close',id});if(tab?.type==='terminal'){const current=await window.desktop.terminal({action:'state'});if(current.sessions.some(session=>session.id===tab.terminal.id))await window.desktop.terminal({action:'close',id:tab.terminal.id});disposeTerminalUi(tab.id);}forgetConversation(id);state.tabs=state.tabs.filter(t=>t.id!==id);saveWorkspace();if(state.tab===id)state.tab='overview';render();}catch(e){toast(e.message);}});
   $('#new-chat').onclick=chatDialog;$('#markdown').onclick=markdownDialog;
+  $('#terminal').onclick=()=>openTerminalDialog();
   $('#browser').onclick=async()=>{try{if(!window.desktop)throw new Error('Open the desktop app to use browser tabs.');const info=await window.desktop.browser({action:'create'});openTab({id:info.id,type:'browser',label:info.title||'New tab',info});}catch(error){toast(error.message);}};
 }
 
@@ -408,6 +448,8 @@ function renderSettings() {
   $('#main').innerHTML=`<div class="heading"><div><div class="eyebrow">Configuration</div><h1>Setup & settings.</h1><p class="muted">Plain JSON settings for new chats and schedules. Existing runs keep their captured configuration.</p></div><button class="primary" id="save-settings">Save settings</button></div><div class="grid"><section class="card"><h2>Workspace</h2><div class="field"><label>Default working directory</label><input id="settings-cwd" value="${escape(settings.workspace.cwd)}"></div><div class="field"><label>Additional repositories / directories · one per line</label><textarea id="settings-roots" rows="5">${escape(settings.workspace.additionalDirectories.join('\n'))}</textarea></div><div class="row"><div><label>Default provider</label><select id="settings-provider"><option value="copilot" ${settings.provider==='copilot'?'selected':''}>GitHub Copilot</option><option value="codex" ${settings.provider==='codex'?'selected':''}>Codex</option><option value="claude" ${settings.provider==='claude'?'selected':''}>Claude</option><option value="rehearsal" ${settings.provider==='rehearsal'?'selected':''}>Local rehearsal</option></select></div><div><label>Default model</label>${modelPicker('settings-model',settings.model,settings.provider)}<button class="subtle" id="settings-model-refresh">↻ Refresh models</button></div></div>${modelControls('settings-model',settings)}<div class="field"><label>Time zone</label><input id="settings-timezone" value="${escape(settings.timezone)}"></div><div class="field"><label>Skill directories · one per line</label><textarea id="settings-skills" rows="3">${escape(settings.skillDirectories.join('\n'))}</textarea></div><details><summary>Default MCP servers · JSON</summary><p class="note">Use command arguments and environment references. Keep secrets in provider authentication or the system keychain.</p><textarea id="settings-mcp" rows="10">${escape(JSON.stringify(settings.mcpServers,null,2))}</textarea></details></section><section class="card"><h2>Where your files live</h2><p class="note">New app schedules:</p><div class="filepath">${escape(state.data.home)}/schedules/</div><p class="note">Run history:</p><div class="filepath">${escape(state.data.home)}/runs/</div><p class="note">Settings:</p><div class="filepath">${escape(settings.file)}</div><button id="open-settings">Open settings file ↗</button><hr class="divider"><h3>Repository-owned schedules</h3><p class="note">An imported organization workflows schedule remains owned by its organization workflows automation manifest. Change that source with AI, export it, then refresh the local copy. The schedule editor shows both locations.</p><h3>Workspace context</h3><p class="note">Copilot receives all listed roots and can read their instructions and files. The VS Code companion also sends the active file, selection location, and open file paths. VS Code’s code index, extension tools, and existing chat history are not copied.</p><h3>Copilot session storage</h3><p class="note">Choose an existing folder for new Copilot sessions. Existing sessions keep their original location. This also holds Copilot configuration; changing it can require sign-in.</p><input id="settings-copilot-home" placeholder="Provider default (~/.copilot)" value="${escape(settings.copilotDataDirectory || '')}"><h3>Data directory</h3><p class="note">Set PROTEUS_HOME before launching to use another data directory. Moving live run history is not performed by this settings screen.</p></section></div>`;
   $('#main').insertAdjacentHTML('afterbegin',`<section class="card setup-appearance"><h2>Appearance</h2><label><input id="settings-show-usage" type="checkbox" ${settings.appearance?.showProviderUsage!==false?'checked':''}>Show AI usage in the sidebar</label></section><section id="life-setup"></section>`);
   renderLifeSetup($('#life-setup'));
+  $('#main').insertAdjacentHTML('beforeend','<section class="card"><h2>Terminal</h2><p class="note">Manage shell, font, colors and optional startup commands.</p><button id="terminal-profiles">Terminal profiles</button></section>');
+  $('#terminal-profiles').onclick=()=>openTerminalProfiles();
   $('#save-settings').onclick=async()=>{try{await api('/api/settings',{settings:{...settings,appearance:{...settings.appearance,showProviderUsage:$('#settings-show-usage').checked},copilotDataDirectory:$('#settings-copilot-home').value.trim() || undefined,workspace:{cwd:$('#settings-cwd').value.trim(),additionalDirectories:lines($('#settings-roots').value)},provider:$('#settings-provider').value,model:$('#settings-model').value.trim(),...modelSelection('settings-model'),timezone:$('#settings-timezone').value.trim(),skillDirectories:lines($('#settings-skills').value),mcpServers:JSON.parse($('#settings-mcp').value)},expectedRevision:settings.revision});await refresh(true);toast('Settings saved.');}catch(e){toast(e.message);}};
   $('#settings-model-refresh').onclick=()=>refreshModels('settings-model','settings-provider',true);
   $('#settings-provider').onchange=()=>refreshModels('settings-model','settings-provider');
@@ -416,24 +458,27 @@ function renderSettings() {
   $('#main').insertAdjacentHTML('beforeend',permissionSettings());
   bindPermissionControls();
 }
+window.desktop?.onShutdown?.(()=>{workspaceClosing=true;liveEvents.close();clearInterval(refreshInterval);clearInterval(usageInterval);clearTimeout(liveRefreshTimer);});
 window.desktop?.onBrowserState(infos=>{
+  if(workspaceRestoring||workspaceClosing)return;
   const ids=new Set(infos.map(info=>info.id));
   state.tabs=state.tabs.filter(tab=>tab.type!=='browser'||ids.has(tab.id));
   for(const info of infos){const tab=state.tabs.find(t=>t.id===info.id);if(tab){tab.info=info;tab.label=info.title||'New tab';}else state.tabs.push({id:info.id,type:'browser',label:info.title||'New tab',info});}
-  if(!state.tabs.some(tab=>tab.id===state.tab)){state.tab='overview';render();}else{renderTabs();updateBrowserControls();}
+  if(!state.tabs.some(tab=>tab.id===state.tab)){state.tab='overview';render();}else{renderTabs();updateBrowserControls();}saveWorkspace();
 });
 window.desktop?.onAddressFocus(()=>$('#browser-url')?.focus());
 window.desktop?.onBrowserResize(()=>requestAnimationFrame(browserBounds));
 window.addEventListener('resize',()=>requestAnimationFrame(browserBounds));
 window.addEventListener('keydown',event=>{if((event.metaKey||event.ctrlKey)&&event.key==='l'&&$('#browser-url')){event.preventDefault();$('#browser-url').focus();}});
+initTerminals({state,escape,toast,showDialog,openTab});
 initFeatures({state,escape,api,toast,refresh,openTab,showDialog,lines,restoreBrowser:()=>requestAnimationFrame(browserBounds)});
 initOmi({state,escape,api,toast,refresh,openSchedule:schedule,openRun:id=>{const run=state.data.runs.find(item=>item.id===id);if(run)runTab(run);}});
 initLife({state,escape,api,toast,refresh,openTab,showDialog,openSettings:()=>{state.page='settings';state.tab='overview';state.tabs[0].label='Setup';render();}});
 initMarkdownPicker({api,escape,showDialog,openTab,toast,defaultWorkspaceId:()=>state.data.context.defaultWorkspaceId});
 new MutationObserver(()=>{if($('#dialog').open)window.desktop?.browser({action:'hide'}).catch(e=>toast(e.message));else requestAnimationFrame(browserBounds);}).observe($('#dialog'),{attributes:true,attributeFilter:['open']});
-refresh().then(() => refreshUsage()).catch(e=>toast(e.message));
-setInterval(() => refreshUsage(), 60_000);
-setInterval(()=>{if((!document.activeElement?.matches('input,textarea,select') || !!$('#conversation-host'))&&!$('#dialog').open)refresh().catch(()=>{});},1500);
+refresh().then(restoreWorkspace).then(() => refreshUsage()).catch(e=>toast(e.message));
+const usageInterval=setInterval(() => refreshUsage(), 60_000);
+const refreshInterval=setInterval(()=>{if((!document.activeElement?.matches('input,textarea,select') || !!$('#conversation-host'))&&!$('#dialog').open)refresh().catch(()=>{});},1500);
 
 window.desktop?.onRemote(() => { state.page = 'remote'; state.tab = 'overview'; render(); });
 let liveRefreshTimer;

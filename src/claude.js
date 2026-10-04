@@ -30,6 +30,22 @@ export function claudeAccountAvailable(account={}) {
     (typeof account.subscriptionType==='string'&&account.subscriptionType.length>0)||
     (typeof account.email==='string'&&account.email.length>0);
 }
+// get_usage percentages are 0–100; streamed rate_limit_event utilization is 0–1.
+// Only copy allowance windows. Session totals, account profile and behavior/transcript data stay private.
+export function claudeQuota(value) {
+  const source='Claude Code /usage';
+  if(value?.rate_limits_available!==true||!value.rate_limits||typeof value.rate_limits!=='object')return {provider:'claude',source,available:false,windows:[],error:'Claude subscription allowance is unavailable for this sign-in. API-key and third-party sessions do not report subscription quota.'};
+  const windows=[];
+  const add=(id,label,window)=>{
+    if(!window||typeof window!=='object')return;
+    const used=window.utilization,remainingPercent=typeof used==='number'&&Number.isFinite(used)&&used>=0&&used<=100?100-used:null;
+    const reset=typeof window.resets_at==='string'?Date.parse(window.resets_at):NaN;
+    windows.push({id,label,remainingPercent,resetAt:Number.isFinite(reset)?new Date(reset).toISOString():null,unlimited:false});
+  };
+  for(const [id,window] of Object.entries(value.rate_limits))if(/^(five_hour|seven_day(?:_[a-z0-9_]+)?)$/.test(id))add(id,({five_hour:'5-hour allowance',seven_day:'Weekly allowance',seven_day_oauth_apps:'Weekly connected-app allowance',seven_day_opus:'Weekly Opus allowance',seven_day_sonnet:'Weekly Sonnet allowance'})[id]||id.replaceAll('_',' '),window);
+  for(const [index,window] of (Array.isArray(value.rate_limits.model_scoped)?value.rate_limits.model_scoped:[]).entries())if(typeof window?.display_name==='string')add('model_'+index,window.display_name,window);
+  return {provider:'claude',source,available:windows.length>0,windows,...(!windows.length?{error:'Claude returned no subscription allowance windows.'}:{})};
+}
 // Only signal the process group created for this child. EPERM is unknown liveness,
 // never evidence that a process exited. All signal exceptions stay inside this promise.
 export async function stopClaudeProcess(child, {platform=process.platform,signalGroup=(pid,signal)=>process.kill(pid,signal),graceMs=500,pollMs=20}={}) {
@@ -71,7 +87,7 @@ export class ClaudeRPC extends EventEmitter {
   write(value){if(this.ended)throw new Error('Claude connection closed.');this.child.stdin.write(JSON.stringify(value)+'\n');}
   request(request,timeout=30000){return new Promise((resolve,reject)=>{const id=String(++this.sequence);const timer=setTimeout(()=>{this.pending.delete(id);reject(new Error(`Claude ${request.subtype} timed out.`));},timeout);this.pending.set(id,{resolve,reject,timer});try{this.write({type:'control_request',request_id:id,request});}catch(error){clearTimeout(timer);this.pending.delete(id);reject(error);}});}
   respond(id,response){if(!this.ended)this.write({type:'control_response',response:{subtype:'success',request_id:id,response}});}
-  async initialize(hooks={}){return this.request({subtype:'initialize',hooks,skills:[],agents:{}});}
+  async initialize(hooks={},timeout=30000){return this.request({subtype:'initialize',hooks,skills:[],agents:{}},timeout);}
   close(){
     if(!this.closing)this.closing=stopClaudeProcess(this.child,{graceMs:this.killGraceMs??500}).catch(error=>{this.cleanupFailure=error;throw error;});
     return this.closing;
@@ -102,7 +118,24 @@ export class ClaudeProvider {
     if(this.cleanupError)status={...status,available:false,error:this.cleanupError.message};
     return status;
   }
-  async quota(){if(this.rateLimits?.size)return {provider:'claude',windows:[...this.rateLimits.values()],available:true,source:'Claude runtime rate-limit events',observedAt:this.rateLimitsObservedAt};return {provider:'claude',windows:[],available:false,source:'Claude Code',error:'Claude Code does not expose subscription quota through its supported control protocol. Check Usage in the Claude app. Per-turn tokens are recorded separately.'};}
+  async quota(){
+    if(this.quotaPending)return this.quotaPending;
+    this.quotaPending=this.readQuota().finally(()=>{this.quotaPending=null;});return this.quotaPending;
+  }
+  async readQuota(){
+    const unavailable=error=>({provider:'claude',windows:[],available:false,source:'Claude Code /usage',error});
+    if(this.cleanupClients.size&&await this.retryPendingCleanup())return unavailable(this.cleanupError.message);
+    const client=this.client(['--no-session-persistence','--system-prompt','Proteus read-only account usage discovery.']);this.quotaClient=client;
+    const deadline=Date.now()+(this.options.quotaTimeoutMs??8000),remaining=()=>Math.max(1,deadline-Date.now());let quota;
+    try{await client.initialize({},remaining());quota=claudeQuota(await client.request({subtype:'get_usage'},remaining()));}
+    catch(error){
+      const message=/timed out/i.test(error.message)?'Claude account usage request timed out.':'This Claude runtime could not provide structured subscription usage. Update Claude Code or check Usage in the Claude app.';
+      quota=this.rateLimits?.size?{provider:'claude',windows:[...this.rateLimits.values()],available:true,source:'Claude runtime rate-limit events',observedAt:this.rateLimitsObservedAt,error:message}:unavailable(message);
+    }
+    try{await client.close();}catch(error){this.cleanupClients.add(client);this.cleanupError=error;quota=unavailable(error.message);}
+    if(this.quotaClient===client)this.quotaClient=null;return quota;
+  }
+
   async run({run,prompt,emit,ask,update,signal,stream}) {
     if(this.cleanupError)throw this.cleanupError;
     if(this.active)throw new Error('A Claude turn is already active.');
@@ -176,5 +209,5 @@ export class ClaudeProvider {
       if(cleanupError)throw cleanupError;
     }
   }
-  async close(){const results=await Promise.allSettled([...new Set([this.active,...this.cleanupClients].filter(Boolean))].map(client=>client.close()));const failed=results.find(result=>result.status==='rejected');if(failed){this.cleanupError=failed.reason;throw failed.reason;}}
+  async close(){const results=await Promise.allSettled([...new Set([this.active,this.quotaClient,...this.cleanupClients].filter(Boolean))].map(client=>client.close()));const failed=results.find(result=>result.status==='rejected');if(failed){this.cleanupError=failed.reason;throw failed.reason;}}
 }

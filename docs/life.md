@@ -97,9 +97,8 @@ Example **synthetic** MariaDB profile (password is never stored here):
 Alternatively use a direct TLS endpoint with `tls: {"caFile": "/absolute/trusted/ca.pem"}`;
 certificate validation cannot be disabled. Optional client certificates use `certFile`/`keyFile`.
 Saved SSH aliases use BatchMode, strict host key checking and loopback-only port forwarding.
-An SSH restriction is a stop condition, not a reason to route around server policy. The current
-proteus.example SSH account prohibits database forwarding, so production has not been connected.
-No production database queries, schema changes or credential changes were performed by Life.
+An SSH restriction is a stop condition, not a reason to route around server policy. The initially inspected account prohibited forwarding. A separately approved, narrowly scoped
+Life SSH/SFTP route was subsequently provisioned and verified on October 4; see validation below.
 
 Omitting `readOnly` defaults to true. MariaDB read-only mode is enforced both with a server
 `SET SESSION TRANSACTION READ ONLY` and adapter mutation guards. Queries have bounded timeouts.
@@ -107,32 +106,71 @@ Every operation rechecks the bound membership; nutrition queries and mutations a
 the individual user. Changing membership invalidates subsequent access. Secrets are retrieved
 from macOS Keychain only for the connection and are not logged. For the managed website, the
 approved vault remains authoritative; any host Keychain entry is a runtime copy, not its sole
-portable credential record. No credential was provisioned during this implementation.
+portable credential record. Site credential provisioning is an administrator operation.
 
-Remote evidence currently requires an authorized local storage mirror configured as storageRoot;
-the desktop does not silently download uploads or bypass remote filesystem permissions.
+Shared SFTP reads explicitly retrieve originals on demand without bypassing filesystem permissions.
+A local storageRoot mirror supports existing originals but cannot accept remote-database uploads.
 
-## MariaDB upgrade procedure (deferred)
+## Verified MariaDB upgrades and shared originals
 
-Automatic MariaDB Apply is deliberately blocked pending a verified server-native backup workflow.
-This does not block a read-only connection to an otherwise compatible database. The app ships
-`src/life-migrations/002-native-action-retry.sql` as the reviewed additive migration for a future
-explicitly approved administrator upgrade:
+Existing MariaDB upgrades require a fresh independently restored SQL backup. Setup’s reviewed
+plan disables Apply until verification succeeds. Choose the private restore connection profile
+and its owner-only SQL dump in the Mac file chooser, then select **Verify restored backup**.
+The server administrator must first create the dump and restore it into a separate database;
+Proteus never restores over the source or creates a pretend backup receipt.
 
-1. Obtain an approved database connection; do not alter an SSH restriction without authorization.
-2. Review the exact bundled SQL and migration checksum and run compatibility/schema checks.
-3. Create a fresh server-native database and private-evidence backup in the site's recovery store,
-   record SHA-256 manifests, and verify restoration in an isolated database. Record nutrition row
-   counts, all meal/version/food links, soft-deleted entries and ordered row fingerprints.
-4. With explicit Apply authorization, apply only the bundled additive SQL through the approved
-   administration route. MariaDB DDL commits implicitly; a transaction cannot undo CREATE TABLE.
-   The statements are idempotent, and existing checksum mismatches are a hard stop.
-5. Compare all protected nutrition fingerprints/counts and schema/history, then reconnect read-only
-   and inspect reports. Enable writes only with an explicitly writable private profile and the
-   matching native schema checksum. No nutrition rewrite is needed.
+The verifier opens both connections read-only. It compares schemas and every row of the 14
+protected Life tables, plus native ledger tables when present. It excludes authentication-secret
+tables (users, passkeys, OAuth secrets and sessions); this check is not a full authentication
+recovery test. The source profile must authorize its bound workspace; the restore credential
+needs only SELECT/SHOW CREATE on protected tables. The dump is streamed through SHA-256.
+Independent database identities, matching protected state, dump digest and verification times
+are bound by a Mac-private HMAC key. Verification records the administrator’s restored-dump
+workflow; matching state alone does not cryptographically prove which SQL file populated a
+server. Keep the actual restore logs with the backup.
 
-This procedure has not been executed on production. Live DB integration, restored MariaDB upgrade
-validation and remote evidence access remain outstanding; the app must not claim they passed.
+Receipts expire after 30 minutes. Apply rechecks the receipt, source identity, dump checksum
+and current protected data before any DDL. Changed data, altered receipts or a receipt from
+another Mac fail closed. SQLite continues to use an integrity-checked native backup. MariaDB
+DDL commits implicitly: the shipped additive migration is restart-safe, creates only the two
+native ledger tables, and does not attempt a destructive rollback. Every upgrade still checks
+unchanged nutrition fingerprints. A fresh backup and restore verification is needed for a
+later upgrade; an old receipt cannot authorize it.
+
+The same verifier ships in `src/life-backup-cli.js`:
+
+```sh
+node src/life-backup-cli.js --source-profile /private/source.json \
+  --restore-profile /private/restored.json --dump /private/backup.sql
+```
+
+The private source profile receives a `backupReceipt` reference. Receipt/key files remain in
+Proteus’s private Life application-data directory; public status only returns timestamps and
+counts. A Keychain lookup times out after 15 seconds with an unlock/approval message.
+
+For a shared database, new original uploads require shared SFTP storage:
+
+```json
+{"evidence":{"mode":"sftp","sshAlias":"approved-life-storage","root":"/srv/site/storage/app/private"}}
+```
+
+Use an administrator-approved SSH alias with strict host-key verification, internal SFTP and
+ACL access restricted to the website’s private storage. New originals get UUID paths under
+`evidence/<workspace>/`; uploads are staged, downloaded and hash-verified, then renamed before
+the database attachment is inserted. Transaction failures remove only the operation’s new file.
+The website user must have inherited read access; files use mode 0640. Existing relative paths
+remain compatible with Laravel. Reads enforce canonical directory containment, regular files,
+recorded byte length and SHA-256, with a 20 MiB bound. A local mirror may read existing originals
+but cannot accept uploads for a remote database. Transfer errors fail closed without exposing
+private paths. Network interruptions can leave unreferenced staged files; reconciliation should
+review these without deleting existing originals.
+
+Production validation on 2026-10-04: an independently restored backup matched 14 protected tables
+and 1,237 rows. The reviewed native v2 migration then preserved every original protected table’s
+schema and row digest, including 219 foods, 243 food versions and 699 meals. Only native ledger
+tables were added. All seven database-referenced original evidence files passed live SFTP byte-length and SHA-256
+checks. No production test records or evidence uploads were created. Feature activation remains gated on the operator’s credential
+unlock; the connection is configured with Life disabled until then.
 
 ## Service contract
 
@@ -145,6 +183,7 @@ Authenticated desktop-local routes:
 
 - `POST /api/life`: settings and expectedRevision.
 - `POST /api/life/setup-plan`: local-new owner fields, private-profile/profileFile, or upgrade-current to review the already configured private database without reselecting its file.
+- `POST /api/life/backup-verify`: optional sourceProfileFile, restoredProfileFile and dumpFile; read-only comparison and a private verification receipt, returning only counts/times.
 - `POST /api/life/setup-apply`: planId and literal confirmation `APPLY`.
 - `POST /api/life/data`: section and query; overview, nutrition, garage, fuel, captures, security,
   connections. Capture pagination returns page/pageSize/hasMore; 100 records per page.
@@ -166,18 +205,18 @@ Upstream declares MIT in composer.json; original package identifiers and depende
 The user-facing website branding is Proteus, while `brain:*`, `BRAIN_*`, OAuth scopes, internal
 models/routes, legacy compatibility and original migrations remain unchanged. No credentials,
 records, uploads, runtime environments, generated assets or dependencies were imported into Git.
-The desktop excludes web runtime dependencies; existing source checkout and live site are untouched.
+The desktop excludes web runtime dependencies; the upstream source checkout stays separate.
 
-Website and relay deployment remain deferred. A hosted Laravel service can share the domain with
-an eventual relay, but the persistent encrypted relay should remain a separately supervised
-process/container behind a separate route/subdomain. Preserve explicit pairing and end-to-end
-encryption. Never reuse a website session as desktop authorization.
+Website remote workspaces now use the existing end-to-end encrypted protocol through a separately
+supervised relay. See `docs/web-remote.md` for origin controls, per-host credentials and browser
+pairing; current production rollout status belongs to `docs/handoff.md`. Website sign-in never
+substitutes for desktop pairing authorization.
 
 Before any website deployment, preserve APP_KEY, Passport keys, private storage, passkey origins,
 legacy nutrition owner/key hashes, OAuth clients/scopes and explicit session/cache prefixes. Pin
 and restore-test database/uploads/release backups, compare historical nutrition reports and row
 links, validate login/MFA/passkeys/legacy client/MCP/tenant isolation, and retain rollback to the
-previous release. No production release or relay change was made here.
+previous release. Production deployment is a separate administrator operation.
 
 ## Verification
 
@@ -186,11 +225,12 @@ state, install/Apply gating, stale plan rejection, verified additive backups, im
 history, complete-day averages, deleted-meal retry protection, tenant isolation and revoked roles,
 read-only profile defaults, MariaDB adapter/session guards, capture/purchase/oil semantics,
 maintenance completion, fuel calculations, calendar estimates, original evidence integrity and
-SHA deduplication. MariaDB guards are tested with a fake driver; no live MariaDB test is claimed.
+SHA deduplication. Restore receipt tests cover tampering, expiry, identity, changed data/dumps and secret-table exclusion. Shared-storage tests cover verified promotion, rollback cleanup and path escape; production reads and additive migration are described above.
 On October 3, all 15 native database tests passed; the Electron native Life suite passed 13
 check groups and the full shell integration passed 20 groups, including persistence and disabling
 Life. The overall Node suite passed 164 tests. Screenshots used synthetic records and were reviewed.
-Run `node --test test/life.test.js`, `node test/life-ui.mjs`, and `node test/integrations-ui.mjs`.
+On October 4, 19 backend tests and 14 native UI groups passed, including the restored-backup wizard.
+Run `node --test test/life.test.js test/life-backup.test.js`, `node test/life-ui.mjs`, and `node test/integrations-ui.mjs`.
 
 The imported Laravel suite previously passed all 45 tests / 251 assertions, Vite built successfully,
 and disposable password/MFA browser tests exercised nine pages plus desktop/mobile nutrition.

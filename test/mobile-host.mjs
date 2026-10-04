@@ -35,23 +35,33 @@ const app = await startServer({ home, port: 0, timers: false, providers: { copil
   }
 } } });
 const schedule = app.engine.schedules.list()[0]; app.engine.schedules.save({ ...app.engine.schedules.get(schedule.id), workspace: { cwd: workspace, additionalDirectories: [] } }, schedule.revision);
-await app.remote.configure({ enabled: true, mode: 'external', relayURL: 'ws://127.0.0.1:4328', publicURL: 'ws://127.0.0.1:4328', relayToken: token });
+await app.remote.configure({ label: 'Build Mac', enabled: true, mode: 'external', relayURL: 'ws://127.0.0.1:4328', publicURL: 'ws://127.0.0.1:4328', relayToken: token });
 await until(() => app.remote.status === 'online', 20_000);
 const receive = app.remote.receive.bind(app.remote);
 app.remote.receive = async (...args) => { try { return await receive(...args); } catch (error) { console.log('Synthetic protocol rejection: ' + error.message); throw error; } };
+// A second independent execution host shares the relay, never the first host's state.
+const secondHome = path.join(home, 'second-host'); fs.mkdirSync(secondHome);
+const secondWorkspace = path.join(secondHome, 'workspace'); fs.mkdirSync(secondWorkspace);
+fs.writeFileSync(path.join(secondWorkspace, 'AGENTS.md'), '# Synthetic second host only');
+atomicJSON(path.join(secondHome, 'settings.json'), { schemaVersion: 1, provider: 'rehearsal', model: '', timezone: 'UTC', workspace: { cwd: secondWorkspace, additionalDirectories: [] }, skillDirectories: [], mcpServers: {} });
+const unavailable = { status: async () => ({available:false,models:[],error:'Synthetic host'}) };
+const second = await startServer({home: secondHome, port: 0, timers: false, providers: {rehearsal: new RehearsalProvider(), copilot: unavailable, codex: unavailable, claude: unavailable}});
+await second.remote.configure({label:'Work Mac',enabled:true,mode:'external',relayURL:'ws://127.0.0.1:4328',publicURL:'ws://127.0.0.1:4328',relayToken:token});
+await until(() => second.remote.status === 'online', 20_000);
 const fixture = http.createServer(async (req, res) => {
   if (req.url === '/latest') { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ context: app.engine.listRuns()[0]?.schedule.context, reasoningEffort: app.engine.listRuns()[0]?.schedule.reasoningEffort, contextTier: app.engine.listRuns()[0]?.schedule.contextTier, queuedMessages: app.engine.listRuns()[0]?.queuedMessages })); return; }
   if (!req.url.startsWith('/pair')) { res.writeHead(404); res.end(); return; }
+  const target = req.url.includes('host=second') ? second : app;
   // Every native test starts with an idle synthetic runner, including after a failed test.
-  for (const run of app.engine.listRuns()) if (['running', 'queued', 'awaiting_input'].includes(run.status)) app.engine.cancel(run.id);
-  app.context.mutate(config => { config.favorites = []; }, app.context.config().revision);
-  const defaults = app.settings.get();
-  app.settings.save({...defaults,provider:req.url.includes("models=1")?"copilot":"rehearsal",model:req.url.includes("models=1")?"synthetic-mobile":"",reasoningEffort:"",contextTier:"default"},defaults.revision);
+  for (const run of target.engine.listRuns()) if (['running', 'queued', 'awaiting_input'].includes(run.status)) target.engine.cancel(run.id);
+  target.context.mutate(config => { config.favorites = []; }, target.context.config().revision);
+  const defaults = target.settings.get();
+  target.settings.save({...defaults,provider:req.url.includes("models=1")?"copilot":"rehearsal",model:req.url.includes("models=1")?"synthetic-mobile":"",reasoningEffort:"",contextTier:"default"},defaults.revision);
   authConnected = false;
   const key = secret(); const aad = 'synthetic:cross-platform';
-  const invite = await app.remote.pairing();
+  const invite = await target.remote.pairing();
   res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ code: invite.code, key, aad, box: seal(key, { test: 'CryptoKit ↔ Node' }, aad) }));
 });
 await new Promise(resolve => fixture.listen(4329, '127.0.0.1', resolve));
 console.log('Synthetic mobile test host ready. Relay: ' + (process.env.PROTEUS_TEST_CONTAINER === '1' ? 'Docker container' : 'Node process'));
-for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, async () => { await new Promise(resolve => fixture.close(resolve)); await app.close(); await relay.close(); fs.rmSync(home, { recursive: true, force: true }); process.exit(0); });
+for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, async () => { await new Promise(resolve => fixture.close(resolve)); await app.close(); await second.close(); await relay.close(); fs.rmSync(home, { recursive: true, force: true }); process.exit(0); });

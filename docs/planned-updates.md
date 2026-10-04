@@ -3,19 +3,27 @@
 Maintain this as the single backlog. Design rationale is in `decisions.md`; recent changes are in
 `../CHANGELOG.md`. Items below are status, not promises of completed validation.
 
-## Omi / Life expansion (October 3)
+## Transcription / Life / remote expansion (October 3–4)
 
-Implemented in source: Omi observation/control screens, paused native and Codex replacement
-schedules, per-job execution lanes, gate/ownership checks, full Proteus-branded Life web source,
-optional native Life database screens/setup, persistent feature tabs, workspace Markdown creation,
-hideable allowance meters, Claude selection, and Apple build helpers. See the handoff for actual checks.
+Implemented in source: separate Omi and general transcription areas, independently gated native
+and Codex schedules, canonical source parity checks, per-native-job lanes, full Proteus-branded
+website, native Life setup/records, all-root Markdown browsing, Ghostty terminal tabs/profiles,
+full desktop tab restoration/browser gestures, hideable allowance meters, Claude support, and
+separately paired Mac destinations on mobile/web. See the handoff for actual validation.
 
-Deferred by request: production website deployment, nutrition-data migration, domain/relay changes,
-and replacement of existing native Omi services/Codex automations. The live Life database also
-needs an approved private connection: existing SSH forwarding is prohibited, so live records are
-not yet connected. Local installer/record verification uses disposable data. Cutover requires draining
-native transactions, disabling original owners, then validating replacement behavior before any
-claim of unattended reliability. Bluetooth, recording capture and mobile review remain separate.
+Website code-only deployment and live relay TLS/two-host routing checks have completed. Final
+combined desktop/mobile deployment and actual paired-client acceptance remain separate. Native
+Life backup restoration and the approved additive v2 upgrade are verified, preserving core table
+schemas/row hashes and the nutrition digest. Original evidence-file hashes also match. Life is
+configured but off pending Keychain access and final app acceptance; no production record writes
+or evidence uploads were used for verification.
+
+Existing native Omi services and Codex automations still own processing. Installed Codex catalog
+and two no-tools synthetic turns now pass, but real workflow tools, claims, context effects and
+retry acceptance remain to be verified. After the final desktop build, prepare replacements while
+disabled, review ownership, drain original transactions, then pause/unload only the corresponding
+original owners before enabling replacements. Observe bounded real outcomes before claiming
+unattended reliability. Bluetooth, recording capture and mobile review remain separate.
 
 Implemented in the workspace-context release:
 
@@ -79,7 +87,6 @@ See [workspaces](workspaces.md) and [credentials](credentials.md) for behavior a
 - Automatic reconciliation of foreign workflow manifests; currently use the owning repository
   exporter and explicit import/refresh.
 - Provider adapters beyond Copilot/Codex/Claude/rehearsal; Claude MCP/browser/steering parity; Codex native agent tool-filter parity and per-tool MCP approval interception; changing the provider of an existing chat.
-- Browser tab restoration across app restarts (website sign-in profiles already persist).
 - Paginated on-disk run storage as history grows.
 - Codex MCP OAuth controls, generic MCP elicitation/input forms, and editor-specific agent hook and extension-tool mappings. Copilot OAuth recovery is implemented per chat.
 - Bitwarden extension compatibility and broader token-broker/Keychain bootstrap integrations.

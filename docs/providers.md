@@ -178,11 +178,24 @@ retains its last known reading with a stale/error indication without hiding heal
 Copilot uses its premium-request quota. Codex uses native `account/rateLimits/read`, preferring all
 named limit buckets to the legacy single bucket. The compact summary uses the lowest reported
 remaining percentage across windows; the detail view retains every window and reset timestamp.
-Claude's supported protocol has no pre-turn account-quota read. It starts as unavailable and can
-show authoritative `rate_limit_event` utilization/reset windows observed during Proteus turns.
-Those events are explicitly observation data; their `observedAt` timestamp is retained separately
-from the cache check time. A missing percentage or reset stays unknown; local token counts never
-fill in subscription percentages.
+Claude uses the native `get_usage` control request, the structured equivalent of `/usage` published
+in the Agent SDK. This experimental response provides authoritative subscription windows before
+any model turn. A separate no-session-persistence probe has an eight-second request budget, closes
+with the existing bounded process cleanup, and never interrupts an active conversation. The probe
+only returns allowance windows; session costs, account identity and behavior/transcript attribution
+are discarded. Structured utilization is a percentage from 0 to 100, unlike streamed
+`rate_limit_event` utilization from 0 to 1. Missing utilization or reset remains unknown. API-key
+and third-party sign-ins may report no subscription allowance. Extra-usage credits are not combined
+with the subscription windows to invent an overall entitlement.
+
+Older runtimes that do not implement `get_usage` retain the observed-event fallback. Its
+`observedAt` timestamp remains separate from the cache check time. Local tokens never fill in an
+account percentage. Request failures remain explicit; cleanup failures retain ownership and block
+new probes until cleanup succeeds.
+
+Source: the official published
+[Agent SDK `SDKControlGetUsageRequest` and response types](https://app.unpkg.com/@anthropic-ai/claude-agent-sdk@0.3.211/files/sdk.d.ts).
+
 
 Installed-app quota validation also covers a Finder-like minimal PATH: the current signed
 `CodexCLI.app` layout inside the Codex/ChatGPT app is discovered directly, without a shell PATH
@@ -201,9 +214,22 @@ This prevents an access-denied cleanup from crashing the main process or accumul
 capability probes. Regression coverage includes denied TERM/KILL/probes, abort, concurrent close,
 status recovery and an actual stubborn descendant process.
 
-The signed installed-app Claude acceptance run emitted an authoritative five-hour limit event with
-status and reset time but no utilization value. Proteus retained that reset information and left
-percentage remaining unknown. Successful authentication or a completed turn must not synthesize
-an allowance percentage. Codex initialization still timed out in the signed installed-app check;
-its isolated CLI quota check is not equivalent to installed-host acceptance. The previously
-observed filesystem/privacy gate needs a fresh installed-host check after macOS approval.
+Earlier signed installed-app turn validation emitted a five-hour event with status/reset but no
+utilization. That event alone could not provide a percentage. A subsequent read-only `get_usage`
+check against the already signed-in app-bundled Claude Code 2.1.286 returned actual five-hour and
+weekly utilization, and the completed source adapter normalized both successfully. This required
+no model turn, credential extraction, browser control or new sign-in. The installed Proteus bundle
+still needs to be refreshed to consume this new reader.
+
+The earlier installed-host Codex timeout cleared without changing its runtime, global instructions
+or security configuration. On October 4 a forced installed-host catalog refresh returned seven
+models in 60 ms. A bounded two-turn synthetic check through the installed signed host verified an
+exact selected instruction marker, no echo of a separate unselected workspace AGENTS marker, no
+tool calls and same native session continuation with observed usage. No operational vault source
+was selected. This verifies the tested path, not global instruction exclusion or production workflow
+completion; transcript cutover still requires its separate ownership and real-outcome acceptance.
+
+A subsequent installed-host check created one exact marker file in a disposable workspace through
+Codex apply_patch, received the normal native file-write permission request, approved it once via
+Proteus, and verified the bytes. No persistent permission mode was broadened. This validates the
+approval round trip, not unattended permission coverage for real transcript workflows.

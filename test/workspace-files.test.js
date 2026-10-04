@@ -62,3 +62,13 @@ test('listing pages are bounded and sorted; Markdown reads and writes reject ove
  fs.writeFileSync(path.join(f.root,'large.md'),'x'.repeat(1_000_001));assert.throws(()=>f.files.read({rootId:f.id,file:'large.md'}),/1 MB/);
  fs.writeFileSync(path.join(f.root,'binary.md'),'nul\0binary');assert.throws(()=>f.files.read({rootId:f.id,file:'binary.md'}),/text/);
 });
+
+test('full context includes shared repositories and every-chat folders with live revocation',t=>{
+ const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-all-roots-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+ const primary=path.join(home,'primary'),shared=path.join(home,'shared'),universal=path.join(home,'universal');for(const p of [primary,shared,universal])fs.mkdirSync(p);
+ fs.mkdirSync(path.join(shared,'Nested'));fs.writeFileSync(path.join(shared,'Nested','Shared.md'),'# Shared');
+ let config={workspaces:[{id:'default',name:'Default',cwd:primary,additionalDirectories:[]}],libraryFolders:[shared],universalFolders:[shared,universal]};
+ const files=new WorkspaceFiles(()=>config),roots=files.roots().roots;assert.equal(roots.length,3);const library=roots.find(r=>r.path===shared);assert.equal(library.scope,'library');assert.equal(roots.find(r=>r.path===universal).scope,'universal');assert.equal(files.read({rootId:library.id,file:'Nested/Shared.md'}).content,'# Shared');
+ const folder=files.createFolder({rootId:library.id,directory:'Nested',name:'Child'});assert.equal(folder.directory,'Nested/Child');
+ config={...config,libraryFolders:[],universalFolders:[universal]};assert.throws(()=>files.createMarkdown({rootId:library.id,directory:'Nested',name:'Revoked'}),/unavailable/);assert.equal(fs.existsSync(path.join(shared,'Nested','Revoked.md')),false);
+});

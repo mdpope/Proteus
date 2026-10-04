@@ -2,7 +2,9 @@
 
 The Markdown action opens a folder picker with **Open existing** and **New file** modes.
 Choose a configured workspace root, enter subfolders, or use the breadcrumbs to move
-up. Roots include each workspace's main and additional folders. Unavailable roots are
+up. **All folders** includes each workspace's main/additional folders, shared repository roots
+and every-chat folders. The server passes the full live ContextStore configuration; the older
+workspace-array constructor remains compatible. Unavailable roots are
 shown disabled. The picker does not accept an arbitrary absolute filesystem path.
 
 Open existing lists folders and `.md` files (case insensitive). Select a file and
@@ -67,7 +69,7 @@ returns the active/default workspace's ID. Invoke `openMarkdownPicker('open')` f
 the Markdown action or `'new'` for a direct new-file action. `showDialog` retains the
 standard `close-dialog` and `dialog-submit` behavior.
 
-Seven synthetic filesystem tests verify root discovery, sorted/paged listings,
+Eight synthetic filesystem tests verify root discovery, sorted/paged listings,
 nested folder and document creation, exact no-overwrite preservation, invalid names,
 traversal, escaping/internal symlinks, changed root membership, alias retargeting and
 size/binary bounds. All test files live in disposable temporary roots. No real notes
@@ -78,3 +80,6 @@ Verification on October 3: seven filesystem tests and four authenticated API tes
 The full Electron regression verified native browser hiding/restoration, nested creation,
 multiple file tabs, refreshed disk contents, no horizontal clipping, and late usage-dialog
 responses preserving an unrelated draft. Tests used disposable workspace folders.
+
+October 4 follow-up: all eight filesystem tests and four authenticated API tests passed, including
+shared/every-chat root discovery and removal. The 20-group full desktop shell regression also passed.

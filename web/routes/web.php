@@ -4,6 +4,7 @@ use App\Http\Controllers\CaptureController;
 use App\Http\Controllers\FuelController;
 use App\Http\Controllers\GarageController;
 use App\Http\Controllers\NutritionController;
+use App\Http\Controllers\RemoteController;
 use App\Http\Controllers\SecurityController;
 use App\Http\Controllers\SetupController;
 use Illuminate\Support\Facades\Route;
@@ -17,6 +18,8 @@ Route::middleware('auth')->group(function () {
     Route::delete('/security/tokens/{token}', [SecurityController::class, 'revoke'])->middleware(['strong', 'password.confirm'])->name('security.revoke');
 });
 Route::middleware(['auth', 'strong'])->group(function () {
+    Route::get('/remote', [RemoteController::class, 'index'])->name('remote');
+    Route::get('/remote/session', [RemoteController::class, 'session'])->name('remote.session')->middleware('throttle:120,1');
     Route::get('/garage', [GarageController::class, 'index'])->name('garage');
     Route::get('/garage/{vehicle}', [GarageController::class, 'show'])->name('vehicles.show');
     Route::post('/garage/{vehicle}/tasks', [GarageController::class, 'task'])->name('tasks.store');

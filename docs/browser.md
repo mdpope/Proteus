@@ -37,3 +37,51 @@ If sign-in is needed, the run must ask the user instead of claiming an empty res
 Sources: [Electron WebContentsView](https://www.electronjs.org/docs/latest/api/web-contents-view),
 [Electron debugger](https://www.electronjs.org/docs/latest/api/debugger),
 [Playwright CDP connection](https://playwright.dev/docs/api/class-browsertype#browser-type-connect-over-cdp).
+
+## Desktop workspace and trackpad gestures
+
+Desktop tabs are recorded in `desktop-workspace.json` under the configured Proteus home,
+with owner-only file permissions and atomic replacement. The record contains tab descriptors,
+order and selection; it never contains Markdown contents, terminal output or startup commands,
+provider credentials, browser agent grants, or chat messages. A changed loopback port does not
+lose the workspace. The old Life/Transcription-only browser storage is migrated when present.
+
+On restart, schedules and chats must still exist. Life opens only when enabled and configured.
+Markdown is reread through the current authorized-root API; a removed or unauthorized file leaves
+an explanatory tab with Retry. Browser HTTP(S) addresses are reopened in new private views:
+Agent access is off, and no former run ownership is restored. Browser login sessions use the
+existing local browser profile. Browser history and page form drafts are not restored.
+Terminal tabs retain their profile and starting-folder descriptor, but no shell is started;
+Resume new shell rechecks current folder authorization and omits the profile startup command.
+Unsaved schedule edits, chat composer drafts, and webpage form drafts are not part of this record.
+Closing a tab updates the record. Closing the main window keeps the running host and tabs alive;
+quitting suppresses browser-removal notifications before disposing views, preserving the workspace.
+
+Two-finger horizontal wheel gestures navigate back/forward with a progressive edge arrow and
+animated release. Vertical scrolling, horizontally scrollable elements, modified wheels and
+pinches are left alone; a zoomed page can pan without navigating. A gesture must reach the
+threshold and stop before one navigation is committed. Forged page events cannot issue a gesture
+command, and the host accepts it only from the active browser view's main frame. On release, the outgoing page snapshot slides aside over the incoming page with a smooth easing
+curve. The snapshot exists only in a temporary isolated native overlay; it is never injected into
+the website DOM, written to disk, or exposed to page scripts. Page CSS/transforms are untouched.
+Reduced-motion preferences skip the slide; changing tabs, resizing, navigation or quitting cancels
+the overlay. Capture/loading/animation have short deadlines and fall back to normal navigation.
+This is a commit-time page slide with a progressive edge affordance during dragging, rather than
+Safari's interactive multi-page history compositor.
+
+Pinch zoom uses Chromium visual zoom from 1× to 3×. Browser views use Electron 44's isolated zoom
+mode, so same-origin tabs do not change each other's layout zoom and the Proteus shell is unaffected.
+Primary API references: [Electron webContents zoom APIs](https://www.electronjs.org/docs/latest/api/web-contents#contentssetvisualzoomlevellimitsminimumlevel-maximumlevel)
+and [isolated zoom mode](https://www.electronjs.org/docs/latest/api/web-contents#contentssetzoommodemode).
+The old BrowserWindow `swipe` event represents a three-finger gesture; it is not used for this
+requested two-finger behavior.
+
+Validation: `node --test test/workspace-session.test.js` checks descriptor validation, sensitive
+field exclusion and durable writes. `node test/desktop-workspace-ui.mjs` exercises a disposable full
+Electron app and real process restart: eleven checks passed, including mixed-tab order/selection,
+authorization and feature flags, private browser restoration, inert terminal restoration, native page-slide overlay appearance/disposal,
+visual pinch, isolated zoom, horizontal scrolling, and trusted/forged gesture events. Screenshots
+were inspected at `/private/tmp/proteus-workspace-restored.png` and
+`/private/tmp/proteus-workspace-browser.png`. The actual native slide frame is
+`/private/tmp/proteus-browser-slide.png` (the shell screenshot API omits native child views). The complete Node suite passed 190 tests and syntax
+checks passed. Physical trackpad feel remains a hands-on acceptance check.

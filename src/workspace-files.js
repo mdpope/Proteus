@@ -27,14 +27,21 @@ export class WorkspaceFiles {
   constructor(getWorkspaces) { if (typeof getWorkspaces !== 'function') throw new Error('Configured workspaces are required.'); this.getWorkspaces = getWorkspaces; }
   roots() {
     const roots = [];
-    for (const workspace of this.getWorkspaces()) {
+    const configuration = this.getWorkspaces();
+    const workspaces = Array.isArray(configuration) ? configuration : (configuration?.workspaces || []);
+    const configured = new Set(workspaces.flatMap(workspace=>[workspace.cwd,...(workspace.additionalDirectories||[])]).filter(value=>typeof value==='string').map(value=>path.resolve(value)));
+    const extra = [];
+    for(const [scope,label,folders] of [['library','Shared repositories',configuration?.libraryFolders],['universal','Every-chat folders',configuration?.universalFolders]]) {
+      for(const folder of folders||[]) { if(typeof folder!=='string'||!path.isAbsolute(folder)||configured.has(path.resolve(folder)))continue; configured.add(path.resolve(folder));extra.push({id:'context-'+scope,name:label,cwd:folder,scope,additionalDirectories:[]}); }
+    }
+    for (const workspace of [...workspaces,...extra]) {
       if (typeof workspace.id !== 'string' || !workspace.id) continue;
       const seen = new Set();
       for (const [index, configured] of [workspace.cwd, ...(workspace.additionalDirectories || [])].entries()) {
         if (typeof configured !== 'string' || !path.isAbsolute(configured)) continue;
         const root = path.resolve(configured); if (seen.has(root)) continue; seen.add(root);
         let available = false, canonicalRoot = null; try { available = fs.statSync(root).isDirectory(); if (available) canonicalRoot = fs.realpathSync(root); } catch { /* An unavailable root remains visible for explanation. */ }
-        roots.push({ id: rootId(workspace.id, root, canonicalRoot), workspaceId: workspace.id, workspaceName: workspace.name || workspace.id, name: path.basename(root) || root, path: root, primary: index === 0, available });
+        roots.push({ id: rootId(workspace.id, root, canonicalRoot), workspaceId: workspace.id, workspaceName: workspace.name || workspace.id, name: path.basename(root) || root, path: root, primary: index === 0 && !workspace.scope, scope: workspace.scope || 'workspace', available });
       }
     }
     return { roots };

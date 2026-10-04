@@ -25,7 +25,7 @@ export function remoteRun(run, offset = 0, permissions) {
 }
 export function remoteState(service) {
   const context = service.context.get(); const defaults = service.settings.get();
-  return { hostName: os.hostname(), schedules: service.engine.schedules.list().map(s => pick(s, scheduleKeys)),
+  return { hostName: service.remote?.config.label || os.hostname(), schedules: service.engine.schedules.list().map(s => pick(s, scheduleKeys)),
     runs: service.engine.listRuns().slice(0, 100).map(r => pick(r, ['id', 'title', 'status', 'createdAt', 'updatedAt'])), runCount: service.engine.listRuns().length,
     context: { ...pick(context, ['revision', 'refreshedAt', 'defaultWorkspaceId', 'workspaces', 'universalFolders', 'libraryFolders', 'favorites', 'errors']), entries: context.entries.map(remoteEntry) },
     defaults: pick(defaults, ['provider', 'model', 'reasoningEffort', 'contextTier', 'serviceTier', 'timezone']), providerStatus: service.catalog?.value || null, providerStatuses: Object.fromEntries(Object.entries(service.catalogs || {}).map(([id, catalog]) => [id, catalog.value])), protocol: 1 };
@@ -47,17 +47,18 @@ export class RemoteHost {
     // Also detect editor/AI changes to plain files; no filesystem secrets leave the projection.
     this.scan = setInterval(() => { if (this.config.enabled && [...this.peers.values()].some(p => p.device)) this.publish(); }, 2000);
   }
-  save() { atomicJSON(this.file, this.config); }
+  save() { atomicJSON(this.file, this.config); fs.chmodSync(this.file, 0o600); }
   addresses() {
     return Object.values(os.networkInterfaces()).flat().filter(i => i.family === 'IPv4' && !i.internal && /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(i.address)).map(i => `ws://${i.address}:${this.config.port}`);
   }
-  info() { return { enabled: this.config.enabled, mode: this.config.mode, status: this.status, error: this.error || null, hostId: this.config.hostId,
+  info() { return { enabled: this.config.enabled, mode: this.config.mode, status: this.status, error: this.error || null, hostId: this.config.hostId, label: this.config.label || os.hostname(),
     relayURL: this.config.relayURL || '', publicURL: this.config.publicURL || '', addresses: this.addresses(), port: this.config.port,
     devices: this.config.devices.map(d => ({ id: d.id, name: d.name, pairedAt: d.pairedAt, online: [...this.peers.values()].some(p => p.device?.id === d.id) })) }; }
   async configure(value) {
     if (typeof value.enabled !== 'boolean') throw new Error('Choose whether remote access is enabled.');
     if (!['local', 'external'].includes(value.mode || this.config.mode)) throw new Error('Choose local or external relay.');
     const next = { ...this.config, enabled: value.enabled, mode: value.mode || this.config.mode };
+    if (value.label !== undefined) { if (typeof value.label !== 'string' || !value.label.trim() || value.label.trim().length > 80 || /[\x00-\x1f]/.test(value.label)) throw new Error('Enter a Mac name between 1 and 80 characters.'); next.label = value.label.trim(); }
     if (value.port !== undefined) { if (!Number.isInteger(value.port) || value.port < 1024 || value.port > 65535) throw new Error('Choose a port between 1024 and 65535.'); next.port = value.port; }
     if (next.mode === 'external') {
       next.relayURL = validateRelayURL(value.relayURL || next.relayURL);
@@ -103,9 +104,9 @@ export class RemoteHost {
     const relay = validateRelayURL(publicURL || (this.config.mode === 'external' ? this.config.publicURL : this.addresses()[0] || `ws://127.0.0.1:${this.config.port}`));
     const expiresAt = new Date(Date.now() + 5 * 60_000).toISOString();
     this.invite = { key: secret(), expiresAt };
-    const capsule = { version: 1, relay, hostId: this.config.hostId, key: this.invite.key, expiresAt };
+    const capsule = { version: 1, relay, label: this.config.label || os.hostname(), hostId: this.config.hostId, key: this.invite.key, expiresAt };
     const code = `proteus://pair?data=${Buffer.from(JSON.stringify(capsule)).toString('base64url')}`;
-    return { code, expiresAt, qr: await QRCode.toDataURL(code, { margin: 2, width: 360, errorCorrectionLevel: 'M' }) };
+    return { code, browserURL: `https://proteus.example/remote#pair=${Buffer.from(JSON.stringify(capsule)).toString('base64url')}`, expiresAt, qr: await QRCode.toDataURL(code, { margin: 2, width: 360, errorCorrectionLevel: 'M' }) };
   }
   revoke(id) {
     this.config.devices = this.config.devices.filter(d => d.id !== id); this.save();

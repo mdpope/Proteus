@@ -1,6 +1,6 @@
 # Remote clients
 
-Proteus for iPhone/iPad controls the same Mac host as the desktop window. The Mac is the only
+Proteus for iPhone/iPad and the website can select among independently paired Macs. Each Mac is the only
 scheduler and provider execution host. The relay routes encrypted messages; it never runs agents,
 receives provider credentials, or reads workspace files. Mobile clients do not need a Copilot login.
 
@@ -76,9 +76,11 @@ identifier for updates, and avoid revoking the other Mac's signing identities du
 - Encrypted local history cache, reconnect, missed-event replay where available, then authoritative
   snapshot recovery. Old history is loaded on demand, rather than transmitting all sessions at once.
 
-This is a foreground local-network prototype. APNs notifications, remote browser viewing/input,
-artifact/file tabs, background auto-start at login, app-store packaging, multiple host switching,
-and importing VS Code-owned chats are not part of this increment. Closing a phone app does not
+Clients support local relays and shared internet relays over TLS. The destination picker keeps
+credentials, caches and drafts separate for each Mac. See [mobile destinations](mobile-destinations.md)
+and [web remote access](web-remote.md). APNs notifications, remote browser viewing/input, artifact/file
+tabs, background auto-start at login, app-store packaging and importing VS Code-owned chats remain
+outside this increment. Closing a phone app does not
 stop work on the Mac. Offline drafts are not automatically executed later.
 
 ## Protocol and trust boundaries
@@ -88,8 +90,9 @@ retains its local bearer/cookie, Host and Origin checks; it is never exposed dir
 Remote devices cannot call desktop IPC, the credential broker, arbitrary HTTP paths, or Electron CDP.
 The Mac validates commands and applies exactly the existing workspace/provider permission rules.
 
-Host registration requires the relay's random 256-bit token. Device routes use an opaque host ID;
-browser-origin WebSocket upgrades are rejected. Connections have payload, rate, connection-count,
+Host registration requires a random 256-bit token. Shared relays can bind a distinct token to each
+host UUID; a credential for one Mac cannot register another. Browser clients require an exact
+configured HTTPS origin, and host registration never accepts a browser Origin. Connections have payload, rate, connection-count,
 and slow-consumer limits. Each host connection can route only its own clients.
 
 The QR/paste invite carries a random, short-lived 256-bit pairing key. The host issues a fresh
