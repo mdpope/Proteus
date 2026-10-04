@@ -140,3 +140,24 @@ was not dispatched as part of installation, and a production relay cutover is se
 Omi was not launched, uninstalled, updated or reconfigured. Private device identifiers, signing
 fingerprints, cache preservation copies and install/launch receipts remain under the private
 `/private/tmp/proteus-mobile-update-20261004` deployment directory, outside Git.
+
+### Relay editor installed on both devices, October 4
+
+A subsequent in-place update installed the native **Manage Macs → Edit relay** control on both
+physical iPhone and iPad. Both were reachable and unlocked during preflight. A fresh generic iOS
+build used the existing project, bundle identifier, team override and Apple Development identity;
+deep/strict signature verification and exact certificate comparison passed before installation.
+The unchanged development profile still expires October 10, 2026 at 17:29 MDT.
+
+Each device's existing per-host encrypted cache and destination index was privately copied before
+installation and was byte-identical after installation, before launch. iPad preferences were also
+copied and byte-identical; a separate iPhone preferences copy was unavailable. Both launch commands
+succeeded, and matching Proteus processes were independently confirmed. After launch, both indexes
+still contained the same single destination, label and selected host; comparison used decoded JSON
+because startup can rewrite JSON key order. The encrypted caches remained present.
+
+No pairing keys were extracted, no app was uninstalled, and no relay endpoint was changed. The
+operator can now edit the existing Mac's relay through the supported native UI after that host's
+cutover, without re-pairing. Build Mac remains a separate Add Mac operation. Omi was untouched.
+Private preservation files and signed-build/install/launch receipts are under
+`/private/tmp/proteus-relay-editor-device-update-20261004`, outside Git.

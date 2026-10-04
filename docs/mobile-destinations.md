@@ -102,3 +102,10 @@ October 4 endpoint-editor verification: iPhone 17 Pro and iPad Pro 13-inch (M5) 
 passed all eight destination tests and the edit/invalid-address/restart UI test. The iPad run
 also includes strict rejection of nonnumeric private-IPv4 lookalikes. Screenshots were reviewed;
 Xcode result bundles remain temporary local artifacts. No physical device endpoint was changed.
+
+Physical deployment later on October 4 installed this editor in place on both iPhone and iPad.
+Their existing encrypted caches and destination indexes matched byte-for-byte across installation
+before launch; both apps launched and retained the same saved destination. Existing relay endpoints
+were not changed and production reconnection is not claimed. On each device, use the destination
+menu → **Manage Macs → Edit relay** on the existing Mac, enter the new relay origin, and **Save**
+after the desktop host cutover. See `apple-build.md` for preservation/signing evidence and limits.
