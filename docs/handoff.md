@@ -114,7 +114,10 @@ handoff remains held as noted.
   all five installed replacement schedules remain paused. No processing owner was changed and no
   live transcription workflow ran through Proteus. Existing native semantic retries were traced to
   missing files in the configured independent organization workflows policy checkout; personal policies are present.
-  Native cutover is held rather than removing the domain policy guard. Installed replacements were
+  An independent canonical policy checkout is now prepared and verified. A path-only repair was
+  attempted under native maintenance locks, but the 300-second drain timed out while original
+  audio/MacWhisper work was active. No configuration changed and no worker was interrupted.
+  Retry the reviewed repair after a safe idle window; native cutover remains held. Installed replacements were
   refreshed while disabled, with canonical fingerprints on both general jobs and a private rollback
   snapshot. See `transcription.md` for scope and cutover.
 - Installed-host Codex is now healthy. A forced catalog refresh returned seven models, including
@@ -157,6 +160,12 @@ handoff remains held as noted.
   `/usage` path. Both five-hour and weekly percentages and the available weekly reset were verified
   in the installed UI; missing reset timestamps remain explicitly unavailable. Usage observations
   stay outside Git. Provider metadata still governs available models/effort/speed.
+- Both Mac hosts now run the tested usage/tab/relay-editor source revision. The local signed app
+  matches all 75 runtime assets, restored five tabs including its terminal descriptor, and retained
+  Life and relay connectivity. Collapsed green meters and the Setup feature flag persist separately.
+  The work host’s owning chat confirmed its in-place update, restored tabs, unchanged identity,
+  both pairings and schedule files, intact Copilot vendor signatures, and online shared relay. Its
+  Life feature remains off. The separate work-host browser pairing still awaits local approval.
 - Native Manage Macs now offers **Edit relay**, preserving the Mac identity, pairing credentials,
   history and drafts. Eight destination tests plus edit/restart UI checks passed on both iPhone and
   iPad simulators; a synthetic relay verified same-key reconnect.
@@ -274,3 +283,11 @@ authentication-feedback, chat interaction, composer and packaged-app tests passe
 status UI test passed on both iPhone and iPad simulators. The installed Mac build restored existing
 selected MCP connections after a cold restart, with no new Keychain prompt observed during the
 check. Physical-device installation remains separate.
+
+## Proposed next capability: multi-provider workflows
+
+The operator requested a design for schedules/chats coordinating agents across provider accounts,
+with provider-specific company-system access and allowance-aware routing. Read
+`multi-provider-workflows.md`. No orchestration, account policy, cross-host delegation pairing or
+connector grant has been enabled. The current engine still serializes AI runs; changing that safely
+requires explicit parent/child capacity, adapter isolation, data-transfer policy and recovery work.

@@ -88,6 +88,15 @@ See [workspaces](workspaces.md) and [credentials](credentials.md) for behavior a
 - Validation details for the release are recorded in the PR and handoff notes; distinguish synthetic
   protocol/UI checks from any real corporate OAuth completion, which requires user interaction.
 
+## Proposed multi-provider workflows
+
+A coordinator chat or schedule could dispatch separate provider sessions through named worker
+profiles, live model/allowance discovery, enforced tool/data boundaries and durable child runs.
+See [multi-provider workflow design](multi-provider-workflows.md). This is a design proposal,
+not installed orchestration. First implement fixed same-host workflows and explicit transfers;
+then bounded dynamic delegation and separately authorized cross-host workers. Existing relay
+pairings do not grant agents new authority, and company-source policy stays in its own repository.
+
 ## Deferred (no implementation yet)
 
 - Detached background daemon/login item, Developer ID distribution signing/notarization, automatic
