@@ -90,3 +90,12 @@ The corrected connected Setup layout passed measured gap/overflow checks in the 
 API UI suite at 390/1400 px. Final installed-app screenshot verification was unavailable: macOS
 ScreenCaptureKit returned capture failure and accessibility exposed only the native window shell.
 This does not replace a visual acceptance claim. The authenticated local API remained healthy.
+
+
+## Work Mac — coordinated final update
+
+The explicitly authorized `Plan Copilot scheduling` chat on Mac.home reports runtime `68463db`
+installed and matched, clean restart, shared relay online, three existing pairings retained, and
+unchanged tabs/settings/all five schedules. Its 232 tests and packaged-app checks passed. Life
+remains disabled. No account-wide connection keys or new peer access were created. This updates
+the remote host; it does not complete the pending website account enrollment.

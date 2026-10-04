@@ -117,6 +117,10 @@ pending-auth feedback are installed; final restart verified the same ready API a
 three pairings and graceful shutdown. Native screen capture was unavailable for the final spacing
 screenshot; narrow/wide source UI checks passed. See `release-validation.md` for exact evidence.
 
+The authorized HC coordination chat has also installed runtime `68463db` and verified exact
+parity, clean restart, shared relay, three pairings and unchanged tabs/settings/five schedules.
+Life stays disabled there; no account keys or peer grants were created.
+
 The iPhone was updated in place with the original identity. Its two destinations are correctly
 named Work Mac and Build Mac, and its selected Build Mac authenticated connection
 was observed online. Life sign-in on that physical device remains unverified. The latest iPad
