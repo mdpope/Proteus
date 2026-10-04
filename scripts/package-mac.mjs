@@ -1,10 +1,12 @@
-// Local, ad-hoc-signed development bundle. Distribution notarization is separate.
+// Local development bundle. Optional existing Apple signing identity keeps OS grants stable.
+// Distribution notarization is separate.
 import { packager } from '@electron/packager';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const signingIdentity = process.env.PROTEUS_MAC_SIGN_IDENTITY || '-';
 if (process.platform !== 'darwin') throw new Error('Build the Mac application on macOS.');
 // These helpers access provider-owned Keychain items. Keep GitHub's designated
 // requirements intact: ad-hoc re-signing breaks their existing Keychain trust.
@@ -24,8 +26,8 @@ const bundles = await packager({ dir: root, out: path.join(root, 'dist'), overwr
   name: 'Proteus', executableName: 'Proteus', appBundleId: 'org.proteusapp.proteus.desktop',
   platform: 'darwin', arch: process.arch, icon, asar: false,
   // Keep runtime files and dependencies; never ship tests, worktrees or local configuration.
-  ignore: [/^\/(?:ios|test|docs|scripts|extensions|dist|coverage|\.runtime|\.git|\.github)(?:\/|$)/, /^\/\.env/, /\.(?:log|xcresult)$/],
-  osxSign: { ignore: file => vendorFiles.some(relative => file.endsWith('/' + relative)), identity: '-', identityValidation: false, preAutoEntitlements: false, gatekeeperAssess: false, optionsForFile: () => ({ hardenedRuntime: false, signatureFlags: '0', timestamp: 'none' }) },
+  ignore: [/^\/(?:web|ios|test|docs|scripts|extensions|dist|coverage|\.runtime|\.git|\.github)(?:\/|$)/, /^\/\.env/, /\.(?:log|xcresult)$/],
+  osxSign: { ignore: file => vendorFiles.some(relative => file.endsWith('/' + relative)), identity: signingIdentity, identityValidation: false, preAutoEntitlements: false, gatekeeperAssess: false, optionsForFile: () => ({ hardenedRuntime: false, signatureFlags: '0', timestamp: 'none' }) },
 });
 for (const directory of bundles) {
   const bundle = path.join(directory, 'Proteus.app');

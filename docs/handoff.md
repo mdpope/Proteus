@@ -13,7 +13,7 @@ and manifests; this repository owns the generic app and provider adapters.
 4. `CHANGELOG.md`: recent changes; `docs/planned-updates.md`: the remaining backlog.
 5. The feature document relevant to your change: `providers.md`, `schedules.md`, `permissions.md`,
    `context-loading.md`, `workspaces.md`, `browser.md`, `credentials.md`, `chat-rendering.md`,
-   or `remote.md`.
+   `remote.md`, `omi.md`, `life.md`, or `apple-build.md`.
 
 Git and merged PRs are the implementation history. These documents explain behavior and decisions;
 they do not replace reading the relevant module. Update them when behavior changes. Never assume
@@ -25,8 +25,8 @@ that a previous conversation is available to the next agent.
 | --- | --- |
 | Authenticated loopback API and lifecycle | `src/server.js` |
 | Schedule validation, disk reads, revision conflicts | `src/schedules.js`, `schemas/schedule.schema.json`, `src/cli.js` |
-| Serialized runs, snapshots, resume and scheduler journal | `src/engine.js`, `src/turn-waiter.js` |
-| Provider execution, model capabilities and refresh | `src/copilot.js`, `src/codex.js`, `src/model-catalog.js` |
+| Serialized AI turns, independent native job lanes, snapshots and journal | `src/engine.js`, `src/turn-waiter.js` |
+| Provider execution, model capabilities and refresh | `src/copilot.js`, `src/codex.js`, `src/claude.js`, `src/model-catalog.js`, `src/usage.js` |
 | Workspace context, source delivery and tool scopes | `src/context.js`, `src/agent-tools.js`, `public/context-plan.js` |
 | Live tool grants and workspace authorization | `src/permissions.js` |
 | Mac forms, tabs, chat and shared controls | `public/app.js`, `public/features.js`, `public/conversation.js` |
@@ -38,6 +38,9 @@ that a previous conversation is available to the next agent.
 | Native UI and remote store | `ios/Proteus/`, `ios/project.yml`, `ios/Proteus.xcodeproj` |
 | VS Code companion | `extensions/vscode/` |
 | Local Mac package | `scripts/package-mac.mjs` |
+| Omi integration and native process execution | `src/omi.js`, `src/local-process.js`, `public/omi.js` |
+| Life and full website application | `src/life.js`, `public/life.js`, `web/` |
+| Reproducible Apple simulator builds/tests | `scripts/apple-build.mjs` |
 
 ## Safe development and validation
 
@@ -69,7 +72,8 @@ machine. `connection.json` contains a local API bearer token: never print or com
 profiles, pairing secrets, provider credentials, private instructions, and real run records also
 stay out of commits and test fixtures.
 
-The host currently serializes execution. It stays alive after window closure, but quitting the
+The host serializes AI turns. Each of the three managed Omi native jobs has its own serial lane,
+so native control work is not blocked behind transcription or an AI chat. It stays alive after window closure, but quitting the
 app or sleeping/shutting down the Mac stops execution. There is no detached always-running daemon.
 Existing chats retain schedule snapshots; editing a schedule affects future runs. The composer can
 change next-turn model settings in that same chat, retaining the initial snapshot and change history. Updating
@@ -84,10 +88,72 @@ Native signing is machine/account configuration, not repository configuration. U
 Apple team on the installation Mac. Do not revoke or recreate certificates as an automatic fix;
 coordinate signing across machines. Remote pairing is separate from Apple signing.
 
-See `chat-controls.md` for queue/steer semantics, `mcp-auth.md` for sign-in recovery, and `providers.md` for Codex compatibility limits. Physical iOS installation remains an explicit operation on the operator’s designated signing Mac; simulator verification does not update devices.
+See `chat-controls.md` for queue/steer semantics, `mcp-auth.md` for sign-in recovery, and `providers.md` for Codex/Claude compatibility limits. Physical iOS installation remains an explicit operation on the operator’s designated signing Mac; simulator verification does not update devices.
 
 
-## Latest validated update: chat controls and second provider
+## October 3: Omi, native Life and Claude expansion
+
+- Synced the Source checkout to upstream `1f61b9b`; work is on `codex/omi-life-claude`.
+  The separate Mnemosyne checkout is unchanged. Its full 263-file Laravel application is
+  incorporated under `web/` with Proteus branding, retaining original migration contents.
+- Omi has Overview, Schedules, Runs, Logs and Settings in a persistent tab. Three native
+  schedules and two imported Codex transcript schedules use the normal scheduler. All five
+  are paused in this Mac's private app data and the global execution gate is disabled.
+  No Omi processing was run through Proteus. Three original LaunchAgents and two original
+  Codex automations retain ownership. Native capture/mobile review remain separate.
+- Life is now native local UI, not a website tab or iframe. Setup explicitly enables the
+  feature and installs a local SQLite database or validates a private existing connection.
+  Life is absent from navigation until enabled and configured. Versioned, reviewed upgrades
+  preserve food versions and nutrition records; existing remote connections default read-only.
+  See `life.md` for data scope, schema handling, evidence storage and server-only limitations.
+- Live database preflight authenticated SSH but found forwarding to MariaDB administratively
+  prohibited. No production SQL was executed. A dedicated read-only access route is awaiting
+  operator approval. No production website, nutrition record, schema, relay or server access
+  configuration was changed. Do not activate an unverified profile or infer principal IDs.
+- Life/Omi tabs survive navigation and reload. New tab actions are icons in the tab strip.
+  AI allowance uses hideable green meters with centered percentages and detailed resets.
+  Markdown supports configured workspace roots, subfolders and new folders without requiring
+  a full path; modal dialogs hide native browser views and reopening a file refreshes it.
+- Claude subscription authorization completed. The installed app's bundled runtime returned
+  12 models and completed two synthetic turns with native session continuation and observed
+  token usage. Runtime speed metadata reported fast mode unavailable. Rate-limit events
+  supplied a reset/status but no utilization; the allowance percentage remains unavailable.
+  This is distinct from successful model execution and per-turn token accounting.
+- The Claude `kill EPERM` crash is fixed: cleanup catches denied group/child termination,
+  reports unconfirmed termination and prevents overlapping discovery/turns. Desktop quit
+  catches asynchronous cleanup rejection. Regression checks exercised both failures.
+- The Mac bundle now uses the existing Apple Development identity, keeping its designated
+  requirement stable across updates while preserving GitHub's vendor signatures/bytes.
+  Installed-host Codex still timed out during startup file access after earlier macOS iCloud
+  approval; direct runtime/node-mode catalog and usage probes succeeded. A new signed-app
+  permission prompt, if shown, must be granted by the operator. Global AGENTS exclusion from
+  the actual model prompt remains unverified. Do not claim all providers are live on this host.
+- Validation before the latest native-Life refinement: 140 Node tests, static checks, isolated
+  Electron integration, shutdown regression and package checks passed. All 45 Laravel tests
+  passed (251 assertions), Vite/Pint passed, and synthetic desktop/mobile web checks exercised
+  nine protected routes. The latest full regression and package result is recorded below.
+- iPhone and iPad simulator builds passed. Four native unit tests, all six iPhone UI cases
+  (one corrected and rerun), and three targeted iPad UI cases passed. Proteus was installed
+  in place on the unlocked iPhone and launched, independently confirmed by process inventory.
+  Its encrypted cache remained byte-identical, pairing was retained, and remote reconnection
+  was not newly verified. Signing reused the existing certificate with a command-line team
+  override; no project-signing setting changed. Profile expires October 10 at 17:29 MDT.
+  Physical iPad installation is deferred at the operator's request. See `apple-build.md`.
+
+Final native-Life validation: 164 Node tests and static checks passed; the full Electron shell
+passed 20 check groups and the native Life renderer passed 13 checks against disposable SQLite.
+The cleanup-failure shutdown regression passed. The development-signed Mac bundle passed its
+isolated launch, identity, vendor-signature and byte-preservation checks. All 64 runtime source
+files matched the bundle. Installed and launched the final app in place with a rollback copy;
+authenticated health confirms zero active runs, Life off/unconfigured, all five Omi schedules
+paused, and all three native Omi owners loaded. Copilot reports 19 live models and Claude 12;
+Codex still reports its startup timeout. This does not certify live MariaDB or Omi cutover.
+
+Next: establish approved read-only server access for live Life records. Omi replacement, production website deployment, schema
+changes, and domain/relay changes remain separate reviewed work. Keep the encrypted relay as
+an independent supervised service; Docker is optional packaging, not a protocol requirement.
+
+## Previously validated update: chat controls and second provider
 
 - 99 Node regression tests and static checks passed.
 - Mac compact-composer, rich-chat, model-picker, browser/control, and packaged launch/signature checks passed using

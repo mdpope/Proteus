@@ -1,12 +1,29 @@
 # Proteus
 
 A local control room for scheduled AI work: set the cadence, watch each run, and return to the
-conversation when it needs you. Provider-independent scheduling and storage, with GitHub Copilot
-and Codex adapters.
+conversation when it needs you. Provider-independent scheduling and storage, with GitHub Copilot,
+Codex and Claude adapters, native Omi processing schedules, and optional native Life records.
+
+## Omi, Life and Apple builds
+
+The **Omi** section observes the installed recording pipeline and prepares disabled replacement
+schedules for its audio, library, semantic, transcript-intake and follow-up jobs. Native services
+and Codex automations keep running until a separately reviewed cutover. See [Omi](docs/omi.md).
+Bluetooth capture and the iCloud recording/review library stay in the separate Omi iCloud app.
+
+**Life** brings the complete former Mnemosyne application into `web/`: nutrition, garage,
+maintenance, fuel, evidence, account security and OAuth/MCP. Life is an optional native desktop
+section, hidden until enabled and configured in Setup. It reads database records directly through
+the trusted host, with a local SQLite installer and private MariaDB connection profiles. The full
+Proteus-branded website source is retained for future deployment. No browser or iframe supplies the
+native Life screens. See [Life](docs/life.md) for migration and nutrition preservation boundaries.
+
+`npm run ios:doctor`, `npm run ios:build` and `npm run ios:test` use the checked-in Xcode project
+on the designated build Mac without replacing signing settings. See [Apple builds](docs/apple-build.md).
 
 ## Run the desktop prototype
 
-Requires Node.js 22+ and npm. The desktop prototype targets macOS.
+Requires Node.js 22.16+ and npm. The desktop prototype targets macOS.
 
 ```sh
 npm ci
@@ -22,14 +39,16 @@ selects an available port. `PROTEUS_HOME` overrides the application-data directo
 
 - Editable five-field cron expressions with IANA time zones and next-five-run previews.
 - Plain JSON schedules, atomic saves, external-edit conflict detection, and JSON Schema.
-- Manual and scheduled runs, serial execution, overlap prevention, and skip/coalesce policies.
+- Manual and scheduled runs, serialized AI turns, independent Omi job lanes, overlap prevention, and skip/coalesce policies.
 - Captured schedule/context versions per run; persisted conversations, feedback, permissions, and
   continuation. Explicit context refresh retains the previous versions. Interrupted runs require explicit continuation after restart.
-- GitHub Copilot SDK adapter, explicit model selection, a sidebar premium-request usage bar, and observed
-  per-run token usage. Copilot authentication uses the official runtime's existing sign-in.
+- GitHub Copilot SDK adapter, explicit model selection, compact account allowance rows with reset
+  details for all providers, and observed per-run token usage. Copilot authentication uses the official runtime's existing sign-in.
 - Codex native app-server adapter using the Mac’s existing sign-in, with separate live model, effort,
   and speed controls. See [provider compatibility](docs/providers.md).
-- Queue next and Steer now during active chats; readable tool cards and complete Markdown responses
+- Claude native runtime adapter with dynamic model/effort/supported-speed controls and explicit
+  sign-in, quota and integration limits. See [provider compatibility](docs/providers.md).
+- Queue next and supported-provider Steer now during active chats; readable tool cards and complete Markdown responses
   on Mac, iPhone and iPad. See [chat controls](docs/chat-controls.md).
 - Copilot MCP connection status and browser OAuth recovery, including `/mcp auth <server>`.
   See [MCP sign-in](docs/mcp-auth.md).
@@ -44,8 +63,8 @@ selects an available port. `PROTEUS_HOME` overrides the application-data directo
 The scheduler runs while the desktop app or server is open. Background service installation,
 distribution signing/notarization, notifications, and independent concurrent workspaces remain future work.
 A locally signed, branded Mac bundle is available; closing its window keeps the menu bar host running.
-The single execution queue avoids concurrent mutations; a run waiting for feedback holds that
-queue until answered or stopped. Missed occurrences of an already-active schedule are skipped.
+AI turns use one execution queue; a run waiting for feedback holds that
+queue until answered or stopped. Each managed Omi native job uses its own serial lane and native locks. Missed occurrences of an already-active schedule are skipped.
 
 The embedded browser has site titles, an address bar with Enter navigation, history, and multiple
 persistent tabs. Playwright uses the same pages through a scoped bridge; human-created tabs require
@@ -53,7 +72,7 @@ Agent access before a run can use them. See [browser design](docs/browser.md). A
 coverage requires a real signed-in read; synthetic browser tests do not establish Slack coverage.
 Markdown renders formatted text, tables, code, and inline images; embedded HTML remains escaped.
 
-Copilot, Codex and rehearsal providers are implemented. Provider adapters retain different native
+Copilot, Codex, Claude and rehearsal providers are implemented; Omi native jobs use a restricted local-process adapter. Provider adapters retain different native
 capabilities; unsupported context/tool restrictions fail explicitly. A `completed` run means its model turn
 ended; workflow-specific checks determine whether the underlying task really succeeded.
 Raw Copilot conversations remain in Copilot's own persistent session store; Proteus keeps their

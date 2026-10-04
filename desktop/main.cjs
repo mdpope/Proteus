@@ -8,6 +8,8 @@ app.setName('Proteus');
 if (process.platform === 'darwin') process.env.PATH = [...new Set(['/opt/homebrew/bin', '/usr/local/bin', ...(process.env.PATH || '/usr/bin:/bin:/usr/sbin:/sbin').split(':')])].join(':');
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
+  // CLI-driven updates and service stops use the same graceful shutdown as Quit.
+  for (const signal of ['SIGTERM', 'SIGINT']) process.once(signal, () => app.quit());
   app.on('second-instance', showWindow);
   app.on('activate', showWindow);
   app.whenReady().then(async () => {
@@ -28,7 +30,7 @@ else {
     ipcMain.handle('proteus:open-path', async (event, file) => {
       trusted(event);
       const settings = service.settings.get();
-      const roots = [service.home, ...service.context.roots(), ...service.context.config().documents.map(doc => path.dirname(doc.path)), ...service.engine.listRuns().flatMap(run => [run.nativeSessionPath, ...(run.providerSessionId && run.schedule.provider==='copilot' ? [path.join(run.providerHome || process.env.COPILOT_HOME || require('node:os').homedir()+'/.copilot', 'session-state', run.providerSessionId)] : [])]).filter(Boolean), settings.workspace.cwd, ...settings.workspace.additionalDirectories, ...service.engine.schedules.list().filter(s => !s.error).flatMap(s => [s.workspace.cwd, ...s.workspace.additionalDirectories])];
+      const roots = [service.home, ...(service.omi && require('node:fs').existsSync(service.omi.getSettings().pipelineRoot) ? [service.omi.getSettings().pipelineRoot] : []), ...service.context.roots(), ...service.context.config().documents.map(doc => path.dirname(doc.path)), ...service.engine.listRuns().flatMap(run => [run.nativeSessionPath, ...(run.providerSessionId && run.schedule.provider==='copilot' ? [path.join(run.providerHome || process.env.COPILOT_HOME || require('node:os').homedir()+'/.copilot', 'session-state', run.providerSessionId)] : [])]).filter(Boolean), settings.workspace.cwd, ...settings.workspace.additionalDirectories, ...service.engine.schedules.list().filter(s => !s.error).flatMap(s => [s.workspace.cwd, ...s.workspace.additionalDirectories])];
       if (typeof file !== 'string' || !isWithin(file, roots)) throw new Error('Path is outside the configured workspaces.');
       const error = await shell.openPath(file); if (error) throw new Error(error);
     });
@@ -43,7 +45,7 @@ else {
     ipcMain.handle('proteus:copy-text', (event, text) => { trusted(event); if (typeof text !== 'string' || text.length > 1_000_000) throw new Error('Invalid clipboard text.'); clipboard.writeText(text); });
     ipcMain.handle('proteus:choose-paths', async (event, options) => {
       trusted(event); const folder = options.kind === 'folder';
-      const result = await dialog.showOpenDialog(window, { properties: [folder ? 'openDirectory' : 'openFile', ...(options.multiple ? ['multiSelections'] : [])], ...(folder ? {} : { filters: [{ name: options.kind === 'workspace' ? 'VS Code workspace' : 'Markdown', extensions: options.kind === 'workspace' ? ['code-workspace'] : ['md'] }] }) });
+      const result = await dialog.showOpenDialog(window, { properties: [folder ? 'openDirectory' : 'openFile', ...(options.multiple ? ['multiSelections'] : [])], ...(folder ? {} : { filters: [{ name: options.kind === 'workspace' ? 'VS Code workspace' : options.kind === 'life-profile' ? 'Private database profile' : 'Markdown', extensions: options.kind === 'workspace' ? ['code-workspace'] : options.kind === 'life-profile' ? ['json'] : ['md'] }] }) });
       return result.canceled ? [] : result.filePaths;
     });
     ipcMain.handle('proteus:browser', (event, value) => { trusted(event); return browser.command(value); });
@@ -80,7 +82,7 @@ else {
   app.on('before-quit', event => {
     if (closing || !service) return;
     event.preventDefault(); closing = true;
-    (async () => { credentials?.close(); await browser?.dispose(); await service.close(); })().finally(() => { tray?.destroy(); app.quit(); });
+    (async () => { credentials?.close(); await browser?.dispose(); await service.close(); })().catch(error => { console.error('Proteus shutdown: ' + error.message); }).finally(() => { tray?.destroy(); app.quit(); });
   });
 }
 // Main-process integration tests use the same broker as the provider adapter.

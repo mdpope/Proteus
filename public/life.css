@@ -1,0 +1,54 @@
+/* Native Life pages share Proteus typography and theme tokens. */
+#life-page { max-width: 1440px; margin: 0 auto; }
+.life-tabs,.life-subtabs,.life-choice { display:flex; flex-wrap:wrap; gap:6px; margin:18px 0; }
+.life-tabs { padding-bottom:14px; border-bottom:1px solid var(--line,#dce4e1); }
+.life-tabs button,.life-subtabs button { background:transparent; border:1px solid transparent; color:inherit; }
+.life-tabs .active,.life-subtabs .active,.life-choice .active { background:var(--accent,#c9e8d7); color:var(--text,#173d2c); border-color:var(--line,#b7d0c4); }
+#life-content>.card,#life-content>.life-columns,#life-content>.life-metrics { margin:16px 0; }
+.life-columns { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(300px,1fr); gap:18px; align-items:start; }
+.life-columns>.card,.life-columns>aside>.card { margin-bottom:16px; min-width:0; }
+.life-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin:12px 0 18px; }
+.life-fields label,.life-filter label { display:flex; flex-direction:column; gap:6px; font-size:13px; }
+.life-fields .wide { grid-column:1 / -1; }
+.life-fields input,.life-fields select,.life-fields textarea,.life-filter input,.life-filter select { width:100%; min-width:0; }
+.life-fields textarea { min-height:88px; resize:vertical; }
+.life-form fieldset { border:0; margin:0; padding:0; min-width:0; }
+.life-form fieldset:disabled { opacity:.68; }
+.life-form .actions { margin-top:16px; }
+.life-filter { display:flex; align-items:end; flex-wrap:wrap; gap:12px; margin:16px 0; }
+.life-filter label { flex:1 1 150px; max-width:280px; }
+.life-table-wrap { overflow:auto; max-width:100%; }
+.life-table { width:100%; border-collapse:collapse; text-align:left; font-size:13px; }
+.life-table th { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--soft,#8e9e95); white-space:nowrap; }
+.life-table th,.life-table td { padding:12px 10px; border-bottom:1px solid var(--line,#dce4e1); vertical-align:top; }
+.life-table td { overflow-wrap:anywhere; }
+.life-table tbody tr:last-child td { border-bottom:0; }
+.life-link { border:0; background:transparent; padding:0; color:var(--accent,#c2e8a0); cursor:pointer; font:inherit; text-align:left; text-decoration:underline; text-underline-offset:3px; }
+.life-empty { padding:24px 8px; color:var(--soft,#8e9e95); }
+.life-metrics { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:12px; }
+.life-metrics>div { border:1px solid var(--line,#dce4e1); border-radius:12px; padding:15px 18px; background:var(--panel,#fff); }
+.life-metrics span { display:block; font-size:12px; color:var(--soft,#8e9e95); text-transform:capitalize; }
+.life-metrics strong { font-size:25px; font-weight:600; display:block; margin-top:5px; }
+.life-record { padding:16px 0; border-bottom:1px solid var(--line,#dce4e1); }
+.life-record:last-child { border:0; }
+.life-record h3 { margin:0 0 5px; }
+.life-record p { margin:7px 0; }
+.life-macro-line { font-size:12px; color:var(--soft,#8e9e95); }
+.life-vehicle-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px; }
+.life-vehicle { display:flex; flex-direction:column; text-align:left; gap:8px; padding:20px; background:var(--panel,#fff); min-height:140px; }
+.life-vehicle strong { font-size:18px; }
+.life-vehicle span,.life-vehicle small { color:var(--soft,#8e9e95); }
+.life-notice,.life-plan { padding:18px; background:var(--panel,#fff); border:1px solid var(--line,#dce4e1); border-radius:12px; margin:18px 0; }
+.life-plan dl { display:grid; grid-template-columns:110px minmax(0,1fr); gap:10px 14px; }
+.life-plan dt { font-weight:600; }.life-plan dd { margin:0; overflow-wrap:anywhere; }
+.life-plan li { padding:5px 0; }
+.life-toggle { display:flex; align-items:center; gap:9px; font-size:13px; white-space:nowrap; }
+.life-toggle input { width:auto; }
+.life-setup-summary { padding:12px 0; }.life-setup-summary>.pill { margin-left:10px; }
+.life-wizard { max-width:900px; }.life-wizard form>button { margin:14px 10px 8px 0; }
+.life-measurements { min-width:650px; margin-bottom:12px; }.life-measurements input { min-width:80px; width:100%; }
+.life-evidence-image { display:block; width:100%; max-height:500px; object-fit:contain; margin-bottom:16px; }
+#life-attachment-form { display:flex; flex-direction:column; gap:9px; margin-top:16px; }
+#life-attachment-form input { width:100%; margin-top:8px; }
+@media(max-width:1000px) { .life-columns { grid-template-columns:minmax(0,1fr); } }
+@media(max-width:600px) { .life-fields { grid-template-columns:1fr; }.life-tabs { gap:3px; }.life-tabs button { padding:7px; }.life-plan dl { grid-template-columns:1fr; }.life-plan dd { margin-bottom:7px; } }

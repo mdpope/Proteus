@@ -18,7 +18,7 @@ export class Engine extends EventEmitter {
     this.permissions = new PermissionStore(home);
     this.runsDir = path.join(home, 'runs');
     this.providers = { rehearsal: new RehearsalProvider(), ...providers };
-    this.pending = new Map(); this.questionQueues = new Map(); this.running = null; this.stopping = false;
+    this.pending = new Map(); this.questionQueues = new Map(); this.running = null; this.backgroundRuns = new Map(); this.executions = new Set(); this.stopping = false;
     fs.mkdirSync(this.runsDir, { recursive: true, mode: 0o700 });
     this.journal = readJSON(path.join(home, 'scheduler.json'), { lastPoll: clock().toISOString(), slots: {} });
     this.runs = new Map();
@@ -176,11 +176,24 @@ export class Engine extends EventEmitter {
     }
   }
   async drain() {
-    if (this.running || this.stopping) return;
-    const run = [...this.runs.values()].find(value => value.status === 'queued'); if (!run) return;
-    const controller = new AbortController(); this.running = { id: run.id, controller };
+    if (this.stopping) return;
+    for (const run of this.runs.values()) {
+      if (run.status !== 'queued') continue;
+      const lane = this.executionLane?.(run.schedule) || null;
+      if (lane ? this.backgroundRuns.has(lane) : this.running) continue;
+      const controller = new AbortController();
+      const slot = { id: run.id, controller };
+      if (lane) this.backgroundRuns.set(lane, slot); else this.running = slot;
+      const execution = this.execute(run, controller, lane);
+      this.executions.add(execution);
+      execution.finally(() => this.executions.delete(execution));
+    }
+  }
+  async execute(run, controller, lane) {
     run.status = 'running'; const prompt = run.nextPrompt; delete run.nextPrompt; this.persist(run);
     try {
+      await this.beforeRun?.(run.schedule);
+      if (controller.signal.aborted) throw new Error('Cancelled');
       const provider = this.providers[run.schedule.provider]; if (!provider) throw new Error('Provider is not installed.');
       await provider.run({
         run, prompt, signal: controller.signal,
@@ -202,14 +215,15 @@ export class Engine extends EventEmitter {
         const next = run.queuedMessages.shift(); if (next.modelOptions) this.applyModelOptions(run, next.modelOptions); run.nextPrompt = next.prompt; run.status = 'queued';
         const event=run.events.find(e=>e.data?.delivery?.id===next.id);if(event)event.data.delivery.state='delivered';
       }
-      this.persist(run); this.running = null;
+      this.persist(run); if (lane) this.backgroundRuns.delete(lane); else this.running = null;
       queueMicrotask(() => this.drain());
     }
   }
   cancel(id) {
     const run = this.getRun(id);
     if (!active.has(run.status)) throw new Error('This run is not active.');
-    if (this.running?.id === id) this.running.controller.abort();
+    const running = this.running?.id === id ? this.running : [...this.backgroundRuns.values()].find(slot => slot.id === id);
+    if (running) running.controller.abort();
     else { run.status = 'cancelled'; delete run.nextPrompt; this.persist(run); }
   }
   tick() {
@@ -234,7 +248,9 @@ export class Engine extends EventEmitter {
   async close() {
     this.stopping = true;
     if (this.running) this.running.controller.abort();
+    for (const slot of this.backgroundRuns.values()) slot.controller.abort();
     for (const provider of Object.values(this.providers)) await provider.close?.();
+    await Promise.allSettled([...this.executions]);
     for (const run of this.runs.values()) if (active.has(run.status)) { run.status = 'interrupted'; run.pending = null; this.persist(run); }
   }
 }

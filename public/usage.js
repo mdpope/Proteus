@@ -20,3 +20,14 @@ export function mountUsage(target, value, refresh, busy) {
   target.querySelector('.usage-detail').textContent = summary.detail;
   const button = target.querySelector('button'); button.disabled = busy; button.onclick = refresh;
 }
+
+export function providerUsageSummary(value) {
+  const windows=value?.windows||[];const known=windows.filter(w=>!w.unlimited&&Number.isFinite(w.remainingPercent));
+  const remaining=known.length?Math.min(...known.map(w=>Math.max(0,Math.min(100,w.remainingPercent)))):null;
+  const unlimited=windows.length>0&&windows.every(w=>w.unlimited===true);
+  const percent=number=>number.toLocaleString(undefined,{maximumFractionDigits:1});
+  const limiting=known.find(w=>w.remainingPercent===remaining);
+  return {remaining,unlimited,label:unlimited?'Unlimited':remaining===null?'Usage unavailable':`${percent(remaining)}% remaining`,
+    detail:limiting?.label||value?.source||'Account allowance',stale:value?.stale===true,
+    windows,title:[value?.checkedAt&&`Checked ${new Date(value.checkedAt).toLocaleString()}`,...windows.filter(w=>w.resetAt).map(w=>`${w.label} resets ${new Date(w.resetAt).toLocaleString()}`),value?.error].filter(Boolean).join(' · ')};
+}

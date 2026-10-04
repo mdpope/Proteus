@@ -4,6 +4,23 @@ This is a concise behavior log. Git commits and pull requests contain the comple
 
 ## Unreleased
 
+- Add the Omi control room with status, normal schedules, run history, bounded processing logs,
+  private settings and an execution gate that remains disabled until an explicit cutover.
+  Three native jobs use independent lanes; AI provider turns remain serialized. Imported personal
+  transcript automations retain their source policy and start paused.
+- Incorporate Mnemosyne's full Laravel source under `web/` and rebrand it Proteus. Add optional
+  native Life screens backed by database records, a local installer, and versioned upgrade plans.
+  Keep production deployment and live database changes separate from local installation.
+- Give Life and Omi persistent tabs alongside chats and schedules. Hide Life until configured
+  and enabled in Setup. Make provider usage hideable, with green meters and centered percentages.
+- Move icon-only new-tab actions into the tab strip and remove the redundant top header. Add a
+  workspace/subfolder Markdown picker with nested folder creation and safe exclusive file creation;
+  hide native browser views while dialogs are open.
+- Catch denied Claude termination signals and asynchronous shutdown failures, preventing native
+  JavaScript error dialogs. Verify native Claude sign-in, model discovery and continuation.
+- Add Claude provider selection on Mac and iOS and common provider allowance summaries.
+- Add reproducible Apple simulator build/test commands and managed native-processing views.
+
 - Preserve and verify GitHub’s Copilot binary signatures during Mac packaging, retaining the
   provider identity used for Keychain authorization.
 - Show persistent MCP sign-in progress and refresh connection state automatically on Mac/iOS.

@@ -8,7 +8,7 @@ import { browserTools } from './browser-tools.js';
 import { displayText, toolSummary } from './tool-activity.js';
 import { validateModelOptions } from './model-catalog.js';
 
-export const codexExecutable = () => process.env.PROTEUS_CODEX_PATH || ['/opt/homebrew/bin/codex','/usr/local/bin/codex','/Applications/ChatGPT.app/Contents/Resources/codex','/Applications/Codex.app/Contents/Resources/codex'].find(p=>fs.existsSync(p)) || 'codex';
+export const codexExecutable = () => process.env.PROTEUS_CODEX_PATH || ['/opt/homebrew/bin/codex','/usr/local/bin/codex','/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex','/Applications/Codex.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex','/Applications/ChatGPT.app/Contents/Resources/codex','/Applications/Codex.app/Contents/Resources/codex'].find(p=>fs.existsSync(p)) || 'codex';
 export function codexModel(model) {
  const efforts=(model.supportedReasoningEfforts||[]).map(e=>typeof e==='string'?e:e.reasoningEffort);
  return {id:model.model||model.id,name:model.displayName||model.id,isDefault:model.isDefault,description:model.description,controls:{reasoningEfforts:efforts,reasoningSupported:efforts.length>0,defaultReasoningEffort:model.defaultReasoningEffort||null,contextTiers:[{id:'default',promptTokens:null,totalTokens:null}],maxOutputTokens:null,serviceTiers:(model.serviceTiers||[]).map(t=>({id:t.id||t.serviceTier,name:t.displayName||t.name||t.id||t.serviceTier})).filter(t=>t.id)}};
@@ -19,15 +19,15 @@ export class CodexRPC extends EventEmitter {
   this.child=spawn(command,[...args,'app-server','--listen','stdio://','-c','project_doc_max_bytes=0','-c','features.skip_host_skill_discovery=true','-c','features.skill_mcp_dependency_install=false'],{cwd,env,stdio:['pipe','pipe','pipe']});
   this.child.stderr.on('data',chunk=>{this.stderr=(this.stderr+chunk).slice(-4000);});
   createInterface({input:this.child.stdout}).on('line',line=>{let msg;try{msg=JSON.parse(line);}catch{return;}if(msg.method){if(msg.id!==undefined)this.emit('request',msg);else this.emit('notification',msg);}else{const p=this.pending.get(msg.id);if(p){this.pending.delete(msg.id);clearTimeout(p.timer);msg.error?p.reject(new Error(msg.error.message)):p.resolve(msg.result);}}});
-  const ended=error=>{for(const p of this.pending.values()){clearTimeout(p.timer);p.reject(error);}this.pending.clear();this.emit('closed',error);};
+  const ended=error=>{this.closedError=error;for(const p of this.pending.values()){clearTimeout(p.timer);p.reject(error);}this.pending.clear();this.emit('closed',error);};
   this.child.stdin.on('error',ended); this.child.on('error',ended);this.child.on('exit',code=>ended(new Error(`Codex runtime exited (${code ?? 'signal'}). ${displayText(this.stderr,1000)}`)));
  }
- write(message){if(this.child.stdin.destroyed)throw new Error('Codex connection is closed.');this.child.stdin.write(JSON.stringify(message)+'\n');}
+ write(message){if(this.closedError)throw this.closedError;if(this.child.stdin.destroyed)throw new Error('Codex connection is closed.');this.child.stdin.write(JSON.stringify(message)+'\n');}
  request(method,params={},timeout=45000){return new Promise((resolve,reject)=>{const id=++this.sequence;const timer=setTimeout(()=>{this.pending.delete(id);reject(new Error(`Codex ${method} timed out.`));},timeout);this.pending.set(id,{resolve,reject,timer});try{this.write({id,method,params});}catch(e){clearTimeout(timer);this.pending.delete(id);reject(e);}});}
  async initialize(){await this.request('initialize',{clientInfo:{name:'proteus',title:'Proteus',version:'0.1.0'},capabilities:{experimentalApi:true}});this.write({method:'initialized'});return this;}
  respond(id,result){if(!this.child.stdin.destroyed)this.write({id,result});}
  async close(){
-  if(this.child.exitCode!==null||this.child.signalCode!==null)return;
+  if(!this.child.pid||this.child.exitCode!==null||this.child.signalCode!==null)return;
   await new Promise(resolve=>{const timer=setTimeout(()=>this.child.kill('SIGKILL'),3000);timer.unref();this.child.once('exit',()=>{clearTimeout(timer);resolve();});this.child.once('error',()=>{clearTimeout(timer);resolve();});this.child.kill('SIGTERM');});
  }
 }
@@ -43,6 +43,7 @@ export class CodexProvider {
  }
  async models(client){client ??= await this.connect();const result=[];let cursor;do{const page=await client.request('model/list',{limit:100,includeHidden:false,...(cursor?{cursor}:{})});result.push(...page.data.map(codexModel));cursor=page.nextCursor;}while(cursor);return result;}
  async status(){try{const client=await this.connect();const [account,models]=await Promise.all([client.request('account/read',{refreshToken:false}),this.models(client)]);return {provider:'codex',available:!!account.account,models,error:account.account?null:'Sign in with codex login on this Mac.',capabilities:{steering:true,context:'Selected instructions and skills; native Codex sessions and approvals.'}};}catch(error){return {provider:'codex',available:false,models:[],error:error.message};}}
+ async quota(){const client=await this.connect();return client.request('account/rateLimits/read',{});}
  async steer(run,prompt){const a=this.active;if(!a||a.run.id!==run.id||!a.turnId)throw new Error('Codex is still starting or the turn ended. Queue this message.');await a.client.request('turn/steer',{threadId:run.providerSessionId,expectedTurnId:a.turnId,input:[{type:'text',text:prompt}]});}
  async run({run,prompt,emit,ask,update,signal,stream}){
   const client=await this.connect();const model=(await this.models(client)).find(m=>m.id===run.schedule.model);if(!model)throw new Error('Choose an available Codex model from the provider catalog.');validateModelOptions(run.schedule,model);

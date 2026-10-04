@@ -43,12 +43,14 @@
       "enum": [
         "copilot",
         "codex",
-        "rehearsal"
+        "rehearsal",
+        "claude",
+        "local-process"
       ]
     },
     "model": {
       "type": "string",
-      "description": "An explicit provider model ID; empty only for rehearsal."
+      "description": "An explicit provider model ID; empty for rehearsal or a managed local process."
     },
     "reasoningEffort": {
       "type": "string",
@@ -133,6 +135,19 @@
     "serviceTier": {
       "type": "string",
       "description": "Provider-advertised service tier ID; empty or omitted for provider default."
+    },
+    "integration": {
+      "type": "object",
+      "description": "Managed integration identity. Omi commands and execution permissions are resolved from private host settings.",
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "job": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
     }
   },
   "additionalProperties": true

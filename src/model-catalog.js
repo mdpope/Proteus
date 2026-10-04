@@ -30,12 +30,13 @@ export class ModelCatalog {
     if (!force && this.lastAttempt !== null && this.now() - this.lastAttempt < this.ttl) return this.value;
     this.lastAttempt = this.now();
     this.pending = (async () => {
+      let reported;
       try {
-        const result = await this.load();
+        const result = reported = await this.load();
         if (result.error || result.available === false) throw new Error(result.error || 'Provider unavailable.');
         this.value = { ...result, stale: false, attemptedAt: null, checkedAt: new Date(this.now()).toISOString(), refreshIntervalMs: this.ttl, error: null };
       } catch (error) {
-        this.value = { ...(this.value || { available: false, models: [], checkedAt: null }), stale: true, error: error.message, attemptedAt: new Date(this.now()).toISOString(), refreshIntervalMs: this.ttl };
+        this.value = { ...(this.value || { available: false, models: [], checkedAt: null }), ...(reported?.authenticationCommand ? { authenticationCommand: reported.authenticationCommand } : {}), stale: true, error: error.message, attemptedAt: new Date(this.now()).toISOString(), refreshIntervalMs: this.ttl };
       }
       return this.value;
     })().finally(() => { this.pending = null; });

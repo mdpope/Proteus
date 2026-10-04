@@ -2,7 +2,7 @@ import { ModelCatalog, chatModelOptions, validateModelOptions } from './model-ca
 import http from 'node:http';
 import { contextPlan } from '../public/context-plan.js';
 import { agentName } from '../public/agent-name.js';
-import { UsageCache } from './usage.js';
+import { ProviderUsageCache } from './usage.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -10,6 +10,10 @@ import { randomBytes } from 'node:crypto';
 import { Engine } from './engine.js';
 import { CopilotProvider } from './copilot.js';
 import { CodexProvider } from './codex.js';
+import { ClaudeProvider } from './claude.js';
+import { OmiIntegration, isOmiSchedule } from './omi.js';
+import { LifeStore } from './life.js';
+import { WorkspaceFiles } from './workspace-files.js';
 import { SettingsStore } from './settings.js';
 import { ContextStore } from './context.js';
 import { StandupStore } from './standup.js';
@@ -42,10 +46,15 @@ function lock(home) {
   }
   return () => { if (fs.existsSync(file) && fs.readFileSync(file, 'utf8') === String(process.pid)) fs.unlinkSync(file); };
 }
-async function body(req) {
-  let text = ''; for await (const chunk of req) { text += chunk; if (text.length > 2_000_000) throw new Error('Request too large.'); }
-  return text ? JSON.parse(text) : {};
+async function body(req, maxBytes = 2_000_000) {
+  let bytes = 0; const chunks = [];
+  for await (const chunk of req) {
+    bytes += chunk.length; if (bytes > maxBytes) throw new Error('Request too large.');
+    chunks.push(chunk);
+  }
+  return bytes ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {};
 }
+
 export async function startServer({ home = defaultHome(), port = 4317, providers, browser, openExternal, timers = true, withSeed = true, background = false } = {}) {
   const unlock = lock(home);
   if (withSeed) seed(home);
@@ -54,15 +63,23 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   const standup = new StandupStore(home, settings.get().timezone);
   const copilot = new CopilotProvider({}, { browser, context, settings });
   const codex = new CodexProvider({}, { browser, context });
-  const adapters = providers || { copilot, codex };
+  const claude = new ClaudeProvider({}, { browser, context });
+  const omi = new OmiIntegration(home);
+  const life = new LifeStore(home);
+  const workspaceFiles = new WorkspaceFiles(() => context.config().workspaces);
+  const adapters = { ...(providers || { copilot, codex, claude }), 'local-process': omi.provider() };
   const engine = new Engine(home, adapters);
-  const usage = new UsageCache(() => (providers?.copilot || copilot).quota());
+  const usage = new ProviderUsageCache(Object.fromEntries(Object.entries(adapters).filter(([id]) => ['copilot', 'codex', 'claude'].includes(id))));
+  engine.beforeRun = schedule => omi.assertRunnable(schedule);
+  engine.executionLane = schedule => schedule.provider === 'local-process' && ['audio', 'library', 'semantic'].includes(schedule.integration?.job) ? `omi:${schedule.integration.job}` : null;
   engine.prepareSchedule = schedule => {
+    omi.assertEnabled(schedule);
+    if (schedule.provider === 'local-process') return schedule;
     if (schedule.context && !schedule.contextSelection) return schedule;
     const snapshot = context.capture({ workspace: schedule.workspace, selectedIds: schedule.contextSelection?.selectedIds, agentId: schedule.contextSelection?.agentId, includeDefaults: schedule.contextSelection?.includeDefaults });
     return { ...schedule, context: snapshot, workspace: snapshot.workspace };
   };
-  const catalogs = Object.fromEntries(Object.entries(adapters).filter(([, adapter]) => adapter.status).map(([id, adapter]) => [id, new ModelCatalog(() => adapter.status())]));
+  const catalogs = Object.fromEntries(Object.entries(adapters).filter(([id, adapter]) => id !== 'local-process' && adapter.status).map(([id, adapter]) => [id, new ModelCatalog(() => adapter.status())]));
   const catalog = catalogs.copilot || new ModelCatalog(() => copilot.status());
   const providerStatuses = () => Object.fromEntries(Object.entries(catalogs).map(([id, catalog]) => [id, catalog.value]));
   const permissionPreviews = new Map();
@@ -87,7 +104,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (req.headers.host !== new URL(origin).host) return json(403, { error: 'Invalid host.' });
       res.setHeader('Cache-Control', 'no-store'); res.setHeader('Referrer-Policy', 'no-referrer');
       res.setHeader('X-Content-Type-Options', 'nosniff');
-      res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https: http:; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'");
+      res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob: https: http:; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'");
       const url = new URL(req.url, origin);
       if (url.pathname === '/' && url.searchParams.get('token') === token) {
         res.setHeader('Set-Cookie', `proteus=${token}; HttpOnly; SameSite=Strict; Path=/`);
@@ -116,9 +133,30 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
           ...engine.schedules.list().filter(schedule => !schedule.error).map(schedule => ({ ...schedule, ref: { scheduleId: schedule.id } })),
           ...engine.listRuns().map(run => ({ ...run.schedule, ref: { runId: run.id } }))
         ].map(permissionSchedule).filter(Boolean).map(schedule => { const context = engine.permissions.describe(schedule); return [context.id, { ...context, ref: schedule.ref }]; })).values()],
-        home, settings: settings.get(), context: context.get(), standup: standup.get(), browserAvailable: !!browser, schedulerErrors, recoveryErrors: engine.recoveryErrors || [], version: '0.1.0',
+        home, life: life.get(), settings: settings.get(), context: context.get(), standup: standup.get(), browserAvailable: !!browser, schedulerErrors, recoveryErrors: engine.recoveryErrors || [], version: '0.1.0',
         scheduler: { running: true, background, message: background ? 'The menu bar host keeps running when its window is closed. Quit Proteus stops execution. The Mac must be awake.' : 'Schedules run while this host process is running.' }
       });
+      if (url.pathname === '/api/omi' && req.method === 'GET') return json(200, { ...await omi.status(), schedules: engine.schedules.list().filter(isOmiSchedule) });
+      if (url.pathname === '/api/omi/settings' && req.method === 'POST') {
+        const value = await body(req); const saved = await omi.saveSettings(value.settings, value.expectedRevision); notify(); return json(200, saved);
+      }
+      if (url.pathname === '/api/omi/prepare' && req.method === 'POST') {
+        const value = await body(req); const schedules = omi.prepareSchedules(engine.schedules, value.expectedRevision); notify(); return json(200, { schedules });
+      }
+      if (url.pathname === '/api/omi/logs' && req.method === 'GET') return json(200, omi.logs(url.searchParams.get('job'), url.searchParams.get('stream') || 'out', url.searchParams.get('limit') || 50));
+      if (url.pathname === '/api/life' && req.method === 'POST') {
+        const value = await body(req); const saved = await life.save(value.settings || value, value.expectedRevision); notify(); return json(200, saved);
+      }
+      if (url.pathname === '/api/life/setup-plan' && req.method === 'POST') return json(200, await life.planSetup(await body(req)));
+      if (url.pathname === '/api/life/setup-apply' && req.method === 'POST') { const result = await life.applySetup(await body(req)); notify(); return json(200, result); }
+      if (url.pathname === '/api/life/data' && req.method === 'POST') { const value = await body(req); return json(200, await life.data(value.section, value.query || {})); }
+      if (url.pathname === '/api/life/action' && req.method === 'POST') { const value = await body(req, 30 * 1024 * 1024); const result = await life.action(value.action, value.input || {}, value.idempotencyKey); notify(); return json(200, result); }
+      if (url.pathname === '/api/life/evidence' && req.method === 'POST') return json(200, await life.evidence((await body(req)).attachmentId));
+      if (url.pathname === '/api/workspace-files/roots' && req.method === 'GET') return json(200, workspaceFiles.roots());
+      if (url.pathname === '/api/workspace-files/list' && req.method === 'POST') return json(200, workspaceFiles.list(await body(req)));
+      if (url.pathname === '/api/workspace-files/folder' && req.method === 'POST') return json(200, workspaceFiles.createFolder(await body(req)));
+      if (url.pathname === '/api/workspace-files/read' && req.method === 'POST') return json(200, workspaceFiles.read(await body(req)));
+      if (url.pathname === '/api/workspace-files/create' && req.method === 'POST') return json(200, workspaceFiles.createMarkdown(await body(req)));
       if (url.pathname === '/api/settings' && req.method === 'POST') {
         const value = await body(req); const old = settings.get();
         const saved = settings.save(value.settings, value.expectedRevision);
@@ -299,14 +337,15 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (url.pathname === '/api/markdown' && req.method === 'POST') {
         const { file, image } = await body(req);
         const roots = [...context.roots(), ...context.config().documents.map(doc => path.dirname(doc.path)), settings.get().workspace.cwd, ...settings.get().workspace.additionalDirectories, ...engine.schedules.list().filter(s => !s.error).flatMap(s => [s.workspace.cwd, ...s.workspace.additionalDirectories])];
-        if (typeof file !== 'string' || !file.endsWith('.md') || !isWithin(file, roots)) throw new Error('Choose a Markdown file inside a configured workspace.');
+        if (typeof file !== 'string' || !/\.md$/i.test(file) || !isWithin(file, roots)) throw new Error('Choose a Markdown file inside a configured workspace.');
         if (fs.statSync(file).size > 1_000_000) throw new Error('Markdown file is too large.');
         const content = fs.readFileSync(file, 'utf8');
         return json(200, image ? readImage({ source: image, texts: [content], cwd: path.dirname(file), roots }) : { file, content });
       }
       const assets = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'], '/features.js': ['features.js', 'text/javascript'], '/remote.js': ['remote.js', 'text/javascript'] };
       for (const file of ['runtime.js', 'style.css']) assets['/markdown/' + file] = ['markdown/' + file, file.endsWith('.css') ? 'text/css' : 'text/javascript'];
-      for (const file of ['conversation.js', 'tool-presentation.js', 'agent-name.js', 'usage.js', 'context-plan.js']) assets['/' + file] = [file, 'text/javascript'];
+      for (const file of ['conversation.js', 'tool-presentation.js', 'agent-name.js', 'usage.js', 'context-plan.js', 'omi.js', 'life.js', 'markdown-picker.js']) assets['/' + file] = [file, 'text/javascript'];
+      for (const file of ['omi.css', 'life.css', 'markdown-picker.css']) assets['/' + file] = [file, 'text/css'];
       if (req.method === 'GET' && assets[url.pathname]) {
         const [file, type] = assets[url.pathname]; res.writeHead(200, { 'Content-Type': type }); res.end(fs.readFileSync(path.join(root, 'public', file))); return;
       }
@@ -318,8 +357,8 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   origin = `http://127.0.0.1:${server.address().port}`;
   atomicJSON(path.join(home, 'connection.json'), { origin, token, pid: process.pid });
   const timer = timers ? setInterval(() => { try { engine.tick(); } catch (error) { engine.emit('scheduler-error', { error: error.message, at: new Date().toISOString() }); } }, 1000) : null;
-  const service = { engine, settings, context, standup, catalog, catalogs, origin, token, home, url: `${origin}/?token=${token}`, async close() {
-    if (timer) clearInterval(timer); if (catalogTimer) clearInterval(catalogTimer); await Promise.all(Object.values(catalogs).map(c => c.pending)); await remote.close(); await engine.close(); await copilot.close(); await codex.close();
+  const service = { engine, settings, context, standup, omi, life, workspaceFiles, usage, catalog, catalogs, origin, token, home, url: `${origin}/?token=${token}`, async close() {
+    if (timer) clearInterval(timer); if (catalogTimer) clearInterval(catalogTimer); await Promise.all(Object.values(catalogs).map(c => c.pending)); await remote.close(); await engine.close(); await copilot.close(); await codex.close(); await claude.close(); await life.close?.();
     for (const client of eventClients) client.end(); eventClients.clear();
     await new Promise(resolve => server.close(resolve)); server.closeAllConnections();
     fs.rmSync(path.join(home, 'connection.json'), { force: true }); unlock();
@@ -328,6 +367,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   const refreshCatalog = () => Promise.allSettled(Object.values(catalogs).map(c => c.get())).then(() => { notify(); remote.changed(); });
   const catalogTimer = timers ? setInterval(refreshCatalog, 60_000) : null;
   if (timers) void refreshCatalog();
+  if (life.get().enabled && life.get().configured) void life.refresh().then(notify).catch(() => notify());
   return service;
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

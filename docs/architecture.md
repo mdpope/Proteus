@@ -17,7 +17,7 @@ session ID. Resume reuses that ID and reapplies directories and tools; it does n
 edited schedule accidentally. An explicit idle-chat context refresh preserves the initial schedule
 and prior context snapshots before replacing the effective context for the next turn.
 
-The runner serializes execution and takes a process lock for its data directory. A saved run
+The runner serializes AI execution and takes a process lock for its data directory. Allowlisted Omi native jobs have independent per-job execution lanes and still use native worker locks. A saved run
 claims a scheduled occurrence even if the process stops before the scheduler journal is saved.
 Restart marks active work interrupted. Catch-up coalesces missed occurrences to at most one new
 run per schedule. Already-active schedules skip overlapping occurrences.
@@ -45,4 +45,22 @@ host executes tools and owns persistence. iOS uses a Keychain device credential,
 versioned edits, deduplicated mutation IDs, and replay/snapshot recovery. Relay routes carry no
 provider credentials. Desktop IPC and the credential broker remain inaccessible to remote clients.
 
-Copilot and Codex implement the same event, input, approval, cancellation and persistence boundary. Model catalogs are keyed by provider. OAuth recovery is a host command separate from model turns; the provider owns token storage and its Mac loopback callback. See `mcp-auth.md` for remote-client behavior.
+Copilot, Codex and Claude implement the same event, input, approval, cancellation and persistence boundary, with provider-specific capabilities and explicit unsupported-feature errors. Model catalogs are keyed by provider. OAuth recovery is a host command separate from model turns; the provider owns token storage and its Mac loopback callback. See `mcp-auth.md` for remote-client behavior.
+
+The Omi adapter is opt-in and disabled by default. It bridges existing installed worker commands,
+not recording transport or Bluetooth. Native ownership and the persisted execution gate are
+checked on every run, including saved/resumed runs. Omi and Life occupy persistent, independent
+feature tabs, so opening them does not repurpose the schedules or chat tabs.
+
+Life is opt-in and absent from navigation before setup. Its renderer uses authenticated local JSON
+routes; the trusted host owns SQLite or a private TLS/SSH MariaDB connection and OS credential
+references. No website tab, iframe, database credential or arbitrary SQL reaches its renderer.
+The installer and versioned migrations preserve nutrition records and immutable food versions.
+Remote upgrades require a verified backup and an explicit reviewed operation; merely downloading
+an app never mutates a database. The complete branded Laravel application remains under `web/`
+for later deployment. Website identity, public-origin passkey enrollment and MCP hosting remain
+server responsibilities. Life's setup and database endpoints are not exposed by the mobile relay.
+
+Markdown creation is bound to configured workspace roots, revalidated for every operation. The
+folder picker rejects escaping links and traversal, creates files exclusively, and bounds reads.
+Native browser views are hidden while application dialogs are open.

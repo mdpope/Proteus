@@ -1,0 +1,180 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import { spawn } from 'node:child_process';
+import { EventEmitter } from 'node:events';
+import { createInterface } from 'node:readline';
+import { validateModelOptions } from './model-catalog.js';
+import { displayText, toolSummary } from './tool-activity.js';
+
+export function claudeExecutable() {
+  if (process.env.PROTEUS_CLAUDE_PATH) return process.env.PROTEUS_CLAUDE_PATH;
+  for (const file of [path.join(os.homedir(), '.local/bin/claude'), '/opt/homebrew/bin/claude', '/usr/local/bin/claude']) if (fs.existsSync(file)) return file;
+  const root = path.join(os.homedir(), 'Library/Application Support/Claude/claude-code');
+  try { for (const version of fs.readdirSync(root).sort((a,b)=>b.localeCompare(a,undefined,{numeric:true}))) for (const build of fs.readdirSync(path.join(root,version))) {
+    const file = path.join(root,version,build,'claude.app/Contents/MacOS/claude'); if (fs.existsSync(file)) return file;
+  } } catch { /* A normal CLI installation is also supported. */ }
+  return 'claude';
+}
+export function claudeModel(model, runtime={}) {
+  const efforts = (model.supportedEffortLevels || []).filter(e => typeof e === 'string');
+  return { id:model.value || model.id, name:model.displayName || model.value, description:model.description, resolvedModel:model.resolvedModel,
+    controls:{ reasoningEfforts:efforts, reasoningSupported:model.supportsEffort ?? efforts.length>0, defaultReasoningEffort:null,
+      contextTiers:[{id:'default',promptTokens:null,totalTokens:null}], maxOutputTokens:null,
+      serviceTiers:model.supportsFastMode === true && !runtime.fast_mode_disabled_reason ? [{id:'fast',name:'Fast (extra usage)'}] : [] } };
+}
+export function claudeAccountAvailable(account={}) {
+  // Current authenticated CLI initialization reports profile fields instead of
+  // tokenSource/apiKeySource. Never store or expose the profile to the UI.
+  return !!(account.apiKeySource&&account.apiKeySource!=='none')||!!(account.tokenSource&&account.tokenSource!=='none')||
+    (typeof account.subscriptionType==='string'&&account.subscriptionType.length>0)||
+    (typeof account.email==='string'&&account.email.length>0);
+}
+// Only signal the process group created for this child. EPERM is unknown liveness,
+// never evidence that a process exited. All signal exceptions stay inside this promise.
+export async function stopClaudeProcess(child, {platform=process.platform,signalGroup=(pid,signal)=>process.kill(pid,signal),graceMs=500,pollMs=20}={}) {
+  if(!Number.isSafeInteger(child?.pid)||child.pid<=0)return;
+  const errors=new Set();
+  const remember=error=>errors.add(error?.code||'signal failed');
+  const directAlive=()=>child.exitCode===null&&child.signalCode===null;
+  const state=()=>{
+    if(platform==='win32')return directAlive()?'alive':'gone';
+    try{signalGroup(-child.pid,0);return 'alive';}catch(error){if(error.code==='ESRCH')return 'gone';remember(error);return 'unknown';}
+  };
+  const direct=signal=>{if(!directAlive())return;try{if(!child.kill(signal)&&directAlive())errors.add('child did not accept signal');}catch(error){if(error.code!=='ESRCH')remember(error);}};
+  const send=signal=>{
+    if(platform==='win32'){direct(signal);return;}
+    try{signalGroup(-child.pid,signal);}catch(error){if(error.code==='ESRCH')return;remember(error);direct(signal);}
+  };
+  const wait=async()=>{const until=Date.now()+graceMs;do{if(state()==='gone')return true;await new Promise(resolve=>setTimeout(resolve,Math.min(pollMs,Math.max(1,until-Date.now()))));}while(Date.now()<until);return state()==='gone';};
+  if(state()==='gone')return;
+  send('SIGTERM');if(await wait())return;
+  send('SIGKILL');if(await wait())return;
+  throw new Error(`Claude runtime cleanup could not confirm termination${errors.size?' ('+[...errors].join(', ')+')':''}. A Proteus-owned process may still be running; resolve its OS permission or stop it before another Claude turn.`);
+}
+// The private process uses the same bidirectional protocol as Anthropic's Agent SDK.
+export class ClaudeRPC extends EventEmitter {
+  constructor({command=claudeExecutable(),args=[],cwd=os.tmpdir(),env=process.env}={}) {
+    super(); this.pending=new Map(); this.sequence=0; this.ended=false;
+    this.child=spawn(command,['--print','--input-format','stream-json','--output-format','stream-json','--verbose','--include-partial-messages',
+      '--permission-prompt-tool','stdio','--permission-mode','default','--setting-sources','','--strict-mcp-config','--mcp-config','{"mcpServers":{}}',
+      '--disable-slash-commands','--no-chrome',...args],{cwd,env:{...env,CLAUDE_CODE_DISABLE_AUTO_MEMORY:'1'},detached:process.platform!=='win32',stdio:['pipe','pipe','pipe']});
+    // Runtime stderr may contain private prompt/credential material. Do not persist it in errors.
+    this.child.stderr.on('data',()=>{});
+    const end=error=>{if(this.ended)return;this.ended=true;for(const p of this.pending.values()){clearTimeout(p.timer);p.reject(error);}this.pending.clear();this.emit('closed',error);};
+    createInterface({input:this.child.stdout}).on('line',line=>{let m;try {m=JSON.parse(line);}catch{return;}
+      if(m.type==='control_response'){const r=m.response,p=this.pending.get(r.request_id);if(p){clearTimeout(p.timer);this.pending.delete(r.request_id);r.subtype==='error'?p.reject(new Error(r.error)):p.resolve(r.response);}}
+      else if(m.type==='control_request')this.emit('request',m);else this.emit('message',m);
+    });
+    this.child.on('error',end);this.child.stdin.on('error',end);this.child.on('exit',code=>end(new Error(`Claude runtime exited (${code ?? 'signal'}).`)));
+  }
+  write(value){if(this.ended)throw new Error('Claude connection closed.');this.child.stdin.write(JSON.stringify(value)+'\n');}
+  request(request,timeout=30000){return new Promise((resolve,reject)=>{const id=String(++this.sequence);const timer=setTimeout(()=>{this.pending.delete(id);reject(new Error(`Claude ${request.subtype} timed out.`));},timeout);this.pending.set(id,{resolve,reject,timer});try{this.write({type:'control_request',request_id:id,request});}catch(error){clearTimeout(timer);this.pending.delete(id);reject(error);}});}
+  respond(id,response){if(!this.ended)this.write({type:'control_response',response:{subtype:'success',request_id:id,response}});}
+  async initialize(hooks={}){return this.request({subtype:'initialize',hooks,skills:[],agents:{}});}
+  close(){
+    if(!this.closing)this.closing=stopClaudeProcess(this.child,{graceMs:this.killGraceMs??500}).catch(error=>{this.cleanupFailure=error;throw error;});
+    return this.closing;
+  }
+  retryClose(){if(this.cleanupFailure){this.closing=null;this.cleanupFailure=null;}return this.close();}
+}
+export class ClaudeProvider {
+  constructor(options={}, {context}={}) {this.options=options;this.context=context;this.active=null;this.cleanupClients=new Set();this.cleanupError=null;}
+  client(args=[],cwd){return this.options.clientFactory ? this.options.clientFactory({args,cwd}) : new ClaudeRPC({...this.options,args,cwd});}
+  async retryPendingCleanup(){
+    for(const client of this.cleanupClients){
+      try{await (client.retryClose?client.retryClose():client.close());this.cleanupClients.delete(client);if(this.active===client)this.active=null;}
+      catch(error){this.cleanupError=error;}
+    }
+    if(!this.cleanupClients.size)this.cleanupError=null;
+    return this.cleanupError;
+  }
+  async status(){
+    if(this.cleanupClients.size&&await this.retryPendingCleanup())return {provider:'claude',available:false,models:[],error:this.cleanupError.message,authenticationCommand:{executable:this.options.command||claudeExecutable(),args:['auth','login']}};
+    const client=this.client(['--no-session-persistence','--system-prompt','Proteus capability discovery.']);let status;
+    const authenticationCommand={executable:this.options.command||claudeExecutable(),args:['auth','login']};
+    try{
+      const result=await client.initialize();const account=result.account||{};
+      const available=claudeAccountAvailable(account);
+      status={provider:'claude',authenticationCommand,available,models:(result.models||[]).map(m=>claudeModel(m,result)),error:available?null:'Sign in to Claude Code on this Mac with claude auth login. The Claude app account is separate.',capabilities:{steering:false,context:'Selected instructions and skills; native Claude sessions; tool approvals through Proteus.'}};
+    }catch(error){status={provider:'claude',authenticationCommand,available:false,models:[],error:error.message};}
+    try{await client.close();}catch(error){this.cleanupClients.add(client);this.cleanupError=error;status={...status,available:false,error:error.message};}
+    if(this.cleanupError)status={...status,available:false,error:this.cleanupError.message};
+    return status;
+  }
+  async quota(){if(this.rateLimits?.size)return {provider:'claude',windows:[...this.rateLimits.values()],available:true,source:'Claude runtime rate-limit events',observedAt:this.rateLimitsObservedAt};return {provider:'claude',windows:[],available:false,source:'Claude Code',error:'Claude Code does not expose subscription quota through its supported control protocol. Check Usage in the Claude app. Per-turn tokens are recorded separately.'};}
+  async run({run,prompt,emit,ask,update,signal,stream}) {
+    if(this.cleanupError)throw this.cleanupError;
+    if(this.active)throw new Error('A Claude turn is already active.');
+    const snapshot=run.schedule.context,managed=snapshot&&this.context?this.context.providerContext(snapshot):null;
+    if(managed?.customAgents?.some(a=>a.tools!==null))throw new Error('Claude cannot enforce selected editor agent tool filters. Deselect restricted agents.');
+    const selected=managed?{...Object.fromEntries(Object.entries(snapshot.includeDefaults!==false?run.schedule.mcpServers||{}:{}).filter(([name])=>!managed.disabledLegacyMcp.includes(name))),...managed.mcpServers}:run.schedule.mcpServers||{};
+    if(Object.keys(selected).length)throw new Error('Claude MCP integration is not yet available. Deselect MCP servers for this Claude chat.');
+    if(run.schedule.skillDirectories?.length&&snapshot?.includeDefaults!==false)throw new Error('For Claude select individual skills; legacy skill directories cannot be isolated.');
+    if(signal.aborted)throw new Error('Cancelled');
+    const instructions=`You are running inside Proteus. Use only the following explicitly supplied instructions and sources. Do not discover instruction, skill, agent, or memory files automatically.\nWorkspace: ${run.schedule.workspace.cwd}\n${managed?.instructionText||''}\n${(managed?.customAgents||[]).map(a=>`Agent ${a.displayName}:\n${a.prompt}`).join('\n\n')}\nEditor context: ${JSON.stringify(run.schedule.editorContext||null)}`;
+    // A custom system prompt omits Claude Code's automatic instruction context. Settings,
+    // skills, MCPs and plugins are excluded independently, while native credentials stay native.
+    const settings={claudeMdExcludes:['/**'],autoMemoryEnabled:false,enabledPlugins:{},fastMode:run.schedule.serviceTier==='fast'};
+    const args=['--system-prompt',instructions,'--settings',JSON.stringify(settings),'--disallowedTools','Agent,Task,Skill,EnterWorktree,ExitWorktree'];
+    if(run.schedule.model)args.push('--model',run.schedule.model);
+    if(run.schedule.reasoningEffort)args.push('--effort',run.schedule.reasoningEffort);
+    if(run.providerSessionId)args.push('--resume',run.providerSessionId);
+    // Additional roots are conveyed to the native permission system, with skills disabled.
+    for(const root of run.schedule.workspace.additionalDirectories||[])args.push('--add-dir',root);
+    const client=this.client(args,run.schedule.workspace.cwd);this.active=client;
+    let resolve,reject;const done=new Promise((a,b)=>{resolve=a;reject=b;});done.catch(()=>{});
+    const calls=new Map();let currentId='claude',resultSeen=false;const approved=new Map();
+    let remaining=this.options.timeoutMs??30*60*1000,started=performance.now(),timer,pauses=0,finished=false;
+    const arm=()=>{if(finished||pauses)return;started=performance.now();timer=setTimeout(()=>reject(new Error('Claude exceeded the active execution time limit. Waiting for input was excluded.')),Math.max(0,remaining));};
+    const askUser=async request=>{if(pauses++===0){clearTimeout(timer);remaining-=performance.now()-started;}try{return await ask(request);}finally{if(--pauses===0)arm();}};
+    const permissionKey=(id,name,input)=>typeof id==='string'&&id.length?JSON.stringify([id,name,input]):null;
+    arm();
+    const permit=async(name,input,id)=>{
+      if(name==='AskUserQuestion'){const answers={};for(const q of input.questions||[])answers[q.question]=await askUser({type:'question',question:q.question,choices:q.options?.map(x=>x.label)});return {behavior:'allow',updatedInput:{...input,answers}};}
+      const kind=name==='Bash'?'shell':['Write','Edit','MultiEdit','NotebookEdit'].includes(name)?'write':['Read','Glob','Grep'].includes(name)?'read':'custom-tool';
+      const answer=await askUser({type:'permission',question:`Allow Claude ${name}?`,details:{kind,toolCallId:id,toolName:name,args:input,fullCommandText:input.command,fileName:input.file_path||input.notebook_path||input.path,path:input.file_path||input.path||run.schedule.workspace.cwd,intention:`Claude ${name}`}});
+      return ['approve','approve-auto'].includes(answer)?{behavior:'allow',updatedInput:input}:{behavior:'deny',message:'The operator declined this tool.'};
+    };
+    const request=async m=>{try{const r=m.request;let answer;
+      if(r.subtype==='hook_callback'){
+        const data=r.input||{},id=data.tool_use_id||r.tool_use_id;answer=await permit(data.tool_name,data.tool_input||{},id);
+        const key=permissionKey(id,data.tool_name,data.tool_input||{});if(key)approved.set(key,answer);
+        client.respond(m.request_id,{hookSpecificOutput:{hookEventName:'PreToolUse',permissionDecision:answer.behavior==='allow'?'allow':'deny',permissionDecisionReason:answer.message||'Approved through Proteus',...(answer.updatedInput?{updatedInput:answer.updatedInput}:{})}});
+      }else if(r.subtype==='can_use_tool')client.respond(m.request_id,approved.get(permissionKey(r.tool_use_id,r.tool_name,r.input||{}))||await permit(r.tool_name,r.input||{},r.tool_use_id));
+      else client.respond(m.request_id,{behavior:'deny',message:'Unsupported Claude control request.'});
+    }catch(error){if(!client.ended)client.respond(m.request_id,{behavior:'deny',message:error.message});}};
+    const message=m=>{
+      if(m.session_id){run.providerSessionId=m.session_id;run.providerHome=process.env.CLAUDE_CONFIG_DIR||path.join(os.homedir(),'.claude');update();}
+      if(m.type==='stream_event'){const event=m.event;if(event?.type==='message_start')currentId=event.message.id;if(event?.type==='content_block_delta'&&event.delta?.type==='text_delta')stream(currentId,event.delta.text);}
+      if(m.type==='assistant'){
+        if(m.error){reject(new Error(`Claude ${m.error}`));return;}
+        for(const block of m.message?.content||[]){if(block.type==='text'){if(run.liveMessages)delete run.liveMessages[m.message.id];emit('assistant',block.text);}if(block.type==='tool_use'){
+          const tool={callId:block.id,name:block.name,summary:toolSummary(block.name,block.input),arguments:displayText(block.input,6000),status:'running',startedAt:new Date().toISOString()};calls.set(block.id,tool);emit('tool',tool.summary,{tool});}}
+      }
+      if(m.type==='user')for(const block of m.message?.content||[])if(block.type==='tool_result'){const tool=calls.get(block.tool_use_id);if(tool){tool.status=block.is_error?'failed':'completed';tool.output=displayText(block.content);tool.finishedAt=new Date().toISOString();tool.durationMs=Date.now()-Date.parse(tool.startedAt);update();}}
+      if(m.type==='system'&&m.subtype==='compact_boundary')emit('system','Claude compacted conversation context.');
+      if(m.type==='rate_limit_event'){
+        const q=m.rate_limit_info||m.rateLimitInfo||{},id=q.rateLimitType||q.rate_limit_type;
+        if(id){this.rateLimits??=new Map();this.rateLimitsObservedAt=new Date().toISOString();const reset=q.resetsAt??q.resets_at;this.rateLimits.set(id,{id,label:id.replaceAll('_',' '),remainingPercent:Number.isFinite(q.utilization)?Math.max(0,Math.min(100,100-q.utilization*100)):null,resetAt:Number.isFinite(reset)?new Date(reset*1000).toISOString():null,status:q.status,unlimited:false});}
+      }
+      if(m.type==='result'){if(resultSeen)return;resultSeen=true;if(m.usage)run.usage={observed:true,inputTokens:(run.usage?.inputTokens||0)+(m.usage.input_tokens||0),outputTokens:(run.usage?.outputTokens||0)+(m.usage.output_tokens||0)};run.contextUsage=m.modelUsage||null;update();m.is_error||m.subtype!=='success'?reject(new Error((m.errors||[]).join('\n')||`Claude ${m.subtype}`)):resolve();}
+    };
+    const closed=e=>{if(!resultSeen)reject(e);};const abort=()=>{void client.close().then(()=>reject(new Error('Cancelled')),error=>reject(error));};
+    client.on('message',message);client.on('request',request);client.on('closed',closed);signal.addEventListener('abort',abort,{once:true});
+    try {const result=await client.initialize({PreToolUse:[{matcher:'.*',hookCallbackIds:['proteus_permission']}]});
+      if(result.hooks_applied!==true)throw new Error('Claude did not confirm the Proteus permission hooks. Update Claude Code before running this chat.');
+      const model=(result.models||[]).map(m=>claudeModel(m,result)).find(m=>m.id===run.schedule.model);if(!model)throw new Error('Choose an available Claude model from the provider catalog.');validateModelOptions(run.schedule,model);
+      // Fast mode requires both model support and runtime opt-in. Do not silently ignore a selection.
+      if(run.schedule.serviceTier==='fast'&&result.fast_mode_disabled_reason)throw new Error(`Claude fast mode unavailable: ${result.fast_mode_disabled_reason}. Choose Provider default.`);
+      run.modelCapabilities={id:model.id,controls:model.controls,capturedAt:new Date().toISOString()};if(snapshot){snapshot.suppliedAt=new Date().toISOString();snapshot.delivery='Claude explicit system prompt accepted';}update();
+      if(signal.aborted)throw new Error('Cancelled');client.write({type:'user',session_id:run.providerSessionId||'',message:{role:'user',content:prompt},parent_tool_use_id:null});await done;
+    }finally{
+      finished=true;clearTimeout(timer);signal.removeEventListener('abort',abort);let cleanupError;
+      try{await client.close();}catch(error){cleanupError=error;this.cleanupError=error;this.cleanupClients.add(client);}
+      finally{client.off('message',message);client.off('request',request);client.off('closed',closed);if(!cleanupError)this.active=null;for(const tool of calls.values())if(tool.status==='running')tool.status='interrupted';update();}
+      if(cleanupError)throw cleanupError;
+    }
+  }
+  async close(){const results=await Promise.allSettled([...new Set([this.active,...this.cleanupClients].filter(Boolean))].map(client=>client.close()));const failed=results.find(result=>result.status==='rejected');if(failed){this.cleanupError=failed.reason;throw failed.reason;}}
+}

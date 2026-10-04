@@ -45,7 +45,7 @@ struct NewChatView: View {
                 Section("Conversation") { TextField("Title (optional)", text: $name); TextField("What would you like to work on?", text: $prompt, axis: .vertical).lineLimit(4...10).accessibilityIdentifier("chat-prompt") }
                 Section("Run on your Mac") {
                     Picker("Workspace", selection: $workspace) { ForEach(store.state["context"]["workspaces"].array, id: \.self) { Text($0["name"].string).tag($0["id"].string) } }
-                    Picker("Provider", selection: $provider) { Text("GitHub Copilot").tag("copilot"); Text("Codex").tag("codex"); Text("Local rehearsal").tag("rehearsal") }.accessibilityIdentifier("chat-provider")
+                    Picker("Provider", selection: $provider) { Text("GitHub Copilot").tag("copilot"); Text("Codex").tag("codex"); Text("Claude").tag("claude"); Text("Local rehearsal").tag("rehearsal") }.accessibilityIdentifier("chat-provider")
                     if provider != "rehearsal" {
                         ProviderModelPicker(model: $model, effort: $effort, contextTier: $contextTier, serviceTier: $serviceTier, provider: provider)
                     }
@@ -83,6 +83,7 @@ struct ChatView: View {
     private var run: JSON { store.chats[id] ?? .null }
     private var mainAgentName: String { run["agentName"].string.isEmpty ? "Proteus" : run["agentName"].string }
     private var pending: JSON { run["pending"] }
+    private var nativeRun: Bool { run["schedule"]["provider"].string == "local-process" }
     private var active: Bool { ["running", "queued", "awaiting_input"].contains(run["status"].string) }
     var body: some View {
         ScrollViewReader { proxy in
@@ -125,13 +126,13 @@ struct ChatView: View {
             .onChange(of: run["events"]) { _, _ in if followLatest { proxy.scrollTo("chat-end", anchor: .bottom) } }
             .onChange(of: run["liveMessages"]) { _, _ in if followLatest { proxy.scrollTo("chat-end", anchor: .bottom) } }
         }.navigationTitle(run["title"].string.isEmpty ? "Conversation" : run["title"].string).navigationBarTitleDisplayMode(.inline)
-            .safeAreaInset(edge: .bottom) { composer }
+            .safeAreaInset(edge: .bottom) { if nativeRun { VStack { Text("Native Omi processing · outcomes are recorded by the worker.").font(.caption); if active { Button("Stop process", role: .destructive) { act("chat.cancel", [:]) } } }.padding().background(.bar) } else { composer } }
             .task(id: id) {
                 await store.openChat(id)
                 let options = run["nextModelOptions"] == .null ? run["schedule"] : run["nextModelOptions"]
                 model = options["model"].string; effort = options["reasoningEffort"].string
                 contextTier = options["contextTier"].string.isEmpty ? "default" : options["contextTier"].string; serviceTier = options["serviceTier"].string
-                await store.loadModels(provider: run["schedule"]["provider"].string)
+                if !["rehearsal", "local-process"].contains(run["schedule"]["provider"].string) { await store.loadModels(provider: run["schedule"]["provider"].string) }
             }
             .sheet(isPresented: $context) { ChatContextView(run: run) }
     }

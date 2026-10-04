@@ -3,6 +3,20 @@
 Maintain this as the single backlog. Design rationale is in `decisions.md`; recent changes are in
 `../CHANGELOG.md`. Items below are status, not promises of completed validation.
 
+## Omi / Life expansion (October 3)
+
+Implemented in source: Omi observation/control screens, paused native and Codex replacement
+schedules, per-job execution lanes, gate/ownership checks, full Proteus-branded Life web source,
+optional native Life database screens/setup, persistent feature tabs, workspace Markdown creation,
+hideable allowance meters, Claude selection, and Apple build helpers. See the handoff for actual checks.
+
+Deferred by request: production website deployment, nutrition-data migration, domain/relay changes,
+and replacement of existing native Omi services/Codex automations. The live Life database also
+needs an approved private connection: existing SSH forwarding is prohibited, so live records are
+not yet connected. Local installer/record verification uses disposable data. Cutover requires draining
+native transactions, disabling original owners, then validating replacement behavior before any
+claim of unattended reliability. Bluetooth, recording capture and mobile review remain separate.
+
 Implemented in the workspace-context release:
 
 - Copilot model catalog in New Chat, with refresh and explicit unavailable-model errors.
@@ -61,10 +75,10 @@ See [workspaces](workspaces.md) and [credentials](credentials.md) for behavior a
 ## Deferred (no implementation yet)
 
 - Detached background daemon/login item, Developer ID distribution signing/notarization, automatic
-  updates, independent concurrent execution, workflow completion validators and notifications.
+  updates, additional concurrent AI execution, workflow completion validators and notifications.
 - Automatic reconciliation of foreign workflow manifests; currently use the owning repository
   exporter and explicit import/refresh.
-- Provider adapters beyond Copilot/Codex/rehearsal; Codex native agent tool-filter parity and per-tool MCP approval interception; changing the provider of an existing chat.
+- Provider adapters beyond Copilot/Codex/Claude/rehearsal; Claude MCP/browser/steering parity; Codex native agent tool-filter parity and per-tool MCP approval interception; changing the provider of an existing chat.
 - Browser tab restoration across app restarts (website sign-in profiles already persist).
 - Paginated on-disk run storage as history grows.
 - Codex MCP OAuth controls, generic MCP elicitation/input forms, and editor-specific agent hook and extension-tool mappings. Copilot OAuth recovery is implemented per chat.

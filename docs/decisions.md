@@ -52,3 +52,31 @@ These decisions describe implemented behavior. Proposed work belongs in `planned
 - **Stable live controls.** Token/tool updates patch conversation content without rebuilding
   unrelated controls. Authentication status is polled only while its view is open, with bounded
   duration and visible feedback, rather than relying on a transient toast or manual refresh.
+
+- **Observe before replacing Omi.** The app owns scheduling controls, not transcription policy.
+  It invokes the installed native runtime through fixed commands and existing locks. A persisted
+  global gate plus per-execution ownership checks block manual, queued and resumed work until
+  native services are separately unloaded; imported Codex replacements require paused originals.
+  Preparing schedules never activates them or modifies their upstream owners.
+- **Independent native service lanes.** Each of the three Omi native jobs has one execution slot,
+  independent from the single AI-turn slot. This keeps review controls responsive during long ASR
+  or semantic work. The native worker still owns file locks and transactional publication.
+- **One product, separate trust boundaries.** The full Life web application lives in `web/` and
+  retains Laravel authentication, workspace authorization and its existing database schema.
+  Desktop opens it in private sandboxed browser tabs, with no app token or preload bridge.
+  The Electron bundle excludes web source/runtime; no web database or uploads enter packaging.
+- **Relay remains an independent service.** The existing encrypted WebSocket relay only transports
+  remote traffic. A later website host may run it behind the same domain/reverse proxy, but PHP
+  request handling and nutrition data must not become a desktop command channel. Docker is an
+  optional packaging/operations choice; a supervised Node service has the same protocol role.
+  No production relay or DNS changes are part of this source integration.
+
+- **Native, optional Life.** Personal records must be explicitly enabled and configured in Setup,
+  with independent tabs and local forms. The host connects to SQL through private OS-backed
+  credentials; the renderer gets scoped domain records, never arbitrary SQL or database secrets.
+  Existing nutrition entries retain immutable food-version references. Schema updates are
+  versioned, previewed and protected by backup/integrity checks, not silently run at startup.
+  Public-origin authentication and the future encrypted relay remain separate server concerns.
+- **Workspace-bound Markdown creation.** The app chooses configured folders and relative names;
+  each request revalidates root membership and canonical containment. New notes never overwrite.
+  Hide native browser views for the entire lifetime of a modal, including resize events.

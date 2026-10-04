@@ -11,3 +11,6 @@ DerivedData/
 xcuserdata/
 *.xcuserstate
 *.xcresult
+
+# The distributable website setup template contains no credentials.
+!web/.env.example

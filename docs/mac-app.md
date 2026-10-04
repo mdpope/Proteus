@@ -18,9 +18,12 @@ chats first. A local package is a snapshot of the source: rebuild/reinstall afte
 underlying development executable remains Electron. Finder launches include the standard Homebrew
 binary directories, matching the repository launcher for tools such as Node and MCP commands.
 
-The Proteus application is ad-hoc signed; the two GitHub Copilot runtime binaries keep their
-verified GitHub Developer ID signatures. This requires no Apple development certificate and does not
-change signing on another Mac. It is not a notarized distributable release. Developer ID signing,
+The Proteus application defaults to ad-hoc signing. Set `PROTEUS_MAC_SIGN_IDENTITY` to an existing
+Apple development identity when building on the designated Mac to retain a stable team-based
+designated requirement across updates. Identity selection applies only to this package command;
+no certificate, provisioning profile or Xcode signing setting is changed. Ad-hoc builds can
+require renewed macOS file-access approval after code changes. The two GitHub Copilot runtime binaries keep their
+verified GitHub Developer ID signatures. The default requires no Apple development certificate and neither mode changes signing on another Mac. It is not a notarized distributable release. Developer ID signing,
 notarization, automatic updates and login-item installation remain in the backlog.
 
 Run state remains in the same Proteus application-data directory. The package contains app code

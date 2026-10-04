@@ -124,7 +124,7 @@ function updateModelControls(id, providerId) {
   const select = $('#' + id); if (!select) return;
   const provider = $('#' + providerId)?.value || select.dataset.provider;
   const data = catalogFor(provider); const model = data?.models?.find(model => model.id === select.value);
-  const controls = model?.controls; const local = provider === 'rehearsal';
+  const controls = model?.controls; const local = ['rehearsal','local-process'].includes(provider);
   const effort = $('#' + id + '-effort'), context = $('#' + id + '-context'), speed = $('#' + id + '-speed');
   const efforts = controls?.reasoningEfforts || [];
   effort.innerHTML = optionList([{ id: '', label: 'Provider default' + (controls?.defaultReasoningEffort ? ' · ' + controls.defaultReasoningEffort : '') }, ...efforts.map(id => ({ id, label: id }))], effort.value);
@@ -170,7 +170,7 @@ export async function refreshModels(id, providerId, force = false) {
     }
     updateModelControls(id, providerId);
   };
-  updateModelControls(id, providerId); if (provider === 'rehearsal') return;
+  updateModelControls(id, providerId); if (['rehearsal','local-process'].includes(provider)) return;
   const old = catalogFor(provider), checked = old?.attemptedAt || old?.checkedAt;
   if (!force && checked && Date.now() - Date.parse(checked) < (old.refreshIntervalMs || 300_000)) return;
   select.disabled = true;
