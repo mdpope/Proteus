@@ -1,7 +1,8 @@
-const { app, BrowserWindow, ipcMain, shell, dialog, clipboard, Tray, Menu, nativeImage, screen, safeStorage } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, clipboard, Tray, Menu, nativeImage, screen, safeStorage, Notification } = require('electron');
 const path = require('node:path');
 const { BrowserTabs } = require('./browser.cjs');
 const { WorkspaceSession } = require('./workspace-session.cjs');
+const { BrowsingHistory } = require('./browsing-history.cjs');
 let service, window, browser, credentials, terminals, peers, tray, standupWindow, closing = false;
 const showWindow = () => { if (window) { if (window.isMinimized()) window.restore(); window.show(); window.focus(); } };
 app.setName('Proteus');
@@ -23,13 +24,15 @@ else {
     const { CredentialBroker } = await import('../src/credentials.js');
     const { TerminalStore } = await import('../src/terminals.js');
     // The provider only receives this bounded interface, never Electron or a CDP endpoint.
-    service = await startServer({ port: Number(process.env.PORT || 4317), openExternal: url => shell.openExternal(url), browser: { agent: (...args) => browser.agent(...args) }, background: true, lifeOptions: { safeStorage } });
+    service = await startServer({ port: Number(process.env.PORT || 4317), openExternal: url => shell.openExternal(url), browser: { agent: (...args) => browser.agent(...args) }, background: true, lifeOptions: { safeStorage, Notification } });
     if (lifeCallback) { const value=lifeCallback; lifeCallback=null; void service.life.callback(value).catch(()=>{}); }
     window = new BrowserWindow({ width: 1440, height: 960, minWidth: 850, minHeight: 650, title: 'Proteus', icon: appIcon, backgroundColor: '#111716',
       webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
-    browser = new BrowserTabs(window, service.origin);
+    const browsingHistory = new BrowsingHistory(service.home,{onVisit:item=>service.activity.queue('history',{...item,title:item.title.slice(0,160),createdAt:item.visitedAt,hostId:service.remote.info().hostId})});
+    browser = new BrowserTabs(window, service.origin,{history:browsingHistory});
     credentials = new CredentialBroker(service.home);
     const trusted = event => { if (new URL(event.senderFrame.url).origin !== service.origin || event.sender !== window.webContents) throw new Error('Untrusted renderer.'); };
+    ipcMain.handle('proteus:open-external',(event,value)=>{trusted(event);if(event.senderFrame.parent!==null)throw new Error('Untrusted frame.');const url=new URL(value);if(url.protocol!=='https:'||url.username||url.password)throw new Error('Use an HTTPS website address.');return shell.openExternal(url.href);});
     ipcMain.handle('proteus:life-account', (event, value) => { trusted(event); if(event.senderFrame.parent!==null||event.senderFrame.routingId!==window.webContents.mainFrame.routingId||event.senderFrame.processId!==window.webContents.mainFrame.processId||closing)throw new Error('Life account access is unavailable.'); return service.life.auth(value?.action, value); });
     // PTYs are desktop-only. Neither the HTTP API nor embedded web pages receive this bridge.
     terminals = new TerminalStore(service.home, { workspaceFiles: service.workspaceFiles });
@@ -39,7 +42,25 @@ else {
     peers = new DesktopPeers(service.home, { safeStorage, localHostId: service.remote.info().hostId });
     ipcMain.handle('proteus:desktop-peers', (event, value) => { trusted(event); if(event.senderFrame.parent!==null||event.senderFrame.routingId!==window.webContents.mainFrame.routingId||event.senderFrame.processId!==window.webContents.mainFrame.processId||closing)throw new Error('Desktop peer access is unavailable.');return peers.handle(value); });
     peers.on('event', value => { if(window&&!window.isDestroyed()&&new URL(window.webContents.getURL()).origin===service.origin)window.webContents.send('proteus:desktop-peer-event',value); });
+    service.peers=peers;
     const workspaceSession = new WorkspaceSession(service.home);
+    service.resources={
+      list:()=>{
+        const tabs=browser.list().map(({id,title,url,group,loaded,pid,error})=>({id,title,url,group,loaded,pid,error}));
+        let descriptors=[];try{descriptors=workspaceSession.get()?.tabs||[];}catch{}
+        for(const tab of descriptors)if(tab.type!=='browser')tabs.push({id:tab.id,title:tab.label,group:tab.type,loaded:true,pid:window.webContents.getOSProcessId(),sharedProcess:true});
+        const processes=app.getAppMetrics().map(p=>({pid:p.pid,type:p.type,name:p.name||p.serviceName||p.type,cpuPercent:p.cpu.percentCPUUsage,memoryBytes:(p.memory.workingSetSize||0)*1024,tabIds:tabs.filter(t=>t.pid===p.pid).map(t=>t.id)}));
+        return {supported:true,processes,tabs,observedAt:new Date().toISOString()};
+      },
+      action:async value=>{
+        if(!['unload','close'].includes(value.action)||typeof value.tabId!=='string')throw new Error('Choose Close or Unload for a tab.');
+        if(browser.tabs.has(value.tabId)){if(value.action==='unload')await browser.unload(value.tabId);else await browser.close(value.tabId);}
+        else {const saved=workspaceSession.get(),tab=saved?.tabs.find(t=>t.id===value.tabId);if(!tab)throw new Error('Tab not found.');if(tab.type==='overview')throw new Error('The Schedules overview stays open.');if(tab.type==='terminal')throw new Error('Close terminal sessions from their terminal tab.');if(value.action==='unload')throw new Error('This tool shares the app renderer. Close its view to release its data; its execution stays on the host.');window.webContents.send('proteus:close-tool',value.tabId);}
+        return service.resources.list();
+      }
+    };
+    service.activity.on('notification',item=>{const p=service.activity.data.preferences;if(!p.systemEnabled||p[item.type]===false||!Notification.isSupported())return;const notification=new Notification({title:item.title,body:item.body,silent:false});notification.on('click',()=>{showWindow();window.webContents.send('proteus:notification-open',item);});notification.show();});
+
     ipcMain.handle('proteus:workspace-session', (event, value) => { trusted(event); if(value?.action==='get')return workspaceSession.get(); if(value?.action==='save'&&!closing)return workspaceSession.save(value.session); });
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     window.webContents.on('will-navigate', (event, url) => { if (new URL(url).origin !== service.origin) event.preventDefault(); });
@@ -86,7 +107,7 @@ else {
     tray = new Tray(icon); tray.setToolTip('Proteus — schedules and chats');
     tray.setContextMenu(Menu.buildFromTemplate([
       { label: 'Open Proteus', click: showWindow },
-      { label: 'Remote Access…', click: () => { showWindow(); window.webContents.send('proteus:remote'); } },
+      { label: 'Connections…', click: () => { showWindow(); window.webContents.send('proteus:remote'); } },
       { type: 'separator' },
       { label: 'Closing the window keeps the host running', enabled: false },
       { label: 'Quit Proteus and stop runs', click: () => app.quit() }

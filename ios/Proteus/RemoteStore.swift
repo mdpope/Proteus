@@ -128,7 +128,7 @@ import Combine
         let box = try RemoteCrypto.seal(.object(["nonce": .string(nonce)]), key: connection.key, aad: "\(challenge):auth")
         try await raw(.object(["type": .string("auth"), "deviceId": .string(connection.deviceId), "box": .string(box)]))
     }
-    private func receive(_ packet: JSON) async throws {
+    func receive(_ packet: JSON) async throws {
         switch packet["type"].string {
         case "challenge":
             challenge = packet["challenge"].string
@@ -155,7 +155,10 @@ import Combine
             guard let connection, packet["seq"].int == incoming + 1 else { throw RemoteError(message: "Invalid message sequence.") }
             let seq = packet["seq"].int
             let value = try RemoteCrypto.open(packet["box"].string, key: connection.key, aad: "\(prefix):host:\(seq)"); incoming = seq
-            if value["type"].string == "result" {
+            if value["type"].string == "revoked" {
+                guard value["deviceId"].string == connection.deviceId else { throw RemoteError(message: "Invalid revocation identity.") }
+                suspend(reason: "This Mac authenticated revocation of this device."); status = "Access revoked by Mac"; error = "This Mac revoked access. Your cached history remains available. Add a new pairing from Connections to reconnect."
+            } else if value["type"].string == "result" {
                 let id = value["id"].string
                 timeouts.removeValue(forKey: id)?.cancel()
                 pendingCommands.removeValue(forKey: id)
@@ -170,7 +173,8 @@ import Combine
                 saveCache()
             }
         case "rejected", "revoked":
-            error = "Pairing expired or this device was revoked. Create a new pairing code on the Mac."; invite = nil; active = false; disconnect(); status = "Pair again on the Mac"
+            // Relay notices are not proof of host revocation. Retain credentials and cached data.
+            error = "The relay refused this connection. Verify Connections on the Mac; your saved pairing and history are preserved."; invite = nil; active = false; disconnect(); status = "Connection refused · pairing retained"
         default: throw RemoteError(message: "Unknown relay message.")
         }
     }
@@ -231,6 +235,7 @@ import Combine
     }
     func openChat(_ id: String) async {
         selectedChat = id
+        guard connected else { return } // Offline opening is a cache read; it never sends or changes hosts.
         do { mergeChat(try await request("chat.get", ["id": .string(id)])); saveCache() } catch { self.error = error.localizedDescription }
     }
     func mergeChat(_ value: JSON) {
@@ -317,6 +322,7 @@ private struct DestinationIndex: Codable {
     @Published var pairing: RemoteStore?
     @Published var error: String?
     private var stores: [String: RemoteStore] = [:]
+    private var observations: [String: AnyCancellable] = [:]
     private let root: URL
     private let service: String
     private var active = false
@@ -367,6 +373,7 @@ private struct DestinationIndex: Codable {
     }
     private func observeHostName(_ remote: RemoteStore, id: String) {
         remote.onHostName = { [weak self] label in self?.hydrateHostLabel(label, for: id) }
+        observations[id] = remote.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
     }
     func hydrateHostLabel(_ label: String, for id: String) {
         let name = label.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -444,12 +451,20 @@ private struct DestinationIndex: Codable {
         let previous = destinations, previousID = selectedID
         destinations.removeAll { $0.id == id }; if selectedID == id { selectedID = destinations.first?.id }
         do { try persist() } catch { destinations = previous; selectedID = previousID; throw error }
-        stores[id]?.suspend(); stores[id]?.forget(); stores.removeValue(forKey: id)
+        stores[id]?.suspend(); stores[id]?.forget(); stores.removeValue(forKey: id); observations.removeValue(forKey: id)
         DeviceKeychain.clear(hostID: id, service: service); try? FileManager.default.removeItem(at: cacheRoot(id))
         if previousID == id { selected = nil; if let next = selectedID { try select(next) } }
     }
-    func remote(for id: String) -> RemoteStore? { stores[id] }
+    func remote(for id: String) -> RemoteStore? {
+        if let store = stores[id] { return store }
+        guard destinations.contains(where: { $0.id == id }), let credential = DeviceKeychain.load(hostID: id, service: service), credential.hostId == id else { return nil }
+        let remote = RemoteStore(connection: credential, cacheRoot: cacheRoot(id), legacyCredentials: false)
+        stores[id] = remote; observeHostName(remote, id: id); return remote
+    }
+    func refreshAll() async {
+        for destination in destinations { if let remote = remote(for: destination.id) { remote.activity(active); if remote.connected { await remote.refresh() } } }
+    }
     func status(_ id: String) -> String { if let remote = stores[id] { return remote.status }; return "Saved · not connected" }
-    func activity(_ value: Bool) { active = value; selected?.activity(value); pairing?.activity(value) }
+    func activity(_ value: Bool) { active = value; for destination in destinations { remote(for: destination.id)?.activity(value) }; pairing?.activity(value) }
     func resetForTesting() { cancelPairing(); for id in destinations.map(\.id) { try? forget(id) }; DeviceKeychain.clear(service: service) }
 }

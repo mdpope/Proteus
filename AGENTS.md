@@ -21,3 +21,9 @@ behavior or scope changes. Record significant design choices in `docs/decisions.
 implemented, verified and deferred work; a clean build alone does not verify a live workflow.
 Model effort/context choices must come from refreshed provider metadata, never a model-name table.
 Schedule reload must read current disk state and preserve revision conflict protection.
+
+For Virtualmin/Webmin administration, use the Codex in-app browser and reuse its existing
+signed-in tab. Read the deployment workspace access record for the exact origin; aliases can
+have different session cookies. Do not fall back to a different browser or request credentials
+before checking that session. Production access and recovery receipts stay in the deployment
+workspace, outside this application repository.

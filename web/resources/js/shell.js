@@ -2,7 +2,7 @@
 export function initShell(document=globalThis.document,window=globalThis.window) {
     const host=document.querySelector('#shell-tabs'),account=document.body.dataset.browserAccount;
     if(!host||!account)return;
-    const keys=['life','chats','schedules','workspaces','inbox','fuel','nutrition','connections','security'];
+    const keys=['life','chats','schedules','workspaces','inbox','fuel','nutrition','connections','security','team','browser-home','engine-room','attention','transcription'];
     let source;try{source=JSON.parse(document.querySelector('#shell-sections').textContent);}catch{return;}
     const sections=Object.fromEntries(keys.flatMap(key=>{
         const value=source[key];if(!value||typeof value.label!=='string'||typeof value.url!=='string')return [];
@@ -19,7 +19,7 @@ export function initShell(document=globalThis.document,window=globalThis.window)
         for(const key of tabs){
             const section=sections[key],item=document.createElement('div'),link=document.createElement('a');
             item.className='shell-tab'+(key===active?' selected':'');item.dataset.shellTab=key;
-            link.href=section.url;link.textContent=section.icon+' '+section.label;link.dataset.shellLink=key;if(key===active)link.setAttribute('aria-current','page');item.append(link);
+            link.href=section.url;link.textContent=section.icon+' '+section.label;if(key==='chats'){link.textContent=' '+section.label;const icon=document.createElementNS('http://www.w3.org/2000/svg','svg');icon.setAttribute('viewBox','0 0 24 24');icon.setAttribute('width','16');icon.setAttribute('height','16');icon.setAttribute('fill','none');icon.setAttribute('stroke','currentColor');icon.setAttribute('stroke-width','1.8');icon.setAttribute('aria-hidden','true');for(const d of ['M3 4h10a3 3 0 0 1 3 3v5a3 3 0 0 1-3 3H8l-4 3v-4a3 3 0 0 1-1-2V4Z','M17 8h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3l-3 2v-4']){const path=document.createElementNS('http://www.w3.org/2000/svg','path');path.setAttribute('d',d);icon.append(path);}link.prepend(icon);}link.dataset.shellLink=key;if(key===active)link.setAttribute('aria-current','page');item.append(link);
             if(key!=='life'){
                 const close=document.createElement('button');close.type='button';close.className='shell-tab-close';close.setAttribute('aria-label','Close '+section.label);close.textContent='×';close.dataset.shellClose=key;
                 close.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();tabs=tabs.filter(item=>item!==key);persist();if(active===key)window.location.assign(sections.life.url);else render();});item.append(close);
@@ -31,8 +31,8 @@ export function initShell(document=globalThis.document,window=globalThis.window)
     }
     function visit(key){if(!sections[key])return;active=key;document.body.dataset.shellSection=key;tabs=clean([...tabs,key]);persist();render();}
     visit(active);
-    document.addEventListener('proteus:section',event=>{if(['chats','schedules','workspaces'].includes(event.detail?.key))visit(event.detail.key);});
-    const clear=()=>{try{window.localStorage.removeItem(storageKey);window.localStorage.removeItem(`proteus-remote-ui:${account}`);}catch{}};
+    document.addEventListener('proteus:section',event=>{if(['chats','schedules','workspaces','attention','transcription'].includes(event.detail?.key)){visit(event.detail.key);document.querySelector('#shell-recent-chats')?.toggleAttribute('hidden',event.detail.key!=='chats');}});
+    const clear=()=>{try{window.localStorage.removeItem(storageKey);window.localStorage.removeItem('proteus.chat-tabs.v1.'+account);window.localStorage.removeItem(`proteus-remote-ui:${account}`);}catch{}};
     document.querySelector('form[action$="/logout"]')?.addEventListener('submit',clear);
     window.addEventListener('storage',event=>{if(event.key===storageKey){try{tabs=clean(JSON.parse(event.newValue));if(!tabs.includes(active))tabs=clean([...tabs,active]);render();}catch{}}});
     if(typeof window.BroadcastChannel==='function'){

@@ -1,4 +1,5 @@
 import WebKit
+import CryptoKit
 import XCTest
 @testable import Proteus
 
@@ -406,4 +407,140 @@ extension DestinationTests {
     var finished:(()->Void)?
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { finished?(); finished=nil }
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { finished?(); finished=nil }
+}
+
+final class NativeParityTests: XCTestCase {
+    @MainActor func testUnauthenticatedRelayNoticesPreservePairingAndCachedHistory() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let credential = DeviceConnection(relay: "wss://relay.example.test", hostId: UUID().uuidString, deviceId: UUID().uuidString, key: RemoteCrypto.random())
+        let store = RemoteStore(connection: credential, cacheRoot: root, legacyCredentials: false)
+        store.chats["saved"] = .object(["id": .string("saved"), "title": .string("Synthetic retained history")]); store.setDraft("reply:saved", .string("Retained draft")); store.flushCache()
+        let before = try Data(contentsOf: store.cacheURL)
+        for type in ["rejected", "revoked"] {
+            try await store.receive(.object(["type": .string(type)]))
+            XCTAssertTrue(store.paired); XCTAssertEqual(store.connection?.key, credential.key); XCTAssertEqual(store.chats["saved"]?["title"].string, "Synthetic retained history")
+            XCTAssertEqual(store.draft("reply:saved").string, "Retained draft"); XCTAssertEqual(try Data(contentsOf: store.cacheURL), before)
+        }
+        store.error = nil; await store.openChat("saved"); XCTAssertNil(store.error); XCTAssertEqual(store.selectedChat, "saved")
+    }
+    @MainActor func testSharedAccountScopesRequireExplicitNewConsent() throws {
+        let attempt = LifeOAuthAttempt(state: "synthetic-state", verifier: RemoteCrypto.random())
+        func scopes(_ shared: Bool) throws -> Set<String> { let url = try attempt.authorization(origin: "https://example.test", clientID: "synthetic", sharedApp: shared); let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false)); return Set((components.queryItems?.first { $0.name == "scope" }?.value ?? "").split(separator: " ").map(String.init)) }
+        XCTAssertEqual(try scopes(false), Set(["brain:read", "brain:write"]))
+        XCTAssertEqual(try scopes(true), Set(["brain:read", "brain:write", "app:read", "app:write"]))
+    }
+    @MainActor func testBrowserBookmarksPreserveFiltersWhileHistoryRedactsAndRejectsSecrets() throws {
+        let bookmark = "https://dev.azure.com/example/project/_boards/board/t/team/Stories?view=backlog&iteration=42#selected=123"
+        let search = "https://example.test/search?q=build%20status#results"
+        for input in [bookmark, search, "https://example.test/docs#code-review"] { XCTAssertEqual(SharedAppStore.safeURL(input)?.absoluteString, input) }
+        XCTAssertEqual(SharedAppStore.historyURL(bookmark)?.absoluteString, "https://dev.azure.com/example/project/_boards/board/t/team/Stories")
+        XCTAssertEqual(SharedAppStore.historyURL(search)?.absoluteString, "https://example.test/search")
+        let capsule = try JSONSerialization.data(withJSONObject: ["version": 1, "hostId": "synthetic-host", "relay": "wss://example.test", "key": "synthetic-key", "expiresAt": "2099-01-01T00:00:00Z"]).base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
+        let unsafe = ["https://user:password@example.test/", "javascript:alert(1)", "https://example.test/oauth/callback?code=secret", "https://example.test/page?access_token=secret", "https://example.test/signin", "https://example.test/page?apiKey=secret", "https://example.test/remote#pair=" + capsule, "https://example.test/remote#%70air=" + capsule, "https://example.test/remote?pairing=" + capsule, "https://example.test/remote?data=" + capsule, "https://example.test/remote#" + capsule, "https://example.test/page#route?session=secret", "https://example.test/page#auth=secret", "https://example.test/page#code=secret", "https://example.test/page?next=proteus%3A%2F%2Fpair%3Fdata%3D" + capsule]
+        for input in unsafe { XCTAssertNil(SharedAppStore.safeURL(input), input); XCTAssertNil(SharedAppStore.historyURL(input), input) }
+    }
+    @MainActor func testEncryptedBrowserRestartPreservesExactSafePageAndOmitsPairingDescriptor() throws {
+        let identity = "synthetic-browser-" + UUID().uuidString
+        let digest = SHA256.hash(data: Data(identity.utf8)).map { String(format: "%02x", $0) }.joined()
+        let cache = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Proteus/browsers/" + digest + ".enc")
+        defer { try? FileManager.default.removeItem(at: cache) }
+        let bookmark = "https://example.test/boards?team=42&view=active#selected=123"
+        let store = SharedAppStore(); store.reset(for: identity)
+        store.open(try XCTUnwrap(SharedAppStore.safeURL(bookmark)), title: "Board filter")
+        store.open(URL(string: "https://example.test/remote#pair=synthetic-capsule"), title: "Do not retain pairing")
+        let restored = SharedAppStore(); restored.reset(for: identity)
+        XCTAssertEqual(restored.browserTabs.count, 1)
+        XCTAssertEqual(restored.browserTabs.first?.title, "Board filter")
+        XCTAssertEqual(restored.browserTabs.first?.url, bookmark)
+        XCTAssertFalse(String(decoding: try Data(contentsOf: cache), as: UTF8.self).contains("team=42"))
+    }
+    @MainActor func testBrowserLinkCreatesOnlyBoundHostDraftAndPreservesExistingChoices() throws {
+        XCTAssertTrue(NativeBrowser.Coordinator.instancesRespond(to: NSSelectorFromString("webView:contextMenuConfigurationForElement:completionHandler:")))
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let connection = DeviceConnection(relay: "wss://relay.example.test", hostId: UUID().uuidString, deviceId: UUID().uuidString, key: RemoteCrypto.random())
+        let remote = RemoteStore(connection: connection, cacheRoot: root, legacyCredentials: false)
+        remote.setDraft("new-chat", .object(["prompt": .string("Existing idea"), "provider": .string("codex"), "workspace": .string("chosen-workspace"), "selected": .array([.string("context")])]))
+        let store = SharedAppStore()
+        let url = try XCTUnwrap(URL(string: "https://example.test/board?view=active#selected=42"))
+        XCTAssertFalse(store.prepareLinkDraft(url, remote: remote, hostID: "other-host", hostName: "Other"))
+        XCTAssertNil(store.linkChatDraft)
+        XCTAssertTrue(store.prepareLinkDraft(url, remote: remote, hostID: connection.hostId, hostName: "Chosen Mac"))
+        XCTAssertEqual(store.linkChatDraft?.hostID, connection.hostId)
+        XCTAssertEqual(remote.draft("new-chat")["prompt"].string, "Existing idea\n\n" + url.absoluteString)
+        XCTAssertEqual(remote.draft("new-chat")["workspace"].string, "chosen-workspace")
+        XCTAssertEqual(remote.draft("new-chat")["provider"].string, "codex")
+        XCTAssertEqual(remote.draft("new-chat")["selected"].array, [.string("context")])
+        XCTAssertFalse(remote.connected); XCTAssertNil(remote.selectedChat); XCTAssertTrue(remote.chats.isEmpty); XCTAssertEqual(remote.pendingCommandCount, 0)
+        let draft = remote.draft("new-chat")
+        XCTAssertFalse(store.prepareLinkDraft(try XCTUnwrap(URL(string: "https://example.test/#pair=secret")), remote: remote, hostID: connection.hostId, hostName: "Chosen Mac"))
+        XCTAssertEqual(remote.draft("new-chat"), draft)
+    }
+    @MainActor func testWebKitDownloadProducesExportableFileAndAccountChangeCleansIt() async throws {
+        let shared = SharedAppStore()
+        let webView = WKWebView(frame: .zero)
+        shared.download(try XCTUnwrap(URL(string: "http://127.0.0.1:4329/latest")), in: webView)
+        let deadline = Date().addingTimeInterval(15)
+        while shared.exportFile == nil && shared.downloadError == nil && Date() < deadline { try await Task.sleep(for: .milliseconds(100)) }
+        XCTAssertNil(shared.downloadError)
+        let file = try XCTUnwrap(shared.exportFile)
+        defer { file.cleanup() }
+        XCTAssertNoThrow(try JSONSerialization.jsonObject(with: Data(contentsOf: file.url)))
+        XCTAssertTrue(shared.downloads.isEmpty)
+        let picker = UIDocumentPickerViewController(forExporting: [file.url], asCopy: true)
+        XCTAssertFalse(picker.allowsMultipleSelection)
+        shared.reset(for: "signed-out")
+        XCTAssertNil(shared.exportFile)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: file.url.path))
+    }
+    @MainActor func testStandupShufflingKeepsFixedPositionsAndAllMembers() {
+        let members: [JSON] = (0..<8).map { index -> JSON in
+            let mode = index == 0 || index == 4 ? "fixed" : "random"
+            return .object(["id": .string(String(index)), "name": .string("Person \(index)"), "mode": .string(mode)])
+        }
+        for _ in 0..<25 { let order = StandupView.shuffled(members); XCTAssertEqual(order[0], members[0]); XCTAssertEqual(order[4], members[4]); XCTAssertEqual(Set(order), Set(members)) }
+    }
+    @MainActor func testTimestampUsesConfiguredZoneAndPushBodyContainsNoSourceContent() throws {
+        let date = try XCTUnwrap(ProviderAllowance.date("2026-10-04T18:00:00Z"))
+        XCTAssertNotEqual(nativeTimestamp(date, timezone: "America/Denver"), nativeTimestamp(date, timezone: "Asia/Tokyo"))
+        XCTAssertEqual(NativeNotifications.safeBody("chat.completed"), "A chat finished.")
+        XCTAssertEqual(NativeNotifications.safeBody("private prompt text"), "New activity is available.")
+    }
+}
+extension DestinationTests {
+    @MainActor func testAggregateReadsEveryEncryptedCacheWithoutChangingExecutionSelection() throws {
+        let (root, service) = try fixture(); let first = DestinationStore(root: root, keychainService: service)
+        let a = credential(UUID().uuidString), b = credential(UUID().uuidString)
+        defer { first.resetForTesting(); try? FileManager.default.removeItem(at: root) }
+        try first.register(a, label: "A"); first.selected?.state = .object(["runs": .array([.object(["id": .string("same"), "title": .string("A title")])])]); first.selected?.flushCache()
+        try first.register(b, label: "B"); first.selected?.state = .object(["runs": .array([.object(["id": .string("same"), "title": .string("B title")])])]); first.selected?.flushCache()
+        let restored = DestinationStore(root: root, keychainService: service)
+        XCTAssertEqual(restored.selectedID, b.hostId)
+        XCTAssertEqual(restored.remote(for: a.hostId)?.state["runs"].array.first?["title"].string, "A title")
+        XCTAssertEqual(restored.remote(for: b.hostId)?.state["runs"].array.first?["title"].string, "B title")
+        XCTAssertEqual(restored.selectedID, b.hostId)
+        XCTAssertFalse(restored.remote(for: a.hostId)?.connected ?? true)
+    }
+}
+
+extension LifeNativeTests {
+    @MainActor func testAppTransportRequiresConsentAndSendsExpectedIdentity() async throws {
+        let (withoutConsent, service) = try fixture(); defer { LifeKeychain.clear(service: service) }
+        var calls = 0
+        let identity = self.identity
+        LifeTestProtocol.handler = { request in
+            calls += 1
+            XCTAssertEqual(request.url?.path, "/api/v1/app/preferences")
+            let payload = try! JSONDecoder().decode(JSON.self, from: LifeTestProtocol.body(request))
+            XCTAssertEqual(payload["expectedAccountId"].string, "account-a"); XCTAssertEqual(payload["expectedWorkspaceId"].string, "workspace-a")
+            return (200, identity, 0)
+        }
+        do { _ = try await withoutConsent.appRequest(); XCTFail("Life token cannot silently become an app token") } catch {}
+        XCTAssertEqual(calls, 0)
+        var credential = try XCTUnwrap(LifeKeychain.load(service: service)); credential.appAuthorized = true; try LifeKeychain.save(credential, service: service)
+        let consented = LifeStore(keychainService: service, session: LifeTestProtocol.session())
+        _ = try await consented.appRequest("/preferences", method: "PUT", body: .object(["timezone": .string("America/Denver")]))
+        XCTAssertEqual(calls, 1)
+    }
 }

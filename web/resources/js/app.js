@@ -1,3 +1,6 @@
+import {appRequest} from './shared-app.js';
+import {clearChatIndex,clearChatDrafts} from './remote-cache.js';
+import './app-tools.js';
 import './shell.js';
 import { Passkeys } from '@laravel/passkeys';
 const status = document.querySelector('#client-status');
@@ -39,9 +42,10 @@ if (measurementList) {
 const logoutForm = document.querySelector('form[action$="/logout"]');
 logoutForm?.addEventListener('submit', async event => {
     if (logoutForm.dataset.remoteCleared) return;
-    event.preventDefault();
+    event.preventDefault();globalThis.proteusSigningOut=true;
     const { PairingStore } = await import('./remote-client.js');
-    const account = document.body.dataset.browserAccount;
+    const account = document.body.dataset.browserAccount;clearChatIndex(account);clearChatDrafts(account);
+    const subscriptionId=localStorage.getItem('proteus.push.subscription.'+account);if(subscriptionId){await appRequest('/push-subscriptions/'+subscriptionId,'DELETE').catch(()=>{});localStorage.removeItem('proteus.push.subscription.'+account);try{const registration=await navigator.serviceWorker?.getRegistration();await (await registration?.pushManager?.getSubscription())?.unsubscribe();}catch{}}
     const channel = new BroadcastChannel('proteus-remote-account');
     channel.postMessage({ type: 'logout', account }); channel.close();
     try { const store = new PairingStore(account); await store.clear(); store.close(); } finally { logoutForm.dataset.remoteCleared = 'true'; logoutForm.requestSubmit(); }

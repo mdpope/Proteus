@@ -5,8 +5,9 @@ function safeHistoryURL(value, appOrigin) {
   try {
     const url=new URL(value);
     if(!['http:','https:'].includes(url.protocol)||url.username||url.password||url.origin===appOrigin)return null;
+    if(/(?:oauth|authorize|callback|sign[-_]?in|login|reset|token)(?:\/|$)/i.test(url.pathname)||/proteus(?::|%3a)(?:\/|%2f)/i.test(value))return null;
     // Authentication callbacks must be revisited through the site's normal login flow.
-    const sensitive=/^(?:access_token|id_token|refresh_token|token|password|passwd|secret|api[_-]?key|authorization|code)$/i;
+    const sensitive=/^(?:access_token|id_token|refresh_token|token|password|passwd|secret|api[_-]?key|authorization|code|pair|pairing|session|signature|sig)$/i;
     if([...url.searchParams.keys()].some(key=>sensitive.test(key)))return null;
     const fragment=url.hash.slice(1);if(fragment.includes('=')&&[...new URLSearchParams(fragment).keys()].some(key=>sensitive.test(key)))return null;
     return url.href;

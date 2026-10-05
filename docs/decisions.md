@@ -151,3 +151,48 @@ All native Life clients use the website API. Centralizing authorization and sche
 the service avoids database credentials and migrations on every desktop. Preserve old profiles
 for recovery without opening them. Account/workspace/session identity travels with drafts and
 evidence requests; changing sign-in cannot silently retarget old inputs.
+
+## October 4 — queued cross-client product contract
+
+The operator wants one Proteus experience across desktop, website, iPhone and iPad. The
+[next-update queue](planned-updates.md) records the requested contract; this entry changes design
+scope only. Execution remains desktop-owned; Life and proposed shared Team Tools configuration
+use the account API. The relay stays an opaque transport and does not need a second account system.
+
+Use the desktop chat presentation, iPhone chat-bubble icon, website Garage artwork/detail design,
+website tab close controls and desktop dividers as the common references. Expand only the active
+feature's sidebar children. Chats aggregates authorized host indexes, while the website has an
+independent explicit default execution Mac. Aggregation must not retarget actions or merge quota.
+Default and temporary destination selection are separate settings; offline never implies fallback.
+
+Team Tools contains Standup, shared named lists/links and a secondary browser-tab strip. Persist
+descriptors separately from memory residency; leaving Team Tools unloads its idle browser pages.
+Other desktop tabs remain loaded until closed or deliberately unloaded. The proposed Engine Room
+contains resources and setup/connection/account controls; its name is provisional. New browser
+tabs gain a history home and Google address-bar search plus explicit DuckDuckGo/Google/Bing choices.
+History covers retained Proteus visits, not unrequested external-browser history or impossible
+cross-origin tracking. Website embedding and exact resource metrics have real platform limits.
+
+Prefer shared feature/text/icon/schema/state modules and contract fixtures, with native adapters
+for platform APIs. Do not collapse trusted shell, untrusted browser, API and host authorization.
+Before expanded remote authority, resolve account-key custody/session revocation and authenticated
+revocation notices. Storing real workplace lists on a personal service requires a domain/policy
+decision; reusable schemas belong here, private names/content do not. Account enrollment remains
+pending and no prior implementation or deployed acceptance is broadened by this queue entry.
+Tagline, section naming and multi-provider release scope remain open for discussion before building.
+
+## October 4 implementation decisions superseding the planning entry
+
+Engine Room is the accepted name and there is no navigation tagline. Team roster/link storage
+is authorized by the operator's explicit data-policy clarification. Shared API records are
+account-scoped and encrypted at rest; separate app scopes require native consent. Website account
+key custody remains a documented trust boundary: MFA protects sign-in, while a compromised website
+server could still impersonate a stored device key. Signed host revocation now invalidates that
+device at the host; untrusted relay notices only disconnect. Per-session short-lived host grants
+remain future protocol work. Multi-provider implementation is entirely deferred.
+
+Website external browsing uses real browser tabs because arbitrary Jira/ADO pages may forbid
+embedding. Native Team browser descriptors restore without loading; active pages reload on demand.
+Dirty, audible or agent-owned desktop pages reject automatic unloading. Process metrics name their
+shared attribution rather than inventing a per-tool memory number. APNs entitlement/provisioning
+and production push delivery are explicit release dependencies. See `parity-release.md`.

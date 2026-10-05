@@ -20,6 +20,11 @@ export class StandupStore {
     const clean = { ...current, timezone: value.timezone, random: value.random.map(n => n.trim()), fixed: value.fixed.map(n => n.trim()), instructions: value.instructions };
     delete clean.file; delete clean.revision; atomicJSON(this.file, clean); return this.get();
   }
+  present(current) {
+    if (!current || !Array.isArray(current.order) || current.order.length>500 || current.order.some(n=>typeof n!=='string'||!n.trim()||n.length>200) || typeof current.instructions!=='string'||current.instructions.length>10000)throw new Error('Invalid standup presentation.');
+    new Intl.DateTimeFormat('en',{timeZone:current.timezone}).format();
+    const value=this.get();value.current={date:String(current.date||'').slice(0,10),generatedAt:new Date().toISOString(),order:current.order,instructions:current.instructions,timezone:current.timezone,listId:String(current.listId||'').slice(0,128)};delete value.file;delete value.revision;atomicJSON(this.file,value);return this.get();
+  }
   generate(expectedRevision, now = new Date(), random = randomInt) {
     const value = this.get();
     if (value.revision !== expectedRevision) throw new Error('Standup changed. Refresh before generating.');

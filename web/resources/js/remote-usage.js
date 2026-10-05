@@ -9,8 +9,9 @@ export function allowance(window, now = Date.now()) {
 function meter(value) {
     return `<span class="provider-meter${value.percent == null ? ' unknown' : ''}"${value.percent == null ? '' : ` role="meter" aria-label="Remaining allowance" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${value.percent}"`}><progress class="provider-meter-fill" max="100" value="${value.percent ?? 0}" aria-hidden="true"></progress><span class="provider-meter-label">${escape(value.label)}</span></span>`;
 }
-export function usagePanel(value, {collapsed = false, destination = '', error = '', loading = false, now = Date.now()} = {}) {
-    return `<header class="web-usage-heading"><span>AI usage</span><button type="button" data-usage-collapse aria-expanded="${!collapsed}" aria-label="${collapsed?'Expand':'Collapse'} AI usage" title="${collapsed?'Expand':'Collapse'} AI usage">${collapsed?'⌄':'⌃'}</button></header><div class="web-usage-destination">${escape(destination)}</div><div class="web-usage-providers ${collapsed?'compact':''}">${Object.entries(names).map(([id,name]) => {
+export function usagePanel(value, {collapsed = false, compact = true, destination = '', error = '', loading = false, now = Date.now()} = {}) {
+    if(collapsed)return '<header class="web-usage-heading"><span>AI Allowance</span><button type="button" data-usage-collapse aria-expanded="false" aria-label="Expand AI Allowance">⌄</button></header>';
+    return `<header class="web-usage-heading"><span>AI Allowance</span><button type="button" data-usage-collapse aria-expanded="${!collapsed}" aria-label="${collapsed?'Expand':'Collapse'} AI Allowance" title="${collapsed?'Expand':'Collapse'} AI Allowance">${collapsed?'⌄':'⌃'}</button></header><div class="web-usage-destination">${escape(destination)}</div><div class="web-usage-providers ${compact?'compact':''}">${Object.entries(names).map(([id,name]) => {
         const provider = value?.providers?.[id]; const windows = provider?.windows || [];
         const measured = windows.map(window=>({...allowance(window,now),window}));
         const valid = measured.filter(window=>window.percent != null);

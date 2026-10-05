@@ -27,6 +27,11 @@
 		EFB5B876A5E8C0845798EFDB /* LifeViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92BF81FE2FB7FD30E6747EA6 /* LifeViews.swift */; };
 		4FB84798FFDA898F674E687B /* LifeForms.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABF0057B2DB7BDE6C2A5BEA1 /* LifeForms.swift */; };
 		891380DFDF602E8C8B8B7A29 /* LifeFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54D0EA83FA3341E9AD922ED5 /* LifeFixtures.swift */; };
+		D26BCA5F8CC14636821B06A3 /* SharedAppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 754660009D54CA67C3B12C53 /* SharedAppStore.swift */; };
+		5023E16EAE07DA09B8342690 /* NativeNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDD8BC386822017A41442984 /* NativeNotifications.swift */; };
+		5AF04EA8A646DCCFDEEF17BA /* NativeShell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2627C7D5A4DE8F9F996B47F8 /* NativeShell.swift */; };
+		42B1CE228634AE5F8B512A86 /* EngineRoomView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 284BE80DCDBBFD7A264CF03C /* EngineRoomView.swift */; };
+		AF0F1C0D85782B82FE42F56A /* TeamToolsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 760C1739284F94041B2F7D83 /* TeamToolsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -71,6 +76,11 @@
 		92BF81FE2FB7FD30E6747EA6 /* LifeViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeViews.swift; sourceTree = "<group>"; };
 		ABF0057B2DB7BDE6C2A5BEA1 /* LifeForms.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeForms.swift; sourceTree = "<group>"; };
 		54D0EA83FA3341E9AD922ED5 /* LifeFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeFixtures.swift; sourceTree = "<group>"; };
+		754660009D54CA67C3B12C53 /* SharedAppStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedAppStore.swift; sourceTree = "<group>"; };
+		FDD8BC386822017A41442984 /* NativeNotifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeNotifications.swift; sourceTree = "<group>"; };
+		2627C7D5A4DE8F9F996B47F8 /* NativeShell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeShell.swift; sourceTree = "<group>"; };
+		284BE80DCDBBFD7A264CF03C /* EngineRoomView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineRoomView.swift; sourceTree = "<group>"; };
+		760C1739284F94041B2F7D83 /* TeamToolsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeamToolsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -114,6 +124,11 @@
 				FAE0DEDA1094847BDFC976EB /* QRScanner.swift */,
 				2B068C230D5ED165EE25D9DD /* RemoteCrypto.swift */,
 				9023FEA1077763EA7555C94D /* RemoteStore.swift */,
+				760C1739284F94041B2F7D83 /* TeamToolsView.swift */,
+				284BE80DCDBBFD7A264CF03C /* EngineRoomView.swift */,
+				2627C7D5A4DE8F9F996B47F8 /* NativeShell.swift */,
+				FDD8BC386822017A41442984 /* NativeNotifications.swift */,
+				754660009D54CA67C3B12C53 /* SharedAppStore.swift */,
 				99814D317E2043305330CB8E /* ScheduleViews.swift */,
 				0E775F33FC902E4E594401A1 /* UsageViews.swift */,
 				61F0564BC9EBE73040AC8CEB /* LifeStore.swift */,
@@ -260,6 +275,11 @@
 				E3CCE5A289BFA2C55DB7BBA0 /* QRScanner.swift in Sources */,
 				68FFA33EBE3DB02F0593900F /* RemoteCrypto.swift in Sources */,
 				0251FE479F24F5A96EA70F96 /* RemoteStore.swift in Sources */,
+				AF0F1C0D85782B82FE42F56A /* TeamToolsView.swift in Sources */,
+				42B1CE228634AE5F8B512A86 /* EngineRoomView.swift in Sources */,
+				5AF04EA8A646DCCFDEEF17BA /* NativeShell.swift in Sources */,
+				5023E16EAE07DA09B8342690 /* NativeNotifications.swift in Sources */,
+				D26BCA5F8CC14636821B06A3 /* SharedAppStore.swift in Sources */,
 				1162CF50A47019EEE0F0B91C /* ScheduleViews.swift in Sources */,
 				30B1A0694148D8AA25AD8B3C /* UsageViews.swift in Sources */,
 				7022D275A902DE896A1918FC /* LifeStore.swift in Sources */,

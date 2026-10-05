@@ -19,6 +19,10 @@ Route::middleware('auth')->group(function () {
     Route::delete('/security/tokens/{token}', [SecurityController::class, 'revoke'])->middleware(['strong', 'password.confirm'])->name('security.revoke');
 });
 Route::middleware(['auth', 'strong'])->group(function () {
+    Route::prefix('/app-api')->middleware('throttle:120,1')->group(__DIR__.'/app.php');
+    Route::view('/team', 'team')->name('team');
+    Route::view('/browser-home', 'browser-home')->name('browser-home');
+    Route::view('/engine-room', 'engine-room')->name('engine-room');
     Route::get('/remote', [RemoteController::class, 'index'])->name('remote');
     Route::get('/remote/session', [RemoteController::class, 'session'])->name('remote.session')->middleware('throttle:120,1');
     Route::prefix('/remote/destinations')->middleware('throttle:60,1')->group(function () {

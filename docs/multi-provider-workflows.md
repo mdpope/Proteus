@@ -1,6 +1,6 @@
 # Multi-provider workflows — proposed design
 
-Status: design only. The installed app runs each chat on one provider and serializes AI turns.
+Status: design only; explicitly deferred from the October 4 parity implementation. The installed app runs each chat on one provider and serializes AI turns.
 This document does not enable delegation, add provider permissions, or change any workflow owner.
 
 ## Product model
@@ -144,3 +144,36 @@ cancellation, offline hosts and native-session isolation. Use synthetic data and
 connectors first. Real workplace access requires the operator's actual approved provider/data
 rules and controlled connector acceptance. Existing transcription replacements remain disabled
 until their separate ownership and workflow acceptance is complete.
+
+## October 4 review — proposed next feature increment
+
+The operator requested renewed review alongside the [cross-client parity queue](planned-updates.md).
+No delegation is implemented or enabled by this design update. Distinguish human-controlled remote
+chat/schedule commands, aggregated chat visibility and AI-authorized delegation as separate powers.
+
+Recommended first delivery:
+
+1. A host-backed provider-awareness view showing verified host/provider/account/profile bindings,
+   current capabilities, allowance freshness and unavailable routes. Reuse the same presentation
+   on desktop/web/mobile; provider authentication/configuration remains desktop-owned.
+2. A reviewable split-work proposal: child task, provider/profile/model, destination, explicit
+   input/result scope, dependencies, tools, approval needs and limits. Preview has no side effects.
+   Do not fabricate cost/capacity predictions or read otherwise unauthorized provider/work data.
+3. After policy/schema/identity prerequisites pass, opt-in fixed same-host sequential execution.
+   End/checkpoint the coordinator turn, execute eligible children as normal provider sessions,
+   and resume with permitted results. Do not await a child while occupying the only adapter slot.
+4. Parent/child links in aggregate Chats and client tabs, status and individually actionable
+   approvals; deterministic cancel/restart/uncertain-result behavior with durable IDs. A child is
+   visible only where its data policy permits, even when the parent is visible everywhere.
+
+The first preview can ship independently of the execution foundation. Actual multi-provider
+execution is conditional, not promised as part of the visual parity release. Keep dynamic task
+creation, parallel provider lanes, automatic allowance balancing and cross-host agent delegation
+behind later policy, isolation and recovery acceptance. A selected/default Mac stays explicit;
+quota exhaustion never silently routes data to another host, account or provider.
+
+Acceptance uses synthetic personal/restricted data labels and fake tools: deny forbidden inputs,
+titles/results and error leakage; invalidate grants after account changes; preserve per-session
+serialization; recover from crashes without duplicate external effects; and ensure all clients
+display the same actual children, pending approvals and outcomes. No live professional content,
+provider login changes or transcription owner cutover is part of planning validation.

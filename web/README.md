@@ -6,7 +6,7 @@ A self-hosted personal organization app and API for vehicle maintenance, private
 
 This repository owns reusable application code, migrations, tests, and UI assets. Deployment workspaces own their hostname, server configuration, releases, credentials, imports and recovery records. Never commit live records, uploaded files, `.env`, database snapshots, keys or personal vault content here.
 
-This is the complete personal-records web application incorporated from Mnemosyne into Proteus. The optional desktop Life section implements native views over a privately configured compatible database. This complete Laravel source remains available for the separately deployed Proteus website. Personal operating workflows belong to operator workflows and durable personal context belongs to private notes; the application has no runtime dependency on either. Professional workflows retain their own organization workflows policy and records boundary. No server-side AI execution or desktop relay is implemented by this web app. See `../docs/life.md` for source provenance, integration and future deployment checks.
+This is the complete personal-records web application incorporated from Mnemosyne into Proteus. Desktop and mobile Life views use the protected website API; the desktop retains an optional local database integration. This complete Laravel source remains available for the separately deployed Proteus website. Personal operating workflows belong to operator workflows and durable personal context belongs to private notes; the application has no runtime dependency on either. Professional workflows retain their own organization workflows policy and records boundary. AI execution remains on connected desktops. The web client controls them through the encrypted relay; Laravel stores account-scoped shared application records and optional encrypted pairing custody. See `../docs/life.md` for source provenance, integration and future deployment checks.
 
 ## Local development
 
@@ -46,7 +46,7 @@ php artisan test --compact
 vendor/bin/pint --dirty --format agent
 ```
 
-MCP is served at `/mcp` with OAuth/PKCE. A deployment may package a connection using its own public endpoint. Receipt originals and structured facts are separate; uncertain readings enter review. Omi processing and native remote clients belong to the desktop side of Proteus. Website AI controls, vault synchronization, relay hosting and commercial onboarding remain future work.
+MCP is served at `/mcp` with OAuth/PKCE. A deployment may package a connection using its own public endpoint. Receipt originals and structured facts are separate; uncertain readings enter review. Omi processing and native remote clients belong to the desktop side of Proteus. Website AI controls use paired desktop hosts. Vault synchronization and commercial onboarding remain future work; the relay runs as an independent service.
 
 ## Source and compatibility
 
@@ -65,9 +65,18 @@ preparing a later deployment. This source incorporation does not authorize a pro
 
 ## Remote workspaces
 
-The strongly authenticated `/remote` page pairs this browser separately with Personal and Health
-Catalyst Macs through the existing encrypted Proteus relay. Chat and schedule content bypasses
+The strongly authenticated `/remote` page supports account-persistent destinations and explicit
+Default Mac selection, with bounded encrypted summary/draft caches. Local browser-only pairing
+remains a separate mode. Account custody requires strong authentication and trusts the website
+server with decryptable device keys; MFA does not eliminate that server trust. Chat and schedule content bypasses
 Laravel and remains encrypted in transit through the relay. Build assets from the full Proteus
 repository so the shared safe Markdown renderer is available. See `../docs/web-remote.md` for
 configuration, browser storage boundaries, supported controls and isolated validation. Existing
 Life data and website authentication remain unchanged.
+
+## Shared application features
+
+Team Tools, Engine Room, browser home, saved links, history and generic notification/log records
+use the additive app-record API with explicit `app:read` / `app:write` scopes and account/workspace
+isolation. Existing native tokens are not broadened. See `../docs/parity-release.md` for delivery,
+consent, resource grants, push provisioning and verified platform differences.

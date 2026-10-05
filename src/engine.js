@@ -36,13 +36,13 @@ export class Engine extends EventEmitter {
     }
   }
   now() { return this.clock().toISOString(); }
-  persist(run) { run.updatedAt = this.now(); atomicJSON(path.join(this.runsDir, `${run.id}.json`), run); this.emit('change'); }
+  persist(run) { run.updatedAt = this.now(); atomicJSON(path.join(this.runsDir, `${run.id}.json`), run); this.emit('change', run); }
   event(run, role, text, data) {
     run.events.push({ role, text, ...(role === 'assistant' ? { agentName: agentName(run) } : {}), ...(data ? { data } : {}), at: this.now() }); this.persist(run);
   }
   stream(run, messageId, text) {
     run.liveMessages ??= {}; run.liveMessages[messageId] = (run.liveMessages[messageId] || '') + text;
-    this.emit('change');
+    this.emit('change', run);
   }
   listRuns() { return [...this.runs.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)); }
   getRun(id) { const run = this.runs.get(id); if (!run) throw new Error('Run not found.'); return run; }

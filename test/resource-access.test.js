@@ -1,0 +1,69 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { startServer } from '../src/server.js';
+import { startRelay } from '../relay/server.js';
+import { atomicJSON } from '../src/files.js';
+import { secret } from '../src/remote-crypto.js';
+import { RemoteClient, until } from './remote-client.mjs';
+
+test('resource access is a local per-device grant, checked before effects and cached replies', async t => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-resource-access-'));
+  atomicJSON(path.join(home, 'settings.json'), {schemaVersion:1,provider:'rehearsal',model:'',timezone:'UTC',workspace:{cwd:home,additionalDirectories:[]},skillDirectories:[],mcpServers:{}});
+  const token = secret(), relay = await startRelay({port:0,token});
+  const app = await startServer({home,port:0,timers:false});
+  const clients = [];
+  t.after(async () => { clients.forEach(client => client.close()); await app.close(); await relay.close(); fs.rmSync(home,{recursive:true,force:true}); });
+  const relayURL = `ws://127.0.0.1:${relay.port}`;
+  await app.remote.configure({enabled:true,mode:'external',relayURL,publicURL:relayURL,relayToken:token});
+  await until(() => app.remote.status === 'online');
+  const pair = async () => { const client = new RemoteClient(RemoteClient.capsule((await app.remote.pairing()).code)); clients.push(client); return client.connect(); };
+  const a = await pair(), b = await pair(), calls = [];
+  const snapshot = {supported:true,tabs:[{id:'private',title:'Private board',url:'https://example.test/private'}],processes:[]};
+  app.resources = {list:() => snapshot,action:async args => {calls.push(args);return snapshot;}};
+  const denied = /Enable it on the host in Engine Room.*Connections/;
+  const local = (value, authorized = true) => fetch(`${app.origin}/api/remote`, {method:'POST',headers:{'Content-Type':'application/json',...(authorized?{Authorization:`Bearer ${app.token}`}:{})},body:JSON.stringify(value)});
+  assert.equal(a.device.resourceAccess,false);
+  // Legacy pairing records without the new field also remain denied.
+  delete app.remote.config.devices.find(device => device.id === b.device.id).resourceAccess;
+  for (const client of [a,b]) {
+    assert.equal(app.remote.info().devices.find(device => device.id === client.device.id).resourceAccess,false);
+    await assert.rejects(client.request('resources.list'),denied);
+    await assert.rejects(client.request('resources.action',{action:'close',tabId:'private'}),denied);
+  }
+  assert.equal(calls.length,0);
+  assert.equal((await local({action:'resource-access',id:a.device.id,enabled:true},false)).status,401);
+  assert.equal((await local({action:'resource-access',id:a.device.id,enabled:'true'})).status,400);
+  assert.equal((await local({action:'resource-access',id:'unknown',enabled:true})).status,400);
+  await assert.rejects(a.request('resource-access',{id:a.device.id,enabled:true}),/Unsupported/);
+  const oldPeerDevice = [...app.remote.peers.values()].find(peer => peer.device?.id === a.device.id).device;
+  const granted = await (await local({action:'resource-access',id:a.device.id,enabled:true})).json();
+  assert.equal(granted.devices.find(device => device.id === a.device.id).resourceAccess,true);
+  assert.equal(oldPeerDevice.resourceAccess,false);
+  assert.equal(JSON.parse(fs.readFileSync(app.remote.file)).devices.find(device => device.id === a.device.id).resourceAccess,true);
+  assert.deepEqual(await a.request('resources.list'),snapshot);
+  await assert.rejects(b.request('resources.list'),denied);
+  const id = randomUUID(), args = {action:'unload',tabId:'private'};
+  assert.deepEqual(await a.request('resources.action',args,id),snapshot);
+  assert.deepEqual(await a.request('resources.action',args,id),snapshot);
+  assert.equal(calls.length,1);
+  await local({action:'resource-access',id:a.device.id,enabled:false});
+  await assert.rejects(a.request('resources.action',args,id),denied);
+  await assert.rejects(a.request('resources.action',args),denied);
+  await assert.rejects(a.request('resources.list'),denied);
+  assert.equal(calls.length,1);
+  assert.equal(JSON.parse(fs.readFileSync(app.remote.file)).devices.find(device => device.id === a.device.id).resourceAccess,false);
+  assert.ok((await a.request('sync')).state);
+  // A resource read already in progress must not disclose its result after revocation.
+  await local({action:'resource-access',id:a.device.id,enabled:true});
+  let finish;
+  app.resources.list = () => new Promise(resolve => { finish = resolve; });
+  const pending = a.request('resources.list');
+  await until(() => finish);
+  await local({action:'resource-access',id:a.device.id,enabled:false});
+  finish(snapshot);
+  await assert.rejects(pending,denied);
+});

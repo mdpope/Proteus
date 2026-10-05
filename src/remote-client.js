@@ -1,5 +1,5 @@
 // Wire-compatible with src/remote-crypto.js and Apple CryptoKit AES.GCM.combined.
-// Keys and application payloads never travel through a Laravel request.
+// Conversation payloads stay on this encrypted wire. Account credential custody is a separate adapter.
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', { fatal: true });
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
@@ -75,9 +75,10 @@ export class BrowserRemoteClient extends EventTarget {
             if (this.status !== 'online' || packet.seq !== this.incoming + 1) throw new Error('Invalid sequence.');
             const value = await unseal(this.host.key, packet.box, `${this.prefix}:host:${packet.seq}`); this.incoming = packet.seq;
             if (value.type === 'result') { const pending = this.waiting.get(value.id); if (pending) { clearTimeout(pending.timer); this.waiting.delete(value.id); value.error ? pending.reject(new Error(value.error)) : pending.resolve(value.result); } }
+            else if(value.type === 'revoked' && value.deviceId === this.host.deviceId){this.event('revoked',{authenticated:true,deviceId:value.deviceId});this.fail('This device was revoked by the Mac.');}
             else if (value.type === 'event') this.event('change', value);
             else throw new Error('Invalid message.');
-        } else if (packet.type === 'revoked' || packet.type === 'rejected') { this.event('revoked', packet.type); this.fail('This browser is not authorized. Pair it again from the Mac.'); }
+        } else if (packet.type === 'revoked' || packet.type === 'rejected') { this.event('rejected', {authenticated:false,type:packet.type}); this.fail('The connection was rejected. Your saved pairing was preserved; retry or review Connections on the Mac.'); }
         else throw new Error('Unexpected message.');
     }
     request(method, args = {}, { id = crypto.randomUUID(), issuedAt = new Date().toISOString() } = {}) {

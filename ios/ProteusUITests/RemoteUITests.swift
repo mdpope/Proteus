@@ -2,12 +2,13 @@ import XCTest
 
 final class RemoteUITests: XCTestCase {
     override func setUp() { super.setUp(); continueAfterFailure = false }
+    @MainActor private func showChats(_ app: XCUIApplication) { XCTAssertTrue(app.buttons["destination-picker"].waitForExistence(timeout: 25)); if app.tabBars.buttons["Chats"].exists { app.tabBars.buttons["Chats"].tap() } else { app.buttons["Chats"].firstMatch.tap() } }
     @MainActor func testExpandableToolOutput() async throws {
         let (data, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/pair")!)
         let fixture = try JSONSerialization.jsonObject(with: data) as! [String: Any]
         let app = XCUIApplication(); app.launchArguments = ["--reset-pairing"]; app.launch()
         let link = app.textFields["pairing-link"]; XCTAssertTrue(link.waitForExistence(timeout: 15)); link.tap(); link.typeText(fixture["code"] as! String)
-        app.buttons["pair-mac"].tap(); let newChat = app.buttons["new-chat"]; XCTAssertTrue(newChat.waitForExistence(timeout: 25)); newChat.tap()
+        app.buttons["pair-mac"].tap(); showChats(app); let newChat = app.buttons["new-chat"]; XCTAssertTrue(newChat.waitForExistence(timeout: 25)); newChat.tap()
         let prompt = app.textFields["chat-prompt"]; XCTAssertTrue(prompt.waitForExistence(timeout: 10)); prompt.tap(); prompt.typeText("Tool display rehearsal")
         app.buttons["start-chat"].tap(); XCTAssertTrue(app.staticTexts["Your input is needed"].waitForExistence(timeout: 20))
         let tool = app.buttons["tool-activity-synthetic-read"]
@@ -24,6 +25,8 @@ final class RemoteUITests: XCTestCase {
         let link = app.textFields["pairing-link"]
         XCTAssertTrue(link.waitForExistence(timeout: 15)); link.tap(); link.typeText(fixture["code"] as! String)
         app.buttons["pair-mac"].tap()
+        XCTAssertTrue(app.buttons["destination-picker"].waitForExistence(timeout: 25))
+        if app.tabBars.buttons["Chats"].exists { app.tabBars.buttons["Chats"].tap() } else { app.buttons["Chats"].firstMatch.tap() }
         let newChat = app.buttons["new-chat"]
         XCTAssertTrue(newChat.waitForExistence(timeout: 25)); newChat.tap()
         let prompt = app.textFields["chat-prompt"]
@@ -47,7 +50,7 @@ extension RemoteUITests {
         let fixture = try JSONSerialization.jsonObject(with: data) as! [String: Any]
         let app = XCUIApplication(); app.launchArguments = ["--reset-pairing"]; app.launch()
         let link = app.textFields["pairing-link"]; XCTAssertTrue(link.waitForExistence(timeout: 15)); link.tap(); link.typeText(fixture["code"] as! String)
-        app.buttons["pair-mac"].tap(); let newChat = app.buttons["new-chat"]; XCTAssertTrue(newChat.waitForExistence(timeout: 25)); newChat.tap()
+        app.buttons["pair-mac"].tap(); showChats(app); let newChat = app.buttons["new-chat"]; XCTAssertTrue(newChat.waitForExistence(timeout: 25)); newChat.tap()
         let prompt = app.textFields["chat-prompt"]; XCTAssertTrue(prompt.waitForExistence(timeout: 10)); prompt.tap()
         prompt.typeText("# Rich message\n\n**Ready** for review.\n\n| Client | Status |\n| --- | --- |\n| Mac | Ready |\n| iPad | Ready |\n\n```javascript\nconst ready = true;\n```")
         app.buttons["start-chat"].tap()
@@ -66,7 +69,7 @@ extension RemoteUITests {
         let fixture = try JSONSerialization.jsonObject(with: data) as! [String: Any]
         let app = XCUIApplication(); app.launchArguments = ["--reset-pairing"]; app.launch()
         let link = app.textFields["pairing-link"]; XCTAssertTrue(link.waitForExistence(timeout: 15)); link.tap(); link.typeText(fixture["code"] as! String)
-        app.buttons["pair-mac"].tap(); let newChat = app.buttons["new-chat"]; XCTAssertTrue(newChat.waitForExistence(timeout: 25)); newChat.tap()
+        app.buttons["pair-mac"].tap(); showChats(app); let newChat = app.buttons["new-chat"]; XCTAssertTrue(newChat.waitForExistence(timeout: 25)); newChat.tap()
         let prompt = app.textFields["chat-prompt"]; XCTAssertTrue(prompt.waitForExistence(timeout: 10)); prompt.tap(); prompt.typeText("Selected sources only")
         let loading = app.buttons["source-loading"]
         guard loading.waitForExistence(timeout: 10) else { XCTFail("Source loading picker is missing"); return }
@@ -104,7 +107,7 @@ extension RemoteUITests {
         let fixture = try JSONSerialization.jsonObject(with: data) as! [String: Any]
         let app = XCUIApplication(); app.launchArguments = ["--reset-pairing"]; app.launch()
         let link = app.textFields["pairing-link"]; XCTAssertTrue(link.waitForExistence(timeout: 15)); link.tap(); link.typeText(fixture["code"] as! String)
-        app.buttons["pair-mac"].tap(); let newChat = app.buttons["new-chat"]; XCTAssertTrue(newChat.waitForExistence(timeout: 25)); newChat.tap()
+        app.buttons["pair-mac"].tap(); showChats(app); let newChat = app.buttons["new-chat"]; XCTAssertTrue(newChat.waitForExistence(timeout: 25)); newChat.tap()
         let prompt = app.textFields["chat-prompt"]; XCTAssertTrue(prompt.waitForExistence(timeout: 10)); prompt.tap(); prompt.typeText("Model options rehearsal")
         let effort = app.descendants(matching: .any)["effort-picker"].firstMatch
         for _ in 0..<12 {
@@ -151,7 +154,7 @@ extension RemoteUITests {
         let fixture = try JSONSerialization.jsonObject(with: data) as! [String: Any]
         let app = XCUIApplication(); app.launchArguments = ["--reset-pairing"]; app.launch()
         let link = app.textFields["pairing-link"]; XCTAssertTrue(link.waitForExistence(timeout: 15)); link.tap(); link.typeText(fixture["code"] as! String)
-        app.buttons["pair-mac"].tap(); let newChat = app.buttons["new-chat"]; XCTAssertTrue(newChat.waitForExistence(timeout: 25)); newChat.tap()
+        app.buttons["pair-mac"].tap(); showChats(app); let newChat = app.buttons["new-chat"]; XCTAssertTrue(newChat.waitForExistence(timeout: 25)); newChat.tap()
         let prompt = app.textFields["chat-prompt"]; XCTAssertTrue(prompt.waitForExistence(timeout: 10)); prompt.tap(); prompt.typeText("Synthetic MCP status")
         app.buttons["start-chat"].tap(); XCTAssertTrue(app.staticTexts["Your input is needed"].waitForExistence(timeout: 20))
         let details = app.buttons["Chat details & loaded context"]
@@ -271,12 +274,33 @@ extension RemoteUITests {
         let toggle=app.switches["show-life"];XCTAssertTrue(toggle.waitForExistence(timeout:10))
         if toggle.value as? String == "1" { toggle.coordinate(withNormalizedOffset: CGVector(dx:0.9,dy:0.5)).tap() }
         app.buttons["Done"].tap()
-        XCTAssertFalse(app.buttons["Life"].exists)
+        XCTAssertTrue(app.buttons["Life"].firstMatch.exists)
         setup.tap();toggle.coordinate(withNormalizedOffset: CGVector(dx:0.9,dy:0.5)).tap();XCTAssertEqual(toggle.value as? String,"1");app.buttons["Done"].tap()
         XCTAssertTrue(app.buttons["Life"].firstMatch.waitForExistence(timeout:5))
         app.buttons["Life"].firstMatch.tap()
         XCTAssertTrue(app.buttons["life-sign-in"].waitForExistence(timeout:10))
-        app.buttons["Macs"].firstMatch.tap();setup.tap();toggle.coordinate(withNormalizedOffset: CGVector(dx:0.9,dy:0.5)).tap();app.buttons["Done"].tap()
-        XCTAssertFalse(app.buttons["Life"].exists)
+        app.buttons["Home"].firstMatch.tap();setup.tap();toggle.coordinate(withNormalizedOffset: CGVector(dx:0.9,dy:0.5)).tap();app.buttons["Done"].tap()
+        XCTAssertTrue(app.buttons["Life"].firstMatch.exists)
+    }
+}
+
+
+extension RemoteUITests {
+    @MainActor func testNativeParityNavigationAndCollapsedAllowance() throws {
+        let app = XCUIApplication(); app.launchArguments = ["--reset-pairing", "--synthetic-destinations"]; app.launch()
+        XCTAssertTrue(app.buttons["destination-picker"].waitForExistence(timeout: 20))
+        let toggle = app.buttons["toggle-provider-usage"].firstMatch
+        XCTAssertTrue(toggle.waitForExistence(timeout: 10))
+        if app.buttons["usage-codex"].exists { toggle.tap() }
+        XCTAssertFalse(app.buttons["usage-codex"].exists)
+        XCTAssertFalse(app.buttons["provider-usage-details"].exists)
+        toggle.tap(); XCTAssertTrue(app.buttons["usage-codex"].exists)
+        func area(_ name: String) { if app.tabBars.buttons[name].exists { app.tabBars.buttons[name].tap() } else { app.buttons[name].firstMatch.tap() } }
+        area("Chats"); XCTAssertTrue(app.staticTexts["New chats execute on Build Mac. Viewing another Mac’s history does not change that destination."].waitForExistence(timeout: 10))
+        if app.tabBars.firstMatch.exists { XCTAssertFalse(app.buttons["toggle-provider-usage"].exists) }
+        area("Team"); XCTAssertTrue(app.buttons["Connect shared Team tools"].waitForExistence(timeout: 10))
+        area("Engine Room"); XCTAssertTrue(app.buttons["Resources"].firstMatch.waitForExistence(timeout: 10))
+        app.buttons["Resources"].firstMatch.tap(); XCTAssertTrue(app.staticTexts["CPU and RAM are reported by the host. Tabs may share a process; shared memory is not counted as per-tab memory."].waitForExistence(timeout: 10))
+        let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Native parity engine resources"; screenshot.lifetime = .keepAlways; add(screenshot)
     }
 }

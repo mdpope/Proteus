@@ -4,6 +4,17 @@ This is a concise behavior log. Git commits and pull requests contain the comple
 
 ## Unreleased
 
+- Unify navigation around Chats, Team Tools and Engine Room, with contextual children, collapsible
+  sidebars, phone Home allowance, paired chat bubbles, attention !, and no tagline.
+- Aggregate authorized Mac chat indexes; retain bounded encrypted caches and account-scoped
+  drafts. Add an explicit website Default Mac without implicit execution fallback.
+- Share Team rosters/links/history/preferences through explicit account API scopes; add standup
+  docking, browser homes/search/history, Team tab unloading and actual host resource metrics.
+- Support remote schedule editing and signed host revocation while preserving pairings on forged
+  relay notices. Add generic notification/log history and retryable push delivery foundations.
+- Preserve existing Apple signing; background APNs provisioning remains pending. Multi-provider
+  implementation is deferred. See `docs/parity-release.md` for exact acceptance and limitations.
+
 - Keep website sign-in feedback and cancellation in Setup; space the connected account badge
   and actions consistently on narrow and wide screens.
 

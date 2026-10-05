@@ -4,20 +4,31 @@ const { PageSlide } = require('./browser-transition.cjs');
 const { randomUUID } = require('node:crypto');
 const { connectPage } = require('./playwright-bridge.cjs');
 const { loadURLWithTimeout, cancelNavigation } = require('./navigation.cjs');
+const { BrowserActions } = require('./browser-actions.cjs');
 
 function normalizeURL(input) {
   const value = String(input || '').trim();
-  if (!value) throw new Error('Enter a website address.');
-  const url = new URL(/^[a-z][a-z0-9+.-]*:/i.test(value) ? value : `https://${value}`);
+  if (!value || value.length>4096) throw new Error('Enter a website address or search term.');
+  const explicit=/^https?:\/\//i.test(value);
+  const host=/^(?:localhost|(?:[a-z0-9\p{L}-]+\.)+[a-z0-9\p{L}-]+|\[[a-f0-9:]+\])(?::[0-9]{1,5})?(?:[/?#][^\s]*)?$/iu.test(value);
+  if(!explicit&&!host){
+    if(/^[a-z][a-z0-9+.-]*:/i.test(value)||/^(?:[~/\\]|[a-z]:\\)/i.test(value)||/(?:token|password|secret|api[_-]?key|authorization|code)=/i.test(value))throw new Error('Use a web address or a search term without credentials or local paths.');
+    return 'https://www.google.com/search?q='+encodeURIComponent(value);
+  }
+  const url = new URL(explicit ? value : `https://${value}`);
   if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) throw new Error('Use an HTTP or HTTPS address without credentials.');
   return url.href;
 }
+
 class BrowserTabs {
-  constructor(window, appOrigin) {
+  constructor(window, appOrigin, options = {}) {
+    this.options=options;this.history=options.history;
     this.window = window; this.appOrigin = appOrigin; this.tabs = new Map(); this.active = null; this.bounds = null;
     this.gestureHandler = (event, direction) => {
-      const tab = [...this.tabs.values()].find(tab => tab.view.webContents === event.sender);
-      if(this.shuttingDown || !tab || tab.id !== this.active || event.senderFrame !== event.sender.mainFrame || !['back','forward'].includes(direction))return;
+      const tab = [...this.tabs.values()].find(tab => tab.view?.webContents === event.sender);
+      if(this.shuttingDown || !tab || tab.id !== this.active || event.senderFrame !== event.sender.mainFrame)return;
+      if(direction==='overview'){this.actions.send({type:'overview',group:tab.group});return;}
+      if(!['back','forward'].includes(direction))return;
       if(this.transition)return;
       const transition=this.transition=new PageSlide(this.window,tab.view.webContents,tab.view.getBounds());
       void transition.play(direction,()=>{void this.command({action:direction,id:tab.id,gesture:true}).catch(()=>{});},()=>!this.shuttingDown&&this.active===tab.id&&!tab.view.webContents.isDestroyed()).finally(()=>{if(this.transition===transition)this.transition=null;});
@@ -26,23 +37,29 @@ class BrowserTabs {
     this.partition = session.fromPartition('persist:proteus-browser');
     this.partition.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
     this.partition.setPermissionCheckHandler(() => false);
-    this.partition.on('will-download', event => event.preventDefault());
+    this.actions = new BrowserActions(this);
     // An external page cannot navigate or fetch the privileged local application.
     this.partition.webRequest.onBeforeRequest((details, callback) => {
       callback({ cancel: new URL(details.url).origin === this.appOrigin });
     });
   }
   state(tab, includeHistory=false) {
+    if(!tab.view||tab.view.webContents.isDestroyed())return {...tab.snapshot,id:tab.id,group:tab.group||'main',loaded:false,loading:false,shared:false,owner:null};
     const wc = tab.view.webContents;
-    return { id: tab.id, url: wc.getURL(), title: wc.getTitle() || (wc.getURL() ? new URL(wc.getURL()).hostname : 'New tab'), loading: wc.isLoading(),
+    return { id: tab.id,group:tab.group||'main',loaded:true,pid:wc.getOSProcessId(), url: wc.getURL(), title: wc.getTitle() || (wc.getURL() ? new URL(wc.getURL()).hostname : 'New tab'), loading: wc.isLoading(),
       canGoBack: wc.navigationHistory.canGoBack(), canGoForward: wc.navigationHistory.canGoForward(), shared: tab.shared, owner: tab.owner, error: tab.error || null, ...(includeHistory?{history:normalizeHistory({entries:wc.navigationHistory.getAllEntries(),index:wc.navigationHistory.getActiveIndex()},this.appOrigin)}:{}) };
   }
   list(includeHistory=false) { return [...this.tabs.values()].map(tab => this.state(tab,includeHistory)); }
   prepareShutdown() { this.shuttingDown = true; this.transition?.cancel(); }
   changed() { if (!this.shuttingDown && !this.window.isDestroyed()) this.window.webContents.send('proteus:browser-state', this.list(true)); }
   get(id) { const tab = this.tabs.get(id); if (!tab) throw new Error('Browser tab is closed or unavailable.'); return tab; }
-  async create(url, owner = null, savedHistory = null) {
-    const tab = { id: randomUUID(), shared: false, owner, view: new WebContentsView({ webPreferences: {
+  async create(url, owner = null, savedHistory = null, descriptor = {}) {
+    if(descriptor.unloaded===true && !owner){
+      const history=normalizeHistory(savedHistory,this.appOrigin), address=history?.entries[history.index]?.url||safeHistoryURL(url,this.appOrigin)||'';
+      const tab={id:descriptor.id||randomUUID(),group:descriptor.group==='team'?'team':'main',shared:false,owner:null,view:null,snapshot:{url:address,title:descriptor.title|| (address?new URL(address).hostname:'New tab'),history,canGoBack:(history?.index||0)>0,canGoForward:!!history&&history.index<history.entries.length-1,error:null}};
+      this.tabs.set(tab.id,tab);this.changed();return this.state(tab,true);
+    }
+    const tab = { id: descriptor.id||randomUUID(), group:descriptor.group==='team'?'team':'main', shared: false, owner, view: new WebContentsView({ webPreferences: {
       preload: require('node:path').join(__dirname,'browser-preload.cjs'), session: this.partition, nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true, backgroundThrottling: false
     } }) };
     this.tabs.set(tab.id, tab); this.window.contentView.addChildView(tab.view);
@@ -57,16 +74,20 @@ class BrowserTabs {
     const sendHistory=()=>{if(!wc.isDestroyed())wc.send('proteus:browser-history',{back:wc.navigationHistory.canGoBack(),forward:wc.navigationHistory.canGoForward()});};
     for(const event of ['dom-ready','did-navigate','did-navigate-in-page','did-stop-loading'])wc.on(event,sendHistory);
     wc.on('before-input-event', (event, input) => {
+      if(input.type==='keyDown'&&(input.meta||input.control)&&input.shift&&input.key==='\\') {event.preventDefault();this.actions.send({type:'overview',group:tab.group});return;}
       if (input.type === 'keyDown' && (input.meta || input.control) && input.key.toLowerCase() === 'l') {
         event.preventDefault(); this.window.webContents.focus(); this.window.webContents.send('proteus:focus-address');
       }
     });
+    wc.on('context-menu', (_event, params) => this.actions.menu(tab,params)?.popup({window:this.window}));
+    wc.on('zoom-changed', (_event, direction) => {if(direction==='out'&&wc.getZoomFactor()<=1&&this.active===tab.id)this.actions.send({type:'overview',group:tab.group});});
     wc.setWindowOpenHandler(({ url: next }) => {
-      try { const address = this.address(next); void this.create(address, owner).catch(() => {}); } catch { /* Unsupported schemes remain blocked. */ }
+      try { const address = this.address(next); void this.create(address, owner,null,{group:tab.group}).catch(() => {}); } catch { /* Unsupported schemes remain blocked. */ }
       return { action: 'deny' };
     });
     wc.on('will-navigate', (event, next) => { try { this.address(next); } catch { event.preventDefault(); } });
     for (const name of ['page-title-updated','did-navigate','did-navigate-in-page','did-start-loading','did-stop-loading']) wc.on(name, () => this.changed());
+    wc.on('did-stop-loading',()=>{if(!wc.isDestroyed())this.history?.visit(wc.getURL(),wc.getTitle(),this.appOrigin);});
     wc.on('did-fail-load', (_e, code, description, _url, isMainFrame) => { if (isMainFrame && code !== -3) { tab.error = description; this.changed(); } });
     this.changed();
     const history=normalizeHistory(savedHistory,this.appOrigin);
@@ -83,7 +104,7 @@ class BrowserTabs {
   address(value) { const url = normalizeURL(value); if (new URL(url).origin === this.appOrigin) throw new Error('The application is not a browser target.'); return url; }
   async navigate(id, url) {
     this.transition?.cancel();
-    const tab = this.get(id); const wc = tab.view.webContents;
+    let tab = this.get(id);if(!tab.view){await this.reload(id,false);tab=this.get(id);} const wc = tab.view.webContents;
     const navigation = Symbol(); tab.navigation = navigation; tab.error = null;
     try { await loadURLWithTimeout(wc, this.address(url)); }
     catch (error) {
@@ -93,21 +114,34 @@ class BrowserTabs {
     this.changed(); return this.state(tab);
   }
   show(id, bounds) {
+    if(this.overviewOpen && id)return;
     if(id!==this.active || (bounds&&this.bounds&&['x','y','width','height'].some(key=>Math.round(bounds[key])!==this.bounds[key])))this.transition?.cancel();
     if (bounds) {
       for (const key of ['x','y','width','height']) if (!Number.isFinite(bounds[key]) || bounds[key] < 0) throw new Error('Invalid browser bounds.');
       this.bounds = Object.fromEntries(Object.entries(bounds).map(([key, value]) => [key, Math.round(value)]));
     }
+    const selection=this.selection=Symbol();
+    if(id&&!this.get(id).view){this.active=id;for(const tab of this.tabs.values())tab.view?.setVisible(false);void this.reload(id).then(()=>{if(this.selection===selection&&this.active===id&&!this.shuttingDown&&this.tabs.has(id))this.show(id,this.bounds);}).catch(()=>{});return;}
     this.active = id;
-    for (const tab of this.tabs.values()) { if (tab.id === id && this.bounds) tab.view.setBounds(this.bounds); tab.view.setVisible(tab.id === id && !!this.bounds); }
+    for (const tab of this.tabs.values()) { if(!tab.view)continue; if (tab.id === id && this.bounds) tab.view.setBounds(this.bounds); tab.view.setVisible(tab.id === id && !!this.bounds && !!tab.view.webContents.getURL()); }
   }
   async close(id) {
     if(id===this.active)this.transition?.cancel();
     const tab = this.get(id); tab.shared = false; tab.owner = null;
-    cancelNavigation(tab.view.webContents, 'Browser tab closed during navigation.');
-    await this.disconnect(tab); this.window.contentView.removeChildView(tab.view); tab.view.webContents.close();
+    if(tab.view){cancelNavigation(tab.view.webContents, 'Browser tab closed during navigation.');
+    await this.disconnect(tab); this.window.contentView.removeChildView(tab.view); tab.view.webContents.close();}
     this.tabs.delete(id); if (this.active === id) this.active = null; this.changed();
   }
+  async unload(id) {
+    const tab=this.get(id);if(!tab.view)return this.state(tab,true);
+    if(tab.shared||tab.owner)throw new Error('Turn off Agent access before unloading this tab.');
+    const wc=tab.view.webContents;if(wc.isCurrentlyAudible())throw new Error('Stop audio before unloading this tab.');
+    tab.snapshot=this.state(tab,true);this.transition?.cancel();await this.disconnect(tab);
+    const closed=await new Promise(resolve=>{let done=false;const finish=value=>{if(done)return;done=true;clearTimeout(timer);wc.removeListener('will-prevent-unload',blocked);resolve(value);};const blocked=()=>finish(false);const timer=setTimeout(()=>finish(wc.isDestroyed()),3000);wc.once('destroyed',()=>finish(true));wc.once('will-prevent-unload',blocked);wc.close({waitForBeforeUnload:true});});
+    if(!closed)throw new Error('This page has unsaved work. Finish or close it before unloading.');
+    try{this.window.contentView.removeChildView(tab.view);}catch{}tab.view=null;tab.shared=false;tab.owner=null;this.changed();return this.state(tab,true);
+  }
+  async reload(id, restore=true) { const tab=this.get(id);if(tab.view)return this.state(tab,true);return this.create(restore?tab.snapshot.url:'',null,restore?tab.snapshot.history:null,{id:tab.id,group:tab.group}); }
   async disconnect(tab) {
     try { const connection = await tab.connecting; await connection?.close(); } catch { /* A closing page may already have disconnected. */ }
     tab.connection = null; tab.connecting = null;
@@ -138,16 +172,24 @@ class BrowserTabs {
   }
   async command(value) {
     const { action, id } = value;
+    if(action==='overview')return this.actions.overview(value.group);
+    if(action==='overview-end'){this.overviewOpen=false;return;}
+    if(action==='history')return this.history?.list(value)||{items:[],total:0,page:1,pageSize:50};
+    if(['history-clear','history-delete','history-settings'].includes(action))return this.history.update(value);
+    if(action==='unload')return this.unload(id);
+    if(action==='activate'){if(!this.get(id).view)await this.reload(id);return this.state(this.get(id),true);}
+    if(action==='unload-group'){for(const tab of [...this.tabs.values()])if(tab.group===value.group&&tab.view)try{await this.unload(tab.id);}catch(error){tab.error=error.message;}return this.list(true);}
     if(!value.gesture&&['back','forward','reload','stop'].includes(action))this.transition?.cancel();
     if (action === 'list') return this.list(true);
     if (action === 'create') {
-      const info=await this.create(value.restore===true?safeHistoryURL(value.url,this.appOrigin):value.url,null,value.restore===true?value.history:null);
+      const info=await this.create(value.restore===true?safeHistoryURL(value.url,this.appOrigin):value.url,null,value.restore===true?value.history:null,{group:value.group,unloaded:value.restore===true&&value.unloaded===true,title:String(value.title||'').slice(0,200)});
       return this.state(this.get(info.id),true);
     }
     if (action === 'show') { this.show(id, value.bounds); return; }
     if (action === 'hide') { this.show(null); return; }
     if (action === 'close') return this.close(id);
     if (action === 'navigate') return this.navigate(id, value.url);
+    if(!this.get(id).view)await this.reload(id);
     const tab = this.get(id); const wc = tab.view.webContents;
     if (action === 'history-menu') { this.historyMenu(tab, value); return; }
     if (['back', 'forward', 'reload'].includes(action)) cancelNavigation(wc, 'Navigation replaced by a browser command.');
@@ -209,6 +251,6 @@ class BrowserTabs {
       catch { throw new Error('Could not fill this page. Check its login fields and complete the step manually.'); }
     });
   }
-  async dispose() { this.prepareShutdown(); ipcMain.removeListener('proteus:browser-gesture',this.gestureHandler); for (const id of [...this.tabs.keys()]) await this.close(id); }
+  async dispose() { this.prepareShutdown(); this.actions.dispose(); ipcMain.removeListener('proteus:browser-gesture',this.gestureHandler); for (const id of [...this.tabs.keys()]) await this.close(id); }
 }
 module.exports = { BrowserTabs, normalizeURL };

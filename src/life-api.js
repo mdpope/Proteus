@@ -37,16 +37,17 @@ export class LifeAPI {
    if(binary)return {bytes,headers:response.headers};if(!value||typeof value!=='object')throw new Error('Website returned an invalid Life response.');return value;
   }catch(e){if(e instanceof LifeHTTPError)throw e;if(e.name==='AbortError'||e.name==='TimeoutError')throw new Error('Life request timed out or the account changed.');if(e instanceof TypeError)throw new Error('Life website is unreachable. Reconnect before saving changes.');throw e;}finally{clearTimeout(timer);this.controllers.delete(controller);}
  }
- async begin(origin){
-  if(this.closing)throw new Error('Life is closing.');this.load();this.vault.available();if(this.credential)throw new Error('Sign out of the current Life account before changing accounts.');
+ async begin(origin,{extend=false}={}){
+  if(this.closing)throw new Error('Life is closing.');this.load();this.vault.available();if(this.credential&&!extend)throw new Error('Sign out of the current Life account before changing accounts.');if(extend&&this.credential&&lifeOrigin(origin)!==this.credential.origin)throw new Error('Keep the current website account when extending permissions.');
   const attempt=++this.authAttempt,epoch=this.generation;this.pending=null;
   origin=lifeOrigin(origin);const discovery=await this.raw(origin,'/api/v1/native-config');
-  if(attempt!==this.authAttempt||epoch!==this.generation||this.closing||this.credential)throw new Error('Life sign-in was cancelled or the account changed.');
+  if(attempt!==this.authAttempt||epoch!==this.generation||this.closing||(this.credential&&!extend))throw new Error('Life sign-in was cancelled or the account changed.');
   if(!discovery.enabled||discovery.protocol!==1||discovery.issuer!==origin||discovery.redirectUri!==LIFE_CALLBACK||!discovery.clientId||discovery.authorizationEndpoint!==origin+'/oauth/authorize'||discovery.tokenEndpoint!==origin+'/oauth/token'||discovery.apiBase!==origin+'/api/v1/life')throw new Error('Native Life sign-in is not configured correctly on this website.');
   if(!this.openExternal)throw new Error('Open Life sign-in in the Mac desktop app.');
   const verifier=randomBytes(48).toString('base64url'),state=randomBytes(32).toString('base64url'),challenge=createHash('sha256').update(verifier).digest('base64url');
-  const pending={origin,clientId:discovery.clientId,verifier,state,expires:Date.now()+10*60*1000,generation:this.generation,attempt};this.pending=pending;this.error=null;this.notice=null;
-  const url=new URL(origin+'/oauth/authorize');url.search=new URLSearchParams({response_type:'code',client_id:discovery.clientId,redirect_uri:LIFE_CALLBACK,scope:'brain:read brain:write',state,code_challenge:challenge,code_challenge_method:'S256'}).toString();
+  const scopes = ['brain:read','brain:write', ...(discovery.appApiBase === origin+'/api/v1/app' && Array.isArray(discovery.appScopes) ? discovery.appScopes.filter(s => ['app:read','app:write'].includes(s)) : [])];
+  const pending={origin,clientId:discovery.clientId,scopes,expectedAccountId:extend?this.credential?.accountId:null,verifier,state,expires:Date.now()+10*60*1000,generation:this.generation,attempt};this.pending=pending;this.error=null;this.notice=null;
+  const url=new URL(origin+'/oauth/authorize');url.search=new URLSearchParams({response_type:'code',client_id:discovery.clientId,redirect_uri:LIFE_CALLBACK,scope:scopes.join(' '),state,code_challenge:challenge,code_challenge_method:'S256'}).toString();
   try{await this.openExternal(url.href);}catch{if(this.pending===pending)this.pending=null;throw new Error('Could not open the system sign-in browser.');}if(attempt!==this.authAttempt||epoch!==this.generation||this.pending!==pending)throw new Error('Life sign-in was cancelled.');this.changed();
  }
  async callback(value){
@@ -61,6 +62,7 @@ export class LifeAPI {
    const next=this.token(pending,token),profile=await this.raw(pending.origin,'/api/v1/life',{token:next.accessToken});
    if(pending.generation!==this.generation||pending.attempt!==this.authAttempt||this.closing)throw new Error('Life account changed during sign-in.');
    if(!/^[a-f0-9]{64}$/.test(profile.accountId)||!String(profile.workspaceId||''))throw new Error('Website returned no valid Life account identity.');
+   if(pending.expectedAccountId&&pending.expectedAccountId!==profile.accountId)throw new Error('Authorize the same website account; your previous sign-in was preserved.');
    Object.assign(next,{accountId:profile.accountId,workspaceId:String(profile.workspaceId)});this.vault.save(next);this.invalidate();this.credential=next;this.profile=profile;this.error=null;this.notice='Website account connected.';this.changed();return true;
   }catch(e){if(pending?.attempt===this.authAttempt){this.error=e.message;this.changed();}throw e;}
  }

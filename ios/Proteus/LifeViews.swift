@@ -11,6 +11,7 @@ private enum LifeSection:String,CaseIterable,Identifiable{
 struct LifeRootView:View{
     @EnvironmentObject var life:LifeStore
     @State private var section:LifeSection? = .overview
+    @AppStorage("nativeLifeSection") private var selectedSection = "overview"
     @State private var account=false
     var body:some View{
         Group{
@@ -23,7 +24,7 @@ struct LifeRootView:View{
                     .toolbar{ToolbarItem(placement:.primaryAction){Button{account=true}label:{Image(systemName:"person.crop.circle")}.accessibilityLabel("Life account")}}
                     .sheet(isPresented:$account){NavigationStack{LifeAccountView()}}
             }else{NavigationStack{LifeAccountView()}}
-        }.task{await life.restore()}
+        }.task{section = LifeSection(rawValue: selectedSection) ?? .overview; await life.restore()}.onChange(of: selectedSection) { _, value in section = LifeSection(rawValue: value) ?? .overview }.onChange(of: section) { _, value in selectedSection = value?.rawValue ?? "overview" }
     }
 }
 struct LifeAccountView:View{

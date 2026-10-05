@@ -1,5 +1,8 @@
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('desktop', {
+  openExternal:value=>ipcRenderer.invoke('proteus:open-external',value),
+  onCloseTool:handler=>{const listener=(_event,id)=>handler(id);ipcRenderer.on('proteus:close-tool',listener);return()=>ipcRenderer.removeListener('proteus:close-tool',listener);},
+  onNotification:handler=>{const listener=(_event,item)=>handler(item);ipcRenderer.on('proteus:notification-open',listener);return()=>ipcRenderer.removeListener('proteus:notification-open',listener);},
   lifeAccount: value => ipcRenderer.invoke('proteus:life-account', value),
   peers: value => ipcRenderer.invoke('proteus:desktop-peers', value),
   onPeer: handler => { const listener = (_event, value) => handler(value); ipcRenderer.on('proteus:desktop-peer-event', listener); return () => ipcRenderer.removeListener('proteus:desktop-peer-event', listener); },
@@ -14,6 +17,7 @@ contextBridge.exposeInMainWorld('desktop', {
   choosePaths: options => ipcRenderer.invoke('proteus:choose-paths', options),
   openPath: file => ipcRenderer.invoke('proteus:open-path', file),
   browser: value => ipcRenderer.invoke('proteus:browser', value),
+  onBrowserAction: handler => { const listener = (_event, value) => handler(value); ipcRenderer.on('proteus:browser-action', listener); return () => ipcRenderer.removeListener('proteus:browser-action', listener); },
   onAddressFocus: handler => { const listener = () => handler(); ipcRenderer.on('proteus:focus-address', listener); return () => ipcRenderer.removeListener('proteus:focus-address', listener); },
   onBrowserState: handler => { const listener = (_event, value) => handler(value); ipcRenderer.on('proteus:browser-state', listener); return () => ipcRenderer.removeListener('proteus:browser-state', listener); },
   onBrowserResize: handler => { const listener = () => handler(); ipcRenderer.on('proteus:browser-resize', listener); return () => ipcRenderer.removeListener('proteus:browser-resize', listener); }

@@ -14,5 +14,5 @@ test('host revocation closes every browser using the account device and rejects 
  app.remote.revoke(saved.deviceId);
  await until(()=>first.status==='closed'&&second.status==='closed');
  assert.equal([...app.remote.peers.values()].filter(peer=>peer.device?.id===saved.deviceId).length,0);
- await assert.rejects(connect({...saved}),/not authorized|verification failed/);
+ await assert.rejects(connect({...saved}),/not authorized|verification failed|connection was rejected/);
 });

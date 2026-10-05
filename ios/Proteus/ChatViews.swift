@@ -92,10 +92,11 @@ struct ChatView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 18) {
                 HStack { if run["status"].string == "running" { ProgressView() }; Text(statusLabel(run["status"].string)).font(.subheadline).foregroundStyle(.secondary); Spacer() }
+                if !store.connected { Label("Offline · cached history", systemImage: "icloud.slash").font(.caption).foregroundStyle(.secondary) }
                 if run["earlier"].int > 0 { Button("Load earlier messages") { loadEarlier() } }
                 ForEach(Array(run["events"].array.enumerated()).filter { ($0.element["role"].string != "assistant" || !$0.element["text"].string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) && !$0.element["data"]["permission"]["automatic"].bool }, id: \.offset) { _, event in
                     if event["data"]["tool"] != .null { ToolActivityView(tool: event["data"]["tool"]) }
-                    else { if !event["data"]["delivery"]["state"].string.isEmpty { Text(event["data"]["delivery"]["state"].string.capitalized).font(.caption2).foregroundStyle(.teal) }; MessageView(role: event["role"].string == "assistant" ? (event["agentName"].string.isEmpty ? mainAgentName : event["agentName"].string) : event["role"].string, text: event["text"].string, runID: id) { if followLatest { Task { @MainActor in await Task.yield(); proxy.scrollTo("chat-end", anchor: .bottom) } } } } }
+                    else { if !event["data"]["delivery"]["state"].string.isEmpty { Text(event["data"]["delivery"]["state"].string.capitalized).font(.caption2).foregroundStyle(.teal) }; MessageView(role: event["role"].string == "assistant" ? (event["agentName"].string.isEmpty ? mainAgentName : event["agentName"].string) : event["role"].string, text: event["text"].string, runID: id, timestamp: event["timestamp"].string.isEmpty ? event["at"].string : event["timestamp"].string) { if followLatest { Task { @MainActor in await Task.yield(); proxy.scrollTo("chat-end", anchor: .bottom) } } } } }
                 ForEach(run["liveMessages"].object.keys.sorted(), id: \.self) { key in MessageView(role: "\(mainAgentName) · streaming", text: run["liveMessages"][key].string, runID: id) { if followLatest { Task { @MainActor in await Task.yield(); proxy.scrollTo("chat-end", anchor: .bottom) } } } }
                 if pending != .null {
                     VStack(alignment: .leading, spacing: 12) {
@@ -128,6 +129,7 @@ struct ChatView: View {
             .onChange(of: run["events"]) { _, _ in if followLatest { proxy.scrollTo("chat-end", anchor: .bottom) } }
             .onChange(of: run["liveMessages"]) { _, _ in if followLatest { proxy.scrollTo("chat-end", anchor: .bottom) } }
         }.navigationTitle(run["title"].string.isEmpty ? "Conversation" : run["title"].string).navigationBarTitleDisplayMode(.inline)
+            .alert("Proteus", isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })) { Button("OK") { store.error = nil } } message: { Text(store.error ?? "") }
             .safeAreaInset(edge: .bottom) { if nativeRun { VStack { Text("Native Omi processing · outcomes are recorded by the worker.").font(.caption); if active { Button("Stop process", role: .destructive) { act("chat.cancel", [:]) } } }.padding().background(.bar) } else { composer } }
             .onChange(of: text) { _, value in store.setDraft("reply:" + id, value.isEmpty ? .null : .string(value)) }
             .task(id: id) {
@@ -182,18 +184,25 @@ struct ChatView: View {
 }
 struct MessageView: View {
     @EnvironmentObject var store: RemoteStore
+    @EnvironmentObject var shared: SharedAppStore
     @State private var height: CGFloat = 0
     let role: String
     let text: String
     let runID: String
+    var timestamp: String = ""
     var onResize: () -> Void = {}
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(role.uppercased()).font(.caption2.weight(.bold)).foregroundStyle(.secondary)
+            HStack { Text(role.uppercased()).font(.caption2.weight(.bold)); Spacer(); if let date = ProviderAllowance.date(timestamp) { Text(nativeTimestamp(date, timezone: shared.snapshot["preferences"]["timezone"].string)).font(.caption2) } }.foregroundStyle(.secondary)
             ZStack(alignment: .topLeading) {
                 if height == 0 { Text(text).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
                 MarkdownView(text: text, runID: runID, store: store, height: $height, onResize: onResize).frame(height: max(height, 1)).opacity(height > 0 ? 1 : 0)
             }.frame(maxWidth: .infinity, alignment: .leading)
         }.padding().background(role == "user" ? Color.accentColor.opacity(0.13) : Color.secondary.opacity(0.09), in: RoundedRectangle(cornerRadius: 16))
     }
+}
+
+func nativeTimestamp(_ date: Date, timezone: String = "") -> String {
+    let formatter = DateFormatter(); formatter.dateFormat = "MMM d, h:mm a z"; formatter.timeZone = TimeZone(identifier: timezone) ?? .current
+    return formatter.string(from: date)
 }

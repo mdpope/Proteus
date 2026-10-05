@@ -26,17 +26,17 @@ struct ProviderAllowance {
 
 struct ProviderUsageStrip: View {
     @ObservedObject var store: RemoteStore
-    @State private var collapsed: Bool?
+    @AppStorage("nativeAllowanceMode") private var displayMode = ""
     @State private var details = false
-    private var isCollapsed: Bool { collapsed ?? store.state["appearance"]["providerUsageCollapsed"].bool }
+    private var isCollapsed: Bool { displayMode.isEmpty ? store.state["appearance"]["providerUsageCollapsed"].bool : displayMode == "collapsed" }
     var body: some View {
         if store.usageEnabled {
             VStack(spacing: 8) {
                 HStack {
-                    Button { collapsed = !isCollapsed } label: { Label("AI usage", systemImage: isCollapsed ? "chevron.right" : "chevron.down").font(.caption.bold()) }.accessibilityIdentifier("toggle-provider-usage")
+                    Button { displayMode = isCollapsed ? "compact" : "collapsed" } label: { Label("AI Allowance", systemImage: isCollapsed ? "chevron.right" : "chevron.down").font(.caption.bold()) }.accessibilityIdentifier("toggle-provider-usage")
                     Spacer()
-                    if store.usageBusy { ProgressView().controlSize(.mini) }
-                    Button("Details") { details = true }.font(.caption).accessibilityIdentifier("provider-usage-details")
+                    if !isCollapsed && store.usageBusy { ProgressView().controlSize(.mini) }
+                    if !isCollapsed { Button("Details") { details = true }.font(.caption).accessibilityIdentifier("provider-usage-details") }
                 }
                 if !isCollapsed {
                     HStack(spacing: 8) {
@@ -52,7 +52,7 @@ struct ProviderUsageStrip: View {
                         }
                     }
                 }
-            }.padding(.horizontal).padding(.vertical, 8).background(.bar)
+            }.padding(.horizontal).padding(.vertical, 8).background(.bar).buttonStyle(.borderless)
                 .sheet(isPresented: $details) { NavigationStack { ProviderUsageDetails(store: store) } }
                 .task(id: store.connected) {
                     while store.connected && !Task.isCancelled {
@@ -69,7 +69,7 @@ struct AllowanceMeter: View {
     var unlimited = false
     let label: String
     var body: some View {
-        Text(label).font(.caption.weight(.semibold)).monospacedDigit().foregroundStyle(.primary)
+        Text(label).font(.caption.weight(.semibold)).monospacedDigit().foregroundStyle(.primary).lineLimit(1).minimumScaleFactor(0.65)
             .frame(maxWidth: .infinity).padding(.vertical, 6)
             .background {
                 GeometryReader { geometry in
@@ -114,7 +114,7 @@ struct ProviderUsageDetails: View {
                     if !value["error"].string.isEmpty { Text(value["error"].string).font(.caption).foregroundStyle(.orange) }
                 }
             }
-        }.navigationTitle("AI usage")
+        }.navigationTitle("Usage")
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } }; ToolbarItem(placement: .primaryAction) { Button { Task { await store.loadUsage(force: true) } } label: { Image(systemName: "arrow.clockwise") }.disabled(!store.connected || store.usageBusy).accessibilityLabel("Refresh provider usage") } }
     }
 }

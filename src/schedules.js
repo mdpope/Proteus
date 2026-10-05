@@ -23,6 +23,7 @@ export function validateSchedule(value) {
   if (!Array.isArray(value.workspace.additionalDirectories) || value.workspace.additionalDirectories.some(p => typeof p !== 'string' || !path.isAbsolute(p))) throw new Error('workspace.additionalDirectories must be absolute paths.');
   if (value.misfire !== 'skip' && value.misfire !== 'coalesce') throw new Error('misfire must be skip or coalesce.');
   if (value.provider === 'local-process' && (value.integration?.type !== 'omi' || !['audio', 'library', 'semantic'].includes(value.integration?.job))) throw new Error('Local processes must be managed Omi jobs.');
+  if (value.notifications !== undefined && (!value.notifications || typeof value.notifications !== 'object' || Array.isArray(value.notifications) || (value.notifications.onCompletion !== undefined && typeof value.notifications.onCompletion !== 'boolean'))) throw new Error('Schedule completion notification must be true or false.');
   validateModelOptionShape(value);
   if (value.contextSelection !== undefined) validateContextSelection(value.contextSelection);
   nextRuns(value.cron, value.timezone);

@@ -1,29 +1,38 @@
-import { initRemoteDesktops, attachChatDestinations, mountMachineHistory, renderRemoteRun } from './remote-desktops.js';
+import { initRemoteDesktops, attachChatDestinations, mountMachineHistory, renderRemoteRun, openRemoteChat, mountRemoteSchedules } from './remote-desktops.js';
+import { initChatsIndex, renderChatsIndex, recentChats, openIndexedChat, loadChatsIndex } from './chats-index.js';
+import { initEngineRoom, engineSections, renderEngineRoom } from './engine-room.js';
+import { initTeamTools, renderTeamTools, teamState, restoreTeamState, leaveTeamTools, ownsTeamBrowser, syncTeamBrowsers, teamBrowserBounds, selectTeamBrowser, forgetTeamBrowser } from './team-tools.js';
+import { initBrowserOverview, showBrowserOverview, isBrowserOverviewOpen } from './browser-overview.js';
+import { browserTarget, renderBrowserHome } from './browser-home.js';
 import { requestPresentation, mountStructured } from './tool-presentation.js';
 import { conversation, forgetConversation } from './conversation.js';
 import { renderRemote } from './remote.js';
 import { initOmi, renderOmi } from './omi.js';
 import { initTerminals, renderTerminal, openTerminalDialog, openTerminalProfiles, disposeTerminalUi } from './terminals.js';
-import { initLife, renderLife, renderLifeSetup } from './life.js';
+import { initLife, renderLife, renderLifeSetup, selectLifeSection } from './life.js';
 import { initMarkdownPicker, openMarkdownPicker } from './markdown-picker.js';
 import { initFeatures, renderContext, renderStandup, renderCredentials, fillBrowserLogin, contextPicker, contextSelection, bindContextPicker, modelPicker, modelControls, modelSelection, contextSize, refreshModels, sessionDetails, bindSessionDetails, bindPaths } from './features.js';
+const chatIconPaths = '<path d="M3 4h10a3 3 0 0 1 3 3v5a3 3 0 0 1-3 3H8l-4 3v-4a3 3 0 0 1-1-2V4Z"/><path d="M17 8h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3l-3 2v-4"/>';
+const pairedBubbles = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">${chatIconPaths}</svg>`;
 const $ = selector => document.querySelector(selector);
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
-const state = { data: null, page: 'schedules', selected: null, tab: 'overview', tabs: [{ id: 'overview', label: 'Schedules', type: 'overview' }], draft: null, dirty: false, signature: '', markdown: null };
+const state = { data: null, page: 'schedules', engineSection:'resources', selected: null, tab: 'overview', tabs: [{ id: 'overview', label: 'Schedules', type: 'overview' }], draft: null, dirty: false, signature: '', markdown: null };
 const friendly = value => ({ awaiting_input:'Needs feedback', completed:'Turn complete', queued:'Queued', running:'Running', cancelled:'Cancelled', interrupted:'Interrupted', failed:'Failed' }[value] || value);
 const badge = status => `<span class="badge ${escape(status)}">${escape(friendly(status))}</span>`;
-const time = (value, timezone) => new Date(value).toLocaleString(undefined, { ...(timezone ? { timeZone: timezone } : {}), month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+const time = (value, timezone) => value && !Number.isNaN(Date.parse(value)) ? new Date(value).toLocaleString(undefined, { timeZone: timezone || state.data?.settings?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone, year:'numeric', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }) : 'Time unavailable';
 let toastTimer, usageValue = null, usageBusy = false, appearanceBusy = false;
+let previousFeature='', sidebarMinimized=localStorage.getItem('proteus.sidebar.minimized')==='true';
+document.body.classList.toggle('sidebar-minimized',sidebarMinimized);
 let workspaceReady=false, workspaceRestoring=false, workspaceClosing=false, lastWorkspace='';
 const lifeVisible = () => state.data?.life?.enabled === true;
 function saveWorkspace() {
   if(!workspaceReady || workspaceRestoring || workspaceClosing)return;
-  const session={schemaVersion:1,active:state.tab,page:state.page,tabs:state.tabs.map(tab=>({id:tab.id,type:tab.type,label:tab.label,...(tab.type==='browser'?{url:tab.info?.url||'',history:tab.info?.history}:{}),...(tab.type==='markdown'?{file:tab.markdown?.file}:{}),...(tab.type==='terminal'?{terminal:tab.terminal}:{}),...(tab.type==='remote-run'?{hostId:tab.hostId,runId:tab.runId}:{})}))};
+  const session={schemaVersion:1,active:state.tab,page:state.page,engineSection:state.engineSection,team:teamState(),tabs:state.tabs.map(tab=>({id:tab.id,type:tab.type,label:tab.label,...(tab.type==='browser'?{url:tab.info?.url||'',history:tab.info?.history,unloaded:tab.info?.loaded===false}:{}),...(tab.type==='markdown'?{file:tab.markdown?.file}:{}),...(tab.type==='terminal'?{terminal:tab.terminal}:{}),...(tab.type==='remote-run'?{hostId:tab.hostId,runId:tab.runId}:{})}))};
   const json=JSON.stringify(session);if(json===lastWorkspace)return;lastWorkspace=json;
   if(window.desktop?.workspaceSession)window.desktop.workspaceSession({action:'save',session}).catch(error=>{lastWorkspace='';toast(error.message);});
   else try{localStorage.setItem('proteus.workspace',json);}catch{}
 }
-function openFeatureTab(type) { if(type==='life'&&!lifeVisible())return;openTab({id:'feature-'+type,type,label:type==='omi'?'Transcription':'Life'}); }
+function openFeatureTab(type) { if(type==='life'&&!lifeVisible())return;openTab({id:'feature-'+type,type,label:type==='omi'?'Transcription':type==='team'?'Team Tools':'Life'}); }
 function restoreFeatureTabs() {
   if(!lifeVisible()){state.tabs=state.tabs.filter(tab=>tab.type!=='life');if(!state.tabs.some(t=>t.id===state.tab))state.tab='overview';}
 }
@@ -35,6 +44,7 @@ async function restoreWorkspace() {
     const tabs=[], existingBrowser=window.desktop?await window.desktop.browser({action:'list'}):[];
     for(const entry of saved.tabs||[]) {
       const tab={...entry};
+      if(tab.type==='standup'){tab.type='team';tab.id='feature-team';tab.label='Team Tools';if(saved.active===entry.id)saved.active=tab.id;if(!saved.team)saved.team={active:'standup'};}
       if(tab.type==='life'&&!lifeVisible())continue;
       if(tab.type==='run'&&!state.data.runs.some(run=>run.id===tab.id))continue;
       if(tab.type==='schedule'&&!state.data.schedules.some(schedule=>schedule.id===tab.id))continue;
@@ -46,12 +56,12 @@ async function restoreWorkspace() {
         if(!window.desktop)continue;
         // A renderer reload reuses the live view; an app restart creates a private tab.
         const previous=tab.id;let info=existingBrowser.find(info=>info.id===tab.id);
-        if(!info){info=await window.desktop.browser({action:'create',restore:true,url:tab.url,history:tab.history});tab.info=info;tab.id=info.id;tabs.push(tab);if(saved.active===previous)saved.active=tab.id;continue;}
+        if(!info){info=await window.desktop.browser({action:'create',restore:true,unloaded:tab.unloaded===true,url:tab.url,history:tab.history});tab.info=info;tab.id=info.id;tabs.push(tab);if(saved.active===previous)saved.active=tab.id;continue;}
         tab.info=info;
       }
       if(!tabs.some(other=>other.id===tab.id))tabs.push(tab);
     }
-    state.tabs=tabs.length?tabs:state.tabs;state.page=saved.page||'schedules';state.tab=state.tabs.some(tab=>tab.id===saved.active)?saved.active:'overview';
+    state.tabs=tabs.length?tabs:state.tabs;state.page=saved.page||'schedules';state.engineSection=saved.engineSection||'resources';restoreTeamState(saved.team,existingBrowser);state.tab=state.tabs.some(tab=>tab.id===saved.active)?saved.active:'overview';
   } catch(error) {toast(error.message);return;}
   finally {workspaceRestoring=false;}
   workspaceReady=true;render();saveWorkspace();
@@ -84,7 +94,7 @@ function renderUsage() {
   host.hidden=state.data?.settings?.appearance?.showProviderUsage===false;
   const collapsed=state.data?.settings?.appearance?.providerUsageCollapsed===true;
   host.classList.toggle('usage-collapsed',collapsed);
-  host.innerHTML=`<div class="usage-heading"><span>AI allowance</span><button id="toggle-usage" class="subtle" aria-label="${collapsed?'Expand':'Collapse'} AI usage" aria-expanded="${!collapsed}" aria-controls="provider-usage-rows" ${appearanceBusy?'disabled':''}>${collapsed?'⌄':'⌃'}</button></div><div id="provider-usage-rows">`+Object.entries(providerNames).map(([id,name])=>{
+  host.innerHTML=`<div class="usage-heading"><span>AI Allowance</span><button id="toggle-usage" class="subtle" aria-label="${collapsed?'Expand':'Collapse'} AI allowance" aria-expanded="${!collapsed}" aria-controls="provider-usage-rows" ${appearanceBusy?'disabled':''}>${collapsed?'⌄':'⌃'}</button></div><div id="provider-usage-rows" ${collapsed?'hidden':''}>`+Object.entries(providerNames).map(([id,name])=>{
     const entry=usageValue?.providers?.[id];
     const windows=entry?.windows || [];
     const reported=windows.filter(w=>Number.isFinite(w.remainingPercent) && !w.unlimited);
@@ -102,7 +112,7 @@ function showUsageDetails(id) {
   if(!dialog.open)dialog.showModal();
   $('#usage-close').onclick=()=>dialog.close();
   $('#usage-refresh').onclick=()=>refreshUsage(true);
-  $('#usage-provider').onclick=()=>{dialog.close();state.page='providers';state.tab='overview';state.tabs[0].label='Providers';render();};
+  $('#usage-provider').onclick=()=>{dialog.close();navigate('engine','providers');};
 }
 async function refreshUsage(force = false) {
   if (usageBusy || (!force && state.data?.settings?.appearance?.showProviderUsage===false)) return;
@@ -126,10 +136,11 @@ async function refresh(force = false) {
     const tab=state.tabs.find(t=>t.id===state.tab);
     if(tab?.type==='run' && $('#main').dataset.runId===tab.id && $('#conversation-host')) {
       renderRun(tab.id);
-      for(const [page,count] of [['runs',data.runs.length],['attention',data.runs.filter(r=>['awaiting_input','failed','interrupted'].includes(r.status)).length]]) {
+      for(const [page,count] of [['runs',recentChats(data.runs).length],['attention',recentChats(data.runs).filter(r=>['awaiting_input','failed','interrupted'].includes(r.status)).length]]) {
         const node=$(`[data-page="${page}"] .count`);if(node)node.textContent=count;
       }
-    } else render();
+    } else if(tab?.type==='browser' && $('#browser-form')) {renderTabs();updateBrowserControls();requestAnimationFrame(browserBounds);}
+    else render();
   }
 }
 function openTab(tab) {
@@ -145,19 +156,29 @@ async function schedule(id) {
   openTab({ id, label:value.name, type:'schedule' });
 }
 function runTab(run) { state.page = 'runs'; openTab({ id:run.id, label:run.title, type:'run' }); }
+function navigate(page, section) {
+  const previous=state.tabs.find(tab=>tab.id===state.tab);
+  if(previous?.type==='team' && page!=='team')void leaveTeamTools().catch(error=>toast(error.message));
+  if(['omi','life','team'].includes(page)) { openFeatureTab(page); return; }
+  if(page==='engine')state.engineSection=section||'resources';
+  if(page==='life-section') { openFeatureTab('life'); return; }
+  state.page=page;state.tab='overview';state.tabs[0].label=page==='runs'?'Chats':page==='attention'?'Needs attention':page==='engine'?'Engine Room':page==='remote'?'Connections':page==='settings'?'App Setup':page[0].toUpperCase()+page.slice(1);render();
+}
 function render() {
   const data = state.data; if (!data) return;
   restoreFeatureTabs();
   const activeTab=state.tabs.find(tab=>tab.id===state.tab);
-  const activePage=['omi','life'].includes(activeTab?.type)?activeTab.type:state.page;
-  const waiting = data.runs.filter(r => ['awaiting_input','failed','interrupted'].includes(r.status)).length;
-  $('#sidebar').innerHTML = `<div class="brand"><span class="brandmark">⤨</span>Proteus</div><div class="subtitle">Your agent control room</div>${[
-    ['schedules','◷','Schedules', data.schedules.length], ['runs','◉','Run history', data.runs.length], ['attention','◇','Needs attention',waiting], ['omi','<svg class="transcription-nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M2 10v4M6 7v10M10 3v18M14 8v8M18 5v14M22 10v4"/></svg>','Transcription',''], ...(lifeVisible()?[['life','♡','Life','']]:[]), ['context','▦','Workspaces',''], ['standup','☷','Standup',''], ['credentials','⚿','Credentials',''], ['providers','⌘','Providers',''], ['remote','⇄','Remote access',''], ['settings','⚙','Setup','']
-  ].map(([id,icon,label,count]) => `<button class="navitem ${activePage === id ? 'active':''}" data-page="${id}"><span><span>${icon}</span><span class="navlabel">${label}</span></span>${count !== '' ? `<span class="count">${count}</span>`:''}</button>`).join('')}<div class="sidebottom"><section id="provider-usage" aria-label="Provider allowance remaining"></section><div><span class="dot"></span>Local runner online</div><p>Prototype · v${data.version}<br>${data.scheduler.background ? 'Keeps running in the menu bar.' : 'Runs while the host is running.'}</p><button class="subtle" id="data-folder">Open data folder ↗</button></div>`;
+  const activePage=['omi','life','team'].includes(activeTab?.type)?activeTab.type:['run','remote-run'].includes(activeTab?.type)?'runs':activeTab?.type==='schedule'?'schedules':state.page;
+  const waiting = recentChats(data.runs).filter(r => ['awaiting_input','failed','interrupted'].includes(r.status)).length;
+  const nav=[['schedules','◷','Schedules',data.schedules.length],['runs',pairedBubbles,'Chats',recentChats(data.runs).length],['attention','!','Needs attention',waiting],['omi','<svg class="transcription-nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M2 10v4M6 7v10M10 3v18M14 8v8M18 5v14M22 10v4"/></svg>','Transcription',''],...(lifeVisible()?[['life','♡','Life','']]:[]),['team','☷','Team Tools',''],['context','▦','Workspaces',''],['engine','⚙','Engine Room','']];
+  const children=id=>id==='runs'?recentChats(data.runs).slice(0,5).map((row,i)=>`<button class="navchild" data-recent-chat="${i}" title="${escape(row.title||'Chat')}"><span>${escape(row.title||'Chat')}</span><small>${escape(row.destinationName||'This Mac')}</small></button>`).join('')+'<button class="navchild" data-page="runs">More</button>':id==='life'?['Overview','Nutrition','Garage','Fuel & mileage','Capture inbox','New capture','Account & security','Connections'].map((name,i)=>`<button class="navchild" data-life-section="${['overview','nutrition','garage','fuel','inbox','capture','security','connections'][i]}">${escape(name)}</button>`).join(''):id==='engine'?engineSections().map(([key,label])=>`<button class="navchild ${state.engineSection===key?'active':''}" data-engine-section="${key}">${escape(label)}</button>`).join(''):id==='team'?'<button class="navchild" data-team-section="overview">Overview</button><button class="navchild" data-team-section="standup">Standup</button>':' ';
+  $('#sidebar').innerHTML = `<div class="brand"><span class="brandmark">⤨</span><span class="brand-text">Proteus</span><button id="sidebar-toggle" class="subtle" aria-label="Collapse sidebar" title="Collapse sidebar">‹</button></div><nav aria-label="Features">${nav.map(([id,icon,label,count])=>`<button class="navitem ${activePage===id?'active':''}" data-page="${id}"><span><span class="nav-icon">${icon}</span><span class="navlabel">${label}</span></span>${count!==''?`<span class="count">${count}</span>`:''}</button>${activePage===id?`<div class="navchildren">${children(id)}</div>`:''}`).join('')}</nav><div class="sidebottom"><section id="provider-usage" aria-label="Provider allowance remaining"></section><div><span class="dot"></span>Local runner online</div><p>Prototype · v${data.version}<br>${data.scheduler.background ? 'Keeps running in the menu bar.' : 'Runs while the host is running.'}</p><button class="subtle" id="data-folder">Open data folder ↗</button></div>`;
   renderUsage();
   renderTabs();
   saveWorkspace();
-  $('#main').classList.remove('browser-main', 'run-main');
+  if(previousFeature==='team'&&activeTab?.type!=='team')void leaveTeamTools().catch(error=>toast(error.message));
+  previousFeature=activeTab?.type||'';
+  $('#main').classList.remove('browser-main', 'run-main', 'team-main');
   const tab = state.tabs.find(t => t.id === state.tab);
   if (tab?.type === 'schedule') renderSchedule(tab.id);
   else if (tab?.type === 'run') renderRun(tab.id);
@@ -167,23 +188,30 @@ function render() {
   else if (tab?.type === 'standup') renderStandup();
   else if (tab?.type === 'omi') renderOmi();
   else if (tab?.type === 'life') renderLife();
+  else if (tab?.type === 'team') renderTeamTools();
   else if (tab?.type === 'terminal') renderTerminal(tab);
   else if (state.page === 'context') renderContext();
   else if (state.page === 'credentials') renderCredentials();
   else if (state.page === 'remote') renderRemote({ api, escape, toast });
   else if (state.page === 'settings') renderSettings();
   else if (state.page === 'providers') renderProviders();
-  else if (state.page === 'runs' || state.page === 'attention') renderRuns();
+  else if (state.page === 'engine') renderEngineRoom(state.engineSection);
+  else if (state.page === 'runs' || state.page === 'attention') renderChatsIndex(state.page==='attention');
   else renderOverview();
-  document.querySelectorAll('[data-page]').forEach(button => button.onclick = () => { if(['omi','life'].includes(button.dataset.page)){openFeatureTab(button.dataset.page);return;} state.page = button.dataset.page; if (state.page === 'standup') { openTab({ id: 'standup', type: 'standup', label: 'Standup' }); return; } state.tab = 'overview'; state.tabs[0].label = button.querySelector('.navlabel').textContent; render(); });
+  document.querySelectorAll('[data-page]').forEach(button => button.onclick = () => navigate(button.dataset.page));
+  document.querySelectorAll('[data-engine-section]').forEach(button=>button.onclick=()=>navigate('engine',button.dataset.engineSection));
+  document.querySelectorAll('[data-team-section]').forEach(button=>button.onclick=()=>{teamState().active=button.dataset.teamSection;openFeatureTab('team');});
+  document.querySelectorAll('#sidebar [data-life-section]').forEach(button=>button.onclick=()=>{openFeatureTab('life');selectLifeSection(button.dataset.lifeSection);});
+  document.querySelectorAll('[data-recent-chat]').forEach(button=>button.onclick=()=>openIndexedChat(recentChats(data.runs)[Number(button.dataset.recentChat)]));
+  $('#sidebar-toggle').textContent=sidebarMinimized?'›':'‹';$('#sidebar-toggle').setAttribute('aria-label',sidebarMinimized?'Expand sidebar':'Collapse sidebar');$('#sidebar-toggle').onclick=()=>{sidebarMinimized=!sidebarMinimized;document.body.classList.toggle('sidebar-minimized',sidebarMinimized);localStorage.setItem('proteus.sidebar.minimized',String(sidebarMinimized));render();requestAnimationFrame(browserBounds);};
   $('#data-folder').onclick = () => window.desktop ? window.desktop.openPath(data.home) : toast(data.home);
-  if (tab?.type !== 'browser') window.desktop?.browser({action:'hide'}).catch(e=>toast(e.message));
+  if (!['browser','team'].includes(tab?.type)) window.desktop?.browser({action:'hide'}).catch(e=>toast(e.message));
 }
 function renderOverview() {
   const data = state.data;
   $('#main').innerHTML = `<div class="heading"><div><div class="eyebrow">Set the rhythm</div><h1>Work that keeps moving.</h1><div class="muted">Give recurring work a schedule. Step in when it needs you.</div></div><div class="actions"><button id="import">Import JSON</button><button class="primary" id="new-schedule">＋ New schedule</button></div></div><div class="stats"><div class="stat"><span class="eyebrow">Schedules enabled</span><strong>${data.schedules.filter(s=>s.enabled).length}<span class="muted small"> / ${data.schedules.length}</span></strong></div><div class="stat"><span class="eyebrow">Runs recorded</span><strong>${data.runs.length}</strong></div><div class="stat"><span class="eyebrow">Waiting for you</span><strong>${data.runs.filter(r=>r.status==='awaiting_input').length}</strong></div></div><div class="card"><div class="heading"><h2>Your schedules</h2><span class="pill">JSON files · Live reload</span></div><table><thead><tr><th>Schedule</th><th>Cadence</th><th>Provider</th><th>Status</th><th></th></tr></thead><tbody>${data.schedules.map(s=>`<tr class="clickable" data-schedule="${escape(s.id)}"><td><strong>${escape(s.name || s.id)}</strong><div class="muted">${escape(s.error || s.workspace?.cwd.split('/').pop())}</div></td><td><code>${escape(s.cron || 'Invalid file')}</code><div class="muted">${escape(s.timezone || '')}</div></td><td>${escape(s.provider === 'rehearsal' ? 'Local rehearsal' : s.provider)}<div class="muted">${escape(s.model || 'No model usage')}</div></td><td>${badge(s.error ? 'failed' : s.enabled ? 'Enabled' : 'Paused')}</td><td>↗</td></tr>`).join('')}</tbody></table></div><p class="note">Edit schedule files in your editor or with an AI agent. Changes are validated before execution. Imported schedules start paused.</p>${data.schedulerErrors.length ? `<div class="banner">Scheduler: ${escape(data.schedulerErrors.at(-1).error)}</div>` : ''}${data.recoveryErrors.length ? `<div class="banner">Some run files could not be loaded. Inspect the data folder before continuing.</div>` : ''}`;
   document.querySelectorAll('[data-schedule]').forEach(el=>el.onclick=()=>schedule(el.dataset.schedule));
-  $('#new-schedule').onclick = newSchedule; $('#import').onclick = importDialog;
+  $('#new-schedule').onclick = newSchedule; $('#import').onclick = importDialog;void mountRemoteSchedules();
 }
 function renderSchedule(id) {
   const managed = state.data.schedules.find(item => item.id === id);
@@ -193,9 +221,10 @@ function renderSchedule(id) {
   if (!original || original.error) { $('#main').innerHTML = `<div class="banner">${escape(original?.error || 'Schedule no longer exists.')}</div>`; return; }
   if (!state.draft || state.draft.id !== id || (!state.dirty && state.draft.revision !== original.revision)) state.draft = structuredClone(original);
   const s = state.draft;
-  $('#main').innerHTML = `<div class="heading"><div><div class="eyebrow">Schedule / ${escape(s.id)}</div><h1>${escape(s.name)}</h1><div class="muted">${escape(s.provider === 'rehearsal' ? 'A no-cost rehearsal of scheduling, feedback, and continuation.' : 'A persistent conversation for every run.')}</div></div><div class="actions">${badge(s.enabled?'Enabled':'Paused')}<button class="primary" id="run-now">▶ Run now</button></div></div><p class="note">${s.source?.manifest ? `Owned by ${escape(s.source.system)} · Edit this source, then export/reconcile it into Proteus: <span class="filepath">${escape(s.source.manifest)}</span><button id="source-file">Open source manifest ↗</button><br>Proteus reads this exported schedule file: <span class="filepath">${escape(original.file)}</span>` : `App-owned schedule · ${escape(original.file)}`}</p><div class="grid"><section class="card"><h2>Schedule settings</h2>${state.dirty && s.revision !== original.revision ? '<p class="banner" role="status">The file changed outside Proteus. Your unsaved edits are preserved. Reload file to use the current file; saving this older draft is blocked.</p>' : ''}<div class="field"><label for="name">Name</label><input id="name" value="${escape(s.name)}"></div><div class="row"><div><label for="cron">Cron expression</label><input id="cron" class="cron" value="${escape(s.cron)}"></div><div><label for="timezone">Time zone</label><input id="timezone" value="${escape(s.timezone)}"></div></div><div class="row"><div><label for="provider">Provider</label><select id="provider"><option value="rehearsal" ${s.provider==='rehearsal'?'selected':''}>Local rehearsal</option><option value="copilot" ${s.provider==='copilot'?'selected':''}>GitHub Copilot</option><option value="codex" ${s.provider==='codex'?'selected':''}>Codex</option><option value="claude" ${s.provider==='claude'?'selected':''}>Claude</option></select></div><div><label for="model">Model ID</label>${modelPicker('model',s.model,s.provider)}<button class="subtle" id="model-refresh">↻ Refresh models</button></div></div>${modelControls('model',s)}<div class="field"><label for="cwd">Workspace directory</label><input id="cwd" value="${escape(s.workspace.cwd)}"></div><div class="field"><label for="roots">Additional directories · one per line</label><textarea id="roots" rows="2">${escape(s.workspace.additionalDirectories.join('\n'))}</textarea></div><div class="field"><label for="prompt">Instructions</label><textarea id="prompt" rows="5">${escape(s.prompt)}</textarea></div><div class="row"><div><label for="misfire">After missed runs</label><select id="misfire"><option value="skip" ${s.misfire==='skip'?'selected':''}>Wait for the next scheduled time</option><option value="coalesce" ${s.misfire==='coalesce'?'selected':''}>Catch up once when available</option></select></div><div><label for="enabled">Execution</label><select id="enabled"><option value="false" ${!s.enabled?'selected':''}>Paused</option><option value="true" ${s.enabled?'selected':''}>Enabled</option></select></div></div>${contextPicker(s.contextSelection?.selectedIds || [], 'schedule', s.contextSelection || {})}<div class="formfooter"><span class="note" id="save-state">${state.dirty?'Unsaved changes':'Saved as a plain JSON file'}</span><div class="actions"><button id="reload">Reload file</button><button class="primary" id="save">Save schedule</button></div></div></section><div class="stack"><section class="card"><div class="heading"><h2>Next five runs</h2><button class="subtle" id="preview">↻ Preview</button></div><ul id="next-runs" class="nextlist">${(s.nextRuns || []).map((date,i)=>`<li><span class="muted">${i===0?'Next':String(i+1).padStart(2,'0')}</span><span>${escape(time(date,s.timezone))}</span></li>`).join('')}</ul><p class="note">${escape(s.timezone)} · Paused schedules show projected times.</p></section><section class="card"><div class="heading"><h2>The source of truth</h2><button class="subtle" id="open-file">Open file ↗</button></div><div class="filepath">${escape(original.file)}</div><p class="note">Reopening or Reload file reads the latest JSON from disk. External edits refresh automatically while this editor has no unsaved changes. Existing chats keep their captured schedule.</p><pre id="json-preview">${escape(JSON.stringify(clean(s),null,2))}</pre></section></div></div>`;
+  $('#main').innerHTML = `<div class="heading"><div><div class="eyebrow">Schedule / ${escape(s.id)}</div><h1>${escape(s.name)}</h1><div class="muted">${escape(s.provider === 'rehearsal' ? 'A no-cost rehearsal of scheduling, feedback, and continuation.' : 'A persistent conversation for every run.')}</div></div><div class="actions">${badge(s.enabled?'Enabled':'Paused')}<button class="primary" id="run-now">▶ Run now</button></div></div><p class="note">${s.source?.manifest ? `Owned by ${escape(s.source.system)} · Edit this source, then export/reconcile it into Proteus: <span class="filepath">${escape(s.source.manifest)}</span><button id="source-file">Open source manifest ↗</button><br>Proteus reads this exported schedule file: <span class="filepath">${escape(original.file)}</span>` : `App-owned schedule · ${escape(original.file)}`}</p><div class="grid"><section class="card"><h2>Schedule settings</h2>${state.dirty && s.revision !== original.revision ? '<p class="banner" role="status">The file changed outside Proteus. Your unsaved edits are preserved. Reload file to use the current file; saving this older draft is blocked.</p>' : ''}<div class="field"><label for="name">Name</label><input id="name" value="${escape(s.name)}"></div><div class="row"><div><label for="cron">Cron expression</label><input id="cron" class="cron" value="${escape(s.cron)}"></div><div><label for="timezone">Time zone</label><input id="timezone" value="${escape(s.timezone)}"></div></div><div class="row"><div><label for="provider">Provider</label><select id="provider"><option value="rehearsal" ${s.provider==='rehearsal'?'selected':''}>Local rehearsal</option><option value="copilot" ${s.provider==='copilot'?'selected':''}>GitHub Copilot</option><option value="codex" ${s.provider==='codex'?'selected':''}>Codex</option><option value="claude" ${s.provider==='claude'?'selected':''}>Claude</option></select></div><div><label for="model">Model ID</label>${modelPicker('model',s.model,s.provider)}<button class="subtle" id="model-refresh">↻ Refresh models</button></div></div>${modelControls('model',s)}<div class="field"><label for="cwd">Workspace directory</label><input id="cwd" value="${escape(s.workspace.cwd)}"></div><div class="field"><label for="roots">Additional directories · one per line</label><textarea id="roots" rows="2">${escape(s.workspace.additionalDirectories.join('\n'))}</textarea></div><div class="field"><label for="prompt">Instructions</label><textarea id="prompt" rows="5">${escape(s.prompt)}</textarea></div><div class="row"><div><label for="misfire">After missed runs</label><select id="misfire"><option value="skip" ${s.misfire==='skip'?'selected':''}>Wait for the next scheduled time</option><option value="coalesce" ${s.misfire==='coalesce'?'selected':''}>Catch up once when available</option></select></div><div><label for="enabled">Execution</label><select id="enabled"><option value="false" ${!s.enabled?'selected':''}>Paused</option><option value="true" ${s.enabled?'selected':''}>Enabled</option></select></div></div><label class="checkbox-row"><input id="schedule-notify" type="checkbox" ${s.notifications?.onCompletion===true?'checked':''}>Notify when this schedule completes</label>${contextPicker(s.contextSelection?.selectedIds || [], 'schedule', s.contextSelection || {})}<div class="formfooter"><span class="note" id="save-state">${state.dirty?'Unsaved changes':'Saved as a plain JSON file'}</span><div class="actions"><button id="reload">Reload file</button><button class="primary" id="save">Save schedule</button></div></div></section><div class="stack"><section class="card"><div class="heading"><h2>Next five runs</h2><button class="subtle" id="preview">↻ Preview</button></div><ul id="next-runs" class="nextlist">${(s.nextRuns || []).map((date,i)=>`<li><span class="muted">${i===0?'Next':String(i+1).padStart(2,'0')}</span><span>${escape(time(date,s.timezone))}</span></li>`).join('')}</ul><p class="note">${escape(s.timezone)} · Paused schedules show projected times.</p></section><section class="card"><div class="heading"><h2>The source of truth</h2><button class="subtle" id="open-file">Open file ↗</button></div><div class="filepath">${escape(original.file)}</div><p class="note">Reopening or Reload file reads the latest JSON from disk. External edits refresh automatically while this editor has no unsaved changes. Existing chats keep their captured schedule.</p><pre id="json-preview">${escape(JSON.stringify(clean(s),null,2))}</pre></section></div></div>`;
   const update = () => {
     Object.assign(s,{name:$('#name').value,cron:$('#cron').value,timezone:$('#timezone').value,provider:$('#provider').value,model:$('#model').value,...modelSelection('model'),prompt:$('#prompt').value,misfire:$('#misfire').value,enabled:$('#enabled').value==='true',workspace:{cwd:$('#cwd').value,additionalDirectories:$('#roots').value.split('\n').map(x=>x.trim()).filter(Boolean)}});
+    s.notifications={...s.notifications,onCompletion:$('#schedule-notify').checked};
     if ($('#schedule-context')) s.contextSelection = { ...s.contextSelection, ...contextSelection('schedule') };
     state.dirty=true; $('#save-state').textContent='Unsaved changes'; $('#json-preview').textContent=JSON.stringify(clean(s),null,2);
   };
@@ -216,9 +245,9 @@ function clean(s) { const result=structuredClone(s); for(const key of ['file','r
 function renderManagedSchedule(original) {
   if (!state.draft || state.draft.id !== original.id || (!state.dirty && state.draft.revision !== original.revision)) state.draft=structuredClone(original);
   const s=state.draft;
-  $('#main').innerHTML = `<div class="heading"><div><div class="eyebrow">Omi / Scheduled service</div><h1>${escape(s.name)}</h1><p class="muted">${escape(s.prompt)}</p></div>${badge(s.enabled ? 'Enabled' : 'Paused')}</div><div class="grid"><section class="card"><h2>Native processing</h2>${state.dirty && s.revision !== original.revision ? '<p class="banner">The schedule changed outside Proteus. Your draft is preserved; reload before saving.</p>' : ''}<p>Runs the installed Omi worker with its existing configuration and file locks. Execution also requires the Omi integration to be enabled after cutover.</p><div class="row"><label>Cron expression<input id="managed-cron" value="${escape(s.cron)}"></label><label>Time zone<input id="managed-timezone" value="${escape(s.timezone)}"></label></div><label>Schedule execution<select id="managed-enabled"><option value="false" ${!s.enabled?'selected':''}>Paused</option><option value="true" ${s.enabled?'selected':''}>Enabled after Omi cutover</option></select></label><div class="actions"><button class="primary" id="managed-save">Save schedule</button><button id="managed-reload">Reload file</button><button id="managed-settings">Omi settings & logs</button><button id="managed-run">Run now</button></div><p class="note" id="managed-save-state">${state.dirty?'Unsaved changes':'Fixed service commands are managed in Omi settings.'}</p></section><section class="card"><h2>Next projected runs</h2><ul class="nextlist">${(s.nextRuns || []).map(date => `<li>${escape(time(date,s.timezone))}</li>`).join('')}</ul><p class="note">Paused schedules show projected times.</p></section></div><section class="card"><h2>Schedule file</h2><p class="filepath">${escape(s.file)}</p><pre>${escape(JSON.stringify(clean(s),null,2))}</pre></section>`;
-  const update=()=>{Object.assign(s,{cron:$('#managed-cron').value,timezone:$('#managed-timezone').value,enabled:$('#managed-enabled').value==='true'});state.dirty=true;$('#managed-save-state').textContent='Unsaved changes';};
-  for(const selector of ['#managed-cron','#managed-timezone','#managed-enabled'])$(selector).addEventListener('input',update);
+  $('#main').innerHTML = `<div class="heading"><div><div class="eyebrow">Omi / Scheduled service</div><h1>${escape(s.name)}</h1><p class="muted">${escape(s.prompt)}</p></div>${badge(s.enabled ? 'Enabled' : 'Paused')}</div><div class="grid"><section class="card"><h2>Native processing</h2>${state.dirty && s.revision !== original.revision ? '<p class="banner">The schedule changed outside Proteus. Your draft is preserved; reload before saving.</p>' : ''}<p>Runs the installed Omi worker with its existing configuration and file locks. Execution also requires the Omi integration to be enabled after cutover.</p><div class="row"><label>Cron expression<input id="managed-cron" value="${escape(s.cron)}"></label><label>Time zone<input id="managed-timezone" value="${escape(s.timezone)}"></label></div><label>Schedule execution<select id="managed-enabled"><option value="false" ${!s.enabled?'selected':''}>Paused</option><option value="true" ${s.enabled?'selected':''}>Enabled after Omi cutover</option></select></label><label class="checkbox-row"><input id="managed-notify" type="checkbox" ${s.notifications?.onCompletion===true?'checked':''}>Notify when this schedule completes</label><div class="actions"><button class="primary" id="managed-save">Save schedule</button><button id="managed-reload">Reload file</button><button id="managed-settings">Omi settings & logs</button><button id="managed-run">Run now</button></div><p class="note" id="managed-save-state">${state.dirty?'Unsaved changes':'Fixed service commands are managed in Omi settings.'}</p></section><section class="card"><h2>Next projected runs</h2><ul class="nextlist">${(s.nextRuns || []).map(date => `<li>${escape(time(date,s.timezone))}</li>`).join('')}</ul><p class="note">Paused schedules show projected times.</p></section></div><section class="card"><h2>Schedule file</h2><p class="filepath">${escape(s.file)}</p><pre>${escape(JSON.stringify(clean(s),null,2))}</pre></section>`;
+  const update=()=>{Object.assign(s,{cron:$('#managed-cron').value,timezone:$('#managed-timezone').value,enabled:$('#managed-enabled').value==='true',notifications:{...s.notifications,onCompletion:$('#managed-notify').checked}});state.dirty=true;$('#managed-save-state').textContent='Unsaved changes';};
+  for(const selector of ['#managed-cron','#managed-timezone','#managed-enabled','#managed-notify'])$(selector).addEventListener('input',update);
   $('#managed-save').onclick=async()=>{try{await api('/api/schedules',{schedule:clean(s),expectedRevision:s.revision});state.dirty=false;await refresh(true);toast('Schedule saved. The Omi execution gate still applies.');}catch(error){toast(error.message);}};
   $('#managed-reload').onclick=()=>schedule(s.id);
   $('#managed-settings').onclick=()=>openFeatureTab('omi');
@@ -306,8 +335,8 @@ function quotaCards(quota) {
 }
 function renderProviders() {
   const statuses=state.data.providerStatuses || {copilot:state.data.providerStatus};
-  $('#main').innerHTML=`<div class="heading"><div><div class="eyebrow">Bring your own engine</div><h1>Providers & usage.</h1><div class="muted">Separate sign-ins and live capabilities for each provider.</div></div></div><div class="grid">${[['copilot','GitHub Copilot'],['codex','Codex'],['claude','Claude']].map(([id,name])=>{
-    const p=statuses[id];return `<section class="card"><div class="heading"><h2>${name}</h2>${badge(p?.available?'Connected':p?'Unavailable':'Not checked')}</div><p class="note">${id==='copilot'?'Uses the official Copilot SDK and your Copilot account.':id==='codex'?'Uses the installed Codex CLI and its existing sign-in. Run codex login on this Mac if needed.':'Uses the installed Claude Code CLI and its sign-in. Claude desktop and CLI authentication may be separate.'}</p><div class="actions"><button data-refresh-provider="${id}">Refresh connection & models</button>${p?.authenticationCommand&&!p?.available?`<button data-copy-provider-login="${id}">Copy sign-in command</button>`:''}</div>${p?.error?`<p class="banner">${escape(p.error)}</p>`:''}<p class="note">${p?.checkedAt?'Checked '+escape(time(p.checkedAt)):'Not checked'} · refreshes at launch and every five minutes</p>${id==='copilot'?quotaCards(p?.quota):'<p class="note">Click this provider in the sidebar for available allowance and reset details. Per-run tokens appear in chat details.</p>'}<ul class="nextlist">${(p?.models || []).map(m=>`<li><span>${escape(m.name||m.id)}</span><div><code>${escape(m.id)}</code><div class="note">Effort: ${escape(m.controls?.reasoningEfforts?.join(', ') || 'Not reported')}<br>${(m.controls?.contextTiers || []).map(t=>escape(contextSize(t))).join('<br>')}<br>Speed: ${escape((m.controls?.serviceTiers || []).map(t=>t.name||t.id).join(', ') || 'Provider default')}</div></div></li>`).join('')}</ul>${id==='codex'?'<p class="note">Selected instructions and skills are supplied as context. Agent prompts work when they do not declare editor-specific tool filters. Codex grants MCP access per selected server; each provider has separate workspace approvals. Chats remain with their original provider.</p>':''}</section>`;
+  $('#main').innerHTML=`<div class="heading"><div><div class="eyebrow">Bring your own engine</div><h1>Providers</h1><div class="muted">Separate sign-ins and live capabilities for each provider.</div></div></div><div class="grid">${[['copilot','GitHub Copilot'],['codex','Codex'],['claude','Claude']].map(([id,name])=>{
+    const p=statuses[id];return `<section class="card"><div class="heading"><h2>${name}</h2>${badge(p?.available?'Connected':p?'Unavailable':'Not checked')}</div><p class="note">${id==='copilot'?'Uses the official Copilot SDK and your Copilot account.':id==='codex'?'Uses the installed Codex CLI and its existing sign-in. Run codex login on this Mac if needed.':'Uses the installed Claude Code CLI and its sign-in. Claude desktop and CLI authentication may be separate.'}</p><div class="actions"><button data-refresh-provider="${id}">Refresh connection & models</button>${p?.authenticationCommand&&!p?.available?`<button data-copy-provider-login="${id}">Copy sign-in command</button>`:''}</div>${p?.error?`<p class="banner">${escape(p.error)}</p>`:''}<p class="note">${p?.checkedAt?'Checked '+escape(time(p.checkedAt)):'Not checked'} · refreshes at launch and every five minutes</p><p class="note">View allowance and reset details in Engine Room → Usage.</p><ul class="nextlist">${(p?.models || []).map(m=>`<li><span>${escape(m.name||m.id)}</span><div><code>${escape(m.id)}</code><div class="note">Effort: ${escape(m.controls?.reasoningEfforts?.join(', ') || 'Not reported')}<br>${(m.controls?.contextTiers || []).map(t=>escape(contextSize(t))).join('<br>')}<br>Speed: ${escape((m.controls?.serviceTiers || []).map(t=>t.name||t.id).join(', ') || 'Provider default')}</div></div></li>`).join('')}</ul>${id==='codex'?'<p class="note">Selected instructions and skills are supplied as context. Agent prompts work when they do not declare editor-specific tool filters. Codex grants MCP access per selected server; each provider has separate workspace approvals. Chats remain with their original provider.</p>':''}</section>`;
   }).join('')}</div>`;
   document.querySelectorAll('[data-copy-provider-login]').forEach(button=>button.onclick=async()=>{
     const command=statuses[button.dataset.copyProviderLogin]?.authenticationCommand;
@@ -353,7 +382,7 @@ async function manageMcp(run) {
   $('#dialog-submit').onclick=load;await load();timer=setTimeout(poll,5000);
 }
 function showDialog(html, submit) {
-  $('#dialog').innerHTML=html;$('#dialog').showModal();$('#close-dialog').onclick=()=>$('#dialog').close();$('#dialog-submit').onclick=async()=>{try{await submit();$('#dialog').close();await refresh(true);}catch(e){toast(e.message);}};
+  $('#dialog').innerHTML=html;$('#dialog').showModal();$('#close-dialog').onclick=()=>$('#dialog').close();if($('#dialog-submit'))$('#dialog-submit').onclick=async()=>{try{await submit();$('#dialog').close();await refresh(true);}catch(e){toast(e.message);}};
 }
 function chatDialog() {
   const defaults=state.data.settings; const context=state.data.context;
@@ -407,18 +436,21 @@ async function openMessageLink(source, cwd) {
 }
 
 function renderTabs() {
-  const icons={markdown:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M6 15V9l3 3 3-3v6m3-4h4m-2-2v6m-2-2 2 2 2-2"/>',browser:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c5 5 5 13 0 18-5-5-5-13 0-18Z"/>',terminal:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m6 8 4 4-4 4m6 0h5"/>',chat:'<path d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-8l-6 4v-4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/>'};
-  $('#tabs').innerHTML='<div class="tab-list">'+state.tabs.map(tab=>`<div data-tab-container="${escape(tab.id)}" class="tabitem ${state.tab===tab.id?'selected':''}"><button data-tab="${escape(tab.id)}" title="${escape(tab.info?.url || tab.label)}">${tab.type==='browser' ? (tab.info?.loading?'◌':'◎') : tab.type==='run'?'◉':tab.type==='markdown'?'▤':tab.type==='life'?'♡':tab.type==='terminal'?'⌘':'◷'} &nbsp;${escape(tab.label || 'New tab')}</button>${tab.id!=='overview'?`<button class="tabclose" aria-label="Close ${escape(tab.label || 'tab')}" data-close="${escape(tab.id)}">×</button>`:''}</div>`).join('')+'</div><div class="tab-actions">'+[['markdown','Markdown','markdown'],['browser','Browser','browser'],['terminal','Terminal','terminal'],['new-chat','New chat','chat']].map(([id,label,icon])=>`<button id="${id}" class="tab-create" aria-label="${label}" title="${label}"><span aria-hidden="true">+</span><svg aria-hidden="true" viewBox="0 0 24 24">${icons[icon]}</svg></button>`).join('')+'</div>';
+  const icons={markdown:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M6 15V9l3 3 3-3v6m3-4h4m-2-2v6m-2-2 2 2 2-2"/>',browser:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c5 5 5 13 0 18-5-5-5-13 0-18Z"/>',terminal:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m6 8 4 4-4 4m6 0h5"/>',chat:chatIconPaths};
+  $('#tabs').innerHTML='<div class="tab-list">'+state.tabs.map(tab=>`<div data-tab-container="${escape(tab.id)}" class="tabitem ${state.tab===tab.id?'selected':''}"><button data-tab="${escape(tab.id)}" title="${escape(tab.info?.url || tab.label)}">${tab.type==='browser' ? (tab.info?.loading?'◌':'◎') : (['run','remote-run'].includes(tab.type)||(tab.type==='overview'&&state.page==='runs'))?pairedBubbles:tab.type==='team'?'☷':tab.type==='engine'||(tab.type==='overview'&&state.page==='engine')?'⚙':tab.type==='markdown'?'▤':tab.type==='life'?'♡':tab.type==='terminal'?'⌘':'◷'} &nbsp;${escape(tab.label || 'New tab')}</button>${tab.id!=='overview'?`<button class="tabclose" aria-label="Close ${escape(tab.label || 'tab')}" data-close="${escape(tab.id)}">×</button>`:''}</div>`).join('')+'</div><div class="tab-actions">'+[['markdown','Markdown','markdown'],['browser','Browser','browser'],['terminal','Terminal','terminal'],['new-chat','New chat','chat']].map(([id,label,icon])=>`<button id="${id}" class="tab-create" aria-label="${label}" title="${label}"><span aria-hidden="true">+</span><svg aria-hidden="true" viewBox="0 0 24 24">${icons[icon]}</svg></button>`).join('')+'</div>';
   document.querySelectorAll('[data-tab-container]').forEach(item=>item.onclick=event=>{if(event.target.closest('[data-close]') || window.getSelection()?.isCollapsed===false)return;state.tab=item.dataset.tabContainer;const tab=state.tabs.find(t=>t.id===state.tab);if(tab.type==='schedule')schedule(tab.id);else render();});
-  document.querySelectorAll('[data-close]').forEach(button=>button.onclick=async event=>{event.stopPropagation();try{const id=button.dataset.close;const tab=state.tabs.find(t=>t.id===id);if(tab?.type==='browser')await window.desktop.browser({action:'close',id});if(tab?.type==='terminal'){const current=await window.desktop.terminal({action:'state'});if(current.sessions.some(session=>session.id===tab.terminal.id))await window.desktop.terminal({action:'close',id:tab.terminal.id});disposeTerminalUi(tab.id);}forgetConversation(id);state.tabs=state.tabs.filter(t=>t.id!==id);saveWorkspace();if(state.tab===id)state.tab='overview';render();}catch(e){toast(e.message);}});
+  document.querySelectorAll('[data-close]').forEach(button=>button.onclick=async event=>{event.stopPropagation();try{const id=button.dataset.close;const tab=state.tabs.find(t=>t.id===id);if(tab?.type==='team')await leaveTeamTools();if(tab?.type==='browser')await window.desktop.browser({action:'close',id});if(tab?.type==='terminal'){const current=await window.desktop.terminal({action:'state'});if(current.sessions.some(session=>session.id===tab.terminal.id))await window.desktop.terminal({action:'close',id:tab.terminal.id});disposeTerminalUi(tab.id);}forgetConversation(id);state.tabs=state.tabs.filter(t=>t.id!==id);saveWorkspace();if(state.tab===id)state.tab='overview';render();}catch(e){toast(e.message);}});
+  document.querySelectorAll('[data-tab-container]').forEach(item=>{const tab=state.tabs.find(t=>t.id===item.dataset.tabContainer);if(tab?.type==='browser')item.oncontextmenu=event=>{event.preventDefault();showDialog('<h2>Browser tab</h2><button id="unload-browser-tab">Unload tab</button><button id="close-dialog">Cancel</button>',()=>{});$('#unload-browser-tab').onclick=async()=>{try{await window.desktop.browser({action:'unload',id:tab.id});tab.info.loaded=false;$('#dialog').close();if(state.tab===tab.id)renderBrowser();}catch(error){toast(error.message);}};};});
   $('#new-chat').onclick=chatDialog;$('#markdown').onclick=markdownDialog;
   $('#terminal').onclick=()=>openTerminalDialog();
   $('#browser').onclick=async()=>{try{if(!window.desktop)throw new Error('Open the desktop app to use browser tabs.');const info=await window.desktop.browser({action:'create'});openTab({id:info.id,type:'browser',label:info.title||'New tab',info});}catch(error){toast(error.message);}};
 }
 
 function browserBounds() {
+  if(isBrowserOverviewOpen())return;
+  if(previousFeature==='team'){teamBrowserBounds();return;}
   if($('#dialog').open){window.desktop?.browser({action:'hide'}).catch(e=>toast(e.message));return;}
-  const area=$('#browser-area');const tab=state.tabs.find(t=>t.id===state.tab);if(!area || tab?.type!=='browser')return;
+  const area=$('#browser-area');const tab=state.tabs.find(t=>t.id===state.tab);if(!area || tab?.type!=='browser'||!tab.info?.url||tab.info?.loaded===false)return;
   const r=area.getBoundingClientRect();window.desktop?.browser({action:'show',id:tab.id,bounds:{x:r.x,y:r.y,width:r.width,height:r.height}}).catch(e=>toast(e.message));
 }
 function updateBrowserControls() {
@@ -436,7 +468,10 @@ function renderBrowser() {
   $('#main').innerHTML='<form class="browserbar" id="browser-form"><button type="button" id="browser-back" aria-label="Back">←</button><button type="button" id="browser-forward" aria-label="Forward">→</button><button type="button" id="browser-reload" aria-label="Reload or stop">↻</button><input id="browser-url" aria-label="Browser address" placeholder="Enter a website address" autocomplete="off" spellcheck="false"><button class="browser-go" type="submit" id="browser-go" aria-label="Load address" title="Load address">↵</button><button type="button" id="browser-fill-login" title="Fill login" aria-label="Fill login">⚿</button><button type="button" id="browser-share" aria-pressed="false">Agent access</button></form><div class="browserstatus" id="browser-status"></div><div id="browser-area" class="browserarea"></div>';
   const command=async(action,extra={})=>{try{await window.desktop.browser({action,id:state.tab,...extra});}catch(e){toast(e.message);}};
   $('#browser-fill-login').onclick=()=>fillBrowserLogin(state.tab);
-  $('#browser-form').onsubmit=event=>{event.preventDefault();void command('navigate',{url:$('#browser-url').value});$('#browser-url').blur();};
+  $('#browser-share').insertAdjacentHTML('beforebegin','<button type="button" id="browser-overview" aria-label="Show all browser tabs" title="Tab overview · ⌘⇧\\">▦</button>');
+  $('#browser-overview').onclick=()=>void showBrowserOverview('main');
+  const navigateBrowser=async raw=>{try{const url=browserTarget(raw);await command('navigate',{url});const tab=state.tabs.find(t=>t.id===state.tab);if(tab){tab.info={...tab.info,url,loaded:true};renderBrowser();}}catch(error){toast(error.message);}};
+  $('#browser-form').onsubmit=event=>{event.preventDefault();void navigateBrowser($('#browser-url').value);$('#browser-url').blur();};
   $('#browser-url').onfocus=()=>$('#browser-url').select();
   for (const direction of ['back', 'forward']) {
     const button = $('#browser-' + direction), tabId = state.tab;
@@ -458,7 +493,11 @@ function renderBrowser() {
   }
   $('#browser-reload').onclick=()=>command(state.tabs.find(t=>t.id===state.tab)?.info?.loading?'stop':'reload');
   $('#browser-share').onclick=()=>command('share',{shared:$('#browser-share').getAttribute('aria-pressed')!=='true'});
-  updateBrowserControls();requestAnimationFrame(browserBounds);
+  updateBrowserControls();
+  const current=state.tabs.find(t=>t.id===state.tab);
+  if(!current?.info?.url){void window.desktop?.browser({action:'hide'});void renderBrowserHome($('#browser-area'),{escape,toast,time,api,showDialog,browser:window.desktop.browser,navigate:navigateBrowser});}
+  else if(current.info.loaded===false){void window.desktop?.browser({action:'hide'});$('#browser-area').innerHTML='<div class="empty"><p>This tab is unloaded.</p><button id="browser-load">Load tab</button></div>';$('#browser-load').onclick=async()=>{await command('activate');current.info.loaded=true;renderBrowser();};}
+  else requestAnimationFrame(browserBounds);
 }
 const lines=value=>value.split('\n').map(s=>s.trim()).filter(Boolean);
 const permissionModeNames={ask:'Ask each time',custom:'Saved rules only',trusted:'Trusted workspace',autopilot:'Auto-approve tools'};
@@ -488,8 +527,8 @@ function bindPermissionControls() {
 }
 function renderSettings() {
   const settings=state.data.settings;
-  $('#main').innerHTML=`<div class="heading"><div><div class="eyebrow">Configuration</div><h1>Setup & settings.</h1><p class="muted">Plain JSON settings for new chats and schedules. Existing runs keep their captured configuration.</p></div><button class="primary" id="save-settings">Save settings</button></div><div class="grid"><section class="card"><h2>Workspace</h2><div class="field"><label>Default working directory</label><input id="settings-cwd" value="${escape(settings.workspace.cwd)}"></div><div class="field"><label>Additional repositories / directories · one per line</label><textarea id="settings-roots" rows="5">${escape(settings.workspace.additionalDirectories.join('\n'))}</textarea></div><div class="row"><div><label>Default provider</label><select id="settings-provider"><option value="copilot" ${settings.provider==='copilot'?'selected':''}>GitHub Copilot</option><option value="codex" ${settings.provider==='codex'?'selected':''}>Codex</option><option value="claude" ${settings.provider==='claude'?'selected':''}>Claude</option><option value="rehearsal" ${settings.provider==='rehearsal'?'selected':''}>Local rehearsal</option></select></div><div><label>Default model</label>${modelPicker('settings-model',settings.model,settings.provider)}<button class="subtle" id="settings-model-refresh">↻ Refresh models</button></div></div>${modelControls('settings-model',settings)}<div class="field"><label>Time zone</label><input id="settings-timezone" value="${escape(settings.timezone)}"></div><div class="field"><label>Skill directories · one per line</label><textarea id="settings-skills" rows="3">${escape(settings.skillDirectories.join('\n'))}</textarea></div><details><summary>Default MCP servers · JSON</summary><p class="note">Use command arguments and environment references. Keep secrets in provider authentication or the system keychain.</p><textarea id="settings-mcp" rows="10">${escape(JSON.stringify(settings.mcpServers,null,2))}</textarea></details></section><section class="card"><h2>Where your files live</h2><p class="note">New app schedules:</p><div class="filepath">${escape(state.data.home)}/schedules/</div><p class="note">Run history:</p><div class="filepath">${escape(state.data.home)}/runs/</div><p class="note">Settings:</p><div class="filepath">${escape(settings.file)}</div><button id="open-settings">Open settings file ↗</button><hr class="divider"><h3>Repository-owned schedules</h3><p class="note">An imported organization workflows schedule remains owned by its organization workflows automation manifest. Change that source with AI, export it, then refresh the local copy. The schedule editor shows both locations.</p><h3>Workspace context</h3><p class="note">Copilot receives all listed roots and can read their instructions and files. The VS Code companion also sends the active file, selection location, and open file paths. VS Code’s code index, extension tools, and existing chat history are not copied.</p><h3>Copilot session storage</h3><p class="note">Choose an existing folder for new Copilot sessions. Existing sessions keep their original location. This also holds Copilot configuration; changing it can require sign-in.</p><input id="settings-copilot-home" placeholder="Provider default (~/.copilot)" value="${escape(settings.copilotDataDirectory || '')}"><h3>Data directory</h3><p class="note">Set PROTEUS_HOME before launching to use another data directory. Moving live run history is not performed by this settings screen.</p></section></div>`;
-  $('#main').insertAdjacentHTML('afterbegin',`<section class="card setup-appearance"><h2>Appearance</h2><label><input id="settings-show-usage" type="checkbox" ${settings.appearance?.showProviderUsage!==false?'checked':''}>Show AI usage in the sidebar</label></section><section id="life-setup"></section>`);
+  $('#main').innerHTML=`<div class="heading"><div><div class="eyebrow">Configuration</div><h1>App Setup</h1><p class="muted">Plain JSON settings for new chats and schedules. Existing runs keep their captured configuration.</p></div><button class="primary" id="save-settings">Save settings</button></div><div class="grid"><section class="card"><h2>Workspace</h2><div class="field"><label>Default working directory</label><input id="settings-cwd" value="${escape(settings.workspace.cwd)}"></div><div class="field"><label>Additional repositories / directories · one per line</label><textarea id="settings-roots" rows="5">${escape(settings.workspace.additionalDirectories.join('\n'))}</textarea></div><div class="row"><div><label>Default provider</label><select id="settings-provider"><option value="copilot" ${settings.provider==='copilot'?'selected':''}>GitHub Copilot</option><option value="codex" ${settings.provider==='codex'?'selected':''}>Codex</option><option value="claude" ${settings.provider==='claude'?'selected':''}>Claude</option><option value="rehearsal" ${settings.provider==='rehearsal'?'selected':''}>Local rehearsal</option></select></div><div><label>Default model</label>${modelPicker('settings-model',settings.model,settings.provider)}<button class="subtle" id="settings-model-refresh">↻ Refresh models</button></div></div>${modelControls('settings-model',settings)}<div class="field"><label>Time zone</label><input id="settings-timezone" value="${escape(settings.timezone)}"></div><div class="field"><label>Skill directories · one per line</label><textarea id="settings-skills" rows="3">${escape(settings.skillDirectories.join('\n'))}</textarea></div><details><summary>Default MCP servers · JSON</summary><p class="note">Use command arguments and environment references. Keep secrets in provider authentication or the system keychain.</p><textarea id="settings-mcp" rows="10">${escape(JSON.stringify(settings.mcpServers,null,2))}</textarea></details></section><section class="card"><h2>Where your files live</h2><p class="note">New app schedules:</p><div class="filepath">${escape(state.data.home)}/schedules/</div><p class="note">Run history:</p><div class="filepath">${escape(state.data.home)}/runs/</div><p class="note">Settings:</p><div class="filepath">${escape(settings.file)}</div><button id="open-settings">Open settings file ↗</button><hr class="divider"><h3>Repository-owned schedules</h3><p class="note">An imported organization workflows schedule remains owned by its organization workflows automation manifest. Change that source with AI, export it, then refresh the local copy. The schedule editor shows both locations.</p><h3>Workspace context</h3><p class="note">Copilot receives all listed roots and can read their instructions and files. The VS Code companion also sends the active file, selection location, and open file paths. VS Code’s code index, extension tools, and existing chat history are not copied.</p><h3>Copilot session storage</h3><p class="note">Choose an existing folder for new Copilot sessions. Existing sessions keep their original location. This also holds Copilot configuration; changing it can require sign-in.</p><input id="settings-copilot-home" placeholder="Provider default (~/.copilot)" value="${escape(settings.copilotDataDirectory || '')}"><h3>Data directory</h3><p class="note">Set PROTEUS_HOME before launching to use another data directory. Moving live run history is not performed by this settings screen.</p></section></div>`;
+  $('#main').insertAdjacentHTML('afterbegin',`<section class="card setup-appearance"><h2>Appearance</h2><label><input id="settings-show-usage" type="checkbox" ${settings.appearance?.showProviderUsage!==false?'checked':''}>Show AI Allowance in the sidebar</label></section><section id="life-setup"></section>`);
   $('#settings-show-usage').dataset.settingsRevision=settings.revision;
   $('#settings-show-usage').onchange=event=>saveAppearance({showProviderUsage:event.target.checked}).catch(error=>toast(error.message));
   renderLifeSetup($('#life-setup'));
@@ -506,27 +545,47 @@ function renderSettings() {
 window.desktop?.onShutdown?.(()=>{workspaceClosing=true;liveEvents.close();clearInterval(refreshInterval);clearInterval(usageInterval);clearTimeout(liveRefreshTimer);});
 window.desktop?.onBrowserState(infos=>{
   if(workspaceRestoring||workspaceClosing)return;
+  const currentBrowser=state.tabs.find(tab=>tab.id===state.tab&&tab.type==='browser');
+  const previousSurface=currentBrowser?`${!!currentBrowser.info?.url}:${currentBrowser.info?.loaded!==false}`:null;
   const ids=new Set(infos.map(info=>info.id));
   state.tabs=state.tabs.filter(tab=>tab.type!=='browser'||ids.has(tab.id));
-  for(const info of infos){const tab=state.tabs.find(t=>t.id===info.id);if(tab){tab.info=info;tab.label=info.title||'New tab';}else state.tabs.push({id:info.id,type:'browser',label:info.title||'New tab',info});}
-  if(!state.tabs.some(tab=>tab.id===state.tab)){state.tab='overview';render();}else{renderTabs();updateBrowserControls();}saveWorkspace();
+  syncTeamBrowsers(infos);
+  for(const info of infos.filter(info=>info.group!=='team'&&!ownsTeamBrowser(info.id))){const tab=state.tabs.find(t=>t.id===info.id);if(tab){tab.info=info;tab.label=info.title||'New tab';}else state.tabs.push({id:info.id,type:'browser',label:info.title||'New tab',info});}
+  if(!state.tabs.some(tab=>tab.id===state.tab)){state.tab='overview';render();}else{renderTabs();updateBrowserControls();if(currentBrowser&&previousSurface!==`${!!currentBrowser.info?.url}:${currentBrowser.info?.loaded!==false}`)renderBrowser();}saveWorkspace();
 });
+window.desktop?.onCloseTool?.((id)=>{state.tabs=state.tabs.filter(t=>t.id!==id);if(state.tab===id)state.tab='overview';render();});
+window.desktop?.onNotification?.(()=>{if(state.page==='engine'&&state.engineSection==='notifications')renderEngineRoom('notifications');});
 window.desktop?.onAddressFocus(()=>$('#browser-url')?.focus());
+function selectBrowserTab(info) {
+  if(info.group==='team'){selectTeamBrowser(info);openFeatureTab('team');}
+  else openTab({id:info.id,type:'browser',label:info.title||'New tab',info});
+}
+window.desktop?.onBrowserAction?.(value=>{
+  if(value.type==='overview')void showBrowserOverview(value.group);
+  else if(value.type==='select-tab')selectBrowserTab(value.info);
+  else if(value.type==='chat-link'){chatDialog();$('#chat-prompt').value=value.url;$('#chat-prompt').focus();}
+  else if(value.type==='error')toast(value.message);
+});
 window.desktop?.onBrowserResize(()=>requestAnimationFrame(browserBounds));
 window.addEventListener('resize',()=>requestAnimationFrame(browserBounds));
 window.addEventListener('keydown',event=>{if((event.metaKey||event.ctrlKey)&&event.key==='l'&&$('#browser-url')){event.preventDefault();$('#browser-url').focus();}});
+window.addEventListener('keydown',event=>{if((event.metaKey||event.ctrlKey)&&event.shiftKey&&event.code==='Backslash'){event.preventDefault();void showBrowserOverview(previousFeature==='team'?'team':'main');}});
+initBrowserOverview({escape,toast,select:selectBrowserTab,closed:forgetTeamBrowser,restore:()=>render()});
 initRemoteDesktops({state,escape,toast,showDialog,openTab,time});
+initChatsIndex({state,api,escape,toast,time,openLocal:runTab,openRemote:openRemoteChat});
+initTeamTools({state,api,escape,toast,time,lines,showDialog,browserTarget,timezone:()=>state.data.settings.timezone,onChange:saveWorkspace});
+initEngineRoom({state,api,escape,toast,time,providers:renderProviders,connections:()=>renderRemote({api,escape,toast}),setup:renderSettings,resourceChanged:(action,id)=>{if(action==='close')state.tabs=state.tabs.filter(tab=>tab.id!==id);saveWorkspace();},openAccount:()=>window.desktop?.openExternal(new URL('/security',state.data.life?.websiteOrigin||'https://proteus.example').href)});
 initTerminals({state,escape,toast,showDialog,openTab});
 initFeatures({state,escape,api,toast,refresh,openTab,showDialog,lines,restoreBrowser:()=>requestAnimationFrame(browserBounds)});
 initOmi({state,escape,api,toast,refresh,openSchedule:schedule,openRun:id=>{const run=state.data.runs.find(item=>item.id===id);if(run)runTab(run);}});
-initLife({state,escape,api,toast,refresh,openTab,showDialog,openSettings:()=>{state.page='settings';state.tab='overview';state.tabs[0].label='Setup';render();}});
+initLife({state,escape,api,toast,refresh,openTab,showDialog,openSettings:()=>{navigate('engine','setup');}});
 initMarkdownPicker({api,escape,showDialog,openTab,toast,defaultWorkspaceId:()=>state.data.context.defaultWorkspaceId});
 new MutationObserver(()=>{if($('#dialog').open)window.desktop?.browser({action:'hide'}).catch(e=>toast(e.message));else requestAnimationFrame(browserBounds);}).observe($('#dialog'),{attributes:true,attributeFilter:['open']});
-refresh().then(restoreWorkspace).then(() => refreshUsage()).catch(e=>toast(e.message));
+refresh().then(restoreWorkspace).then(async()=>{await Promise.allSettled([refreshUsage(),loadChatsIndex()]);render();}).catch(e=>toast(e.message));
 const usageInterval=setInterval(() => refreshUsage(), 60_000);
 const refreshInterval=setInterval(()=>{if((!document.activeElement?.matches('input,textarea,select') || !!$('#conversation-host'))&&!$('#dialog').open)refresh().catch(()=>{});},1500);
 
-window.desktop?.onRemote(() => { state.page = 'remote'; state.tab = 'overview'; render(); });
+window.desktop?.onRemote(() => navigate('engine','connections'));
 let liveRefreshTimer;
 const liveEvents = new EventSource('/api/events');
 liveEvents.addEventListener('change', () => { if (liveRefreshTimer) return; liveRefreshTimer = setTimeout(() => { liveRefreshTimer = null; if ((!document.activeElement?.matches('input,textarea,select') || !!$('#conversation-host')) && !$('#dialog').open) refresh().catch(() => {}); }, 120); });

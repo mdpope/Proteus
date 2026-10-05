@@ -11,5 +11,6 @@ test('web provider meter preserves unknown, exhausted, unlimited and expired all
  const html=usagePanel({providers:{codex:{checkedAt:'2026-10-04T07:00:00Z',windows:[{label:'Short window',remainingPercent:70},{label:'Week',remainingPercent:23}]},claude:{stale:true,windows:[]}}},{destination:'Example <Mac>',now});
  assert.doesNotMatch(html,/style=/);assert.match(html,/<progress[^>]+value="23"/);
  assert.match(html,/23%/);assert.match(html,/Short window/);assert.match(html,/Reset time unreported/);assert.match(html,/Claude · stale/);assert.match(html,/Example &lt;Mac&gt;/);assert.doesNotMatch(html,/Example <Mac>/);
- assert.match(usagePanel({},{collapsed:true}),/Expand AI usage/);assert.doesNotMatch(usagePanel({},{collapsed:true}),/data-usage-refresh/);
+ assert.match(usagePanel({},{collapsed:true}),/Expand AI Allowance/);assert.doesNotMatch(usagePanel({providers:{codex:{windows:[{remainingPercent:23}]}}},{collapsed:true}),/data-usage-refresh|23%|provider-meter/);
+ assert.match(usagePanel({providers:{codex:{windows:[{remainingPercent:23}]}}},{compact:true}),/23%/);
 });

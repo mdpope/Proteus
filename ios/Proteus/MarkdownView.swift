@@ -2,6 +2,8 @@ import SwiftUI
 import WebKit
 
 struct MarkdownView: UIViewRepresentable {
+    @EnvironmentObject var life: LifeStore
+    @EnvironmentObject var shared: SharedAppStore
     let text: String
     let runID: String
     let store: RemoteStore
@@ -64,7 +66,7 @@ struct MarkdownView: UIViewRepresentable {
             case "copy": if let text = body["text"] as? String { UIPasteboard.general.string = text }
             case "link":
                 if let value = body["url"] as? String, let url = URL(string: value) {
-                    if ["http", "https", "mailto"].contains(url.scheme?.lowercased() ?? "") { UIApplication.shared.open(url) }
+                    if ["http", "https", "mailto"].contains(url.scheme?.lowercased() ?? "") { UIApplication.shared.open(url); Task { await parent.shared.record(url, title: url.host ?? "Link", life: parent.life) } }
                     else { UIPasteboard.general.string = value.removingPercentEncoding ?? value; parent.store.error = "Mac file path copied. Open it on your Mac: \(value.removingPercentEncoding ?? value)" }
                 }
             case "image":

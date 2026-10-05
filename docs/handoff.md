@@ -99,6 +99,19 @@ coordinate signing across machines. Remote pairing is separate from Apple signin
 See `chat-controls.md` for queue/steer semantics, `mcp-auth.md` for sign-in recovery, and `providers.md` for Codex/Claude compatibility limits. Physical iOS installation remains an explicit operation on the operator’s designated signing Mac; simulator verification does not update devices.
 
 
+## October 4 — cross-client parity implemented; release acceptance in progress
+
+The operator authorized building the queued scope, accepted Engine Room, removed the tagline,
+confirmed roster/URL storage is permitted, and explicitly deferred multi-provider implementation.
+Read `parity-release.md` and `ios/PARITY-VALIDATION.md` for code/tests/deployment distinctions.
+The current signed native build preserves original signing and requires an unlocked-device update.
+Its existing profile lacks APNs entitlement. Native shared tools require new app-scope consent;
+old Life credentials are preserved until successful same-account reconsent.
+
+No Omi owner, schedule execution gate, provider configuration, or live workflow was changed by
+implementation. Source tests are not evidence of production push, actual account Team interaction,
+or installed-device acceptance. Keep those pending until receipts below establish otherwise.
+
 ## October 4 daytime continuation — API-only Life and account destinations
 
 The website account-destination release `20261004T175555Z` is deployed with one additive

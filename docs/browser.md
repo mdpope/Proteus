@@ -126,3 +126,23 @@ no form/POST replay across a second restart; denied privileged origin; legacy UR
 agent history exclusion; persisted removal on tab close; long-press/right-click menus, backward
 and forward selection, short-click behavior, and rejection of stale menu selections. Thirteen groups passed. No production browsing data or
 installed app was used. Screenshot: `/private/tmp/proteus-browser-history-restored.png`.
+
+## Search, history and Team Tools — October 4
+
+New tabs show a search/URL entry, explicit DuckDuckGo/Google/Bing choices, saved account links,
+shared recent visits and retained local Proteus history. Address-bar terms search Google. Only
+HTTP(S) destinations are accepted; credentials/auth callbacks and local paths are excluded.
+`desktop/browsing-history.cjs` retains up to 10,000 visits, default 90 days, with search, pagination,
+clear/delete and recording/retention controls. History is separate from open-tab restoration.
+Shared visit/log/notification uploads use a bounded seven-day account-bound retry queue.
+
+Team Tools has its own persistent overview/Standup/browser subtabs and left standup dock. On
+leaving Team Tools, idle browser pages unload, retaining safe descriptors. Selecting an unloaded
+page recreates its view/history without restoring Agent access. Audible, shared/agent-owned or
+unsaved pages refuse automatic unload. Other desktop browser pages remain loaded. Engine Room
+reports actual process CPU/memory with shared-process attribution and close/unload actions.
+
+Website New browser opens the Proteus home in a real tab; external links open separate tabs.
+The website cannot inspect a third-party tab's memory or later cross-origin navigation. It retains
+Proteus-opened visit descriptors only; no Safari/Chrome history is imported. Native mobile WebKit
+uses the same shared links/history with account-scoped encrypted local descriptors.

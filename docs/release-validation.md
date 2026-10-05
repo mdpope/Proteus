@@ -99,3 +99,45 @@ installed and matched, clean restart, shared relay online, three existing pairin
 unchanged tabs/settings/all five schedules. Its 232 tests and packaged-app checks passed. Life
 remains disabled. No account-wide connection keys or new peer access were created. This updates
 the remote host; it does not complete the pending website account enrollment.
+
+## October 4 — queued parity update and targeted security source review
+
+Planning/documentation only; no new feature was implemented, packaged, installed or deployed.
+Reviewed the website account destinations/MFA/PKCE/Life authorization paths, encrypted host and
+relay protocol, desktop peer allowlist/storage, native navigation and rejection handling, Standup
+storage, shared shell/usage and browser-history boundaries. Findings and future acceptance gates
+are SEC-01–06 and PAR-01–10 in `planned-updates.md`. This was not a live penetration test, exhaustive
+API audit, fresh visual parity acceptance or independent cryptographic review.
+
+The existing focused baseline passed **23 tests**:
+
+```text
+node --test test/remote.test.js test/relay-browser.test.js test/web-remote.test.js test/desktop-peers.test.js
+```
+
+Fixtures used temporary synthetic hosts, local loopback relay sockets, rehearsal/fake provider
+content and disposable protected-storage substitutes; no live account key, production database,
+real chat, operational schedule or installed app was used. The first sandbox attempt passed five
+non-listening checks and failed eighteen fixtures with `listen EPERM`; the authorized rerun with
+loopback access passed all 23. Existing tests do not cover or fix the newly prioritized forged
+revocation, account-session grant, aggregation/cache or resource-management requirements.
+Documentation validation checks whitespace, relative links and preservation of original content.
+Previous production acceptance holds remain unchanged.
+
+## Cross-client parity build — October 4 evening
+
+Implementation and isolated test status are in `parity-release.md`. This supersedes the earlier
+planning-only checkpoint. Desktop/web/mobile feature work is implemented; signed native release
+preparation is ongoing as browser-context-menu/overview additions finish. The operator authorized
+Build Mac updates and asked for an unlock prompt for iPhone. Mac preflight observed zero active
+or waiting chats, an online relay, three pairings, 11 tabs and a ready API Life account. This is
+preflight evidence only, not installation.
+
+Initial Node regression: 240/240 passed. Review then fixed invalid history starving the upload
+queue, restored native pages becoming visible after leaving, sensitive pairing URLs entering
+history, and a history-size/reopen mismatch. Fifteen focused tests passed; native resource/lifecycle
+fixture passed nine groups, including an actual asynchronous restore selection regression. Remote
+resource access gains a separate device grant instead of silently broadening old pairings.
+
+See the final appended receipts for actual package/install/deployment results. Do not infer native
+APNs entitlement, server delivery, production Team consent, or pair-once enrollment from tests.

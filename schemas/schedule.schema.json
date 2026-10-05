@@ -148,6 +148,16 @@
         }
       },
       "additionalProperties": true
+    },
+    "notifications": {
+      "type": "object",
+      "properties": {
+        "onCompletion": {
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "additionalProperties": true
     }
   },
   "additionalProperties": true

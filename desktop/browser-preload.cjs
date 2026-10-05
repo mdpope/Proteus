@@ -19,6 +19,7 @@ function draw() {
   const progress=Math.min(1,Math.abs(amount)/140),back=direction==='back';overlay.bubble.textContent=back?'←':'→';overlay.bubble.style[back?'left':'right']='0';overlay.bubble.style.transform=`translateX(${(back?1:-1)*(-50+progress*68)}px) scale(${.8+progress*.2})`;overlay.bubble.style.opacity=String(.3+progress*.7);
 }
 window.addEventListener('wheel', event=>{
+  if(event.isTrusted&&event.ctrlKey&&event.deltaY>0&&(window.visualViewport?.scale||1)<=1.01&&Date.now()>=cooldown){event.preventDefault();cooldown=Date.now()+900;ipcRenderer.send('proteus:browser-gesture','overview');return;}
   if(!event.isTrusted||event.ctrlKey||event.shiftKey||event.deltaMode!==0||Date.now()<cooldown||(window.visualViewport?.scale||1)>1.01)return;
   if(!direction) {
     if(Math.abs(event.deltaX)<3||Math.abs(event.deltaX)<Math.abs(event.deltaY)*1.5||canScroll(event,event.deltaX))return;

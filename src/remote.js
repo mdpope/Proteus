@@ -12,10 +12,11 @@ import { seal, unseal, secret } from './remote-crypto.js';
 import { startRelay } from '../relay/server.js';
 
 const pick = (value, keys) => Object.fromEntries(keys.filter(key => value?.[key] !== undefined).map(key => [key, value[key]]));
-const scheduleKeys = ['id', 'name', 'enabled', 'cron', 'timezone', 'provider', 'model', 'reasoningEffort', 'contextTier', 'serviceTier', 'workspace', 'misfire', 'prompt', 'revision', 'nextRuns', 'error', 'source', 'contextSelection', 'integration'];
+const scheduleKeys = ['id', 'name', 'enabled', 'cron', 'timezone', 'provider', 'model', 'reasoningEffort', 'contextTier', 'serviceTier', 'workspace', 'misfire', 'prompt', 'revision', 'nextRuns', 'error', 'source', 'contextSelection', 'integration', 'notifications'];
+export const runSummary = r => ({...pick(r,['id','title','status','createdAt','updatedAt']),provider:r.schedule.provider,workspaceName:r.schedule.context?.workspaceId||'',scheduleName:r.trigger==='chat'?'':r.schedule.name});
 const entryKeys = ['id', 'name', 'description', 'kind', 'path', 'sources', 'roots', 'mode', 'scope', 'warnings', 'unsupportedAgentFields', 'error', 'missing', 'characters'];
 const remoteEntry = entry => ({ ...pick(entry, entryKeys), ...(entry.agent ? { userInvocable: entry.agent.userInvocable } : {}) });
-const mutationMethods = new Set(['chat.start', 'chat.reply', 'chat.resume', 'chat.cancel', 'chat.send', 'chat.remove-queued', 'schedule.run', 'schedule.save', 'context.mode', 'context.favorite', 'context.addFolders', 'chat.context', 'chat.permissions', 'mcp.login']);
+const mutationMethods = new Set(['chat.start', 'chat.reply', 'chat.resume', 'chat.cancel', 'chat.send', 'chat.remove-queued', 'schedule.run', 'schedule.save', 'context.mode', 'context.favorite', 'context.addFolders', 'chat.context', 'chat.permissions', 'mcp.login', 'notifications.read', 'resources.action', 'connection.revoke']);
 const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
 export function remoteRun(run, offset = 0, permissions) {
   const end = Math.max(0, run.events.length - offset); const start = Math.max(0, end - 100);
@@ -40,9 +41,9 @@ export function remoteState(service) {
   return { hostName: service.remote?.config.label || os.hostname(),
     appearance: {showProviderUsage:defaults.appearance?.showProviderUsage!==false,providerUsageCollapsed:defaults.appearance?.providerUsageCollapsed===true},
     ...(defaults.appearance?.showProviderUsage!==false?{providerUsage:remoteUsage({providers:service.usage?.providers})}:{}), schedules: service.engine.schedules.list().map(s => pick(s, scheduleKeys)),
-    runs: service.engine.listRuns().slice(0, 100).map(r => pick(r, ['id', 'title', 'status', 'createdAt', 'updatedAt'])), runCount: service.engine.listRuns().length,
+    runs: service.engine.listRuns().slice(0, 100).map(runSummary), runCount: service.engine.listRuns().length,
     context: { ...pick(context, ['revision', 'refreshedAt', 'defaultWorkspaceId', 'workspaces', 'universalFolders', 'libraryFolders', 'favorites', 'errors']), entries: context.entries.map(remoteEntry) },
-    defaults: pick(defaults, ['provider', 'model', 'reasoningEffort', 'contextTier', 'serviceTier', 'timezone']), providerStatus: service.catalog?.value || null, providerStatuses: Object.fromEntries(Object.entries(service.catalogs || {}).map(([id, catalog]) => [id, catalog.value])), protocol: 1 };
+    defaults: pick(defaults, ['provider', 'model', 'reasoningEffort', 'contextTier', 'serviceTier', 'timezone']), providerStatus: service.catalog?.value || null, providerStatuses: Object.fromEntries(Object.entries(service.catalogs || {}).map(([id, catalog]) => [id, catalog.value])), capabilities:['chat.index.v1','notifications.v1','authenticated-revocation.v1','connection-self-revoke.v1',...(service.resources?['resources.v1']:[])],protocol: 1 };
 }
 function validateRelayURL(value) {
   const url = new URL(value);
@@ -67,7 +68,7 @@ export class RemoteHost {
   }
   info() { return { enabled: this.config.enabled, mode: this.config.mode, status: this.status, error: this.error || null, hostId: this.config.hostId, label: this.config.label || os.hostname(),
     relayURL: this.config.relayURL || '', publicURL: this.config.publicURL || '', addresses: this.addresses(), port: this.config.port,
-    devices: this.config.devices.map(d => ({ id: d.id, name: d.name, pairedAt: d.pairedAt, online: [...this.peers.values()].some(p => p.device?.id === d.id) })) }; }
+    devices: this.config.devices.map(d => ({ id: d.id, name: d.name, pairedAt: d.pairedAt, resourceAccess: d.resourceAccess === true, online: [...this.peers.values()].some(p => p.device?.id === d.id) })) }; }
   async configure(value) {
     if (typeof value.enabled !== 'boolean') throw new Error('Choose whether remote access is enabled.');
     if (!['local', 'external'].includes(value.mode || this.config.mode)) throw new Error('Choose local or external relay.');
@@ -93,11 +94,11 @@ export class RemoteHost {
     this.status = 'connecting'; this.error = null;
     const base = this.config.mode === 'local' ? `ws://127.0.0.1:${this.config.port}` : this.config.relayURL;
     const ws = this.socket = new WebSocket(`${base}/socket?role=host&host=${this.config.hostId}`, { headers: { Authorization: `Bearer ${this.config.relayToken}` }, maxPayload: 8_000_000, handshakeTimeout: 8000 });
-    ws.on('open', () => { if (this.socket === ws) this.status = 'online'; });
+    ws.on('open', () => { if (this.socket !== ws) return;this.status='online';const since=this.config.offlineSince;if(since){const elapsed=Math.max(0,Math.floor((Date.now()-Date.parse(since))/1000));this.service.activity?.add('device.reconnected',{hostId:this.config.hostId,offlineSeconds:elapsed});delete this.config.offlineSince;this.save();}this.service.activity?.log('info','transport.online','Connected to the relay.',{hostId:this.config.hostId}); });
     ws.on('error', error => { if (this.socket === ws) this.error = error.message; });
     ws.on('close', () => {
       if (this.socket !== ws) return;
-      this.peers.clear(); this.status = 'offline';
+      this.peers.clear(); this.status = 'offline';this.config.offlineSince ||= new Date().toISOString();this.save();this.service.activity?.log('warning','transport.offline','Connection to the relay was interrupted.',{hostId:this.config.hostId});
       if (!this.closed && this.config.enabled) this.reconnect = setTimeout(() => this.connect(), 3000);
     });
     ws.on('message', bytes => {
@@ -124,8 +125,21 @@ export class RemoteHost {
   }
   revoke(id) {
     this.config.devices = this.config.devices.filter(d => d.id !== id); this.save();
-    for (const peer of this.peers.values()) if (peer.device?.id === id) { this.raw(peer, { type: 'revoked' }); this.peers.delete(peer.id); }
+    for (const peer of this.peers.values()) if (peer.device?.id === id) { this.send(peer,{type:'revoked',deviceId:id});this.raw(peer, { type: 'revoked' }); this.peers.delete(peer.id); }
     return this.info();
+  }
+  setResourceAccess(id, enabled) {
+    if (typeof enabled !== 'boolean') throw new Error('Choose whether resource access is enabled.');
+    if (!this.config.devices.some(device => device.id === id)) throw new Error('Paired device not found.');
+    const previous = this.config.devices;
+    this.config.devices = previous.map(device => device.id === id ? { ...device, resourceAccess: enabled } : device);
+    try { this.save(); } catch (error) { this.config.devices = previous; throw error; }
+    return this.info();
+  }
+  requireResourceAccess(peer) {
+    // A connected peer may hold an older device object after a local permission change.
+    const device = this.config.devices.find(device => device.id === peer.device?.id);
+    if (device?.resourceAccess !== true) throw new Error('Resource access is not enabled for this device. Enable it on the host in Engine Room → Connections.');
   }
   async receive(peer, packet) {
     if (!peer.device) {
@@ -134,8 +148,8 @@ export class RemoteHost {
         if (!this.invite || Date.parse(this.invite.expiresAt) < Date.now()) throw new Error('Pairing expired.');
         const invite = this.invite; const request = unseal(invite.key, packet.box, `${peer.challenge}:pair`);
         if (typeof request.name !== 'string' || !request.name.trim() || request.name.length > 80 || this.config.devices.length >= 20) throw new Error('Invalid device.');
-        const device = { id: randomUUID(), key: secret(), name: request.name.trim(), pairedAt: new Date().toISOString() };
-        this.invite = null; this.config.devices.push(device); this.save();
+        const device = { id: randomUUID(), key: secret(), name: request.name.trim(), pairedAt: new Date().toISOString(), resourceAccess: false };
+        this.invite = null; this.config.devices.push(device); this.save();this.service.activity?.add('device.added',{hostId:this.config.hostId,deviceId:device.id});
         this.raw(peer, { type: 'paired', box: seal(invite.key, device, `${peer.challenge}:paired`) }); return;
       }
       if (packet.type !== 'auth') throw new Error('Pair or authenticate first.');
@@ -153,6 +167,8 @@ export class RemoteHost {
   }
   async command(peer, message) {
     const { method, args = {} } = message;
+    // Apply the current grant before replaying a previously successful command's snapshot.
+    if (method === 'resources.list' || method === 'resources.action') this.requireResourceAccess(peer);
     if (!mutationMethods.has(method)) return this.execute(peer, method, args);
     const key = `${peer.device.id}:${message.id}`; const digest = createHash('sha256').update(JSON.stringify(canonical([method, args]))).digest('hex');
     const previous = this.ledger[key];
@@ -186,7 +202,18 @@ export class RemoteHost {
       if (index >= 0) for (const event of this.journal.slice(index + 1)) if (!event.runId || event.runId === peer.runId) this.send(peer, event);
       return { state: remoteState(this.service), cursor: `${this.epoch}:${this.sequence}` };
     }
-    if (method === 'runs.list') { const offset = Math.max(0, Math.floor(Number(args.offset) || 0)); return engine.listRuns().slice(offset, offset + 100).map(r => pick(r, ['id', 'title', 'status', 'createdAt', 'updatedAt'])); }
+    if (method === 'runs.list') { const offset = Math.max(0, Math.floor(Number(args.offset) || 0)); return engine.listRuns().slice(offset, offset + 100).map(runSummary); }
+    if(method==='connection.revoke'){if(args.deviceId&&args.deviceId!==peer.device.id)throw new Error('Only this connection can be revoked here.');this.revoke(peer.device.id);return {ok:true};}
+    if(method==='notifications.list')return this.service.activity?.notifications()||{items:[],preferences:{}};
+    if(method==='notifications.read')return this.service.activity.read(args.id);
+    if(method==='logs.list')return this.service.activity?.logs(args.limit)||{items:[]};
+    if (method === 'resources.list' || method === 'resources.action') {
+      this.requireResourceAccess(peer);
+      if (method === 'resources.action' && !this.service.resources) throw new Error('Resource controls are unavailable.');
+      const result = this.service.resources ? await (method === 'resources.list' ? this.service.resources.list() : this.service.resources.action(args)) : {supported:false,processes:[],tabs:[],observedAt:new Date().toISOString()};
+      this.requireResourceAccess(peer);
+      return result;
+    }
     if (method === 'chat.get') { const run = engine.getRun(args.id); peer.runId = run.id; return remoteRun(run, Math.max(0, Math.floor(Number(args.offset) || 0)), engine.permissions); }
     if (method === 'chat.image') return this.api('/api/chat-image', pick(args, ['id', 'source']));
     if (method === 'mcp.status' || method === 'mcp.login') return this.api('/api/mcp', {runId:args.id,action:method === 'mcp.login' ? 'login' : 'status',server:args.server,openOnMac:method === 'mcp.login'});
@@ -221,7 +248,7 @@ export class RemoteHost {
       const original = engine.schedules.get(args.id);
       if (original.source?.manifest) throw new Error('This schedule is repository-owned. Update its source manifest and reconcile it on the Mac.');
       if (revision(original) !== args.expectedRevision) throw new Error('Schedule changed. Refresh before saving.');
-      await this.api('/api/schedules', { schedule: { ...original, ...pick(args.changes, ['name', 'enabled', 'cron', 'timezone', 'provider', 'model', 'reasoningEffort', 'contextTier', 'serviceTier', 'prompt', 'misfire', 'contextSelection']) }, expectedRevision: args.expectedRevision }); return { ok: true };
+      await this.api('/api/schedules', { schedule: { ...original, ...pick(args.changes, ['name', 'enabled', 'cron', 'timezone', 'provider', 'model', 'reasoningEffort', 'contextTier', 'serviceTier', 'prompt', 'misfire', 'contextSelection', 'notifications']) }, expectedRevision: args.expectedRevision }); return { ok: true };
     }
     throw new Error('Unsupported remote command.');
   }

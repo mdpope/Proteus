@@ -19,21 +19,21 @@ async function launch(){
  await page.locator('#new-chat').waitFor();
 }
 try{
- await launch();await page.locator('[data-page="settings"]').click();
+ await launch();await page.locator('[data-page="engine"]').click();await page.locator('[data-engine-section="setup"]').click();
  assert.equal(await page.locator('#provider-usage').isVisible(),false,'Existing disabled flag is preserved');
  await page.locator('#settings-timezone').fill('America/Denver');
  await page.locator('#settings-show-usage').check();await page.locator('#provider-usage').waitFor({state:'visible'});await until(()=>saved().appearance.showProviderUsage===true);
  assert.equal(await page.locator('#settings-timezone').inputValue(),'America/Denver','Appearance save preserves unrelated form edits');
  await page.locator('#save-settings').click();await until(()=>saved().timezone==='America/Denver');
- // Collapsing retains a compact, accessible provider summary and does not disable the feature.
- await page.getByRole('button',{name:'Collapse AI usage',exact:true}).click();await until(()=>saved().appearance.providerUsageCollapsed===true);
+ // Collapsing shows only the allowance label and expander, without disabling the feature.
+ await page.getByRole('button',{name:'Collapse AI allowance',exact:true}).click();await until(()=>saved().appearance.providerUsageCollapsed===true);
  assert.equal(saved().appearance.showProviderUsage,true);assert.equal(await page.locator('.usage-collapsed .provider-usage-row').count(),3);
- assert.equal(await page.getByRole('button',{name:'Expand AI usage',exact:true}).getAttribute('aria-expanded'),'false');
- await until(async()=>/71%/.test(await page.locator('[data-usage-provider="codex"]').innerText()));
- assert.equal(await page.locator('.usage-collapsed [data-usage-provider="codex"] progress').isVisible(),true,'Compact oval retains progress fill');
- await page.locator('[data-page="schedules"]').click();await page.locator('[data-page="settings"]').click();assert.equal(await page.locator('#settings-show-usage').isChecked(),true);
+ assert.equal(await page.getByRole('button',{name:'Expand AI allowance',exact:true}).getAttribute('aria-expanded'),'false');
+ await until(async()=>/71%/.test(await page.locator('[data-usage-provider="codex"]').textContent()));
+ assert.equal(await page.locator('.usage-collapsed [data-usage-provider="codex"] progress').isVisible(),false,'Collapsed allowance hides percentages and meters');
+ await page.locator('[data-page="schedules"]').click();await page.locator('[data-page="engine"]').click();await page.locator('[data-engine-section="setup"]').click();assert.equal(await page.locator('#settings-show-usage').isChecked(),true);
  await page.locator('#settings-show-usage').uncheck();await page.locator('#provider-usage').waitFor({state:'hidden'});await until(()=>saved().appearance.showProviderUsage===false);
- await page.locator('[data-page="schedules"]').click();await page.locator('[data-page="settings"]').click();assert.equal(await page.locator('#settings-show-usage').isChecked(),false);
+ await page.locator('[data-page="schedules"]').click();await page.locator('[data-page="engine"]').click();await page.locator('[data-engine-section="setup"]').click();assert.equal(await page.locator('#settings-show-usage').isChecked(),false);
  await page.locator('#settings-show-usage').check();await page.locator('#provider-usage').waitFor({state:'visible'});await until(()=>saved().appearance.showProviderUsage===true);
  assert.equal(await page.locator('#provider-usage').evaluate(node=>node.classList.contains('usage-collapsed')),true);
  // Failed saves restore the checkbox and leave the persisted preference unchanged.
@@ -42,10 +42,10 @@ try{
  assert.equal(await page.locator('#settings-show-usage').isChecked(),true);assert.equal(saved().appearance.showProviderUsage,true);
  await page.unroute('**/api/settings');
  // Real isolated application restart; never touch the operator's installed application.
- await app.close();app=null;await launch();await page.locator('[data-page="settings"]').click();
- assert.equal(await page.locator('#settings-show-usage').isChecked(),true);await page.getByRole('button',{name:'Expand AI usage',exact:true}).waitFor();
+ await app.close();app=null;await launch();await page.locator('[data-page="engine"]').click();await page.locator('[data-engine-section="setup"]').click();
+ assert.equal(await page.locator('#settings-show-usage').isChecked(),true);await page.getByRole('button',{name:'Expand AI allowance',exact:true}).waitFor();
  await page.screenshot({path:'/private/tmp/proteus-sidebar-collapsed.png'});
- await page.getByRole('button',{name:'Expand AI usage',exact:true}).click();await until(()=>saved().appearance.providerUsageCollapsed===false);
+ await page.getByRole('button',{name:'Expand AI allowance',exact:true}).click();await until(()=>saved().appearance.providerUsageCollapsed===false);
  await page.locator('[data-usage-provider="codex"]').click();await page.getByText('71% remaining',{exact:true}).waitFor();await page.locator('#usage-close').click();
  const tabs=[{id:'overview',type:'overview',label:'Schedules'},...['First','Second'].map(name=>({id:'markdown:'+path.join(workspace,name+'.md'),type:'markdown',file:path.join(workspace,name+'.md'),label:name+'.md'}))];
  await page.evaluate(tabs=>window.desktop.workspaceSession({action:'save',session:{schemaVersion:1,page:'schedules',active:tabs[2].id,tabs}}),tabs);await page.reload();await page.getByRole('heading',{name:'Second synthetic note',exact:true}).waitFor();

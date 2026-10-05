@@ -1,3 +1,5 @@
+import { ActivityStore } from './activity.js';
+import { AppAccount } from './app-account.js';
 import { ModelCatalog, chatModelOptions, validateModelOptions } from './model-catalog.js';
 import http from 'node:http';
 import { contextPlan } from '../public/context-plan.js';
@@ -66,6 +68,8 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   const claude = new ClaudeProvider({}, { browser, context });
   const omi = new OmiIntegration(home);
   const life = new LifeStore(home, {...lifeOptions, openExternal, onChange: () => queueMicrotask(() => notify())});
+  const account = new AppAccount(life);
+  const activity = new ActivityStore(home, { identity: () => life.api.identity(), publish: (item, identity, kind='notifications') => account.request({ path:'/'+kind, method:'POST', body:item, identity }) });
   const workspaceFiles = new WorkspaceFiles(() => context.config());
   const adapters = { ...(providers || { copilot, codex, claude }), 'local-process': omi.provider() };
   const engine = new Engine(home, adapters);
@@ -124,7 +128,25 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         if (value.action === 'configure') return json(200, await remote.configure(value));
         if (value.action === 'pair') return json(200, await remote.pairing(value.publicURL));
         if (value.action === 'revoke') return json(200, remote.revoke(value.id));
+        if (value.action === 'resource-access') return json(200, remote.setResourceAccess(value.id, value.enabled));
         throw new Error('Unknown remote action.');
+      }
+      if (url.pathname === '/api/app' && req.method === 'GET') return json(200, await account.request());
+      if (url.pathname === '/api/app' && req.method === 'POST') return json(200, await account.request(await body(req)));
+      if (url.pathname === '/api/team/lists' && req.method === 'GET') return json(200, await account.lists());
+      if (url.pathname === '/api/team/lists' && req.method === 'POST') return json(200, await account.team(await body(req)));
+      if (url.pathname === '/api/notifications' && req.method === 'GET') return json(200, activity.notifications());
+      if (url.pathname === '/api/notifications' && req.method === 'POST') { const value=await body(req); if(value.action==='read')return json(200,activity.read(value.id));if(value.action==='preferences')return json(200,activity.preferences(value.preferences));throw new Error('Unknown notification action.'); }
+      if (url.pathname === '/api/logs' && req.method === 'GET') return json(200, activity.logs(url.searchParams.get('limit')));
+      if (url.pathname === '/api/logs' && req.method === 'POST') {const v=await body(req,16000);return json(200,activity.log(v.level,v.event,v.message));}
+      if (url.pathname === '/api/resources' && req.method === 'GET') return json(200, service.resources ? await service.resources.list() : {supported:false,processes:[],tabs:[],observedAt:new Date().toISOString()});
+      if (url.pathname === '/api/resources' && req.method === 'POST') {if(!service.resources)throw new Error('Resource controls require the desktop app.');return json(200,await service.resources.action(await body(req)));}
+      if (url.pathname === '/api/chats/index' && req.method === 'GET') {
+        const info=remote.info(),lastSyncAt=new Date().toISOString();
+        const local=engine.listRuns().slice(0,1000).map(r=>({id:r.id,chatId:r.id,hostId:info.hostId,local:true,title:r.title,provider:r.schedule.provider,status:r.status,createdAt:r.createdAt,updatedAt:r.updatedAt,workspaceName:r.schedule.context?.workspaceId||'',scheduleName:r.trigger==='chat'?'':r.schedule.name,destinationName:info.label}));
+        const peer=service.peers?await service.peers.index():{items:[],hosts:[],partial:false};
+        const items=[...local,...peer.items].sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt))||a.hostId.localeCompare(b.hostId)||a.chatId.localeCompare(b.chatId));
+        return json(200,{items,hosts:[{id:info.hostId,name:info.label,online:true,lastSyncAt},...peer.hosts],partial:peer.partial});
       }
       if (url.pathname === '/api/state') return json(200, {
         schedules: engine.schedules.list(), runs: engine.listRuns().map(run => ({ ...run, storage: storagePaths(home, run), permissionContext: engine.permissions.describe(run.schedule) })), providerStatus: catalog.value, providerStatuses: providerStatuses(),
@@ -209,7 +231,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       }
       if (url.pathname === '/api/standup' && req.method === 'POST') {
         const value = await body(req);
-        return json(200, value.action === 'generate' ? standup.generate(value.expectedRevision) : standup.save(value.settings, value.expectedRevision));
+        return json(200, value.action === 'present' ? standup.present(value.current) : value.action === 'generate' ? standup.generate(value.expectedRevision) : standup.save(value.settings, value.expectedRevision));
       }
       if (url.pathname === '/api/run-context' && req.method === 'POST') {
         const value = await body(req); const run = engine.getRun(value.runId);
@@ -347,19 +369,20 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       assets['/terminal/ghostty.js'] = ['terminal/ghostty.js', 'text/javascript'];
       assets['/terminal/ghostty-vt.wasm'] = ['terminal/ghostty-vt.wasm', 'application/wasm'];
       for (const file of ['proteus-theme.css', 'omi.css', 'life.css', 'markdown-picker.css', 'terminals.css', 'remote-desktops.css']) assets['/' + file] = [file, 'text/css'];
+      for(const file of fs.readdirSync(path.join(root,'public')).filter(name=>/^[a-z0-9-]+\.(js|css)$/.test(name))) assets['/'+file]=[file,file.endsWith('.css')?'text/css':'text/javascript'];
       if (req.method === 'GET' && assets[url.pathname]) {
         const [file, type] = assets[url.pathname]; res.writeHead(200, { 'Content-Type': type }); res.end(fs.readFileSync(path.join(root, 'public', file))); return;
       }
       json(404, { error: 'Not found.' });
-    } catch (error) { json(400, { error: error.message }); }
+    } catch (error) { activity.log('warning','api.failed','An application request failed validation or could not be completed.'); json(400, { error: error.message }); }
   });
   try { await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', resolve); }); }
   catch (error) { unlock(); throw error; }
   origin = `http://127.0.0.1:${server.address().port}`;
   atomicJSON(path.join(home, 'connection.json'), { origin, token, pid: process.pid });
   const timer = timers ? setInterval(() => { try { engine.tick(); } catch (error) { engine.emit('scheduler-error', { error: error.message, at: new Date().toISOString() }); } }, 1000) : null;
-  const service = { engine, settings, context, standup, omi, life, workspaceFiles, usage, catalog, catalogs, origin, token, home, url: `${origin}/?token=${token}`, async close() {
-    if (timer) clearInterval(timer); if (catalogTimer) clearInterval(catalogTimer); await Promise.all(Object.values(catalogs).map(c => c.pending)); await remote.close(); await engine.close(); await copilot.close(); await codex.close(); await claude.close(); await life.close?.();
+  const service = { engine, settings, context, standup, omi, life, account, activity, workspaceFiles, usage, catalog, catalogs, origin, token, home, url: `${origin}/?token=${token}`, async close() {
+    activity.log('info','app.stopping','Proteus is shutting down.'); activity.close(); if(activityTimer)clearInterval(activityTimer); if (timer) clearInterval(timer); if (catalogTimer) clearInterval(catalogTimer); await Promise.all(Object.values(catalogs).map(c => c.pending)); await remote.close(); await engine.close(); await copilot.close(); await codex.close(); await claude.close(); await life.close?.();
     for (const client of eventClients) client.end(); eventClients.clear();
     await new Promise(resolve => {
       server.close(resolve);
@@ -368,7 +391,8 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
     });
     fs.rmSync(path.join(home, 'connection.json'), { force: true }); unlock();
   } };
-  remote = service.remote = new RemoteHost(service); await remote.start();
+  remote = service.remote = new RemoteHost(service); activity.attach(engine,()=>remote.info().hostId); activity.log('info','app.started','Proteus started.'); await remote.start();
+  const activityTimer = timers ? setInterval(()=>void activity.flush(),60000) : null;
   const refreshCatalog = () => Promise.allSettled(Object.values(catalogs).map(c => c.get())).then(() => { notify(); remote.changed(); });
   const catalogTimer = timers ? setInterval(refreshCatalog, 60_000) : null;
   if (timers) void refreshCatalog();

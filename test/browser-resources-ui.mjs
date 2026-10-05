@@ -1,0 +1,23 @@
+import { _electron as electron } from 'playwright';
+import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import http from 'node:http';import assert from 'node:assert/strict';
+const home=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'proteus-resource-ui-')));
+fs.writeFileSync(path.join(home,'settings.json'),JSON.stringify({schemaVersion:1,provider:'rehearsal',model:'',timezone:'UTC',workspace:{cwd:home,additionalDirectories:[]},skillDirectories:[],mcpServers:{}}));
+const server=http.createServer((req,res)=>{res.setHeader('Content-Type','text/html');res.end('<!doctype html><title>Synthetic board</title><h1>Board</h1><a href="/next">Next</a>');});await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+let app;try{
+  app=await electron.launch({args:['.','--user-data-dir='+path.join(home,'electron')],env:{...process.env,PROTEUS_HOME:home,COPILOT_HOME:path.join(home,'copilot'),PORT:'0'},timeout:60000});const page=await app.firstWindow();await page.locator('#new-chat').waitFor();
+  const url='http://127.0.0.1:'+server.address().port+'/board';
+  const command=value=>page.evaluate(value=>window.desktop.browser(value),value);
+  const tab=await command({action:'create',url,group:'team'});assert.equal(tab.group,'team');assert.equal(tab.loaded,true);
+  const unloaded=await command({action:'unload',id:tab.id});assert.equal(unloaded.loaded,false);assert.equal(unloaded.url,url);
+  const resumed=await command({action:'activate',id:tab.id});assert.equal(resumed.id,tab.id);assert.equal(resumed.url,url);assert.equal(resumed.loaded,true);assert.equal(resumed.shared,false);
+  await command({action:'share',id:tab.id,shared:true});await assert.rejects(command({action:'unload',id:tab.id}),/Agent access/);await command({action:'share',id:tab.id,shared:false});
+  const main=await command({action:'create',url,group:'main'});const groups=await command({action:'unload-group',group:'team'});assert.equal(groups.find(t=>t.id===tab.id).loaded,false);assert.equal(groups.find(t=>t.id===main.id).loaded,true);
+  const metrics=await page.evaluate(async()=>await(await fetch('/api/resources')).json());assert.equal(metrics.supported,true);assert.ok(metrics.processes.length);assert.ok(metrics.processes.every(p=>Number.isFinite(p.cpuPercent)&&p.memoryBytes>=0));assert.equal(metrics.tabs.find(t=>t.id===tab.id).loaded,false);
+  await command({action:'close',id:tab.id});await command({action:'close',id:main.id});
+  const visits=await command({action:'history',query:'board'});assert.ok(visits.items.some(i=>i.url===url));
+  const urls=await app.evaluate(({app})=>{const {normalizeURL}=process.mainModule.require(app.getAppPath()+'/desktop/browser.cjs');let refused=0;for(const input of ['file:///private/a','proteus://pair?data=SECRET','/Users/private','token=SECRET'])try{normalizeURL(input);}catch{refused++;}return {search:normalizeURL('task planning tips'),host:normalizeURL('example.test/path'),local:normalizeURL('localhost:4321'),refused};});
+  assert.equal(urls.search,'https://www.google.com/search?q=task%20planning%20tips');assert.equal(urls.host,'https://example.test/path');assert.equal(urls.local,'https://localhost:4321/');assert.equal(urls.refused,4);
+  const race=await app.evaluate(async({app})=>{const {BrowserTabs}=process.mainModule.require(app.getAppPath()+'/desktop/browser.cjs');let release,visible=false;const tab={id:'restore',view:null},browser=Object.create(BrowserTabs.prototype);browser.tabs=new Map([[tab.id,tab]]);browser.bounds={x:0,y:0,width:100,height:100};browser.reload=()=>new Promise(resolve=>{release=()=>{tab.view={setBounds(){},setVisible(value){visible=value;},webContents:{getURL(){return 'https://example.test';}}};resolve();};});browser.show(tab.id,browser.bounds);browser.show(null);release();await Promise.resolve();return {active:browser.active,visible};});
+  assert.equal(race.active,null);assert.equal(race.visible,false);
+  console.log(JSON.stringify({passed:true,checks:9,summary:'native unload/reload, authority guard, team-only unloading, process metrics, durable history, URL/search boundaries and no stale restore reveal'}));
+}finally{if(app)await app.close();await new Promise(resolve=>server.close(resolve));fs.rmSync(home,{recursive:true,force:true});}

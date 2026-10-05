@@ -1,10 +1,12 @@
 import SwiftUI
 
 @main struct ProteusApp: App {
+    @UIApplicationDelegateAdaptor(ProteusAppDelegate.self) private var appDelegate
+    @StateObject private var shared = SharedAppStore()
     @StateObject private var destinations = DestinationStore()
     @StateObject private var life = LifeStore()
     var body: some Scene {
-        WindowGroup { ProteusRoot().environmentObject(destinations).environmentObject(life) }
+        WindowGroup { ProteusRoot().environmentObject(destinations).environmentObject(life).environmentObject(shared) }
     }
 }
 struct ProteusRoot: View {
@@ -20,10 +22,7 @@ struct ProteusRoot: View {
     }
     @Environment(\.scenePhase) private var phase
     var body: some View {
-            TabView(selection:$area) {
-                DestinationRoot().tabItem { Label("Macs",systemImage:"desktopcomputer") }.tag("macs")
-                if showLife { LifeRootView().tabItem { Label("Life",systemImage:"heart.text.square") }.tag("life") }
-            }.overlay { if phase != .active { Color.black.ignoresSafeArea().overlay { Label("Proteus",systemImage:"lock.shield").font(.title2).foregroundStyle(.secondary) } } }.tint(Color(red: 0.67, green: 0.86, blue: 0.49)).preferredColorScheme(.dark)
+            NativeShell().overlay { if phase != .active { Color.black.ignoresSafeArea().overlay { Label("Proteus",systemImage:"lock.shield").font(.title2).foregroundStyle(.secondary) } } }.tint(Color(red: 0.67, green: 0.86, blue: 0.49)).preferredColorScheme(.dark)
                 .onOpenURL { url in if url.scheme == "proteus" && url.host == "pair" { area = "macs"; do { try destinations.add(url.absoluteString, label: "New Mac") } catch { destinations.error = error.localizedDescription } } }
                 .task {
                     #if DEBUG
@@ -53,7 +52,6 @@ struct DestinationRoot: View {
             if let remote = destinations.selected {
                 VStack(spacing: 0) {
                     DestinationBar(remote: remote, adding: $adding, managing: $managing, setup: $setup)
-                    ProviderUsageStrip(store: remote).id(destinations.selectedID)
                     RootView().environmentObject(remote).id(destinations.selectedID)
                 }
             } else { NavigationStack { PairView().toolbar { ToolbarItem(placement: .primaryAction) { Button("App setup", systemImage: "gearshape") { setup = true }.accessibilityIdentifier("app-setup") } } } }
@@ -142,8 +140,8 @@ struct PairView: View {
         Form {
             Section {
                 Image(systemName: "point.3.connected.trianglepath.dotted").font(.system(size: 52)).foregroundStyle(.tint).frame(maxWidth: .infinity).padding()
-                Text("Your Macs. One app.").font(.title2.bold())
-                Text("Open Remote Access in Proteus on the Mac you want to add, then create a one-time pairing code. Each Mac keeps its own chats, schedules and workspace context.").foregroundStyle(.secondary)
+                Text("Add your Mac").font(.title2.bold())
+                Text("Open Connections in Proteus on the Mac you want to add, then create a one-time pairing code. Each Mac keeps its own chats, schedules and workspace context.").foregroundStyle(.secondary)
             }
             Section("Add a Mac") {
                 TextField("Mac name", text: $label).accessibilityIdentifier("destination-name")
@@ -180,6 +178,7 @@ struct DestinationsView: View {
                         if let remote = destinations.remote(for: destination.id) { PairingStatus(remote: remote) } else { Text("Saved · not connected").font(.caption).foregroundStyle(.secondary) }
                         HStack {
                             Button("Use Mac") { do { try destinations.select(destination.id) } catch { destinations.error = error.localizedDescription } }.disabled(destination.id == destinations.selectedID).accessibilityIdentifier("select-" + destination.id)
+                            Button("Reconnect") { destinations.remote(for: destination.id)?.activity(true) }
                             Button("Rename") { renameID = destination.id; renameLabel = destination.label }.accessibilityIdentifier("rename-" + destination.id)
                             Button("Edit relay") { editingRelay = destination }.accessibilityIdentifier("edit-relay-" + destination.id)
                             Button("Forget", role: .destructive) { forgetID = destination.id }.accessibilityIdentifier("forget-" + destination.id)

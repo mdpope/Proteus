@@ -1,0 +1,43 @@
+let ui;
+const $ = selector => document.querySelector(selector);
+const sections = [['resources','Resources'],['providers','Providers'],['connections','Connections'],['account','Account & Security'],['setup','App Setup'],['usage','Usage'],['notifications','Notifications'],['logs','Logs']];
+export function initEngineRoom(options){ui=options;}
+async function activity(kind){const local=await ui.api('/api/'+kind);if(!ui.state.data.life?.identity)return local;try{const account=await ui.api('/api/app'),merged=new Map((local.items||[]).map(item=>[item.id,{...item,localId:item.id}]));for(const item of account[kind]||[]){const key=item.eventId||item.id,previous=merged.get(key);merged.set(key,{...previous,...item,localId:previous?.localId,shared:true,identity:account.identity});}return {...local,items:[...merged.values()].sort((a,b)=>Date.parse(b.createdAt||b.at)-Date.parse(a.createdAt||a.at))};}catch{return {...local,sharedUnavailable:true};}}
+
+export function engineSections(){return sections;}
+export function renderEngineRoom(section='resources'){
+  const main=$('#main');
+  if(section==='providers')return ui.providers();
+  if(section==='connections')return ui.connections();
+  if(section==='setup')return ui.setup();
+  const title=sections.find(([id])=>id===section)?.[1]||'Engine Room';
+  main.innerHTML=`<div class="heading"><div><div class="eyebrow">Engine Room</div><h1>${title}</h1></div></div><div id="engine-content"><p class="note">Loading…</p></div>`;
+  const active=()=>ui.state.page==='engine'&&ui.state.engineSection===section&&$('#engine-content');
+  const render=async()=>{
+    try{
+      if(section==='resources'){
+        const result=await ui.api('/api/resources');if(!active())return;
+        const tabs=result.tabs||[],processes=result.processes||[];
+        $('#engine-content').innerHTML=`<p class="note">Observed ${ui.escape(ui.time(result.observedAt))}. Process CPU and memory are shared where tabs use the same process.</p><section class="card"><h2>Open tabs and tools</h2><div class="resource-list">${tabs.map(t=>`<div class="resource-row"><div><strong>${ui.escape(t.title||t.label||t.id)}</strong><p class="note">${ui.escape(t.hostName||'This Mac')} · ${ui.escape(t.group||t.type||'Tab')}${t.sharedProcess?' · Shared app process':''} · ${t.loaded?'Loaded':'Unloaded'}</p></div><div class="actions"><button data-resource-unload="${ui.escape(t.id)}" ${!t.loaded||t.sharedProcess?'disabled':''}>Unload</button><button data-resource-close="${ui.escape(t.id)}" ${t.id==='overview'?'disabled':''}>Close</button></div></div>`).join('')||'<p class="empty">No open tabs.</p>'}</div></section><section class="card"><h2>Processes</h2>${processes.length?`<table><thead><tr><th>Process</th><th>CPU</th><th>Memory</th></tr></thead><tbody>${processes.map(p=>`<tr><td>${ui.escape(p.label||p.name||p.type)}${p.tabIds?.length?`<div class="note">${p.tabIds.map(id=>ui.escape(tabs.find(t=>t.id===id)?.title||id)).join(', ')}</div>`:''}</td><td>${Number.isFinite(p.cpuPercent)?ui.escape(p.cpuPercent.toFixed(1))+'%':'Unavailable'}</td><td>${Number.isFinite(p.memoryBytes)?ui.escape((p.memoryBytes/1048576).toFixed(1))+' MB':'Unavailable'}</td></tr>`).join('')}</tbody></table>`:'<p class="note">Process metrics are unavailable on this host.</p>'}</section>`;
+        for(const action of ['unload','close'])document.querySelectorAll('[data-resource-'+action+']').forEach(button=>button.onclick=async()=>{try{await ui.api('/api/resources',{action,tabId:button.dataset['resource'+action[0].toUpperCase()+action.slice(1)]});ui.resourceChanged(action,button.dataset['resource'+action[0].toUpperCase()+action.slice(1)]);render();}catch(error){ui.toast(error.message);}});
+      } else if(section==='usage'){
+        const value=await ui.api('/api/usage',{force:false});if(!active())return;
+        $('#engine-content').innerHTML=Object.entries(value.providers||{}).map(([name,entry])=>`<section class="card"><h2>${ui.escape(name)}</h2><p class="note">${ui.escape(entry.checkedAt?ui.time(entry.checkedAt):'Not checked')} ${entry.stale?'· Stale':''}</p>${(entry.windows||[]).map(w=>`<div class="resource-row"><span>${ui.escape(w.label||w.id)}</span><strong>${Number.isFinite(w.remainingPercent)?ui.escape(w.remainingPercent.toFixed(1))+'% remaining':w.unlimited?'Unlimited':'Unavailable'}</strong></div>`).join('')||'<p class="note">No reported allowance.</p>'}</section>`).join('')||'<p class="empty">Allowance unavailable.</p>';
+      } else if(section==='notifications'){
+        const value=await activity('notifications');if(!active())return;
+        const p=value.preferences||{};
+        $('#engine-content').innerHTML=`<section class="card"><h2>Preferences</h2><label class="checkbox-row"><input id="notify-system" type="checkbox" ${p.systemEnabled?'checked':''}>Enable system notifications</label><label><input id="notify-schedule" type="checkbox" ${p['schedule.completed']!==false?'checked':''}> Notify when a schedule completes</label><p class="note">Chat completion and requests for review remain visible in notification history.</p></section><section class="card"><h2>History</h2>${value.sharedUnavailable?'<p class="note">Shared history unavailable. Showing this Mac’s history; authorize shared features in App Setup.</p>':''}${(value.items||[]).map(n=>`<article class="resource-row"><div><strong>${ui.escape(n.title||n.event||'Notification')}</strong><p>${ui.escape(n.message||n.body||'')}</p><small>${ui.escape(ui.time(n.at||n.createdAt))}</small></div>${n.read||n.readAt?'':`<button data-notification-read="${ui.escape(n.id)}">Mark read</button>`}</article>`).join('')||'<p class="empty">No notifications yet.</p>'}</section>`;
+        $('#notify-system').onchange=async event=>{try{await ui.api('/api/notifications',{action:'preferences',preferences:{systemEnabled:event.target.checked}});p.systemEnabled=event.target.checked;}catch(error){ui.toast(error.message);event.target.checked=!event.target.checked;}};
+        $('#notify-schedule').onchange=async event=>{try{await ui.api('/api/notifications',{action:'preferences',preferences:{'schedule.completed':event.target.checked}});p['schedule.completed']=event.target.checked;}catch(error){ui.toast(error.message);event.target.checked=!event.target.checked;}};
+        document.querySelectorAll('[data-notification-read]').forEach(button=>button.onclick=async()=>{try{const item=value.items.find(n=>n.id===button.dataset.notificationRead);if(item.shared)await ui.api('/api/app',{path:'/notifications/'+item.id,method:'PATCH',body:{read:true},identity:item.identity});if(item.localId||!item.shared)await ui.api('/api/notifications',{action:'read',id:item.localId||item.id});render();}catch(error){ui.toast(error.message);}});
+      } else if(section==='logs'){
+        const value=await activity('logs');if(!active())return;
+        $('#engine-content').innerHTML=`<section class="card"><p class="note">Recent bounded application events. Private prompts and credentials are omitted.</p>${value.sharedUnavailable?'<p class="note">Shared logs unavailable. Showing this Mac’s events.</p>':''}${(value.items||[]).map(log=>`<div class="resource-row"><time>${ui.escape(ui.time(log.at||log.createdAt))}</time><strong>${ui.escape(log.level||'info')}</strong><span>${ui.escape(log.event||'')}</span><span>${ui.escape(log.message||'')}</span></div>`).join('')||'<p class="empty">No recent log events.</p>'}</section>`;
+      } else if(section==='account'){
+        $('#engine-content').innerHTML='<section class="card"><h2>Account & Security</h2><p>Manage your profile, timezone, passkeys, authenticator and sessions in your secure website account.</p><button id="engine-account-open">Open account settings ↗</button></section>';
+        $('#engine-account-open').onclick=()=>ui.openAccount();
+      }
+    }catch(error){if(active())$('#engine-content').innerHTML=`<p class="banner">${ui.escape(error.message)}</p>`;}
+  };
+  void render();
+}

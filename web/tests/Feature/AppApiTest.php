@@ -1,0 +1,141 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Services\AppRecords;
+use App\Services\PushDelivery;
+use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
+use Laravel\Passport\Passport;
+use Tests\CreatesBrain;
+use Tests\TestCase;
+
+class AppApiTest extends TestCase
+{
+    use CreatesBrain, LazilyRefreshDatabase;
+
+    public function test_explicit_scopes_and_account_binding_are_required(): void
+    {
+        $this->getJson('/api/v1/app')->assertUnauthorized();
+        $user = $this->owner();
+        Passport::actingAs($user, ['brain:read', 'brain:write']);
+        $this->getJson('/api/v1/app')->assertForbidden();
+        $this->postJson('/api/v1/app/links', [])->assertForbidden();
+        Passport::actingAs($user, ['app:read']);
+        $this->getJson('/api/v1/app')->assertOk()->assertJsonPath('preferences.defaultMacId', null)->assertJsonPath('preferences.allowanceDisplay', 'compact');
+        $this->putJson('/api/v1/app/preferences', ['timezone' => 'America/Denver'])->assertForbidden();
+        Passport::actingAs($user, ['app:read', 'app:write']);
+        $this->putJson('/api/v1/app/preferences', ['expectedAccountId' => str_repeat('f', 64), 'timezone' => 'America/Denver'])->assertConflict();
+        $this->putJson('/api/v1/app/preferences', ['defaultMacId' => (string) Str::uuid()])->assertUnprocessable();
+        $this->putJson('/api/v1/app/preferences', ['timezone' => 'America/Denver', 'allowanceDisplay' => 'collapsed'])->assertOk();
+        $this->getJson('/api/v1/app')->assertJsonPath('preferences.timezone', 'America/Denver')->assertJsonPath('preferences.allowanceDisplay', 'collapsed');
+    }
+
+    public function test_shared_lists_enforce_revisions_and_account_isolation(): void
+    {
+        $user = $this->owner();
+        Passport::actingAs($user, ['app:read', 'app:write']);
+        $input = ['name' => 'Synthetic team', 'instructions' => 'Share one update', 'timezone' => 'America/Denver', 'members' => [['id' => 'alex', 'name' => 'Alex', 'mode' => 'fixed'], ['id' => 'sam', 'name' => 'Sam', 'mode' => 'random']], 'links' => [['id' => 'tool', 'title' => 'Tool', 'url' => 'https://example.test/board?view=team']]];
+        $created = $this->postJson('/api/v1/app/team-lists', $input)->assertCreated()->assertJsonPath('revision', 1)->assertJsonPath('links.0.url', 'https://example.test/board?view=team')->json();
+        $this->putJson('/api/v1/app/team-lists/'.$created['id'], $input + ['expectedRevision' => 1])->assertOk()->assertJsonPath('revision', 2);
+        $this->putJson('/api/v1/app/team-lists/'.$created['id'], $input + ['expectedRevision' => 1])->assertConflict();
+        Passport::actingAs($this->owner(), ['app:read', 'app:write']);
+        $this->getJson('/api/v1/app/team-lists')->assertExactJson(['items' => []]);
+        $this->deleteJson('/api/v1/app/team-lists/'.$created['id'])->assertNotFound();
+        $this->putJson('/api/v1/app/team-lists/'.$created['id'], $input + ['expectedRevision' => 2])->assertNotFound();
+        $this->assertDatabaseCount('app_records', 1);
+        $this->assertStringNotContainsString('Synthetic team', DB::table('app_records')->value('payload'));
+    }
+
+    public function test_history_rejects_auth_urls_and_strips_query_and_fragment(): void
+    {
+        Passport::actingAs($this->owner(), ['app:read', 'app:write']);
+        foreach (['javascript:alert(1)', 'https://name:secret@example.test/', 'https://example.test/oauth/callback?code=secret'] as $url) {
+            $this->postJson('/api/v1/app/history', ['url' => $url, 'source' => 'desktop'])->assertUnprocessable();
+        }
+        foreach (['https://example.test/remote#pair=SYNTHETIC_CAPSULE', 'https://example.test/remote#data=SYNTHETIC_CAPSULE', 'https://example.test/#access_token=secret', 'https://example.test/#%70air=secret', 'https://example.test/?pairing=secret', 'https://example.test/?token=secret'] as $url) {
+            $this->postJson('/api/v1/app/history', ['url' => $url, 'source' => 'desktop'])->assertUnprocessable();
+            $this->postJson('/api/v1/app/links', ['url' => $url, 'title' => 'Synthetic'])->assertUnprocessable();
+        }
+        $this->postJson('/api/v1/app/links', ['url' => 'https://example.test/board?view=team#section', 'title' => 'Synthetic'])->assertCreated()->assertJsonPath('url', 'https://example.test/board?view=team#section');
+        $this->postJson('/api/v1/app/history', ['url' => 'https://example.test/docs?view=reference#section', 'source' => 'mobile', 'title' => 'Reference'])->assertCreated()->assertJsonPath('url', 'https://example.test/docs');
+        $this->getJson('/api/v1/app/history')->assertJsonCount(1, 'items')->assertDontSee('secret');
+        $visit = ['id' => (string) Str::uuid(), 'url' => 'https://example.test/retry', 'source' => 'desktop'];
+        $first = $this->postJson('/api/v1/app/history', $visit)->assertCreated()->json('id');
+        $this->postJson('/api/v1/app/history', $visit)->assertCreated()->assertJsonPath('id', $first);
+        $this->getJson('/api/v1/app/history')->assertJsonCount(2, 'items');
+    }
+
+    public function test_notification_and_log_events_are_idempotent_and_generic(): void
+    {
+        Passport::actingAs($this->owner(), ['app:read', 'app:write']);
+        $payload = ['id' => (string) Str::uuid(), 'type' => 'chat.completed', 'title' => 'PRIVATE PROMPT', 'body' => 'secret'];
+        $first = $this->postJson('/api/v1/app/notifications', $payload)->assertCreated()->assertJsonPath('title', 'Chat completed')->assertDontSee('PRIVATE PROMPT')->json();
+        $this->postJson('/api/v1/app/notifications', $payload)->assertCreated()->assertJsonPath('id', $first['id']);
+        $this->patchJson('/api/v1/app/notifications/'.$first['id'], ['read' => true])->assertOk()->assertJsonPath('read', true);
+        $this->postJson('/api/v1/app/logs', ['id' => (string) Str::uuid(), 'event' => 'chat.completed', 'level' => 'info', 'message' => 'private transcript'])->assertCreated()->assertDontSee('private transcript');
+        $this->postJson('/api/v1/app/logs', ['id' => (string) Str::uuid(), 'event' => 'secret', 'level' => 'info'])->assertUnprocessable();
+        $this->getJson('/api/v1/app')->assertJsonCount(1, 'notifications')->assertJsonCount(1, 'logs');
+    }
+
+    public function test_push_registration_validates_destinations_and_never_claims_unconfigured_delivery(): void
+    {
+        Http::preventStrayRequests();
+        $user = $this->owner();
+        Passport::actingAs($user, ['app:read', 'app:write']);
+        $device = (string) Str::uuid();
+        $this->postJson('/api/v1/app/push-subscriptions', ['deviceId' => $device, 'platform' => 'web', 'endpoint' => 'https://127.0.0.1/private'])->assertUnprocessable();
+        $subscription = $this->postJson('/api/v1/app/push-subscriptions', ['deviceId' => $device, 'platform' => 'apns', 'token' => str_repeat('a', 64), 'environment' => 'sandbox'])->assertOk()->assertJsonPath('configured', false)->assertDontSee(str_repeat('a', 64))->json();
+        $this->postJson('/api/v1/app/notifications', ['id' => (string) Str::uuid(), 'type' => 'approval.required'])->assertCreated();
+        $this->assertSame(1, DB::table('app_records')->where('kind', 'push-outbox')->count());
+        $this->artisan('proteus:deliver-push')->assertSuccessful();
+        Http::assertNothingSent();
+        $this->deleteJson('/api/v1/app/push-subscriptions/'.$subscription['id'])->assertOk();
+        $this->artisan('proteus:deliver-push')->assertSuccessful();
+        $this->assertSame(0, DB::table('app_records')->where('kind', 'push-outbox')->count());
+    }
+
+    public function test_configured_push_uses_generic_payload_and_cleans_expired_subscription(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'proteus-test-push-');
+        $key = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_EC, 'curve_name' => 'prime256v1']);
+        openssl_pkey_export($key, $pem);
+        file_put_contents($path, $pem);
+        try {
+            config(['push.apns_key_path' => $path, 'push.apns_key_id' => 'SYNTHETIC', 'push.apns_team_id' => 'TEAM', 'push.apns_topic' => 'test.proteus']);
+            Http::fake(['api.sandbox.push.apple.com/*' => Http::response([], 410)]);
+            $service = app(PushDelivery::class);
+            $this->assertSame('expired', $service->deliver(['platform' => 'apns', 'environment' => 'sandbox', 'token' => str_repeat('a', 64)]));
+            Http::assertSent(fn ($request) => $request['aps']['alert']['title'] === 'Proteus' && ! isset($request['chatId']) && $request->hasHeader('apns-push-type', 'alert'));
+        } finally {
+            unlink($path);
+        }
+    }
+
+    public function test_browsing_and_engine_room_require_strong_session_and_render_shell(): void
+    {
+        $this->withoutVite();
+        $this->get('/team')->assertRedirect('/login');
+        $this->signedIn($this->owner());
+        foreach (['/team', '/browser-home', '/engine-room'] as $path) {
+            $this->get($path)->assertOk()->assertSee('Engine Room')->assertSee('Team Tools')->assertDontSee('Your agent control room');
+        }
+        $this->getJson('/app-api')->assertConflict();
+    }
+
+    public function test_history_is_bounded_and_schedule_push_is_opt_in(): void
+    {
+        $user = $this->owner();
+        $records = app(AppRecords::class);
+        for ($i = 0; $i < 503; $i++) {
+            $records->save($user, 'history', ['url' => 'https://example.test/'.$i, 'source' => 'web']);
+        }
+        $this->assertCount(500, $records->all($user, 'history'));
+        Passport::actingAs($user, ['app:read', 'app:write']);
+        $this->postJson('/api/v1/app/push-subscriptions', ['deviceId' => (string) Str::uuid(), 'platform' => 'apns', 'token' => str_repeat('b', 64), 'environment' => 'sandbox'])->assertOk();
+        $this->postJson('/api/v1/app/notifications', ['id' => (string) Str::uuid(), 'type' => 'schedule.completed'])->assertCreated();
+        $this->assertSame(0, DB::table('app_records')->where('kind', 'push-outbox')->count());
+    }
+}

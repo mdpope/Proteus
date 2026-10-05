@@ -12,6 +12,7 @@ struct LifeCredential: Codable {
     var expiresAt: Date
     var accountID: String
     var workspaceID: String
+    var appAuthorized: Bool? = nil
 }
 
 enum LifeKeychain {
@@ -37,9 +38,9 @@ struct LifeOAuthAttempt {
     let verifier:String
     init(state:String = RemoteCrypto.random(),verifier:String = RemoteCrypto.random()){self.state=state;self.verifier=verifier}
     var challenge:String{Data(SHA256.hash(data:Data(verifier.utf8))).base64EncodedString().replacingOccurrences(of:"+",with:"-").replacingOccurrences(of:"/",with:"_").replacingOccurrences(of:"=",with:"")}
-    func authorization(origin:String,clientID:String)throws->URL{
+    func authorization(origin:String,clientID:String, sharedApp:Bool=false)throws->URL{
         guard var url=URLComponents(string:origin+"/oauth/authorize") else{throw RemoteError(message:"Invalid Life website.")}
-        url.queryItems=[URLQueryItem(name:"response_type",value:"code"),URLQueryItem(name:"client_id",value:clientID),URLQueryItem(name:"redirect_uri",value:Self.callback),URLQueryItem(name:"scope",value:"brain:read brain:write"),URLQueryItem(name:"state",value:state),URLQueryItem(name:"code_challenge",value:challenge),URLQueryItem(name:"code_challenge_method",value:"S256")]
+        url.queryItems=[URLQueryItem(name:"response_type",value:"code"),URLQueryItem(name:"client_id",value:clientID),URLQueryItem(name:"redirect_uri",value:Self.callback),URLQueryItem(name:"scope",value:sharedApp ? "brain:read brain:write app:read app:write" : "brain:read brain:write"),URLQueryItem(name:"state",value:state),URLQueryItem(name:"code_challenge",value:challenge),URLQueryItem(name:"code_challenge_method",value:"S256")]
         guard let value=url.url else{throw RemoteError(message:"Invalid Life sign-in URL.")};return value
     }
     func code(from callback:URL)throws->String{
@@ -104,14 +105,14 @@ struct LifeHTTPError:Error{let status:Int;let message:String}
     private func clearRecords(){profile = .null;snapshots.removeAll();connected=false;dataRevision += 1}
     private func clearCredentials(){generation=UUID();refreshTask?.cancel();refreshTask=nil;credential=nil;LifeKeychain.clear(service:keychainService);clearRecords()}
     func restore()async{guard credential != nil else{return};do{try await refreshProfile()}catch{self.error=display(error);connected=false}}
-    func signIn(website:String)async{
+    func signIn(website:String, sharedApp:Bool=false)async{
         guard !busy else{return};busy=true;defer{busy=false};error=nil;notice=nil
         do{
             let origin=try LifeOAuthAttempt.origin(website)
             let discovery=try await raw(origin:origin,path:"/api/v1/native-config")
             guard discovery["enabled"].bool,discovery["protocol"].int==1,discovery["issuer"].string==origin,discovery["redirectUri"].string==LifeOAuthAttempt.callback,!discovery["clientId"].string.isEmpty else{throw RemoteError(message:"Native Life sign-in is not configured on this website.")}
             let attempt=LifeOAuthAttempt(),clientID=discovery["clientId"].string
-            let url=try attempt.authorization(origin:origin,clientID:clientID)
+            let url=try attempt.authorization(origin:origin,clientID:clientID,sharedApp:sharedApp)
             let callback:URL=try await withCheckedThrowingContinuation{continuation in
                 let authentication=ASWebAuthenticationSession(url:url,callbackURLScheme:"proteus"){url,error in
                     if let url{continuation.resume(returning:url)}else{continuation.resume(throwing:RemoteError(message:error == nil ? "Life sign-in did not complete." : "Life sign-in was cancelled or could not finish."))}
@@ -126,7 +127,8 @@ struct LifeHTTPError:Error{let status:Int;let message:String}
             // Verify identity before showing any account records or saving credentials.
             let identity=try await raw(origin:origin,path:"/api/v1/life",bearer:token["access_token"].string)
             guard !identity["accountId"].string.isEmpty,!identity["workspaceId"].string.isEmpty else{throw RemoteError(message:"Website returned no Life account identity.")}
-            let next=LifeCredential(origin:origin,clientID:clientID,accessToken:token["access_token"].string,refreshToken:token["refresh_token"].string,expiresAt:Date().addingTimeInterval(Double(token["expires_in"].int)),accountID:identity["accountId"].string,workspaceID:identity["workspaceId"].string)
+            if sharedApp, let current=credential, current.origin != origin || current.accountID != identity["accountId"].string || current.workspaceID != identity["workspaceId"].string { throw RemoteError(message:"Use the same website account to add Team access. The existing Life session was preserved.") }
+            let next=LifeCredential(origin:origin,clientID:clientID,accessToken:token["access_token"].string,refreshToken:token["refresh_token"].string,expiresAt:Date().addingTimeInterval(Double(token["expires_in"].int)),accountID:identity["accountId"].string,workspaceID:identity["workspaceId"].string,appAuthorized:sharedApp)
             try LifeKeychain.save(next,service:keychainService);generation=UUID();refreshTask?.cancel();refreshTask=nil;clearRecords();credential=next;profile=identity;connected=true
         }catch{authSession=nil;self.error=display(error)}
     }
@@ -168,6 +170,15 @@ struct LifeHTTPError:Error{let status:Int;let message:String}
             do{let result=try await raw(origin:next.origin,path:path,method:method,body:body,bearer:next.accessToken);guard expected==generation,!closing else{throw RemoteError(message:"Life account changed.")};return result}
             catch let second as LifeHTTPError where second.status==401{if expected==generation,credential?.accessToken==next.accessToken{clearCredentials();throw RemoteError(message:"Life session was revoked. Sign in again.")};throw RemoteError(message:"Life session refreshed while this request was in flight. Please retry.")}
         }
+    }
+    func appRequest(_ path:String="", method:String="GET", body:JSON?=nil)async throws->JSON {
+        guard credential?.appAuthorized == true else { throw RemoteError(message:"Connect shared Team tools in Account & Security. Existing Life access does not grant shared app access.") }
+        guard path.isEmpty || (path.hasPrefix("/") && !path.contains("..") && !path.contains("?")) else { throw RemoteError(message:"Invalid app endpoint.") }
+        var payload = body
+        if method != "GET", case .object(var fields) = body { fields["expectedAccountId"] = .string(credential?.accountID ?? ""); fields["expectedWorkspaceId"] = .string(credential?.workspaceID ?? ""); payload = .object(fields) }
+        let result = try await authorized(path:"/api/v1/app"+path,method:method,body:payload)
+        if path.isEmpty { try verifyAccount(result) }
+        return result
     }
     func refreshProfile()async throws{
         let value=try await authorized(path:"/api/v1/life")
