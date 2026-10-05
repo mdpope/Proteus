@@ -18,11 +18,12 @@ resource unload/close, remote schedule editing, authenticated revocation, notifi
 and notification transport foundations. Native shared tools require separate `app:read app:write`
 consent. Production Web Push is provisioned with an active worker; device delivery acceptance
 remains pending. Background APNs still requires an entitled build and server credentials.
-Build Mac and website parity releases are deployed. A reported main/Team browser-home overflow
-fix adds top-aligned search controls and 25-entry **More** pagination; its follow-up install is being
-validated. Shared app consent is verified on Build Mac. iPhone USB reachability and HC final
-installation remain pending; the HC Keychain test prompt was safely dismissed and its original
-installed host is healthy.
+Build Mac and website parity releases are deployed. Browser-home follow-up `8e3ab51` is
+installed and visually verified on Build Mac: top-aligned search, bounded long links and
+25-entry **More** pagination. Shared app consent is verified there. Both iPhone and iPad are
+updated over Wi-Fi with data and both destinations preserved; iPad shared-account sign-in needs
+its on-device system flow. HC has the update installed and state preserved, but normal startup
+awaits the real Keychain prompt before relay/provider checks can finish.
 The current release does not add per-session short-lived host grants, merge browser/native pairing
 keys, or implement multi-provider work. Those security protocol improvements remain open.
 
@@ -418,13 +419,14 @@ pairings do not grant agents new authority, and company-source policy stays in i
 ## Deferred (no implementation yet)
 
 - Detached background daemon/login item, Developer ID distribution signing/notarization, automatic
-  updates, additional concurrent AI execution, workflow completion validators and notifications.
+  updates, additional concurrent AI execution and workflow completion validators. Generic completion
+  notifications are implemented; workflow-specific completion proof remains separate.
 - Automatic reconciliation of foreign workflow manifests; currently use the owning repository
   exporter and explicit import/refresh.
 - Provider adapters beyond Copilot/Codex/Claude/rehearsal; Claude MCP/browser/steering parity; Codex native agent tool-filter parity and per-tool MCP approval interception; changing the provider of an existing chat.
 - Paginated on-disk run storage as history grows.
-- Authenticated end-to-end revocation is promoted into the next-update security work (SEC-03);
-  it remains unimplemented and must not erase enrollment on an unauthenticated relay notice.
+- Further account-session grant hardening remains queued. Authenticated end-to-end revocation is
+  implemented in the parity release; unauthenticated relay notices cannot erase enrollment.
 - Codex MCP OAuth controls, generic MCP elicitation/input forms, and editor-specific agent hook and extension-tool mappings. Copilot OAuth recovery is implemented per chat.
 - Bitwarden extension compatibility and broader token-broker/Keychain bootstrap integrations.
 - Automatic VS Code index, unsaved buffers, or existing chat-history transfer.

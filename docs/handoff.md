@@ -7,16 +7,29 @@ and manifests; this repository owns the generic app and provider adapters.
 
 ## Latest release state
 
-Build Mac runs parity runtime commit `295be2d`; website release `20261005T000810Z` is live.
-Read `parity-release.md` for final test, preservation, backup and restore receipts. Signed phone/iPad
-build is ready but physical devices were locked; later iPhone discovery was unavailable. The
-operator approved shared app scopes and OAuth reconsent completed; live shared endpoints now return
-success for the same Life account. The Build Mac has no legacy roster to import. Work Mac
-received the exact final commit and passed its focused checks, but a packaged-test Keychain
-prompt prevented installation. Screen Sharing recovery confirmed installed `68463db` remains
-healthy and the login Keychain is unlocked; the next browser-home fix and isolated package test
-are being prepared. Obtain the installation receipt before claiming HC updated. Web Push is configured with an active worker; APNs and real push delivery remain pending.
-Multi-provider work is deferred. Existing workflow owners/schedule enablement remain unchanged.
+Build Mac runs browser-home follow-up `8e3ab51`; all 103 runtime files, signing, 12 tabs,
+three pairings and existing account/data preservation passed. Installed main and Team browser
+homes were visually verified with search visible and 25-entry history/More controls. Website
+release `20261005T000810Z` remains live. Read `parity-release.md` for release receipts.
+
+Both physical iPhone and iPad were updated in place over Wi-Fi with the original signer and
+all 25 build inputs verified. Data/preferences, both Mac destinations and selection survived;
+launch/process checks passed. The operator explicitly authorized iPad account connection, but
+its device-local system sign-in requires interaction on the iPad. The pending handoff is
+Proteus → Team → Connect shared Team tools; no new approval is needed for normal same-account
+consent. Do not claim mobile shared-account acceptance from installation alone.
+
+Build Mac shared scopes are authorized; live shared endpoints return success for the same
+Life account. Its legacy roster was empty, so no import was made. HC now has `8e3ab51` installed
+with exact 103-file parity and unchanged two tabs, three pairings, settings and five disabled
+schedules. Normal startup is waiting on its real Proteus Safe Storage prompt. The operator was
+asked to respond using the HC login-keychain password. Relay/provider postlaunch checks remain
+pending. Do not reset/delete Keychain items or change access rules to bypass the prompt.
+
+Disposable Mac tests now use a mock Keychain, isolated from real credentials; production launches
+do not. Website account-persistent Mac enrollment still needs the recorded trust/custody review.
+Web Push is configured with an active worker; APNs and real push delivery remain pending.
+Multi-provider work is deferred. Workflow owners and schedule enablement remain unchanged.
 
 ## Read first
 

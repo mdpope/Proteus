@@ -134,15 +134,19 @@ a guarded resume; no release or backup was deleted.
 Web Push has a protected first-time VAPID key, verified portable credential backup and an active
 bounded delivery timer with successful worker execution. Actual device delivery is not verified.
 APNs remains unconfigured and the preserved physical profile lacks its entitlement. The signed
-phone/iPad build and 25-input hash receipt are ready; the last physical-device checks found both
-locked; a later iPhone check found the device unavailable to CoreDeviceService. No parity build
-was installed on either device. Physical iPad installation remains deferred.
+phone/iPad build and 25-input hash receipt passed verification. After earlier locked/unavailable
+checks, the existing paired iPhone became reachable over Wi-Fi and was updated in place at
+02:30 UTC. All three app-data files and preferences were byte-identical before launch; both
+destination identities and selection survived launch, and the running process was independently
+confirmed. The iPad subsequently received the same in-place Wi-Fi update at 02:35 UTC with identical
+preservation checks; its normal shared-account sign-in is an on-device handoff.
 
-The Work Mac validated the base release (244 tests, static checks, 21 parity checks and package
-checks), then the final delta (22 browser checks and static checks). The exact final commit was
-sent through its authorized Codex chat for an in-place update preserving ad-hoc signing and vendor
-identity. That Codex connection became unavailable before the final installation receipt could be
-read. Do not claim HC installation from build results; reconnect and obtain the receipt first.
+The Work Mac validated the base release and final browser checks, then installed browser-home
+follow-up `8e3ab51` through its authorized Codex chat. All 103 runtime files match, app/vendor
+signatures pass, and two tabs, three pairings, settings/permissions and five disabled schedules
+are unchanged. Production launched without a mock-Keychain flag and is waiting on the real
+Proteus Safe Storage prompt. The operator was asked to respond on HC. Relay/provider checks
+remain pending; the full prior app/state rollback is retained.
 
 The operator explicitly approved the added shared-data scopes. Build Mac OAuth reconsent
 completed: live `/api/app` and `/api/team/lists` both returned HTTP 200, with the same account
@@ -158,14 +162,8 @@ The deployment workspace records a separate all-database-backup and version-revi
 maintenance proposal; no server-wide repair was attempted as part of this application update.
 
 
-Latest consent check: the operator approved the scope expansion and the installed app launched
-its normal system-browser flow. Native browser control failed/stalled before the consent click.
-Read-only checks confirm Life remains ready with the original account/workspace/origin; shared
-app and Team-list endpoints correctly remain unavailable. No roster was imported. Complete the
-opened authorization page and return to Proteus, or restart Engine Room → App Setup → Authorize
-shared features if expired. The approval is already recorded; do not request it again for the
-same action. The iPhone later became undiscoverable and the HC Codex/SSH connections remained
-unavailable. Resume those exact pending checks when the devices reconnect.
+The earlier consent/browser-control hold is resolved by the successful same-account checks above.
+No additional approval is needed for that already-authorized scope expansion.
 
 
 ## Follow-up observations — October 5 UTC
@@ -177,8 +175,26 @@ reported password rejection is not diagnosed by that finding. The cross-host Cod
 the existing HC update chat then verified the disposable test had exited, installed `68463db`
 remained byte-matched across all 93 runtime files, the relay and three pairings were healthy, and
 login Keychain metadata reported unlocked. All three providers remained available and five
-schedules stayed disabled. Installation is waiting for the browser-home follow-up commit. Never reset or delete Safe Storage to bypass this issue.
+schedules stayed disabled. The later follow-up installation is recorded above; production Keychain acceptance remains pending. Never reset or delete Safe Storage to bypass this issue.
 
-The unlocked iPhone remained unavailable to CoreDevice discovery. The prepared app’s 25 input
-hashes, existing signing identity and unexpired profile were rechecked; no installation or data
-mutation occurred. A USB data connection was requested. iPad remains deferred.
+The earlier iPhone discovery hold was resolved by a fresh Wi-Fi attempt at the operator’s request.
+Installation and preservation succeeded as recorded above and in `../ios/PARITY-VALIDATION.md`;
+no USB connection, uninstall, pairing reset, signing change or Omi action was needed. The operator
+subsequently authorized the iPad update and normal account connection; its installation succeeded,
+while the device-local shared-account flow remains an explicit on-device handoff.
+
+
+## Browser-home follow-up installed on Build Mac
+
+Runtime `8e3ab51` passed 244 Node tests, static checks and 16 focused main/docked-Team UI checks.
+The signed package passed its isolated launch, synthetic cookie and 19-model catalog checks.
+All 103 installed runtime files match. Original application/vendor signing, 12 tabs and selection,
+Team state, local/tab histories, three pairings/resource grants, run/schedule files and nine
+settings records were preserved. The encrypted Life session stayed byte-identical; shared API
+authorization and relay reconnect passed. Full app/state rollback remains outside Git.
+
+The installed app was then inspected through native accessibility and screenshots: search,
+Google/DuckDuckGo/Bing and URL controls are visible at the top of both the existing main new tab
+and Team new tab. The installed Team view exposes exactly 25 local history rows and both More
+controls. The original main tab selection was restored after inspection. Docked/narrow behavior
+and pagination/retry logic have the separate disposable regression evidence above.

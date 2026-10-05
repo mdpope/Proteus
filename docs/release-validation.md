@@ -188,3 +188,25 @@ list were empty, so no roster was imported. HC recovery verified its existing ru
 three pairings and disabled schedules; no Keychain items, passwords or access rules changed.
 Physical iPhone discovery is being retried over its existing Wi-Fi pairing at the operator's
 request. iPad remains deferred.
+
+
+## Final follow-up device receipts — October 5 UTC
+
+Build Mac: `8e3ab51`, exact 103-file parity, existing signing/vendor identities, normal launch,
+shared API and relay healthy. Twelve tabs/selection, Team state, histories, three pairings and
+resource grants, settings, account and all run/schedule files survived. Native screenshots confirm
+visible search/URL controls in main and Team new tabs; accessibility confirms 25 local rows and
+More controls. Original selection was restored. Full private rollback retained.
+
+iPhone at 02:30 UTC and iPad at 02:35 UTC: both installed in place over their existing Wi-Fi
+pairings. Original universal build, signer and 25 inputs verified. Three app-data files and
+preferences stayed byte-identical before launch, both destination identities and selection
+survived launch, and running processes were independently confirmed. The operator authorized
+iPad account connection; its system authentication flow needs on-device interaction. This is not
+proof of mobile shared-account or background push delivery.
+
+HC: `8e3ab51` installed and all 103 files/signatures verified. Two tabs, three pairings, settings,
+permissions and five disabled schedules preserved. Normal production startup is waiting on the
+real Safe Storage prompt, with no test mock flag. The user has the secure-dialog handoff; relay
+and provider acceptance remain pending. No Keychain reset, ACL/password changes or data deletion
+were made. Full previous application/state recovery is retained.
