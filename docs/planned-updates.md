@@ -3,6 +3,24 @@
 Maintain this as the single backlog. Design rationale is in `decisions.md`; recent changes are in
 `../CHANGELOG.md`. Items below are status, not promises of completed validation.
 
+## Queued iPad corrections — October 5
+
+Operator-reported follow-ups; queued only, not yet reproduced, implemented or verified.
+
+- [ ] **Open the selected shared team configuration.** Selecting an existing named team
+  list on iPad currently opens a new-list form instead of that list's configuration. Load
+  the selected API record, including its stable ID, revision, members, instructions, links
+  and timezone. Editing/saving must update that same list; create a new list only through
+  the explicit New list action. Verify selection between multiple existing lists and confirm
+  that opening or saving one does not create a duplicate.
+- [ ] **Separate main browser tabs from Team Tools browser tabs.** The iPad's global
+  new-browser control must use the same plus/globe artwork as desktop, without the visible
+  word “Browser,” while retaining an accessible New browser tab label. It must open and
+  select a browser tab in the main top tab bar, including when Team Tools is active.
+  Team Tools keeps its own separate browser-tab control and secondary tab collection,
+  matching desktop. Verify that each control adds a tab only to its intended collection
+  and preserves the other collection's tabs and selection.
+
 ## Connection and presentation corrections — October 5
 
 Implemented in the current source: three-column desktop allowance; host-owned names refreshed

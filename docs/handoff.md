@@ -7,6 +7,12 @@ and manifests; this repository owns the generic app and provider adapters.
 
 ## Latest release state
 
+New iPad follow-ups are queued in `planned-updates.md`: selecting an existing shared team
+list reportedly opens a new-list form, and the global browser button must use desktop artwork
+and create a main top-level tab instead of a Team Tools subtab. These are user reports and
+queued acceptance requirements, not completed fixes; existing release evidence below does not
+verify them.
+
 Build Mac and HC now run `17719ea`, including the empty-peer startup fix, message actions,
 and visiting-device history metadata. Personal verified all 104 runtime hashes, signing,
 13 tabs, three incoming pairings and existing account/data preservation. HC independently
