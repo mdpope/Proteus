@@ -3,6 +3,23 @@
 Maintain this as the single backlog. Design rationale is in `decisions.md`; recent changes are in
 `../CHANGELOG.md`. Items below are status, not promises of completed validation.
 
+## Queued: preserve generated Standup when links change — October 5
+
+Status: operator-reported desktop issue with a screenshot; not yet reproduced or fixed.
+
+- After generating and docking a selected list's daily Standup order, adding a Standup link
+  resets the docked panel to the empty “Generate for today” state. Undocking and redocking
+  does not restore the generated list; the operator currently has to regenerate it.
+- Adding or editing links must preserve the already-generated order and current presentation
+  state for the selected list and day. Docking, undocking and redocking must display that same
+  result, without reshuffling participants or requiring regeneration.
+- Investigate link-save refresh, shared-list revisions, daily-state invalidation and dock
+  remounting without assuming a root cause. Keep daily results scoped to their list and date;
+  link-only edits must not be treated as a request to regenerate the roster.
+- Acceptance: generate an order, dock it, add a link and verify the exact order remains visible;
+  undock/redock and switch away/back to Team Tools and verify the same result. Cover link edits
+  and removal too, while retaining explicit regeneration and list/day isolation.
+
 ## Queued iPad corrections — October 5
 
 Operator-reported follow-ups; queued only, not yet reproduced, implemented or verified.

@@ -33,6 +33,9 @@ This is a concise behavior log. Git commits and pull requests contain the comple
 
 ## Unreleased
 
+- Queue a desktop Standup state-preservation fix: adding a saved link must retain the generated
+  daily order through undocking/redocking. This is a reported issue, not an implemented fix.
+
 - Queue investigation of MCP configuration reporting Connected while the active chat reports
   needs-auth, including per-session state and consistent Mac/iOS recovery feedback.
 

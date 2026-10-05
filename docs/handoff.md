@@ -7,6 +7,12 @@ and manifests; this repository owns the generic app and provider adapters.
 
 ## Latest release state
 
+The latest remote parity-branch backlog updates have been merged, preserving the local queue.
+A desktop Standup issue is now queued: adding a saved link clears the generated docked daily
+order, and undocking/redocking does not recover it. Preserve daily presentation state across
+link-only edits and dock changes; see `planned-updates.md` for the report and acceptance steps.
+This is queued work, not an implemented fix.
+
 New iPad follow-ups are queued in `planned-updates.md`: selecting an existing shared team
 list reportedly opens a new-list form, and the global browser button must use desktop artwork
 and create a main top-level tab instead of a Team Tools subtab. These are user reports and
