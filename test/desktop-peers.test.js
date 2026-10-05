@@ -60,9 +60,61 @@ test('protected writes never fall back to plaintext after empty-store startup',a
 
 test('real peer index remains bounded and encrypted through offline restart',async t=>{
   const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-peers-bounded-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));fs.writeFileSync(path.join(home,'desktop-peers.enc'),safeStorage.encryptString(JSON.stringify([record])));
-  class Client extends EventTarget{constructor(host){super();this.host=host;}async connect(){this.status='online';}async request(){return Array.from({length:150},(_,i)=>({id:'synthetic-'+i,title:'Synthetic '+i,status:'completed'}));}close(){this.status='offline';}}
+  class Client extends EventTarget{constructor(host){super();this.host=host;}async connect(){this.status='online';}async request(method){if(method==='sync')return {state:{hostName:record.label,runs:[]}};return Array.from({length:150},(_,i)=>({id:'synthetic-'+i,title:'Synthetic '+i,status:'completed'}));}close(){this.status='offline';}}
   const peers=new DesktopPeers(home,{safeStorage,clientFactory:host=>new Client(host)});await peers.index();await peers.indexPending;assert.equal((await peers.index()).items.length,100);const stored=fs.readFileSync(peers.cacheFile);assert.ok(!stored.includes(Buffer.from('Synthetic')));peers.close();
   const restarted=new DesktopPeers(home,{safeStorage,clientFactory:host=>Object.assign(new Client(host),{connect:async()=>{throw new Error('Synthetic offline');}})});const initial=await restarted.index();assert.equal(initial.items.length,100);await restarted.indexPending;const result=await restarted.index();assert.equal(result.items.length,100);assert.equal(result.partial,true);assert.equal(result.hosts[0].online,false);restarted.close();
+});
+
+class NamingClient {
+  constructor(host){this.host=host;this.status='offline';this.listeners=new Map();this.name='Host-owned name';}
+  addEventListener(type,listener){this.listeners.set(type,listener);}
+  emit(type,detail){this.listeners.get(type)?.({detail});}
+  async connect(){this.status='online';}
+  async request(method){if(method==='sync')return {state:{hostName:this.name,runs:[]}};return [];}
+  close(){this.status='offline';}
+}
+function namingFixture(t){
+  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-peer-names-'));let client;
+  fs.writeFileSync(path.join(home,'desktop-peers.enc'),safeStorage.encryptString(JSON.stringify([record])));
+  fs.writeFileSync(path.join(home,'desktop-chat-index.enc'),safeStorage.encryptString(JSON.stringify({[record.hostId]:{items:[{id:'synthetic-chat',hostId:record.hostId,destinationName:record.label}],lastSyncAt:'2026-01-01T00:00:00Z'}})));
+  const peers=new DesktopPeers(home,{safeStorage,clientFactory:host=>client=new NamingClient(host)});
+  t.after(()=>{peers.close();fs.rmSync(home,{recursive:true,force:true});});return {home,peers,get client(){return client;}};
+}
+test('authenticated host names update labels without changing pairing identity and survive encrypted restart',async t=>{
+  const f=namingFixture(t),{peers}=f;peers.load();const identity={...peers.records.get(record.hostId)};delete identity.label;
+  await peers.connect(record.hostId);assert.equal(peers.list()[0].label,'Host-owned name');assert.equal(peers.cache.get(record.hostId).items[0].destinationName,'Host-owned name');
+  f.client.name='Renamed through sync';await peers.request(record.hostId,'sync');assert.equal(peers.list()[0].label,f.client.name);
+  f.client.emit('change',{event:'state',data:{hostName:'Renamed through state',runs:[]}});assert.equal(peers.list()[0].label,'Renamed through state');assert.equal(f.client.host.label,'Renamed through state');
+  const current={...peers.records.get(record.hostId)};delete current.label;assert.deepEqual(current,identity);assert.equal(peers.cache.get(record.hostId).items[0].destinationName,'Renamed through state');
+  assert.ok(!fs.readFileSync(peers.file).includes(Buffer.from('Renamed through state')));const restarted=new DesktopPeers(f.home,{safeStorage});assert.equal(restarted.list()[0].label,'Renamed through state');assert.equal(restarted.cache.get(record.hostId).items[0].destinationName,'Renamed through state');restarted.close();
+});
+test('invalid, offline and superseded sessions cannot rename a saved desktop',async t=>{
+  const f=namingFixture(t),{peers}=f;await peers.connect(record.hostId);const session=peers.sessions.get(record.hostId),original=fs.readFileSync(peers.file);
+  for(const name of [null,42,{},'', '   ','x'.repeat(81),'bad\u0000name','bad\nname','bad\u007fname']){f.client.emit('change',{event:'state',data:{hostName:name}});assert.equal(peers.list()[0].label,'Host-owned name');}
+  f.client.status='offline';f.client.emit('change',{event:'state',data:{hostName:'Offline spoof'}});assert.equal(peers.list()[0].label,'Host-owned name');f.client.status='online';
+  peers.sessions.set(record.hostId,{client:new NamingClient({}),unread:false});f.client.emit('change',{event:'state',data:{hostName:'Old session spoof'}});peers.adoptHostName(record.hostId,session,'Old direct spoof');assert.equal(peers.list()[0].label,'Host-owned name');assert.deepEqual(fs.readFileSync(peers.file),original);
+});
+test('late authenticated sync response cannot rename a replaced desktop session',async t=>{
+  const f=namingFixture(t),{peers}=f;await peers.connect(record.hostId);let resolve;f.client.request=()=>new Promise(r=>{resolve=r;});const pending=peers.request(record.hostId,'sync');
+  peers.sessions.set(record.hostId,{client:new NamingClient({}),unread:false});resolve({state:{hostName:'Late response spoof'}});await assert.rejects(pending,/connection changed/);assert.equal(peers.list()[0].label,'Host-owned name');
+});
+test('failed protected rename preserves old credentials and cache without escaping state listener',async t=>{
+  const f=namingFixture(t),{peers}=f;await peers.connect(record.hostId);const bytes=fs.readFileSync(peers.file),cached=structuredClone(peers.cache.get(record.hostId));peers.safeStorage={...safeStorage,encryptString:()=>{throw new Error('Synthetic encrypted write denied');}};
+  assert.doesNotThrow(()=>f.client.emit('change',{event:'state',data:{hostName:'Must not persist'}}));assert.equal(peers.list()[0].label,'Host-owned name');assert.equal(f.client.host.label,'Host-owned name');assert.deepEqual(peers.cache.get(record.hostId),cached);assert.deepEqual(fs.readFileSync(peers.file),bytes);
+});
+test('pending connection metadata is ignored after explicit disconnect or removal',async t=>{
+  for(const action of ['disconnect','remove'])await t.test(action,async t=>{
+    const f=namingFixture(t),{peers}=f;let resolve;
+    peers.clientFactory=host=>Object.assign(new NamingClient(host),{request:()=>new Promise(r=>{resolve=r;})});
+    const pending=peers.connect(record.hostId);await until(()=>!!resolve);peers[action](record.hostId);resolve({state:{hostName:'Late obsolete connection'}});await assert.rejects(pending,/connection changed/i);
+    const restarted=new DesktopPeers(f.home,{safeStorage});assert.deepEqual(restarted.list().map(item=>item.label),action==='remove'?[]:[record.label]);restarted.close();
+  });
+});
+
+test('pairing adopts the destination capsule name instead of a caller alias',async t=>{
+  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-peer-capsule-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+  const code=Buffer.from(JSON.stringify({version:1,hostId:record.hostId,relay:record.relay,key:record.key,label:'Destination-defined name',expiresAt:new Date(Date.now()+60000).toISOString()})).toString('base64url');
+  const peers=new DesktopPeers(home,{safeStorage,clientFactory:(host,options)=>({connect:()=>options.onCredential({...record,label:host.label}),close(){}})});await peers.pair(code,'Ignored client alias');assert.equal(peers.list()[0].label,'Destination-defined name');assert.equal(new DesktopPeers(home,{safeStorage}).list()[0].label,'Destination-defined name');
 });
 
 test('two desktops isolate catalogs, runs and authorization across encrypted restart and revocation',async t=>{const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-peers-')),token=secret(),relay=await startRelay({port:0,token}),url=`ws://127.0.0.1:${relay.port}`,apps=[];let peers=new DesktopPeers(path.join(home,'client'),{safeStorage});t.after(async()=>{peers.close();for(const app of apps)await app.close();await relay.close();fs.rmSync(home,{recursive:true,force:true});});

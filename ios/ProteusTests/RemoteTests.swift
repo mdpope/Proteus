@@ -352,25 +352,45 @@ final class LifeNativeTests:XCTestCase {
 
 
 extension DestinationTests {
-    @MainActor func testConnectedHostNameHydratesOnlyLegacyPlaceholderAndPreservesCustomNames() throws {
+    @MainActor func testAuthenticatedHostNamesRefreshSelectedAndBackgroundDestinationsWithoutChangingIdentity() throws {
         let (root, service) = try fixture(); let destinations = DestinationStore(root: root, keychainService: service)
         defer { destinations.resetForTesting(); try? FileManager.default.removeItem(at: root) }
-        let a=credential(UUID().uuidString), b=credential(UUID().uuidString)
-        try destinations.register(a,label:"My Mac");let first=try XCTUnwrap(destinations.selected)
-        destinations.hydrateHostLabel("Work Mac",for:a.hostId)
-        XCTAssertEqual(destinations.selectedLabel,"My Mac")
-        first.connected=true;destinations.hydrateHostLabel("Work Mac",for:a.hostId)
-        XCTAssertEqual(destinations.selectedLabel,"Work Mac")
-        destinations.hydrateHostLabel("Changed server name",for:a.hostId)
-        XCTAssertEqual(destinations.selectedLabel,"Work Mac")
-        try destinations.register(b,label:"Personal custom label");destinations.selected?.connected=true
-        destinations.hydrateHostLabel("Build Mac",for:b.hostId)
-        XCTAssertEqual(destinations.selectedLabel,"Personal custom label")
-        try destinations.rename(a.hostId,label:"My Mac");destinations.hydrateHostLabel("Wrong host",for:a.hostId)
-        XCTAssertEqual(destinations.destinations.first(where:{$0.id==a.hostId})?.label,"My Mac")
-        try destinations.select(a.hostId,connect:false);first.connected=true
-        destinations.hydrateHostLabel("Bad\nname",for:a.hostId)
-        XCTAssertEqual(destinations.selectedLabel,"My Mac")
+        let a = credential(UUID().uuidString), b = credential(UUID().uuidString)
+        try destinations.register(a, label: "Former custom name")
+        let first = try XCTUnwrap(destinations.selected)
+        first.setDraft("reply:retained", .string("Retained first draft"))
+        first.chats["retained"] = .object(["title": .string("Retained first chat")])
+        destinations.hydrateHostLabel("Untrusted offline name", for: a.hostId)
+        XCTAssertEqual(destinations.selectedLabel, "Former custom name")
+        first.connected = true; first.onHostName?("Alpha Mac")
+        XCTAssertEqual(destinations.selectedLabel, "Alpha Mac")
+        first.onHostName?("Alpha renamed")
+        XCTAssertEqual(destinations.selectedLabel, "Alpha renamed")
+        try destinations.register(b, label: "Another former custom name")
+        let second = try XCTUnwrap(destinations.selected)
+        second.connected = true; second.onHostName?("Beta Mac")
+        first.connected = true; first.onHostName?("Background Alpha")
+        XCTAssertEqual(destinations.selectedID, b.hostId)
+        XCTAssertTrue(destinations.selected === second)
+        XCTAssertEqual(destinations.selectedLabel, "Beta Mac")
+        XCTAssertEqual(destinations.destinations.first(where: { $0.id == a.hostId })?.label, "Background Alpha")
+        let before = try Data(contentsOf: destinations.indexURL)
+        for name in ["", "  ", "Bad\nname", String(repeating: "x", count: 81)] { first.onHostName?(name) }
+        destinations.hydrateHostLabel("Unknown host", for: UUID().uuidString)
+        first.connected = false; first.onHostName?("Offline spoof")
+        XCTAssertEqual(try Data(contentsOf: destinations.indexURL), before)
+        for (store, credential) in [(first, a), (second, b)] {
+            XCTAssertEqual(store.connection?.hostId, credential.hostId)
+            XCTAssertEqual(store.connection?.deviceId, credential.deviceId)
+            XCTAssertEqual(store.connection?.key, credential.key)
+            XCTAssertEqual(DeviceKeychain.load(hostID: credential.hostId, service: service)?.key, credential.key)
+        }
+        XCTAssertEqual(first.draft("reply:retained").string, "Retained first draft")
+        XCTAssertEqual(first.chats["retained"]?["title"].string, "Retained first chat")
+        let restored = DestinationStore(root: root, keychainService: service)
+        XCTAssertEqual(restored.selectedID, b.hostId)
+        XCTAssertEqual(restored.destinations.first(where: { $0.id == a.hostId })?.label, "Background Alpha")
+        XCTAssertEqual(restored.selectedLabel, "Beta Mac")
     }
 }
 
@@ -501,6 +521,13 @@ final class NativeParityTests: XCTestCase {
             return .object(["id": .string(String(index)), "name": .string("Person \(index)"), "mode": .string(mode)])
         }
         for _ in 0..<25 { let order = StandupView.shuffled(members); XCTAssertEqual(order[0], members[0]); XCTAssertEqual(order[4], members[4]); XCTAssertEqual(Set(order), Set(members)) }
+    }
+    @MainActor func testTimestampHonorsDeviceZoneSummerAndWinterOffsets() throws {
+        let summer = try XCTUnwrap(ProviderAllowance.date("2026-07-04T18:00:00Z"))
+        let winter = try XCTUnwrap(ProviderAllowance.date("2026-01-04T18:00:00Z"))
+        XCTAssertTrue(nativeTimestamp(summer, timezone: "America/Denver").contains("12:00"))
+        XCTAssertTrue(nativeTimestamp(winter, timezone: "America/Denver").contains("11:00"))
+        XCTAssertNotEqual(nativeTimestamp(summer, timezone: "America/Denver"), nativeTimestamp(summer, timezone: "UTC"))
     }
     @MainActor func testTimestampUsesConfiguredZoneAndPushBodyContainsNoSourceContent() throws {
         let date = try XCTUnwrap(ProviderAllowance.date("2026-10-04T18:00:00Z"))

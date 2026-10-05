@@ -372,13 +372,16 @@ private struct DestinationIndex: Codable {
         if connect && active { remote.activity(true) }
     }
     private func observeHostName(_ remote: RemoteStore, id: String) {
-        remote.onHostName = { [weak self] label in self?.hydrateHostLabel(label, for: id) }
+        remote.onHostName = { [weak self, weak remote] label in
+            guard let self, let remote, self.stores[id] === remote else { return }
+            self.hydrateHostLabel(label, for: id)
+        }
         observations[id] = remote.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
     }
     func hydrateHostLabel(_ label: String, for id: String) {
         let name = label.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard selectedID == id, stores[id]?.connected == true,
-              destinations.first(where: { $0.id == id })?.label == "My Mac",
+        guard let remote = stores[id], remote.connected, remote.connection?.hostId == id,
+              let destination = destinations.first(where: { $0.id == id }), destination.label != name,
               !name.isEmpty, name.count <= 80,
               !name.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) })
         else { return }

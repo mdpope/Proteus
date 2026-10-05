@@ -6,7 +6,14 @@ import SwiftUI
     @StateObject private var destinations = DestinationStore()
     @StateObject private var life = LifeStore()
     var body: some Scene {
-        WindowGroup { ProteusRoot().environmentObject(destinations).environmentObject(life).environmentObject(shared) }
+        WindowGroup {
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--synthetic-message-timezone") { MessageTimezoneFixture() }
+            else { ProteusRoot().environmentObject(destinations).environmentObject(life).environmentObject(shared) }
+            #else
+            ProteusRoot().environmentObject(destinations).environmentObject(life).environmentObject(shared)
+            #endif
+        }
     }
 }
 struct ProteusRoot: View {
@@ -29,7 +36,7 @@ struct ProteusRoot: View {
                     if ProcessInfo.processInfo.arguments.contains("--reset-pairing") { destinations.resetForTesting() }
                     if ProcessInfo.processInfo.arguments.contains("--synthetic-destinations") {
                         destinations.resetForTesting()
-                        for (id, label) in [("10000000-0000-4000-8000-000000000001", "Build Mac"), ("10000000-0000-4000-8000-000000000002", "Work Mac")] {
+                        for (id, label) in [("10000000-0000-4000-8000-000000000001", "Alpha Mac"), ("10000000-0000-4000-8000-000000000002", "Beta Mac")] {
                             try? destinations.register(DeviceConnection(relay: "ws://127.0.0.1:1", hostId: id, deviceId: UUID().uuidString, key: RemoteCrypto.random()), label: label)
                         }
                         try? destinations.select("10000000-0000-4000-8000-000000000001", connect: false)
@@ -145,7 +152,7 @@ struct PairView: View {
             }
             Section("Add a Mac") {
                 TextField("Mac name", text: $label).accessibilityIdentifier("destination-name")
-                Text("For example: Build Mac or Work Mac.").font(.caption).foregroundStyle(.secondary)
+                Text("This name updates from the Mac after it connects.").font(.caption).foregroundStyle(.secondary)
                 Button("Scan pairing QR code", systemImage: "qrcode.viewfinder") { scan = true }
                 TextField("Paste pairing link", text: $code, axis: .vertical).textInputAutocapitalization(.never).autocorrectionDisabled().accessibilityIdentifier("pairing-link")
                 Button("Pair Mac") { pair() }.disabled(code.isEmpty || label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty).accessibilityIdentifier("pair-mac")

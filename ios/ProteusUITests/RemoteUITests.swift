@@ -2,6 +2,18 @@ import XCTest
 
 final class RemoteUITests: XCTestCase {
     override func setUp() { super.setUp(); continueAfterFailure = false }
+    @MainActor func testMessageTimestampUsesDeviceZoneInsteadOfSharedUTCAndUpdates() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--synthetic-message-timezone", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        let timestamp = app.staticTexts["message-timestamp"]
+        XCTAssertTrue(timestamp.waitForExistence(timeout: 15))
+        expectation(for: NSPredicate(format: "label == %@", "Oct 4, 12:00 PM MDT"), evaluatedWith: timestamp)
+        waitForExpectations(timeout: 10)
+        app.buttons["Use Tokyo device timezone"].tap()
+        expectation(for: NSPredicate(format: "label == %@", "Oct 5, 3:00 AM GMT+9"), evaluatedWith: timestamp)
+        waitForExpectations(timeout: 10)
+    }
     @MainActor private func showChats(_ app: XCUIApplication) { XCTAssertTrue(app.buttons["destination-picker"].waitForExistence(timeout: 25)); if app.tabBars.buttons["Chats"].exists { app.tabBars.buttons["Chats"].tap() } else { app.buttons["Chats"].firstMatch.tap() } }
     @MainActor func testExpandableToolOutput() async throws {
         let (data, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/pair")!)
@@ -179,18 +191,18 @@ extension RemoteUITests {
     @MainActor func testMacDestinationPickerRenameAndIndependentForget() throws {
         let app = XCUIApplication(); app.launchArguments = ["--synthetic-destinations"]; app.launch()
         let picker = app.buttons["destination-picker"]
-        XCTAssertTrue(picker.waitForExistence(timeout: 20)); XCTAssertTrue(picker.label.contains("Build Mac"))
-        picker.tap(); app.buttons["Work Mac"].tap()
-        XCTAssertTrue(picker.label.contains("Work Mac"))
+        XCTAssertTrue(picker.waitForExistence(timeout: 20)); XCTAssertTrue(picker.label.contains("Alpha Mac"))
+        picker.tap(); app.buttons["Beta Mac"].tap()
+        XCTAssertTrue(picker.label.contains("Beta Mac"))
         picker.tap(); app.buttons["Manage Macs"].tap()
         let workID = "10000000-0000-4000-8000-000000000002"
         app.buttons["rename-" + workID].tap(); let field = app.alerts.textFields.firstMatch
         field.tap(); field.typeText(" 2"); let renamed = try XCTUnwrap(field.value as? String)
-        XCTAssertNotEqual(renamed, "Work Mac")
+        XCTAssertNotEqual(renamed, "Beta Mac")
         app.alerts.buttons["Save"].tap(); XCTAssertTrue(app.staticTexts[renamed].waitForExistence(timeout: 5))
         app.buttons["forget-" + workID].tap(); app.buttons["Forget Mac"].tap()
-        XCTAssertFalse(app.staticTexts[renamed].exists); XCTAssertTrue(app.staticTexts["Build Mac"].exists)
-        app.buttons["Done"].tap(); XCTAssertTrue(picker.label.contains("Build Mac"))
+        XCTAssertFalse(app.staticTexts[renamed].exists); XCTAssertTrue(app.staticTexts["Alpha Mac"].exists)
+        app.buttons["Done"].tap(); XCTAssertTrue(picker.label.contains("Alpha Mac"))
         let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Independent Mac destinations"; shot.lifetime = .keepAlways; add(shot)
     }
 }
@@ -218,7 +230,7 @@ extension RemoteUITests {
         replace("wss://relay.example.test"); app.buttons["save-relay"].tap()
         XCTAssertTrue(app.buttons["edit-relay-" + personal].waitForExistence(timeout: 5)); app.buttons["edit-relay-" + personal].tap()
         XCTAssertEqual(field.value as? String, "ws://127.0.0.1:1"); app.buttons["Cancel"].tap(); app.buttons["Done"].tap()
-        XCTAssertTrue(picker.label.contains("Build Mac"))
+        XCTAssertTrue(picker.label.contains("Alpha Mac"))
         app.terminate(); app.launchArguments = []; app.launch()
         XCTAssertTrue(picker.waitForExistence(timeout: 20)); picker.tap(); app.buttons["Manage Macs"].tap(); app.buttons["edit-relay-" + work].tap()
         XCTAssertEqual(field.value as? String, "wss://relay.example.test")
@@ -296,7 +308,7 @@ extension RemoteUITests {
         XCTAssertFalse(app.buttons["provider-usage-details"].exists)
         toggle.tap(); XCTAssertTrue(app.buttons["usage-codex"].exists)
         func area(_ name: String) { if app.tabBars.buttons[name].exists { app.tabBars.buttons[name].tap() } else { app.buttons[name].firstMatch.tap() } }
-        area("Chats"); XCTAssertTrue(app.staticTexts["New chats execute on Build Mac. Viewing another Mac’s history does not change that destination."].waitForExistence(timeout: 10))
+        area("Chats"); XCTAssertTrue(app.staticTexts["New chats execute on Alpha Mac. Viewing another Mac’s history does not change that destination."].waitForExistence(timeout: 10))
         if app.tabBars.firstMatch.exists { XCTAssertFalse(app.buttons["toggle-provider-usage"].exists) }
         area("Team"); XCTAssertTrue(app.buttons["Connect shared Team tools"].waitForExistence(timeout: 10))
         area("Engine Room"); XCTAssertTrue(app.buttons["Resources"].firstMatch.waitForExistence(timeout: 10))

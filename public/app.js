@@ -102,7 +102,7 @@ function renderUsage() {
     const reported=windows.filter(w=>Number.isFinite(w.remainingPercent) && !w.unlimited);
     const remaining=reported.length?Math.max(0,Math.min(100,...reported.map(w=>w.remainingPercent))):null;
     const label=remaining!==null?remaining.toLocaleString(undefined,{maximumFractionDigits:1})+'%':windows.length&&windows.every(w=>w.unlimited)?'Unlimited':'Unavailable';
-    return `<button class="provider-usage-row" data-usage-provider="${id}" aria-label="${name} usage details: ${label} remaining" title="${name}: ${label} remaining"><span>${name}${entry?.stale?' · stale':''}</span><span class="usage-pill">${remaining!==null?`<progress max="100" value="${remaining}" aria-label="${name} allowance remaining"></progress>`:''}<strong>${remaining!==null?label:label==='Unlimited'?'∞':'—'}</strong></span></button>`;
+    return `<button class="provider-usage-row" data-usage-provider="${id}" aria-label="${name} usage details: ${label} remaining" title="${name}: ${label} remaining${entry?.stale?' · Last known':''}"><span>${name}</span><span class="usage-pill">${remaining!==null?`<progress max="100" value="${remaining}" aria-label="${name} allowance remaining"></progress>`:''}<strong>${remaining!==null?label:label==='Unlimited'?'∞':'—'}</strong></span>${entry?.stale?'<small class="usage-stale">Last known</small>':''}</button>`;
   }).join('')+'</div>';
   $('#toggle-usage').onclick=()=>saveAppearance({providerUsageCollapsed:!collapsed}).catch(e=>toast(e.message));
   host.querySelectorAll('[data-usage-provider]').forEach(button=>button.onclick=()=>showUsageDetails(button.dataset.usageProvider));

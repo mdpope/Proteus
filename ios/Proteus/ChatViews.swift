@@ -190,7 +190,7 @@ struct ChatView: View {
 }
 struct MessageView: View {
     @EnvironmentObject var store: RemoteStore
-    @EnvironmentObject var shared: SharedAppStore
+    @Environment(\.timeZone) private var timeZone
     @State private var height: CGFloat = 0
     let role: String
     let text: String
@@ -200,7 +200,7 @@ struct MessageView: View {
     var onResize: () -> Void = {}
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack { Text(role.uppercased()).font(.caption2.weight(.bold)); Spacer(); if let date = ProviderAllowance.date(timestamp) { Text(nativeTimestamp(date, timezone: shared.snapshot["preferences"]["timezone"].string)).font(.caption2) } }.foregroundStyle(.secondary)
+            HStack { Text(role.uppercased()).font(.caption2.weight(.bold)); Spacer(); if let date = ProviderAllowance.date(timestamp) { Text(nativeTimestamp(date, timezone: timeZone.identifier)).font(.caption2).accessibilityIdentifier("message-timestamp") } }.foregroundStyle(.secondary)
             ZStack(alignment: .topLeading) {
                 if height == 0 { Text(text).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
                 MarkdownView(text: text, runID: runID, store: store, height: $height, onResize: onResize).frame(height: max(height, 1)).opacity(height > 0 ? 1 : 0)
@@ -214,6 +214,25 @@ func nativeTimestamp(_ date: Date, timezone: String = "") -> String {
     let formatter = DateFormatter(); formatter.dateFormat = "MMM d, h:mm a z"; formatter.timeZone = TimeZone(identifier: timezone) ?? .current
     return formatter.string(from: date)
 }
+
+#if DEBUG
+/// A rendered-message fixture verifies the environment dependency, including a timezone change.
+struct MessageTimezoneFixture: View {
+    @StateObject private var remote = RemoteStore(connection: nil, legacyCredentials: false)
+    @StateObject private var shared = SharedAppStore()
+    @State private var timezone = "America/Denver"
+    var body: some View {
+        VStack {
+            MessageView(role: "user", text: "Synthetic timezone message", runID: "timezone-fixture", timestamp: "2026-10-04T18:00:00Z")
+                .environmentObject(remote).environmentObject(shared)
+                .environment(\.timeZone, TimeZone(identifier: timezone)!)
+            Button("Use Tokyo device timezone") { timezone = "Asia/Tokyo" }
+        }.padding().onAppear {
+            shared.snapshot = .object(["preferences": .object(["timezone": .string("UTC")])])
+        }
+    }
+}
+#endif
 
 /// Persisted assistant events are complete messages. Streams, tools and reasoning never get actions.
 enum MessageActions {
