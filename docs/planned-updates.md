@@ -10,8 +10,9 @@ desktop/web/iOS. Active playback adds Pause/Resume, Stop and a text-position scr
 share one local-voice controller; native uses system speech. No provider execution or cloud voice
 fallback is introduced. See `chat-rendering.md` for controls and platform limitations; installation
 and deployment remain separate from implementation/test status. Build Mac, iPhone, iPad
-and website are updated; HC still runs the prior release while its real Safe Storage prompt
-blocks normal startup. See `release-validation.md` for exact receipts.
+and website are updated. HC core services recovered on the prior release; its new build
+including the empty-peer startup fix is prepared, with installation awaiting a fresh direct
+confirmation required by automatic approval review. See `release-validation.md` for receipts.
 
 HC packaging follow-up: evaluate a consistent signed identity to prevent per-build Safe Storage
 reauthorization. Preserve existing encrypted data and require a reviewed migration of trust;

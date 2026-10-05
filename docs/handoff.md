@@ -7,7 +7,7 @@ and manifests; this repository owns the generic app and provider adapters.
 
 ## Latest release state
 
-Build Mac now runs message-action follow-up `68a1226`: Copy and local Read Aloud, Pause/Resume,
+Build Mac now runs `a1fc629`, including the empty-peer startup fix and message actions: Copy and local Read Aloud, Pause/Resume,
 Stop and text-position seeking. All 104 runtime hashes, signing, 12 tabs, three pairings and
 existing account/data preservation passed. Website release `20261005T040049Z` is live with
 9,209 manifest files verified, unchanged schema/configuration/nutrition and all 14 endpoint
@@ -31,7 +31,9 @@ current password unlocks login Keychain, but the item permission prompt fails ev
 physical input. No password mismatch or remote-input cause was established. No Keychain item,
 password or ACL was changed. Stat-only checks found no Life session, outgoing peer or chat-index
 encrypted file; the new aggregate index was requesting protected storage and writing an empty
-cache unnecessarily. The narrow startup fix passes 251 Node tests and static checks; installation is pending. See `credentials.md`; app-only
+cache unnecessarily. The narrow startup fix passes 251 Node tests and static/package checks and is installed on
+Build Mac. HC has the exact build prepared; automatic approval review blocked replacement
+because its chat has an earlier direct wait instruction. A fresh user confirmation is pending. See `credentials.md`; app-only
 rollback is prepared but on hold because the current host is healthy.
 
 Disposable Mac tests now use a mock Keychain, isolated from real credentials; production launches

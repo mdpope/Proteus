@@ -293,3 +293,19 @@ A prior bundle-only rollback was reviewed and prepared but not performed because
 host recovered. Core data formats are compatible with `68463db`, but that older runtime drops
 newer workspace descriptors on restore; a fresh current profile/workspace backup is required
 if rollback is ever needed. Installation of the narrow startup fix is recorded below.
+
+
+Build Mac installed `a1fc629` at 04:29 UTC. All 104 runtime hashes and original signer/vendor
+requirements matched. Normal launch, relay and same-account Life/shared API are healthy.
+Twelve tabs/current selection, Team state, histories, three pairings/grants, settings and all
+run/schedule files were preserved; encrypted Life session bytes are unchanged. The installer
+verified regenerated native browser IDs before accepting restored workspace state. No UI
+navigation was performed. Full receipt and rollback:
+`/private/tmp/proteus-empty-peers-install-20261005T042938Z`.
+
+HC prepared the same exact commit and passed all 251 tests, ten focused tests, static checks
+and its isolated packaged smoke. Automatic approval review blocked app replacement because
+the HC chat retains an earlier direct instruction to wait and did not accept the coordinator's
+later authorization as lifting it. No process was stopped or app replaced. The fresh direct
+approval request identifies the prepared build and data-preserving normal restart; install
+acceptance remains pending.
