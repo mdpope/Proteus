@@ -369,3 +369,112 @@ Website source `4e75600` is tested/frozen and release `20261005T051822Z` is stag
 current release remains `20261005T040049Z`. Until activation, the existing API strips new optional
 visit fields, so in-flight device metadata retention is not claimed. Physical audible playback,
 recording coexistence, APNs delivery and cross-Mac outgoing pairing are still separate checks.
+
+
+## Website client corrections deployed — October 5, 05:41 UTC
+
+This receipt supersedes the staged website status above. Release `20261005T051822Z` is live;
+all 9,209 manifest files matched. Schema, runtime configuration and nutrition counts/hashes
+were unchanged. All 14 public endpoint checks passed, including authentication boundaries,
+login branding, protected environment-file denial and relay health. The previous release
+remains available for rollback; private receipts and recovery evidence remain outside Git.
+
+Fresh encrypted recovery was centrally registered without rotation. The original isolated
+restore passed nutrition, DDL and native-ledger checks, but its comparison with later live
+protected rows failed as live state drifted. The operator explicitly approved the narrow
+supplemental-verifier correction and deployment. That check verified all 18 protected tables
+against exact complete INSERT byte streams in the immutable captured SQL, including empty
+tables and `app_records`, and repeated capture-integrity, nutrition, DDL and native-ledger gates.
+It only read the existing isolated database: no new restore, production write or database deletion.
+The original failed receipt and isolated database remain retained. No stable live state is claimed.
+
+The release deploys unified account/browser destination lookup, authenticated host names,
+explicit connection states, desktop-style chat filters/main tabs and localized visiting-device
+history metadata. The authorized eight-member Standup list was verified in the live website UI.
+Default Mac, Chats/main-tab navigation and reload acceptance remain pending in the operator's
+actual authorized browser context.
+
+Laravel and relay Apache recorded no new events. Website Apache recorded one error during the
+audit; classification is pending, so it is not yet asserted to be the intentional `.env` denial.
+PHP/MariaDB/push journal activity also remains to be classified. Endpoint success alone does
+not establish a clean log review. Existing MariaDB system-table maintenance remains separate.
+
+Both physical native clients remain on `1101c3c`, with saved Mac labels subsequently refreshed
+from authenticated host metadata. Both Macs remain on `17719ea`. Cross-Mac pairing is now in
+progress after HC coordination returned; completion is not claimed. Physical shared-Team consent,
+audible playback/recording coexistence and APNs delivery remain separate acceptance checks.
+
+
+## Engine Room navigation follow-up — predeployment validation
+
+Live acceptance reported Connections returning to Resources. A synthetic delayed-response
+browser test reproduced a concrete early-click error: tab rendering accessed preferences before
+shared app data arrived. Button changes also left the previous `?tab` URL unchanged, so reload
+restored the old section. Source now waits for state, preserves selected tabs in the URL, handles
+Back/Forward, and rejects stale Connections results while closing their temporary stores.
+
+All six focused browser groups and the existing 21-group Laravel shell suite pass; local assets
+build successfully. At this checkpoint the changes were not yet deployed. They establish the early-click and
+reload fixes, not proof that every observed live navigation symptom has the same cause. Repeat
+Default Mac/Connections/Chats navigation acceptance in the operator's browser after deployment.
+
+
+## Pairing, staging and log-classification checkpoint — October 5
+
+Personal → HC is paired, saved and observed online as `workstation.example.test`. Its encrypted peer file is
+275 bytes and index cache 4,115 bytes; the desktop Chats count increased from five to fifteen.
+No private chat titles or roster names are included in this record. The operator approved both
+final pairing clicks. HC → Personal nevertheless remains blocked by Keychain access; there is
+no bidirectional-success claim.
+
+HC still runs the ad-hoc-signed `17719ea` installation. An exact-runtime artifact signed with a
+valid Apple Development identity was prepared and transferred through the authorized private
+GitHub draft route. Guarded installation is waiting for the active HC job to finish naturally;
+no interruption or completed install is claimed. Keychain credentials and access rules are unchanged.
+
+Navigation fix `7975f77` is committed locally only. Local release `20261005T060541Z` contains
+9,209 verified manifest files and unchanged migrations, but has not been deployed. Website
+`20261005T051822Z` and its verified recovery remain unchanged. Build Mac is locked, and SSH
+staging is blocked because the accepted key cannot be unlocked locally (Keychain retrieval and
+an empty agent). No authentication configuration changed. The existing signed-in in-app admin
+session remains valid; the reviewed File Manager upload can proceed after the Mac is unlocked.
+
+Classification for the 05:39–05:41 UTC live audit window now establishes the sole Apache error
+as the expected protected `.env` 403 denial. PHP file events: 17 lifecycle entries and one other;
+PHP journal: 15 lifecycle entries. MariaDB: 664 entries, including 332 known histogram-definition
+failures and 332 other entries containing failure words whose exact system-table template is
+still pending classification. Push journal: nine other entries. Laravel recorded no application
+errors. These findings do not establish that all server logs are clean; existing MariaDB
+system-table maintenance remains a separate issue.
+
+
+## Final website activation and live Chats — October 5, 06:40 UTC
+
+Release `20261005T060541Z`, containing navigation fix `7975f77`, is now live. The signed-in
+in-app File Manager supplied the archive after local SSH key unlock failed; no authentication
+configuration changed. The hash-guarded updater and approved supplemental recovery gate passed.
+Its completed receipt verifies all 9,209 manifest files, preserved runtime configuration,
+unchanged schema and unchanged nutrition counts/hashes. Previous release `051822` and recovery
+`050326` remain retained. This supersedes the preceding local-staging status.
+
+Live Chats acceptance verified All Macs with both authorized hosts and authenticated Mac names,
+records and the Search/Mac/Provider/Status/Workspace/Schedule/date filters. No inner chat navigation
+remains; New Chat is in the main shell. The eight-member Team list was verified earlier. No
+professional chat titles or private roster names are recorded here.
+
+Default Mac preference acceptance remains incomplete: several UI clicks timed out, no JavaScript
+errors appeared, and reload still showed Choose explicitly. The save is not claimed successful.
+This is a pending preference action, not evidence that paired Macs cannot connect. Build Mac
+remains locked awaiting operator unlock. Cross-Mac reverse pairing and physical consent checks
+retain their separate earlier limits.
+
+The 06:40:25 UTC audit, starting at 06:38, passed all 14 endpoints. Laravel had zero bytes/events;
+relay Apache had zero events. Website Apache recorded one event/221 new bytes during the expected
+protected `.env` probe, but this new window's classification remains pending. PHP recorded 18
+other file events and 15 reload journal events; MariaDB recorded 7,145 priority-six events, with
+new bounded classification pending; push recorded nine events. No all-clean log claim is made.
+
+The earlier 05:39–05:41 window is now fully classified: all 664 MariaDB entries are the existing
+`mysql.column_stats` incorrect-definition issue, split evenly between 332 `histogram_type` and
+332 `histogram` messages, with no other messages in that window. Its sole Apache error was the
+expected `.env` denial. This earlier classification is not substituted for the new audit window.

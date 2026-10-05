@@ -9,9 +9,17 @@ Implemented in the current source: three-column desktop allowance; host-owned na
 from authenticated connections; website account/browser destination lookup and explicit connection
 states; desktop-style website chat filters/main tabs; native device-zone chat timestamps;
 same-tab native browsing/navigation controls and localized visit/device history with pagination.
-Both desktops and physical iPhone/iPad are updated. Website corrections are staged; its prior
-release remains live pending recovery verification. Desktop-to-desktop pairing and physical
-shared-account acceptance remain separate; see release-validation.md.
+Both desktops and physical iPhone/iPad are updated. Website release `20261005T060541Z`, including
+navigation fix `7975f77`, is deployed: 9,209 files and 14 public endpoints verified, with schema,
+runtime configuration and nutrition unchanged. Live All Macs Chats, all filters, main New Chat,
+absence of inner chat navigation and the authorized eight-member Standup list are verified.
+Default Mac preference persistence remains pending after timed-out UI actions; this is not a
+host-connectivity failure. Build Mac is locked awaiting unlock. The earlier MariaDB audit
+window is fully classified as the known system-table mismatch; the final window remains to be
+classified. Personal → HC pairing is saved and online; HC → Personal remains Keychain blocked.
+The latest HC installation checkpoint still awaits its active job's natural completion before
+using the prepared exact-runtime Apple Development-signed artifact. Physical shared-account
+acceptance remains separate. See `release-validation.md`.
 There are no product-specific personal/work Mac categories. Any paired host can be selected by
 its stable host ID; its display name is configured on that desktop.
 
@@ -50,7 +58,8 @@ installed and visually verified on Build Mac: top-aligned search, bounded long l
 25-entry **More** pagination. Shared app consent is verified there. Both iPhone and iPad are
 updated over Wi-Fi with data and both destinations preserved; iPad shared-account sign-in needs
 its on-device system flow. HC has the update installed and state preserved, with normal
-startup, relay and provider checks passing. Desktop-to-desktop authorization is still pending.
+startup, relay and provider checks passing. Personal → HC authorization is saved and online;
+HC → Personal remains blocked by Keychain access. Bidirectional completion is not claimed.
 The current release does not add per-session short-lived host grants, merge browser/native pairing
 keys, or implement multi-provider work. Those security protocol improvements remain open.
 

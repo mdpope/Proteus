@@ -11,8 +11,13 @@ Build Mac and HC now run `17719ea`, including the empty-peer startup fix, messag
 and visiting-device history metadata. Personal verified all 104 runtime hashes, signing,
 13 tabs, three incoming pairings and existing account/data preservation. HC independently
 verified 104 hashes, three tabs, three incoming pairings, five disabled schedules and nine local
-chats; its relay and all three providers are healthy, with no startup Keychain prompt. HC has
-no outgoing desktop peers. Cross-Mac pairing setup remains pending. Read `release-validation.md`
+chats; its relay and all three providers are healthy, with no startup Keychain prompt at that
+preflight. Personal → HC is now paired and saved; the desktop shows `workstation.example.test` online and
+its Chats count increased from five to fifteen. HC → Personal remains blocked by Keychain
+access. The operator approved both final pairing clicks, but that does not establish completion
+in the blocked direction. A valid Apple Development-signed artifact of exact runtime `17719ea`
+was prepared and privately transferred; HC still runs the ad-hoc-signed installation and awaits
+natural completion of its active job before a guarded update. Read `release-validation.md`
 for receipts and `chat-rendering.md` for speech behavior.
 
 Both physical iPhone (05:20 UTC) and iPad (05:21 UTC) now run the native build from `1101c3c`,
@@ -21,17 +26,34 @@ resources verified. The update includes device-local chat timestamps, authentica
 refresh, localized history with visiting-device metadata, and the native browser tab/toolbar
 improvements. Four app-data files and preferences stayed byte-identical before launch on each
 device; both destination identities and selection survived, and launch/process checks passed.
+Both physical clients subsequently refreshed saved Mac names from authenticated host metadata.
 At 05:22 UTC, Personal's API observed both phone and iPad online; the closed website client was
 offline. Physical iPad shared-Team account consent remains unverified. The operator already
 authorized the normal same-account consent flow at Proteus → Team → Connect shared Team tools;
 installation and relay connectivity do not establish that acceptance.
 
-Website release `20261005T040049Z` remains live. Source `4e75600` is tested/frozen and release
-`20261005T051822Z` is staged, not activated. Its optional visit metadata API fields therefore
-remain pending deployment; the current API accepts the existing history payload and strips
-unknown optional fields. Do not claim new device metadata was retained from in-flight uploads.
-Personal shared scopes and same-account endpoints are healthy; its legacy roster was empty.
-HC's authorized Standup import of eight members was verified; private names stay outside Git.
+Website release `20261005T060541Z` is now live, including navigation fix `7975f77`. All 9,209
+manifest files matched; schema, runtime configuration and nutrition counts/hashes are unchanged.
+The 06:40 UTC audit passed all 14 endpoints. Activation used the existing authenticated in-app
+File Manager upload and guarded updater with the approved supplemental recovery gate; SSH key
+unlock remained unavailable locally, and no authentication settings changed. The verified
+`050326` recovery and previous `051822` code release remain retained. Supplemental verification
+matched all 18 protected tables to exact captured SQL without production writes or a live-state
+stability claim. Private receipts remain in the deployment workspace.
+
+Live Chats now verifies All Macs with both authorized hosts, authenticated names and records,
+all search/destination/provider/status/workspace/schedule/date filters, no inner chat navigation,
+and the main New Chat control. The eight-member Standup list was also verified; private names
+stay outside Git. Default Mac selection has not persisted: timed-out UI clicks left Choose
+explicitly after reload, with no JavaScript errors. This is pending preference acceptance, not
+evidence that either Mac is offline. Build Mac remains locked awaiting operator unlock.
+
+The earlier 05:39–05:41 UTC MariaDB window is fully classified: all 664 entries concern the
+known `mysql.column_stats` histogram-definition mismatch. The new 06:38–06:40 window needs its
+own classification, including 7,145 MariaDB entries and one Apache error during the expected
+`.env` probe. Laravel remained empty. No all-clean server-log claim is made. Personal shared
+scopes and same-account endpoints are healthy; its legacy roster was empty. Historical uploads
+before visit-metadata activation are not claimed to have retained those optional fields.
 
 The HC startup fix avoids unnecessary protected-storage access when no encrypted outgoing
 state exists. The underlying Keychain item authorization/ACL problem was never modified or
