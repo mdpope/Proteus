@@ -7,34 +7,37 @@ and manifests; this repository owns the generic app and provider adapters.
 
 ## Latest release state
 
-Build Mac now runs `a1fc629`, including the empty-peer startup fix and message actions: Copy and local Read Aloud, Pause/Resume,
-Stop and text-position seeking. All 104 runtime hashes, signing, 12 tabs, three pairings and
-existing account/data preservation passed. Website release `20261005T040049Z` is live with
-9,209 manifest files verified, unchanged schema/configuration/nutrition and all 14 endpoint
-checks passing. Browser-home improvements from `8e3ab51` remain included. Read
-`release-validation.md` for current receipts and `chat-rendering.md` for speech behavior.
+Build Mac and HC now run `17719ea`, including the empty-peer startup fix, message actions,
+and visiting-device history metadata. Personal verified all 104 runtime hashes, signing,
+13 tabs, three incoming pairings and existing account/data preservation. HC independently
+verified 104 hashes, three tabs, three incoming pairings, five disabled schedules and nine local
+chats; its relay and all three providers are healthy, with no startup Keychain prompt. HC has
+no outgoing desktop peers. Cross-Mac pairing setup remains pending. Read `release-validation.md`
+for receipts and `chat-rendering.md` for speech behavior.
 
-Both physical iPhone (04:06 UTC) and iPad (04:03 UTC) now have the message-action update,
-installed in place over Wi-Fi with the original signer and
-all 25 build inputs verified. Data/preferences, both Mac destinations and selection survived;
-launch/process checks passed. The operator explicitly authorized iPad account connection, but
-its device-local system sign-in requires interaction on the iPad. The pending handoff is
-Proteus → Team → Connect shared Team tools; no new approval is needed for normal same-account
-consent. Do not claim mobile shared-account acceptance from installation alone.
+Both physical iPhone (05:20 UTC) and iPad (05:21 UTC) now run the native build from `1101c3c`,
+installed in place with the original signer/team/profile, all 25 native inputs and six Markdown
+resources verified. The update includes device-local chat timestamps, authenticated Mac-name
+refresh, localized history with visiting-device metadata, and the native browser tab/toolbar
+improvements. Four app-data files and preferences stayed byte-identical before launch on each
+device; both destination identities and selection survived, and launch/process checks passed.
+At 05:22 UTC, Personal's API observed both phone and iPad online; the closed website client was
+offline. Physical iPad shared-Team account consent remains unverified. The operator already
+authorized the normal same-account consent flow at Proteus → Team → Connect shared Team tools;
+installation and relay connectivity do not establish that acceptance.
 
-Build Mac shared scopes are authorized; live shared endpoints return success for the same
-Life account. Its legacy roster was empty, so no import was made. HC now has `8e3ab51` installed
-with exact 103-file parity and unchanged two tabs, three pairings, settings and five disabled
-schedules. Its API has now resumed: relay online, all three providers available, no active work, with
-settings and five disabled schedules unchanged. Life is disabled. The operator confirmed the
-current password unlocks login Keychain, but the item permission prompt fails even with local
-physical input. No password mismatch or remote-input cause was established. No Keychain item,
-password or ACL was changed. Stat-only checks found no Life session, outgoing peer or chat-index
-encrypted file; the new aggregate index was requesting protected storage and writing an empty
-cache unnecessarily. The narrow startup fix passes 251 Node tests and static/package checks and is installed on
-Build Mac. HC has the exact build prepared; automatic approval review blocked replacement
-because its chat has an earlier direct wait instruction. A fresh user confirmation is pending. See `credentials.md`; app-only
-rollback is prepared but on hold because the current host is healthy.
+Website release `20261005T040049Z` remains live. Source `4e75600` is tested/frozen and release
+`20261005T051822Z` is staged, not activated. Its optional visit metadata API fields therefore
+remain pending deployment; the current API accepts the existing history payload and strips
+unknown optional fields. Do not claim new device metadata was retained from in-flight uploads.
+Personal shared scopes and same-account endpoints are healthy; its legacy roster was empty.
+HC's authorized Standup import of eight members was verified; private names stay outside Git.
+
+The HC startup fix avoids unnecessary protected-storage access when no encrypted outgoing
+state exists. The underlying Keychain item authorization/ACL problem was never modified or
+proven repaired: the password unlocked login Keychain, but item authorization previously failed
+even with physical input. No Keychain item, password or access rule was changed. App-only
+rollback was prepared but not performed after recovery. See `credentials.md` for the boundary.
 
 Disposable Mac tests now use a mock Keychain, isolated from real credentials; production launches
 do not. Website account-persistent Mac enrollment still needs the recorded trust/custody review.

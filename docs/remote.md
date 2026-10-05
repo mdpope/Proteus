@@ -147,7 +147,8 @@ and compatible Xcode. Proteus's QR pairing is separate from Xcode's device-insta
 ## Desktop-to-desktop destinations
 
 A Proteus Mac can also be a client of separately paired Macs. In **Remote access → Other desktop
-Macs**, paste a fresh one-time code generated on the destination and give it a recognizable name.
+Macs**, paste a fresh one-time code generated on the destination. Its name comes from that desktop’s
+**Connections → Mac name** setting and refreshes from authenticated host state.
 This is a new device pairing; sharing a relay, an Apple account, or an existing website pairing
 never grants access. Host registration and incoming paired devices remain separate settings.
 
@@ -172,7 +173,7 @@ Proteus tab with its destination in the title and composer; followups, queue/ste
 approvals, user-input replies, cancel and earlier history use the same encrypted host commands as
 other clients. Remote tab descriptors restore after restart; reconnecting reads the existing run
 and never resubmits a prompt. Unsent remote drafts and downloaded conversation snapshots are not
-persisted across application restarts. The sidebar's AI allowance still describes This Mac.
+persisted across application restarts. The sidebar’s AI allowance describes This Mac in three compact provider columns.
 
 `src/desktop-peers.js` owns the desktop client. `desktop-peers.enc` under the app data directory
 contains only OS-encrypted pairing records with owner-only permissions and atomic replacement.

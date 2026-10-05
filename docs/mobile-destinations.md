@@ -2,14 +2,14 @@
 
 Proteus on iPhone and iPad can keep multiple independent Mac pairings. The destination menu above
 all host pages names the selected Mac and shows its current connection status. Add each Mac using
-its own one-time link or QR code from Proteus **Remote access**; give it a recognizable label such
-as **Build Mac** or **Work Mac**. The Macs may share `wss://relay.proteus.example`, while
+its own one-time link or QR code from Proteus **Remote access**; the desktop supplies its name from **Connections → Mac name**. The Macs may share `wss://relay.proteus.example`, while
 retaining separate host IDs, device authorizations and encryption keys. The phone does not need
 provider credentials.
 
 **Manage Macs** offers selection, rename, **Edit relay**, and independent forgetting. A saved Mac that is not
 selected is not continuously polled; its row shows saved/offline status rather than claiming
-current reachability. Renaming changes only this device's label. Forgetting removes that Mac's
+current reachability. The next authenticated state refresh adopts the desktop’s current name; client labels do not
+change host identity or authorization. Forgetting removes that Mac's
 local Keychain entry, encrypted history and drafts. It does not delete server records or revoke
 another device. Revoke the phone from the relevant Mac to remove its server-side authorization.
 
@@ -39,7 +39,8 @@ not evidence that the pairing was lost.
 
 Each destination owns a fixed `RemoteStore` instance. Its WebSocket connection, session counters,
 cursor, command continuations, provider catalog, chats, context, schedules and drafts never move
-between host objects. Only the selected destination stays connected in the foreground. Switching
+between host objects. Foreground aggregate chat refresh can connect every authorized destination; each keeps its own
+connection and state. Switching
 recreates host-bound navigation and sheets, disconnects the previous client and cancels its local
 unconfirmed command retries. A late task still refers to the old client and cannot transmit to
 the newly selected Mac. Work already accepted on the Mac continues there. When an action was
@@ -119,11 +120,11 @@ Macs scopes chats, schedules, context, cached drafts, and provider allowances to
 destination. Life signs directly into the website and works independently of whether either
 Mac is awake; it does not use or duplicate a Mac's database credentials.
 
-A connected Mac can hydrate the legacy exact placeholder **My Mac** from its authenticated
-state's host name. This applies only to the selected, connected destination. Existing custom
-names are never overwritten, including a name already hydrated once. A legacy Example Organization
-pairing can therefore pick up **Work Mac** while the Build Mac pairing, keys,
-history, and drafts remain independent.
+Every valid authenticated connection/state refresh adopts the host-owned advertised name for
+the exact matching saved host ID. This also applies to a background destination connected for
+aggregate chat refresh; it is independent of which destination is selected. A previous client
+label can change, but destination IDs, keys, cached history, drafts and selection stay intact.
+An unauthenticated, mismatched or stale replaced store cannot rename another destination.
 
 The compact AI usage strip shows green percentage capsules for Copilot, Codex, and Claude.
 Hide/collapse defaults come from the selected Mac's appearance settings. **Details** shows
@@ -154,3 +155,19 @@ chat rendering measures its first layout directly, keeping later resize updates 
 The final iPhone conversation regression passed pairing/start/reply and rich Markdown/code
 rendering after the initial-height correction. The universal device build was signed with the
 existing team/profile; installation and physical sign-in are recorded separately by deployment.
+
+### Current physical status — October 5, 05:22 UTC
+
+Both iPhone and iPad received native source `1101c3c` in place, retaining the original signer,
+team and provisioning profile. All 25 native inputs and six Markdown resources matched the
+reviewed commit. Each device's four app-data files and preferences were byte-identical across
+installation before launch; both saved destination IDs and selection survived launch, and
+running processes were independently confirmed. Personal's subsequent API observed both mobile
+clients online. This verifies the existing pairings, not new cross-Mac outgoing peer setup.
+
+The focused ten-test destination suite covers authenticated host-owned label refresh on selected
+and background connections, including unchanged identity/state and rejection of mismatched or
+stale stores. Device-timezone chat tests cover summer/winter and a shared UTC setting that cannot
+override the current device timezone. See `release-validation.md` for simulator results and the
+physical receipts. Physical iPad shared-Team account consent is still unverified; installation
+and relay connectivity alone do not establish website-account authorization.

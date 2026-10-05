@@ -309,3 +309,63 @@ the HC chat retains an earlier direct instruction to wait and did not accept the
 later authorization as lifting it. No process was stopped or app replaced. The fresh direct
 approval request identifies the prepared build and data-preserving normal restart; install
 acceptance remains pending.
+
+## Current desktop and native acceptance — October 5, 05:22 UTC
+
+This entry supersedes the earlier pending HC installation and older native build status above.
+Build Mac installed `17719ea`: all 104 runtime hashes and signing verified; 13 tabs, three
+incoming pairings and existing account/data retained. Receipt and rollback:
+`/private/tmp/proteus-visit-metadata-install-20261005T050835Z/receipt.json`.
+The HC coordination chat independently confirmed `17719ea`, 104 runtime hashes, three tabs,
+three incoming pairings, five disabled schedules and nine local chats. Relay and all three
+providers are healthy; no startup Keychain prompt occurred. No outgoing desktop peers exist.
+The underlying item ACL/authorization rejection is not proven repaired, and no Keychain item,
+password or ACL was modified. Cross-Mac pairing setup remains pending. The authorized HC
+Standup import of eight members was verified earlier; no actual member names are recorded here.
+
+Native source `1101c3c831d4effd0503f3f5ae451cc1f7dab278` was installed in place on iPhone at
+05:20 UTC and iPad at 05:21 UTC. Both guarded installers verified 25 native inputs, six Markdown
+resources, the full bundle manifest, original signer/team/profile and fresh unlock state before
+backup and immediately before installation. Each device's four retained app-data files and
+preferences were byte-identical before launch. Both destination IDs and selected destination
+survived launch; running processes were independently confirmed. Neither app was uninstalled.
+
+- Universal build receipt: `/private/tmp/proteus-client-browser-native-release-20261005/build-receipt.json`.
+- iPhone receipt: `/private/tmp/proteus-iphone-client-browser-update-20261005T052037Z/receipt.json`.
+- iPad receipt: `/private/tmp/proteus-ipad-client-browser-update-20261005T052106Z/receipt.json`.
+
+The build preserves the existing profile, expiring October 10 at 23:29:01 UTC, without APNs
+entitlement. It adds device-timezone chat rendering, authenticated host-name refresh for exact
+matching selected/background destinations, localized visit timestamps and visiting-device
+metadata, 25-row native history pagination, and same-tab browser navigation with observed
+back/forward/loading state. The only added local preference is `browserHistoryDeviceId`, a random
+installation UUID created lazily when an authorized safe visit is recorded; it is not a hardware
+identifier and is not based on the selected Mac.
+
+Focused simulator evidence uses synthetic records and local HTTP pages on iOS 26.5/Xcode 26.6:
+
+- iPhone timestamp/destination verification: 19 unit and four UI tests passed (`proteus-apple-TnCBXv`).
+- iPad: ten destination tests, one timestamp unit test and the rendered timezone UI regression
+  passed (`proteus-apple-p2Kcmc`). Summer/winter formatting and a shared UTC preference unable to
+  override the device timezone are covered.
+- History: two unit tests and one UI test passed on each device (`proteus-apple-kpiaFZ` iPhone,
+  `proteus-apple-YMJ3Lo` iPad), including device identity, old records, timezone changes and More.
+- iPhone: all 12 native parity unit tests and three relevant UI tests passed
+  (`proteus-apple-r4bgtS`). iPad's browser unit plus browser/history UI tests passed
+  (`proteus-apple-zeFIbA`). The real WebKit tests keep the tab ID/count and view identity while
+  navigating, exercise back/forward/refresh, and verify unload invalidates stale observers.
+- Final browser UI regression passed after the last styling changes on both devices
+  (`proteus-apple-Pb8exT` iPhone, `proteus-apple-pehJvU` iPad). The final iPad screenshot was
+  visually reviewed for selected underlines, dividers, + Browser and the grouped toolbar.
+
+Result bundles reside under `/var/folders/h8/p0_ht00j4wz3gbnr_s2nrf940000gn/T/`, in each named
+directory's `Tests.xcresult`. Final iPad screenshot:
+`/private/tmp/proteus-ipad-final-browser-attachments/1de0c170-36c0-54da-841d-e1d2bcdae254.png`.
+Source whitespace checks passed. These simulator checks are distinct from physical UI acceptance.
+
+Personal's fresh API at 05:22 UTC observed both physical mobile clients online; the closed web
+client was offline. Actual shared-Team account consent on the physical iPad remains unverified.
+Website source `4e75600` is tested/frozen and release `20261005T051822Z` is staged, not live;
+current release remains `20261005T040049Z`. Until activation, the existing API strips new optional
+visit fields, so in-flight device metadata retention is not claimed. Physical audible playback,
+recording coexistence, APNs delivery and cross-Mac outgoing pairing are still separate checks.

@@ -2,6 +2,16 @@
 
 These decisions describe implemented behavior. Proposed work belongs in `planned-updates.md`.
 
+- **Host identity and display names.** A stable host UUID owns credentials, chat identity and
+  execution routing. Each desktop supplies its configured display name through authenticated
+  state. Clients refresh that name without re-pairing; labels never select an authorization or
+  imply a special personal/work category. Failed metadata persistence preserves existing keys.
+- **One website destination lookup.** Account-backed records take precedence over browser-only
+  legacy pairings. All sections share that lookup; absence of a default or credential is not
+  evidence of an offline Mac. This does not migrate nonextractable keys or widen account trust.
+- **Native device-zone chats.** Mobile chat timestamps follow the viewing device’s time zone,
+  including DST and live zone changes. Shared account defaults cannot force UTC on native chats.
+
 - **Mac execution with remote clients.** Provider credentials, tools and browser sessions remain
   on the Mac. iOS sends authenticated encrypted commands through an opaque relay. This preserves
   access to local workspaces and avoids replicating execution environments on mobile devices.

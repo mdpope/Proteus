@@ -127,6 +127,38 @@ agent history exclusion; persisted removal on tab close; long-press/right-click 
 and forward selection, short-click behavior, and rejection of stale menu selections. Thirteen groups passed. No production browsing data or
 installed app was used. Screenshot: `/private/tmp/proteus-browser-history-restored.png`.
 
+## Native iPhone and iPad browser
+
+The native Team browser keeps a stable ID and one cached `WKWebView` for each loaded tab.
+Submitting the address/search field with **Go** navigates the selected tab, including a blank
+new tab; it does not create a second tab. **+ Browser** explicitly opens a new blank tab.
+On iPad it is available in the main tab bar as well as the browser strip; Team's other sections
+also offer the action. Tab dividers and an active underline identify the current selection.
+The compact iPhone layout retains the same browser controls in its Team view.
+
+Back, Forward, Refresh/Stop, address/search and Go share one toolbar. WebKit's URL, title,
+loading state and back/forward availability update the controls and descriptor through observed
+state. Editing the address does not recreate the view or discard its in-memory navigation
+history. Unloading invalidates observers and releases the view; reloading retains the descriptor
+and tab ID, then opens the saved URL in a fresh view. Native back/forward history is not persisted
+across unloading or app restart. Each browser view uses a nonpersistent WebKit data store.
+
+Shared history rows show a localized date and time in the viewing device's current timezone,
+plus the visiting device name. Old records fall back from `visitedAt` to `createdAt` and display
+**Unknown device** when metadata is absent. The list begins with 25 records and offers **More
+history** below them. New native visits keep `source: mobile`, record an ISO timestamp, a random
+installation UUID stored in the local `browserHistoryDeviceId` preference, and the native device
+name bounded to 100 characters (model fallback). They are never attributed to the selected
+remote Mac. Existing account authorization and sensitive-URL filtering still apply.
+
+Synthetic real-WebKit unit/UI tests passed on iPhone 17 Pro and iPad Pro 13-inch (M5), covering
+same-tab Go, back/forward/reload, tab identity and selection, stale-observer invalidation after
+unload, localized metadata and 25-row pagination. The final iPad layout was visually reviewed.
+The build from `1101c3c` was installed in place on both physical devices on October 5; data,
+preferences and destinations were preserved. Physical iPad shared-Team consent remains
+unverified, and new optional history fields await activation of the staged website API release.
+See `release-validation.md` for receipts and the distinction between simulator and device checks.
+
 ## Search, history and Team Tools — October 4
 
 New tabs show a search/URL entry, explicit DuckDuckGo/Google/Bing choices, saved account links,

@@ -1,5 +1,21 @@
 # Changes
 
+## Connection and presentation follow-up
+
+- Show desktop AI Allowance as three compact provider columns, retaining details and independent
+  hidden/collapsed preferences.
+- Use each authenticated Mac’s configured name across desktop, website and mobile destinations;
+  preserve host IDs and pairing credentials through renames.
+- Let all website sections use existing account or browser pairings, and distinguish no selected
+  destination from an offline connection.
+- Match website Chats to the desktop filterable list and main tab bar, with the shared New Chat
+  toolbar action.
+- Display iPhone/iPad chat timestamps in the device time zone, including daylight saving changes.
+- Keep iPad address/search navigation in the current browser tab, with Back, Forward, Reload,
+  a grouped address toolbar, + Browser actions, tab dividers and active underlines.
+- Show browsing visits with device-local date/time and their recorded source device; preserve
+  unknown provenance on older entries and paginate history in groups of 25.
+
 ## Empty desktop connections follow-up
 
 - Avoid Keychain requests and empty encrypted-cache writes when the desktop has no saved

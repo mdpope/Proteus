@@ -3,6 +3,18 @@
 Maintain this as the single backlog. Design rationale is in `decisions.md`; recent changes are in
 `../CHANGELOG.md`. Items below are status, not promises of completed validation.
 
+## Connection and presentation corrections — October 5
+
+Implemented in the current source: three-column desktop allowance; host-owned names refreshed
+from authenticated connections; website account/browser destination lookup and explicit connection
+states; desktop-style website chat filters/main tabs; native device-zone chat timestamps;
+same-tab native browsing/navigation controls and localized visit/device history with pagination.
+Both desktops and physical iPhone/iPad are updated. Website corrections are staged; its prior
+release remains live pending recovery verification. Desktop-to-desktop pairing and physical
+shared-account acceptance remain separate; see release-validation.md.
+There are no product-specific personal/work Mac categories. Any paired host can be selected by
+its stable host ID; its display name is configured on that desktop.
+
 ## Message actions — October 4 follow-up
 
 Copy and local Read Aloud buttons beneath completed assistant messages are implemented across
@@ -10,9 +22,9 @@ desktop/web/iOS. Active playback adds Pause/Resume, Stop and a text-position scr
 share one local-voice controller; native uses system speech. No provider execution or cloud voice
 fallback is introduced. See `chat-rendering.md` for controls and platform limitations; installation
 and deployment remain separate from implementation/test status. Build Mac, iPhone, iPad
-and website are updated. HC core services recovered on the prior release; its new build
-including the empty-peer startup fix is prepared, with installation awaiting a fresh direct
-confirmation required by automatic approval review. See `release-validation.md` for receipts.
+and website are updated. HC now runs `17719ea`, including the empty-peer startup fix; relay
+and providers passed after installation without a Keychain prompt. The underlying item ACL
+was not changed or proven repaired. See `release-validation.md` for receipts.
 
 HC packaging follow-up: evaluate a consistent signed identity to prevent per-build Safe Storage
 reauthorization. Preserve existing encrypted data and require a reviewed migration of trust;
@@ -37,8 +49,8 @@ Build Mac and website parity releases are deployed. Browser-home follow-up `8e3a
 installed and visually verified on Build Mac: top-aligned search, bounded long links and
 25-entry **More** pagination. Shared app consent is verified there. Both iPhone and iPad are
 updated over Wi-Fi with data and both destinations preserved; iPad shared-account sign-in needs
-its on-device system flow. HC has the update installed and state preserved, but normal startup
-awaits the real Keychain prompt before relay/provider checks can finish.
+its on-device system flow. HC has the update installed and state preserved, with normal
+startup, relay and provider checks passing. Desktop-to-desktop authorization is still pending.
 The current release does not add per-session short-lived host grants, merge browser/native pairing
 keys, or implement multi-provider work. Those security protocol improvements remain open.
 
@@ -68,8 +80,8 @@ explicit capability explanations for platform exceptions and a migration path fo
   (`bubble.left.and.bubble.right`); use equivalent shared artwork on desktop/web.
 - Treat the desktop Proteus chat presentation and messaging as the reference: shared labels,
   composer states, tool activity, approvals, empty/error/offline states and Markdown behavior.
-  Every displayed message has date **and** time in the user's saved IANA timezone, with the
-  desktop format used consistently. Store instants in UTC; retain date-only domain values.
+  Every displayed message has date **and** time; native iPhone/iPad chat messages follow the
+  device time zone, while desktop/web honor their display setting. Store instants in UTC; retain date-only domain values.
   Test daylight-saving transitions and timezone changes without rewriting historical timestamps.
 - Needs attention uses an **!** icon with an accessible label, replacing the diamond.
 - Expand subitems only under the active left-navigation feature. Life contains Garage,
@@ -85,7 +97,7 @@ explicit capability explanations for platform exceptions and a migration path fo
 ### PAR-02 — Website destination and AI allowance
 
 - Add a website-specific **Default Mac** setting, stored with the account and initially set
-  by the operator to the personal Mac's verified identity. Never infer identity from its label
+  by the operator to a paired Mac's verified identity. Never infer identity from its label
   or choose the first paired host. Provide an explicit temporary switch and a separate action
   to change the default; browsing another host's chat must not silently change new-chat routing.
 - The website defaults new AI work and allowance to that Mac. Every composer/schedule/action

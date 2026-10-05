@@ -43,6 +43,13 @@ streaming output. New responses retain the agent name when saved, so later agent
 rename earlier messages. Older messages fall back to the captured selection. Without an explicit
 main agent, the label identifies the provider (Copilot or Rehearsal).
 
+## Chat timestamps
+
+Native iPhone/iPad messages use the device’s SwiftUI time-zone environment, including changes
+while the view is open and daylight saving transitions. A shared account preference defaulting
+to UTC must not override the device’s chat display zone. Stored timestamps remain UTC instants;
+schedule execution zones and Engine Room’s account-zone displays are unchanged.
+
 ## Message actions and local speech
 
 Completed, nonempty assistant messages have **Copy message** and **Read aloud** icon buttons.
