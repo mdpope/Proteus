@@ -11,6 +11,8 @@ The latest remote parity-branch backlog updates have been merged, preserving the
 A desktop Standup issue is now queued: adding a saved link clears the generated docked daily
 order, and undocking/redocking does not recover it. Preserve daily presentation state across
 link-only edits and dock changes; see `planned-updates.md` for the report and acceptance steps.
+Also queued: missing vertical dividers between the Team Tools and Standup subtabs and before
+the first browser subtab, matching existing browser-tab separation.
 This is queued work, not an implemented fix.
 
 New iPad follow-ups are queued in `planned-updates.md`: selecting an existing shared team

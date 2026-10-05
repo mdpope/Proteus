@@ -3,6 +3,18 @@
 Maintain this as the single backlog. Design rationale is in `decisions.md`; recent changes are in
 `../CHANGELOG.md`. Items below are status, not promises of completed validation.
 
+## Queued: Team Tools subtab dividers — October 5
+
+Status: reported desktop presentation issue, visible in the supplied screenshot; not fixed.
+
+- The persistent Team Tools and Standup subtabs lack the visible separation used between
+  browser subtabs. Add matching vertical dividers between Team Tools and Standup, and between
+  Standup and the first browser subtab. Keep the main tab bar and this secondary bar distinct.
+- Use consistent divider height, spacing and contrast across the secondary tab strip while
+  preserving the active-tab underline and current tab behavior. Check each fixed tab selected,
+  a browser tab selected, and narrow/overflow layouts; include the corresponding iPad tab strip
+  in the parity review.
+
 ## Queued: preserve generated Standup when links change — October 5
 
 Status: operator-reported desktop issue with a screenshot; not yet reproduced or fixed.
