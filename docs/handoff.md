@@ -16,8 +16,9 @@ preflight. Personal → HC is now paired and saved; the desktop shows `workstati
 its Chats count increased from five to fifteen. HC → Personal remains blocked by Keychain
 access. The operator approved both final pairing clicks, but that does not establish completion
 in the blocked direction. A valid Apple Development-signed artifact of exact runtime `17719ea`
-was prepared and privately transferred; HC still runs the ad-hoc-signed installation and awaits
-natural completion of its active job before a guarded update. Read `release-validation.md`
+was prepared and privately transferred. HC's latest control check is unreachable again, with
+no signed-install receipt. The last install hold protected an active digest job; do not assume
+it finished or interrupt that workflow. Read `release-validation.md`
 for receipts and `chat-rendering.md` for speech behavior.
 
 Both physical iPhone (05:20 UTC) and iPad (05:21 UTC) now run the native build from `1101c3c`,
@@ -44,14 +45,18 @@ stability claim. Private receipts remain in the deployment workspace.
 Live Chats now verifies All Macs with both authorized hosts, authenticated names and records,
 all search/destination/provider/status/workspace/schedule/date filters, no inner chat navigation,
 and the main New Chat control. The eight-member Standup list was also verified; private names
-stay outside Git. Default Mac selection has not persisted: timed-out UI clicks left Choose
-explicitly after reload, with no JavaScript errors. This is pending preference acceptance, not
-evidence that either Mac is offline. Build Mac remains locked awaiting operator unlock.
+stay outside Git. Default Mac is now saved as Build Mac through the existing authorized
+account API with an identity guard; a readback verified every other preference unchanged.
+Website reload confirmed the selection and live Copilot/Codex/Claude allowance. Both host chat
+indexes retain authenticated names. Build Mac's screen remains locked, so no additional
+native UI acceptance is claimed.
 
 The earlier 05:39–05:41 UTC MariaDB window is fully classified: all 664 entries concern the
-known `mysql.column_stats` histogram-definition mismatch. The new 06:38–06:40 window needs its
-own classification, including 7,145 MariaDB entries and one Apache error during the expected
-`.env` probe. Laravel remained empty. No all-clean server-log claim is made. Personal shared
+known `mysql.column_stats` histogram-definition mismatch. The final 06:38–06:40 window contains
+7,138 messages for that same definition issue and seven other warning-word entries still
+unclassified, from a complete 7,145-entry window under the 15,000-entry cap. Its sole Apache
+error is the expected `.env` denial; Laravel remained empty. Server-maintenance work remains
+open, and no all-clean log claim is made. Personal shared
 scopes and same-account endpoints are healthy; its legacy roster was empty. Historical uploads
 before visit-metadata activation are not claimed to have retained those optional fields.
 

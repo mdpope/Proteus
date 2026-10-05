@@ -13,12 +13,13 @@ Both desktops and physical iPhone/iPad are updated. Website release `20261005T06
 navigation fix `7975f77`, is deployed: 9,209 files and 14 public endpoints verified, with schema,
 runtime configuration and nutrition unchanged. Live All Macs Chats, all filters, main New Chat,
 absence of inner chat navigation and the authorized eight-member Standup list are verified.
-Default Mac preference persistence remains pending after timed-out UI actions; this is not a
-host-connectivity failure. Build Mac is locked awaiting unlock. The earlier MariaDB audit
-window is fully classified as the known system-table mismatch; the final window remains to be
-classified. Personal → HC pairing is saved and online; HC → Personal remains Keychain blocked.
-The latest HC installation checkpoint still awaits its active job's natural completion before
-using the prepared exact-runtime Apple Development-signed artifact. Physical shared-account
+Default Mac is saved as Build Mac; guarded API readback preserved all other preferences,
+and website reload verified the selection and live provider allowance. Build Mac's screen
+remains locked, so no additional native UI checks are claimed. The final log window confirms
+the known MariaDB system-table issue plus seven still-unclassified warning entries; maintenance
+remains open. Personal → HC pairing was saved and online; HC → Personal remains incomplete.
+HC's latest control check is unreachable, with no signed-install receipt; its last install hold
+protected an active digest job. Preserve that workflow safeguard. Physical shared-account
 acceptance remains separate. See `release-validation.md`.
 There are no product-specific personal/work Mac categories. Any paired host can be selected by
 its stable host ID; its display name is configured on that desktop.

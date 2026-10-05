@@ -462,17 +462,25 @@ records and the Search/Mac/Provider/Status/Workspace/Schedule/date filters. No i
 remains; New Chat is in the main shell. The eight-member Team list was verified earlier. No
 professional chat titles or private roster names are recorded here.
 
-Default Mac preference acceptance remains incomplete: several UI clicks timed out, no JavaScript
-errors appeared, and reload still showed Choose explicitly. The save is not claimed successful.
-This is a pending preference action, not evidence that paired Macs cannot connect. Build Mac
-remains locked awaiting operator unlock. Cross-Mac reverse pairing and physical consent checks
-retain their separate earlier limits.
+Default Mac preference acceptance is now complete. After timed-out UI clicks, the existing
+authorized local/account API saved Build Mac with an identity guard; readback verified all
+other preferences unchanged. Live website reload confirmed Build Mac and its provider
+allowance, while both host chat indexes retained authenticated names. Exact live quota values
+remain in the private operational summary, outside Git. Build Mac's screen remains locked,
+so no additional native UI checks are claimed.
 
-The 06:40:25 UTC audit, starting at 06:38, passed all 14 endpoints. Laravel had zero bytes/events;
-relay Apache had zero events. Website Apache recorded one event/221 new bytes during the expected
-protected `.env` probe, but this new window's classification remains pending. PHP recorded 18
-other file events and 15 reload journal events; MariaDB recorded 7,145 priority-six events, with
-new bounded classification pending; push recorded nine events. No all-clean log claim is made.
+HC's final control check is unreachable again. There is no signed-install receipt; the last
+installation hold protected an active digest job. Do not infer job completion or interrupt the
+user workflow. Reverse pairing and physical consent checks retain their separate limits.
+
+The final audit window, 06:38–06:40:25.079532 UTC, passed all 14 endpoints. Laravel had zero
+bytes/events; relay Apache had zero events. Website Apache's one event/221 new bytes is the
+expected protected `.env` denial. PHP's 18 file events comprise 17 lifecycle and one other;
+its 15 journal events are lifecycle entries. The complete MariaDB window contains 7,145 events,
+below the 15,000-entry cap: 7,138 `mysql.column_stats` definition messages and seven other
+warning-word entries whose exact meaning remains unclassified. Push has nine other events.
+Known system-table maintenance and those seven warnings remain open; logs are not claimed quiet
+or all clean.
 
 The earlier 05:39–05:41 window is now fully classified: all 664 MariaDB entries are the existing
 `mysql.column_stats` incorrect-definition issue, split evenly between 332 `histogram_type` and
