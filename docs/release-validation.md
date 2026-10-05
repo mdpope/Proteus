@@ -229,4 +229,39 @@ word-range callbacks and unchanged audio-session configuration. Native build has
 inputs verified and retains the original signer/profile. Website browser speech tests are
 synthetic; physical audible output is not claimed from muted or simulator checks.
 
-Deployment and device installation receipts will be recorded below after the verified update.
+Desktop fixture: all 21 groups pass, including real muted Electron local speech and the actual
+Pause → seek → Resume → Stop controls. The engine exposed 180 local voices. Tests use a
+disposable profile and mock Keychain; production does not. Signed package smoke also passes.
+
+Build Mac: `68a1226`, original signer and all 104 runtime hashes verified. Normal launch,
+relay, Life and shared API are healthy. Twelve tabs, Team state, histories, three pairings,
+resource grants, settings and all run/schedule files survived; account and encrypted Life
+session bytes were preserved. Full rollback/receipt:
+`/private/tmp/proteus-message-actions-install-20261005T040408Z`. The installed workspace
+screenshot was observed, but native UI automation failed during the reply-icons inspection.
+An earlier click applied late and left the existing `test table` chat selected instead of the
+original New tab; all 12 tabs remain intact. Further attempts stopped, and no message was
+copied, spoken or submitted. Installed reply-icon visual acceptance remains unverified; the
+disposable real-Electron controls and speech tests above passed.
+
+iPad at 04:03 UTC and iPhone at 04:06 UTC: signed universal message-action build installed
+in place over existing Wi-Fi pairing. All 25 inputs matched, app data/preferences stayed
+byte-identical before launch, both Mac destinations and selection survived, and processes
+were independently confirmed. iPhone's first attempt correctly stopped while locked; the
+operator then unlocked it and authorized the successful fresh check. Full receipts are in
+`ios/PARITY-VALIDATION.md`. Physical audible playback and recording coexistence remain unverified.
+
+Website: `20261005T040049Z`, archive hash and all 9,209 manifest files matched. New protected
+recovery `20261005T034455Z-postdeployment` was independently restored before activation through
+the authenticated Codex in-app Virtualmin session. Runtime configuration, schema and nutrition
+counts/hashes remained unchanged. All 14 endpoint checks pass. No Laravel errors appeared; the
+one Apache error was the expected protected `.env` denial. A bounded MariaDB sample contained
+95 known `column_stats` issue entries and five other entries, with no other failure category;
+it is not a complete journal-window review. Existing server-wide maintenance remains separate.
+
+HC remains on `8e3ab51`: its process is blocked in real Keychain access and its API is
+unresponsive. It was left untouched; no new install, Keychain deletion/reset or ACL change
+occurred. Read-only diagnosis found the login Keychain already unlocked and the stored item
+listing Proteus as trusted. The changed ad-hoc identity is a likely trigger for renewed consent,
+not proof of the reported password-rejection cause. The protected prompt cannot be inspected
+through the available UI tool; exact wording/buttons have been requested from the operator.

@@ -7,12 +7,15 @@ and manifests; this repository owns the generic app and provider adapters.
 
 ## Latest release state
 
-Build Mac runs browser-home follow-up `8e3ab51`; all 103 runtime files, signing, 12 tabs,
-three pairings and existing account/data preservation passed. Installed main and Team browser
-homes were visually verified with search visible and 25-entry history/More controls. Website
-release `20261005T000810Z` remains live. Read `parity-release.md` for release receipts.
+Build Mac now runs message-action follow-up `68a1226`: Copy and local Read Aloud, Pause/Resume,
+Stop and text-position seeking. All 104 runtime hashes, signing, 12 tabs, three pairings and
+existing account/data preservation passed. Website release `20261005T040049Z` is live with
+9,209 manifest files verified, unchanged schema/configuration/nutrition and all 14 endpoint
+checks passing. Browser-home improvements from `8e3ab51` remain included. Read
+`release-validation.md` for current receipts and `chat-rendering.md` for speech behavior.
 
-Both physical iPhone and iPad were updated in place over Wi-Fi with the original signer and
+Both physical iPhone (04:06 UTC) and iPad (04:03 UTC) now have the message-action update,
+installed in place over Wi-Fi with the original signer and
 all 25 build inputs verified. Data/preferences, both Mac destinations and selection survived;
 launch/process checks passed. The operator explicitly authorized iPad account connection, but
 its device-local system sign-in requires interaction on the iPad. The pending handoff is
@@ -22,8 +25,11 @@ consent. Do not claim mobile shared-account acceptance from installation alone.
 Build Mac shared scopes are authorized; live shared endpoints return success for the same
 Life account. Its legacy roster was empty, so no import was made. HC now has `8e3ab51` installed
 with exact 103-file parity and unchanged two tabs, three pairings, settings and five disabled
-schedules. Normal startup is waiting on its real Proteus Safe Storage prompt. The operator was
-asked to respond using the HC login-keychain password. Relay/provider postlaunch checks remain
+schedules. Normal startup is waiting on its real Proteus Safe Storage prompt. Read-only diagnosis
+confirmed login Keychain unlocked and the item trusting Proteus, while the new ad-hoc build has
+a different signing identity. This likely explains renewed authorization but does not explain
+the reported password rejection. Secure dialog text is inaccessible to tools; the operator has
+been asked for its exact wording/buttons before any repair. Relay/provider checks remain
 pending. Do not reset/delete Keychain items or change access rules to bypass the prompt.
 
 Disposable Mac tests now use a mock Keychain, isolated from real credentials; production launches

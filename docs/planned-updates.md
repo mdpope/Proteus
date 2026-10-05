@@ -9,7 +9,13 @@ Copy and local Read Aloud buttons beneath completed assistant messages are imple
 desktop/web/iOS. Active playback adds Pause/Resume, Stop and a text-position scrubber. Desktop/web
 share one local-voice controller; native uses system speech. No provider execution or cloud voice
 fallback is introduced. See `chat-rendering.md` for controls and platform limitations; installation
-and deployment remain separate from implementation/test status.
+and deployment remain separate from implementation/test status. Build Mac, iPhone, iPad
+and website are updated; HC still runs the prior release while its real Safe Storage prompt
+blocks normal startup. See `release-validation.md` for exact receipts.
+
+HC packaging follow-up: evaluate a consistent signed identity to prevent per-build Safe Storage
+reauthorization. Preserve existing encrypted data and require a reviewed migration of trust;
+do not weaken Keychain access or treat signature changes as proof of a password problem.
 
 ## Cross-client parity — October 4 implementation
 
