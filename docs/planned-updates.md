@@ -21,6 +21,59 @@ Operator-reported follow-ups; queued only, not yet reproduced, implemented or ve
   matching desktop. Verify that each control adds a tab only to its intended collection
   and preserves the other collection's tabs and selection.
 
+## Queued: provider sign-in recovery and refresh without restarting
+
+Status: requested; not implemented or validated. Applies to GitHub Copilot, Codex and Claude Code.
+
+- Add visible Sign in / Reconnect actions to Providers and actionable recovery links wherever a
+  provider blocks starting or continuing a chat. Distinguish signed out, expired authorization,
+  connection failure and an account without model access; use provider-supported authentication.
+- Show sign-in progress, the account being connected, success, cancellation, timeout and retry.
+  Support browser/device authorization on the Mac, with clear handoff and synchronized status on
+  iPhone/iPad. Keep credentials and authorization codes out of transcripts, logs and repository files.
+- On successful sign-in, recheck the provider account and refresh its model/capability catalog,
+  usage where supported, selectors and connection indicators automatically. Manual Refresh must
+  also detect authentication completed outside Proteus; refreshing only a stale client is insufficient.
+- Recover provider authentication without quitting Proteus. Use supported credential refresh or
+  safely replace an idle provider connection. Preserve active/waiting turns, queued messages,
+  native session continuity, selected context and unsent drafts; if reconnection must wait for an
+  active turn, explain that state and complete it when safe. Do not stop unrelated providers.
+- Preserve secure credential storage, existing accounts and pairings. Do not silently sign out,
+  reset Keychain, weaken access controls or fall back to plaintext credential storage.
+- Acceptance: for each provider, test initial sign-in, expired/revoked credentials, external CLI
+  sign-in, cancel/timeout/retry and refresh while another chat is active. Verify Mac/iOS converge
+  on the current account and catalog without app restart; use isolated mocks for regressions and
+  report live sign-in validation separately. Account/model checks must not launch a paid chat.
+
+Observed recovery gap: Copilot CLI sign-in succeeded, but Proteus's forced provider refresh still
+reported signed out with zero models. Restarting the idle app restored authenticated status and
+19 models. This is evidence for the Copilot path only; equivalent failures in Codex and Claude Code
+have not been established. The shared recovery experience should cover all three adapters.
+
+## Queued: reconcile MCP connection status with the active chat
+
+Status: investigation requested; cause and fix not yet established.
+
+- Reported Atlassian case: MCP configuration shows Connected while a resumed Copilot chat emits
+  `MCP atlassian: needs-auth`. Keep this separate from provider-account sign-in: a provider being
+  authenticated does not prove that a selected MCP is authorized in the current chat.
+- Trace status from provider runtime events, per-chat MCP status, configuration views and OAuth
+  completion. Check stale caches, account/profile differences, resumed-session configuration and
+  whether connection checks inspect the same server instance the active chat uses.
+- Show the scope and freshness of connection state. Reconcile current runtime authentication
+  failures promptly across Mac/iOS; do not label a server usable solely because configuration or
+  another session reports Connected. Retain historical chat events without presenting them as
+  current failures once recovery is verified.
+- Provide actionable sign-in/retry/error details and recheck the affected session after OAuth,
+  without app restart or interrupting unrelated runs. Do not reset credentials as a diagnostic.
+- Acceptance: reproduce contradictory configuration/session status with isolated fixtures; cover
+  resumed chats, token expiry, reauthorization, stale responses arriving out of order and matching
+  Mac/iOS status. Verify recovery via a non-mutating MCP check where supported; distinguish that
+  check from actual successful tool use and record any remaining live-validation limits.
+
+The operator supplied a local chat reference and screenshots. Keep those diagnostic references
+with local app support records, outside Git; repository tests and documentation use synthetic data.
+
 ## Connection and presentation corrections — October 5
 
 Implemented in the current source: three-column desktop allowance; host-owned names refreshed
