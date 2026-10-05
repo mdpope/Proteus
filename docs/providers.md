@@ -12,6 +12,35 @@ makes no AI calls, and exercises the same feedback states. Never present rehears
 Account quota and per-run tokens are separate measurements. Missing data remains unavailable;
 do not estimate subscription quota from local tokens or silently substitute another model.
 
+## Allowance refresh: current behavior and queued review
+
+As reviewed October 5, `ProviderUsageCache` in `src/usage.js` refreshes all three adapters on
+request, coalesces concurrent calls, and caches the result for five minutes; force bypasses TTL.
+It has no active-chat versus idle policy and no independent host usage timer. Desktop asks every
+minute while allowance is enabled. Visible website shell/remote views ask every minute, and the
+native allowance view asks every five minutes while mounted and connected. These are client-to-
+Mac requests; a valid host cache avoids a new adapter quota read. Browser backgrounding and native
+view/app lifecycle can stop these requests, so this is not a guaranteed background refresh service.
+
+There is an additional Copilot quota call in `CopilotProvider.status()`, used by the host's
+five-minute model/status catalog refresh. It is outside `ProviderUsageCache`, so the allowance
+TTL alone does not bound all quota traffic. The queued adaptive policy must account for both.
+
+Copilot calls the official SDK `account.getQuota`; Codex uses its local app-server
+`account/rateLimits/read`; Claude asks a temporary local CLI control session for `get_usage`,
+with previously observed rate-limit events as a labeled fallback. These are usage/account
+operations, not generated model turns. Local SDK/CLI transport does not establish that the
+runtime serves data solely from disk: provider service access and runtime caching are separate.
+Web/native ask the paired Mac through the encrypted relay rather than receiving provider tokens.
+
+Past reset timestamps are retained internally as `reportedResetAt`, cleared from the future
+`resetAt` display and labeled “next reset is unreported.” A read-only running-Mac status check
+confirmed a past Copilot reset observation; it did not establish the cause in GitHub or its CLI.
+Copilot currently uses the generic premium-interactions bucket and labels it Premium requests;
+review current billing metadata before interpreting its units. The queued design distinguishes
+an expected monthly reset from a provider-reported reset and preserves missing/stale values.
+See `planned-updates.md` for the proposed adaptive policy and official reset references.
+
 ## Live model controls
 
 Mac New Chat, schedule settings and default Settings share model, **Thinking effort**, and

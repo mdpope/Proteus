@@ -33,6 +33,10 @@ This is a concise behavior log. Git commits and pull requests contain the comple
 
 ## Unreleased
 
+- Document and queue Copilot reset provenance, adaptive allowance refresh, consistent provider
+  labels and desktop/web chat parity. Record grouped Activity and usage/context details as design
+  proposals; source review and read-only status inspection do not constitute implementation.
+
 - Queue matching dividers between Team Tools, Standup and the first browser subtab; the
   screenshot-reported presentation issue is not yet fixed.
 

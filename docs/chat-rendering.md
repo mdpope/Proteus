@@ -43,6 +43,27 @@ streaming output. New responses retain the agent name when saved, so later agent
 rename earlier messages. Older messages fall back to the captured selection. Without an explicit
 main agent, the label identifies the provider (Copilot or Rehearsal).
 
+## Website parity gap: October 5 review
+
+The earlier rendering description is the desktop/native baseline, not full website acceptance.
+`public/conversation.js` removes automatic permission notices from the main timeline and renders
+structured tool details; `web/resources/js/remote.js` currently maps all persisted events into
+message articles and prints their generic role. This explains website “assistant” labels and
+standalone “Auto-approved write: Trusted folder” messages even though the remote payload already
+includes provider/agent identity and tool presentation data. Desktop resolves the saved agent
+identity or provider; website does not yet use that resolution.
+
+An automatic approval means Proteus accepted a tool request under a saved permission rule, not
+that the write succeeded. The standalone audit event stores kind, reason and mode, but not the
+resolved path, matched root or tool-call ID. If the corresponding tool already exists, its details
+can carry the approval reason and reported arguments/target; the generic line alone cannot name
+which folder was written. This limitation must remain explicit for older records.
+
+Queued requirements use the desktop conversation as the web reference and retain provider names
+on all clients. A proposed Activity group combines consecutive routine tools and approvals while
+keeping actionable warnings and requests visible. Path/rule correlation and optional usage/context
+details need an explicit shared contract. See `planned-updates.md`; these are not implemented.
+
 ## Chat timestamps
 
 Native iPhone/iPad messages use the device’s SwiftUI time-zone environment, including changes

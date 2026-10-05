@@ -7,6 +7,14 @@ and manifests; this repository owns the generic app and provider adapters.
 
 ## Latest release state
 
+An October 5 source review and read-only local provider-status check documented the next
+allowance/chat work in `planned-updates.md`: Copilot expected-reset labeling, adaptive usage
+refresh including duplicate status/catalog quota reads, provider-name consistency and web
+conversation parity. Proposed grouped Activity and usage/context details remain for discussion.
+The review confirmed a past Copilot reset observation and the differing web/desktop renderers;
+no runtime changes, deployment or model turns were performed. Read `providers.md` and
+`chat-rendering.md` for the current behavior and evidence limits.
+
 The latest remote parity-branch backlog updates have been merged, preserving the local queue.
 A desktop Standup issue is now queued: adding a saved link clears the generated docked daily
 order, and undocking/redocking does not recover it. Preserve daily presentation state across

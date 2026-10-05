@@ -3,6 +3,78 @@
 Maintain this as the single backlog. Design rationale is in `decisions.md`; recent changes are in
 `../CHANGELOG.md`. Items below are status, not promises of completed validation.
 
+## Queued review: allowance refresh and chat parity — October 5
+
+Status: source review and a read-only check of the running local Mac completed; requirements
+and proposed presentation recorded below. No runtime change, deployment or live-chat execution.
+Private chat contents, machine paths and account usage values are excluded from this record.
+
+Confirmed requirements:
+
+- **Copilot reset:** prefer a valid future provider reset timestamp. When its monthly allowance
+  reports a missing/past reset, show an explicitly labeled expected reset derived from GitHub's
+  documented first-of-month 00:00 UTC rule, in the viewer's display zone. Preserve the raw
+  observation and its freshness separately; never invent a replenished allowance or apply this
+  monthly rule to other providers' rolling windows. Investigate why the installed runtime reports
+  a past timestamp. Check actual billing metadata before calling the allowance premium requests:
+  current GitHub AI Credits and legacy premium requests must not be conflated.
+- **Adaptive usage refresh:** one host-owned, coalesced refresh policy per provider/account context:
+  about five minutes while that provider is executing chats or schedules, about one hour when
+  idle. Waiting for user input alone is idle. Refresh after a completed turn (debounced), sign-in,
+  wake/reconnect when stale, and an expected reset; keep manual refresh. Consume genuine runtime
+  usage events promptly, but do not substitute session tokens for account allowance. Define minimum
+  request spacing, timeout/backoff and last-success/observation timestamps; preserve last-known
+  data on errors. Clients receive the host snapshot rather than each owning provider polling.
+  Consolidate the separate quota read inside Copilot status/model refresh, or idle checks will
+  still run every five minutes. Preserve the host's usage privacy setting and existing sign-in.
+- **Provider identity:** use Copilot, Codex or Claude consistently for response labels, including
+  streaming and historical messages, across web/desktop/mobile. Keep the underlying assistant role
+  unchanged. If a named agent is selected, retain its recorded identity as secondary information
+  without hiding the provider. Older data must use a safe recorded-provider fallback.
+- **Conversation parity:** the desktop conversation is the visual and behavioral reference for
+  web: message surfaces, type/spacing, Markdown/tables, timestamp format, composer controls,
+  scroll-follow/Jump to latest, tool details, and Copy/Read Aloud. Share normalization and reusable
+  rendering where possible instead of maintaining a second incompatible event renderer. Compare
+  the same synthetic event stream on all clients. The supplied screenshots also show differing
+  display zones; review implicit UTC defaults versus intentional user time-zone choices, without
+  changing stored UTC instants or silently overwriting an explicit preference.
+
+Proposed design for discussion, not yet an approved implementation specification:
+
+- Group consecutive routine tool activity and automatic approvals between assistant/user messages
+  into an expandable Activity block, with a deterministic summary such as “3 files read · 2 edited
+  · 1 command.” Preserve chronological order, pagination boundaries, expanded state and scrolling
+  during streaming. Live groups show the current action; completed groups collapse by default.
+- Expansion lists each tool's operation, executing Mac, target path/URL, command and working
+  directory when supplied, timestamps/duration, result or failure, and the rule that authorized
+  it. Deeper raw details remain bounded and redacted. Show missing information honestly rather
+  than inferring a target from the chat title or the nearest event.
+- Record a stable tool-call correlation and the resolved target/matched trusted root for future
+  approval audit events. Today the standalone automatic-approval event retains kind/reason/mode
+  but omits the path and call ID; only an already-associated tool may carry the reason. Handle
+  approval-before-tool ordering and legacy unlinked events without losing the audit record.
+- Keep actionable approval requests, questions, failures, interrupted work and authentication
+  issues prominent. Show a failure badge even when a group is collapsed. Context compaction can
+  be a small timeline marker; old authentication warnings should remain historical once recovery
+  is verified (see the existing MCP reconciliation item). Grouping must not change permissions.
+- Consider a Usage/Context drawer per turn/session using reported input/output/cache tokens,
+  model, tool duration and provider credit totals where available. Mark incomplete/unsupported
+  metrics; do not manufacture exact per-file cost or use an assistant's narrative as a billing
+  ledger. Current Copilot code persists input/output totals and optional session metrics, but
+  the remote projection omits the latter. Review a redacted, compatible contract before exposing.
+
+Acceptance for the queued work: fake-clock active/idle/provider-isolation and event/manual-refresh
+coalescing tests; month/year/DST reset tests; stale/missing/future provider values; identical
+provider labels and synthetic transcript content on desktop/web/native; correlated/unlinked
+approvals, failed tools and secret redaction; streaming/pagination/scroll preservation. Live
+provider validation is read-only and must not restart active sessions or send a billable prompt.
+
+Sources reviewed October 5, 2026:
+[GitHub individual billing](https://docs.github.com/en/copilot/concepts/billing-and-usage/individuals/billing),
+[organization billing](https://docs.github.com/en/copilot/concepts/billing-and-usage/organizations-and-enterprises/billing),
+[legacy request billing](https://docs.github.com/en/copilot/reference/copilot-billing/request-based-billing-legacy/github-copilot-premium-requests),
+and [SDK usage APIs](https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/usage-and-billing).
+
 ## Queued: Team Tools subtab dividers — October 5
 
 Status: reported desktop presentation issue, visible in the supplied screenshot; not fixed.
