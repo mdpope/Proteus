@@ -55,8 +55,48 @@ acceptance. The detailed host/document identity, authorization and offline desig
   spaces, Unicode, case-insensitive Markdown extensions and anchors; missing files; denied roots,
   traversal, symlink replacement and bounded reads/images; safe rendering; chat-state preservation;
   no automatic opening and no persistent content cache. Use synthetic files and transcripts.
-  Rich HTML/JavaScript artifacts need a separately scoped isolated preview design; this Markdown
-  approval does not authorize executing generated scripts or installing a general code runner.
+  Interactive HTML previews are approved as the separate queued extension below. The Markdown
+  viewing grant alone must never enable scripts or install a general code runner.
+
+## Queued: interactive artifacts with explicit script approval — October 5
+
+Status: the operator approved adding rich previews to the backlog, with scripts off by default
+and an explicit way to approve interactive previews; not implemented or verified.
+
+- Support provider-neutral HTML/CSS/browser-JavaScript artifacts from Codex, Claude and Copilot.
+  Use one artifact contract and preview behavior across desktop/web/iPhone/iPad. Open only on
+  click, using the document tab/reader flow above, preserving chat state. Replace any provider-
+  specific preview helpers with a small Proteus interface; do not require an OpenAI file format.
+- Initially show an isolated static preview with scripts disabled. Keep **Enable interactive
+  preview** in trusted Proteus chrome, outside generated content. Identify the artifact, owning
+  Mac and version, and explain that this enables browser JavaScript inside this preview only.
+  Script-dependent artifacts should show a clear enable prompt rather than an unexplained blank.
+- Bind approval to the viewing account/client, source host, artifact and exact content version,
+  including bundled executable dependencies, for the current preview session. Ordinary rerenders
+  must not prompt again or rerun initialization; changed code/dependencies require new approval.
+  Do not inherit approval across unrelated artifacts, clients or restored app sessions. Offer
+  **Stop scripts** to destroy the active execution context and return to the static view.
+- Run approved scripts in an isolated, disposable browser context without Node/Electron APIs,
+  shell execution, filesystem authority, app credentials, authenticated browser cookies, other
+  chats or ambient Proteus API access. Keep Markdown sanitization unchanged. A generated `.cjs`
+  file remains source text unless a separately designed host execution workflow is invoked;
+  approving a preview is not approval for Node scripts, dependency installs or build commands.
+- Keep network access, embedded remote resources and app actions blocked by default, including
+  before script approval. Prefer self-contained artifacts and authorized bundled assets. If a
+  preview needs external access or a privileged action, explain the missing capability and
+  require a separate narrow permission through trusted UI; enabling scripts cannot imply it.
+  Validate any preview-to-host messages against explicit capabilities and the approved context.
+- Use the approved host document identity, authorization and bounded relay delivery for remote
+  artifacts and assets. Script approval cannot expand file-reading grants. Retain contents and
+  execution state in memory only initially; clear on close, sign-out/account change or revocation.
+  Include active previews in Engine Room resource controls with stop/unload actions and bounded
+  resource use. No model call is needed for ordinary local preview interactions.
+- Acceptance: static and script-dependent fixtures from each provider; explicit enable/stop;
+  same-version rerenders, changed code/assets and session restoration; remote/offline behavior;
+  keyboard/touch and native layouts; blocked network, host APIs, cross-artifact storage and
+  attempted top-level navigation; fabricated approval controls; runaway-script stop/unload;
+  denied/revoked document grants and account transitions. Use synthetic artifacts and disposable
+  profiles. This queue entry is design approval, not permission to execute any existing artifact.
 
 ## Queued: tab-bar branding and persistent navigation icons — October 5
 

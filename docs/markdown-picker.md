@@ -124,5 +124,22 @@ future reads but cannot recall content already disclosed; the browser receives t
 content and its website trust boundary remains relevant. Missing/moved/denied files stay explicit.
 
 This design is approved and queued, not implemented or accepted on live clients. Interactive
-HTML/JavaScript previews are a separate proposed extension requiring isolation and an explicit
-capability model; a Markdown viewing grant must not implicitly execute generated code.
+HTML/JavaScript previews are now approved as a separate queued extension; a Markdown viewing
+grant must not implicitly execute generated code.
+
+### Interactive artifact extension — approved queue
+
+Accept standard HTML/CSS/browser JavaScript from any supported provider through the same artifact
+identity and authorized delivery. Start with an isolated static preview. Trusted Proteus chrome
+provides Enable interactive preview for scripts in that artifact's exact version and current
+preview session, plus Stop scripts to destroy its execution context and restore the static view.
+Include bundled executable dependencies in the version identity. Rerenders retain approval;
+changed code/dependencies and restored sessions require a new approval. Generated content cannot
+approve itself or impersonate the trusted permission controls.
+
+Approved browser scripts remain isolated from Node, shell, filesystem, credentials, other chats
+and app APIs. Network/resources and privileged actions require separate narrow permissions;
+self-contained previews should work without them. A `.cjs` file is not a visual document and is
+not executed by preview approval. Keep content/state in memory initially, expose stop/unload in
+Engine Room and clear on close, sign-out/account change or revocation. See the interactive-artifact
+entry in `planned-updates.md` for acceptance. No renderer or live permissions changed in this queue.

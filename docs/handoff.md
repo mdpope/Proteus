@@ -16,8 +16,11 @@ The remote design is now explicitly approved for the queue: host/chat-bound docu
 separate View chat documents connection grant, per-read authorization over the encrypted relay,
 versioned bounded reads and in-memory open-tab content only. Offline already-loaded copies retain
 a last-read label; first reads need the owning Mac online. Do not silently grant existing peers
-access or expose the broad local Markdown API remotely. Rich HTML previews are still a proposed
-extension, not covered by the Markdown grant or implemented by this documentation update.
+access or expose the broad local Markdown API remotely. Rich HTML previews are now also approved
+for the queue: scripts disabled initially, with trusted Enable interactive preview and Stop scripts
+controls. Approval covers one artifact version and preview session, retains isolation, and grants
+neither Node execution nor network/filesystem/app access. The Markdown grant alone cannot enable
+scripts. See the interactive-artifact backlog entry; no runtime or permissions changed here.
 
 The operator approved the October 5 chat mockup and requested queuing only. Grouped Activity,
 visible actionable warnings and usage/context details should be consistent across clients;

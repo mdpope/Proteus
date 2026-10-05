@@ -257,3 +257,17 @@ last-read label, while first reads require the owning Mac online. Clear account-
 sign-out/account changes. Revocation stops subsequent reads, not possession of already-delivered
 bytes. No new AI turn or plaintext website database copy is needed; existing website-client trust
 is unchanged. This is queued design approval, not implementation or permission migration.
+
+## October 5 — interactive previews require explicit script approval
+
+The operator approved queuing provider-neutral interactive HTML artifacts with scripts off by
+default and a user approval path. Provide Enable interactive preview and Stop scripts in trusted
+Proteus chrome. Approval is limited to the exact artifact and bundled code version for the current
+viewing session; ordinary rerenders preserve approval, while changed code and restored sessions
+require renewed approval. The artifact itself must not approve or broaden its capabilities.
+
+Script approval permits isolated browser JavaScript for the preview. It does not authorize Node
+or `.cjs` execution, installs/build commands, access to other chats/files/credentials, network or
+app actions. Additional capabilities remain separate and explicit. Reuse document authorization
+for remote delivery, keep state in memory initially and expose stop/unload in Engine Room. These
+are backlog requirements, not an implemented sandbox or a grant to run existing artifacts.

@@ -33,6 +33,10 @@ This is a concise behavior log. Git commits and pull requests contain the comple
 
 ## Unreleased
 
+- Queue provider-neutral interactive HTML previews with scripts disabled by default and trusted
+  enable/stop controls. Scope approval to the artifact version and preview session; retain
+  isolation and separate permissions for network or app access. This is approved design only.
+
 - Record the approved remote-document architecture: chat-bound host document IDs, a separate
   revocable viewing grant, authorized bounded relay reads, version/refresh behavior and in-memory
   open-tab retention. No automatic persistent offline copies or broadened filesystem grants.
