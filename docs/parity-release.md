@@ -110,3 +110,47 @@ Source tests and signed builds are not installation receipts. The release record
 record Mac/phone preservation and launch, website manifest/migration/backup checks, actual account
 consent and device notification delivery. Omi processing owners and disabled Proteus gates remain
 outside this release. No operational schedule should be run as a smoke test.
+
+
+## Deployed state — October 4 evening (October 5 UTC)
+
+Build Mac installed runtime commit `295be2d32f22c54bdfed85ad7aa4436ccb48be54` in place.
+The final package passed identity, icon, application/vendor signatures, isolated launch and live
+Copilot catalog checks. All 103 runtime files matched source. Graceful shutdown, idle/terminal
+guards, full private app-data backup and retained previous application were verified. Eleven tabs
+and selection, three pairings/keys, six schedule files, eight configuration records and the ready
+Life account survived. No resource grants or account scopes were broadened. The final restart kept
+the encrypted Life session byte-identical; an earlier restart performed only normal OAuth refresh.
+Installed native UI was observed using accessibility and a screenshot.
+
+The website activated release `20261005T000810Z`: 9,209 manifest hashes, the single additive
+app-record migration and 14/14 public endpoint checks passed. Existing Life rows, account
+destinations, native clients, credentials and prior release were retained. Pre- and post-deployment
+central recovery bundles were independently verified and restored into isolated databases; all
+17 then 18 protected tables matched. The first attempt stopped before migration because the site
+had reached its 1 GiB quota. Raising that site's quota to 2 GiB with verified server headroom allowed
+a guarded resume; no release or backup was deleted.
+
+Web Push has a protected first-time VAPID key, verified portable credential backup and an active
+bounded delivery timer with successful worker execution. Actual device delivery is not verified.
+APNs remains unconfigured and the preserved physical profile lacks its entitlement. The signed
+phone/iPad build and 25-input hash receipt are ready; the last physical-device checks found both
+locked. No parity build was installed on either device. Physical iPad installation remains deferred.
+
+The Work Mac validated the base release (244 tests, static checks, 21 parity checks and package
+checks), then the final delta (22 browser checks and static checks). The exact final commit was
+sent through its authorized Codex chat for an in-place update preserving ad-hoc signing and vendor
+identity. That Codex connection became unavailable before the final installation receipt could be
+read. Do not claim HC installation from build results; reconnect and obtain the receipt first.
+
+The existing Build Mac sign-in still has its prior Life scopes. `/api/app` correctly refuses
+shared app access until explicit OAuth reconsent. The operator has been asked to approve the added
+shared-data scopes; no response or approval is inferred. Production account-backed pairing
+migration, Default Mac selection, native Team synchronization, browser notification permission and
+end-device delivery remain distinct acceptance steps. No credentials or Mac grants were silently
+created to make the new views appear connected.
+
+The deployment audit also identified a pre-existing MariaDB `mysql.column_stats` system-table
+version mismatch, identical before and after release. Application recovery/endpoint checks passed.
+The deployment workspace records a separate all-database-backup and version-reviewed system-table
+maintenance proposal; no server-wide repair was attempted as part of this application update.

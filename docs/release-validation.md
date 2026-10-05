@@ -141,3 +141,23 @@ resource access gains a separate device grant instead of silently broadening old
 
 See the final appended receipts for actual package/install/deployment results. Do not infer native
 APNs entitlement, server delivery, production Team consent, or pair-once enrollment from tests.
+
+
+## October 4 final parity receipts
+
+Final runtime commit `295be2d`: 244 Node tests, 22 browser-action checks, 13 history checks,
+21 desktop parity checks, 9 native-resource checks, and focused remote/security suites passed.
+Laravel passed 76 tests/666 assertions; the native build passed 26 distinct unit cases plus focused
+phone/iPad UI and real disposable WebKit download preparation. See `parity-release.md` for exact
+coverage and platform limits.
+
+Build Mac is installed and verified with 103 matching runtime files, original signing/vendor
+identity, 11 tabs, three pairings, six schedule files, original settings and Life session retained.
+Website release `20261005T000810Z` is live with 9,209 matching files, 14/14 public checks,
+verified central recovery and isolated restore before and after deployment. Web Push worker is
+configured/active; receipt does not establish device delivery.
+
+Physical phone/iPad installation and shared-app OAuth consent remain pending. HC final build was
+dispatched; its Codex connection was unavailable before a final installation receipt could be read.
+No HC installation, account enrollment, new resource permission, APNs entitlement or operational
+schedule execution is claimed. Pre-existing MariaDB system-table maintenance is recorded separately.

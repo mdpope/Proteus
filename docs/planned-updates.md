@@ -16,7 +16,9 @@ bounded chat indexes, website Default Mac, sidebar/Home allowance, Garage artwor
 and shared named lists/links, local daily standup/docking, new-tab search/history, Engine Room,
 resource unload/close, remote schedule editing, authenticated revocation, notification/log history,
 and notification transport foundations. Native shared tools require separate `app:read app:write`
-consent. Background APNs and production Web Push still require provisioning and delivery acceptance.
+consent. Production Web Push is provisioned with an active worker; device delivery acceptance
+remains pending. Background APNs still requires an entitled build and server credentials.
+Build Mac and website are deployed; phone unlock and HC final receipt are pending.
 The current release does not add per-session short-lived host grants, merge browser/native pairing
 keys, or implement multi-provider work. Those security protocol improvements remain open.
 
