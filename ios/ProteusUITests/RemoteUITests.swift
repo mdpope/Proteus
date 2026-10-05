@@ -2,6 +2,61 @@ import XCTest
 
 final class RemoteUITests: XCTestCase {
     override func setUp() { super.setUp(); continueAfterFailure = false }
+    @MainActor func testBrowserGoKeepsTabAndToolbarTracksBackForwardRefresh() {
+        let app = XCUIApplication(); app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-browser-workspace"]; app.launch()
+        XCTAssertTrue(app.buttons["destination-picker"].waitForExistence(timeout: 20))
+        if app.buttons["new-main-browser-tab"].exists { app.buttons["new-main-browser-tab"].tap() }
+        else { app.tabBars.buttons["Team"].tap(); if !app.textFields["browser-address"].waitForExistence(timeout: 2) { app.buttons["team-new-browser-tab"].tap() } }
+        let address = app.textFields["browser-address"]
+        XCTAssertTrue(address.waitForExistence(timeout: 15))
+        let tabs = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "browser-tab-select-"))
+        XCTAssertEqual(tabs.count, 1)
+        let originalID = tabs.firstMatch.identifier
+        address.tap(); address.typeText("http://127.0.0.1:4329/browser/one"); app.buttons["browser-go"].tap()
+        XCTAssertTrue(app.webViews.staticTexts["First browser page"].waitForExistence(timeout: 15))
+        XCTAssertEqual(tabs.count, 1); XCTAssertEqual(tabs.firstMatch.identifier, originalID)
+        XCTAssertEqual(app.buttons[originalID].value as? String, "Active")
+        XCTAssertFalse(app.buttons["browser-back"].isEnabled)
+        app.webViews.links["Next browser page"].tap()
+        XCTAssertTrue(app.webViews.staticTexts["Second browser page"].waitForExistence(timeout: 15))
+        expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: app.buttons["browser-back"]); waitForExpectations(timeout: 10)
+        app.buttons["browser-back"].tap()
+        XCTAssertTrue(app.webViews.staticTexts["First browser page"].waitForExistence(timeout: 15))
+        expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: app.buttons["browser-forward"]); waitForExpectations(timeout: 10)
+        app.buttons["browser-forward"].tap()
+        XCTAssertTrue(app.webViews.staticTexts["Second browser page"].waitForExistence(timeout: 15))
+        let load = app.webViews.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Load ")).firstMatch
+        XCTAssertTrue(load.waitForExistence(timeout: 10)); let before = load.label
+        expectation(for: NSPredicate(format: "label == %@", "Refresh page"), evaluatedWith: app.buttons["browser-refresh"]); waitForExpectations(timeout: 10)
+        app.buttons["browser-refresh"].tap()
+        expectation(for: NSPredicate(format: "label != %@", before), evaluatedWith: load); waitForExpectations(timeout: 15)
+        XCTAssertEqual(tabs.count, 1); XCTAssertEqual(tabs.firstMatch.identifier, originalID)
+        app.buttons["browser-new-tab"].tap(); XCTAssertEqual(tabs.count, 2)
+        XCTAssertEqual(app.buttons[originalID].value as? String, "Inactive")
+        app.buttons[originalID].tap()
+        XCTAssertTrue(app.webViews.staticTexts["Second browser page"].waitForExistence(timeout: 15))
+        XCTAssertEqual(app.buttons[originalID].value as? String, "Active")
+        XCTAssertTrue(app.buttons["browser-back"].isEnabled)
+        let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Native browser toolbar and active tab"; screenshot.lifetime = .keepAlways; add(screenshot)
+    }
+    @MainActor func testBrowserHistoryShowsLocalVisitDeviceAndPagesAfter25() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--synthetic-browser-history", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        let first = app.staticTexts["browser-history-details-1"]
+        XCTAssertTrue(first.waitForExistence(timeout: 15))
+        XCTAssertTrue(first.label.contains("Oct 4, 2026")); XCTAssertTrue(first.label.contains("12:00")); XCTAssertTrue(first.label.contains("Visiting iPad"))
+        XCTAssertTrue(app.staticTexts["browser-history-details-2"].label.contains("Unknown device"))
+        app.buttons["Use Tokyo history timezone"].tap()
+        expectation(for: NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "Oct 5, 2026", "3:00"), evaluatedWith: first)
+        waitForExpectations(timeout: 10)
+        let more = app.buttons["browser-history-more"]
+        for _ in 0..<12 { if more.exists && more.isHittable { break }; app.swipeUp() }
+        XCTAssertTrue(more.exists); XCTAssertFalse(app.staticTexts["Visit 26"].exists)
+        more.tap(); app.swipeUp()
+        XCTAssertTrue(app.staticTexts["Visit 26"].waitForExistence(timeout: 10))
+        XCTAssertFalse(more.exists)
+    }
     @MainActor func testMessageTimestampUsesDeviceZoneInsteadOfSharedUTCAndUpdates() {
         let app = XCUIApplication()
         app.launchArguments = ["--synthetic-message-timezone", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]

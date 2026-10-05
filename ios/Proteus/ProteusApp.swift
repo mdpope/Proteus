@@ -9,6 +9,7 @@ import SwiftUI
         WindowGroup {
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--synthetic-message-timezone") { MessageTimezoneFixture() }
+            else if ProcessInfo.processInfo.arguments.contains("--synthetic-browser-history") { BrowserHistoryFixture() }
             else { ProteusRoot().environmentObject(destinations).environmentObject(life).environmentObject(shared) }
             #else
             ProteusRoot().environmentObject(destinations).environmentObject(life).environmentObject(shared)

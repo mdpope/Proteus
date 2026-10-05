@@ -50,7 +50,14 @@ const unavailable = { status: async () => ({available:false,models:[],error:'Syn
 const second = await startServer({home: secondHome, port: 0, timers: false, providers: {rehearsal: new RehearsalProvider(), copilot: unavailable, codex: unavailable, claude: unavailable}});
 await second.remote.configure({label:'Work Mac',enabled:true,mode:'external',relayURL:'ws://127.0.0.1:4328',publicURL:'ws://127.0.0.1:4328',relayToken:token});
 await until(() => second.remote.status === 'online', 20_000);
+const browserVisits = new Map();
 const fixture = http.createServer(async (req, res) => {
+  if (['/browser/one', '/browser/two'].includes(req.url)) {
+    const count = (browserVisits.get(req.url) || 0) + 1; browserVisits.set(req.url, count);
+    const first = req.url.endsWith('/one');
+    res.writeHead(200, {'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});
+    res.end(`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>${first?'First':'Second'} browser page</title><h1>${first?'First':'Second'} browser page</h1><p>Load ${count}</p><a href="/browser/${first?'two':'one'}">${first?'Next':'Previous'} browser page</a>`);return;
+  }
   if (req.url === '/latest') { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ context: app.engine.listRuns()[0]?.schedule.context, reasoningEffort: app.engine.listRuns()[0]?.schedule.reasoningEffort, contextTier: app.engine.listRuns()[0]?.schedule.contextTier, queuedMessages: app.engine.listRuns()[0]?.queuedMessages })); return; }
   if (!req.url.startsWith('/pair')) { res.writeHead(404); res.end(); return; }
   const target = req.url.includes('host=second') ? second : app;

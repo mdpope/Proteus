@@ -22,6 +22,7 @@ struct NativeShell: View {
     @AppStorage("lifeEnabled") private var lifeEnabled = false
     @ObservedObject private var notifications = NativeNotifications.shared
     private var tablet: Bool { sizeClass == .regular }
+    private let tabAccent = Color(red: 0.67, green: 0.86, blue: 0.49)
     private var recentChats: [AggregateChat] {
         Array(destinations.destinations.flatMap { destination in
             (destinations.remote(for: destination.id)?.state["runs"].array ?? []).map { AggregateChat(hostID: destination.id, hostName: destination.label, run: $0) }
@@ -35,7 +36,17 @@ struct NativeShell: View {
                     VStack(spacing: 0) {
                         HStack(spacing: 0) {
                             Button { sidebar.toggle() } label: { Label("Toggle sidebar", systemImage: "sidebar.left") }.labelStyle(.iconOnly).padding(10).keyboardShortcut("s", modifiers: [.command, .option])
-                            ScrollView(.horizontal) { HStack(spacing: 0) { ForEach(opened) { tab in HStack { Button(tab.rawValue) { area = tab }; Button { opened.removeAll { $0 == tab }; if area == tab { area = opened.last ?? .home }; if opened.isEmpty { opened = [.home] } } label: { Image(systemName: "xmark").font(.caption2) }.accessibilityLabel("Close " + tab.rawValue) }.padding(10).background(area == tab ? Color.accentColor.opacity(0.15) : Color.clear).contextMenu { Button("Unload") { if tab == .team { shared.unloadBrowsers() }; opened.removeAll { $0 == tab }; area = .home } } }; Spacer() } }.scrollIndicators(.hidden)
+                            ScrollView(.horizontal) { HStack(spacing: 0) {
+                                ForEach(opened) { tab in
+                                    HStack { Button(tab.rawValue) { area = tab }.accessibilityIdentifier("shell-tab-" + tab.rawValue).accessibilityValue(area == tab ? "Active" : "Inactive"); Button { opened.removeAll { $0 == tab }; if area == tab { area = opened.last ?? .home }; if opened.isEmpty { opened = [.home] } } label: { Image(systemName: "xmark").font(.caption2) }.accessibilityLabel("Close " + tab.rawValue) }
+                                        .padding(12).background(area == tab ? tabAccent.opacity(0.08) : Color.clear)
+                                        .overlay(alignment: .bottom) { Rectangle().fill(area == tab ? tabAccent : .clear).frame(height: 2) }
+                                        .contextMenu { Button("Unload") { if tab == .team { shared.unloadBrowsers() }; opened.removeAll { $0 == tab }; area = .home } }
+                                    Divider().frame(height: 24)
+                                }
+                                Button("Browser", systemImage: "plus") { shared.open(nil); teamSection = "Browser"; area = .team }
+                                    .padding(12).accessibilityLabel("New browser tab").accessibilityIdentifier("new-main-browser-tab")
+                            }.buttonStyle(.plain) }.scrollIndicators(.hidden)
                         }.background(.bar)
                         Divider(); ZStack { ForEach(opened) { item in if item != .team || area == .team { content(item).opacity(area == item ? 1 : 0).allowsHitTesting(area == item).accessibilityHidden(area != item) } } }
                     }

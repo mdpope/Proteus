@@ -12,6 +12,7 @@ import Security
     @Published var browserTabs: [BrowserDescriptor] = [] { didSet { saveBrowsers() } }
     @Published var selectedBrowser: String?
     @Published var unloadedBrowsers = Set<String>()
+    @Published private(set) var browserNavigation: [String: BrowserNavigationState] = [:]
     @Published var linkChatDraft: BrowserChatDraft?
     @Published var exportFile: BrowserExportFile?
     @Published var downloadError: String?
@@ -19,6 +20,7 @@ import Security
     private var account = ""
     private var restoring = false
     private var browserViews: [String: WKWebView] = [:]
+    private var browserObservations: [String: [NSKeyValueObservation]] = [:]
     var lists: [JSON] { snapshot["teamLists"].array }
     func reset(for identity: String) {
         guard account != identity else { return }
@@ -107,9 +109,25 @@ import Security
             return keys.isSuperset(of: ["hostid", "key", "relay"]) || keys.isSuperset(of: ["hostid", "deviceid", "key"])
         }
     }
+    static func historyDeviceID(defaults: UserDefaults = .standard) -> String {
+        let key = "browserHistoryDeviceId"
+        if let value = defaults.string(forKey: key), UUID(uuidString: value) != nil { return value }
+        let value = UUID().uuidString.lowercased(); defaults.set(value, forKey: key); return value
+    }
+    static func historyDeviceName(_ value: String, fallback: String = "Unknown device") -> String {
+        let clean = String(value.unicodeScalars.filter { !CharacterSet.controlCharacters.contains($0) }.map(String.init).joined().trimmingCharacters(in: .whitespacesAndNewlines).prefix(100))
+        return clean.isEmpty ? String(fallback.prefix(100)) : clean
+    }
+    static func historyVisit(_ url: URL, title: String, at: Date, deviceID: String, deviceName: String) -> JSON? {
+        guard let clean = historyURL(url.absoluteString), UUID(uuidString: deviceID) != nil else { return nil }
+        let formatter = ISO8601DateFormatter(); formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return .object(["url": .string(clean.absoluteString), "title": .string(String(title.prefix(160))), "source": .string("mobile"), "visitedAt": .string(formatter.string(from: at)), "deviceId": .string(deviceID), "deviceName": .string(historyDeviceName(deviceName))])
+    }
     func record(_ url: URL, title: String, life: LifeStore) async {
-        guard let clean = Self.historyURL(url.absoluteString), life.credential?.appAuthorized == true else { return }
-        _ = await mutate(life, path: "/history", body: .object(["url": .string(clean.absoluteString), "title": .string(String(title.prefix(160))), "source": .string("mobile")]))
+        guard Self.historyURL(url.absoluteString) != nil, life.credential?.appAuthorized == true else { return }
+        let deviceName = Self.historyDeviceName(UIDevice.current.name, fallback: UIDevice.current.model)
+        guard let visit = Self.historyVisit(url, title: title, at: Date(), deviceID: Self.historyDeviceID(), deviceName: deviceName) else { return }
+        _ = await mutate(life, path: "/history", body: visit)
     }
     @discardableResult func prepareLinkDraft(_ url: URL, remote: RemoteStore, hostID: String, hostName: String) -> Bool {
         guard remote.connection?.hostId == hostID, let safe = Self.safeURL(url.absoluteString) else { return false }
@@ -135,8 +153,26 @@ import Security
         let tab = BrowserDescriptor(id: UUID().uuidString, title: title, url: url?.absoluteString)
         browserTabs.append(tab); selectedBrowser = tab.id
     }
+    @discardableResult func navigate(_ url: URL, in id: String) -> Bool {
+        guard ["http", "https"].contains(url.scheme), url.host != nil, url.user == nil, url.password == nil,
+              let index = browserTabs.firstIndex(where: { $0.id == id }) else { return false }
+        browserTabs[index].url = url.absoluteString
+        browserTabs[index].title = url.host ?? "Browser"
+        unloadedBrowsers.remove(id)
+        browserViews[id]?.load(URLRequest(url: url))
+        return true
+    }
+    func goBack(_ id: String) { if let view = browserViews[id], view.canGoBack { view.goBack() } }
+    func goForward(_ id: String) { if let view = browserViews[id], view.canGoForward { view.goForward() } }
+    func refreshBrowser(_ id: String) { if let view = browserViews[id] { view.reload() } else { reload(id) } }
+    func stopBrowser(_ id: String) { browserViews[id]?.stopLoading() }
     func close(_ id: String) { unload(id); unloadedBrowsers.remove(id); browserTabs.removeAll { $0.id == id }; if selectedBrowser == id { selectedBrowser = browserTabs.last?.id } }
-    func unload(_ id: String) { if let view = browserViews.removeValue(forKey: id) { view.navigationDelegate = nil; view.uiDelegate = nil; view.stopLoading(); view.loadHTMLString("", baseURL: nil) }; unloadedBrowsers.insert(id) }
+    func unload(_ id: String) {
+        browserObservations.removeValue(forKey: id)?.forEach { $0.invalidate() }
+        browserNavigation.removeValue(forKey: id)
+        if let view = browserViews.removeValue(forKey: id) { view.navigationDelegate = nil; view.uiDelegate = nil; view.stopLoading() }
+        unloadedBrowsers.insert(id)
+    }
     func reload(_ id: String) { unloadedBrowsers.remove(id) }
     func unloadBrowsers() { for id in Array(browserViews.keys) { unload(id) } }
     func isBrowserLoaded(_ id: String) -> Bool { browserViews[id] != nil }
@@ -144,8 +180,32 @@ import Security
         if let view = browserViews[tab.id] { return view }
         let configuration = WKWebViewConfiguration(); configuration.websiteDataStore = .nonPersistent()
         let view = WKWebView(frame: .zero, configuration: configuration); view.allowsBackForwardNavigationGestures = true
-        if let text = tab.url, let url = URL(string: text) { view.load(URLRequest(url: url)) }; browserViews[tab.id] = view; return view
+        browserViews[tab.id] = view
+        browserObservations[tab.id] = [observeBrowser(view, id: tab.id, keyPath: \.canGoBack), observeBrowser(view, id: tab.id, keyPath: \.canGoForward), observeBrowser(view, id: tab.id, keyPath: \.isLoading), observeBrowser(view, id: tab.id, keyPath: \.url), observeBrowser(view, id: tab.id, keyPath: \.title)]
+        if let text = tab.url, let url = URL(string: text) { view.load(URLRequest(url: url)) }
+        return view
     }
+    private func observeBrowser<Value>(_ view: WKWebView, id: String, keyPath: KeyPath<WKWebView, Value>) -> NSKeyValueObservation {
+        view.observe(keyPath, options: [.new]) { [weak self, weak view] _, _ in
+            Task { @MainActor [weak self, weak view] in
+                guard let self, let view, self.browserViews[id] === view,
+                      let index = self.browserTabs.firstIndex(where: { $0.id == id }) else { return }
+                let state = BrowserNavigationState(url: view.url?.absoluteString ?? "", title: view.title ?? "", canGoBack: view.canGoBack, canGoForward: view.canGoForward, isLoading: view.isLoading)
+                if self.browserNavigation[id] != state { self.browserNavigation[id] = state }
+                var tab = self.browserTabs[index]
+                if !state.url.isEmpty && state.url != "about:blank" { tab.url = state.url }
+                if !state.title.isEmpty { tab.title = state.title }
+                if tab.url != self.browserTabs[index].url || tab.title != self.browserTabs[index].title { self.browserTabs[index] = tab }
+            }
+        }
+    }
+}
+struct BrowserNavigationState: Equatable {
+    var url = ""
+    var title = ""
+    var canGoBack = false
+    var canGoForward = false
+    var isLoading = false
 }
 struct BrowserDescriptor: Identifiable, Codable { var id: String; var title: String; var url: String? }
 

@@ -431,6 +431,63 @@ extension DestinationTests {
 }
 
 final class NativeParityTests: XCTestCase {
+    @MainActor func testBrowserNavigationPreservesTabAndWebViewAndInvalidatesUnloadedObservers() async throws {
+        let shared = SharedAppStore(); shared.open(nil)
+        let tab = try XCTUnwrap(shared.browserTabs.first), id = tab.id
+        let original = shared.webView(tab)
+        XCTAssertTrue(shared.navigate(try XCTUnwrap(URL(string: "http://127.0.0.1:4329/browser/one")), in: id))
+        XCTAssertEqual(shared.browserTabs.count, 1); XCTAssertEqual(shared.selectedBrowser, id)
+        XCTAssertTrue(shared.webView(try XCTUnwrap(shared.browserTabs.first)) === original)
+        for _ in 0..<100 { if shared.browserNavigation[id]?.title == "First browser page" && shared.browserNavigation[id]?.isLoading == false { break }; try await Task.sleep(for: .milliseconds(100)) }
+        XCTAssertEqual(shared.browserNavigation[id]?.title, "First browser page")
+        XCTAssertTrue(shared.navigate(try XCTUnwrap(URL(string: "http://127.0.0.1:4329/browser/two")), in: id))
+        for _ in 0..<100 { if shared.browserNavigation[id]?.canGoBack == true && shared.browserNavigation[id]?.title == "Second browser page" { break }; try await Task.sleep(for: .milliseconds(100)) }
+        XCTAssertTrue(shared.browserNavigation[id]?.canGoBack == true)
+        XCTAssertTrue(shared.webView(try XCTUnwrap(shared.browserTabs.first)) === original)
+        shared.unload(id)
+        XCTAssertFalse(shared.isBrowserLoaded(id)); XCTAssertNil(shared.browserNavigation[id])
+        original.loadHTMLString("<title>Stale page</title>", baseURL: nil)
+        try await Task.sleep(for: .milliseconds(250))
+        XCTAssertNil(shared.browserNavigation[id]); XCTAssertNotEqual(shared.browserTabs.first?.title, "Stale page")
+        shared.reload(id)
+        let replacement = shared.webView(try XCTUnwrap(shared.browserTabs.first))
+        XCTAssertFalse(replacement === original); XCTAssertEqual(shared.browserTabs.count, 1); XCTAssertEqual(shared.selectedBrowser, id)
+        shared.close(id); original.stopLoading()
+        XCTAssertTrue(shared.browserTabs.isEmpty); XCTAssertNil(shared.selectedBrowser); XCTAssertNil(shared.browserNavigation[id])
+    }
+    @MainActor func testHistoryVisitUsesStableInstallationIdentityAndActualVisitInstant() throws {
+        let suite = "proteus-history-" + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let id = SharedAppStore.historyDeviceID(defaults: defaults)
+        XCTAssertNotNil(UUID(uuidString: id))
+        XCTAssertEqual(SharedAppStore.historyDeviceID(defaults: try XCTUnwrap(UserDefaults(suiteName: suite))), id)
+        let date = try XCTUnwrap(ProviderAllowance.date("2026-10-04T18:00:00Z"))
+        let visit = try XCTUnwrap(SharedAppStore.historyVisit(try XCTUnwrap(URL(string: "https://example.test/page?filter=mine#section")), title: "Visited page", at: date, deviceID: id, deviceName: "Visiting iPhone"))
+        XCTAssertEqual(visit["visitedAt"].string, "2026-10-04T18:00:00.000Z")
+        XCTAssertEqual(visit["deviceId"].string, id)
+        XCTAssertEqual(visit["deviceName"].string, "Visiting iPhone")
+        XCTAssertEqual(visit["source"].string, "mobile")
+        XCTAssertEqual(visit["url"].string, "https://example.test/page")
+        XCTAssertEqual(visit["hostId"], .null)
+        XCTAssertNil(SharedAppStore.historyVisit(try XCTUnwrap(URL(string: "https://example.test/?token=secret")), title: "Unsafe", at: date, deviceID: id, deviceName: "Phone"))
+        XCTAssertNil(SharedAppStore.historyVisit(try XCTUnwrap(URL(string: "https://example.test")), title: "Page", at: date, deviceID: "hardware-id", deviceName: "Phone"))
+        XCTAssertEqual(SharedAppStore.historyDeviceName("\n  ", fallback: "iPad"), "iPad")
+        XCTAssertEqual(SharedAppStore.historyDeviceName(String(repeating: "x", count: 120)).count, 100)
+    }
+    @MainActor func testHistoryDetailsUseDeviceZoneAndRetainLegacyUnknownDevice() throws {
+        let denver = try XCTUnwrap(TimeZone(identifier: "America/Denver")), tokyo = try XCTUnwrap(TimeZone(identifier: "Asia/Tokyo"))
+        let locale = Locale(identifier: "en_US")
+        let item: JSON = .object(["visitedAt": .string("2026-10-04T18:00:00Z"), "createdAt": .string("2026-10-05T00:00:00Z"), "deviceName": .string("Visiting iPad")])
+        let local = BrowserHistoryRows.details(item, timeZone: denver, locale: locale)
+        XCTAssertTrue(local.contains("Oct 4, 2026")); XCTAssertTrue(local.contains("12:00")); XCTAssertTrue(local.contains("Visiting iPad"))
+        let away = BrowserHistoryRows.details(item, timeZone: tokyo, locale: locale)
+        XCTAssertTrue(away.contains("Oct 5, 2026")); XCTAssertTrue(away.contains("3:00"))
+        let legacy: JSON = .object(["createdAt": .string("2026-01-04T18:00:00Z")])
+        let old = BrowserHistoryRows.details(legacy, timeZone: denver, locale: locale)
+        XCTAssertTrue(old.contains("11:00")); XCTAssertTrue(old.hasSuffix("Unknown device"))
+        XCTAssertEqual(BrowserHistoryRows.details(.null, timeZone: denver, locale: locale), "Time unavailable · Unknown device")
+    }
     @MainActor func testUnauthenticatedRelayNoticesPreservePairingAndCachedHistory() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
