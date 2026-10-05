@@ -45,3 +45,25 @@ Streaming updates change conversation content and usage in place. They do not de
 model/permission menus, navigation or detail panels. Changes to pending requests and other control
 structure wait until an actively edited field loses focus; the conversation continues streaming.
 Expanded detail disclosures survive these less-frequent structural refreshes.
+
+## Approved next increment — October 5 (queued only)
+
+The normal local composer is the reference for remote desktop chats: the same model/effort/
+speed/context-size controls from the owning Mac's advertised provider catalog, with identical
+Send/Queue/Steer/Stop semantics and preserved drafts. A model context-size setting does not grant
+permission to change the chat's loaded workspace/context sources. Provider and destination remain
+fixed for an existing session.
+
+Remote details should expose available usage, model history, session-file metadata and captured/
+loaded context read-only. Desktop/web use the normal sidebar/adaptive layout; mobile retains its
+expandable Chat details and Loaded context and condensed styling. Do not add remote file Open or
+Copy path actions or context-source editing for this increment. Automatically prepend older remote
+history as the reader approaches the top, preserving the viewport, stable event identity, grouping,
+expanded details and playback. Failures offer a retry without restarting or replaying the chat.
+
+Paste adds an attachment strip above the composer: image previews and non-image filename tags,
+per-item removal, and a modal image viewer with backdrop/X/Escape dismissal. Draft attachments
+must remain bound to the account, host and chat, and send only through an explicit supported
+submission. Provider capability validation, bounded encrypted delivery to a remote host, safe
+previewing and cleanup/retry behavior are requirements, not completed implementations.
+See `planned-updates.md` for acceptance coverage.

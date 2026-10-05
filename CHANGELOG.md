@@ -33,6 +33,11 @@ This is a concise behavior log. Git commits and pull requests contain the comple
 
 ## Unreleased
 
+- Record approval of grouped chat Activity and shared details, preserving compact native mobile
+  styling. Queue tab-bar branding and persistent normalized navigation icons, remote composer/
+  read-only details parity, automatic earlier-history loading and pasted image/file attachments.
+  These are approved requirements, not implemented behavior.
+
 - Document and queue Copilot reset provenance, adaptive allowance refresh, consistent provider
   labels and desktop/web chat parity. Record grouped Activity and usage/context details as design
   proposals; source review and read-only status inspection do not constitute implementation.

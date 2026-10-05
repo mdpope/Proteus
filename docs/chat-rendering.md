@@ -59,10 +59,16 @@ resolved path, matched root or tool-call ID. If the corresponding tool already e
 can carry the approval reason and reported arguments/target; the generic line alone cannot name
 which folder was written. This limitation must remain explicit for older records.
 
-Queued requirements use the desktop conversation as the web reference and retain provider names
-on all clients. A proposed Activity group combines consecutive routine tools and approvals while
-keeping actionable warnings and requests visible. Path/rule correlation and optional usage/context
-details need an explicit shared contract. See `planned-updates.md`; these are not implemented.
+The operator approved the Activity-group mockup on October 5. Desktop is the web visual
+reference; all clients share provider labels, grouped routine tools/approvals, actionable warnings
+and expandable usage/context information. Mobile retains condensed native formatting and solid
+message boxes rather than adopting desktop styling. Path/rule correlation still needs an explicit
+shared contract, and illustrative mockup paths/metrics are not real account observations.
+
+Also queued: image thumbnails and filename tags above the composer, with removable draft
+attachments and a modal image preview dismissed by backdrop, X or Escape. Apply attachment
+presentation consistently to local/remote chats and mobile, with provider-specific support made
+explicit. See `planned-updates.md` and `chat-controls.md`; these changes are not implemented.
 
 ## Chat timestamps
 

@@ -7,13 +7,20 @@ and manifests; this repository owns the generic app and provider adapters.
 
 ## Latest release state
 
-An October 5 source review and read-only local provider-status check documented the next
-allowance/chat work in `planned-updates.md`: Copilot expected-reset labeling, adaptive usage
-refresh including duplicate status/catalog quota reads, provider-name consistency and web
-conversation parity. Proposed grouped Activity and usage/context details remain for discussion.
-The review confirmed a past Copilot reset observation and the differing web/desktop renderers;
-no runtime changes, deployment or model turns were performed. Read `providers.md` and
-`chat-rendering.md` for the current behavior and evidence limits.
+The operator approved the October 5 chat mockup and requested queuing only. Grouped Activity,
+visible actionable warnings and usage/context details should be consistent across clients;
+mobile keeps its condensed native formatting and solid boxes. New queued work also moves smaller
+Proteus branding into the tab bar while preserving existing artwork, enlarges/normalizes icons
+and retains them in the minimized hover-expanding rail, gives remote chats the normal composer
+and read-only details, automatically pages earlier history, and adds pasted image/file attachments.
+Remote file Open/Copy path actions and context-source editing are excluded. See
+`planned-updates.md`, `chat-controls.md`, `chat-rendering.md` and the October 5 decision entry.
+
+The earlier source/read-only review also queued Copilot expected-reset labeling, adaptive usage
+refresh including duplicate status/catalog quota reads, and provider-name consistency. It
+confirmed a past Copilot reset observation and differing web/desktop renderers. No runtime
+changes, deployment or model turns were performed for these queue entries. Read `providers.md`
+for current behavior and evidence limits; the illustrative mockup is not product acceptance.
 
 The latest remote parity-branch backlog updates have been merged, preserving the local queue.
 A desktop Standup issue is now queued: adding a saved link clears the generated docked daily

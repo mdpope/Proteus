@@ -3,10 +3,88 @@
 Maintain this as the single backlog. Design rationale is in `decisions.md`; recent changes are in
 `../CHANGELOG.md`. Items below are status, not promises of completed validation.
 
-## Queued review: allowance refresh and chat parity — October 5
+## Queued: tab-bar branding and persistent navigation icons — October 5
 
-Status: source review and a read-only check of the running local Mac completed; requirements
-and proposed presentation recorded below. No runtime change, deployment or live-chat execution.
+Status: explicitly requested following the approved chat mockup; not implemented.
+
+- Move the compact Proteus name and existing app logo into the top tab-bar chrome so branding
+  remains visible with the navigation minimized. Preserve the current product logo and icon
+  artwork; the illustrative mockup logo is not an approved replacement.
+- Slightly enlarge navigation icons and normalize their perceived size, alignment and stroke
+  treatment. Equal bounding boxes alone are insufficient when glyphs occupy different areas.
+  Apply the same shared sizing rules to corresponding desktop/web and wide-iPad controls.
+- Minimized navigation retains a narrow rail of clickable feature icons, active-state indication
+  and accessible names/tooltips. Pointer entry still opens the sidebar as a slide-over; leaving
+  closes it without shifting the content, losing focus or intercepting unrelated chat controls.
+  Preserve explicit expand/pin controls, keyboard access and a touch alternative on iPad.
+- Acceptance: expanded, icon-only and hover-overlay states at normal/narrow widths and UI scales;
+  long/overflowing top tabs; active feature/subitems, pointer transitions and keyboard/touch use.
+  This changes shell presentation, not feature routing or the location of iPhone allowance.
+
+## Queued: remote desktop chat parity and automatic earlier history — October 5
+
+Status: operator report with local/remote desktop screenshots; queued, not implemented or tested.
+
+- Reuse the local chat composer and layout for remote desktop chats: the same message box,
+  Send/Queue/Steer/Stop behavior and destination-provider model, effort, speed and applicable
+  context-size controls. Use the owning Mac's refreshed catalog and advertised capabilities.
+  Apply selected settings to the next queued turn, preserve the active turn's settings and keep
+  the chat on its original provider/host. Never silently substitute a model or route locally.
+- Present the same read-only chat details as a local session where the host supplies them:
+  input/output and supported cache/credit metrics, session identity/files metadata, captured
+  workspace and loaded context, source versions/delivery state, model history and approvals.
+  Desktop/web use the normal details sidebar/adaptive layout; mobile keeps expandable Chat
+  details and Loaded context with its existing compact visual treatment.
+- Omit remote file Open/Copy path actions and context-changing controls from this increment.
+  Read-only source/path metadata can remain informative; do not map remote paths to the viewing
+  machine, request new filesystem grants, alter context or expand resource access for parity.
+  Context-size model selection is distinct from changing selected workspace/context sources.
+- Replace the normal Load earlier messages button with automatic page loading near the top of
+  remote conversation history, including web/native equivalents where applicable. Preserve the
+  visible message/scroll offset when prepending, stop at the beginning, show a compact loading
+  indicator, and offer a retry on failure. Coalesce loads, deduplicate stable event IDs and
+  preserve activity boundaries, open disclosures and playback through pagination/live updates.
+- Retain per-account/host/chat drafts, selected model settings and scroll state across tabs and
+  reconnects. Offline and older-host capability limits must be explicit; no replay of ambiguous
+  sends. Keep provider setup on the host and existing host-side permission enforcement.
+- Acceptance: the same synthetic local/remote transcript and composer states; model changes
+  through a real test peer without billable prompts; source/session details read-only; older-host
+  fallbacks; repeated upward scrolling during streaming, reconnect, failed paging and long history.
+
+## Queued: pasted image and file attachments in chat — October 5
+
+Status: requested for chat composers across desktop/web/iPhone/iPad, including remote chats;
+not implemented. The supplied attachment-strip image is a presentation reference only.
+
+- Pasting images adds preview thumbnails in an attachment strip at the top of the composer.
+  Clicking/tapping a thumbnail opens a large modal preview; clicking the backdrop or its X
+  closes it. Include Escape, focus containment/return and an accessible close control.
+- Pasted non-image files appear as filename tags, with type/size where useful. Keep attachments
+  outside the editable text if simpler; allow multiple mixed attachments, text and per-item removal
+  before sending. Retain their association with the draft and show sent attachments in history.
+  Use platform paste/file-selection equivalents where clipboard file access is unavailable.
+- Stage attachments locally until explicit Send/Queue (or another explicitly supported send
+  action). Show preparation/upload/error states and provider capability/size limits; unsupported
+  formats must produce an actionable explanation, never silent omission or claimed delivery.
+  Images should reach image-capable providers as images, not only a path on the viewing device.
+- Bind every attachment to its account, destination Mac, chat and submitted message identity.
+  Deliver remote bytes through an authenticated encrypted host transport; do not expose public
+  file URLs or give the website provider credentials. Define bounded size/count/type validation,
+  filename/path normalization, draft protection, retention and cleanup before implementation.
+- Preview untrusted file contents safely; do not execute pasted files or interpret file content
+  as privileged application instructions. Pasting itself grants no workspace trust or broader
+  tool permission. Treat attachment removal, cancelled sends, retries, account/host switches and
+  application restart explicitly so content cannot be silently sent to another destination.
+- Acceptance: multiple image/file paste with text, remove/retry, thumbnail/full preview dismissal
+  and keyboard accessibility, native clipboard/files equivalents, local and remote delivery,
+  duplicate send protection, provider rejection, large/unsafe files and cross-account isolation.
+
+## Queued: allowance refresh and approved chat presentation — October 5
+
+Status: the operator approved the interactive chat proposal on October 5 and requested queuing,
+not implementation. The source review and read-only local Mac check are complete. The approved
+flow applies to desktop, web and mobile; mobile keeps its condensed native formatting and solid
+message boxes. No runtime change, deployment or live-chat execution has occurred for this queue.
 Private chat contents, machine paths and account usage values are excluded from this record.
 
 Confirmed requirements:
@@ -39,7 +117,7 @@ Confirmed requirements:
   display zones; review implicit UTC defaults versus intentional user time-zone choices, without
   changing stored UTC instants or silently overwriting an explicit preference.
 
-Proposed design for discussion, not yet an approved implementation specification:
+Approved presentation direction, queued for implementation (the mockup used illustrative data):
 
 - Group consecutive routine tool activity and automatic approvals between assistant/user messages
   into an expandable Activity block, with a deterministic summary such as “3 files read · 2 edited
@@ -57,11 +135,13 @@ Proposed design for discussion, not yet an approved implementation specification
   issues prominent. Show a failure badge even when a group is collapsed. Context compaction can
   be a small timeline marker; old authentication warnings should remain historical once recovery
   is verified (see the existing MCP reconciliation item). Grouping must not change permissions.
-- Consider a Usage/Context drawer per turn/session using reported input/output/cache tokens,
+- Add expandable Usage/Context details per turn/session using reported input/output/cache tokens,
   model, tool duration and provider credit totals where available. Mark incomplete/unsupported
   metrics; do not manufacture exact per-file cost or use an assistant's narrative as a billing
   ledger. Current Copilot code persists input/output totals and optional session metrics, but
   the remote projection omits the latter. Review a redacted, compatible contract before exposing.
+  Desktop/web can use the normal details sidebar; mobile retains expandable Chat details and
+  Loaded context. Flow, data and actions are shared without forcing desktop styling onto mobile.
 
 Acceptance for the queued work: fake-clock active/idle/provider-isolation and event/manual-refresh
 coalescing tests; month/year/DST reset tests; stale/missing/future provider values; identical

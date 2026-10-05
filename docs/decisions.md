@@ -206,3 +206,28 @@ embedding. Native Team browser descriptors restore without loading; active pages
 Dirty, audible or agent-owned desktop pages reject automatic unloading. Process metrics name their
 shared attribution rather than inventing a per-tool memory number. APNs entitlement/provisioning
 and production push delivery are explicit release dependencies. See `parity-release.md`.
+
+## October 5 — approved chat presentation and queued shell/composer parity
+
+The operator approved the interactive current-versus-proposed chat comparison. Group consecutive
+routine tools and automatic approvals between messages into expandable Activity blocks; retain
+paths, commands, results and authorization reasons in correlated detail, with raw audit data one
+level deeper. Actionable approvals, failures and sign-in problems remain visible. Add reported
+usage/context detail without fabricated metrics. This is design approval plus a request to queue,
+not evidence that production rendering changed.
+
+Desktop and web share the conversation presentation. Native mobile shares event semantics,
+capabilities and detail availability while retaining condensed formatting and solid message boxes.
+Place compact Proteus branding in the tab-bar chrome, using the existing logo/icon artwork. A
+minimized navigation rail keeps slightly larger, optically consistent icons and its hover slide-over,
+with keyboard/touch alternatives. The mockup's illustrative replacement logo was not selected.
+
+Remote desktop chats should reuse the local composer and normal details layout, using host-owned
+model metadata and exposing session/context information read-only. Omit remote Open/Copy path
+and context-source changes in this increment. Load earlier history automatically while scrolling
+up, without changing the reading position. Retain mobile's expandable detail presentation.
+
+Images and other files can be pasted into a removable composer attachment strip; images open a
+modal preview. Attachment delivery stays explicit, provider-capability-aware and bound to the
+account/host/chat/message. Pasting grants no additional trust and must not execute file contents.
+Implementation and acceptance remain in the single `planned-updates.md` backlog.
