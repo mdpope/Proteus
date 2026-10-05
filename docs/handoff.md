@@ -9,7 +9,8 @@ and manifests; this repository owns the generic app and provider adapters.
 
 Build Mac runs parity runtime commit `295be2d`; website release `20261005T000810Z` is live.
 Read `parity-release.md` for final test, preservation, backup and restore receipts. Signed phone/iPad
-build is ready but physical devices were locked. Shared app scopes await OAuth consent. Work Mac
+build is ready but physical devices were locked; later iPhone discovery was unavailable. The
+operator approved shared app scopes and OAuth reconsent started; callback verification is pending. Work Mac
 received the exact final commit and passed its focused checks, but its Codex connection became
 unavailable before the installation receipt could be read; obtain that receipt before claiming it
 updated. Web Push is configured with an active worker; APNs and real push delivery remain pending.

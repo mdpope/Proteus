@@ -135,7 +135,8 @@ Web Push has a protected first-time VAPID key, verified portable credential back
 bounded delivery timer with successful worker execution. Actual device delivery is not verified.
 APNs remains unconfigured and the preserved physical profile lacks its entitlement. The signed
 phone/iPad build and 25-input hash receipt are ready; the last physical-device checks found both
-locked. No parity build was installed on either device. Physical iPad installation remains deferred.
+locked; a later iPhone check found the device unavailable to CoreDeviceService. No parity build
+was installed on either device. Physical iPad installation remains deferred.
 
 The Work Mac validated the base release (244 tests, static checks, 21 parity checks and package
 checks), then the final delta (22 browser checks and static checks). The exact final commit was
@@ -144,8 +145,8 @@ identity. That Codex connection became unavailable before the final installation
 read. Do not claim HC installation from build results; reconnect and obtain the receipt first.
 
 The existing Build Mac sign-in still has its prior Life scopes. `/api/app` correctly refuses
-shared app access until explicit OAuth reconsent. The operator has been asked to approve the added
-shared-data scopes; no response or approval is inferred. Production account-backed pairing
+shared app access until explicit OAuth reconsent. The operator explicitly approved the added shared-data scopes. The installed app started
+its normal OAuth reconsent; successful callback and live shared-data access remain to be verified. Production account-backed pairing
 migration, Default Mac selection, native Team synchronization, browser notification permission and
 end-device delivery remain distinct acceptance steps. No credentials or Mac grants were silently
 created to make the new views appear connected.
@@ -154,3 +155,13 @@ The deployment audit also identified a pre-existing MariaDB `mysql.column_stats`
 version mismatch, identical before and after release. Application recovery/endpoint checks passed.
 The deployment workspace records a separate all-database-backup and version-reviewed system-table
 maintenance proposal; no server-wide repair was attempted as part of this application update.
+
+
+Latest consent check: the operator approved the scope expansion and the installed app launched
+its normal system-browser flow. Native browser control failed/stalled before the consent click.
+Read-only checks confirm Life remains ready with the original account/workspace/origin; shared
+app and Team-list endpoints correctly remain unavailable. No roster was imported. Complete the
+opened authorization page and return to Proteus, or restart Engine Room → App Setup → Authorize
+shared features if expired. The approval is already recorded; do not request it again for the
+same action. The iPhone later became undiscoverable and the HC Codex/SSH connections remained
+unavailable. Resume those exact pending checks when the devices reconnect.
