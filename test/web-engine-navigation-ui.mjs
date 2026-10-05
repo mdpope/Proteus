@@ -1,0 +1,55 @@
+// Actual Engine Room module, synthetic delayed services, disposable browser only.
+import fs from 'node:fs';
+import path from 'node:path';
+import http from 'node:http';
+import assert from 'node:assert/strict';
+import {chromium} from 'playwright';
+const root=path.resolve(import.meta.dirname,'..');
+const shared=`export const escapeHTML=value=>String(value??'');export const externalLink=()=>'';export const dateTime=value=>value;export const localDateTime=value=>value;export const recordBrowserVisit=async()=>{};export const defaultMacStatus=()=>({message:'Choose a Default Mac in Engine Room.'});export const updateDefaultMac=async()=>{};export const retryDefaultMac=async()=>{};export const defaultMacRequest=async()=>({supported:true,observedAt:'synthetic',processes:[],tabs:[]});export const appRequest=()=>new Promise(resolve=>{window.resolveApp=()=>resolve({preferences:{timezone:'UTC'},teamLists:[],links:[],history:[],notifications:[],logs:[],push:{}})});`;
+const store=`window.pendingDestinations=[];export class BrowserDestinationStore{list(){return new Promise((resolve,reject)=>{window.pendingDestinations.push({resolve:()=>resolve([]),reject:()=>reject(new Error('Synthetic stale lookup failure'))})})}close(){window.closedStores=(window.closedStores||0)+1}}`;
+const html=`<!doctype html><body data-browser-account="synthetic"><section id="engine-room"><p id="shared-notice"></p><nav>${['resources','connections','setup','usage','notifications','logs'].map(t=>`<button data-engine-tab="${t}">${t}</button>`).join('')}</nav><div id="engine-content"></div></section><script type="module" src="/app-tools.js"></script>`;
+const server=http.createServer((req,res)=>{
+    const pathname=new URL(req.url,'http://local').pathname;
+    const content=pathname==='/app-tools.js'?fs.readFileSync(path.join(root,'web/resources/js/app-tools.js')):pathname==='/shared-app.js'?shared:pathname==='/remote-client.js'?store:pathname==='/remote-usage.js'?'export const usagePanel=()=>"Synthetic allowance";':html;
+    res.setHeader('Content-Type',pathname.endsWith('.js')?'text/javascript':'text/html');res.end(content);
+});
+await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+const origin='http://127.0.0.1:'+server.address().port;
+let browser;
+try{
+    browser=await chromium.launch({headless:true});const page=await browser.newPage();page.setDefaultTimeout(10000);
+    const errors=[];page.on('pageerror',error=>errors.push(error.message));
+    const click=tab=>page.locator(`[data-engine-tab=${tab}]`).click();
+    const heading=name=>page.getByRole('heading',{name,exact:true}).waitFor();
+    const resolveApp=async()=>{await page.waitForFunction(()=>typeof window.resolveApp==='function');await page.evaluate(()=>window.resolveApp());};
+    const resolveDestinations=async()=>{await page.waitForFunction(()=>window.pendingDestinations.length>0);await page.evaluate(()=>window.pendingDestinations.shift().resolve());};
+    // A user can select a tab while the initial shared-data response is pending.
+    await page.goto(origin+'/engine-room?tab=resources');await page.waitForFunction(()=>typeof window.resolveApp==='function');
+    await click('connections');assert.equal(new URL(page.url()).searchParams.get('tab'),'connections');
+    await resolveApp();await resolveDestinations();await heading('Connections');assert.deepEqual(errors,[]);
+    // The chosen route survives reload and browser Back/Forward.
+    await page.reload();await resolveApp();await resolveDestinations();await heading('Connections');
+    await click('resources');await heading('Resources');assert.equal(new URL(page.url()).searchParams.get('tab'),'resources');
+    await page.goBack();await resolveDestinations();await heading('Connections');
+    await page.goForward();await heading('Resources');
+    // A late Connections result cannot overwrite a newer section or leak its store.
+    await click('connections');await page.waitForFunction(()=>window.pendingDestinations.length===1);
+    await click('setup');await heading('App Setup');await resolveDestinations();await heading('App Setup');
+    assert.equal(await page.locator('#default-mac-form').count(),0);
+    // Returning to Connections creates a new request; the old one must stay stale
+    // even when its tab name matches again. Its late error cannot replace notices.
+    await click('connections');await page.waitForFunction(()=>window.pendingDestinations.length===1);
+    await click('logs');await heading('Logs');await click('connections');await page.waitForFunction(()=>window.pendingDestinations.length===2);
+    await page.evaluate(()=>window.pendingDestinations[1].resolve());await heading('Connections');
+    await page.evaluate(()=>window.pendingDestinations[0].reject());await heading('Connections');
+    assert.equal(await page.locator('#shared-notice').innerText(),'');
+    assert.equal(await page.evaluate(()=>window.closedStores),5);
+    // Unsolicited default-host/usage updates must not take navigation ownership.
+    await page.evaluate(()=>{document.dispatchEvent(new CustomEvent('proteus:default-connected'));document.dispatchEvent(new CustomEvent('proteus:usage',{detail:{value:{providers:{}},destination:'Synthetic Mac'}}));});
+    await heading('Connections');assert.equal(new URL(page.url()).searchParams.get('tab'),'connections');
+    // Invalid deep links fall back safely, and a subsequent real tab is reloadable.
+    await page.goto(origin+'/engine-room?tab=unsupported');await resolveApp();await heading('Resources');
+    await click('notifications');await heading('Notifications');assert.equal(new URL(page.url()).searchParams.get('tab'),'notifications');
+    assert.deepEqual(errors,[]);
+    console.log(JSON.stringify({passed:true,checks:6,synthetic:true}));
+}finally{await browser?.close();await new Promise(resolve=>server.close(resolve));}

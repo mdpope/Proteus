@@ -1,7 +1,9 @@
 import {appRequest,escapeHTML as e,externalLink,dateTime,localDateTime,recordBrowserVisit,defaultMacRequest,defaultMacStatus,updateDefaultMac,retryDefaultMac} from './shared-app.js';
 import {BrowserDestinationStore} from './remote-client.js';
 import {usagePanel} from './remote-usage.js';
-let state,teamTab='overview',engineTab=new URLSearchParams(location.search).get('tab')||'resources',selectedList='',usage;
+const engineTabs=['resources','connections','setup','usage','notifications','logs'];
+const engineTabFromURL=()=>{const tab=new URLSearchParams(location.search).get('tab');return engineTabs.includes(tab)?tab:'resources';};
+let state,teamTab='overview',engineTab=engineTabFromURL(),engineRenderVersion=0,selectedList='',usage;
 const notice=message=>{const n=document.querySelector('#shared-notice');if(n)n.textContent=message;};
 const action=callback=>async event=>{event?.preventDefault();try{await callback(event);notice('');}catch(error){notice(error.message);}};
 async function reload(){state=await appRequest();window.proteusPreferences=state.preferences;render();}
@@ -41,11 +43,14 @@ function renderBrowser(){
 async function renderEngine(){
     document.querySelectorAll('[data-engine-tab]').forEach(button=>button.classList.toggle('selected',button.dataset.engineTab===engineTab));
     const host=document.querySelector('#engine-content');if(!host)return;
+    const version=++engineRenderVersion;
+    if(!state){host.innerHTML='<p>Loading Engine Room…</p>';return;}
     const pref=state.preferences;
     if(engineTab==='setup')host.innerHTML=`<section class="card"><h2>App Setup</h2><form id="preferences-form"><label>Time zone<input name="timezone" value="${e(pref.timezone)}" required></label><label>AI Allowance<select name="allowanceDisplay">${['compact','expanded','collapsed'].map(v=>`<option ${v===pref.allowanceDisplay?'selected':''}>${v}</option>`).join('')}</select></label><label><input type="checkbox" name="scheduleCompletionNotifications" ${pref.scheduleCompletionNotifications?'checked':''}> Schedule completion notifications</label><button>Save preferences</button></form><p>Configure providers and credentials on the destination Mac.</p></section>`;
     else if(engineTab==='connections'){
         host.innerHTML='<p>Loading verified account destinations…</p>';
-        try {const store=new BrowserDestinationStore(document.body.dataset.browserAccount,{sessionURL:'/remote/session'});const hosts=await store.list();if(engineTab!=='connections')return;host.innerHTML=`<section class="card"><h2>Connections</h2><p>New website work and AI Allowance use the Default Mac. There is no automatic fallback.</p><form id="default-mac-form"><label>Default Mac<select name="defaultMacId"><option value="">Choose explicitly</option>${hosts.map(h=>`<option value="${e(h.hostId)}" ${h.hostId===pref.defaultMacId?'selected':''}>${e(h.label)}${h.source==='legacy'?' · this browser only':''} · ${e(h.hostId)}</option>`).join('')}</select></label><button>Save Default Mac</button></form><p id="default-mac-status" role="status">${e(defaultMacStatus().message)}</p><button id="default-mac-retry" type="button">Retry connection</button><p>Browser-only pairings stay on this browser. Choosing one as the account default does not copy its key; other browsers need their own authorized pairing.</p><a href="/remote?view=connections">Manage and pair Macs</a></section>`;host.querySelector('form').onsubmit=action(async event=>{const id=new FormData(event.target).get('defaultMacId');await updateDefaultMac(id);await reload();});host.querySelector('#default-mac-retry').onclick=()=>void retryDefaultMac();store.close();}catch(error){notice(error.message);}return;
+        const store=new BrowserDestinationStore(document.body.dataset.browserAccount,{sessionURL:'/remote/session'});
+        try {const hosts=await store.list();if(engineTab!=='connections'||version!==engineRenderVersion)return;host.innerHTML=`<section class="card"><h2>Connections</h2><p>New website work and AI Allowance use the Default Mac. There is no automatic fallback.</p><form id="default-mac-form"><label>Default Mac<select name="defaultMacId"><option value="">Choose explicitly</option>${hosts.map(h=>`<option value="${e(h.hostId)}" ${h.hostId===pref.defaultMacId?'selected':''}>${e(h.label)}${h.source==='legacy'?' · this browser only':''} · ${e(h.hostId)}</option>`).join('')}</select></label><button>Save Default Mac</button></form><p id="default-mac-status" role="status">${e(defaultMacStatus().message)}</p><button id="default-mac-retry" type="button">Retry connection</button><p>Browser-only pairings stay on this browser. Choosing one as the account default does not copy its key; other browsers need their own authorized pairing.</p><a href="/remote?view=connections">Manage and pair Macs</a></section>`;host.querySelector('form').onsubmit=action(async event=>{const id=new FormData(event.target).get('defaultMacId');await updateDefaultMac(id);await reload();});host.querySelector('#default-mac-retry').onclick=()=>void retryDefaultMac();}catch(error){if(version===engineRenderVersion)notice(error.message);}finally{store.close();}return;
     } else if(engineTab==='notifications')host.innerHTML=`<section class="card"><h2>Notifications</h2><button id="enable-push">Enable browser notifications</button><p>${state.push.web?'Web Push configured; browser permission and delivery worker required.':'Web Push service is not configured. History remains available.'} APNs: ${state.push.apns?'configured; device entitlement and delivery acceptance unverified':'not configured'}.</p>${state.notifications.map(n=>`<article><strong>${n.read?'':'! '}${e(n.title)}</strong><small> ${e(dateTime(n.createdAt))}</small>${n.downtimeSeconds!=null?`<p>Estimated downtime: ${e(n.downtimeSeconds)} seconds</p>`:''}${n.chatId?`<a href="/remote?view=chats&host=${encodeURIComponent(n.hostId||'')}&chat=${encodeURIComponent(n.chatId)}">Open chat</a>`:''}<button data-read-notification="${e(n.id)}">Mark read</button></article>`).join('')||'<p>No notifications yet.</p>'}</section>`;
     else if(engineTab==='logs')host.innerHTML=`<section class="card"><h2>Logs</h2><p>Bounded account history with generic event codes; prompts and credentials are excluded.</p>${state.logs.map(l=>`<p>${e(dateTime(l.createdAt))} · ${e(l.level)} · ${e(l.event||l.code)}</p>`).join('')||'<p>No log events yet.</p>'}</section>`;
     else if(engineTab==='usage')host.innerHTML=`<section class="card"><h2>Usage</h2><div id="usage-details">${usage?usagePanel(usage.value,{destination:usage.destination}):'Connect the Default Mac to inspect provider allowance. No usage is inferred.'}</div></section>`;
@@ -67,7 +72,14 @@ function render(){renderTeam();renderBrowser();void renderEngine();}
 if(document.querySelector('#team-tools,#browser-home,#engine-room')){
     if(new URLSearchParams(location.search).has('standup'))teamTab='standup';
     document.querySelectorAll('[data-team-tab]').forEach(b=>b.onclick=()=>{teamTab=b.dataset.teamTab;renderTeam();});
-    document.querySelectorAll('[data-engine-tab]').forEach(b=>b.onclick=()=>{engineTab=b.dataset.engineTab;void renderEngine();});
+    document.querySelectorAll('[data-engine-tab]').forEach(b=>b.onclick=()=>{
+        if(!engineTabs.includes(b.dataset.engineTab))return;
+        engineTab=b.dataset.engineTab;
+        const url=new URL(location.href);url.searchParams.set('tab',engineTab);
+        if(url.href!==location.href)history.pushState(null,'',url);
+        void renderEngine();
+    });
+    window.addEventListener('popstate',()=>{if(document.querySelector('#engine-room')){engineTab=engineTabFromURL();void renderEngine();}});
     document.querySelector('#history-search')?.addEventListener('input',renderBrowser);
     document.querySelector('#browser-open')?.addEventListener('submit',event=>{
         event.preventDefault();const values=Object.fromEntries(new FormData(event.target)),q=values.query.trim();let url;
