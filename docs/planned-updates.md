@@ -3,6 +3,58 @@
 Maintain this as the single backlog. Design rationale is in `decisions.md`; recent changes are in
 `../CHANGELOG.md`. Items below are status, not promises of completed validation.
 
+## Active release: content tabs, Home, attention review and browser lifetime — October 5
+
+The operator authorized implementation of all previously approved queued work together with the
+requirements below, followed by tested updates to both Macs, iPhone, iPad and website. Coordination
+and implementation use GPT-6 Sol or lower, at medium/high effort as appropriate. The broader
+multi-provider feature and future Safari-style browser tab groups remain deferred. Implementation,
+verification and installation receipts must be recorded separately; this entry alone proves none.
+
+- Hide system scrollbars on main and nested tab strips while preserving trackpad/wheel/touch and
+  keyboard access. Fade partially obscured labels near trailing new-tab controls. Preserve each
+  strip's exact scroll offset through tab selection, sidebar navigation, rerenders and content
+  refreshes; no reset to the beginning or unnecessary active-tab scroll jump.
+- Main tabs represent user content: open chats, individual schedules, browsers, terminals and
+  documents. Feature landing pages (Schedules, Chats, Engine Room, Transcription, etc.) are reached
+  through sidebar navigation without adding feature tabs or overwriting content tabs. Preserve
+  content state and migrate existing descriptors without dropping open user content.
+- Each chat becomes a content workspace: its first persistent child tab is the named conversation,
+  followed by user-opened browser, terminal and Markdown/document views. Team Tools keeps its
+  persistent tool tabs and gains the same content-view machinery. A single trailing + opens the
+  same icon-and-label creation menu at main, chat and Team levels, with scope-appropriate actions
+  and honest platform/host capability limits. Menu icons do not each repeat a + prefix.
+- Reuse the main browser toolbar throughout embedded browser surfaces: Back, Forward, Refresh,
+  address/search and Go with consistent icons and states. Website external cross-origin tabs
+  retain normal browser controls; do not promise control of those tabs from the Proteus website.
+- Add Home first in navigation and show it on initial app load. Explain Proteus capabilities,
+  display the actual installed/released version, expose release changelog and update status/action
+  according to the configured distribution source. An unavailable/unconfigured updater must be
+  explicit, not a fabricated update result. Unmount Home content on leaving and recreate on access.
+- Needs Attention includes newly failed chats until successfully opened/reviewed through either
+  Chats or Needs Attention. Persist acknowledgment against the current failure event; retry or a
+  new failure can require attention again. Reviewing cannot approve, dismiss or hide unresolved
+  tool permissions/questions. Retain actual failed status in history. Avoid review on prefetch.
+- Expand Engine Room Resources to explain the whole local Electron application footprint and its
+  process breakdown. Distinguish app/renderer/GPU/utility and tracked host/provider/terminal child
+  processes, unavailable metrics and shared attribution without double counting. Remote/web/mobile
+  views must label the owning host and platform measurement limits.
+- Replace immediate Team browser unloading with a browser policy across all scopes in each app:
+  keep the six most recently touched browser tabs plus every browser tab opened/interacted with
+  during the past hour. Unload an older tab only if outside those six. Keep descriptors and reload
+  when selected. Actual user interactions update recency; background polls/page timers do not.
+  Protect foreground, unsaved, audible, downloading or agent-controlled work from automatic loss;
+  show protected state and manual controls. The six is a floor, not a hard memory/tab limit.
+- Preserve native iPhone navigation and condensed formatting; wide iPad follows desktop tabs.
+  Do not terminate terminals, model turns or schedules as a browser-memory optimization. Future
+  tab groups are context, not permission to design/implement that additional feature now.
+
+Acceptance includes main/nested strip scroll retention, overflow and focus; old-session migration;
+consistent creation menus/toolbars; Home mount/unmount and real version/changelog; failure reviewed
+on every client, new failure reappearance and approvals retained; fake-clock six-plus-hour policy
+with protected activity; process totals with explicit coverage; cross-client regression and signed
+in-place device updates preserving application data. No operational schedule is a smoke test.
+
 ## Queued: generated-document links and click-to-open Markdown tabs — October 5
 
 Status: the operator approved the remote-document design and requested queuing; not implemented.

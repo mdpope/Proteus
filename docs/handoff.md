@@ -7,6 +7,14 @@ and manifests; this repository owns the generic app and provider adapters.
 
 ## Latest release state
 
+Implementation is now authorized for all approved queue entries plus the October 5 content-tab,
+Home, reviewed-failure and browser lifetime redesign. Work is assigned by ownership to Sol agents
+for desktop/backend, web and native clients. The six most recently touched browser tabs plus all
+used within one hour supersede immediate Team unload. Main feature pages no longer become content
+tabs; chat/Team child workspaces share creation menus and browser controls. See the active-release
+entry in `planned-updates.md`. Existing release receipts below remain historical until replaced
+by fresh checks; do not infer an installed update from this authorization.
+
 Also queued on October 5: clear generated-document links that open Markdown in an app document
 view only when clicked. Local desktop has a `.md` link handler; remote/web parity remains work.
 Do not auto-open a document or force a split view. Broader tab organization awaits further input.

@@ -271,3 +271,17 @@ or `.cjs` execution, installs/build commands, access to other chats/files/creden
 app actions. Additional capabilities remain separate and explicit. Reuse document authorization
 for remote delivery, keep state in memory initially and expose stop/unload in Engine Room. These
 are backlog requirements, not an implemented sandbox or a grant to run existing artifacts.
+
+## October 5 — content workspaces and recency-based browser residency
+
+The operator chose sidebar navigation for feature landing pages and content-only main tabs. Chats
+and Team Tools own nested content tabs with a common creation menu and browser toolbar. Preserve
+tab-strip positions through navigation. Home is initially selected, reports release information
+and is unmounted when left. Review acknowledges a failure event, never a pending permission.
+
+Browser residency is the union of the most recent six tabs and all touched within one hour,
+across scopes per app, with active/dirty work protected. This supersedes the earlier immediate
+Team Tools unload decision. It is not a six-tab maximum and does not stop terminals or model work.
+Broader Safari-style tab groups remain a later design. The operator authorized implementing the
+approved backlog and deploying after verification; current historical receipts are not acceptance
+of this redesign. Worker models are capped at GPT-6 Sol with medium/high effort.
