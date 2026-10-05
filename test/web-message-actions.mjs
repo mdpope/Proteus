@@ -1,5 +1,6 @@
 // Browser-only fakes keep synthetic conversation text out of OS clipboard/audio services.
 import assert from 'node:assert/strict';
+async function selectHost(page,id){await page.locator('#remote-host').evaluate((select,id)=>{select.value=id;select.dispatchEvent(new Event('change',{bubbles:true}));},id);}
 
 export async function installMessageActionFakes(page) {
   await page.addInitScript(() => {
@@ -100,8 +101,8 @@ export async function exerciseMessageActions(page, app, run) {
   assert.match(await first.locator('[data-message-action=speak]').getAttribute('title'),/local|unavailable/i);
   await page.evaluate(()=>messageActionTest.setLocalVoices(true));
   await first.locator('[data-message-action=speak]').click();
-  await page.locator('[data-remote-view=schedules]').click();assert.equal(await page.evaluate(()=>speechSynthesis.speaking),false);
-  await page.locator('[data-remote-view=chats]').click();
+  await page.locator('[data-shell-nav=schedules]').click();assert.equal(await page.evaluate(()=>speechSynthesis.speaking),false);
+  await page.locator('[data-shell-nav=chats]').click();await page.locator(`[data-run="${run.id}"]`).click();
   await first.locator('[data-message-action=speak]').click();
   await first.locator('.message-actions').evaluate(element=>element.remove());
   await page.waitForFunction(()=>!speechSynthesis.speaking);
@@ -110,24 +111,25 @@ export async function exerciseMessageActions(page, app, run) {
   const hostId=await page.locator('#remote-host').inputValue();
   const otherHost=await page.locator('#remote-host option').evaluateAll((options,selected)=>options.find(option=>option.value&&option.value!==selected)?.value,hostId);
   await first.locator('[data-message-action=speak]').click();
-  await page.locator('#remote-host').selectOption(otherHost);
+  await selectHost(page,otherHost);
   assert.equal(await page.evaluate(()=>speechSynthesis.speaking),false);
-  await page.locator('#remote-host').selectOption(hostId);
+  await selectHost(page,hostId);
   await first.locator('[data-message-action=speak]').waitFor();
   await first.locator('[data-message-action=speak]').click();
+  await page.locator('[data-shell-nav=chats]').click();
   const otherChat=page.locator(`[data-run-host="${hostId}"]:not([data-run="${run.id}"])`).first();
   await otherChat.click();assert.equal(await page.evaluate(()=>speechSynthesis.speaking),false);
-  await page.locator(`[data-run="${run.id}"]`).first().click();
+  await page.locator(`[data-shell-chat="${run.id}"] a`).first().click();
   await first.locator('[data-message-action=speak]').click();
-  await page.locator('#remote-disconnect').click();assert.equal(await page.evaluate(()=>speechSynthesis.speaking),false);
-  await page.locator('#remote-connect').click();await page.locator(`[data-run="${run.id}"]`).first().click();
+  await page.locator('#remote-disconnect').evaluate(button=>button.click());assert.equal(await page.evaluate(()=>speechSynthesis.speaking),false);
+  await page.locator('#remote-connect').evaluate(button=>button.click());await page.locator(`[data-shell-chat="${run.id}"] a`).first().click();
   await first.locator('[data-message-action=speak]').click();
   const beforeNavigation=await page.evaluate(()=>messageActionTest.cancellations);
-  await page.goto(page.url());await page.locator('#remote-composer').waitFor();
+  await page.goto(page.url());await page.locator('#chat-index-rows').waitFor();
   assert.ok(Number(await page.evaluate(()=>sessionStorage.getItem('synthetic-speech-cancellations')))>beforeNavigation);
-  await page.locator(`[data-run="${run.id}"]`).first().click();await first.locator('[data-message-action=speak]').click();
+  await page.locator(`[data-shell-chat="${run.id}"] a`).first().click();await first.locator('[data-message-action=speak]').click();
   await page.evaluate(()=>{const channel=new BroadcastChannel('proteus-remote-account');channel.postMessage({type:'logout',account:document.querySelector('#remote-workspace').dataset.account});channel.close();});
   await page.getByText(/Signed out. Sign in again to restore/).waitFor();assert.equal(await page.evaluate(()=>speechSynthesis.speaking),false);
-  await page.reload();await page.locator('#remote-composer').waitFor();
+  await page.reload();await page.locator('#chat-index-rows').waitFor();
 
 }

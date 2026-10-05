@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\RemoteDestination;
 use App\Models\User;
 use App\Services\AppRecords;
 use App\Services\PushDelivery;
@@ -54,9 +53,8 @@ class AppApiController extends Controller
     {
         $this->account($request);
         $value = $request->validate(['defaultMacId' => 'sometimes|nullable|uuid', 'timezone' => ['sometimes', Rule::in(timezone_identifiers_list())], 'searchEngine' => 'sometimes|in:google,duckduckgo,bing', 'allowanceDisplay' => 'sometimes|in:compact,expanded,collapsed', 'sidebarCollapsed' => 'sometimes|boolean', 'scheduleCompletionNotifications' => 'sometimes|boolean']);
-        if (isset($value['defaultMacId'])) {
-            abort_unless(RemoteDestination::where('user_id', $request->user()->id)->where('host_id', $value['defaultMacId'])->exists(), 422, 'Choose a verified paired Mac from Connections.');
-        }
+        // A default host ID is a preference, never an access grant. Browser-only and native
+        // pairings are verified by their clients without uploading protected device keys.
 
         return DB::transaction(function () use ($request, $value) {
             User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
@@ -80,7 +78,7 @@ class AppApiController extends Controller
         $rules = match ($kind) {
             'team-lists' => ['name' => 'required|string|max:100', 'instructions' => 'sometimes|nullable|string|max:4000', 'timezone' => ['sometimes', Rule::in(timezone_identifiers_list())], 'members' => 'present|array|max:200', 'members.*' => 'array:id,name,mode', 'members.*.id' => 'required|string|max:100|distinct', 'members.*.name' => 'required|string|max:100', 'members.*.mode' => 'required|in:fixed,random', 'links' => 'sometimes|array|max:50', 'links.*' => 'array:id,title,url', 'links.*.id' => 'required|string|max:100|distinct', 'links.*.title' => 'required|string|max:100', 'links.*.url' => 'required|string|max:2048'],
             'links' => ['title' => 'required|string|max:100', 'url' => 'required|string|max:2048'],
-            'history' => ['eventId' => 'sometimes|nullable|uuid', 'url' => 'required|string|max:2048', 'title' => 'sometimes|string|max:160', 'source' => 'required|in:desktop,mobile,web', 'hostId' => 'sometimes|nullable|uuid'],
+            'history' => ['visitedAt' => ['sometimes', 'string', 'max:40', 'date', 'regex:/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/'], 'deviceId' => 'sometimes|nullable|uuid', 'deviceName' => ['sometimes', 'nullable', 'string', 'max:100', 'regex:/\A[^\x00-\x1f\x7f]*\z/u'], 'eventId' => 'sometimes|nullable|uuid', 'url' => 'required|string|max:2048', 'title' => 'sometimes|string|max:160', 'source' => 'required|in:desktop,mobile,web', 'hostId' => 'sometimes|nullable|uuid'],
             'notifications' => ['eventId' => 'required|uuid', 'type' => 'required|in:chat.completed,approval.required,review.required,schedule.completed,device.added,device.reconnected', 'hostId' => 'sometimes|nullable|uuid', 'chatId' => 'sometimes|nullable|string|max:100|regex:/^[a-zA-Z0-9_-]+$/', 'downtimeSeconds' => 'sometimes|nullable|integer|between:0,31536000'],
             'logs' => ['eventId' => 'required|uuid', 'code' => 'required|in:connected,disconnected,reconnected,command_failed,push_failed,permission_denied,run_started,run_completed,run_failed,device_added,device_revoked,chat.queued,chat.running,chat.awaiting_input,chat.completed,chat.failed,chat.cancelled,chat.interrupted,transport.online,transport.offline,transport.device_added,browser.open,browser.unload,app.started,app.stopping,api.failed', 'level' => 'required|in:info,warning,error', 'source' => 'sometimes|in:desktop,mobile,web,server', 'hostId' => 'sometimes|nullable|uuid'],
             default => abort(404),

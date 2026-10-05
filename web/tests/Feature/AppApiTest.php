@@ -28,7 +28,9 @@ class AppApiTest extends TestCase
         $this->putJson('/api/v1/app/preferences', ['timezone' => 'America/Denver'])->assertForbidden();
         Passport::actingAs($user, ['app:read', 'app:write']);
         $this->putJson('/api/v1/app/preferences', ['expectedAccountId' => str_repeat('f', 64), 'timezone' => 'America/Denver'])->assertConflict();
-        $this->putJson('/api/v1/app/preferences', ['defaultMacId' => (string) Str::uuid()])->assertUnprocessable();
+        $nativeHost = (string) Str::uuid();
+        $this->putJson('/api/v1/app/preferences', ['defaultMacId' => $nativeHost])->assertOk()->assertJsonPath('defaultMacId', $nativeHost);
+        $this->assertDatabaseCount('remote_destinations', 0);
         $this->putJson('/api/v1/app/preferences', ['timezone' => 'America/Denver', 'allowanceDisplay' => 'collapsed'])->assertOk();
         $this->getJson('/api/v1/app')->assertJsonPath('preferences.timezone', 'America/Denver')->assertJsonPath('preferences.allowanceDisplay', 'collapsed');
     }
@@ -123,6 +125,18 @@ class AppApiTest extends TestCase
             $this->get($path)->assertOk()->assertSee('Engine Room')->assertSee('Team Tools')->assertDontSee('Your agent control room');
         }
         $this->getJson('/app-api')->assertConflict();
+    }
+
+    public function test_history_preserves_actual_visit_time_and_device_without_rewriting_older_records(): void
+    {
+        Passport::actingAs($this->owner(), ['app:read', 'app:write']);
+        $visit = ['url' => 'https://example.test/history', 'source' => 'desktop', 'visitedAt' => '2026-09-01T18:30:00.000Z', 'deviceId' => (string) Str::uuid(), 'deviceName' => 'Studio workstation'];
+        $this->postJson('/api/v1/app/history', $visit)->assertCreated()->assertJsonPath('visitedAt', $visit['visitedAt'])->assertJsonPath('deviceId', $visit['deviceId'])->assertJsonPath('deviceName', 'Studio workstation');
+        foreach (['visitedAt' => 'invalid', 'deviceId' => 'not-a-uuid', 'deviceName' => str_repeat('a', 101)] as $key => $invalid) {
+            $this->postJson('/api/v1/app/history', array_replace($visit, [$key => $invalid]))->assertUnprocessable();
+        }
+        $this->postJson('/api/v1/app/history', ['url' => 'https://example.test/legacy', 'source' => 'web'])->assertCreated()->assertJsonMissingPath('visitedAt')->assertJsonMissingPath('deviceName');
+        $this->getJson('/api/v1/app/history')->assertJsonCount(2, 'items');
     }
 
     public function test_history_is_bounded_and_schedule_push_is_opt_in(): void

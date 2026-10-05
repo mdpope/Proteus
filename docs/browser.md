@@ -150,3 +150,25 @@ Website New browser opens the Proteus home in a real tab; external links open se
 The website cannot inspect a third-party tab's memory or later cross-origin navigation. It retains
 Proteus-opened visit descriptors only; no Safari/Chrome history is imported. Native mobile WebKit
 uses the same shared links/history with account-scoped encrypted local descriptors.
+
+
+## Website shared visit metadata
+
+Shared history accepts optional `visitedAt` (an ISO timestamp with timezone), `deviceId` (UUID)
+and `deviceName` (up to 100 characters), alongside the existing URL, title, source, optional host ID
+and idempotent event ID. These fields are stored in the existing account-scoped `app_records`
+payload; no new table or migration is needed. `visitedAt` represents the visit, not the later upload.
+Older entries remain valid and use their `createdAt` as the display fallback.
+
+The website history orders and formats visits by `visitedAt`, falling back to `createdAt`, in the
+viewing browser's local timezone. It displays the supplied device name and source; old entries
+without a name show **Unknown device**. Website-originated visits use an account-scoped random
+browser device UUID and a descriptive **Browser on macOS/Windows/etc.** label. The browser cannot
+read the computer's configured name and does not attribute these visits to the Default Mac.
+No fingerprinting or imported system-browser history is used.
+
+The shared history API retains URL/auth filtering, account isolation, idempotent event IDs and its
+500-record bound. Device metadata contains no conversation or page content. Synthetic website
+checks verify a UTC visit rendered in the browser's local timezone, named and legacy records,
+and a new browser-originated visit. These checks do not assert production deployment or delivery
+from an actual desktop/mobile device.

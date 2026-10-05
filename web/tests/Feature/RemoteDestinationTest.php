@@ -56,7 +56,8 @@ class RemoteDestinationTest extends TestCase
 
     public function test_secret_is_encrypted_at_rest_hidden_from_serialization_and_released_only_explicitly(): void
     {
-        $user = $this->owner(); $payload = $this->payload();
+        $user = $this->owner();
+        $payload = $this->payload();
         $saved = $this->authorize($user)->postJson('/remote/destinations', $payload)->assertOk()->assertHeader('Cache-Control', 'no-store, private');
         $this->assertArrayNotHasKey('key', $saved->json());
         $row = RemoteDestination::firstOrFail();
@@ -75,7 +76,9 @@ class RemoteDestinationTest extends TestCase
 
     public function test_account_isolation_and_stale_page_binding_apply_before_reads_and_mutations(): void
     {
-        $first = $this->owner(); $second = $this->owner(); $payload = $this->payload();
+        $first = $this->owner();
+        $second = $this->owner();
+        $payload = $this->payload();
         $this->authorize($first)->postJson('/remote/destinations', $payload)->assertOk();
         $this->authorize($second)->getJson('/remote/destinations')->assertExactJson(['destinations' => []]);
         $this->getJson('/remote/destinations/'.$payload['hostId'].'/credential')->assertNotFound();
@@ -94,7 +97,9 @@ class RemoteDestinationTest extends TestCase
 
     public function test_upsert_retains_order_and_stale_delete_cannot_remove_a_replacement(): void
     {
-        $this->authorize($this->owner()); $a = $this->payload(); $b = $this->payload(['hostId' => (string) Str::uuid(), 'label' => 'Second Mac']);
+        $this->authorize($this->owner());
+        $a = $this->payload();
+        $b = $this->payload(['hostId' => (string) Str::uuid(), 'label' => 'Second Mac']);
         $this->postJson('/remote/destinations', $a)->assertOk();
         $this->postJson('/remote/destinations', $b)->assertOk();
         $replacement = $this->payload(['deviceId' => (string) Str::uuid(), 'key' => str_repeat('c', 64), 'label' => 'Repaired Mac']);
@@ -111,7 +116,8 @@ class RemoteDestinationTest extends TestCase
 
     public function test_invalid_and_oversized_input_never_echoes_or_flashes_credentials(): void
     {
-        $this->authorize($this->owner()); $key = str_repeat('a', 64);
+        $this->authorize($this->owner());
+        $key = str_repeat('a', 64);
         foreach ([['hostId' => 'bad'], ['deviceId' => 'bad'], ['key' => 'NOT_A_SECRET_KEY'], ['label' => str_repeat('L', 81)], ['label' => "bad\nlabel"], ['label' => ' '], ['relay' => 'wss://other.example.test'], ['relay' => 'wss://user:password@relay.example.test'], ['pairedAt' => 'invalid']] as $change) {
             $response = $this->postJson('/remote/destinations', $this->payload($change))->assertUnprocessable();
             $this->assertStringNotContainsString($key, $response->getContent());
@@ -124,7 +130,8 @@ class RemoteDestinationTest extends TestCase
 
     public function test_count_bound_allows_replacing_existing_destination_and_corrupt_credentials_are_preserved(): void
     {
-        $this->authorize($this->owner()); $last = null;
+        $this->authorize($this->owner());
+        $last = null;
         for ($i = 0; $i < 32; $i++) {
             $last = $this->payload(['hostId' => (string) Str::uuid()]);
             $this->postJson('/remote/destinations', $last)->assertOk();
@@ -137,9 +144,29 @@ class RemoteDestinationTest extends TestCase
         $this->assertSame('corrupt-encrypted-record', DB::table('remote_destinations')->where('host_id', $last['hostId'])->value('credential'));
     }
 
+    public function test_name_update_preserves_credential_and_rejects_stale_or_foreign_devices(): void
+    {
+        $user = $this->owner();
+        $payload = $this->payload();
+        $this->authorize($user)->postJson('/remote/destinations', $payload)->assertOk();
+        $raw = DB::table('remote_destinations')->value('credential');
+        $path = '/remote/destinations/'.$payload['hostId'];
+        $this->patchJson($path, ['deviceId' => $payload['deviceId'], 'label' => 'Studio workstation'])->assertJsonPath('label', 'Studio workstation')->assertJsonMissingPath('key');
+        $this->assertSame($raw, DB::table('remote_destinations')->value('credential'));
+        $this->patchJson($path, ['deviceId' => (string) Str::uuid(), 'label' => 'Stale'])->assertConflict();
+        foreach (['', '   ', "Bad\nname", str_repeat('a', 81)] as $label) {
+            $this->patchJson($path, ['deviceId' => $payload['deviceId'], 'label' => $label])->assertUnprocessable();
+        }
+        $this->withHeader('X-Proteus-Account', str_repeat('b', 64))->patchJson($path, ['deviceId' => $payload['deviceId'], 'label' => 'Wrong session'])->assertConflict();
+        $this->authorize($this->owner())->patchJson($path, ['deviceId' => $payload['deviceId'], 'label' => 'Other account'])->assertNotFound();
+        $this->assertSame('Studio workstation', RemoteDestination::firstOrFail()->label);
+        $this->assertSame($raw, DB::table('remote_destinations')->value('credential'));
+    }
+
     public function test_migration_rollback_preserves_saved_account_credentials(): void
     {
-        $this->authorize($this->owner()); $payload = $this->payload();
+        $this->authorize($this->owner());
+        $payload = $this->payload();
         $this->postJson('/remote/destinations', $payload)->assertOk();
         $migration = require database_path('migrations/2026_10_05_000002_create_remote_destinations_table.php');
         $migration->down();
@@ -149,7 +176,8 @@ class RemoteDestinationTest extends TestCase
 
     public function test_web_csrf_protects_create_and_delete_without_changing_test_database(): void
     {
-        $this->authorize($this->owner()); $payload = $this->payload();
+        $this->authorize($this->owner());
+        $payload = $this->payload();
         // Only disable Laravel's test-only CSRF bypass. Database/storage remain disposable fixtures.
         $this->app->instance('env', 'local');
         $this->postJson('/remote/destinations', $payload)->assertStatus(419)->assertDontSee($payload['key']);

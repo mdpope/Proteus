@@ -29,6 +29,7 @@ Route::middleware(['auth', 'strong'])->group(function () {
         Route::get('/', [RemoteDestinationController::class, 'index'])->name('remote.destinations');
         Route::post('/', [RemoteDestinationController::class, 'store']);
         Route::get('/{hostId}/credential', [RemoteDestinationController::class, 'credential'])->whereUuid('hostId');
+        Route::patch('/{hostId}', [RemoteDestinationController::class, 'rename'])->whereUuid('hostId');
         Route::delete('/{hostId}', [RemoteDestinationController::class, 'destroy'])->whereUuid('hostId');
     });
     Route::get('/garage', [GarageController::class, 'index'])->name('garage');

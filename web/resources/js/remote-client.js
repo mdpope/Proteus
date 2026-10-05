@@ -14,6 +14,15 @@ export class PairingStore {
     }
     list() { return this.operation('readonly', store => store.getAll()); }
     save(host) { const { hostId, relay, label, deviceId, key, cursor, pairedAt } = host; if (!uuid.test(hostId) || key?.extractable !== false || key.algorithm?.name !== 'AES-GCM') throw new Error('Invalid protected pairing.'); return this.operation('readwrite', store => store.put({ hostId, relay, label, deviceId, key, cursor: cursor || '', pairedAt })); }
+    async renameIfCurrent(host,label) {
+        const db=await this.open();
+        return new Promise((resolve,reject)=>{
+            const transaction=db.transaction('hosts','readwrite'),store=transaction.objectStore('hosts');let changed=false;
+            const request=store.get(host.hostId);
+            request.onsuccess=()=>{const current=request.result;if(current&&current.deviceId===host.deviceId&&current.relay===host.relay&&current.pairedAt===host.pairedAt){store.put({...current,label});changed=true;}};
+            transaction.oncomplete=()=>resolve(changed);transaction.onerror=()=>reject(new Error('Could not update this browser pairing.'));transaction.onabort=transaction.onerror;
+        });
+    }
     remove(hostId) { return this.operation('readwrite', store => store.delete(hostId)); }
     clear() { return this.operation('readwrite', store => store.clear()); }
     close() { this.database?.close(); this.database = null; }
@@ -59,6 +68,37 @@ export class AccountPairingStore {
         const {key,...metadata}=value;return {...metadata,key:await importAccountKey(key),cursor:''};
     }
     async saveCredential(record) { const value=destination(record,true);const {source,...body}=value;const saved=await this.request('',{method:'POST',body});return destination(saved?.destination||saved); }
+    async rename(host,label) { return destination(await this.request('/'+host.hostId,{method:'PATCH',body:{deviceId:host.deviceId,label}})); }
     async remove(host) { if(!uuid.test(host.hostId)||!uuid.test(host.deviceId))throw new Error('Choose a valid destination.');return this.request('/'+host.hostId,{method:'DELETE',body:{deviceId:host.deviceId}}); }
 }
 import { importKey as importAccountKey } from '../../../src/remote-client.js';
+
+// Account records take precedence. Legacy keys stay nonextractable in this browser;
+// a failed account lookup must never silently select an older local authorization.
+export class BrowserDestinationStore {
+    constructor(account,{accountStore,legacyStore}={}) { this.accountStore=accountStore||new AccountPairingStore(account);this.legacyStore=legacyStore||new PairingStore(account); }
+    verifySession(){return this.accountStore.verifySession();}
+    async list(){
+        const account=await this.accountStore.list();let legacy=[];
+        try{legacy=await this.legacyStore.list();}catch{}
+        const hosts=new Map(legacy.map(host=>{const {key,...metadata}=host;return [host.hostId,{...metadata,source:'legacy'}];}));
+        for(const host of account)hosts.set(host.hostId,host);
+        return [...hosts.values()];
+    }
+    async credential(hostId){
+        const hosts=await this.list(),host=hosts.find(value=>value.hostId===hostId);
+        if(!host){const error=new Error('This Mac is not paired with this account or browser. Pair it in Connections.');error.status=404;throw error;}
+        if(host.source==='account')return this.accountStore.credential(hostId);
+        const legacy=(await this.legacyStore.list()).find(value=>value.hostId===hostId);
+        if(!legacy)throw new Error('This browser pairing was removed. Reload Connections.');
+        return {...legacy,source:'legacy'};
+    }
+    async rememberName(host,name){
+        if(typeof name!=='string'||!name.trim()||name.length>80||/[\x00-\x1f\x7f]/.test(name)||name.trim()===host.label)return;
+        const label=name.trim();
+        if(host.source==='account')await this.accountStore.rename(host,label);
+        else {await this.verifySession();if(!await this.legacyStore.renameIfCurrent(host,label))return;}
+        host.label=label;
+    }
+    close(){this.legacyStore.close();}
+}

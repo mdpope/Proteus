@@ -19,6 +19,7 @@
     $section = match (true) {
         request()->routeIs('remote') && request()->query('attention') === '1' => 'attention',
         request()->routeIs('remote') && request()->query('transcription') === '1' => 'transcription',
+        request()->routeIs('remote') && request()->query('view') === 'connections' => 'engine-room',
         request()->routeIs('remote') => in_array(request()->query('view'), ['chats', 'schedules', 'workspaces'], true) ? request()->query('view') : 'chats',
         request()->routeIs('captures.*') => 'inbox', request()->routeIs('fuel') => 'fuel',
         request()->routeIs('nutrition', 'foods.*', 'meals.*') => 'nutrition',
