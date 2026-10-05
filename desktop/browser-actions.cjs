@@ -33,9 +33,9 @@ class BrowserActions {
       {label:`Open Link in ${browserName.replace(/[\r\n]/g,' ').replace(/&/g,'&&')}`, ...this.icon('NSFollowLinkFreestandingTemplate'), click:run(() => shell.openExternal(url))},
       {type:'separator'},
       {label:'Copy Link',...this.icon('NSLinkTemplate'),click:run(() => clipboard.writeText(url))},
-      {label:'Download Linked File As…',...this.icon('NSGoDownTemplate'),click:run(() => this.download(url))},
+      {label:'Download Linked File As…',...this.icon('NSTouchBarDownloadTemplate'),click:run(() => this.download(url))},
       {type:'separator'},
-      {label:'Start New Chat with Link',...this.icon('NSCommentTemplate'),click:run(() => this.send({type:'chat-link',url}))},
+      {label:'Start New Chat with Link',...this.icon('NSTouchBarComposeTemplate'),click:run(() => this.send({type:'chat-link',url}))},
     ]);
   }
   async download(url) {

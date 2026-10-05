@@ -132,3 +132,6 @@ This is a concise behavior log. Git commits and pull requests contain the comple
 - Shared Markdown rendering, standup popout, quota display and agent identity labels.
 
 Known unfinished work and distribution limitations are tracked in `docs/planned-updates.md`.
+
+- Browser tab and overview selection reloads an unloaded page immediately; background pages remain
+  unloaded. All five native link actions have verified macOS template icons.

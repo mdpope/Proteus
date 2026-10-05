@@ -34,7 +34,7 @@ New browser homes provide URL/search entry, DuckDuckGo/Google/Bing, saved links 
 Proteus history, including shared recent visits. Address-bar terms default to Google. Native link menus provide new Proteus tab, default browser,
 copy, explicit file download and a link-only unsent chat draft. macOS reads the registered browser
 name; iOS uses an honest generic label. A fading tab overview supports selection/close without
-loading unloaded pages. Desktop supports button/keyboard and zoom/pinch hooks; physical trackpad
+loading unloaded pages. Explicit tab/card selection reloads an unloaded page in one click. Desktop supports button/keyboard and zoom/pinch hooks; physical trackpad
 acceptance remains outstanding. iPhone/iPad use an adaptive overview and Files export. No external
 Safari/Chrome history is read. Local desktop history has recording/retention/delete controls,
 10,000-entry and 8 MiB bounds, and 90-day default retention. Auth/callback/pairing URLs are excluded.
@@ -96,7 +96,7 @@ Disposable verification completed before release:
 - Final full Node suite: 244 passed. Static and diff checks passed.
 - Desktop parity: 21 groups; sidebar/restart: 10 groups; two-host peer UI: 18 groups, including
   actual remote schedule save/preview/run and cross-host drafts/approvals.
-- Browser actions/overview: 17 groups; history: 13; native resources: 9; remote resource grants: 13.
+- Browser actions/overview: 22 groups; history: 13; native resources: 9; remote resource grants: 13.
   Security tests cover authenticated revocation, account outbox
   isolation, invalid-event recovery, sensitive URL exclusion and bounded reopenable history.
 - Laravel: 76 tests/666 assertions after final URL-hardening checks; remote browser: 22 groups;

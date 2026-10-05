@@ -438,7 +438,7 @@ async function openMessageLink(source, cwd) {
 function renderTabs() {
   const icons={markdown:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M6 15V9l3 3 3-3v6m3-4h4m-2-2v6m-2-2 2 2 2-2"/>',browser:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c5 5 5 13 0 18-5-5-5-13 0-18Z"/>',terminal:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m6 8 4 4-4 4m6 0h5"/>',chat:chatIconPaths};
   $('#tabs').innerHTML='<div class="tab-list">'+state.tabs.map(tab=>`<div data-tab-container="${escape(tab.id)}" class="tabitem ${state.tab===tab.id?'selected':''}"><button data-tab="${escape(tab.id)}" title="${escape(tab.info?.url || tab.label)}">${tab.type==='browser' ? (tab.info?.loading?'◌':'◎') : (['run','remote-run'].includes(tab.type)||(tab.type==='overview'&&state.page==='runs'))?pairedBubbles:tab.type==='team'?'☷':tab.type==='engine'||(tab.type==='overview'&&state.page==='engine')?'⚙':tab.type==='markdown'?'▤':tab.type==='life'?'♡':tab.type==='terminal'?'⌘':'◷'} &nbsp;${escape(tab.label || 'New tab')}</button>${tab.id!=='overview'?`<button class="tabclose" aria-label="Close ${escape(tab.label || 'tab')}" data-close="${escape(tab.id)}">×</button>`:''}</div>`).join('')+'</div><div class="tab-actions">'+[['markdown','Markdown','markdown'],['browser','Browser','browser'],['terminal','Terminal','terminal'],['new-chat','New chat','chat']].map(([id,label,icon])=>`<button id="${id}" class="tab-create" aria-label="${label}" title="${label}"><span aria-hidden="true">+</span><svg aria-hidden="true" viewBox="0 0 24 24">${icons[icon]}</svg></button>`).join('')+'</div>';
-  document.querySelectorAll('[data-tab-container]').forEach(item=>item.onclick=event=>{if(event.target.closest('[data-close]') || window.getSelection()?.isCollapsed===false)return;state.tab=item.dataset.tabContainer;const tab=state.tabs.find(t=>t.id===state.tab);if(tab.type==='schedule')schedule(tab.id);else render();});
+  document.querySelectorAll('[data-tab-container]').forEach(item=>item.onclick=event=>{if(event.target.closest('[data-close]') || window.getSelection()?.isCollapsed===false)return;state.tab=item.dataset.tabContainer;const tab=state.tabs.find(t=>t.id===state.tab);if(tab.type==='schedule')schedule(tab.id);else if(tab.type==='browser')selectBrowserTab(tab.info);else render();});
   document.querySelectorAll('[data-close]').forEach(button=>button.onclick=async event=>{event.stopPropagation();try{const id=button.dataset.close;const tab=state.tabs.find(t=>t.id===id);if(tab?.type==='team')await leaveTeamTools();if(tab?.type==='browser')await window.desktop.browser({action:'close',id});if(tab?.type==='terminal'){const current=await window.desktop.terminal({action:'state'});if(current.sessions.some(session=>session.id===tab.terminal.id))await window.desktop.terminal({action:'close',id:tab.terminal.id});disposeTerminalUi(tab.id);}forgetConversation(id);state.tabs=state.tabs.filter(t=>t.id!==id);saveWorkspace();if(state.tab===id)state.tab='overview';render();}catch(e){toast(e.message);}});
   document.querySelectorAll('[data-tab-container]').forEach(item=>{const tab=state.tabs.find(t=>t.id===item.dataset.tabContainer);if(tab?.type==='browser')item.oncontextmenu=event=>{event.preventDefault();showDialog('<h2>Browser tab</h2><button id="unload-browser-tab">Unload tab</button><button id="close-dialog">Cancel</button>',()=>{});$('#unload-browser-tab').onclick=async()=>{try{await window.desktop.browser({action:'unload',id:tab.id});tab.info.loaded=false;$('#dialog').close();if(state.tab===tab.id)renderBrowser();}catch(error){toast(error.message);}};};});
   $('#new-chat').onclick=chatDialog;$('#markdown').onclick=markdownDialog;
@@ -558,7 +558,18 @@ window.desktop?.onNotification?.(()=>{if(state.page==='engine'&&state.engineSect
 window.desktop?.onAddressFocus(()=>$('#browser-url')?.focus());
 function selectBrowserTab(info) {
   if(info.group==='team'){selectTeamBrowser(info);openFeatureTab('team');}
-  else openTab({id:info.id,type:'browser',label:info.title||'New tab',info});
+  else {
+    openTab({id:info.id,type:'browser',label:info.title||'New tab',info});
+    const tab=state.tabs.find(tab=>tab.id===info.id);
+    if(info.loaded===false && info.url && !tab.activating){
+      tab.activating=true;
+      void window.desktop.browser({action:'activate',id:info.id}).then(current=>{
+        if(!state.tabs.includes(tab))return;
+        tab.info=current;tab.label=current.title||tab.label;saveWorkspace();
+        if(state.tab===tab.id)renderBrowser();
+      }).catch(error=>{if(state.tab===tab.id)toast(error.message);}).finally(()=>{tab.activating=false;});
+    }
+  }
 }
 window.desktop?.onBrowserAction?.(value=>{
   if(value.type==='overview')void showBrowserOverview(value.group);
