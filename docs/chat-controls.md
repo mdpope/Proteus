@@ -56,8 +56,9 @@ fixed for an existing session.
 
 Remote details should expose available usage, model history, session-file metadata and captured/
 loaded context read-only. Desktop/web use the normal sidebar/adaptive layout; mobile retains its
-expandable Chat details and Loaded context and condensed styling. Do not add remote file Open or
-Copy path actions or context-source editing for this increment. Automatically prepend older remote
+expandable Chat details and Loaded context and condensed styling. Do not add native remote file Open or
+Copy path actions or context-source editing for this increment. The separately queued generated-
+document link feature adds authorized read-only in-app viewing, not native filesystem opening. Automatically prepend older remote
 history as the reader approaches the top, preserving the viewport, stable event identity, grouping,
 expanded details and playback. Failures offer a retry without restarting or replaying the chat.
 

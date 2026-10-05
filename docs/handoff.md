@@ -7,13 +7,20 @@ and manifests; this repository owns the generic app and provider adapters.
 
 ## Latest release state
 
+Also queued on October 5: clear generated-document links that open Markdown in an app document
+view only when clicked. Local desktop has a `.md` link handler; remote/web parity remains work.
+Do not auto-open a document or force a split view. Broader tab organization awaits further input.
+Escape must close an image preview without closing the chat or cancelling work. See
+`markdown-picker.md` and the new backlog entry; source inspection is not live acceptance.
+
 The operator approved the October 5 chat mockup and requested queuing only. Grouped Activity,
 visible actionable warnings and usage/context details should be consistent across clients;
 mobile keeps its condensed native formatting and solid boxes. New queued work also moves smaller
 Proteus branding into the tab bar while preserving existing artwork, enlarges/normalizes icons
 and retains them in the minimized hover-expanding rail, gives remote chats the normal composer
 and read-only details, automatically pages earlier history, and adds pasted image/file attachments.
-Remote file Open/Copy path actions and context-source editing are excluded. See
+Native remote file Open/Copy path actions and context-source editing are excluded; the separately
+queued in-app generated-document preview is read-only. See
 `planned-updates.md`, `chat-controls.md`, `chat-rendering.md` and the October 5 decision entry.
 
 The earlier source/read-only review also queued Copilot expected-reset labeling, adaptive usage

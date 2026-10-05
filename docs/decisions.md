@@ -231,3 +231,13 @@ Images and other files can be pasted into a removable composer attachment strip;
 modal preview. Attachment delivery stays explicit, provider-capability-aware and bound to the
 account/host/chat/message. Pasting grants no additional trust and must not execute file contents.
 Implementation and acceptance remain in the single `planned-updates.md` backlog.
+
+## October 5 — generated documents open on demand
+
+Expose clear Markdown document links in chat and open an app document tab only when clicked.
+Preserve the originating chat and reuse an existing tab for the same host/file. Do not auto-open
+or force split view. Remote viewing is an authorized read-only preview through the owning Mac,
+not native remote file Open or context editing. iPhone uses return navigation; desktop/web/iPad
+use document tabs. Broader tab organization is awaiting further operator input. Escape explicitly
+closes the image-preview modal without closing a chat or cancelling execution. These are queued
+requirements; the current local Markdown handler alone does not verify cross-client support.

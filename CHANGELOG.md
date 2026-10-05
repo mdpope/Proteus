@@ -33,6 +33,10 @@ This is a concise behavior log. Git commits and pull requests contain the comple
 
 ## Unreleased
 
+- Queue click-to-open generated Markdown links across clients, preserving chat state without
+  automatic tabs or forced split view. Confirm Escape closes image previews. Broader tab
+  organization awaits further input; existing local Markdown linking is not cross-client parity.
+
 - Record approval of grouped chat Activity and shared details, preserving compact native mobile
   styling. Queue tab-bar branding and persistent normalized navigation icons, remote composer/
   read-only details parity, automatic earlier-history loading and pasted image/file attachments.

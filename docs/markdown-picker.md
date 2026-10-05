@@ -83,3 +83,20 @@ responses preserving an unrelated draft. Tests used disposable workspace folders
 
 October 4 follow-up: all eight filesystem tests and four authenticated API tests passed, including
 shared/every-chat root discovery and removal. The 20-group full desktop shell regression also passed.
+
+## Generated documents from chat — October 5 queue
+
+Source review confirms local chat `.md` links already use `openMessageLink` to open the rendered
+Markdown in a document tab. This is separate from the picker. Remote desktop currently shows
+“Open links on the destination Mac” instead; website file links also lack this in-app reader.
+Do not claim local support establishes parity or that every generated document is linked today.
+
+The operator requested consistent titled links for generated/updated Markdown artifacts. Open a
+normal document tab only on click, retain the chat and its state, and activate an existing tab for
+the same host/file rather than duplicating it. No automatic opening, focus change or split view.
+Desktop/web/iPad use the top tab bar; iPhone uses a document view with return navigation.
+
+Remote preview must be a bounded, authorized read from the owning Mac, with safe rendering and
+current file/root checks. It is not native file Open, context editing or arbitrary remote filesystem
+access. Broader tab organization is awaiting the operator's next design input. See
+`planned-updates.md` for the queued requirements and acceptance; no implementation is claimed.

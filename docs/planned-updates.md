@@ -3,6 +3,38 @@
 Maintain this as the single backlog. Design rationale is in `decisions.md`; recent changes are in
 `../CHANGELOG.md`. Items below are status, not promises of completed validation.
 
+## Queued: generated-document links and click-to-open Markdown tabs — October 5
+
+Status: requested as a continuation of the feature queue; not implemented. Source review confirms
+that local desktop chat links ending in `.md` already call the Markdown reader and open a document
+tab. Remote desktop links currently show destination guidance, and website local-file links also
+lack an equivalent reader. Existing local support is not cross-client acceptance.
+
+- When a chat generates or updates a proposal, design document, journal entry or similar Markdown
+  artifact, expose a clear clickable document title/filename in the response. Use a genuine file
+  reference from the response or confirmed tool output; do not infer successful creation from
+  prose alone or scan unrelated folders to find potential artifacts. First scope is Markdown.
+- Clicking the document opens and selects its rendered Markdown in a normal top-level Proteus
+  document tab on desktop/web/wide iPad. Keep the chat tab, draft and reading position intact.
+  Repeated clicks activate the already-open document for that host/file identity. On iPhone use
+  the equivalent document view with Back/swipe back to the retained chat.
+- Do not open documents, switch focus, create a split view or force side-by-side presentation
+  automatically when generation finishes. The operator's click is the opening trigger. Broader
+  tab grouping/organization is explicitly awaiting the operator's later design input.
+- Resolve a remote document through its owning Mac and show host provenance. Use an authenticated,
+  bounded read-only document capability tied to the authorized chat/file; recheck current roots,
+  canonical paths/symlinks, file type and size on the host. Never treat a remote path as local,
+  publish a public file URL, execute document HTML/scripts or broaden workspace/resource grants.
+  This adds in-app document viewing; native remote Open/Copy path and context editing stay excluded.
+- Retain safe Markdown rendering and supported relative-link/image resolution within the same
+  authorization boundary. Show missing/moved/denied/offline/unsupported-host states explicitly.
+  A restored document tab is a descriptor, not authority to reread a revoked file. Distinguish
+  current disk contents from any deliberately retained snapshot rather than implying immutability.
+- Acceptance: generated and updated document links; local and remote ownership; duplicate clicks;
+  spaces, Unicode, case-insensitive Markdown extensions and anchors; unavailable files/hosts;
+  denied roots and symlink escapes; safe rendering; chat-state preservation; no automatic opening.
+  Use synthetic files and transcripts. The reference screenshot supplies UI behavior, not work data.
+
 ## Queued: tab-bar branding and persistent navigation icons — October 5
 
 Status: explicitly requested following the approved chat mockup; not implemented.
@@ -35,7 +67,7 @@ Status: operator report with local/remote desktop screenshots; queued, not imple
   workspace and loaded context, source versions/delivery state, model history and approvals.
   Desktop/web use the normal details sidebar/adaptive layout; mobile keeps expandable Chat
   details and Loaded context with its existing compact visual treatment.
-- Omit remote file Open/Copy path actions and context-changing controls from this increment.
+- Omit native remote file Open/Copy path actions and context-changing controls from this increment.
   Read-only source/path metadata can remain informative; do not map remote paths to the viewing
   machine, request new filesystem grants, alter context or expand resource access for parity.
   Context-size model selection is distinct from changing selected workspace/context sources.
@@ -58,7 +90,9 @@ not implemented. The supplied attachment-strip image is a presentation reference
 
 - Pasting images adds preview thumbnails in an attachment strip at the top of the composer.
   Clicking/tapping a thumbnail opens a large modal preview; clicking the backdrop or its X
-  closes it. Include Escape, focus containment/return and an accessible close control.
+  closes it. Pressing Escape also closes the active image preview and returns focus to its
+  thumbnail/composer; it must not close the chat tab or cancel a running turn. Include focus
+  containment and an accessible close control.
 - Pasted non-image files appear as filename tags, with type/size where useful. Keep attachments
   outside the editable text if simpler; allow multiple mixed attachments, text and per-item removal
   before sending. Retain their association with the draft and show sent attachments in history.
