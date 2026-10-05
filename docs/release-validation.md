@@ -265,3 +265,31 @@ occurred. Read-only diagnosis found the login Keychain already unlocked and the 
 listing Proteus as trusted. The changed ad-hoc identity is a likely trigger for renewed consent,
 not proof of the reported password-rejection cause. The protected prompt cannot be inspected
 through the available UI tool; exact wording/buttons have been requested from the operator.
+
+
+## Empty desktop connections — October 5 follow-up
+
+The operator's current password successfully unlocks HC's login keychain, but authorizing the
+Proteus item and saving access changes failed even with local keyboard/trackpad input. The
+keychain is unlocked; no password mismatch or Screen Sharing denial was established. Nearby
+code-requirement failures lack explicit requester attribution, while Proteus partition records
+and changed ad-hoc signatures support an app-trust concern. The item-edit rejection is not
+claimed resolved. No Keychain item, password, access rule or stored secret was changed.
+
+HC's API then resumed: relay online, three incoming pairings and all three providers available;
+settings and five disabled schedules unchanged; no active chats or PTY jobs. Life is disabled.
+Stat-only inspection confirmed `life/website-session.enc`, `desktop-peers.enc` and
+`desktop-chat-index.enc` are all absent. The combined startup index nevertheless probed
+Safe Storage and attempted to encrypt an empty cache. The fix avoids both calls for an absent
+peer store and zero-peer index, leaves orphan caches untouched, validates existing credential
+records transactionally, and checks protected storage before a new pairing exchange.
+
+Validation: all ten focused tests, all 251 Node tests, and static checks pass. Coverage includes
+zero Safe Storage calls during repeated empty indexes and local-chat API requests, preserved
+orphan caches, corrupt/inaccessible/oversized/dangling credentials failing closed, guarded
+first pairing and encrypted writes, plus real encrypted cache/restart/revocation flows.
+
+A prior bundle-only rollback was reviewed and prepared but not performed because the current
+host recovered. Core data formats are compatible with `68463db`, but that older runtime drops
+newer workspace descriptors on restore; a fresh current profile/workspace backup is required
+if rollback is ever needed. Installation of the narrow startup fix is recorded below.

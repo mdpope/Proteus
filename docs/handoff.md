@@ -25,12 +25,14 @@ consent. Do not claim mobile shared-account acceptance from installation alone.
 Build Mac shared scopes are authorized; live shared endpoints return success for the same
 Life account. Its legacy roster was empty, so no import was made. HC now has `8e3ab51` installed
 with exact 103-file parity and unchanged two tabs, three pairings, settings and five disabled
-schedules. Normal startup is waiting on its real Proteus Safe Storage prompt. Read-only diagnosis
-confirmed login Keychain unlocked and the item trusting Proteus, while the new ad-hoc build has
-a different signing identity. This likely explains renewed authorization but does not explain
-the reported password rejection. Secure dialog text is inaccessible to tools; the operator has
-been asked for its exact wording/buttons before any repair. Relay/provider checks remain
-pending. Do not reset/delete Keychain items or change access rules to bypass the prompt.
+schedules. Its API has now resumed: relay online, all three providers available, no active work, with
+settings and five disabled schedules unchanged. Life is disabled. The operator confirmed the
+current password unlocks login Keychain, but the item permission prompt fails even with local
+physical input. No password mismatch or remote-input cause was established. No Keychain item,
+password or ACL was changed. Stat-only checks found no Life session, outgoing peer or chat-index
+encrypted file; the new aggregate index was requesting protected storage and writing an empty
+cache unnecessarily. The narrow startup fix passes 251 Node tests and static checks; installation is pending. See `credentials.md`; app-only
+rollback is prepared but on hold because the current host is healthy.
 
 Disposable Mac tests now use a mock Keychain, isolated from real credentials; production launches
 do not. Website account-persistent Mac enrollment still needs the recorded trust/custody review.

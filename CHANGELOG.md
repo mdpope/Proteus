@@ -1,5 +1,11 @@
 # Changes
 
+## Empty desktop connections follow-up
+
+- Avoid Keychain requests and empty encrypted-cache writes when the desktop has no saved
+  outgoing Mac connections. Existing encrypted credentials still fail closed; new pairing
+  checks secure storage before contacting the destination.
+
 ## Message actions follow-up
 
 - Add Copy and local Read Aloud controls below completed assistant messages across desktop, web

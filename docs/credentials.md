@@ -38,3 +38,27 @@ the embedded Chromium/browser environment; use the organization's normal login f
 Existing workflow-specific Keychain/bootstrap helpers are not automatically imported. A provider
 can point at an already-authenticated CLI profile, but Proteus does not migrate credentials or
 infer an organization/collection binding from a repository name.
+
+
+## Empty desktop connections and macOS Keychain
+
+The combined Chats index must not request protected storage merely to discover that no outgoing
+desktop connections exist. A missing `desktop-peers.enc` means an empty outgoing-connection
+list; an orphan `desktop-chat-index.enc` is not authority and must remain unread and unchanged.
+A zero-peer index must not encrypt/write an empty cache. Existing credential files still require
+protected storage and fail closed if unavailable, unreadable or invalid; pairing must verify secure
+storage before starting the remote exchange, and all credential/cache writes remain encrypted.
+Incoming relay device pairings are separate from this outgoing-connection store.
+
+During the HC investigation on October 5, the operator confirmed the current password unlocks
+the login keychain, yet authorizing Proteus or saving item access changes failed even using the
+Mac's physical keyboard. No general password mismatch or Screen Sharing denial was established.
+The ad-hoc app identity changed across updates; nearby code-requirement failures and Proteus
+partition records support an app-authorization issue, but do not prove the cause of Keychain
+Access's permission-edit rejection. Do not reset/delete Safe Storage or broaden its ACL as a
+routine update fix. Stable signing remains a separate packaging follow-up.
+
+HC had none of the Life session, outgoing peer credential or chat-index encrypted files. The
+new unconditional startup index was nevertheless probing Safe Storage and encrypting an empty
+cache. Its core API subsequently resumed with all providers and incoming relay pairings intact.
+Fixing that unnecessary access does not claim to repair the existing Keychain item's ACL.
