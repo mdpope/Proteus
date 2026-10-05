@@ -28,7 +28,7 @@ else {
     if (lifeCallback) { const value=lifeCallback; lifeCallback=null; void service.life.callback(value).catch(()=>{}); }
     window = new BrowserWindow({ width: 1440, height: 960, minWidth: 850, minHeight: 650, title: 'Proteus', icon: appIcon, backgroundColor: '#111716',
       webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
-    const browsingHistory = new BrowsingHistory(service.home,{onVisit:item=>service.activity.queue('history',{...item,title:item.title.slice(0,160),createdAt:item.visitedAt,hostId:service.remote.info().hostId})});
+    const browsingHistory = new BrowsingHistory(service.home,{device:()=>{const host=service.remote.info();return {id:host.hostId,name:host.label};},onVisit:item=>service.activity.queue('history',{...item,title:item.title.slice(0,160),createdAt:item.visitedAt,hostId:service.remote.info().hostId})});
     browser = new BrowserTabs(window, service.origin,{history:browsingHistory});
     credentials = new CredentialBroker(service.home);
     const trusted = event => { if (new URL(event.senderFrame.url).origin !== service.origin || event.sender !== window.webContents) throw new Error('Untrusted renderer.'); };

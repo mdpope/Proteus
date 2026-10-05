@@ -17,6 +17,11 @@ export function browserTarget(raw,engine='google'){
   return parsed.href;
 }
 export function searchTarget(query,engine='google'){if(!engines[engine])throw new Error('Unknown search engine.');const value=String(query||'').trim();if(!value)throw new Error('Enter a search.');return engines[engine]+encodeURIComponent(value);}
+export function historyTimestamp(value,timeZone){
+  const date=new Date(value);if(!value||!Number.isFinite(date.getTime()))return 'Unknown time';
+  return new Intl.DateTimeFormat(undefined,{year:'numeric',month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short',...(timeZone?{timeZone}:{})}).format(date);
+}
+export function historyDevice(item){return String(item.deviceName||'').trim()||'Unknown device';}
 export async function renderBrowserHome(area,options){
   const escape=options.escape;
   let identity,shared=[],sharedHistory=[],sharedCount=SHARED_HISTORY_PAGE_SIZE;
@@ -31,7 +36,7 @@ export async function renderBrowserHome(area,options){
   find('#browser-home-search').onsubmit=act(event=>options.navigate(searchTarget(find('#browser-home-query').value,event.submitter?.dataset.engine||'google')));
   find('#browser-home-address').onsubmit=act(()=>options.navigate(browserTarget(find('#browser-home-url').value)));
   const renderSharedHistory=()=>{
-    find('#browser-shared-history').innerHTML=sharedHistory.slice(0,sharedCount).map(item=>`<button class="browser-history-row" data-shared-history-url="${escape(item.url)}"><strong>${escape(item.title||item.url)}</strong><span>${escape(item.url)} · ${escape(item.source||'Shared')}</span><time>${escape(options.time(item.updatedAt||item.createdAt))}</time></button>`).join('')||'<p class="note">No shared visits yet.</p>';
+    find('#browser-shared-history').innerHTML=sharedHistory.slice(0,sharedCount).map(item=>`<button class="browser-history-row" data-shared-history-url="${escape(item.url)}"><strong>${escape(item.title||item.url)}</strong><span>${escape(item.url)}</span><small>${escape(historyDevice(item))}</small><time>${escape(historyTimestamp(item.visitedAt||item.createdAt))}</time></button>`).join('')||'<p class="note">No shared visits yet.</p>';
     find('#browser-shared-more').hidden=sharedCount>=sharedHistory.length;
     find('#browser-shared-history').querySelectorAll('[data-shared-history-url]').forEach(button=>button.onclick=act(()=>options.navigate(browserTarget(button.dataset.sharedHistoryUrl))));
   };
@@ -51,7 +56,7 @@ export async function renderBrowserHome(area,options){
       const rows=value.items||[],host=find('#browser-home-history');
       if(reset){host.innerHTML='';shownHistoryIds=new Set();}
       const fresh=rows.filter(item=>{const key=String(item.id);if(shownHistoryIds.has(key))return false;shownHistoryIds.add(key);return true;});
-      host.insertAdjacentHTML('beforeend',fresh.map(item=>`<div class="browser-shared-link"><button class="browser-history-row" data-history-url="${escape(item.url)}"><strong>${escape(item.title||item.url)}</strong><span>${escape(item.url)}</span><time>${escape(options.time(item.visitedAt||item.at))}</time></button><button data-history-delete="${escape(item.id)}" aria-label="Delete history entry">×</button></div>`).join(''));
+      host.insertAdjacentHTML('beforeend',fresh.map(item=>`<div class="browser-shared-link"><button class="browser-history-row" data-history-url="${escape(item.url)}"><strong>${escape(item.title||item.url)}</strong><span>${escape(item.url)}</span><small>${escape(historyDevice(item))}</small><time>${escape(historyTimestamp(item.visitedAt||item.at))}</time></button><button data-history-delete="${escape(item.id)}" aria-label="Delete history entry">×</button></div>`).join(''));
       if(reset&&!rows.length)host.innerHTML='<p class="note">No retained visits match this filter.</p>';
       host.querySelectorAll('[data-history-url]').forEach(button=>button.onclick=act(()=>options.navigate(button.dataset.historyUrl)));
       host.querySelectorAll('[data-history-delete]').forEach(button=>button.onclick=act(async()=>{await options.browser({action:'history-delete',id:button.dataset.historyDelete});await load(true);}));
