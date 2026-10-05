@@ -261,14 +261,20 @@ function renderChatEvent(event,index,provider){
     if((event.role||event.type)==='assistant'&&!String(event.text||'').trim())return '';
     const role=event.role||event.type,label=role==='assistant'?providerName(provider):role;
     const files=role==='user'&&Array.isArray(event.data?.attachments)?`<div class="remote-sent-attachments">${event.data.attachments.map(item=>`<span>▤ ${escape(item.name||'File')} · ${escape(item.mediaType||'file')}</span>`).join('')}</div>`:'';
-    const permission=event.data?.permission,review=permission?.automatic?`<p class="remote-permission-detail">Auto-approved${permission.kind?' '+escape(permission.kind):''}${permission.resolvedTarget?' · '+escape(permission.resolvedTarget):''}${permission.matchedRoot?' · Rule: '+escape(permission.matchedRoot):''}</p>`:'';
-    return `<article class="remote-message ${escape(role)}"><div class="eyebrow">${escape(label)}<time>${escape(dateTime(event.at||event.timestamp||event.createdAt,appPreferences.timezone))}</time></div><div data-markdown-event="${index}"></div>${files}${review}</article>`;
+    return `<article class="remote-message ${escape(role)}"><div class="eyebrow">${escape(label)}<time>${escape(dateTime(event.at||event.timestamp||event.createdAt,appPreferences.timezone))}</time></div><div data-markdown-event="${index}"></div>${files}</article>`;
+}
+function isActivityEvent(event){return Boolean(event?.data?.tool||event?.data?.permission?.automatic||(event?.role||event?.type)==='tool');}
+function renderAutomaticApproval(event){
+    const permission=event.data.permission;
+    const detail=[permission.reason||event.text,permission.resolvedTarget&&`Target: ${permission.resolvedTarget}`,permission.matchedRoot&&`Trusted root: ${permission.matchedRoot}`].filter(Boolean);
+    return `<div class="remote-activity-item remote-permission-detail"><strong>✓ Automatic approval${permission.kind?' · '+escape(permission.kind):''}</strong><time>${escape(dateTime(event.at||event.timestamp||event.createdAt,appPreferences.timezone))}</time>${detail.length?`<p>${detail.map(escape).join(' · ')}</p>`:''}</div>`;
 }
 function renderChatTimeline(events,provider){
     const output=[];for(let index=0;index<events.length;){
-        if(!events[index]?.data?.tool&&(events[index]?.role||events[index]?.type)!=='tool'){output.push(renderChatEvent(events[index],index,provider));index++;continue;}
-        const tools=[];let failed=false;while(index<events.length&&(events[index]?.data?.tool||(events[index]?.role||events[index]?.type)==='tool')){const tool=events[index].data?.tool;failed ||= ['failed','error'].includes(tool?.status)||Boolean(tool?.presentation?.error);tools.push(renderToolEvent(events[index]));index++;}
-        output.push(`<article class="remote-message remote-activity ${failed?'failed':''}"><details ${failed?'open':''}><summary>Activity · ${tools.length} ${tools.length===1?'tool':'tools'}${failed?' · Needs review':''}</summary>${tools.join('')}</details></article>`);
+        if(!isActivityEvent(events[index])){output.push(renderChatEvent(events[index],index,provider));index++;continue;}
+        const items=[];let failed=false,tools=0,approvals=0;while(index<events.length&&isActivityEvent(events[index])){const event=events[index],tool=event.data?.tool;if(tool||(event.role||event.type)==='tool'){tools++;failed ||= ['failed','error'].includes(tool?.status)||Boolean(tool?.presentation?.error);items.push(renderToolEvent(event));}if(event.data?.permission?.automatic){approvals++;items.push(renderAutomaticApproval(event));}index++;}
+        const counts=[tools&&`${tools} ${tools===1?'tool':'tools'}`,approvals&&`${approvals} automatic ${approvals===1?'approval':'approvals'}`].filter(Boolean).join(' · ');
+        output.push(`<article class="remote-message remote-activity ${failed?'failed':''}"><details ${failed?'open':''}><summary>Activity · ${counts}${failed?' · Needs review':''}</summary>${items.join('')}</details></article>`);
     }return output.join('');
 }
 function renderAttachmentStrip(current,key,providerId){
