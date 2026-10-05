@@ -32,6 +32,30 @@ reported signed out with zero models. Restarting the idle app restored authentic
 19 models. This is evidence for the Copilot path only; equivalent failures in Codex and Claude Code
 have not been established. The shared recovery experience should cover all three adapters.
 
+## Queued: reconcile MCP connection status with the active chat
+
+Status: investigation requested; cause and fix not yet established.
+
+- Reported Atlassian case: MCP configuration shows Connected while a resumed Copilot chat emits
+  `MCP atlassian: needs-auth`. Keep this separate from provider-account sign-in: a provider being
+  authenticated does not prove that a selected MCP is authorized in the current chat.
+- Trace status from provider runtime events, per-chat MCP status, configuration views and OAuth
+  completion. Check stale caches, account/profile differences, resumed-session configuration and
+  whether connection checks inspect the same server instance the active chat uses.
+- Show the scope and freshness of connection state. Reconcile current runtime authentication
+  failures promptly across Mac/iOS; do not label a server usable solely because configuration or
+  another session reports Connected. Retain historical chat events without presenting them as
+  current failures once recovery is verified.
+- Provide actionable sign-in/retry/error details and recheck the affected session after OAuth,
+  without app restart or interrupting unrelated runs. Do not reset credentials as a diagnostic.
+- Acceptance: reproduce contradictory configuration/session status with isolated fixtures; cover
+  resumed chats, token expiry, reauthorization, stale responses arriving out of order and matching
+  Mac/iOS status. Verify recovery via a non-mutating MCP check where supported; distinguish that
+  check from actual successful tool use and record any remaining live-validation limits.
+
+The operator supplied a local chat reference and screenshots. Keep those diagnostic references
+with local app support records, outside Git; repository tests and documentation use synthetic data.
+
 ## Message actions — October 4 follow-up
 
 Copy and local Read Aloud buttons beneath completed assistant messages are implemented across
