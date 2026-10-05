@@ -17,6 +17,10 @@ This is a concise behavior log. Git commits and pull requests contain the comple
 
 ## Unreleased
 
+- Queue provider sign-in/reconnect controls and authentication refresh without restarting for
+  Copilot, Codex and Claude Code; acceptance criteria are in `docs/planned-updates.md`.
+  This is planned work, not an implemented authentication fix.
+
 - Keep new-tab search and address controls reachable when history grows, in both main and Team
   browsers. Bound long rows to the viewport and show history in batches of 25 with **More**.
 - Isolate packaged Mac smoke tests from the real Safe Storage Keychain item; production launches

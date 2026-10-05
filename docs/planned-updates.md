@@ -3,6 +3,35 @@
 Maintain this as the single backlog. Design rationale is in `decisions.md`; recent changes are in
 `../CHANGELOG.md`. Items below are status, not promises of completed validation.
 
+## Queued: provider sign-in recovery and refresh without restarting
+
+Status: requested; not implemented or validated. Applies to GitHub Copilot, Codex and Claude Code.
+
+- Add visible Sign in / Reconnect actions to Providers and actionable recovery links wherever a
+  provider blocks starting or continuing a chat. Distinguish signed out, expired authorization,
+  connection failure and an account without model access; use provider-supported authentication.
+- Show sign-in progress, the account being connected, success, cancellation, timeout and retry.
+  Support browser/device authorization on the Mac, with clear handoff and synchronized status on
+  iPhone/iPad. Keep credentials and authorization codes out of transcripts, logs and repository files.
+- On successful sign-in, recheck the provider account and refresh its model/capability catalog,
+  usage where supported, selectors and connection indicators automatically. Manual Refresh must
+  also detect authentication completed outside Proteus; refreshing only a stale client is insufficient.
+- Recover provider authentication without quitting Proteus. Use supported credential refresh or
+  safely replace an idle provider connection. Preserve active/waiting turns, queued messages,
+  native session continuity, selected context and unsent drafts; if reconnection must wait for an
+  active turn, explain that state and complete it when safe. Do not stop unrelated providers.
+- Preserve secure credential storage, existing accounts and pairings. Do not silently sign out,
+  reset Keychain, weaken access controls or fall back to plaintext credential storage.
+- Acceptance: for each provider, test initial sign-in, expired/revoked credentials, external CLI
+  sign-in, cancel/timeout/retry and refresh while another chat is active. Verify Mac/iOS converge
+  on the current account and catalog without app restart; use isolated mocks for regressions and
+  report live sign-in validation separately. Account/model checks must not launch a paid chat.
+
+Observed recovery gap: Copilot CLI sign-in succeeded, but Proteus's forced provider refresh still
+reported signed out with zero models. Restarting the idle app restored authenticated status and
+19 models. This is evidence for the Copilot path only; equivalent failures in Codex and Claude Code
+have not been established. The shared recovery experience should cover all three adapters.
+
 ## Message actions — October 4 follow-up
 
 Copy and local Read Aloud buttons beneath completed assistant messages are implemented across
