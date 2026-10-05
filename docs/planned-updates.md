@@ -5,15 +5,47 @@ Maintain this as the single backlog. Design rationale is in `decisions.md`; rece
 retained as acceptance criteria; the installed versus unverified state is summarized immediately
 below and in `content-workspace-release.md`.
 
+## Next changes
+
+### 1. Command W closes the current tab
+
+Requested October 5, 2026. Status: recorded for the next set of changes; implementation
+and verification pending.
+
+In the Proteus Mac app, **Command-W (⌘W) must close the current tab and must never
+close the main Proteus window**.
+
+Acceptance criteria:
+
+- With multiple tabs open, close only the current tab and leave the other tabs and
+  main window open.
+- Apply the shortcut to the current tab in the active tab area, including nested
+  chat and Team workspaces. Preserve existing restrictions on persistent tabs.
+- Closing the last closable tab leaves the main window open. If there is no closable
+  current tab, do nothing; never fall back to closing the window.
+- Honor existing tab-close protections and confirmations. Cancelling a close leaves
+  both the tab and window open.
+- Verify shortcut handling with focus in ordinary content, embedded browser content,
+  terminals and text inputs, so the main window cannot receive a fallback close.
+
 ## 0.2.0 implementation and rollout status
 
-The installed base source is `74da6f78827de0145f2164b3a1d2d065202dea0e`; its integrated
-Node suite passed 331/331 and signed packaged-app smoke passed. Follow-up source edits for
-expanded attachments, Claude MCP status settling and website chat-title persistence passed
-340/340 integrated Node tests and `npm run check`. Native follow-up validation passed
-53/53 unit tests and three focused iPhone/iPad viewer tests; final artifact freeze and installs
-are pending. Build Mac, physical iPhone and iPad were updated in place with their data and signing preserved. Both physical clients reached both Mac
-hosts independently at HC 22:48:32 UTC and Personal 22:49:00 UTC. Website base release
+The initial installed base source was `74da6f78827de0145f2164b3a1d2d065202dea0e`;
+its integrated Node suite passed 331/331 and signed packaged-app smoke passed. The final
+Mac/native follow-up build uses `d24bd8a3904f3370044410b2fb4a306e24f269cd` with
+256-file/32-MiB guarded attachment batches, Claude MCP status settling and website chat-title
+persistence. It passed 340/340 integrated Node tests and `npm run check`; native follow-up
+validation passed 53/53 unit tests and three focused iPhone/iPad viewer tests. Build Mac,
+physical iPhone and iPad are now installed in place from the final commit with their signing,
+data and pairing identities preserved. Website release `20261005T232043Z` from `d24bd8a`
+preserved 9,212 files and configuration/schema/nutrition state; its 23:34:50 UTC audit passed
+14/14. A supplemental isolated restore of the recovery capture passed after the ordinary
+restore failed; no production writes or live state comparison were made. Web-only
+`2355d6bd004d3743bf79566937e1e32697e354bd` then deployed as `20261005T234233Z`,
+preserved the 9,212 files and protected state, and passed 14/14 at 23:45:35 UTC. The
+actual HC chat showed five grouped Activity entries with approval counts and zero
+standalone Auto-approved entries. Work Mac final reinstall/live
+readiness check remains in progress. Both physical clients reached both Mac hosts independently at HC 22:48:32 UTC and Personal 22:49:00 UTC. Website base release
 `20261005T221822Z` passed 9,212-file verification and 14/14 health checks; a web-only Home
 correction from `d9e3d96` was deployed as `20261005T224447Z`; its independent 14/14 health
 audit passed at 22:49:33.926 UTC. Work Mac 0.2.0 launched with state preserved. Both desktop
@@ -24,17 +56,19 @@ resource/document grants off. HC passed its normal macOS installed-app signature
 Keychain or trust changes; it preserved 15 runs, five schedules, open tabs and existing pairings.
 The installed Claude MCP status probe has a confirmed startup-settling bug: Safari showed
 connected, while ADO/Atlassian appeared pending after an immediate sample. A bounded settle
-source fix is ready, but final Mac rebuild/reinstall and live recheck remain
-pending; those values do not prove server failure. HC read the saved shared-account identity
-through `/api/app` at 23:09:32 UTC without credential or scope change. The separate website
-chat-title persistence source correction is ready but not yet deployed. No
-physical-device live notification tap, attachment upload, generated-document approval or provider
-turn is claimed.
+source fix is in the final frozen build. Build Mac has been reinstalled; HC reinstall and
+live recheck remain pending, so earlier values do not prove server failure. HC read the
+saved shared-account identity through `/api/app` at 23:09:32 UTC without credential or
+scope change. The separate website chat-title persistence correction from `d24bd8a` is deployed; its 14/14 audit passed. A
+separate web-only Activity grouping correction is deployed and live-verified. No physical-device live
+notification tap, attachment upload, generated-document approval or provider turn is claimed.
 Website account timezone is America/Denver with a verified 3:39 PM chat timestamp; automatic/device
 zone selection is follow-up. The Home build-ID width fix passed live 1280-pixel visual
 acceptance (12-character display and full-ID tooltip) and the 14/14 health audit. Bounded logs
-include known MariaDB `column_stats` warnings and one unclassified PHP and MariaDB entry each;
-this is not an all-clean log result.
+from d24 and the web-only successor are classified. The latter had one expected `.env`
+denial, 18 PHP lifecycle entries, 552 known MariaDB `column_stats` warnings and one
+unrelated different-account localhost connection abort; Laravel and relay Apache had no
+recent errors. This is not an all-clean log result.
 
 ## Active release: content tabs, Home, attention review and browser lifetime — October 5
 
@@ -332,9 +366,10 @@ installed Personal retained both online Mac destinations. No live paid remote mo
 Status: implemented across desktop/web/iPhone/iPad including remote chats. Exact one-use
 consent, provider byte delivery and client UI passed synthetic tests. The follow-up larger-batch
 source change allows 256 files within 32 MiB total and 8 MiB per file, with bounded staging,
-sliding inactivity expiry and the same ordered consent. Its final cross-client installs are
-pending. The supplied attachment-strip image remains a presentation reference; no existing user
-file was sent during validation.
+sliding inactivity expiry and the same ordered consent. Final Build Mac, iPhone and
+iPad installs and both d24/web-only final website 14/14 audits passed. The Work Mac final
+install and live Claude readiness check remain pending. The supplied attachment-strip image remains a
+presentation reference; no existing user file was sent during validation.
 
 - Pasting images adds preview thumbnails in an attachment strip at the top of the composer.
   Clicking/tapping a thumbnail opens a large modal preview; clicking the backdrop or its X

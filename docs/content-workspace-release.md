@@ -1,20 +1,24 @@
 # Content workspace release validation — 0.2.0 rollout
 
-Version **0.2.0**, native build **2610.5.1**, source commit
-`74da6f78827de0145f2164b3a1d2d065202dea0e`. The initial source and signed Build Mac,
-iPhone and iPad installs are complete. Website release `20261005T221822Z` used that commit;
-a website-only Home layout correction from `d9e3d96` went live as `20261005T224447Z` and passed its
-14/14 post-deploy health audit. Work Mac has launched 0.2.0 with app data preserved, both
-desktop pairing directions are authenticated, and a normal macOS installed-app signature check
-passed. The installed Claude MCP status probe has a confirmed startup-settling bug. Its bounded
-settle fix is implemented in the follow-up source, but a targeted Mac rebuild and reinstall
-remain pending. These are distinct results, not one blanket cross-device acceptance.
+Version **0.2.0**, final Mac and native source `d24bd8a3904f3370044410b2fb4a306e24f269cd`,
+with native build **2610.5.2**. The website subsequently added a web-only Activity classifier
+correction at `2355d6bd004d3743bf79566937e1e32697e354bd`. The initial 0.2.0 Mac/iPhone/iPad
+release used `74da6f78827de0145f2164b3a1d2d065202dea0e`; website release
+`20261005T221822Z` and Home correction `20261005T224447Z` passed separate 14/14 audits.
+The follow-up source adds larger guarded attachment batches, bounded Claude MCP status
+settling and website chat-title persistence; **340/340** integrated Node tests and
+`npm run check` passed. Build Mac and both physical iOS devices now run the final build,
+installed in place with their data and signing preserved. Work Mac had the base 0.2.0 installed
+and both desktop pairing directions authenticated; its final reinstall and live Claude
+readiness check remain pending. Website release `20261005T232043Z` from `d24bd8a` preserved 9,212 files and protected
+configuration, schema and nutrition state; a new 14/14 audit passed at 23:34:50 UTC.
+The web-only Activity correction deployed as `20261005T234233Z` and passed 14/14 again
+at 23:45:35 UTC. The actual HC chat had five grouped Activity entries with approval counts
+and zero standalone Auto-approved entries. These are separate surface results, not blanket
+cross-device acceptance.
 
-Follow-up source changes for larger attachment batches, Claude MCP status settling and website
-chat-title persistence passed **340/340** integrated Node tests and `npm run check`. Final
-Mac/native/web artifact freeze, builds and deployments for this follow-up remain pending.
-Follow-up native source validation passed 53/53 unit tests plus two iPhone and one iPad focused
-viewer tests; these are not physical-device reinstall receipts. Historical receipts remain in `release-validation.md` and
+Follow-up native validation passed 53/53 unit tests plus two iPhone and one iPad focused
+viewer tests before physical reinstall. Historical receipts remain in `release-validation.md` and
 `parity-release.md`; current private receipts are listed below.
 
 ## Source acceptance at the frozen commit
@@ -110,15 +114,28 @@ closing the browser tab. Restored descriptors never inherit document/script appr
 ## Rollout checks and remaining gates
 
 The installed base source passed 331/331 integrated Node tests, syntax/static checks, focused Electron
-and native acceptance, and a signed packaged-app smoke. The packaged Electron-as-Node launcher
+and native acceptance, and a signed packaged-app smoke. The final follow-up source passed
+340/340 integrated Node tests and `npm run check`. Its signed Mac archive contained 119 verified
+files; the isolated packaged different-cwd synthetic MCP launcher passed. A separate packaged
+GUI smoke was inconclusive because the already-running installed singleton intercepted it;
+actual installed Home launched and was observed after the guarded replacement. The packaged Electron-as-Node launcher
 ran an isolated selected synthetic MCP server from a different captured working directory, with
 no real MCP server or model turn. Build Mac installation used the approved signing identity,
 verified graceful shutdown and a terminal guard, and preserved settings, run/schedule files,
-Life state, content-tab order/history and three incoming pairings. The installed Home/version,
-compact navigation, unloaded browser restoration, peer links and fresh Copilot allowance were
-checked in the actual app. Both physical iOS devices were updated in place with the original
-team/profile and verified data/pairing preservation. Both physical clients subsequently reached
-both authenticated Mac hosts independently (HC at 22:48:32 UTC; Personal at 22:49:00 UTC).
+Life state, content-tab order/history and three incoming pairings. The initial installed
+Home/version, compact navigation, unloaded browser restoration, peer links and fresh Copilot allowance were checked in the actual app. The final `d24bd8a` guarded
+Personal install preserved twelve then-current content descriptors/order, four pairings,
+settings, runs/schedules, Life state and histories. Its Home visibly showed version 0.2.0 and
+build `d24bd8a3904f`; five main browser rows remained unloaded and the Team child browser
+stayed a saved descriptor. A later snapshot showed fourteen content tabs after continued app
+use. At 23:32 UTC Personal's authenticated index had five local and fifteen HC chats,
+`partial:false`, with both host rows online. Cached read-only Copilot, Codex and Claude usage
+was available; no forced quota fetch or model turn was used.
+
+Both physical iOS devices were updated in place again from `d24bd8a` with the original
+team/profile and verified data/pairing preservation, installed build 2610.5.2 and independent
+running-process checks. Build Mac saw both updated clients online at 23:23:28 UTC.
+Both physical clients subsequently reached both authenticated Mac hosts independently (HC at 22:48:32 UTC; Personal at 22:49:00 UTC).
 Physical notification taps, uploads and provider calls were not exercised. The base website
 activation preserved configuration, schema and nutrition state and passed all 14 guarded health
 checks; the subsequent Home-only correction preserved those stores and passed its separate 14/14
@@ -131,8 +148,8 @@ directions: HC read Personal's five chat metadata records and fifteen local reco
 22:54:20 UTC with `partial:false`. The new Build incoming identity, `Proteus on workstation.example.test`,
 was online at 22:51:27 UTC with resource and document access off. No chat turn or mutation was
 used for these checks. HC passed a normal macOS installed-app signature check without
-Keychain or trust changes. The installed Claude MCP status probe sampled once immediately after initialization, so Safari
-showed connected while ADO/Atlassian showed pending. This is a confirmed probe bug, not evidence
+Keychain or trust changes. The initial installed Claude MCP status probe sampled once
+immediately after initialization, so Safari showed connected while ADO/Atlassian showed pending. This is a confirmed probe bug, not evidence
 that those servers failed. A bounded settle fix is in the follow-up source; the final Mac reinstall
 and live recheck remain pending. HC also read the saved shared-account identity through `/api/app`
 at 23:09:32 UTC without a credential change or scope mutation. No Claude model turn was used.
@@ -142,9 +159,24 @@ The website Home-only build-ID width correction from `d9e3d96` was deployed as
 The audit reported zero Laravel and relay-Apache errors, one expected `.env` denial, 17 PHP
 lifecycle entries plus one unclassified entry, and 1,242 known MariaDB `column_stats` warnings
 plus one unclassified entry in the bounded 22:48–22:49:34 UTC window.
+Website `d24bd8a` then deployed as `20261005T232043Z` with verified file parity and
+protected-state preservation;
+its 23:34:50 UTC endpoint audit passed 14/14. The newer bounded log window contained one expected `.env` denial, 18 PHP lifecycle
+entries (17 initially recognized plus one systemd monitor interval), 510 known MariaDB
+`column_stats` warnings and one unrelated different-account login denial. All categories
+were classified; none required corrective action for this release. The web-only Activity auto-approval grouping correction then deployed and passed live HC
+chat acceptance: five grouped Activity entries with approval counts and no standalone
+Auto-approved entry. Its final bounded audit logged one expected `.env` denial, 18 PHP
+lifecycle entries, 552 known MariaDB `column_stats` warnings and one unrelated
+different-account localhost connection abort. Laravel and relay Apache had zero recent
+errors; all categories were classified, with no corrective action in scope.
+The recovery capture had an ordinary isolated restore failure, then passed a user-approved
+supplemental isolated restore at 23:17:03 UTC without production writes. A live backup-state
+comparison was not performed. Detailed deployment receipt:
+`/private/tmp/proteus-web-d24-final-verification.json`.
 The live account timezone was changed from UTC to America/Denver and a 3:39 PM chat timestamp was
 verified; an automatic/device-timezone option remains follow-up. MariaDB's known `column_stats`
-warnings and unclassified log entries preclude an all-clean logs claim.
+warnings and the unrelated login denial preclude an all-clean logs claim.
 
 ## Known platform limits
 
@@ -161,12 +193,13 @@ warnings and unclassified log entries preclude an all-clean logs claim.
 
 | Surface | Verified state | Private evidence / remaining limit |
 | --- | --- | --- |
-| Build Mac | Installed 0.2.0 from `74da6f7`; Home and compact navigation observed; ten content tabs, histories, settings, schedules, Life state and three pairings preserved; six browser descriptors unloaded | `/private/tmp/proteus-content-workspace-install-20261005T222724Z/receipt.json`, `/private/tmp/proteus-personal-installed-acceptance-20261005.json`; incoming iPhone was offline/backgrounded at that instant |
+| Build Mac | Final `d24bd8a` 0.2.0 installed and Home/build observed; then-current twelve content descriptors/order, histories, settings, schedules, Life state and four pairings preserved; five main browser rows unloaded, Team child saved | `/private/tmp/proteus-content-workspace-install-20261005T232900Z/receipt.json`, `/private/tmp/proteus-d24bd8a-personal-acceptance.json`; signed 119-file archive `/private/tmp/proteus-content-workspace-d24bd8a3904f/Proteus-d24bd8a3904f-macos-arm64.zip` SHA-256 `4a74e2a5c5d732b4f805f86657c0df06a9b29c4672b416708e0ffd0b55d0bdae`; 23:32 UTC read-only index: Personal 5/HC 15, `partial:false` |
 | Work Mac | Installed 0.2.0 build `74da6f7`; normal macOS signature check passed; 15 runs, five schedules, open tabs and existing pairings preserved; HC → Personal read-only index returned five Personal and fifteen HC chat records, `partial:false` | Bidirectional desktop pairing verified. Initial installed Claude MCP status probe has a confirmed startup-settling bug; source fix ready, Mac reinstall and later readiness check pending; no live model turn |
-| iPhone | Installed 0.2.0 (2610.5.1) in place; app data/preferences and both Mac destination identities preserved; authenticated links to both Macs observed | `/private/tmp/proteus-iphone-content-workspace-update-20261005T222216Z/receipt.json`; live links HC 22:48:32 UTC / Personal 22:49:00 UTC; no physical notification/provider/upload test |
-| iPad | Installed 0.2.0 (2610.5.1) in place; app data/preferences and both Mac destination identities preserved; authenticated links to both Macs observed | `/private/tmp/proteus-ipad-content-workspace-update-20261005T221940Z/receipt.json`; live links HC 22:48:32 UTC / Personal 22:49:00 UTC; no physical notification/provider/upload test |
-| Website | Base `20261005T221822Z` from `74da6f7` passed 14/14 health checks. Home-only `d9e3d96` correction deployed as `20261005T224447Z`, 9,212 files, protected state preserved; its independent audit passed 14/14 at 22:49:33.926 UTC | `/private/tmp/proteus-web-live-acceptance-20261005.json` covers the base audit; correction has known MariaDB `column_stats` warnings and unclassified PHP/MariaDB entries, not an all-clean log claim; a separate web chat-title persistence source fix is ready but not yet deployed |
+| iPhone | Final `d24bd8a` 0.2.0 (2610.5.2) installed in place; five app-data files/preferences and both Mac destination identities/selection preserved; independent process check passed | `/private/tmp/proteus-iphone-attachment-batch-update-20261005T232240Z/receipt.json`; Personal saw updated client online 23:23:28 UTC; no physical notification/provider/upload test |
+| iPad | Final `d24bd8a` 0.2.0 (2610.5.2) installed in place; four app-data files/preferences and both Mac destination identities/selection preserved; independent process check passed | `/private/tmp/proteus-ipad-attachment-batch-update-20261005T232123Z/receipt.json`; Personal saw updated client online 23:23:28 UTC; no physical notification/provider/upload test |
+| Website | `d24bd8a` deployed as `20261005T232043Z`, then web-only `2355d6b` as `20261005T234233Z`; both preserved 9,212 files and protected state and passed 14/14 audits, latest at 23:45:35 UTC; HC chat Activity grouping verified | d24 receipt `/private/tmp/proteus-web-d24-final-verification.json`; earlier base/Home receipt `/private/tmp/proteus-web-live-acceptance-20261005.json`; d24 audit had one expected `.env` denial, 18 PHP lifecycle entries, 510 known MariaDB `column_stats` warnings and one unrelated different-account login denial. Web-only Activity grouping verified in the later release; latest logs had 18 PHP lifecycle entries, 552 known MariaDB warnings, one unrelated different-account connection abort and one expected `.env` denial, so no all-clean claim |
 
-Native detail: `/private/tmp/proteus-native-release-final.md`. Personal installed detail:
-`/private/tmp/proteus-personal-release-final.md`. The development iOS provisioning profile
-expires October 10, 2026 at 23:29:01 UTC and has no APNs entitlement.
+Native final attachment-batch detail: `/private/tmp/proteus-native-attachment-batch-final.md`;
+build receipt: `/private/tmp/proteus-attachment-batch-native-release-20261005/build-receipt.json`.
+Personal final installed acceptance: `/private/tmp/proteus-d24bd8a-personal-acceptance.json`.
+The development iOS provisioning profile expires October 10, 2026 at 23:29:01 UTC and has no APNs entitlement.

@@ -7,17 +7,24 @@ and manifests; this repository owns the generic app and provider adapters.
 
 ## Latest release state
 
-The authorized **0.2.0** content-workspace release is implemented at frozen commit
-`74da6f78827de0145f2164b3a1d2d065202dea0e`. Build Mac, physical iPhone and iPad are
-installed in place; website base release `20261005T221822Z` used that commit, and a web-only
-Home correction from `d9e3d96` went live as `20261005T224447Z` and passed its separate
-14/14 endpoint audit. Work Mac has launched 0.2.0 with state preserved. Both desktop pairing
-directions are authenticated, and HC passed its normal macOS installed-app signature check.
-The installed Claude MCP status probe has a confirmed startup-settling bug; the bounded
-source fix is ready, but Mac rebuild/reinstall and live recheck remain pending. The website
-chat-title persistence source fix is also ready; deployment remains pending. The combined
-follow-up source passed 340/340 integrated Node tests and `npm run check`; native follow-up
-validation passed 53/53 unit tests and three focused iPhone/iPad viewer tests. Read
+The final **0.2.0** Mac/native follow-up build uses
+`d24bd8a3904f3370044410b2fb4a306e24f269cd`. It includes 256-file/32-MiB guarded
+attachment batches, bounded Claude MCP status settling and website chat-title persistence.
+The integrated Node suite passed 340/340, `npm run check` passed, and native follow-up
+validation passed 53/53 unit tests plus three focused iPhone/iPad viewer tests. Build Mac
+and both physical iOS devices are installed in place from this commit, preserving signing,
+app data and destination identities. The original 0.2.0 website release
+`20261005T221822Z` and Home correction `20261005T224447Z` passed their separate 14/14
+audits. Website release `20261005T232043Z` from `d24bd8a` verified 9,212 files and preserved
+configuration, schema and nutrition state; its 23:34:50 UTC audit passed 14/14 checks. The web-only
+Activity classifier correction `2355d6bd004d3743bf79566937e1e32697e354bd` then
+deployed as `20261005T234233Z`, preserved the same 9,212 files and protected state,
+and passed 14/14 health checks at 23:45:35 UTC. The actual HC chat showed five grouped
+Activity entries with approval counts and no standalone Auto-approved entry. Work Mac final
+reinstall/live Claude readiness check remains pending. Its installer Codex-app task showed
+Thinking for roughly twenty minutes; the operator asked to Stop it, with completion not yet
+confirmed. The earlier installed 0.2.0/pairing receipts remain valid but do not establish
+follow-up acceptance. Read
 `content-workspace-release.md` for receipts and remaining gates. Multi-provider orchestration
 and Safari-style browser tab groups remain deferred.
 
@@ -47,28 +54,61 @@ The HC login Keychain was reset after a crash. HC 0.2.0 has since launched with 
 preserved. Both desktop pairing directions passed read-only authenticated chat-index checks;
 its normal macOS installed-app signature check passed without Keychain or trust changes. The
 installed Claude MCP status probe sampled immediately after initialization: Safari showed
-connected, while ADO/Atlassian remained pending. The bounded startup-settling source fix is ready, but a Mac reinstall and live recheck remain pending; the pending values do not establish server failure. No Claude model turn was
-used. HC read the saved shared-account identity through `/api/app` at 23:09:32 UTC without
-changing credentials or scopes. Preserve existing credentials and unreadable encrypted stores; use supported sign-in/pairing
-only where needed. Do not reset/delete Keychain items, weaken access controls or
+connected, while ADO/Atlassian remained pending. The bounded startup-settling source fix is in the final Mac build, but the HC reinstall and
+live recheck remain pending; the earlier pending values do not establish server failure.
+Separately, a Proteus Codex chat reported `Codex thread/start timed out.` Proteus gives each
+Codex app-server RPC, including `thread/start`, a 45-second timeout. Selected MCP configuration
+is passed to that request, so slow startup handling is plausible but unproven; the unrelated
+Codex-app installer Thinking state must not be treated as the same failure. Build Mac
+reported a healthy cached Codex catalog at 23:49 UTC, which says nothing conclusive about
+HC. On HC resume, inspect only the failed run's event time/session assignment, selected
+server names, cached provider status and app-server process/log state before any retry. No
+Claude model turn was used. HC read the saved shared-account identity through `/api/app` at
+23:09:32 UTC without changing credentials or scopes. Preserve existing credentials and
+unreadable encrypted stores; use supported sign-in/pairing only where needed. Do not reset/delete Keychain items, weaken access controls or
 introduce plaintext storage. Existing app data backups and deployment receipts remain private.
 
-Build Mac installation preserved ten ordered content tabs, browser histories, settings,
-run/schedule files, Life account/session bytes and three incoming pairings. Actual installed UI
-showed Home, version 0.2.0/build `74da6f78827d`, rendered release notes and the compact tab bar;
-five main and one Team browser descriptors stayed unloaded, and no terminal process started. Its
-relay and both outgoing Mac links were online. A fresh read-only Copilot quota request returned
-75.1% remaining without error; the iPhone incoming client was offline/backgrounded at that
-instant. Both physical iOS installs preserved app data/preferences and two Mac destination
-identities. Both physical clients subsequently reached both authenticated Macs independently
-(HC 22:48:32 UTC, Personal 22:49:00 UTC); they were not used for a live notification tap,
-attachment upload or provider turn. Website base activation matched 9,212 files and 14/14 health
-checks while preserving configuration, schema and nutrition state. The account timezone is now
-America/Denver, with a live 3:39 PM chat timestamp observed; automatic/device-timezone selection
+The initial Build Mac 0.2.0 install from `74da6f7` preserved ten ordered content tabs,
+browser histories, settings, run/schedule files, Life account/session bytes and three incoming
+pairings. Its installed UI showed Home and compact navigation, with five main and one Team
+browser descriptors unloaded. The final `d24bd8a` Personal reinstall passed the guarded
+idle/terminal check and preserved the then-current twelve content descriptors and order,
+histories, settings, runs/schedules, Life bytes and four pairings; a later read-only snapshot
+showed fourteen tabs after continued app use, not an install-preservation mismatch. Installed
+Home displayed version 0.2.0/build `d24bd8a3904f`, rendered release notes and compact chrome.
+The five instantiated main browser rows remained unloaded; the Team child browser descriptor
+was saved without an eager BrowserView. At 23:32 UTC the authenticated chat index was
+`partial:false`: five Personal and fifteen HC records, both host rows online with fresh sync.
+Cached read-only allowance showed Copilot 75.1%, Codex 59%, Claude 97% five-hour/100% weekly;
+no model turn or forced usage refresh occurred. Incoming-device online indicators varied by
+instantaneous connection, while resource/document grants remained off. The signed package,
+install and UI receipt are in `content-workspace-release.md`.
+
+Both physical iOS devices were updated in place again from `d24bd8a` as build 2610.5.2,
+with original team/profile, protected app data/preferences and both Mac destination identities
+preserved. Independent installed-app and running-process checks passed. Build Mac observed
+both updated clients online at 23:23:28 UTC. The earlier independent cross-Mac links were
+observed at HC 22:48:32 UTC and Personal 22:49:00 UTC; no physical-device chat, upload,
+notification tap or provider call was used for the final build.
+
+Website base activation matched 9,212 files and 14/14 health checks while preserving
+configuration, schema and nutrition state. The account timezone is now America/Denver, with a live 3:39 PM chat timestamp observed; automatic/device-timezone selection
 remains follow-up. The later Home build-ID width correction passed its separate 14/14
-post-deploy health audit at 22:49:33.926 UTC. Live Home shows a 12-character build ID with a full-ID tooltip inside the card
-at a 1280-pixel viewport. Bounded logs still contain known MariaDB `column_stats` warnings and
-one unclassified entry each in PHP and MariaDB; do not call them all-clean.
+post-deploy health audit at 22:49:33.926 UTC. The `d24bd8a` website deployment passed a new
+14/14 audit at 23:34:50 UTC. Web-only `2355d6b` then passed 14/14 at 23:45:35 UTC, with
+9,212 deploy files and protected state preserved.
+The `d24bd8a` archive and live result are recorded in
+`/private/tmp/proteus-web-d24-final-verification.json`; final web-only receipt is
+pending its private summary. A prior ordinary isolated restore
+attempt failed; a user-approved supplemental isolated restore passed, without production writes.
+No live backup-state comparison is claimed.
+Live Home shows a 12-character build ID with a full-ID tooltip inside the card at a
+1280-pixel viewport. The d24 bounded log window had one expected `.env` denial, 18 PHP lifecycle entries,
+510 known MariaDB `column_stats` warnings and one unrelated different-account login denial.
+The later web-only audit had 18 PHP lifecycle entries, 552 known `column_stats` warnings,
+one unrelated different-account localhost connection abort and one expected `.env` denial;
+Laravel and relay Apache had no recent errors. All categories are classified, but this is
+not an all-clean logs claim.
 
 HC read five Personal and fifteen HC chat metadata records with `partial:false` around 22:52 UTC; Personal refreshed fifteen HC records at 22:54:20 UTC, also `partial:false`. Personal's
 new incoming `Proteus on workstation.example.test` identity was online at 22:51:27 UTC with resource and
