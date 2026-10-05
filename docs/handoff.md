@@ -12,6 +12,12 @@ view only when clicked. Local desktop has a `.md` link handler; remote/web parit
 Do not auto-open a document or force a split view. Broader tab organization awaits further input.
 Escape must close an image preview without closing the chat or cancelling work. See
 `markdown-picker.md` and the new backlog entry; source inspection is not live acceptance.
+The remote design is now explicitly approved for the queue: host/chat-bound document IDs, a
+separate View chat documents connection grant, per-read authorization over the encrypted relay,
+versioned bounded reads and in-memory open-tab content only. Offline already-loaded copies retain
+a last-read label; first reads need the owning Mac online. Do not silently grant existing peers
+access or expose the broad local Markdown API remotely. Rich HTML previews are still a proposed
+extension, not covered by the Markdown grant or implemented by this documentation update.
 
 The operator approved the October 5 chat mockup and requested queuing only. Grouped Activity,
 visible actionable warnings and usage/context details should be consistent across clients;

@@ -100,3 +100,29 @@ Remote preview must be a bounded, authorized read from the owning Mac, with safe
 current file/root checks. It is not native file Open, context editing or arbitrary remote filesystem
 access. Broader tab organization is awaiting the operator's next design input. See
 `planned-updates.md` for the queued requirements and acceptance; no implementation is claimed.
+
+### Approved remote-document transport and lifetime — queued
+
+The executing Mac keeps the source file and registers a document ID associated with its chat.
+Clients address host/chat/document identity; they never supply an arbitrary path as authority.
+A separate **View chat documents** connection grant permits read-only previews without general
+resource access or file editing. Check that grant, peer authorization, chat association and current
+canonical file/root/type/size boundary on every read, including related images. Existing peers
+must not gain the new capability silently. Reuse the encrypted relay transport, not a public URL
+or unrestricted forwarding of the local `/api/markdown` reader.
+
+Return bounded content, title, modification time and a version identifier matching the delivered
+bytes. Fetch the latest saved version when opening; preserve a reader's current version until
+Refresh when the source changes. Reads do not require an AI turn or plaintext document storage
+in the website database. Safe Markdown rendering remains mandatory; scripts are not executable.
+
+Keep content in memory for the open tab initially. Restored tab descriptors require a new authorized
+read. An already-loaded document remains visible during a host disconnect, labeled with its
+last-read time; an unloaded document requires reconnection. Persistent offline caching is deferred
+to an explicit option. Clear retained private content on sign-out/account change. Revocation blocks
+future reads but cannot recall content already disclosed; the browser receives the displayed
+content and its website trust boundary remains relevant. Missing/moved/denied files stay explicit.
+
+This design is approved and queued, not implemented or accepted on live clients. Interactive
+HTML/JavaScript previews are a separate proposed extension requiring isolation and an explicit
+capability model; a Markdown viewing grant must not implicitly execute generated code.

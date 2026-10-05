@@ -241,3 +241,19 @@ not native remote file Open or context editing. iPhone uses return navigation; d
 use document tabs. Broader tab organization is awaiting further operator input. Escape explicitly
 closes the image-preview modal without closing a chat or cancelling execution. These are queued
 requirements; the current local Markdown handler alone does not verify cross-client support.
+
+## October 5 — approved remote document identity and viewing scope
+
+Keep generated files on the executing Mac and register chat-bound document IDs. Transport bounded
+read-only content over the existing authenticated encrypted relay after checking a separate,
+revocable View chat documents grant and the current host file boundary. Document IDs, cached links
+and restored tabs confer no authority by themselves. Do not promote the broad local Markdown
+endpoint into a general remote reader or expand existing peers' resource permissions silently.
+
+Fetch the current saved version on open, return version metadata, and offer explicit refresh for
+changes. Initially keep displayed contents in memory for the open tab only; persist descriptors,
+not offline document copies. A disconnect leaves an already-loaded version readable with a
+last-read label, while first reads require the owning Mac online. Clear account-bound content on
+sign-out/account changes. Revocation stops subsequent reads, not possession of already-delivered
+bytes. No new AI turn or plaintext website database copy is needed; existing website-client trust
+is unchanged. This is queued design approval, not implementation or permission migration.

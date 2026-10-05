@@ -5,10 +5,11 @@ Maintain this as the single backlog. Design rationale is in `decisions.md`; rece
 
 ## Queued: generated-document links and click-to-open Markdown tabs — October 5
 
-Status: requested as a continuation of the feature queue; not implemented. Source review confirms
-that local desktop chat links ending in `.md` already call the Markdown reader and open a document
-tab. Remote desktop links currently show destination guidance, and website local-file links also
-lack an equivalent reader. Existing local support is not cross-client acceptance.
+Status: the operator approved the remote-document design and requested queuing; not implemented.
+Source review confirms that local desktop chat links ending in `.md` already call the Markdown
+reader and open a document tab. Remote desktop links currently show destination guidance, and
+website local-file links also lack an equivalent reader. Existing local support is not cross-client
+acceptance. The detailed host/document identity, authorization and offline design below is approved.
 
 - When a chat generates or updates a proposal, design document, journal entry or similar Markdown
   artifact, expose a clear clickable document title/filename in the response. Use a genuine file
@@ -30,10 +31,32 @@ lack an equivalent reader. Existing local support is not cross-client acceptance
   authorization boundary. Show missing/moved/denied/offline/unsupported-host states explicitly.
   A restored document tab is a descriptor, not authority to reread a revoked file. Distinguish
   current disk contents from any deliberately retained snapshot rather than implying immutability.
-- Acceptance: generated and updated document links; local and remote ownership; duplicate clicks;
-  spaces, Unicode, case-insensitive Markdown extensions and anchors; unavailable files/hosts;
-  denied roots and symlink escapes; safe rendering; chat-state preservation; no automatic opening.
-  Use synthetic files and transcripts. The reference screenshot supplies UI behavior, not work data.
+- Register a host-owned document ID bound to its chat and filesystem reference. Remote links and
+  restored tabs use host/chat/document identity; only the owning Mac resolves the path. IDs and
+  previously rendered links are not bearer authorization. Add an independently granted, revocable
+  Connections capability, **View chat documents**, without enabling general resource access,
+  filesystem browsing or editing. Existing peers must not silently acquire this grant.
+- Read through the existing authenticated encrypted relay transport. Recheck the peer's current
+  grant, chat/document association and current host filesystem boundary for every document/image
+  request. Do not expose the broader local `/api/markdown` reader as an unrestricted remote method.
+  Return bounded Markdown plus title, modification time and a version identifier for the bytes read.
+  Reading a document requires no AI turn and no plaintext document store in the website database.
+- Opening fetches the latest saved version. If a file changes while its tab is open, offer Refresh
+  rather than silently replacing the visible content. Related local images require separate
+  authorized bounded reads. Moved/deleted/denied files and unsupported hosts remain explicit states.
+- Initially retain document contents only in memory while the tab is open; persist tab descriptors,
+  not document bodies or automatic offline copies. If the owning Mac disconnects after loading, retain
+  the visible copy with its last-read time/version. If no copy is loaded, explain that the owning
+  Mac must reconnect. Persistent offline caching is a later explicit option. Sign-out/account
+  changes must clear retained private content; revocation prevents further reads but cannot recall
+  bytes already delivered to a client. Transport encryption does not remove website-client trust.
+- Acceptance: generated and updated links; duplicate clicks; version/refresh behavior; loaded and
+  never-loaded offline states; reconnect; revoked grants; cross-chat/host/account ID substitution;
+  spaces, Unicode, case-insensitive Markdown extensions and anchors; missing files; denied roots,
+  traversal, symlink replacement and bounded reads/images; safe rendering; chat-state preservation;
+  no automatic opening and no persistent content cache. Use synthetic files and transcripts.
+  Rich HTML/JavaScript artifacts need a separately scoped isolated preview design; this Markdown
+  approval does not authorize executing generated scripts or installing a general code runner.
 
 ## Queued: tab-bar branding and persistent navigation icons — October 5
 

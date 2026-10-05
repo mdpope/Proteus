@@ -33,6 +33,11 @@ This is a concise behavior log. Git commits and pull requests contain the comple
 
 ## Unreleased
 
+- Record the approved remote-document architecture: chat-bound host document IDs, a separate
+  revocable viewing grant, authorized bounded relay reads, version/refresh behavior and in-memory
+  open-tab retention. No automatic persistent offline copies or broadened filesystem grants.
+  Queued design only; no runtime or deployed behavior changed.
+
 - Queue click-to-open generated Markdown links across clients, preserving chat state without
   automatic tabs or forced split view. Confirm Escape closes image previews. Broader tab
   organization awaits further input; existing local Markdown linking is not cross-client parity.
