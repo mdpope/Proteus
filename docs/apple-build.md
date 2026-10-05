@@ -190,3 +190,32 @@ labels. The Build Mac host independently reported its iPhone peer online, verify
 reconnection. iPad installation remains deferred at the operator's request. This supersedes the
 iPhone-only locked-device hold above; no iPad retry was made. Life account sign-in remains separate
 and unverified on physical devices. See `release-validation.md` for the current acceptance record.
+
+
+## Packaged Mac smoke test and Keychain isolation
+
+Run `node test/packaged-mac.mjs` against the built Mac bundle (or pass its path).
+The test checks bundle identity/artwork, signatures, preserved GitHub vendor binaries,
+window launch and the existing read-only Copilot model-catalog check. It creates a fresh
+`PROTEUS_HOME` and browser profile and passes Chromium's `--use-mock-keychain` only to
+that disposable test process. A synthetic persistent cookie exercises the network storage
+path; the test asserts its temporary paths and the switch before reporting success.
+
+Electron itself uses this switch to prevent macOS test launches from blocking on Keychain
+consent; its test change was backported in 44.4.0 and the bundled version is 44.5.1:
+[upstream test change](https://releases.electronjs.org/pr/53790). A separate browser profile
+alone does not isolate the OS-level `Proteus Safe Storage` item. Ad-hoc builds can therefore
+prompt for that real item even while the older installed application continues running.
+
+Only synthetic browser data may enter this mock profile. Do not copy a real profile, Life
+session or encrypted pairing store into it. This check does **not** verify real Keychain
+access, stored-session decryption or post-update credential continuity. Those require a
+separate, guarded installed-app verification with the normal launch and signing identity.
+The mock flag is absent from the production launcher and package configuration; production
+Keychain protection and vendor signing are unchanged. Do not reset/delete Safe Storage or
+broaden its access controls to make a package test pass.
+
+Verified October 4, 2026 on Electron 44.5.1: a disposable copy of the current package,
+re-signed ad hoc while the installed app stayed running, passed all package checks and
+synthetic cookie flush/read without a Keychain handoff; the catalog returned 19 models.
+This result uses mock storage and does not validate the Work Mac Keychain or installed update.

@@ -144,9 +144,10 @@ sent through its authorized Codex chat for an in-place update preserving ad-hoc 
 identity. That Codex connection became unavailable before the final installation receipt could be
 read. Do not claim HC installation from build results; reconnect and obtain the receipt first.
 
-The existing Build Mac sign-in still has its prior Life scopes. `/api/app` correctly refuses
-shared app access until explicit OAuth reconsent. The operator explicitly approved the added shared-data scopes. The installed app started
-its normal OAuth reconsent; successful callback and live shared-data access remain to be verified. Production account-backed pairing
+The operator explicitly approved the added shared-data scopes. Build Mac OAuth reconsent
+completed: live `/api/app` and `/api/team/lists` both returned HTTP 200, with the same account
+identity as the ready Life connection. The Build Mac legacy roster and shared list collection
+were empty at verification, so no blank or duplicate roster was imported. Production account-backed pairing
 migration, Default Mac selection, native Team synchronization, browser notification permission and
 end-device delivery remain distinct acceptance steps. No credentials or Mac grants were silently
 created to make the new views appear connected.
@@ -165,3 +166,19 @@ opened authorization page and return to Proteus, or restart Engine Room → App 
 shared features if expired. The approval is already recorded; do not request it again for the
 same action. The iPhone later became undiscoverable and the HC Codex/SSH connections remained
 unavailable. Resume those exact pending checks when the devices reconnect.
+
+
+## Follow-up observations — October 5 UTC
+
+The operator dismissed the Work Mac’s `Proteus Safe Storage` access prompt with Deny. No Keychain
+item, password or access control was changed. Code review identified that the ad-hoc packaged
+smoke test could request the production item despite using a disposable browser profile. The
+reported password rejection is not diagnosed by that finding. The cross-host Codex API and SSH were unavailable. Refreshing Screen Sharing restored input;
+the existing HC update chat then verified the disposable test had exited, installed `68463db`
+remained byte-matched across all 93 runtime files, the relay and three pairings were healthy, and
+login Keychain metadata reported unlocked. All three providers remained available and five
+schedules stayed disabled. Installation is waiting for the browser-home follow-up commit. Never reset or delete Safe Storage to bypass this issue.
+
+The unlocked iPhone remained unavailable to CoreDevice discovery. The prepared app’s 25 input
+hashes, existing signing identity and unexpired profile were rechecked; no installation or data
+mutation occurred. A USB data connection was requested. iPad remains deferred.

@@ -4,6 +4,11 @@ This is a concise behavior log. Git commits and pull requests contain the comple
 
 ## Unreleased
 
+- Keep new-tab search and address controls reachable when history grows, in both main and Team
+  browsers. Bound long rows to the viewport and show history in batches of 25 with **More**.
+- Isolate packaged Mac smoke tests from the real Safe Storage Keychain item; production launches
+  keep normal Keychain protection.
+
 - Unify navigation around Chats, Team Tools and Engine Room, with contextual children, collapsible
   sidebars, phone Home allowance, paired chat bubbles, attention !, and no tagline.
 - Aggregate authorized Mac chat indexes; retain bounded encrypted caches and account-scoped

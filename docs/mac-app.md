@@ -32,8 +32,10 @@ browser profiles. The browser profile remains Electron-managed user data. Authen
 Keychain behavior should be checked when changing bundle/signing identity.
 
 Verify the result with `codesign --verify --deep --strict <path-to-Proteus.app>`, inspect its
-`Contents/Info.plist`, and launch with a temporary `PROTEUS_HOME` and `--user-data-dir` for a smoke
-test before using the operator's data. `test/packaged-mac.mjs` performs that isolated smoke test.
+`Contents/Info.plist`, and use `test/packaged-mac.mjs` for the disposable smoke test before using the operator's data.
+It sets a temporary `PROTEUS_HOME`, browser profile and test-only mock Keychain switch. Separate
+profiles alone do not isolate the macOS Safe Storage item. See `apple-build.md` for this boundary;
+real credential continuity is checked separately after a guarded normal installation.
 
 The packager checks both Copilot vendor signatures before and after packaging, and fails if either
 binary changes. Do not re-sign these helpers: their designated requirements identify the caller

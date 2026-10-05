@@ -134,6 +134,10 @@ shared recent visits and retained local Proteus history. Address-bar terms searc
 HTTP(S) destinations are accepted; credentials/auth callbacks and local paths are excluded.
 `desktop/browsing-history.cjs` retains up to 10,000 visits, default 90 days, with search, pagination,
 clear/delete and recording/retention controls. History is separate from open-tab restoration.
+Main and Team browser homes start at the top of their scroll area, with width-bounded titles and
+URLs. Local and shared history initially show 25 entries, followed by **More** beneath each list.
+Search resets local pagination; a failed additional-page load retains the current entries and can
+be retried. The local API retains its default page size of 50 for existing callers.
 Shared visit/log/notification uploads use a bounded seven-day account-bound retry queue.
 
 Team Tools has its own persistent overview/Standup/browser subtabs and left standup dock. On

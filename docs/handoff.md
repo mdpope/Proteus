@@ -10,10 +10,12 @@ and manifests; this repository owns the generic app and provider adapters.
 Build Mac runs parity runtime commit `295be2d`; website release `20261005T000810Z` is live.
 Read `parity-release.md` for final test, preservation, backup and restore receipts. Signed phone/iPad
 build is ready but physical devices were locked; later iPhone discovery was unavailable. The
-operator approved shared app scopes and OAuth reconsent started; callback verification is pending. Work Mac
-received the exact final commit and passed its focused checks, but its Codex connection became
-unavailable before the installation receipt could be read; obtain that receipt before claiming it
-updated. Web Push is configured with an active worker; APNs and real push delivery remain pending.
+operator approved shared app scopes and OAuth reconsent completed; live shared endpoints now return
+success for the same Life account. The Build Mac has no legacy roster to import. Work Mac
+received the exact final commit and passed its focused checks, but a packaged-test Keychain
+prompt prevented installation. Screen Sharing recovery confirmed installed `68463db` remains
+healthy and the login Keychain is unlocked; the next browser-home fix and isolated package test
+are being prepared. Obtain the installation receipt before claiming HC updated. Web Push is configured with an active worker; APNs and real push delivery remain pending.
 Multi-provider work is deferred. Existing workflow owners/schedule enablement remain unchanged.
 
 ## Read first
@@ -62,7 +64,8 @@ that a previous conversation is available to the next agent.
 - Inspect branch/status and preserve unrelated edits. Keep changes reviewable; do not overwrite an
   operator's configuration or run an operational schedule as a generic smoke test.
 - Use a fresh temporary `PROTEUS_HOME`, `PORT=0`, and a separate Electron `--user-data-dir` for UI
-  tests. One process must own each data directory. `npm start` and `npm run desktop` must not both
+  tests. Packaged Mac smoke tests must also use their test-only mock Keychain switch; temporary
+  profiles alone still access the production Safe Storage item. See `apple-build.md`. One process must own each data directory. `npm start` and `npm run desktop` must not both
   run against the same directory.
 - Run `npm ci`, `npm test`, `npm run check`. Node integration tests bind localhost and need that
   permission in a restricted execution environment.

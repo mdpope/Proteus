@@ -18,7 +18,11 @@ resource unload/close, remote schedule editing, authenticated revocation, notifi
 and notification transport foundations. Native shared tools require separate `app:read app:write`
 consent. Production Web Push is provisioned with an active worker; device delivery acceptance
 remains pending. Background APNs still requires an entitled build and server credentials.
-Build Mac and website are deployed; phone unlock and HC final receipt are pending.
+Build Mac and website parity releases are deployed. A reported main/Team browser-home overflow
+fix adds top-aligned search controls and 25-entry **More** pagination; its follow-up install is being
+validated. Shared app consent is verified on Build Mac. iPhone USB reachability and HC final
+installation remain pending; the HC Keychain test prompt was safely dismissed and its original
+installed host is healthy.
 The current release does not add per-session short-lived host grants, merge browser/native pairing
 keys, or implement multi-provider work. Those security protocol improvements remain open.
 

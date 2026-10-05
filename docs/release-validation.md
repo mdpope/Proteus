@@ -161,3 +161,30 @@ Physical phone/iPad installation and shared-app OAuth consent remain pending. HC
 dispatched; its Codex connection was unavailable before a final installation receipt could be read.
 No HC installation, account enrollment, new resource permission, APNs entitlement or operational
 schedule execution is claimed. Pre-existing MariaDB system-table maintenance is recorded separately.
+
+
+## October 4 browser-home and package-test follow-up
+
+Both main and Team Tools browser homes now start at the search controls instead of vertically
+centering an overflowing history. Long titles/URLs stay within the available width. Local and
+shared history each initially show 25 entries, with a More button for subsequent entries. The
+local API retains its default page size of 50 for other callers and bounds requested sizes.
+
+Validation: 244/244 Node tests and static checks passed. Sixteen isolated Electron UI checks
+passed with 77 local and 73 shared synthetic visits, including the narrow docked Team layout,
+visible search at scroll position zero, no horizontal overflow, pagination, filter reset and
+retrying a failed second page without skipped/duplicate records. Main and docked screenshots
+were visually inspected. These checks use disposable profiles and the test-only mock Keychain.
+
+The packaged smoke test also isolates synthetic cookies from the real login Keychain; a copied
+ad-hoc-signed bundle passed signature/vendor checks, launch, synthetic cookie persistence and
+a live 19-model Copilot catalog check. This does not validate real Keychain access. Production
+launches retain native Keychain behavior. Personal/HC installation of this follow-up remains
+pending at this checkpoint.
+
+Shared-app OAuth consent has completed on Build Mac: authenticated app and Team-list
+endpoints returned success for the existing Life account. Its legacy roster and shared Team
+list were empty, so no roster was imported. HC recovery verified its existing runtime, relay,
+three pairings and disabled schedules; no Keychain items, passwords or access rules changed.
+Physical iPhone discovery is being retried over its existing Wi-Fi pairing at the operator's
+request. iPad remains deferred.
