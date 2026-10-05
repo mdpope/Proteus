@@ -1,12 +1,14 @@
 import SwiftUI
 
+func toolActivityFailed(_ tool: JSON) -> Bool {
+    if tool["status"].string == "failed" || !tool["error"].string.isEmpty { return true }
+    return ["bash", "shell", "powershell"].contains(tool["name"].string) && tool["output"].string.range(of: #"<shellId: [^<>\r\n]+ completed with exit code [1-9]\d*>\s*$"#, options: .regularExpression) != nil
+}
+
 struct ToolActivityView: View {
     let tool: JSON
     @State private var expanded = false
-    private var failedCommand: Bool {
-        ["bash", "shell", "powershell"].contains(tool["name"].string) && tool["output"].string.range(of: #"<shellId: [^<>\r\n]+ completed with exit code [1-9]\d*>\s*$"#, options: .regularExpression) != nil
-    }
-    private var status: String { failedCommand ? "failed" : tool["status"].string }
+    private var status: String { toolActivityFailed(tool) ? "failed" : tool["status"].string }
     private func display(_ key: String) -> String {
         let text = tool[key].string
         guard key == "output", let data = text.data(using: .utf8), let value = try? JSONDecoder().decode(JSON.self, from: data) else { return text }
@@ -43,6 +45,7 @@ struct ToolActivityView: View {
         }.padding(12).background(Color.secondary.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(status == "failed" ? Color.orange.opacity(0.5) : Color.teal.opacity(0.3)))
             .accessibilityIdentifier("tool-activity-\(tool["callId"].string)")
+            .onAppear { if toolActivityFailed(tool) { expanded = true } }
     }
 }
 
@@ -89,6 +92,8 @@ struct ProviderModelPicker: View {
     @Binding var serviceTier: String
     var provider = "copilot"
     private var catalog: JSON { store.providerStatuses[provider] ?? (provider == "copilot" ? store.modelStatus : .null) }
+    private var hostName: String { store.state["hostName"].string.isEmpty ? "your Mac" : store.state["hostName"].string }
+    private var providerName: String { ["copilot": "GitHub Copilot", "codex": "Codex", "claude": "Claude"][provider] ?? provider }
     private var models: [JSON] { catalog["models"].array }
     var disabled = false
     private var controls: JSON { models.first { $0["id"].string == model }?["controls"] ?? .null }
@@ -120,6 +125,9 @@ struct ProviderModelPicker: View {
         if controls["maxOutputTokens"].int > 0 { Text("Context size is the prompt budget. Maximum output: \(modelTokenSize(controls["maxOutputTokens"])) tokens.").font(.caption).foregroundStyle(.secondary) }
         Text(catalog["checkedAt"].string.isEmpty ? "Catalog not checked yet." : "Catalog checked \(catalog["checkedAt"].string). Refreshes at Mac launch and every five minutes.").font(.caption).foregroundStyle(.secondary)
         if catalog["stale"].bool { Text("Using last known choices. \(catalog["error"].string)").font(.caption).foregroundStyle(.orange) }
+        if catalog["available"] == .bool(false) || (!catalog["error"].string.isEmpty && models.isEmpty) {
+            Text("\(providerName) needs attention on \(hostName). Open Proteus on that Mac, complete its provider sign-in or reconnect there, then refresh available models here.").font(.caption).foregroundStyle(.orange)
+        }
         Button("Refresh available models") { Task { await store.loadModels(force: true, provider: provider) } }.disabled(!store.connected)
     }
 }
@@ -162,6 +170,7 @@ struct ChatPermissionsView: View {
 struct MCPConnectionsView: View {
     @EnvironmentObject var store: RemoteStore
     let runID: String
+    var loginAvailable = true
     @State private var servers: [JSON] = []
     @State private var message = "Checking connections…"
     @State private var busy = false
@@ -176,7 +185,10 @@ struct MCPConnectionsView: View {
                     Text(server["name"].string).font(.subheadline.bold())
                     Text(server["status"].string).font(.caption).foregroundStyle(.teal)
                     if !server["error"].string.isEmpty { Text(server["error"].string).font(.caption).foregroundStyle(.orange) }
-                    if server["remote"].bool && server["status"].string != "connected" { Button(waiting == server["name"].string ? "Restart sign-in on Mac" : "Sign in on Mac") { connect(server["name"].string) } }
+                    if server["remote"].bool && server["status"].string != "connected" {
+                        if loginAvailable { Button(waiting == server["name"].string ? "Restart sign-in on Mac" : "Sign in on Mac") { connect(server["name"].string) } }
+                        else { Text("Open Proteus on the Mac to finish this connection.").font(.caption).foregroundStyle(.secondary) }
+                    }
                 }
             }
             Button("Refresh MCP connections") { Task { await refreshConnections() } }
@@ -222,12 +234,19 @@ struct ComposerModelPicker: View {
     @Binding var serviceTier: String
     let provider: String
     private var models: [JSON] { (store.providerStatuses[provider] ?? (provider == "copilot" ? store.modelStatus : .null))["models"].array }
+    private var catalog: JSON { store.providerStatuses[provider] ?? (provider == "copilot" ? store.modelStatus : .null) }
+    private var hostName: String { store.state["hostName"].string.isEmpty ? "your Mac" : store.state["hostName"].string }
+    private var providerName: String { ["copilot": "GitHub Copilot", "codex": "Codex", "claude": "Claude"][provider] ?? provider }
     private var selected: JSON { models.first { $0["id"].string == model } ?? .null }
     private var controls: JSON { selected["controls"] }
     private var efforts: [String] { controls["reasoningEfforts"].array.map(\.string) }
     private var tiers: [JSON] { controls["contextTiers"].array }
     private var speeds: [JSON] { controls["serviceTiers"].array }
     var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+        if catalog["available"] == .bool(false) || (!catalog["error"].string.isEmpty && models.isEmpty) {
+            Text("\(providerName) needs sign-in or reconnection in Proteus on \(hostName). Complete it there, then refresh models here.").font(.caption).foregroundStyle(.orange)
+        }
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
                 Menu {
@@ -267,6 +286,7 @@ struct ComposerModelPicker: View {
             if !efforts.contains(effort) { effort = "" }
             if !tiers.contains(where: { $0["id"].string == contextTier }) { contextTier = "default" }
             if !speeds.contains(where: { $0["id"].string == serviceTier }) { serviceTier = "" }
+        }
         }
     }
     private func label(_ title: String) -> some View { HStack(spacing: 4) { Text(title).lineLimit(1); Image(systemName: "chevron.down").font(.caption2) } }

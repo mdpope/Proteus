@@ -10,17 +10,19 @@ import { atomicJSON, readJSON } from './files.js';
 import { revision } from './schedules.js';
 import { seal, unseal, secret } from './remote-crypto.js';
 import { startRelay } from '../relay/server.js';
+import { ChatDocumentApprovals } from './chat-documents.js';
+import { ChatAttachmentConsents } from './chat-attachment-consent.js';
 
 const pick = (value, keys) => Object.fromEntries(keys.filter(key => value?.[key] !== undefined).map(key => [key, value[key]]));
 const scheduleKeys = ['id', 'name', 'enabled', 'cron', 'timezone', 'provider', 'model', 'reasoningEffort', 'contextTier', 'serviceTier', 'workspace', 'misfire', 'prompt', 'revision', 'nextRuns', 'error', 'source', 'contextSelection', 'integration', 'notifications'];
-export const runSummary = r => ({...pick(r,['id','title','status','createdAt','updatedAt']),provider:r.schedule.provider,workspaceName:r.schedule.context?.workspaceId||'',scheduleName:r.trigger==='chat'?'':r.schedule.name});
+export const runSummary = r => ({...pick(r,['id','title','status','createdAt','updatedAt','failureReviewedAt']),archivedAt:r.archivedAt||null,archived:!!r.archivedAt,failureEventAt:['failed','interrupted'].includes(r.status)?r.failureEventAt||r.updatedAt:null,attentionRequired:r.status==='awaiting_input'||(!r.archivedAt&&['failed','interrupted'].includes(r.status)&&!r.failureReviewedAt),provider:r.schedule.provider,workspaceName:r.schedule.context?.workspaceId||'',scheduleName:r.trigger==='chat'?'':r.schedule.name});
 const entryKeys = ['id', 'name', 'description', 'kind', 'path', 'sources', 'roots', 'mode', 'scope', 'warnings', 'unsupportedAgentFields', 'error', 'missing', 'characters'];
 const remoteEntry = entry => ({ ...pick(entry, entryKeys), ...(entry.agent ? { userInvocable: entry.agent.userInvocable } : {}) });
-const mutationMethods = new Set(['chat.start', 'chat.reply', 'chat.resume', 'chat.cancel', 'chat.send', 'chat.remove-queued', 'schedule.run', 'schedule.save', 'context.mode', 'context.favorite', 'context.addFolders', 'chat.context', 'chat.permissions', 'mcp.login', 'notifications.read', 'resources.action', 'connection.revoke']);
+const mutationMethods = new Set(['chat.start', 'chat.reply', 'chat.resume', 'chat.cancel', 'chat.send', 'chat.remove-queued', 'chat.review', 'chat.archive', 'chat.delete', 'chat.documents.request', 'chat.attachments.begin', 'chat.attachments.chunk', 'chat.attachments.finish', 'chat.attachments.authorize', 'schedule.run', 'schedule.save', 'context.mode', 'context.favorite', 'context.addFolders', 'chat.context', 'chat.permissions', 'mcp.login', 'notifications.read', 'resources.action', 'connection.revoke']);
 const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
 export function remoteRun(run, offset = 0, permissions) {
   const end = Math.max(0, run.events.length - offset); const start = Math.max(0, end - 100);
-  return { ...(permissions ? { permissionContext: permissions.describe(run.schedule), permissionRevision: permissions.get().revision } : {}), agentName: agentName(run), ...pick(run, ['id', 'title', 'trigger', 'status', 'createdAt', 'updatedAt', 'pending', 'usage', 'contextUsage', 'providerSessionId', 'nativeSessionPath', 'automaticApprovals', 'modelCapabilities', 'queuedMessages', 'nextModelOptions', 'modelHistory']),
+  return { ...(permissions ? { permissionContext: permissions.describe(run.schedule), permissionRevision: permissions.get().revision } : {}), agentName: agentName(run), ...pick(run, ['id', 'title', 'trigger', 'status', 'createdAt', 'updatedAt', 'failureReviewedAt', 'pending', 'usage', 'contextUsage', 'providerSessionId', 'nativeSessionPath', 'automaticApprovals', 'modelCapabilities', 'nextModelOptions', 'modelHistory']),archivedAt:run.archivedAt||null,archived:!!run.archivedAt,queuedMessages:(run.queuedMessages||[]).map(message=>pick(message,['id','prompt','at','modelOptions'])),failureEventAt:['failed','interrupted'].includes(run.status)?run.failureEventAt||run.updatedAt:null,attentionRequired:run.status==='awaiting_input'||(!run.archivedAt&&['failed','interrupted'].includes(run.status)&&!run.failureReviewedAt),
     events: run.events.slice(start, end).map(e=>e.data?.tool ? {...e,data:{...e.data,tool:{...e.data.tool,presentation:toolPresentation(e.data.tool)}}}:e), eventStart: start, eventCount: run.events.length, earlier: start, schedule: pick(run.schedule, scheduleKeys),
     context: { ...pick(run.schedule.context, ['workspaceId', 'selectedIds', 'agentId', 'includeDefaults', 'baseWorkspace', 'capturedAt']), entries: (run.schedule.context?.entries || []).map(remoteEntry) }, liveMessages: structuredClone(run.liveMessages || {}) };
 }
@@ -32,7 +34,7 @@ export function remoteUsage(value) {
     providers[id] = { ...pick(entry, ['provider', 'available', 'checkedAt', 'observedAt', 'stale']),
       source: {copilot:'GitHub Copilot account allowance',codex:'Codex account allowance',claude:'Claude account allowance'}[id],
       error: entry.error ? 'Account usage could not be refreshed on this Mac. Check its provider connection.' : null,
-      windows: (entry.windows || []).slice(0, 20).map(window => pick(window, ['id', 'label', 'remainingPercent', 'unlimited', 'resetAt', 'windowDurationMins', 'resetNote', 'expired'])) };
+      windows: (entry.windows || []).slice(0, 20).map(window => pick(window, ['id', 'label', 'remainingPercent', 'unlimited', 'resetAt', 'reportedResetAt', 'resetSource', 'windowDurationMins', 'resetNote', 'billingNote', 'expired'])) };
   }
   return {providers};
 }
@@ -41,9 +43,9 @@ export function remoteState(service) {
   return { hostName: service.remote?.config.label || os.hostname(),
     appearance: {showProviderUsage:defaults.appearance?.showProviderUsage!==false,providerUsageCollapsed:defaults.appearance?.providerUsageCollapsed===true},
     ...(defaults.appearance?.showProviderUsage!==false?{providerUsage:remoteUsage({providers:service.usage?.providers})}:{}), schedules: service.engine.schedules.list().map(s => pick(s, scheduleKeys)),
-    runs: service.engine.listRuns().slice(0, 100).map(runSummary), runCount: service.engine.listRuns().length,
+    runs: service.engine.visibleRuns().slice(0, 100).map(runSummary), runCount: service.engine.visibleRuns().length, runCountIncludingArchived: service.engine.listRuns().length,
     context: { ...pick(context, ['revision', 'refreshedAt', 'defaultWorkspaceId', 'workspaces', 'universalFolders', 'libraryFolders', 'favorites', 'errors']), entries: context.entries.map(remoteEntry) },
-    defaults: pick(defaults, ['provider', 'model', 'reasoningEffort', 'contextTier', 'serviceTier', 'timezone']), providerStatus: service.catalog?.value || null, providerStatuses: Object.fromEntries(Object.entries(service.catalogs || {}).map(([id, catalog]) => [id, catalog.value])), capabilities:['chat.index.v1','notifications.v1','authenticated-revocation.v1','connection-self-revoke.v1',...(service.resources?['resources.v1']:[])],protocol: 1 };
+    defaults: pick(defaults, ['provider', 'model', 'reasoningEffort', 'contextTier', 'serviceTier', 'timezone']), providerStatus: service.catalog?.value || null, providerStatuses: Object.fromEntries(Object.entries(service.catalogs || {}).map(([id, catalog]) => [id, catalog.value])),attachmentMediaTypes:Object.fromEntries(['copilot','codex','claude'].map(id=>[id,service.engine.providers[id]?.acceptedMediaTypes||[]])),mcpStatusProviders:['copilot','codex','claude'].filter(id=>typeof service.engine.providers[id]?.mcpStatus==='function'),mcpLoginProviders:['copilot','codex','claude'].filter(id=>typeof service.engine.providers[id]?.mcpLogin==='function'),capabilities:['chat.index.v1','chat.review.v1','chat.lifecycle.v1','chat.documents.v1','chat.attachments.v1','notifications.v1','authenticated-revocation.v1','connection-self-revoke.v1',...(service.resources?['resources.v1']:[])],protocol: 1 };
 }
 function validateRelayURL(value) {
   const url = new URL(value);
@@ -55,10 +57,12 @@ export class RemoteHost {
   constructor(service) {
     this.service = service; this.file = path.join(service.home, 'remote.json');
     this.config = readJSON(this.file, { version: 1, enabled: false, mode: 'local', port: 4318, hostId: randomUUID(), relayToken: secret(), devices: [] });
-    this.peers = new Map(); this.journal = []; this.epoch = randomUUID(); this.sequence = 0; this.closed = false; this.status = 'disabled'; this.inflight = new Map();
+    this.peers = new Map(); this.journal = []; this.epoch = randomUUID(); this.sequence = 0; this.closed = false; this.status = 'disabled'; this.inflight = new Map();this.documents=new ChatDocumentApprovals({currentRoots:run=>{const catalog=service.context.get(),id=run.schedule?.context?.workspaceId;const workspace=id?catalog.workspaces.find(item=>item.id===id):null;return workspace?[workspace.cwd,...(workspace.additionalDirectories||[]),...(catalog.universalFolders||[])]:[];}});this.attachmentConsents=new ChatAttachmentConsents(service.attachments);service.engine.attachmentConsents=this.attachmentConsents;
     this.ledgerFile = path.join(service.home, 'remote-commands.json'); this.ledger = readJSON(this.ledgerFile, {});
     this.changed = () => { if (!this.changeTimer) this.changeTimer = setTimeout(() => { this.changeTimer = null; this.publish(); }, 150); };
     service.engine.on('change', this.changed);
+    this.lifecycleChanged = result => { if (result.deleted) { for (const peer of this.peers.values()) if (peer.runId === result.id) peer.runId = null; this.documents.revokeChat?.(result.id); this.attachmentConsents.revokeChat(result.id); void service.attachments?.revokeChat?.(result.id); } this.broadcast('chat.lifecycle', result); this.changed(); };
+    service.engine.on('lifecycle', this.lifecycleChanged);
     // Also detect editor/AI changes to plain files; no filesystem secrets leave the projection.
     this.scan = setInterval(() => { if (this.config.enabled && [...this.peers.values()].some(p => p.device)) this.publish(); }, 2000);
   }
@@ -68,7 +72,7 @@ export class RemoteHost {
   }
   info() { return { enabled: this.config.enabled, mode: this.config.mode, status: this.status, error: this.error || null, hostId: this.config.hostId, label: this.config.label || os.hostname(),
     relayURL: this.config.relayURL || '', publicURL: this.config.publicURL || '', addresses: this.addresses(), port: this.config.port,
-    devices: this.config.devices.map(d => ({ id: d.id, name: d.name, pairedAt: d.pairedAt, resourceAccess: d.resourceAccess === true, online: [...this.peers.values()].some(p => p.device?.id === d.id) })) }; }
+    devices: this.config.devices.map(d => ({ id: d.id, name: d.name, pairedAt: d.pairedAt, resourceAccess: d.resourceAccess === true, documentAccess:d.documentAccess===true, online: [...this.peers.values()].some(p => p.device?.id === d.id) })),documentRequests:this.documents.list() }; }
   async configure(value) {
     if (typeof value.enabled !== 'boolean') throw new Error('Choose whether remote access is enabled.');
     if (!['local', 'external'].includes(value.mode || this.config.mode)) throw new Error('Choose local or external relay.');
@@ -124,6 +128,9 @@ export class RemoteHost {
     return { code, browserURL: `https://proteus.example/remote#pair=${Buffer.from(JSON.stringify(capsule)).toString('base64url')}`, expiresAt, qr: await QRCode.toDataURL(code, { margin: 2, width: 360, errorCorrectionLevel: 'M' }) };
   }
   revoke(id) {
+    this.documents.revokeDevice(id);
+    this.attachmentConsents.revokeDevice(id);
+    void this.service.attachments.revokeDevice(id);
     this.config.devices = this.config.devices.filter(d => d.id !== id); this.save();
     for (const peer of this.peers.values()) if (peer.device?.id === id) { this.send(peer,{type:'revoked',deviceId:id});this.raw(peer, { type: 'revoked' }); this.peers.delete(peer.id); }
     return this.info();
@@ -136,6 +143,16 @@ export class RemoteHost {
     try { this.save(); } catch (error) { this.config.devices = previous; throw error; }
     return this.info();
   }
+  setDocumentAccess(id,enabled){
+    if(typeof enabled!=='boolean')throw new Error('Choose whether document viewing is enabled.');
+    if(!this.config.devices.some(device=>device.id===id))throw new Error('Paired device not found.');
+    const previous=this.config.devices;this.config.devices=previous.map(device=>device.id===id?{...device,documentAccess:enabled}:device);
+    try{this.save();}catch(error){this.config.devices=previous;throw error;}
+    if(!enabled)this.documents.revokeDevice(id);
+    return this.info();
+  }
+  requireDocumentAccess(peer){const device=this.config.devices.find(device=>device.id===peer.device?.id);if(device?.documentAccess!==true)throw new Error('View chat documents is not enabled for this device on the Mac.');}
+  reviewDocument(requestId,approved){return this.documents.review(requestId,approved,this.service.engine);}
   requireResourceAccess(peer) {
     // A connected peer may hold an older device object after a local permission change.
     const device = this.config.devices.find(device => device.id === peer.device?.id);
@@ -148,7 +165,7 @@ export class RemoteHost {
         if (!this.invite || Date.parse(this.invite.expiresAt) < Date.now()) throw new Error('Pairing expired.');
         const invite = this.invite; const request = unseal(invite.key, packet.box, `${peer.challenge}:pair`);
         if (typeof request.name !== 'string' || !request.name.trim() || request.name.length > 80 || this.config.devices.length >= 20) throw new Error('Invalid device.');
-        const device = { id: randomUUID(), key: secret(), name: request.name.trim(), pairedAt: new Date().toISOString(), resourceAccess: false };
+        const device = { id: randomUUID(), key: secret(), name: request.name.trim(), pairedAt: new Date().toISOString(), resourceAccess: false,documentAccess:false };
         this.invite = null; this.config.devices.push(device); this.save();this.service.activity?.add('device.added',{hostId:this.config.hostId,deviceId:device.id});
         this.raw(peer, { type: 'paired', box: seal(invite.key, device, `${peer.challenge}:paired`) }); return;
       }
@@ -169,6 +186,7 @@ export class RemoteHost {
     const { method, args = {} } = message;
     // Apply the current grant before replaying a previously successful command's snapshot.
     if (method === 'resources.list' || method === 'resources.action') this.requireResourceAccess(peer);
+    if (method?.startsWith('chat.documents.')) this.requireDocumentAccess(peer);
     if (!mutationMethods.has(method)) return this.execute(peer, method, args);
     const key = `${peer.device.id}:${message.id}`; const digest = createHash('sha256').update(JSON.stringify(canonical([method, args]))).digest('hex');
     const previous = this.ledger[key];
@@ -202,7 +220,7 @@ export class RemoteHost {
       if (index >= 0) for (const event of this.journal.slice(index + 1)) if (!event.runId || event.runId === peer.runId) this.send(peer, event);
       return { state: remoteState(this.service), cursor: `${this.epoch}:${this.sequence}` };
     }
-    if (method === 'runs.list') { const offset = Math.max(0, Math.floor(Number(args.offset) || 0)); return engine.listRuns().slice(offset, offset + 100).map(runSummary); }
+    if (method === 'runs.list') { const offset = Math.max(0, Math.floor(Number(args.offset) || 0)); return engine.visibleRuns(args.includeArchived===true).slice(offset, offset + 100).map(runSummary); }
     if(method==='connection.revoke'){if(args.deviceId&&args.deviceId!==peer.device.id)throw new Error('Only this connection can be revoked here.');this.revoke(peer.device.id);return {ok:true};}
     if(method==='notifications.list')return this.service.activity?.notifications()||{items:[],preferences:{}};
     if(method==='notifications.read')return this.service.activity.read(args.id);
@@ -215,6 +233,27 @@ export class RemoteHost {
       return result;
     }
     if (method === 'chat.get') { const run = engine.getRun(args.id); peer.runId = run.id; return remoteRun(run, Math.max(0, Math.floor(Number(args.offset) || 0)), engine.permissions); }
+    if (method === 'chat.review') return engine.reviewFailure(args.id,args.expectedFailureEventAt);
+    if (method === 'chat.archive') {if(typeof args.archived!=='boolean')throw new Error('Choose Archive or Unarchive.');return engine.lifecycle(args.id,args.archived?'archive':'unarchive',pick(args,['expectedUpdatedAt','expectedArchivedAt']));}
+    if (method === 'chat.delete') return engine.lifecycle(args.id,'delete',pick(args,['expectedUpdatedAt','expectedArchivedAt']));
+    if (method === 'chat.documents.request') {this.requireDocumentAccess(peer);const result=this.documents.request(engine.getRun(args.id),peer.device,args.source,args.documentId,args.fromRequestId,args.relativePath);this.service.activity?.add('review.required',{chatId:args.id});return result;}
+    if (method === 'chat.documents.status') {this.requireDocumentAccess(peer);return this.documents.status(args.requestId,peer.device.id);}
+    if (method === 'chat.documents.read') {this.requireDocumentAccess(peer);return this.documents.read(args.requestId,peer.device.id,engine);}
+    if (method === 'chat.documents.asset') {this.requireDocumentAccess(peer);return this.documents.asset(args.requestId,args.assetId,peer.device.id,engine);}
+    if (method === 'chat.attachments.begin') {
+      const run=args.id?engine.getRun(args.id):null,providerId=run?.schedule.provider||args.providerId,accepted=engine.providers[providerId]?.acceptedMediaTypes||[];
+      if(!accepted.includes(args.mediaType))throw new Error(`${providerId} cannot receive ${args.mediaType} attachments. Choose a supported file type or provider.`);
+      if(args.providerId!==undefined&&args.providerId!==providerId)throw new Error('The chat provider changed. Choose the attachment again.');
+      if(!run&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(args.draftId||''))throw new Error('Choose a chat or a valid first-message draft.');
+      return this.service.attachments.begin({chatId:run?.id||'draft:'+args.draftId,deviceId:peer.device.id,messageId:args.messageId,providerId,name:args.name,mediaType:args.mediaType,size:args.size,sha256:args.sha256});
+    }
+    if (method === 'chat.attachments.chunk') return this.service.attachments.chunk({uploadId:args.uploadId,deviceId:peer.device.id,index:args.index,dataBase64:args.dataBase64});
+    if (method === 'chat.attachments.finish') return this.service.attachments.finish({uploadId:args.uploadId,deviceId:peer.device.id});
+    if (method === 'chat.attachments.authorize') {
+      const run=args.id?engine.getRun(args.id):null,providerId=run?.schedule.provider||args.providerId;
+      if(run&&args.providerId!==providerId)throw new Error('The chat provider changed. Review the files and destination again.');
+      return this.attachmentConsents.authorize({...(run?{chatId:run.id}:{draftId:args.draftId}),deviceId:peer.device.id,messageId:args.messageId,providerId,attachments:args.attachments,acceptedMediaTypes:engine.providers[providerId]?.acceptedMediaTypes||[]});
+    }
     if (method === 'chat.image') return this.api('/api/chat-image', pick(args, ['id', 'source']));
     if (method === 'mcp.status' || method === 'mcp.login') return this.api('/api/mcp', {runId:args.id,action:method === 'mcp.login' ? 'login' : 'status',server:args.server,openOnMac:method === 'mcp.login'});
     if (method === 'provider.usage') {
@@ -227,10 +266,23 @@ export class RemoteHost {
     if (method === 'context.refresh') { this.service.context.refresh(); this.changed(); return remoteState(this.service).context; }
     if (method === 'schedule.preview') return this.api('/api/preview', pick(args, ['cron', 'timezone']));
     if (method === 'chat.start') {
-      const run = await this.api('/api/chat', pick(args, ['name', 'prompt', 'provider', 'model', 'reasoningEffort', 'contextTier', 'serviceTier', 'workspaceId', 'selectedIds', 'agentId', 'includeDefaults']));
-      peer.runId = run.id; return { runId: run.id };
+      const files=Array.isArray(args.attachments)?args.attachments:[];
+      if(!files.length){const run=await this.api('/api/chat',pick(args,['name','prompt','provider','model','reasoningEffort','contextTier','serviceTier','workspaceId','selectedIds','agentId','includeDefaults']));peer.runId=run.id;return {runId:run.id};}
+      if(!args.consentId||!args.draftId||!args.messageId||files.length>4||args.providerId!==args.provider)throw new Error('Review the exact first-message files and named provider before sending.');
+      const schedule=this.service.buildChatSchedule(pick(args,['name','prompt','provider','model','reasoningEffort','contextTier','serviceTier','workspaceId','selectedIds','agentId','includeDefaults']));
+      await this.attachmentConsents.verify({consentId:args.consentId,draftId:args.draftId,messageId:args.messageId,providerId:schedule.provider,deviceId:peer.device.id,attachmentIds:files});
+      const run=engine.createRun(schedule,'chat',null,{deferStart:true});let prepared;
+      try{prepared=await this.attachmentConsents.prepareSend({consentId:args.consentId,draftId:args.draftId,chatId:run.id,messageId:args.messageId,providerId:schedule.provider,deviceId:peer.device.id,attachmentIds:files});engine.startDeferredRun(run.id,{proofId:prepared.proofId,attachmentIds:files,messageId:args.messageId});peer.runId=run.id;return {runId:run.id};}
+      catch(error){if(prepared)await this.attachmentConsents.releaseProof(prepared.proofId).catch(()=>{});engine.discardDeferredRun(run.id);throw error;}
     }
     if (method === 'schedule.run') { const run = await this.api('/api/run', { id: args.id }); peer.runId = run.id; return { runId: run.id }; }
+    if (method==='chat.send'&&Array.isArray(args.attachments)&&args.attachments.length){
+      const run=engine.getRun(args.id),files=args.attachments;
+      if(args.mode==='steer'||files.length>4||args.providerId!==run.schedule.provider||!args.consentId||!args.messageId)throw new Error('Review the exact files and named provider for a queued turn.');
+      const prepared=await this.attachmentConsents.prepareSend({consentId:args.consentId,chatId:run.id,messageId:args.messageId,providerId:run.schedule.provider,deviceId:peer.device.id,attachmentIds:files});
+      try{await engine.send(run.id,args.prompt,'queue',args.messageId,args.modelOptions,{proofId:prepared.proofId,attachmentIds:files});peer.runId=run.id;return {runId:run.id};}
+      catch(error){await this.attachmentConsents.releaseProof(prepared.proofId).catch(()=>{});throw error;}
+    }
     if (['chat.reply', 'chat.resume', 'chat.cancel', 'chat.send', 'chat.remove-queued'].includes(method)) {
       engine.getRun(args.id); const action = method.split('.')[1];
       await this.api(`/api/runs/${args.id}/${action}`, pick(args, ['answer', 'requestId', 'prompt', 'mode', 'messageId', 'modelOptions'])); return { runId: args.id };
@@ -258,6 +310,7 @@ export class RemoteHost {
     if (signature !== this.signature) { this.signature = signature; this.broadcast('state', state); }
     const watched = new Set([...this.peers.values()].filter(p => p.device).map(p => p.runId).filter(Boolean));
     for (const id of watched) {
+      if (!this.service.engine.runs.has(id)) continue;
       const run = remoteRun(this.service.engine.getRun(id), 0, this.service.engine.permissions); const hash = JSON.stringify(run);
       if (this.runSignatures?.get(id) === hash) continue;
       this.runSignatures ??= new Map(); this.runSignatures.set(id, hash); this.broadcast('run', run, id);
@@ -269,10 +322,10 @@ export class RemoteHost {
     for (const peer of this.peers.values()) if (peer.device && (!runId || peer.runId === runId)) this.send(peer, value);
   }
   async stop() {
-    clearTimeout(this.reconnect); this.invite = null;
+    clearTimeout(this.reconnect); this.invite = null;this.documents.clear();
     const socket = this.socket; this.socket = null; socket?.terminate(); this.peers.clear();
     if (this.relay) { await this.relay.close(); this.relay = null; }
     this.status = 'disabled';
   }
-  async close() { this.closed = true; clearInterval(this.scan); clearTimeout(this.changeTimer); this.service.engine.off('change', this.changed); await this.stop(); }
+  async close() { this.closed = true; clearInterval(this.scan); clearTimeout(this.changeTimer); this.service.engine.off('change', this.changed); this.service.engine.off('lifecycle',this.lifecycleChanged); await this.stop(); }
 }

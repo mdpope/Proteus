@@ -113,6 +113,20 @@ test('trusting a workspace clears subsequent queued permissions and persists acr
     assert.throws(()=>engine.reply(run.id,'approve-auto',run.pending.id),/Permission scope changed/);
   } finally {await engine.close();await until(()=>!engine.running);fs.rmSync(home,{recursive:true,force:true});}
 });
+test('automatic approval records stable call, canonical target and matched trusted root without raw arguments',async()=>{
+  const home=temp();const engine=new Engine(home,{copilot:{async run(){}}});
+  try{
+    const s=schedule(home);engine.permissions.setMode(s,'trusted');const target=path.join(home,'notes.md');
+    const decision=engine.permissions.decide(s,{kind:'read',path:target,toolCallId:'call-123',args:{password:'must-not-serialize'}});
+    assert.equal(decision.allowed,true);assert.equal(decision.resolvedTarget,path.join(fs.realpathSync(home),'notes.md'));assert.equal(decision.matchedRoot,fs.realpathSync(home));
+    const run=engine.createRun(s,'chat',null,{deferStart:true});
+    engine.recordAutomaticPermission(run,{kind:'read',toolCallId:'call-123',path:target,args:{password:'must-not-serialize'}},decision);
+    const permission=run.events.at(-1).data.permission;
+    assert.equal(permission.toolCallId,'call-123');assert.equal(permission.resolvedTarget,path.join(fs.realpathSync(home),'notes.md'));assert.equal(permission.matchedRoot,fs.realpathSync(home));
+    assert.doesNotMatch(JSON.stringify(permission),/must-not-serialize/);
+    engine.discardDeferredRun(run.id);
+  }finally{await engine.close();fs.rmSync(home,{recursive:true,force:true});}
+});
 test('changing permission mode resolves a waiting request but never answers a real question', async () => {
   const home=temp();const replies=[];const provider={run:async({ask})=>{
     replies.push(await ask({type:'permission',details:{kind:'shell',fullCommandText:'test command'}}));

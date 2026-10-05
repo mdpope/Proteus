@@ -31,3 +31,20 @@ test('execution guard is checked again for queued and resumed snapshots',async()
   enabled=false; engine.resume(run.id,'Stale snapshot'); await until(()=>run.status==='failed'); assert.equal(calls,1);
  } finally {await engine.close();fs.rmSync(home,{recursive:true,force:true});}
 });
+test('provider sign-in holds only its queued provider and resumes after cleanup',async()=>{
+ const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-auth-lane-'));const started=[];let releaseCopilot,authActive=true;
+ const engine=new Engine(home,{
+  codex:{run:async()=>{started.push('codex');}},
+  copilot:{run:()=>new Promise(resolve=>{started.push('copilot');releaseCopilot=resolve;})}
+ });
+ engine.providerAuthHold=providerId=>providerId==='codex'&&authActive;
+ const entry=(id,provider)=>({...schedule(home,id),provider,model:'synthetic-model'});
+ try{
+  const codex=engine.createRun(entry('held-codex','codex'));
+  const copilot=engine.createRun(entry('free-copilot','copilot'));
+  await until(()=>started.includes('copilot'));assert.equal(codex.status,'queued');assert.deepEqual(started,['copilot']);
+  releaseCopilot();await until(()=>copilot.status==='completed');await engine.drain();
+  assert.equal(codex.status,'queued');assert.deepEqual(started,['copilot']);
+  authActive=false;await engine.drain();await until(()=>codex.status==='completed');assert.deepEqual(started,['copilot','codex']);
+ }finally{await engine.close();fs.rmSync(home,{recursive:true,force:true});}
+});

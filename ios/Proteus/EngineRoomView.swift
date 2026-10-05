@@ -35,11 +35,11 @@ struct EngineRoomView: View {
     }
     private var resources: some View {
         List {
-            Section { Text(destinations.selectedLabel).font(.headline); if let failure { Text(failure).foregroundStyle(.orange) }; Text("CPU and RAM are reported by the host. Tabs may share a process; shared memory is not counted as per-tab memory.").font(.caption).foregroundStyle(.secondary) }
+            Section { Text(destinations.selectedLabel).font(.headline); if let failure { Text(failure).foregroundStyle(.orange) }; Text("Host figures include processes Proteus can inspect. Shared processes cannot be charged to one tab. iOS does not expose other apps’ memory here.").font(.caption).foregroundStyle(.secondary) }
             ForEach(value["processes"].array, id: \.self) { process in VStack(alignment: .leading) { Text(process["name"].string); HStack { Text("PID \(process["pid"].int)"); Text("CPU \(process["cpuPercent"].pretty)%"); Text(ByteCountFormatter.string(fromByteCount: Int64(process["memoryBytes"].int), countStyle: .memory)) }.font(.caption); if process["tabIds"].array.count > 1 { Text("Shared by \(process["tabIds"].array.count) tabs").font(.caption).foregroundStyle(.secondary) } } }
             if value["supported"] == .bool(false) { Text("Resource reporting is unavailable from this host.").foregroundStyle(.secondary) }
             Section("Host tabs") { ForEach(value["tabs"].array, id: \.self) { tab in VStack(alignment: .leading) { Text(tab["title"].string); Text(tab["loaded"].bool ? "Loaded" : "Unloaded").font(.caption).foregroundStyle(.secondary); HStack { Button("Unload") { resourceAction("unload", id: tab["id"].string) }.disabled(!tab["loaded"].bool); Button("Close", role: .destructive) { resourceAction("close", id: tab["id"].string) } }.buttonStyle(.bordered) }.contextMenu { Button("Unload") { resourceAction("unload", id: tab["id"].string) }; Button("Close", role: .destructive) { resourceAction("close", id: tab["id"].string) } } } }
-            Section("This device · Team browser") { ForEach(shared.browserTabs) { tab in HStack { Text(tab.title); Spacer(); Button("Unload") { shared.unload(tab.id) }; Button("Close", role: .destructive) { shared.close(tab.id) } }.buttonStyle(.bordered) } }
+            Section("This device · browser tabs") { ForEach(shared.browserTabs) { tab in HStack { VStack(alignment: .leading) { Text(tab.title); Text(tab.scope == "main" ? "Main tabs" : "Team Tools").font(.caption).foregroundStyle(.secondary) }; Spacer(); Button("Unload") { shared.unload(tab.id) }; Button("Close", role: .destructive) { shared.close(tab.id) } }.buttonStyle(.bordered) } }
         }
     }
     private var activity: some View {

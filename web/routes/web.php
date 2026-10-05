@@ -10,7 +10,7 @@ use App\Http\Controllers\SecurityController;
 use App\Http\Controllers\SetupController;
 use Illuminate\Support\Facades\Route;
 
-Route::redirect('/', '/garage');
+Route::redirect('/', '/home');
 Route::get('/setup', [SetupController::class, 'show'])->name('setup.show')->middleware('throttle:10,1');
 Route::post('/setup', [SetupController::class, 'store'])->name('setup.store')->middleware('throttle:5,1');
 Route::middleware('auth')->group(function () {
@@ -19,11 +19,25 @@ Route::middleware('auth')->group(function () {
     Route::delete('/security/tokens/{token}', [SecurityController::class, 'revoke'])->middleware(['strong', 'password.confirm'])->name('security.revoke');
 });
 Route::middleware(['auth', 'strong'])->group(function () {
+    Route::get('/home', function () {
+        $releasePath = resource_path('release.json');
+        $release = is_file($releasePath) ? json_decode(file_get_contents($releasePath), true) : [];
+
+        return view('home', [
+            'version' => $release['version'] ?? 'Unknown',
+            'buildId' => $release['buildId'] ?? null,
+            'changelog' => $release['changelog'] ?? null,
+            'updates' => $release['updates'] ?? null,
+        ]);
+    })->name('home');
     Route::prefix('/app-api')->middleware('throttle:120,1')->group(__DIR__.'/app.php');
     Route::view('/team', 'team')->name('team');
     Route::view('/browser-home', 'browser-home')->name('browser-home');
     Route::view('/engine-room', 'engine-room')->name('engine-room');
     Route::get('/remote', [RemoteController::class, 'index'])->name('remote');
+    Route::get('/remote/preview-shell', fn () => response()->view('preview-shell')
+        ->header('Content-Security-Policy', "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; frame-src 'none'; connect-src 'none'; img-src data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'")
+        ->header('Cache-Control', 'no-store, private'))->name('remote.preview-shell');
     Route::get('/remote/session', [RemoteController::class, 'session'])->name('remote.session')->middleware('throttle:120,1');
     Route::prefix('/remote/destinations')->middleware('throttle:60,1')->group(function () {
         Route::get('/', [RemoteDestinationController::class, 'index'])->name('remote.destinations');

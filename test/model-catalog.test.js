@@ -46,6 +46,20 @@ test('catalog refresh bypasses SDK listModels cache without reconnecting an acti
   provider.client={getAuthStatus:async()=>({isAuthenticated:true}),listModels:()=>{throw Error('cached API called');},rpc:{models:{list:async()=>({models:[{...raw,id:'fresh-'+(++calls)}]})},account:{getQuota:async()=>({})}}};
   assert.equal((await provider.status()).models[0].id,'fresh-1');assert.equal((await provider.status()).models[0].id,'fresh-2');
 });
+test('Copilot refresh replaces an idle signed-out SDK client after external sign-in, preserving active turns', async () => {
+  const old={getAuthStatus:async()=>({isAuthenticated:false})};
+  const fresh={getAuthStatus:async()=>({isAuthenticated:true}),rpc:{models:{list:async()=>({models:[raw]})}}};
+  const provider=new CopilotProvider();provider.client=old;provider.starting=Promise.resolve();
+  let closed=0;provider.close=async()=>{closed++;provider.client=null;provider.starting=null;};provider.connect=async()=>{provider.client=fresh;return fresh;};
+  assert.equal((await provider.status()).available,true);assert.equal(closed,1);
+  provider.client=old;provider.starting=Promise.resolve();provider.sessions.set('running',{});
+  assert.equal((await provider.status()).available,false);assert.equal(closed,1);
+});
+test('Copilot MCP status gives active-chat authentication failure priority over a connected configuration row', async () => {
+  const provider=new CopilotProvider();const run={id:'chat',schedule:{mcpServers:{atlassian:{type:'http'}}}};
+  const session={rpc:{mcp:{list:async()=>({servers:[{name:'atlassian',status:'connected'}],host:{needsAuthServers:{atlassian:true}}})}}};provider.sessions.set(run.id,session);
+  const status=await provider.mcpStatus(run);assert.equal(status.servers[0].status,'needs-auth');assert.equal(status.servers[0].scope,'active-chat');
+});
 test('create and resume pass effort and context tier to Copilot and revalidate against current capabilities', async () => {
   const configs=[];let current=raw;
   const provider=new CopilotProvider();

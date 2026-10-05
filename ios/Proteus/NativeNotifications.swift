@@ -15,7 +15,22 @@ import Security
     private var life: LifeStore?
     @AppStorage("pushSubscriptionID") private var subscriptionID = ""
     @AppStorage("pushSubscriptionAccount") private var subscriptionAccount = ""
-    struct NotificationRoute: Equatable { let hostID: String; let chatID: String }
+    struct NotificationRoute: Equatable {
+        let hostID: String
+        let chatID: String
+        let scheduleID: String
+        let type: String
+        static func from(_ payload: [AnyHashable: Any]) -> Self {
+            func field(_ key: String) -> String {
+                guard let value = payload[key] as? String, value.count <= 128,
+                      !value.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else { return "" }
+                return value
+            }
+            let host = field("hostId")
+            return Self(hostID: UUID(uuidString: host) == nil ? "" : host,
+                        chatID: field("chatId"), scheduleID: field("scheduleId"), type: field("type"))
+        }
+    }
     override init() { super.init(); UNUserNotificationCenter.current().delegate = self }
     func attach(_ life: LifeStore) { self.life = life; if enabled { UIApplication.shared.registerForRemoteNotifications() } }
     func enable() async {
@@ -47,7 +62,8 @@ import Security
             let id = hostID + ":" + item["id"].string
             guard delivered.insert(id).inserted, !first, enabled, item["readAt"] == .null else { continue }
             let content = UNMutableNotificationContent(); content.title = "Proteus"; content.body = Self.safeBody(item["type"].string); content.sound = .default
-            content.userInfo = ["hostId": hostID, "chatId": item["chatId"].string]
+            content.userInfo = ["hostId": hostID, "chatId": item["chatId"].string,
+                                "scheduleId": item["scheduleId"].string, "type": item["type"].string]
             UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: id, content: content, trigger: nil))
         }
         if delivered.count > 2000 { delivered = Set(delivered.suffix(1000)) }
@@ -55,15 +71,44 @@ import Security
     static func safeBody(_ type: String) -> String {
         switch type { case "chat.completed": "A chat finished."; case "review.required", "approval.required": "A chat needs your review."; case "schedule.completed": "A schedule finished."; case "device.added": "A device was added."; case "device.reconnected": "A Mac reconnected."; default: "New activity is available." }
     }
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions { [.banner, .sound, .list] }
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+    func receivedTap(_ payload: [AnyHashable: Any]) { route = NotificationRoute.from(payload) }
+    #if DEBUG
+    func scheduleFixtureTap() async throws {
+        let center = UNUserNotificationCenter.current()
+        guard try await center.requestAuthorization(options: [.alert, .sound]) else { throw RemoteError(message: "Simulator notification permission was denied.") }
+        let content = UNMutableNotificationContent()
+        content.title = "Proteus route fixture"
+        content.body = "Tap to open the fixture chat."
+        content.userInfo = ["hostId": "10000000-0000-4000-8000-000000000001", "chatId": "notification-chat", "type": "chat.completed"]
+        try await center.add(UNNotificationRequest(identifier: "proteus-simulator-route-fixture", content: content, trigger: UNTimeIntervalNotificationTrigger(timeInterval: 4, repeats: false)))
+    }
+    #endif
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        DispatchQueue.main.async { completionHandler([.banner, .sound, .list]) }
+    }
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
         let payload = response.notification.request.content.userInfo
-        let host = payload["hostId"] as? String ?? "", chat = payload["chatId"] as? String ?? ""
-        await MainActor.run { self.route = NotificationRoute(hostID: host, chatID: chat) }
+        let host = payload["hostId"] as? String ?? ""
+        let chat = payload["chatId"] as? String ?? ""
+        let schedule = payload["scheduleId"] as? String ?? ""
+        let type = payload["type"] as? String ?? ""
+        DispatchQueue.main.async {
+            self.receivedTap(["hostId": host, "chatId": chat, "scheduleId": schedule, "type": type])
+            completionHandler()
+        }
     }
 }
 final class ProteusAppDelegate: NSObject, UIApplicationDelegate {
-    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool { _ = NativeNotifications.shared; return true }
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        let notifications = NativeNotifications.shared
+        #if DEBUG
+        let args = ProcessInfo.processInfo.arguments
+        let host = "10000000-0000-4000-8000-000000000001"
+        if args.contains("--synthetic-notification-cold-chat") { notifications.receivedTap(["hostId": host, "chatId": "notification-chat", "type": "chat.completed"]) }
+        if args.contains("--synthetic-notification-cold-schedule") { notifications.receivedTap(["hostId": host, "scheduleId": "notification-schedule", "type": "schedule.completed"]) }
+        #endif
+        return true
+    }
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) { Task { @MainActor in NativeNotifications.shared.registered(deviceToken) } }
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) { Task { @MainActor in NativeNotifications.shared.registrationFailed() } }
 }

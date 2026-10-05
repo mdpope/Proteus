@@ -24,6 +24,8 @@ import { atomicJSON, defaultHome, readJSON, isWithin } from './files.js';
 import { nextRuns, revision, validateSchedule } from './schedules.js';
 import { readChatImage, readImage } from './chat-images.js';
 import { RemoteHost } from './remote.js';
+import { ChatAttachmentStore } from './chat-attachments.js';
+import { ProviderAuthManager } from './provider-auth.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export function seed(home, cwd = root) {
@@ -71,9 +73,22 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   const account = new AppAccount(life);
   const activity = new ActivityStore(home, { identity: () => life.api.identity(), publish: (item, identity, kind='notifications') => account.request({ path:'/'+kind, method:'POST', body:item, identity }) });
   const workspaceFiles = new WorkspaceFiles(() => context.config());
+  const attachments = new ChatAttachmentStore(home);
   const adapters = { ...(providers || { copilot, codex, claude }), 'local-process': omi.provider() };
   const engine = new Engine(home, adapters);
+  const providerAuth = new ProviderAuthManager({adapters,settings,activeTurn:providerId=>[engine.running,...engine.backgroundRuns.values()].filter(Boolean).some(slot=>engine.getRun(slot.id).schedule.provider===providerId),onTerminal:()=>queueMicrotask(()=>engine.drain())});
+  engine.providerAuthHold=providerId=>providerAuth.isActive(providerId);
   const usage = new ProviderUsageCache(Object.fromEntries(Object.entries(adapters).filter(([id]) => ['copilot', 'codex', 'claude'].includes(id))));
+  usage.setActive(false);
+  const allowanceRunStatus=new Map();
+  engine.on('change',run=>{
+    if(!run?.id)return;
+    if(run.deleted){allowanceRunStatus.delete(run.id);usage.setActive(engine.listRuns().some(item=>['queued','running'].includes(item.status)));return;}
+    const prior=allowanceRunStatus.get(run.id);
+    allowanceRunStatus.set(run.id,run.status);
+    usage.setActive(engine.listRuns().some(item=>['queued','running'].includes(item.status)));
+    if(prior&&prior!==run.status&&['completed','failed','cancelled','interrupted'].includes(run.status))usage.invalidate(run.schedule.provider);
+  });
   engine.beforeRun = schedule => omi.assertRunnable(schedule);
   engine.executionLane = schedule => schedule.provider === 'local-process' && ['audio', 'library', 'semantic'].includes(schedule.integration?.job) ? `omi:${schedule.integration.job}` : null;
   engine.prepareSchedule = schedule => {
@@ -97,6 +112,11 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       catch { return null; } // Invalid context must not hide the UI needed to repair it.
     }
     return permissionPreviews.get(key);
+  }
+  function buildChatSchedule(value){
+    const defaults=settings.get();
+    const snapshot=context.capture({workspaceId:value.workspaceId,workspace:value.workspace||(!value.workspaceId?defaults.workspace:undefined),selectedIds:value.selectedIds,agentId:value.agentId,includeDefaults:value.includeDefaults});
+    return validateSchedule({schemaVersion:1,id:`chat-${Date.now()}-${randomBytes(4).toString('hex')}`,name:value.name||'Workspace chat',enabled:false,cron:'0 9 * * 1-5',timezone:value.timezone||defaults.timezone,provider:value.provider||defaults.provider,model:value.model||defaults.model,reasoningEffort:value.reasoningEffort??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.reasoningEffort:undefined),contextTier:value.contextTier??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.contextTier:undefined),serviceTier:value.serviceTier??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.serviceTier:undefined),workspace:snapshot.workspace,context:snapshot,skillDirectories:value.skillDirectories||defaults.skillDirectories,mcpServers:value.mcpServers||defaults.mcpServers,editorContext:value.editorContext,misfire:'skip',prompt:value.prompt});
   }
   const token = randomBytes(32).toString('hex'); let origin; let remote; const schedulerErrors = []; const eventClients = new Set();
   const notify = () => { for (const client of eventClients) client.write('event: change\ndata: {}\n\n'); };
@@ -129,6 +149,8 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         if (value.action === 'pair') return json(200, await remote.pairing(value.publicURL));
         if (value.action === 'revoke') return json(200, remote.revoke(value.id));
         if (value.action === 'resource-access') return json(200, remote.setResourceAccess(value.id, value.enabled));
+        if (value.action === 'document-access') return json(200, remote.setDocumentAccess(value.id, value.enabled));
+        if (value.action === 'document-review') return json(200, remote.reviewDocument(value.requestId,value.approved));
         throw new Error('Unknown remote action.');
       }
       if (url.pathname === '/api/app' && req.method === 'GET') return json(200, await account.request());
@@ -139,23 +161,41 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (url.pathname === '/api/notifications' && req.method === 'POST') { const value=await body(req); if(value.action==='read')return json(200,activity.read(value.id));if(value.action==='preferences')return json(200,activity.preferences(value.preferences));throw new Error('Unknown notification action.'); }
       if (url.pathname === '/api/logs' && req.method === 'GET') return json(200, activity.logs(url.searchParams.get('limit')));
       if (url.pathname === '/api/logs' && req.method === 'POST') {const v=await body(req,16000);return json(200,activity.log(v.level,v.event,v.message));}
+      if (url.pathname === '/api/home' && req.method === 'GET') {
+        const root=new URL('../',import.meta.url);
+        const read=name=>fs.readFileSync(new URL(name,root),'utf8').slice(0,200_000);
+        const metadata=JSON.parse(read('package.json'));
+        return json(200,{version:metadata.version,buildRevision:metadata.buildRevision||'source',readme:read('README.md'),changelog:read('CHANGELOG.md'),update:{available:false,supported:false,message:'Automatic updates are not configured for this build.'}});
+      }
       if (url.pathname === '/api/resources' && req.method === 'GET') return json(200, service.resources ? await service.resources.list() : {supported:false,processes:[],tabs:[],observedAt:new Date().toISOString()});
       if (url.pathname === '/api/resources' && req.method === 'POST') {if(!service.resources)throw new Error('Resource controls require the desktop app.');return json(200,await service.resources.action(await body(req)));}
+      if (url.pathname === '/api/chat-attention' && req.method === 'POST') {const value=await body(req,16000);if(value.action!=='review'||typeof value.id!=='string')throw new Error('Choose a chat failure to review.');return json(200,engine.reviewFailure(value.id,value.expectedFailureEventAt));}
+      if (url.pathname === '/api/chat-lifecycle' && req.method === 'POST') {
+        const value=await body(req,16000);
+        if(!['archive','unarchive','delete'].includes(value.action)||typeof value.id!=='string')throw new Error('Choose a chat and archive, unarchive or delete action.');
+        const hostId=value.hostId||remote.info().hostId;
+        if(hostId===remote.info().hostId)return json(200,engine.lifecycle(value.id,value.action,{expectedUpdatedAt:value.expectedUpdatedAt,expectedArchivedAt:value.expectedArchivedAt}));
+        if(!service.peers)throw new Error('The paired Mac is unavailable.');
+        const result=await service.peers.request(hostId,value.action==='delete'?'chat.delete':'chat.archive',{id:value.id,...(value.action==='delete'?{}:{archived:value.action==='archive'}),expectedUpdatedAt:value.expectedUpdatedAt,expectedArchivedAt:value.expectedArchivedAt});
+        service.peers.reconcileChat(hostId,result);
+        return json(200,result);
+      }
       if (url.pathname === '/api/chats/index' && req.method === 'GET') {
         const info=remote.info(),lastSyncAt=new Date().toISOString();
-        const local=engine.listRuns().slice(0,1000).map(r=>({id:r.id,chatId:r.id,hostId:info.hostId,local:true,title:r.title,provider:r.schedule.provider,status:r.status,createdAt:r.createdAt,updatedAt:r.updatedAt,workspaceName:r.schedule.context?.workspaceId||'',scheduleName:r.trigger==='chat'?'':r.schedule.name,destinationName:info.label}));
+        const includeArchived=url.searchParams.get('includeArchived')==='1';
+        const local=engine.visibleRuns(includeArchived).slice(0,1000).map(r=>({id:r.id,chatId:r.id,hostId:info.hostId,local:true,title:r.title,provider:r.schedule.provider,status:r.status,createdAt:r.createdAt,updatedAt:r.updatedAt,archivedAt:r.archivedAt||null,archived:!!r.archivedAt,attentionRequired:r.status==='awaiting_input'||(!r.archivedAt&&['failed','interrupted'].includes(r.status)&&!r.failureReviewedAt),failureEventAt:['failed','interrupted'].includes(r.status)?r.failureEventAt||r.updatedAt:null,failureReviewedAt:r.failureReviewedAt||null,workspaceName:r.schedule.context?.workspaceId||'',scheduleName:r.trigger==='chat'?'':r.schedule.name,destinationName:info.label}));
         const peer=service.peers?await service.peers.index():{items:[],hosts:[],partial:false};
-        const items=[...local,...peer.items].sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt))||a.hostId.localeCompare(b.hostId)||a.chatId.localeCompare(b.chatId));
+        const items=[...local,...peer.items.filter(item=>includeArchived||!item.archivedAt)].sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt))||a.hostId.localeCompare(b.hostId)||a.chatId.localeCompare(b.chatId));
         return json(200,{items,hosts:[{id:info.hostId,name:info.label,online:true,lastSyncAt},...peer.hosts],partial:peer.partial});
       }
       if (url.pathname === '/api/state') return json(200, {
-        schedules: engine.schedules.list(), runs: engine.listRuns().map(run => ({ ...run, storage: storagePaths(home, run), permissionContext: engine.permissions.describe(run.schedule) })), providerStatus: catalog.value, providerStatuses: providerStatuses(),
+        schedules: engine.schedules.list(), runs: engine.listRuns().map(run => ({ ...run, storage: storagePaths(home, run), permissionContext: engine.permissions.describe(run.schedule) })), providerStatus: catalog.value, providerStatuses: providerStatuses(),attachmentMediaTypes:Object.fromEntries(['copilot','codex','claude'].map(id=>[id,adapters[id]?.acceptedMediaTypes||[]])),mcpStatusProviders:['copilot','codex','claude'].filter(id=>typeof adapters[id]?.mcpStatus==='function'),mcpLoginProviders:['copilot','codex','claude'].filter(id=>typeof adapters[id]?.mcpLogin==='function'),
         permissions: engine.permissions.get(), permissionWorkspaces: [...new Map([
           { ...settings.get(), name: 'Default workspace', ref: { defaults: true } },
           ...engine.schedules.list().filter(schedule => !schedule.error).map(schedule => ({ ...schedule, ref: { scheduleId: schedule.id } })),
           ...engine.listRuns().map(run => ({ ...run.schedule, ref: { runId: run.id } }))
         ].map(permissionSchedule).filter(Boolean).map(schedule => { const context = engine.permissions.describe(schedule); return [context.id, { ...context, ref: schedule.ref }]; })).values()],
-        home, life: life.get(), settings: settings.get(), context: context.get(), standup: standup.get(), browserAvailable: !!browser, schedulerErrors, recoveryErrors: engine.recoveryErrors || [], version: '0.1.0',
+        home, life: life.get(), settings: settings.get(), context: context.get(), standup: standup.get(), browserAvailable: !!browser, schedulerErrors, recoveryErrors: engine.recoveryErrors || [], version: readJSON(path.join(root,'package.json')).version,
         scheduler: { running: true, background, message: background ? 'The menu bar host keeps running when its window is closed. Quit Proteus stops execution. The Mac must be awake.' : 'Schedules run while this host process is running.' }
       });
       if (['/api/omi','/api/transcription'].includes(url.pathname) && req.method === 'GET') return json(200, { ...await omi.status(), schedules: engine.schedules.list().filter(isOmiSchedule) });
@@ -278,20 +318,26 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         return json(200, { imported: schedules.length, enabled: false });
       }
       if (url.pathname === '/api/run' && req.method === 'POST') { const { id } = await body(req); return json(200, engine.createRun(engine.schedules.get(id))); }
+      if(url.pathname==='/api/attachments'&&req.method==='POST'){
+        const value=await body(req),deviceId='local-desktop',providerId=value.id?engine.getRun(value.id).schedule.provider:value.providerId;
+        if(value.action==='begin'){
+          if(value.providerId!==providerId||!adapters[providerId]?.acceptedMediaTypes?.includes(value.mediaType))throw new Error(`${providerId} cannot receive ${value.mediaType} attachments.`);
+          if(!value.id&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.draftId||''))throw new Error('Choose a valid chat draft.');
+          return json(200,await attachments.begin({chatId:value.id||'draft:'+value.draftId,deviceId,messageId:value.messageId,providerId,name:value.name,mediaType:value.mediaType,size:value.size,sha256:value.sha256}));
+        }
+        if(value.action==='chunk')return json(200,await attachments.chunk({uploadId:value.uploadId,deviceId,index:value.index,dataBase64:value.dataBase64}));
+        if(value.action==='finish')return json(200,await attachments.finish({uploadId:value.uploadId,deviceId}));
+        if(value.action==='authorize')return json(200,await remote.attachmentConsents.authorize({...(value.id?{chatId:value.id}:{draftId:value.draftId}),deviceId,messageId:value.messageId,providerId,attachments:value.attachments,acceptedMediaTypes:adapters[providerId]?.acceptedMediaTypes||[]}));
+        throw new Error('Unknown attachment action.');
+      }
       if (url.pathname === '/api/chat' && req.method === 'POST') {
-        const value = await body(req); const defaults = settings.get();
-        const snapshot = context.capture({ workspaceId: value.workspaceId, workspace: value.workspace || (!value.workspaceId ? defaults.workspace : undefined), selectedIds: value.selectedIds, agentId: value.agentId, includeDefaults: value.includeDefaults });
-        const schedule = validateSchedule({
-          schemaVersion: 1, id: `chat-${Date.now()}-${randomBytes(4).toString('hex')}`, name: value.name || 'Workspace chat', enabled: false,
-          cron: '0 9 * * 1-5', timezone: value.timezone || defaults.timezone,
-          provider: value.provider || defaults.provider, model: value.model || defaults.model,
-          reasoningEffort: value.reasoningEffort ?? ((value.model || defaults.model) === defaults.model && (value.provider || defaults.provider) === defaults.provider ? defaults.reasoningEffort : undefined),
-          contextTier: value.contextTier ?? ((value.model || defaults.model) === defaults.model && (value.provider || defaults.provider) === defaults.provider ? defaults.contextTier : undefined),
-          serviceTier: value.serviceTier ?? ((value.model || defaults.model) === defaults.model && (value.provider || defaults.provider) === defaults.provider ? defaults.serviceTier : undefined),
-          workspace: snapshot.workspace, context: snapshot, skillDirectories: value.skillDirectories || defaults.skillDirectories,
-          mcpServers: value.mcpServers || defaults.mcpServers, editorContext: value.editorContext, misfire: 'skip', prompt: value.prompt
-        });
-        return json(200, engine.createRun(schedule, 'chat'));
+        const value = await body(req),schedule=buildChatSchedule(value),files=Array.isArray(value.attachments)?value.attachments:[];
+        if(!files.length)return json(200,engine.createRun(schedule,'chat'));
+        if(files.length>4||!value.consentId||!value.draftId||!value.messageId||value.providerId!==schedule.provider)throw new Error('Review the exact files and named provider before sending.');
+        await remote.attachmentConsents.verify({consentId:value.consentId,draftId:value.draftId,messageId:value.messageId,providerId:schedule.provider,deviceId:'local-desktop',attachmentIds:files});
+        const run=engine.createRun(schedule,'chat',null,{deferStart:true});let prepared;
+        try{prepared=await remote.attachmentConsents.prepareSend({consentId:value.consentId,draftId:value.draftId,chatId:run.id,messageId:value.messageId,providerId:schedule.provider,deviceId:'local-desktop',attachmentIds:files});engine.startDeferredRun(run.id,{proofId:prepared.proofId,attachmentIds:files,messageId:value.messageId});return json(200,run);}
+        catch(error){if(prepared)await remote.attachmentConsents.releaseProof(prepared.proofId).catch(()=>{});engine.discardDeferredRun(run.id);throw error;}
       }
       const match = url.pathname.match(/^\/api\/runs\/([a-f0-9-]+)\/(reply|resume|cancel|send|remove-queued)$/);
       if (match && req.method === 'POST') {
@@ -299,7 +345,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         if (action === 'reply') return json(200, engine.reply(id, value.answer, value.requestId));
         if (action === 'send' && typeof value.prompt === 'string' && /^\/mcp\s+auth(?:\s|$)/i.test(value.prompt.trim())) {
           const run = engine.getRun(id); const provider = engine.providers[run.schedule.provider];
-          if (!provider?.mcpLogin) throw new Error('MCP sign-in commands are currently supported for Copilot chats.');
+          if (!provider?.mcpLogin) throw new Error('This provider does not support MCP sign-in through Proteus. Sign in on the owning Mac, then refresh connections.');
           if (!openExternal) throw new Error('Use MCP connections in chat details to open the sign-in link.');
           if (engine.running && engine.running.id !== id) throw new Error('Wait for the other chat to finish before signing in.');
           const name = value.prompt.trim().replace(/^\/mcp\s+auth\s*/i, '').trim();
@@ -318,6 +364,13 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         }
         if (action === 'send') {
           const run = engine.getRun(id);
+          const files=Array.isArray(value.attachments)?value.attachments:[];
+          if(files.length){
+            if(files.length>4||value.mode==='steer'||!value.messageId||!value.consentId||value.providerId!==run.schedule.provider)throw new Error('Review the exact files and named provider for a queued turn.');
+            const prepared=await remote.attachmentConsents.prepareSend({consentId:value.consentId,chatId:run.id,messageId:value.messageId,providerId:run.schedule.provider,deviceId:'local-desktop',attachmentIds:files});
+            try{return json(200,await engine.send(id,value.prompt,'queue',value.messageId,value.modelOptions,{proofId:prepared.proofId,attachmentIds:files}));}
+            catch(error){await remote.attachmentConsents.releaseProof(prepared.proofId).catch(()=>{});throw error;}
+          }
           if (value.modelOptions && value.mode !== 'steer') {
             const options = chatModelOptions(value.modelOptions);
             if (run.schedule.provider !== 'rehearsal') {
@@ -330,15 +383,27 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
           return json(200, await engine.send(id, value.prompt, value.mode, value.messageId, value.modelOptions));
         }
         if (action === 'remove-queued') return json(200, engine.removeQueued(id, value.messageId));
-        if (action === 'resume') return json(200, engine.resume(id, value.prompt));
+        if (action === 'resume') {
+          if(value.modelOptions){
+            const run=engine.getRun(id),options=chatModelOptions(value.modelOptions);
+            if(run.schedule.provider!=='rehearsal'){
+              const catalog=await catalogs[run.schedule.provider]?.get(),model=catalog?.models?.find(item=>item.id===options.model);
+              if(!model)throw new Error('Selected model is unavailable. Refresh models and choose an available model.');
+              validateModelOptions(options,model);
+            }
+            return json(200,await engine.send(id,value.prompt,'queue',value.messageId,options));
+          }
+          return json(200, engine.resume(id, value.prompt));
+        }
         engine.cancel(id); return json(200, { ok: true });
       }
       if (url.pathname === '/api/mcp' && req.method === 'POST') {
         const value = await body(req); const run = engine.getRun(value.runId);
         const provider = engine.providers[run.schedule.provider];
-        if (!provider?.mcpStatus) throw new Error('MCP sign-in controls are currently supported for Copilot chats.');
+        if (!provider?.mcpStatus) throw new Error('This provider does not report selected MCP connection status through Proteus.');
         if (engine.running && engine.running.id !== run.id) throw new Error('Wait for the other chat to finish before opening these connections.');
         if (value.action === 'login') {
+          if(typeof provider.mcpLogin!=='function')throw new Error('This provider does not support MCP sign-in through Proteus. Sign in on the owning Mac, then refresh connections.');
           const result = await provider.mcpLogin(run, value.server);
           if (result.authorizationUrl && value.openOnMac) {
             if (!openExternal) throw new Error('Open Proteus on the Mac to finish browser sign-in.');
@@ -351,6 +416,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       }
       if (url.pathname === '/api/usage' && req.method === 'POST') return json(200, await usage.get((await body(req)).force === true));
       if (url.pathname === '/api/provider' && req.method === 'POST') { const value = await body(req); const selectedCatalog = value.provider ? catalogs[value.provider] : catalog; if (!selectedCatalog) throw new Error('Provider catalog is unavailable.'); const result = await selectedCatalog.get(value.force !== false); notify(); remote.changed(); return json(200, result); }
+      if (url.pathname === '/api/provider-auth' && req.method === 'POST') return json(200, await providerAuth.handle(await body(req)));
       if (url.pathname === '/api/chat-image' && req.method === 'POST') {
         const value = await body(req);
         return json(200, readChatImage(engine.getRun(value.id), value.source));
@@ -381,8 +447,8 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   origin = `http://127.0.0.1:${server.address().port}`;
   atomicJSON(path.join(home, 'connection.json'), { origin, token, pid: process.pid });
   const timer = timers ? setInterval(() => { try { engine.tick(); } catch (error) { engine.emit('scheduler-error', { error: error.message, at: new Date().toISOString() }); } }, 1000) : null;
-  const service = { engine, settings, context, standup, omi, life, account, activity, workspaceFiles, usage, catalog, catalogs, origin, token, home, url: `${origin}/?token=${token}`, async close() {
-    activity.log('info','app.stopping','Proteus is shutting down.'); activity.close(); if(activityTimer)clearInterval(activityTimer); if (timer) clearInterval(timer); if (catalogTimer) clearInterval(catalogTimer); await Promise.all(Object.values(catalogs).map(c => c.pending)); await remote.close(); await engine.close(); await copilot.close(); await codex.close(); await claude.close(); await life.close?.();
+  const service = { engine, settings, context, standup, omi, life, account, activity, workspaceFiles, attachments, buildChatSchedule, usage, catalog, catalogs, origin, token, home, url: `${origin}/?token=${token}`, async close() {
+    activity.log('info','app.stopping','Proteus is shutting down.'); activity.close(); if(activityTimer)clearInterval(activityTimer); if (timer) clearInterval(timer); if (catalogTimer) clearInterval(catalogTimer); await Promise.all(Object.values(catalogs).map(c => c.pending)); await providerAuth.close(); await remote.close(); await engine.close(); await attachments.close(); await copilot.close(); await codex.close(); await claude.close(); await life.close?.();
     for (const client of eventClients) client.end(); eventClients.clear();
     await new Promise(resolve => {
       server.close(resolve);

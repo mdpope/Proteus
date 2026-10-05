@@ -8,6 +8,8 @@ struct MarkdownView: UIViewRepresentable {
     let runID: String
     let store: RemoteStore
     @Binding var height: CGFloat
+    var onDocumentLink: ((String) -> Void)? = nil
+    var documentAssetURLs: [String: String]? = nil
     var onResize: () -> Void = {}
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -67,10 +69,15 @@ struct MarkdownView: UIViewRepresentable {
             case "link":
                 if let value = body["url"] as? String, let url = URL(string: value) {
                     if ["http", "https", "mailto"].contains(url.scheme?.lowercased() ?? "") { UIApplication.shared.open(url); Task { await parent.shared.record(url, title: url.host ?? "Link", life: parent.life) } }
+                    else if ["md", "html", "htm"].contains(url.pathExtension.lowercased()) || ["md", "html", "htm"].contains((value as NSString).pathExtension.lowercased()) { if let onDocumentLink = parent.onDocumentLink { onDocumentLink(value) } else { UIPasteboard.general.string = value; parent.store.error = "This Mac file path was copied. Open it on your Mac." } }
                     else { UIPasteboard.general.string = value.removingPercentEncoding ?? value; parent.store.error = "Mac file path copied. Open it on your Mac: \(value.removingPercentEncoding ?? value)" }
                 }
             case "image":
                 guard let source = body["source"] as? String, let id = body["id"] as? String else { return }
+                if let approved = parent.documentAssetURLs {
+                    web.callAsyncJavaScript("window.imageResult(id, dataURL)", arguments: ["id": id, "dataURL": approved[source] ?? ""], in: nil, in: .page) { _ in }
+                    return
+                }
                 Task { [weak self, weak web] in
                     guard let self else { return }
                     let result = try? await parent.store.request("chat.image", ["id": .string(parent.runID), "source": .string(source)])

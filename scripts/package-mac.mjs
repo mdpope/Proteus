@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const buildRevision=execFileSync('git',['rev-parse','--short=12','HEAD'],{cwd:root,encoding:'utf8'}).trim();
 const signingIdentity = process.env.PROTEUS_MAC_SIGN_IDENTITY || '-';
 if (process.platform !== 'darwin') throw new Error('Build the Mac application on macOS.');
 // These helpers access provider-owned Keychain items. Keep GitHub's designated
@@ -31,6 +32,10 @@ const bundles = await packager({ dir: root, out: path.join(root, 'dist'), overwr
   protocols: [{ name: 'Proteus Life sign-in', schemes: ['proteus'] }],
   // Rebuild only our PTY in the copied app. Preserve source Node ABI and vendor signatures.
   afterCopy: [async ({buildPath, electronVersion, arch}) => {
+    const metadataFile=path.join(buildPath,'package.json');
+    const metadata=JSON.parse(fs.readFileSync(metadataFile,'utf8'));
+    metadata.buildRevision=buildRevision;
+    fs.writeFileSync(metadataFile,JSON.stringify(metadata,null,2)+'\n');
     await rebuild({buildPath, electronVersion, arch, onlyModules:['node-pty'], force:true});
     preparePty(buildPath);
   }],

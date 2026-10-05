@@ -11,6 +11,7 @@
 		1162CF50A47019EEE0F0B91C /* ScheduleViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99814D317E2043305330CB8E /* ScheduleViews.swift */; };
 		2DA06CE96BFC9F1B53D5955C /* MarkdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8599964FC6EFDA8704A9F1CF /* MarkdownView.swift */; };
 		398B9FDDC1D1B5A441D3E044 /* markdown in Resources */ = {isa = PBXBuildFile; fileRef = 4FA0511E62085A38609D5D2C /* markdown */; };
+		C0A0C0A0C0A0C0A0C0A0C001 /* CHANGELOG.md in Resources */ = {isa = PBXBuildFile; fileRef = C0A0C0A0C0A0C0A0C0A0C002 /* CHANGELOG.md */; };
 		54B2034637BB14023E216F1B /* RemoteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD304CE5E2D4AA434F2B24CC /* RemoteTests.swift */; };
 		5740FAB8AE1ED396820BEC60 /* ToolActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2C219FBBECD427ED9810FAF /* ToolActivityView.swift */; };
 		5F7A96C7CCAC62FF1B3C0FE2 /* ChatViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A814582040CD2B969E3FED0 /* ChatViews.swift */; };
@@ -55,6 +56,7 @@
 		2B068C230D5ED165EE25D9DD /* RemoteCrypto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteCrypto.swift; sourceTree = "<group>"; };
 		3B1F7B75CFDD99F635051F0D /* Proteus.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Proteus.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		4FA0511E62085A38609D5D2C /* markdown */ = {isa = PBXFileReference; lastKnownFileType = folder; name = markdown; path = ../public/markdown; sourceTree = SOURCE_ROOT; };
+		C0A0C0A0C0A0C0A0C0A0C002 /* CHANGELOG.md */ = {isa = PBXFileReference; lastKnownFileType = text; name = CHANGELOG.md; path = ../CHANGELOG.md; sourceTree = SOURCE_ROOT; };
 		7DB8DB7C2A0FFB5C4A9E2425 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		8599964FC6EFDA8704A9F1CF /* MarkdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownView.swift; sourceTree = "<group>"; };
 		89BCB9A523FAD7012BFBFBE2 /* ProteusApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProteusApp.swift; sourceTree = "<group>"; };
@@ -114,6 +116,7 @@
 		9C9312C0FF80BE614739AEAC /* Proteus */ = {
 			isa = PBXGroup;
 			children = (
+				C0A0C0A0C0A0C0A0C0A0C002 /* CHANGELOG.md */,
 				C3669D14C35D62493F9512B7 /* Assets.xcassets */,
 				9A814582040CD2B969E3FED0 /* ChatViews.swift */,
 				CF35BFD81ECE37D5F8218105 /* ContextViews.swift */,
@@ -257,6 +260,7 @@
 			files = (
 				D5382767A692259B940198E9 /* Assets.xcassets in Resources */,
 				398B9FDDC1D1B5A441D3E044 /* markdown in Resources */,
+				C0A0C0A0C0A0C0A0C0A0C001 /* CHANGELOG.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -375,7 +379,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2610.5.1;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -394,7 +398,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 0.2.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -478,7 +482,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2610.5.1;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -491,7 +495,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 0.2.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";

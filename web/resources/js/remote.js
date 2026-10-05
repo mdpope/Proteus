@@ -1,6 +1,6 @@
-import {renderChatIndex} from './chats-index.js';
+import {renderChatIndex,chatIndexShowsArchived} from './chats-index.js';
 import {saveChatIndex,loadChatIndex,clearChatIndex,saveChatDrafts,loadChatDrafts,clearChatDrafts} from './remote-cache.js';
-import {appRequest,dateTime} from './shared-app.js';
+import {appRequest,dateTime,recordBrowserVisit} from './shared-app.js';
 import { mount as mountMarkdown } from '../../../src/markdown-renderer.js';
 import { PairingStore, AccountPairingStore, BrowserDestinationStore, BrowserRemoteClient, parsePairing } from './remote-client.js';
 import { usagePanel } from './remote-usage.js';
@@ -22,12 +22,27 @@ let attentionOnly=initialQuery.get('attention')==='1',transcriptionOnly=initialQ
 let chatMode=initialQuery.has('new')?'new':'index';
 let active = '', view = sectionNames.includes(initialView) ? initialView : 'chats', switching = 0;
 const chatTabKey='proteus.chat-tabs.v1.'+root.dataset.account;
+const childTabKey='proteus.chat-child-tabs.v1.'+root.dataset.account;
+let savedChildTabs={};try{savedChildTabs=JSON.parse(localStorage.getItem(childTabKey)||'{}');}catch{}
+function saveChildTabs(current,chatId){
+    const key=current.host.hostId+':'+chatId,tabs=current.childOrder?.get(chatId)||[];
+    savedChildTabs[key]={tabs:tabs.map(item=>item.type==='browser'?{type:'browser'}:{type:'document',documentId:item.documentId,title:String(item.title||'Document').slice(0,120),version:String(item.version||''),mediaType:item.mediaType==='text/html'?'text/html':'text/markdown',source:item.source==='local'?'local':'remote',...(item.parentDocumentId&&item.relativePath?{parentDocumentId:item.parentDocumentId,relativePath:item.relativePath}:{})}),active:current.activeChatPanel||'conversation'};
+    try{localStorage.setItem(childTabKey,JSON.stringify(savedChildTabs));}catch{}
+}
+function restoreChildTabs(current,chatId){
+    if(current.restoredChildChats?.has(chatId))return;current.restoredChildChats ||= new Set();current.restoredChildChats.add(chatId);
+    const saved=savedChildTabs[current.host.hostId+':'+chatId],tabs=Array.isArray(saved?.tabs)?saved.tabs.slice(0,24):[];
+    current.childOrder ||= new Map();current.childOrder.set(chatId,tabs.filter(item=>item?.type==='browser'||item?.type==='document'&&/^[a-zA-Z0-9_-]{1,120}$/.test(item.documentId||'')).map(item=>item.type==='browser'?{type:'browser'}:{type:'document',documentId:item.documentId,title:String(item.title||'Document').slice(0,120),version:String(item.version||''),mediaType:item.mediaType==='text/html'?'text/html':'text/markdown',source:item.source==='local'?'local':'remote',...(/^[a-f0-9]{64}$/.test(item.parentDocumentId||'')&&typeof item.relativePath==='string'&&item.relativePath.length<=4096?{parentDocumentId:item.parentDocumentId,relativePath:item.relativePath}:{})}));
+    current.documents ||= new Map();for(const item of current.childOrder.get(chatId))if(item.type==='document')current.documents.set(chatId+':'+item.documentId,{...item,chatId,content:null,readAt:null});
+    const activePanel=saved?.active;current.activeChatPanel=activePanel==='browser'&&current.childOrder.get(chatId).some(item=>item.type==='browser')||activePanel==='conversation'||current.childOrder.get(chatId).some(item=>item.type==='document'&&item.documentId===activePanel)?activePanel:'conversation';
+}
 const saveChatTabs=()=>{try{localStorage.setItem(chatTabKey,JSON.stringify([...chatTabs.values()].slice(-32).map(({hostId,id})=>({hostId,id}))));}catch{}};
 const preferenceKey = 'proteus-remote-ui:' + root.dataset.account;
 const readPreferences = () => { try { return JSON.parse(localStorage.getItem(preferenceKey)) || {}; } catch { return {}; } };
 const writePreferences = changes => { try { localStorage.setItem(preferenceKey, JSON.stringify({ ...readPreferences(), ...changes })); } catch {} };
 function setView(value) {
     view = sectionNames.includes(value) ? value : 'chats';
+    if(view!=='chats')session()?.previewApprovals?.clear();
     history.replaceState(null, '', location.pathname + '?view=' + view+(attentionOnly&&view==='chats'?'&attention=1':'')+(transcriptionOnly&&view==='schedules'?'&transcription=1':''));
     document.dispatchEvent(new CustomEvent('proteus:section', { detail: { key: attentionOnly&&view==='chats'?'attention':transcriptionOnly&&view==='schedules'?'transcription':view==='connections'?'engine-room':view } }));
 }
@@ -37,6 +52,42 @@ const text = value => typeof value === 'string' ? value : JSON.stringify(value, 
 const options = (list, selected, label = value => value.name || value.id) => list.map(item => `<option value="${escape(item.id)}" ${item.id === selected ? 'selected' : ''}>${escape(label(item))}</option>`).join('');
 const field = (name, label, value = '', type = 'text') => `<label>${escape(label)}${type === 'textarea' ? `<textarea name="${escape(name)}" rows="4">${escape(value)}</textarea>` : `<input name="${escape(name)}" type="${type}" value="${escape(value)}">`}</label>`;
 const notice = message => { $('remote-notice').textContent = message; $('remote-notice').hidden = !message; };
+const attachmentTypes=new Set(['image/png','image/jpeg','image/gif','image/webp','application/pdf','text/plain']);
+const providerName=id=>({copilot:'Copilot',codex:'Codex',claude:'Claude',rehearsal:'Local rehearsal'}[id]||String(id||'provider'));
+const attachmentType=file=>attachmentTypes.has(file.type)?file.type:/\.txt$/i.test(file.name)?'text/plain':file.type;
+function attachmentItems(current,key){current.attachmentDrafts ||= new Map();return current.attachmentDrafts.get(key)||[];}
+function clearAttachmentItems(current,key){for(const item of attachmentItems(current,key))if(item.previewURL)URL.revokeObjectURL(item.previewURL);current.attachmentDrafts?.delete(key);}
+function confirmAttachmentSend({items,providerId,hostName,chatName}){
+    return new Promise(resolve=>{const dialog=document.createElement('dialog');dialog.className='remote-attachment-confirm';dialog.innerHTML=`<h2>Confirm Send</h2><p>Send these files to <strong>${escape(providerName(providerId))}</strong> in <strong>${escape(chatName)}</strong> on <strong>${escape(hostName)}</strong>?</p><ul>${items.map(item=>`<li>${escape(item.file.name)} · ${escape(item.mediaType)} · ${escape(Math.ceil(item.file.size/1024))} KB</li>`).join('')}</ul><p>Proteus sends these exact files to the named provider only after you confirm.</p><div><button type="button" data-attachment-cancel>Cancel</button><button type="button" class="primary" data-attachment-confirm>Confirm Send</button></div>`;
+        let approved=false;const focus=document.activeElement;dialog.querySelector('[data-attachment-cancel]').onclick=()=>dialog.close();dialog.querySelector('[data-attachment-confirm]').onclick=()=>{approved=true;dialog.close();};dialog.addEventListener('click',event=>{if(event.target===dialog)dialog.close();});dialog.addEventListener('close',()=>{dialog.remove();focus?.focus?.();resolve(approved);},{once:true});document.body.append(dialog);dialog.showModal();dialog.querySelector('[data-attachment-confirm]').focus();});
+}
+function assertAttachmentDestination(current,run){if(session()!==current||current.client?.status!=='online'||(run&&current.run?.id!==run.id))throw new Error('The destination changed. Review the files and chat again before sending.');}
+async function uploadAttachment(item,{current,run,draftId,messageId,providerId}){
+    assertAttachmentDestination(current,run);
+    const scope=run?.id||draftId;
+    if(item.uploaded?.scope===scope&&item.uploaded.messageId===messageId&&item.uploaded.providerId===providerId&&Date.now()-item.uploaded.at<10*60_000)return item.uploaded.metadata;
+    const bytes=new Uint8Array(await item.file.arrayBuffer()),digest=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(byte=>byte.toString(16).padStart(2,'0')).join('');
+    const begin=await command('chat.attachments.begin',{...(run?{id:run.id}:{draftId}),providerId,messageId,name:item.file.name,mediaType:item.mediaType,size:bytes.byteLength,sha256:digest});
+    const chunkSize=Math.min(256*1024,Number(begin.chunkSize)||256*1024);
+    for(let index=0,offset=0;offset<bytes.length;index++,offset+=chunkSize){assertAttachmentDestination(current,run);const chunk=bytes.subarray(offset,offset+chunkSize);let binary='';for(let inner=0;inner<chunk.length;inner+=32768)binary+=String.fromCharCode(...chunk.subarray(inner,inner+32768));await command('chat.attachments.chunk',{uploadId:begin.uploadId,index,dataBase64:btoa(binary)});}
+    assertAttachmentDestination(current,run);
+    const metadata=await command('chat.attachments.finish',{uploadId:begin.uploadId});
+    if(metadata.sha256!==digest||metadata.mediaType!==item.mediaType||metadata.size!==bytes.byteLength)throw new Error('The Mac returned different attachment metadata. Nothing was sent.');
+    item.uploaded={scope,messageId,providerId,metadata,at:Date.now()};return metadata;
+}
+async function prepareAttachmentSend(current,run,key,retained,input,base){
+    const items=attachmentItems(current,key);if(!items.length)return {method:run?(['running','awaiting_input'].includes(run.status)?'chat.send':'chat.resume'):'chat.start',args:base};
+    if(!current.state?.capabilities?.includes('chat.attachments.v1'))throw new Error('Update Proteus on this Mac to send attachments.');
+    const providerId=run?.schedule?.provider||input.provider,allowed=current.state.attachmentMediaTypes?.[providerId]||[];
+    if(items.some(item=>!allowed.includes(item.mediaType)))throw new Error(`${providerName(providerId)} cannot receive one of these file types. Remove it or choose a supported provider.`);
+    if(run&&input.mode==='steer')throw new Error('Files require a queued turn. Choose Queue before sending.');
+    if(!await confirmAttachmentSend({items,providerId,hostName:current.host.label,chatName:run?.title||input.name||'New chat'})){const error=new Error('Send cancelled.');error.cancelled=true;throw error;}
+    retained.draftId ||= crypto.randomUUID();const messageId=retained.id,metadata=[];
+    for(const item of items)metadata.push(await uploadAttachment(item,{current,run,draftId:retained.draftId,messageId,providerId}));
+    assertAttachmentDestination(current,run);
+    const authorization=await command('chat.attachments.authorize',{...(run?{id:run.id}:{draftId:retained.draftId}),providerId,messageId,attachments:metadata});
+    return {method:run?'chat.send':'chat.start',args:{...base,...(run?{}:{draftId:retained.draftId}),providerId,messageId,mode:'queue',attachments:metadata.map(item=>item.attachmentId),consentId:authorization.consentId}};
+}
 const session = () => sessions.get(active);
 function connectionLabel(hostId) {
     const current=sessions.get(hostId);
@@ -64,7 +115,7 @@ async function command(method, args, commandOptions) {
 }
 async function refresh() {
     const target = active, current = session(); const result = await command('sync', { cursor: current.host.cursor || '' });
-    if (target !== active) return; current.state = result.state;rememberHostName(current,result.state);current.cachedRuns=result.state.runs||[];current.lastSyncAt=new Date().toISOString();void saveChatIndex(root.dataset.account,current.host,current.cachedRuns).catch(()=>{}); current.host.cursor = result.cursor; if(current.host.source==='legacy')await legacyStore.save(current.host); render();
+    if (target !== active) return; current.state = result.state;rememberHostName(current,result.state);current.cachedRuns=result.state.runs||[];current.archivedRuns=null;current.lastSyncAt=new Date().toISOString();void saveChatIndex(root.dataset.account,current.host,current.cachedRuns).catch(()=>{}); current.host.cursor = result.cursor; if(current.host.source==='legacy')await legacyStore.save(current.host); if(chatIndexShowsArchived())await loadArchivedChats(true);else render();
 }
 function preserveDrafts() {
     const current = session();if(current?.selected){current.scroll ||= new Map();const pane=root.querySelector('.remote-messages');if(pane)current.scroll.set(current.selected,pane.scrollTop);} if (!current) return;
@@ -76,10 +127,11 @@ function bindDraft(formId, key, method, args, after) {
     form.addEventListener('input', () => { const draft = session().drafts.get(key); draft.values = { ...draft.values, ...Object.fromEntries(new FormData(form)) }; delete draft.sentAt; draft.id = crypto.randomUUID(); draft.issuedAt = new Date().toISOString(); });
     form.addEventListener('submit', async event => {
         event.preventDefault(); const current = session(), draft = current.drafts.get(key); const button = form.querySelector('button[type="submit"]'); button.disabled = true; notice('');
-        try { const result = await command(method, args(Object.fromEntries(new FormData(form)), draft), { id: draft.id, issuedAt: draft.sentAt ||= new Date().toISOString() }); current.drafts.delete(key);await saveChatDrafts(root.dataset.account,current.host,current.drafts); form.removeAttribute('data-draft'); await after?.(result); await refresh(); }
-        catch (error) { notice(error.message); } finally { if (button.isConnected) button.disabled = false; }
+        try { const prepared=await args(Object.fromEntries(new FormData(form)),draft);assertAttachmentDestinationForSubmit(current,formId);const result = await command(prepared?.method||method, prepared?.args||prepared, { id: draft.id, issuedAt: draft.sentAt ||= new Date().toISOString() }); if(formId==='remote-composer')clearAttachmentItems(current,key);current.drafts.delete(key);await saveChatDrafts(root.dataset.account,current.host,current.drafts); form.removeAttribute('data-draft'); await after?.(result); await refresh(); }
+        catch (error) { if(!error.cancelled)notice(error.message); } finally { if (button.isConnected) button.disabled = false; }
     });
 }
+function assertAttachmentDestinationForSubmit(current,formId){if(formId==='remote-composer'&&session()!==current)throw new Error('The destination changed. Review the message and files before sending.');}
 function stopReconnect() { clearTimeout(reconnectTimer); reconnectTimer=null; }
 async function verifyWebsite() {
     if(ended||suspended)throw new Error('Sign in and reload this page before reconnecting.');
@@ -120,7 +172,7 @@ async function connect(hostId,{automatic=false}={}) {
         client.addEventListener('failure', event => { if (relevant()) notice(event.detail); });
         // Routing packets are not authenticated revocation proofs. Keep account credentials intact.
         client.addEventListener('rejected', () => { if(!relevant())return;suppressed.add(hostId);stopReconnect();preserveDrafts();current.state=null;current.run=null;notice('This Mac rejected the connection. Retry or create a fresh pairing; the saved account destination was retained.'); });
-        client.addEventListener('change', event => { if(ended||suspended||current.client!==client)return; const change = event.detail; current.host.cursor = change.cursor; if (change.event === 'state'){current.state = change.data;rememberHostName(current,change.data);current.cachedRuns=change.data.runs||[];current.lastSyncAt=new Date().toISOString();void saveChatIndex(root.dataset.account,current.host,current.cachedRuns).catch(()=>{});} if (change.event === 'run' && change.runId === current.selected) current.run = change.data; if(active===hostId){preserveDrafts();render();} });
+        client.addEventListener('change', event => { if(ended||suspended||current.client!==client)return; const change = event.detail; current.host.cursor = change.cursor; if(change.event==='chat.lifecycle'){applyChatLifecycle(current,hostId,change.data);if(chatIndexShowsArchived())void loadArchivedChats(true).catch(error=>notice(error.message));} if (change.event === 'state'){current.state = change.data;rememberHostName(current,change.data);current.cachedRuns=change.data.runs||[];current.archivedRuns=null;current.lastSyncAt=new Date().toISOString();void saveChatIndex(root.dataset.account,current.host,current.cachedRuns).catch(()=>{});if(chatIndexShowsArchived())void loadArchivedChats(true).catch(error=>notice(error.message));} if (change.event === 'run' && change.runId === current.selected) current.run = change.data; if(active===hostId){preserveDrafts();render();} });
         await client.connect(); if (!relevant()) { client.close(); return; } await refresh();reconnectAttempt=0;void refreshUsage();
     } catch (error) { if(generation!==switching)return;if(error.sessionInvalid){await endAccount();return;}current.connecting=false;notice(error.message);render();if(![409,404].includes(error.status))reconnect(hostId); }
 }
@@ -138,13 +190,13 @@ async function refreshUsage(force = false) {
     } catch { if (active === target) current.usageError = 'Usage is unavailable. Check or update Proteus on this Mac.'; }
     finally { current.usageLoading = false; if (active === target) renderUsage(); }
 }
-function modelFields(values, prefix = '') {
+function modelFields(values, prefix = '', includeProvider = true) {
     const current = session(); const statuses = current.state?.providerStatuses || {};
     const providers = [...new Set([...Object.keys(statuses), current.state?.defaults?.provider || 'copilot', values.provider || 'copilot'])].filter(p => p !== 'local-process');
     const models = statuses[values.provider]?.models || (current.state?.providerStatus?.provider === values.provider ? current.state.providerStatus.models || [] : []);
     const selected = models.find(model => model.id === values.model); const controls = selected?.controls || {};
     const select = (name, label, choices, value) => `<label>${label}<select name="${prefix}${name}"><option value="">Default</option>${options(choices.map(item => typeof item === 'string' ? { id: item, name: item } : item), value)}</select></label>`;
-    return `<label>Provider<select name="${prefix}provider">${options(providers.map(id => ({ id, name: id })), values.provider)}</select></label><label>Model<select name="${prefix}model"><option value="">Provider default</option>${options(models, values.model)}${values.model && !models.some(m => m.id === values.model) ? `<option selected value="${escape(values.model)}">${escape(values.model)} (refresh catalog)</option>` : ''}</select></label>${select('reasoningEffort', 'Reasoning', controls.reasoningEfforts || [], values.reasoningEffort)}${select('contextTier', 'Context', controls.contextTiers || [], values.contextTier)}${select('serviceTier', 'Speed', controls.serviceTiers || [], values.serviceTier)}`;
+    return `${includeProvider?`<label>Provider<select name="${prefix}provider">${options(providers.map(id => ({ id, name: id })), values.provider)}</select></label>`:''}<label>Model<select name="${prefix}model"><option value="">Provider default</option>${options(models, values.model)}${values.model && !models.some(m => m.id === values.model) ? `<option selected value="${escape(values.model)}">${escape(values.model)} (refresh catalog)</option>` : ''}</select></label>${select('reasoningEffort', 'Reasoning', controls.reasoningEfforts || [], values.reasoningEffort)}${select('contextTier', 'Context', controls.contextTiers || [], values.contextTier)}${select('serviceTier', 'Speed', controls.serviceTiers || [], values.serviceTier)}`;
 }
 function contextFields(values) {
     const context = session().state.context || {}; const workspaces = context.workspaces || [];
@@ -164,8 +216,9 @@ function render() {
     $('remote-pair-panel').hidden=!management;root.querySelector('.remote-privacy').hidden=!management;
     if(management){$('remote-content').innerHTML='<p>Mac connection keys remain separate. <a href="/engine-room?tab=connections">Choose the Default Mac in Engine Room</a>.</p>';return;}
     root.querySelectorAll('[data-remote-view]').forEach(button => button.classList.toggle('active', button.dataset.remoteView === view));
-    if(view==='chats'&&chatMode==='index'){renderChatIndex($('remote-content'),{rows:aggregateChats(),hosts:[...hosts.values()],escape,time:value=>dateTime(value,appPreferences.timezone),timezone:appPreferences.timezone,attention:attentionOnly,open:(id,hostId)=>void openChat(id,hostId).catch(error=>notice(error.message)),refresh:()=>void refreshAggregate(true).then(render).catch(error=>notice(error.message)),hasMore:[...sessions.values()].some(value=>value.client?.status==='online'&&(value.state?.runs?.length||0)<(value.state?.runCount||0)),loadMore:loadMoreChats});if(focused?.id?.startsWith('chat-index-')){const replacement=$(focused.id);replacement?.focus({preventScroll:true});if(typeof focused.selectionStart==='number')replacement?.setSelectionRange?.(focused.selectionStart,focused.selectionEnd);}return;}
-    if (!current?.state || !online) { $('remote-content').innerHTML = `<section class="card"><h2>${active ? 'Connect ' + escape(hosts.get(active)?.label) : 'Choose a paired Mac'}</h2><p>${active ? 'Remote content is hidden while disconnected. The selected Mac reconnects automatically unless you disconnect it. Use Connect to retry now.' : 'Use a fresh pairing code from each Mac. Each authorized Mac keeps separate keys, drafts and event cursors.'}</p>${view==='chats'?`<h3>Last authorized chat index</h3>${aggregateChats().map(run=>`<p>${escape(run.title||'Chat')} · ${escape(run.hostLabel)} · ${run.cached?'cached '+escape(dateTime(run.lastSyncAt,appPreferences.timezone)):'online'}</p>`).join('')||'<p>No cached chat index.</p>'}`:''}</section>`; return; }
+    if(view==='chats'&&chatMode==='index'){renderChatIndex($('remote-content'),{rows:aggregateChats(),hosts:[...hosts.values()],escape,time:value=>dateTime(value,appPreferences.timezone),timezone:appPreferences.timezone,attention:attentionOnly,open:(id,hostId)=>void openChat(id,hostId).catch(error=>notice(error.message)),refresh:()=>void refreshAggregate(true).then(()=>chatIndexShowsArchived()?loadArchivedChats(true):null).then(render).catch(error=>notice(error.message)),hasMore:[...sessions.values()].some(value=>value.client?.status==='online'&&(chatIndexShowsArchived()&&value.state?.capabilities?.includes('chat.lifecycle.v1')?(value.archivedRuns?.length||0)<(value.state?.runCountIncludingArchived||0):(value.state?.runs?.length||0)<(value.state?.runCount||0))),loadMore:loadMoreChats,archive:(row,archived)=>lifecycleChat(row,'chat.archive',{archived}),remove:row=>lifecycleChat(row,'chat.delete'),onShowArchived:shown=>shown?loadArchivedChats(true):render(),onError:error=>notice(error.message)});if(focused?.id?.startsWith('chat-index-')){const replacement=$(focused.id);replacement?.focus({preventScroll:true});if(typeof focused.selectionStart==='number')replacement?.setSelectionRange?.(focused.selectionStart,focused.selectionEnd);}return;}
+    if (!current?.state || !online) {current?.previewApprovals?.clear(); const loaded=!ended&&!suspended&&view==='chats'&&current?.documents?.get(current.selected+':'+current.activeChatPanel);if(loaded?.content){$('remote-content').innerHTML=`<section class="card remote-chat-document"><h2>${escape(loaded.title||'Document')}</h2><p>Offline copy from ${escape(current.host.label)} · Last read ${escape(dateTime(loaded.readAt,appPreferences.timezone))}. Reconnect for a fresh authorized read.</p><div id="remote-offline-document"></div></section>`;mountMarkdown($('remote-offline-document'),loaded.content,{copy:value=>navigator.clipboard.writeText(value)});return;}
+        $('remote-content').innerHTML = `<section class="card"><h2>${active ? 'Connect ' + escape(hosts.get(active)?.label) : 'Choose a paired Mac'}</h2><p>${active ? 'Remote content is hidden while disconnected. The selected Mac reconnects automatically unless you disconnect it. Use Connect to retry now.' : 'Use a fresh pairing code from each Mac. Each authorized Mac keeps separate keys, drafts and event cursors.'}</p>${view==='chats'?`<h3>Last authorized chat index</h3>${aggregateChats().map(run=>`<p>${escape(run.title||'Chat')} · ${escape(run.hostLabel)} · ${run.cached?'cached '+escape(dateTime(run.lastSyncAt,appPreferences.timezone)):'online'}</p>`).join('')||'<p>No cached chat index.</p>'}`:''}</section>`; return; }
     if (view === 'chats') renderChats(current); else if (view === 'schedules') renderSchedules(current); else renderWorkspaces(current);
     if (actionFocus) {
         const toolbar = [...root.querySelectorAll('[data-message-key]')].find(element => element.dataset.messageKey === actionFocus.key);
@@ -176,19 +229,202 @@ function render() {
 }
 function bindCatalog(formId, key) {
     const form = $(formId);
+    if(!form)return;
     for (const select of form.querySelectorAll('select[name="provider"],select[name="model"]')) select.addEventListener('change', async () => { preserveDrafts(); const draft = session().drafts.get(key); if (select.name === 'provider') { draft.values.model = ''; draft.values.reasoningEffort = ''; draft.values.contextTier = ''; draft.values.serviceTier = ''; try { const status = await command('provider.status', { provider: select.value }); session().state.providerStatuses ||= {}; session().state.providerStatuses[select.value] = status; } catch (error) { notice(error.message); } } render(); });
 }
-async function openChat(id,hostId=active) { chatMode='chat'; if(hostId!==active||session()?.run?.id!==id||view!=='chats')stopMessageSpeech();preserveDrafts();if(hostId!==active||session()?.client?.status!=='online')await connect(hostId);const current=session();if(current?.client?.status!=='online')throw new Error('This chat’s Mac is not connected. Use Connect to retry.');current.selected=id;setView('chats');current.run=await command('chat.get',{id});chatTabs.set(hostId+':'+id,{hostId,id,title:current.run.title||current.run.schedule?.name||'Chat'});saveChatTabs();render(); }
+async function openChat(id,hostId=active) { chatMode='chat'; if(hostId!==active||session()?.run?.id!==id||view!=='chats')stopMessageSpeech();preserveDrafts();if(hostId!==active||session()?.client?.status!=='online')await connect(hostId);const current=session();if(current?.client?.status!=='online')throw new Error('This chat’s Mac is not connected. Use Connect to retry.');if(current.selected!==id){current.previewApprovals?.clear();current.activeChatPanel='conversation';}current.selected=id;setView('chats');current.run=await command('chat.get',{id});restoreChildTabs(current,id);chatTabs.set(hostId+':'+id,{hostId,id,title:current.run.title||current.run.schedule?.name||'Chat'});saveChatTabs();render();
+    // A failed chat is only acknowledged after its detail has been delivered and rendered.
+    if(['failed','interrupted'].includes(current.run.status)&&current.run.attentionRequired===true){
+        try{const reviewed=await command('chat.review',{id,expectedFailureEventAt:current.run.failureEventAt});if(session()!==current)return;current.run={...current.run,...reviewed};const row=current.state?.runs?.find(item=>item.id===id);if(row)Object.assign(row,reviewed);render();}catch(error){notice('Could not mark this failure reviewed: '+error.message);}
+    }
+}
+async function openSchedule(id,hostId=active){
+    preserveDrafts();if(hostId!==active||session()?.client?.status!=='online')await connect(hostId);
+    const current=session();if(current?.client?.status!=='online')throw new Error('This schedule’s Mac is not connected. Use Connect to retry.');
+    const schedule=current.state?.schedules?.find(item=>item.id===id);if(!schedule)throw new Error('This schedule is no longer available on the selected Mac.');
+    attentionOnly=false;transcriptionOnly=false;current.scheduleId=id;setView('schedules');
+    history.replaceState(null,'',location.pathname+'?view=schedules&host='+encodeURIComponent(hostId)+'&schedule='+encodeURIComponent(id));
+    render();document.dispatchEvent(new CustomEvent('proteus:schedule-open',{detail:{hostId,id,title:schedule.name||'Schedule'}}));
+}
+function renderToolEvent(event){
+    const tool=event.data?.tool||{name:'Tool output',summary:'Tool output',status:'completed',presentation:{output:{text:event.text||''}}};
+    const presentation=tool.presentation||{},output=presentation.output,failed=tool.status==='failed'||tool.status==='error'||Boolean(presentation.error);
+    const facts=presentation.facts?.length?`<dl class="remote-tool-facts">${presentation.facts.map(fact=>`<dt>${escape(fact.label)}</dt><dd>${escape(fact.value)}</dd>`).join('')}</dl>`:'';
+    const outputView=output?.kind==='facts'?`<dl class="remote-tool-facts">${(output.facts||[]).map(fact=>`<dt>${escape(fact.label)}</dt><dd>${escape(fact.value)}</dd>`).join('')}</dl>`:output?.kind==='table'?`<div class="remote-tool-table"><table><thead><tr>${(output.columns||[]).map(column=>`<th>${escape(column)}</th>`).join('')}</tr></thead><tbody>${(output.rows||[]).map(row=>`<tr>${row.map(cell=>`<td>${escape(cell)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`:output?.text?`<pre>${escape(output.text)}</pre>`:'';
+    const detail=[presentation.command&&`<p><strong>Command</strong></p><pre>${escape(presentation.command)}</pre>`,presentation.targets?.length&&`<p><strong>Targets</strong> ${escape(presentation.targets.join(', '))}</p>`,facts,presentation.progress&&`<p>${escape(presentation.progress)}</p>`,outputView,presentation.error&&`<p class="remote-activity-error">${escape(presentation.error)}</p>`].filter(Boolean).join('');
+    return `<details class="remote-activity-item ${failed?'failed':''}" ${failed?'open':''}><summary>${escape(tool.summary||tool.name||'Tool')} <span>${escape(tool.status||'running')}${tool.durationMs!=null?' · '+escape(Math.round(tool.durationMs/1000))+'s':''}</span></summary>${detail||'<p>Details are available in the provider session.</p>'}</details>`;
+}
+function renderChatEvent(event,index,provider){
+    if((event.role||event.type)==='assistant'&&!String(event.text||'').trim())return '';
+    const role=event.role||event.type,label=role==='assistant'?providerName(provider):role;
+    const files=role==='user'&&Array.isArray(event.data?.attachments)?`<div class="remote-sent-attachments">${event.data.attachments.map(item=>`<span>▤ ${escape(item.name||'File')} · ${escape(item.mediaType||'file')}</span>`).join('')}</div>`:'';
+    const permission=event.data?.permission,review=permission?.automatic?`<p class="remote-permission-detail">Auto-approved${permission.kind?' '+escape(permission.kind):''}${permission.resolvedTarget?' · '+escape(permission.resolvedTarget):''}${permission.matchedRoot?' · Rule: '+escape(permission.matchedRoot):''}</p>`:'';
+    return `<article class="remote-message ${escape(role)}"><div class="eyebrow">${escape(label)}<time>${escape(dateTime(event.at||event.timestamp||event.createdAt,appPreferences.timezone))}</time></div><div data-markdown-event="${index}"></div>${files}${review}</article>`;
+}
+function renderChatTimeline(events,provider){
+    const output=[];for(let index=0;index<events.length;){
+        if(!events[index]?.data?.tool&&(events[index]?.role||events[index]?.type)!=='tool'){output.push(renderChatEvent(events[index],index,provider));index++;continue;}
+        const tools=[];let failed=false;while(index<events.length&&(events[index]?.data?.tool||(events[index]?.role||events[index]?.type)==='tool')){const tool=events[index].data?.tool;failed ||= ['failed','error'].includes(tool?.status)||Boolean(tool?.presentation?.error);tools.push(renderToolEvent(events[index]));index++;}
+        output.push(`<article class="remote-message remote-activity ${failed?'failed':''}"><details ${failed?'open':''}><summary>Activity · ${tools.length} ${tools.length===1?'tool':'tools'}${failed?' · Needs review':''}</summary>${tools.join('')}</details></article>`);
+    }return output.join('');
+}
+function renderAttachmentStrip(current,key,providerId){
+    const allowed=current.state?.attachmentMediaTypes?.[providerId]||[];
+    return attachmentItems(current,key).map((item,index)=>`<div class="remote-attachment-tag ${allowed.includes(item.mediaType)?'':'unsupported'}">${item.previewURL?`<button type="button" data-attachment-preview="${index}" aria-label="Preview ${escape(item.file.name)}"><img src="${escape(item.previewURL)}" alt=""></button>`:'<span aria-hidden="true">▤</span>'}<span title="${escape(item.file.name)}">${escape(item.file.name)}</span>${allowed.includes(item.mediaType)?'':`<small>Unsupported by ${escape(providerName(providerId))}</small>`}<button type="button" data-attachment-remove="${index}" aria-label="Remove ${escape(item.file.name)}">×</button></div>`).join('');
+}
+function bindAttachmentControls(form,current,key,run){
+    const picker=$('remote-attachment-picker'),strip=$('remote-attachment-strip'),button=$('remote-attach');if(!picker||!strip||!button)return;
+    const provider=()=>run?.schedule?.provider||form.elements.namedItem('provider')?.value;
+    const update=()=>{const providerId=provider(),allowed=current.state?.attachmentMediaTypes?.[providerId]||[];strip.innerHTML=renderAttachmentStrip(current,key,providerId);button.disabled=allowed.length===0;button.title=allowed.length?'Add images or files. Sending requires a separate confirmation.':`${providerName(providerId)} does not support attachments in Proteus.`;};
+    const add=files=>{const items=attachmentItems(current,key);for(const file of files){if(items.length>=4){notice('Add up to four files per message.');break;}if(!file.size||file.size>8*1024*1024){notice('Each file must be between 1 byte and 8 MB.');continue;}const mediaType=attachmentType(file);items.push({file,mediaType,previewURL:attachmentTypes.has(mediaType)&&mediaType.startsWith('image/')?URL.createObjectURL(file):null});}current.attachmentDrafts.set(key,items);update();};
+    picker.onchange=event=>{add([...event.target.files]);event.target.value='';};button.onclick=()=>picker.click();
+    form.addEventListener('paste',event=>{if(event.target?.name!=='prompt')return;const images=[...(event.clipboardData?.files||[])].filter(file=>file.type.startsWith('image/'));if(images.length){event.preventDefault();add(images);}});
+    strip.onclick=event=>{const remove=event.target.closest('[data-attachment-remove]'),preview=event.target.closest('[data-attachment-preview]');if(remove){const index=Number(remove.dataset.attachmentRemove),items=attachmentItems(current,key),[item]=items.splice(index,1);if(item?.previewURL)URL.revokeObjectURL(item.previewURL);update();return;}if(preview){const item=attachmentItems(current,key)[Number(preview.dataset.attachmentPreview)];if(!item?.previewURL)return;const dialog=document.createElement('dialog');dialog.className='remote-attachment-preview';dialog.innerHTML=`<button type="button" aria-label="Close preview">×</button><img src="${escape(item.previewURL)}" alt="${escape(item.file.name)}"><p>${escape(item.file.name)}</p>`;dialog.querySelector('button').onclick=()=>dialog.close();dialog.onclick=e=>{if(e.target===dialog)dialog.close();};dialog.addEventListener('close',()=>{dialog.remove();preview.focus();},{once:true});document.body.append(dialog);dialog.showModal();dialog.querySelector('button').focus();}};
+    form.addEventListener('change',event=>{if(event.target.name==='provider')update();});update();
+}
+function renderChatDetails(run){
+    if(!run)return '';
+    const usage=run.usage||{},options=run.nextModelOptions||run.schedule||{};
+    const line=(name,value)=>value==null||value===''?'':`<div><dt>${escape(name)}</dt><dd>${escape(value)}</dd></div>`;
+    return `<details class="card remote-chat-details" ${window.matchMedia('(min-width: 1100px)').matches?'open':''}><summary>Chat details</summary><dl>${line('Provider',providerName(run.schedule?.provider))}${line('Model',options.model)}${line('Reasoning',options.reasoningEffort)}${line('Speed',options.serviceTier)}${line('Context',options.contextTier)}${line('Input tokens',usage.observed?usage.inputTokens:null)}${line('Output tokens',usage.observed?usage.outputTokens:null)}${line('Workspace',run.context?.workspaceId)}${line('Session',run.providerSessionId)}${line('Updated',dateTime(run.updatedAt,appPreferences.timezone))}</dl>${run.contextUsage?`<details><summary>Context usage</summary><pre>${escape(text(run.contextUsage).slice(0,4000))}</pre></details>`:''}${run.modelHistory?.length?`<details><summary>Model history</summary><pre>${escape(text(run.modelHistory).slice(0,4000))}</pre></details>`:''}</details>`;
+}
+function documentTabs(current,run){
+    const selected=current.activeChatPanel||'conversation';
+    const children=(current.childOrder?.get(run.id)||[]).map(item=>item.type==='browser'?`<button type="button" data-chat-panel="browser" class="${selected==='browser'?'selected':''}">Browser <span data-close-browser role="button" tabindex="0" aria-label="Close browser tab">×</span></button>`:`<button type="button" data-chat-document="${escape(item.documentId)}" class="${selected===item.documentId?'selected':''}">${escape(item.title||'Document')} <span data-close-document="${escape(item.documentId)}" role="button" tabindex="0" aria-label="Close ${escape(item.title||'Document')}">×</span></button>`).join('');
+    return `<nav class="remote-inner-tabs" aria-label="Chat content"><button type="button" data-chat-panel="conversation" class="${selected==='conversation'?'selected':''}">${escape(run.title||'Chat')}</button>${children}<details class="shell-add-menu remote-inner-add"><summary aria-label="Add chat tab">+</summary><div class="shell-add-options"><button type="button" data-chat-create="browser"><span class="tab-create-icon browser" aria-hidden="true"></span><span>Browser</span></button><button type="button" data-chat-create="markdown"><span class="tab-create-icon markdown" aria-hidden="true"></span><span>Markdown file</span></button><button type="button" disabled title="Terminals run in the Mac app"><span class="tab-create-icon terminal" aria-hidden="true"></span><span>Terminal · Mac app</span></button></div></details></nav>`;
+}
+function stopDocumentPreview(current,run){const item=current.documents?.get(run.id+':'+current.activeChatPanel);if(item)current.previewApprovals?.delete(run.id+':'+item.documentId+':'+item.version);}
+function releaseDocumentAssets(item){for(const url of item?.assetURLs?.values()||[])URL.revokeObjectURL(url);item?.assetURLs?.clear();item?.assetRequests?.clear();}
+async function documentAsset(current,run,item,source,{inline=false}={}){
+    const asset=item.assets?.find(value=>value.source===source);
+    if(!asset||!item.approvedRequestId||!/^image\/(?:png|jpeg|gif|webp)$/.test(asset.mediaType||''))throw new Error('This image is not in the approved document.');
+    const key=run.id+':'+item.documentId;if(current.documents?.get(key)!==item)throw new Error('The document tab changed.');
+    item.assetRequests ||= new Map();let pending=item.assetRequests.get(asset.assetId);
+    if(!pending){pending=(async()=>{
+        const value=await command('chat.documents.asset',{requestId:item.approvedRequestId,assetId:asset.assetId});
+        if(current.documents?.get(key)!==item||value.requestId!==item.approvedRequestId||value.assetId!==asset.assetId||value.documentId!==item.documentId||value.version!==item.version||value.source!==asset.source||value.mediaType!==asset.mediaType||value.size!==asset.size||value.sha256!==asset.version||value.size>512*1024)throw new Error('The approved image changed. Request the document again.');
+        const binary=atob(value.dataBase64||''),bytes=Uint8Array.from(binary,char=>char.charCodeAt(0));if(bytes.length!==asset.size)throw new Error('Image size mismatch.');
+        const digest=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(byte=>byte.toString(16).padStart(2,'0')).join('');if(digest!==asset.version)throw new Error('Image digest mismatch.');
+        return {bytes,dataURL:`data:${asset.mediaType};base64,${value.dataBase64}`};
+    })();item.assetRequests.set(asset.assetId,pending);pending.catch(()=>item.assetRequests?.delete(asset.assetId));}
+    const verified=await pending;if(inline)return verified.dataURL;
+    item.assetURLs ||= new Map();let url=item.assetURLs.get(asset.assetId);if(!url){url=URL.createObjectURL(new Blob([verified.bytes],{type:asset.mediaType}));item.assetURLs.set(asset.assetId,url);}return url;
+}
+async function materializeDocumentHTML(current,run,item,html){
+    const parsed=new DOMParser().parseFromString(html,'text/html');
+    for(const element of parsed.querySelectorAll('[srcset]'))element.removeAttribute('srcset');
+    for(const image of parsed.querySelectorAll('img[src]')){const source=image.getAttribute('src');image.removeAttribute('src');if(item.assets?.some(asset=>asset.source===source))image.setAttribute('src',await documentAsset(current,run,item,source,{inline:true}));}
+    return '<!doctype html>'+parsed.documentElement.outerHTML;
+}
+async function openChatDocument(current,run,sourceOrId,depth=0){
+    if(depth>8)throw new Error('Document links are nested too deeply. Open the original chat link again.');
+    if(!current.state?.capabilities?.includes('chat.documents.v1'))throw new Error('Update Proteus on this Mac to view chat documents here.');
+    const source=typeof sourceOrId==='string'?sourceOrId:null;
+    const relative=sourceOrId&&typeof sourceOrId==='object'&&sourceOrId.relativePath?sourceOrId:null;
+    let parentDocumentId=relative?.parentDocumentId||null,parentRequestId=relative?.fromRequestId||null;
+    if(relative&&!parentRequestId){
+        const parent=current.documents?.get(run.id+':'+parentDocumentId);
+        if(!parent)throw new Error('Open the parent document link from the chat before reopening this linked document.');
+        if(!parent.approvedRequestId){await openChatDocument(current,run,{documentId:parentDocumentId,...(parent.parentDocumentId&&parent.relativePath?{parentDocumentId:parent.parentDocumentId,relativePath:parent.relativePath}:{})},depth+1);}
+        parentRequestId=current.documents?.get(run.id+':'+parentDocumentId)?.approvedRequestId;
+        if(!parentRequestId)throw new Error('Approve the parent document on the Mac, then open this link again.');
+    }
+    if(source){
+        const existing=[...(current.documents?.values()||[])].find(item=>item.chatId===run.id&&item.source==='remote'&&item.linkSource===source&&item.content!=null);
+        if(existing){current.activeChatPanel=existing.documentId;saveChildTabs(current,run.id);render();return;}
+    }
+    const request=await command('chat.documents.request',{id:run.id,...(source?{source}:relative?{fromRequestId:parentRequestId,relativePath:relative.relativePath}:{documentId:sourceOrId.documentId})});
+    if(session()!==current||current.run?.id!==run.id)return;
+    const documentId=request.documentId,requestId=request.requestId;
+    if(!/^[a-f0-9]{64}$/.test(documentId||'')||!requestId)throw new Error('The Mac returned an invalid document request.');
+    current.documents ||= new Map();const key=run.id+':'+documentId,previous=current.documents.get(key);
+    if(previous?.version!==request.version)releaseDocumentAssets(previous);
+    current.documents.set(key,{...previous,chatId:run.id,documentId,title:request.title,version:request.version,mediaType:request.mediaType,source:'remote',linkSource:source||previous?.linkSource,parentDocumentId:parentDocumentId||previous?.parentDocumentId,relativePath:relative?.relativePath||previous?.relativePath,assets:request.assets,links:request.links,content:previous?.version===request.version?previous.content:null,approvalStatus:request.status,requestId,approvedRequestId:null,readAt:previous?.version===request.version?previous.readAt:null});
+    current.childOrder ||= new Map();const tabs=current.childOrder.get(run.id)||[];const descriptor=tabs.find(item=>item.type==='document'&&item.documentId===documentId);
+    if(descriptor)Object.assign(descriptor,{title:request.title,version:request.version,mediaType:request.mediaType,source:'remote',parentDocumentId,relativePath:relative?.relativePath});
+    else tabs.push({type:'document',documentId,title:request.title,version:request.version,mediaType:request.mediaType,source:'remote',parentDocumentId,relativePath:relative?.relativePath});
+    current.childOrder.set(run.id,tabs);current.activeChatPanel=documentId;saveChildTabs(current,run.id);preserveDrafts();render();
+    notice('Approve this exact document version on '+current.host.label+' to open it.');
+    try{
+        let status=request.status;
+        while(status==='pending'&&Date.now()<Date.parse(request.expiresAt)){
+            await new Promise(resolve=>setTimeout(resolve,4000));
+            if(session()!==current||current.run?.id!==run.id||current.client?.status!=='online'||current.documents?.get(key)?.requestId!==requestId)return;
+            status=(await command('chat.documents.status',{requestId})).status;
+        }
+        if(status!=='approved')throw new Error(status==='pending'?'The document approval expired. Open the link again to retry.':'The document request was not approved.');
+        const result=await command('chat.documents.read',{requestId});
+        if(session()!==current||current.run?.id!==run.id||current.documents?.get(key)?.requestId!==requestId)return;
+        if(result.documentId!==documentId||result.version!==request.version)throw new Error('The document changed; request the latest version again.');
+        current.documents.set(key,{...current.documents.get(key),...result,source:'remote',chatId:run.id,approvalStatus:'approved',requestId:null,approvedRequestId:requestId});if(current.activeChatPanel===documentId)render();notice('');
+    }catch(error){notice(error.message);}
+}
+function renderChatPanel(current,run,conversation){
+    const selected=current.activeChatPanel||'conversation';
+    if(selected==='conversation')return conversation;
+    if(selected==='browser')return `<section class="card remote-chat-main"><h2>Browser</h2><p>Website pages open in browser-managed tabs. Use your browser’s Back, Forward, and Reload controls there.</p><form id="remote-chat-browser"><label>URL or search<input name="query" required placeholder="Search or enter a URL"></label><button class="primary">Open browser tab ↗</button></form></section>`;
+    const item=current.documents?.get(run.id+':'+selected);if(!item)return conversation;
+    const standaloneHTML=item.mediaType==='text/html'||/\.html?$/i.test(item.title||'');
+    const html=standaloneHTML?item.content:item.content?.match(/^\s*```html\s*\n([\s\S]*?)\n```/im)?.[1];
+    const preview=html?`<${standaloneHTML?'div':'details'} class="remote-html-preview">${standaloneHTML?'':'<summary>HTML preview</summary>'}<p>Scripts are off. This preview cannot use Proteus credentials, files, app actions, or network access.</p><div class="remote-preview-controls"><button id="remote-preview-enable" type="button">Enable interactive preview</button><button id="remote-preview-stop" type="button" hidden>Stop scripts</button></div><iframe id="remote-html-frame" title="HTML document preview" sandbox="" referrerpolicy="no-referrer"></iframe></${standaloneHTML?'div':'details'}>`:'';
+    return `<section class="card remote-chat-document"><header><div><h2>${escape(item.title||'Document')}</h2><small>${escape(current.host.label)} · ${item.readAt?'Read '+escape(dateTime(item.readAt,appPreferences.timezone)):item.approvalStatus==='pending'?'Awaiting Mac approval':'Contents unloaded'} · Version ${escape(item.version)}</small></div>${item.source==='remote'?` <button id="remote-document-refresh" type="button">${item.content==null?'Request latest':'Check latest'}</button>`:''}</header>${item.content==null?`<p>${item.approvalStatus==='pending'?'Approve the request in Proteus on the owning Mac.':item.source==='local'?'Choose the file again to reopen this tab.':'Request the current version from the owning Mac; approval is required for each version.'}</p>${item.source==='local'?'<button id="remote-document-reselect" type="button">Choose file</button>':''}`:standaloneHTML?`${preview}<details><summary>View source</summary><pre>${escape(item.content)}</pre></details>`:`<div id="remote-document-markdown"></div>${preview}`}</section>`;
+}
 function renderChats(current) {
     const previousScroll=root.querySelector('.remote-messages')?.scrollTop;
-    const runs = aggregateChats().filter(run=>!attentionOnly||['awaiting_input','failed','interrupted'].includes(run.status)); const run = current.run; const key = run ? 'reply:' + run.id : 'new-chat'; const draft = currentDraft(key, run ? { prompt: '', mode: 'queue' } : { ...current.state.defaults, name: '', prompt: '', workspaceId: current.state.context.defaultWorkspaceId, includeDefaults: 'true' }); const values = draft.values;
+    const run = current.run; const key = run ? 'reply:' + run.id : 'new-chat'; const draft = currentDraft(key, run ? { prompt: '', mode: 'queue', provider:run.provider||run.schedule?.provider||current.state.defaults.provider,model:run.nextModelOptions?.model||run.schedule?.model||'',reasoningEffort:run.nextModelOptions?.reasoningEffort||run.schedule?.reasoningEffort||'',contextTier:run.nextModelOptions?.contextTier||run.schedule?.contextTier||'',serviceTier:run.nextModelOptions?.serviceTier||run.schedule?.serviceTier||'' } : { ...current.state.defaults, name: '', prompt: '', workspaceId: current.state.context.defaultWorkspaceId, includeDefaults: 'true' }); const values = draft.values;
+    const openDocument=run&&current.documents?.get(run.id+':'+current.activeChatPanel),existingDocument=root.querySelector('.remote-chat-document[data-document-id]');
+    if(openDocument?.content&&existingDocument?.dataset.documentId===openDocument.documentId&&existingDocument.dataset.version===String(openDocument.version)&&existingDocument._documentContent===openDocument.content)return;
     const pending = run?.pending; const answerKey=pending?'answer:'+run.id+':'+pending.id:null;const answerDraft=pending&&pending.type!=='permission'?currentDraft(answerKey,{answer:''}):null; const waiting = pending ? `<section class="remote-pending"><h3>${pending.type === 'permission' ? 'Approval needed on ' + escape(current.host.label) : 'Input requested'}</h3><pre>${escape(pending.question || text(pending.details || pending))}</pre>${pending.type === 'permission' ? '<button data-answer="approve" type="button">Approve once</button><button data-answer="deny" type="button">Deny</button>' : `<form id="remote-answer" data-draft="${escape(answerKey)}"><label>Your answer<textarea name="answer" required rows="3">${escape(answerDraft?.values.answer||'')}</textarea></label><button type="submit">Send answer</button></form>`}</section>` : '';
-    const history = run ? `<header class="remote-chat-title"><h2>${escape(run.title || run.schedule?.name || 'Chat')}</h2><span>${escape(current.host.label)} · ${escape(run.status)}</span></header><div class="remote-messages">${run.earlier ? '<button id="remote-earlier" type="button">Load earlier messages</button>' : ''}${(run.events || []).map((event, eventIndex) => `<article class="remote-message ${escape(event.role || event.type)}"><div class="eyebrow">${escape(event.role || event.type)}<time>${escape(dateTime(event.at||event.timestamp||event.createdAt,appPreferences.timezone))}</time></div><div data-markdown-event="${eventIndex}"></div>${event.data?.tool ? `<details><summary>${escape(event.data.tool.summary || event.data.tool.name || 'Tool details')}</summary><pre>${escape(text(event.data.tool))}</pre></details>` : ''}</article>`).join('')}${Object.values(run.liveMessages || {}).map(message => `<article class="remote-message assistant"><div class="eyebrow">Responding</div><pre>${escape(message)}</pre></article>`).join('')}</div>${waiting}${run.queuedMessages?.length ? `<section class="card"><h3>Queued messages</h3>${run.queuedMessages.map(message => `<p>${escape(message.prompt || message.text)} <button data-unqueue="${escape(message.id)}" type="button">Remove</button></p>`).join('')}</section>` : ''}` : '<h2>Start a conversation</h2>';
-    $('remote-content').innerHTML = `<div class="remote-chat-layout"><section class="card remote-chat-main">${history}<form id="remote-composer" data-draft="${escape(key)}">${run ? `<label>Send mode<select name="mode"><option value="queue" ${values.mode === 'queue' ? 'selected' : ''}>Queue next turn</option><option value="steer" ${values.mode === 'steer' ? 'selected' : ''}>Steer current turn</option></select></label>` : `<label>Mac<select id="remote-new-destination">${[...hosts.values()].map(host=>`<option value="${escape(host.hostId)}" ${host.hostId===active?'selected':''}>${escape(host.label)}</option>`).join('')}</select></label><div class="remote-fields">${field('name', 'Chat title', values.name)}${contextFields(values)}${modelFields(values)}</div>`}${field('prompt', run ? 'Follow-up message' : 'Message', values.prompt, 'textarea')}<button type="submit" class="primary">${run ? 'Send to ' : 'Start on '}${escape(current.host.label)}</button>${run && ['running', 'awaiting_input', 'queued'].includes(run.status) ? '<button id="remote-cancel" type="button">Cancel run</button>' : ''}</form></section></div>`;
-    bindDraft('remote-composer', key, run ? (['running', 'awaiting_input'].includes(run.status) ? 'chat.send' : 'chat.resume') : 'chat.start', (input, retained) => { if (!input.prompt?.trim()) throw new Error('Enter a message.'); if (run) return { id: run.id, prompt: input.prompt, mode: input.mode, messageId: retained.id }; return { ...input, selectedIds: retained.selectedIds || [], includeDefaults: input.includeDefaults !== 'false' }; }, async result => { if (result.runId) await openChat(result.runId); });
-    if (!run) {bindCatalog('remote-composer', key);$('remote-new-destination').onchange=async event=>{await connect(event.target.value);if(session()){session().run=null;session().selected=null;}render();};}
-    if(run){const pane=root.querySelector('.remote-messages');if(pane)pane.scrollTop=current.scroll?.get(run.id)??previousScroll??0;}
-    for (const element of root.querySelectorAll('[data-markdown-event]')) { const event = run.events[Number(element.dataset.markdownEvent)]; current.images ||= new Map(); mountMarkdown(element, event?.text || '', { copy: value => navigator.clipboard.writeText(value), link: url => { if (/^https?:\/\//i.test(url)) window.open(url, '_blank', 'noopener,noreferrer'); else notice('Open local file links on the paired Mac.'); }, image: async source => { const key = run.id + ':' + source; if (!current.images.has(key)) current.images.set(key, command('chat.image', { id: run.id, source }).then(r => r.dataURL).catch(error => { current.images.delete(key); throw error; })); return current.images.get(key); } }); }
+    const lifecycleAllowed=current.state.capabilities?.includes('chat.lifecycle.v1')&&current.client?.status==='online',lifecycleBusy=['queued','running','awaiting_input'].includes(run?.status)||Number(run?.queuedMessageCount||run?.queuedMessages?.length||0)>0;
+    const lifecycleControls=run&&lifecycleAllowed?`<div class="remote-chat-lifecycle"><button id="remote-chat-archive" type="button" ${lifecycleBusy?'disabled title="Finish or cancel this chat first"':''}>${run.archivedAt||run.archived?'Unarchive':'Archive'}</button><button id="remote-chat-delete" type="button" ${lifecycleBusy?'disabled title="Finish or cancel this chat first"':''}>Delete…</button></div>`:'';
+    const history = run ? `<header class="remote-chat-title"><h2>${escape(run.title || run.schedule?.name || 'Chat')}</h2><span>${escape(current.host.label)} · ${escape(run.status)}${run.archivedAt||run.archived?' · Archived':''}</span>${lifecycleControls}</header>${renderChatDetails(run)}<div class="remote-messages">${run.earlier ? '<div id="remote-earlier-status" role="status">Scroll up to load earlier messages</div>' : ''}${renderChatTimeline(run.events||[],run.provider||run.schedule?.provider)}${Object.values(run.liveMessages || {}).map(message => `<article class="remote-message assistant"><div class="eyebrow">Responding</div><pre>${escape(message)}</pre></article>`).join('')}</div>${waiting}${run.queuedMessages?.length ? `<section class="card"><h3>Queued messages</h3>${run.queuedMessages.map(message => `<p>${escape(message.prompt || message.text)} <button data-unqueue="${escape(message.id)}" type="button">Remove</button></p>`).join('')}</section>` : ''}` : '<h2>Start a conversation</h2>';
+    const composerSetup=run?'':`<details class="remote-composer-setup"><summary>Chat setup · ${escape(current.host.label)}</summary><div class="remote-fields"><label>Mac<select id="remote-new-destination">${[...hosts.values()].map(host=>`<option value="${escape(host.hostId)}" ${host.hostId===active?'selected' : ''}>${escape(host.label)}</option>`).join('')}</select></label>${field('name', 'Chat title', values.name)}${contextFields(values)}</div></details>`;
+    const modeControl=run?`<label>Mode<select name="mode"><option value="queue" ${values.mode === 'queue' ? 'selected' : ''}>Queue</option><option value="steer" ${values.mode === 'steer' ? 'selected' : ''}>Steer</option></select></label>`:'';
+    const attachmentControls=current.state.capabilities?.includes('chat.attachments.v1')?`<div id="remote-attachment-strip" class="remote-attachment-strip">${renderAttachmentStrip(current,key,run?.schedule?.provider||values.provider)}</div><input id="remote-attachment-picker" type="file" multiple hidden><button id="remote-attach" type="button" class="remote-attach-button">▤ Attach files</button>`:'';
+    const conversation=`<section class="card remote-chat-main">${history}<form id="remote-composer" data-draft="${escape(key)}">${composerSetup}${field('prompt',run?'Follow-up message':'Message',values.prompt,'textarea')}${attachmentControls}<div class="remote-composer-bottom"><div class="remote-composer-controls">${modelFields(values,'',!run)}${modeControl}</div><div class="remote-composer-actions"><span>${run?'Next turn on ':'Start on '}${escape(current.host.label)}</span>${run&&['running','awaiting_input','queued'].includes(run.status)?'<button id="remote-cancel" type="button">Stop</button>':''}<button type="submit" class="primary">${run?'Send':'Start chat'} ↗</button></div></div>${run?'<p class="remote-composer-note">Model choices apply to queued turns. Steer uses the current model.</p>':''}</form></section>`;
+    $('remote-content').innerHTML = `<div class="remote-chat-layout">${run?documentTabs(current,run):''}${run?renderChatPanel(current,run,conversation):conversation}</div>`;
+    $('remote-chat-archive')?.addEventListener('click',()=>{void lifecycleChat({hostId:current.host.hostId,id:run.id,status:run.status,queuedMessageCount:run.queuedMessages?.length||0,updatedAt:run.updatedAt,archivedAt:run.archivedAt,title:run.title},'chat.archive',{archived:!(run.archivedAt||run.archived)}).catch(error=>notice(error.message));});
+    $('remote-chat-delete')?.addEventListener('click',()=>{if(!confirm(`Delete “${run.title||'Chat'}” from ${current.host.label}? This permanently removes the Proteus chat record on that Mac. Generated files and provider originals are not deleted. This cannot be undone.`))return;void lifecycleChat({hostId:current.host.hostId,id:run.id,status:run.status,queuedMessageCount:run.queuedMessages?.length||0,updatedAt:run.updatedAt,archivedAt:run.archivedAt,title:run.title},'chat.delete').catch(error=>notice(error.message));});
+    const documentView=root.querySelector('.remote-chat-document');if(documentView&&openDocument){documentView.dataset.documentId=openDocument.documentId;documentView.dataset.version=String(openDocument.version);documentView._documentContent=openDocument.content;}
+    bindDraft('remote-composer', key, run ? (['running', 'awaiting_input'].includes(run.status) ? 'chat.send' : 'chat.resume') : 'chat.start', async (input, retained) => { if (!input.prompt?.trim()) throw new Error('Enter a message.'); const base=run?{ id: run.id, prompt: input.prompt, mode: input.mode, messageId: retained.id,...(retained.modelOptionsChanged&&input.mode!=='steer'?{modelOptions:{model:input.model||'',reasoningEffort:input.reasoningEffort||'',contextTier:input.contextTier||'',serviceTier:input.serviceTier||''}}:{}) }:{ ...input, selectedIds: retained.selectedIds || [], includeDefaults: input.includeDefaults !== 'false' };return prepareAttachmentSend(current,run,key,retained,input,base); }, async result => { if (result.runId) await openChat(result.runId); });
+    bindAttachmentControls($('remote-composer'),current,key,run);
+    if(run){$('remote-composer')?.addEventListener('change',event=>{if(['model','reasoningEffort','contextTier','serviceTier'].includes(event.target.name))draft.modelOptionsChanged=true;});bindCatalog('remote-composer',key);}
+    else {bindCatalog('remote-composer', key);$('remote-new-destination').onchange=async event=>{await connect(event.target.value);if(session()){session().run=null;session().selected=null;}render();};}
+    if(run){const pane=root.querySelector('.remote-messages');if(pane){pane.scrollTop=current.scroll?.get(run.id)??previousScroll??pane.scrollHeight;pane.addEventListener('scroll',()=>{current.scroll ||= new Map();current.scroll.set(run.id,pane.scrollTop);if(pane.scrollTop<100&&run.earlier)void loadEarlier();},{passive:true});}}
+    root.querySelectorAll('[data-chat-panel]').forEach(button=>button.onclick=event=>{if(event.target.closest('[data-close-browser]')){current.childOrder?.set(run.id,(current.childOrder.get(run.id)||[]).filter(item=>item.type!=='browser'));if(current.activeChatPanel==='browser')current.activeChatPanel='conversation';saveChildTabs(current,run.id);render();return;}preserveDrafts();stopDocumentPreview(current,run);current.activeChatPanel=button.dataset.chatPanel;saveChildTabs(current,run.id);render();});
+    root.querySelectorAll('[data-chat-document]').forEach(button=>button.onclick=event=>{if(event.target.closest('[data-close-document]')){const id=button.dataset.chatDocument;stopDocumentPreview(current,run);releaseDocumentAssets(current.documents?.get(run.id+':'+id));current.documents?.delete(run.id+':'+id);current.childOrder?.set(run.id,(current.childOrder.get(run.id)||[]).filter(item=>item.documentId!==id));if(current.activeChatPanel===id)current.activeChatPanel='conversation';saveChildTabs(current,run.id);render();return;}preserveDrafts();stopDocumentPreview(current,run);current.activeChatPanel=button.dataset.chatDocument;saveChildTabs(current,run.id);render();});
+    root.querySelectorAll('[data-close-document],[data-close-browser]').forEach(button=>button.onkeydown=event=>{if(['Enter',' '].includes(event.key)){event.preventDefault();button.click();}});
+    root.querySelector('.remote-inner-add')?.addEventListener('click',event=>{const action=event.target.closest('[data-chat-create]')?.dataset.chatCreate;if(!action)return;event.currentTarget.open=false;if(action==='browser'){preserveDrafts();stopDocumentPreview(current,run);current.childOrder ||= new Map();const tabs=current.childOrder.get(run.id)||[];if(!tabs.some(item=>item.type==='browser'))tabs.push({type:'browser'});current.childOrder.set(run.id,tabs);current.activeChatPanel='browser';saveChildTabs(current,run.id);render();}if(action==='markdown')document.dispatchEvent(new CustomEvent('proteus:choose-file'));});
+    $('remote-chat-browser')?.addEventListener('submit',event=>{event.preventDefault();const query=new FormData(event.target).get('query').trim();let url;try{url=new URL(/^https?:\/\//i.test(query)?query:/^[\w.-]+\.[a-z]{2,}(?:[/:]|$)/i.test(query)?'https://'+query:'https://www.google.com/search?q='+encodeURIComponent(query));}catch{notice('Enter a valid URL or search.');return;}if(!['http:','https:'].includes(url.protocol)){notice('Only http and https addresses are supported.');return;}window.open(url.href,'_blank','noopener,noreferrer');void recordBrowserVisit(url.href,url.hostname).catch(error=>notice(error.message));});
+    if(run&&current.activeChatPanel&&current.activeChatPanel!=='conversation'&&current.activeChatPanel!=='browser'){
+        const item=current.documents?.get(run.id+':'+current.activeChatPanel),target=$('remote-document-markdown');
+        if(item&&target)mountMarkdown(target,item.content,{allowExternalImages:false,copy:value=>navigator.clipboard.writeText(value),link:url=>{
+            if(/^https?:\/\//i.test(url)){window.open(url,'_blank','noopener,noreferrer');return;}
+            const linked=item.links?.find(link=>link.source===url);
+            if(!linked||!item.approvedRequestId){notice('This document link needs a separate authorized read on the Mac.');return;}
+            const existing=current.documents?.get(run.id+':'+linked.documentId);
+            if(existing?.content&&existing.version){current.activeChatPanel=linked.documentId;saveChildTabs(current,run.id);render();return;}
+            void openChatDocument(current,run,{parentDocumentId:item.documentId,fromRequestId:item.approvedRequestId,relativePath:url}).catch(error=>notice(error.message));
+        },image:source=>documentAsset(current,run,item,source)});
+        const frame=$('remote-html-frame');if(item&&frame){
+            const html=item.mediaType==='text/html'||/\.html?$/i.test(item.title||'')?item.content:item.content.match(/^\s*```html\s*\n([\s\S]*?)\n```/im)?.[1]||'';
+            const approvalKey=run.id+':'+item.documentId+':'+item.version;
+            const updatePreview=()=>{const enabled=current.previewApprovals?.has(approvalKey)===true;
+                const revision=crypto.randomUUID();frame.dataset.previewRevision=revision;
+                // A separate, trusted shell has its own CSP. Its frame-src 'none' blocks
+                // artifact-initiated navigation without weakening the main app CSP.
+                frame.setAttribute('sandbox','allow-scripts');
+                frame.onload=()=>{void materializeDocumentHTML(current,run,item,html).then(materialized=>{if(frame.isConnected&&frame.dataset.previewRevision===revision&&current.documents?.get(run.id+':'+item.documentId)===item)frame.contentWindow?.postMessage({type:'proteus:preview',html:materialized,enabled},'*');}).catch(error=>notice(error.message));};
+                frame.src='/remote/preview-shell?revision='+crypto.randomUUID();
+                $('remote-preview-enable').hidden=enabled;$('remote-preview-stop').hidden=!enabled;};
+            $('remote-preview-enable').onclick=()=>{current.previewApprovals ||= new Set();current.previewApprovals.add(approvalKey);updatePreview();};
+            $('remote-preview-stop').onclick=()=>{current.previewApprovals?.delete(approvalKey);updatePreview();};
+            updatePreview();
+        }
+    }
+    $('remote-document-reselect')?.addEventListener('click',()=>{const item=current.documents?.get(run.id+':'+current.activeChatPanel);if(!item)return;if(item.source==='local'){current.reselectDocumentId=item.documentId;document.dispatchEvent(new CustomEvent('proteus:choose-file'));}else notice('This document needs an approved read from its owning Mac.');});
+    $('remote-document-refresh')?.addEventListener('click',()=>{const item=current.documents?.get(run.id+':'+current.activeChatPanel);if(item?.source==='remote')void openChatDocument(current,run,{documentId:item.documentId,...(item.parentDocumentId&&item.relativePath?{parentDocumentId:item.parentDocumentId,relativePath:item.relativePath}:{})}).catch(error=>notice(error.message));});
+    for (const element of root.querySelectorAll('[data-markdown-event]')) { const event = run.events[Number(element.dataset.markdownEvent)]; current.images ||= new Map(); mountMarkdown(element, event?.text || '', { copy: value => navigator.clipboard.writeText(value), link: url => { if (/^https?:\/\//i.test(url)) window.open(url, '_blank', 'noopener,noreferrer'); else if((event?.role||event?.type)==='assistant')void openChatDocument(current,run,url).catch(error=>notice(error.message));else notice('Open file links from assistant messages on the owning Mac.'); }, image: async source => { const key = run.id + ':' + source; if (!current.images.has(key)) current.images.set(key, command('chat.image', { id: run.id, source }).then(r => r.dataURL).catch(error => { current.images.delete(key); throw error; })); return current.images.get(key); } }); }
     for (const element of root.querySelectorAll('[data-markdown-event]')) {
         const index=Number(element.dataset.markdownEvent), event=run.events[index];
         if ((event.role||event.type)!=='assistant'||['tool','reasoning','thinking'].includes(event.type)||event.streaming||event.data?.reasoning||event.data?.tool||typeof event.text!=='string'||!event.text.trim()) continue;
@@ -199,7 +435,15 @@ function renderChats(current) {
     }
     root.querySelectorAll('[data-run]').forEach(button => button.onclick = () => openChat(button.dataset.run,button.dataset.runHost).catch(error => notice(error.message)));
     $('remote-more-runs')?.addEventListener('click', async () => { try { const older = await command('runs.list', { offset: (current.state.runs||[]).length }); current.state.runs.push(...older); preserveDrafts(); render(); } catch (error) { notice(error.message); } });
-    $('remote-earlier')?.addEventListener('click', async () => { try { const older = await command('chat.get', { id: run.id, offset: run.eventCount - run.eventStart }); current.run = { ...run, events: [...older.events, ...run.events], eventStart: older.eventStart, earlier: older.earlier }; preserveDrafts(); render(); } catch (error) { notice(error.message); } });
+    async function loadEarlier(){
+        if(current.loadingEarlier||!run.earlier||current.run?.id!==run.id)return;
+        const pane=root.querySelector('.remote-messages'),status=$('remote-earlier-status');if(!pane)return;
+        const oldHeight=pane.scrollHeight,oldTop=pane.scrollTop;current.loadingEarlier=true;if(status)status.textContent='Loading earlier messages…';
+        try{const older=await command('chat.get',{id:run.id,offset:run.eventStart});if(current.run?.id!==run.id)return;
+            const unique=new Map();for(const [index,event] of [...older.events,...run.events].entries()){const offset=index<older.events.length?(older.eventStart||0)+index:(run.eventStart||0)+index-older.events.length;unique.set(event.id||event.eventId||'offset:'+offset,event);}
+            current.run={...run,events:[...unique.values()],eventStart:older.eventStart,earlier:older.earlier};render();const next=root.querySelector('.remote-messages');if(next){next.scrollTop=oldTop+next.scrollHeight-oldHeight;current.scroll ||= new Map();current.scroll.set(run.id,next.scrollTop);}
+        }catch(error){if(status){status.innerHTML='<button id="remote-earlier-retry" type="button">Retry loading earlier messages</button>';$('remote-earlier-retry').onclick=()=>void loadEarlier();}notice(error.message);}finally{current.loadingEarlier=false;}
+    }
     const answer = async value => { try { await command('chat.reply', { id: run.id, requestId: pending.id, answer: value });current.drafts.delete(answerKey);if(view==='chats'&&current.selected===run.id)await openChat(run.id);else await refresh(); } catch (error) { notice(error.message); } };
     root.querySelectorAll('[data-answer]').forEach(button => button.onclick = () => answer(button.dataset.answer));
     $('remote-answer')?.addEventListener('input',event=>{answerDraft.values.answer=new FormData(event.currentTarget).get('answer');});
@@ -211,7 +455,7 @@ function renderSchedules(current) {
     const schedules=(current.state.schedules||[]).filter(item=>!transcriptionOnly||item.integration?.type==='omi'||item.provider==='local-process');
     const schedule = (current.state.schedules || []).find(s => s.id === current.scheduleId); const key = schedule ? 'schedule:' + schedule.id : null; const draft = schedule ? currentDraft(key, { ...schedule, enabled: String(schedule.enabled), expectedRevision: schedule.revision }) : null;
     $('remote-content').innerHTML = `<div class="remote-chat-layout"><aside class="card"><h2>${transcriptionOnly?'Transcription':'Schedules'}</h2>${schedules.map(s => `<button class="remote-schedule-item" type="button" data-schedule="${escape(s.id)}"><strong>${escape(s.name)}</strong><small>${s.enabled ? 'Enabled' : 'Disabled'} · ${escape(s.cron)}</small></button>`).join('') || '<p>No schedules configured on this Mac.</p>'}</aside><section class="card">${schedule ? `<h2>${escape(schedule.name)}</h2>${schedule.source?.manifest || schedule.provider === 'local-process' ? '<p>This schedule is owned by its source repository. Update that source on the Mac.</p>' : `<form id="remote-schedule-form" data-draft="${escape(key)}"><div class="remote-fields">${field('name', 'Name', draft.values.name)}<label>Status<select name="enabled"><option value="false" ${draft.values.enabled === 'false' ? 'selected' : ''}>Disabled</option><option value="true" ${draft.values.enabled === 'true' ? 'selected' : ''}>Enabled</option></select></label>${field('cron', 'Cron expression', draft.values.cron)}${field('timezone', 'Time zone', draft.values.timezone)}${modelFields(draft.values)}</div>${field('prompt', 'Instructions', draft.values.prompt, 'textarea')}<button type="button" id="remote-preview">Preview timing</button><button class="primary" type="submit">Save schedule</button><pre id="remote-timing"></pre></form>`}<button id="remote-run-schedule" type="button">Run once on ${escape(current.host.label)}</button><p>${escape(schedule.nextRuns?.join('\n') || '')}</p>` : '<h2>Choose a schedule</h2><p>Edits use the current Mac revision. Repository-owned schedules remain controlled by their source.</p>'}</section></div>`;
-    root.querySelectorAll('[data-schedule]').forEach(button => button.onclick = () => { preserveDrafts(); current.scheduleId = button.dataset.schedule; render(); });
+    root.querySelectorAll('[data-schedule]').forEach(button => button.onclick = () => { void openSchedule(button.dataset.schedule).catch(error=>notice(error.message)); });
     if ($('remote-schedule-form')) { bindDraft('remote-schedule-form', key, 'schedule.save', input => ({ id: schedule.id, expectedRevision: draft.values.expectedRevision, changes: { ...input, enabled: input.enabled === 'true' } })); bindCatalog('remote-schedule-form', key); $('remote-preview').onclick = async () => { try { const input = Object.fromEntries(new FormData($('remote-schedule-form'))); $('remote-timing').textContent = text(await command('schedule.preview', { cron: input.cron, timezone: input.timezone })); } catch (error) { notice(error.message); } }; }
     $('remote-run-schedule')?.addEventListener('click', async () => { try { const result = await command('schedule.run', { id: schedule.id }); await openChat(result.runId); } catch (error) { notice(error.message); } });
 }
@@ -243,7 +487,7 @@ root.querySelectorAll('[data-remote-view]').forEach(button => button.onclick = (
 document.addEventListener('click', event => {
     const link = event.target.closest('a[href]'); if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.target === '_blank') return;
     const url = new URL(link.href); const requested = url.searchParams.get('view');
-    if (url.origin === location.origin && url.pathname === location.pathname && sectionNames.includes(requested)) { event.preventDefault(); preserveDrafts();if(requested==='chats'){if(url.searchParams.has('chat')){void openChat(url.searchParams.get('chat'),url.searchParams.get('host')).catch(error=>notice(error.message));return;}if(url.searchParams.has('new')){void newChat();return;}chatMode='index';}attentionOnly=url.searchParams.get('attention')==='1';transcriptionOnly=url.searchParams.get('transcription')==='1'; setView(requested); render(); }
+    if (url.origin === location.origin && url.pathname === location.pathname && sectionNames.includes(requested)) { event.preventDefault(); preserveDrafts();if(requested==='chats'){if(url.searchParams.has('chat')){void openChat(url.searchParams.get('chat'),url.searchParams.get('host')).catch(error=>notice(error.message));return;}if(url.searchParams.has('new')){void newChat();return;}chatMode='index';}if(requested==='schedules'&&url.searchParams.has('schedule')){void openSchedule(url.searchParams.get('schedule'),url.searchParams.get('host')).catch(error=>notice(error.message));return;}attentionOnly=url.searchParams.get('attention')==='1';transcriptionOnly=url.searchParams.get('transcription')==='1'; setView(requested); render(); }
 });
 window.addEventListener('popstate', () => { const requested = new URLSearchParams(location.search).get('view'); preserveDrafts();if(!consumeFragment())setView(requested);render(); });
 $('remote-pair-form').onsubmit = async event => {
@@ -265,7 +509,7 @@ function consumeFragment() {
 }
 consumeFragment(); setView(view); window.addEventListener('hashchange', consumeFragment);
 async function endAccount() {
-    if(ended)return;stopMessageSpeech();ended=true;globalThis.proteusSigningOut=true;clearChatIndex(root.dataset.account);clearChatDrafts(root.dataset.account);++switching;stopReconnect();stopLifecycle();try{localStorage.removeItem(preferenceKey);localStorage.removeItem(chatTabKey);}catch{}
+    if(ended)return;stopMessageSpeech();ended=true;globalThis.proteusSigningOut=true;clearChatIndex(root.dataset.account);clearChatDrafts(root.dataset.account);++switching;stopReconnect();stopLifecycle();try{localStorage.removeItem(preferenceKey);localStorage.removeItem(chatTabKey);localStorage.removeItem(childTabKey);}catch{}
     for(const pair of pendingPairs)pair.close();pendingPairs.clear();for(const current of sessions.values())current.client?.close();sessions.clear();hosts.clear();active='';
     await legacyStore.clear().catch(()=>{});legacyStore.close();render();destinationOptions();notice('Signed out. Sign in again to restore destinations saved to your account. Browser-only pairings were removed.');
 }
@@ -277,8 +521,39 @@ function startLifecycle(){
 }
 
 function bindRevocation(client,hostId,current){client.addEventListener('revoked',event=>{if(event.detail?.authenticated!==true||event.detail.deviceId!==current.host.deviceId)return;suppressed.add(hostId);clearChatIndex(root.dataset.account,hostId);clearChatDrafts(root.dataset.account,hostId);current.cachedRuns=[];current.state=null;current.run=null;if(active===hostId){stopReconnect();notice('This Mac confirmed that its device access was revoked. Pair again to reconnect.');render();}});client.addEventListener('rejected',()=>{suppressed.add(hostId);current.rejected=true;current.state=null;if(active===hostId){notice('Connection rejected. Saved pairing was retained; no authenticated revocation was received.');render();}});}
-function aggregateChats(){return [...sessions.entries()].flatMap(([hostId,current])=>(current.state?.runs||current.cachedRuns||[]).map(run=>({...run,hostId,hostLabel:hosts.get(hostId)?.label||'Mac',cached:current.client?.status!=='online',lastSyncAt:current.lastSyncAt}))).sort((a,b)=>Date.parse(b.updatedAt||b.createdAt||0)-Date.parse(a.updatedAt||a.createdAt||0));}
-function renderRecentChats(){const target=$('shell-recent-chats');if(!target)return;target.hidden=view!=='chats';target.innerHTML=aggregateChats().slice(0,5).map(run=>`<a href="/remote?view=chats&host=${encodeURIComponent(run.hostId)}&chat=${encodeURIComponent(run.id)}" data-recent-chat="${escape(run.id)}" data-recent-host="${escape(run.hostId)}" title="${escape(run.title||'Chat')} · ${escape(run.hostLabel)}">${run.status==='awaiting_input'?'! ':''}${escape(run.title||'Chat')}${run.cached?' · cached':''}</a>`).join('')+'<a href="/remote?view=chats">More</a>';target.querySelectorAll('[data-recent-chat]').forEach(link=>link.onclick=event=>{event.preventDefault();void openChat(link.dataset.recentChat,link.dataset.recentHost).catch(error=>notice(error.message));});}
+function aggregateChats(){return [...sessions.entries()].flatMap(([hostId,current])=>(chatIndexShowsArchived()&&current.archivedRuns||current.state?.runs||current.cachedRuns||[]).map(run=>({...run,hostId,hostLabel:hosts.get(hostId)?.label||'Mac',cached:current.client?.status!=='online',lastSyncAt:current.lastSyncAt,lifecycleSupported:current.client?.status==='online'&&current.state?.capabilities?.includes('chat.lifecycle.v1')}))).sort((a,b)=>Date.parse(b.updatedAt||b.createdAt||0)-Date.parse(a.updatedAt||a.createdAt||0));}
+async function loadArchivedChats(reset=false){
+    await verifyWebsite();await Promise.all([...sessions.values()].filter(current=>current.client?.status==='online'&&current.state?.capabilities?.includes('chat.lifecycle.v1')).map(async current=>{
+        if(current.archivedRuns&&!reset)return;
+        const client=current.client,generation=(current.archiveFetchGeneration||0)+1;current.archiveFetchGeneration=generation;
+        const rows=await client.request('runs.list',{offset:0,limit:100,includeArchived:true});
+        if(ended||suspended||current.client!==client||current.archiveFetchGeneration!==generation)return;current.archivedRuns=rows;
+    }));render();
+}
+function applyChatLifecycle(current,hostId,change){
+    if(!change?.id)return;current.archivedRuns=null;
+    if(!change.deleted){if(current.run?.id===change.id)Object.assign(current.run,change);return;}
+    if(current.state?.runs)current.state.runs=current.state.runs.filter(row=>row.id!==change.id);
+    if(current.cachedRuns)current.cachedRuns=current.cachedRuns.filter(row=>row.id!==change.id);
+    chatTabs.delete(hostId+':'+change.id);saveChatTabs();delete savedChildTabs[hostId+':'+change.id];try{localStorage.setItem(childTabKey,JSON.stringify(savedChildTabs));}catch{}
+    for(const item of current.documents?.values()||[])if(item.chatId===change.id)releaseDocumentAssets(item);
+    current.documents&&[...current.documents.keys()].filter(key=>key.startsWith(change.id+':')).forEach(key=>current.documents.delete(key));
+    current.childOrder?.delete(change.id);current.drafts?.delete('reply:'+change.id);current.scroll?.delete(change.id);
+    if(current.selected===change.id){current.run=null;current.selected=null;current.activeChatPanel='conversation';if(active===hostId)chatMode='index';}
+}
+async function lifecycleChat(row,method,extra={}){
+    const current=sessions.get(row.hostId),client=current?.client;
+    if(client?.status!=='online'||!current.state?.capabilities?.includes('chat.lifecycle.v1'))throw new Error('Connect and update this chat’s Mac before managing it.');
+    if(['queued','running','awaiting_input'].includes(row.status)||Number(row.queuedMessageCount||0)>0)throw new Error('Finish or cancel this chat before managing it.');
+    await verifyWebsite();if(ended||suspended||current.client!==client)throw new Error('The destination changed.');
+    const mutation=await client.request(method,{id:row.id,...extra,...(row.updatedAt?{expectedUpdatedAt:row.updatedAt}:{}),...(row.archivedAt?{expectedArchivedAt:row.archivedAt}:{})});
+    if(ended||suspended||current.client!==client)throw new Error('The destination changed. Refresh to review the result.');
+    applyChatLifecycle(current,row.hostId,mutation);
+    const result=await client.request('sync',{cursor:''});if(ended||suspended||current.client!==client)return;
+    current.state=result.state;current.cachedRuns=result.state.runs||[];current.archivedRuns=null;current.lastSyncAt=new Date().toISOString();void saveChatIndex(root.dataset.account,current.host,current.cachedRuns).catch(()=>{});
+    if(chatIndexShowsArchived())await loadArchivedChats(true);else render();
+}
+function renderRecentChats(){const target=$('shell-recent-chats');if(!target)return;target.hidden=view!=='chats';const rows=[...sessions.entries()].flatMap(([hostId,current])=>(current.state?.runs||current.cachedRuns||[]).filter(run=>!(run.archivedAt||run.archived)).map(run=>({...run,hostId,hostLabel:hosts.get(hostId)?.label||'Mac',cached:current.client?.status!=='online',lastSyncAt:current.lastSyncAt}))).sort((a,b)=>Date.parse(b.updatedAt||b.createdAt||0)-Date.parse(a.updatedAt||a.createdAt||0));target.innerHTML=rows.slice(0,5).map(run=>`<a href="/remote?view=chats&host=${encodeURIComponent(run.hostId)}&chat=${encodeURIComponent(run.id)}" data-recent-chat="${escape(run.id)}" data-recent-host="${escape(run.hostId)}" title="${escape(run.title||'Chat')} · ${escape(run.hostLabel)}">${run.attentionRequired===true?'! ':''}${escape(run.title||'Chat')}${run.cached?' · cached':''}</a>`).join('')+'<a href="/remote?view=chats">More</a>';target.querySelectorAll('[data-recent-chat]').forEach(link=>link.onclick=event=>{event.preventDefault();void openChat(link.dataset.recentChat,link.dataset.recentHost).catch(error=>notice(error.message));});}
 function renderChatTabs(){
     for(const tab of chatTabs.values()){const latest=(sessions.get(tab.hostId)?.state?.runs||[]).find(r=>r.id===tab.id);if(latest?.title)tab.title=latest.title;}
     document.dispatchEvent(new CustomEvent('proteus:chat-tabs',{detail:{tabs:[...chatTabs.values()].map(tab=>({...tab,label:hosts.get(tab.hostId)?.label||'Mac'})),active:view==='chats'&&chatMode==='chat'?{hostId:active,id:session()?.selected}:null}}));
@@ -288,22 +563,25 @@ async function newChat(){
     chatMode='new';await connect(appPreferences.defaultMacId);if(session()){session().run=null;session().selected=null;}setView('chats');render();
 }
 document.addEventListener('proteus:chat-close',event=>{const {hostId,id}=event.detail||{};chatTabs.delete(hostId+':'+id);saveChatTabs();if(hostId===active&&session()?.selected===id){preserveDrafts();stopMessageSpeech();session().run=null;session().selected=null;chatMode='index';}render();});
+document.addEventListener('proteus:open-local-file',event=>{
+    const current=session(),run=current?.run,file=event.detail?.file;if(view!=='chats'||chatMode!=='chat'||!run||!file)return;
+    preserveDrafts();stopDocumentPreview(current,run);const documentId=current.reselectDocumentId||'local-'+crypto.randomUUID();current.reselectDocumentId=null;const version=String(file.lastModified)+'-'+String(file.size);current.documents ||= new Map();current.documents.set(run.id+':'+documentId,{chatId:run.id,documentId,title:file.name,version,content:event.detail.text,readAt:new Date().toISOString(),source:'local',mediaType:/\.html?$/i.test(file.name)?'text/html':'text/markdown'});current.childOrder ||= new Map();const tabs=current.childOrder.get(run.id)||[];const descriptor=tabs.find(item=>item.type==='document'&&item.documentId===documentId);if(descriptor)Object.assign(descriptor,{title:file.name,version,source:'local'});else tabs.push({type:'document',documentId,title:file.name,version,source:'local'});current.childOrder.set(run.id,tabs);current.activeChatPanel=documentId;saveChildTabs(current,run.id);event.detail.handled=true;render();
+});
 
 async function loadMoreChats(){
-    try{await verifyWebsite();await Promise.all([...sessions.values()].filter(current=>current.client?.status==='online'&&(current.state?.runs?.length||0)<(current.state?.runCount||0)).map(async current=>{
-        const client=current.client,older=await client.request('runs.list',{offset:current.state.runs.length});
+    try{await verifyWebsite();const archived=chatIndexShowsArchived();await Promise.all([...sessions.values()].filter(current=>current.client?.status==='online'&&(archived&&current.state?.capabilities?.includes('chat.lifecycle.v1')?(current.archivedRuns?.length||0)<(current.state?.runCountIncludingArchived||0):(current.state?.runs?.length||0)<(current.state?.runCount||0))).map(async current=>{
+        const client=current.client,includeArchived=archived&&current.state?.capabilities?.includes('chat.lifecycle.v1'),existing=includeArchived?current.archivedRuns||[]:current.state.runs||[],older=await client.request('runs.list',{offset:existing.length,...(includeArchived?{includeArchived:true}:{})});
         if(ended||suspended||current.client!==client)return;
-        current.state.runs=[...new Map([...current.state.runs,...older].map(run=>[run.id,run])).values()];current.cachedRuns=current.state.runs;
-        await saveChatIndex(root.dataset.account,current.host,current.cachedRuns).catch(()=>{});
+        if(includeArchived)current.archivedRuns=[...new Map([...existing,...older].map(run=>[run.id,run])).values()];else{current.state.runs=[...new Map([...existing,...older].map(run=>[run.id,run])).values()];current.cachedRuns=current.state.runs;await saveChatIndex(root.dataset.account,current.host,current.cachedRuns).catch(()=>{});}
     }));render();}catch(error){notice(error.message);}
 }
 async function refreshAggregate(force=false){
     await Promise.allSettled([...hosts.values()].map(async metadata=>{
-        if(readPreferences().autoConnect===false&&metadata.hostId===appPreferences.defaultMacId)return;let current=sessions.get(metadata.hostId);if(current?.client?.status==='online'){if(force){await verifyWebsite();const client=current.client,result=await client.request('sync',{cursor:''});if(ended||suspended||current.client!==client)return;current.state=result.state;rememberHostName(current,result.state);current.cachedRuns=result.state.runs||[];current.lastSyncAt=new Date().toISOString();}return;}
+        if(readPreferences().autoConnect===false&&metadata.hostId===appPreferences.defaultMacId)return;let current=sessions.get(metadata.hostId);if(current?.client?.status==='online'){if(force){await verifyWebsite();const client=current.client,result=await client.request('sync',{cursor:''});if(ended||suspended||current.client!==client)return;current.state=result.state;rememberHostName(current,result.state);current.cachedRuns=result.state.runs||[];current.archivedRuns=null;current.lastSyncAt=new Date().toISOString();}return;}
         const credential=metadata.source==='account'?await accountStore.credential(metadata.hostId):metadata;
         if(ended||suspended)return;
         const client=new BrowserRemoteClient(credential);current={host:credential,client,drafts:new Map(),selected:null,run:null,state:null};sessions.set(metadata.hostId,current);current.drafts=await loadChatDrafts(root.dataset.account,credential);const cached=await loadChatIndex(root.dataset.account,credential);if(cached){current.cachedRuns=cached.items;current.lastSyncAt=cached.observedAt;}bindRevocation(client,metadata.hostId,current);client.addEventListener('status',()=>{if(client.status==='closed'){current.state=null;if(active===metadata.hostId){render();reconnect(metadata.hostId);}}});
-        client.addEventListener('change',event=>{if(ended||suspended||current.client!==client)return;if(event.detail.event==='state'){current.state=event.detail.data;rememberHostName(current,event.detail.data);current.cachedRuns=event.detail.data.runs||[];current.lastSyncAt=new Date().toISOString();void saveChatIndex(root.dataset.account,current.host,current.cachedRuns).catch(()=>{});renderRecentChats();if(active===metadata.hostId){preserveDrafts();render();}}if(event.detail.event==='run'&&event.detail.runId===current.selected){current.run=event.detail.data;if(active===metadata.hostId){preserveDrafts();render();}}});
+        client.addEventListener('change',event=>{if(ended||suspended||current.client!==client)return;if(event.detail.event==='chat.lifecycle'){applyChatLifecycle(current,metadata.hostId,event.detail.data);if(chatIndexShowsArchived())void loadArchivedChats(true).catch(error=>notice(error.message));}if(event.detail.event==='state'){current.state=event.detail.data;rememberHostName(current,event.detail.data);current.cachedRuns=event.detail.data.runs||[];current.archivedRuns=null;current.lastSyncAt=new Date().toISOString();void saveChatIndex(root.dataset.account,current.host,current.cachedRuns).catch(()=>{});renderRecentChats();if(chatIndexShowsArchived())void loadArchivedChats(true).catch(error=>notice(error.message));if(active===metadata.hostId){preserveDrafts();render();}}if(event.detail.event==='run'&&event.detail.runId===current.selected){current.run=event.detail.data;if(active===metadata.hostId){preserveDrafts();render();}}});
         try{await client.connect();await verifyWebsite();const result=await client.request('sync',{cursor:''});current.state=result.state;rememberHostName(current,result.state);current.cachedRuns=result.state.runs||[];current.lastSyncAt=new Date().toISOString();await saveChatIndex(root.dataset.account,current.host,current.cachedRuns).catch(()=>{});current.host.cursor=result.cursor;}catch{client.close();current.client=null;current.state=null;}
     }));
 }
@@ -326,7 +604,7 @@ async function startup(){
         const prefs=readPreferences(),selected=hosts.has(appPreferences.defaultMacId)?appPreferences.defaultMacId:null;
         if(selected){active=selected;destinationOptions();if(prefs.autoConnect===false){suppressed.add(selected);render();}else await connect(selected,{automatic:true});}else render();
         if(initialQuery.has('new'))await newChat();
-        const deep=initialQuery;if(deep.get('chat')&&hosts.has(deep.get('host')))await openChat(deep.get('chat'),deep.get('host'));
+        const deep=initialQuery;if(deep.get('chat')&&hosts.has(deep.get('host')))await openChat(deep.get('chat'),deep.get('host'));else if(deep.get('schedule')&&hosts.has(deep.get('host')))await openSchedule(deep.get('schedule'),deep.get('host'));
     }catch(error){if(error.sessionInvalid)await endAccount();else{pauseUnverified();notice(error.message+' Reload to try again.');}}
 }
 window.addEventListener('pagehide',()=>{suspended=true;++switching;stopReconnect();stopLifecycle();for(const pair of pendingPairs)pair.close();pendingPairs.clear();for(const current of sessions.values())current.client?.close();sessions.clear();hosts.clear();active='';legacyStore.close();render();});

@@ -1,7 +1,7 @@
 
 @extends('layouts.app')
 @section('title','Account & security')
-@section('content')<header class="top"><div><div class="eyebrow">Your account</div><h1>Account & security</h1><p>{{ $user->name }} · {{ $user->email }}</p></div><a class="button secondary" href="{{ route('garage') }}">Open Proteus →</a></header><div class="grid"><section class="card"><h2>Passkeys</h2><p class="muted">Sign in with Face ID, Touch ID, or a security key. Keep a second passkey or an authenticator as a recovery option.</p>
+@section('content')<header class="top"><div><div class="eyebrow">Your account</div><h1>Account & security</h1><p>{{ $user->name }} · {{ $user->email }}</p></div><a class="button secondary" href="{{ route('home') }}">Open Proteus →</a></header><div class="grid"><section class="card"><h2>Passkeys</h2><p class="muted">Sign in with Face ID, Touch ID, or a security key. Keep a second passkey or an authenticator as a recovery option.</p>
 @foreach($passkeys as $key)<div class="file"><strong>{{ $key->name }}</strong><form action="{{ url('/user/passkeys/'.$key->id) }}" method="post">
 @csrf 
 @method('DELETE')<button class="secondary">Remove passkey</button></form></div>

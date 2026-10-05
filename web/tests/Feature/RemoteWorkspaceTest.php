@@ -10,6 +10,19 @@ class RemoteWorkspaceTest extends TestCase
 {
     use CreatesBrain, LazilyRefreshDatabase;
 
+    public function test_home_is_the_entry_point_and_is_loaded_only_when_visited(): void
+    {
+        $this->get('/')->assertRedirect('/home');
+        $this->get('/home')->assertRedirect('/login');
+        $user = $this->owner();
+        $this->actingAs($user)->get('/home')->assertRedirect('/security');
+        $this->signedIn($user)->get('/home')->assertOk()
+            ->assertSee('Website version')
+            ->assertSee('What changed')
+            ->assertSee('Future updates')
+            ->assertSee('data-shell-section="home"', false);
+    }
+
     public function test_remote_pages_require_login_and_strong_authentication(): void
     {
         $this->get('/remote')->assertRedirect('/login');

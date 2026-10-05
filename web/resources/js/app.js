@@ -10,8 +10,8 @@ for(const button of document.querySelectorAll('[data-passkey]')) {
   button.disabled=true;
   try {
    if(button.dataset.passkey==='register') { await Passkeys.register({name:document.querySelector('#passkey-name').value||'My device'}); location.reload(); }
-   else if(button.dataset.passkey==='confirm') { await Passkeys.verify({routes:{options:'/passkeys/confirm/options',submit:'/passkeys/confirm'}}); location.href='/garage'; }
-   else { const result=await Passkeys.verify(); location.href=result.redirect||'/garage'; }
+   else if(button.dataset.passkey==='confirm') { await Passkeys.verify({routes:{options:'/passkeys/confirm/options',submit:'/passkeys/confirm'}}); location.href='/home'; }
+   else { const result=await Passkeys.verify(); location.href=result.redirect||'/home'; }
   } catch(e) { notice(e.message+' If confirmation is needed, confirm your password below and retry.'); }
   finally { button.disabled=false; }
  });

@@ -64,6 +64,19 @@ test('real peer index remains bounded and encrypted through offline restart',asy
   const peers=new DesktopPeers(home,{safeStorage,clientFactory:host=>new Client(host)});await peers.index();await peers.indexPending;assert.equal((await peers.index()).items.length,100);const stored=fs.readFileSync(peers.cacheFile);assert.ok(!stored.includes(Buffer.from('Synthetic')));peers.close();
   const restarted=new DesktopPeers(home,{safeStorage,clientFactory:host=>Object.assign(new Client(host),{connect:async()=>{throw new Error('Synthetic offline');}})});const initial=await restarted.index();assert.equal(initial.items.length,100);await restarted.indexPending;const result=await restarted.index();assert.equal(result.items.length,100);assert.equal(result.partial,true);assert.equal(result.hosts[0].online,false);restarted.close();
 });
+test('host lifecycle event wins over an in-flight stale index and survives offline restart',async t=>{
+  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-peers-lifecycle-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+  fs.writeFileSync(path.join(home,'desktop-peers.enc'),safeStorage.encryptString(JSON.stringify([record])));
+  let client,release,hold=false;
+  class Client extends EventTarget{constructor(host){super();this.host=host;}async connect(){this.status='online';}async request(method){if(method==='sync')return {state:{hostName:record.label,runs:[]}};if(hold)await new Promise(resolve=>release=resolve);return [{id:'synthetic-chat',title:'Synthetic',status:'completed',updatedAt:'2026-01-01T00:00:00Z'}];}close(){this.status='offline';}}
+  const peers=new DesktopPeers(home,{safeStorage,clientFactory:host=>client=new Client(host)});await peers.index();await peers.indexPending;await until(()=>peers.indexPending===null);
+  assert.equal((await peers.index()).items.length,1);
+  hold=true;peers.indexAt=0;await peers.index();await until(()=>Boolean(release));
+  client.dispatchEvent(new CustomEvent('change',{detail:{event:'chat.lifecycle',data:{id:'synthetic-chat',deleted:true,deletedAt:'2026-01-02T00:00:00Z'}}}));
+  release();await peers.indexPending;assert.equal((await peers.index()).items.length,0);peers.close();
+  const restarted=new DesktopPeers(home,{safeStorage,clientFactory:host=>Object.assign(new Client(host),{connect:async()=>{throw new Error('Offline');}})});
+  const initial=await restarted.index();assert.equal(initial.items.length,0);await restarted.indexPending;assert.equal((await restarted.index()).items.length,0);restarted.close();
+});
 
 class NamingClient {
   constructor(host){this.host=host;this.status='offline';this.listeners=new Map();this.name='Host-owned name';}

@@ -1,5 +1,21 @@
 # MCP connection recovery
 
+Claude chats can refresh connection status for their captured MCP selections. Proteus starts a
+separate, tool-free Claude Code status process with only those servers in a private `0600` config
+file and `--strict-mcp-config`; it does not inherit other user/project MCP definitions. The status
+view distinguishes connected, pending, failed, and needs-auth. A Claude turn waits for its selected
+connections to become connected and stops before sending chat content when a server fails or needs
+sign-in. Tool permission requests still pass through Proteus for each operation.
+
+Claude MCP sign-in is not offered inside Proteus yet. The installed CLI documents `claude mcp login
+<name>`, but its help does not establish that Proteus can bind that command to an isolated selected
+configuration. Sign in or repair the named server in Claude Code on the owning Mac, then refresh
+its status in Proteus. No auth URL or credential is inferred from a `needs-auth` status. Selected
+servers with restricted per-tool filters are rejected rather than running with wider permissions.
+Selected stdio servers with a different source directory use a fixed Proteus launcher and the
+captured directory, command, arguments and environment; no shell is involved. Codex MCP OAuth
+remains separate follow-up work.
+
 Copilot chats expose **MCP connections → Manage connections** in Mac chat details and **MCP
 connections → Refresh MCP connections** on iOS. The list is scoped to the MCP servers selected
 for that captured chat configuration. It shows connection state and bounded error details, never
@@ -28,7 +44,7 @@ runtime's exact installation receipt and prepare-login handle. Unsupported/local
 cannot use these remote OAuth controls.
 
 Browser sign-in cookies and MCP OAuth tokens are separate. Logging into a website in a Proteus tab
-alone does not authorize its MCP server. The sign-in button uses the external Mac browser for
+alone does not authorize its MCP server. The Copilot sign-in button uses the external Mac browser for
 compatibility with corporate account/passkey flows. Codex MCP OAuth UI and MCP elicitation/input
 forms are follow-up work; the current Codex adapter requires its selected servers to be already
 configured for that runtime. No success is inferred from merely opening the browser.

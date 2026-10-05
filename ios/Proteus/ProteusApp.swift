@@ -10,6 +10,7 @@ import SwiftUI
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--synthetic-message-timezone") { MessageTimezoneFixture() }
             else if ProcessInfo.processInfo.arguments.contains("--synthetic-browser-history") { BrowserHistoryFixture() }
+            else if ProcessInfo.processInfo.arguments.contains("--synthetic-attachment-preview") { AttachmentPreviewFixture() }
             else { ProteusRoot().environmentObject(destinations).environmentObject(life).environmentObject(shared) }
             #else
             ProteusRoot().environmentObject(destinations).environmentObject(life).environmentObject(shared)
@@ -41,6 +42,22 @@ struct ProteusRoot: View {
                             try? destinations.register(DeviceConnection(relay: "ws://127.0.0.1:1", hostId: id, deviceId: UUID().uuidString, key: RemoteCrypto.random()), label: label)
                         }
                         try? destinations.select("10000000-0000-4000-8000-000000000001", connect: false)
+                    }
+                    if ProcessInfo.processInfo.arguments.contains("--synthetic-notification-fixtures"),
+                       let remote = destinations.remote(for: "10000000-0000-4000-8000-000000000001") {
+                        let run: JSON = .object(["id": .string("notification-chat"), "title": .string("Notification fixture chat"), "status": .string("completed"), "events": .array([.object(["role": .string("assistant"), "text": .string("Notification destination loaded"), "at": .string("2026-10-05T00:00:00Z")])]), "eventStart": .number(0)])
+                        remote.state = .object(["runs": .array([run]), "schedules": .array([.object(["id": .string("notification-schedule"), "name": .string("Notification fixture schedule"), "cron": .string("0 9 * * *"), "timezone": .string("UTC")])])])
+                        remote.chats["notification-chat"] = run
+                        remote.flushCache()
+                    }
+                    if ProcessInfo.processInfo.arguments.contains("--synthetic-chat-lifecycle-fixtures"),
+                       let remote = destinations.remote(for: "10000000-0000-4000-8000-000000000001") {
+                        let current: JSON = .object(["id": .string("current-chat"), "title": .string("Current fixture"), "status": .string("completed"), "updatedAt": .string("2026-10-05T18:00:00Z")])
+                        let earlier: JSON = .object(["id": .string("earlier-chat"), "title": .string("Earlier fixture"), "status": .string("completed"), "updatedAt": .string("2026-10-01T18:00:00Z")])
+                        let archived: JSON = .object(["id": .string("archived-chat"), "title": .string("Archived fixture"), "status": .string("completed"), "updatedAt": .string("2026-10-04T18:00:00Z"), "archived": .bool(true), "archivedAt": .string("2026-10-04T18:00:00Z")])
+                        remote.state = .object(["runs": .array([current, earlier]), "runCount": .number(2), "runCountIncludingArchived": .number(3), "capabilities": .array([.string("chat.lifecycle.v1")])])
+                        remote.allRuns = [current, archived, earlier]
+                        remote.flushCache()
                     }
                     #endif
                     destinations.activity(true)

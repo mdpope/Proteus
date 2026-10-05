@@ -1,4 +1,6 @@
 /* Shared feature shell. Keep the collapsed edge reachable by pointer and keyboard. */
+.chat-context-menu{position:fixed;z-index:10000;min-width:170px;padding:5px;display:grid;gap:2px;background:var(--panel,#1d2a23);border:1px solid var(--line);border-radius:9px;box-shadow:0 12px 32px #0008}.chat-context-menu button{display:block;width:100%;text-align:left;border:0;background:transparent;padding:8px 10px;border-radius:6px}.chat-context-menu button:hover,.chat-context-menu button:focus-visible{background:#ffffff16}.chat-index-row .pill{white-space:nowrap}
+.archive-switch{display:inline-flex;align-items:center;gap:9px;align-self:end;min-height:34px;white-space:nowrap;cursor:pointer}.archive-switch input{appearance:none;position:relative;width:36px!important;height:20px;margin:0;border:1px solid var(--line);border-radius:20px;background:#69766e;cursor:pointer;flex:0 0 36px}.archive-switch input::before{content:"";position:absolute;width:14px;height:14px;left:2px;top:2px;border-radius:50%;background:white;transition:transform 120ms ease}.archive-switch input:checked{background:var(--accent)}.archive-switch input:checked::before{transform:translateX(16px)}.archive-switch input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .brand{display:flex;align-items:center;gap:9px}.brand-text{flex:1}#sidebar-toggle{padding:4px 9px}.nav-icon{width:20px;text-align:center;display:inline-flex;justify-content:center}.navchildren{margin:3px 0 12px 28px;border-left:1px solid var(--line);padding-left:9px}.navchild{display:block;width:100%;padding:6px 8px;border:0;background:transparent;text-align:left;font-size:12px;color:var(--soft)}.navchild>span{display:block;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}.navchild small{font-size:10px}.navchild:hover,.navchild.active{background:#ffffff0b;color:var(--accent)}
 body.sidebar-minimized #sidebar{width:38px;padding:16px 4px;overflow:hidden;z-index:20}body.sidebar-minimized #sidebar .brandmark,body.sidebar-minimized #sidebar .brand-text,body.sidebar-minimized #sidebar nav,body.sidebar-minimized #sidebar .sidebottom{display:none}body.sidebar-minimized #sidebar .brand{padding:0;gap:0}body.sidebar-minimized #workspace{margin-left:38px;width:calc(100% - 38px)}body.sidebar-minimized #sidebar:hover,body.sidebar-minimized #sidebar:focus-within{width:250px;padding:24px 16px;overflow:auto;box-shadow:8px 0 25px #0006}body.sidebar-minimized #sidebar:hover .brand-text,body.sidebar-minimized #sidebar:focus-within .brand-text,body.sidebar-minimized #sidebar:hover .brandmark,body.sidebar-minimized #sidebar:focus-within .brandmark,body.sidebar-minimized #sidebar:hover nav,body.sidebar-minimized #sidebar:focus-within nav,body.sidebar-minimized #sidebar:hover .sidebottom,body.sidebar-minimized #sidebar:focus-within .sidebottom{display:block}body.sidebar-minimized #sidebar:hover .brand,body.sidebar-minimized #sidebar:focus-within .brand{gap:9px}
 #provider-usage-rows[hidden],#provider-usage.usage-collapsed #provider-usage-rows{display:none}.tabitem{border-right:1px solid var(--line)}.checkbox-row{display:flex;align-items:center;gap:10px;margin:18px 0}.checkbox-row input{width:auto}
@@ -33,3 +35,119 @@ body.sidebar-minimized #sidebar-toggle{position:absolute;left:4px;top:24px}body.
 .message-playback input[type="range"]{min-width:55px;flex:1;width:130px;padding:0;accent-color:var(--accent,#77c4ad)}
 .message-playback-position{font-size:11px;color:var(--muted,#899493);min-width:34px;text-align:right;font-variant-numeric:tabular-nums}
 @media(max-width:500px){.message-actions{flex-wrap:wrap}.message-playback{max-width:100%}}
+
+/* Content tabs retain their horizontal position while the fixed add control stays visible. */
+#topbar{height:42px;min-height:42px;padding:0 20px;justify-content:flex-start;background:#121b16}
+#topbar-home{display:inline-flex;align-items:center;gap:8px;border:0;background:transparent;padding:3px 7px;color:var(--ink);font-size:14px;letter-spacing:-.25px}
+#topbar-home .brandmark{font-size:20px;line-height:1}
+#tabs{grid-template-columns:auto minmax(0,1fr) auto}
+#tabs #topbar-home{display:inline-flex;align-items:center;gap:7px;align-self:stretch;padding:0 13px 0 2px;border:0;border-right:1px solid var(--line);background:transparent;color:var(--ink);font-size:14px;letter-spacing:-.25px;flex-shrink:0}
+#tabs #topbar-home .brandmark{font-size:20px;line-height:1}
+#sidebar .brand{justify-content:flex-end;min-height:28px;padding:0 5px 2px}
+#sidebar .brandmark,#sidebar .brand-text{display:none!important}
+body.sidebar-minimized #sidebar .brand{justify-content:center;padding:0}
+body.sidebar-minimized #sidebar{width:56px;padding:12px 5px}
+body.sidebar-minimized #workspace{margin-left:56px;width:calc(100% - 56px)}
+body.sidebar-minimized #sidebar nav{display:block}
+body.sidebar-minimized #sidebar .navitem{justify-content:center;padding:10px 4px;min-height:44px}
+body.sidebar-minimized #sidebar .nav-icon{font-size:20px;width:28px}
+body.sidebar-minimized #sidebar .navlabel,body.sidebar-minimized #sidebar .count,body.sidebar-minimized #sidebar .navchildren{display:none}
+body.sidebar-minimized #sidebar:hover .navitem,body.sidebar-minimized #sidebar:focus-within .navitem{justify-content:space-between;padding:12px}
+body.sidebar-minimized #sidebar:hover .navlabel,body.sidebar-minimized #sidebar:focus-within .navlabel,body.sidebar-minimized #sidebar:hover .count,body.sidebar-minimized #sidebar:focus-within .count,body.sidebar-minimized #sidebar:hover .navchildren,body.sidebar-minimized #sidebar:focus-within .navchildren{display:block}
+body.sidebar-minimized #sidebar:hover .nav-icon,body.sidebar-minimized #sidebar:focus-within .nav-icon{font-size:17px}
+#tabs .tab-list,#team-subtabs{scrollbar-width:none;-ms-overflow-style:none}
+#tabs{overflow:visible;position:relative;z-index:5}
+#tabs .tab-list::-webkit-scrollbar,#team-subtabs::-webkit-scrollbar{display:none}
+#tabs .tab-list{mask-image:linear-gradient(to right,#000 0%,#000 calc(100% - 42px),transparent 100%)}
+#tabs .tab-actions{position:relative;z-index:4}
+#tabs .tab-add-menu{position:relative}
+#tabs .tab-add-menu>summary{list-style:none;cursor:pointer}
+#tabs .tab-add-menu>summary::-webkit-details-marker{display:none}
+#tabs .tab-add-options{position:absolute;right:0;top:calc(100% + 6px);min-width:190px;padding:6px;background:var(--panel);border:1px solid var(--line);border-radius:9px;box-shadow:0 12px 30px #0009;display:grid;gap:2px}
+#tabs .tab-add-options button{display:flex;align-items:center;gap:10px;text-align:left;padding:9px;border:0;border-radius:5px;width:100%}
+#tabs .tab-add-options svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.home-document{max-height:48vh;overflow:auto;white-space:normal;line-height:1.65;padding:0 4px}
+.home-document h1,.home-document h2,.home-document h3{margin:20px 0 10px}
+.home-document h1{font-size:22px}.home-document h2{font-size:18px}.home-document h3{font-size:15px}
+.home-document li{margin:6px 0}.home-document a{color:var(--accent)}
+#team-subtabs .team-subtab-list>button[data-team-tab="standup"]{border-left:1px solid var(--line)}
+#team-subtabs{overflow:visible;position:relative;z-index:4;justify-content:space-between}
+#team-subtabs .team-subtab-list{display:flex;align-items:stretch;gap:3px;min-width:0;overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none;mask-image:linear-gradient(to right,#000 0%,#000 calc(100% - 42px),transparent 100%)}
+#team-subtabs .team-subtab-list::-webkit-scrollbar{display:none}
+#team-subtabs .team-tab-add{margin:auto 0 auto 6px}
+#team-content:has(.terminal-page){padding:0;overflow:hidden}
+#team-content .terminal-page{height:100%;padding:20px}
+#chat-subtabs{display:flex;align-items:stretch;justify-content:space-between;gap:8px;min-height:43px;margin:-22px -24px 16px;padding:0 12px;border-bottom:1px solid var(--line);flex-shrink:0;position:relative;z-index:4;background:var(--bg)}
+#main.browser-main #chat-subtabs{margin:0}
+.chat-subtab-list{display:flex;align-items:stretch;min-width:0;overflow-x:auto;scrollbar-width:none;mask-image:linear-gradient(to right,#000 0%,#000 calc(100% - 32px),transparent 100%)}
+.chat-subtab-list::-webkit-scrollbar{display:none}
+#chat-subtabs button,#chat-subtabs summary{background:transparent;border:0;border-radius:0;white-space:nowrap;padding:0 13px;font-size:12px}
+#chat-subtabs [data-chat-subtab]{max-width:230px;overflow:hidden;text-overflow:ellipsis}
+#chat-subtabs .selected{background:#ffffff0b;border-bottom:2px solid var(--accent)}
+.chat-subtab{display:flex;border-left:1px solid var(--line)}
+.chat-subtab [data-chat-child-close]{padding:0 8px;color:var(--soft)}
+.chat-tab-add{position:relative;flex-shrink:0;display:flex;align-items:center}
+.chat-tab-add>summary{display:flex;align-items:center;justify-content:center;list-style:none;cursor:pointer;height:31px;min-width:32px;border:1px solid var(--line)!important;border-radius:6px!important}
+.chat-tab-add>summary::-webkit-details-marker{display:none}
+.chat-tab-add-options{position:absolute;right:0;top:100%;display:grid;min-width:165px;padding:5px;background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:0 12px 28px #0008}
+.chat-tab-add-options button{text-align:left;height:34px;border-radius:5px!important}
+.chat-tab-add-options button{display:flex;align-items:center;gap:8px}
+.chat-tab-add-options svg{width:17px;height:17px;flex:0 0 17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+#peer-artifact-area{min-height:50vh;background:#fff;border:1px solid var(--line,#34433c);border-radius:8px;overflow:hidden}
+#peer-artifact-source,#peer-document-source{max-height:36vh;overflow:auto;white-space:pre-wrap;word-break:break-word}
+.activity-group{margin:8px 0;padding:8px 12px;border:1px solid var(--line,#34433c);border-radius:10px;background:rgba(127,151,133,.08)}
+.activity-group>summary{cursor:pointer;font-weight:600}
+.activity-group-items{display:grid;gap:8px;margin-top:10px}
+.activity-group-item{padding:8px 10px;border-left:2px solid #79b1a6;background:rgba(127,151,133,.06)}
+.activity-group-item details{margin-top:6px}
+.chat-attachment-picker{margin:8px 0;min-width:0}
+.attachment-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.attachment-controls .note{font-size:11px;overflow-wrap:anywhere}
+.attachment-strip,.message-attachments{display:flex;flex-wrap:wrap;gap:7px;margin:7px 0}
+.attachment-chip,.message-attachment{display:flex;align-items:center;gap:4px;max-width:min(100%,300px);padding:4px 7px;border:1px solid var(--line);border-radius:8px;background:rgba(127,151,133,.08)}
+.attachment-chip>button:first-child{display:flex;align-items:center;gap:6px;min-width:0;padding:0;border:0;background:transparent;text-align:left}
+.attachment-chip img,.message-attachment img{width:34px;height:34px;object-fit:cover;border-radius:4px}
+
+/* The content tabs own the full top edge; feature navigation starts below them. */
+#tabs{position:fixed;inset:0 0 auto 0;width:100%;height:40px;z-index:30;padding:0 10px;gap:5px;background:var(--bg);overflow:visible}
+#tabs #topbar-home{padding:0 8px 0 0}
+#tabs .tab-list{gap:1px}
+#tabs .tabitem>button[data-tab]{padding:0 6px}
+#tabs .tabitem .tabclose{min-width:24px;padding:0 6px}
+#tabs .tab-create{width:30px;height:30px;padding:0}
+#sidebar{top:40px;bottom:0;padding:4px 10px 12px}
+#sidebar .brand{min-height:24px;padding:0;align-items:flex-start}
+#sidebar-toggle{width:24px;height:24px;padding:0;line-height:1}
+#sidebar .navitem{min-height:36px;margin:1px 0;padding:7px 8px}
+#workspace{position:fixed;top:40px;bottom:0;left:230px;right:0;margin:0!important;width:auto!important;height:auto!important}
+body.sidebar-minimized #workspace{left:56px;margin:0!important;width:auto!important}
+body.sidebar-minimized #sidebar{padding:4px 5px 10px}
+body.sidebar-minimized #sidebar-toggle{top:4px;left:9px}
+body.sidebar-minimized #sidebar:hover,body.sidebar-minimized #sidebar:focus-within{padding:4px 10px 12px}
+body.sidebar-minimized #sidebar:hover .brand,body.sidebar-minimized #sidebar:focus-within .brand{padding:0}
+body.sidebar-minimized #sidebar .navitem{min-height:36px;padding:7px 4px}
+body.sidebar-minimized #sidebar:hover .navitem,body.sidebar-minimized #sidebar:focus-within .navitem{padding:7px 8px}
+#team-subtabs{height:38px;padding:0 8px;gap:2px}
+#team-subtabs .team-subtab-list{gap:1px}
+#team-subtabs .team-subtab-list>button,#team-subtabs .team-tab>button{padding:0 7px}
+#team-subtabs .team-tab>button[data-team-close]{min-width:24px;padding:0 6px}
+#team-subtabs .team-tab-add{margin-left:4px}
+#chat-subtabs{min-height:38px;height:38px;padding:0 8px;gap:4px}
+#chat-subtabs button,#chat-subtabs summary{padding:0 7px}
+#chat-subtabs .chat-subtab [data-chat-child-close]{min-width:24px;padding:0 6px}
+#chat-subtabs .chat-tab-add>summary,#team-subtabs .chat-tab-add>summary{height:30px;min-width:30px}
+#sidebar .nav-icon{font-size:21px;line-height:1;transform:scale(1.08)}
+#sidebar [data-page="team"] .nav-icon,#sidebar [data-page="context"] .nav-icon,#sidebar [data-page="engine"] .nav-icon{font-size:22px;line-height:1;transform:scale(1.12)}
+body.sidebar-minimized #sidebar [data-page="team"] .nav-icon,body.sidebar-minimized #sidebar [data-page="context"] .nav-icon,body.sidebar-minimized #sidebar [data-page="engine"] .nav-icon{font-size:24px}
+@media(max-width:1050px){#workspace{left:190px}}
+@media(max-width:700px){#workspace{left:70px}}
+.attachment-chip span,.message-attachment span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.attachment-chip small,.message-attachment small{display:block;color:var(--soft);font-size:10px}
+.attachment-chip>button:last-child{padding:3px 6px;background:transparent;border:0;color:var(--soft)}
+.attachment-confirm,.attachment-image-preview{max-width:min(560px,94vw);max-height:90vh;padding:22px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink)}
+.attachment-confirm::backdrop,.attachment-image-preview::backdrop{background:#000a}
+.attachment-confirm ul{max-height:35vh;overflow:auto;padding-left:22px;word-break:break-word}
+.attachment-confirm .actions{display:flex;justify-content:flex-end;gap:8px}
+.attachment-image-preview{width:min(860px,94vw);max-width:none}
+.attachment-image-preview img{display:block;max-width:100%;max-height:75vh;margin:auto;object-fit:contain}
+.attachment-image-preview .heading{display:flex;justify-content:space-between;align-items:center;gap:12px}

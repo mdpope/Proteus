@@ -2,16 +2,14 @@ import SwiftUI
 
 struct SchedulesView: View {
     @EnvironmentObject var store: RemoteStore
+    var onSelect: ((JSON) -> Void)? = nil
     @State private var path: [String] = []
     var body: some View {
         NavigationStack(path: $path) {
             List(store.state["schedules"].array, id: \.self) { schedule in
-                NavigationLink(value: "schedule:" + schedule["id"].string) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(schedule["name"].string.isEmpty ? schedule["id"].string : schedule["name"].string).font(.headline)
-                        Text("\(schedule["cron"].string) · \(schedule["timezone"].string)").font(.caption.monospaced()).foregroundStyle(.secondary)
-                        Text(schedule["enabled"].bool ? "Enabled" : "Paused").font(.caption).foregroundStyle(schedule["enabled"].bool ? .green : .secondary)
-                    }.padding(.vertical, 5)
+                Group {
+                    if let onSelect { Button { onSelect(schedule) } label: { scheduleRow(schedule) } }
+                    else { NavigationLink(value: "schedule:" + schedule["id"].string) { scheduleRow(schedule) } }
                 }
             }.navigationTitle("Schedules").refreshable { await store.refresh() }
                 .safeAreaInset(edge: .bottom) { ConnectionStatus().padding().background(.bar) }
@@ -20,6 +18,13 @@ struct SchedulesView: View {
                     else { ChatView(id: value) }
                 }
         }
+    }
+    private func scheduleRow(_ schedule: JSON) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(schedule["name"].string.isEmpty ? schedule["id"].string : schedule["name"].string).font(.headline)
+            Text("\(schedule["cron"].string) · \(schedule["timezone"].string)").font(.caption.monospaced()).foregroundStyle(.secondary)
+            Text(schedule["enabled"].bool ? "Enabled" : "Paused").font(.caption).foregroundStyle(schedule["enabled"].bool ? .green : .secondary)
+        }.padding(.vertical, 5)
     }
 }
 struct ScheduleView: View {

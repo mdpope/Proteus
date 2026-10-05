@@ -178,7 +178,7 @@ export class ContextStore {
         total += Buffer.byteLength(text);
         if (total > 300_000) throw new Error('Selected context exceeds 300 KB. Select fewer sources for this chat.');
         record.content = text;
-      } else this.resolveMcp(record, false);
+      } else { record.canonicalSource=fs.realpathSync(entry.path);record.canonicalRoot=fs.realpathSync(entry.roots[0]);this.resolveMcp(record, false); }
       records.push(record);
       for (const root of entry.roots) if (fs.existsSync(root) && !roots.includes(root)) roots.push(directory(root));
     }
@@ -187,6 +187,7 @@ export class ContextStore {
     return { schemaVersion: 1, baseWorkspace: { cwd, additionalDirectories: original.additionalDirectories }, followsWorkspace: !!profile && revision({ cwd, additionalDirectories: original.additionalDirectories }) === revision({ cwd: profile.cwd, additionalDirectories: profile.additionalDirectories }), workspaceId: profile?.id || null, workspaceName: profile?.name || path.basename(cwd), includeDefaults, selectedIds, agentId: agentId || null, capturedAt: new Date().toISOString(), workspace: { cwd, additionalDirectories: roots.filter(root => root !== cwd) }, entries: records };
   }
   resolveMcp(record, resolveEnvironment = true) {
+    if((record.canonicalSource&&fs.realpathSync(record.path)!==record.canonicalSource)||(record.canonicalRoot&&fs.realpathSync(record.roots[0])!==record.canonicalRoot))throw new Error('Selected MCP source or folder changed. Refresh this chat context: '+record.name);
     const data = parseJSONC(fs.readFileSync(record.path, 'utf8')); const cfg = record.workspaceFile ? data.mcp || data.settings?.mcp || {} : data;
     const definition = (cfg.servers || cfg.mcpServers || {})[record.key];
     if (!definition || revision(definition) !== record.hash) throw new Error('MCP definition changed. Refresh this chat context: ' + record.name);

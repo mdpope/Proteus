@@ -1,10 +1,146 @@
 import WebKit
 import AVFoundation
 import CryptoKit
+import Network
+import SwiftUI
 import XCTest
 @testable import Proteus
 
+private actor PreviewRequestCounter {
+    var count = 0
+    func record() { count += 1 }
+}
+
 final class RemoteTests: XCTestCase {
+    @MainActor func testLifecycleReplayUpdatesArchiveAndEvictsDeletedChatWithoutLosingOtherPages() {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let connection = DeviceConnection(relay: "wss://relay.example.test", hostId: UUID().uuidString, deviceId: UUID().uuidString, key: RemoteCrypto.random())
+        let store = RemoteStore(connection: connection, cacheRoot: root, legacyCredentials: false)
+        let older: JSON = .object(["id": .string("older"), "title": .string("Older")])
+        let target: JSON = .object(["id": .string("target"), "title": .string("Target"), "updatedAt": .string("2026-10-05T00:00:00Z")])
+        store.state = .object(["runs": .array([target, older]), "runCount": .number(2)])
+        store.allRuns = [target, older]
+        store.chats["target"] = target
+        store.setDraft("reply:target", .string("unsent"))
+        store.applyLifecycle(.object(["id": .string("target"), "archived": .bool(true), "archivedAt": .string("2026-10-05T01:00:00Z"), "updatedAt": .string("2026-10-05T01:00:00Z")]))
+        XCTAssertTrue(store.chats["target"]?["archived"].bool == true)
+        XCTAssertEqual(store.allRuns.first?["archivedAt"].string, "2026-10-05T01:00:00Z")
+        XCTAssertFalse(store.state["runs"].array.contains { $0["id"].string == "target" }, "Default history must hide an archived chat immediately")
+        XCTAssertTrue(store.state["runs"].array.contains { $0["id"].string == "older" })
+        store.applyLifecycle(.object(["id": .string("target"), "archived": .bool(false), "archivedAt": .null, "updatedAt": .string("2026-10-05T02:00:00Z")]))
+        XCTAssertTrue(store.state["runs"].array.contains { $0["id"].string == "target" }, "Unarchive must restore the known row without waiting for a new page")
+        var deleted = ""
+        store.onChatDeleted = { deleted = $0 }
+        store.applyLifecycle(.object(["id": .string("target"), "deleted": .bool(true)]))
+        XCTAssertEqual(deleted, "target")
+        XCTAssertNil(store.chats["target"])
+        XCTAssertTrue(store.allRuns.allSatisfy { $0["id"].string != "target" })
+        XCTAssertEqual(store.draft("reply:target"), .null)
+        XCTAssertEqual(store.state["runs"].array.map { $0["id"].string }, ["older"])
+        XCTAssertTrue(chatHasPendingWork(.object(["status": .string("awaiting_input")])))
+        XCTAssertTrue(chatHasPendingWork(.object(["queuedMessages": .array([.object(["id": .string("queued")])])])))
+        XCTAssertFalse(chatHasPendingWork(older))
+    }
+    @MainActor func testDeletedChatWorkspacePromotesBrowserButRemovesScopedDocument() {
+        let store = SharedAppStore()
+        let host = UUID().uuidString, chat = UUID().uuidString
+        let scope = "chat:\(host):\(chat)"
+        let browser = UUID().uuidString, document = UUID().uuidString
+        store.browserTabs.append(BrowserDescriptor(id: browser, title: "Independent page", url: "https://example.test", scope: scope))
+        store.rememberDocument(NativeDocumentDescriptor(id: document, chatKey: scope, title: "Approved document", mediaType: "text/markdown"), content: "ephemeral")
+        store.draftAttachments[scope] = [NativeDraftAttachment(id: UUID().uuidString, name: "draft.png", mediaType: "image/png", bytes: Data([1]))]
+        store.removeChatWorkspace(hostID: host, chatID: chat)
+        XCTAssertEqual(store.browserTabs.first { $0.id == browser }?.scope, "main")
+        XCTAssertEqual(store.browserTabs.first { $0.id == browser }?.url, "https://example.test")
+        XCTAssertTrue(store.documents(in: scope).isEmpty)
+        XCTAssertNil(store.content(for: document, in: scope))
+        XCTAssertNil(store.draftAttachments[scope])
+        store.close(browser)
+    }
+    @MainActor func testAttachmentDraftNeverRestoresBytesOrSilentlyDropsSelection() {
+        let store = RemoteStore()
+        let key = "reply-attachments:synthetic-" + UUID().uuidString
+        let item = NativeDraftAttachment(id: UUID().uuidString, name: "Selected.png", mediaType: "image/png", bytes: Data([1, 2, 3]))
+        store.setDraft(key, .array([.object(["id": .string(item.id), "name": .string(item.name), "mediaType": .string(item.mediaType)])]))
+        defer { store.setDraft(key, .null) }
+        XCTAssertTrue(missingAttachmentRecords(store: store, draftKey: key, items: [item]).isEmpty, "Navigating away and back must retain in-memory selection")
+        let missing = missingAttachmentRecords(store: store, draftKey: key, items: [])
+        XCTAssertEqual(missing.map { $0["name"].string }, ["Selected.png"], "After restart the sender must require reattachment or explicit removal")
+        XCTAssertEqual(Set(missing[0].object.keys), Set(["id", "name", "mediaType"]), "The encrypted draft cache must not contain file bytes or upload authority")
+    }
+    func testApprovedHTMLImagesOnlyReplaceExactListedSource() {
+        let html = #"<img src="chart.png"><img src="https://example.test/other.png"><img src='../secret.png'>"#
+        let rendered = htmlWithApprovedAssets(html, assetDataURLs: ["chart.png": "data:image/png;base64,QUJD"])
+        XCTAssertTrue(rendered.contains("src=\"data:image/png;base64,QUJD\""))
+        XCTAssertTrue(rendered.contains("https://example.test/other.png"), "External references remain blocked by the isolated preview CSP")
+        XCTAssertTrue(rendered.contains("../secret.png"), "Unapproved relative references remain blocked by the isolated preview CSP")
+    }
+    @MainActor func testHTMLPreviewUsesOpaqueFrameNonpersistentStoreAndExplicitScriptSwitch() {
+        let hostile = #"</iframe><meta http-equiv="refresh" content="0;url=https://example.test/escape"><script>location.href='https://example.test/go';fetch('https://example.test/fetch')</script><form action="https://example.test/post"></form><img src="https://example.test/image">"#
+        let shell = IsolatedArtifactWebView.shell(hostile)
+        XCTAssertTrue(shell.contains("iframe sandbox=\"allow-scripts\""))
+        XCTAssertFalse(shell.contains("allow-same-origin"))
+        XCTAssertTrue(shell.contains("&lt;/iframe&gt;"))
+        XCTAssertTrue(shell.contains("default-src 'none'"))
+        XCTAssertTrue(shell.contains("connect-src 'none'"))
+        XCTAssertTrue(shell.contains("form-action 'none'"))
+        XCTAssertFalse(IsolatedArtifactWebView.configuration(scriptsEnabled: false).defaultWebpagePreferences.allowsContentJavaScript)
+        XCTAssertTrue(IsolatedArtifactWebView.configuration(scriptsEnabled: true).defaultWebpagePreferences.allowsContentJavaScript)
+        XCTAssertFalse(IsolatedArtifactWebView.configuration(scriptsEnabled: true).websiteDataStore.isPersistent)
+    }
+    func testFailedToolActivityIsActionableWhileSuccessfulRoutineActivityCanCollapse() {
+        XCTAssertTrue(toolActivityFailed(.object(["name": .string("bash"), "status": .string("completed"), "output": .string("permission denied\n<shellId: local completed with exit code 1>")])))
+        XCTAssertTrue(toolActivityFailed(.object(["name": .string("read_file"), "status": .string("failed"), "error": .string("Access denied")])))
+        XCTAssertFalse(toolActivityFailed(.object(["name": .string("read_file"), "status": .string("completed")])))
+    }
+    @MainActor func testRestoredDocumentTabKeepsStableIdentityWithoutBodyOrApproval() {
+        let chatKey = "chat:synthetic-host:" + UUID().uuidString
+        let documentID = String(repeating: "a", count: 64)
+        let first = SharedAppStore()
+        first.rememberDocument(NativeDocumentDescriptor(id: documentID, chatKey: chatKey, title: "Generated brief", mediaType: "text/markdown"), content: "SYNTHETIC PRIVATE DOCUMENT")
+        XCTAssertEqual(first.content(for: documentID, in: chatKey), "SYNTHETIC PRIVATE DOCUMENT")
+        let restored = SharedAppStore()
+        XCTAssertEqual(restored.documents(in: chatKey).map(\.id), [documentID])
+        XCTAssertNil(restored.content(for: documentID, in: chatKey), "A restored tab must request fresh Mac approval before reading bytes")
+        let childID = String(repeating: "b", count: 64)
+        restored.rememberDocument(NativeDocumentDescriptor(id: childID, chatKey: chatKey, title: "Linked detail", mediaType: "text/markdown", parentID: documentID, relativePath: "detail.md"), content: "IN MEMORY ONLY")
+        let anotherLaunch = SharedAppStore()
+        let child = anotherLaunch.documents(in: chatKey).first { $0.id == childID }
+        XCTAssertEqual(child?.parentID, documentID)
+        XCTAssertEqual(child?.relativePath, "detail.md")
+        XCTAssertNil(anotherLaunch.content(for: childID, in: chatKey))
+        anotherLaunch.closeDocument(childID, in: chatKey)
+        anotherLaunch.closeDocument(documentID, in: chatKey)
+    }
+    @MainActor func testHTMLPreviewBlocksExternalRequestsInStaticAndInteractiveModes() async throws {
+        let counter = PreviewRequestCounter()
+        let listener = try NWListener(using: .tcp, on: .any)
+        listener.newConnectionHandler = { connection in Task { await counter.record() }; connection.cancel() }
+        listener.start(queue: DispatchQueue(label: "proteus-preview-network-test"))
+        defer { listener.cancel() }
+        try await Task.sleep(for: .milliseconds(250))
+        let port = try XCTUnwrap(listener.port?.rawValue)
+        let target = "http://127.0.0.1:\(port)"
+        let html = """
+        <meta http-equiv="refresh" content="0;url=\(target)/refresh">
+        <img src="\(target)/image"><form id="f" action="\(target)/form"><input name="x" value="1"></form>
+        <a id="a" href="\(target)/download" download>download</a>
+        <script>fetch('\(target)/fetch'); location.href='\(target)/navigate'; window.open('\(target)/popup'); document.getElementById('f').submit(); document.getElementById('a').click();</script>
+        """
+        for enabled in [false, true] {
+            let controller = UIHostingController(rootView: IsolatedArtifactWebView(content: html, scriptsEnabled: enabled, error: .constant(nil)))
+            let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 600))
+            window.rootViewController = controller
+            window.makeKeyAndVisible()
+            controller.view.layoutIfNeeded()
+            try await Task.sleep(for: .seconds(2))
+            window.isHidden = true
+            window.rootViewController = nil
+        }
+        let received = await counter.count
+        XCTAssertEqual(received, 0, "Neither static nor interactive preview may reach a local or external network destination")
+    }
     @MainActor func testNativeEncryptedRoundTripAndContinuation() async throws {
         let (data, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/pair")!)
         let fixture = try JSONDecoder().decode(JSON.self, from: data)
@@ -431,6 +567,27 @@ extension DestinationTests {
 }
 
 final class NativeParityTests: XCTestCase {
+    @MainActor func testBrowserScopesAndOneHourSixTabRetention() throws {
+        let shared = SharedAppStore()
+        shared.open(nil, title: "Main", scope: "main")
+        let mainID = try XCTUnwrap(shared.selectedMainBrowser)
+        XCTAssertTrue(shared.tabs(in: "team").isEmpty)
+        shared.open(nil, title: "Team")
+        let teamID = try XCTUnwrap(shared.selectedBrowser)
+        XCTAssertEqual(shared.tabs(in: "main").map(\.id), [mainID])
+        XCTAssertEqual(shared.tabs(in: "team").map(\.id), [teamID])
+        for tab in shared.browserTabs { _ = shared.webView(tab) }
+        for number in 0..<5 { shared.open(nil, title: "Chat \(number)", scope: "chat:host:run"); _ = shared.webView(try XCTUnwrap(shared.browserTabs.last)) }
+        XCTAssertEqual(shared.browserTabs.count, 7)
+        shared.pruneBrowsers(now: Date().addingTimeInterval(3601))
+        XCTAssertFalse(shared.isBrowserLoaded(mainID))
+        XCTAssertTrue(shared.isBrowserLoaded(teamID))
+        XCTAssertEqual(shared.browserTabs.count, 7)
+        shared.select(mainID, in: "main")
+        XCTAssertEqual(shared.selectedMainBrowser, mainID)
+        XCTAssertEqual(shared.selectedBrowser, teamID)
+        for tab in shared.browserTabs { shared.close(tab.id) }
+    }
     @MainActor func testBrowserNavigationPreservesTabAndWebViewAndInvalidatesUnloadedObservers() async throws {
         let shared = SharedAppStore(); shared.open(nil)
         let tab = try XCTUnwrap(shared.browserTabs.first), id = tab.id
@@ -591,6 +748,18 @@ final class NativeParityTests: XCTestCase {
         XCTAssertNotEqual(nativeTimestamp(date, timezone: "America/Denver"), nativeTimestamp(date, timezone: "Asia/Tokyo"))
         XCTAssertEqual(NativeNotifications.safeBody("chat.completed"), "A chat finished.")
         XCTAssertEqual(NativeNotifications.safeBody("private prompt text"), "New activity is available.")
+    }
+    @MainActor func testNotificationRouteParsesOnlyBoundedTargetsWithoutPayloadContent() {
+        let host = "10000000-0000-4000-8000-000000000001"
+        let route = NativeNotifications.NotificationRoute.from(["hostId": host, "chatId": "chat-1", "scheduleId": "schedule-1", "type": "schedule.completed", "prompt": "private prompt"])
+        XCTAssertEqual(route.hostID, host)
+        XCTAssertEqual(route.chatID, "chat-1")
+        XCTAssertEqual(route.scheduleID, "schedule-1")
+        XCTAssertEqual(route.type, "schedule.completed")
+        let invalid = NativeNotifications.NotificationRoute.from(["hostId": "not-a-host", "chatId": "chat\nsecret", "scheduleId": String(repeating: "x", count: 129), "type": ""])
+        XCTAssertEqual(invalid.hostID, "")
+        XCTAssertEqual(invalid.chatID, "")
+        XCTAssertEqual(invalid.scheduleID, "")
     }
 }
 extension DestinationTests {

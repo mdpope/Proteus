@@ -285,3 +285,73 @@ Team Tools unload decision. It is not a six-tab maximum and does not stop termin
 Broader Safari-style tab groups remain a later design. The operator authorized implementing the
 approved backlog and deploying after verification; current historical receipts are not acceptance
 of this redesign. Worker models are capped at GPT-6 Sol with medium/high effort.
+
+
+## October 5 — restore all content scopes without replaying work
+
+Persist safe tab descriptors/order in the main strip, chat workspaces and Team Tools. Browsers
+restore unloaded until activated. Restore identities and layout rather than executing startup
+commands, restarting runs or inheriting a document/script approval. Website external tabs stay
+under browser control; restored Proteus descriptors never automatically reopen external windows.
+
+The remote-document implementation was narrowed after automatic approval review: a peer-level
+View chat documents grant is necessary but insufficient. The requesting client creates a bounded
+pending request for an exact chat-linked document; trusted host UI approves its exact bytes/version
+for that device with an expiry. Revalidate identity, current grant, workspace containment and version
+on every read. Changed content or destination needs a new approval. No body is sent while pending.
+This replaces the initial blanket linked-file read proposal; successful source checks are separate
+from full security/UI validation and installed-client acceptance.
+
+## 2026-10-05 — Explicit sender consent for chat attachments
+
+The operator explicitly approved the guarded delivery workflow after reviewing the proposed
+boundary and synthetic test evidence. The sending client must show the exact selected files,
+destination Mac/chat and named AI provider before Confirm Send. Upload/staging alone never
+starts a chat or forwards bytes. Bind a short-lived one-use consent to authenticated device,
+chat or first-message draft, message, provider and ordered file metadata/digests; verify it again
+at the provider byte boundary. Changing destination or payload requires fresh confirmation.
+Preserve accepted queued attachments privately across staging expiry/restart; never replay an
+ambiguous interrupted provider send. Tests use synthetic files only, with no real user-file or
+live-provider delivery. This authorizes implementation, not unattended export of existing files.
+
+## October 5 — full-width compact top bar and notification routing
+
+The operator clarified that desktop/web navigation begins below a full-width top tab row, with
+Proteus in the upper-left corner. Reduce tab height and title-to-boundary padding before reducing
+any title character allowance. Keep the icon rail, hover slide-over, creation menu and exact
+scroll-position retention. A follow-up screenshot clarified that the collapse arrow should sit
+near the sidebar top, with little empty space before Home and tighter left/right margins. Native
+layout is unchanged by this desktop/web-specific request.
+
+Fix iOS notification opening for cold and running app states before installation. Home is the
+ordinary cold-start destination, but an explicit notification target takes precedence. Native
+remote APNs push remains pending because the operator does not have paid Developer membership;
+local notification routing is independent of that entitlement. Preserve existing signing.
+
+## October 5 — host-owned chat lifecycle and fresh Copilot quota reads
+
+Archive is a reversible visibility state of a Proteus chat, controlled by its owning Mac and
+shared with authorized clients. Deletion is a confirmed Proteus-record operation, not permission
+to delete generated files, provider histories or schedules. Active work and unresolved approvals
+must not be orphaned. Restored descriptors and caches cannot resurrect a deleted chat.
+
+Copilot's long-running SDK process can return a cached quota even when Proteus's own usage cache
+is bypassed. Use a short-lived same-profile read-only quota process for an actual refresh, keeping
+the executing chat client untouched and coalescing simultaneous requests. A local check timestamp
+does not prove a provider observation timestamp. Do not label SDK fetch-time resetDate values as
+authoritative reset times; retain explicit estimated/unreported provenance.
+
+
+## October 5 — selected Claude MCP and runtime model identity
+
+The Claude adapter uses only MCP definitions selected in the captured chat context, passed in a
+private configuration file with strict isolation. Keep resolved environment/header values out of
+process arguments and logs, require confirmed permission hooks, and clean private configuration
+after its process exits. Unselected machine/project servers must not appear implicitly. Runtime
+status and login are separate advertised capabilities: Claude status is supported, while scoped
+login remains unavailable until the installed CLI's credential scope can be verified safely.
+An authentication requirement points to the owning Mac without claiming OAuth succeeded.
+
+Model aliases remain selectable and show resolved model IDs only when the runtime reports them.
+Preserve explicit IDs and provider capabilities; never infer model versions from an alias table.
+No workplace task or paid provider turn is used to test these adapter changes.

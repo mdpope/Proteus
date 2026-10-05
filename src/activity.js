@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { atomicJSON, readJSON } from './files.js';
 
 const types = new Set(['chat.completed', 'review.required', 'schedule.completed', 'device.added', 'device.reconnected']);
-const sharedLogTypes=new Set(['chat.queued','chat.running','chat.awaiting_input','chat.completed','chat.failed','chat.cancelled','chat.interrupted','transport.online','transport.offline','transport.device_added','browser.open','browser.unload','app.started','app.stopping','api.failed']);
+const sharedLogTypes=new Set(['chat.queued','chat.running','chat.awaiting_input','chat.completed','chat.failed','chat.cancelled','chat.interrupted','chat.deleted','transport.online','transport.offline','transport.device_added','browser.open','browser.unload','app.started','app.stopping','api.failed']);
 const limits = { notifications: 1000, logs: 2000, outbox: 500 };
 export function safeLog(value) {
   return String(value || '').replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '')
@@ -57,6 +57,7 @@ export class ActivityStore extends EventEmitter {
     for (const run of engine.listRuns()) this.states.set(run.id, snapshot(run));
     this.listener = run => {
       if (!run?.id) return;
+      if(run.deleted){this.states.delete(run.id);this.log('info','chat.deleted',`Chat ${run.id} deleted from Proteus.`,{hostId:hostId()});return;}
       const before = this.states.get(run.id); this.states.set(run.id, snapshot(run));
       if (run.status === 'awaiting_input' && run.pending?.id && before?.pending !== run.pending.id) this.add('review.required', { hostId: hostId(), chatId: run.id });
       if (run.status === 'completed' && before?.status !== 'completed') {

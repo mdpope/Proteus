@@ -1,5 +1,39 @@
 # Changes
 
+## 0.2.0 — October 5, 2026
+
+- Keep open chats, schedules, browsers, terminals and documents as content tabs. Chat and Team
+  workspaces share one + menu, consistent browser controls and persistent tab order/scroll position.
+- Restore content tabs after reopening Proteus. Browser pages load only when selected; Home opens
+  first with version, update-source status and release notes.
+- Put Proteus in the upper-left of a compact full-width tab bar, with the sidebar below it.
+  Keep feature icons available when the sidebar is collapsed and preserve readable tab titles.
+- Make desktop and web chats consistent: provider names, grouped expandable Activity, compact
+  composer/model controls, read-only remote details and automatic earlier-history loading.
+- Manage chats from context menus or chat-view controls: Archive, Unarchive and confirmed Delete.
+  Show Archived sits after the date filters; host-owned changes sync to authorized clients.
+- Paste supported images/files into chat drafts, preview images with click or tap, and close with
+  Escape, the backdrop or X. Sending confirms the exact files and provider destination.
+- Open generated Markdown and HTML documents inside their chat workspace on demand. Remote files
+  use revocable viewing permission and approval for the exact document version; scripts stay off
+  until explicitly enabled in an isolated preview.
+- Add optional tmux-backed local terminals, session/profile controls and locally saved output.
+  Reconnect when possible or start a fresh shell by typing, without replaying previous commands.
+- Retain the six most recently used browser tabs and tabs touched within the past hour, protecting
+  active work while allowing older pages to unload.
+- Preserve generated Standup order when links change; correct iPad list editing and separate main
+  browser tabs from Team browser tabs.
+- Read Copilot quota with a fresh isolated SDK process so Refresh does not reuse a stale
+  process-lifetime snapshot or interrupt running chats.
+- Refresh provider allowance more often during execution and less often while idle, label estimated
+  Copilot reset dates, and improve provider/MCP authentication recovery.
+- Connect explicitly selected MCP servers to Claude chats with private configuration and existing
+  tool permissions. Show runtime-reported Claude model versions and actionable connection status.
+- Route iPhone/iPad notification taps after startup restoration, retain schedule targets and
+  show unavailable targets safely instead of letting Home or restored tabs override navigation.
+- Clear reviewed failures from Needs Attention while keeping unresolved approvals visible. Expand
+  Resources with app processes, host children and managed persistent-terminal usage.
+
 ## Connection and presentation follow-up
 
 - Show desktop AI Allowance as three compact provider columns, retaining details and independent
@@ -31,42 +65,7 @@
 
 This is a concise behavior log. Git commits and pull requests contain the complete change history.
 
-## Unreleased
-
-- Queue provider-neutral interactive HTML previews with scripts disabled by default and trusted
-  enable/stop controls. Scope approval to the artifact version and preview session; retain
-  isolation and separate permissions for network or app access. This is approved design only.
-
-- Record the approved remote-document architecture: chat-bound host document IDs, a separate
-  revocable viewing grant, authorized bounded relay reads, version/refresh behavior and in-memory
-  open-tab retention. No automatic persistent offline copies or broadened filesystem grants.
-  Queued design only; no runtime or deployed behavior changed.
-
-- Queue click-to-open generated Markdown links across clients, preserving chat state without
-  automatic tabs or forced split view. Confirm Escape closes image previews. Broader tab
-  organization awaits further input; existing local Markdown linking is not cross-client parity.
-
-- Record approval of grouped chat Activity and shared details, preserving compact native mobile
-  styling. Queue tab-bar branding and persistent normalized navigation icons, remote composer/
-  read-only details parity, automatic earlier-history loading and pasted image/file attachments.
-  These are approved requirements, not implemented behavior.
-
-- Document and queue Copilot reset provenance, adaptive allowance refresh, consistent provider
-  labels and desktop/web chat parity. Record grouped Activity and usage/context details as design
-  proposals; source review and read-only status inspection do not constitute implementation.
-
-- Queue matching dividers between Team Tools, Standup and the first browser subtab; the
-  screenshot-reported presentation issue is not yet fixed.
-
-- Queue a desktop Standup state-preservation fix: adding a saved link must retain the generated
-  daily order through undocking/redocking. This is a reported issue, not an implemented fix.
-
-- Queue investigation of MCP configuration reporting Connected while the active chat reports
-  needs-auth, including per-session state and consistent Mac/iOS recovery feedback.
-
-- Queue provider sign-in/reconnect controls and authentication refresh without restarting for
-  Copilot, Codex and Claude Code; acceptance criteria are in `docs/planned-updates.md`.
-  This is planned work, not an implemented authentication fix.
+## Earlier changes
 
 - Keep new-tab search and address controls reachable when history grows, in both main and Team
   browsers. Bound long rows to the viewport and show history in batches of 25 with **More**.

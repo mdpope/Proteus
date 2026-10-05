@@ -4,6 +4,7 @@ import os from 'node:os';
 import { spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { createInterface } from 'node:readline';
+import { fileURLToPath } from 'node:url';
 import { validateModelOptions } from './model-catalog.js';
 import { displayText, toolSummary } from './tool-activity.js';
 
@@ -18,10 +19,57 @@ export function claudeExecutable() {
 }
 export function claudeModel(model, runtime={}) {
   const efforts = (model.supportedEffortLevels || []).filter(e => typeof e === 'string');
-  return { id:model.value || model.id, name:model.displayName || model.value, description:model.description, resolvedModel:model.resolvedModel,
+  const id=model.value||model.id, resolved=typeof model.resolvedModel==='string'&&model.resolvedModel!==id?model.resolvedModel:null;
+  const name=(model.displayName||id)+(resolved?` · ${resolved} (alias)`:'');
+  return { id, name, description:resolved?`${model.description||''}${model.description?' ':''}Alias currently resolves to ${resolved}; this can change with the Claude runtime or account.`:model.description, resolvedModel:model.resolvedModel,
     controls:{ reasoningEfforts:efforts, reasoningSupported:model.supportsEffort ?? efforts.length>0, defaultReasoningEffort:null,
       contextTiers:[{id:'default',promptTokens:null,totalTokens:null}], maxOutputTokens:null,
       serviceTiers:model.supportsFastMode === true && !runtime.fast_mode_disabled_reason ? [{id:'fast',name:'Fast (extra usage)'}] : [] } };
+}
+const claudeMcpLauncher=fileURLToPath(new URL('./claude-mcp-launcher.cjs',import.meta.url));
+export function claudeMcpConfig(selected={},cwd,makeLauncher) {
+  if(!selected||typeof selected!=='object'||Array.isArray(selected)||Object.keys(selected).length>20)throw new Error('Choose at most 20 Claude MCP servers.');
+  const mcpServers={};
+  for(const [name,definition] of Object.entries(selected)){
+    if(!/^[a-zA-Z0-9_-]{1,80}$/.test(name)||!definition||typeof definition!=='object'||Array.isArray(definition))throw new Error('A selected Claude MCP server has an invalid name or definition.');
+    if(definition.tools!=null&&!(Array.isArray(definition.tools)&&definition.tools.length===1&&definition.tools[0]==='*'))throw new Error(`Claude cannot enforce the selected tool filter for ${name}. Remove that filter or deselect this server.`);
+    const type=definition.type==='local'?'stdio':definition.type||'stdio',timeout=definition.timeout;
+    if(timeout!=null&&(!Number.isSafeInteger(timeout)||timeout<1000||timeout>86_400_000))throw new Error(`Claude MCP timeout for ${name} must be 1 second to 24 hours.`);
+    const common=timeout==null?{}:{timeout};
+    if(type==='stdio'){
+      if(typeof definition.command!=='string'||!definition.command.trim()||/\0|[\r\n]/.test(definition.command))throw new Error(`Claude MCP command for ${name} is invalid.`);
+      const args=definition.args||[],env=definition.env||{};
+      if(!Array.isArray(args)||args.some(value=>typeof value!=='string'||value.includes('\0'))||!env||typeof env!=='object'||Array.isArray(env)||Object.entries(env).some(([key,value])=>!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)||typeof value!=='string'||value.includes('\0')))throw new Error(`Claude MCP process options for ${name} are invalid.`);
+      let launch={command:definition.command,args,env};
+      if(definition.workingDirectory){
+        if(typeof definition.workingDirectory!=='string'||!path.isAbsolute(definition.workingDirectory))throw new Error(`Claude MCP ${name} needs an absolute working directory.`);
+        let directory,chatDirectory;try{directory=fs.realpathSync(definition.workingDirectory);chatDirectory=fs.realpathSync(cwd);if(!fs.statSync(directory).isDirectory())throw new Error('not a directory');}catch{throw new Error(`Claude MCP ${name} working directory is unavailable. Refresh the selected source.`);}
+        if(directory!==chatDirectory){if(!makeLauncher)throw new Error(`Claude MCP ${name} needs a private working-directory launcher.`);launch=makeLauncher(name,{workingDirectory:directory,command:definition.command,args,env});}
+      }
+      mcpServers[name]={type:'stdio',...launch,...common};
+    }else if(type==='http'||type==='sse'){
+      let url;try{url=new URL(definition.url);}catch{throw new Error(`Claude MCP URL for ${name} is invalid.`);}
+      if(!['http:','https:'].includes(url.protocol)||url.username||url.password||url.protocol==='http:'&&!['localhost','127.0.0.1','::1'].includes(url.hostname))throw new Error(`Claude MCP ${name} needs HTTPS or a local HTTP endpoint without URL credentials.`);
+      const headers=definition.headers||{};
+      if(!headers||typeof headers!=='object'||Array.isArray(headers)||Object.entries(headers).some(([key,value])=>!/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(key)||typeof value!=='string'||/[\r\n\0]/.test(value)))throw new Error(`Claude MCP headers for ${name} are invalid.`);
+      mcpServers[name]={type,url:url.href,headers,...common};
+    }else throw new Error(`Claude MCP transport for ${name} is unsupported.`);
+  }
+  return {mcpServers};
+}
+function privateClaudeMcpConfig(selected,cwd){
+  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-claude-mcp-'));fs.chmodSync(directory,0o700);
+  const file=path.join(directory,'mcp.json');
+  try{
+    let total=0;
+    const config=claudeMcpConfig(selected,cwd,(name,spec)=>{
+      const content=JSON.stringify(spec);total+=Buffer.byteLength(content);if(total>512*1024)throw new Error('Selected Claude MCP configuration is too large.');
+      const specFile=path.join(directory,`launcher-${name}.json`);fs.writeFileSync(specFile,content,{mode:0o600,flag:'wx'});
+      return {command:process.execPath,args:[claudeMcpLauncher,specFile],env:{ELECTRON_RUN_AS_NODE:'1'}};
+    });
+    const content=JSON.stringify(config);total+=Buffer.byteLength(content);if(total>512*1024)throw new Error('Selected Claude MCP configuration is too large.');fs.writeFileSync(file,content,{mode:0o600,flag:'wx'});return {file,dispose:()=>fs.rmSync(directory,{recursive:true,force:true})};
+  }
+  catch(error){fs.rmSync(directory,{recursive:true,force:true});throw error;}
 }
 export function claudeAccountAvailable(account={}) {
   // Current authenticated CLI initialization reports profile fields instead of
@@ -70,10 +118,10 @@ export async function stopClaudeProcess(child, {platform=process.platform,signal
 }
 // The private process uses the same bidirectional protocol as Anthropic's Agent SDK.
 export class ClaudeRPC extends EventEmitter {
-  constructor({command=claudeExecutable(),args=[],cwd=os.tmpdir(),env=process.env}={}) {
+  constructor({command=claudeExecutable(),args=[],cwd=os.tmpdir(),env=process.env,mcpConfigPath=null}={}) {
     super(); this.pending=new Map(); this.sequence=0; this.ended=false;
     this.child=spawn(command,['--print','--input-format','stream-json','--output-format','stream-json','--verbose','--include-partial-messages',
-      '--permission-prompt-tool','stdio','--permission-mode','default','--setting-sources','','--strict-mcp-config','--mcp-config','{"mcpServers":{}}',
+      '--permission-prompt-tool','stdio','--permission-mode','default','--setting-sources','','--strict-mcp-config','--mcp-config',mcpConfigPath||'{"mcpServers":{}}',
       '--disable-slash-commands','--no-chrome',...args],{cwd,env:{...env,CLAUDE_CODE_DISABLE_AUTO_MEMORY:'1'},detached:process.platform!=='win32',stdio:['pipe','pipe','pipe']});
     // Runtime stderr may contain private prompt/credential material. Do not persist it in errors.
     this.child.stderr.on('data',()=>{});
@@ -95,11 +143,33 @@ export class ClaudeRPC extends EventEmitter {
   retryClose(){if(this.cleanupFailure){this.closing=null;this.cleanupFailure=null;}return this.close();}
 }
 export class ClaudeProvider {
-  constructor(options={}, {context}={}) {this.options=options;this.context=context;this.active=null;this.cleanupClients=new Set();this.cleanupError=null;}
-  client(args=[],cwd){return this.options.clientFactory ? this.options.clientFactory({args,cwd}) : new ClaudeRPC({...this.options,args,cwd});}
+  constructor(options={}, {context}={}) {this.options=options;this.context=context;this.active=null;this.cleanupClients=new Set();this.cleanupError=null;this.acceptedMediaTypes=Object.freeze(['image/png','image/jpeg','image/gif','image/webp','text/plain']);}
+  client(args=[],cwd,mcpConfigPath=null){return this.options.clientFactory ? this.options.clientFactory({args,cwd,mcpConfigPath}) : new ClaudeRPC({...this.options,args,cwd,mcpConfigPath});}
+  selectedMcp(run){const snapshot=run.schedule.context,managed=snapshot&&this.context?this.context.providerContext(snapshot):null;return managed?{...Object.fromEntries(Object.entries(snapshot.includeDefaults!==false?run.schedule.mcpServers||{}:{}).filter(([name])=>!managed.disabledLegacyMcp.includes(name))),...managed.mcpServers}:run.schedule.mcpServers||{};}
+  async mcpState(client,names,timeout=10000,selected={}){
+    let raw;
+    try{raw=await client.request({subtype:'mcp_status'},timeout);}catch{throw new Error('Claude MCP connection status is unavailable. Check the selected server on this Mac and retry.');}
+    const list=raw?.mcpServers||raw?.mcp_servers||raw?.servers;
+    if(!Array.isArray(list))throw new Error('Claude did not return MCP connection status. Update Claude Code on this Mac.');
+    return names.map(name=>{const item=list.find(value=>value?.name===name),status=['connected','pending','failed','needs-auth','disabled'].includes(item?.status)?item.status:'not-connected';return {name,status,scope:'selected-chat',observedAt:new Date().toISOString(),remote:['http','sse'].includes(selected[name]?.type),...(status==='failed'?{error:'Claude could not connect to this selected server. Check its Mac configuration and credentials.'}:status==='needs-auth'?{error:'This server needs sign-in in Claude Code on the owning Mac.'}:{})};});
+  }
+  async mcpStatus(run){
+    const selected=this.selectedMcp(run),names=Object.keys(selected);if(!names.length)return {servers:[]};
+    if(this.cleanupError)throw this.cleanupError;
+    if(this.active&&this.activeRunId===run.id)return {servers:await this.mcpState(this.active,names,10000,selected)};
+    if(this.active)throw new Error('Refresh Claude MCP connections after the active Claude turn finishes.');
+    if(this.mcpProbe)throw new Error('A Claude MCP connection check is already running.');
+    const config=privateClaudeMcpConfig(selected,run.schedule.workspace.cwd);
+    let client,result,cleanupError;
+    try{client=this.client(['--no-session-persistence','--system-prompt','Proteus selected MCP connection status.'],run.schedule.workspace.cwd,config.file);this.mcpProbe=client;await client.initialize({},30000);result={servers:await this.mcpState(client,names,10000,selected)};}
+    catch(error){if(error.message?.startsWith('Claude did not return MCP'))throw error;throw new Error('Claude MCP connection status is unavailable. Check the selected server on this Mac and retry.');}
+    finally{if(client)try{await client.close();}catch(error){this.cleanupClients.add(client);this.cleanupError=error;cleanupError=error;}if(!cleanupError&&this.mcpProbe===client)this.mcpProbe=null;config.dispose();}
+    if(cleanupError)throw cleanupError;
+    return result;
+  }
   async retryPendingCleanup(){
     for(const client of this.cleanupClients){
-      try{await (client.retryClose?client.retryClose():client.close());this.cleanupClients.delete(client);if(this.active===client)this.active=null;}
+      try{await (client.retryClose?client.retryClose():client.close());this.cleanupClients.delete(client);if(this.active===client)this.active=null;if(this.mcpProbe===client)this.mcpProbe=null;}
       catch(error){this.cleanupError=error;}
     }
     if(!this.cleanupClients.size)this.cleanupError=null;
@@ -136,13 +206,22 @@ export class ClaudeProvider {
     if(this.quotaClient===client)this.quotaClient=null;return quota;
   }
 
-  async run({run,prompt,emit,ask,update,signal,stream}) {
+  async run({run,prompt,attachments=[],emit,ask,update,signal,stream}) {
+    const content=attachments.length?[{type:'text',text:prompt}]:prompt;
+    for(const item of attachments){
+      if(!this.acceptedMediaTypes.includes(item.mediaType)||!Buffer.isBuffer(item.bytes)||item.bytes.length>8*1024*1024)throw new Error('Claude can receive images and UTF-8 plain text here. PDF and other files are not supported.');
+      if(item.mediaType==='text/plain'){
+        let decoded;try{decoded=new TextDecoder('utf-8',{fatal:true}).decode(item.bytes);}catch{throw new Error('Claude requires UTF-8 plain text attachments.');}
+        if(decoded.includes('\0'))throw new Error('Claude cannot receive binary content as plain text.');
+        content.push({type:'text',text:`Attached plain text file: ${item.name}\n\n${decoded}`});
+      }else content.push({type:'image',source:{type:'base64',media_type:item.mediaType,data:item.bytes.toString('base64')}});
+    }
     if(this.cleanupError)throw this.cleanupError;
     if(this.active)throw new Error('A Claude turn is already active.');
+    if(this.mcpProbe)throw new Error('Wait for the Claude MCP connection check to finish before starting this chat.');
     const snapshot=run.schedule.context,managed=snapshot&&this.context?this.context.providerContext(snapshot):null;
     if(managed?.customAgents?.some(a=>a.tools!==null))throw new Error('Claude cannot enforce selected editor agent tool filters. Deselect restricted agents.');
-    const selected=managed?{...Object.fromEntries(Object.entries(snapshot.includeDefaults!==false?run.schedule.mcpServers||{}:{}).filter(([name])=>!managed.disabledLegacyMcp.includes(name))),...managed.mcpServers}:run.schedule.mcpServers||{};
-    if(Object.keys(selected).length)throw new Error('Claude MCP integration is not yet available. Deselect MCP servers for this Claude chat.');
+    const selected=this.selectedMcp(run);
     if(run.schedule.skillDirectories?.length&&snapshot?.includeDefaults!==false)throw new Error('For Claude select individual skills; legacy skill directories cannot be isolated.');
     if(signal.aborted)throw new Error('Cancelled');
     const instructions=`You are running inside Proteus. Use only the following explicitly supplied instructions and sources. Do not discover instruction, skill, agent, or memory files automatically.\nWorkspace: ${run.schedule.workspace.cwd}\n${managed?.instructionText||''}\n${(managed?.customAgents||[]).map(a=>`Agent ${a.displayName}:\n${a.prompt}`).join('\n\n')}\nEditor context: ${JSON.stringify(run.schedule.editorContext||null)}`;
@@ -155,7 +234,9 @@ export class ClaudeProvider {
     if(run.providerSessionId)args.push('--resume',run.providerSessionId);
     // Additional roots are conveyed to the native permission system, with skills disabled.
     for(const root of run.schedule.workspace.additionalDirectories||[])args.push('--add-dir',root);
-    const client=this.client(args,run.schedule.workspace.cwd);this.active=client;
+    const mcpConfig=Object.keys(selected).length?privateClaudeMcpConfig(selected,run.schedule.workspace.cwd):null;
+    let client;try{client=this.client(args,run.schedule.workspace.cwd,mcpConfig?.file||null);}catch(error){mcpConfig?.dispose();throw error;}
+    this.active=client;this.activeRunId=run.id;
     let resolve,reject;const done=new Promise((a,b)=>{resolve=a;reject=b;});done.catch(()=>{});
     const calls=new Map();let currentId='claude',resultSeen=false;const approved=new Map();
     let remaining=this.options.timeoutMs??30*60*1000,started=performance.now(),timer,pauses=0,finished=false;
@@ -195,19 +276,33 @@ export class ClaudeProvider {
     };
     const closed=e=>{if(!resultSeen)reject(e);};const abort=()=>{void client.close().then(()=>reject(new Error('Cancelled')),error=>reject(error));};
     client.on('message',message);client.on('request',request);client.on('closed',closed);signal.addEventListener('abort',abort,{once:true});
-    try {const result=await client.initialize({PreToolUse:[{matcher:'.*',hookCallbackIds:['proteus_permission']}]});
+    try {let result;
+      try{result=await client.initialize({PreToolUse:[{matcher:'.*',hookCallbackIds:['proteus_permission']}]});}
+      catch(error){if(Object.keys(selected).length)throw new Error('Claude could not initialize the selected MCP connections on this Mac. Check their configuration and retry.');throw error;}
       if(result.hooks_applied!==true)throw new Error('Claude did not confirm the Proteus permission hooks. Update Claude Code before running this chat.');
+      if(Object.keys(selected).length){
+        const names=Object.keys(selected),deadline=Date.now()+30_000;let states=[];
+        do{
+          states=await this.mcpState(client,names,Math.max(1000,Math.min(5000,deadline-Date.now())),selected);
+          run.mcpConnections=Object.fromEntries(states.map(item=>[item.name,{status:item.status,...(item.error?{error:item.error}:{})}]));update();
+          const unavailable=states.find(item=>['failed','needs-auth','disabled','not-connected'].includes(item.status));
+          if(unavailable)throw new Error(`Claude MCP ${unavailable.name}: ${unavailable.status}. ${unavailable.error||'Check the selected server on this Mac.'}`);
+          if(states.every(item=>item.status==='connected'))break;
+          await new Promise(resolve=>setTimeout(resolve,250));
+        }while(Date.now()<deadline);
+        if(states.some(item=>item.status!=='connected'))throw new Error('Claude MCP connection is still pending. Check the selected server on this Mac and retry.');
+      }
       const model=(result.models||[]).map(m=>claudeModel(m,result)).find(m=>m.id===run.schedule.model);if(!model)throw new Error('Choose an available Claude model from the provider catalog.');validateModelOptions(run.schedule,model);
       // Fast mode requires both model support and runtime opt-in. Do not silently ignore a selection.
       if(run.schedule.serviceTier==='fast'&&result.fast_mode_disabled_reason)throw new Error(`Claude fast mode unavailable: ${result.fast_mode_disabled_reason}. Choose Provider default.`);
       run.modelCapabilities={id:model.id,controls:model.controls,capturedAt:new Date().toISOString()};if(snapshot){snapshot.suppliedAt=new Date().toISOString();snapshot.delivery='Claude explicit system prompt accepted';}update();
-      if(signal.aborted)throw new Error('Cancelled');client.write({type:'user',session_id:run.providerSessionId||'',message:{role:'user',content:prompt},parent_tool_use_id:null});await done;
+      if(signal.aborted)throw new Error('Cancelled');client.write({type:'user',session_id:run.providerSessionId||'',message:{role:'user',content},parent_tool_use_id:null});await done;
     }finally{
       finished=true;clearTimeout(timer);signal.removeEventListener('abort',abort);let cleanupError;
       try{await client.close();}catch(error){cleanupError=error;this.cleanupError=error;this.cleanupClients.add(client);}
-      finally{client.off('message',message);client.off('request',request);client.off('closed',closed);if(!cleanupError)this.active=null;for(const tool of calls.values())if(tool.status==='running')tool.status='interrupted';update();}
+      finally{client.off('message',message);client.off('request',request);client.off('closed',closed);mcpConfig?.dispose();if(!cleanupError){this.active=null;this.activeRunId=null;}for(const tool of calls.values())if(tool.status==='running')tool.status='interrupted';update();}
       if(cleanupError)throw cleanupError;
     }
   }
-  async close(){const results=await Promise.allSettled([...new Set([this.active,this.quotaClient,...this.cleanupClients].filter(Boolean))].map(client=>client.close()));const failed=results.find(result=>result.status==='rejected');if(failed){this.cleanupError=failed.reason;throw failed.reason;}}
+  async close(){const results=await Promise.allSettled([...new Set([this.active,this.mcpProbe,this.quotaClient,...this.cleanupClients].filter(Boolean))].map(client=>client.close()));const failed=results.find(result=>result.status==='rejected');if(failed){this.cleanupError=failed.reason;throw failed.reason;}}
 }

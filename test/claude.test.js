@@ -5,14 +5,15 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {once} from 'node:events';
-import {ClaudeProvider,ClaudeRPC,claudeModel,stopClaudeProcess,claudeAccountAvailable,claudeQuota} from '../src/claude.js';
+import {execFileSync} from 'node:child_process';
+import {ClaudeProvider,ClaudeRPC,claudeModel,claudeMcpConfig,stopClaudeProcess,claudeAccountAvailable,claudeQuota} from '../src/claude.js';
 import {normalizeProviderUsage,ProviderUsageCache} from '../src/usage.js';
 import {providerUsageSummary} from '../public/usage.js';
 const model={value:'test',displayName:'Synthetic',supportedEffortLevels:['low','high'],supportsFastMode:true};
 class Fake extends EventEmitter {
   constructor(action){super();this.action=action;this.responses=[];}
   async initialize(hooks){this.hooks=hooks;return {hooks_applied:true,models:[model],account:{tokenSource:'oauth'},fast_mode_disabled_reason:'sdk_opt_in_required'};}
-  write(message){if(message.type==='user')queueMicrotask(()=>this.action?.(this));}
+  write(message){if(message.type==='user'){this.userMessage=message;queueMicrotask(()=>this.action?.(this));}}
   respond(id,response){this.responses.push({id,response});this.emit('response');}
   async close(){this.closed=true;}
 }
@@ -23,11 +24,120 @@ test('Claude capabilities originate in runtime metadata; disabled fast mode is n
   assert.deepEqual(claudeModel(model).controls.reasoningEfforts,['low','high']);assert.equal(claudeModel(model).controls.contextTiers[0].totalTokens,null);
   assert.equal(claudeModel(model,{fast_mode_disabled_reason:'sdk_opt_in_required'}).controls.serviceTiers.length,0);
 });
+test('Claude model labels reveal runtime-resolved aliases without inventing pinned choices',()=>{
+  const aliases=[{value:'sonnet',displayName:'Sonnet',resolvedModel:'claude-sonnet-5',description:'Current model'}, {value:'claude-fable-5[1m]',displayName:'Fable',resolvedModel:'claude-fable-5'}].map(item=>claudeModel(item));
+  assert.equal(aliases[0].id,'sonnet');assert.match(aliases[0].name,/Sonnet.*claude-sonnet-5.*alias/);
+  assert.match(aliases[0].description,/can change/);assert.equal(aliases[1].id,'claude-fable-5[1m]');
+  assert.equal(claudeModel({value:'pinned-id',displayName:'Pinned',resolvedModel:'pinned-id'}).name,'Pinned');
+});
+test('Claude MCP configuration admits selected stdio and HTTPS only, preserving explicit scope',()=>{
+  const selected={local:{type:'stdio',command:'/usr/bin/false',args:['--synthetic'],env:{KEY:'SYNTHETIC_SECRET'},workingDirectory:'/tmp'},remote:{type:'http',url:'https://mcp.example.invalid/api',headers:{Authorization:'Bearer SYNTHETIC_SECRET'}}};
+  assert.deepEqual(claudeMcpConfig(selected,'/tmp').mcpServers,{local:{type:'stdio',command:'/usr/bin/false',args:['--synthetic'],env:{KEY:'SYNTHETIC_SECRET'}},remote:selected.remote});
+  assert.throws(()=>claudeMcpConfig({bad:{type:'http',url:'http://example.invalid',headers:{}}},'/tmp'),/HTTPS/);
+  assert.throws(()=>claudeMcpConfig({bad:{type:'stdio',command:'/usr/bin/false',workingDirectory:'/elsewhere'}},'/tmp'),/working directory is unavailable/);
+  assert.throws(()=>claudeMcpConfig({bad:{type:'stdio',command:'/usr/bin/false',workingDirectory:'relative'}},'/tmp'),/absolute working directory/);
+  assert.throws(()=>claudeMcpConfig({bad:{type:'stdio',command:'/usr/bin/false',tools:['read']}},'/tmp'),/cannot enforce/);
+  assert.throws(()=>claudeMcpConfig({bad:{type:'stdio',command:'/usr/bin/false',tools:[]}},'/tmp'),/cannot enforce/);
+  assert.deepEqual(claudeMcpConfig({allowed:{type:'stdio',command:'/usr/bin/false',tools:['*']}},'/tmp').mcpServers.allowed,{type:'stdio',command:'/usr/bin/false',args:[],env:{}});
+});
+test('Claude private stdio launcher preserves selected source cwd and env without shell or secret argv',async t=>{
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-claude-mcp-fixture-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+  const chat=path.join(root,'chat'),source=path.join(root,'source');fs.mkdirSync(chat);fs.mkdirSync(source);
+  fs.writeFileSync(path.join(source,'server.cjs'),"process.stdout.write(JSON.stringify({cwd:process.cwd(),arg:process.argv[2],key:process.env.SYNTHETIC_KEY,electronNode:process.env.ELECTRON_RUN_AS_NODE||null}));");
+  let config,configFile,spec,specMode,output;
+  const p=new ClaudeProvider({clientFactory:options=>{
+    configFile=options.mcpConfigPath;config=JSON.parse(fs.readFileSync(configFile,'utf8'));
+    const launched=config.mcpServers.local;const specFile=launched.args[1];spec=JSON.parse(fs.readFileSync(specFile,'utf8'));specMode=fs.statSync(specFile).mode&0o777;
+    output=JSON.parse(execFileSync(launched.command,launched.args,{encoding:'utf8',env:{...process.env,...launched.env}}));
+    const client=new Fake(result);client.request=async()=>({mcpServers:[{name:'local',status:'connected'}]});return client;
+  }});
+  const a=runArgs();a.run.schedule.workspace.cwd=chat;a.run.schedule.mcpServers={local:{type:'stdio',command:process.execPath,args:['server.cjs','SYNTHETIC_ARG'],workingDirectory:source,env:{SYNTHETIC_KEY:'SYNTHETIC_ENV_SECRET'}}};
+  await p.run(a);
+  assert.equal(specMode,0o600);assert.equal(spec.workingDirectory,fs.realpathSync(source));
+  assert.equal(JSON.stringify(config).includes('SYNTHETIC_ENV_SECRET'),false);
+  assert.equal(config.mcpServers.local.args.join(' ').includes('SYNTHETIC_ENV_SECRET'),false);
+  assert.equal(config.mcpServers.local.env.ELECTRON_RUN_AS_NODE,'1');
+  assert.deepEqual(output,{cwd:fs.realpathSync(source),arg:'SYNTHETIC_ARG',key:'SYNTHETIC_ENV_SECRET',electronNode:null});
+  assert.equal(fs.existsSync(configFile),false);assert.equal(fs.existsSync(config.mcpServers.local.args[1]),false);
+});
+test('Claude captured context includes only selected MCP sources, without legacy defaults',async()=>{
+  let config;const context={providerContext:()=>({disabledLegacyMcp:[],mcpServers:{chosen:{type:'http',url:'https://chosen.example.invalid'}},customAgents:[],instructionText:''})};
+  const p=new ClaudeProvider({clientFactory:options=>{config=JSON.parse(fs.readFileSync(options.mcpConfigPath,'utf8'));const client=new Fake(result);client.request=async()=>({mcpServers:[{name:'chosen',status:'connected'}]});return client;}},{context});
+  const a=runArgs();a.run.schedule.context={includeDefaults:false,entries:[]};a.run.schedule.mcpServers={unselected:{type:'http',url:'https://unselected.example.invalid'}};
+  await p.run(a);assert.deepEqual(Object.keys(config.mcpServers),['chosen']);
+});
+test('Claude turn loads selected MCP servers from a private file and waits for connection before user content',async()=>{
+  let configFile,config,mode,args,observedUserBeforeStatus=false,statusChecks=0;
+  const provider=new ClaudeProvider({clientFactory:options=>{
+    configFile=options.mcpConfigPath;args=options.args;
+    assert.ok(configFile);mode=fs.statSync(configFile).mode&0o777;config=JSON.parse(fs.readFileSync(configFile,'utf8'));
+    const client=new Fake(result);client.request=async payload=>{assert.deepEqual(payload,{subtype:'mcp_status'});statusChecks++;return {mcpServers:[{name:'remote',status:'connected'},{name:'unselected',status:'connected'}]};};
+    client.write=message=>{if(message.type==='user'){observedUserBeforeStatus=statusChecks===0;client.userMessage=message;queueMicrotask(()=>result(client));}};
+    return client;
+  }});
+  const a=runArgs();a.run.schedule.mcpServers={remote:{type:'http',url:'https://mcp.example.invalid/api',headers:{Authorization:'Bearer SYNTHETIC_SECRET'}}};
+  await provider.run(a);
+  assert.equal(mode,0o600);assert.deepEqual(Object.keys(config.mcpServers),['remote']);assert.equal(config.mcpServers.remote.headers.Authorization,'Bearer SYNTHETIC_SECRET');
+  assert.equal(args.join(' ').includes('SYNTHETIC_SECRET'),false);assert.equal(observedUserBeforeStatus,false);assert.equal(statusChecks,1);
+  assert.equal(a.run.mcpConnections.remote.status,'connected');assert.equal(fs.existsSync(configFile),false);
+});
+test('Claude MCP needs-auth, failed, and permission denial do not bypass the selected-server boundary',async()=>{
+  for(const state of ['needs-auth','failed']){
+    let client,configFile;const p=new ClaudeProvider({clientFactory:options=>{configFile=options.mcpConfigPath;client=new Fake();client.request=async()=>({mcpServers:[{name:'remote',status:state,error:'SYNTHETIC_SECRET'}]});return client;}});
+    const a=runArgs();a.run.schedule.mcpServers={remote:{type:'sse',url:'https://mcp.example.invalid/sse'}};
+    await assert.rejects(p.run(a),error=>error.message.includes(state)&&!error.message.includes('SYNTHETIC_SECRET'));
+    assert.equal(client.userMessage,undefined);assert.equal(client.closed,true);assert.equal(fs.existsSync(configFile),false);
+  }
+  let client;const p=new ClaudeProvider({clientFactory:()=>{client=new Fake();client.request=async()=>({mcpServers:[{name:'remote',status:'connected'}]});return client;}});
+  const a=runArgs();a.run.schedule.mcpServers={remote:{type:'http',url:'https://mcp.example.invalid/api'}};a.ask=async()=> 'deny';
+  const pending=p.run(a);await new Promise(resolve=>setImmediate(resolve));
+  const responded=new Promise(resolve=>client.once('response',resolve));client.emit('request',{request_id:'approval',request:{subtype:'hook_callback',input:{tool_name:'mcp__remote__read',tool_use_id:'tool-1',tool_input:{synthetic:true}}}});await responded;
+  assert.equal(client.responses.at(-1).response.hookSpecificOutput.permissionDecision,'deny');result(client);await pending;
+});
+test('Claude selected MCP startup and status errors redact provider secrets',async()=>{
+  const a=runArgs();a.run.schedule.mcpServers={remote:{type:'http',url:'https://mcp.example.invalid/api',headers:{Authorization:'Bearer SYNTHETIC_SECRET'}}};
+  const startup=new ClaudeProvider({clientFactory:()=>{const client=new Fake();client.initialize=async()=>{throw new Error('Bearer SYNTHETIC_SECRET');};return client;}});
+  await assert.rejects(startup.run(a),error=>!error.message.includes('SYNTHETIC_SECRET')&&/selected MCP/.test(error.message));
+  const status=new ClaudeProvider({clientFactory:()=>{const client=new Fake();client.request=async()=>{throw new Error('Bearer SYNTHETIC_SECRET');};return client;}});
+  await assert.rejects(status.mcpStatus(a.run),error=>!error.message.includes('SYNTHETIC_SECRET')&&/status is unavailable/.test(error.message));
+});
+test('Claude MCP status probe is selected-only, sends no model turn, and cleanup failure blocks success',async()=>{
+  let configFile,client;const p=new ClaudeProvider({clientFactory:options=>{configFile=options.mcpConfigPath;client=new Fake();client.write=()=>assert.fail('Status probe must not send a model turn');client.request=async()=>({mcpServers:[{name:'local',status:'connected'}]});return client;}});
+  const a=runArgs();a.run.schedule.mcpServers={local:{type:'stdio',command:'/usr/bin/false'}};
+  const status=await p.mcpStatus(a.run);assert.equal(status.servers[0].status,'connected');assert.equal(client.closed,true);assert.equal(fs.existsSync(configFile),false);
+  const failed=new ClaudeProvider({clientFactory:options=>{configFile=options.mcpConfigPath;client=new Fake();client.request=async()=>({mcpServers:[{name:'local',status:'connected'}]});client.close=async()=>{throw new Error('cleanup EPERM');};return client;}});
+  await assert.rejects(failed.mcpStatus(a.run),/cleanup EPERM/);assert.equal(fs.existsSync(configFile),false);assert.ok(failed.cleanupError);
+});
+test('Claude MCP status checks serialize with each other and with a new turn',async()=>{
+  let release,client;const p=new ClaudeProvider({clientFactory:()=>{client=new Fake();client.initialize=()=>new Promise(resolve=>{release=()=>resolve({hooks_applied:true,models:[model]});});client.request=async()=>({mcpServers:[{name:'local',status:'connected'}]});return client;}});
+  const a=runArgs();a.run.schedule.mcpServers={local:{type:'stdio',command:'/usr/bin/false'}};
+  const pending=p.mcpStatus(a.run);assert.ok(p.mcpProbe);
+  await assert.rejects(p.mcpStatus(a.run),/already running/);
+  await assert.rejects(p.run(a),/connection check to finish/);
+  release();await pending;assert.equal(p.mcpProbe,null);assert.equal(client.closed,true);
+});
 test('Claude uses native session continuation, accumulates tokens, streams no thinking',async()=>{
   const created=[];const provider=new ClaudeProvider({clientFactory:opts=>{const c=new Fake(client=>{client.emit('message',{type:'stream_event',event:{type:'content_block_delta',delta:{type:'thinking_delta',thinking:'private'}}});result(client);});created.push({opts,c});return c;}});
   const a=runArgs();let streamed=false;a.stream=()=>{streamed=true;};await provider.run(a);await provider.run(a);
   assert.equal(a.run.providerSessionId,'native-test');assert.equal(a.run.usage.inputTokens,20);assert.ok(created[1].opts.args.includes('--resume'));assert.equal(streamed,false);assert.ok(created.every(x=>x.c.closed));
   assert.equal(created[0].c.hooks.PreToolUse[0].hookCallbackIds[0],'proteus_permission');
+});
+test('Claude sends approved image and UTF-8 text as structured streaming user content',async()=>{
+  const clients=[];const provider=new ClaudeProvider({clientFactory:()=>{const client=new Fake(result);clients.push(client);return client;}});
+  assert.deepEqual(provider.acceptedMediaTypes,['image/png','image/jpeg','image/gif','image/webp','text/plain']);
+  const attachments=[
+    {bytes:Buffer.from([137,80,78,71]),name:'Synthetic.png',mediaType:'image/png'},
+    {bytes:Buffer.from('Only synthetic text.'),name:'Synthetic.txt',mediaType:'text/plain'},
+  ];
+  await provider.run({...runArgs(),attachments});
+  assert.deepEqual(clients[0].userMessage.message.content,[
+    {type:'text',text:'synthetic'},
+    {type:'image',source:{type:'base64',media_type:'image/png',data:attachments[0].bytes.toString('base64')}},
+    {type:'text',text:'Attached plain text file: Synthetic.txt\n\nOnly synthetic text.'},
+  ]);
+  await assert.rejects(provider.run({...runArgs(),attachments:[{bytes:Buffer.from([0xff]),name:'bad.txt',mediaType:'text/plain'}]}),/UTF-8/);
+  await assert.rejects(provider.run({...runArgs(),attachments:[{bytes:Buffer.from('%PDF'),name:'bad.pdf',mediaType:'application\/pdf'}]}),/PDF and other files/);
+  assert.equal(clients.length,1);
 });
 test('Claude missing approval IDs cannot reuse a grant and user-question answers survive duplicate callback',async()=>{
   let client;const provider=new ClaudeProvider({clientFactory:()=>client=new Fake()});const a=runArgs();let asks=0;a.ask=async()=>{asks++;return 'approve';};const pending=provider.run(a);
@@ -84,7 +194,7 @@ test('Claude cancellation escalates against tool descendants after direct CLI ex
 });
 test('fresh account API percentages remain authoritative when reset timestamps are already past',async()=>{
   const now=Date.parse('2026-10-03T18:00:00Z');const cache=new ProviderUsageCache({copilot:async()=>({quotaSnapshots:{premium_interactions:{remainingPercentage:87,resetDate:'2026-10-03T17:59:59Z'}}})},()=>now);
-  const result=await cache.get();assert.equal(result.providers.copilot.windows[0].remainingPercent,87);assert.equal(result.providers.copilot.stale,false);assert.equal(result.providers.copilot.windows[0].resetAt,null);assert.equal(result.providers.copilot.windows[0].reportedResetAt,'2026-10-03T17:59:59.000Z');
+  const result=await cache.get();assert.equal(result.providers.copilot.windows[0].remainingPercent,87);assert.equal(result.providers.copilot.stale,false);assert.equal(result.providers.copilot.windows[0].resetAt,'2026-11-01T00:00:00.000Z');assert.equal(result.providers.copilot.windows[0].resetSource,'expected-monthly');assert.equal(result.providers.copilot.windows[0].reportedResetAt,'2026-10-03T17:59:59.000Z');
 });
 const signalError=code=>Object.assign(new Error(code),{code});
 test('Claude TERM permission denial falls back only to the owned child and confirms exit',async()=>{

@@ -16,10 +16,11 @@ async function launch(){
  app=await electron.launch({args:['.','--user-data-dir='+path.join(home,'electron')],env:{...process.env,PROTEUS_HOME:home,COPILOT_HOME:path.join(home,'copilot'),PORT:'0'},timeout:60000});
  page=await app.firstWindow();page.setDefaultTimeout(15000);page.on('pageerror',error=>errors.push(error.message));
  await page.route('**/api/usage',route=>route.fulfill({json:{providers:Object.fromEntries(['copilot','codex','claude'].map((id,i)=>[id,{windows:[{id:'test',label:'Synthetic allowance',remainingPercent:70+i,resetAt:'2030-01-01T00:00:00Z'}]}]))}}));
- await page.locator('#new-chat').waitFor();
+ await page.locator('#tab-add-menu').waitFor();
 }
 try{
- await launch();await page.locator('[data-page="engine"]').click();await page.locator('[data-engine-section="setup"]').click();
+ await launch();await page.locator('#home-release-notes h2').first().waitFor();await page.locator('#home-release-notes li').first().waitFor();assert.ok(await page.locator('#home-release-notes li').count()>0,'Home release notes render readable Markdown lists');
+ await page.locator('[data-page="engine"]').click();await page.locator('[data-engine-section="setup"]').click();
  assert.equal(await page.locator('#provider-usage').isVisible(),false,'Existing disabled flag is preserved');
  await page.locator('#settings-timezone').fill('America/Denver');
  await page.locator('#settings-show-usage').check();await page.locator('#provider-usage').waitFor({state:'visible'});await until(()=>saved().appearance.showProviderUsage===true);
@@ -48,7 +49,7 @@ try{
  await page.getByRole('button',{name:'Expand AI allowance',exact:true}).click();await until(()=>saved().appearance.providerUsageCollapsed===false);
  await page.locator('[data-usage-provider="codex"]').click();await page.getByText('71% remaining',{exact:true}).waitFor();await page.locator('#usage-close').click();
  const tabs=[{id:'overview',type:'overview',label:'Schedules'},...['First','Second'].map(name=>({id:'markdown:'+path.join(workspace,name+'.md'),type:'markdown',file:path.join(workspace,name+'.md'),label:name+'.md'}))];
- await page.evaluate(tabs=>window.desktop.workspaceSession({action:'save',session:{schemaVersion:1,page:'schedules',active:tabs[2].id,tabs}}),tabs);await page.reload();await page.getByRole('heading',{name:'Second synthetic note',exact:true}).waitFor();
+ await page.evaluate(tabs=>window.desktop.workspaceSession({action:'save',session:{schemaVersion:1,page:'schedules',active:tabs[2].id,tabs}}),tabs);await page.reload();await page.locator('[data-page="home"].active').waitFor();await page.locator(`[data-tab="${tabs[2].id}"]`).click();await page.getByRole('heading',{name:'Second synthetic note',exact:true}).waitFor();
  const first=page.locator('[data-tab-container]').filter({has:page.locator('[data-tab]').filter({hasText:'First.md'})});
  // The upper inset is outside both inner buttons, proving the tab rectangle itself activates.
  const point=await first.evaluate(node=>{const r=node.getBoundingClientRect();return {x:r.left+2,y:r.top+1};});
@@ -59,7 +60,12 @@ try{
  await page.locator('[data-close]').filter({hasText:'×'}).nth(1).click();await until(()=>session().tabs.length===2);
  assert.equal(session().active,tabs[1].id);assert.equal(await page.locator('.tabitem.selected [data-tab]').getAttribute('data-tab'),tabs[1].id);
  const selections=await page.evaluate(()=>window.__tabSelections);assert.ok(selections.length>0);assert.ok(!selections.includes(tabs[2].id));
- await page.locator('[data-tab="overview"]').focus();await page.keyboard.press('Enter');await page.getByRole('heading',{name:'Work that keeps moving.',exact:true}).waitFor();
+ await page.locator('[data-page="home"]').click();await page.locator('[data-page="home"].active').waitFor();
  await page.screenshot({path:'/private/tmp/proteus-sidebar-tabs-fixed.png'});
- assert.deepEqual(errors,[]);console.log(JSON.stringify({passed:true,checks:10,screenshots:['/private/tmp/proteus-sidebar-collapsed.png','/private/tmp/proteus-sidebar-tabs-fixed.png']}));
+ await page.locator('#sidebar-toggle').click();await page.mouse.move(700,150);
+ assert.equal(await page.locator('body').evaluate(node=>node.classList.contains('sidebar-minimized')),true);
+ assert.ok((await page.locator('#sidebar').boundingBox()).width<=60,'Collapsed sidebar remains a compact icon rail');
+ assert.equal(await page.locator('#sidebar [data-page="home"] .nav-icon').isVisible(),true);
+ await page.screenshot({path:'/private/tmp/proteus-icon-rail.png'});
+ assert.deepEqual(errors,[]);console.log(JSON.stringify({passed:true,checks:13,screenshots:['/private/tmp/proteus-sidebar-collapsed.png','/private/tmp/proteus-sidebar-tabs-fixed.png','/private/tmp/proteus-icon-rail.png']}));
 }finally{if(app)await app.close();fs.rmSync(home,{recursive:true,force:true});}

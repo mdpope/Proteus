@@ -23,10 +23,10 @@ export class TurnWaiter {
     if (this.pauses++ === 0) { clearTimeout(this.timer); this.remaining -= performance.now() - this.started; }
   }
   resume() { if (!this.closed && this.pauses > 0 && --this.pauses === 0) this.arm(); }
-  async run(prompt) {
+  async run(prompt, attachments = []) {
     try {
       if (this.signal.aborted) throw new Error('Cancelled');
-      await Promise.race([this.session.send({ prompt }).then(() => this.outcome), this.outcome]);
+      await Promise.race([this.session.send({ prompt, ...(attachments.length ? { attachments } : {}) }).then(() => this.outcome), this.outcome]);
     } finally {
       this.closed = true; clearTimeout(this.timer); this.unsubscribe();
       this.signal.removeEventListener('abort', this.abort);

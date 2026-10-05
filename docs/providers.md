@@ -162,13 +162,20 @@ Initialization supplies the current model catalog and model effort capabilities.
 remain unreported. A model's Fast capability is offered only when the runtime does not report a
 fast-mode disabled reason; an unsupported explicit speed fails before sending the prompt. The
 installed 2.1.286 runtime reports `sdk_opt_in_required`, so this installation offers provider-default
-speed only. No hidden enablement flag or guessed model table is used.
+speed only. Alias choices display the exact model ID the installed runtime currently resolves them
+to; aliases can change with the runtime or account. No hidden enablement flag or guessed model table
+is used.
 
 Selected instruction/skill text and agent identity are explicitly included in the system prompt.
 User/project setting sources, slash commands, auto memory, automatic CLAUDE.md discovery, external
 MCP discovery and Chrome integration are disabled for these sessions. Additional workspace roots
-are explicit. Restricted editor agents, legacy skill directories and selected MCP servers are
-currently rejected before execution: translating their complete contracts is deferred. Native
+are explicit. Only MCP servers captured for the chat are passed through a private configuration file
+with `--strict-mcp-config`; connection status must become connected before the turn sends content.
+Selected stdio servers with a source-specific working directory run through a fixed Proteus launcher
+that preserves that directory and passes the captured command directly without a shell. Server
+arguments and environment stay in a second private file. Servers with a restricted per-tool filter
+are rejected because Claude cannot enforce that source limit here. Restricted editor agents and legacy skill directories
+are also rejected until their complete contracts can be translated. Native
 subagents and worktree tools are disabled. The embedded Proteus browser is not exposed to Claude yet.
 These limits do not change Copilot or Codex support.
 
@@ -187,7 +194,9 @@ tool-free synthetic turn and resumed the same native session with correct recall
 token usage. Authenticated initialization can report profile fields instead of token-source fields;
 the adapter recognizes either shape without exposing account identity in provider status. Synthetic
 tests cover native continuation, capabilities, errors/timeouts/cancellation, permission identity,
-unknown quota, runtime quota-event normalization and accumulated token usage. The Apple Development
+selected-only MCP configuration/status and failure gates, unknown quota, runtime quota-event
+normalization and accumulated token usage. A selected MCP tool has not been called against a real
+workplace server as part of this release. The Apple Development
 signed installed desktop app also completed the same class of tool-free synthetic turn and native
 continuation through its authenticated local API, with observed token usage. Live tool permission
 flow still needs its own acceptance check. The installed runtime still disables SDK fast mode.

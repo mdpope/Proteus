@@ -10,7 +10,7 @@ import { copilotModel, validateModelOptions } from './model-catalog.js';
 import { TurnWaiter } from './turn-waiter.js';
 
 export class CopilotProvider {
-  constructor(options = {}, { browser, context, settings } = {}) { this.browser = browser; this.context = context; this.settings = settings; this.options = options; this.client = null; this.starting = null; this.sessions = new Map(); this.authSessions = new Map(); }
+  constructor(options = {}, { browser, context, settings, quotaClientFactory = baseDirectory => new CopilotClient({baseDirectory,mode:'empty',logLevel:'none'}), quotaTimeoutMs = 8000, quotaStopTimeoutMs = 1500 } = {}) { this.browser = browser; this.context = context; this.settings = settings; this.options = options; this.quotaClientFactory=quotaClientFactory;this.quotaTimeoutMs=quotaTimeoutMs;this.quotaStopTimeoutMs=quotaStopTimeoutMs;this.quotaPending=null;this.quotaProbe=null; this.client = null; this.starting = null; this.sessions = new Map(); this.authSessions = new Map(); this.acceptedMediaTypes=Object.freeze(['image/png','image/jpeg','image/gif','image/webp','application/pdf','text/plain']); }
   dataDirectory() { return this.settings?.get().copilotDataDirectory || this.options.baseDirectory || process.env.COPILOT_HOME || path.join(os.homedir(), '.copilot'); }
   async connect(baseDirectory = this.dataDirectory()) {
     if (this.client && this.baseDirectory !== baseDirectory) await this.close();
@@ -22,9 +22,42 @@ export class CopilotProvider {
     await this.starting; return this.client;
   }
   async quota() {
-    // A usage refresh must never restart a client running a chat in another profile.
-    const client = this.starting ? (await this.starting, this.client) : await this.connect();
-    return await client.rpc.account.getQuota({});
+    // The CLI can retain account.getQuota for the entire process lifetime. Probe
+    // from a new quota-only process so Refresh means a fresh provider query,
+    // while a running chat keeps its own SDK client and sessions untouched.
+    if(this.quotaPending)return this.quotaPending;
+    const bounded=(work,ms)=>{
+      let timer;
+      return Promise.race([Promise.resolve().then(work),new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('Timed out')),ms);})]).finally(()=>clearTimeout(timer));
+    };
+    const client=this.quotaClientFactory(this.dataDirectory());
+    let cancel;
+    const cancelled=new Promise((_,reject)=>{cancel=()=>reject(new Error('Cancelled'));});
+    const probe={client,cancel};this.quotaProbe=probe;
+    const cleanup=async()=>{
+      // stop() may wait for a hung start/RPC. The SDK documents forceStop() for
+      // this case; neither cleanup path may hold shutdown or the next Refresh.
+      try{
+        const errors=await bounded(()=>client.stop(),this.quotaStopTimeoutMs);
+        if(Array.isArray(errors)&&errors.length)throw new Error('Cleanup failed');
+      }catch{
+        await bounded(()=>client.forceStop(),this.quotaStopTimeoutMs);
+      }
+    };
+    const pending=(async()=>{
+      try{
+        const result=await bounded(()=>Promise.race([(async()=>{await client.start();return client.rpc.account.getQuota({});})(),cancelled]),this.quotaTimeoutMs);
+        return result;
+      }catch{throw new Error('Fresh Copilot allowance unavailable. Check sign-in on this Mac and retry.');}
+      finally{
+        try{await cleanup();}
+        catch{throw new Error('Copilot allowance probe could not close cleanly.');}
+        finally{if(this.quotaProbe===probe)this.quotaProbe=null;}
+      }
+    })();
+    this.quotaPending=pending.finally(()=>{if(this.quotaPending===wrapped)this.quotaPending=null;});
+    const wrapped=this.quotaPending;
+    return this.quotaPending;
   }
   async models(client) {
     // listModels() retains its first result until disconnect. Use the public RPC
@@ -34,18 +67,20 @@ export class CopilotProvider {
   }
   async status() {
     try {
-      const client = this.starting ? (await this.starting, this.client) : await this.connect(); const auth = await client.getAuthStatus();
+      let client = this.starting ? (await this.starting, this.client) : await this.connect(); let auth = await client.getAuthStatus();
+      // The SDK client can retain a signed-out snapshot after an external CLI
+      // sign-in. Recreate only an idle client; never interrupt an active turn.
+      if (!auth.isAuthenticated && this.sessions.size===0) {
+        await this.close();client=await this.connect();auth=await client.getAuthStatus();
+      }
       if (!auth.isAuthenticated) return { available: false, error: 'Sign in with Copilot CLI, then refresh.', auth };
-      const [models, quota] = await Promise.allSettled([this.models(client), client.rpc.account.getQuota({})]);
-      if (models.status === 'rejected') throw models.reason;
+      const models = await this.models(client);
       return {
         available: true, auth,
-        models: models.status === 'fulfilled' ? models.value : [],
-        quota: quota.status === 'fulfilled' ? quota.value : null,
-        quotaError: quota.status === 'rejected' ? quota.reason.message : null,
+        models,
         checkedAt: new Date().toISOString()
       };
-    } catch (error) { return { available: false, error: error.message, quota: null }; }
+    } catch (error) { return { available: false, error: error.message }; }
   }
   selectedMcp(run) {
     const snapshot = run.schedule.context;
@@ -75,7 +110,7 @@ export class CopilotProvider {
     return { servers: Object.entries(configured).map(([name, config]) => {
       const item = value.servers.find(server => server.name === name);
       const error = item?.error || value.host?.failedServers?.[name]?.message;
-      return {name, status: item?.status || (value.host?.needsAuthServers?.[name] ? 'needs-auth' : 'not-connected'), remote: ['http','sse'].includes(config.type), ...(error ? {error:displayText(error,1000)} : {})}; }) };
+      return {name, status: value.host?.needsAuthServers?.[name] ? 'needs-auth' : item?.status || 'not-connected', scope: this.sessions.has(run.id)?'active-chat':'resumed-chat', observedAt:new Date().toISOString(), remote: ['http','sse'].includes(config.type), ...(error ? {error:displayText(error,1000)} : {})}; }) };
   }
   async mcpLogin(run, name) {
     const config = this.selectedMcp(run)[name];
@@ -90,14 +125,20 @@ export class CopilotProvider {
     }
     const result = await session.rpc.mcp.oauth.login(params);
     if (result.authorizationUrl && !/^https:\/\//i.test(result.authorizationUrl)) throw new Error('Provider returned an unsafe sign-in URL.');
-    return {server:name,status:result.authorizationUrl ? 'sign-in-required' : 'connected',authorizationUrl:result.authorizationUrl || null};
+    const latest=result.authorizationUrl?null:(await session.rpc.mcp.list());
+    const status=latest?.host?.needsAuthServers?.[name]?'needs-auth':latest?.servers?.find(server=>server.name===name)?.status||'not-connected';
+    return {server:name,status:result.authorizationUrl ? 'sign-in-required' : status,authorizationUrl:result.authorizationUrl || null,observedAt:new Date().toISOString(),scope:this.sessions.has(run.id)?'active-chat':'resumed-chat'};
   }
   async steer(run, prompt) {
     const session = this.sessions.get(run.id);
     if (!session) throw new Error('Copilot is still starting. Queue this message or try steering again.');
     await session.send({ prompt, mode: 'immediate' });
   }
-  async run({ run, prompt, emit, ask, update, signal, stream }) {
+  async run({ run, prompt, attachments=[], emit, ask, update, signal, stream }) {
+    const nativeAttachments=attachments.map(item=>{
+      if(!this.acceptedMediaTypes.includes(item.mediaType)||!Buffer.isBuffer(item.bytes))throw new Error('Copilot cannot receive this attachment type. Choose a supported image, PDF, or plain text file.');
+      return {type:'blob',data:item.bytes.toString('base64'),mimeType:item.mediaType,displayName:item.name};
+    });
     let turn;
     const askUser = async request => { turn?.pause(); try { return await ask(request); } finally { turn?.resume(); } };
     const decisions = new Map();
@@ -185,7 +226,7 @@ export class CopilotProvider {
     try {
       if (signal.aborted) throw new Error('Cancelled');
       turn = new TurnWaiter(session, signal);
-      await turn.run(prompt);
+      await turn.run(prompt,nativeAttachments);
       if (providerError) throw new Error(providerError);
       try { run.metrics = await session.rpc.usage.getMetrics({}); update(); } catch { /* Optional runtime capability. */ }
     } catch (error) {
@@ -201,5 +242,5 @@ export class CopilotProvider {
       signal.removeEventListener('abort', abort); unsubscribe(); this.sessions.delete(run.id); await session.disconnect();
     }
   }
-  async close() { if (this.client) await this.client.stop(); this.client = null; this.starting = null; this.sessions.clear(); this.authSessions.clear(); }
+  async close() { this.quotaProbe?.cancel();await this.quotaPending?.catch(()=>{});if (this.client) await this.client.stop(); this.client = null; this.starting = null; this.sessions.clear(); this.authSessions.clear(); }
 }

@@ -7,58 +7,42 @@ and manifests; this repository owns the generic app and provider adapters.
 
 ## Latest release state
 
-Implementation is now authorized for all approved queue entries plus the October 5 content-tab,
-Home, reviewed-failure and browser lifetime redesign. Work is assigned by ownership to Sol agents
-for desktop/backend, web and native clients. The six most recently touched browser tabs plus all
-used within one hour supersede immediate Team unload. Main feature pages no longer become content
-tabs; chat/Team child workspaces share creation menus and browser controls. See the active-release
-entry in `planned-updates.md`. Existing release receipts below remain historical until replaced
-by fresh checks; do not infer an installed update from this authorization.
+The authorized **0.2.0** content-workspace release is being integrated. All approved backlog is in
+scope, including local/remote chat parity, guarded attachments, document and interactive previews,
+content-only tabs, Home, attention review, optional tmux and browser lifetime. Multi-provider
+orchestration and future Safari-style tab groups remain deferred. Read
+`content-workspace-release.md` for current test evidence, pending release gates and exact install
+receipts. Source/test completion must not be reported as a device or website update.
 
-Also queued on October 5: clear generated-document links that open Markdown in an app document
-view only when clicked. Local desktop has a `.md` link handler; remote/web parity remains work.
-Do not auto-open a document or force a split view. Broader tab organization awaits further input.
-Escape must close an image preview without closing the chat or cancelling work. See
-`markdown-picker.md` and the new backlog entry; source inspection is not live acceptance.
-The remote design is now explicitly approved for the queue: host/chat-bound document IDs, a
-separate View chat documents connection grant, per-read authorization over the encrypted relay,
-versioned bounded reads and in-memory open-tab content only. Offline already-loaded copies retain
-a last-read label; first reads need the owning Mac online. Do not silently grant existing peers
-access or expose the broad local Markdown API remotely. Rich HTML previews are now also approved
-for the queue: scripts disabled initially, with trusted Enable interactive preview and Stop scripts
-controls. Approval covers one artifact version and preview session, retains isolation, and grants
-neither Node execution nor network/filesystem/app access. The Markdown grant alone cannot enable
-scripts. See the interactive-artifact backlog entry; no runtime or permissions changed here.
+The operator approved attachment delivery after reviewing the exact-file/destination/provider
+Confirm Send workflow. Uploading is not authorization to execute or send. Durable accepted proof
+binds the actual chat, peer, provider, message and file hashes; first-message execution remains
+ineligible until that proof is committed. Only synthetic attachments and fake providers are used
+in validation. Supported formats are capability-reported, with explicit unsupported-format errors.
 
-The operator approved the October 5 chat mockup and requested queuing only. Grouped Activity,
-visible actionable warnings and usage/context details should be consistent across clients;
-mobile keeps its condensed native formatting and solid boxes. New queued work also moves smaller
-Proteus branding into the tab bar while preserving existing artwork, enlarges/normalizes icons
-and retains them in the minimized hover-expanding rail, gives remote chats the normal composer
-and read-only details, automatically pages earlier history, and adds pasted image/file attachments.
-Native remote file Open/Copy path actions and context-source editing are excluded; the separately
-queued in-app generated-document preview is read-only. See
-`planned-updates.md`, `chat-controls.md`, `chat-rendering.md` and the October 5 decision entry.
+Remote documents use host/chat-bound IDs, a separate default-off View chat documents grant and
+short-lived trusted-host approval of the exact version for the requesting device. Approval covers
+bounded referenced raster assets; relative document links request their own approval. Recheck the
+current path/root/grant/content version on every read. Persist descriptors, not content or preview
+grants. HTML is static by default; explicit per-version Enable/Stop controls run browser JavaScript
+inside isolation without network, app, Node or filesystem authority. Browser previews have no hard
+CPU/memory guarantee; a runaway synchronous script may require closing its browser tab.
 
-The earlier source/read-only review also queued Copilot expected-reset labeling, adaptive usage
-refresh including duplicate status/catalog quota reads, and provider-name consistency. It
-confirmed a past Copilot reset observation and differing web/desktop renderers. No runtime
-changes, deployment or model turns were performed for these queue entries. Read `providers.md`
-for current behavior and evidence limits; the illustrative mockup is not product acceptance.
+Cold start opens Home. Main/chat/Team content descriptors and ordering restore; browsers remain
+unloaded until explicitly selected. Feature pages are sidebar destinations, not content tabs.
+The six most recently touched browser tabs plus all used within one hour supersede immediate
+Team unloading. Protect active/unsaved/audible/download/agent work. Optional tmux uses a private
+Proteus socket, preserves unrelated sessions and stores bounded terminal output locally. Reattach
+on activation or start a fresh shell when typing, never replaying previous/startup commands.
+Both Macs already have tmux; no installation was necessary.
 
-The latest remote parity-branch backlog updates have been merged, preserving the local queue.
-A desktop Standup issue is now queued: adding a saved link clears the generated docked daily
-order, and undocking/redocking does not recover it. Preserve daily presentation state across
-link-only edits and dock changes; see `planned-updates.md` for the report and acceptance steps.
-Also queued: missing vertical dividers between the Team Tools and Standup subtabs and before
-the first browser subtab, matching existing browser-tab separation.
-This is queued work, not an implemented fix.
+The HC login Keychain was reset after a crash. Its pre-update Codex check found working relay and
+incoming connections/providers, but saved Life sign-in may not decrypt after restart and reverse
+desktop pairing is incomplete. Preserve data and existing credentials; use normal sign-in/pairing
+only as needed after the signed update. Do not reset/delete Keychain items, weaken access controls
+or introduce plaintext storage. Existing app data backups and deployment receipts remain private.
 
-New iPad follow-ups are queued in `planned-updates.md`: selecting an existing shared team
-list reportedly opens a new-list form, and the global browser button must use desktop artwork
-and create a main top-level tab instead of a Team Tools subtab. These are user reports and
-queued acceptance requirements, not completed fixes; existing release evidence below does not
-verify them.
+## Historical installed baseline (before 0.2.0)
 
 Build Mac and HC now run `17719ea`, including the empty-peer startup fix, message actions,
 and visiting-device history metadata. Personal verified all 104 runtime hashes, signing,

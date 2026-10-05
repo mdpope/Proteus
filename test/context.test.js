@@ -78,6 +78,14 @@ test('MCPs stay disabled, resolve source-relative launch directories, and keep s
   f.write(path.join(f.repo, '.vscode/mcp.json'), '{"servers":{}}');
   assert.throws(() => f.context.providerContext(snapshot), /MCP definition changed/);
 });
+test('captured MCP source cannot silently retarget a symlink with matching bytes',t=>{
+  const f=fixture(t),one=path.join(f.repo,'first-mcp.json'),two=path.join(f.repo,'second-mcp.json'),link=path.join(f.repo,'.vscode','mcp.json');
+  const definition=JSON.stringify({servers:{selected:{command:'node',args:['server.mjs']}}});f.write(one,definition);f.write(two,definition);fs.mkdirSync(path.dirname(link));fs.symlinkSync(one,link);
+  const entry=f.context.refresh().entries.find(item=>item.kind==='mcp');f.mode(entry,'available');const captured=f.context.capture({selectedIds:[entry.id]});
+  assert.equal(f.context.providerContext(captured).mcpServers.selected.command,'node');
+  fs.unlinkSync(link);fs.symlinkSync(two,link);
+  assert.throws(()=>f.context.providerContext(captured),/source or folder changed/);
+});
 test('MCP aliases deduplicate exact configurations while conflicting names fail before provider use', t => {
   const f = fixture(t); f.write(path.join(f.repo, '.mcp.json'), JSON.stringify({ mcpServers: { same: { type: 'http', url: 'https://one.example.test' } } }));
   f.write(path.join(f.repo, '.vscode/mcp.json'), JSON.stringify({ servers: { alias: { type: 'http', url: 'https://one.example.test' } } }));

@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('desktop', {
   peers: value => ipcRenderer.invoke('proteus:desktop-peers', value),
   onPeer: handler => { const listener = (_event, value) => handler(value); ipcRenderer.on('proteus:desktop-peer-event', listener); return () => ipcRenderer.removeListener('proteus:desktop-peer-event', listener); },
   terminal: value => ipcRenderer.invoke('proteus:terminal', value),
+  artifactPreview: value => ipcRenderer.invoke('proteus:artifact-preview', value),
   onTerminal: handler => { const listener = (_event, value) => handler(value); ipcRenderer.on('proteus:terminal-event', listener); return () => ipcRenderer.removeListener('proteus:terminal-event', listener); },
   workspaceSession: value => ipcRenderer.invoke('proteus:workspace-session', value),
   onShutdown: handler => { const listener = () => handler(); ipcRenderer.on('proteus:shutdown', listener); return () => ipcRenderer.removeListener('proteus:shutdown', listener); },

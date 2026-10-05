@@ -4,6 +4,8 @@ import Combine
 @MainActor final class RemoteStore: ObservableObject {
     @Published var state: JSON = .null
     @Published var chats: [String: JSON] = [:]
+    @Published var allRuns: [JSON] = []
+    private var allRunOffset = 0
     @Published var providerStatuses: [String: JSON] = [:]
     @Published var models: [JSON] = []
     @Published var modelStatus: JSON = .null
@@ -15,6 +17,7 @@ import Combine
     @Published var drafts: [String: JSON] = [:]
     var onPaired: ((DeviceConnection) throws -> Void)?
     var onHostName: ((String) -> Void)?
+    var onChatDeleted: ((String) -> Void)?
     private let cacheRoot: URL?
     private let legacyCredentials: Bool
     private(set) var connection: DeviceConnection?
@@ -44,13 +47,13 @@ import Combine
         self.cacheRoot = cacheRoot; self.legacyCredentials = legacyCredentials
         self.connection = connection; paired = connection != nil
         if let connection, let data = try? Data(contentsOf: cacheURL), let cache = try? RemoteCrypto.open(String(decoding: data, as: UTF8.self), key: connection.key, aad: "proteus-cache-v1") {
-            state = cache["state"]; chats = cache["chats"].object; cursor = cache["cursor"].string; drafts = cache["drafts"].object; status = "Offline · cached history"
+            state = cache["state"]; chats = cache["chats"].object; allRuns = cache["allRuns"].array; allRunOffset = allRuns.count; cursor = cache["cursor"].string; drafts = cache["drafts"].object; status = "Offline · cached history"
             providerStatuses = state["providerStatuses"].object; modelStatus = state["providerStatus"]; models = modelStatus["models"].array
         }
     }
     func draft(_ id: String) -> JSON { drafts[id] ?? .null }
     func setDraft(_ id: String, _ value: JSON) { if value == .null { drafts.removeValue(forKey: id) } else { drafts[id] = value }; saveCache() }
-    func copyHistory(from other: RemoteStore) { state = other.state; chats = other.chats; cursor = other.cursor; drafts = other.drafts }
+    func copyHistory(from other: RemoteStore) { state = other.state; chats = other.chats; allRuns = other.allRuns; allRunOffset = other.allRunOffset; cursor = other.cursor; drafts = other.drafts }
     func pair(_ code: String) throws {
         guard let components = URLComponents(string: code.trimmingCharacters(in: .whitespacesAndNewlines)), components.scheme == "proteus", components.host == "pair", let encoded = components.queryItems?.first(where: { $0.name == "data" })?.value else { throw RemoteError(message: "Paste a Proteus pairing link from the Mac’s Remote Access screen.") }
         var base64 = encoded.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
@@ -170,6 +173,7 @@ import Combine
                 cursor = value["cursor"].string
                 if value["event"].string == "state" { updateState(value["data"]) }
                 if value["event"].string == "run" { mergeChat(value["data"]) }
+                if value["event"].string == "chat.lifecycle" { applyLifecycle(value["data"]); Task { await refresh() } }
                 saveCache()
             }
         case "rejected", "revoked":
@@ -233,10 +237,90 @@ import Combine
         do { let more = try await request("runs.list", ["offset": .number(Double(state["runs"].array.count))]); var object = state.object; let ids = Set(state["runs"].array.map { $0["id"].string }); object["runs"] = .array(state["runs"].array + more.array.filter { !ids.contains($0["id"].string) }); state = .object(object) }
         catch { self.error = error.localizedDescription }
     }
-    func openChat(_ id: String) async {
+    var allRunCount: Int { state["runCountIncludingArchived"].int }
+    func loadAllRuns(reset: Bool = false) async {
+        guard connected, state["capabilities"].array.contains(.string("chat.lifecycle.v1")) else { return }
+        let offset = reset ? 0 : allRunOffset
+        do {
+            let page = try await request("runs.list", ["offset": .number(Double(offset)), "limit": .number(100), "includeArchived": .bool(true)]).array
+            if reset { allRuns = page }
+            else {
+                let existing = Set(allRuns.map { $0["id"].string })
+                allRuns += page.filter { !existing.contains($0["id"].string) }
+            }
+            allRunOffset = offset + page.count
+            saveCache()
+        } catch { self.error = error.localizedDescription }
+    }
+    func archiveChat(_ id: String, archived: Bool) async throws {
+        guard connected, state["capabilities"].array.contains(.string("chat.lifecycle.v1")) else { throw RemoteError(message: "Reconnect this Mac to manage chats.") }
+        let row = chats[id] ?? state["runs"].array.first(where: { $0["id"].string == id }) ?? allRuns.first(where: { $0["id"].string == id }) ?? .null
+        var arguments: [String: JSON] = ["id": .string(id), "archived": .bool(archived)]
+        if !row["updatedAt"].string.isEmpty { arguments["expectedUpdatedAt"] = row["updatedAt"] }
+        arguments["expectedArchivedAt"] = row["archivedAt"].string.isEmpty ? .null : row["archivedAt"]
+        var result = (try await request("chat.archive", arguments)).object
+        result["archived"] = .bool(archived)
+        applyLifecycle(.object(result))
+        await refresh()
+    }
+    func deleteChat(_ id: String) async throws {
+        guard connected, state["capabilities"].array.contains(.string("chat.lifecycle.v1")) else { throw RemoteError(message: "Reconnect this Mac to manage chats.") }
+        let row = chats[id] ?? state["runs"].array.first(where: { $0["id"].string == id }) ?? allRuns.first(where: { $0["id"].string == id }) ?? .null
+        var arguments: [String: JSON] = ["id": .string(id)]
+        if !row["updatedAt"].string.isEmpty { arguments["expectedUpdatedAt"] = row["updatedAt"] }
+        arguments["expectedArchivedAt"] = row["archivedAt"].string.isEmpty ? .null : row["archivedAt"]
+        let result = try await request("chat.delete", arguments)
+        applyLifecycle(result)
+        await refresh()
+    }
+    func applyLifecycle(_ value: JSON) {
+        let id = value["id"].string
+        guard !id.isEmpty else { return }
+        if value["deleted"].bool {
+            chats.removeValue(forKey: id)
+            allRuns.removeAll { $0["id"].string == id }
+            var snapshot = state.object
+            snapshot["runs"] = .array(state["runs"].array.filter { $0["id"].string != id })
+            state = .object(snapshot)
+            drafts.removeValue(forKey: "reply:" + id)
+            drafts.removeValue(forKey: "reply-attachments:" + id)
+            if selectedChat == id { selectedChat = nil }
+            onChatDeleted?(id)
+        } else {
+            func changed(_ row: JSON) -> JSON {
+                guard row["id"].string == id else { return row }
+                var result = row.object
+                result["archivedAt"] = value["archivedAt"]
+                result["archived"] = value["archived"]
+                result["updatedAt"] = value["updatedAt"]
+                return .object(result)
+            }
+            if let chat = chats[id] { chats[id] = changed(chat) }
+            allRuns = allRuns.map(changed)
+            var snapshot = state.object
+            var visible = state["runs"].array.map(changed)
+            if value["archived"].bool { visible.removeAll { $0["id"].string == id } }
+            else if !visible.contains(where: { $0["id"].string == id }), let restored = allRuns.first(where: { $0["id"].string == id }) ?? chats[id] { visible.insert(changed(restored), at: 0) }
+            snapshot["runs"] = .array(visible)
+            state = .object(snapshot)
+        }
+        saveCache()
+    }
+    @discardableResult func openChat(_ id: String) async -> Bool {
         selectedChat = id
-        guard connected else { return } // Offline opening is a cache read; it never sends or changes hosts.
-        do { mergeChat(try await request("chat.get", ["id": .string(id)])); saveCache() } catch { self.error = error.localizedDescription }
+        guard connected else { return false } // Offline opening is a cache read; it never sends or changes hosts.
+        do { mergeChat(try await request("chat.get", ["id": .string(id)])); saveCache(); return true } catch { self.error = error.localizedDescription; return false }
+    }
+    func reviewFailure(_ id: String) async {
+        guard connected, let chat = chats[id], chat["attentionRequired"].bool,
+              ["failed", "interrupted"].contains(chat["status"].string) else { return }
+        do {
+            let reviewed = try await request("chat.review", ["id": .string(id), "expectedFailureEventAt": chat["failureEventAt"]])
+            var updated = chat.object; updated["attentionRequired"] = .bool(false); updated["failureReviewedAt"] = reviewed["failureReviewedAt"]; chats[id] = .object(updated)
+            var snapshot = state.object
+            snapshot["runs"] = .array(state["runs"].array.map { row in guard row["id"].string == id else { return row }; var item = row.object; item["attentionRequired"] = .bool(false); item["failureReviewedAt"] = reviewed["failureReviewedAt"]; return .object(item) })
+            state = .object(snapshot); saveCache()
+        } catch { self.error = error.localizedDescription }
     }
     func mergeChat(_ value: JSON) {
         let id = value["id"].string
@@ -282,7 +366,7 @@ import Combine
         if active && (paired || invite != nil) { retryTask?.cancel(); retryTask = Task { try? await Task.sleep(for: .seconds(3)); if !Task.isCancelled { connect() } } }
     }
     func disconnect() { generation = UUID(); readTask?.cancel(); retryTask?.cancel(); socket?.cancel(with: .goingAway, reason: nil); socket = nil; connected = false; status = paired ? "Offline · cached history" : "Not paired" }
-    func forget() { active = false; suspend(); if legacyCredentials { DeviceKeychain.clear() }; connection = nil; invite = nil; paired = false; state = .null; chats = [:]; drafts = [:]; selectedChat = nil; cursor = ""; cacheTimer?.cancel(); try? FileManager.default.removeItem(at: cacheURL); for c in waiting.values { c.resume(throwing: RemoteError(message: "Device forgotten.")) }; waiting.removeAll(); pendingCommands.removeAll(); timeouts.values.forEach { $0.cancel() }; timeouts.removeAll() }
+    func forget() { active = false; suspend(); if legacyCredentials { DeviceKeychain.clear() }; connection = nil; invite = nil; paired = false; state = .null; chats = [:]; allRuns = []; allRunOffset = 0; drafts = [:]; selectedChat = nil; cursor = ""; cacheTimer?.cancel(); try? FileManager.default.removeItem(at: cacheURL); for c in waiting.values { c.resume(throwing: RemoteError(message: "Device forgotten.")) }; waiting.removeAll(); pendingCommands.removeAll(); timeouts.values.forEach { $0.cancel() }; timeouts.removeAll() }
     // A host switch never leaves a retry behind. Commands already accepted by the Mac continue there.
     func suspend(reason: String = "Mac selection changed. An unconfirmed action may have reached that Mac; refresh its history before retrying.") {
         flushCache(); active = false; disconnect(); sendTask?.cancel(); sendTask = nil
@@ -292,7 +376,7 @@ import Combine
     func flushCache() {
         cacheTimer?.cancel(); guard let connection else { return }
         do {
-            let payload: JSON = .object(["state": state, "chats": .object(chats), "cursor": .string(cursor), "drafts": .object(drafts)])
+            let payload: JSON = .object(["state": state, "chats": .object(chats), "allRuns": .array(Array(allRuns.prefix(500))), "cursor": .string(cursor), "drafts": .object(drafts)])
             let encrypted = try RemoteCrypto.seal(payload, key: connection.key, aad: "proteus-cache-v1")
             try FileManager.default.createDirectory(at: cacheURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             try Data(encrypted.utf8).write(to: cacheURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
@@ -308,6 +392,11 @@ struct MacDestination: Codable, Identifiable, Equatable {
     var id: String
     var label: String
 }
+struct ChatDeletionEvent: Equatable {
+    let token = UUID()
+    let hostID: String
+    let chatID: String
+}
 private struct DestinationIndex: Codable {
     var version = 1
     var selectedID: String?
@@ -321,6 +410,7 @@ private struct DestinationIndex: Codable {
     @Published private(set) var selected: RemoteStore?
     @Published var pairing: RemoteStore?
     @Published var error: String?
+    @Published var deletedChat: ChatDeletionEvent?
     private var stores: [String: RemoteStore] = [:]
     private var observations: [String: AnyCancellable] = [:]
     private let root: URL
@@ -376,6 +466,7 @@ private struct DestinationIndex: Codable {
             guard let self, let remote, self.stores[id] === remote else { return }
             self.hydrateHostLabel(label, for: id)
         }
+        remote.onChatDeleted = { [weak self] chatID in self?.deletedChat = ChatDeletionEvent(hostID: id, chatID: chatID) }
         observations[id] = remote.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
     }
     func hydrateHostLabel(_ label: String, for id: String) {

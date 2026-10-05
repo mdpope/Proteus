@@ -46,6 +46,15 @@ test('active execution timeout and cancellation release the waiter', async () =>
   const controller = new AbortController(); const turn = new TurnWaiter(session, controller.signal, 1000);
   turn.pause(); const done = turn.run('fixture'); controller.abort(); await assert.rejects(done, /Cancelled/);
 });
+test('Copilot sends approved synthetic file bytes as native SDK blobs',async()=>{
+  let sent;const session=fakeSession({async send(value){sent=value;this.event('session.idle');}});
+  const provider=new CopilotProvider();provider.connect=async()=>({listModels:async()=>[{id:'fixture'}],createSession:async()=>session});
+  const run={id:'attachment-fixture',schedule:{model:'fixture',workspace:{cwd:'/fixture',additionalDirectories:[]}},usage:{inputTokens:0,outputTokens:0}};
+  assert.deepEqual(provider.acceptedMediaTypes,['image/png','image/jpeg','image/gif','image/webp','application/pdf','text/plain']);
+  await provider.run({run,prompt:'Inspect the synthetic file',attachments:[{bytes:Buffer.from('Synthetic fixture only'),name:'Fixture.txt',mediaType:'text/plain'}],signal:new AbortController().signal,update(){},emit(){},ask(){}});
+  assert.equal(sent.prompt,'Inspect the synthetic file');assert.deepEqual(sent.attachments,[{type:'blob',data:Buffer.from('Synthetic fixture only').toString('base64'),mimeType:'text/plain',displayName:'Fixture.txt'}]);
+  await assert.rejects(provider.run({run,prompt:'Unsupported',attachments:[{bytes:Buffer.from('fixture'),name:'x.zip',mediaType:'application/zip'}],signal:new AbortController().signal,update(){},emit(){},ask(){}}),/cannot receive this attachment type/);
+});
 test('Copilot omits empty assistant cards, preserves streamed final text and shows warnings', async () => {
   const run = { id: 'fixture', schedule: { model: 'fixture', workspace: { cwd: '/fixture', additionalDirectories: [] } }, events: [], usage: { inputTokens: 0, outputTokens: 0 } };
   const session = fakeSession({ async send() {

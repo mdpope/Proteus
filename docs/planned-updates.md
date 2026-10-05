@@ -24,6 +24,12 @@ verification and installation receipts must be recorded separately; this entry a
   persistent tool tabs and gains the same content-view machinery. A single trailing + opens the
   same icon-and-label creation menu at main, chat and Team levels, with scope-appropriate actions
   and honest platform/host capability limits. Menu icons do not each repeat a + prefix.
+- Restore open content tabs and their order after reload across the main strip, each chat workspace
+  and Team Tools. Persist safe identities/descriptors and selected context; browser tabs restore
+  unloaded until activated. Restoring a terminal must not restart its previous command or create
+  background work. Do not restore document bodies, credentials or interactive-preview grants.
+  Website external browser tabs remain browser-owned; restore their Proteus link/launch descriptors
+  without reopening external windows automatically. Recheck current authorization on activation.
 - Reuse the main browser toolbar throughout embedded browser surfaces: Back, Forward, Refresh,
   address/search and Go with consistent icons and states. Website external cross-origin tabs
   retain normal browser controls; do not promise control of those tabs from the Proteus website.
@@ -49,15 +55,86 @@ verification and installation receipts must be recorded separately; this entry a
   Do not terminate terminals, model turns or schedules as a browser-memory optimization. Future
   tab groups are context, not permission to design/implement that additional feature now.
 
-Acceptance includes main/nested strip scroll retention, overflow and focus; old-session migration;
+Acceptance includes main/nested strip scroll retention, overflow and focus; all-scope tab restoration
+with lazy browser loading and no resumed commands; old-session migration;
 consistent creation menus/toolbars; Home mount/unmount and real version/changelog; failure reviewed
 on every client, new failure reappearance and approvals retained; fake-clock six-plus-hour policy
 with protected activity; process totals with explicit coverage; cross-client regression and signed
 in-place device updates preserving application data. No operational schedule is a smoke test.
 
-## Queued: generated-document links and click-to-open Markdown tabs — October 5
+## Active release: Claude MCP and model metadata — October 5
 
-Status: the operator approved the remote-document design and requested queuing; not implemented.
+The operator reported that selecting SafariSelector, ADO or Jira for a Claude chat fails at
+Proteus's own unsupported-integration guard. This is an adapter gap, not evidence that those
+servers rejected a request. Implement explicitly selected MCP configuration with the same host
+permission boundary and provider-specific status/authentication handling. Do not inherit unrelated
+MCP servers or remove the confirmed PreToolUse hook requirement. Keep secret values out of process
+arguments, logs and Git; validate using synthetic servers before any installed acceptance.
+
+Display version/resolved-model information that the installed Claude runtime actually reports.
+Keep aliases clearly distinguishable from explicit model IDs, preserve provider descriptions and
+capabilities, and never manufacture a model-version table. Unknown token usage on a real provider
+must not display the rehearsal-only explanation. The workplace task shown in the report is a
+reference for diagnosis, not an instruction to execute those operational actions during testing.
+
+## Active release: chat context menus, archive and delete — October 5
+
+The operator added this to the current release. Implementation and cross-client acceptance are
+in progress; no existing user chats are test fixtures.
+
+- Offer context menus on desktop/web chat rows and tabs, with equivalent native long-press
+  actions. Other applicable content lists/tabs expose their existing actions consistently.
+- Add Archive/Unarchive and Delete actions to the chat view. Archive state belongs to the owning
+  Mac and propagates through its authenticated remote API, rather than becoming a client-only flag.
+- Hide archived chats by default. Add a **Show Archived** switch after **Through Date** in chat
+  filters, including compact expandable native filters. Identify archived records and allow
+  unarchiving without losing the conversation or its provider association.
+- Confirm deletion with the owning Mac/chat identity and scope. Deleting a Proteus chat must not
+  delete generated documents, workspace files, provider-owned originals or schedule definitions.
+  Reject deletion while execution, queued work or unresolved approvals would be orphaned.
+- Invalidate deleted-chat caches, content descriptors and pending capabilities; reject stale
+  continuation/document/attachment requests. Sync and reload must not resurrect the chat.
+- Verify local and paired remote archive/unarchive/delete, default and archived filters, safe
+  active-state rejection, confirmation cancellation, tab/cache cleanup and reload behavior.
+
+## Active: optional tmux, terminal history and seamless reconnect — October 5
+
+The operator selected tmux-backed persistence plus local saved history for this release. Proteus
+must still work when tmux is absent. Install tmux on Work Mac through its existing reputable package
+manager and verify with a disposable session; preserve unrelated sessions and shell configuration.
+Verification found tmux 3.6a on Build Mac and 3.6b already installed on HC, so no new package
+installation was needed. HC disposable-session attach/detach/persistence/cleanup passed; this
+is not yet acceptance of the pending Proteus integration.
+
+- Keep **Terminal** as the user-facing tool. Ghostty remains accurate renderer/appearance detail:
+  `ghostty-web` provides the embedded WebAssembly terminal and `node-pty` the host connection.
+- Opening a terminal lets the operator choose a specific available tmux session (or create one)
+  and a Ghostty/terminal appearance profile, with sensible saved defaults preselected. Provide
+  session/preset management and explicit attach, detach, rename and end controls. Preserve existing
+  profiles and distinguish appearance from session identity/lifetime.
+- Tmux sessions continue after closing their Proteus tab or quitting the app. These actions detach
+  the view; only an explicit End session terminates a persistent managed session. Report resource
+  ownership and retain normal non-tmux PTY fallback when tmux is missing or unavailable.
+- Restore terminal descriptors and bounded private local output. Reconnect to an existing session
+  when activated. If the process no longer exists, typing a command should transparently create a
+  fresh shell and deliver that input once, without a separate Start new session button. Preserve
+  old output with a truthful ended/reconnected marker and keep initialization races/error retries
+  from losing, duplicating or silently replaying input.
+- Never replay a profile startup command because of restoration, renderer reload, reconnect or the
+  first keystroke into an ended session. A new explicit terminal launch may use its configured
+  startup command. A Mac reboot/crash does not preserve running tmux processes; distinguish saved
+  output from a live session.
+- Save history only on the owning Mac, privately and with bounded retention/clear controls. Do not
+  sync terminal contents through the Life/shared API or add a remote-shell endpoint as part of
+  this change. Do not modify unrelated tmux sessions, global tmux config or shell history files.
+- Validate tmux present/absent, real attach/detach/restart, synthetic output restoration, no command
+  replay, typing during reconnect, explicit End and profile/default choices with disposable data.
+  Existing production shells and provider processes are not test fixtures.
+
+## Active release: generated-document links and click-to-open Markdown tabs — October 5
+
+Status: included in the authorized active release. Host approval protocol and client readers are
+in progress; full security, UI and installed-client acceptance remain pending.
 Source review confirms that local desktop chat links ending in `.md` already call the Markdown
 reader and open a document tab. Remote desktop links currently show destination guidance, and
 website local-file links also lack an equivalent reader. Existing local support is not cross-client
@@ -67,13 +144,13 @@ acceptance. The detailed host/document identity, authorization and offline desig
   artifact, expose a clear clickable document title/filename in the response. Use a genuine file
   reference from the response or confirmed tool output; do not infer successful creation from
   prose alone or scan unrelated folders to find potential artifacts. First scope is Markdown.
-- Clicking the document opens and selects its rendered Markdown in a normal top-level Proteus
-  document tab on desktop/web/wide iPad. Keep the chat tab, draft and reading position intact.
+- Clicking the document opens and selects its rendered Markdown in the originating chat workspace
+  on desktop/web/wide iPad, using the later content-tab design. Keep the chat tab, draft and reading position intact.
   Repeated clicks activate the already-open document for that host/file identity. On iPhone use
   the equivalent document view with Back/swipe back to the retained chat.
 - Do not open documents, switch focus, create a split view or force side-by-side presentation
-  automatically when generation finishes. The operator's click is the opening trigger. Broader
-  tab grouping/organization is explicitly awaiting the operator's later design input.
+  automatically when generation finishes. The operator's click is the opening trigger. The October 5 content-workspace design governs placement; broader Safari-style tab groups
+  remain deferred.
 - Resolve a remote document through its owning Mac and show host provenance. Use an authenticated,
   bounded read-only document capability tied to the authorized chat/file; recheck current roots,
   canonical paths/symlinks, file type and size on the host. Never treat a remote path as local,
@@ -88,6 +165,10 @@ acceptance. The detailed host/document identity, authorization and offline desig
   previously rendered links are not bearer authorization. Add an independently granted, revocable
   Connections capability, **View chat documents**, without enabling general resource access,
   filesystem browsing or editing. Existing peers must not silently acquire this grant.
+- The implemented authorization boundary also requires trusted host approval of the exact
+  linked document version for the requesting device, with a short expiry. A peer-level grant
+  alone cannot transmit content. Pending requests contain metadata only; changed bytes or a
+  different device require a fresh request and approval.
 - Read through the existing authenticated encrypted relay transport. Recheck the peer's current
   grant, chat/document association and current host filesystem boundary for every document/image
   request. Do not expose the broader local `/api/markdown` reader as an unrestricted remote method.
@@ -110,10 +191,10 @@ acceptance. The detailed host/document identity, authorization and offline desig
   Interactive HTML previews are approved as the separate queued extension below. The Markdown
   viewing grant alone must never enable scripts or install a general code runner.
 
-## Queued: interactive artifacts with explicit script approval — October 5
+## Active release: interactive artifacts with explicit script approval — October 5
 
-Status: the operator approved adding rich previews to the backlog, with scripts off by default
-and an explicit way to approve interactive previews; not implemented or verified.
+Status: included in the authorized active release. Static and explicitly approved interactive
+previews are under implementation and containment testing; no installed-client acceptance yet.
 
 - Support provider-neutral HTML/CSS/browser-JavaScript artifacts from Codex, Claude and Copilot.
   Use one artifact contract and preview behavior across desktop/web/iPhone/iPad. Open only on
@@ -141,8 +222,10 @@ and an explicit way to approve interactive previews; not implemented or verified
 - Use the approved host document identity, authorization and bounded relay delivery for remote
   artifacts and assets. Script approval cannot expand file-reading grants. Retain contents and
   execution state in memory only initially; clear on close, sign-out/account change or revocation.
-  Include active previews in Engine Room resource controls with stop/unload actions and bounded
-  resource use. No model call is needed for ordinary local preview interactions.
+  Include active previews in Engine Room resource controls with stop/unload actions and honest
+  platform measurement/interruption limits. Ordinary website JavaScript has no hard CPU/memory
+  budget and synchronous code may block an in-page Stop control; do not claim otherwise.
+  No model call is needed for ordinary local preview interactions.
 - Acceptance: static and script-dependent fixtures from each provider; explicit enable/stop;
   same-version rerenders, changed code/assets and session restoration; remote/offline behavior;
   keyboard/touch and native layouts; blocked network, host APIs, cross-artifact storage and
@@ -150,10 +233,17 @@ and an explicit way to approve interactive previews; not implemented or verified
   denied/revoked document grants and account transitions. Use synthetic artifacts and disposable
   profiles. This queue entry is design approval, not permission to execute any existing artifact.
 
-## Queued: tab-bar branding and persistent navigation icons — October 5
+## Active release: tab-bar branding and persistent navigation icons — October 5
 
-Status: explicitly requested following the approved chat mockup; not implemented.
+Status: included in the authorized active release; cross-client implementation and UI acceptance
+are in progress.
 
+- Place the full-width top tab bar above the sidebar, with the compact Proteus name and current
+  logo at the upper left. The sidebar and its hover slide-over begin below that bar. Reduce main
+  and child tab height and horizontal padding without shortening the existing title character
+  limit; preserve usable controls, dividers and scroll positions. Place the collapse arrow near the
+  sidebar top edge, remove excess space above Home, and tighten left/right sidebar padding while
+  retaining usable controls. This is the latest layout steering.
 - Move the compact Proteus name and existing app logo into the top tab-bar chrome so branding
   remains visible with the navigation minimized. Preserve the current product logo and icon
   artwork; the illustrative mockup logo is not an approved replacement.
@@ -168,9 +258,10 @@ Status: explicitly requested following the approved chat mockup; not implemented
   long/overflowing top tabs; active feature/subitems, pointer transitions and keyboard/touch use.
   This changes shell presentation, not feature routing or the location of iPhone allowance.
 
-## Queued: remote desktop chat parity and automatic earlier history — October 5
+## Active release: remote desktop chat parity and automatic earlier history — October 5
 
-Status: operator report with local/remote desktop screenshots; queued, not implemented or tested.
+Status: included in the authorized active release; local/remote parity and history acceptance
+remain in progress.
 
 - Reuse the local chat composer and layout for remote desktop chats: the same message box,
   Send/Queue/Steer/Stop behavior and destination-provider model, effort, speed and applicable
@@ -198,10 +289,11 @@ Status: operator report with local/remote desktop screenshots; queued, not imple
   through a real test peer without billable prompts; source/session details read-only; older-host
   fallbacks; repeated upward scrolling during streaming, reconnect, failed paging and long history.
 
-## Queued: pasted image and file attachments in chat — October 5
+## Active release: pasted image and file attachments in chat — October 5
 
-Status: requested for chat composers across desktop/web/iPhone/iPad, including remote chats;
-not implemented. The supplied attachment-strip image is a presentation reference only.
+Status: included in the authorized active release across desktop/web/iPhone/iPad, including
+remote chats. Durable host staging has focused tests; provider delivery and all client UI
+acceptance remain in progress. The supplied attachment-strip image is a presentation reference only.
 
 - Pasting images adds preview thumbnails in an attachment strip at the top of the composer.
   Clicking/tapping a thumbnail opens a large modal preview; clicking the backdrop or its X
@@ -228,12 +320,11 @@ not implemented. The supplied attachment-strip image is a presentation reference
   and keyboard accessibility, native clipboard/files equivalents, local and remote delivery,
   duplicate send protection, provider rejection, large/unsafe files and cross-account isolation.
 
-## Queued: allowance refresh and approved chat presentation — October 5
+## Active release: allowance refresh and approved chat presentation — October 5
 
-Status: the operator approved the interactive chat proposal on October 5 and requested queuing,
-not implementation. The source review and read-only local Mac check are complete. The approved
-flow applies to desktop, web and mobile; mobile keeps its condensed native formatting and solid
-message boxes. No runtime change, deployment or live-chat execution has occurred for this queue.
+Status: the October 5 interactive chat proposal is included in the authorized active release.
+The flow applies to desktop, web and mobile; mobile keeps its condensed native formatting and
+solid message boxes. Implementation and acceptance are in progress; no new deployment is claimed.
 Private chat contents, machine paths and account usage values are excluded from this record.
 
 Confirmed requirements:
@@ -266,7 +357,7 @@ Confirmed requirements:
   display zones; review implicit UTC defaults versus intentional user time-zone choices, without
   changing stored UTC instants or silently overwriting an explicit preference.
 
-Approved presentation direction, queued for implementation (the mockup used illustrative data):
+Approved presentation direction, implemented with synthetic cross-client acceptance (the mockup used illustrative data):
 
 - Group consecutive routine tool activity and automatic approvals between assistant/user messages
   into an expandable Activity block, with a deterministic summary such as “3 files read · 2 edited
@@ -304,9 +395,10 @@ Sources reviewed October 5, 2026:
 [legacy request billing](https://docs.github.com/en/copilot/reference/copilot-billing/request-based-billing-legacy/github-copilot-premium-requests),
 and [SDK usage APIs](https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/usage-and-billing).
 
-## Queued: Team Tools subtab dividers — October 5
+## Active release: Team Tools subtab dividers — October 5
 
-Status: reported desktop presentation issue, visible in the supplied screenshot; not fixed.
+Status: matching desktop dividers are implemented and included in the focused UI checks. Final
+installed-client verification remains part of the release gate.
 
 - The persistent Team Tools and Standup subtabs lack the visible separation used between
   browser subtabs. Add matching vertical dividers between Team Tools and Standup, and between
@@ -316,9 +408,10 @@ Status: reported desktop presentation issue, visible in the supplied screenshot;
   a browser tab selected, and narrow/overflow layouts; include the corresponding iPad tab strip
   in the parity review.
 
-## Queued: preserve generated Standup when links change — October 5
+## Active release: preserve generated Standup when links change — October 5
 
-Status: operator-reported desktop issue with a screenshot; not yet reproduced or fixed.
+Status: implemented and verified in isolated Electron acceptance: generated order and fixed positions
+survive link additions/edits and undock/redock. Installed acceptance remains pending.
 
 - After generating and docking a selected list's daily Standup order, adding a Standup link
   resets the docked panel to the empty “Generate for today” state. Undocking and redocking
@@ -333,17 +426,17 @@ Status: operator-reported desktop issue with a screenshot; not yet reproduced or
   undock/redock and switch away/back to Team Tools and verify the same result. Cover link edits
   and removal too, while retaining explicit regeneration and list/day isolation.
 
-## Queued iPad corrections — October 5
+## Active release: iPad corrections — October 5
 
-Operator-reported follow-ups; queued only, not yet reproduced, implemented or verified.
+Source and simulator acceptance passed for both corrections; physical-device update remains pending.
 
-- [ ] **Open the selected shared team configuration.** Selecting an existing named team
+- [x] **Open the selected shared team configuration (source and simulator verified).** Selecting an existing named team
   list on iPad currently opens a new-list form instead of that list's configuration. Load
   the selected API record, including its stable ID, revision, members, instructions, links
   and timezone. Editing/saving must update that same list; create a new list only through
   the explicit New list action. Verify selection between multiple existing lists and confirm
   that opening or saving one does not create a duplicate.
-- [ ] **Separate main browser tabs from Team Tools browser tabs.** The iPad's global
+- [x] **Separate main browser tabs from Team Tools browser tabs (source and simulator verified).** The iPad's global
   new-browser control must use the same plus/globe artwork as desktop, without the visible
   word “Browser,” while retaining an accessible New browser tab label. It must open and
   select a browser tab in the main top tab bar, including when Team Tools is active.
@@ -351,9 +444,23 @@ Operator-reported follow-ups; queued only, not yet reproduced, implemented or ve
   matching desktop. Verify that each control adds a tab only to its intended collection
   and preserves the other collection's tabs and selection.
 
-## Queued: provider sign-in recovery and refresh without restarting
+## Active release: iOS notification tap routing — October 5
 
-Status: requested; not implemented or validated. Applies to GitHub Copilot, Codex and Claude Code.
+The operator reports that tapping a Proteus notification can crash or fail to open its target.
+Native investigation and cold/warm routing regression tests are a release gate. Preserve host and
+chat/schedule identity, wait for app readiness, avoid Home overriding a pending notification, and
+show missing/offline targets safely. Existing notifications may be local; this is not proof of APNs.
+
+The operator has no paid Apple Developer membership. Native background remote push remains pending
+an APNs-enabled signing team and server credentials; retain the current signing configuration.
+Local notifications and their tap routing do not require enrollment. Do not purchase membership or
+change signing/account settings implicitly.
+
+## Active release: provider sign-in recovery and refresh without restarting
+
+Status: local Sign in/Reconnect, timeout/cancellation, delayed completion, account labels and
+provider-specific execution holds passed synthetic integration. Copilot, Codex and Claude use
+supported authentication handoffs. No live sign-in validation or credential change is claimed.
 
 - Add visible Sign in / Reconnect actions to Providers and actionable recovery links wherever a
   provider blocks starting or continuing a chat. Distinguish signed out, expired authorization,
@@ -380,9 +487,11 @@ reported signed out with zero models. Restarting the idle app restored authentic
 19 models. This is evidence for the Copilot path only; equivalent failures in Codex and Claude Code
 have not been established. The shared recovery experience should cover all three adapters.
 
-## Queued: reconcile MCP connection status with the active chat
+## Active release: reconcile MCP connection status with the active chat
 
-Status: investigation requested; cause and fix not yet established.
+Status: current-session MCP failures now take priority over configuration-only Connected status,
+with refreshed OAuth/session checks and synthetic coverage. Live provider OAuth recovery remains
+unverified; historical tool events are retained.
 
 - Reported Atlassian case: MCP configuration shows Connected while a resumed Copilot chat emits
   `MCP atlassian: needs-auth`. Keep this separate from provider-account sign-in: a provider being
@@ -861,7 +970,7 @@ pairings do not grant agents new authority, and company-source policy stays in i
   notifications are implemented; workflow-specific completion proof remains separate.
 - Automatic reconciliation of foreign workflow manifests; currently use the owning repository
   exporter and explicit import/refresh.
-- Provider adapters beyond Copilot/Codex/Claude/rehearsal; Claude MCP/browser/steering parity; Codex native agent tool-filter parity and per-tool MCP approval interception; changing the provider of an existing chat.
+- Provider adapters beyond Copilot/Codex/Claude/rehearsal; Claude browser/steering parity and scoped MCP OAuth controls; Codex native agent tool-filter parity and per-tool MCP approval interception; changing the provider of an existing chat.
 - Paginated on-disk run storage as history grows.
 - Further account-session grant hardening remains queued. Authenticated end-to-end revocation is
   implemented in the parity release; unauthenticated relay notices cannot erase enrollment.

@@ -33,6 +33,29 @@ test('AES-GCM authenticates the payload and routing context', () => {
   assert.throws(() => unseal(secret(), box, 'connection:client:1'));
   const corrupt = Buffer.from(box, 'base64'); corrupt[14] ^= 1; assert.throws(() => unseal(key, corrupt.toString('base64'), 'connection:client:1'));
 });
+test('paired chat archive and delete synchronize without resurrecting cached history',async t=>{
+  const {app,connect,workspace}=await fixture(t);const first=await connect(),second=await connect();
+  const controls=(await first.request('sync')).state;assert.ok(controls.mcpStatusProviders.includes('claude'));assert.equal(controls.mcpLoginProviders.includes('claude'),false);
+  const schedule={...app.engine.schedules.list()[0],workspace:{cwd:workspace,additionalDirectories:[]}};
+  const run=app.engine.createRun(schedule,'chat',null,{deferStart:true});run.deferredStart=false;run.status='completed';app.engine.persist(run);
+  const before=await first.request('chat.get',{id:run.id});
+  assert.ok((await first.request('runs.list')).some(row=>row.id===run.id));
+  const archived=await first.request('chat.archive',{id:run.id,archived:true,expectedUpdatedAt:before.updatedAt,expectedArchivedAt:null});
+  assert.ok(archived.archivedAt);assert.equal((await first.request('runs.list')).some(row=>row.id===run.id),false);
+  assert.ok((await second.request('runs.list',{includeArchived:true})).find(row=>row.id===run.id)?.archived);
+  assert.equal((await second.request('sync')).state.runCountIncludingArchived,1);
+  assert.ok((await second.request('chat.get',{id:run.id})).archived);
+  await assert.rejects(first.request('chat.archive',{id:run.id,archived:false,expectedArchivedAt:'old'}),/changed/);
+  await second.request('chat.archive',{id:run.id,archived:false,expectedArchivedAt:archived.archivedAt});
+  assert.ok((await first.request('runs.list')).some(row=>row.id===run.id));
+  const deleted=await first.request('chat.delete',{id:run.id,expectedUpdatedAt:before.updatedAt,expectedArchivedAt:null});
+  assert.equal(deleted.deleted,true);await until(()=>second.events.some(event=>event.event==='chat.lifecycle'&&event.data?.deleted===true&&event.data.id===run.id));
+  await assert.rejects(first.request('chat.get',{id:run.id}),/not found/);
+  await assert.rejects(first.request('chat.send',{id:run.id,prompt:'Synthetic retry',mode:'queue'}),/not found/);
+  await assert.rejects(first.request('chat.attachments.begin',{id:run.id,messageId:'synthetic',name:'x.txt',mediaType:'text\/plain',size:1,sha256:'x'}),/not found/);
+  assert.equal((await second.request('runs.list',{includeArchived:true})).length,0);
+  assert.equal(app.activity.logs(40).items.some(item=>item.event==='chat.undefined'),false);
+});
 test('a paired client can apply permissions to the current waiting chat and receive tool details', async t => {
   const { app, connect, workspace } = await fixture(t, { copilot: { run: async ({ ask, emit }) => {
     emit('tool', 'Read fixture', { tool: { callId: 'fixture-read', name: 'view', summary: 'Read fixture', status: 'running', arguments: '{"path":"fixture.md"}', output: 'Visible progress' } });

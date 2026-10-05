@@ -8,6 +8,7 @@ import { browserTools } from './browser-tools.js';
 import { displayText, toolSummary } from './tool-activity.js';
 import { canonicalPath, effectivePermissionMode } from './permissions.js';
 import { validateModelOptions } from './model-catalog.js';
+const proteusVersion=JSON.parse(fs.readFileSync(new URL('../package.json',import.meta.url),'utf8')).version;
 
 export const codexExecutable = () => process.env.PROTEUS_CODEX_PATH || ['/opt/homebrew/bin/codex','/usr/local/bin/codex','/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex','/Applications/Codex.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex','/Applications/ChatGPT.app/Contents/Resources/codex','/Applications/Codex.app/Contents/Resources/codex'].find(p=>fs.existsSync(p)) || 'codex';
 export function codexModel(model) {
@@ -46,7 +47,7 @@ export class CodexRPC extends EventEmitter {
  }
  write(message){if(this.closedError)throw this.closedError;if(this.child.stdin.destroyed)throw new Error('Codex connection is closed.');this.child.stdin.write(JSON.stringify(message)+'\n');}
  request(method,params={},timeout=45000){return new Promise((resolve,reject)=>{const id=++this.sequence;const timer=setTimeout(()=>{this.pending.delete(id);reject(new Error(`Codex ${method} timed out.`));},timeout);this.pending.set(id,{resolve,reject,timer});try{this.write({id,method,params});}catch(e){clearTimeout(timer);this.pending.delete(id);reject(e);}});}
- async initialize(){await this.request('initialize',{clientInfo:{name:'proteus',title:'Proteus',version:'0.1.0'},capabilities:{experimentalApi:true}});this.write({method:'initialized'});return this;}
+ async initialize(){await this.request('initialize',{clientInfo:{name:'proteus',title:'Proteus',version:proteusVersion},capabilities:{experimentalApi:true}});this.write({method:'initialized'});return this;}
  respond(id,result){if(!this.child.stdin.destroyed)this.write({id,result});}
  async close(){
   if(!this.child.pid||this.child.exitCode!==null||this.child.signalCode!==null)return;
@@ -54,7 +55,7 @@ export class CodexRPC extends EventEmitter {
  }
 }
 export class CodexProvider {
- constructor(options={}, {browser,context}={}){this.options=options;this.browser=browser;this.context=context;this.active=null;this.client=null;this.starting=null;}
+ constructor(options={}, {browser,context}={}){this.options=options;this.browser=browser;this.context=context;this.active=null;this.starting=null;this.acceptedMediaTypes=Object.freeze(['image/png','image/jpeg','image/gif','image/webp','text/plain']);}
  async connect(){
   if(!this.starting){
    const client=this.options.clientFactory?this.options.clientFactory():new CodexRPC(this.options);this.client=client;
@@ -64,10 +65,12 @@ export class CodexProvider {
   await this.starting;return this.client;
  }
  async models(client){client ??= await this.connect();const result=[];let cursor;do{const page=await client.request('model/list',{limit:100,includeHidden:false,...(cursor?{cursor}:{})});result.push(...page.data.map(codexModel));cursor=page.nextCursor;}while(cursor);return result;}
- async status(){try{const client=await this.connect();const [account,models]=await Promise.all([client.request('account/read',{refreshToken:false}),this.models(client)]);return {provider:'codex',available:!!account.account,models,error:account.account?null:'Sign in with codex login on this Mac.',capabilities:{steering:true,context:'Selected instructions and skills; native Codex sessions and approvals.'}};}catch(error){return {provider:'codex',available:false,models:[],error:error.message};}}
+ async status(){try{let client=await this.connect();let account=await client.request('account/read',{refreshToken:true});if(!account.account&&!this.active){await this.close();client=await this.connect();account=await client.request('account/read',{refreshToken:true});}const models=account.account?await this.models(client):[];return {provider:'codex',available:!!account.account,models,error:account.account?null:'Sign in with codex login on this Mac.',capabilities:{steering:true,context:'Selected instructions and skills; native Codex sessions and approvals.'}};}catch(error){return {provider:'codex',available:false,models:[],error:error.message};}}
  async quota(){const client=await this.connect();return client.request('account/rateLimits/read',{});}
  async steer(run,prompt){const a=this.active;if(!a||a.run.id!==run.id||!a.turnId)throw new Error('Codex is still starting or the turn ended. Queue this message.');await a.client.request('turn/steer',{threadId:run.providerSessionId,expectedTurnId:a.turnId,input:[{type:'text',text:prompt}]});}
- async run({run,prompt,emit,ask,update,signal,stream,permissionProfile}){
+ async run({run,prompt,attachments=[],emit,ask,update,signal,stream,permissionProfile}){
+  for(const item of attachments)if(!this.acceptedMediaTypes.includes(item.mediaType)||!Buffer.isBuffer(item.bytes))throw new Error('Codex can receive images and plain text here. PDF and other files are not supported.');
+  let imageDir=null;
   const client=await this.connect();const model=(await this.models(client)).find(m=>m.id===run.schedule.model);if(!model)throw new Error('Choose an available Codex model from the provider catalog.');validateModelOptions(run.schedule,model);
   const snapshot=run.schedule.context, managed=snapshot&&this.context?this.context.providerContext(snapshot):null;
   // Tool scopes are an execution contract. Do not silently drop provider-specific restrictions.
@@ -149,8 +152,21 @@ export class CodexProvider {
    run.providerSessionId=thread.thread.id;run.providerHome=process.env.CODEX_HOME||path.join(os.homedir(),'.codex');run.nativeSessionPath=thread.thread.path||null;run.modelCapabilities={id:model.id,controls:model.controls,capturedAt:new Date().toISOString()};run.explicitProviderContext={mcpNames:Object.keys(selected),skillDirectories:[],disabledSkills:managed?.disabledSkills||[]};if(snapshot){snapshot.suppliedAt=new Date().toISOString();snapshot.delivery='Codex thread configuration accepted';}update();
    if(signal.aborted)throw new Error('Cancelled');
    if(active.recheckPermissions())throw new Error('Workspace permissions changed before the Codex turn started.');
-   const result=await client.request('turn/start',{threadId:run.providerSessionId,sandboxPolicy:sandbox.policy,approvalPolicy:'untrusted',approvalsReviewer:'user',runtimeWorkspaceRoots:sandbox.runtimeWorkspaceRoots,input:[{type:'text',text:prompt}],effort:run.schedule.reasoningEffort||model.controls.defaultReasoningEffort||null,serviceTier:run.schedule.serviceTier||null});active.turnId=result.turn.id;if(signal.aborted||active.permissionRevoked){clearTimeout(abortTimer);abortTimer=null;abort();}await completed;
-  }finally{clearTimeout(abortTimer);if(active.turnId&&!settled)await client.close();signal.removeEventListener('abort',abort);client.off('notification',onNotification);client.off('request',onRequest);client.off('closed',closed);for(const tool of calls.values())if(tool.status==='running')tool.status='interrupted';if(this.active===active)this.active=null;update();}
+   const input=[{type:'text',text:prompt}];
+   if(attachments.some(item=>item.mediaType.startsWith('image/'))){imageDir=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-codex-image-'));}
+   if(attachments.length){
+    const extensions={'image/png':'png','image/jpeg':'jpg','image/gif':'gif','image/webp':'webp'};
+    for(const [index,item] of attachments.entries()){
+      if(item.mediaType==='text/plain'){
+        let content;try{content=new TextDecoder('utf-8',{fatal:true}).decode(item.bytes);}catch{throw new Error('Codex requires UTF-8 plain text attachments.');}
+        if(content.includes('\0'))throw new Error('Codex cannot receive binary content as a text attachment.');
+        input.push({type:'text',text:`Attached plain text file: ${item.name}\n\n${content}`});continue;
+      }
+      const file=path.join(imageDir,`image-${index}.${extensions[item.mediaType]}`);fs.writeFileSync(file,item.bytes,{mode:0o600,flag:'wx'});input.push({type:'localImage',path:file});
+    }
+   }
+   const result=await client.request('turn/start',{threadId:run.providerSessionId,sandboxPolicy:sandbox.policy,approvalPolicy:'untrusted',approvalsReviewer:'user',runtimeWorkspaceRoots:sandbox.runtimeWorkspaceRoots,input,effort:run.schedule.reasoningEffort||model.controls.defaultReasoningEffort||null,serviceTier:run.schedule.serviceTier||null});active.turnId=result.turn.id;if(signal.aborted||active.permissionRevoked){clearTimeout(abortTimer);abortTimer=null;abort();}await completed;
+  }finally{clearTimeout(abortTimer);if(active.turnId&&!settled)await client.close();signal.removeEventListener('abort',abort);client.off('notification',onNotification);client.off('request',onRequest);client.off('closed',closed);for(const tool of calls.values())if(tool.status==='running')tool.status='interrupted';if(this.active===active)this.active=null;if(imageDir)fs.rmSync(imageDir,{recursive:true,force:true});update();}
  }
  recheckPermissions(){this.active?.recheckPermissions?.();}
  async close(){await this.client?.close();this.client=null;this.starting=null;}

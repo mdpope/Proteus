@@ -1,0 +1,201 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { createHash, randomUUID } from 'node:crypto';
+import { TextDecoder } from 'node:util';
+
+const MAX_FILE_BYTES = 8 * 1024 * 1024;
+const CHUNK_BYTES = 256 * 1024;
+const TTL_MS = 15 * 60 * 1000;
+const MAX_PENDING = 16;
+const MAX_PER_DEVICE = 4;
+const MEDIA_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'application/pdf', 'text/plain']);
+const PROVIDERS = new Set(['copilot', 'codex', 'claude']);
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function identity(value, label) {
+  if (typeof value !== 'string' || !value || value.length > 128 || /[\x00-\x1f\x7f]/.test(value)) throw new Error(`Invalid ${label}.`);
+  return value;
+}
+function filename(value) {
+  if (typeof value !== 'string' || value !== value.trim() || !value || value.length > 180 || /[\\/\x00-\x1f\x7f]/.test(value) || ['.', '..'].includes(value)) throw new Error('Choose a file with a valid filename.');
+  return value.normalize('NFC');
+}
+function fileType(bytes, mediaType) {
+  const starts = signature => bytes.subarray(0, signature.length).equals(Buffer.from(signature));
+  if (mediaType === 'image/png') return bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex'));
+  if (mediaType === 'image/jpeg') return bytes.length >= 4 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes.at(-2) === 0xff && bytes.at(-1) === 0xd9;
+  if (mediaType === 'image/gif') return starts('GIF87a') || starts('GIF89a');
+  if (mediaType === 'image/webp') return bytes.length >= 12 && starts('RIFF') && bytes.subarray(8, 12).equals(Buffer.from('WEBP'));
+  if (mediaType === 'application/pdf') return starts('%PDF-');
+  if (mediaType === 'text/plain') {
+    if (bytes.includes(0)) return false;
+    try { new TextDecoder('utf-8', { fatal: true }).decode(bytes); return true; } catch { return false; }
+  }
+  return false;
+}
+function decodedChunk(value) {
+  if (typeof value !== 'string' || value.length > Math.ceil(CHUNK_BYTES / 3) * 4 + 4 || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)) throw new Error('Invalid attachment chunk.');
+  const bytes = Buffer.from(value, 'base64');
+  if (!bytes.length || bytes.length > CHUNK_BYTES || bytes.toString('base64') !== value) throw new Error('Invalid attachment chunk.');
+  return bytes;
+}
+function readStaged(record) {
+  const fd = fs.openSync(record.path, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
+  try {
+    const stat = fs.fstatSync(fd);
+    if (!stat.isFile() || stat.ino !== record.inode || stat.size !== record.size) throw new Error('Staged attachment changed.');
+    return fs.readFileSync(fd);
+  } finally { fs.closeSync(fd); }
+}
+
+/** Ephemeral, host-private byte staging. A caller must authenticate the peer before using this store. */
+export class ChatAttachmentStore {
+  constructor(home, { clock = () => Date.now() } = {}) {
+    if (typeof home !== 'string' || !path.isAbsolute(home)) throw new Error('An absolute application-data home is required.');
+    this.clock = clock;
+    this.base = path.join(home, 'chat-attachments');
+    fs.mkdirSync(this.base, { recursive: true, mode: 0o700 }); fs.chmodSync(this.base, 0o700);
+    this.removeStaleSessions();
+    this.acceptedRoot = path.join(this.base, 'accepted'); fs.mkdirSync(this.acceptedRoot, { recursive: true, mode: 0o700 }); fs.chmodSync(this.acceptedRoot, 0o700);
+    this.root = path.join(this.base, randomUUID()); fs.mkdirSync(this.root, { mode: 0o700 });
+    this.records = new Map(); this.closed = false;
+    this.loadAccepted();
+    this.timer = setInterval(() => this.cleanup(), 60_000); this.timer.unref?.();
+  }
+  ensureOpen() { if (this.closed) throw new Error('Attachment staging is closed.'); this.cleanup(); }
+  loadAccepted() {
+    for (const name of fs.readdirSync(this.acceptedRoot)) {
+      if (!name.endsWith('.json') || !UUID.test(name.slice(0, -5))) continue;
+      const id = name.slice(0, -5), metadata = path.join(this.acceptedRoot, name), file = path.join(this.acceptedRoot, id);
+      try {
+        const saved = JSON.parse(fs.readFileSync(metadata, 'utf8'));
+        if (saved.id !== id || !PROVIDERS.has(saved.providerId) || !MEDIA_TYPES.has(saved.mediaType) || !Number.isSafeInteger(saved.size) || saved.size < 1 || saved.size > MAX_FILE_BYTES || !/^[0-9a-f]{64}$/.test(saved.sha256)) throw new Error('Invalid accepted attachment record.');
+        const stat = fs.lstatSync(file);
+        if (!stat.isFile() || stat.isSymbolicLink() || stat.size !== saved.size) throw new Error('Accepted attachment changed.');
+        const record = { ...saved, path: file, fd: null, inode: stat.ino, finished: true, accepted: true, expiresAt: Infinity };
+        this.verify(record); this.records.set(id, record);
+      } catch { fs.rmSync(metadata, { force: true }); fs.rmSync(file, { force: true }); }
+    }
+  }
+  removeStaleSessions() {
+    for (const name of fs.readdirSync(this.base)) {
+      if (!UUID.test(name)) continue;
+      const target = path.join(this.base, name);
+      try { const stat = fs.lstatSync(target); if (stat.isDirectory() && !stat.isSymbolicLink() && this.clock() - stat.mtimeMs >= TTL_MS) fs.rmSync(target, { recursive: true, force: true }); } catch { /* A concurrent cleanup is harmless. */ }
+    }
+  }
+  cleanup() {
+    if (this.closed) return;
+    for (const record of this.records.values()) if (!record.accepted && this.clock() >= record.expiresAt) this.remove(record);
+  }
+  remove(record) {
+    if (record.fd !== null) { try { fs.closeSync(record.fd); } catch { /* Closed already. */ }; record.fd = null; }
+    try { fs.rmSync(record.path, { force: true }); } catch { /* Missing staged bytes. */ }
+    if (record.accepted) { try { fs.rmSync(path.join(this.acceptedRoot, record.id + '.json'), { force: true }); } catch { /* Missing manifest. */ } }
+    this.records.delete(record.id);
+  }
+  bound(record, { chatId, deviceId, messageId, providerId }) {
+    if (record.chatId !== identity(chatId, 'chat') || record.deviceId !== identity(deviceId, 'device') || record.messageId !== identity(messageId, 'message') || record.providerId !== identity(providerId, 'provider')) throw new Error('This attachment belongs to another chat, device, message or provider.');
+  }
+  async begin({ chatId, deviceId, messageId, providerId, name, mediaType, size, sha256 } = {}) {
+    this.ensureOpen();
+    chatId = identity(chatId, 'chat'); deviceId = identity(deviceId, 'device'); messageId = identity(messageId, 'message'); name = filename(name);
+    if (!PROVIDERS.has(providerId)) throw new Error('Unsupported attachment provider.');
+    if (!MEDIA_TYPES.has(mediaType)) throw new Error('This file type is not supported for chat attachments.');
+    if (!Number.isSafeInteger(size) || size < 1 || size > MAX_FILE_BYTES) throw new Error('Attachments must be between 1 byte and 8 MB.');
+    if (typeof sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(sha256)) throw new Error('Invalid attachment digest.');
+    const staged = [...this.records.values()].filter(item => !item.accepted);
+    if (staged.length >= MAX_PENDING || staged.filter(item => item.deviceId === deviceId).length >= MAX_PER_DEVICE) throw new Error('Too many attachments are being prepared. Finish or remove one first.');
+    const id = randomUUID(), file = path.join(this.root, id);
+    const fd = fs.openSync(file, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | (fs.constants.O_NOFOLLOW || 0), 0o600);
+    const record = { id, path: file, fd, inode: fs.fstatSync(fd).ino, chatId, deviceId, messageId, providerId, name, mediaType, size, sha256, received: 0, nextIndex: 0, finished: false, expiresAt: this.clock() + TTL_MS };
+    this.records.set(id, record);
+    return { uploadId: id, chunkSize: CHUNK_BYTES, expiresAt: new Date(record.expiresAt).toISOString() };
+  }
+  async chunk({ uploadId, deviceId, index, dataBase64 } = {}) {
+    this.ensureOpen();
+    const record = this.records.get(uploadId); if (!record || record.deviceId !== identity(deviceId, 'device') || record.finished) throw new Error('Attachment upload is unavailable.');
+    if (!Number.isSafeInteger(index) || index !== record.nextIndex) throw new Error('Attachment chunks must arrive in order.');
+    const bytes = decodedChunk(dataBase64);
+    if (record.received + bytes.length > record.size) throw new Error('Attachment exceeds its declared size.');
+    let written = 0;
+    while (written < bytes.length) { const count = fs.writeSync(record.fd, bytes, written, bytes.length - written, null); if (count <= 0) throw new Error('Attachment write failed.'); written += count; }
+    record.received += bytes.length; record.nextIndex += 1; record.expiresAt = this.clock() + TTL_MS;
+    return { uploadId, received: record.received, nextIndex: record.nextIndex };
+  }
+  async finish({ uploadId, deviceId } = {}) {
+    this.ensureOpen();
+    const record = this.records.get(uploadId); if (!record || record.deviceId !== identity(deviceId, 'device') || record.finished) throw new Error('Attachment upload is unavailable.');
+    if (record.received !== record.size) throw new Error('Attachment upload is incomplete.');
+    fs.fsyncSync(record.fd); fs.closeSync(record.fd); record.fd = null;
+    const bytes = readStaged(record);
+    if (bytes.length !== record.size || createHash('sha256').update(bytes).digest('hex') !== record.sha256 || !fileType(bytes, record.mediaType)) { this.remove(record); throw new Error('Attachment bytes did not match the declared file, type or digest.'); }
+    record.finished = true; record.expiresAt = this.clock() + TTL_MS;
+    return { attachmentId: record.id, name: record.name, mediaType: record.mediaType, size: record.size, sha256: record.sha256 };
+  }
+  /** Rebind a finished, still-staged first-message file after the host creates its chat. */
+  async claimDraft({ attachmentId, draftId, chatId, deviceId, messageId, providerId } = {}) {
+    this.ensureOpen();
+    const record = this.records.get(attachmentId);
+    if (!record || !record.finished || record.accepted) throw new Error('Draft attachment is unavailable or already accepted.');
+    if (record.chatId !== `draft:${identity(draftId, 'draft')}` || record.deviceId !== identity(deviceId, 'device') || record.messageId !== identity(messageId, 'message') || record.providerId !== identity(providerId, 'provider')) throw new Error('This attachment belongs to another draft, device, message or provider.');
+    chatId = identity(chatId, 'chat');
+    if (chatId.startsWith('draft:')) throw new Error('A created chat is required to claim an attachment.');
+    this.verify(record);
+    record.chatId = chatId;
+    return { attachmentId: record.id, name: record.name, mediaType: record.mediaType, size: record.size, sha256: record.sha256 };
+  }
+  async resolve({ attachmentId, chatId, deviceId, messageId, providerId } = {}) {
+    this.ensureOpen();
+    const record = this.records.get(attachmentId); if (!record || !record.finished) throw new Error('Attachment is unavailable or expired.');
+    this.bound(record, { chatId, deviceId, messageId, providerId });
+    this.verify(record);
+    return { path: record.path, name: record.name, mediaType: record.mediaType, size: record.size, sha256: record.sha256 };
+  }
+  verify(record) {
+    const bytes = readStaged(record);
+    if (createHash('sha256').update(bytes).digest('hex') !== record.sha256 || !fileType(bytes, record.mediaType)) throw new Error('Staged attachment changed.');
+    return bytes;
+  }
+  async read({ attachmentId, chatId, deviceId, messageId, providerId } = {}) {
+    this.ensureOpen();
+    const record = this.records.get(attachmentId); if (!record || !record.finished) throw new Error('Attachment is unavailable or expired.');
+    this.bound(record, { chatId, deviceId, messageId, providerId });
+    return { bytes: this.verify(record), name: record.name, mediaType: record.mediaType, size: record.size, sha256: record.sha256 };
+  }
+  async accept({ attachmentId, chatId, deviceId, messageId, providerId } = {}) {
+    this.ensureOpen();
+    const record = this.records.get(attachmentId); if (!record || !record.finished) throw new Error('Attachment is unavailable or expired.');
+    this.bound(record, { chatId, deviceId, messageId, providerId }); this.verify(record);
+    if (record.accepted) return { attachmentId: record.id, name: record.name, mediaType: record.mediaType, size: record.size, sha256: record.sha256 };
+    const target = path.join(this.acceptedRoot, record.id), metadata = target + '.json';
+    const manifest = { id: record.id, chatId: record.chatId, deviceId: record.deviceId, messageId: record.messageId, providerId: record.providerId, name: record.name, mediaType: record.mediaType, size: record.size, sha256: record.sha256 };
+    fs.writeFileSync(metadata, JSON.stringify(manifest), { flag: 'wx', mode: 0o600 });
+    try { fs.renameSync(record.path, target); fs.chmodSync(target, 0o400); }
+    catch (error) { fs.rmSync(metadata, { force: true }); throw error; }
+    record.path = target; record.accepted = true; record.expiresAt = Infinity;
+    return { attachmentId: record.id, name: record.name, mediaType: record.mediaType, size: record.size, sha256: record.sha256 };
+  }
+  async release({ attachmentId, chatId, deviceId, messageId, providerId } = {}) {
+    this.ensureOpen();
+    const record = this.records.get(attachmentId); if (!record) return false;
+    this.bound(record, { chatId, deviceId, messageId, providerId }); this.remove(record); return true;
+  }
+  async revokeDevice(deviceId) {
+    this.ensureOpen(); deviceId = identity(deviceId, 'device');
+    for (const record of [...this.records.values()]) if (record.deviceId === deviceId) this.remove(record);
+  }
+  async revokeChat(chatId) {
+    this.ensureOpen(); chatId = identity(chatId, 'chat');
+    for (const record of [...this.records.values()]) if (record.chatId === chatId) this.remove(record);
+  }
+  async close() {
+    if (this.closed) return;
+    clearInterval(this.timer);
+    for (const record of [...this.records.values()]) if (!record.finished) this.remove(record);
+    this.records.clear(); this.closed = true;
+    try { if (fs.readdirSync(this.root).length === 0) fs.rmdirSync(this.root); } catch { /* Finished uploads age out on next startup. */ }
+  }
+}
+
+export const chatAttachmentLimits = Object.freeze({ maxFileBytes: MAX_FILE_BYTES, chunkBytes: CHUNK_BYTES, ttlMs: TTL_MS, maxPending: MAX_PENDING, maxPerDevice: MAX_PER_DEVICE });

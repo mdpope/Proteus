@@ -131,11 +131,11 @@ export class PermissionStore {
     if (profile.mode === 'ask') return { allowed: false, reason: 'Ask for approval' };
     if (['read','write'].includes(request.kind)) {
       const target = requestedPath(request, profile);
-      const allowed = target && profile.folders.some(folder => {
+      const matched = target && profile.folders.find(folder => {
         const current = canonicalPath(folder.path, profile.cwd);
         return current === folder.path && within(target, folder.path) && (request.kind === 'read' || folder.access === 'read-write');
       });
-      return { allowed: !!allowed, reason: allowed ? 'Trusted folder' : 'Outside trusted folders', mode: profile.mode };
+      return { allowed: !!matched, reason: matched ? 'Trusted folder' : 'Outside trusted folders', mode: profile.mode,...(matched?{resolvedTarget:target,matchedRoot:matched.path}:{}) };
     }
     const rule = operationRule(request);
     if (rule && profile.rules.some(value => hash(value) === hash(rule))) return { allowed: true, reason: 'Saved operation approval', mode: profile.mode };

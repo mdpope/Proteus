@@ -9,6 +9,7 @@ import { PermissionStore } from './permissions.js';
 
 import { chatModelOptions } from './model-catalog.js';
 import { agentName } from '../public/agent-name.js';
+import { ChatAttachmentConsents } from './chat-attachment-consent.js';
 
 const active = new Set(['queued', 'running', 'awaiting_input']);
 export class Engine extends EventEmitter {
@@ -17,6 +18,8 @@ export class Engine extends EventEmitter {
     this.schedules = new ScheduleStore(path.join(home, 'schedules'));
     this.permissions = new PermissionStore(home);
     this.runsDir = path.join(home, 'runs');
+    this.tombstoneFile = path.join(home, 'chat-tombstones.json');
+    this.tombstones = readJSON(this.tombstoneFile, {});
     this.providers = { rehearsal: new RehearsalProvider(), ...providers };
     this.pending = new Map(); this.questionQueues = new Map(); this.running = null; this.backgroundRuns = new Map(); this.executions = new Set(); this.stopping = false;
     fs.mkdirSync(this.runsDir, { recursive: true, mode: 0o700 });
@@ -25,8 +28,10 @@ export class Engine extends EventEmitter {
     for (const file of jsonFiles(this.runsDir)) {
       try {
         const run = readJSON(file);
+        if (this.tombstones[run.id]) { fs.rmSync(file, { force: true }); continue; }
         if (active.has(run.status)) {
           run.status = 'interrupted'; run.pending = null; delete run.liveMessages;
+          run.failureEventAt = clock().toISOString(); delete run.failureReviewedAt;
           for (const event of run.events) if (event.data?.delivery?.state === 'sending') Object.assign(event.data.delivery, {state:'failed',error:'The runner stopped before confirming delivery. Inspect the provider session before retrying.'});
           run.events.push({ role: 'system', text: 'The runner stopped. Continue this session to recover; no work was silently replayed.', at: clock().toISOString() });
           atomicJSON(file, run);
@@ -36,7 +41,7 @@ export class Engine extends EventEmitter {
     }
   }
   now() { return this.clock().toISOString(); }
-  persist(run) { run.updatedAt = this.now(); atomicJSON(path.join(this.runsDir, `${run.id}.json`), run); this.emit('change', run); }
+  persist(run) { if(this.tombstones[run.id]||!this.runs.has(run.id))throw new Error('Deleted chat cannot be restored.');run.updatedAt = this.now(); atomicJSON(path.join(this.runsDir, `${run.id}.json`), run); this.emit('change', run); }
   event(run, role, text, data) {
     run.events.push({ role, text, ...(role === 'assistant' ? { agentName: agentName(run) } : {}), ...(data ? { data } : {}), at: this.now() }); this.persist(run);
   }
@@ -45,8 +50,44 @@ export class Engine extends EventEmitter {
     this.emit('change', run);
   }
   listRuns() { return [...this.runs.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)); }
+  visibleRuns(includeArchived = false) { return this.listRuns().filter(run => includeArchived || !run.archivedAt); }
   getRun(id) { const run = this.runs.get(id); if (!run) throw new Error('Run not found.'); return run; }
-  createRun(schedule, trigger = 'manual', slot = null) {
+  lifecycle(id, action, { expectedUpdatedAt, expectedArchivedAt } = {}) {
+    const run = this.getRun(id);
+    if (expectedUpdatedAt !== undefined && expectedUpdatedAt !== run.updatedAt) throw new Error('This chat changed. Refresh it before continuing.');
+    if (expectedArchivedAt !== undefined && expectedArchivedAt !== (run.archivedAt || null)) throw new Error('This chat archive state changed. Refresh it before continuing.');
+    if (active.has(run.status) || run.deferredStart || run.queuedMessages?.length || this.running?.id===run.id || [...this.backgroundRuns.values()].some(slot=>slot.id===run.id) || this.pending.has(run.id)) throw new Error('Finish or cancel the active or queued chat work before archiving or deleting it.');
+    if (action === 'archive' || action === 'unarchive') {
+      run.archivedAt = action === 'archive' ? (run.archivedAt || this.now()) : null;
+      atomicJSON(path.join(this.runsDir, `${run.id}.json`), run);
+      this.emit('change', run);
+      const result = { id: run.id, archivedAt: run.archivedAt, archived: !!run.archivedAt, updatedAt: run.updatedAt };
+      this.emit('lifecycle', result);
+      return result;
+    }
+    if (action !== 'delete') throw new Error('Unknown chat action.');
+    if (path.basename(run.id) !== run.id || !/^[a-zA-Z0-9_-]{1,100}$/.test(run.id)) throw new Error('Invalid chat record identifier.');
+    const deletedAt = this.now();
+    this.tombstones[run.id] = deletedAt;
+    atomicJSON(this.tombstoneFile, this.tombstones);
+    fs.rmSync(path.join(this.runsDir, `${run.id}.json`), { force: true });
+    this.runs.delete(run.id);
+    this.emit('change', { id: run.id, deleted: true, deletedAt });
+    const result = { id: run.id, deleted: true, deletedAt };
+    this.emit('lifecycle', result);
+    return result;
+  }
+  reviewFailure(id, expectedFailureEventAt) {
+    const run=this.getRun(id);
+    if(!['failed','interrupted'].includes(run.status))throw new Error('This chat does not have a failure to review.');
+    const eventAt=run.failureEventAt||run.updatedAt;
+    if(typeof expectedFailureEventAt!=='string'||expectedFailureEventAt!==eventAt)throw new Error('The chat changed. Reopen it to review the latest failure.');
+    run.failureEventAt ||= eventAt;
+    run.failureReviewedAt ||= this.now();
+    atomicJSON(path.join(this.runsDir, `${run.id}.json`), run);this.emit('change',run);
+    return {id:run.id,failureEventAt:run.failureEventAt,failureReviewedAt:run.failureReviewedAt,attentionRequired:false};
+  }
+  createRun(schedule, trigger = 'manual', slot = null, {deferStart=false} = {}) {
     schedule = this.prepareSchedule ? this.prepareSchedule(schedule, trigger) : schedule;
     validateSchedule(schedule);
     if (this.stopping) throw new Error('Runner is stopping.');
@@ -57,18 +98,22 @@ export class Engine extends EventEmitter {
       title: schedule.name, trigger, slot, status: 'queued', createdAt: this.now(), updatedAt: this.now(),
       events: [{ role: 'user', text: schedule.prompt, at: this.now() }], pending: null,
       providerSessionId: null, usage: { inputTokens: 0, outputTokens: 0, observed: false },
-      nextPrompt: schedule.prompt
+      nextPrompt: schedule.prompt,...(deferStart?{deferredStart:true}:{})
     };
-    this.runs.set(run.id, run); this.persist(run); queueMicrotask(() => this.drain()); return run;
+    this.runs.set(run.id, run); this.persist(run);if(!deferStart)queueMicrotask(() => this.drain()); return run;
   }
+  verifyAttachmentDispatch(run,dispatch){if(!(this.attachmentConsents instanceof ChatAttachmentConsents)||!dispatch||typeof dispatch.proofId!=='string')throw new Error('Attachment send authorization is unavailable.');return this.attachmentConsents.assertPrepared({...dispatch,chatId:run.id,providerId:run.schedule.provider});}
+  startDeferredRun(id,dispatch){const run=this.getRun(id);if(run.trigger!=='chat'||run.status!=='queued'||run.deferredStart!==true)throw new Error('Chat draft changed.');if(dispatch){run.events[0].data={attachments:this.verifyAttachmentDispatch(run,dispatch),delivery:{id:dispatch.messageId,state:'delivered'}};run.nextAttachmentDispatch=dispatch;}delete run.deferredStart;this.persist(run);queueMicrotask(()=>this.drain());return run;}
+  discardDeferredRun(id){const run=this.getRun(id);if(run.trigger!=='chat'||run.status!=='queued'||run.deferredStart!==true)throw new Error('Chat draft changed.');this.runs.delete(id);fs.rmSync(path.join(this.runsDir,`${id}.json`),{force:true});this.emit('change',run);}
   resume(id, prompt) {
     const run = this.getRun(id);
     if (active.has(run.status)) throw new Error('Reply to the pending question, or wait for the active turn.');
     if (typeof prompt !== 'string' || !prompt.trim()) throw new Error('A follow-up message is required.');
+    const wasArchived=!!run.archivedAt;run.archivedAt=null;
     run.status = 'queued'; run.pending = null; run.nextPrompt = prompt;
-    this.event(run, 'user', prompt); queueMicrotask(() => this.drain()); return run;
+    this.event(run, 'user', prompt);if(wasArchived)this.emit('lifecycle',{id:run.id,archivedAt:null,archived:false,updatedAt:run.updatedAt}); queueMicrotask(() => this.drain()); return run;
   }
-  async send(id, prompt, mode = 'queue', messageId = randomUUID(), modelOptions) {
+  async send(id, prompt, mode = 'queue', messageId = randomUUID(), modelOptions, dispatch) {
     const run = this.getRun(id);
     if (typeof prompt !== 'string' || !prompt.trim()) throw new Error('Write a message first.');
     if (!['queue','steer'].includes(mode)) throw new Error('Choose Queue next or Steer now.');
@@ -76,17 +121,20 @@ export class Engine extends EventEmitter {
     if (run.events.some(e => e.data?.delivery?.id === messageId)) return run;
     if (this.stopping) throw new Error('Runner is stopping.');
     if (mode === 'steer' && modelOptions) throw new Error('Steering keeps the current turn’s model. Queue a message to change model settings.');
+    if(dispatch&&mode!=='queue')throw new Error('Attachments require a queued turn.');
+    const attached=dispatch?this.verifyAttachmentDispatch(run,dispatch):[];
     const options = mode === 'queue' ? chatModelOptions(modelOptions || run.nextModelOptions || run.schedule) : null;
     if (options) run.nextModelOptions = options;
     if (!active.has(run.status)) {
+      const wasArchived=!!run.archivedAt;run.archivedAt=null;
       if (options) this.applyModelOptions(run, options);
-      run.status = 'queued'; run.pending = null; run.nextPrompt = prompt;
-      this.event(run, 'user', prompt, { delivery: { id: messageId, state: 'delivered' } });
-      queueMicrotask(() => this.drain()); return run;
+      run.status = 'queued'; run.pending = null; run.nextPrompt = prompt;if(dispatch)run.nextAttachmentDispatch=dispatch;
+      this.event(run, 'user', prompt, { delivery: { id: messageId, state: 'delivered' },...(attached.length?{attachments:attached}:{}) });
+      if(wasArchived)this.emit('lifecycle',{id:run.id,archivedAt:null,archived:false,updatedAt:run.updatedAt});queueMicrotask(() => this.drain()); return run;
     }
     if (mode === 'queue') {
-      run.queuedMessages ??= []; run.queuedMessages.push({ id: messageId, prompt, at: this.now(), modelOptions: options });
-      this.event(run, 'user', prompt, { delivery: { id: messageId, state: 'queued' } });
+      run.queuedMessages ??= []; run.queuedMessages.push({ id: messageId, prompt, at: this.now(), modelOptions: options,attachmentDispatch:dispatch });
+      this.event(run, 'user', prompt, { delivery: { id: messageId, state: 'queued' },...(attached.length?{attachments:attached}:{}) });
       return run;
     }
     if (run.status !== 'running' || this.running?.id !== id) throw new Error('Steering is available during a running turn. Queue this message, or answer the pending request first.');
@@ -111,7 +159,7 @@ export class Engine extends EventEmitter {
   removeQueued(id, messageId) {
     const run = this.getRun(id); const index = run.queuedMessages?.findIndex(m=>m.id===messageId) ?? -1;
     if (index < 0) throw new Error('This message has already been delivered.');
-    run.queuedMessages.splice(index,1);
+    const [removed]=run.queuedMessages.splice(index,1);if(removed.attachmentDispatch)void this.attachmentConsents?.releaseProof(removed.attachmentDispatch.proofId).catch(()=>{});
     const event=run.events.find(e=>e.data?.delivery?.id===messageId);if(event)event.data.delivery.state='removed';
     this.persist(run);return run;
   }
@@ -164,7 +212,7 @@ export class Engine extends EventEmitter {
     run.automaticApprovals = (run.automaticApprovals || 0) + 1;
     const tool = request?.toolCallId ? run.events.findLast(event => event.data?.tool?.callId === request.toolCallId)?.data?.tool : null;
     if (tool) tool.approval = decision.reason;
-    this.event(run, 'system', `Auto-approved ${request?.kind || 'tool'}: ${decision.reason}.`, { permission: { kind: request?.kind, automatic: true, reason: decision.reason, mode: decision.mode } });
+    this.event(run, 'system', `Auto-approved ${request?.kind || 'tool'}: ${decision.reason}.`, { permission: { kind: request?.kind, automatic: true, reason: decision.reason, mode: decision.mode,...(typeof request?.toolCallId==='string'?{toolCallId:request.toolCallId.slice(0,128)}:{}),...(decision.resolvedTarget?{resolvedTarget:decision.resolvedTarget.slice(0,1024)}:{}),...(decision.matchedRoot?{matchedRoot:decision.matchedRoot.slice(0,1024)}:{}) } });
   }
   recheckPermissions() {
     for (const provider of Object.values(this.providers)) provider.recheckPermissions?.();
@@ -179,7 +227,7 @@ export class Engine extends EventEmitter {
   async drain() {
     if (this.stopping) return;
     for (const run of this.runs.values()) {
-      if (run.status !== 'queued') continue;
+      if (run.status !== 'queued'||run.deferredStart===true||this.providerAuthHold?.(run.schedule.provider)) continue;
       const lane = this.executionLane?.(run.schedule) || null;
       if (lane ? this.backgroundRuns.has(lane) : this.running) continue;
       const controller = new AbortController();
@@ -191,13 +239,16 @@ export class Engine extends EventEmitter {
     }
   }
   async execute(run, controller, lane) {
-    run.status = 'running'; const prompt = run.nextPrompt; delete run.nextPrompt; this.persist(run);
+    run.status = 'running'; const prompt = run.nextPrompt,dispatch=run.nextAttachmentDispatch; delete run.nextPrompt; this.persist(run);
     try {
       await this.beforeRun?.(run.schedule);
       if (controller.signal.aborted) throw new Error('Cancelled');
       const provider = this.providers[run.schedule.provider]; if (!provider) throw new Error('Provider is not installed.');
+      // Explicit sender consent is rechecked against the actual run/provider and
+      // immutable accepted bytes immediately before the provider receives them.
+      const attachments=dispatch?await this.attachmentConsents.readForProvider({...dispatch,chatId:run.id,providerId:run.schedule.provider}):[];
       await provider.run({
-        run, prompt, signal: controller.signal,
+        run, prompt, attachments, signal: controller.signal,
         permissionProfile: () => this.permissions.describe(run.schedule),
         emit: (role, text, data) => this.event(run, role, text, data),
         stream: (id, text) => this.stream(run, id, text),
@@ -212,9 +263,11 @@ export class Engine extends EventEmitter {
       // Provider errors/timeouts can leave permission promises pending. Settle them
       // before another turn reuses this run's serialized question queue.
       controller.abort();
-      this.pending.delete(run.id); run.pending = null; delete run.liveMessages;
+      if(['failed','interrupted'].includes(run.status)){run.failureEventAt=this.now();delete run.failureReviewedAt;}
+      this.pending.delete(run.id); run.pending = null; delete run.liveMessages;delete run.nextAttachmentDispatch;
+      if(dispatch)await this.attachmentConsents.releaseProof(dispatch.proofId).catch(()=>{});
       if (run.status === 'completed' && run.queuedMessages?.length && !this.stopping) {
-        const next = run.queuedMessages.shift(); if (next.modelOptions) this.applyModelOptions(run, next.modelOptions); run.nextPrompt = next.prompt; run.status = 'queued';
+        const next = run.queuedMessages.shift(); if (next.modelOptions) this.applyModelOptions(run, next.modelOptions); run.nextPrompt = next.prompt;run.nextAttachmentDispatch=next.attachmentDispatch; run.status = 'queued';
         const event=run.events.find(e=>e.data?.delivery?.id===next.id);if(event)event.data.delivery.state='delivered';
       }
       this.persist(run); if (lane) this.backgroundRuns.delete(lane); else this.running = null;
@@ -226,7 +279,7 @@ export class Engine extends EventEmitter {
     if (!active.has(run.status)) throw new Error('This run is not active.');
     const running = this.running?.id === id ? this.running : [...this.backgroundRuns.values()].find(slot => slot.id === id);
     if (running) running.controller.abort();
-    else { run.status = 'cancelled'; delete run.nextPrompt; this.persist(run); }
+    else { run.status = 'cancelled'; delete run.nextPrompt;if(run.nextAttachmentDispatch)void this.attachmentConsents?.releaseProof(run.nextAttachmentDispatch.proofId).catch(()=>{});delete run.nextAttachmentDispatch;this.persist(run); }
   }
   tick() {
     this.recheckPermissions();

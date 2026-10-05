@@ -50,12 +50,13 @@ export function mount(element, text, options = {}) {
   };
   async function loadImage(holder) {
     const source = holder.dataset.image; const button = holder.querySelector('button'); if (!button || button.disabled) return;
+    if (linkKind(source) === 'web' && options.allowExternalImages === false) { button.disabled = true; button.textContent = 'External image blocked'; return; }
     button.disabled = true; button.textContent = 'Loading image…';
     try {
       let value = element._images.get(source);
       if (!value) {
         value = linkKind(source) === 'web' ? source : await options.image?.(source);
-        if (typeof value !== 'string' || !(/^(https?:\/\/|data:image\/(png|jpeg|gif|webp);base64,)/i.test(value))) throw new Error('Image unavailable');
+        if (typeof value !== 'string' || !(value.startsWith('blob:') && linkKind(source) !== 'web' || /^(https?:\/\/|data:image\/(png|jpeg|gif|webp);base64,)/i.test(value))) throw new Error('Image unavailable');
         element._images.set(source, value);
       }
       const img = document.createElement('img'); img.alt = holder.querySelector('.md-image-label').textContent; img.referrerPolicy = 'no-referrer'; img.decoding = 'async';

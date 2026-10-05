@@ -1,0 +1,38 @@
+const selections=new Map(),sentPreviews=new Map();
+const MAX_BYTES=8*1024*1024,CHUNK_BYTES=256*1024;
+const escape=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+const providerName=id=>({copilot:'Copilot',codex:'Codex',claude:'Claude'}[id]||id);
+const sizeLabel=size=>size>=1024*1024?(size/1024/1024).toFixed(1)+' MB':Math.ceil(size/1024)+' KB';
+function preview(file){if(!file.type.startsWith('image/'))return null;return URL.createObjectURL(file);}
+function closePreview(){document.querySelector('#attachment-image-preview')?.close();document.querySelector('#attachment-image-preview')?.remove();}
+function showPreview(item){closePreview();const dialog=document.createElement('dialog');dialog.id='attachment-image-preview';dialog.className='attachment-image-preview';dialog.innerHTML=`<div class="heading"><strong>${escape(item.file.name)}</strong><button aria-label="Close image preview">×</button></div><img alt="${escape(item.file.name)}" src="${item.url}">`;document.body.append(dialog);dialog.querySelector('button').onclick=()=>dialog.close();dialog.addEventListener('close',()=>dialog.remove(),{once:true});dialog.showModal();}
+export function selectedAttachments(key){return selections.get(key)||[];}
+export function clearAttachments(key){for(const item of selections.get(key)||[])if(item.url)URL.revokeObjectURL(item.url);selections.delete(key);}
+export function sentAttachmentPreview(messageId,name){return sentPreviews.get(messageId)?.find(item=>item.file.name===name)?.url||null;}
+export function openSentAttachmentPreview(messageId,name){const item=sentPreviews.get(messageId)?.find(entry=>entry.file.name===name);if(item?.url)showPreview(item);}
+export function mountAttachmentPicker({key,host,textarea,provider,mediaTypes={},notify,onChange=()=>{}}){
+  const accepted=()=>mediaTypes[provider()]||[];
+  host.classList.add('chat-attachment-picker');
+  const render=()=>{const items=selectedAttachments(key);host.innerHTML=`<div class="attachment-controls"><button type="button" data-attach-add ${accepted().length?'':'disabled'}>＋ Attach files</button><input type="file" multiple hidden><span class="note">${accepted().length?`Up to 4 files · ${accepted().join(', ')}`:'This provider has no supported file attachments.'}</span></div><div class="attachment-strip">${items.map((item,index)=>`<div class="attachment-chip"><button type="button" data-attach-preview="${index}" ${item.url?'':'disabled'}>${item.url?`<img src="${item.url}" alt="">`:'▤'} <span>${escape(item.file.name)}<small>${sizeLabel(item.file.size)}</small></span></button><button type="button" data-attach-remove="${index}" aria-label="Remove ${escape(item.file.name)}">×</button></div>`).join('')}</div>`;
+    const input=host.querySelector('input[type=file]');input.accept=accepted().join(',');host.querySelector('[data-attach-add]').onclick=()=>input.click();input.onchange=()=>{add([...input.files]);input.value='';};
+    host.querySelectorAll('[data-attach-preview]').forEach(button=>button.onclick=()=>{const item=selectedAttachments(key)[Number(button.dataset.attachPreview)];if(item?.url)showPreview(item);});
+    host.querySelectorAll('[data-attach-remove]').forEach(button=>button.onclick=()=>{const list=selectedAttachments(key),[item]=list.splice(Number(button.dataset.attachRemove),1);if(item?.url)URL.revokeObjectURL(item.url);render();onChange();});
+  };
+  const add=files=>{const items=selectedAttachments(key).slice();for(const file of files){if(items.length>=4){notify('Choose up to four attachments.');break;}if(!accepted().includes(file.type)){notify(`${providerName(provider())} cannot receive ${file.type||'this file type'}.`);continue;}if(!file.size||file.size>MAX_BYTES){notify('Each attachment must be 8 MB or smaller.');continue;}items.push({file,url:preview(file)});}selections.set(key,items);render();onChange();};
+  textarea?.addEventListener('paste',event=>{const files=[...(event.clipboardData?.items||[])].filter(item=>item.kind==='file').map(item=>item.getAsFile()).filter(Boolean);if(files.length){event.preventDefault();add(files);}});
+  render();return {refresh:render,clear:()=>{clearAttachments(key);render();onChange();}};
+}
+function confirmDelivery(files,destination,providerId){return new Promise(resolve=>{const dialog=document.createElement('dialog');dialog.className='attachment-confirm';dialog.innerHTML=`<h2>Send these files?</h2><p>Destination: <strong>${escape(destination)}</strong><br>AI provider: <strong>${escape(providerName(providerId))}</strong></p><ul>${files.map(item=>`<li>${escape(item.file.name)} · ${escape(item.file.type)} · ${sizeLabel(item.file.size)}</li>`).join('')}</ul><p class="note">Only these selected files will be sent with this message.</p><div class="actions"><button data-cancel>Cancel</button><button class="primary" data-confirm>Confirm Send</button></div>`;document.body.append(dialog);const finish=value=>{dialog.close();dialog.remove();resolve(value);};dialog.querySelector('[data-cancel]').onclick=()=>finish(false);dialog.querySelector('[data-confirm]').onclick=()=>finish(true);dialog.addEventListener('cancel',event=>{event.preventDefault();finish(false);},{once:true});dialog.showModal();});}
+async function sha256(bytes){const digest=await crypto.subtle.digest('SHA-256',bytes);return [...new Uint8Array(digest)].map(byte=>byte.toString(16).padStart(2,'0')).join('');}
+function base64(bytes){let binary='';for(let offset=0;offset<bytes.length;offset+=32768)binary+=String.fromCharCode(...bytes.subarray(offset,offset+32768));return btoa(binary);}
+export async function prepareAttachments({key,providerId,destination,chatId,draftId,messageId,mediaTypes,send}){
+  const items=selectedAttachments(key);if(!items.length)return null;
+  if(!items.every(item=>(mediaTypes[providerId]||[]).includes(item.file.type)))throw new Error(`The selected provider cannot receive one of these files. Remove it or choose another provider.`);
+  if(!await confirmDelivery(items,destination,providerId))throw new Error('Attachment send cancelled.');
+  const attachments=[];
+  for(const item of items){const bytes=new Uint8Array(await item.file.arrayBuffer()),hash=await sha256(bytes),scope=chatId?{id:chatId}:{draftId};const begun=await send('begin',{...scope,providerId,messageId,name:item.file.name,mediaType:item.file.type,size:bytes.length,sha256:hash});for(let offset=0,index=0;offset<bytes.length;offset+=CHUNK_BYTES,index++)await send('chunk',{uploadId:begun.uploadId,index,dataBase64:base64(bytes.subarray(offset,offset+CHUNK_BYTES))});attachments.push(await send('finish',{uploadId:begun.uploadId}));}
+  const scope=chatId?{id:chatId}:{draftId},grant=await send('authorize',{...scope,providerId,messageId,attachments});
+  sentPreviews.set(messageId,items.map(item=>({...item,url:preview(item.file)})));
+  return {...scope,providerId,messageId,attachments:attachments.map(item=>item.attachmentId),consentId:grant.consentId};
+}
+export const prepareLocalAttachments=options=>prepareAttachments({...options,send:(action,args)=>options.post('/api/attachments',{action,...args})});

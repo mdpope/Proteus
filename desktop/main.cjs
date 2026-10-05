@@ -3,7 +3,9 @@ const path = require('node:path');
 const { BrowserTabs } = require('./browser.cjs');
 const { WorkspaceSession } = require('./workspace-session.cjs');
 const { BrowsingHistory } = require('./browsing-history.cjs');
-let service, window, browser, credentials, terminals, peers, tray, standupWindow, closing = false;
+const { trackedChildren, trackedPids, resourceTotals } = require('./resource-metrics.cjs');
+const { ArtifactPreview } = require('./artifact-preview.cjs');
+let service, window, browser, preview, credentials, terminals, peers, tray, standupWindow, closing = false;
 const showWindow = () => { if (window) { if (window.isMinimized()) window.restore(); window.show(); window.focus(); } };
 app.setName('Proteus');
 // Finder launches lack the interactive shell PATH; match the repository launcher.
@@ -30,6 +32,7 @@ else {
       webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
     const browsingHistory = new BrowsingHistory(service.home,{device:()=>{const host=service.remote.info();return {id:host.hostId,name:host.label};},onVisit:item=>service.activity.queue('history',{...item,title:item.title.slice(0,160),createdAt:item.visitedAt,hostId:service.remote.info().hostId})});
     browser = new BrowserTabs(window, service.origin,{history:browsingHistory});
+    preview = new ArtifactPreview(window);
     credentials = new CredentialBroker(service.home);
     const trusted = event => { if (new URL(event.senderFrame.url).origin !== service.origin || event.sender !== window.webContents) throw new Error('Untrusted renderer.'); };
     ipcMain.handle('proteus:open-external',(event,value)=>{trusted(event);if(event.senderFrame.parent!==null)throw new Error('Untrusted frame.');const url=new URL(value);if(url.protocol!=='https:'||url.username||url.password)throw new Error('Use an HTTPS website address.');return shell.openExternal(url.href);});
@@ -37,6 +40,7 @@ else {
     // PTYs are desktop-only. Neither the HTTP API nor embedded web pages receive this bridge.
     terminals = new TerminalStore(service.home, { workspaceFiles: service.workspaceFiles });
     ipcMain.handle('proteus:terminal', (event, value) => { trusted(event); if (event.senderFrame.parent !== null || event.senderFrame.routingId !== window.webContents.mainFrame.routingId || event.senderFrame.processId !== window.webContents.mainFrame.processId || closing) throw new Error('Terminal access is unavailable.'); return terminals.handle(value); });
+    ipcMain.handle('proteus:artifact-preview', (event, value) => { trusted(event); if(event.senderFrame.parent!==null||event.senderFrame.routingId!==window.webContents.mainFrame.routingId||event.senderFrame.processId!==window.webContents.mainFrame.processId||closing)throw new Error('Document preview is unavailable.');if(value?.action==='hide')return preview.hide();if(value?.action==='show')return preview.show(value);throw new Error('Unknown document preview action.'); });
     terminals.on('event', value => { if (window && !window.isDestroyed() && new URL(window.webContents.getURL()).origin === service.origin) window.webContents.send('proteus:terminal-event', value); });
     const { DesktopPeers } = await import('../src/desktop-peers.js');
     peers = new DesktopPeers(service.home, { safeStorage, localHostId: service.remote.info().hostId });
@@ -50,7 +54,14 @@ else {
         let descriptors=[];try{descriptors=workspaceSession.get()?.tabs||[];}catch{}
         for(const tab of descriptors)if(tab.type!=='browser')tabs.push({id:tab.id,title:tab.label,group:tab.type,loaded:true,pid:window.webContents.getOSProcessId(),sharedProcess:true});
         const processes=app.getAppMetrics().map(p=>({pid:p.pid,type:p.type,name:p.name||p.serviceName||p.type,cpuPercent:p.cpu.percentCPUUsage,memoryBytes:(p.memory.workingSetSize||0)*1024,tabIds:tabs.filter(t=>t.pid===p.pid).map(t=>t.id)}));
-        return {supported:true,processes,tabs,observedAt:new Date().toISOString()};
+        const terminalPids=new Set([...terminals.sessions.values()].map(record=>record.child?.pid).filter(Number.isSafeInteger));
+        const children=trackedChildren(process.pid,new Set(processes.map(item=>item.pid)));
+        for(const child of children)if(terminalPids.has(child.pid)){child.type='terminal';child.name='Terminal process';}
+        processes.push(...children);
+        const knownPids=new Set(processes.map(item=>item.pid));
+        const persistent=trackedPids(terminals.tmux.sessions().managedPids,knownPids);
+        processes.push(...persistent);
+        return {supported:true,processes,tabs,totals:resourceTotals(processes),scope:'Proteus Electron, tracked child processes, and tagged persistent tmux sessions',observedAt:new Date().toISOString()};
       },
       action:async value=>{
         if(!['unload','close'].includes(value.action)||typeof value.tabId!=='string')throw new Error('Choose Close or Unload for a tab.');
@@ -120,7 +131,7 @@ else {
     if (closing || !service) return;
     event.preventDefault(); closing = true;
     browser?.prepareShutdown(); window?.webContents.send('proteus:shutdown');
-    (async () => { credentials?.close(); peers?.close(); await terminals?.dispose(); await browser?.dispose(); await service.close(); })().catch(error => { console.error('Proteus shutdown: ' + error.message); }).finally(() => { tray?.destroy(); app.quit(); });
+    (async () => { credentials?.close(); peers?.close(); await preview?.hide(); await terminals?.dispose(); await browser?.dispose(); await service.close(); })().catch(error => { console.error('Proteus shutdown: ' + error.message); }).finally(() => { tray?.destroy(); app.quit(); });
   });
 }
 // Main-process integration tests use the same broker as the provider adapter.

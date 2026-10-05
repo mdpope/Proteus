@@ -5,6 +5,7 @@ const { randomUUID } = require('node:crypto');
 const { connectPage } = require('./playwright-bridge.cjs');
 const { loadURLWithTimeout, cancelNavigation } = require('./navigation.cjs');
 const { BrowserActions } = require('./browser-actions.cjs');
+const { retirementCandidates } = require('./browser-retention.cjs');
 
 function normalizeURL(input) {
   const value = String(input || '').trim();
@@ -23,7 +24,9 @@ function normalizeURL(input) {
 class BrowserTabs {
   constructor(window, appOrigin, options = {}) {
     this.options=options;this.history=options.history;
-    this.window = window; this.appOrigin = appOrigin; this.tabs = new Map(); this.active = null; this.bounds = null;
+    this.window = window; this.appOrigin = appOrigin; this.tabs = new Map(); this.reloading = new Map(); this.active = null; this.bounds = null;
+    this.retentionTimer = setInterval(() => { void this.sweepRetention(); }, 60_000);
+    this.retentionTimer.unref?.();
     this.gestureHandler = (event, direction) => {
       const tab = [...this.tabs.values()].find(tab => tab.view?.webContents === event.sender);
       if(this.shuttingDown || !tab || tab.id !== this.active || event.senderFrame !== event.sender.mainFrame)return;
@@ -37,6 +40,12 @@ class BrowserTabs {
     this.partition = session.fromPartition('persist:proteus-browser');
     this.partition.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
     this.partition.setPermissionCheckHandler(() => false);
+    this.partition.on('will-download', (_event, item, webContents) => {
+      const tab=[...this.tabs.values()].find(value=>value.view?.webContents===webContents);
+      if(!tab)return;
+      tab.downloads ??= new Set();tab.downloads.add(item);
+      item.once('done',()=>tab.downloads.delete(item));
+    });
     this.actions = new BrowserActions(this);
     // An external page cannot navigate or fetch the privileged local application.
     this.partition.webRequest.onBeforeRequest((details, callback) => {
@@ -44,22 +53,32 @@ class BrowserTabs {
     });
   }
   state(tab, includeHistory=false) {
-    if(!tab.view||tab.view.webContents.isDestroyed())return {...tab.snapshot,id:tab.id,group:tab.group||'main',loaded:false,loading:false,shared:false,owner:null};
+    if(!tab.view||tab.view.webContents.isDestroyed())return {...tab.snapshot,id:tab.id,group:tab.group||'main',loaded:false,loading:false,shared:false,owner:null,lastTouchedAt:new Date(tab.lastTouchedAt||Date.now()).toISOString()};
     const wc = tab.view.webContents;
-    return { id: tab.id,group:tab.group||'main',loaded:true,pid:wc.getOSProcessId(), url: wc.getURL(), title: wc.getTitle() || (wc.getURL() ? new URL(wc.getURL()).hostname : 'New tab'), loading: wc.isLoading(),
+    return { id: tab.id,group:tab.group||'main',loaded:true,pid:wc.getOSProcessId(),lastTouchedAt:new Date(tab.lastTouchedAt||Date.now()).toISOString(), url: wc.getURL(), title: wc.getTitle() || (wc.getURL() ? new URL(wc.getURL()).hostname : 'New tab'), loading: wc.isLoading()||this.reloading.has(tab.id),
       canGoBack: wc.navigationHistory.canGoBack(), canGoForward: wc.navigationHistory.canGoForward(), shared: tab.shared, owner: tab.owner, error: tab.error || null, ...(includeHistory?{history:normalizeHistory({entries:wc.navigationHistory.getAllEntries(),index:wc.navigationHistory.getActiveIndex()},this.appOrigin)}:{}) };
   }
   list(includeHistory=false) { return [...this.tabs.values()].map(tab => this.state(tab,includeHistory)); }
   prepareShutdown() { this.shuttingDown = true; this.transition?.cancel(); }
   changed() { if (!this.shuttingDown && !this.window.isDestroyed()) this.window.webContents.send('proteus:browser-state', this.list(true)); }
   get(id) { const tab = this.tabs.get(id); if (!tab) throw new Error('Browser tab is closed or unavailable.'); return tab; }
+  touch(tab) { tab.lastTouchedAt = Date.now(); }
+  async sweepRetention(now = Date.now()) {
+    if(this.shuttingDown||this.retentionBusy)return;
+    this.retentionBusy=true;
+    try {
+      for(const tab of retirementCandidates(this.tabs.values(),now,this.active)) {
+        try { await this.unload(tab.id); } catch(error) { tab.error=error.message; }
+      }
+    } finally { this.retentionBusy=false; }
+  }
   async create(url, owner = null, savedHistory = null, descriptor = {}) {
     if(descriptor.unloaded===true && !owner){
       const history=normalizeHistory(savedHistory,this.appOrigin), address=history?.entries[history.index]?.url||safeHistoryURL(url,this.appOrigin)||'';
-      const tab={id:descriptor.id||randomUUID(),group:descriptor.group==='team'?'team':'main',shared:false,owner:null,view:null,snapshot:{url:address,title:descriptor.title|| (address?new URL(address).hostname:'New tab'),history,canGoBack:(history?.index||0)>0,canGoForward:!!history&&history.index<history.entries.length-1,error:null}};
+      const tab={id:descriptor.id||randomUUID(),group:descriptor.group==='team'?'team':'main',shared:false,owner:null,view:null,lastTouchedAt:Date.parse(descriptor.lastTouchedAt)||Date.now(),snapshot:{url:address,title:descriptor.title|| (address?new URL(address).hostname:'New tab'),history,canGoBack:(history?.index||0)>0,canGoForward:!!history&&history.index<history.entries.length-1,error:null}};
       this.tabs.set(tab.id,tab);this.changed();return this.state(tab,true);
     }
-    const tab = { id: descriptor.id||randomUUID(), group:descriptor.group==='team'?'team':'main', shared: false, owner, view: new WebContentsView({ webPreferences: {
+    const tab = { id: descriptor.id||randomUUID(), group:descriptor.group==='team'?'team':'main', shared: false, owner, lastTouchedAt:Date.parse(descriptor.lastTouchedAt)||Date.now(), view: new WebContentsView({ webPreferences: {
       preload: require('node:path').join(__dirname,'browser-preload.cjs'), session: this.partition, nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true, backgroundThrottling: false
     } }) };
     this.tabs.set(tab.id, tab); this.window.contentView.addChildView(tab.view);
@@ -74,6 +93,7 @@ class BrowserTabs {
     const sendHistory=()=>{if(!wc.isDestroyed())wc.send('proteus:browser-history',{back:wc.navigationHistory.canGoBack(),forward:wc.navigationHistory.canGoForward()});};
     for(const event of ['dom-ready','did-navigate','did-navigate-in-page','did-stop-loading'])wc.on(event,sendHistory);
     wc.on('before-input-event', (event, input) => {
+      if(this.active===tab.id&&event.senderFrame===wc.mainFrame&&['keyDown','mouseDown'].includes(input.type))this.touch(tab);
       if(input.type==='keyDown'&&(input.meta||input.control)&&input.shift&&input.key==='\\') {event.preventDefault();this.actions.send({type:'overview',group:tab.group});return;}
       if (input.type === 'keyDown' && (input.meta || input.control) && input.key.toLowerCase() === 'l') {
         event.preventDefault(); this.window.webContents.focus(); this.window.webContents.send('proteus:focus-address');
@@ -104,7 +124,7 @@ class BrowserTabs {
   address(value) { const url = normalizeURL(value); if (new URL(url).origin === this.appOrigin) throw new Error('The application is not a browser target.'); return url; }
   async navigate(id, url) {
     this.transition?.cancel();
-    let tab = this.get(id);if(!tab.view){await this.reload(id,false);tab=this.get(id);} const wc = tab.view.webContents;
+    let tab = this.get(id);this.touch(tab);if(!tab.view){await this.reload(id,false);tab=this.get(id);} const wc = tab.view.webContents;
     const navigation = Symbol(); tab.navigation = navigation; tab.error = null;
     try { await loadURLWithTimeout(wc, this.address(url)); }
     catch (error) {
@@ -115,14 +135,16 @@ class BrowserTabs {
   }
   show(id, bounds) {
     if(this.overviewOpen && id)return;
+    const previousActive=this.active;
     if(id!==this.active || (bounds&&this.bounds&&['x','y','width','height'].some(key=>Math.round(bounds[key])!==this.bounds[key])))this.transition?.cancel();
     if (bounds) {
       for (const key of ['x','y','width','height']) if (!Number.isFinite(bounds[key]) || bounds[key] < 0) throw new Error('Invalid browser bounds.');
       this.bounds = Object.fromEntries(Object.entries(bounds).map(([key, value]) => [key, Math.round(value)]));
     }
     const selection=this.selection=Symbol();
-    if(id&&!this.get(id).view){this.active=id;for(const tab of this.tabs.values())tab.view?.setVisible(false);void this.reload(id).then(()=>{if(this.selection===selection&&this.active===id&&!this.shuttingDown&&this.tabs.has(id))this.show(id,this.bounds);}).catch(()=>{});return;}
+    if(id&&!this.get(id).view){this.active=id;this.touch(this.get(id));for(const tab of this.tabs.values())tab.view?.setVisible(false);void this.reload(id).then(()=>{if(this.selection===selection&&this.active===id&&!this.shuttingDown&&this.tabs.has(id))this.show(id,this.bounds);}).catch(()=>{});return;}
     this.active = id;
+    if(id&&id!==previousActive)this.touch(this.get(id));
     for (const tab of this.tabs.values()) { if(!tab.view)continue; if (tab.id === id && this.bounds) tab.view.setBounds(this.bounds); tab.view.setVisible(tab.id === id && !!this.bounds && !!tab.view.webContents.getURL()); }
   }
   async close(id) {
@@ -133,6 +155,9 @@ class BrowserTabs {
     this.tabs.delete(id); if (this.active === id) this.active = null; this.changed();
   }
   async unload(id) {
+    // A restored view exists before its history/navigation promise completes.
+    // Wait for that exact restore before taking a snapshot or closing the view.
+    await this.reloading.get(id);
     const tab=this.get(id);if(!tab.view)return this.state(tab,true);
     if(tab.shared||tab.owner)throw new Error('Turn off Agent access before unloading this tab.');
     const wc=tab.view.webContents;if(wc.isCurrentlyAudible())throw new Error('Stop audio before unloading this tab.');
@@ -141,7 +166,13 @@ class BrowserTabs {
     if(!closed)throw new Error('This page has unsaved work. Finish or close it before unloading.');
     try{this.window.contentView.removeChildView(tab.view);}catch{}tab.view=null;tab.shared=false;tab.owner=null;this.changed();return this.state(tab,true);
   }
-  async reload(id, restore=true) { const tab=this.get(id);if(tab.view)return this.state(tab,true);return this.create(restore?tab.snapshot.url:'',null,restore?tab.snapshot.history:null,{id:tab.id,group:tab.group}); }
+  async reload(id, restore=true) {
+    if(this.reloading.has(id))return this.reloading.get(id);
+    const tab=this.get(id);if(tab.view)return this.state(tab,true);
+    const pending=this.create(restore?tab.snapshot.url:'',null,restore?tab.snapshot.history:null,{id:tab.id,group:tab.group});
+    this.reloading.set(id,pending);this.changed();
+    try{return await pending;}finally{this.reloading.delete(id);this.changed();}
+  }
   async disconnect(tab) {
     try { const connection = await tab.connecting; await connection?.close(); } catch { /* A closing page may already have disconnected. */ }
     tab.connection = null; tab.connecting = null;
@@ -177,12 +208,12 @@ class BrowserTabs {
     if(action==='history')return this.history?.list(value)||{items:[],total:0,page:1,pageSize:50};
     if(['history-clear','history-delete','history-settings'].includes(action))return this.history.update(value);
     if(action==='unload')return this.unload(id);
-    if(action==='activate'){if(!this.get(id).view)await this.reload(id);return this.state(this.get(id),true);}
-    if(action==='unload-group'){for(const tab of [...this.tabs.values()])if(tab.group===value.group&&tab.view)try{await this.unload(tab.id);}catch(error){tab.error=error.message;}return this.list(true);}
+    if(action==='activate'){this.touch(this.get(id));if(this.reloading.has(id)||!this.get(id).view)await this.reload(id);return this.state(this.get(id),true);}
+    if(action==='unload-group'){await this.sweepRetention();return this.list(true);}
     if(!value.gesture&&['back','forward','reload','stop'].includes(action))this.transition?.cancel();
     if (action === 'list') return this.list(true);
     if (action === 'create') {
-      const info=await this.create(value.restore===true?safeHistoryURL(value.url,this.appOrigin):value.url,null,value.restore===true?value.history:null,{group:value.group,unloaded:value.restore===true&&value.unloaded===true,title:String(value.title||'').slice(0,200)});
+      const info=await this.create(value.restore===true?safeHistoryURL(value.url,this.appOrigin):value.url,null,value.restore===true?value.history:null,{group:value.group,unloaded:value.restore===true&&value.unloaded===true,title:String(value.title||'').slice(0,200),lastTouchedAt:value.restore===true?value.lastTouchedAt:undefined});
       return this.state(this.get(info.id),true);
     }
     if (action === 'show') { this.show(id, value.bounds); return; }
@@ -190,7 +221,7 @@ class BrowserTabs {
     if (action === 'close') return this.close(id);
     if (action === 'navigate') return this.navigate(id, value.url);
     if(!this.get(id).view)await this.reload(id);
-    const tab = this.get(id); const wc = tab.view.webContents;
+    const tab = this.get(id); this.touch(tab); const wc = tab.view.webContents;
     if (action === 'history-menu') { this.historyMenu(tab, value); return; }
     if (['back', 'forward', 'reload'].includes(action)) cancelNavigation(wc, 'Navigation replaced by a browser command.');
     if (action === 'back' && wc.navigationHistory.canGoBack()) wc.navigationHistory.goBack();
@@ -209,6 +240,7 @@ class BrowserTabs {
     if (value.action === 'open') return this.create(this.address(value.url), runId);
     const tab = this.get(value.tabId);
     if (!allowed(tab)) throw new Error('This tab is private. Ask the user to enable Agent access on this tab.');
+    this.touch(tab);
     if (value.action === 'navigate') return this.navigate(tab.id, value.url);
     if (value.action === 'close') { await this.close(tab.id); return { closed: true }; }
     tab.connecting ??= connectPage(tab.view.webContents).then(connection => { tab.connection = connection; return connection; }).catch(error => { tab.connecting = null; throw error; });
@@ -251,6 +283,6 @@ class BrowserTabs {
       catch { throw new Error('Could not fill this page. Check its login fields and complete the step manually.'); }
     });
   }
-  async dispose() { this.prepareShutdown(); this.actions.dispose(); ipcMain.removeListener('proteus:browser-gesture',this.gestureHandler); for (const id of [...this.tabs.keys()]) await this.close(id); }
+  async dispose() { this.prepareShutdown(); clearInterval(this.retentionTimer); this.actions.dispose(); ipcMain.removeListener('proteus:browser-gesture',this.gestureHandler); for (const id of [...this.tabs.keys()]) await this.close(id); }
 }
 module.exports = { BrowserTabs, normalizeURL };
