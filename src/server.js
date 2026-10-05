@@ -24,7 +24,7 @@ import { atomicJSON, defaultHome, readJSON, isWithin } from './files.js';
 import { nextRuns, revision, validateSchedule } from './schedules.js';
 import { readChatImage, readImage } from './chat-images.js';
 import { RemoteHost } from './remote.js';
-import { ChatAttachmentStore } from './chat-attachments.js';
+import { ChatAttachmentStore, chatAttachmentLimits } from './chat-attachments.js';
 import { ProviderAuthManager } from './provider-auth.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -333,7 +333,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (url.pathname === '/api/chat' && req.method === 'POST') {
         const value = await body(req),schedule=buildChatSchedule(value),files=Array.isArray(value.attachments)?value.attachments:[];
         if(!files.length)return json(200,engine.createRun(schedule,'chat'));
-        if(files.length>4||!value.consentId||!value.draftId||!value.messageId||value.providerId!==schedule.provider)throw new Error('Review the exact files and named provider before sending.');
+        if(files.length>chatAttachmentLimits.maxBatchFiles||!value.consentId||!value.draftId||!value.messageId||value.providerId!==schedule.provider)throw new Error('Review the exact files and named provider before sending.');
         await remote.attachmentConsents.verify({consentId:value.consentId,draftId:value.draftId,messageId:value.messageId,providerId:schedule.provider,deviceId:'local-desktop',attachmentIds:files});
         const run=engine.createRun(schedule,'chat',null,{deferStart:true});let prepared;
         try{prepared=await remote.attachmentConsents.prepareSend({consentId:value.consentId,draftId:value.draftId,chatId:run.id,messageId:value.messageId,providerId:schedule.provider,deviceId:'local-desktop',attachmentIds:files});engine.startDeferredRun(run.id,{proofId:prepared.proofId,attachmentIds:files,messageId:value.messageId});return json(200,run);}
@@ -366,7 +366,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
           const run = engine.getRun(id);
           const files=Array.isArray(value.attachments)?value.attachments:[];
           if(files.length){
-            if(files.length>4||value.mode==='steer'||!value.messageId||!value.consentId||value.providerId!==run.schedule.provider)throw new Error('Review the exact files and named provider for a queued turn.');
+            if(files.length>chatAttachmentLimits.maxBatchFiles||value.mode==='steer'||!value.messageId||!value.consentId||value.providerId!==run.schedule.provider)throw new Error('Review the exact files and named provider for a queued turn.');
             const prepared=await remote.attachmentConsents.prepareSend({consentId:value.consentId,chatId:run.id,messageId:value.messageId,providerId:run.schedule.provider,deviceId:'local-desktop',attachmentIds:files});
             try{return json(200,await engine.send(id,value.prompt,'queue',value.messageId,value.modelOptions,{proofId:prepared.proofId,attachmentIds:files}));}
             catch(error){await remote.attachmentConsents.releaseProof(prepared.proofId).catch(()=>{});throw error;}

@@ -65,10 +65,12 @@ and expandable usage/context information. Mobile retains condensed native format
 message boxes rather than adopting desktop styling. Path/rule correlation still needs an explicit
 shared contract, and illustrative mockup paths/metrics are not real account observations.
 
-Also queued: image thumbnails and filename tags above the composer, with removable draft
-attachments and a modal image preview dismissed by backdrop, X or Escape. Apply attachment
-presentation consistently to local/remote chats and mobile, with provider-specific support made
-explicit. See `planned-updates.md` and `chat-controls.md`; these changes are not implemented.
+Image thumbnails and filename tags now sit in a bounded row above compact composer controls,
+with removable draft attachments and a modal image preview dismissed by backdrop, X or Escape.
+A subtle + Attach control sits beside provider choices and Send. Provider-specific file support
+remains capability-driven. Source supports at most 256 files, 8 MiB each and 32 MiB total per
+message, with exact destination/provider consent; final installed acceptance for this expanded
+batch is tracked in `content-workspace-release.md`.
 
 ## Chat timestamps
 

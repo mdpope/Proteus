@@ -12,6 +12,7 @@ import { seal, unseal, secret } from './remote-crypto.js';
 import { startRelay } from '../relay/server.js';
 import { ChatDocumentApprovals } from './chat-documents.js';
 import { ChatAttachmentConsents } from './chat-attachment-consent.js';
+import { chatAttachmentLimits } from './chat-attachments.js';
 
 const pick = (value, keys) => Object.fromEntries(keys.filter(key => value?.[key] !== undefined).map(key => [key, value[key]]));
 const scheduleKeys = ['id', 'name', 'enabled', 'cron', 'timezone', 'provider', 'model', 'reasoningEffort', 'contextTier', 'serviceTier', 'workspace', 'misfire', 'prompt', 'revision', 'nextRuns', 'error', 'source', 'contextSelection', 'integration', 'notifications'];
@@ -268,7 +269,7 @@ export class RemoteHost {
     if (method === 'chat.start') {
       const files=Array.isArray(args.attachments)?args.attachments:[];
       if(!files.length){const run=await this.api('/api/chat',pick(args,['name','prompt','provider','model','reasoningEffort','contextTier','serviceTier','workspaceId','selectedIds','agentId','includeDefaults']));peer.runId=run.id;return {runId:run.id};}
-      if(!args.consentId||!args.draftId||!args.messageId||files.length>4||args.providerId!==args.provider)throw new Error('Review the exact first-message files and named provider before sending.');
+      if(!args.consentId||!args.draftId||!args.messageId||files.length>chatAttachmentLimits.maxBatchFiles||args.providerId!==args.provider)throw new Error('Review the exact first-message files and named provider before sending.');
       const schedule=this.service.buildChatSchedule(pick(args,['name','prompt','provider','model','reasoningEffort','contextTier','serviceTier','workspaceId','selectedIds','agentId','includeDefaults']));
       await this.attachmentConsents.verify({consentId:args.consentId,draftId:args.draftId,messageId:args.messageId,providerId:schedule.provider,deviceId:peer.device.id,attachmentIds:files});
       const run=engine.createRun(schedule,'chat',null,{deferStart:true});let prepared;
@@ -278,7 +279,7 @@ export class RemoteHost {
     if (method === 'schedule.run') { const run = await this.api('/api/run', { id: args.id }); peer.runId = run.id; return { runId: run.id }; }
     if (method==='chat.send'&&Array.isArray(args.attachments)&&args.attachments.length){
       const run=engine.getRun(args.id),files=args.attachments;
-      if(args.mode==='steer'||files.length>4||args.providerId!==run.schedule.provider||!args.consentId||!args.messageId)throw new Error('Review the exact files and named provider for a queued turn.');
+      if(args.mode==='steer'||files.length>chatAttachmentLimits.maxBatchFiles||args.providerId!==run.schedule.provider||!args.consentId||!args.messageId)throw new Error('Review the exact files and named provider for a queued turn.');
       const prepared=await this.attachmentConsents.prepareSend({consentId:args.consentId,chatId:run.id,messageId:args.messageId,providerId:run.schedule.provider,deviceId:peer.device.id,attachmentIds:files});
       try{await engine.send(run.id,args.prompt,'queue',args.messageId,args.modelOptions,{proofId:prepared.proofId,attachmentIds:files});peer.runId=run.id;return {runId:run.id};}
       catch(error){await this.attachmentConsents.releaseProof(prepared.proofId).catch(()=>{});throw error;}

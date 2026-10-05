@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { chatAttachmentLimits } from './chat-attachments.js';
 
 const TTL_MS=5*60_000;
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -17,15 +18,17 @@ export class ChatAttachmentConsents {
     this.prune();
     if(draftId!==undefined){if(!UUID.test(draftId)||chatId!==undefined)throw new Error('Choose one chat or draft destination.');chatId='draft:'+draftId;}
     if(typeof chatId!=='string'||!chatId||typeof messageId!=='string'||!messageId||typeof providerId!=='string'||!providerId||typeof deviceId!=='string'||!deviceId)throw new Error('Attachment destination is incomplete.');
-    if(!Array.isArray(attachments)||!attachments.length||attachments.length>4||new Set(attachments.map(item=>item?.attachmentId)).size!==attachments.length)throw new Error('Choose one to four distinct attachments.');
+    if(!Array.isArray(attachments)||!attachments.length||attachments.length>chatAttachmentLimits.maxBatchFiles||new Set(attachments.map(item=>item?.attachmentId)).size!==attachments.length)throw new Error('Choose a valid batch of distinct attachments.');
     const exact=[];
     for(const declared of attachments){
       const item=await this.store.resolve({attachmentId:declared.attachmentId,chatId,deviceId,messageId,providerId});
+      if(this.store.records.get(declared.attachmentId)?.accepted)throw new Error('This attachment was already sent. Select it again for a new message.');
       if(!acceptedMediaTypes?.includes(item.mediaType))throw new Error(`${providerId} cannot receive ${item.mediaType} attachments.`);
       const bound=metadata({attachmentId:declared.attachmentId,...item});
       if(JSON.stringify(metadata(declared))!==JSON.stringify(bound))throw new Error('Attachment details changed. Review the files and destination again.');
       exact.push(bound);
     }
+    if(exact.reduce((total,item)=>total+item.size,0)>chatAttachmentLimits.maxBatchBytes)throw new Error('This message exceeds the attachment batch limit.');
     const consentId=randomUUID(),expiresAt=this.clock()+TTL_MS;
     this.grants.set(consentId,{consentId,chatId,messageId,providerId,deviceId,attachments:exact,expiresAt});
     return {consentId,expiresAt:new Date(expiresAt).toISOString(),providerId,attachments:exact};
@@ -39,17 +42,30 @@ export class ChatAttachmentConsents {
   }
   async prepareSend({consentId,chatId,draftId,messageId,providerId,deviceId,attachmentIds}={}){
     const exact=await this.verify({consentId,chatId,draftId,messageId,providerId,deviceId,attachmentIds});
-    if(draftId!==undefined){if(typeof chatId!=='string'||!chatId)throw new Error('A created chat is required for draft attachments.');for(const item of exact)await this.store.claimDraft({attachmentId:item.attachmentId,draftId,chatId,deviceId,messageId,providerId});}
+    if(draftId!==undefined&&(!chatId||typeof chatId!=='string'))throw new Error('A created chat is required for draft attachments.');
     const bound=exact.map(item=>({attachmentId:item.attachmentId,chatId,deviceId,messageId,providerId,name:item.name,mediaType:item.mediaType,size:item.size,sha256:item.sha256}));
-    for(const item of bound)await this.store.accept(item);
-    this.consume(consentId);
-    const proofId=randomUUID();this.prepared.set(proofId,{chatId,deviceId,messageId,providerId,attachments:bound});this.persistProofs();
-    return {proofId,attachments:bound};
+    let proofId;
+    try{
+      if(draftId!==undefined)for(const item of exact)await this.store.claimDraft({attachmentId:item.attachmentId,draftId,chatId,deviceId,messageId,providerId});
+      for(const item of bound)await this.store.accept(item);
+      this.consume(consentId);
+      proofId=randomUUID();this.prepared.set(proofId,{chatId,deviceId,messageId,providerId,attachments:bound});this.persistProofs();
+      return {proofId,attachments:bound};
+    }catch(error){
+      this.consume(consentId);
+      if(proofId)this.prepared.delete(proofId);
+      for(const item of bound){
+        try{await this.store.release(item);}catch{if(draftId!==undefined)try{await this.store.release({...item,chatId:'draft:'+draftId});}catch{/* A failed file is already unavailable. */}}
+      }
+      if(proofId)try{this.persistProofs();}catch{/* Preserve the original failure. */}
+      throw error;
+    }
   }
   async readForProvider({proofId,chatId,providerId,attachmentIds}={}){
     const proof=this.prepared.get(proofId);
     if(!proof||proof.used||proof.chatId!==chatId||proof.providerId!==providerId||!Array.isArray(attachmentIds)||JSON.stringify(proof.attachments.map(item=>item.attachmentId))!==JSON.stringify(attachmentIds))throw new Error('Attachment provider consent is missing or changed. No file was forwarded.');
     const files=[];
+    if(proof.attachments.length>chatAttachmentLimits.maxBatchFiles||proof.attachments.reduce((total,item)=>total+item.size,0)>chatAttachmentLimits.maxBatchBytes)throw new Error('Attachment batch exceeds the approved delivery limit.');
     for(const item of proof.attachments){const current=await this.store.read(item);if(JSON.stringify(metadata({attachmentId:item.attachmentId,...current}))!==JSON.stringify(metadata(item)))throw new Error('Attachment bytes changed. No file was forwarded.');files.push(current);}
     proof.used=true;this.persistProofs();
     return files;

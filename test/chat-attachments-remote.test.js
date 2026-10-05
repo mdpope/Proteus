@@ -30,11 +30,12 @@ test('explicit first-message and follow-up consent deliver only exact synthetic 
   const {runId}=await client.request('chat.start',{draftId,provider:'copilot',providerId:'copilot',model:'fixture',prompt:'Inspect this synthetic image',messageId,attachments:[first.attachmentId],consentId:grant.consentId});
   await until(()=>calls.length===1);assert.deepEqual(calls[0].attachments[0].bytes,png);assert.equal(calls[0].prompt,'Inspect this synthetic image');
   await until(()=>app.engine.getRun(runId).status==='completed');
-  const nextMessage=randomUUID(),second=await upload({id:runId,providerId:'copilot',messageId:nextMessage});
-  const nextGrant=await client.request('chat.attachments.authorize',{id:runId,providerId:'copilot',messageId:nextMessage,attachments:[second]});
+  const nextMessage=randomUUID(),batch=[];
+  for(let index=0;index<5;index++)batch.push(await upload({id:runId,providerId:'copilot',messageId:nextMessage}));
+  const nextGrant=await client.request('chat.attachments.authorize',{id:runId,providerId:'copilot',messageId:nextMessage,attachments:batch});
   await assert.rejects(client.request('chat.send',{id:runId,prompt:'Wrong file list',providerId:'copilot',mode:'queue',messageId:nextMessage,attachments:[first.attachmentId],consentId:nextGrant.consentId}),/does not match|expired/);
-  await client.request('chat.send',{id:runId,prompt:'Check another synthetic image',providerId:'copilot',mode:'queue',messageId:nextMessage,attachments:[second.attachmentId],consentId:nextGrant.consentId});
-  await until(()=>calls.length===2);assert.deepEqual(calls[1].attachments[0].bytes,png);
+  await client.request('chat.send',{id:runId,prompt:'Check another synthetic image',providerId:'copilot',mode:'queue',messageId:nextMessage,attachments:batch.map(item=>item.attachmentId),consentId:nextGrant.consentId});
+  await until(()=>calls.length===2);assert.equal(calls[1].attachments.length,5);for(const item of calls[1].attachments)assert.deepEqual(item.bytes,png);
   assert.deepEqual((await client.request('chat.get',{id:runId})).events.filter(item=>item.data?.attachments).map(item=>item.data.attachments[0].name),['synthetic.png','synthetic.png']);
 });
 

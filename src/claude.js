@@ -153,18 +153,39 @@ export class ClaudeProvider {
     if(!Array.isArray(list))throw new Error('Claude did not return MCP connection status. Update Claude Code on this Mac.');
     return names.map(name=>{const item=list.find(value=>value?.name===name),status=['connected','pending','failed','needs-auth','disabled'].includes(item?.status)?item.status:'not-connected';return {name,status,scope:'selected-chat',observedAt:new Date().toISOString(),remote:['http','sse'].includes(selected[name]?.type),...(status==='failed'?{error:'Claude could not connect to this selected server. Check its Mac configuration and credentials.'}:status==='needs-auth'?{error:'This server needs sign-in in Claude Code on the owning Mac.'}:{})};});
   }
-  async mcpStatus(run){
+  async mcpStatus(run,{signal}={}){
     const selected=this.selectedMcp(run),names=Object.keys(selected);if(!names.length)return {servers:[]};
+    const cancelled=()=>new Error('Claude MCP connection check cancelled.');
+    if(signal?.aborted)throw cancelled();
     if(this.cleanupError)throw this.cleanupError;
     if(this.active&&this.activeRunId===run.id)return {servers:await this.mcpState(this.active,names,10000,selected)};
     if(this.active)throw new Error('Refresh Claude MCP connections after the active Claude turn finishes.');
     if(this.mcpProbe)throw new Error('A Claude MCP connection check is already running.');
     const config=privateClaudeMcpConfig(selected,run.schedule.workspace.cwd);
-    let client,result,cleanupError;
-    try{client=this.client(['--no-session-persistence','--system-prompt','Proteus selected MCP connection status.'],run.schedule.workspace.cwd,config.file);this.mcpProbe=client;await client.initialize({},30000);result={servers:await this.mcpState(client,names,10000,selected)};}
-    catch(error){if(error.message?.startsWith('Claude did not return MCP'))throw error;throw new Error('Claude MCP connection status is unavailable. Check the selected server on this Mac and retry.');}
+    let client,result,cleanupError,failure;
+    const withAbort=promise=>!signal?promise:new Promise((resolve,reject)=>{
+      if(signal.aborted){reject(cancelled());return;}
+      const abort=()=>reject(cancelled());signal.addEventListener('abort',abort,{once:true});
+      Promise.resolve(promise).then(resolve,reject).finally(()=>signal.removeEventListener('abort',abort));
+    });
+    try{
+      client=this.client(['--no-session-persistence','--system-prompt','Proteus selected MCP connection status.'],run.schedule.workspace.cwd,config.file);this.mcpProbe=client;
+      await withAbort(client.initialize({},30000));
+      const now=this.options.mcpStatusNow||(()=>performance.now()),wait=this.options.mcpStatusWait||((ms)=>new Promise(resolve=>setTimeout(resolve,ms)));
+      const deadline=now()+(this.options.mcpStatusSettleMs??15000),pollMs=this.options.mcpStatusPollMs??250;
+      let servers;
+      do{
+        if(signal?.aborted)throw cancelled();
+        servers=await withAbort(this.mcpState(client,names,Math.max(1000,Math.min(10000,deadline-now())),selected));
+        if(!servers.some(item=>item.status==='pending')||now()>=deadline)break;
+        await withAbort(wait(Math.min(pollMs,Math.max(1,deadline-now()))));
+      }while(true);
+      result={servers};
+    }
+    catch(error){failure=signal?.aborted?cancelled():error.message?.startsWith('Claude did not return MCP')?error:new Error('Claude MCP connection status is unavailable. Check the selected server on this Mac and retry.');}
     finally{if(client)try{await client.close();}catch(error){this.cleanupClients.add(client);this.cleanupError=error;cleanupError=error;}if(!cleanupError&&this.mcpProbe===client)this.mcpProbe=null;config.dispose();}
     if(cleanupError)throw cleanupError;
+    if(failure)throw failure;
     return result;
   }
   async retryPendingCleanup(){

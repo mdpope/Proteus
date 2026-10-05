@@ -126,6 +126,8 @@ final class RemoteUITests: XCTestCase {
         XCTAssertTrue(app.images["Selected image thumbnail"].waitForExistence(timeout: 10))
         XCTAssertTrue(open.waitForExistence(timeout: 10)); open.tap()
         XCTAssertTrue(app.images["Attachment image preview"].waitForExistence(timeout: 10))
+        app.images["Attachment image preview"].tap()
+        XCTAssertTrue(app.images["Attachment image preview"].exists, "Tapping the image itself must not dismiss its viewer")
         app.typeKey(XCUIKeyboardKey.escape, modifierFlags: [])
         XCTAssertTrue(open.waitForExistence(timeout: 10))
         open.tap()
@@ -134,7 +136,16 @@ final class RemoteUITests: XCTestCase {
         XCTAssertTrue(open.waitForExistence(timeout: 10))
         open.tap()
         XCTAssertTrue(app.images["Attachment image preview"].waitForExistence(timeout: 10))
-        app.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: 0.5)).tap()
+        let background = app.buttons["Close preview background"]
+        XCTAssertTrue(background.waitForExistence(timeout: 10))
+        let tablet = app.windows.firstMatch.frame.width > 700
+        if tablet { app.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: 0.5)).tap() }
+        else { background.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9)).tap() }
+        expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: app.images["Attachment image preview"])
+        waitForExpectations(timeout: 10)
+        open.tap()
+        XCTAssertTrue(app.images["Attachment image preview"].waitForExistence(timeout: 10))
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: tablet ? 0.5 : 0.9)).tap()
         expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: app.images["Attachment image preview"])
         waitForExpectations(timeout: 10)
     }

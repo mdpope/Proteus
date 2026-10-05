@@ -314,6 +314,16 @@ Preserve accepted queued attachments privately across staging expiry/restart; ne
 ambiguous interrupted provider send. Tests use synthetic files only, with no real user-file or
 live-provider delivery. This authorizes implementation, not unattended export of existing files.
 
+For larger batches, keep the same exact ordered one-use consent: at most 256 files, 8 MiB each
+and 32 MiB total per message. The size budget is not multiplied by splitting uploads or by
+sending a first-message draft. Finished staged files may number in the hundreds, but only four
+per device and sixteen globally may have open upload descriptors; staged bytes are bounded to
+64 MiB per device and 128 MiB globally. Sequential upload activity refreshes a 15-minute
+inactivity lease for that message, while idle staged bytes expire. Accepted queued bytes remain
+private and durable until consumed or revoked. Partial acceptance failure removes the entire
+selected batch; the sender must reselect and reconfirm. The composer shows a quiet + Attach
+control without advertising format or count limits in its normal state.
+
 ## October 5 — full-width compact top bar and notification routing
 
 The operator clarified that desktop/web navigation begins below a full-width top tab row, with

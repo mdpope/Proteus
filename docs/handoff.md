@@ -7,12 +7,19 @@ and manifests; this repository owns the generic app and provider adapters.
 
 ## Latest release state
 
-The authorized **0.2.0** content-workspace release is being integrated. All approved backlog is in
-scope, including local/remote chat parity, guarded attachments, document and interactive previews,
-content-only tabs, Home, attention review, optional tmux and browser lifetime. Multi-provider
-orchestration and future Safari-style tab groups remain deferred. Read
-`content-workspace-release.md` for current test evidence, pending release gates and exact install
-receipts. Source/test completion must not be reported as a device or website update.
+The authorized **0.2.0** content-workspace release is implemented at frozen commit
+`74da6f78827de0145f2164b3a1d2d065202dea0e`. Build Mac, physical iPhone and iPad are
+installed in place; website base release `20261005T221822Z` used that commit, and a web-only
+Home correction from `d9e3d96` went live as `20261005T224447Z` and passed its separate
+14/14 endpoint audit. Work Mac has launched 0.2.0 with state preserved. Both desktop pairing
+directions are authenticated, and HC passed its normal macOS installed-app signature check.
+The installed Claude MCP status probe has a confirmed startup-settling bug; the bounded
+source fix is ready, but Mac rebuild/reinstall and live recheck remain pending. The website
+chat-title persistence source fix is also ready; deployment remains pending. The combined
+follow-up source passed 340/340 integrated Node tests and `npm run check`; native follow-up
+validation passed 53/53 unit tests and three focused iPhone/iPad viewer tests. Read
+`content-workspace-release.md` for receipts and remaining gates. Multi-provider orchestration
+and Safari-style browser tab groups remain deferred.
 
 The operator approved attachment delivery after reviewing the exact-file/destination/provider
 Confirm Send workflow. Uploading is not authorization to execute or send. Durable accepted proof
@@ -36,15 +43,41 @@ Proteus socket, preserves unrelated sessions and stores bounded terminal output 
 on activation or start a fresh shell when typing, never replaying previous/startup commands.
 Both Macs already have tmux; no installation was necessary.
 
-The HC login Keychain was reset after a crash. Its pre-update Codex check found working relay and
-incoming connections/providers, but saved Life sign-in may not decrypt after restart and reverse
-desktop pairing is incomplete. Preserve data and existing credentials; use normal sign-in/pairing
-only as needed after the signed update. Do not reset/delete Keychain items, weaken access controls
-or introduce plaintext storage. Existing app data backups and deployment receipts remain private.
+The HC login Keychain was reset after a crash. HC 0.2.0 has since launched with app data
+preserved. Both desktop pairing directions passed read-only authenticated chat-index checks;
+its normal macOS installed-app signature check passed without Keychain or trust changes. The
+installed Claude MCP status probe sampled immediately after initialization: Safari showed
+connected, while ADO/Atlassian remained pending. The bounded startup-settling source fix is ready, but a Mac reinstall and live recheck remain pending; the pending values do not establish server failure. No Claude model turn was
+used. HC read the saved shared-account identity through `/api/app` at 23:09:32 UTC without
+changing credentials or scopes. Preserve existing credentials and unreadable encrypted stores; use supported sign-in/pairing
+only where needed. Do not reset/delete Keychain items, weaken access controls or
+introduce plaintext storage. Existing app data backups and deployment receipts remain private.
+
+Build Mac installation preserved ten ordered content tabs, browser histories, settings,
+run/schedule files, Life account/session bytes and three incoming pairings. Actual installed UI
+showed Home, version 0.2.0/build `74da6f78827d`, rendered release notes and the compact tab bar;
+five main and one Team browser descriptors stayed unloaded, and no terminal process started. Its
+relay and both outgoing Mac links were online. A fresh read-only Copilot quota request returned
+75.1% remaining without error; the iPhone incoming client was offline/backgrounded at that
+instant. Both physical iOS installs preserved app data/preferences and two Mac destination
+identities. Both physical clients subsequently reached both authenticated Macs independently
+(HC 22:48:32 UTC, Personal 22:49:00 UTC); they were not used for a live notification tap,
+attachment upload or provider turn. Website base activation matched 9,212 files and 14/14 health
+checks while preserving configuration, schema and nutrition state. The account timezone is now
+America/Denver, with a live 3:39 PM chat timestamp observed; automatic/device-timezone selection
+remains follow-up. The later Home build-ID width correction passed its separate 14/14
+post-deploy health audit at 22:49:33.926 UTC. Live Home shows a 12-character build ID with a full-ID tooltip inside the card
+at a 1280-pixel viewport. Bounded logs still contain known MariaDB `column_stats` warnings and
+one unclassified entry each in PHP and MariaDB; do not call them all-clean.
+
+HC read five Personal and fifteen HC chat metadata records with `partial:false` around 22:52 UTC; Personal refreshed fifteen HC records at 22:54:20 UTC, also `partial:false`. Personal's
+new incoming `Proteus on workstation.example.test` identity was online at 22:51:27 UTC with resource and
+document grants off. No chat turn or mutation was used. See private receipts in
+`content-workspace-release.md`.
 
 ## Historical installed baseline (before 0.2.0)
 
-Build Mac and HC now run `17719ea`, including the empty-peer startup fix, message actions,
+Before 0.2.0, Build Mac and HC ran `17719ea`, including the empty-peer startup fix, message actions,
 and visiting-device history metadata. Personal verified all 104 runtime hashes, signing,
 13 tabs, three incoming pairings and existing account/data preservation. HC independently
 verified 104 hashes, three tabs, three incoming pairings, five disabled schedules and nine local
@@ -53,12 +86,12 @@ preflight. Personal → HC is now paired and saved; the desktop shows `workstati
 its Chats count increased from five to fifteen. HC → Personal remains blocked by Keychain
 access. The operator approved both final pairing clicks, but that does not establish completion
 in the blocked direction. A valid Apple Development-signed artifact of exact runtime `17719ea`
-was prepared and privately transferred. HC's latest control check is unreachable again, with
-no signed-install receipt. The last install hold protected an active digest job; do not assume
-it finished or interrupt that workflow. Read `release-validation.md`
+was prepared and privately transferred. At that earlier checkpoint, HC's control check became unreachable again and
+no signed-install receipt had been issued. The install hold protected an active digest job; its
+later outcome must be read from the subsequent receipt, not inferred from this historical note. Read `release-validation.md`
 for receipts and `chat-rendering.md` for speech behavior.
 
-Both physical iPhone (05:20 UTC) and iPad (05:21 UTC) now run the native build from `1101c3c`,
+Before 0.2.0, physical iPhone (05:20 UTC) and iPad (05:21 UTC) ran the native build from `1101c3c`,
 installed in place with the original signer/team/profile, all 25 native inputs and six Markdown
 resources verified. The update includes device-local chat timestamps, authenticated Mac-name
 refresh, localized history with visiting-device metadata, and the native browser tab/toolbar
@@ -70,7 +103,7 @@ offline. Physical iPad shared-Team account consent remains unverified. The opera
 authorized the normal same-account consent flow at Proteus → Team → Connect shared Team tools;
 installation and relay connectivity do not establish that acceptance.
 
-Website release `20261005T060541Z` is now live, including navigation fix `7975f77`. All 9,209
+Previously, website release `20261005T060541Z` went live, including navigation fix `7975f77`. All 9,209
 manifest files matched; schema, runtime configuration and nutrition counts/hashes are unchanged.
 The 06:40 UTC audit passed all 14 endpoints. Activation used the existing authenticated in-app
 File Manager upload and guarded updater with the approved supplemental recovery gate; SSH key
@@ -85,8 +118,8 @@ and the main New Chat control. The eight-member Standup list was also verified; 
 stay outside Git. Default Mac is now saved as Build Mac through the existing authorized
 account API with an identity guard; a readback verified every other preference unchanged.
 Website reload confirmed the selection and live Copilot/Codex/Claude allowance. Both host chat
-indexes retain authenticated names. Build Mac's screen remains locked, so no additional
-native UI acceptance is claimed.
+indexes retain authenticated names. At that earlier website audit, Build Mac's screen was locked, so no native UI acceptance was
+claimed from it. The later 0.2.0 installed UI receipt is listed above.
 
 The earlier 05:39–05:41 UTC MariaDB window is fully classified: all 664 entries concern the
 known `mysql.column_stats` histogram-definition mismatch. The final 06:38–06:40 window contains
@@ -284,8 +317,8 @@ acceptance step. Do not infer installation from a build or simulator test.
   metadata, clearing prior selections and blocking Start while unavailable. Remote commands never
   fall back locally. History tabs put This Mac first; replies, approvals and pending-answer drafts
   are scoped to host/run/request. Peer keys stay in native safeStorage. Fresh desktop control
-  pairing is distinct from already-approved website/mobile pairings and remains pending operator
-  confirmation. No production desktop peer was silently added.
+  pairing was distinct from already-approved website/mobile pairings and was pending operator
+  confirmation at that checkpoint. The verified 0.2.0 desktop pairing outcome is recorded above.
 - Browser history now persists URL/title entries and index across actual restart; form/POST state,
   agent grants and common authentication callback URLs are excluded. Hold or right-click Back/
   Forward for a native history list; stale menu selections cannot jump an unrelated entry.

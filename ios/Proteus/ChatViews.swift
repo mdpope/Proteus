@@ -5,6 +5,18 @@ import PhotosUI
 import UniformTypeIdentifiers
 import CryptoKit
 
+enum NativeAttachmentBudget {
+    static let maxFiles = 256
+    static let maxFileBytes = 8 * 1024 * 1024
+    static let maxTotalBytes = 32 * 1024 * 1024
+    static func rejection(existingCount: Int, existingBytes: Int, incomingBytes: Int) -> String? {
+        if incomingBytes <= 0 || incomingBytes > maxFileBytes { return "Choose a file between 1 byte and 8 MB." }
+        if existingCount >= maxFiles { return "This selection is full. Remove a file before adding another." }
+        if existingBytes < 0 || existingBytes > maxTotalBytes - incomingBytes { return "Selected files exceed the 32 MB total. Remove a file or choose smaller files." }
+        return nil
+    }
+}
+
 // Only file names and types are restored. File bytes and upload authority stay in memory.
 @MainActor func attachmentRecords(store: RemoteStore, draftKey: String) -> [JSON] { store.draft(draftKey).array }
 @MainActor func missingAttachmentRecords(store: RemoteStore, draftKey: String, items: [NativeDraftAttachment]) -> [JSON] {
@@ -61,7 +73,7 @@ struct NewChatView: View {
     @State private var includeDefaults = true
     @State private var sending = false
     @State private var loading = true
-    @State private var pickedPhoto: PhotosPickerItem?
+    @State private var pickedPhotos: [PhotosPickerItem] = []
     @State private var filePicker = false
     @State private var previewAttachment: NativeDraftAttachment?
     @State private var confirmAttachmentStart = false
@@ -78,22 +90,33 @@ struct NewChatView: View {
         NavigationStack {
             Form {
                 Section("Conversation") { TextField("Title (optional)", text: $name); TextField("What would you like to work on?", text: $prompt, axis: .vertical).lineLimit(4...10).accessibilityIdentifier("chat-prompt") }
-                if attachmentsEnabled || !attachments.isEmpty || !missingAttachments.isEmpty {
-                    Section("Attachments · up to four files") {
-                        ForEach(attachments) { item in HStack { Button { previewAttachment = item } label: { Label(item.name, systemImage: item.image == nil ? "doc" : "photo") }; Spacer(); Button("Remove", systemImage: "xmark.circle") { removeAttachment(item.id) }.labelStyle(.iconOnly) } }
-                        if !missingAttachments.isEmpty {
-                            Text("Reattach these files before sending: " + missingAttachments.map { $0["name"].string }.joined(separator: ", ") + ". Their bytes were discarded when Proteus closed.").font(.caption).foregroundStyle(.orange)
-                            Button("Remove missing files") { removeMissingAttachments() }
-                        }
-                        if attachmentsEnabled { HStack { Menu { Button("Paste image or file", systemImage: "doc.on.clipboard") { pasteAttachment() }; Button("Choose file", systemImage: "folder") { filePicker = true } } label: { Label("Attach", systemImage: "paperclip") }; PhotosPicker(selection: $pickedPhoto, matching: .images) { Label("Photo", systemImage: "photo") } } }
-                        Text(hasUnsupportedAttachment ? "Remove files this provider does not accept before starting." : "Supported by \(providerName): \(supportedAttachmentTypes.joined(separator: ", ")) · 8 MB each. You will confirm the exact files before sending.").font(.caption).foregroundStyle(hasUnsupportedAttachment ? Color.orange : Color.secondary)
-                    }
-                }
                 Section("Run on your Mac") {
                     Picker("Workspace", selection: $workspace) { ForEach(store.state["context"]["workspaces"].array, id: \.self) { Text($0["name"].string).tag($0["id"].string) } }
                     Picker("Provider", selection: $provider) { Text("GitHub Copilot").tag("copilot"); Text("Codex").tag("codex"); Text("Claude").tag("claude"); Text("Local rehearsal").tag("rehearsal") }.accessibilityIdentifier("chat-provider")
                     if provider != "rehearsal" {
                         ProviderModelPicker(model: $model, effort: $effort, contextTier: $contextTier, serviceTier: $serviceTier, provider: provider)
+                    }
+                }
+                if attachmentsEnabled || !attachments.isEmpty || !missingAttachments.isEmpty {
+                    Section {
+                        if attachmentsEnabled {
+                            Menu {
+                                Button("Paste image or file", systemImage: "doc.on.clipboard") { pasteAttachment() }
+                                Button("Choose files", systemImage: "folder") { filePicker = true }
+                                PhotosPicker(selection: $pickedPhotos, matching: .images) { Label("Choose photos", systemImage: "photo") }
+                            } label: { Label("Attach", systemImage: "plus").font(.subheadline) }
+                                .accessibilityIdentifier("new-chat-attach")
+                        }
+                        if !attachments.isEmpty {
+                            DisclosureGroup("Selected files") {
+                                ForEach(attachments) { item in HStack { Button { previewAttachment = item } label: { Label(item.name, systemImage: item.image == nil ? "doc" : "photo") }; Spacer(); Button("Remove", systemImage: "xmark.circle") { removeAttachment(item.id) }.labelStyle(.iconOnly) } }
+                            }
+                        }
+                        if !missingAttachments.isEmpty {
+                            Text("Reattach these files before sending: " + missingAttachments.map { $0["name"].string }.joined(separator: ", ") + ". Their bytes were discarded when Proteus closed.").font(.caption).foregroundStyle(.orange)
+                            Button("Remove missing files") { removeMissingAttachments() }
+                        }
+                        if hasUnsupportedAttachment { Text("Remove files this provider does not accept before starting.").font(.caption).foregroundStyle(.orange) }
                     }
                 }
                 ContextSelection(selected: $selected, agent: $agent, includeDefaults: $includeDefaults, workspaceID: workspace)
@@ -102,10 +125,10 @@ struct NewChatView: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) { Button { if attachments.isEmpty { start() } else { confirmAttachmentStart = true } } label: { if sending { ProgressView() } else { Text("Start chat") } }.disabled(loading || sending || !store.connected || prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || workspace.isEmpty || (provider != "rehearsal" && model.isEmpty) || !missingAttachments.isEmpty || (!attachments.isEmpty && (!attachmentsEnabled || hasUnsupportedAttachment))).accessibilityIdentifier("start-chat") }
             }.onChange(of: draftValue) { _, value in if !loading { store.setDraft("new-chat", value) } }.onChange(of: provider) { old, value in if !loading && old != value { model = ""; effort = ""; contextTier = "default"; serviceTier = "" }; if value != "rehearsal" { Task { await store.loadModels(provider: value) } } }.task { await store.refresh(); workspace = store.state["context"]["defaultWorkspaceId"].string; provider = store.state["defaults"]["provider"].string; model = store.state["defaults"]["model"].string; effort = store.state["defaults"]["reasoningEffort"].string; serviceTier = store.state["defaults"]["serviceTier"].string; contextTier = store.state["defaults"]["contextTier"].string.isEmpty ? "default" : store.state["defaults"]["contextTier"].string; if let saved = store.drafts["new-chat"] { restore(saved) }; if provider != "rehearsal" { await store.loadModels(provider: provider) }; loading = false }
-            .onChange(of: pickedPhoto) { _, value in if let value { Task { await importPhoto(value) } } }
-            .fileImporter(isPresented: $filePicker, allowedContentTypes: [.item]) { result in if case .success(let url) = result { importFile(url) } else if case .failure(let error) = result { store.error = error.localizedDescription } }
+            .onChange(of: pickedPhotos) { _, value in if !value.isEmpty { Task { await importPhotos(value) } } }
+            .fileImporter(isPresented: $filePicker, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in if case .success(let urls) = result { for url in urls { if !importFile(url) { break } } } else if case .failure(let error) = result { store.error = error.localizedDescription } }
             .sheet(item: $previewAttachment) { item in AttachmentPreview(attachment: item) { previewAttachment = nil } }
-            .confirmationDialog("Send attachments to \(providerName)?", isPresented: $confirmAttachmentStart) { Button("Send to " + providerName) { start() }; Button("Cancel", role: .cancel) {} } message: { Text(attachments.map { "\($0.name) (\(ByteCountFormatter.string(fromByteCount: Int64($0.bytes.count), countStyle: .file)))" }.joined(separator: "\n")) }
+            .sheet(isPresented: $confirmAttachmentStart) { AttachmentSendReview(attachments: attachments, providerName: providerName) { confirmAttachmentStart = false; start() } }
         }
     }
     private var draftValue: JSON { .object(["name": .string(name), "prompt": .string(prompt), "provider": .string(provider), "model": .string(model), "effort": .string(effort), "contextTier": .string(contextTier), "serviceTier": .string(serviceTier), "workspace": .string(workspace), "selected": .array(selected.sorted().map(JSON.string)), "agent": .string(agent), "includeDefaults": .bool(includeDefaults)]) }
@@ -153,14 +176,14 @@ struct NewChatView: View {
         guard !consent["consentId"].string.isEmpty, consent["providerId"].string == provider else { throw RemoteError(message: "The Mac did not confirm the exact attachment destination.") }
         return (ids, consent["consentId"].string)
     }
-    private func addAttachment(_ data: Data, name: String, mediaType: String) {
-        guard !sending else { return }
-        guard supportedAttachmentTypes.contains(mediaType) else { store.error = "\(providerName) does not accept this file type through Proteus."; return }
-        guard !data.isEmpty, data.count <= 8 * 1024 * 1024 else { store.error = "Choose a file between 1 byte and 8 MB."; return }
-        guard attachments.count < 4 else { store.error = "Send these four attachments before adding more."; return }
+    @discardableResult private func addAttachment(_ data: Data, name: String, mediaType: String) -> Bool {
+        guard !sending else { return false }
+        guard supportedAttachmentTypes.contains(mediaType) else { store.error = "\(providerName) does not accept this file type through Proteus."; return false }
+        if let reason = NativeAttachmentBudget.rejection(existingCount: attachments.count, existingBytes: attachments.reduce(0) { $0 + $1.bytes.count }, incomingBytes: data.count) { store.error = reason; return false }
         let item = NativeDraftAttachment(id: UUID().uuidString, name: String(name.prefix(120)), mediaType: mediaType, bytes: data)
         shared.draftAttachments[attachmentScope, default: []].append(item)
         appendAttachmentRecord(store: store, draftKey: "new-chat-attachments", item: item)
+        return true
     }
     private func removeAttachment(_ id: String) {
         guard !sending else { return }
@@ -173,22 +196,27 @@ struct NewChatView: View {
         let records = attachmentRecords(store: store, draftKey: "new-chat-attachments").filter { kept.contains($0["id"].string) }
         store.setDraft("new-chat-attachments", records.isEmpty ? .null : .array(records))
     }
-    private func importPhoto(_ item: PhotosPickerItem) async {
-        do { guard let data = try await item.loadTransferable(type: Data.self), let image = UIImage(data: data), let png = image.pngData() else { throw RemoteError(message: "The photo could not be read.") }; addAttachment(png, name: "Photo.png", mediaType: "image/png") }
-        catch { store.error = error.localizedDescription }
-        pickedPhoto = nil
+    private func importPhotos(_ items: [PhotosPickerItem]) async {
+        defer { pickedPhotos = [] }
+        for item in items {
+            do {
+                guard let data = try await item.loadTransferable(type: Data.self), let image = UIImage(data: data), let png = image.pngData() else { throw RemoteError(message: "The photo could not be read.") }
+                if !addAttachment(png, name: "Photo.png", mediaType: "image/png") { break }
+            } catch { store.error = error.localizedDescription; break }
+        }
     }
-    private func importFile(_ url: URL) {
+    @discardableResult private func importFile(_ url: URL) -> Bool {
         let access = url.startAccessingSecurityScopedResource(); defer { if access { url.stopAccessingSecurityScopedResource() } }
         let types = ["png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "gif": "image/gif", "webp": "image/webp", "pdf": "application/pdf", "txt": "text/plain"]
-        guard let mediaType = types[url.pathExtension.lowercased()] else { store.error = "Supported files are PNG, JPEG, GIF, WebP, PDF and plain text."; return }
-        do { let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0; guard size > 0, size <= 8 * 1024 * 1024 else { throw RemoteError(message: "Choose a file between 1 byte and 8 MB.") }; addAttachment(try Data(contentsOf: url), name: url.lastPathComponent, mediaType: mediaType) }
-        catch { store.error = error.localizedDescription }
+        guard let mediaType = types[url.pathExtension.lowercased()] else { store.error = "This file type is not supported by \(providerName)."; return false }
+        do { let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0; guard size > 0, size <= NativeAttachmentBudget.maxFileBytes else { throw RemoteError(message: "Choose a file between 1 byte and 8 MB.") }; return addAttachment(try Data(contentsOf: url), name: url.lastPathComponent, mediaType: mediaType) }
+        catch { store.error = error.localizedDescription; return false }
     }
     private func pasteAttachment() {
-        if let url = UIPasteboard.general.urls?.first, url.isFileURL { importFile(url); return }
+        let files = (UIPasteboard.general.urls ?? []).filter(\.isFileURL)
+        if !files.isEmpty { for url in files { if !importFile(url) { break } }; return }
         if let image = UIPasteboard.general.image, let data = image.pngData() { addAttachment(data, name: "Pasted image.png", mediaType: "image/png"); return }
-        store.error = "Copy an image or supported file, then paste it here."
+        store.error = "Copy an image or a file supported by this provider, then paste it here."
     }
 }
 private struct ChatDocumentTab: Identifiable {
@@ -224,7 +252,7 @@ struct ChatView: View {
     @State private var documents: [ChatDocumentTab] = []
     @State private var documentNotice: String?
     @State private var documentTask: Task<Void, Never>?
-    @State private var pickedPhoto: PhotosPickerItem?
+    @State private var pickedPhotos: [PhotosPickerItem] = []
     @State private var filePicker = false
     @State private var previewAttachment: NativeDraftAttachment?
     @State private var confirmAttachmentSend = false
@@ -301,13 +329,10 @@ struct ChatView: View {
             selectedChild = saved == "chat" || shared.tabs(in: chatBrowserScope).contains(where: { $0.id == saved }) || documents.contains(where: { $0.id == saved }) ? saved : "chat"
         }
             .onDisappear { documentTask?.cancel(); documents = [] }
-            .onChange(of: pickedPhoto) { _, value in if let value { Task { await importPhoto(value) } } }
-            .fileImporter(isPresented: $filePicker, allowedContentTypes: [.item]) { result in if case .success(let url) = result { importFile(url) } else if case .failure(let error) = result { store.error = error.localizedDescription } }
+            .onChange(of: pickedPhotos) { _, value in if !value.isEmpty { Task { await importPhotos(value) } } }
+            .fileImporter(isPresented: $filePicker, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in if case .success(let urls) = result { for url in urls { if !importFile(url) { break } } } else if case .failure(let error) = result { store.error = error.localizedDescription } }
             .sheet(item: $previewAttachment) { attachment in AttachmentPreview(attachment: attachment) { previewAttachment = nil } }
-            .confirmationDialog("Send attachments to \(providerName)?", isPresented: $confirmAttachmentSend) {
-                Button("Send to " + providerName) { Task { await sendAttachments() } }
-                Button("Cancel", role: .cancel) {}
-            } message: { Text(attachments.map { "\($0.name) (\(ByteCountFormatter.string(fromByteCount: Int64($0.bytes.count), countStyle: .file)))" }.joined(separator: "\n")) }
+            .sheet(isPresented: $confirmAttachmentSend) { AttachmentSendReview(attachments: attachments, providerName: providerName) { confirmAttachmentSend = false; Task { await sendAttachments() } } }
     }
     private var childTabs: some View {
         HStack(spacing: 0) { ScrollView(.horizontal) { HStack(spacing: 0) {
@@ -460,8 +485,13 @@ struct ChatView: View {
                 }
                 HStack(spacing: 12) {
                     if attachmentsEnabled {
-                        Menu { Button("Paste image or file", systemImage: "doc.on.clipboard") { pasteAttachment() }; Button("Choose file", systemImage: "folder") { filePicker = true } } label: { Image(systemName: "paperclip") }.accessibilityLabel("Attach file").disabled(busy)
-                        PhotosPicker(selection: $pickedPhoto, matching: .images) { Image(systemName: "photo") }.accessibilityLabel("Attach photo").disabled(busy)
+                        Menu {
+                            Button("Paste image or file", systemImage: "doc.on.clipboard") { pasteAttachment() }
+                            Button("Choose files", systemImage: "folder") { filePicker = true }
+                            PhotosPicker(selection: $pickedPhotos, matching: .images) { Label("Choose photos", systemImage: "photo") }
+                        } label: { Label("Attach", systemImage: "plus") }
+                            .accessibilityIdentifier("chat-attach")
+                            .disabled(busy)
                     }
                     Spacer()
                     if pending["type"].string == "question" { Button("Send feedback") { answer(text) }.disabled(cannotSend) }
@@ -529,15 +559,15 @@ struct ChatView: View {
             await store.openChat(id)
         } catch { store.error = "Attachment was not sent: " + error.localizedDescription }
     }
-    private func addAttachment(_ data: Data, name: String, mediaType: String) {
-        guard !busy else { return }
-        guard attachmentsEnabled else { store.error = "This Mac has not enabled approved attachments for this provider yet."; return }
-        guard supportedAttachmentTypes.contains(mediaType) else { store.error = "\(providerName) does not accept this file type through Proteus."; return }
-        guard !data.isEmpty, data.count <= 8 * 1024 * 1024 else { store.error = "Choose a file between 1 byte and 8 MB."; return }
-        guard attachments.count < 4 else { store.error = "Send these four attachments before adding more."; return }
+    @discardableResult private func addAttachment(_ data: Data, name: String, mediaType: String) -> Bool {
+        guard !busy else { return false }
+        guard attachmentsEnabled else { store.error = "This Mac has not enabled approved attachments for this provider yet."; return false }
+        guard supportedAttachmentTypes.contains(mediaType) else { store.error = "\(providerName) does not accept this file type through Proteus."; return false }
+        if let reason = NativeAttachmentBudget.rejection(existingCount: attachments.count, existingBytes: attachments.reduce(0) { $0 + $1.bytes.count }, incomingBytes: data.count) { store.error = reason; return false }
         let item = NativeDraftAttachment(id: UUID().uuidString, name: String(name.prefix(120)), mediaType: mediaType, bytes: data)
         shared.draftAttachments[chatBrowserScope, default: []].append(item)
         appendAttachmentRecord(store: store, draftKey: attachmentDraftKey, item: item)
+        return true
     }
     private func removeAttachment(_ attachmentID: String) {
         guard !busy else { return }
@@ -550,30 +580,33 @@ struct ChatView: View {
         let records = attachmentRecords(store: store, draftKey: attachmentDraftKey).filter { kept.contains($0["id"].string) }
         store.setDraft(attachmentDraftKey, records.isEmpty ? .null : .array(records))
     }
-    private func importPhoto(_ item: PhotosPickerItem) async {
-        do {
-            guard let data = try await item.loadTransferable(type: Data.self), let image = UIImage(data: data), let png = image.pngData() else { throw RemoteError(message: "The photo could not be read.") }
-            addAttachment(png, name: "Photo-\(Date().formatted(.iso8601.year().month().day())).png", mediaType: "image/png")
-        } catch { store.error = error.localizedDescription }
-        pickedPhoto = nil
+    private func importPhotos(_ items: [PhotosPickerItem]) async {
+        defer { pickedPhotos = [] }
+        for item in items {
+            do {
+                guard let data = try await item.loadTransferable(type: Data.self), let image = UIImage(data: data), let png = image.pngData() else { throw RemoteError(message: "The photo could not be read.") }
+                if !addAttachment(png, name: "Photo-\(Date().formatted(.iso8601.year().month().day())).png", mediaType: "image/png") { break }
+            } catch { store.error = error.localizedDescription; break }
+        }
     }
-    private func importFile(_ url: URL) {
+    @discardableResult private func importFile(_ url: URL) -> Bool {
         let access = url.startAccessingSecurityScopedResource()
         defer { if access { url.stopAccessingSecurityScopedResource() } }
         let suffix = url.pathExtension.lowercased()
         let types = ["png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "gif": "image/gif", "webp": "image/webp", "pdf": "application/pdf", "txt": "text/plain"]
-        guard let mediaType = types[suffix] else { store.error = "This Mac currently accepts PNG, JPEG, GIF, WebP, PDF and plain text files up to 8 MB."; return }
+        guard let mediaType = types[suffix] else { store.error = "This file type is not supported by \(providerName)."; return false }
         do {
             let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
-            guard size > 0, size <= 8 * 1024 * 1024 else { throw RemoteError(message: "Choose a file between 1 byte and 8 MB.") }
+            guard size > 0, size <= NativeAttachmentBudget.maxFileBytes else { throw RemoteError(message: "Choose a file between 1 byte and 8 MB.") }
             let data = try Data(contentsOf: url)
-            addAttachment(data, name: url.lastPathComponent, mediaType: mediaType)
-        } catch { store.error = error.localizedDescription }
+            return addAttachment(data, name: url.lastPathComponent, mediaType: mediaType)
+        } catch { store.error = error.localizedDescription; return false }
     }
     private func pasteAttachment() {
-        if let url = UIPasteboard.general.urls?.first, url.isFileURL { importFile(url); return }
+        let files = (UIPasteboard.general.urls ?? []).filter(\.isFileURL)
+        if !files.isEmpty { for url in files { if !importFile(url) { break } }; return }
         if let image = UIPasteboard.general.image, let data = image.pngData() { addAttachment(data, name: "Pasted image.png", mediaType: "image/png"); return }
-        store.error = "Copy an image or supported file, then paste it here."
+        store.error = "Copy an image or a file supported by this provider, then paste it here."
     }
     private func answer(_ value: String) { act("chat.reply", ["answer": .string(value), "requestId": pending["id"]]) }
     private func act(_ method: String, _ values: [String: JSON]) {
@@ -835,6 +868,51 @@ struct MessageView: View {
     }
 }
 
+struct AttachmentSendReview: View {
+    @Environment(\.dismiss) private var dismiss
+    let attachments: [NativeDraftAttachment]
+    let providerName: String
+    let send: () -> Void
+    var body: some View {
+        NavigationStack {
+            List {
+                Section { Text("Send these selected files to \(providerName) on your Mac?").font(.subheadline) }
+                Section("Selected files") {
+                    ForEach(attachments) { item in
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(item.name).lineLimit(2)
+                            Text(ByteCountFormatter.string(fromByteCount: Int64(item.bytes.count), countStyle: .file)).font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }.navigationTitle("Review attachments").navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                    ToolbarItem(placement: .confirmationAction) { Button("Send to " + providerName) { dismiss(); send() }.accessibilityIdentifier("confirm-attachment-send") }
+                }
+        }
+    }
+}
+
+struct BackdropImagePreview: View {
+    let image: UIImage
+    let imageLabel: String
+    let close: () -> Void
+    var body: some View {
+        GeometryReader { geometry in
+            let scale = min(geometry.size.width / max(image.size.width, 1), geometry.size.height / max(image.size.height, 1))
+            ZStack {
+                Button(action: close) { Color.black.opacity(0.94) }
+                    .buttonStyle(.plain).accessibilityLabel("Close preview background")
+                Image(uiImage: image).resizable().scaledToFit()
+                    .frame(width: image.size.width * scale, height: image.size.height * scale)
+                    .contentShape(Rectangle()).onTapGesture {}
+                    .accessibilityLabel(imageLabel)
+            }.frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+}
+
 struct AttachmentPreview: View {
     @Environment(\.dismiss) private var dismiss
     let attachment: NativeDraftAttachment
@@ -843,7 +921,7 @@ struct AttachmentPreview: View {
         NavigationStack {
             Group {
                 if let image = attachment.image {
-                    ScrollView([.horizontal, .vertical]) { Image(uiImage: image).resizable().scaledToFit().frame(maxWidth: .infinity, maxHeight: .infinity).accessibilityLabel("Attachment image preview") }
+                    BackdropImagePreview(image: image, imageLabel: "Attachment image preview") { close(); dismiss() }
                 } else if attachment.mediaType == "text/plain", let text = String(data: attachment.bytes, encoding: .utf8) {
                     ScrollView { Text(text).font(.body.monospaced()).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading).padding() }
                 } else {

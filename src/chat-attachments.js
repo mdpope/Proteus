@@ -6,8 +6,14 @@ import { TextDecoder } from 'node:util';
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
 const CHUNK_BYTES = 256 * 1024;
 const TTL_MS = 15 * 60 * 1000;
-const MAX_PENDING = 16;
-const MAX_PER_DEVICE = 4;
+const MAX_BATCH_FILES = 256;
+const MAX_BATCH_BYTES = 32 * 1024 * 1024;
+const MAX_PENDING = 1024;
+const MAX_PER_DEVICE = 512;
+const MAX_PENDING_BYTES = 128 * 1024 * 1024;
+const MAX_PER_DEVICE_BYTES = 64 * 1024 * 1024;
+const MAX_INCOMPLETE = 16;
+const MAX_INCOMPLETE_PER_DEVICE = 4;
 const MEDIA_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'application/pdf', 'text/plain']);
 const PROVIDERS = new Set(['copilot', 'codex', 'claude']);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -88,6 +94,14 @@ export class ChatAttachmentStore {
     if (this.closed) return;
     for (const record of this.records.values()) if (!record.accepted && this.clock() >= record.expiresAt) this.remove(record);
   }
+  touchBatch(record) {
+    const expiresAt = this.clock() + TTL_MS;
+    for (const item of this.records.values()) {
+      if (!item.accepted && item.deviceId === record.deviceId && item.messageId === record.messageId) item.expiresAt = expiresAt;
+    }
+    // The restart sweeper uses this session directory timestamp.
+    try { fs.utimesSync(this.root, new Date(this.clock()), new Date(this.clock())); } catch { /* In-memory expiry still applies. */ }
+  }
   remove(record) {
     if (record.fd !== null) { try { fs.closeSync(record.fd); } catch { /* Closed already. */ }; record.fd = null; }
     try { fs.rmSync(record.path, { force: true }); } catch { /* Missing staged bytes. */ }
@@ -105,11 +119,18 @@ export class ChatAttachmentStore {
     if (!Number.isSafeInteger(size) || size < 1 || size > MAX_FILE_BYTES) throw new Error('Attachments must be between 1 byte and 8 MB.');
     if (typeof sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(sha256)) throw new Error('Invalid attachment digest.');
     const staged = [...this.records.values()].filter(item => !item.accepted);
-    if (staged.length >= MAX_PENDING || staged.filter(item => item.deviceId === deviceId).length >= MAX_PER_DEVICE) throw new Error('Too many attachments are being prepared. Finish or remove one first.');
+    const incomplete = staged.filter(item => item.fd !== null);
+    const deviceStage = staged.filter(item => item.deviceId === deviceId);
+    const batch = [...this.records.values()].filter(item => item.deviceId === deviceId && item.messageId === messageId);
+    if (batch.length >= MAX_BATCH_FILES || batch.reduce((total, item) => total + item.size, 0) + size > MAX_BATCH_BYTES) throw new Error('This message exceeds the attachment batch limit.');
+    if (incomplete.length >= MAX_INCOMPLETE || incomplete.filter(item => item.deviceId === deviceId).length >= MAX_INCOMPLETE_PER_DEVICE ||
+        staged.length >= MAX_PENDING || deviceStage.length >= MAX_PER_DEVICE ||
+        staged.reduce((total, item) => total + item.size, 0) + size > MAX_PENDING_BYTES ||
+        deviceStage.reduce((total, item) => total + item.size, 0) + size > MAX_PER_DEVICE_BYTES) throw new Error('Too many attachments are being prepared. Finish or remove one first.');
     const id = randomUUID(), file = path.join(this.root, id);
     const fd = fs.openSync(file, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | (fs.constants.O_NOFOLLOW || 0), 0o600);
     const record = { id, path: file, fd, inode: fs.fstatSync(fd).ino, chatId, deviceId, messageId, providerId, name, mediaType, size, sha256, received: 0, nextIndex: 0, finished: false, expiresAt: this.clock() + TTL_MS };
-    this.records.set(id, record);
+    this.records.set(id, record); this.touchBatch(record);
     return { uploadId: id, chunkSize: CHUNK_BYTES, expiresAt: new Date(record.expiresAt).toISOString() };
   }
   async chunk({ uploadId, deviceId, index, dataBase64 } = {}) {
@@ -120,7 +141,7 @@ export class ChatAttachmentStore {
     if (record.received + bytes.length > record.size) throw new Error('Attachment exceeds its declared size.');
     let written = 0;
     while (written < bytes.length) { const count = fs.writeSync(record.fd, bytes, written, bytes.length - written, null); if (count <= 0) throw new Error('Attachment write failed.'); written += count; }
-    record.received += bytes.length; record.nextIndex += 1; record.expiresAt = this.clock() + TTL_MS;
+    record.received += bytes.length; record.nextIndex += 1; this.touchBatch(record);
     return { uploadId, received: record.received, nextIndex: record.nextIndex };
   }
   async finish({ uploadId, deviceId } = {}) {
@@ -130,7 +151,7 @@ export class ChatAttachmentStore {
     fs.fsyncSync(record.fd); fs.closeSync(record.fd); record.fd = null;
     const bytes = readStaged(record);
     if (bytes.length !== record.size || createHash('sha256').update(bytes).digest('hex') !== record.sha256 || !fileType(bytes, record.mediaType)) { this.remove(record); throw new Error('Attachment bytes did not match the declared file, type or digest.'); }
-    record.finished = true; record.expiresAt = this.clock() + TTL_MS;
+    record.finished = true; this.touchBatch(record);
     return { attachmentId: record.id, name: record.name, mediaType: record.mediaType, size: record.size, sha256: record.sha256 };
   }
   /** Rebind a finished, still-staged first-message file after the host creates its chat. */
@@ -198,4 +219,4 @@ export class ChatAttachmentStore {
   }
 }
 
-export const chatAttachmentLimits = Object.freeze({ maxFileBytes: MAX_FILE_BYTES, chunkBytes: CHUNK_BYTES, ttlMs: TTL_MS, maxPending: MAX_PENDING, maxPerDevice: MAX_PER_DEVICE });
+export const chatAttachmentLimits = Object.freeze({ maxFileBytes: MAX_FILE_BYTES, maxBatchFiles: MAX_BATCH_FILES, maxBatchBytes: MAX_BATCH_BYTES, chunkBytes: CHUNK_BYTES, ttlMs: TTL_MS, maxPending: MAX_PENDING, maxPerDevice: MAX_PER_DEVICE, maxPendingBytes: MAX_PENDING_BYTES, maxPerDeviceBytes: MAX_PER_DEVICE_BYTES, maxIncomplete: MAX_INCOMPLETE, maxIncompletePerDevice: MAX_INCOMPLETE_PER_DEVICE });

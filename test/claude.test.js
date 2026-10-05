@@ -108,6 +108,33 @@ test('Claude MCP status probe is selected-only, sends no model turn, and cleanup
   const failed=new ClaudeProvider({clientFactory:options=>{configFile=options.mcpConfigPath;client=new Fake();client.request=async()=>({mcpServers:[{name:'local',status:'connected'}]});client.close=async()=>{throw new Error('cleanup EPERM');};return client;}});
   await assert.rejects(failed.mcpStatus(a.run),/cleanup EPERM/);assert.equal(fs.existsSync(configFile),false);assert.ok(failed.cleanupError);
 });
+test('Claude MCP status waits for selected pending servers in one runtime, without a model turn',async()=>{
+  let time=0,client,configFile,checks=0;
+  const p=new ClaudeProvider({mcpStatusNow:()=>time,mcpStatusWait:async ms=>{time+=ms;},mcpStatusSettleMs:1000,mcpStatusPollMs:250,
+    clientFactory:options=>{configFile=options.mcpConfigPath;client=new Fake();client.write=()=>assert.fail('Status probe must not send a model turn');client.request=async()=>({mcpServers:[{name:'local',status:++checks<3?'pending':'connected'}]});return client;}});
+  const a=runArgs();a.run.schedule.mcpServers={local:{type:'stdio',command:'/usr/bin/false'}};
+  const status=await p.mcpStatus(a.run);
+  assert.equal(status.servers[0].status,'connected');assert.equal(checks,3);assert.equal(time,500);
+  assert.equal(client.closed,true);assert.equal(fs.existsSync(configFile),false);
+});
+test('Claude MCP status returns honest pending after its bounded wait and terminal needs-auth immediately',async()=>{
+  let time=0,checks=0,client;
+  const make=status=>new ClaudeProvider({mcpStatusNow:()=>time,mcpStatusWait:async ms=>{time+=ms;},mcpStatusSettleMs:500,mcpStatusPollMs:250,
+    clientFactory:()=>{client=new Fake();client.request=async()=>{checks++;return {mcpServers:[{name:'local',status}]};};return client;}});
+  const a=runArgs();a.run.schedule.mcpServers={local:{type:'stdio',command:'/usr/bin/false'}};
+  assert.equal((await make('pending').mcpStatus(a.run)).servers[0].status,'pending');
+  assert.equal(checks,3);assert.equal(time,500);assert.equal(client.closed,true);
+  checks=0;time=0;
+  const auth=await make('needs-auth').mcpStatus(a.run);
+  assert.equal(auth.servers[0].status,'needs-auth');assert.equal(checks,1);assert.equal(time,0);assert.equal(client.closed,true);
+});
+test('Claude MCP status cancellation closes the isolated runtime and removes private config',async()=>{
+  const controller=new AbortController();let client,configFile;
+  const p=new ClaudeProvider({clientFactory:options=>{configFile=options.mcpConfigPath;client=new Fake();client.request=async()=>{controller.abort();return {mcpServers:[{name:'local',status:'pending'}]};};return client;}});
+  const a=runArgs();a.run.schedule.mcpServers={local:{type:'stdio',command:'/usr/bin/false'}};
+  await assert.rejects(p.mcpStatus(a.run,{signal:controller.signal}),/cancelled/);
+  assert.equal(client.closed,true);assert.equal(fs.existsSync(configFile),false);assert.equal(p.mcpProbe,null);
+});
 test('Claude MCP status checks serialize with each other and with a new turn',async()=>{
   let release,client;const p=new ClaudeProvider({clientFactory:()=>{client=new Fake();client.initialize=()=>new Promise(resolve=>{release=()=>resolve({hooks_applied:true,models:[model]});});client.request=async()=>({mcpServers:[{name:'local',status:'connected'}]});return client;}});
   const a=runArgs();a.run.schedule.mcpServers={local:{type:'stdio',command:'/usr/bin/false'}};

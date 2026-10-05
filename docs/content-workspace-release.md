@@ -1,12 +1,25 @@
-# Content workspace release validation — in progress
+# Content workspace release validation — 0.2.0 rollout
 
-Version **0.2.0**, native build **2610.5.1**. All approved October 5 work is in scope.
-Source acceptance is complete for the release candidate; artifacts must use the frozen commit. No physical install or website deployment receipt has been issued for
-this candidate. Historical receipts remain in `release-validation.md` and `parity-release.md`.
+Version **0.2.0**, native build **2610.5.1**, source commit
+`74da6f78827de0145f2164b3a1d2d065202dea0e`. The initial source and signed Build Mac,
+iPhone and iPad installs are complete. Website release `20261005T221822Z` used that commit;
+a website-only Home layout correction from `d9e3d96` went live as `20261005T224447Z` and passed its
+14/14 post-deploy health audit. Work Mac has launched 0.2.0 with app data preserved, both
+desktop pairing directions are authenticated, and a normal macOS installed-app signature check
+passed. The installed Claude MCP status probe has a confirmed startup-settling bug. Its bounded
+settle fix is implemented in the follow-up source, but a targeted Mac rebuild and reinstall
+remain pending. These are distinct results, not one blanket cross-device acceptance.
 
-## Current source acceptance
+Follow-up source changes for larger attachment batches, Claude MCP status settling and website
+chat-title persistence passed **340/340** integrated Node tests and `npm run check`. Final
+Mac/native/web artifact freeze, builds and deployments for this follow-up remain pending.
+Follow-up native source validation passed 53/53 unit tests plus two iPhone and one iPad focused
+viewer tests; these are not physical-device reinstall receipts. Historical receipts remain in `release-validation.md` and
+`parity-release.md`; current private receipts are listed below.
 
-- Desktop/backend integrated Node suite: **331/331 passed**, `npm run check` and `git diff --check`
+## Source acceptance at the frozen commit
+
+- Desktop/backend integrated Node suite at the installed base: **331/331 passed**, `npm run check` and `git diff --check`
   passed. Core checks use synthetic files/providers and isolated application data.
 - Electron acceptance passed content-only main/chat/Team tabs, reload restoration, unloaded browser
   descriptors, tab-strip scroll retention, shared menus/toolbars, icon rail and Home. Home README
@@ -40,7 +53,7 @@ this candidate. Historical receipts remain in `release-validation.md` and `parit
   full changelog rendering test, with exact source/bundle hash equality. No physical-device crash
   acceptance or APNs entitlement is claimed.
 
-## Additional active gates
+## Additional source acceptance
 
 Chat context menus, archive/unarchive, Show Archived filters and guarded delete were added before
 freeze. Host persistence, remote authorization, cached/restored tabs and native long-press behavior
@@ -52,7 +65,9 @@ synthetic conversations were deleted during tests.
 The installed Copilot mismatch was reproduced as a stale SDK-process quota snapshot. Independent
 read-only probes on both Macs confirmed the same account and matching fresh quotas, without a
 model turn or authentication change. Source now uses a separate short-lived quota client; eight
-synthetic usage tests passed. Installed acceptance still requires the signed app update.
+synthetic usage tests passed. In the installed Personal app, an explicit fresh read-only usage
+request on October 5 at 22:30 UTC returned 75.1% remaining, nonstale and without error. Its
+monthly reset is labeled expected rather than provider-reported. This is not a provider turn.
 
 Claude selected-MCP integration passed 35 focused adapter tests: private configuration permissions,
 strict selected-server isolation, captured working directories and relative commands through a
@@ -92,22 +107,44 @@ app API, credentials or network authority is granted. CJS remains source. Websit
 no hard CPU/memory guarantee: synchronous code can block an in-page Stop control and may require
 closing the browser tab. Restored descriptors never inherit document/script approvals.
 
-## Build and rollout gates
+## Rollout checks and remaining gates
 
-1. Source checks passed: compact sidebar/tabs, rapid unload/reselect, notification routing,
-   quota refresh, chat lifecycle and selected Claude MCP. The packaged Electron MCP launcher still
-   requires its isolated synthetic smoke before installation.
-2. Update source acceptance, freeze a clean commit and build all artifacts from that exact revision.
-3. Preserve valid existing Apple signing, native team/profile and GitHub vendor signatures.
-4. Fresh Mac active/waiting/terminal guard, graceful quit, private app/data backup, in-place install;
-   preserve histories, schedules, credentials, pairings, browser profiles and content descriptors.
-5. Native Wi-Fi install with fresh unlocked-device checks and private app-data/preferences backup;
-   never uninstall the existing app or regenerate signing settings.
-6. Website fresh verified recovery capture, off-server download and isolated restore before guarded
-   code deployment. Verify manifest, protected schema/state, HTTPS, auth boundaries, logs and UI.
-7. Verify each installed version and connections to both authenticated Mac identities, preserving
-   least-privilege grants. HC Keychain recovery uses normal sign-in/re-pair only where needed.
-8. Record exact artifacts and actual device observations separately from source/simulator evidence.
+The installed base source passed 331/331 integrated Node tests, syntax/static checks, focused Electron
+and native acceptance, and a signed packaged-app smoke. The packaged Electron-as-Node launcher
+ran an isolated selected synthetic MCP server from a different captured working directory, with
+no real MCP server or model turn. Build Mac installation used the approved signing identity,
+verified graceful shutdown and a terminal guard, and preserved settings, run/schedule files,
+Life state, content-tab order/history and three incoming pairings. The installed Home/version,
+compact navigation, unloaded browser restoration, peer links and fresh Copilot allowance were
+checked in the actual app. Both physical iOS devices were updated in place with the original
+team/profile and verified data/pairing preservation. Both physical clients subsequently reached
+both authenticated Mac hosts independently (HC at 22:48:32 UTC; Personal at 22:49:00 UTC).
+Physical notification taps, uploads and provider calls were not exercised. The base website
+activation preserved configuration, schema and nutrition state and passed all 14 guarded health
+checks; the subsequent Home-only correction preserved those stores and passed its separate 14/14
+health audit at 22:49:33.926 UTC. Live Home shows a 12-character build ID with full-ID tooltip
+inside its card at a 1280-pixel viewport.
+
+Work Mac 0.2.0 launched with its data preserved. Desktop pairing is authenticated in both
+directions: HC read Personal's five chat metadata records and fifteen local records with
+`partial:false` around 22:52 UTC; Personal independently refreshed HC's fifteen records at
+22:54:20 UTC with `partial:false`. The new Build incoming identity, `Proteus on workstation.example.test`,
+was online at 22:51:27 UTC with resource and document access off. No chat turn or mutation was
+used for these checks. HC passed a normal macOS installed-app signature check without
+Keychain or trust changes. The installed Claude MCP status probe sampled once immediately after initialization, so Safari
+showed connected while ADO/Atlassian showed pending. This is a confirmed probe bug, not evidence
+that those servers failed. A bounded settle fix is in the follow-up source; the final Mac reinstall
+and live recheck remain pending. HC also read the saved shared-account identity through `/api/app`
+at 23:09:32 UTC without a credential change or scope mutation. No Claude model turn was used.
+
+The website Home-only build-ID width correction from `d9e3d96` was deployed as
+`20261005T224447Z`; its independent 14/14 endpoint audit passed at 22:49:33.926 UTC.
+The audit reported zero Laravel and relay-Apache errors, one expected `.env` denial, 17 PHP
+lifecycle entries plus one unclassified entry, and 1,242 known MariaDB `column_stats` warnings
+plus one unclassified entry in the bounded 22:48–22:49:34 UTC window.
+The live account timezone was changed from UTC to America/Denver and a 3:39 PM chat timestamp was
+verified; an automatic/device-timezone option remains follow-up. MariaDB's known `column_stats`
+warnings and unclassified log entries preclude an all-clean logs claim.
 
 ## Known platform limits
 
@@ -122,4 +159,14 @@ closing the browser tab. Restored descriptors never inherit document/script appr
 
 ## Installation receipts
 
-Pending: Build Mac, Work Mac, iPhone, iPad and website.
+| Surface | Verified state | Private evidence / remaining limit |
+| --- | --- | --- |
+| Build Mac | Installed 0.2.0 from `74da6f7`; Home and compact navigation observed; ten content tabs, histories, settings, schedules, Life state and three pairings preserved; six browser descriptors unloaded | `/private/tmp/proteus-content-workspace-install-20261005T222724Z/receipt.json`, `/private/tmp/proteus-personal-installed-acceptance-20261005.json`; incoming iPhone was offline/backgrounded at that instant |
+| Work Mac | Installed 0.2.0 build `74da6f7`; normal macOS signature check passed; 15 runs, five schedules, open tabs and existing pairings preserved; HC → Personal read-only index returned five Personal and fifteen HC chat records, `partial:false` | Bidirectional desktop pairing verified. Initial installed Claude MCP status probe has a confirmed startup-settling bug; source fix ready, Mac reinstall and later readiness check pending; no live model turn |
+| iPhone | Installed 0.2.0 (2610.5.1) in place; app data/preferences and both Mac destination identities preserved; authenticated links to both Macs observed | `/private/tmp/proteus-iphone-content-workspace-update-20261005T222216Z/receipt.json`; live links HC 22:48:32 UTC / Personal 22:49:00 UTC; no physical notification/provider/upload test |
+| iPad | Installed 0.2.0 (2610.5.1) in place; app data/preferences and both Mac destination identities preserved; authenticated links to both Macs observed | `/private/tmp/proteus-ipad-content-workspace-update-20261005T221940Z/receipt.json`; live links HC 22:48:32 UTC / Personal 22:49:00 UTC; no physical notification/provider/upload test |
+| Website | Base `20261005T221822Z` from `74da6f7` passed 14/14 health checks. Home-only `d9e3d96` correction deployed as `20261005T224447Z`, 9,212 files, protected state preserved; its independent audit passed 14/14 at 22:49:33.926 UTC | `/private/tmp/proteus-web-live-acceptance-20261005.json` covers the base audit; correction has known MariaDB `column_stats` warnings and unclassified PHP/MariaDB entries, not an all-clean log claim; a separate web chat-title persistence source fix is ready but not yet deployed |
+
+Native detail: `/private/tmp/proteus-native-release-final.md`. Personal installed detail:
+`/private/tmp/proteus-personal-release-final.md`. The development iOS provisioning profile
+expires October 10, 2026 at 23:29:01 UTC and has no APNs entitlement.

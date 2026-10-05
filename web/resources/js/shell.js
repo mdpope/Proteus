@@ -7,17 +7,20 @@ export function initShell(document=globalThis.document,window=globalThis.window)
     const chatKey='proteus.chat-tabs.v1.'+account;
     const contentKey='proteus.content-tabs.v1.'+account;
     const scrollKey='proteus.tab-scroll.v1.'+account;
+    const chatTitle=value=>typeof value==='string'?value.replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g,' ').replace(/\s+/g,' ').trim().slice(0,120)||'Chat':'Chat';
     const validChat=tab=>tab&&/^[a-f0-9-]{36}$/i.test(tab.hostId||'')&&/^[a-zA-Z0-9_-]{1,100}$/.test(tab.id||'');
-    let chats=[];try{const saved=JSON.parse(window.localStorage.getItem(chatKey));if(Array.isArray(saved))chats=saved.filter(validChat).slice(-32).map(({hostId,id})=>({hostId,id,title:'Chat'}));}catch{}
+    let chats=[];try{const saved=JSON.parse(window.localStorage.getItem(chatKey));if(Array.isArray(saved))chats=saved.filter(validChat).slice(-32).map(({hostId,id,title})=>({hostId,id,title:chatTitle(title)}));}catch{}
     const validSchedule=tab=>tab&&/^[a-f0-9-]{36}$/i.test(tab.hostId||'')&&/^[a-z0-9][a-z0-9-]{0,79}$/.test(tab.id||'');
-    const cleanOrder=value=>{const seen=new Set();return (Array.isArray(value)?value:[]).flatMap(item=>{const tab=item==='browser-home'||item?.type==='browser'?{type:'browser'}:item?.type==='chat'&&validChat(item)?{type:'chat',hostId:item.hostId,id:item.id}:item?.type==='schedule'&&validSchedule(item)?{type:'schedule',hostId:item.hostId,id:item.id,title:String(item.title||'Schedule').slice(0,120)}:item?.type==='file'&&/^[a-f0-9-]{36}$/i.test(item.id||'')?{type:'file',id:item.id,name:String(item.name||'Markdown file').slice(0,120)}:null;if(!tab)return [];const key=tab.type==='chat'||tab.type==='schedule'?`${tab.type}:${tab.hostId}:${tab.id}`:tab.type==='file'?`${tab.type}:${tab.id}`:tab.type;if(seen.has(key))return [];seen.add(key);return [tab];}).slice(0,40);};
+    const cleanOrder=value=>{const seen=new Set();return (Array.isArray(value)?value:[]).flatMap(item=>{const tab=item==='browser-home'||item?.type==='browser'?{type:'browser'}:item?.type==='chat'&&validChat(item)?{type:'chat',hostId:item.hostId,id:item.id,title:chatTitle(item.title)}:item?.type==='schedule'&&validSchedule(item)?{type:'schedule',hostId:item.hostId,id:item.id,title:String(item.title||'Schedule').slice(0,120)}:item?.type==='file'&&/^[a-f0-9-]{36}$/i.test(item.id||'')?{type:'file',id:item.id,name:String(item.name||'Markdown file').slice(0,120)}:null;if(!tab)return [];const key=tab.type==='chat'||tab.type==='schedule'?`${tab.type}:${tab.hostId}:${tab.id}`:tab.type==='file'?`${tab.type}:${tab.id}`:tab.type;if(seen.has(key))return [];seen.add(key);return [tab];}).slice(0,40);};
     let order=[];try{order=cleanOrder(JSON.parse(window.localStorage.getItem(contentKey)));}catch{}
     const localFiles=new Map();let pendingFileId=null,activeFileId=null,cleared=false;
     let activeChat=null,activeSchedule=null;
     let active=document.body.dataset.shellSection;
     if(active==='browser-home'&&!order.some(item=>item.type==='browser'))order.push({type:'browser'});
-    for(const chat of chats)if(!order.some(item=>item.type==='chat'&&item.hostId===chat.hostId&&item.id===chat.id))order.push({type:'chat',hostId:chat.hostId,id:chat.id});
+    for(const descriptor of order.filter(item=>item.type==='chat')){const chat=chats.find(item=>item.hostId===descriptor.hostId&&item.id===descriptor.id);if(chat){if(chat.title==='Chat')chat.title=descriptor.title;else descriptor.title=chat.title;}else chats.push({hostId:descriptor.hostId,id:descriptor.id,title:descriptor.title});}
+    for(const chat of chats)if(!order.some(item=>item.type==='chat'&&item.hostId===chat.hostId&&item.id===chat.id))order.push({type:'chat',hostId:chat.hostId,id:chat.id,title:chat.title});
     const persist=()=>{if(cleared)return;try{window.localStorage.setItem(contentKey,JSON.stringify(order));}catch{}};persist();
+    const saveChats=()=>{if(cleared)return;try{window.localStorage.setItem(chatKey,JSON.stringify(chats.slice(-32).map(({hostId,id,title})=>({hostId,id,title:chatTitle(title)}))));}catch{}};
     const saveScroll=()=>{try{window.sessionStorage.setItem(scrollKey,String(strip.scrollLeft));}catch{}};
     strip.addEventListener('scroll',saveScroll,{passive:true});
     function restoreScroll(){let value=0;try{value=Number(window.sessionStorage.getItem(scrollKey))||0;}catch{}strip.scrollLeft=value;}
@@ -38,7 +41,7 @@ export function initShell(document=globalThis.document,window=globalThis.window)
                 const chat=chats.find(value=>value.hostId===descriptor.hostId&&value.id===descriptor.id);if(!chat)continue;
                 const selected=activeChat?.hostId===chat.hostId&&activeChat?.id===chat.id;
                 const url='/remote?view=chats&host='+encodeURIComponent(chat.hostId)+'&chat='+encodeURIComponent(chat.id);
-                const item=tab(chat.title||'Chat',url,selected,()=>{chats=chats.filter(value=>value.hostId!==chat.hostId||value.id!==chat.id);order=order.filter(value=>value!==descriptor);persist();try{window.localStorage.setItem(chatKey,JSON.stringify(chats.map(({hostId,id})=>({hostId,id}))));}catch{}document.dispatchEvent(new CustomEvent('proteus:chat-close',{detail:{hostId:chat.hostId,id:chat.id}}));render();},chat.title||'Chat');item.querySelector('a').prepend(chatIcon());
+                const item=tab(chat.title||'Chat',url,selected,()=>{chats=chats.filter(value=>value.hostId!==chat.hostId||value.id!==chat.id);order=order.filter(value=>value!==descriptor);persist();saveChats();document.dispatchEvent(new CustomEvent('proteus:chat-close',{detail:{hostId:chat.hostId,id:chat.id}}));render();},chat.title||'Chat');item.querySelector('a').prepend(chatIcon());
                 item.dataset.shellChat=chat.id;item.dataset.shellChatHost=chat.hostId;strip.append(item);
             }else if(descriptor.type==='schedule'){
                 const selected=activeSchedule?.hostId===descriptor.hostId&&activeSchedule?.id===descriptor.id;
@@ -55,7 +58,7 @@ export function initShell(document=globalThis.document,window=globalThis.window)
         document.querySelectorAll('[data-shell-nav]').forEach(link=>{const selected=link.dataset.shellNav===active;link.classList.toggle('active',selected);if(selected)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');});
     }
     render();restoreScroll();
-    document.addEventListener('proteus:chat-tabs',event=>{if(cleared)return;chats=(event.detail?.tabs||[]).filter(validChat).slice(-32);for(const chat of chats)if(!order.some(item=>item.type==='chat'&&item.hostId===chat.hostId&&item.id===chat.id))order.push({type:'chat',hostId:chat.hostId,id:chat.id});activeChat=event.detail?.active||null;persist();render();});
+    document.addEventListener('proteus:chat-tabs',event=>{if(cleared)return;chats=(event.detail?.tabs||[]).filter(validChat).slice(-32).map(tab=>({hostId:tab.hostId,id:tab.id,title:chatTitle(tab.title)}));for(const chat of chats){const descriptor=order.find(item=>item.type==='chat'&&item.hostId===chat.hostId&&item.id===chat.id);if(descriptor)descriptor.title=chat.title;else order.push({type:'chat',hostId:chat.hostId,id:chat.id,title:chat.title});}activeChat=event.detail?.active||null;saveChats();persist();render();});
     document.addEventListener('proteus:schedule-open',event=>{if(cleared||!validSchedule(event.detail))return;const schedule=event.detail;let descriptor=order.find(item=>item.type==='schedule'&&item.hostId===schedule.hostId&&item.id===schedule.id);if(!descriptor){descriptor={type:'schedule',hostId:schedule.hostId,id:schedule.id,title:String(schedule.title||'Schedule').slice(0,120)};order.push(descriptor);}else descriptor.title=String(schedule.title||descriptor.title).slice(0,120);activeSchedule={hostId:schedule.hostId,id:schedule.id};activeChat=null;persist();render();});
     document.addEventListener('proteus:section',event=>{active=event.detail?.key||active;document.body.dataset.shellSection=active;activeChat=null;activeSchedule=null;render();document.querySelector('#shell-recent-chats')?.toggleAttribute('hidden',active!=='chats');});
     document.addEventListener('proteus:open-browser',()=>{if(!order.some(item=>item.type==='browser'))order.push({type:'browser'});persist();window.location.assign(sections['browser-home'].url);});

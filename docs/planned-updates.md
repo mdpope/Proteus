@@ -1,7 +1,40 @@
 # Implementation status and backlog
 
 Maintain this as the single backlog. Design rationale is in `decisions.md`; recent changes are in
-`../CHANGELOG.md`. Items below are status, not promises of completed validation.
+`../CHANGELOG.md`. Items below are status, not promises of completed validation. The October 5 design bullets are
+retained as acceptance criteria; the installed versus unverified state is summarized immediately
+below and in `content-workspace-release.md`.
+
+## 0.2.0 implementation and rollout status
+
+The installed base source is `74da6f78827de0145f2164b3a1d2d065202dea0e`; its integrated
+Node suite passed 331/331 and signed packaged-app smoke passed. Follow-up source edits for
+expanded attachments, Claude MCP status settling and website chat-title persistence passed
+340/340 integrated Node tests and `npm run check`. Native follow-up validation passed
+53/53 unit tests and three focused iPhone/iPad viewer tests; final artifact freeze and installs
+are pending. Build Mac, physical iPhone and iPad were updated in place with their data and signing preserved. Both physical clients reached both Mac
+hosts independently at HC 22:48:32 UTC and Personal 22:49:00 UTC. Website base release
+`20261005T221822Z` passed 9,212-file verification and 14/14 health checks; a web-only Home
+correction from `d9e3d96` was deployed as `20261005T224447Z`; its independent 14/14 health
+audit passed at 22:49:33.926 UTC. Work Mac 0.2.0 launched with state preserved. Both desktop
+pairing directions passed authenticated read-only chat-index checks: HC saw five Personal chats
+and fifteen HC chats around 22:52 UTC, and Personal refreshed fifteen HC chats at 22:54:20 UTC,
+with `partial:false` in both directions. The new Build incoming HC device was online with
+resource/document grants off. HC passed its normal macOS installed-app signature check without
+Keychain or trust changes; it preserved 15 runs, five schedules, open tabs and existing pairings.
+The installed Claude MCP status probe has a confirmed startup-settling bug: Safari showed
+connected, while ADO/Atlassian appeared pending after an immediate sample. A bounded settle
+source fix is ready, but final Mac rebuild/reinstall and live recheck remain
+pending; those values do not prove server failure. HC read the saved shared-account identity
+through `/api/app` at 23:09:32 UTC without credential or scope change. The separate website
+chat-title persistence source correction is ready but not yet deployed. No
+physical-device live notification tap, attachment upload, generated-document approval or provider
+turn is claimed.
+Website account timezone is America/Denver with a verified 3:39 PM chat timestamp; automatic/device
+zone selection is follow-up. The Home build-ID width fix passed live 1280-pixel visual
+acceptance (12-character display and full-ID tooltip) and the 14/14 health audit. Bounded logs
+include known MariaDB `column_stats` warnings and one unclassified PHP and MariaDB entry each;
+this is not an all-clean log result.
 
 ## Active release: content tabs, Home, attention review and browser lifetime — October 5
 
@@ -79,8 +112,9 @@ reference for diagnosis, not an instruction to execute those operational actions
 
 ## Active release: chat context menus, archive and delete — October 5
 
-The operator added this to the current release. Implementation and cross-client acceptance are
-in progress; no existing user chats are test fixtures.
+The operator added this to the current release. Source and synthetic cross-client acceptance
+passed for archive/unarchive, filters, guarded deletion and cache/tombstone behavior. No existing
+user chats were deleted for testing; installed end-to-end deletion was not exercised.
 
 - Offer context menus on desktop/web chat rows and tabs, with equivalent native long-press
   actions. Other applicable content lists/tabs expose their existing actions consistently.
@@ -103,8 +137,9 @@ The operator selected tmux-backed persistence plus local saved history for this 
 must still work when tmux is absent. Install tmux on Work Mac through its existing reputable package
 manager and verify with a disposable session; preserve unrelated sessions and shell configuration.
 Verification found tmux 3.6a on Build Mac and 3.6b already installed on HC, so no new package
-installation was needed. HC disposable-session attach/detach/persistence/cleanup passed; this
-is not yet acceptance of the pending Proteus integration.
+installation was needed. HC disposable-session attach/detach/persistence/cleanup and isolated
+Electron quit/relaunch integration passed. Installed Personal startup showed zero terminal processes;
+a real production tmux session was not started for acceptance.
 
 - Keep **Terminal** as the user-facing tool. Ghostty remains accurate renderer/appearance detail:
   `ghostty-web` provides the embedded WebAssembly terminal and `node-pty` the host connection.
@@ -133,12 +168,13 @@ is not yet acceptance of the pending Proteus integration.
 
 ## Active release: generated-document links and click-to-open Markdown tabs — October 5
 
-Status: included in the authorized active release. Host approval protocol and client readers are
-in progress; full security, UI and installed-client acceptance remain pending.
-Source review confirms that local desktop chat links ending in `.md` already call the Markdown
-reader and open a document tab. Remote desktop links currently show destination guidance, and
-website local-file links also lack an equivalent reader. Existing local support is not cross-client
-acceptance. The detailed host/document identity, authorization and offline design below is approved.
+Status: host approval protocol, bounded asset manifest, relative-link approval and cross-client
+readers passed synthetic security/UI acceptance. Personal and native builds are installed; no
+existing user document was opened or approved in live installed-client acceptance.
+Before 0.2.0, local desktop `.md` links opened a Markdown tab, while remote desktop and website
+links lacked the equivalent host-approved reader. The approved host/document identity, authorization
+and offline design below is now implemented and synthetically tested; installed live-file approval
+remains unverified.
 
 - When a chat generates or updates a proposal, design document, journal entry or similar Markdown
   artifact, expose a clear clickable document title/filename in the response. Use a genuine file
@@ -193,8 +229,9 @@ acceptance. The detailed host/document identity, authorization and offline desig
 
 ## Active release: interactive artifacts with explicit script approval — October 5
 
-Status: included in the authorized active release. Static and explicitly approved interactive
-previews are under implementation and containment testing; no installed-client acceptance yet.
+Status: static and explicitly approved interactive previews passed synthetic containment
+fixtures across desktop, web and native. No existing artifact was executed in an installed client;
+website previews have no hard CPU/memory guarantee.
 
 - Support provider-neutral HTML/CSS/browser-JavaScript artifacts from Codex, Claude and Copilot.
   Use one artifact contract and preview behavior across desktop/web/iPhone/iPad. Open only on
@@ -235,8 +272,9 @@ previews are under implementation and containment testing; no installed-client a
 
 ## Active release: tab-bar branding and persistent navigation icons — October 5
 
-Status: included in the authorized active release; cross-client implementation and UI acceptance
-are in progress.
+Status: source and focused cross-client UI acceptance passed. The installed Personal app showed
+the compact full-width top bar, sidebar and collapsed icon rail; the original layout was restored
+after inspection.
 
 - Place the full-width top tab bar above the sidebar, with the compact Proteus name and current
   logo at the upper left. The sidebar and its hover slide-over begin below that bar. Reduce main
@@ -260,8 +298,8 @@ are in progress.
 
 ## Active release: remote desktop chat parity and automatic earlier history — October 5
 
-Status: included in the authorized active release; local/remote parity and history acceptance
-remain in progress.
+Status: local/remote parity and automatic-history behavior passed synthetic client acceptance;
+installed Personal retained both online Mac destinations. No live paid remote model turn was used.
 
 - Reuse the local chat composer and layout for remote desktop chats: the same message box,
   Send/Queue/Steer/Stop behavior and destination-provider model, effort, speed and applicable
@@ -291,9 +329,12 @@ remain in progress.
 
 ## Active release: pasted image and file attachments in chat — October 5
 
-Status: included in the authorized active release across desktop/web/iPhone/iPad, including
-remote chats. Durable host staging has focused tests; provider delivery and all client UI
-acceptance remain in progress. The supplied attachment-strip image is a presentation reference only.
+Status: implemented across desktop/web/iPhone/iPad including remote chats. Exact one-use
+consent, provider byte delivery and client UI passed synthetic tests. The follow-up larger-batch
+source change allows 256 files within 32 MiB total and 8 MiB per file, with bounded staging,
+sliding inactivity expiry and the same ordered consent. Its final cross-client installs are
+pending. The supplied attachment-strip image remains a presentation reference; no existing user
+file was sent during validation.
 
 - Pasting images adds preview thumbnails in an attachment strip at the top of the composer.
   Clicking/tapping a thumbnail opens a large modal preview; clicking the backdrop or its X
@@ -324,7 +365,8 @@ acceptance remain in progress. The supplied attachment-strip image is a presenta
 
 Status: the October 5 interactive chat proposal is included in the authorized active release.
 The flow applies to desktop, web and mobile; mobile keeps its condensed native formatting and
-solid message boxes. Implementation and acceptance are in progress; no new deployment is claimed.
+solid message boxes. Source acceptance passed and the 0.2.0 clients were deployed as described
+above; the installed Personal fresh Copilot quota returned 75.1% remaining without a model turn.
 Private chat contents, machine paths and account usage values are excluded from this record.
 
 Confirmed requirements:
@@ -397,11 +439,11 @@ and [SDK usage APIs](https://docs.github.com/en/copilot/how-tos/copilot-sdk/feat
 
 ## Active release: Team Tools subtab dividers — October 5
 
-Status: matching desktop dividers are implemented and included in the focused UI checks. Final
-installed-client verification remains part of the release gate.
+Status: matching desktop/iPad dividers passed focused UI checks. The clients are installed;
+manual traversal of each live installed Team tab was not part of the guarded install check.
 
-- The persistent Team Tools and Standup subtabs lack the visible separation used between
-  browser subtabs. Add matching vertical dividers between Team Tools and Standup, and between
+- The persistent Team Tools and Standup subtabs previously lacked the visible separation used
+  between browser subtabs. Matching vertical dividers now separate Team Tools and Standup, and
   Standup and the first browser subtab. Keep the main tab bar and this secondary bar distinct.
 - Use consistent divider height, spacing and contrast across the secondary tab strip while
   preserving the active-tab underline and current tab behavior. Check each fixed tab selected,
@@ -411,11 +453,10 @@ installed-client verification remains part of the release gate.
 ## Active release: preserve generated Standup when links change — October 5
 
 Status: implemented and verified in isolated Electron acceptance: generated order and fixed positions
-survive link additions/edits and undock/redock. Installed acceptance remains pending.
+survive link additions/edits and undock/redock. Installed real-list mutation was not exercised.
 
-- After generating and docking a selected list's daily Standup order, adding a Standup link
-  resets the docked panel to the empty “Generate for today” state. Undocking and redocking
-  does not restore the generated list; the operator currently has to regenerate it.
+- Before the fix, adding a Standup link reset a docked generated order to “Generate for today,”
+  and undock/redock did not restore it. The isolated regression now preserves that order.
 - Adding or editing links must preserve the already-generated order and current presentation
   state for the selected list and day. Docking, undocking and redocking must display that same
   result, without reshuffling participants or requiring regeneration.
@@ -428,7 +469,8 @@ survive link additions/edits and undock/redock. Installed acceptance remains pen
 
 ## Active release: iPad corrections — October 5
 
-Source and simulator acceptance passed for both corrections; physical-device update remains pending.
+Source and simulator acceptance passed for both corrections; the physical iPad was updated in
+place with app data and preferences preserved. Live shared-list edits were not exercised.
 
 - [x] **Open the selected shared team configuration (source and simulator verified).** Selecting an existing named team
   list on iPad currently opens a new-list form instead of that list's configuration. Load
@@ -515,6 +557,7 @@ with local app support records, outside Git; repository tests and documentation 
 
 ## Connection and presentation corrections — October 5
 
+This section records the earlier October 5 interim release; the current 0.2.0 rollout is above.
 Implemented in the current source: three-column desktop allowance; host-owned names refreshed
 from authenticated connections; website account/browser destination lookup and explicit connection
 states; desktop-style website chat filters/main tabs; native device-zone chat timestamps;
@@ -525,11 +568,12 @@ runtime configuration and nutrition unchanged. Live All Macs Chats, all filters,
 absence of inner chat navigation and the authorized eight-member Standup list are verified.
 Default Mac is saved as Build Mac; guarded API readback preserved all other preferences,
 and website reload verified the selection and live provider allowance. Build Mac's screen
-remains locked, so no additional native UI checks are claimed. The final log window confirms
+was locked at that audit, so no native UI checks were claimed then. Later 0.2.0 installed UI
+acceptance is recorded above. The final log window confirms
 the known MariaDB system-table issue plus seven still-unclassified warning entries; maintenance
 remains open. Personal → HC pairing was saved and online; HC → Personal remains incomplete.
-HC's latest control check is unreachable, with no signed-install receipt; its last install hold
-protected an active digest job. Preserve that workflow safeguard. Physical shared-account
+At that earlier checkpoint HC's control check was unreachable and no signed-install receipt
+existed; its install hold protected an active digest job. Preserve that workflow safeguard. Physical shared-account
 acceptance remains separate. See `release-validation.md`.
 There are no product-specific personal/work Mac categories. Any paired host can be selected by
 its stable host ID; its display name is configured on that desktop.
@@ -541,8 +585,8 @@ desktop/web/iOS. Active playback adds Pause/Resume, Stop and a text-position scr
 share one local-voice controller; native uses system speech. No provider execution or cloud voice
 fallback is introduced. See `chat-rendering.md` for controls and platform limitations; installation
 and deployment remain separate from implementation/test status. Build Mac, iPhone, iPad
-and website are updated. HC now runs `17719ea`, including the empty-peer startup fix; relay
-and providers passed after installation without a Keychain prompt. The underlying item ACL
+and website were updated for that follow-up. HC ran `17719ea` then, including the empty-peer
+startup fix; relay and providers passed after installation without a Keychain prompt. The underlying item ACL
 was not changed or proven repaired. See `release-validation.md` for receipts.
 
 HC packaging follow-up: evaluate a consistent signed identity to prevent per-build Safe Storage
@@ -570,7 +614,8 @@ installed and visually verified on Build Mac: top-aligned search, bounded long l
 updated over Wi-Fi with data and both destinations preserved; iPad shared-account sign-in needs
 its on-device system flow. HC has the update installed and state preserved, with normal
 startup, relay and provider checks passing. Personal → HC authorization is saved and online;
-HC → Personal remains blocked by Keychain access. Bidirectional completion is not claimed.
+HC → Personal remained incomplete then; it is still under inspection after the 0.2.0 install.
+Bidirectional completion is not claimed.
 The current release does not add per-session short-lived host grants, merge browser/native pairing
 keys, or implement multi-provider work. Those security protocol improvements remain open.
 

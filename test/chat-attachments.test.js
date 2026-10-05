@@ -130,3 +130,70 @@ test('deleting one chat revokes staged and accepted bytes without touching anoth
   await assert.rejects(store.read({ attachmentId: finished.attachmentId, ...owner, messageId: 'accepted-message' }), /unavailable/);
   assert.equal(store.records.has(other.uploadId), true);
 }));
+
+test('one message accepts 256 tiny files but rejects a 257th and a 32 MiB aggregate overflow', async () => fixture(async store => {
+  assert.equal(chatAttachmentLimits.maxBatchFiles, 256);
+  assert.equal(chatAttachmentLimits.maxBatchBytes, 32 * 1024 * 1024);
+  for (let index = 0; index < chatAttachmentLimits.maxBatchFiles; index++) {
+    const started = await store.begin({ ...owner, name: `tiny-${index}.png`, mediaType: 'image/png', size: png.length, sha256: digest(png) });
+    await store.chunk({ uploadId: started.uploadId, deviceId: owner.deviceId, index: 0, dataBase64: png.toString('base64') });
+    await store.finish({ uploadId: started.uploadId, deviceId: owner.deviceId });
+  }
+  await assert.rejects(store.begin({ ...owner, name: 'too-many.png', mediaType: 'image/png', size: png.length, sha256: digest(png) }), /batch limit/);
+  await store.revokeChat(owner.chatId);
+  const large = Buffer.alloc(8 * 1024 * 1024, 65), largeHash = digest(large);
+  for (let index = 0; index < 4; index++) {
+    const started = await store.begin({ ...owner, name: `large-${index}.txt`, mediaType: 'text/plain', size: large.length, sha256: largeHash });
+    for (let offset = 0, chunkIndex = 0; offset < large.length; offset += chatAttachmentLimits.chunkBytes, chunkIndex++) await store.chunk({ uploadId: started.uploadId, deviceId: owner.deviceId, index: chunkIndex, dataBase64: large.subarray(offset, offset + chatAttachmentLimits.chunkBytes).toString('base64') });
+    await store.finish({ uploadId: started.uploadId, deviceId: owner.deviceId });
+  }
+  await assert.rejects(store.begin({ ...owner, name: 'over-budget.txt', mediaType: 'text/plain', size: 1, sha256: 'a'.repeat(64) }), /batch limit/);
+  await store.begin({ ...owner, messageId: 'separate-message', name: 'different-message.png', mediaType: 'image/png', size: png.length, sha256: digest(png) });
+}));
+
+test('active sequential upload refreshes earlier files but an idle batch expires', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-attachments-sliding-'));
+  let now = Date.now(); const store = new ChatAttachmentStore(home, { clock: () => now });
+  try {
+    const first = await store.begin({ ...owner, name: 'first.png', mediaType: 'image/png', size: png.length, sha256: digest(png) });
+    await store.chunk({ uploadId: first.uploadId, deviceId: owner.deviceId, index: 0, dataBase64: png.toString('base64') });
+    const firstFile = await store.finish({ uploadId: first.uploadId, deviceId: owner.deviceId });
+    now += chatAttachmentLimits.ttlMs - 1;
+    const second = await store.begin({ ...owner, name: 'second.png', mediaType: 'image/png', size: png.length, sha256: digest(png) });
+    now += chatAttachmentLimits.ttlMs - 1;
+    await store.chunk({ uploadId: second.uploadId, deviceId: owner.deviceId, index: 0, dataBase64: png.toString('base64') });
+    await store.finish({ uploadId: second.uploadId, deviceId: owner.deviceId });
+    assert.deepEqual((await store.read({ attachmentId: firstFile.attachmentId, ...owner })).bytes, png);
+    now += chatAttachmentLimits.ttlMs + 1; store.cleanup();
+    await assert.rejects(store.read({ attachmentId: firstFile.attachmentId, ...owner }), /unavailable/);
+  } finally { await store.close(); fs.rmSync(home, { recursive: true, force: true }); }
+});
+
+test('staging byte caps permit one full batch per destination without unbounded global reservations', async () => fixture(async store => {
+  const large = Buffer.alloc(8 * 1024 * 1024, 65), largeHash = digest(large);
+  for (let device = 0; device < 4; device++) {
+    for (let index = 0; index < 4; index++) {
+      const deviceId = `device-${device}`;
+      const started = await store.begin({ ...owner, deviceId, messageId: `message-${device}`, name: `large-${device}-${index}.txt`, mediaType: 'text/plain', size: large.length, sha256: largeHash });
+      for (let offset = 0, chunkIndex = 0; offset < large.length; offset += chatAttachmentLimits.chunkBytes, chunkIndex++) await store.chunk({ uploadId: started.uploadId, deviceId, index: chunkIndex, dataBase64: large.subarray(offset, offset + chatAttachmentLimits.chunkBytes).toString('base64') });
+      await store.finish({ uploadId: started.uploadId, deviceId });
+    }
+  }
+  await assert.rejects(store.begin({ ...owner, deviceId: 'device-5', messageId: 'message-5', name: 'over-global.txt', mediaType: 'text/plain', size: 1, sha256: 'a'.repeat(64) }), /Too many attachments/);
+  assert.equal(chatAttachmentLimits.maxPendingBytes, 128 * 1024 * 1024);
+}));
+
+
+test('incomplete uploads retain the low open-file-descriptor concurrency caps', async () => fixture(async store => {
+  for (let index = 0; index < chatAttachmentLimits.maxIncompletePerDevice; index++) {
+    await store.begin({ ...owner, name: `open-${index}.png`, mediaType: 'image/png', size: png.length, sha256: digest(png) });
+  }
+  await assert.rejects(store.begin({ ...owner, name: 'fifth-open.png', mediaType: 'image/png', size: png.length, sha256: digest(png) }), /Too many attachments/);
+  for (let device = 1; device < 4; device++) {
+    for (let index = 0; index < chatAttachmentLimits.maxIncompletePerDevice; index++) {
+      await store.begin({ ...owner, deviceId: `extra-device-${device}`, name: `open-${device}-${index}.png`, mediaType: 'image/png', size: png.length, sha256: digest(png) });
+    }
+  }
+  assert.equal(chatAttachmentLimits.maxIncomplete, 16);
+  await assert.rejects(store.begin({ ...owner, deviceId: 'device-4', name: 'seventeenth-open.png', mediaType: 'image/png', size: png.length, sha256: digest(png) }), /Too many attachments/);
+}));

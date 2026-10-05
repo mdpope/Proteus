@@ -14,6 +14,9 @@
   Show Archived sits after the date filters; host-owned changes sync to authorized clients.
 - Paste supported images/files into chat drafts, preview images with click or tap, and close with
   Escape, the backdrop or X. Sending confirms the exact files and provider destination.
+- Keep the ordinary chat composer compact with + Attach beside the provider controls and Send.
+  A message can contain up to 256 files within a 32 MiB total budget (8 MiB per file);
+  selected thumbnails remain in a bounded row above the controls.
 - Open generated Markdown and HTML documents inside their chat workspace on demand. Remote files
   use revocable viewing permission and approval for the exact document version; scripts stay off
   until explicitly enabled in an isolated preview.

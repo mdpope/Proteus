@@ -303,7 +303,7 @@ private struct LifeEvidenceView:View{
         Group{
             if let failure{ContentUnavailableView("Evidence unavailable",systemImage:"doc",description:Text(failure))}
             else if let data{
-                if Self.raster(data),let image=UIImage(data:data){ScrollView([.horizontal,.vertical]){Image(uiImage:image).resizable().scaledToFit().frame(maxWidth:900)}}
+                if Self.raster(data),let image=UIImage(data:data){BackdropImagePreview(image:image,imageLabel:"Evidence image preview"){dismiss()}}
                 else if data.starts(with:Data("%PDF-".utf8)){LifePDF(data:data)}
                 else{ContentUnavailableView("Preview unavailable",systemImage:"doc",description:Text("This file type can be downloaded from the website. HTML and executable previews are disabled."));Link("Open evidence on website",destination:URL(string:life.website+"/attachments/"+item.id)!)}
             }else{ProgressView("Loading evidence…")}

@@ -71,3 +71,23 @@ test('accepted queued proof survives host restart but cannot replay after provid
   const replayed=new ChatAttachmentConsents(store);await assert.rejects(replayed.readForProvider(exact),/consent is missing or changed/);
   await replayed.releaseProof(prepared.proofId);
 });
+
+test('a mid-batch accept failure removes earlier accepted bytes and consumes consent',async t=>{
+  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-consent-rollback-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+  const store=new ChatAttachmentStore(home);t.after(()=>store.close());const grants=new ChatAttachmentConsents(store);
+  const owner={chatId:'chat-1',deviceId:'device-a',messageId:'message-1',providerId:'copilot'},files=[];
+  for(let index=0;index<2;index++){const begun=await store.begin({...owner,name:`picture-${index}.png`,mediaType:'image/png',size:png.length,sha256});await store.chunk({uploadId:begun.uploadId,deviceId:owner.deviceId,index:0,dataBase64:png.toString('base64')});files.push(await store.finish({uploadId:begun.uploadId,deviceId:owner.deviceId}));}
+  const consent=await grants.authorize({...owner,attachments:files,acceptedMediaTypes:['image/png']});
+  const accept=store.accept.bind(store);let count=0;store.accept=async item=>{if(++count===2)throw new Error('synthetic second-file failure');return accept(item);};
+  await assert.rejects(grants.prepareSend({...owner,consentId:consent.consentId,attachmentIds:files.map(file=>file.attachmentId)}),/second-file failure/);
+  assert.equal(store.records.size,0);assert.equal(grants.prepared.size,0);
+  await assert.rejects(grants.verify({...owner,consentId:consent.consentId,attachmentIds:files.map(file=>file.attachmentId)}),/expired/);
+});
+
+test('consent rejects a 257-file declaration before any staged-byte reads', async t => {
+  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-consent-large-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+  const store=new ChatAttachmentStore(home);t.after(()=>store.close());
+  const grants=new ChatAttachmentConsents(store),owner={chatId:'chat-1',deviceId:'device-a',messageId:'message-1',providerId:'copilot'};
+  const declared=Array.from({length:257},(_,index)=>({attachmentId:`synthetic-${index}`,name:`tiny-${index}.png`,mediaType:'image/png',size:1,sha256:'a'.repeat(64)}));
+  await assert.rejects(grants.authorize({...owner,attachments:declared,acceptedMediaTypes:['image/png']}),/valid batch/);
+});

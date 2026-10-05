@@ -12,6 +12,13 @@ private actor PreviewRequestCounter {
 }
 
 final class RemoteTests: XCTestCase {
+    func testAttachmentBudgetAcceptsManySmallFilesButBoundsTotalBytes() {
+        XCTAssertNil(NativeAttachmentBudget.rejection(existingCount: 255, existingBytes: NativeAttachmentBudget.maxTotalBytes - 1, incomingBytes: 1))
+        XCTAssertNotNil(NativeAttachmentBudget.rejection(existingCount: 256, existingBytes: 0, incomingBytes: 1))
+        XCTAssertNotNil(NativeAttachmentBudget.rejection(existingCount: 1, existingBytes: NativeAttachmentBudget.maxTotalBytes, incomingBytes: 1))
+        XCTAssertNotNil(NativeAttachmentBudget.rejection(existingCount: 0, existingBytes: 0, incomingBytes: NativeAttachmentBudget.maxFileBytes + 1))
+        XCTAssertNil(NativeAttachmentBudget.rejection(existingCount: 100, existingBytes: 100, incomingBytes: 1))
+    }
     @MainActor func testLifecycleReplayUpdatesArchiveAndEvictsDeletedChatWithoutLosingOtherPages() {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
