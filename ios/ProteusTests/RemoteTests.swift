@@ -1,4 +1,5 @@
 import WebKit
+import AVFoundation
 import CryptoKit
 import XCTest
 @testable import Proteus
@@ -542,5 +543,134 @@ extension LifeNativeTests {
         let consented = LifeStore(keychainService: service, session: LifeTestProtocol.session())
         _ = try await consented.appRequest("/preferences", method: "PUT", body: .object(["timezone": .string("America/Denver")]))
         XCTAssertEqual(calls, 1)
+    }
+}
+
+@MainActor private final class FakeMessageSpeechOutput: MessageSpeechOutput {
+    var event: ((UUID, MessageSpeechEvent) -> Void)?
+    var starts: [(text: String, token: UUID)] = []
+    var stops = 0
+    var pauses = 0
+    var resumes = 0
+    var canPause = true
+    var canResume = true
+    func start(_ text: String, token: UUID) { starts.append((text, token)) }
+    func stop() { stops += 1 }
+    func pause() -> Bool { pauses += 1; return canPause }
+    func resume() -> Bool { resumes += 1; return canResume }
+}
+final class MessageSpeechTests: XCTestCase {
+    func testReadableMarkdownPreservesCodeTablesLinksAndUnicode() {
+        let markdown = """
+        # Ready
+
+        **Strong** and [guide](https://example.test) with `List<T>`.
+        - [x] Reviewed
+        > Quoted
+
+        | Client | State |
+        | --- | :---: |
+        | iPad | **Ready** |
+
+        ```swift
+        let snake_case = x | y
+        print("**keep literal**")
+        ```
+
+        Café 👋 finishes.
+        """
+        let text = SpokenMarkdown.text(markdown)
+        XCTAssertTrue(text.contains("Strong and guide with List<T>."), text)
+        XCTAssertTrue(text.contains("Reviewed\nQuoted"), text)
+        XCTAssertTrue(text.contains("Client; State\niPad; Ready"), text)
+        XCTAssertTrue(text.contains("let snake_case = x | y\nprint(\"**keep literal**\")"), text)
+        XCTAssertTrue(text.contains("Café 👋 finishes."), text)
+        XCTAssertFalse(text.contains("```")); XCTAssertFalse(text.contains("---")); XCTAssertFalse(text.contains("https://example.test"))
+        XCTAssertEqual(SpokenMarkdown.text("Use `a_b | x` and ~~old~~."), "Use a_b | x and old.")
+        XCTAssertEqual(SpokenMarkdown.text("![Chart](https://example.test/chart.png) &amp; café"), "Chart & café")
+    }
+    func testActionsExcludeLiveReasoningToolsAndEmptyMessages() {
+        let completed: JSON = .object(["role": .string("assistant"), "text": .string("Done")])
+        XCTAssertTrue(MessageActions.eligible(completed))
+        for event: JSON in [
+            .object(["role": .string("user"), "text": .string("Prompt")]),
+            .object(["role": .string("assistant"), "text": .string(" \n ")]),
+            .object(["role": .string("assistant"), "text": .string("Partial"), "partial": .bool(true)]),
+            .object(["role": .string("assistant"), "text": .string("Thinking"), "data": .object(["phase": .string("analysis")])]),
+            .object(["role": .string("assistant"), "text": .string("Tool"), "data": .object(["tool": .object([:])])]),
+            .object(["role": .string("assistant"), "text": .string("Hidden"), "data": .object(["reasoning": .object([:])])]),
+            .object(["role": .string("assistant"), "text": .string("Partial"), "status": .string("streaming")])
+        ] { XCTAssertFalse(MessageActions.eligible(event), event.pretty) }
+    }
+    @MainActor func testSystemSpeechReportsTextProgressWithoutChangingSharedAudioSession() async throws {
+        let session = AVAudioSession.sharedInstance()
+        let category = session.category, mode = session.mode, options = session.categoryOptions
+        let output = SystemMessageSpeech(); defer { output.stop() }
+        let token = UUID(); let progressed = expectation(description: "System speech reports an utterance word range")
+        var received = false
+        output.event = { expected, event in
+            guard expected == token else { return }
+            if case .progress(let offset) = event, offset >= 0, !received { received = true; progressed.fulfill() }
+        }
+        output.start("One two three. This is a synthetic speech playback test.", token: token)
+        await fulfillment(of: [progressed], timeout: 15)
+        output.stop()
+        XCTAssertEqual(session.category, category); XCTAssertEqual(session.mode, mode); XCTAssertEqual(session.categoryOptions, options)
+    }
+    @MainActor func testCopyPreservesExactMarkdown() {
+        let old = UIPasteboard.general.string; defer { UIPasteboard.general.string = old }
+        let markdown = "# Title\n\n**exact** `code` & café 👋\n"
+        MessageActions.copy(markdown); XCTAssertEqual(UIPasteboard.general.string, markdown)
+    }
+    @MainActor func testReplacementIgnoresOldEventsAndStopFinishCancelClearState() throws {
+        let output = FakeMessageSpeechOutput(); let speech = MessageSpeech(output: output)
+        XCTAssertTrue(output.starts.isEmpty)
+        speech.toggle(messageID: "host-a:chat:a", markdown: "**First** response")
+        let first = try XCTUnwrap(output.starts.last); output.event?(first.token, .started)
+        XCTAssertEqual(first.text, "First response")
+        speech.toggle(messageID: "host-a:chat:b", markdown: "Second response")
+        let second = try XCTUnwrap(output.starts.last)
+        output.event?(first.token, .finished); output.event?(first.token, .progress(9))
+        XCTAssertEqual(speech.messageID, "host-a:chat:b"); XCTAssertEqual(speech.progress, 0)
+        output.event?(second.token, .finished); XCTAssertNil(speech.messageID)
+        speech.toggle(messageID: "c", markdown: "Third response")
+        output.event?(try XCTUnwrap(output.starts.last).token, .cancelled); XCTAssertNil(speech.messageID)
+        speech.toggle(messageID: "d", markdown: "Fourth response"); speech.toggle(messageID: "d", markdown: "Fourth response")
+        XCTAssertNil(speech.messageID); XCTAssertFalse(speech.isPaused); XCTAssertTrue(speech.spokenText.isEmpty)
+    }
+    @MainActor func testPauseSeekResumeUsesFullTextCoordinatesAndIgnoresOldProgress() throws {
+        let output = FakeMessageSpeechOutput(); let speech = MessageSpeech(output: output)
+        let text = "One café 👋 two three four five six seven eight nine ten"
+        speech.toggle(messageID: "message", markdown: text)
+        let original = try XCTUnwrap(output.starts.last)
+        output.event?(original.token, .started); output.event?(original.token, .progress(12))
+        XCTAssertEqual(speech.readingOffset, 12)
+        speech.togglePause(); XCTAssertTrue(speech.isPaused); XCTAssertEqual(output.pauses, 1)
+        speech.seek(to: 0.8); let soughtOffset = speech.readingOffset
+        XCTAssertTrue(speech.isPaused); XCTAssertEqual(output.starts.count, 1)
+        XCTAssertGreaterThan(soughtOffset, 12)
+        output.event?(original.token, .progress(0)); XCTAssertEqual(speech.readingOffset, soughtOffset)
+        speech.togglePause(); XCTAssertFalse(speech.isPaused)
+        let resumed = try XCTUnwrap(output.starts.last)
+        XCTAssertEqual(resumed.text, (text as NSString).substring(from: soughtOffset))
+        output.event?(resumed.token, .started); output.event?(resumed.token, .progress(0))
+        XCTAssertEqual(speech.readingOffset, soughtOffset)
+        speech.seek(to: 0.999)
+        XCTAssertEqual(output.starts.last?.text, "ten")
+        speech.seek(to: 1); XCTAssertNil(speech.messageID); XCTAssertFalse(speech.isPaused)
+    }
+    @MainActor func testPauseResumeAndFailedStartRecovery() async throws {
+        let output = FakeMessageSpeechOutput(); let speech = MessageSpeech(output: output, startTimeout: .milliseconds(30))
+        speech.toggle(messageID: "a", markdown: "One two three")
+        output.event?(try XCTUnwrap(output.starts.last).token, .started)
+        speech.togglePause(); speech.togglePause()
+        XCTAssertFalse(speech.isPaused); XCTAssertEqual(output.resumes, 1)
+        output.event?(try XCTUnwrap(output.starts.last).token, .failed)
+        XCTAssertNil(speech.messageID); XCTAssertEqual(speech.failedMessageID, "a"); XCTAssertNotNil(speech.error)
+        speech.toggle(messageID: "b", markdown: "Retry")
+        try await Task.sleep(for: .milliseconds(70))
+        XCTAssertNil(speech.messageID); XCTAssertEqual(speech.failedMessageID, "b")
+        speech.stop(); XCTAssertNil(speech.error); XCTAssertNil(speech.failedMessageID)
+        speech.toggle(messageID: "empty", markdown: " \n "); XCTAssertNil(speech.messageID)
     }
 }

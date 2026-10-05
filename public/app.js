@@ -1,3 +1,4 @@
+import { setMessageActionsContext, stopMessageSpeech } from './message-actions.js';
 import { initRemoteDesktops, attachChatDestinations, mountMachineHistory, renderRemoteRun, openRemoteChat, mountRemoteSchedules } from './remote-desktops.js';
 import { initChatsIndex, renderChatsIndex, recentChats, openIndexedChat, loadChatsIndex } from './chats-index.js';
 import { initEngineRoom, engineSections, renderEngineRoom } from './engine-room.js';
@@ -24,6 +25,7 @@ let toastTimer, usageValue = null, usageBusy = false, appearanceBusy = false;
 let previousFeature='', sidebarMinimized=localStorage.getItem('proteus.sidebar.minimized')==='true';
 document.body.classList.toggle('sidebar-minimized',sidebarMinimized);
 let workspaceReady=false, workspaceRestoring=false, workspaceClosing=false, lastWorkspace='';
+const syncMessageContext=()=>setMessageActionsContext(JSON.stringify([state.data?.life?.identity?.accountId||'',state.data?.life?.identity?.workspaceId||'',state.data?.life?.identity?.origin||'',state.data?.life?.identity?.sessionId||'',state.tab,state.tabs.find(t=>t.id===state.tab)?.hostId||'local']));
 const lifeVisible = () => state.data?.life?.enabled === true;
 function saveWorkspace() {
   if(!workspaceReady || workspaceRestoring || workspaceClosing)return;
@@ -130,7 +132,7 @@ async function api(url, data) {
 async function refresh(force = false) {
   if (!force && window.getSelection()?.isCollapsed === false) return;
   const data = await api('/api/state'); const signature = JSON.stringify(data);
-  state.data = data;
+  state.data = data;syncMessageContext();
   if (force || signature !== state.signature || $('#main').dataset.deferredControls) {
     state.signature = signature;
     const tab=state.tabs.find(t=>t.id===state.tab);
@@ -166,7 +168,7 @@ function navigate(page, section) {
 }
 function render() {
   const data = state.data; if (!data) return;
-  restoreFeatureTabs();
+  restoreFeatureTabs();syncMessageContext();
   const activeTab=state.tabs.find(tab=>tab.id===state.tab);
   const activePage=['omi','life','team'].includes(activeTab?.type)?activeTab.type:['run','remote-run'].includes(activeTab?.type)?'runs':activeTab?.type==='schedule'?'schedules':state.page;
   const waiting = recentChats(data.runs).filter(r => ['awaiting_input','failed','interrupted'].includes(r.status)).length;
@@ -542,7 +544,7 @@ function renderSettings() {
   $('#main').insertAdjacentHTML('beforeend',permissionSettings());
   bindPermissionControls();
 }
-window.desktop?.onShutdown?.(()=>{workspaceClosing=true;liveEvents.close();clearInterval(refreshInterval);clearInterval(usageInterval);clearTimeout(liveRefreshTimer);});
+window.desktop?.onShutdown?.(()=>{stopMessageSpeech();workspaceClosing=true;liveEvents.close();clearInterval(refreshInterval);clearInterval(usageInterval);clearTimeout(liveRefreshTimer);});
 window.desktop?.onBrowserState(infos=>{
   if(workspaceRestoring||workspaceClosing)return;
   const currentBrowser=state.tabs.find(tab=>tab.id===state.tab&&tab.type==='browser');

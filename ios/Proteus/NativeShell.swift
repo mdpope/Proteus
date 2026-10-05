@@ -66,9 +66,10 @@ struct NativeShell: View {
         }
         .sheet(item: $shared.exportFile) { file in BrowserFileExport(file: file) { shared.exportFile = nil }.onDisappear { file.cleanup() } }
         .alert("Download", isPresented: Binding(get: { shared.downloadError != nil }, set: { if !$0 { shared.downloadError = nil } })) { Button("OK") { shared.downloadError = nil } } message: { Text(shared.downloadError ?? "") }
-        .onChange(of: area) { old, next in if !opened.contains(next) { opened.append(next) }; if old == .team && next != .team { shared.unloadBrowsers() } }
+        .onChange(of: area) { old, next in MessageSpeech.shared.stop(); if !opened.contains(next) { opened.append(next) }; if old == .team && next != .team { shared.unloadBrowsers() } }
         .onChange(of: destinations.pairing != nil) { _, pairing in if pairing { area = .home } }
-        .onChange(of: life.accountIdentity) { _, identity in shared.reset(for: identity) }
+        .onChange(of: life.accountIdentity) { _, identity in MessageSpeech.shared.stop(); shared.reset(for: identity) }
+        .onChange(of: destinations.selectedID) { _, _ in MessageSpeech.shared.stop() }
         .onChange(of: notifications.route) { _, route in
             guard let route else { return }; openNotification(route)
         }

@@ -1,3 +1,4 @@
+import { mountMessageActions } from './message-actions.js';
 import { toolPresentation, mountStructured } from './tool-presentation.js';
 import { agentName } from './agent-name.js';
 const views = new Map();
@@ -34,7 +35,7 @@ export function conversation(target, run, options) {
   }
   view.updating = true;
   if(view.shell.parentElement!==target)target.replaceChildren(view.shell);
-  const entries = [...run.events.map((event, index) => ({ key: `event-${index}`, ...event })), ...Object.entries(run.liveMessages || {}).map(([id, text]) => ({ key: `stream-${id}`, role: 'assistant', text, streaming: true }))].filter(entry => (entry.role !== 'assistant' || entry.text?.trim()) && !entry.data?.permission?.automatic);
+  const entries = [...run.events.map((event, index) => ({ key: `event-${(run.eventStart||0)+index}`, ...event })), ...Object.entries(run.liveMessages || {}).map(([id, text]) => ({ key: `stream-${id}`, role: 'assistant', text, streaming: true }))].filter(entry => (entry.role !== 'assistant' || entry.text?.trim()) && !entry.data?.permission?.automatic);
   const nodes = new Map([...view.messages.children].map(node => [node.dataset.key, node]));
   let next=view.messages.firstElementChild;
   const place=node=>{if(node===next)next=next.nextElementSibling;else view.messages.insertBefore(node,next);};
@@ -71,10 +72,16 @@ export function conversation(target, run, options) {
     if (!node) { node = document.createElement('div'); node.className = 'message'; node.dataset.key = entry.key; node.innerHTML = '<div class="role"></div><div class="text"></div>'; }
     node.className = `message ${['user', 'assistant', 'tool', 'system'].includes(entry.role) ? entry.role : 'system'}`;
     node.firstChild.textContent = `${entry.data?.delivery ? ({queued:'Queued next',steered:'Steering',sending:'Sending steering',failed:'Not delivered',removed:'Removed from queue',delivered:'Queued message delivered'}[entry.data.delivery.state] || '') + ' · ' : ''}${entry.role === 'assistant' ? entry.agentName || agentName(run) : entry.role}${entry.streaming ? ' · streaming' : entry.at ? ' · ' + options.time(entry.at) : ''}`;
-    ProteusMarkdown.mount(node.lastChild, entry.text, { ...options, resize: view.position });
+    const body=node.querySelector('.text');
+    ProteusMarkdown.mount(body, entry.text, { ...options, resize: view.position });
+    const completed=entry.role==='assistant'&&!entry.streaming&&!entry.data?.reasoning&&!['reasoning','thinking','analysis'].includes(entry.data?.phase||entry.phase||entry.type)&&entry.text?.trim();
+    if(completed){
+      let actions=node.querySelector('.message-actions');if(!actions){actions=document.createElement('div');node.append(actions);}
+      node.messageActions=mountMessageActions(actions,{key:run.id+':'+entry.key,text:entry.text,rendered:body,copy:options.copy,notify:options.notify});
+    }else if(node.messageActions){node.messageActions.destroy();node.querySelector('.message-actions')?.remove();node.messageActions=null;}
     place(node); nodes.delete(entry.key);
   }
-  for (const node of nodes.values()) node.remove();
+  for (const node of nodes.values()){node.messageActions?.destroy();node.remove();}
   view.position();
 }
-export function forgetConversation(id) { const view = views.get(id); view?.observer.disconnect(); if (view) cancelAnimationFrame(view.frames); views.delete(id); }
+export function forgetConversation(id) { const view = views.get(id); view?.observer.disconnect();view?.messages.querySelectorAll('.message').forEach(node=>node.messageActions?.destroy()); if (view) cancelAnimationFrame(view.frames); views.delete(id); }

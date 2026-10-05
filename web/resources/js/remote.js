@@ -3,6 +3,7 @@ import {appRequest,dateTime} from './shared-app.js';
 import { mount as mountMarkdown } from '../../../src/markdown-renderer.js';
 import { PairingStore, AccountPairingStore, BrowserRemoteClient, parsePairing } from './remote-client.js';
 import { usagePanel } from './remote-usage.js';
+import { mountMessageActions, setMessageActionsContext, stopMessageSpeech } from '../../../public/message-actions.js';
 const root = document.querySelector('#remote-workspace');
 const legacyStore = new PairingStore(root.dataset.account);
 const accountStore = new AccountPairingStore(root.dataset.account,{sessionURL:root.dataset.sessionUrl});
@@ -84,6 +85,7 @@ async function connect(hostId,{automatic=false}={}) {
     if(ended||suspended)return;
     if(automatic&&suppressed.has(hostId))return;
     stopReconnect();if(!automatic){suppressed.delete(hostId);reconnectAttempt=0;}
+    if(hostId!==active)stopMessageSpeech();
     preserveDrafts(); const generation = ++switching;const previous=session(); active = hosts.has(hostId) ? hostId : ''; writePreferences({ selectedHost: active, autoConnect:true }); notice(''); destinationOptions();
     if (!active) { render(); return; }
     const metadata = hosts.get(hostId); if (!metadata) return;
@@ -135,17 +137,26 @@ function contextFields(values) {
 }
 function render() {
     const focused = document.activeElement; const focus = focused?.name && focused.closest('form') ? { form: focused.closest('form').id, name: focused.name, start: focused.selectionStart, end: focused.selectionEnd } : null;
-    const current = session(), online = current?.client?.status === 'online'; destinationOptions(); renderUsage();renderChatTabs();renderRecentChats();
+    const messageControl = focused?.closest('[data-message-key]');
+    const actionFocus = messageControl ? { key: messageControl.dataset.messageKey, action: focused.dataset.messageAction, seek: focused.hasAttribute('data-message-seek') } : null;
+    const current = session(), online = current?.client?.status === 'online';
+    setMessageActionsContext(online&&current?.state&&view==='chats'&&current.run ? JSON.stringify([root.dataset.account,active,current.run.id]) : '');
+    destinationOptions(); renderUsage();renderChatTabs();renderRecentChats();
     root.querySelectorAll('[data-remote-view]').forEach(button => button.classList.toggle('active', button.dataset.remoteView === view));
     if (!current?.state || !online) { $('remote-content').innerHTML = `<section class="card"><h2>${active ? 'Connect ' + escape(hosts.get(active)?.label) : 'Choose a paired Mac'}</h2><p>${active ? 'Remote content is hidden while disconnected. The selected Mac reconnects automatically unless you disconnect it. Use Connect to retry now.' : 'Use a fresh pairing code from each Mac. Personal and Example Organization destinations keep separate keys, drafts and event cursors.'}</p>${view==='chats'?`<h3>Last authorized chat index</h3>${aggregateChats().map(run=>`<p>${escape(run.title||'Chat')} · ${escape(run.hostLabel)} · ${run.cached?'cached '+escape(dateTime(run.lastSyncAt,appPreferences.timezone)):'online'}</p>`).join('')||'<p>No cached chat index.</p>'}`:''}</section>`; return; }
     if (view === 'chats') renderChats(current); else if (view === 'schedules') renderSchedules(current); else renderWorkspaces(current);
+    if (actionFocus) {
+        const toolbar = [...root.querySelectorAll('[data-message-key]')].find(element => element.dataset.messageKey === actionFocus.key);
+        const control = actionFocus.seek ? toolbar?.querySelector('[data-message-seek]') : [...(toolbar?.querySelectorAll('[data-message-action]') || [])].find(element => element.dataset.messageAction === actionFocus.action);
+        if (control && !control.disabled && !control.closest('[hidden]')) control.focus({ preventScroll: true });
+    }
     if (focus) { const field = document.getElementById(focus.form)?.elements.namedItem(focus.name); if (field) { field.focus({ preventScroll: true }); if (typeof focus.start === 'number' && field.setSelectionRange) { try { field.setSelectionRange(focus.start, focus.end); } catch {} } } }
 }
 function bindCatalog(formId, key) {
     const form = $(formId);
     for (const select of form.querySelectorAll('select[name="provider"],select[name="model"]')) select.addEventListener('change', async () => { preserveDrafts(); const draft = session().drafts.get(key); if (select.name === 'provider') { draft.values.model = ''; draft.values.reasoningEffort = ''; draft.values.contextTier = ''; draft.values.serviceTier = ''; try { const status = await command('provider.status', { provider: select.value }); session().state.providerStatuses ||= {}; session().state.providerStatuses[select.value] = status; } catch (error) { notice(error.message); } } render(); });
 }
-async function openChat(id,hostId=active) { preserveDrafts();if(hostId!==active)await connect(hostId);const current=session();if(!current?.client)throw new Error('This chat’s Mac is offline.');current.selected=id;setView('chats');current.run=await command('chat.get',{id});chatTabs.set(hostId+':'+id,{hostId,id,title:current.run.title||current.run.schedule?.name||'Chat'});saveChatTabs();render(); }
+async function openChat(id,hostId=active) { if(hostId!==active||session()?.run?.id!==id||view!=='chats')stopMessageSpeech();preserveDrafts();if(hostId!==active)await connect(hostId);const current=session();if(!current?.client)throw new Error('This chat’s Mac is offline.');current.selected=id;setView('chats');current.run=await command('chat.get',{id});chatTabs.set(hostId+':'+id,{hostId,id,title:current.run.title||current.run.schedule?.name||'Chat'});saveChatTabs();render(); }
 function renderChats(current) {
     const previousScroll=root.querySelector('.remote-messages')?.scrollTop;
     const runs = aggregateChats().filter(run=>!attentionOnly||['awaiting_input','failed','interrupted'].includes(run.status)); const run = current.run; const key = run ? 'reply:' + run.id : 'new-chat'; const draft = currentDraft(key, run ? { prompt: '', mode: 'queue' } : { ...current.state.defaults, name: '', prompt: '', workspaceId: current.state.context.defaultWorkspaceId, includeDefaults: 'true' }); const values = draft.values;
@@ -156,6 +167,14 @@ function renderChats(current) {
     if (!run) bindCatalog('remote-composer', key);
     if(run){const pane=root.querySelector('.remote-messages');if(pane)pane.scrollTop=current.scroll?.get(run.id)??previousScroll??0;}
     for (const element of root.querySelectorAll('[data-markdown-event]')) { const event = run.events[Number(element.dataset.markdownEvent)]; current.images ||= new Map(); mountMarkdown(element, event?.text || '', { copy: value => navigator.clipboard.writeText(value), link: url => { if (/^https?:\/\//i.test(url)) window.open(url, '_blank', 'noopener,noreferrer'); else notice('Open local file links on the paired Mac.'); }, image: async source => { const key = run.id + ':' + source; if (!current.images.has(key)) current.images.set(key, command('chat.image', { id: run.id, source }).then(r => r.dataURL).catch(error => { current.images.delete(key); throw error; })); return current.images.get(key); } }); }
+    for (const element of root.querySelectorAll('[data-markdown-event]')) {
+        const index=Number(element.dataset.markdownEvent), event=run.events[index];
+        if ((event.role||event.type)!=='assistant'||['tool','reasoning','thinking'].includes(event.type)||event.streaming||event.data?.reasoning||event.data?.tool||typeof event.text!=='string'||!event.text.trim()) continue;
+        const actions=document.createElement('div');element.after(actions);
+        const identity=event.id ?? ((run.eventStart||0)+index);
+        actions.dataset.messageKey=JSON.stringify([root.dataset.account,current.host.hostId,run.id,identity]);
+        mountMessageActions(actions,{key:actions.dataset.messageKey,text:event.text,rendered:element,notify:notice});
+    }
     $('remote-new').onclick = async () => { preserveDrafts(); if(!appPreferences.defaultMacId){notice('Choose a Default Mac in Engine Room before starting a new chat.');return;}await connect(appPreferences.defaultMacId);if(session()){session().run=null;session().selected=null;}render(); };
     root.querySelectorAll('[data-run]').forEach(button => button.onclick = () => openChat(button.dataset.run,button.dataset.runHost).catch(error => notice(error.message)));
     $('remote-more-runs')?.addEventListener('click', async () => { try { const older = await command('runs.list', { offset: (current.state.runs||[]).length }); current.state.runs.push(...older); preserveDrafts(); render(); } catch (error) { notice(error.message); } });
@@ -224,7 +243,7 @@ function consumeFragment() {
 }
 consumeFragment(); setView(view); window.addEventListener('hashchange', consumeFragment);
 async function endAccount() {
-    if(ended)return;ended=true;globalThis.proteusSigningOut=true;clearChatIndex(root.dataset.account);clearChatDrafts(root.dataset.account);++switching;stopReconnect();stopLifecycle();try{localStorage.removeItem(preferenceKey);localStorage.removeItem(chatTabKey);}catch{}
+    if(ended)return;stopMessageSpeech();ended=true;globalThis.proteusSigningOut=true;clearChatIndex(root.dataset.account);clearChatDrafts(root.dataset.account);++switching;stopReconnect();stopLifecycle();try{localStorage.removeItem(preferenceKey);localStorage.removeItem(chatTabKey);}catch{}
     for(const pair of pendingPairs)pair.close();pendingPairs.clear();for(const current of sessions.values())current.client?.close();sessions.clear();hosts.clear();active='';
     await legacyStore.clear().catch(()=>{});legacyStore.close();render();destinationOptions();notice('Signed out. Sign in again to restore destinations saved to your account. Browser-only pairings were removed.');
 }

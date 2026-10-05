@@ -304,3 +304,44 @@ extension RemoteUITests {
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Native parity engine resources"; screenshot.lifetime = .keepAlways; add(screenshot)
     }
 }
+
+extension RemoteUITests {
+    @MainActor func testCompletedMessageCopySpeechPauseSeekAndLeaveChat() async throws {
+        let (data, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/pair")!)
+        let fixture = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        let app = XCUIApplication(); app.launchArguments = ["--reset-pairing"]; app.launch()
+        let link = app.textFields["pairing-link"]; XCTAssertTrue(link.waitForExistence(timeout: 15)); link.tap(); link.typeText(fixture["code"] as! String)
+        app.buttons["pair-mac"].tap(); showChats(app); app.buttons["new-chat"].tap()
+        let prompt = app.textFields["chat-prompt"]; XCTAssertTrue(prompt.waitForExistence(timeout: 10)); prompt.tap(); prompt.typeText("Reading controls test")
+        app.buttons["start-chat"].tap(); XCTAssertTrue(app.staticTexts["Your input is needed"].waitForExistence(timeout: 20))
+        let reply = app.textFields["reply-text"]; reply.tap()
+        reply.typeText(String(repeating: "Read this completed response while the playback controls remain available for pause, resume and seeking. ", count: 4))
+        app.buttons["Send feedback"].tap()
+        let completed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "Send message"), object: app.buttons["send-message"])
+        await fulfillment(of: [completed], timeout: 20)
+        guard app.buttons["send-message"].label == "Send message" else { XCTFail("Rehearsal did not complete"); return }
+        let copies = app.buttons.matching(identifier: "copy-message")
+        XCTAssertTrue(copies.firstMatch.waitForExistence(timeout: 15))
+        let copy = copies.element(boundBy: copies.count - 1)
+        for _ in 0..<6 { if copy.isHittable { break }; app.swipeDown() }
+        copy.tap(); XCTAssertEqual(copy.label, "Message copied")
+        let readers = app.buttons.matching(identifier: "read-aloud")
+        let read = readers.element(boundBy: readers.count - 1)
+        read.tap(); XCTAssertEqual(read.label, "Stop reading aloud")
+        let pause = app.buttons["pause-reading"]; XCTAssertTrue(pause.waitForExistence(timeout: 5))
+        pause.tap(); XCTAssertEqual(pause.label, "Resume reading aloud")
+        let position = app.sliders["reading-position"]; XCTAssertTrue(position.exists)
+        position.adjust(toNormalizedSliderPosition: 0.55)
+        XCTAssertEqual(pause.label, "Resume reading aloud", "Seeking while paused must not start speech")
+        pause.tap(); XCTAssertEqual(pause.label, "Pause reading aloud")
+        pause.tap()
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Completed message copy and paused reading position"; shot.lifetime = .keepAlways; add(shot)
+        read.tap(); XCTAssertEqual(read.label, "Read aloud"); XCTAssertFalse(position.exists)
+        read.tap(); XCTAssertEqual(read.label, "Stop reading aloud")
+        app.navigationBars.buttons.firstMatch.tap()
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@", "Reading controls test", "Turn complete")).firstMatch
+        guard row.waitForExistence(timeout: 10) else { XCTFail("Completed chat row missing"); return }; row.tap()
+        XCTAssertTrue(app.buttons["read-aloud"].firstMatch.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label == %@", "Stop reading aloud")).firstMatch.exists, "Leaving the chat must stop its speech")
+    }
+}

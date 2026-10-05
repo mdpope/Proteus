@@ -3,6 +3,14 @@
 Maintain this as the single backlog. Design rationale is in `decisions.md`; recent changes are in
 `../CHANGELOG.md`. Items below are status, not promises of completed validation.
 
+## Message actions — October 4 follow-up
+
+Copy and local Read Aloud buttons beneath completed assistant messages are implemented across
+desktop/web/iOS. Active playback adds Pause/Resume, Stop and a text-position scrubber. Desktop/web
+share one local-voice controller; native uses system speech. No provider execution or cloud voice
+fallback is introduced. See `chat-rendering.md` for controls and platform limitations; installation
+and deployment remain separate from implementation/test status.
+
 ## Cross-client parity — October 4 implementation
 
 The operator authorized implementation, accepted **Engine Room**, removed the tagline, confirmed

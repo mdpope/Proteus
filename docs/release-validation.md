@@ -1,7 +1,8 @@
 # Release acceptance — October 4
 
 The operator requested these checks after installing the prepared updates on Build Mac and
-iPhone. iPad installation is deferred. Preserve all existing records, pairings, schedules and tabs.
+iPhone. The operator subsequently authorized iPad installation and account connection; latest
+receipts below supersede the earlier deferral. Preserve existing records, pairings, schedules and tabs.
 
 - [x] Build Mac: install the signed release in place; verify runtime parity, graceful restart,
   open-tab order/selection, shared-relay connection, unchanged settings and existing pairings.
@@ -210,3 +211,22 @@ permissions and five disabled schedules preserved. Normal production startup is 
 real Safe Storage prompt, with no test mock flag. The user has the secure-dialog handoff; relay
 and provider acceptance remain pending. No Keychain reset, ACL/password changes or data deletion
 were made. Full previous application/state recovery is retained.
+
+
+## Message playback controls — October 5 UTC
+
+Completed assistant messages now have Copy and local Read Aloud actions. Playback exposes
+Pause/Resume, Stop and a text-position scrubber; seeking restarts at a word boundary and a paused
+seek waits for Resume. No duration is estimated and no provider or cloud speech service is called.
+The website and desktop share the same controller. The native client uses AVSpeechSynthesizer
+without modifying the app audio session, microphone permission or background modes.
+
+Source validation: 244 Node tests and static checks pass. All 23 website synthetic-browser groups
+pass, including local-only voice selection, copy denial, pause/seek, refresh continuity and focus,
+and navigation/account/disconnect cleanup. Both iPhone and iPad simulators pass seven focused
+native tests and the complete controls/navigation UI flow, including actual system-speech
+word-range callbacks and unchanged audio-session configuration. Native build has all 25 source
+inputs verified and retains the original signer/profile. Website browser speech tests are
+synthetic; physical audible output is not claimed from muted or simulator checks.
+
+Deployment and device installation receipts will be recorded below after the verified update.

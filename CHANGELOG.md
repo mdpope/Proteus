@@ -1,5 +1,12 @@
 # Changes
 
+## Message actions follow-up
+
+- Add Copy and local Read Aloud controls below completed assistant messages across desktop, web
+  and iPhone/iPad, with Pause/Resume, Stop and a reading-position scrubber during playback.
+- Share desktop/web speech behavior, preserve playback through chat refreshes and stop when its
+  chat or authorization context changes. System voices require no AI provider call.
+
 This is a concise behavior log. Git commits and pull requests contain the complete change history.
 
 ## Unreleased

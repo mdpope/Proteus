@@ -43,6 +43,29 @@ streaming output. New responses retain the agent name when saved, so later agent
 rename earlier messages. Older messages fall back to the captured selection. Without an explicit
 main agent, the label identifies the provider (Copilot or Rehearsal).
 
+## Message actions and local speech
+
+Completed, nonempty assistant messages have **Copy message** and **Read aloud** icon buttons.
+Copy retains the original Markdown; speech reads the message content without Markdown formatting
+or embedded UI labels. Tool activities, reasoning and partial streaming messages do not start
+speech. Playback always requires an explicit user action on the viewing device.
+
+The active message exposes **Pause/Resume**, **Stop** and a **Reading position** scrubber. Position
+is a percentage of message text, not an audio duration. Moving it restarts speech at a nearby word
+boundary. Speech boundary callbacks advance the position; browsers without word callbacks update
+at bounded text-chunk transitions. No timer invents progress. Only one message plays at a time;
+normal refreshes preserve playback, while leaving/changing the chat or losing its authorized
+context stops it.
+
+Desktop and website share the same controller using Web Speech synthesis. Only voices reported
+as local are selected; no local voice produces a visible unavailable state, with no cloud fallback.
+Native iPhone/iPad use Apple's retained AVSpeechSynthesizer. Voice availability and quality depend
+on the device. This feature consumes no AI provider allowance and requires no microphone access.
+
+References: [browser local-service distinction](https://developer.mozilla.org/en-US/docs/Web/API/SpeechSynthesisVoice/localService)
+and [Apple on-device speech synthesis](https://developer.apple.com/documentation/avfoundation/speech-synthesis).
+Implementation and device/deployment evidence are recorded separately in the release validation.
+
 ## Development
 
 - Edit `src/markdown-renderer.js` and `public/markdown/style.css`, then run `npm run markdown:build`.
