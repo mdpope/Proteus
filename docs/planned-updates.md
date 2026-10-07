@@ -12,12 +12,16 @@ below and in `content-workspace-release.md`.
 
 ## October 7 live-review follow-up
 
-Implemented in source: compact API-backed Standup link tables on desktop/web; stable link IDs on
-web roster edits; new browser tab address focus; latest 20 unique site suggestions with visit date
-and device; bounded resource titles/process notes. Full Node suite: 368 passed. Desktop follow-up
-and actual Laravel shared-list/focus checks passed. Native navigation and deployment follow below
-in the acceptance audit; source validation is not installed acceptance. HC Claude allowance has a
-new machine-specific report and is being investigated by the owning HC chat.
+Implemented and deployed from `56a074d`: compact API-backed Standup link tables; stable link IDs;
+new-tab address focus and 20 recent sites with date/device; bounded resource titles; green native
+tab strips; shared desktop/web allowance popups and corrected sidebar ordering; plain nested web
+Activity Details. Both Macs, website and physical iPad/iPhone are updated. Native build: 2610.6.3.
+368 Node tests, static/package/UI checks and 14 website deployment endpoint checks passed.
+
+Both Macs' hands-on interface checks are deferred to tomorrow at the operator's request. HC
+Claude is signed out and sign-in/allowance verification is also deferred to tomorrow. The complete
+[acceptance audit](2026-10-07-acceptance-audit.md) distinguishes deployed changes, fixture checks
+and remaining live workflow gates. Installation is not blanket acceptance of every original item.
 
 ## October 6 bug/feature list — closed for build handoff
 

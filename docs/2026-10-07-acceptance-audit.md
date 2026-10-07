@@ -4,14 +4,10 @@ The operator rejected 0.2.2 acceptance on October 6 (the audit continued after m
 This audit supersedes blanket completion language in the earlier release/handoff. It covers all
 22 October 6 build items, all 28 October 5 follow-up items, and the additional current reports.
 Source presence, synthetic regression, installation, and real workflow acceptance are separate.
-The first correction is source commit `c5bda4297293ebbcb10f56c8c3a680840f71fa34`, version 0.2.3.
-Website release `20261007T035838Z` passed 14/14 endpoint checks; runtime configuration, schema and
-nutrition data were preserved. Build Mac runs the signed correction with unchanged signer,
-protected data and initial workspace projection. Later authoritative remote-tab reconciliation is
-being compared with HC's pre-update scope revisions; no stale workspace was restored. HC's chat
-installed and launched the same signed artifact; its post-launch verification remains pending.
-Both physical iPad and iPhone installed and launched 0.2.3 (2610.6.2), with app data/preferences and
-two destination identities preserved. Installation does not certify every physical gesture below.
+The first correction was source commit `c5bda4297293ebbcb10f56c8c3a680840f71fa34`, version 0.2.3.
+The current follow-up is `56a074dafe4181d1fcd73e045326d27c251e6603`, installed on both Macs and
+both physical mobile devices. Website release `20261007T043636Z` is live and passed 14/14 endpoint
+checks. Read the final rollout section below for verification and explicit remaining gates.
 Screenshots containing real chats and workplace URLs are evidence only and are not copied into Git.
 
 ## Confirmed failures and current corrections
@@ -24,9 +20,9 @@ Screenshots containing real chats and workplace URLs are evidence only and are n
 | iPad duplicate title/back/menu row | `compactHeader` rendered unconditionally despite the outer regular-width tab menu | Hide compact header at regular width; retain phone controls. iPad simulator confirms exactly one top menu and no redundant row; phone regression preserves compact header. |
 | Earlier messages does nothing / missing history | Native renders inert text; automatic pagination is gated by reading/restore/gesture flags. Merge replaces history when windows are disjoint | Added explicit load/retry, stable absolute before-event paging, sparse page retention and contiguous merging on web, desktop remote and native. Live updates no longer replace loaded history; unit tests exercise gaps, incoming messages and reconnection windows. |
 | Subnav colors/fonts differ | Independent rules for main/chat/Team and website tab bars | Align child background, 13px text and 17px icons; selected/unselected colors follow main navigation. Whole-platform screenshot acceptance remains open. |
-| HC Copilot allowance | Original work tested empty quota parsing but did not diagnose affected machine authentication | HC chat independently found quota probe `mode:'empty'` disabled Keychain auth and selected a different CLI identity. Normal-auth quota-only probe succeeded; adapter and regression integrated from `c67a61a`; all 366 Node tests pass. Real quota/cache/summary verified by owning Mac; installed signed-app acceptance remains open. |
+| HC Copilot allowance | Original work tested empty quota parsing but did not diagnose affected machine authentication | HC chat independently found quota probe `mode:'empty'` disabled Keychain auth and selected a different CLI identity. Normal-auth quota-only probe succeeded; adapter and regression integrated from `c67a61a`; all 366 Node tests pass. Real quota/cache/summary and installed signed-app allowance/Refresh verified by owning Mac. |
 | Default Mac Save spacing | Form was a block label followed immediately by button | Side-by-side flex layout, stacked with a gap at narrow widths. |
-| Website version/status position | Website version was Home-only; no persistent default-connection footer | Sidebar footer below allowance now shows website version and observed Default Mac status. No invented quota or online state. |
+| Website version/status position | Website version was Home-only; no persistent default-connection footer | Sidebar footer below allowance shows the connected Mac once with a green status dot, then the website version. No duplicate destination subtitle, Default Mac prefix, invented quota or online state. |
 | Web Engine Room duplicate tabs / highlight | Separate top nav and sidebar links without selected section state | Removed top nav; sidebar owns routes, active class and aria-current; heading names current section. |
 | Web notifications | All content in one card, inline timestamp/buttons and bright primary actions | Preferences and History panels with desktop-style separated rows, timestamps, secondary controls. |
 | Web resource formatting | Processes and tabs were paragraphs; totals boxes missing | Memory, CPU estimate and process totals, tab rows, process table. Unavailable metrics remain unavailable. |
@@ -61,7 +57,7 @@ Additional failures verified during this audit:
   Electron checks at 1440px and 900px retain visible action buttons without horizontal overflow.
 - iPad black chat-browser strip: the child strip inherited a transparent background while the main
   strip used system material. Both now share explicit green native tab colors and typography; Team
-  strips use the same style. This late correction needs its own native build.
+  strips use the same style. Installed on both physical devices in native build 2610.6.3; the final iPad simulator focus/history check includes this style.
 - HC Claude allowance: newly reported and routed to the owning Mac chat for diagnosis of the actual
   installed app. The earlier Copilot diagnosis does not establish Claude health.
 
@@ -195,6 +191,39 @@ in-flight navigation; both are corrected. Website reading anchor restoration now
 restoration of disclosure layout, preventing scroll clamping during live refresh.
 
 ## Follow-up validation and current installation boundary
-The installed baseline on both Macs, website and physical iPad/iPhone is 0.2.3 from c5bda429 (native 2610.6.2). Signed identity, data, pairing and runtime checks passed. HC Copilot allowance and Refresh passed. HC Claude is signed out and explicitly deferred by the operator until tomorrow; no Claude patch or invented allowance.
 
-The subsequent Standup table/API links, address focus/20 shared recents, Resources truncation, iPad green tab bars, shared desktop/web allowance popups and plain web nested Details are source changes awaiting the next signed rollout. 368 Node tests and desktop follow-up checks pass. Actual Laravel shell checks (24), web Engine Room groups (8), full remote web groups (29), iPad browser tests (2), iPhone recents test (1) and native recents unit test pass. Physical installs do not alone prove every live cross-device workflow.
+Current source: `56a074dafe4181d1fcd73e045326d27c251e6603`, version **0.2.3**.
+Both Macs run signed build `56a074dafe41+src.93ec8dbf8f96`. Original signing identity,
+all 142 runtime files and served assets were verified. Fresh before/after continuity checks
+preserved app data, pairings, grants, and each Mac's current ordered tab set. Earlier tab-count
+changes were reconciled against current authoritative state; no stale workspace was restored.
+
+Both physical iPhone and iPad have installed and launched **0.2.3 (2610.6.3)**. The iPad completed
+at 04:57 UTC October 7 after the operator unlocked it. Six app-data files, preferences, both
+paired destination identities and the selected destination survived each update. Signed source
+and bundle hashes, existing signer/profile/entitlements, installed version and running process
+were independently checked. Private recovery copies and receipts remain outside this repository.
+
+Website release **20261007T043636Z** is live. Runtime configuration, schema and protected data
+were preserved; public JS/CSS hashes match the generated release. Its 04:57 UTC audit passed
+**14/14** endpoint/authentication/relay checks with no new Laravel or relay error-log events.
+The audit also records Apache denial and service-journal events. Detailed classification of
+those events and a fresh authenticated production screenshot remain open after browser control
+timeouts; this is not an assertion that all server logs are clean.
+
+Follow-up checks passed: **368 Node tests**, syntax/static checks, four desktop UI groups,
+24 actual Laravel shell groups, eight web Engine Room groups, 29 web remote groups, native
+recents unit coverage, iPad browser coverage and an iPhone recents case. The final iPad run
+includes the shared green tab-strip style. The signed Mac package passed its isolated launch,
+identity, vendor-byte and catalog smoke checks. Fixtures use synthetic data.
+
+The user explicitly deferred both Macs' hands-on interface checks to tomorrow because the Macs
+are locked. Installation and data verification are complete; installed UI acceptance and the
+remaining live cross-device gates in the item tables above are not claimed complete.
+HC Copilot allowance and Refresh passed on the installed correction. HC Claude's existing CLI
+runtimes are signed out; the operator explicitly deferred sign-in until tomorrow. No Claude
+usage patch, fabricated allowance or model turn is claimed.
+
+End-of-session reminder requested by the operator: tomorrow unlock both Macs to finish the
+installed-interface checks, and complete HC Claude sign-in/allowance verification. The Mac
+updates themselves are already installed; reinstall only if tomorrow's evidence requires it.

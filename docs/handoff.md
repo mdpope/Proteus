@@ -5,6 +5,19 @@
 > the historical completion claims below. It reviews all 22 + 28 build items and current reports;
 > working-tree corrections are not installed release acceptance.
 
+## Current October 7 correction rollout
+
+Source `56a074d` (0.2.3) is installed on both Macs; signed runtime and continuity checks passed.
+Both physical iPad/iPhone installed and launched native 2610.6.3 with data/preferences/pairing
+preserved. Website release 20261007T043636Z passed 14/14 endpoint checks and public asset hashes.
+368 Node tests plus static, package and focused desktop/web/native UI checks passed.
+
+The operator deferred locked-Mac hands-on checks to tomorrow. HC Claude remains signed out;
+its sign-in and allowance verification are also deferred. Include both in the end-of-session
+reminder. Detailed current status, test boundaries and remaining live gates are in the
+[acceptance audit](2026-10-07-acceptance-audit.md). Deployment/recovery receipts are private and
+outside this repository. Historical 0.2.2/0.2.1 rollout sections below are not the current build.
+
 ## October 6 build and deployment
 
 The prior handoff recorded the closed intake and BF-22 as implemented for 0.2.2; the new audit
