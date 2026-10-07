@@ -370,6 +370,11 @@ struct ChatView: View {
         VStack(spacing: 0) {
             if sizeClass != .regular { compactHeader }
             childTabs
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--synthetic-desktop-browser-tabs") {
+                Button("Replay desktop tab refresh") { shared.replayDesktopBrowserFixture(scope: chatBrowserScope) }.accessibilityIdentifier("replay-desktop-tabs")
+            }
+            #endif
             Divider()
             if let documentNotice { HStack { ProgressView().controlSize(.small); Text(documentNotice).font(.caption); Spacer(); Button("Cancel") { documentTask?.cancel(); self.documentNotice = nil } }.padding(8).background(.bar) }
             if selectedChild == "chat" { conversation }
@@ -388,6 +393,9 @@ struct ChatView: View {
             } else { conversation.onAppear { selectedChild = "chat" } }
         }.navigationBarBackButtonHidden(true).toolbar(.hidden, for: .navigationBar)
         .task(id: chatBrowserScope) {
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--synthetic-desktop-browser-tabs") { shared.replayDesktopBrowserFixture(scope: chatBrowserScope) }
+            #endif
             while !Task.isCancelled {
                 await shared.refreshContentTabs(scope: chatBrowserScope, remote: store, kind: "chat", id: id)
                 try? await Task.sleep(for: .seconds(2))
@@ -457,7 +465,7 @@ struct ChatView: View {
         }.buttonStyle(.plain).padding(.horizontal, 4).frame(height: 44).background(.bar)
     }
     private var childTabs: some View {
-        HStack(spacing: 0) { ScrollView(.horizontal) { HStack(spacing: 0) {
+        HStack(spacing: 0) { NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs: documents.map(\.id)), selection: selectedChild) { HStack(spacing: 0) {
             Button { selectedChild = "chat"; shared.selectChatChild("chat", for: chatBrowserScope) } label: { Label("Chat", systemImage: "bubble.left.and.bubble.right") }.accessibilityIdentifier("chat-conversation-tab")
                 .lineLimit(1).padding(.horizontal, 12).frame(minHeight: 44)
                 .overlay(alignment: .bottom) { Rectangle().fill(selectedChild == "chat" ? NativeTheme.accent : .clear).frame(height: 2) }
@@ -467,6 +475,8 @@ struct ChatView: View {
                 HStack {
                     if let tab = shared.tabs(in: chatBrowserScope).first(where: { $0.id == childID }) {
                         Button(tab.title) { shared.select(tab.id, in: chatBrowserScope); selectedChild = tab.id; shared.selectChatChild(tab.id, for: chatBrowserScope) }.lineLimit(1)
+                            .accessibilityIdentifier("chat-browser-tab-" + (tab.contentTabId ?? tab.id))
+                            .accessibilityValue(selectedChild == tab.id ? "Active" : "Inactive")
                         Button { closeChild(tab.id) } label: { Image(systemName: "xmark").font(.caption2) }.accessibilityLabel("Close " + tab.title)
                     } else if let document = documents.first(where: { $0.id == childID }) {
                         Button(document.title) { selectedChild = document.id; shared.selectChatChild(document.id, for: chatBrowserScope) }.lineLimit(1)
@@ -482,6 +492,7 @@ struct ChatView: View {
                         Button("Close other tabs") { for other in shared.orderedChatChildren(in: chatBrowserScope, documentIDs: documents.map(\.id)) where other != childID { closeChild(other) } }.disabled(shared.orderedChatChildren(in: chatBrowserScope, documentIDs: documents.map(\.id)).count < 2)
                         Button("Close tabs to the right") { let children = shared.orderedChatChildren(in: chatBrowserScope, documentIDs: documents.map(\.id)); if let index = children.firstIndex(of: childID) { for other in children.dropFirst(index + 1) { closeChild(other) } } }.disabled(shared.orderedChatChildren(in: chatBrowserScope, documentIDs: documents.map(\.id)).last == childID)
                     }
+                .id(childID)
                 Divider().frame(height: 24)
             }
         }.buttonStyle(.plain).background(NativeTabClipProbe { childTabsClipped = $0 }.frame(width: 1, height: 1).opacity(0)) }.scrollIndicators(.hidden).accessibilityIdentifier("chat-child-tab-strip")

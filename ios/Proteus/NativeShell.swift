@@ -8,6 +8,30 @@ enum NativeTheme {
 extension View {
     func nativeTabBar() -> some View { font(.system(size: 14, weight: .medium)).foregroundStyle(NativeTheme.tabText).background(NativeTheme.tabBackground) }
 }
+/// Reveal newly opened content once, while retaining the offset when selecting existing tabs.
+struct NativeTabStrip<Content: View>: View {
+    let ids: [String]
+    let selection: String?
+    @ViewBuilder var content: () -> Content
+    @State private var additions = Set<String>()
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal) { content() }
+                .onChange(of: ids) { old, new in
+                    additions = Set(new).subtracting(old)
+                    if let selection, additions.contains(selection) {
+                        additions.removeAll()
+                        Task { @MainActor in await Task.yield(); proxy.scrollTo(selection, anchor: .trailing) }
+                    }
+                }
+                .onChange(of: selection) { _, selected in
+                    guard let selected, additions.contains(selected) else { additions.removeAll(); return }
+                    additions.removeAll()
+                    Task { @MainActor in await Task.yield(); proxy.scrollTo(selected, anchor: .trailing) }
+                }
+        }
+    }
+}
 struct NativeTabClipProbe: UIViewRepresentable {
     var onChange: (Bool) -> Void
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -140,6 +164,10 @@ struct NativeShell: View {
         default: return nil
         }
     }
+    private var activeArea: NativeArea? {
+        guard let tab = opened.first(where: { $0.id == selectedTab }) else { return area }
+        switch tab.kind { case "chat": return .chats; case "schedule": return .schedules; default: return nil }
+    }
     private var selectedChatEntry: AggregateChat? {
         guard let tab = opened.first(where: { $0.id == selectedTab }) else { return nil }
         return chatEntry(for: tab)
@@ -176,7 +204,7 @@ struct NativeShell: View {
                             Button { sidebar.toggle() } label: { Label("Toggle sidebar", systemImage: "sidebar.left") }.labelStyle(.iconOnly).padding(10).keyboardShortcut("s", modifiers: [.command, .option])
                             HStack(spacing: 5) { Text("⤨").foregroundStyle(tabAccent).font(.title3.bold()); Text("Proteus").font(.subheadline.bold()) }
                                 .accessibilityElement(children: .combine).padding(.trailing, 10)
-                            ScrollView(.horizontal) { HStack(spacing: 0) {
+                            NativeTabStrip(ids: opened.map(\.id), selection: selectedTab) { HStack(spacing: 0) {
                                 ForEach(opened) { tab in
                                     HStack { Button(title(for: tab)) { selectContent(tab) }.lineLimit(1).accessibilityIdentifier("shell-tab-" + tab.id).accessibilityValue(selectedTab == tab.id ? "Active" : "Inactive"); Button { closeContent(tab) } label: { Image(systemName: "xmark").font(.caption2) }.accessibilityLabel("Close " + title(for: tab)) }
                                         .padding(12).background(selectedTab == tab.id ? tabAccent.opacity(0.08) : Color.clear)
@@ -312,21 +340,25 @@ struct NativeShell: View {
                 HStack(spacing: 7) { Text("⤨").foregroundStyle(tabAccent); Text("Proteus") }.font(.title2.bold())
                 ForEach(NativeArea.allCases) { item in
                     Button { area = item; selectedTab = nil; hover = false } label: {
-                        HStack { Label(item.rawValue, systemImage: item.icon).fontWeight(area == item ? .semibold : .regular); Spacer(minLength: 4); if let value = count(for: item) { Text(String(value)).font(.caption.bold()).foregroundStyle(NativeTheme.accent).accessibilityLabel("\(value) \(item.rawValue.lowercased())").accessibilityIdentifier("nav-count-" + item.id) } }.accessibilityElement(children: .contain)
+                        HStack { Label(item.rawValue, systemImage: item.icon).fontWeight(activeArea == item ? .semibold : .regular); Spacer(minLength: 4); if let value = count(for: item) { Text(String(value)).font(.caption.bold()).foregroundStyle(NativeTheme.accent).accessibilityLabel("\(value) \(item.rawValue.lowercased())").accessibilityIdentifier("nav-count-" + item.id) } }.accessibilityElement(children: .contain)
                     }
+                    .listRowBackground(activeArea == item ? NativeTheme.accent.opacity(0.16) : Color.clear)
+                    .accessibilityIdentifier("sidebar-" + item.id)
+                    .accessibilityValue(activeArea == item ? "Active" : "Inactive")
+                    .accessibilityAddTraits(activeArea == item ? .isSelected : [])
                     if area == item && item == .chats {
                         ForEach(recentChats) { entry in
                             Button { openChat(entry) }
-                                label: { HStack { if entry.run["status"].string == "awaiting_input" { Text("!").foregroundStyle(.orange) }; Text(entry.run["title"].string).lineLimit(1).font(.caption) } }.padding(.leading)
+                                label: { HStack { if entry.run["status"].string == "awaiting_input" { Text("!").foregroundStyle(.orange) }; Text(entry.run["title"].string).lineLimit(1).font(.caption) } }.padding(.leading).listRowBackground(selectedTab == entry.id ? NativeTheme.accent.opacity(0.10) : Color.clear)
                         }
                         Button("More…") { area = .chats }.padding(.leading)
                     }
                     if area == item && item == .team {
-                        ForEach(["Overview", "Standup"], id: \.self) { title in Button(title) { teamSection = title }.font(.caption).padding(.leading).accessibilityIdentifier("team-sidebar-" + title.lowercased()) }
+                        ForEach(["Overview", "Standup"], id: \.self) { title in Button(title) { teamSection = title }.font(.caption).padding(.leading).accessibilityIdentifier("team-sidebar-" + title.lowercased()).listRowBackground(activeArea == .team && teamSection == title ? NativeTheme.accent.opacity(0.10) : Color.clear) }
                         ForEach(shared.tabs(in: "team")) { tab in Button { shared.select(tab.id, in: "team"); teamSection = tab.id } label: { Label(tab.title, systemImage: "globe").font(.caption).lineLimit(1) }.padding(.leading) }
                     }
-                    if area == item && item == .life { ForEach(["overview", "nutrition", "garage", "fuel", "captures"], id: \.self) { title in Button(title.capitalized) { lifeSection = title }.font(.caption).padding(.leading) } }
-                    if area == item && item == .engine { ForEach(EngineRoomView.pages, id: \.self) { title in Button(title) { enginePage = title }.font(.caption).padding(.leading) } }
+                    if area == item && item == .life { ForEach(["overview", "nutrition", "garage", "fuel", "captures"], id: \.self) { title in Button(title.capitalized) { lifeSection = title }.font(.caption).padding(.leading).listRowBackground(activeArea == .life && lifeSection == title ? NativeTheme.accent.opacity(0.10) : Color.clear) } }
+                    if area == item && item == .engine { ForEach(EngineRoomView.pages, id: \.self) { title in Button(title) { enginePage = title }.font(.caption).padding(.leading).listRowBackground(activeArea == .engine && enginePage == title ? NativeTheme.accent.opacity(0.10) : Color.clear) } }
                 }
             }.listStyle(.sidebar)
             if let remote = destinations.selected { ProviderUsageStrip(store: remote) }
@@ -336,7 +368,8 @@ struct NativeShell: View {
         VStack(spacing: 10) {
             Text("⤨").font(.title2.bold()).foregroundStyle(tabAccent).accessibilityLabel("Proteus")
             ForEach(NativeArea.allCases) { item in
-                Button { area = item; selectedTab = nil } label: { Image(systemName: item.icon).font(.system(size: 19, weight: .medium)).frame(width: 40, height: 40).background(area == item && selectedTab == nil ? tabAccent.opacity(0.18) : .clear, in: RoundedRectangle(cornerRadius: 8)).overlay(alignment: .topTrailing) { if let value = count(for: item), value > 0 { Text(String(value)).font(.system(size: 9, weight: .bold)).padding(3).background(NativeTheme.accent, in: Capsule()).foregroundStyle(.black) } } }
+                Button { area = item; selectedTab = nil } label: { Image(systemName: item.icon).font(.system(size: 19, weight: .medium)).frame(width: 40, height: 40).background(activeArea == item ? tabAccent.opacity(0.18) : .clear, in: RoundedRectangle(cornerRadius: 8)).overlay(alignment: .topTrailing) { if let value = count(for: item), value > 0 { Text(String(value)).font(.system(size: 9, weight: .bold)).padding(3).background(NativeTheme.accent, in: Capsule()).foregroundStyle(.black) } } }
+                    .accessibilityValue(activeArea == item ? "Active" : "Inactive")
                     .accessibilityLabel(item.rawValue + (count(for: item).map { ", \($0)" } ?? "")).help(item.rawValue)
             }
             Spacer()
@@ -428,6 +461,7 @@ struct NativeShell: View {
     }
 }
 struct NativeHome: View {
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @EnvironmentObject var destinations: DestinationStore
     var showAllowance = true
     var onSchedule: ((JSON) -> Void)? = nil
@@ -435,6 +469,11 @@ struct NativeHome: View {
     @State private var managing = false
     @State private var setup = false
     @State private var updates = false
+    @State private var projectGuide = false
+    private var guideLink: some View {
+        Button("What Proteus can do", systemImage: "book") { projectGuide = true }
+            .font(.body).frame(minHeight: 44).accessibilityIdentifier("home-project-guide")
+    }
     private var attentionCount: Int? {
         let remotes = destinations.destinations.map { destinations.remote(for: $0.id) }
         guard !remotes.isEmpty, remotes.allSatisfy({ $0?.connected == true }) else { return nil }
@@ -448,9 +487,10 @@ struct NativeHome: View {
                 List {
                     Section {
                         HStack(spacing: 10) { Text("⤨").font(.system(size: 36, weight: .bold)).foregroundStyle(Color(red: 0.67, green: 0.86, blue: 0.49)); Text("Proteus").font(.largeTitle.bold()) }
-                            .accessibilityElement(children: .combine).frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 4)
+                            .accessibilityElement(children: .combine).accessibilityIdentifier("home-intro-title").frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 4)
                         Text("Proteus keeps conversations, schedules and tools connected to your Macs. Choose a Mac, review work that needs your input, or open a chat.")
                         Text("Version \(version) (\(build))").font(.caption).foregroundStyle(.secondary)
+                        guideLink
                         Button("Future updates and changelog", systemImage: "clock.arrow.circlepath") { updates = true }
                     }
                     Section { DestinationBar(remote: remote, adding: $adding, managing: $managing, setup: $setup) }
@@ -471,9 +511,17 @@ struct NativeHome: View {
                         }
                     }
                     #endif
-                }.navigationTitle("Home")
-            } else { VStack(spacing: 0) { HStack(spacing: 10) { Text("⤨").font(.system(size: 34, weight: .bold)).foregroundStyle(NativeTheme.accent); VStack(alignment: .leading) { Text("Proteus").font(.largeTitle.bold()); Text("\(version) (\(build))").font(.caption).foregroundStyle(.secondary) }; Spacer(); Button("Future updates and changelog") { updates = true }.font(.caption) }.padding(); PairView() }.toolbar { Button("App setup") { setup = true }.accessibilityIdentifier("app-setup") } }
+                }.contentMargins(.top, sizeClass == .regular ? 0 : nil, for: .scrollContent).navigationTitle("Home")
+                    .toolbar(sizeClass == .regular ? .hidden : .automatic, for: .navigationBar)
+                    .safeAreaInset(edge: .top, spacing: 0) {
+                        if sizeClass == .regular {
+                            Text("Home").font(.largeTitle.bold()).frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 20).padding(.vertical, 16).accessibilityIdentifier("home-page-heading")
+                        }
+                    }
+            } else { VStack(spacing: 0) { HStack(spacing: 10) { Text("⤨").font(.system(size: 34, weight: .bold)).foregroundStyle(NativeTheme.accent); VStack(alignment: .leading) { Text("Proteus").font(.largeTitle.bold()); Text("\(version) (\(build))").font(.caption).foregroundStyle(.secondary) }; Spacer(); Button("Future updates and changelog") { updates = true }.font(.caption) }.padding(); guideLink.padding(.horizontal).padding(.bottom, 12); PairView() }.toolbar { Button("App setup") { setup = true }.accessibilityIdentifier("app-setup") } }
         }
+        .sheet(isPresented: $projectGuide) { NativeProjectGuide() }
         .sheet(isPresented: $updates) { NavigationStack { List {
             Section("Installed release") { Text("Proteus \(version) (\(build))"); Text("The displayed version comes from this installed app bundle.").font(.caption).foregroundStyle(.secondary) }
             Section("Changes in \(version)") {
@@ -491,6 +539,38 @@ struct NativeHome: View {
         .sheet(isPresented: $managing) { NavigationStack { DestinationsView { managing = false; adding = true }.toolbar { Button("Done") { managing = false } } } }
         .sheet(isPresented: $adding, onDismiss: { destinations.cancelPairing() }) { NavigationStack { PairView().toolbar { Button("Cancel") { adding = false } } } }
         .onChange(of: destinations.pairing != nil) { _, value in if !value { adding = false } }
+    }
+}
+private struct NativeProjectGuide: View {
+    @Environment(\.dismiss) private var dismiss
+    private let content = Bundle.main.url(forResource: "README", withExtension: "md")
+        .flatMap { try? String(contentsOf: $0, encoding: .utf8) }
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    Text("Your Macs run AI work. Keep chats, schedules, browser pages, documents, Team Tools and Life connected across your devices.")
+                    if let content {
+                        ForEach(Array(content.components(separatedBy: "\n\n").enumerated()), id: \.offset) { _, paragraph in
+                            if paragraph.hasPrefix("#") {
+                                Text(paragraph.drop(while: { $0 == "#" || $0 == " " }))
+                                    .font(paragraph.hasPrefix("# ") ? .title.bold() : .title2.bold())
+                                    .accessibilityAddTraits(.isHeader)
+                            } else if paragraph.hasPrefix("```") {
+                                Text(paragraph.components(separatedBy: "\n").dropFirst().dropLast().joined(separator: "\n"))
+                                    .font(.body.monospaced()).textSelection(.enabled)
+                            } else {
+                                let prose = paragraph.replacingOccurrences(of: "\n(?![-*] |[0-9]+\\. )", with: " ", options: .regularExpression)
+                                Text((try? AttributedString(markdown: prose, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(prose))
+                                    .font(.body).textSelection(.enabled)
+                            }
+                        }
+                    } else { Text("The project guide was not included with this build.") }
+                }.frame(maxWidth: .infinity, alignment: .leading).padding(20)
+            }.accessibilityIdentifier("home-project-guide-content")
+                .navigationTitle("What Proteus can do").navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.accessibilityIdentifier("home-project-guide-done") } }
+        }
     }
 }
 private struct BundledChangelogView: View {

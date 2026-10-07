@@ -227,3 +227,27 @@ usage patch, fabricated allowance or model turn is claimed.
 End-of-session reminder requested by the operator: tomorrow unlock both Macs to finish the
 installed-interface checks, and complete HC Claude sign-in/allowance verification. The Mac
 updates themselves are already installed; reinstall only if tomorrow's evidence requires it.
+
+
+## Late native report: desktop-origin browser titles and navigation
+
+The operator's iPad screenshot showed a loaded site under `New tab`. A failing iPad simulator
+regression reproduced the exact mechanism: a desktop descriptor refresh replaced the local
+loaded-page title even though the URL and WKWebView had not changed. The correction prefers the
+loaded title for the same URL, preserves explicit custom names and continues applying remote URL
+changes. Incoming browser collections are published atomically. This fixes the reproduced path;
+it does not claim every production website or provider authentication flow was exercised.
+
+Also requested and implemented: the full desktop/web README guide in a readable mobile Home popup;
+an inset iPad Home heading without an empty navigation row; current-page sidebar highlighting;
+and one-time scrolling to newly opened main, chat and Team browser tabs. Ordinary existing-tab
+selection keeps the strip position. Native build 2610.6.4 is the intended signed artifact. The
+preceding 2610.6.3 installation remains the physical baseline until a new receipt is recorded.
+
+
+Late native validation: seven distinct iPad cases passed, including the previously failing title
+regression, existing concurrent-sync/retained-view checks, repeated UI sync/switch/back/forward/
+background resume, heading/sidebar/new-tab visibility, unchanged existing-tab scroll position,
+and full-guide popup/dismissal. The final title case additionally verifies explicit desktop
+renames and actual changed-URL navigation on both iPad and iPhone. The guide popup passes on
+both sizes; exported screenshots were visually reviewed. 368 Node tests and static checks pass.

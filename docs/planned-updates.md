@@ -10,6 +10,16 @@ Maintain this as the single backlog. Design rationale is in `decisions.md`; rece
 retained as acceptance criteria; the installed versus unverified state is summarized immediately
 below and in `content-workspace-release.md`.
 
+## October 7 late native review
+
+Source correction for desktop-origin chat titles, atomic tab reconciliation, full mobile Home
+guide popup, iPad Home heading/active sidebar and new-tab visibility passed simulator checks
+for build 2610.6.4. The preceding installed native baseline remains 2610.6.3 until a new receipt
+is recorded. The title failure reproduced before the change. Seven distinct iPad cases cover
+transport/reconciliation, retained views, repeated sync, history/backgrounding, heading/sidebar,
+new-tab visibility, existing strip position and guide dismissal. The extended transport case and
+guide popup also pass on iPhone. All 368 Node tests and static checks pass.
+
 ## October 7 live-review follow-up
 
 Implemented and deployed from `56a074d`: compact API-backed Standup link tables; stable link IDs;

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C0A0C0A0C0A0C0A0C0A0C003 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = C0A0C0A0C0A0C0A0C0A0C004 /* README.md */; };
 		0251FE479F24F5A96EA70F96 /* RemoteStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9023FEA1077763EA7555C94D /* RemoteStore.swift */; };
 		1162CF50A47019EEE0F0B91C /* ScheduleViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99814D317E2043305330CB8E /* ScheduleViews.swift */; };
 		2DA06CE96BFC9F1B53D5955C /* MarkdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8599964FC6EFDA8704A9F1CF /* MarkdownView.swift */; };
@@ -54,6 +55,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		C0A0C0A0C0A0C0A0C0A0C004 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = text; name = README.md; path = ../README.md; sourceTree = SOURCE_ROOT; };
 		2B068C230D5ED165EE25D9DD /* RemoteCrypto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteCrypto.swift; sourceTree = "<group>"; };
 		3B1F7B75CFDD99F635051F0D /* Proteus.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Proteus.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		4FA0511E62085A38609D5D2C /* markdown */ = {isa = PBXFileReference; lastKnownFileType = folder; name = markdown; path = ../public/markdown; sourceTree = SOURCE_ROOT; };
@@ -118,6 +120,7 @@
 		9C9312C0FF80BE614739AEAC /* Proteus */ = {
 			isa = PBXGroup;
 			children = (
+				C0A0C0A0C0A0C0A0C0A0C004 /* README.md */,
 				C0A0C0A0C0A0C0A0C0A0C002 /* CHANGELOG.md */,
 				C3669D14C35D62493F9512B7 /* Assets.xcassets */,
 				9A814582040CD2B969E3FED0 /* ChatViews.swift */,
@@ -263,6 +266,7 @@
 			files = (
 				D5382767A692259B940198E9 /* Assets.xcassets in Resources */,
 				398B9FDDC1D1B5A441D3E044 /* markdown in Resources */,
+				C0A0C0A0C0A0C0A0C0A0C003 /* README.md in Resources */,
 				C0A0C0A0C0A0C0A0C0A0C001 /* CHANGELOG.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -383,7 +387,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 2610.6.3;
+				CURRENT_PROJECT_VERSION = 2610.6.4;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -486,7 +490,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 2610.6.3;
+				CURRENT_PROJECT_VERSION = 2610.6.4;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

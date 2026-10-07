@@ -722,6 +722,52 @@ final class NativeParityTests: XCTestCase {
         XCTAssertEqual(shared.selectedBrowser, teamID)
         for tab in shared.browserTabs { shared.close(tab.id) }
     }
+    @MainActor func testDesktopChatTabsKeepLiveTitlesThroughRemoteRefresh() async throws {
+        let (data, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/pair")!)
+        let fixture = try JSONDecoder().decode(JSON.self, from: data)
+        let remote = RemoteStore(); remote.forget(); try remote.pair(fixture["code"].string)
+        let shared = SharedAppStore()
+        defer { shared.unloadBrowsers(); remote.forget() }
+        for _ in 0..<100 { if remote.connected && remote.state["capabilities"].array.contains(.string("content-tabs.v1")) { break }; try await Task.sleep(for: .milliseconds(100)) }; XCTAssertTrue(remote.connected)
+        let created = try await remote.request("chat.start", ["prompt": .string("Desktop browser title rehearsal"), "provider": .string("rehearsal")])
+        let run = created["runId"].string, host = try XCTUnwrap(remote.connection?.hostId)
+        let scope = "chat:\(host):\(run)"
+        let url = "http://127.0.0.1:4329/browser/one"
+        let desktop: JSON = .object(["id": .string("desktop-browser"), "type": .string("browser"), "title": .string("New tab"), "url": .string(url)])
+        _ = try await remote.request("tabs.mutate", ["scope": .string("chat"), "id": .string(run), "expectedRevision": .number(0), "operations": .array([.object(["action": .string("open"), "tab": desktop])])])
+        await shared.refreshContentTabs(scope: scope, remote: remote, kind: "chat", id: run)
+        let initial = try XCTUnwrap(shared.tabs(in: scope).first)
+        shared.select(initial.id, in: scope)
+        let web = shared.webView(initial)
+        for _ in 0..<100 { if shared.browserTabs.first(where: { $0.id == initial.id })?.title == "First browser page" && !web.isLoading { break }; try await Task.sleep(for: .milliseconds(100)) }; XCTAssertEqual(web.title, "First browser page")
+        // Let native title publication settle, then simulate another desktop workspace refresh
+        // carrying its unloaded placeholder for the same URL and stable shared tab identity.
+        for _ in 0..<8 { await shared.refreshContentTabs(scope: scope, remote: remote, kind: "chat", id: run); try await Task.sleep(for: .milliseconds(100)) }
+        let current = try await remote.request("tabs.get", ["scope": .string("chat"), "id": .string(run)])
+        _ = try await remote.request("tabs.mutate", ["scope": .string("chat"), "id": .string(run), "expectedRevision": current["revision"], "operations": .array([.object(["action": .string("open"), "tab": desktop])])])
+        await shared.refreshContentTabs(scope: scope, remote: remote, kind: "chat", id: run)
+        XCTAssertEqual(shared.tabs(in: scope).first?.title, "First browser page", "An unloaded desktop placeholder must not replace the title of the page displayed on iPad")
+        XCTAssertEqual(shared.selected(in: scope), initial.id)
+        XCTAssertTrue(shared.webView(try XCTUnwrap(shared.tabs(in: scope).first)) === web)
+        XCTAssertEqual(shared.tabs(in: scope).count, 1)
+        let renameBase = try await remote.request("tabs.get", ["scope": .string("chat"), "id": .string(run)])
+        _ = try await remote.request("tabs.mutate", ["scope": .string("chat"), "id": .string(run), "expectedRevision": renameBase["revision"], "operations": .array([.object(["action": .string("rename"), "id": .string("desktop-browser"), "title": .string("Pinned desktop name")])])])
+        await shared.refreshContentTabs(scope: scope, remote: remote, kind: "chat", id: run)
+        XCTAssertEqual(shared.tabs(in: scope).first?.title, "Pinned desktop name", "An explicit desktop rename still takes priority")
+        XCTAssertTrue(shared.navigate(URL(string: "http://127.0.0.1:4329/browser/two")!, in: initial.id))
+        for _ in 0..<100 { if web.title == "Second browser page" && !web.isLoading { break }; try await Task.sleep(for: .milliseconds(100)) }
+        XCTAssertEqual(web.title, "Second browser page")
+        XCTAssertEqual(shared.tabs(in: scope).first?.title, "Pinned desktop name")
+        for _ in 0..<8 { await shared.refreshContentTabs(scope: scope, remote: remote, kind: "chat", id: run); try await Task.sleep(for: .milliseconds(100)) }
+        let navigationBase = try await remote.request("tabs.get", ["scope": .string("chat"), "id": .string(run)])
+        let changed: JSON = .object(["id": .string("desktop-browser"), "type": .string("browser"), "title": .string("New tab"), "url": .string("http://127.0.0.1:4329/browser/three")])
+        _ = try await remote.request("tabs.mutate", ["scope": .string("chat"), "id": .string(run), "expectedRevision": navigationBase["revision"], "operations": .array([.object(["action": .string("open"), "tab": changed])])])
+        await shared.refreshContentTabs(scope: scope, remote: remote, kind: "chat", id: run)
+        for _ in 0..<100 { if web.title == "Third browser page" && !web.isLoading { break }; try await Task.sleep(for: .milliseconds(100)) }
+        XCTAssertEqual(web.title, "Third browser page", "A real desktop URL change still navigates the retained view")
+        XCTAssertEqual(shared.tabs(in: scope).first?.title, "Third browser page")
+        XCTAssertTrue(shared.webView(try XCTUnwrap(shared.tabs(in: scope).first)) === web)
+    }
     @MainActor func testBrowserNavigationPreservesTabAndWebViewAndInvalidatesUnloadedObservers() async throws {
         let shared = SharedAppStore(); shared.open(nil)
         let tab = try XCTUnwrap(shared.browserTabs.first), id = tab.id

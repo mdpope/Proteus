@@ -450,3 +450,15 @@ Resources truncates oversized labels in a fixed-width table and flex rows rather
 
 ### Shared allowance rendering
 Desktop and website use one provider-pill and detail-dialog renderer and stylesheet. The website retains its authenticated Mac quota request and privacy setting, while collapse is a single persisted toggle. Connection identity appears once below allowance; the green dot requires connected state. Web provider setup links to the page explaining destination-Mac configuration. Nested Activity Details has no extra border or padded box, matching desktop.
+
+
+## October 7 — Native page title authority and new-tab visibility
+
+For the same loaded URL, the local page's observed title takes priority over another client's
+automatic descriptor title. Explicit custom names remain authoritative across clients, and remote
+URL changes still navigate. Apply incoming tab collections atomically to avoid transient removal
+of the selected child. New-tab scrolling is triggered by newly added selected IDs, not ordinary
+selection changes, preserving the accepted manual strip position behavior.
+
+Bundle the same README used by desktop/web Home into the native app. Present it from a Home link
+in a dismissible, scrollable sheet with normal body typography, so it remains readable offline.

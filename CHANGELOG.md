@@ -2,6 +2,10 @@
 
 ## 0.2.3 — October 7, 2026
 
+- Keep an iPad's loaded browser title when desktop tab synchronization supplies an older automatic title; retain explicit renames, page state and tab identity.
+- Add a readable full project-guide popup to Home on iPad and iPhone, using the same bundled guide as desktop/web.
+- Inset the iPad Home heading, highlight its active sidebar page, and reveal newly opened main/chat/Team tabs without moving the strip when selecting existing tabs.
+
 - Share desktop/web AI Allowance pills and provider detail dialogs, including refresh and one collapse state. Show the connected Mac once with a green status dot and version below. Remove the extra box/border inside web Activity Details.
 - Show Standup links in matching desktop/web name-and-URL rows with quiet right-aligned Edit/Remove actions. Website Team now uses the selected shared list's API links; roster edits preserve link IDs.
 - Focus the address field in new browser tabs on desktop, website and native clients. Show the 20 latest distinct visited sites with date/time and originating device when editing the address.

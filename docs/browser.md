@@ -274,3 +274,19 @@ remaps both the active tab and remembered chat-child selections to the recreated
 validating and saving the workspace. The separate content-tab ID remains stable for descriptor
 synchronization. A selected child must still exist and belong to the same chat; an unrelated or
 missing child is never selected as a fallback.
+
+
+### Native title and navigation stability — October 7 follow-up
+
+Reproduced a loaded iPad chat-browser tab reverting to `New tab` after a desktop descriptor
+refresh. Reconciliation now keeps the WKWebView title for the same loaded URL when no explicit
+custom name exists. Remote custom names and changed URLs still apply. Publish the browser list
+once so the selected child never disappears between removal and reinsertion. Tab IDs, WKWebViews,
+local selection and page memory are retained. Simulator coverage includes actual encrypted
+host descriptor exchange and UI switching, repeated refresh, history and background resume.
+
+Native main/chat/Team strips reveal a newly added selected tab once. Selecting an existing tab
+or navigating with the sidebar retains the strip offset. Sidebar highlights follow the selected
+chat/schedule as well as ordinary pages. Home uses an inset heading on iPad without a blank
+native navigation row. Mobile Home opens the bundled README project guide in a scrollable popup.
+These source corrections are planned for native build 2610.6.4; see the acceptance audit for rollout.

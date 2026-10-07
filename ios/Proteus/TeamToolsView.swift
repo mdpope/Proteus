@@ -149,7 +149,7 @@ struct TeamBrowserView: View {
     private var navigation: BrowserNavigationState { shared.browserNavigation[selectedID ?? ""] ?? BrowserNavigationState() }
     var body: some View {
         VStack(spacing: 0) {
-            if showTabs { HStack(spacing: 0) { ScrollView(.horizontal) { HStack(spacing: 0) {
+            if showTabs { HStack(spacing: 0) { NativeTabStrip(ids: tabs.map(\.id), selection: selectedID) { HStack(spacing: 0) {
                 ForEach(tabs) { tab in
                     HStack(spacing: 8) {
                         Button(tab.title.isEmpty ? "New tab" : tab.title) { shared.select(tab.id, in: scope) }
@@ -157,7 +157,7 @@ struct TeamBrowserView: View {
                             .accessibilityValue(selectedID == tab.id ? "Active" : "Inactive")
                             .accessibilityAddTraits(selectedID == tab.id ? .isSelected : [])
                         Button { shared.close(tab.id) } label: { Image(systemName: "xmark").font(.caption2) }.accessibilityLabel("Close " + (tab.title.isEmpty ? "browser tab" : tab.title))
-                    }.padding(12).background(selectedID == tab.id ? NativeTheme.accent.opacity(0.08) : .clear)
+                    }.id(tab.id).padding(12).background(selectedID == tab.id ? NativeTheme.accent.opacity(0.08) : .clear)
                         .overlay(alignment: .bottom) { Rectangle().fill(selectedID == tab.id ? NativeTheme.accent : .clear).frame(height: 2) }
                         .draggable(tab.id).dropDestination(for: String.self) { ids, _ in guard let source = ids.first, tabs.contains(where: { $0.id == source }) else { return false }; shared.moveBrowser(source, before: tab.id); return true }
                         .contextMenu {

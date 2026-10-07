@@ -2,6 +2,92 @@ import XCTest
 
 final class RemoteUITests: XCTestCase {
     override func setUp() { super.setUp(); continueAfterFailure = false }
+    @MainActor func testDesktopOriginChatBrowserTabsStayStable() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-long-chat", "--synthetic-desktop-browser-tabs"]
+        app.launch(); app.buttons["Chats"].firstMatch.tap()
+        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Long fixture")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 12)); row.tap()
+        let first = app.buttons["chat-browser-tab-desktop-fixture-0"]
+        let second = app.buttons["chat-browser-tab-desktop-fixture-1"]
+        XCTAssertTrue(first.waitForExistence(timeout: 10)); first.tap()
+        let address = app.textFields["browser-address"]
+        XCTAssertTrue(address.waitForExistence(timeout: 10)); address.tap()
+        address.press(forDuration: 1.2)
+        if app.menuItems["Select All"].waitForExistence(timeout: 2) { app.menuItems["Select All"].tap() }
+        else { address.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: (address.value as? String ?? "").count)) }
+        address.typeText("http://127.0.0.1:4329/browser/one"); app.buttons["browser-go"].tap()
+        XCTAssertTrue(app.webViews.staticTexts["First browser page"].waitForExistence(timeout: 15))
+        expectation(for: NSPredicate(format: "label == %@", "First browser page"), evaluatedWith: first); waitForExpectations(timeout: 8)
+        let load = app.webViews.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Load ")).firstMatch
+        let before = load.label
+        for _ in 0..<3 {
+            app.buttons["replay-desktop-tabs"].tap()
+            XCTAssertEqual(first.label, "First browser page")
+            XCTAssertEqual(first.value as? String, "Active")
+            second.tap(); XCTAssertTrue(app.webViews.staticTexts["Third browser page"].waitForExistence(timeout: 12))
+            first.tap(); XCTAssertTrue(app.webViews.staticTexts["First browser page"].waitForExistence(timeout: 12))
+            XCTAssertEqual(load.label, before, "Switching and sync must retain the loaded page rather than reload it")
+        }
+        app.webViews.links["Next browser page"].tap()
+        XCTAssertTrue(app.webViews.staticTexts["Second browser page"].waitForExistence(timeout: 12))
+        expectation(for: NSPredicate(format: "label == %@", "Second browser page"), evaluatedWith: first); waitForExpectations(timeout: 8)
+        app.buttons["replay-desktop-tabs"].tap(); XCTAssertEqual(first.label, "Second browser page")
+        app.buttons["browser-back"].tap(); XCTAssertTrue(app.webViews.staticTexts["First browser page"].waitForExistence(timeout: 12))
+        app.buttons["browser-forward"].tap(); XCTAssertTrue(app.webViews.staticTexts["Second browser page"].waitForExistence(timeout: 12))
+        XCUIDevice.shared.press(.home); app.activate()
+        XCTAssertTrue(first.waitForExistence(timeout: 10)); XCTAssertEqual(first.label, "Second browser page")
+        XCTAssertEqual(first.value as? String, "Active")
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "chat-browser-tab-desktop-fixture-")).count, 2)
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Stable desktop-origin chat tabs"; shot.lifetime = .keepAlways; add(shot)
+    }
+    @MainActor func testIPadSidebarHeadingAndNewTabsReveal() {
+        let app = XCUIApplication(); app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-long-chat", "--synthetic-browser-workspace"]; app.launch()
+        let home = app.buttons["sidebar-Home"]
+        XCTAssertTrue(home.waitForExistence(timeout: 12)); home.tap()
+        XCTAssertEqual(home.value as? String, "Active")
+        let heading = app.staticTexts["home-page-heading"]
+        XCTAssertTrue(heading.waitForExistence(timeout: 8))
+        let plus = app.buttons["new-main-browser-tab"]
+        XCTAssertGreaterThan(heading.frame.minY, plus.frame.maxY)
+        XCTAssertLessThan(heading.frame.minY - plus.frame.maxY, 35, "Home must not reserve an empty navigation/back-button row")
+        XCTAssertGreaterThan(heading.frame.minX, home.frame.maxX + 15, "Home heading has a normal inset from the content edge")
+        let homeShot = XCTAttachment(screenshot: app.screenshot()); homeShot.name = "iPad Home inset and selected sidebar"; homeShot.lifetime = .keepAlways; add(homeShot)
+        for _ in 0..<12 {
+            plus.tap(); app.buttons["Browser"].firstMatch.tap()
+            let active = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND value == %@", "shell-tab-", "Active")).firstMatch
+            XCTAssertTrue(active.waitForExistence(timeout: 5)); XCTAssertTrue(active.isHittable, "New main tab scrolls into view")
+        }
+        app.buttons["sidebar-Chats"].tap(); XCTAssertEqual(app.buttons["sidebar-Chats"].value as? String, "Active")
+        XCTAssertEqual(home.value as? String, "Inactive")
+        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Long fixture")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 8)); row.tap()
+        XCTAssertEqual(app.buttons["sidebar-Chats"].value as? String, "Active", "A selected chat still highlights Chats")
+        for _ in 0..<10 {
+            app.buttons["Add chat tab"].tap(); app.buttons["Browser"].firstMatch.tap()
+            let child = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND value == %@", "chat-browser-tab-", "Active")).firstMatch
+            XCTAssertTrue(child.waitForExistence(timeout: 5)); XCTAssertTrue(child.isHittable, "New child tab scrolls into view")
+        }
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "New chat browser tab revealed"; shot.lifetime = .keepAlways; add(shot)
+    }
+    @MainActor func testHomeProjectGuidePopup() {
+        let app = XCUIApplication(); app.launchArguments = ["--reset-pairing", "--synthetic-destinations"]; app.launch()
+        let link = app.buttons["home-project-guide"]
+        XCTAssertTrue(link.waitForExistence(timeout: 15))
+        let heading = app.staticTexts["home-page-heading"]
+        if heading.exists {
+            let intro = app.descendants(matching: .any)["home-intro-title"].firstMatch
+            XCTAssertLessThan(intro.frame.minY - heading.frame.maxY, 65, "No reserved navigation gap between the heading and Home content")
+            XCTAssertEqual(app.buttons["sidebar-Home"].value as? String, "Active")
+            let home = XCTAttachment(screenshot: app.screenshot()); home.name = "Final iPad Home spacing"; home.lifetime = .keepAlways; add(home)
+        }
+        link.tap()
+        XCTAssertTrue(app.buttons["home-project-guide-done"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.staticTexts["Omi, Life and Apple builds"].exists, "The popup includes the same expanded project guide as desktop/web")
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Home project guide popup"; shot.lifetime = .keepAlways; add(shot)
+        app.buttons["home-project-guide-done"].tap()
+        XCTAssertTrue(link.waitForExistence(timeout: 5))
+    }
     @MainActor func testSyntheticChatComposerShowsCompactActions() {
         let app = XCUIApplication()
         app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-long-chat"]

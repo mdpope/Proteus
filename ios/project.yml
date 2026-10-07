@@ -9,7 +9,7 @@ settings:
     TARGETED_DEVICE_FAMILY: '1,2'
     CODE_SIGN_STYLE: Automatic
     MARKETING_VERSION: '0.2.3'
-    CURRENT_PROJECT_VERSION: '2610.6.3'
+    CURRENT_PROJECT_VERSION: '2610.6.4'
 targets:
   ProteusMobile:
     type: application
@@ -17,6 +17,8 @@ targets:
     platform: iOS
     sources:
       - Proteus
+      - path: ../README.md
+        buildPhase: resources
       - path: ../public/markdown
         type: folder
         buildPhase: resources

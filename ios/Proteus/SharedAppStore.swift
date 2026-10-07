@@ -90,14 +90,27 @@ struct NativeChatScrollLocation {
         for tab in incoming where tab["type"].string == "browser" {
             if let existing = existingBrowsers.first(where: { ($0.contentTabId ?? $0.id) == tab["id"].string }), existing.url ?? "" != tab["url"].string, let url = Self.safeURL(tab["url"].string) { browserViews[existing.id]?.load(URLRequest(url: url)) }
         }
-        browserTabs.removeAll { $0.scope == scope && !privateLocal.contains($0) }
+        var nextBrowsers = browserTabs.filter { $0.scope != scope || privateLocal.contains($0) }
         for tab in incoming where tab["type"].string == "browser" {
             let existing = existingBrowsers.first { ($0.contentTabId ?? $0.id) == tab["id"].string }
             let localID = existing?.id ?? ("sync:" + SHA256.hash(data: Data((scope + "\0" + tab["id"].string).utf8)).map { String(format: "%02x", $0) }.joined())
-            let descriptor = BrowserDescriptor(id: localID, title: tab["title"].string, url: tab["url"].string.isEmpty ? nil : tab["url"].string, scope: scope, customTitle: tab["customTitle"].string.isEmpty ? nil : tab["customTitle"].string, contentTabId: tab["id"].string, history: Self.decodeBrowserHistory(tab["history"]) ?? existing?.history)
-            browserTabs.append(descriptor)
+            // A shared descriptor can come from an unloaded desktop tab. Its automatic
+            // title must not replace the title of the page already displayed here.
+            // Explicit names still win; a changed URL follows the remote navigation.
+            let currentView = existing.flatMap { browserViews[$0.id] }
+            let pageTitle = currentView.flatMap { view -> String? in
+                guard !view.isLoading, view.url?.absoluteString == tab["url"].string,
+                      let title = view.title, !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+                return String(title.prefix(200))
+            }
+            let customTitle = tab["customTitle"].string
+            let title = !customTitle.isEmpty ? customTitle : pageTitle ?? tab["title"].string
+            let descriptor = BrowserDescriptor(id: localID, title: title, url: tab["url"].string.isEmpty ? nil : tab["url"].string, scope: scope, customTitle: tab["customTitle"].string.isEmpty ? nil : tab["customTitle"].string, contentTabId: tab["id"].string, history: Self.decodeBrowserHistory(tab["history"]) ?? existing?.history)
+            nextBrowsers.append(descriptor)
             if descriptor.url != nil && !isBrowserLoaded(descriptor.id) { unloadedBrowsers.insert(descriptor.id) }
         }
+        // Publish one coherent list so a selected child never temporarily disappears.
+        browserTabs = nextBrowsers
         let docIDs = Set(incoming.filter { $0["type"].string == "document" }.map { $0["documentId"].string })
         for old in documents(in: scope) where !docIDs.contains(old.id) { documentContents.removeValue(forKey: scope + ":" + old.id); documentSessions.removeValue(forKey: scope + ":" + old.id) }
         documentTabs.removeAll { $0.chatKey == scope }
@@ -106,6 +119,17 @@ struct NativeChatScrollLocation {
         contentSnapshots[scope] = response
         saveDocumentTabs(); saveBrowsers()
     }
+    #if DEBUG
+    func replayDesktopBrowserFixture(scope: String) {
+        let existing = tabs(in: scope)
+        let tabs: [JSON] = ["one", "three"].enumerated().map { index, page in
+            let id = "desktop-fixture-\(index)"
+            return .object(["id": .string(id), "type": .string("browser"), "title": .string("New tab"),
+                "url": .string(existing.first(where: { $0.contentTabId == id })?.url ?? "http://127.0.0.1:4329/browser/\(page)")])
+        }
+        applyContentTabs(.object(["revision": .number(Double((contentSnapshots[scope]?["revision"].int ?? 0) + 1)), "tabs": .array(tabs)]), scope: scope)
+    }
+    #endif
     private func revokeDocumentTabs(_ host: String) {
         let affected = Set(contentHosts.filter { $0.value == host }.map(\.key) + documentTabs.filter { $0.chatKey.hasPrefix("chat:" + host + ":") }.map(\.chatKey))
         applyingContent = true; defer { applyingContent = false }
