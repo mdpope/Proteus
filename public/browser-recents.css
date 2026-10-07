@@ -1,0 +1,8 @@
+.browser-recents{position:fixed;z-index:3000;overflow-y:auto;overscroll-behavior:contain;background:var(--panel,var(--proteus-panel,#1b2420));color:var(--text,var(--proteus-text,#edf3ed));border:1px solid var(--line,var(--proteus-line,#38483d));border-radius:8px;box-shadow:0 8px 28px #0006;padding:4px;box-sizing:border-box}
+.browser-recents[hidden]{display:none}
+.browser-recents>button{display:flex;flex-direction:column;gap:3px;width:100%;text-align:left;align-items:stretch;border:0;border-radius:4px;background:transparent;color:inherit;padding:10px 12px;min-height:64px;font:inherit}
+.browser-recents>button:hover,.browser-recents>button[aria-selected=true]{background:var(--control,var(--proteus-control,#29392e))}
+.browser-recents strong,.browser-recents span,.browser-recents small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.browser-recents strong{font-size:14px;font-weight:500}.browser-recents span,.browser-recents small{font-size:12px;color:var(--soft,var(--proteus-muted,#a6b5ab))}
+.browser-recents p{margin:12px;font-size:14px}
+.browser-recents-inline{position:relative;width:100%;max-height:360px;margin:8px 0 20px;z-index:auto}

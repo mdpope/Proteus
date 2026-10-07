@@ -60,7 +60,7 @@ export function initShell(document=globalThis.document,window=globalThis.window)
         document.querySelectorAll('[data-shell-nav]').forEach(link=>{const selected=link.dataset.shellNav===active;link.classList.toggle('active',selected);if(selected)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');});
     }
     render();restoreScroll();
-    document.addEventListener('proteus:default-status',event=>{const target=document.querySelector('#shell-default-status');if(target)target.textContent='Default Mac · '+event.detail.message;});
+    document.addEventListener('proteus:default-status',event=>{const target=document.querySelector('#shell-default-status');if(target){target.dataset.status=event.detail.status;target.replaceChildren();const dot=document.createElement('span');dot.className='connection-dot';dot.setAttribute('aria-hidden','true');target.append(dot,document.createTextNode(event.detail.message));}});
     const overviewButton=document.createElement('button');overviewButton.type='button';overviewButton.className='shell-overview-button';overviewButton.textContent='▦';overviewButton.setAttribute('aria-label','Tab overview');overviewButton.title='Tab overview';document.querySelector('#shell-add-menu')?.before(overviewButton);
     const overview=document.createElement('dialog');overview.className='shell-overview';overview.setAttribute('aria-label','Open tabs');document.body.append(overview);
     overview.addEventListener('click',event=>{if(event.target!==overview)return;const r=overview.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)overview.close();});

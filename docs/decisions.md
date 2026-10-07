@@ -434,3 +434,19 @@ Use the existing safe-history filter; never synchronize cookies, page content or
 Keep selection local and keep loaded desktop pages intact. Native retains its existing WK view
 on a remote URL update rather than discarding it. Use absolute event boundaries for older chat
 pages and retain disjoint cached segments until gaps close.
+
+## October 7 follow-up: Standup links and browser recents
+
+Standup links belong to the revision-checked shared team-list record, not the independent browser
+bookmark collection. Desktop and website share the same row markup/style. Editing other roster
+fields preserves stable link IDs; conflicting writes remain rejected by the existing API.
+
+An address field shows up to 20 distinct URLs ordered by latest visit, retaining that visit's device
+name and timestamp. Desktop combines retained local and account visits; web/native use the authorized
+account history. No system-browser history is imported and no missing device identity is inferred.
+Native new tabs focus the keyboard; desktop suggestions suppress the embedded page through the
+existing overlay token while open. Website suggestions stay within layout so they do not cover Go.
+Resources truncates oversized labels in a fixed-width table and flex rows rather than wrapping them.
+
+### Shared allowance rendering
+Desktop and website use one provider-pill and detail-dialog renderer and stylesheet. The website retains its authenticated Mac quota request and privacy setting, while collapse is a single persisted toggle. Connection identity appears once below allowance; the green dot requires connected state. Web provider setup links to the page explaining destination-Mac configuration. Nested Activity Details has no extra border or padded box, matching desktop.

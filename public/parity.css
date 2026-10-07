@@ -231,3 +231,12 @@ body.sidebar-minimized #sidebar [data-page="team"] .nav-icon,body.sidebar-minimi
 #chat-subtabs .selected,#team-subtabs .selected{color:var(--ink);background:#ffffff0b}
 
 .sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+
+#engine-content .resource-tab-row{display:flex;flex-wrap:nowrap;min-width:0;width:100%;box-sizing:border-box}
+#engine-content .resource-tab-row>div:first-child{flex:1;min-width:0;overflow:hidden}
+#engine-content .resource-tab-row strong,#engine-content .resource-tab-row p{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#engine-content .resource-tab-row>div:last-child{flex:0 0 auto;display:flex;gap:8px}
+#engine-content .resource-process-table{width:100%;table-layout:fixed}
+#engine-content .resource-process-table th:first-child{width:60%}
+#engine-content .resource-process-table td,#engine-content .resource-process-table td .note{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+@media(max-width:550px){#engine-content .resource-process-table th:first-child{width:48%}#engine-content .resource-tab-row{gap:8px}#engine-content .resource-tab-row button{padding:8px}}

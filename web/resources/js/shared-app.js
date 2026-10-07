@@ -1,5 +1,5 @@
 import { BrowserDestinationStore, BrowserRemoteClient } from './remote-client.js';
-import { usagePanel } from './remote-usage.js';
+import { usageSidebar, usageDetails } from '../../../public/provider-usage-view.js';
 const account = document.body.dataset.browserAccount;
 export const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export async function appRequest(path = '', method = 'GET', body) {
@@ -60,17 +60,32 @@ async function connectDefaultMac({retry=false}={}){
     try {
         const credential=await destinationStore.credential(selected);if(!relevant())return;
         const client=usageClient=new BrowserRemoteClient(credential);let rejected=false;
-        const render=(value,error='')=>{
+        let latestUsage, usageBusy=false;
+        const dialog=document.createElement('dialog');dialog.className='provider-usage-modal';dialog.setAttribute('aria-label','Account allowance');document.body.append(dialog);
+        const removeDialog=()=>{dialog.close();dialog.remove();};
+        client.addEventListener('status',()=>{if(client.status==='closed')removeDialog();});
+        dialog.addEventListener('click',event=>{if(event.target===dialog){const box=dialog.getBoundingClientRect();if(event.clientX<box.left||event.clientX>box.right||event.clientY<box.top||event.clientY>box.bottom)dialog.close();}});
+        const showDetails=id=>{
+            dialog.dataset.provider=id;
+            dialog.innerHTML=usageDetails(latestUsage,id,{busy:usageBusy,settingsButton:'<a class="button" href="/engine-room?tab=setup">Provider settings</a>'});
+            dialog.querySelector('#usage-close').onclick=()=>dialog.close();
+            dialog.querySelector('#usage-refresh').onclick=()=>void refresh(true);
+            if(!dialog.open)dialog.showModal();
+        };
+        const render=(value)=>{
             if(!relevant()||!element)return;
-            const mode=preferences.allowanceDisplay;element.hidden=false;
-            element.innerHTML=mode==='collapsed'?'<header class="web-usage-heading"><span>AI Allowance</span><button type="button" data-usage-collapse aria-expanded="false" aria-label="Expand AI Allowance">⌄</button></header>':usagePanel(value,{compact:mode==='compact',destination:credential.label,error});
-            element.querySelector('[data-usage-collapse]')?.addEventListener('click',async()=>{preferences.allowanceDisplay=mode==='collapsed'?'compact':mode==='compact'?'expanded':'collapsed';render(value);await appRequest('/preferences','PUT',{allowanceDisplay:preferences.allowanceDisplay}).catch(()=>{});});
-            element.querySelector('[data-usage-refresh]')?.addEventListener('click',()=>void refresh(true));
+            latestUsage=value;const collapsed=preferences.allowanceDisplay==='collapsed';element.hidden=false;
+            element.innerHTML=usageSidebar(value,{collapsed});
+            element.querySelector('#toggle-usage').onclick=async()=>{preferences.allowanceDisplay=collapsed?'compact':'collapsed';render(value);await appRequest('/preferences','PUT',{allowanceDisplay:preferences.allowanceDisplay}).catch(()=>{});};
+            element.querySelectorAll('[data-usage-provider]').forEach(button=>button.onclick=()=>showDetails(button.dataset.usageProvider));
+            if(dialog.open)showDetails(dialog.dataset.provider);
             document.dispatchEvent(new CustomEvent('proteus:usage',{detail:{value,destination:credential.label}}));
         };
         const refresh=async(force=false)=>{
-            try{await destinationStore.verifySession();if(!relevant())return;const value=await client.request('provider.usage',{force});if(!relevant())return;if(value.enabled===false)unavailable('Hidden by this Mac’s privacy setting.');else render(value);}
-            catch(error){if(!relevant())return;if(error.sessionInvalid){stopDefaultMac();report('session','Sign in again before connecting.');}else if(client.status==='online')unavailable(credential.label+' · allowance unavailable.');}
+            if(usageBusy)return;usageBusy=true;if(dialog.open)showDetails(dialog.dataset.provider);
+            try{await destinationStore.verifySession();if(!relevant())return;const value=await client.request('provider.usage',{force});if(!relevant())return;if(value.enabled===false){dialog.close();unavailable('Hidden by this Mac’s privacy setting.');}else render(value);}
+            catch(error){if(!relevant())return;if(error.sessionInvalid){stopDefaultMac();report('session','Sign in again before connecting.');}else if(client.status==='online'){latestUsage={providers:Object.fromEntries(['copilot','codex','claude'].map(id=>[id,{error:'Allowance unavailable. Refresh to retry.'}]))};render(latestUsage);}}
+            finally{usageBusy=false;if(relevant()&&dialog.open)showDetails(dialog.dataset.provider);}
         };
         client.addEventListener('change',event=>{
             if(!relevant()||event.detail?.event!=='state')return;
@@ -79,7 +94,7 @@ async function connectDefaultMac({retry=false}={}){
                 const old={...credential};credential.label=state.hostName.trim();void destinationStore.rememberName(old,state.hostName).catch(()=>{});
                 connectionState('connected',credential.label+' · Connected',credential);
             }
-            if(state.appearance?.showProviderUsage===false)unavailable('Hidden by this Mac’s privacy setting.');else render(state.providerUsage||{providers:{}});
+            if(state.appearance?.showProviderUsage===false){dialog.close();unavailable('Hidden by this Mac’s privacy setting.');}else render(state.providerUsage||{providers:{}});
         });
         client.addEventListener('rejected',()=>{if(!relevant())return;rejected=true;report('rejected','Connection rejected. Saved pairing is retained; review access on the Mac.',credential);});
         client.addEventListener('revoked',event=>{if(!relevant()||event.detail?.authenticated!==true)return;rejected=true;report('revoked','The Mac revoked this connection. Pair again to restore access.',credential);});

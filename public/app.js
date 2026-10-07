@@ -1,3 +1,5 @@
+import {usageSidebar,usageDetails} from './provider-usage-view.js';
+import { bindDesktopBrowserRecents } from './browser-recents.js';
 import { mountHome } from './home.js';
 import { createTabSynchronizer, syncableTabURL } from './content-tab-sync.js';
 import { browserTabIcon } from './browser-icons.js';
@@ -109,27 +111,20 @@ async function saveAppearance(patch) {
   }
 }
 
-const providerNames={copilot:'Copilot',codex:'Codex',claude:'Claude'};
+
 function renderUsage() {
   const host=$('#provider-usage');if(!host)return;
   host.hidden=state.data?.settings?.appearance?.showProviderUsage===false;
   const collapsed=state.data?.settings?.appearance?.providerUsageCollapsed===true;
   host.classList.toggle('usage-collapsed',collapsed);
-  host.innerHTML=`<div class="usage-heading"><span>AI Allowance</span><button id="toggle-usage" class="subtle" aria-label="${collapsed?'Expand':'Collapse'} AI allowance" aria-expanded="${!collapsed}" aria-controls="provider-usage-rows" ${appearanceBusy?'disabled':''}>${collapsed?'⌄':'⌃'}</button></div><div id="provider-usage-rows" ${collapsed?'hidden':''}>`+Object.entries(providerNames).map(([id,name])=>{
-    const entry=usageValue?.providers?.[id];
-    const windows=entry?.windows || [];
-    const reported=windows.filter(w=>Number.isFinite(w.remainingPercent) && !w.unlimited);
-    const remaining=reported.length?Math.max(0,Math.min(100,...reported.map(w=>w.remainingPercent))):null;
-    const label=remaining!==null?remaining.toLocaleString(undefined,{maximumFractionDigits:1})+'%':windows.length&&windows.every(w=>w.unlimited)?'Unlimited':'Unavailable';
-    return `<button class="provider-usage-row" data-usage-provider="${id}" aria-label="${name} usage details: ${label} remaining" title="${name}: ${label} remaining${entry?.stale?' · Last known':''}"><span>${name}</span><span class="usage-pill">${remaining!==null?`<progress max="100" value="${remaining}" aria-label="${name} allowance remaining"></progress>`:''}<strong>${remaining!==null?label:label==='Unlimited'?'∞':'—'}</strong></span>${entry?.stale?'<small class="usage-stale">Last known</small>':''}</button>`;
-  }).join('')+'</div>';
+  host.innerHTML=usageSidebar(usageValue,{collapsed,appearanceBusy});
   $('#toggle-usage').onclick=()=>saveAppearance({providerUsageCollapsed:!collapsed}).catch(e=>toast(e.message));
   host.querySelectorAll('[data-usage-provider]').forEach(button=>button.onclick=()=>showUsageDetails(button.dataset.usageProvider));
 }
 function showUsageDetails(id) {
   const entry=usageValue?.providers?.[id];const windows=entry?.windows || [];
   const dialog=$('#dialog');dialog.dataset.usageDetailProvider=id;
-  dialog.innerHTML=`<div class="usage-dialog"><div class="heading"><div><div class="eyebrow">Account allowance</div><h2>${providerNames[id]}</h2></div><button id="usage-close" aria-label="Close usage details">×</button></div><p class="note">The sidebar shows the lowest reported remaining allowance. These account limits are separate from tokens in one chat.</p>${windows.length?windows.map(w=>{const remaining=Number.isFinite(w.remainingPercent)?Math.max(0,Math.min(100,w.remainingPercent)):null;return `<section class="usage-window"><div class="heading"><span>${escape(w.label || w.id)}</span><strong>${w.unlimited?'Unlimited':remaining===null?'Unavailable':remaining.toLocaleString(undefined,{maximumFractionDigits:1})+'% remaining'}</strong></div>${remaining!==null&&!w.unlimited?`<progress max="100" value="${remaining}" aria-label="${escape(w.label || w.id)} remaining"></progress>`:''}<p class="note">${w.resetAt?(w.resetSource==='expected-monthly'?'Expected reset ':'Resets ')+escape(new Date(w.resetAt).toLocaleString()):escape(w.resetNote || 'Reset time not reported')}${w.billingNote?' · '+escape(w.billingNote):''}</p></section>`;}).join(''):'<p>Account allowance has not been reported.</p>'}${entry?.error?`<p class="banner">${escape(entry.error)}</p>`:''}<p class="note">${entry?.checkedAt?'Last checked '+escape(new Date(entry.checkedAt).toLocaleString()):'Not checked'}${entry?.source?' · '+escape(entry.source):''}${entry?.observedAt?'<br>Provider observation: '+escape(new Date(entry.observedAt).toLocaleString()):''}</p><div class="actions"><button id="usage-refresh" ${usageBusy?'disabled':''}>Refresh usage</button><button id="usage-provider">Provider settings</button></div></div>`;
+  dialog.innerHTML=usageDetails(usageValue,id,{busy:usageBusy});
   if(!dialog.open)dialog.showModal();
   $('#usage-close').onclick=()=>dialog.close();
   $('#usage-refresh').onclick=()=>refreshUsage(true);
@@ -671,7 +666,7 @@ function renderBrowser() {
   bindBrowserAddressMenu($('#browser-url'),state.tab,{showDialog,toast});
   const navigateBrowser=async raw=>{try{const url=browserTarget(raw);await command('navigate',{url});const tab=state.tabs.find(t=>t.id===state.tab);if(tab){tab.info={...tab.info,url,loaded:true};renderBrowser();}}catch(error){toast(error.message);}};
   $('#browser-form').onsubmit=event=>{event.preventDefault();void navigateBrowser($('#browser-url').value);$('#browser-url').blur();};
-  $('#browser-url').onfocus=()=>$('#browser-url').select();
+  bindDesktopBrowserRecents($('#browser-url'),{api,navigate:navigateBrowser,toast});
   for (const direction of ['back', 'forward']) {
     const button = $('#browser-' + direction), tabId = state.tab;
     bindBrowserHistoryButton(button, {direction, tabId, group:'main', selectionRevision:browserSurfaceRevision,
@@ -687,6 +682,7 @@ function renderBrowser() {
   else if(current.info.loaded===false){void window.desktop?.browser({action:'hide',...browserSurfaceIdentity()});$('#browser-area').innerHTML='<div class="empty"><p>This tab is unloaded.</p><button id="browser-load">Load tab</button></div>';$('#browser-load').onclick=async()=>{await command('activate');current.info.loaded=true;renderBrowser();};}
   else requestAnimationFrame(browserBounds);
   renderChatSubtabs();
+  if(!current?.info?.url)$('#browser-url').focus({preventScroll:true});
 }
 const lines=value=>value.split('\n').map(s=>s.trim()).filter(Boolean);
 const permissionModeNames={ask:'Ask each time',custom:'Saved rules only',trusted:'Trusted workspace',autopilot:'Auto-approve tools'};

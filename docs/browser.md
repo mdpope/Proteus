@@ -3,6 +3,12 @@
 Electron owns the visible WebContentsView tabs, their persistent sign-in session, page titles,
 address bar, navigation history, and lifecycle. Proteus supplies the tab strip and browser controls.
 Enter navigates; Command/Ctrl+L focuses the address; links opening new windows create new tabs.
+New browser tabs focus the address immediately on desktop, website and native clients. Focusing or
+clicking the address shows up to 20 distinct recent sites, newest visit first, with URL, date/time and
+the device recorded for that visit. Desktop merges retained local and authorized account history;
+web/native use authorized account history. Missing device names remain Unknown device. Arrow keys
+and Enter select desktop/web suggestions; Escape or clicking elsewhere dismisses them. The mobile
+list scrolls below the field and Done dismisses it. No external system-browser history is imported.
 Hold Back or Forward for 450 milliseconds to open that direction’s native history menu; right-click,
 Arrow Down and Shift+F10 also open it. A short click navigates one entry. Entries are nearest first.
 Selecting an entry jumps through Chromium history; if navigation changed while the menu was open,

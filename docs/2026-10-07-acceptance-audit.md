@@ -4,7 +4,14 @@ The operator rejected 0.2.2 acceptance on October 6 (the audit continued after m
 This audit supersedes blanket completion language in the earlier release/handoff. It covers all
 22 October 6 build items, all 28 October 5 follow-up items, and the additional current reports.
 Source presence, synthetic regression, installation, and real workflow acceptance are separate.
-No new production deployment or physical-device installation is claimed by this audit.
+The first correction is source commit `c5bda4297293ebbcb10f56c8c3a680840f71fa34`, version 0.2.3.
+Website release `20261007T035838Z` passed 14/14 endpoint checks; runtime configuration, schema and
+nutrition data were preserved. Build Mac runs the signed correction with unchanged signer,
+protected data and initial workspace projection. Later authoritative remote-tab reconciliation is
+being compared with HC's pre-update scope revisions; no stale workspace was restored. HC's chat
+installed and launched the same signed artifact; its post-launch verification remains pending.
+Both physical iPad and iPhone installed and launched 0.2.3 (2610.6.2), with app data/preferences and
+two destination identities preserved. Installation does not certify every physical gesture below.
 Screenshots containing real chats and workplace URLs are evidence only and are not copied into Git.
 
 ## Confirmed failures and current corrections
@@ -40,6 +47,23 @@ Additional failures verified during this audit:
 - Website archived-chat menu vanished on live refresh: the archived index was cleared before its
   replacement arrived, and rerender discarded menu selection. Retain the index during refresh,
   apply authoritative lifecycle changes immediately, and restore the menu against updated rows.
+
+## Follow-up reports while reviewing the installed correction
+
+- Standup links: web showed general browser bookmarks instead of the selected shared list's links.
+  Both now render the same compact name/URL/right-aligned actions table. API storage already existed;
+  web now edits those revision-checked records and preserves IDs during roster edits. Desktop UI and
+  actual Laravel add/edit/roster-save/reload/Standup/remove checks passed with synthetic data.
+- New browser focus / recent sites: source focuses new desktop/web/native address fields and shows
+  20 distinct URLs sorted by latest visit, with date/time and that visit's device. Desktop keyboard,
+  mouse selection, dismissal and Team/main focus checks passed. The native ordering unit test and iPad focus/20-row/device/selection/dismissal plus existing Go/Back/Forward UI tests passed; iPhone and installed-device follow-up are separate gates.
+- Resources overflow: fixed table width and ellipsis keep long tab names/process notes on one line;
+  Electron checks at 1440px and 900px retain visible action buttons without horizontal overflow.
+- iPad black chat-browser strip: the child strip inherited a transparent background while the main
+  strip used system material. Both now share explicit green native tab colors and typography; Team
+  strips use the same style. This late correction needs its own native build.
+- HC Claude allowance: newly reported and routed to the owning Mac chat for diagnosis of the actual
+  installed app. The earlier Copilot diagnosis does not establish Claude health.
 
 ## October 6 build: all 22 items
 
@@ -169,3 +193,8 @@ Native iPad real-gesture Back/Forward, held history selection and 40-event spaci
 The history check exposed a missing Team active-tab accessibility value and observation during
 in-flight navigation; both are corrected. Website reading anchor restoration now follows the
 restoration of disclosure layout, preventing scroll clamping during live refresh.
+
+## Follow-up validation and current installation boundary
+The installed baseline on both Macs, website and physical iPad/iPhone is 0.2.3 from c5bda429 (native 2610.6.2). Signed identity, data, pairing and runtime checks passed. HC Copilot allowance and Refresh passed. HC Claude is signed out and explicitly deferred by the operator until tomorrow; no Claude patch or invented allowance.
+
+The subsequent Standup table/API links, address focus/20 shared recents, Resources truncation, iPad green tab bars, shared desktop/web allowance popups and plain web nested Details are source changes awaiting the next signed rollout. 368 Node tests and desktop follow-up checks pass. Actual Laravel shell checks (24), web Engine Room groups (8), full remote web groups (29), iPad browser tests (2), iPhone recents test (1) and native recents unit test pass. Physical installs do not alone prove every live cross-device workflow.

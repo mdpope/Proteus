@@ -291,6 +291,9 @@ struct NativeChatScrollLocation {
     func selectChatChild(_ id: String, for chatKey: String) { chatSelectedChildren[chatKey] = id; saveDocumentTabs() }
     func refresh(_ life: LifeStore) async {
         #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--synthetic-address-recents") {
+            snapshot = .object(["history": .array((0..<25).map { number in .object(["id": .string("v\(number)"), "title": .string("Visited \(number)"), "url": .string("http://127.0.0.1:4329/browser/one#visit=\(number)"), "visitedAt": .string(String(format: "2026-10-07T00:%02d:00Z", number)), "deviceName": .string("Fixture iPad")]) })]); return
+        }
         if ProcessInfo.processInfo.arguments.contains("--synthetic-team-lists") {
             snapshot = .object(["teamLists": .array([
                 .object(["id": .string("first"), "revision": .string("alpha-v1"), "name": .string("Alpha configuration"), "timezone": .string("UTC"), "members": .array([.object(["id": .string("alpha-member"), "name": .string("Alice"), "mode": .string("fixed")])]), "links": .array([.object(["id": .string("alpha-link"), "title": .string("Alpha link"), "url": .string("https://example.test/alpha")])])]),
@@ -373,6 +376,14 @@ struct NativeChatScrollLocation {
             let keys = Set(object.keys.map { $0.lowercased() })
             return keys.isSuperset(of: ["hostid", "key", "relay"]) || keys.isSuperset(of: ["hostid", "deviceid", "key"])
         }
+    }
+    static func recentBrowserVisits(_ items: [JSON]) -> [JSON] {
+        func time(_ item: JSON) -> Date { ProviderAllowance.date(item["visitedAt"].string) ?? ProviderAllowance.date(item["createdAt"].string) ?? .distantPast }
+        var seen = Set<String>()
+        return Array(items.sorted { time($0) > time($1) }.filter { item in
+            guard let url = safeURL(item["url"].string) else { return false }
+            return seen.insert(url.absoluteString).inserted
+        }.prefix(20))
     }
     static func historyDeviceID(defaults: UserDefaults = .standard) -> String {
         let key = "browserHistoryDeviceId"

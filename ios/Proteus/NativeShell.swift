@@ -1,6 +1,13 @@
 import SwiftUI
 import UIKit
-enum NativeTheme { static let accent = Color(red: 0.67, green: 0.86, blue: 0.49) }
+enum NativeTheme {
+    static let accent = Color(red: 0.67, green: 0.86, blue: 0.49)
+    static let tabBackground = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 20/255, green: 27/255, blue: 24/255, alpha: 1) : UIColor(red: 235/255, green: 241/255, blue: 235/255, alpha: 1) })
+    static let tabText = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 167/255, green: 182/255, blue: 172/255, alpha: 1) : UIColor(red: 62/255, green: 82/255, blue: 68/255, alpha: 1) })
+}
+extension View {
+    func nativeTabBar() -> some View { font(.system(size: 14, weight: .medium)).foregroundStyle(NativeTheme.tabText).background(NativeTheme.tabBackground) }
+}
 struct NativeTabClipProbe: UIViewRepresentable {
     var onChange: (Bool) -> Void
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -205,7 +212,7 @@ struct NativeShell: View {
                                     Button("File · grant required", systemImage: "doc") {}.disabled(true)
                                 } label: { Image(systemName: "plus") }
                                     .padding(12).accessibilityLabel("New tab").accessibilityIdentifier("new-main-browser-tab")
-                        }.background(.bar)
+                        }.nativeTabBar()
                         Divider(); if let selected = opened.first(where: { $0.id == selectedTab }) { contentTab(selected) } else { content(area) }
                     }
                 }.overlay(alignment: .leading) {

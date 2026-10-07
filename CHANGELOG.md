@@ -2,6 +2,12 @@
 
 ## 0.2.3 — October 7, 2026
 
+- Share desktop/web AI Allowance pills and provider detail dialogs, including refresh and one collapse state. Show the connected Mac once with a green status dot and version below. Remove the extra box/border inside web Activity Details.
+- Show Standup links in matching desktop/web name-and-URL rows with quiet right-aligned Edit/Remove actions. Website Team now uses the selected shared list's API links; roster edits preserve link IDs.
+- Focus the address field in new browser tabs on desktop, website and native clients. Show the 20 latest distinct visited sites with date/time and originating device when editing the address.
+- Use one green native tab-bar background and text style for main, chat and Team browser strips, including iPad.
+- Keep long tab titles and process labels on one truncated line in Resources, with actions inside the page width.
+
 - Expand the shared Home capabilities into the complete project guide and show the full version/build in its own box.
 - Preserve loaded chat history during live updates and recover earlier pages with a stable boundary.
 - Restore bounded browser Back/Forward history through synchronized chat/Team tabs and native app restarts; retain native browser views during URL reconciliation.

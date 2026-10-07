@@ -693,6 +693,14 @@ extension DestinationTests {
 }
 
 final class NativeParityTests: XCTestCase {
+    @MainActor func testAddressRecentsUseLatestVisitDeviceAndTwentyUniqueURLs() {
+        var items: [JSON] = (0..<25).map { number in .object(["id": .string("v\(number)"), "url": .string("https://example.test/\(number)"), "visitedAt": .string(String(format: "2026-10-07T00:%02d:00Z", number)), "deviceName": .string("Mac")]) }
+        items.append(.object(["id": .string("latest"), "url": .string("https://example.test/0"), "visitedAt": .string("2026-10-07T01:00:00Z"), "deviceName": .string("iPad")]))
+        items.append(.object(["url": .string("javascript:alert(1)"), "visitedAt": .string("2026-10-07T02:00:00Z")]))
+        let result = SharedAppStore.recentBrowserVisits(items)
+        XCTAssertEqual(result.count, 20); XCTAssertEqual(result.first?["id"].string, "latest"); XCTAssertEqual(result.first?["deviceName"].string, "iPad")
+        XCTAssertEqual(result[1]["url"].string, "https://example.test/24"); XCTAssertEqual(Set(result.map { $0["url"].string }).count, 20)
+    }
     @MainActor func testBrowserScopesAndOneHourSixTabRetention() throws {
         let shared = SharedAppStore()
         shared.open(nil, title: "Main", scope: "main")

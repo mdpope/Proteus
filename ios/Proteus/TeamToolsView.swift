@@ -48,7 +48,7 @@ struct TeamToolsView: View {
                         Menu { Button("Browser", systemImage: "globe") { shared.open(nil); section = shared.selectedBrowser ?? "Overview" }; Button("Standup", systemImage: "person.3") { section = "Standup" } } label: { Image(systemName: "plus") }.padding(12).accessibilityLabel("Add Team tab").accessibilityIdentifier("team-new-browser-tab")
                         if sizeClass == .regular { Button(docked ? "Undock standup" : "Dock standup", systemImage: "sidebar.left") { docked.toggle() }.padding(8) }
 
-                    }
+                    }.nativeTabBar()
                     Divider()
                     HStack(spacing: 0) {
                         if docked && sizeClass == .regular { StandupView().frame(width: 300); Divider() }
@@ -173,17 +173,19 @@ struct TeamBrowserView: View {
             }.buttonStyle(.plain) }.scrollIndicators(.hidden)
                 .mask { LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.9), .init(color: .clear, location: 1)], startPoint: .leading, endPoint: .trailing) }
                 Menu { Button("Browser", systemImage: "globe") { shared.open(nil, scope: scope) } } label: { Image(systemName: "plus") }.padding(12).accessibilityLabel("Add tab").accessibilityIdentifier("browser-new-tab")
-            }
+            }.nativeTabBar()
             }
             Divider()
             toolbar
+            if addressFocused { recentSites }
             Divider()
             if !shared.downloads.isEmpty { HStack { ProgressView().accessibilityLabel("Downloading linked file"); Button("Cancel download") { for transfer in Array(shared.downloads.values) { transfer.cancel() } } }.padding(8) }
             if let tab = selectedTab, tab.url != nil { if shared.unloadedBrowsers.contains(tab.id) { ContentUnavailableView { Label("Page unloaded", systemImage: "pause.circle") } actions: { Button("Reload page") { shared.reload(tab.id); shared.touch(tab.id) } } } else { NativeBrowser(tab: tab).id(tab.id) } }
             else { home }
         }.sheet(isPresented: $overview) { BrowserTabOverview(scope: scope) }
-        .onAppear { if tabs.isEmpty && showTabs { shared.open(nil, scope: scope) }; text = selectedTab?.url ?? ""; engine = ["google": "Google", "duckduckgo": "DuckDuckGo", "bing": "Bing"][shared.snapshot["preferences"]["searchEngine"].string] ?? "Google" }
-        .onChange(of: selectedID) { _, _ in addressFocused = false; text = selectedTab?.url ?? "" }
+        .onAppear { if tabs.isEmpty && showTabs { shared.open(nil, scope: scope) }; text = selectedTab?.url ?? ""; engine = ["google": "Google", "duckduckgo": "DuckDuckGo", "bing": "Bing"][shared.snapshot["preferences"]["searchEngine"].string] ?? "Google"; addressFocused = selectedTab?.url == nil }
+        .onChange(of: selectedID) { _, _ in text = selectedTab?.url ?? ""; addressFocused = selectedTab?.url == nil }
+        .task(id: addressFocused) { if addressFocused { await shared.refresh(life) } }
         .onChange(of: navigation.url) { _, url in if !addressFocused && !url.isEmpty { text = url } }
     }
     private var toolbar: some View {
@@ -209,6 +211,25 @@ struct TeamBrowserView: View {
         }.buttonStyle(.plain).foregroundStyle(control).font(.system(size: 14, weight: .medium))
             .padding(.horizontal, 4).padding(.vertical, 2)
             .frame(minHeight: 44).background { if colorScheme == .dark { chrome } else { Rectangle().fill(.bar) } }
+    }
+    private var recentSites: some View {
+        let items = SharedAppStore.recentBrowserVisits(shared.snapshot["history"].array)
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack { Text("Recent sites").font(.subheadline.weight(.semibold)); Spacer(); Button("Done") { addressFocused = false } }.padding(12)
+                if items.isEmpty { Text("No recent sites yet.").foregroundStyle(.secondary).padding(12) }
+                ForEach(items, id: \.self) { item in
+                    Button { text = item["url"].string; navigate() } label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(item["title"].string.isEmpty ? item["url"].string : item["title"].string).font(.subheadline).lineLimit(1)
+                            Text(item["url"].string).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            Text(BrowserHistoryRows.details(item, timeZone: .current, locale: .current)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12).padding(.vertical, 10).contentShape(Rectangle())
+                    }.buttonStyle(.plain).accessibilityIdentifier("browser-recent-" + item["id"].string)
+                    Divider()
+                }
+            }
+        }.frame(maxHeight: 240).background(Color(uiColor: .secondarySystemBackground)).accessibilityIdentifier("browser-recent-sites")
     }
     private var home: some View {
         List {

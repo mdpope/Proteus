@@ -453,6 +453,24 @@ final class RemoteUITests: XCTestCase {
         app.buttons["Chats"].firstMatch.tap()
         XCTAssertEqual(app.buttons[tabID].frame.minX, before, accuracy: 2, "A second left navigation must preserve the same offset")
     }
+    @MainActor func testNewBrowserFocusAndTwentyRecentSites() {
+        let app = XCUIApplication(); app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-browser-workspace", "--synthetic-address-recents"]; app.launch()
+        XCTAssertTrue(app.buttons["destination-picker"].waitForExistence(timeout: 20))
+        if app.tabBars.buttons["Team"].exists { app.tabBars.buttons["Team"].tap() } else { app.buttons["Team"].firstMatch.tap() }
+        app.buttons["team-new-browser-tab"].tap(); app.buttons["Browser"].firstMatch.tap()
+        let address = app.textFields["browser-address"]
+        XCTAssertTrue(address.waitForExistence(timeout: 15))
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "New tab opens the address keyboard without another tap")
+        let recent = app.buttons["browser-recent-v24"]
+        XCTAssertTrue(recent.waitForExistence(timeout: 10)); XCTAssertTrue(recent.label.contains("Fixture iPad"))
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "browser-recent-v")).count, 20)
+        recent.tap(); let loaded = app.webViews.staticTexts["First browser page"].waitForExistence(timeout: 15)
+        if !loaded { let failure = XCTAttachment(screenshot: app.screenshot()); failure.name = "Recent navigation failure"; failure.lifetime = .keepAlways; add(failure); print(app.debugDescription) }
+        XCTAssertTrue(loaded)
+        address.tap(); XCTAssertTrue(recent.waitForExistence(timeout: 5)); app.buttons["Done"].firstMatch.tap()
+        XCTAssertFalse(recent.exists)
+        let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Browser focus and recent sites"; screenshot.lifetime = .keepAlways; add(screenshot)
+    }
     @MainActor func testBrowserGoKeepsTabAndToolbarTracksBackForwardRefresh() {
         let app = XCUIApplication(); app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-browser-workspace"]; app.launch()
         XCTAssertTrue(app.buttons["destination-picker"].waitForExistence(timeout: 20), "Synthetic Alpha Mac must be selected before browser navigation")

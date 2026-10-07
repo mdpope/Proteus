@@ -509,7 +509,7 @@ struct ChatView: View {
                 Text(scrollTrace.joined(separator: " | ")).font(.caption2).lineLimit(1).frame(width: 100).accessibilityIdentifier("chat-scroll-trace")
             }
             #endif
-        }
+        }.nativeTabBar()
     }
     private func closeChild(_ id: String) {
         if shared.tabs(in: chatBrowserScope).contains(where: { $0.id == id }) { shared.close(id) }

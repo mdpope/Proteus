@@ -1,3 +1,6 @@
+@import "../../../public/provider-usage.css";
+@import "../../../public/standup-links.css";
+@import "../../../public/browser-recents.css";
 @import "../../../public/home.css";
 @import "../../../public/proteus-theme.css";
 @import "./shell.css";
@@ -53,3 +56,20 @@ body[data-browser-account] .remote-message.assistant{margin:12px 0;padding:16px 
 body[data-browser-account] .remote-message.system{font-size:12px;background:#17201c;border-style:dashed;color:#a3b0a7}
 body[data-browser-account] .remote-message.remote-activity{padding:12px 14px;background:#1c2823;border:1px solid var(--proteus-line);border-radius:12px}
 body[data-browser-account] .remote-message.remote-activity.failed{background:#332c20;border-color:#775638}
+
+#engine-content .resource-tab-row{display:flex;flex-wrap:nowrap;min-width:0;width:100%;box-sizing:border-box}
+#engine-content .resource-tab-row>div:first-child{flex:1;min-width:0;overflow:hidden}
+#engine-content .resource-tab-row strong,#engine-content .resource-tab-row p{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#engine-content .resource-tab-row>div:last-child{flex:0 0 auto;display:flex;gap:8px}
+#engine-content .resource-process-table{width:100%;table-layout:fixed}
+#engine-content .resource-process-table th:first-child{width:60%}
+#engine-content .resource-process-table td,#engine-content .resource-process-table td .note{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+@media(max-width:550px){#engine-content .resource-process-table th:first-child{width:48%}#engine-content .resource-tab-row{gap:8px}#engine-content .resource-tab-row button{padding:8px}}
+
+#engine-content{grid-template-columns:minmax(0,1fr);min-width:0}#engine-content>.card,#resource-data{min-width:0}
+
+/* The inner Details disclosure follows desktop's plain, unboxed disclosure. */
+.remote-activity .remote-activity-item details{border:0;border-radius:0;padding:0;background:transparent;margin:6px 0 0}
+#shell-default-status{display:flex;align-items:center;gap:6px}
+.connection-dot{display:inline-block;width:6px;height:6px;flex:0 0 6px;border-radius:50%;background:var(--proteus-muted)}
+#shell-default-status[data-status="connected"] .connection-dot{background:var(--proteus-accent)}

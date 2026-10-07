@@ -1,0 +1,5 @@
+// One presentation for the selected API-backed team list on desktop and web.
+export function standupLinksMarkup(links, escape) {
+  if (!links?.length) return '<p class="note">No links saved for this list.</p>';
+  return `<div class="standup-links" role="table" aria-label="Standup links"><div class="standup-link-head" role="row"><span role="columnheader">Name</span><span role="columnheader">URL</span><span role="columnheader">Actions</span></div>${links.map(link => `<div class="standup-link-row" role="row"><a role="cell" data-standup-open href="${escape(link.url)}" target="_blank" rel="noopener noreferrer">${escape(link.title || link.url)}</a><a role="cell" class="standup-link-url" data-standup-open href="${escape(link.url)}" target="_blank" rel="noopener noreferrer" title="${escape(link.url)}">${escape(link.url)}</a><div role="cell" class="standup-link-actions"><button type="button" data-standup-edit="${escape(link.id)}" aria-label="Edit ${escape(link.title || link.url)}">Edit</button><button type="button" data-standup-remove="${escape(link.id)}" aria-label="Remove ${escape(link.title || link.url)}">Remove</button></div></div>`).join('')}</div>`;
+}

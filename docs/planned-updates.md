@@ -10,6 +10,15 @@ Maintain this as the single backlog. Design rationale is in `decisions.md`; rece
 retained as acceptance criteria; the installed versus unverified state is summarized immediately
 below and in `content-workspace-release.md`.
 
+## October 7 live-review follow-up
+
+Implemented in source: compact API-backed Standup link tables on desktop/web; stable link IDs on
+web roster edits; new browser tab address focus; latest 20 unique site suggestions with visit date
+and device; bounded resource titles/process notes. Full Node suite: 368 passed. Desktop follow-up
+and actual Laravel shared-list/focus checks passed. Native navigation and deployment follow below
+in the acceptance audit; source validation is not installed acceptance. HC Claude allowance has a
+new machine-specific report and is being investigated by the owning HC chat.
+
 ## October 6 bug/feature list — closed for build handoff
 
 The operator closed the original 21-item intake on October 6 and authorized implementation,
@@ -2096,3 +2105,5 @@ Proteus website’s control. Verify with synthetic multi-page history.
 0.2.3 implements the reopened Home, chrome, activity/details, tab-close, native spacing, stable
 chat paging, bounded browser-history persistence/sync and HC quota-auth corrections. See the
 acceptance audit for the all-50-item review and distinguish pending installed/live acceptance.
+
+October 7 follow-up: shared desktop/web allowance sidebar and modal details implemented; duplicate destination label removed; connected status dot and footer order match desktop. Plain nested Activity Details now matches desktop. HC Claude sign-in is deferred until tomorrow at the operator’s request in the HC chat; quota-only diagnosis found all existing CLI runtimes signed out. No model turn was used.
