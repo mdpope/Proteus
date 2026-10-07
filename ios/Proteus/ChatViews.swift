@@ -527,6 +527,16 @@ struct ChatView: View {
         else { documents.removeAll { $0.id == id }; shared.closeDocument(id, in: chatBrowserScope) }
         if selectedChild == id { selectedChild = "chat"; shared.selectChatChild("chat", for: chatBrowserScope) }
     }
+    private func messageTurn(at index: Int) -> JSON {
+        let events = run["events"].array
+        let turnID = events[index]["data"]["turnId"].string
+        guard !turnID.isEmpty, !events.prefix(index).contains(where: { $0["role"].string == "assistant" && $0["data"]["turnId"].string == turnID && !$0["text"].string.isEmpty }) else { return .null }
+        return run["turns"].array.first { $0["id"].string == turnID } ?? .null
+    }
+    private func streamingTurn(for key: String) -> JSON {
+        guard key == run["liveMessages"].object.keys.sorted().first, let turn = run["turns"].array.last else { return .null }
+        return run["events"].array.contains { $0["role"].string == "assistant" && $0["data"]["turnId"].string == turn["id"].string && !$0["text"].string.isEmpty } ? .null : turn
+    }
     private var conversation: some View {
         ScrollViewReader { proxy in
         ScrollView {
@@ -544,7 +554,7 @@ struct ChatView: View {
                             ChatActivityGroupView(events: activityGroup(startingAt: index), hostName: store.state["hostName"].string)
                         } else if event["role"].string != "assistant" || !event["text"].string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             if !event["data"]["delivery"]["state"].string.isEmpty { Text(event["data"]["delivery"]["state"].string.capitalized).font(.caption2).foregroundStyle(.teal) }
-                            MessageView(role: event["role"].string == "assistant" ? assistantName(event) : event["role"].string, text: event["text"].string, runID: id, timestamp: event["timestamp"].string.isEmpty ? event["at"].string : event["timestamp"].string, actionID: MessageActions.eligible(event) ? "\(store.connection?.hostId ?? "local"):\(id):\(absoluteIndex):\(event["at"].string)" : nil, sentAttachments: event["data"]["attachments"].array, onDocumentLink: event["role"].string == "assistant" ? { source in openDocument(source) } : nil, onResize: { Task { @MainActor in await Task.yield(); if followLatest && !userReadingGesture && !restoringConversation { proxy.scrollTo("chat-end", anchor: .bottom) } } })
+                            MessageView(role: event["role"].string == "assistant" ? assistantName(event) : event["role"].string, text: event["text"].string, runID: id, timestamp: event["timestamp"].string.isEmpty ? event["at"].string : event["timestamp"].string, turn: event["role"].string == "assistant" ? messageTurn(at: index) : .null, actionID: MessageActions.eligible(event) ? "\(store.connection?.hostId ?? "local"):\(id):\(absoluteIndex):\(event["at"].string)" : nil, sentAttachments: event["data"]["attachments"].array, onDocumentLink: event["role"].string == "assistant" ? { source in openDocument(source) } : nil, onResize: { Task { @MainActor in await Task.yield(); if followLatest && !userReadingGesture && !restoringConversation { proxy.scrollTo("chat-end", anchor: .bottom) } } })
                         }
                     }.id(absoluteIndex)
                         .accessibilityElement(children: .contain)
@@ -584,13 +594,14 @@ struct ChatView: View {
                             visibleAnchor = location
                         }
                 }
-                ForEach(run["liveMessages"].object.keys.sorted(), id: \.self) { key in MessageView(role: "\(assistantName(.null)) · streaming", text: run["liveMessages"][key].string, runID: id, onResize: { Task { @MainActor in await Task.yield(); if followLatest && !userReadingGesture && !restoringConversation { proxy.scrollTo("chat-end", anchor: .bottom) } } }) }
+                ForEach(run["liveMessages"].object.keys.sorted(), id: \.self) { key in MessageView(role: "\(assistantName(.null)) · streaming", text: run["liveMessages"][key].string, runID: id, turn: streamingTurn(for: key), onResize: { Task { @MainActor in await Task.yield(); if followLatest && !userReadingGesture && !restoringConversation { proxy.scrollTo("chat-end", anchor: .bottom) } } }) }
                 if pending != .null {
                     VStack(alignment: .leading, spacing: 12) {
                         Label("Your input is needed", systemImage: "person.crop.circle.badge.questionmark").font(.headline)
                         Text(pending["question"].string)
                         if pending["details"] != .null { PermissionRequestSummary(request: pending["details"]); DisclosureGroup("Request details") { Text(pending["details"].pretty).font(.caption.monospaced()).textSelection(.enabled) } }
                         if pending["type"].string == "permission" {
+                            Text("Approve once applies only to this request on this Mac. Saved workspace choices survive restart and affect matching chats and schedules until revoked.").font(.caption).foregroundStyle(.secondary)
                             HStack { Button("Deny", role: .destructive) { answer("deny") }; Button("Approve once") { answer("approve") }.buttonStyle(.borderedProminent) }
                             ForEach(pending["permissionChoices"].array, id: \.self) { choice in Button(choice["label"].string) { answer(choice["value"].string) } }
                         }
@@ -598,6 +609,7 @@ struct ChatView: View {
                 }
                 DisclosureGroup("Chat details & loaded context") {
                     VStack(alignment: .leading, spacing: 8) {
+                        RuntimeTimerView(turns:run["turns"].array,total:true,partial:run["timingPartial"].bool)
                         if lifecycleEnabled {
                             HStack {
                                 Button(run["archived"].bool ? "Unarchive chat" : "Archive chat") { Task { await archiveChat() } }.disabled(chatHasPendingWork(run))
@@ -1174,7 +1186,7 @@ struct ChatActivityGroupView: View {
                 }
             }.padding(.top, 8)
         } label: {
-            HStack { if running { ProgressView().controlSize(.small) } else { Image(systemName: failed ? "exclamationmark.triangle.fill" : "checkmark.circle").foregroundStyle(failed ? .orange : .teal) }; Text("Activity · " + summary).font(.subheadline); Spacer() }
+            HStack { if running { ProgressView().controlSize(.small) } else { Image(systemName: failed ? "exclamationmark.triangle.fill" : "checkmark.circle").foregroundStyle(failed ? .orange : .teal) }; Text("Activity · " + summary).font(.subheadline); Spacer(); RuntimeTimerView(tools:tools) }
         }.padding(12).background(failed ? Color.orange.opacity(0.12) : Color.green.opacity(0.09), in: RoundedRectangle(cornerRadius: 12))
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(failed ? Color.orange.opacity(0.6) : Color.teal.opacity(0.25)))
             .onAppear { if running || failed { expanded = true } }
@@ -1188,13 +1200,14 @@ struct MessageView: View {
     let text: String
     let runID: String
     var timestamp: String = ""
+    var turn: JSON = .null
     var actionID: String? = nil
     var sentAttachments: [JSON] = []
     var onDocumentLink: ((String) -> Void)? = nil
     var onResize: () -> Void = {}
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack { Text(role.uppercased()).font(.caption2.weight(.bold)); Spacer(); if let date = ProviderAllowance.date(timestamp) { Text(nativeTimestamp(date, timezone: timeZone.identifier)).font(.caption2).accessibilityIdentifier("message-timestamp") } }.foregroundStyle(.secondary)
+            HStack { Text(role.uppercased()).font(.caption2.weight(.bold)); Spacer(); if role != "user" && turn != .null { RuntimeTimerView(turns:[turn]) }; if let date = ProviderAllowance.date(timestamp) { Text(nativeTimestamp(date, timezone: timeZone.identifier)).font(.caption2).accessibilityIdentifier("message-timestamp") } }.foregroundStyle(.secondary)
             ZStack(alignment: .topLeading) {
                 if height == 0 { Text(text).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
                 MarkdownView(text: text, runID: runID, store: store, height: $height, onDocumentLink: onDocumentLink, onResize: onResize).frame(height: max(height, 1)).opacity(height > 0 ? 1 : 0)

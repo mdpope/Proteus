@@ -105,7 +105,7 @@ export function bindContextPicker(prefix = 'chat', options = {}) {
 }
 function modelOptions(models, selected) {
   const missing = selected && !models.some(model => model.id === selected);
-  return '<option value="">Choose a model</option>' + (missing ? `<option value="${esc(selected)}" selected>${esc(selected)} · ${models.length ? 'unavailable' : 'catalog not loaded'}</option>` : '') + models.map(model => `<option value="${esc(model.id)}" ${model.id === selected ? 'selected' : ''}>${esc(model.name || model.id)} · ${esc(model.id)}</option>`).join('');
+  return '<option value="">Choose a model</option>' + (missing ? `<option value="${esc(selected)}" selected>${esc(selected)} · ${models.length ? 'unavailable' : 'catalog not loaded'}</option>` : '') + models.map(model => `<option value="${esc(model.id)}" ${model.id === selected ? 'selected' : ''}>${esc(model.name || model.id)}</option>`).join('');
 }
 export const tokenSize = value => Number.isFinite(value) ? (value >= 1_000_000 ? value / 1_000_000 + 'M' : value >= 1000 ? value / 1000 + 'K' : String(value)) : 'Not reported';
 export const contextSize = tier => `${tier.promptTokens ? tokenSize(tier.promptTokens) : 'Capacity not reported'} · ${tier.id === 'default' ? 'Default' : tier.id === 'long_context' ? 'Long context' : tier.id}`;
@@ -145,7 +145,7 @@ function updateModelControls(id, providerId) {
   }
   select.disabled = local; effort.disabled = local; context.disabled = local; speed.disabled = local;
   $('#' + id + '-capabilities').textContent = local ? 'Local rehearsal uses no model.' : [
-    !model ? 'Selected model is unavailable or the catalog has not loaded.' : !efforts.length ? (controls?.reasoningSupported === false ? 'This model does not support thinking effort.' : 'Thinking effort choices are not reported.') : '',
+    !select.value ? 'Choose a model.' : !model ? 'Selected model is unavailable or the catalog has not loaded.' : !efforts.length ? (controls?.reasoningSupported === false ? 'This model does not support thinking effort.' : 'Thinking effort choices are not reported.') : '',
     controls?.maxOutputTokens ? 'Maximum output: ' + tokenSize(controls.maxOutputTokens) + ' tokens. Context size is the prompt budget; output is separate.' : 'Context capacity is not advertised by this catalog; actual usage appears during a run.',
     provider === 'codex' ? 'Uses the Mac’s Codex sign-in. Selected instructions and skills are supplied; editor-specific agent tool filters are not supported. MCP servers require a grant for all their selected tools.' : '',
     data?.checkedAt ? 'Catalog checked ' + new Date(data.checkedAt).toLocaleTimeString() + '. Refreshes every five minutes.' : 'Catalog has not been checked.',
@@ -172,11 +172,13 @@ export async function refreshModels(id, providerId, force = false) {
     updateModelControls(id, providerId);
   };
   updateModelControls(id, providerId); if (['rehearsal','local-process'].includes(provider)) return;
+  const requestGeneration=select.dataset.catalogGeneration=String(Number(select.dataset.catalogGeneration||0)+1);
   const old = catalogFor(provider), checked = old?.attemptedAt || old?.checkedAt;
   if (!force && checked && Date.now() - Date.parse(checked) < (old.refreshIntervalMs || 300_000)) return;
   select.disabled = true;
   try {
     const data = await u.api('/api/provider', { force, provider });
+    if(!select.isConnected||select.dataset.provider!==provider||select.dataset.catalogGeneration!==requestGeneration)return;
     u.state.data.providerStatuses ??= {}; u.state.data.providerStatuses[provider] = data;
     if (provider === 'copilot') u.state.data.providerStatus = data;
     document.querySelectorAll('[data-model-picker]').forEach(root => {

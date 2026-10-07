@@ -2699,3 +2699,13 @@ chat paging, bounded browser-history persistence/sync and HC quota-auth correcti
 acceptance audit for the all-50-item review and distinguish pending installed/live acceptance.
 
 October 7 follow-up: shared desktop/web allowance sidebar and modal details implemented; duplicate destination label removed; connected status dot and footer order match desktop. Plain nested Activity Details now matches desktop. HC Claude sign-in is deferred until tomorrow at the operator’s request in the HC chat; quota-only diagnosis found all existing CLI runtimes signed out. No model turn was used.
+
+
+## October 7 implementation reconciliation
+
+BF-2026-10-07-01 through -17 are reconciled against source, tests and installation in
+[the 0.2.4 implementation ledger](2026-10-07-implementation.md). The original intake wording above
+remains the acceptance contract. Project transfer destinations are deferred by the operator.
+Read-only provider-command output is the supported terminal integration; interactive provider PTY
+attachment is not exposed by the adapters. Integration profile mechanisms that cannot isolate
+credentials are explicitly listed in the ledger rather than marked connected from configuration.

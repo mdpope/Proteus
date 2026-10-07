@@ -42,7 +42,8 @@ export function bindTabReorder(list, selector, getId, move) {
     });
     node.addEventListener('drop', event => {
       event.preventDefault();
-      const source = dragged, target = getId(node), after = node.classList.contains('drop-after');
+      const source = dragged, target = getId(node), after = event.clientX > node.getBoundingClientRect().left + node.clientWidth / 2;
+      dragged = null;for(const item of nodes())item.classList.remove('dragging','drop-before','drop-after');
       if (source && target && source !== target) move(source, target, after);
     });
     node.addEventListener('keydown', event => {

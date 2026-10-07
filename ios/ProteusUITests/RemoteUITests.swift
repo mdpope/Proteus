@@ -653,7 +653,7 @@ final class RemoteUITests: XCTestCase {
         expectation(for: NSPredicate(format: "label == %@", "Oct 5, 3:00 AM GMT+9"), evaluatedWith: timestamp)
         waitForExpectations(timeout: 10)
     }
-    @MainActor private func showChats(_ app: XCUIApplication) { XCTAssertTrue(app.buttons["destination-picker"].waitForExistence(timeout: 25)); if app.tabBars.buttons["Chats"].exists { app.tabBars.buttons["Chats"].tap() } else { app.buttons["Chats"].firstMatch.tap() } }
+    @MainActor private func showChats(_ app: XCUIApplication) { XCTAssertTrue(app.buttons["destination-picker"].waitForExistence(timeout: 25)); if app.tabBars.buttons["Chats"].exists { app.tabBars.buttons["Chats"].tap() } else { let chats=app.buttons["sidebar-Chats"].exists ? app.buttons["sidebar-Chats"] : app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Chats")).firstMatch; if !chats.exists && app.buttons["Toggle sidebar"].exists { app.buttons["Toggle sidebar"].tap() }; XCTAssertTrue(chats.waitForExistence(timeout: 8)); chats.tap() } }
     @MainActor func testExpandableToolOutput() async throws {
         let (data, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/pair")!)
         let fixture = try JSONSerialization.jsonObject(with: data) as! [String: Any]
@@ -662,6 +662,9 @@ final class RemoteUITests: XCTestCase {
         app.buttons["pair-mac"].tap(); showChats(app); let newChat = app.buttons["new-chat"]; XCTAssertTrue(newChat.waitForExistence(timeout: 25)); newChat.tap()
         let prompt = app.textFields["chat-prompt"]; XCTAssertTrue(prompt.waitForExistence(timeout: 10)); prompt.tap(); prompt.typeText("Tool display rehearsal")
         app.buttons["start-chat"].tap(); XCTAssertTrue(app.staticTexts["Your input is needed"].waitForExistence(timeout: 20))
+        let group = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Activity · 1 tool")).firstMatch
+        for _ in 0..<8 { if group.exists && group.isHittable { break }; app.swipeDown() }
+        XCTAssertTrue(group.waitForExistence(timeout: 10)); group.tap()
         let tool = app.buttons["tool-activity-synthetic-read"]
         for _ in 0..<8 { if tool.exists && tool.isHittable { break }; app.swipeDown() }
         XCTAssertTrue(tool.waitForExistence(timeout: 10)); tool.tap()

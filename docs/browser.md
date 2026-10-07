@@ -295,3 +295,18 @@ or navigating with the sidebar retains the strip offset. Sidebar highlights foll
 chat/schedule as well as ordinary pages. Home uses an inset heading on iPad without a blank
 native navigation row. Mobile Home opens the bundled README project guide in a scrollable popup.
 These source corrections are planned for native build 2610.6.4; see the acceptance audit for rollout.
+
+## October 7 tab organization
+
+Presentation parent IDs travel with browser creation and popups. Clicked chat links capture their
+origin before asynchronous menus/IPC. Engine Room → Preferences selects the in-app or OS browser
+for ordinary clicked web links; the OS-reported default app name is shown. Agent browser tools
+remain in-app and their control grants are separate from tab presentation.
+
+Desktop main/chat/Team context menus offer left/right insertion. Browser tabs can move or copy
+between main tabs, local chats and Team. A move clears prior control access; a copy starts unloaded.
+Protected documents and live terminals explain why transfer is unsupported. Project destinations
+are deferred. Overview respects the current container and includes non-browser content cards;
+the visible overview button and Command-Shift-Backslash are available without a trackpad.
+Renderer pinch detection excludes editors/terminals/dialogs and ordinary scrolling. Native browser
+pinch remains distinct from renderer surfaces; actual physical trackpad feel requires acceptance.

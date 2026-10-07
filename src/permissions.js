@@ -116,8 +116,8 @@ export class PermissionStore {
     if (operationRule(request)) choices.push({ value: 'always-tool', label: `Always allow ${ruleLabel(operationRule(request))}` });
     // Whole-workspace modes must not silently approve a one-off outside path.
     if (!['read','write'].includes(request.kind) || (requestedPath(request, permissionContext(schedule)) && permissionContext(schedule).roots.some(root => within(requestedPath(request, permissionContext(schedule)), root)))) {
-      choices.push({ value: 'trust-workspace', label: 'Approve once and trust workspace files and read-only tools' });
-      choices.push({ value: 'autopilot-workspace', label: 'Auto-approve tools for this workspace' });
+      choices.push({ value: 'trust-workspace', label: 'Approve and save workspace trust' });
+      choices.push({ value: 'autopilot-workspace', label: 'Save auto-approval for this workspace' });
     }
     return choices;
   }

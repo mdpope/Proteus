@@ -1,11 +1,11 @@
 let ui;
 export function initMarkdownPicker(value) { ui = value; }
 const $ = selector => document.querySelector(selector);
-export async function openMarkdownPicker(initialMode = 'open', parentId = null, onOpened = null) {
+export async function openMarkdownPicker(initialMode = 'open', parentId = null, onOpened = null, guard = () => {}) {
   const esc = ui.escape;
   let mode = initialMode === 'new' ? 'new' : 'open', rootId = '', directory = '', selected = '', offset = 0, generation = 0, listing, busy = false, roots = [];
   ui.showDialog(`<div id="markdown-picker"><h2>Markdown</h2><div class="md-picker-modes" role="tablist" aria-label="Markdown action"><button type="button" id="md-mode-open" role="tab">Open existing</button><button type="button" id="md-mode-new" role="tab">New file</button></div><label class="field">Workspace folder<select id="md-root" aria-label="Workspace folder"><option>Loading workspaces…</option></select></label><p id="md-root-path" class="filepath note"></p><nav id="md-breadcrumb" class="md-picker-breadcrumb" aria-label="Current folder"></nav><div id="md-picker-list" class="md-picker-list" role="group" aria-label="Folders and Markdown files"></div><div id="md-pagination" class="actions"></div><div class="md-new-folder"><label>New folder<input id="md-folder-name" placeholder="Folder name" autocomplete="off"></label><button type="button" id="md-create-folder">Create folder here</button></div><div id="md-new-fields"><label class="field">Filename<input id="md-file-name" placeholder="Notes.md" autocomplete="off"></label><details><summary>Initial content (optional)</summary><textarea id="md-content" rows="5" aria-label="Initial Markdown content"></textarea></details></div><p id="md-selection" class="note"></p><p id="md-picker-status" class="note" role="status"></p><div class="actions"><button id="close-dialog">Cancel</button><button class="primary" id="dialog-submit">Open tab</button></div></div>`, async () => {
-    if (busy || !rootId) throw new Error('Wait for the selected workspace folder to load.');
+    guard();if (busy || !rootId) throw new Error('Wait for the selected workspace folder to load.');
     let document;
     if (mode === 'new') document = await ui.api('/api/workspace-files/create', { rootId, directory, name: $('#md-file-name').value, content: $('#md-content').value });
     else { if (!selected) throw new Error('Choose a Markdown file to open.'); document = await ui.api('/api/workspace-files/read', { rootId, file: selected }); }

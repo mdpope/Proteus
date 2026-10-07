@@ -7,6 +7,7 @@ import { revision } from './schedules.js';
 export function validateSettings(value) {
   if (value?.schemaVersion !== 1) throw new Error('Settings schemaVersion must be 1.');
   validateModelOptionShape(value);
+  if(value.preferences!==undefined&&(!value.preferences||typeof value.preferences!=='object'||Array.isArray(value.preferences)||value.preferences.clickedLinks!==undefined&&!['in-app','system'].includes(value.preferences.clickedLinks)))throw new Error('Choose in-app or system browser for clicked links.');
   if(value.appearance!==undefined&&(!value.appearance||typeof value.appearance!=='object'||Array.isArray(value.appearance)||(['showProviderUsage','providerUsageCollapsed','sidebarCollapsed'].some(key=>value.appearance[key]!==undefined&&typeof value.appearance[key]!=='boolean'))))throw new Error('Appearance settings must contain boolean usage preferences.');
   if (!['copilot','codex','claude','rehearsal'].includes(value.provider)) throw new Error('Choose a supported default provider.');
   if (value.provider !== 'rehearsal' && (!value.model?.trim() || value.model === 'auto')) throw new Error('Choose an explicit default model.');

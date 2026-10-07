@@ -1,5 +1,18 @@
 # Changes
 
+## 0.2.4 — October 7, 2026
+
+- Automatically recover eligible desktop peer connections with bounded jitter, heartbeat checks and authoritative refresh, preserving drafts and respecting manual disconnect and authentication failures.
+- Widen the desktop new-chat composer, choose a starting folder, add chat-only folders locally, refresh provider metadata and preserve draft text and attachments across destination switches.
+- Separate schedule paths from file actions and clarify approval lifetimes.
+- Retain original questions, option descriptions and stable answer associations; show active turn, tool-group and total runtime on desktop, website and native clients.
+- Keep clicked and agent-created browser pages with their originating chat, including popups, and save the Mac's clicked-link browser preference.
+- Add scoped tab overview, left/right insertion, browser move/copy between application, chat and Team containers, and durable standup-link ordering.
+- Tighten terminal layout and add an explicitly read-only view of actual provider command activity.
+- Expose existing chat-specific MCP consumers through Integration profiles. New isolated Azure/Jira/ADO credentials remain subject to the adapter limitations in the implementation ledger.
+
+Installation and live acceptance are recorded in `docs/2026-10-07-implementation.md`.
+
 ## October 7 implementation intake
 
 - Import the 17 requested changes and approved new-chat design from PR #18.

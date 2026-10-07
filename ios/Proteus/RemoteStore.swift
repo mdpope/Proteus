@@ -11,6 +11,7 @@ import Combine
     @Published var modelStatus: JSON = .null
     @Published var status = "Not paired"
     @Published var connected = false
+    var runtimeClockOffset: TimeInterval?
     @Published var error: String?
     @Published var selectedChat: String?
     @Published var paired = false
@@ -324,6 +325,7 @@ import Combine
         } catch { self.error = error.localizedDescription }
     }
     func mergeChat(_ value: JSON) {
+        if let observed = ProviderAllowance.date(value["observedAt"].string) { runtimeClockOffset = observed.timeIntervalSinceNow }
         let id = value["id"].string
         guard let old = chats[id] else { chats[id] = value; return }
         var events: [Int: JSON] = [:]

@@ -1,10 +1,10 @@
-let ui, overlay, opening = false;
+let ui, overlay, opening = false, scope = 'main';
 export function initBrowserOverview(options) { ui = options; }
 export const isBrowserOverviewOpen = () => !!overlay || opening;
-export async function showBrowserOverview() {
+export async function showBrowserOverview(requestedScope='main') {
   if (!window.desktop?.browser || opening) return;
   if (overlay) { overlay.focus(); return; }
-  opening = true;
+  opening = true;scope=requestedScope;
   try {
     const result = await window.desktop.browser({action:'overview'});
     overlay = document.createElement('dialog'); overlay.className = 'browser-overview';
@@ -14,7 +14,7 @@ export async function showBrowserOverview() {
     overlay.addEventListener('pointerdown',event=>{backdropPressed=event.target===overlay&&outside(event);});
     overlay.addEventListener('click',event=>{if(backdropPressed&&event.target===overlay&&outside(event)){event.preventDefault();event.stopPropagation();void close();}backdropPressed=false;});
     overlay.addEventListener('cancel', event => { event.preventDefault(); void close(); });
-    paint(ui.overviewGroups(result.tabs||[])); overlay.showModal();
+    paint(ui.overviewGroups(result.tabs||[],scope)); overlay.showModal();
   } catch (error) { await window.desktop.browser({action:'overview-end'}).catch(()=>{});ui.restore(); ui.toast(error.message); }
   finally { opening = false; }
 }
@@ -25,7 +25,7 @@ function paint(groups) {
   overlay.querySelector('[data-overview-done]').onclick=()=>void close();
   overlay.querySelectorAll('[data-overview-select]').forEach(button=>button.onclick=async()=>{const item=all.find(entry=>entry.id===button.dataset.overviewSelect);await close(false);if(item)ui.selectOverview(item);});
   overlay.querySelectorAll('[data-overview-close]').forEach(button=>button.onclick=async()=>{
-    button.disabled=true;try{const item=all.find(entry=>entry.id===button.dataset.overviewClose);if(item)await ui.closeOverview(item);if(overlay)paint(ui.overviewGroups([]));}
+    button.disabled=true;try{const item=all.find(entry=>entry.id===button.dataset.overviewClose);if(item)await ui.closeOverview(item);if(overlay)paint(ui.overviewGroups([],scope));}
     catch(error){button.disabled=false;ui.toast(error.message);}
   });
 }

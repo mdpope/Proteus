@@ -4,7 +4,7 @@ const {normalizeHistory,safeHistoryURL}=require('./browser-history.cjs');
 const MAX_SESSION_BYTES=2*1024*1024, MAX_TOTAL_HISTORY_BYTES=512*1024;
 const safeFavicon=value=>typeof value==='string'&&value.length<=96*1024&&/^data:image\/png;base64,[A-Za-z0-9+/]+=*$/.test(value)?value:undefined;
 const text = (value, max = 4096) => typeof value === 'string' ? value.slice(0, max) : '';
-const engineSections=['resources','providers','connections','security','account','settings','setup','usage','notifications','logs'];
+const engineSections=['resources','providers','connections','security','account','settings','setup','preferences','integrations','usage','notifications','logs'];
 function normalizeTeam(value){
   if(!value||typeof value!=='object')return undefined;
   const tabs=[],seen=new Set();
@@ -26,11 +26,11 @@ function normalizeTeam(value){
 function normalizeSession(value) {
   const tabs = [], seen = new Set();let historyBytes=0;
   for (const item of Array.isArray(value?.tabs) ? value.tabs.slice(0, 100) : []) {
-    if (!item || !['overview','schedule','run','markdown','browser','standup','omi','life','terminal','remote-run','remote-document','team','engine','home'].includes(item.type)) continue;
+    if (!item || !['overview','schedule','run','markdown','browser','standup','omi','life','terminal','agent-terminal','remote-run','remote-document','team','engine','home'].includes(item.type)) continue;
     const tab = {id:text(item.id,256),type:item.type,label:text(item.label,200)};
     if(text(item.customTitle,200))tab.customTitle=text(item.customTitle,200);
     if(text(item.contentTabId,256))tab.contentTabId=text(item.contentTabId,256);
-    if(['browser','markdown','terminal','remote-document'].includes(tab.type)&&typeof item.parentId==='string')tab.parentId=text(item.parentId,256);
+    if(['browser','markdown','terminal','agent-terminal','remote-document'].includes(tab.type)&&typeof item.parentId==='string')tab.parentId=text(item.parentId,256);
     if (!tab.id || seen.has(tab.id) || (tab.id==='overview') !== (tab.type==='overview')) continue;
     if (tab.type === 'remote-run') { if(!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(item.hostId||'')||!/^[a-zA-Z0-9_-]{1,128}$/.test(item.runId||''))continue;tab.hostId=item.hostId;tab.runId=item.runId;tab.id='peer:'+tab.hostId+':'+tab.runId; }
     if (tab.type === 'remote-document') {

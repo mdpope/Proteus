@@ -1,3 +1,4 @@
+import {startTurn,pauseTurn,resumeTurn,finishTurn,interruptTiming} from './run-timing.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -39,6 +40,8 @@ export class Engine extends EventEmitter {
           atomicJSON(file, run);
         }
         if (active.has(run.status)) {
+          interruptTiming(run);
+          for(const event of run.events)if(event.data?.question?.status==='pending')event.data.question.status='interrupted';
           run.status = 'interrupted'; run.pending = null; delete run.liveMessages;
           run.failureEventAt = clock().toISOString(); delete run.failureReviewedAt;
           for (const event of run.events) if (event.data?.delivery?.state === 'sending') Object.assign(event.data.delivery, {state:'failed',error:'The runner stopped before confirming delivery. Inspect the provider session before retrying.'});
@@ -54,7 +57,7 @@ export class Engine extends EventEmitter {
     if(run.chatPermission && run.chatPermission.contextId !== permissionContext(run.schedule).id){run.chatPermission=null;run.chatPermissionRevision=randomUUID();}
     run.updatedAt = this.now(); atomicJSON(path.join(this.runsDir, `${run.id}.json`), run); this.emit('change', run); }
   event(run, role, text, data) {
-    run.events.push({ role, text, ...(role === 'assistant' ? { agentName: agentName(run) } : {}), ...(data ? { data } : {}), at: this.now() }); this.persist(run);
+    run.events.push({ role, text, ...(role === 'assistant' ? { agentName: agentName(run) } : {}), data:{...data,...(run.turns?.at(-1)&&['running','awaiting_input'].includes(run.status)?{turnId:run.turns.at(-1).id}:{})}, at: this.now() }); this.persist(run);
   }
   stream(run, messageId, text) {
     run.liveMessages ??= {}; run.liveMessages[messageId] = (run.liveMessages[messageId] || '') + text;
@@ -206,6 +209,8 @@ export class Engine extends EventEmitter {
     if (!pending || run.pending?.id !== requestId) throw new Error('This request is no longer waiting for an answer.');
     if (typeof answer !== 'string' || !answer.trim()) throw new Error('A reply is required.');
     const isPermission = run.pending.type === 'permission';
+    const questionEvent=run.events.find(event=>event.data?.question?.id===requestId);
+    if(questionEvent){Object.assign(questionEvent.data.question,{status:'answered',answer,answeredAt:this.now()});}
     if (isPermission) {
       if (!['approve', 'deny'].includes(answer)) {
         const offered = run.pending.permissionChoices?.find(choice => choice.value === answer);
@@ -215,8 +220,8 @@ export class Engine extends EventEmitter {
       }
       this.event(run, 'system', answer === 'deny' ? 'Permission denied.' : `Permission approved: ${answer}.`, { permission: { kind: run.pending.details?.kind, decision: answer, automatic: false } });
     }
-    this.pending.delete(id); run.pending = null; run.status = 'running';
-    if (!isPermission) this.event(run, 'user', answer); else this.persist(run);
+    this.pending.delete(id); run.pending = null; run.status = 'running';resumeTurn(run,this.now());
+    if (!isPermission) this.event(run, 'user', answer, {questionReply:{requestId}}); else this.persist(run);
     pending.resolve(isPermission && !['approve','deny'].includes(answer) ? 'approve' : answer);
     if (isPermission) this.recheckPermissions();
     return run;
@@ -237,13 +242,15 @@ export class Engine extends EventEmitter {
       request = { ...request, permissionChoices: this.permissions.choices(run.schedule, request.details || {}), permissionReason: decision.reason };
     }
     return new Promise((resolve, reject) => {
-      const onAbort = () => { this.pending.delete(run.id); reject(new Error('Cancelled')); };
+      const onAbort = () => { const event=run.events.find(event=>event.data?.question?.id===run.pending?.id);if(event)event.data.question.status='cancelled';this.pending.delete(run.id); reject(new Error('Cancelled')); };
       signal.addEventListener('abort', onAbort, { once: true });
       this.pending.set(run.id, {
         resolve: value => { signal.removeEventListener('abort', onAbort); resolve(value); },
         reject: error => { signal.removeEventListener('abort', onAbort); reject(error); }
       });
-      run.pending = { ...request, id: randomUUID() }; run.status = 'awaiting_input'; this.persist(run);
+      run.pending = { ...request, id: randomUUID() }; run.status = 'awaiting_input';pauseTurn(run,this.now(),run.pending.id);
+      if(request.type!=='permission'){const question={id:run.pending.id,text:String(request.question||''),choices:request.choices||[],options:request.optionDetails||request.choices||[],providerQuestionId:request.providerQuestionId||null,status:'pending',askedAt:this.now()};this.event(run,'system','**Question**\n\n'+question.text+(question.choices.length?'\n\n'+question.options.map(choice=>'• '+(typeof choice==='string'?choice:(choice.label||choice.title||'')+(choice.description?' — '+choice.description:''))).join('\n'):''),{question});}
+      this.persist(run);
     });
   }
   recordAutomaticPermission(run, request, decision) {
@@ -259,7 +266,7 @@ export class Engine extends EventEmitter {
       const decision = this.decidePermission(run, run.pending.details || {});
       if (!decision.allowed) continue;
       this.recordAutomaticPermission(run, run.pending.details, decision);
-      this.pending.delete(id); run.pending = null; run.status = 'running'; this.persist(run); waiting.resolve('approve-auto');
+      this.pending.delete(id); run.pending = null; run.status = 'running';resumeTurn(run,this.now()); this.persist(run); waiting.resolve('approve-auto');
     }
   }
   async drain() {
@@ -277,7 +284,7 @@ export class Engine extends EventEmitter {
     }
   }
   async execute(run, controller, lane) {
-    run.status = 'running'; const prompt = run.nextPrompt,dispatch=run.nextAttachmentDispatch; delete run.nextPrompt; this.persist(run);
+    run.status = 'running';startTurn(run,this.now()); const prompt = run.nextPrompt,dispatch=run.nextAttachmentDispatch; delete run.nextPrompt; this.persist(run);
     try {
       await this.beforeRun?.(run.schedule);
       if (controller.signal.aborted) throw new Error('Cancelled');
@@ -300,6 +307,7 @@ export class Engine extends EventEmitter {
     } finally {
       // Provider errors/timeouts can leave permission promises pending. Settle them
       // before another turn reuses this run's serialized question queue.
+      finishTurn(run,this.now(),run.status);
       controller.abort();
       if(['failed','interrupted'].includes(run.status)){run.failureEventAt=this.now();delete run.failureReviewedAt;}
       this.pending.delete(run.id); run.pending = null; delete run.liveMessages;delete run.nextAttachmentDispatch;

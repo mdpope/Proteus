@@ -137,7 +137,7 @@ export class CodexProvider {
      for(const change of changes){const answer=await ask({type:'permission',question:p.reason||'Allow this file change?',details:{kind:'write',toolCallId:p.itemId,fileName:change.path,intention:'Edit '+change.path}});if(!['approve','approve-auto'].includes(answer))allowed=false;}
      client.respond(msg.id,{decision:allowed?'accept':'decline'});
    }else if(msg.method==='item/tool/requestUserInput'){
-     const answers={};for(const q of p.questions||[])answers[q.id]={answers:[await ask({type:'question',question:q.question,choices:q.options?.map(x=>x.label)})]};client.respond(msg.id,{answers});
+     const answers={};for(const q of p.questions||[])answers[q.id]={answers:[await ask({type:'question',question:q.question,choices:q.options?.map(x=>x.label),optionDetails:q.options?.map(x=>({label:x.label,description:x.description||''})),providerQuestionId:q.id})]};client.respond(msg.id,{answers});
    }else if(msg.method==='mcpServer/elicitation/request')client.respond(msg.id,{action:'decline',content:null});
    else client.write({id:msg.id,error:{code:-32601,message:'Unsupported approval or tool request: '+msg.method}});
   }catch(e){client.write({id:msg.id,error:{code:-32000,message:e.message}});}};

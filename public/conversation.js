@@ -1,3 +1,4 @@
+import {bindRuntimeTimer,formatDuration,turnDuration,runtimeTotal,toolDuration,groupDuration} from './runtime.js';
 import { mountMessageActions } from './message-actions.js';
 import { toolPresentation, mountStructured, normalizedTool, activitySummary } from './tool-presentation.js';
 import { agentName } from './agent-name.js';
@@ -44,9 +45,12 @@ export function conversation(target, run, options) {
     jump.onclick = () => { view.following = true; position(); };
     view.observer = new ResizeObserver(position); view.observer.observe(messages); view.observer.observe(scroll);
   }
+  view.verified=run.runtimeVerified!==false;const receipt=Date.now(),hostAt=Date.parse(run.observedAt),now=()=>Number.isFinite(hostAt)?hostAt+Date.now()-receipt:Date.now();
+  const durationText=value=>formatDuration(value)+(view.verified?'':' · offline, unverified');
+  bindRuntimeTimer(document.querySelector('[data-runtime-total]'),()=>durationText(runtimeTotal(run.turns,now(),view.verified))+((run.timingPartial||run.turns?.some(t=>t.incomplete))?' · partial':''));
   view.updating = true;
   if(view.shell.parentElement!==target)target.replaceChildren(view.shell);
-  const entries = groupActivity([...run.events.map((event, index) => ({ key: `event-${(run.eventStart||0)+index}`, ...event })), ...Object.entries(run.liveMessages || {}).map(([id, text]) => ({ key: `stream-${id}`, role: 'assistant', text, streaming: true }))].filter(entry => entry.role !== 'assistant' || entry.text?.trim()));
+  const entries = groupActivity([...run.events.map((event, index) => ({ key: `event-${(run.eventStart||0)+index}`, ...event })), ...Object.entries(run.liveMessages || {}).map(([id, text]) => ({ key: `stream-${id}`, role: 'assistant', text, streaming: true,data:{turnId:run.turns?.at(-1)?.id} }))].filter(entry => entry.role !== 'assistant' || entry.text?.trim()));
   const nodes = new Map([...view.messages.children].map(node => [node.dataset.key, node]));
   let next=view.messages.firstElementChild;
   const place=node=>{if(node===next)next=next.nextElementSibling;else view.messages.insertBefore(node,next);};
@@ -57,7 +61,7 @@ export function conversation(target, run, options) {
       const tools=entry.items.filter(item=>item.data?.tool).map(item=>normalizedTool(item.data.tool)), approvals=entry.items.filter(item=>item.data?.permission?.automatic);
       node.classList.toggle('running',tools.some(tool=>tool.status==='running'));
       node.classList.toggle('failed',tools.some(tool=>['failed','error','interrupted'].includes(tool.status)));
-      node.querySelector('summary').textContent=activitySummary(tools,approvals.length);
+      node.querySelector('summary').textContent=activitySummary(tools,approvals.length);const groupTimer=document.createElement('span');node.querySelector('summary').append(groupTimer);bindRuntimeTimer(groupTimer,()=>durationText(groupDuration(tools,now(),view.verified,run.turns)));
       const signature=JSON.stringify(entry.items.map(item=>[item.key,item.data?.tool,item.data?.permission]));
       if(node.activitySignature!==signature){
         const content=node.querySelector('.activity-group-items'),openItems=new Set([...content.querySelectorAll('[data-activity-key]')].filter(row=>row.querySelector('details')?.open).map(row=>row.dataset.activityKey));content.replaceChildren();
@@ -66,7 +70,7 @@ export function conversation(target, run, options) {
           if(item.data?.tool){
             const tool=normalizedTool(item.data.tool),presentation=toolPresentation(tool);row.classList.add(tool.status||'completed');
             const title=document.createElement('strong'),icon=document.createElement('span');icon.className='tool-icon'+(tool.status==='running'?' spinner':'');icon.setAttribute('aria-hidden','true');icon.textContent=tool.status==='running'?'':tool.status==='completed'?'✓':'!';title.append(icon,document.createTextNode(' '+(tool.summary||tool.name||'Tool')));row.append(title);
-            const status=document.createElement('div');status.className='note';status.textContent=(tool.status==='running'?'Working…':tool.status==='failed'?'Failed':tool.status==='completed'?'Completed':tool.status)+(tool.durationMs!==undefined?` · ${(tool.durationMs/1000).toFixed(1)}s`:'')+(item.at?' · '+options.time(item.at):'');row.append(status);
+            const status=document.createElement('div');status.className='note';status.textContent=(tool.status==='running'?'Working…':tool.status==='failed'?'Failed':tool.status==='completed'?'Completed':tool.status)+(item.at?' · '+options.time(item.at):'');row.append(status);const timer=document.createElement('span');status.append(timer);bindRuntimeTimer(timer,()=>durationText(toolDuration(tool,now(),view.verified,run.turns)));
             if(presentation.error){const error=document.createElement('p');error.className='tool-error';error.textContent=presentation.error;row.append(error);}
             if(presentation.targets.length){const target=document.createElement('div');target.className='note';target.textContent=presentation.targets.join(' · ');row.append(target);}
             if(presentation.approval){const note=document.createElement('div');note.className='note';note.textContent=presentation.approval;row.append(note);}
@@ -89,7 +93,7 @@ export function conversation(target, run, options) {
       node.querySelector('.tool-icon').className = 'tool-icon' + (tool.status === 'running' ? ' spinner' : '');
       node.querySelector('.tool-icon').textContent = tool.status === 'running' ? '' : tool.status === 'completed' ? '✓' : '!';
       node.querySelector('.tool-summary').textContent = tool.summary;
-      node.querySelector('.tool-status').textContent = tool.status + (tool.durationMs !== undefined ? ` · ${(tool.durationMs / 1000).toFixed(1)}s` : '');
+      node.querySelector('.tool-status').textContent = tool.status;const toolTimer=document.createElement('span');node.querySelector('.tool-status').append(toolTimer);bindRuntimeTimer(toolTimer,()=>durationText(toolDuration(tool,now(),view.verified,run.turns)));
       const content = node.querySelector('.tool-content');
       const presentation = toolPresentation(tool);
       const signature = JSON.stringify([presentation,tool.arguments,tool.output]);
@@ -112,6 +116,11 @@ export function conversation(target, run, options) {
     node.messageMarkdown=entry.text||'';
     node.className = `message ${['user', 'assistant', 'tool', 'system'].includes(entry.role) ? entry.role : 'system'}`;
     node.firstChild.textContent = `${entry.data?.delivery ? ({queued:'Queued next',steered:'Steering',sending:'Sending steering',failed:'Not delivered',removed:'Removed from queue',delivered:'Queued message delivered'}[entry.data.delivery.state] || '') + ' · ' : ''}${entry.role === 'assistant' ? entry.agentName || agentName(run) : entry.role}${entry.streaming ? ' · streaming' : entry.at ? ' · ' + options.time(entry.at) : ''}`;
+    if(entry.role==='assistant'){
+      const turn=run.turns?.find(t=>t.id===entry.data?.turnId)||(entry.streaming?run.turns?.at(-1):null);
+      const first=entry.streaming?!(run.events||[]).some(e=>e.role==='assistant'&&e.data?.turnId===turn?.id):!entries.some(e=>e.key!==entry.key&&e.role==='assistant'&&e.data?.turnId===turn?.id&&entries.indexOf(e)<entries.indexOf(entry));
+      if(first){const timer=document.createElement('span');node.firstChild.append(timer);bindRuntimeTimer(timer,()=>durationText(turnDuration(turn,now(),view.verified))+(turn?.incomplete?' · partial':''));}
+    }
     const body=node.querySelector('.text');
     ProteusMarkdown.mount(body, entry.text, { ...options, resize: view.position });
     let files=node.querySelector('.message-attachments');
@@ -136,3 +145,5 @@ export function conversation(target, run, options) {
   view.position();
 }
 export function forgetConversation(id) { const view = views.get(id); view?.observer.disconnect();view?.messages.querySelectorAll('.message').forEach(node=>node.messageActions?.destroy()); if (view) cancelAnimationFrame(view.frames); views.delete(id); }
+
+export function setConversationVerified(id,verified){const view=views.get(id);if(view)view.verified=verified;}

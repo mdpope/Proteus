@@ -68,3 +68,13 @@ must remain bound to the account, host and chat, and send only through an explic
 submission. Provider capability validation, bounded encrypted delivery to a remote host, safe
 previewing and cleanup/retry behavior are requirements, not completed implementations.
 See `planned-updates.md` for acceptance coverage.
+
+## October 7 desktop new chat
+
+The wide dialog groups Run on/Workspace, uses a starting-folder dropdown and expandable folders,
+and keeps provider/model controls beside the unboxed attachment picker. Provider starts empty;
+its fresh metadata controls the available model/effort/context/speed. Local folder additions are
+chat-specific. Remote starts can select an existing configured workspace folder; adding entirely
+new remote roots still requires configuration on that Mac. Draft text/title and the attachment
+selection survive destination/provider switches, with final destination/provider consent still
+required for attachment delivery. Context selections reset when the destination changes.

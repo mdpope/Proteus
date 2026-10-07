@@ -188,3 +188,13 @@ test('Copilot aborts a timed-out provider turn before disconnecting', async () =
   await assert.rejects(provider.run({run:{id:'fixture',schedule:{model:'fixture',workspace:{cwd:'/fixture',additionalDirectories:[]}},usage:{inputTokens:0,outputTokens:0}},prompt:'fixture',signal:new AbortController().signal,update:()=>{},emit:()=>{},ask:async()=>{throw new Error('Unexpected permission request');}}),/Timed out/);
   assert.deepEqual(calls,['abort','disconnect']);
 });
+
+test('question history retains wording, option descriptions, stable reply links and interrupted requests',async()=>{
+ const dir=temp();const answers=[];const provider={run:async({ask})=>{for(const name of ['first','second'])answers.push(await ask({type:'question',question:name+' wording',choices:['A','B'],optionDetails:[{label:'A',description:'original explanation'},{label:'B',description:'another explanation'}],providerQuestionId:name}));}};
+ const engine=new Engine(dir,{copilot:provider});
+ try{const run=engine.createRun({...example(dir),provider:'copilot',model:'test-model'});await until(()=>run.pending?.question==='first wording');const first=run.pending.id;engine.reply(run.id,'freeform answer',first);await until(()=>run.pending?.question==='second wording');
+ const firstEvent=run.events.find(e=>e.data?.question?.id===first);assert.equal(firstEvent.data.question.answer,'freeform answer');assert.match(firstEvent.text,/original explanation/);assert.equal(firstEvent.data.question.providerQuestionId,'first');assert.equal(run.events.find(e=>e.data?.questionReply)?.data.questionReply.requestId,first);
+ engine.cancel(run.id);await until(()=>!engine.running);assert.equal(run.events.find(e=>e.data?.question?.providerQuestionId==='second').data.question.status,'cancelled');assert.deepEqual(answers,['freeform answer']);
+ const persisted=JSON.parse(fs.readFileSync(path.join(dir,'runs',run.id+'.json'),'utf8'));assert.equal(persisted.events.find(e=>e.data?.question?.id===first).data.question.answer,'freeform answer');
+ }finally{await engine.close();fs.rmSync(dir,{recursive:true,force:true});}
+});

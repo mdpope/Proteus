@@ -58,9 +58,9 @@ class BrowserTabs {
     });
   }
   state(tab, includeHistory=false) {
-    if(!tab.view||tab.view.webContents.isDestroyed())return {...tab.snapshot,id:tab.id,group:tab.group||'main',loaded:false,loading:false,shared:false,owner:null,agentControlling:false,lastTouchedAt:new Date(tab.lastTouchedAt||Date.now()).toISOString()};
+    if(!tab.view||tab.view.webContents.isDestroyed())return {...tab.snapshot,id:tab.id,group:tab.group||'main',parentId:tab.parentId||null,loaded:false,loading:false,shared:false,owner:null,agentControlling:false,lastTouchedAt:new Date(tab.lastTouchedAt||Date.now()).toISOString()};
     const wc = tab.view.webContents;
-    return { id: tab.id,group:tab.group||'main',loaded:true,pid:wc.getOSProcessId(),lastTouchedAt:new Date(tab.lastTouchedAt||Date.now()).toISOString(), url: wc.getURL(), title: wc.getTitle() || (wc.getURL() ? new URL(wc.getURL()).hostname : 'New tab'), loading: wc.isLoading()||this.reloading.has(tab.id),
+    return { id: tab.id,group:tab.group||'main',parentId:tab.parentId||null,loaded:true,pid:wc.getOSProcessId(),lastTouchedAt:new Date(tab.lastTouchedAt||Date.now()).toISOString(), url: wc.getURL(), title: wc.getTitle() || (wc.getURL() ? new URL(wc.getURL()).hostname : 'New tab'), loading: wc.isLoading()||this.reloading.has(tab.id),
       canGoBack: wc.navigationHistory.canGoBack(), canGoForward: wc.navigationHistory.canGoForward(), shared: tab.shared, owner: tab.owner, agentControlling:!!tab.agentActions, favicon:tab.favicon||'', error: tab.error || null, ...(includeHistory?{history:normalizeHistory({entries:wc.navigationHistory.getAllEntries(),index:wc.navigationHistory.getActiveIndex()},this.appOrigin)}:{}) };
   }
   list(includeHistory=false) { return [...this.tabs.values()].map(tab => this.state(tab,includeHistory)); }
@@ -105,7 +105,7 @@ class BrowserTabs {
     const now=Date.now();
     if(this.overviewOpen||this.active!==tab.id||now-(tab.overviewLastOpened||0)<1200)return;
     tab.overviewLastOpened=now;tab.overviewGate=null;
-    this.actions.send({type:'overview',group:tab.group});
+    this.actions.send({type:'overview',group:tab.group,parentId:tab.parentId||tab.owner});
   }
   async sweepRetention(now = Date.now()) {
     if(this.shuttingDown||this.retentionBusy)return;
@@ -119,10 +119,10 @@ class BrowserTabs {
   async create(url, owner = null, savedHistory = null, descriptor = {}) {
     if(descriptor.unloaded===true && !owner){
       const history=normalizeHistory(savedHistory,this.appOrigin), address=history?.entries[history.index]?.url||safeHistoryURL(url,this.appOrigin)||'';
-      const tab={id:descriptor.id||randomUUID(),group:descriptor.group==='team'?'team':'main',shared:false,owner:null,view:null,lastTouchedAt:Date.parse(descriptor.lastTouchedAt)||Date.now(),snapshot:{favicon:safeFavicon(descriptor.favicon),url:address,title:descriptor.title|| (address?new URL(address).hostname:'New tab'),history,canGoBack:(history?.index||0)>0,canGoForward:!!history&&history.index<history.entries.length-1,error:null}};
+      const tab={parentId:typeof descriptor.parentId==='string'?descriptor.parentId.slice(0,256):null,id:descriptor.id||randomUUID(),group:descriptor.group==='team'?'team':'main',shared:false,owner:null,view:null,lastTouchedAt:Date.parse(descriptor.lastTouchedAt)||Date.now(),snapshot:{favicon:safeFavicon(descriptor.favicon),url:address,title:descriptor.title|| (address?new URL(address).hostname:'New tab'),history,canGoBack:(history?.index||0)>0,canGoForward:!!history&&history.index<history.entries.length-1,error:null}};
       this.tabs.set(tab.id,tab);this.changed();return this.state(tab,true);
     }
-    const tab = { id: descriptor.id||randomUUID(), group:descriptor.group==='team'?'team':'main', favicon:safeFavicon(descriptor.favicon), agentActions:owner?1:0, shared: false, owner, lastTouchedAt:Date.parse(descriptor.lastTouchedAt)||Date.now(), view: new WebContentsView({ webPreferences: {
+    const tab = { parentId:typeof descriptor.parentId==='string'?descriptor.parentId.slice(0,256):owner,id: descriptor.id||randomUUID(), group:descriptor.group==='team'?'team':'main', favicon:safeFavicon(descriptor.favicon), agentActions:owner?1:0, shared: false, owner, lastTouchedAt:Date.parse(descriptor.lastTouchedAt)||Date.now(), view: new WebContentsView({ webPreferences: {
       preload: require('node:path').join(__dirname,'browser-preload.cjs'), session: this.partition, nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true, backgroundThrottling: false
     } }) };
     this.tabs.set(tab.id, tab); this.window.contentView.addChildView(tab.view);
@@ -168,7 +168,7 @@ class BrowserTabs {
     wc.on('before-input-event', (event, input) => {
       if(this.active===tab.id&&event.senderFrame===wc.mainFrame&&['keyDown','mouseDown'].includes(input.type))this.touch(tab);
       if(input.type==='keyDown'&&(input.meta||input.control)&&!input.shift&&!input.alt&&String(input.key).toLowerCase()==='w') {event.preventDefault();this.closeCurrentTab?.();return;}
-      if(input.type==='keyDown'&&(input.meta||input.control)&&input.shift&&input.key==='\\') {event.preventDefault();this.actions.send({type:'overview',group:tab.group});return;}
+      if(input.type==='keyDown'&&(input.meta||input.control)&&input.shift&&input.key==='\\') {event.preventDefault();this.actions.send({type:'overview',group:tab.group,parentId:tab.parentId||tab.owner});return;}
       if (input.type === 'keyDown' && (input.meta || input.control) && input.key.toLowerCase() === 'l') {
         event.preventDefault(); this.window.webContents.focus(); this.window.webContents.send('proteus:focus-address');
       }
@@ -186,7 +186,7 @@ class BrowserTabs {
       if(now-tab.overviewGate.started>=260&&tab.overviewGate.count>=3)this.requestOverview(tab);
     });
     wc.setWindowOpenHandler(({ url: next }) => {
-      try { const address = this.address(next); void this.create(address, owner,null,{group:tab.group}).catch(() => {}); } catch { /* Unsupported schemes remain blocked. */ }
+      try { const address = this.address(next); void this.create(address, owner,null,{group:tab.group,parentId:tab.parentId}).catch(() => {}); } catch { /* Unsupported schemes remain blocked. */ }
       return { action: 'deny' };
     });
     wc.on('will-navigate', (event, next) => { try { this.address(next); } catch { event.preventDefault(); } });
@@ -256,7 +256,7 @@ class BrowserTabs {
   async reload(id, restore=true) {
     if(this.reloading.has(id))return this.reloading.get(id);
     const tab=this.get(id);if(tab.view)return this.state(tab,true);
-    const pending=this.create(restore?tab.snapshot.url:'',null,restore?tab.snapshot.history:null,{id:tab.id,group:tab.group,favicon:tab.snapshot.favicon});
+    const pending=this.create(restore?tab.snapshot.url:'',null,restore?tab.snapshot.history:null,{id:tab.id,group:tab.group,parentId:tab.parentId,favicon:tab.snapshot.favicon});
     this.reloading.set(id,pending);this.changed();
     try{return await pending;}finally{this.reloading.delete(id);this.changed();}
   }
@@ -385,8 +385,12 @@ class BrowserTabs {
     if(!value.gesture&&['back','forward','reload','stop'].includes(action))this.transition?.cancel();
     if (action === 'list') return this.list(true);
     if (action === 'create') {
-      const info=await this.create(value.restore===true?safeHistoryURL(value.url,this.appOrigin):value.url,null,value.restore===true?value.history:null,{group:value.group,unloaded:value.restore===true&&value.unloaded===true,title:String(value.title||'').slice(0,200),favicon:value.restore===true?value.favicon:undefined,lastTouchedAt:value.restore===true?value.lastTouchedAt:undefined});
+      const info=await this.create(value.restore===true?safeHistoryURL(value.url,this.appOrigin):value.url,null,value.restore===true?value.history:null,{group:value.group,parentId:value.parentId,unloaded:value.restore===true&&value.unloaded===true,title:String(value.title||'').slice(0,200),favicon:value.restore===true?value.favicon:undefined,lastTouchedAt:value.restore===true?value.lastTouchedAt:undefined});
       return this.state(this.get(info.id),true);
+    }
+    if(action==='transfer'){
+      const tab=this.get(id);if(tab.agentActions)throw new Error('Wait for the active browser operation to finish.');
+      await this.disconnect(tab);tab.shared=false;tab.owner=null;tab.parentId=typeof value.parentId==='string'?value.parentId.slice(0,256):null;tab.group=value.group==='team'?'team':'main';this.changed();return this.state(tab,true);
     }
     if (action === 'show') { if(this.acceptRendererSelection(value,id))this.show(id, value.bounds); return; }
     if (action === 'hide') { if(this.acceptRendererSelection(value,null))this.show(null); return; }

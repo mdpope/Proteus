@@ -462,3 +462,21 @@ selection changes, preserving the accepted manual strip position behavior.
 
 Bundle the same README used by desktop/web Home into the native app. Present it from a Home link
 in a dismissible, scrollable sheet with normal body typography, so it remains readable offline.
+
+
+## October 7: active runtime, browser ownership and credential consumers
+
+Runtime means observed active orchestration, not inference or billing. Persist active intervals
+per turn; pause while waiting for the operator, exclude queue/idle gaps, and union overlapping
+child-tool intervals. Host observation timestamps offset remote device clocks. Interrupted tails
+are excluded and marked partial. Older chats remain unavailable or partial; never reconstruct
+work time from message spacing. See runtime.md.
+
+Browser presentation parentage is distinct from agent control. Moves preserve page identity but
+clear old control grants; copies are independent unloaded pages. No live terminal, running chat,
+or protected remote-document grant is cloned. Projects remain deferred. A provider-command view
+reads reported tool activity and does not invent an attachable interactive process.
+
+Integration status belongs to a specific host/provider/MCP consumer. A successful Azure login
+cannot establish Jira/ADO MCP authentication. New credential isolation must meet the protected
+storage requirement; see the official adapter investigation in the implementation ledger.

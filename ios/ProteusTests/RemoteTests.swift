@@ -1107,3 +1107,15 @@ final class MessageSpeechTests: XCTestCase {
         speech.toggle(messageID: "empty", markdown: " \n "); XCTAssertNil(speech.messageID)
     }
 }
+
+final class ActiveRuntimeTests: XCTestCase {
+    func testOverlappingActivityAndHumanWaits() {
+        let base=Date(timeIntervalSince1970:0)
+        XCTAssertEqual(runtimeUnion([(base,base.addingTimeInterval(5)),(base.addingTimeInterval(2),base.addingTimeInterval(8))]),8)
+        let turn: JSON = .object(["intervals":.array([.array([.string("2026-10-07T00:00:00Z"),.string("2026-10-07T00:00:03Z")])]),"activeSince":.string("2026-10-07T00:00:10Z")])
+        let now=ProviderAllowance.date("2026-10-07T00:00:15Z")!
+        XCTAssertEqual(runtimeSeconds(turn,now:now,verified:true),8)
+        XCTAssertEqual(runtimeSeconds(turn,now:now,verified:false),3)
+        XCTAssertNil(runtimeSeconds(.null,now:now,verified:true))
+    }
+}

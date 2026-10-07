@@ -1,5 +1,5 @@
 .standup-links{width:100%;margin:12px 0 20px;min-width:0}
-.standup-link-head,.standup-link-row{display:grid;grid-template-columns:minmax(100px,1fr) minmax(0,2fr) 130px;gap:20px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line,var(--proteus-line))}
+.standup-link-head,.standup-link-row{display:grid;grid-template-columns:minmax(100px,1fr) minmax(0,2fr) 205px;gap:20px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line,var(--proteus-line))}
 .standup-link-head{color:var(--soft,var(--proteus-muted));font-size:12px;font-weight:600}
 .standup-link-row>a{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:inherit;text-decoration:none}
 .standup-link-row>a:hover{text-decoration:underline}

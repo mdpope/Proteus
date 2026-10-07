@@ -30,3 +30,12 @@ Workspace restoration saves a tab descriptor (session ID, profile ID, starting-r
 - `node test/workspace-ui.mjs` separately verifies process restart restores descriptors without starting terminal commands.
 
 Primary implementation references: [ghostty-web](https://github.com/coder/ghostty-web), [Ghostty configuration](https://ghostty.org/docs/config/reference), [Ghostty themes](https://ghostty.org/docs/features/theme), [node-pty](https://github.com/microsoft/node-pty).
+
+## October 7 provider command views
+
+A local chat can open Agent terminal output. It renders the provider's actual reported shell or
+command tool activities, command text, redacted output, status and IDs. It is read-only: providers
+do not expose a safe attachable PTY/input channel through the current boundary. Opening/closing
+this view neither starts a shell nor stops the agent. Interactive shell and tmux tabs retain their
+existing explicit lifecycle; they are not transferable/copyable. Main terminal layout fills the
+available area below navigation without chat-content spacing.

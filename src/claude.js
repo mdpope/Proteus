@@ -266,7 +266,7 @@ export class ClaudeProvider {
     const permissionKey=(id,name,input)=>typeof id==='string'&&id.length?JSON.stringify([id,name,input]):null;
     arm();
     const permit=async(name,input,id)=>{
-      if(name==='AskUserQuestion'){const answers={};for(const q of input.questions||[])answers[q.question]=await askUser({type:'question',question:q.question,choices:q.options?.map(x=>x.label)});return {behavior:'allow',updatedInput:{...input,answers}};}
+      if(name==='AskUserQuestion'){const answers={};for(const q of input.questions||[])answers[q.question]=await askUser({type:'question',question:q.question,choices:q.options?.map(x=>x.label),optionDetails:q.options?.map(x=>({label:x.label,description:x.description||''})),providerQuestionId:q.id});return {behavior:'allow',updatedInput:{...input,answers}};}
       const kind=name==='Bash'?'shell':['Write','Edit','MultiEdit','NotebookEdit'].includes(name)?'write':['Read','Glob','Grep'].includes(name)?'read':'custom-tool';
       const answer=await askUser({type:'permission',question:`Allow Claude ${name}?`,details:{kind,toolCallId:id,toolName:name,args:input,fullCommandText:input.command,fileName:input.file_path||input.notebook_path||input.path,path:input.file_path||input.path||run.schedule.workspace.cwd,intention:`Claude ${name}`}});
       return ['approve','approve-auto'].includes(answer)?{behavior:'allow',updatedInput:input}:{behavior:'deny',message:'The operator declined this tool.'};

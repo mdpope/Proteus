@@ -1,5 +1,5 @@
 import { bindBrowserRecents } from '../../../public/browser-recents.js';
-import { standupLinksMarkup } from '../../../public/standup-links.js';
+import { standupLinksMarkup, bindStandupOrder } from '../../../public/standup-links.js';
 import {appRequest,escapeHTML as e,externalLink,dateTime,localDateTime,recordBrowserVisit,defaultMacRequest,defaultMacStatus,updateDefaultMac,retryDefaultMac} from './shared-app.js';
 import {BrowserDestinationStore} from './remote-client.js';
 import {usagePanel} from './remote-usage.js';
@@ -50,6 +50,7 @@ function standupLinksCard(list){
 function bindStandupLinks(host,list){
     if(!list)return;
     const save=async links=>{await appRequest('/team-lists/'+list.id,'PUT',{name:list.name,members:list.members,instructions:list.instructions,timezone:list.timezone,links,expectedRevision:list.revision});await reload();};
+    bindStandupOrder(host,list.links||[],save,error=>window.alert(error.message));
     host.querySelector('#standup-link-form')?.addEventListener('submit',action(async event=>{const v=Object.fromEntries(new FormData(event.target));await save([...(list.links||[]),{id:crypto.randomUUID(),title:v.title.trim(),url:v.url.trim()}]);}));
     host.querySelectorAll('[data-standup-remove]').forEach(button=>button.onclick=action(()=>save(list.links.filter(link=>link.id!==button.dataset.standupRemove))));
     host.querySelectorAll('[data-standup-edit]').forEach(button=>button.onclick=()=>{

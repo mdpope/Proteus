@@ -1,5 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('desktop', {
+  defaultBrowser:()=>ipcRenderer.invoke('proteus:default-browser'),
+  openLink:value=>ipcRenderer.invoke('proteus:open-link',value),
   openExternal:value=>ipcRenderer.invoke('proteus:open-external',value),
   onCloseTool:handler=>{const listener=(_event,id)=>handler(id);ipcRenderer.on('proteus:close-tool',listener);return()=>ipcRenderer.removeListener('proteus:close-tool',listener);},
   onCloseCurrentTab:handler=>{const listener=()=>handler();ipcRenderer.on('proteus:close-current-tab',listener);return()=>ipcRenderer.removeListener('proteus:close-current-tab',listener);},

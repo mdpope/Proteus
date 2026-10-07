@@ -38,8 +38,9 @@ struct ToolActivityView: View {
                 if status == "running" { ProgressView().controlSize(.small) }
                 else { Image(systemName: status == "completed" ? "checkmark.circle" : "exclamationmark.circle").foregroundStyle(status == "completed" ? Color.green : Color.orange) }
                 VStack(alignment: .leading, spacing: 3) {
+                    RuntimeTimerView(tools: [tool])
                     Text(tool["summary"].string).font(.subheadline)
-                    Text(status.capitalized + (tool["durationMs"] != .null ? " · \(String(format: "%.1f", Double(tool["durationMs"].int) / 1000))s" : "")).font(.caption).foregroundStyle(.secondary)
+                    Text(status.capitalized).font(.caption).foregroundStyle(.secondary)
                 }
             }
         }.padding(12).background(status == "failed" ? Color.orange.opacity(0.17) : Color.green.opacity(0.12), in: UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 0, bottomTrailingRadius: 8, topTrailingRadius: 8))
@@ -151,7 +152,7 @@ struct ChatPermissionsView: View {
                     if context["source"].string == "chat" {
                         Button("Revoke chat-only auto-approval") { applyChat("inherit") }.disabled(busy || !store.connected).accessibilityIdentifier("revoke-chat-auto-approval")
                     } else {
-                        Button("Auto-approve for this chat only") { applyChat("autopilot") }.disabled(busy || !store.connected).accessibilityIdentifier("chat-only-auto-approval")
+                        Button("Auto-approve this chat and future continuations") { applyChat("autopilot") }.disabled(busy || !store.connected).accessibilityIdentifier("chat-only-auto-approval")
                     }
                     Text("This chat-only choice survives app restart, applies to pending tools and this chat’s future turns, and is revoked when its provider, roots or integrations change. It uses existing granted resources and keeps mandatory approval and sandbox rules.").font(.caption).foregroundStyle(.secondary)
                 }
@@ -310,4 +311,54 @@ struct ComposerModelPicker: View {
         }
     }
     private func label(_ title: String) -> some View { HStack(spacing: 4) { Text(title).lineLimit(1); Image(systemName: "chevron.down").font(.caption2) } }
+}
+
+// Durable active orchestration intervals exclude queue, idle and human-wait time.
+func runtimeUnion(_ intervals: [(Date, Date)]) -> Double {
+    var end = Date.distantPast, total = 0.0
+    for (start, finish) in intervals.filter({ $0.1 >= $0.0 }).sorted(by: { $0.0 < $1.0 }) {
+        total += max(0, finish.timeIntervalSince(max(start, end))); end = max(end, finish)
+    }
+    return total
+}
+func runtimeSeconds(_ turn: JSON, now: Date, verified: Bool) -> Double? {
+    guard turn["intervals"] != .null else { return nil }
+    var intervals = turn["intervals"].array.compactMap { row -> (Date, Date)? in
+        guard row.array.count == 2, let a = ProviderAllowance.date(row.array[0].string), let b = ProviderAllowance.date(row.array[1].string) else { return nil }; return (a,b)
+    }
+    if verified, let start = ProviderAllowance.date(turn["activeSince"].string) { intervals.append((start,max(start,now))) }
+    return runtimeUnion(intervals)
+}
+func runtimeLabel(_ seconds: Double?) -> String {
+    guard let seconds else { return "Unavailable" }; let n = Int(max(0,seconds)), h = n / 3600, m = n % 3600 / 60
+    return h > 0 ? "\(h)h \(m)m \(n % 60)s" : m > 0 ? "\(m)m \(n % 60)s" : "\(n)s"
+}
+struct RuntimeTimerView: View {
+    @EnvironmentObject var store: RemoteStore
+    var turns: [JSON] = []
+    var tools: [JSON] = []
+    var total: Bool = false
+    var partial: Bool = false
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            let verified = store.connected && store.runtimeClockOffset != nil
+            let hostNow = context.date.addingTimeInterval(store.runtimeClockOffset ?? 0)
+            let intervals = tools.compactMap { tool -> (Date,Date)? in
+                guard let start = ProviderAllowance.date(tool["startedAt"].string) else { return nil }
+                if let finish = ProviderAllowance.date(tool["finishedAt"].string) { return (start,finish) }
+                return verified && tool["status"].string == "running" ? (start,max(start,hostNow)) : nil
+            }
+            let activityTurns = store.chats[store.selectedChat ?? ""]?["turns"].array ?? []
+            let active = activityTurns.flatMap { turn -> [(Date,Date)] in
+                var result = turn["intervals"].array.compactMap { row -> (Date,Date)? in let values=row.array; guard values.count==2, let start=ProviderAllowance.date(values[0].string), let end=ProviderAllowance.date(values[1].string) else { return nil }; return (start,end) }
+                if verified, let start=ProviderAllowance.date(turn["activeSince"].string) { result.append((start,hostNow)) }; return result
+            }
+            let clipped = activityTurns.isEmpty ? intervals : intervals.flatMap { interval in active.map { (max(interval.0,$0.0),min(interval.1,$0.1)) } }
+            let durations = turns.compactMap { runtimeSeconds($0,now:hostNow,verified:verified) }
+            let fallback: Double? = tools.count == 1 && tools[0]["durationMs"] != .null ? Double(tools[0]["durationMs"].int) / 1000 : nil
+            let seconds: Double? = !tools.isEmpty ? (intervals.isEmpty ? fallback : runtimeUnion(clipped)) : durations.isEmpty ? nil : durations.reduce(0,+)
+            Text((total ? "Total AI runtime · " : "") + runtimeLabel(seconds) + (partial || turns.contains { $0["incomplete"].bool } ? " · partial" : "") + (store.connected ? "" : " · offline, unverified"))
+                .font(.caption).monospacedDigit().foregroundStyle(.secondary).accessibilityLabel((total ? "Total AI runtime " : "Runtime ") + runtimeLabel(seconds))
+        }
+    }
 }

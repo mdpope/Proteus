@@ -141,3 +141,30 @@ peers.close();peers=new DesktopPeers(path.join(home,'client'),{safeStorage});ass
 });
 
 test('remote tab descriptors retain only explicit destination/run identity, with no cached content',async()=>{const {normalizeSession}=await import('../desktop/workspace-session.cjs');const hostId='11111111-1111-4111-8111-111111111111',runId='22222222-2222-4222-8222-222222222222';const value=normalizeSession({tabs:[{id:'one',type:'remote-run',hostId,runId,label:'Synthetic remote chat',key:'must disappear',prompt:'private draft',events:['private content']},{id:'two',type:'remote-run',hostId,runId},{id:'bad',type:'remote-run',hostId:'invalid',runId}],active:'one'});assert.equal(value.tabs.length,2);assert.deepEqual(value.tabs[1],{id:'peer:'+hostId+':'+runId,type:'remote-run',label:'Synthetic remote chat',hostId,runId});assert.ok(!JSON.stringify(value).includes('private'));});
+
+test('recovery retries one host independently, never replays mutations, and respects disconnect',async t=>{
+  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-recovery-'));
+  const second={...record,hostId:'33333333-3333-4333-8333-333333333333'};
+  fs.writeFileSync(path.join(home,'desktop-peers.enc'),safeStorage.encryptString(JSON.stringify([record,second])));
+  const clients=[],requests=[];let available=false;
+  class Client extends EventTarget{
+    constructor(host){super();this.host=host;this.status='offline';clients.push(this);}
+    async connect(){if(this.host.hostId===second.hostId||!available)throw Error('Offline');this.status='online';}
+    async request(method){requests.push(method);if(method==='chat.send')throw Error('Unknown outcome');return method==='sync'?{state:{runs:[]}}:[];}
+    close(){this.status='closed';this.dispatchEvent(new CustomEvent('status',{detail:'offline'}));}
+  }
+  const peers=new DesktopPeers(home,{safeStorage,clientFactory:h=>new Client(h),retryBaseMs:10,retryMaxMs:20,heartbeatMs:0,random:()=>0});
+  t.after(()=>{peers.close();fs.rmSync(home,{recursive:true,force:true});});
+  await assert.rejects(peers.connect(record.hostId));await assert.rejects(peers.connect(second.hostId));available=true;
+  await until(()=>peers.sessions.get(record.hostId)?.ready);
+  assert.equal(peers.sessions.get(second.hostId)?.ready,false);
+  await assert.rejects(peers.request(record.hostId,'chat.send',{}));peers.sessions.get(record.hostId).client.close();
+  await until(()=>peers.sessions.get(record.hostId)?.ready);assert.equal(requests.filter(x=>x==='chat.send').length,1);
+  peers.disconnect(record.hostId);await peers.index();await peers.indexPending;peers.resumeConnections();
+  assert.equal(peers.sessions.has(record.hostId),false);assert.equal(peers.recovery.get(record.hostId).timer,null);
+  await peers.connect(record.hostId);assert.equal(peers.sessions.get(record.hostId).ready,true);
+  peers.sessions.get(record.hostId).client.dispatchEvent(new CustomEvent('recovery-blocked',{detail:{reason:'authentication'}}));
+  peers.sessions.get(record.hostId).client.close();peers.resumeConnections();assert.equal(peers.recovery.get(record.hostId).timer,null);
+  assert.equal(peers.list().find(p=>p.hostId===record.hostId).status,'needs-action');
+  peers.close();assert.equal(peers.recovery.size,0);
+});
