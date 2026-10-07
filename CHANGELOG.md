@@ -1,5 +1,10 @@
 # Changes
 
+## October 7 implementation intake
+
+- Import the 17 requested changes and approved new-chat design from PR #18.
+  Implementation and validation are tracked separately from this planning checkpoint.
+
 ## 0.2.3 — October 7, 2026
 
 - Keep an iPad's loaded browser title when desktop tab synchronization supplies an older automatic title; retain explicit renames, page state and tab identity.

@@ -1,5 +1,10 @@
 # Shared embedded browser
 
+October 7 planning: BF-2026-10-07-08 through BF-2026-10-07-14 in
+[planned updates](planned-updates.md) queue chat-owned routing, clicked-link preferences,
+pinch overview, standup ordering, tab insertion/transfers, and a movement audit. These are
+requested changes, not additions to the implemented behavior described below.
+
 Electron owns the visible WebContentsView tabs, their persistent sign-in session, page titles,
 address bar, navigation history, and lifecycle. Proteus supplies the tab strip and browser controls.
 Enter navigates; Command/Ctrl+L focuses the address; links opening new windows create new tabs.

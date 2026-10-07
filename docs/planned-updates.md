@@ -38,6 +38,579 @@ user-requested Claude CLI sign-in is waiting on that chat’s approval gate. The
 [acceptance audit](2026-10-07-acceptance-audit.md) distinguishes deployed changes, fixture checks
 and remaining live workflow gates. Installation is not blanket acceptance of every original item.
 
+## October 7 next-version intake — queued for build handoff
+
+The operator requested this planning PR on October 7. The 17 items below are requested work,
+not implemented fixes. The new-chat design in BF-04 is approved; the other proposals retain
+any investigation or design qualifications stated in their entries. See the
+[October 7 build handoff](2026-10-07-build-handoff.md) for dependencies and validation limits.
+These items are separate from the October 6 intake; repeated chat-browser routing feedback
+is consolidated into BF-08 rather than duplicated.
+
+### BF-2026-10-07-01 — Reconnect automatically after network recovery
+
+#### Report and evidence
+
+The desktop Chats screen reports “Some Macs are offline. Cached statuses are unverified and
+excluded from Needs attention; inspect them in Chats.” A toast reports:
+“Error invoking remote method 'proteus:desktop-peers': Error: Connect the selected Mac first.
+No local action was taken.” The local runner indicator is online.
+
+A network interruption is the operator's suspected cause, not an established diagnosis.
+The error means the requested paired-Mac session is unavailable; it does not establish whether
+the client network, destination Mac, relay, or authentication caused the interruption.
+Private chat contents, hostnames, URLs, usage figures, and the original screenshot are omitted.
+
+Read-only source inspection found:
+
+- `src/desktop-peers.js` rejects a request when the destination is absent or its client is not
+  online. Its aggregate index attempts connections when refreshed, so some opportunistic
+  reconnection already exists.
+- `src/remote-client.js` closes failed connections and rejects pending requests. The inspected
+  transport does not schedule reconnection itself.
+- `public/remote-desktops.js` directs users to reopen a remote tab or reconnect manually after
+  a disconnect. Automatic restoration must include the open conversation, not only its socket.
+- The installed app differs from this checkout. Inspect and reconcile the current implementation
+  before editing; this checkout is not proof of the latest installed behavior.
+
+#### Requested behavior
+
+Restore previously connected, still-authorized Mac sessions automatically when the network and
+destination become reachable again, including after sleep/wake, Wi-Fi changes, and temporary
+relay outages. Recover in place without restarting Proteus, reopening a tab, or pairing again.
+
+Show a concise connection state for the affected Mac: reconnecting, waiting for the Mac or
+network, or requiring user action. Offer Retry now and connection details when useful. Expected
+temporary outages should not surface raw Electron IPC errors or repeated toast messages.
+Distinguish the local runner's health from remote destination connectivity.
+
+#### Acceptance criteria
+
+1. Restoring connectivity triggers a prompt retry for eligible sessions. Use bounded exponential
+   backoff with jitter while unavailable; network-restored and wake events may accelerate retry.
+   Handle a silent broken socket as well as an explicit close. Avoid tight loops and concurrent
+   connection attempts for the same host.
+2. After authenticated reconnection, refresh the affected chat index, open conversation and
+   event subscription/cursor, and Needs attention status from authoritative host state.
+   Clear stale warnings for recovered hosts; retain accurate warnings for any still offline.
+   Never mark cached status current merely because the network or socket is available.
+3. Preserve the selected Mac, chat, tabs, unsent drafts, and pairing. Never fall back to local
+   execution or another Mac. Do not replay prompts, approvals, replies, cancellations, schedule
+   edits, or other mutations automatically. Reconcile uncertain outcomes before offering retry,
+   retaining existing request identity protections.
+4. Respect explicit disconnect, Forget, authenticated revocation, and application shutdown.
+   Cancel pending retries and prevent late callbacks from restoring a removed connection.
+   Authentication or protected-storage failures receive actionable guidance without endless
+   retries, credential deletion, weakened storage, or automatic re-pairing.
+5. Test multiple hosts independently: a reachable host recovers while another remains offline.
+   Verify outage during an active remote chat and during an in-flight mutation without duplicate
+   execution, lost draft, mixed-host state, or concurrent turns in a session.
+6. Cover network loss/return, destination sleep/wake, relay restart, repeated network flapping,
+   silent socket loss, manual disconnect, removal/revocation, authentication failure, and quit
+   during backoff with isolated tests. Exercise desktop UI recovery with synthetic hosts and
+   data. Run `npm test` and `npm run check` for execution/persistence changes. Report installed
+   live reconnection separately from test/build success.
+
+#### Implementation scope and release handling
+
+Primary scope is desktop-to-Mac recovery and the related Chats UI. Inspect the shared transport
+and existing website/native recovery paths for regressions; broader client redesign is not
+implicitly part of this item. Likely owners are `src/desktop-peers.js`, `src/remote-client.js`,
+`public/remote-desktops.js`, `public/chats-index.js`, and desktop lifecycle integration.
+
+The installed desktop bundle's designated requirement uses an Apple Development identity.
+That establishes the signing identity, not which physical Mac produced it or whether this Mac
+has the corresponding private key. Source editing is separate from building or installing.
+A later installation should retain the existing signing requirement and vendor helper signatures,
+then verify real Keychain and saved-data continuity using the documented installation workflow.
+No signing identity, credential, Keychain item, or running app was changed during this intake.
+
+
+### BF-2026-10-07-02 — Review schedule page layout and prevent text overlapping actions
+
+#### Report
+
+The schedule detail screenshot shows the source ownership and manifest-path text running beneath
+the **Open source manifest** button. Long paths also put pressure on the exported-file description
+and source-of-truth card. Review the schedule page as a whole for text overflow, button placement,
+spacing, and responsive behavior. Private schedule names, source contents, and machine paths from
+the screenshot are intentionally omitted.
+
+#### Requested design
+
+Give source ownership, source manifest path, and exported schedule path distinct labeled text
+areas. Place **Open source manifest** on a separate action row below its text so its width cannot
+obscure the path. Use the same clear separation between descriptions and file actions in the
+source-of-truth card. Long paths should wrap within their container, including long segments
+without spaces, and remain selectable and readable.
+
+Review the title and Run now area, settings fields, model refresh action, preview card, source
+card, and remaining editor controls for consistent alignment and sufficient space. Let columns
+and action groups stack when space is limited. Preserve the distinction between the owning
+repository's source manifest and the exported file Proteus reads.
+
+#### Acceptance criteria
+
+1. No label, description, path, or heading renders beneath a button, beyond its card, or over an
+   adjacent control. Verify long synthetic schedule names and deeply nested paths, including
+   unbroken path segments, at wide and narrow desktop window sizes and increased text/zoom size.
+2. Source and exported paths remain fully accessible without relying solely on hover tooltips.
+   Multiline wrapping does not hide actions or create page-wide horizontal scrolling. Inputs
+   such as cron expressions keep their full values accessible through appropriate field behavior;
+   visual truncation must not change saved values.
+3. Buttons remain visible, keyboard reachable, and clearly associated with their text after
+   wrapping or stacking. Keep Run now visually distinct from file-opening and preview actions.
+4. Exercise the actual desktop schedule editor with synthetic data, including both externally
+   owned and ordinary local schedules. Inspect the full page, not only the reported source row.
+   Verify file actions still target the correct file and layout changes do not run, enable,
+   save, or otherwise modify a schedule inadvertently.
+
+Status: requested design review and layout fix; no implementation or UI verification yet.
+
+### BF-2026-10-07-03 — Restore clear versioned Claude model labels across chats and schedules
+
+The operator reports a possible regression in Claude model presentation after an earlier fix.
+The screenshot shows short family labels mixed with resolved identifiers, alias annotations,
+and invocation aliases, such as `Sonnet · claude-sonnet-5 (alias) · sonnet`. Versions are present
+in some identifier text, but the human-readable names and alias presentation need review.
+Do not describe this as proven missing catalog entries without checking refreshed metadata.
+
+Use one consistent model catalog and label formatter for new chats, existing-chat settings,
+and schedules. Show a readable family and version from provider metadata; make an alias or
+provider default distinguishable from a pinned model version without repeating redundant IDs.
+Preserve the actual invocation identifier separately from its display label. Review the prior
+fix and installed build before deciding whether the cause is stale metadata, adapter discovery,
+or different formatting paths.
+
+Acceptance: for the same destination, provider, and refreshed catalog, all three surfaces show
+the same eligible models, versions, and alias semantics. Effort, context, and speed choices come
+from that metadata, never a model-name table. Distinguish an unselected model, catalog loading,
+catalog failure, and a saved model that is no longer available. Do not show an unavailable-model
+warning merely because the user has not selected one. Preserve saved identifiers and unsupported
+selection feedback without silently substituting a model. Cover aliases, pinned versions, unknown
+capacity, catalog changes, and unavailable saved selections in focused tests and UI checks.
+
+Status: queued investigation and fix; not built during intake.
+
+### BF-2026-10-07-04 — Widen and simplify the new chat dialog
+
+Replace the tall form with a substantially wider desktop dialog, initially targeting about
+1,240 CSS pixels subject to viewport margins, and use the existing continued-chat composer styling.
+Put Run on and Workspace side by side; pair Command starting folder with the optional chat name.
+Command starting folder must be a dropdown of the selected workspace's folders, initially set to
+that workspace's configured default. Additional folders selected for this draft are also available
+as starting folders. Do not silently rewrite the workspace's saved default.
+
+Workspace folders is an expander listing the folders already configured for the workspace.
+Provide a **+** action to add additional folders for this chat, with clear distinction between
+configured and added folders and removal for draft additions. Keep these additions scoped to
+the new chat unless a separate explicit workspace-edit action is taken. Removing a chosen starting
+folder must leave a valid starting-folder selection, with clear feedback.
+
+Reuse the existing **Instructions, skills, agents & MCPs** system and its minimizer/expander;
+do not redesign it or replace it with simplified toggles. Retain source loading modes, summary
+and estimates, source-loading reasons, Favorites and Check all favorites, other-source filtering,
+selection and favorite controls, main agent, source refresh, and existing explanatory copy.
+The demonstration uses synthetic source entries; implementation must embed the existing component.
+
+Move Attach into the composer toolbar at its left edge, next to the message controls, rather
+than between Cancel and Start chat. Display selected attachments inside the composer with removal
+controls. Keep the primary Start chat action at the composer's lower right and Cancel separate.
+The **+** attachment control must have no visible bounding box, matching continued chats while
+retaining an accessible hit area and keyboard focus indication.
+
+The Provider dropdown initially reads **Select provider first** with no provider preselected.
+Hide Model, Thinking effort, Speed/service tier, and Context controls until a provider is chosen.
+Then populate from refreshed metadata for that provider on the selected destination, sharing the
+versioned labels requested in BF-03. Provider, Model, Thinking effort, Speed/service tier, and
+Context size form one wrapping toolbar; do not impose separate rows or a dividing line. Retain
+the visible field labels for new chats. Remove the model-refresh button: provider changes
+automatically refresh appropriate options, while genuine load failures may offer retry.
+Omit unnecessary coaching such as “Choose a model, then write your message” and “Ready when
+you are.” Keep useful validation, loading, and error feedback.
+In the demo, model lists are illustrative samples, not a live catalog or capability commitment.
+
+Acceptance: changing provider clears incompatible model/capability choices and prevents stale
+catalog responses from populating the wrong provider. Changing destination refreshes availability
+and capabilities for that Mac without changing execution ownership silently. Preserve message,
+attachments, workspace choices where valid, and chat name through provider changes. Start chat
+remains unavailable until required destination/workspace/provider/model state is valid and the
+composer has valid content under existing submission rules. Show clear loading, empty, and error
+states; never treat metadata failure as permission to guess model capabilities.
+
+Verify the wide layout, narrower windows, keyboard flow, increased zoom, expanded advanced
+sections, and attachment selection/removal. Controls must wrap or stack without overlap, clipped
+paths, or inaccessible actions. Keep all existing authorization and workspace context controls.
+
+Design preview: [approved new-chat design](design/2026-10-07/new-chat-approved.html). Its controls simulate
+the flow only; it does not start chats, read files, or contact providers. The revised design
+incorporates the operator's folder, existing-source-selector, and wrapping-composer feedback.
+**Design approved by the operator on October 7, 2026.** This preview and the requirements above
+are the accepted design reference for implementation. Sample data and model capabilities are
+illustrative; use actual workspace configuration and refreshed provider metadata in the app.
+Implementation remains queued for a future build; design approval does not request building,
+installing, or deploying the app during this planning PR.
+
+### BF-2026-10-07-05 — Make tool approval duration and scope explicit
+
+The operator asks whether **Auto-approve tools for this workspace** lasts only for the current
+chat. The current wording leaves its lifetime unclear, and **Approve once and trust workspace
+files and read-only tools** mixes a one-time approval with a persistent policy change.
+
+Read-only inspection of the checkout and installed permission store confirms that workspace
+auto-approval is saved in the executing host's `permissions.json`, not only in the current chat.
+It applies across chats and schedules, and survives restart, for the same computed permission
+context. That context includes provider, canonical working directory, workspace roots, and
+configured integrations/skills/agents. A different provider or changed context can require fresh
+approval even when the visible workspace name is unchanged. The setting is host-local.
+
+The installed build also has a separate **Auto-approve for this chat only** action in approval
+settings. That override is saved with the chat and survives continuation/restart, but does not
+apply to other chats. It ends when revoked or when that chat's permission context changes.
+Distinguish this option explicitly from the workspace-wide action shown in the screenshot.
+
+#### Requested wording and presentation
+
+- Label the broad action **Save auto-approval for this workspace**.
+- Put its duration directly beside the action: **Applies to this chat and future chats and
+  scheduled runs on this Mac with the same provider and workspace configuration. Stays enabled
+  until you change or revoke it.** Use the actual destination label when controlling a remote Mac.
+- Give **Approve once** its own unambiguous explanation: **Only this request; does not save a
+  rule.** Rename the mixed trust action to **Approve and save workspace trust**, with a concise
+  description of the file and read-only tool access it saves.
+- Distinguish one-time actions from saved rules visually. Show the current saved mode and a
+  direct route to manage/revoke workspace approvals, with an expandable explanation of the
+  provider/configuration scope rather than relying on a tooltip or a long footer.
+- Where chat-only approval is offered, use **This chat only, including future continuations**
+  and explain that it survives app restart. Clearly separate request-only, chat-only, and
+  workspace-wide lifetimes, and show which policy supplies the effective approval mode.
+- Preserve the existing explanation of breadth: terminal commands and configured tools are
+  included; terminal commands are not confined to workspace folders. User questions,
+  enterprise-required approvals, and sandbox bypass requests still pause. Do not imply that
+  every tool action is approved without exception.
+
+Acceptance: permission prompts and approval settings consistently identify what is approved,
+how long it lasts, which host/provider/workspace configuration it covers, and how to revoke it.
+Verify persistence across a new matching chat, a matching scheduled run using synthetic data,
+and restart; verify separation across providers, hosts, or changed workspace configuration.
+Check all clients exposing these actions and wrap descriptions at narrow widths. This is a
+clarity change, not authorization to broaden approval scope or change current saved permissions.
+
+Status: queued wording and presentation improvement; no permission setting or app code changed.
+
+### BF-2026-10-07-06 — Show live command, activity, group, and chat runtime
+
+#### Requested displays
+
+- **Each command/AI turn:** Show an elapsed timer on the right of its response/run header,
+  opposite the provider name and date/time shown on the left in the supplied screenshot.
+  Display it while the command is running, update it in real time, and retain its final duration
+  on completion. Each continuation/command has its own timer; do not repeat the entire chat's
+  cumulative time on every response. Group multiple response fragments from one turn correctly.
+- **Each chat:** Put **Total AI runtime** near the top of Run details. Accumulate runtime across
+  the chat's commands/turns, including continuations, and update the total while work is active.
+- **Each activity:** Display its own live elapsed timer, then its final duration, alongside
+  the activity's existing status. Cover tool/command activity and other timed activity kinds.
+- **Activity and other groups:** Show an aggregate timer in each group header, including when
+  collapsed. Nested and parent group totals should remain consistent with their member activities.
+
+#### Timing semantics and investigation
+
+Use authoritative execution timestamps and lifecycle events, not time since the UI opened.
+Inspect the existing event/turn timing data before implementing; add explicit timing events only
+where necessary. Define **Total AI runtime** as the cumulative active execution time of this chat's
+AI turns, including tool execution within those turns, excluding queue time, idle time between
+turns, and time paused for user input/approval. This is elapsed orchestration time, not a claim
+about provider inference time, billable usage, or CPU time. If provider-only processing time is
+available, label it separately rather than conflating the two.
+
+For group totals, aggregate the union of active child intervals so parallel children and nested
+groups do not count the same elapsed time twice. If summed tool work is also useful, show it as a
+separately labeled measure. Keep human-wait duration distinguishable from active execution;
+approval or question activities may show a clearly labeled **Waiting** timer without adding it
+to AI runtime. Document these counting rules with the eventual implementation.
+
+#### Acceptance criteria
+
+1. Active timers refresh about once per second without reloading or resetting the chat, moving
+   scroll position, or disrupting input. Format durations consistently as seconds, minutes, and
+   hours as needed; align numerals to avoid jitter. Preserve existing status and error indicators.
+2. Timers freeze or resume according to the actual running/waiting/terminal state. Completion,
+   failure, and cancellation retain measured durations; stopping a view's animation does not
+   stop execution or change recorded timing.
+3. Reopening a chat, reconnecting, and restarting the app reconstruct the same durations from
+   durable data, including completed turns. Offline cached timers must be marked stale or
+   unverified rather than continuing to imply confirmed remote activity. Reconcile on reconnect.
+4. Missing timing evidence in historical chats shows **Unavailable** or an explicitly labeled
+   estimate, not an invented zero or exact duration. Handle remote clock skew and stale events
+   without negative durations, duplicate intervals, or inflated totals.
+5. Check commands with multiple response fragments, sequential continuations, parallel tools,
+   nested groups, pauses/resumes, tool failures, cancellation, and reconnect. A parent elapsed
+   total must not grow simply because its children are also counted individually.
+6. Keep the header timer opposite provider/date on wide screens, with clean wrapping on narrow
+   screens and at increased zoom. Group timers remain visible while collapsed. Avoid screen-reader
+   announcements every second; retain accessible duration labels and meaningful status changes.
+7. Apply consistent semantics to desktop, website, and native clients wherever these chat/run
+   surfaces exist. Use synthetic fixtures; run `npm test` and `npm run check` for execution or
+   persistence changes, plus UI validation for each changed client. Separate measured live-run
+   verification from fixture success.
+
+Status: queued feature request. No timer implementation or runtime instrumentation added during
+intake. Private workflow names, report contents, and paths from the screenshot are omitted.
+
+### BF-2026-10-07-07 — Preserve original user questions in chat history
+
+The screenshot shows a completed **Asking user** activity whose details contain only
+**User responded: yes**, followed by a user message containing **yes**. The original question
+is not visible in that completed interaction, leaving the answer without its context. Treat
+this as a reported history/presentation issue; investigate whether the question is missing
+from durable events or merely omitted by the renderer. Private question contents are omitted.
+
+#### Requested behavior
+
+Keep the original question in the chronological conversation history after the user answers.
+Show the question text, relevant explanatory context, and any offered choices, followed by the
+actual selected or free-text answer. Preserve each question/answer association, including when
+one request contains multiple questions or the agent asks a later clarification. The completed
+activity must not replace the question with a generic response summary alone.
+
+#### Acceptance criteria
+
+1. Answering changes the pending question to a completed, readable history entry. Its original
+   wording and choices remain accessible alongside the answer without opening raw event JSON.
+   Long questions may collapse, but the full question remains available through a clear expander.
+2. Preserve stable request/question identifiers, order, and timestamps so short answers such as
+   **yes** can be understood unambiguously. A follow-up question must not overwrite the earlier
+   one. Avoid duplicate standalone answers that obscure which question they answer.
+3. Store the original question before clearing pending input state. Reopening, restarting,
+   remote reconnect, and loading older history retain the same question and answer. Verify both
+   durable event capture and desktop/web/native rendering wherever user questions are supported.
+4. Preserve unanswered, cancelled, or superseded questions with their actual status; never
+   invent an answer. For older records whose original question cannot be recovered, identify
+   the missing question rather than reconstructing it from an answer or later clarification.
+5. Test single and multiple questions, offered choices, free-text answers, repeated short answers,
+   long formatted questions, interruption, and reconnect using synthetic content. Run `npm test`
+   and `npm run check` if execution/persistence changes, and exercise affected client UIs.
+
+Status: queued investigation and history fix; no app behavior changed during intake.
+
+### BF-2026-10-07-08 — Keep chat-related browser tabs in their chat navigation
+
+Browser pages opened by an agent working in a chat, explicitly requested by the user in that
+chat, or opened by clicking a link in chat content should belong to that chat's browser tab
+navigation, rather than the application-level navigation. Preserve the originating chat even
+if the user switches chats before an asynchronous page-open operation completes.
+
+Acceptance: exercise all three entry points and follow-on navigation/new-window links from
+chat-owned browser pages. In-app pages retain the correct chat owner, remain discoverable in
+that chat, and restore under the same chat after restart using the existing tab persistence
+contract. Closing or switching one chat's browser tabs must not select another chat, redirect
+its composer, or mix agent access. Preserve existing Agent access permissions and browser-session
+boundaries; placement alone must not authorize agent control. Browser actions without a chat
+origin retain an appropriate application/Team destination instead of being assigned arbitrarily.
+
+Clicked links follow the preference in BF-09: **In-app browser** means the originating chat's
+navigation; **System browser** opens externally. Agent-controlled browser operations continue to
+use the controllable in-app browser with the originating chat owner. Honor an explicit user
+request for a particular browser rather than silently overriding it with the click preference.
+The operator reiterated this requirement during final intake: chat-opened browser pages must
+follow applicable user settings and must not escape into the application tab bar when opened
+in-app. Apply chat ownership consistently across links, explicit requests, and agent tools.
+
+Status: queued routing/organization change; no implementation during intake.
+
+### BF-2026-10-07-09 — Add a clicked-link browser preference in Engine Room
+
+Add a **Preferences** section in Engine Room containing **Open clicked links in** with choices
+**In-app browser** and **System browser**. When the operating system supplies the default
+browser's display name, show it alongside System browser, for example **System browser (Safari)**.
+Use the generic label if unavailable; never guess the installed or default browser.
+
+Persist the choice on the device opening the link, retain it across restart, and apply it
+consistently to ordinary web links clicked in chat messages and other Proteus content. Keep
+existing behavior until the operator changes the preference. In-app links from chats use
+BF-08's chat-owned navigation. The preference governs clicked links, not autonomous agent browser
+tool calls or navigation within an already-open webpage. Existing explicit open-in actions can
+override the default for an individual link.
+
+Acceptance: use the OS default-browser handler for system-browser opening, and update the shown
+browser name when the system default changes. Keep internal Proteus navigation, file links,
+authentication callbacks, and special schemes on their existing appropriate handlers; do not
+route them blindly as ordinary web links. Verify both choices, persistence, missing browser-name
+metadata, opening failure feedback, and chat ownership. Preserve existing URL and permission
+checks. Do not change the operating system's default browser as a side effect.
+
+Status: queued preferences feature; no device or app preference changed during intake.
+
+### BF-2026-10-07-10 — Improve pinch-to-tab-overview and extend tab coverage
+
+Improve the existing pinch gesture for browser tab overview, including reliable recognition,
+smooth entry/exit, and a predictable return to the selected tab. Investigate support for the
+same tab-overview interaction on chat tabs and other tab types where the platform and app
+structure support it. Preserve scope: a chat's browser overview represents that chat's tabs;
+the application overview represents application tabs. Do not mix tab owners to expand coverage.
+
+Acceptance: check main and chat-owned browser surfaces and Team browser surfaces where present;
+test short or cancelled gestures, repeated gestures, trackpad input, and touch input on supported
+clients. Distinguish the intended overview gesture from webpage pinch-to-zoom and ordinary
+scrolling so content interaction is not intercepted accidentally. Avoid double activation,
+accidental tab closure/selection, hidden overlays behind embedded browser views, or loss of
+focus and scroll position when dismissing the overview.
+
+Retain a visible overview control and keyboard access as alternatives to the gesture. Handle
+zero/one/many tabs, reduced-motion preferences, narrow layouts, and unsupported devices sensibly.
+Validate feasibility per client/tab type and document implemented versus deferred coverage;
+do not claim universal pinch support from a browser-only demonstration. Align behavior with
+the existing tab overview and accepted dismissal behavior from the October 6 intake.
+
+Status: queued interaction improvement and feasibility review; no gesture changes implemented.
+
+### BF-2026-10-07-11 — Reorder standup links and open them in saved list order
+
+Allow the operator to reorder standup links. The displayed, saved list order must determine
+the order of tabs opened by the standup link-opening action, so the standup follows the intended
+sequence. Provide drag-and-drop with an accessible alternative such as Move up/Move down.
+
+Acceptance: save ordering through the existing standup-link persistence/sync mechanism and
+preserve it after reload or restart. Opening the links creates or arranges their tabs in that
+order regardless of page loading speed; navigation completion must not reshuffle them. Retain
+each link's label, URL, and identity while moving it. Adding, editing, or deleting a link must
+not unexpectedly reorder the others. Handle already-open links and individual opening failures
+without scrambling the remaining order or creating unintended duplicates. Reordering itself
+does not open links. Verify first/last positions, keyboard controls, saved-order restoration,
+and opening several synthetic links with different load times.
+
+Status: queued standup-link ordering feature; no links reordered or app behavior changed.
+
+### BF-2026-10-07-12 — Add tabs to the left or right through the tab-type menu
+
+Add **Add tab to left** and **Add tab to right** to the tab menu. Selecting either action opens
+the existing new-tab type menu; only after the user chooses a supported type should the new tab
+be created at the requested position. Offer types valid for that navigation container.
+
+Acceptance: retain the clicked tab as the insertion anchor even if active selection changes
+while the menu is open. Cancel creates nothing. Handle first/last tabs, overflow, keyboard use,
+and an anchor closed before selection without inserting into an unrelated container. Persist
+the resulting order and preserve existing type-specific creation and authorization behavior.
+
+Status: queued tab-menu feature.
+
+### BF-2026-10-07-13 — Move or copy tabs to chats, projects, and Team Tools
+
+Add separate **Send a tab copy to chat/project** and **Send tab to chat/project** actions, with
+a destination picker identifying the target chat or project. Also allow eligible top-level
+application tabs to move into a chat's navigation or the Team Tools navigation bar. Integrate
+with the existing project/workspace model; resolve how project destinations map to navigation
+before implementation rather than introducing a duplicate project concept.
+
+A copy leaves the original in place and creates an independent destination tab descriptor.
+A move transfers the tab to the chosen owner/container and removes its original placement only
+after the destination accepts it. Preserve content identity and view state where supported;
+never duplicate underlying chats, replay a command, or silently clone a live terminal process.
+Define supported move/copy semantics per tab type, with clear unavailable actions and reasons
+for unsupported types, destinations, or cross-host transfers. Avoid containment cycles, such
+as nesting a chat inside its own content tabs.
+
+Acceptance: browser URL/title and relevant tab settings follow the operation without copying
+cookies, credentials, or broader agent permissions across trust boundaries. Existing live browser
+or terminal resources keep a single well-defined owner; control from the old chat must not leak
+after transfer. For terminal copies, explicitly distinguish a new terminal configuration from
+the existing process; no process starts solely because a descriptor was copied. Validate source
+and destination permissions, host compatibility, failure rollback, active selection, ordering,
+and restoration after restart. Keep source tabs intact on failed transfer and do not silently
+close active work.
+
+Status: queued tab organization feature and per-type behavior design.
+
+### BF-2026-10-07-14 — Audit and fix tab movement behavior
+
+The operator reports that moving tabs seems buggy; no single reproducible cause is established.
+Reproduce existing drag/drop and menu-based moves before implementing BF-12/BF-13. Inspect index
+calculation, source/destination ownership, active selection, persistence, and embedded browser or
+terminal resource attachment through a move.
+
+Acceptance: moving left/right, across overflow boundaries, and between supported containers
+produces exactly the intended order and one tab at its new location. Preserve chat/composer
+ownership, focus, content, and relevant scroll state. Cover moves of active/inactive tabs,
+cancelled drags, rapid successive moves, last-tab removal, destination closure, and restart.
+Use the same validated move primitive for drag/drop and menu actions, and report which observed
+failures were reproduced and fixed separately from coverage of hypothetical edge cases.
+
+Status: queued bug investigation and fix.
+
+### BF-2026-10-07-15 — Keep navigation spacing stable when opening terminal tabs
+
+The operator reports that creating a terminal tab disrupts navigation-bar spacing. The supplied
+screenshot shows a terminal within chat content navigation; private titles, paths, and shell
+details are excluded. Compare before/after terminal creation and switching to identify the exact
+layout regression rather than assuming a specific CSS cause.
+
+Acceptance: browser, chat, and terminal tabs share consistent bar height, padding, icon/label
+alignment, active indicator, and close-control placement. Terminal content must not stretch,
+shift, or otherwise restyle its parent navigation. Verify creation, activation, resize, closing,
+long titles, many tabs/overflow, collapsed sidebar, and switching among tab types at normal and
+increased zoom. Preserve terminal sizing and input focus while fixing navigation geometry.
+
+Status: queued terminal-tab layout fix.
+
+### BF-2026-10-07-16 — Integrate agent terminal work with chat terminal tabs
+
+Make agent terminal work visible and usable through terminal tabs owned by the originating chat.
+Investigate the provider execution boundaries and existing terminal integration first: distinguish
+provider-owned command execution/output from a Proteus-owned interactive PTY. Do not present an
+unrelated shell as the agent's actual session or claim persistent shell state where commands
+execute independently. Correlate each activity with its terminal/output surface and show agent
+activity and process status accurately.
+
+Evaluate defaults in Engine Room Preferences for new chat terminals, such as terminal profile,
+shell, starting folder derived from the chat workspace, reuse versus separate session, and
+whether the tab is selected automatically when work begins. These are design candidates, not
+approval to add every setting without evaluating usefulness. Let explicit per-chat choices
+override defaults. Preserve current terminals when defaults change.
+
+Acceptance: the user can find the actual command and output for a chat, distinguish agent and
+manual input, and understand when a process is running, completed, failed, or awaiting input.
+Prevent agent/user input collisions and cross-chat command routing; retain existing permission
+checks, host ownership, working directory, and environment/auth-profile boundaries. Closing or
+moving a tab must not silently terminate or duplicate running work. Document supported providers
+and terminal modes, limitations, restart behavior, and whether a view is interactive or output-only.
+Use synthetic commands to verify attribution, output, input handoff, errors, cancellation,
+and isolated parallel chats. Do not expose stored secrets in tab labels or configuration previews.
+
+Status: queued terminal integration investigation and defaults design.
+
+### BF-2026-10-07-17 — Expose multiple Azure, Jira, and Azure DevOps auth profiles
+
+Investigate support for multiple Azure CLI (`az login`) authentication profiles plus Jira and
+Azure DevOps authentication, and make the active profile and login health visible in the interface.
+Provide explicit profile selection, a manual status refresh, and sign-in/re-authentication actions
+appropriate to each integration. Distinguish **Refresh status** from **Sign in again** so a status
+check does not unexpectedly start an interactive authentication flow.
+
+Show useful account/tenant/subscription or organization/site context when available, the host and
+consumer using the profile (CLI, MCP connection, chat terminal, or other adapter), status, and last
+checked time. Distinguish signed in, expired/needs sign-in, checking, unreachable, and unknown;
+stored configuration alone is not proof that a live request will authenticate successfully.
+
+Acceptance: determine each adapter's real profile and credential mechanisms rather than assuming
+Azure CLI login authenticates Jira/ADO MCPs or all terminals. Isolate supported profiles and make
+selection explicit for chats/workspaces/terminals as appropriate; switching one context must not
+silently change credentials for other active chats. A status refresh checks the selected context,
+and successful re-authentication refreshes affected consumers without requiring an app restart
+where supported. Preserve existing sessions and credentials on failure. Store secrets only in
+the existing protected credential facilities; never put tokens in UI, logs, browser tabs, repo
+files, or synced descriptors. Do not copy professional credential configuration into personal
+contexts. Verify multi-account selection, expiration, failed checks, re-authentication, and
+concurrent consumers with synthetic profiles before separately reporting live validation.
+
+Coordinate this with existing provider-sign-in and contradictory MCP-auth-status backlog items;
+this request adds integration-profile visibility and isolation rather than assuming those items
+are already fixed. Keep unsupported profile mechanisms explicitly deferred with reasons.
+
+Status: queued authentication/profile investigation and interface feature. No authentication
+state, account selection, credentials, or access grants changed during intake.
+
+
 ## October 6 bug/feature list — closed for build handoff
 
 The operator closed the original 21-item intake on October 6 and authorized implementation,

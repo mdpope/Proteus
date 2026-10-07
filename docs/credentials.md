@@ -1,5 +1,10 @@
 # Credential providers and browser sign-in
 
+October 7 planning: BF-2026-10-07-17 in [planned updates](planned-updates.md) requests visible,
+isolated Azure CLI, Jira, and Azure DevOps authentication profiles, manual status refresh, and
+appropriate sign-in recovery. Profile support requires adapter-specific investigation; this
+planning request does not establish an implemented multi-profile credential broker.
+
 Proteus has a desktop-only credential broker with a Bitwarden CLI adapter. The broker is independent
 of Copilot and unavailable through the HTTP API or agent tools. Future providers can implement the
 same status/unlock/lock/login operations. This is login assistance, not a general token broker or a

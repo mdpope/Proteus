@@ -1,5 +1,10 @@
 # Local terminals
 
+October 7 planning: BF-2026-10-07-15 and BF-2026-10-07-16 in
+[planned updates](planned-updates.md) queue terminal-tab navigation spacing fixes and an
+investigation of agent terminal integration/defaults. BF-13 covers move/copy semantics for
+eligible tabs. These proposals do not change current PTY behavior or configuration.
+
 Proteus embeds **Ghostty VT (WebAssembly)** through `ghostty-web` 0.4.0 and uses `node-pty` 1.1.0 for interactive host shells. This is a Ghostty parser/canvas renderer inside Proteus, not an embedded native Ghostty window. The installed Ghostty application and its settings are untouched.
 
 Use the terminal button in the tab bar to choose a saved profile and configured starting folder. Profiles live under Setup → Terminal profiles and support shell executable, optional startup command, starting directory, font family/size, scrollback, and colors. New terminals explicitly run the profile command; a blank command opens a login shell. Starting folders must resolve inside currently configured workspace, shared repository, or every-chat folder roots. A shell has the ordinary permissions of the Mac user: this starting-folder check is not a command sandbox.

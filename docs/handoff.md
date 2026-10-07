@@ -5,6 +5,15 @@
 > the historical completion claims below. It reviews all 22 + 28 build items and current reports;
 > working-tree corrections are not installed release acceptance.
 
+## October 7 next-version intake
+
+The operator requested a planning PR containing 17 new queued items and the approved new-chat
+design. Start with [the October 7 build handoff](2026-10-07-build-handoff.md) and BF-2026-10-07-01
+through BF-2026-10-07-17 in `planned-updates.md`. This checkpoint changes documentation and the
+design sample only. Reconcile the installed/current implementation branches before building;
+none of these requested fixes is certified implemented or verified by this planning PR.
+
+
 ## October 7 morning verification
 
 The physical iPad installed and launched signed **0.2.3 (2610.6.4)** at 13:30 UTC. Fresh
