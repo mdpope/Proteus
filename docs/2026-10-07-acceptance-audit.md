@@ -10,6 +10,15 @@ both physical mobile devices. Website release `20261007T043636Z` is live and pas
 checks. Read the final rollout section below for verification and explicit remaining gates.
 Screenshots containing real chats and workplace URLs are evidence only and are not copied into Git.
 
+## October 7 0.2.4 continuation
+
+The [new implementation ledger](2026-10-07-implementation.md) supersedes the release versions
+above. Both Macs, website and both physical mobile devices have verified 0.2.4 installations.
+HC signing, runtime, continuity, provider refresh, Home and composer checks passed. Both mobile
+updates preserved all app-data/preferences before
+launch and both saved Mac identities after launch. This installation evidence does not close
+the physical gesture, fresh pairing or other live workflow gates documented below.
+
 ## Confirmed failures and current corrections
 
 | Report | Finding in the delivered source | Correction / remaining acceptance |

@@ -10,6 +10,13 @@ Maintain this as the single backlog. Design rationale is in `decisions.md`; rece
 retained as acceptance criteria; the installed versus unverified state is summarized immediately
 below and in `content-workspace-release.md`.
 
+## October 7 0.2.4 rollout
+
+The [implementation ledger](2026-10-07-implementation.md) records current scope and acceptance.
+Both Macs, website, iPhone and iPad have verified 0.2.4 installations.
+Both physical mobile devices now run 2610.7.1 with data, preferences and paired destinations
+preserved. Earlier build and installation statements below are historical baselines.
+
 ## October 7 late native review
 
 Source correction for desktop-origin chat titles, atomic tab reconciliation, full mobile Home
@@ -49,7 +56,7 @@ is consolidated into BF-08 rather than duplicated.
 
 ### BF-2026-10-07-01 — Reconnect automatically after network recovery
 
-Current status: Implemented and regression-tested; Build Mac deployed, HC pending. See [implementation and acceptance](2026-10-07-implementation.md).
+Current status: Implemented and regression-tested; both Macs deployed; installed review and remaining live gates recorded separately. See [implementation and acceptance](2026-10-07-implementation.md).
 
 #### Report and evidence
 

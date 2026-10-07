@@ -8,8 +8,9 @@
 ## October 7 implementation work
 
 The 0.2.4 source work is tracked in [the implementation ledger](2026-10-07-implementation.md).
-Use its verification and deployment columns; the intake and historical receipts below are not
-evidence that this new build is installed. Projects are explicitly deferred by the operator.
+Use its verification and deployment columns. Both Macs, website, iPhone and iPad now have
+verified 0.2.4 installations (native 2610.7.1). The historical 0.2.3 receipts below describe earlier
+baselines. Projects are explicitly deferred by the operator.
 
 ## October 7 next-version intake
 

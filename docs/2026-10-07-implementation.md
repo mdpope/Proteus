@@ -6,23 +6,23 @@ Frozen source: `72d198e6ec0a6621578a66cddba2f2f213e46cea`. Release: 0.2.4, nativ
 
 | BF-2026-10-07 | Source work | Verification | Installed |
 | --- | --- | --- | --- |
-| 01 Recovery | Per-host backoff, heartbeat, wake/network retry; manual/auth boundaries; preserved chat drafts | Encrypted peer regression including no mutation replay and 19 two-host UI groups pass | Build Mac; other applicable destinations pending |
-| 02 Schedule layout | Separate source/action rows; wrapping long paths | Actual Electron at 1440/900/620 passes | Build Mac; other applicable destinations pending |
-| 03 Model labels | Use metadata display names without redundant invocation IDs; no false warning when unselected | Catalog-driven composer regression passes | Build Mac; other applicable destinations pending |
-| 04 Approved new chat | Wide composer, provider-first, local chat-only folders, configured remote starting folders, retained draft/title/attachments | Electron layout and local/remote destination-switch checks pass; arbitrary new remote roots require Mac configuration | Build Mac; other applicable destinations pending |
-| 05 Approval scope | Explicit once/chat/workspace lifetime and restart language across clients; grant semantics unchanged | Permission unit regressions pass; installed review pending | Build Mac + website; native/HC as applicable pending |
-| 06 Runtime | Persist active intervals; live desktop/web/native timers; exclude waits/idle; union overlaps; partial/offline labels and host clock offset | Interval/overlap/crash tests and iPhone/iPad simulator timing and expanded-output checks pass | Build Mac + website; native/HC as applicable pending |
-| 07 Question history | Original wording/options/descriptions, stable IDs and replies, cancellation/interruption | Serialized-question, answer-association and disk-persistence regression passes | Build Mac; other applicable destinations pending |
-| 08 Browser ownership | Chat presentation parent captured before awaits; agent tabs/popups inherit parent | Existing browser suite plus tab regression; installed live agent workflow pending | Build Mac; other applicable destinations pending |
-| 09 Browser preference | Engine Room preference, OS default app name, device-local revision-protected persistence | Electron preference persistence and native default-browser lookup pass; installed exercise pending | Build Mac; other applicable destinations pending |
-| 10 Pinch overview | Scope-aware main/chat/Team overview with non-browser cards, visible/keyboard alternatives and guarded renderer pinch | Team scope Electron regression passes; physical trackpad feel remains unverified | Build Mac; other applicable destinations pending |
-| 11 Standup order | Desktop/web drag and keyboard ordering; existing/new tabs follow saved link order | Electron revision-checked saved order, load order and reuse-without-duplicates pass | Build Mac + website; native/HC as applicable pending |
-| 12 Tab insertion | Main/chat/Team left/right type menus, captured anchor and closure guards | Electron main/Team browser insertion passes; file/terminal guards source-reviewed | Build Mac; other applicable destinations pending |
-| 13 Tab transfer | Browser move/copy among main/local chats/Team; clears old control; independent unloaded copies | Main→Team→main copy and renderer restart pass; projects deferred by operator; live terminals/protected documents unsupported with reasons | Build Mac; other applicable destinations pending |
-| 14 Tab movement | Correct final drop-side calculation, complete context menus, persisted placement | Existing tab suite and new insertion/transfer/restart checks | Build Mac; other applicable destinations pending |
-| 15 Terminal spacing | Bounded flex content below navigation | 13 Electron checks pass for input, view recovery, shell continuity, restart and persistent-session reattachment | Build Mac; other applicable destinations pending |
-| 16 Agent terminals | Actual provider command output in read-only chat tab; no shell/process invented | Source/runtime check; interactive PTY attachment unavailable in current provider boundary | Build Mac; other applicable destinations pending |
-| 17 Auth profiles | Integration profiles shows exact existing chat/provider MCP consumers and routes to supported status/sign-in | New isolated Azure/Jira/ADO credential mechanisms remain unsupported/deferred as detailed below; operator clarification pending | Build Mac; other applicable destinations pending |
+| 01 Recovery | Per-host backoff, heartbeat, wake/network retry; manual/auth boundaries; preserved chat drafts | Encrypted peer regression including no mutation replay and 19 two-host UI groups pass | Both Macs |
+| 02 Schedule layout | Separate source/action rows; wrapping long paths | Actual Electron at 1440/900/620 passes | Both Macs |
+| 03 Model labels | Use metadata display names without redundant invocation IDs; no false warning when unselected | Catalog-driven composer regression passes | Both Macs |
+| 04 Approved new chat | Wide composer, provider-first, local chat-only folders, configured remote starting folders, retained draft/title/attachments | Electron layout and local/remote destination-switch checks pass; arbitrary new remote roots require Mac configuration | Both Macs |
+| 05 Approval scope | Explicit once/chat/workspace lifetime and restart language across clients; grant semantics unchanged | Permission unit regressions pass; installed review pending | Both Macs, website and native where applicable |
+| 06 Runtime | Persist active intervals; live desktop/web/native timers; exclude waits/idle; union overlaps; partial/offline labels and host clock offset | Interval/overlap/crash tests and iPhone/iPad simulator timing and expanded-output checks pass | Both Macs, website and native where applicable |
+| 07 Question history | Original wording/options/descriptions, stable IDs and replies, cancellation/interruption | Serialized-question, answer-association and disk-persistence regression passes | Both Macs |
+| 08 Browser ownership | Chat presentation parent captured before awaits; agent tabs/popups inherit parent | Existing browser suite plus tab regression; installed live agent workflow pending | Both Macs |
+| 09 Browser preference | Engine Room preference, OS default app name, device-local revision-protected persistence | Electron preference persistence and native default-browser lookup pass; installed exercise pending | Both Macs |
+| 10 Pinch overview | Scope-aware main/chat/Team overview with non-browser cards, visible/keyboard alternatives and guarded renderer pinch | Team scope Electron regression passes; physical trackpad feel remains unverified | Both Macs |
+| 11 Standup order | Desktop/web drag and keyboard ordering; existing/new tabs follow saved link order | Electron revision-checked saved order, load order and reuse-without-duplicates pass | Both Macs, website and native where applicable |
+| 12 Tab insertion | Main/chat/Team left/right type menus, captured anchor and closure guards | Electron main/Team browser insertion passes; file/terminal guards source-reviewed | Both Macs |
+| 13 Tab transfer | Browser move/copy among main/local chats/Team; clears old control; independent unloaded copies | Main→Team→main copy and renderer restart pass; projects deferred by operator; live terminals/protected documents unsupported with reasons | Both Macs |
+| 14 Tab movement | Correct final drop-side calculation, complete context menus, persisted placement | Existing tab suite and new insertion/transfer/restart checks | Both Macs |
+| 15 Terminal spacing | Bounded flex content below navigation | 13 Electron checks pass for input, view recovery, shell continuity, restart and persistent-session reattachment | Both Macs |
+| 16 Agent terminals | Actual provider command output in read-only chat tab; no shell/process invented | Source/runtime check; interactive PTY attachment unavailable in current provider boundary | Both Macs |
+| 17 Auth profiles | Integration profiles shows exact existing chat/provider MCP consumers and routes to supported status/sign-in | New isolated Azure/Jira/ADO credential mechanisms remain unsupported/deferred as detailed below; operator clarification pending | Both Macs |
 
 Full Node regression: 374 passing tests; static checks and website asset build pass at the
 pre-freeze checkpoint. New Electron composer, tab interaction, standup-order and preference scripts pass. Website
@@ -77,15 +77,25 @@ this does not defer chat or Team transfers.
   was restored into an isolated database; both pre- and post-release recovery sets were downloaded,
   checksum-verified and registered, preserving all older recovery points. Private access and
   recovery receipts remain in the deployment workspace.
-- **iPhone and iPad built; installation blocked by device locks:** signed 0.2.4 (2610.7.1), same
-  certificate/team/profile/entitlements as the existing app; both device identifiers remain in the
-  valid profile. Both are paired and reachable over Wi-Fi. Final preflights stopped at the lock
-  check before backup, process termination or installation. The operator has been asked to unlock
-  them. iPhone and iPad simulator timing and expandable-output tests pass; this does not certify
-  physical-device installation or gestures.
-- **Work Mac pending:** tested source is published on `codex/oct-7-implementation`. The connected HC
-  chat is available, but sending it deployment instructions requires explicit user authorization;
-  that question is pending. No HC installation or newly verified allowance is claimed here.
+- **iPhone and iPad installed and verified:** signed 0.2.4 (2610.7.1), same
+  certificate/team/profile/entitlements. After the operator unlocked both devices, the guarded
+  in-place updates preserved every app-data and preference byte before launch. Both saved Mac
+  destination identities and each selected destination survived launch. Installed versions and
+  running processes were independently verified. Simulator timing and expandable-output tests
+  pass; physical gestures and full remote workflows remain separate acceptance work.
+- **Work Mac installed and verified:** 0.2.4, build
+  `72d198e6ec0a+src.e7e8dc39e050`, independently confirmed new process and served renderer.
+  All 5,519 bundle entries and 145 runtime hashes match the signed release; the original
+  certificate/designated requirement and vendor helpers remain intact. The operator authorized
+  ending one confirmed-idle nonpersistent shell; its tab and saved scrollback survived. A full
+  cold backup matched the old app and 31,878 data entries; app data stayed byte-identical before
+  launch. After launch, 17 main tabs, four Team tabs, order, selection, existing history, 35 runs,
+  five schedules, five pairings and all resource/document grants were preserved. Runtime browser
+  IDs and the context refresh timestamp changed as expected; no unexplained change remained.
+  Account authentication and relay are healthy; Life remains disabled. All three providers
+  refreshed successfully. The installed Home and provider-first composer passed inspection without
+  a model turn; the original selection was restored.
+  Detailed recovery and verification receipts remain on the owning Mac.
 
 The source runtime is frozen at the commit above. Later documentation-only commits record receipts
 without changing shipped inputs. Projects are deferred by the operator. New protected integration
