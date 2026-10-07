@@ -12,6 +12,9 @@ build and deployment from the coordinating Mac. BF-22 adds visiting-desktop chat
 All 22 items are implemented in the 0.2.2 source checkpoint; isolated validation and actual rollout
 are tracked separately in [October 6 release](2026-10-06-release.md). The original acceptance
 criteria and accepted examples remain in [the build handoff](2026-10-06-build-handoff.md).
+Website, Build Mac, iPad and iPhone rollout is verified at 0.2.2; HC's selected-child restart
+correction, corrected Mac rollout and explicit remaining live gates are recorded in the release document. Preserve these
+gates rather than treating synthetic checks or app installation as a completed live workflow.
 
 ### BF-2026-10-06-01 — Make website Mac connections easy to find and complete
 

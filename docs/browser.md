@@ -260,3 +260,11 @@ Command-W is routed by the main and embedded web contents to the renderer's
 protected current-tab close action. Pinch-out overview entry requires additional
 input after reaching baseline; tab switches, navigation and dismissal reset the
 pending gesture. Hardware timing remains subject to installed trackpad validation.
+
+## Browser selection across desktop restart
+
+Local browser view IDs can change when Electron recreates a saved browser. Workspace restoration
+remaps both the active tab and remembered chat-child selections to the recreated view before
+validating and saving the workspace. The separate content-tab ID remains stable for descriptor
+synchronization. A selected child must still exist and belong to the same chat; an unrelated or
+missing child is never selected as a fallback.

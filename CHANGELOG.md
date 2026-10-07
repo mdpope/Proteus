@@ -13,6 +13,8 @@
   status; explain unavailable Copilot quota without inventing allowance.
 - Sync bounded chat browser/document tabs and Team browser tabs between the host and native clients;
   visiting desktops also reconcile remote chat tabs. Keep selection and page state local.
+- Remap a chat's remembered browser child when restart recreates its local browser view, retaining
+  the selected child while adopting stable content-tab IDs.
 - Compact native chat headers and collapse the composer to a draft preview while reading, with a
   circular Stop in both sizes. Flatten Team browser tabs and retain chat ownership when closing.
 

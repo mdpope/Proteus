@@ -58,7 +58,7 @@ async function restoreWorkspace() {
   try {
     let saved=window.desktop?.workspaceSession?await window.desktop.workspaceSession({action:'get'}):JSON.parse(localStorage.getItem('proteus.workspace')||'null');
     if(!saved){let legacy=[];try{legacy=JSON.parse(localStorage.getItem('proteus.feature-tabs')||'[]');}catch{}saved={tabs:[...state.tabs,...legacy.filter(type=>['omi','life'].includes(type)).map(type=>({id:'feature-'+type,type,label:type==='omi'?'Transcription':'Life'}))],active:'overview',page:'home'};}
-    const tabs=[], existingBrowser=window.desktop?await window.desktop.browser({action:'list'}):[];
+    const tabs=[], restoredBrowserIds=new Map(), existingBrowser=window.desktop?await window.desktop.browser({action:'list'}):[];
     for(const entry of saved.tabs||[]) {
       const tab={...entry};
       if(tab.type==='standup'){tab.type='team';tab.id='feature-team';tab.label='Team Tools';if(saved.active===entry.id)saved.active=tab.id;if(!saved.team)saved.team={active:'standup'};}
@@ -73,12 +73,14 @@ async function restoreWorkspace() {
         if(!window.desktop)continue;
         // A renderer reload reuses the live view; an app restart creates a private tab.
         const previous=tab.id;tab.contentTabId??=previous;let info=existingBrowser.find(info=>info.id===tab.id);
-        if(!info){info=await window.desktop.browser({action:'create',restore:true,unloaded:saved.active!==previous,url:tab.url,history:tab.history,favicon:tab.favicon,lastTouchedAt:tab.lastTouchedAt});tab.info=info;tab.id=info.id;tabs.push(tab);if(saved.active===previous)saved.active=tab.id;continue;}
+        if(!info){info=await window.desktop.browser({action:'create',restore:true,unloaded:saved.active!==previous,url:tab.url,history:tab.history,favicon:tab.favicon,lastTouchedAt:tab.lastTouchedAt});tab.info=info;tab.id=info.id;restoredBrowserIds.set(previous,tab.id);tabs.push(tab);if(saved.active===previous)saved.active=tab.id;continue;}
         tab.info=info;
       }
       if(!tabs.some(other=>other.id===tab.id))tabs.push(tab);
     }
-    selectedChildren.clear();for(const [parent,child] of Object.entries(saved.selectedChildren||{}))selectedChildren.set(parent,child);state.tabs=tabs.length?tabs.filter(tab=>!tab.parentId||tabs.some(parent=>parent.id===tab.parentId&&['run','remote-run'].includes(parent.type))):state.tabs;state.page=saved.page||'home';state.engineSection=saved.engineSection||'resources';restoreTeamState(saved.team,existingBrowser);state.tab=state.tabs.some(tab=>tab.id===saved.active)?saved.active:'overview';
+    // Remembered selections use client-local view IDs, just like the active tab.
+    // Remap them before saving; otherwise the workspace ownership filter drops them.
+    selectedChildren.clear();for(const [parent,child] of Object.entries(saved.selectedChildren||{}))selectedChildren.set(parent,restoredBrowserIds.get(child)||child);state.tabs=tabs.length?tabs.filter(tab=>!tab.parentId||tabs.some(parent=>parent.id===tab.parentId&&['run','remote-run'].includes(parent.type))):state.tabs;state.page=saved.page||'home';state.engineSection=saved.engineSection||'resources';restoreTeamState(saved.team,existingBrowser);state.tab=state.tabs.some(tab=>tab.id===saved.active)?saved.active:'overview';
     for(const info of existingBrowser.filter(item=>item.loaded!==false&&item.id!==state.tab))try{await window.desktop.browser({action:'unload',id:info.id});info.loaded=false;}catch{/* Protected audible, agent-owned or downloading views retain their work. */}
   } catch(error) {toast(error.message);return;}
   finally {workspaceRestoring=false;}
