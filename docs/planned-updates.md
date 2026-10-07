@@ -49,6 +49,8 @@ is consolidated into BF-08 rather than duplicated.
 
 ### BF-2026-10-07-01 — Reconnect automatically after network recovery
 
+Current status: Implemented and regression-tested; Build Mac deployed, HC pending. See [implementation and acceptance](2026-10-07-implementation.md).
+
 #### Report and evidence
 
 The desktop Chats screen reports “Some Macs are offline. Cached statuses are unverified and
@@ -128,6 +130,8 @@ No signing identity, credential, Keychain item, or running app was changed durin
 
 ### BF-2026-10-07-02 — Review schedule page layout and prevent text overlapping actions
 
+Current status: Implemented and verified at three desktop widths. See [implementation and acceptance](2026-10-07-implementation.md).
+
 #### Report
 
 The schedule detail screenshot shows the source ownership and manifest-path text running beneath
@@ -165,9 +169,10 @@ repository's source manifest and the exported file Proteus reads.
    Verify file actions still target the correct file and layout changes do not run, enable,
    save, or otherwise modify a schedule inadvertently.
 
-Status: requested design review and layout fix; no implementation or UI verification yet.
 
 ### BF-2026-10-07-03 — Restore clear versioned Claude model labels across chats and schedules
+
+Current status: Implemented from refreshed provider metadata. See [implementation and acceptance](2026-10-07-implementation.md).
 
 The operator reports a possible regression in Claude model presentation after an earlier fix.
 The screenshot shows short family labels mixed with resolved identifiers, alias annotations,
@@ -190,9 +195,10 @@ warning merely because the user has not selected one. Preserve saved identifiers
 selection feedback without silently substituting a model. Cover aliases, pinned versions, unknown
 capacity, catalog changes, and unavailable saved selections in focused tests and UI checks.
 
-Status: queued investigation and fix; not built during intake.
 
 ### BF-2026-10-07-04 — Widen and simplify the new chat dialog
+
+Current status: Implemented for local composer and configured remote folders; new arbitrary remote roots require owning-Mac configuration. See [implementation and acceptance](2026-10-07-implementation.md).
 
 Replace the tall form with a substantially wider desktop dialog, initially targeting about
 1,240 CSS pixels subject to viewport margins, and use the existing continued-chat composer styling.
@@ -248,10 +254,12 @@ incorporates the operator's folder, existing-source-selector, and wrapping-compo
 **Design approved by the operator on October 7, 2026.** This preview and the requirements above
 are the accepted design reference for implementation. Sample data and model capabilities are
 illustrative; use actual workspace configuration and refreshed provider metadata in the app.
-Implementation remains queued for a future build; design approval does not request building,
-installing, or deploying the app during this planning PR.
+The intake design approval was followed by a separate implementation/deployment authorization;
+current verification and remaining scope are recorded in the implementation ledger.
 
 ### BF-2026-10-07-05 — Make tool approval duration and scope explicit
+
+Current status: Implemented; existing approval grants and enforcement preserved. See [implementation and acceptance](2026-10-07-implementation.md).
 
 The operator asks whether **Auto-approve tools for this workspace** lasts only for the current
 chat. The current wording leaves its lifetime unclear, and **Approve once and trust workspace
@@ -296,9 +304,10 @@ and restart; verify separation across providers, hosts, or changed workspace con
 Check all clients exposing these actions and wrap descriptions at narrow widths. This is a
 clarity change, not authorization to broaden approval scope or change current saved permissions.
 
-Status: queued wording and presentation improvement; no permission setting or app code changed.
 
 ### BF-2026-10-07-06 — Show live command, activity, group, and chat runtime
+
+Current status: Implemented on desktop/web/native; both simulator checks pass. Physical native installation awaits unlock. See [implementation and acceptance](2026-10-07-implementation.md).
 
 #### Requested displays
 
@@ -355,10 +364,10 @@ to AI runtime. Document these counting rules with the eventual implementation.
    persistence changes, plus UI validation for each changed client. Separate measured live-run
    verification from fixture success.
 
-Status: queued feature request. No timer implementation or runtime instrumentation added during
-intake. Private workflow names, report contents, and paths from the screenshot are omitted.
 
 ### BF-2026-10-07-07 — Preserve original user questions in chat history
+
+Current status: Implemented and persistence-tested. See [implementation and acceptance](2026-10-07-implementation.md).
 
 The screenshot shows a completed **Asking user** activity whose details contain only
 **User responded: yes**, followed by a user message containing **yes**. The original question
@@ -392,9 +401,10 @@ activity must not replace the question with a generic response summary alone.
    long formatted questions, interruption, and reconnect using synthetic content. Run `npm test`
    and `npm run check` if execution/persistence changes, and exercise affected client UIs.
 
-Status: queued investigation and history fix; no app behavior changed during intake.
 
 ### BF-2026-10-07-08 — Keep chat-related browser tabs in their chat navigation
+
+Current status: Implemented and regression-tested; live agent-browser acceptance remains open. See [implementation and acceptance](2026-10-07-implementation.md).
 
 Browser pages opened by an agent working in a chat, explicitly requested by the user in that
 chat, or opened by clicking a link in chat content should belong to that chat's browser tab
@@ -417,9 +427,10 @@ The operator reiterated this requirement during final intake: chat-opened browse
 follow applicable user settings and must not escape into the application tab bar when opened
 in-app. Apply chat ownership consistently across links, explicit requests, and agent tools.
 
-Status: queued routing/organization change; no implementation during intake.
 
 ### BF-2026-10-07-09 — Add a clicked-link browser preference in Engine Room
+
+Current status: Implemented as a device-local Mac preference; persistence tested. See [implementation and acceptance](2026-10-07-implementation.md).
 
 Add a **Preferences** section in Engine Room containing **Open clicked links in** with choices
 **In-app browser** and **System browser**. When the operating system supplies the default
@@ -440,9 +451,10 @@ route them blindly as ordinary web links. Verify both choices, persistence, miss
 metadata, opening failure feedback, and chat ownership. Preserve existing URL and permission
 checks. Do not change the operating system's default browser as a side effect.
 
-Status: queued preferences feature; no device or app preference changed during intake.
 
 ### BF-2026-10-07-10 — Improve pinch-to-tab-overview and extend tab coverage
+
+Current status: Implemented scoped overview and alternatives; physical pinch feel unverified. See [implementation and acceptance](2026-10-07-implementation.md).
 
 Improve the existing pinch gesture for browser tab overview, including reliable recognition,
 smooth entry/exit, and a predictable return to the selected tab. Investigate support for the
@@ -463,9 +475,10 @@ Validate feasibility per client/tab type and document implemented versus deferre
 do not claim universal pinch support from a browser-only demonstration. Align behavior with
 the existing tab overview and accepted dismissal behavior from the October 6 intake.
 
-Status: queued interaction improvement and feasibility review; no gesture changes implemented.
 
 ### BF-2026-10-07-11 — Reorder standup links and open them in saved list order
+
+Current status: Implemented on desktop/web; saved ordering and tab reuse tested. See [implementation and acceptance](2026-10-07-implementation.md).
 
 Allow the operator to reorder standup links. The displayed, saved list order must determine
 the order of tabs opened by the standup link-opening action, so the standup follows the intended
@@ -480,9 +493,10 @@ without scrambling the remaining order or creating unintended duplicates. Reorde
 does not open links. Verify first/last positions, keyboard controls, saved-order restoration,
 and opening several synthetic links with different load times.
 
-Status: queued standup-link ordering feature; no links reordered or app behavior changed.
 
 ### BF-2026-10-07-12 — Add tabs to the left or right through the tab-type menu
+
+Current status: Implemented and regression-tested for main/chat/Team containers. See [implementation and acceptance](2026-10-07-implementation.md).
 
 Add **Add tab to left** and **Add tab to right** to the tab menu. Selecting either action opens
 the existing new-tab type menu; only after the user chooses a supported type should the new tab
@@ -493,9 +507,10 @@ while the menu is open. Cancel creates nothing. Handle first/last tabs, overflow
 and an anchor closed before selection without inserting into an unrelated container. Persist
 the resulting order and preserve existing type-specific creation and authorization behavior.
 
-Status: queued tab-menu feature.
 
 ### BF-2026-10-07-13 — Move or copy tabs to chats, projects, and Team Tools
+
+Current status: Browser move/copy implemented. Projects deferred by operator; live terminals/host-bound documents remain unsupported. See [implementation and acceptance](2026-10-07-implementation.md).
 
 Add separate **Send a tab copy to chat/project** and **Send tab to chat/project** actions, with
 a destination picker identifying the target chat or project. Also allow eligible top-level
@@ -520,9 +535,10 @@ and destination permissions, host compatibility, failure rollback, active select
 and restoration after restart. Keep source tabs intact on failed transfer and do not silently
 close active work.
 
-Status: queued tab organization feature and per-type behavior design.
 
 ### BF-2026-10-07-14 — Audit and fix tab movement behavior
+
+Current status: Implemented and tab/paired-host regressions pass. See [implementation and acceptance](2026-10-07-implementation.md).
 
 The operator reports that moving tabs seems buggy; no single reproducible cause is established.
 Reproduce existing drag/drop and menu-based moves before implementing BF-12/BF-13. Inspect index
@@ -536,9 +552,10 @@ cancelled drags, rapid successive moves, last-tab removal, destination closure, 
 Use the same validated move primitive for drag/drop and menu actions, and report which observed
 failures were reproduced and fixed separately from coverage of hypothetical edge cases.
 
-Status: queued bug investigation and fix.
 
 ### BF-2026-10-07-15 — Keep navigation spacing stable when opening terminal tabs
+
+Current status: Implemented; 13 terminal UI checks pass. See [implementation and acceptance](2026-10-07-implementation.md).
 
 The operator reports that creating a terminal tab disrupts navigation-bar spacing. The supplied
 screenshot shows a terminal within chat content navigation; private titles, paths, and shell
@@ -551,9 +568,10 @@ shift, or otherwise restyle its parent navigation. Verify creation, activation, 
 long titles, many tabs/overflow, collapsed sidebar, and switching among tab types at normal and
 increased zoom. Preserve terminal sizing and input focus while fixing navigation geometry.
 
-Status: queued terminal-tab layout fix.
 
 ### BF-2026-10-07-16 — Integrate agent terminal work with chat terminal tabs
+
+Current status: Read-only actual provider command view implemented; interactive PTY attachment remains unsupported. See [implementation and acceptance](2026-10-07-implementation.md).
 
 Make agent terminal work visible and usable through terminal tabs owned by the originating chat.
 Investigate the provider execution boundaries and existing terminal integration first: distinguish
@@ -577,9 +595,10 @@ and terminal modes, limitations, restart behavior, and whether a view is interac
 Use synthetic commands to verify attribution, output, input handoff, errors, cancellation,
 and isolated parallel chats. Do not expose stored secrets in tab labels or configuration previews.
 
-Status: queued terminal integration investigation and defaults design.
 
 ### BF-2026-10-07-17 — Expose multiple Azure, Jira, and Azure DevOps auth profiles
+
+Current status: Investigation and existing MCP-consumer visibility implemented; new isolated credential mechanisms deferred, operator clarification pending. See [implementation and acceptance](2026-10-07-implementation.md).
 
 Investigate support for multiple Azure CLI (`az login`) authentication profiles plus Jira and
 Azure DevOps authentication, and make the active profile and login health visible in the interface.
@@ -607,8 +626,7 @@ Coordinate this with existing provider-sign-in and contradictory MCP-auth-status
 this request adds integration-profile visibility and isolation rather than assuming those items
 are already fixed. Keep unsupported profile mechanisms explicitly deferred with reasons.
 
-Status: queued authentication/profile investigation and interface feature. No authentication
-state, account selection, credentials, or access grants changed during intake.
+
 
 
 ## October 6 bug/feature list — closed for build handoff
