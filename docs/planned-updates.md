@@ -18,7 +18,9 @@ for build 2610.6.4. The preceding installed native baseline remains 2610.6.3 unt
 is recorded. The title failure reproduced before the change. Seven distinct iPad cases cover
 transport/reconciliation, retained views, repeated sync, history/backgrounding, heading/sidebar,
 new-tab visibility, existing strip position and guide dismissal. The extended transport case and
-guide popup also pass on iPhone. All 368 Node tests and static checks pass.
+guide popup also pass on iPhone. All 368 Node tests and static checks pass. Signed artifact
+`684e1cb`, 0.2.3 (2610.6.4), is ready with signer/profile/entitlements preserved. Physical rollout
+is blocked by both device locks; iPad installation stopped before backup or app termination.
 
 ## October 7 live-review follow-up
 

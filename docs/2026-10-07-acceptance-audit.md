@@ -251,3 +251,10 @@ background resume, heading/sidebar/new-tab visibility, unchanged existing-tab sc
 and full-guide popup/dismissal. The final title case additionally verifies explicit desktop
 renames and actual changed-URL navigation on both iPad and iPhone. The guide popup passes on
 both sizes; exported screenshots were visually reviewed. 368 Node tests and static checks pass.
+
+
+Signed native artifact `684e1cb`, **0.2.3 (2610.6.4)**, is verified and privately retained with
+43 exact source inputs and 18 signed bundle-file hashes. Original signer/team/profile and
+entitlements match. Both devices were locked at rollout; the iPad installer stopped before
+backup, app termination or installation. Installed physical build remains 2610.6.3 until unlock
+and a successful new receipt. The ready artifact and guarded installer are in private recovery.

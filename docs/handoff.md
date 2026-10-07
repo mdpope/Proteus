@@ -5,6 +5,23 @@
 > the historical completion claims below. It reviews all 22 + 28 build items and current reports;
 > working-tree corrections are not installed release acceptance.
 
+## Late native correction ready — 2610.6.4
+
+Source `684e1cb` fixes the reproduced desktop-sync `New tab` title overwrite; adds the full mobile
+Home guide popup; insets iPad Home; highlights active sidebar pages; and reveals newly opened
+main/chat/Team tabs while preserving ordinary strip selection offsets. Seven distinct iPad cases,
+two iPhone cases, 368 Node tests and static checks pass. The signed 0.2.3 (2610.6.4) artifact
+preserves the original signer, profile and entitlements, with 43 source inputs and 18 signed
+bundle files verified. It is **ready, not installed**: both devices are locked; the iPad install
+stopped before backup or app termination. Their installed baseline is still 2610.6.3.
+
+The immutable app/source, build receipt, guarded installer and simulator screenshots are retained
+in the private release-recovery folder `Native-Stability-2610.6.4`, outside Git. Use its installer
+after unlock; it checks ancestry plus every packaged source/bundle hash, current profile validity,
+paired device, lock state and existing app before replacement, then verifies data and pairing.
+Do not rebuild or reset pairing to work around a lock. The Mac checks/HC Claude reminder below
+remains deferred to tomorrow. Latest details are in the acceptance audit's late-native section.
+
 ## Current October 7 correction rollout
 
 Source `56a074d` (0.2.3) is installed on both Macs; signed runtime and continuity checks passed.
