@@ -5,15 +5,31 @@
 > the historical completion claims below. It reviews all 22 + 28 build items and current reports;
 > working-tree corrections are not installed release acceptance.
 
-## Late native correction ready — 2610.6.4
+## October 7 morning verification
+
+The physical iPad installed and launched signed **0.2.3 (2610.6.4)** at 13:30 UTC. Fresh
+checks preserved six data files, preferences, both paired Mac identities and selected destination;
+installed version and running process were independently confirmed. Private receipt and backups
+are retained with `Native-Stability-2610.6.4`. The iPhone remains on 2610.6.3 pending its update.
+
+Build Mac live checks verified the unified Home/version/guide, active sidebar, Standup
+name/URL/action table, Resources summary cards, Notifications panels, Copilot popup and actual
+Refresh, main/chat browser address autofocus, dated/device-labelled recents, main close-left
+and chat-child close back to its chat. Temporary verification tabs were closed without sending
+a chat message. HC also passed allowance popup/Refresh, main address autofocus, 20 dated/device
+recents and existing Standup table checks. Its remaining UI checks and Claude allowance are open.
+The operator asked the HC chat to help with CLI sign-in; that flow is waiting on the remote
+chat’s approval gate. Unlock alone does not restore subscription authentication.
+
+## Late native correction — 2610.6.4
 
 Source `684e1cb` fixes the reproduced desktop-sync `New tab` title overwrite; adds the full mobile
 Home guide popup; insets iPad Home; highlights active sidebar pages; and reveals newly opened
 main/chat/Team tabs while preserving ordinary strip selection offsets. Seven distinct iPad cases,
 two iPhone cases, 368 Node tests and static checks pass. The signed 0.2.3 (2610.6.4) artifact
 preserves the original signer, profile and entitlements, with 43 source inputs and 18 signed
-bundle files verified. It is **ready, not installed**: both devices are locked; the iPad install
-stopped before backup or app termination. Their installed baseline is still 2610.6.3.
+bundle files verified. The first attempt stopped at the device lock before backup or app
+termination. The subsequent successful iPad installation is recorded above; iPhone remains pending.
 
 The immutable app/source, build receipt, guarded installer and simulator screenshots are retained
 in the private release-recovery folder `Native-Stability-2610.6.4`, outside Git. Use its installer

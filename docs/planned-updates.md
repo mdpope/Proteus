@@ -14,13 +14,13 @@ below and in `content-workspace-release.md`.
 
 Source correction for desktop-origin chat titles, atomic tab reconciliation, full mobile Home
 guide popup, iPad Home heading/active sidebar and new-tab visibility passed simulator checks
-for build 2610.6.4. The preceding installed native baseline remains 2610.6.3 until a new receipt
-is recorded. The title failure reproduced before the change. Seven distinct iPad cases cover
+for build 2610.6.4. The physical iPad installed and launched that build on October 7 at 13:30 UTC,
+with data/preferences/pairing preserved. The iPhone remains on 2610.6.3 pending its update. The title failure reproduced before the change. Seven distinct iPad cases cover
 transport/reconciliation, retained views, repeated sync, history/backgrounding, heading/sidebar,
 new-tab visibility, existing strip position and guide dismissal. The extended transport case and
 guide popup also pass on iPhone. All 368 Node tests and static checks pass. Signed artifact
-`684e1cb`, 0.2.3 (2610.6.4), is ready with signer/profile/entitlements preserved. Physical rollout
-is blocked by both device locks; iPad installation stopped before backup or app termination.
+`684e1cb`, 0.2.3 (2610.6.4), preserves signer/profile/entitlements. The initial locked iPad
+attempt was superseded by the successful morning installation; private receipts are retained.
 
 ## October 7 live-review follow-up
 
@@ -30,8 +30,11 @@ tab strips; shared desktop/web allowance popups and corrected sidebar ordering; 
 Activity Details. Both Macs, website and physical iPad/iPhone are updated. Native build: 2610.6.3.
 368 Node tests, static/package/UI checks and 14 website deployment endpoint checks passed.
 
-Both Macs' hands-on interface checks are deferred to tomorrow at the operator's request. HC
-Claude is signed out and sign-in/allowance verification is also deferred to tomorrow. The complete
+Both Macs' hands-on checks resumed October 7 after unlock. Build Mac passed Home, sidebar,
+Standup table, Resources cards, Notifications structure, usage popup/refresh, address autofocus,
+recents and safe tab-close checks. HC passed allowance popup/Refresh, address autofocus, 20
+recents with dates/devices and Standup table checks. Remaining HC UI checks are open while its
+user-requested Claude CLI sign-in is waiting on that chat’s approval gate. The complete
 [acceptance audit](2026-10-07-acceptance-audit.md) distinguishes deployed changes, fixture checks
 and remaining live workflow gates. Installation is not blanket acceptance of every original item.
 

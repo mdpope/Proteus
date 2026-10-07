@@ -258,3 +258,32 @@ Signed native artifact `684e1cb`, **0.2.3 (2610.6.4)**, is verified and privatel
 entitlements match. Both devices were locked at rollout; the iPad installer stopped before
 backup, app termination or installation. Installed physical build remains 2610.6.3 until unlock
 and a successful new receipt. The ready artifact and guarded installer are in private recovery.
+
+
+## October 7 morning unlocked-device follow-up
+
+At 13:30 UTC the physical iPad installed and launched **0.2.3 (2610.6.4)** from signed source
+`684e1cb`. All 43 source-input and 18 signed-bundle-file hashes passed. Original signer, team,
+profile and entitlements matched. A fresh quiescent backup and pre-launch comparison verified
+six app-data files and preferences byte-for-byte; both destination identities and selected
+destination survived launch. Installed version and running process were independently confirmed.
+The receipt/backups are private and retained with the immutable artifact. iPhone is still on
+2610.6.3; this result does not claim a physical iPhone update or hands-on iPad screen review.
+
+Build Mac live installed checks passed: unified Home spacing/version box/guide disclosure;
+active sidebar; populated shared Standup name/URL/quiet action rows; Resources totals cards;
+Notifications preferences/history structure; Copilot details and force Refresh with a newly
+reported timestamp; main and chat-child new-tab URL focus confirmed by typing without clicking
+the field; recent-sites dropdown with dates/devices; main close selecting its left browser and
+chat-child close returning to the same chat. Both temporary tabs were closed without navigation
+or a chat turn. Existing remote chat showed inline model/reasoning/context controls.
+Native scroll automation failed to move the Resources page; bottom process clipping is still
+supported by prior isolated 1440px/900px checks rather than a new Build Mac bottom screenshot.
+
+HC owning-chat checks passed allowance popup/Refresh (reported Copilot and Codex), main new-tab
+address focus, a 20-item date/device recent-sites menu and Escape dismissal, disposable tab cleanup,
+and the populated shared Standup table with three Edit/Remove pairs. Remaining HC Resources and
+chat checks are not yet claimed. The operator then directly requested help signing in to Claude
+Code CLI in that chat; the official flow is waiting on its approval gate. Claude allowance is
+still unverified until authentication and refresh succeed. No quota was fabricated, provider turn
+started, permission granted, or signed Mac app patched during this verification.
