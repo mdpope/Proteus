@@ -5,6 +5,17 @@ import os from 'node:os';
 import path from 'node:path';
 import { createServer } from 'node:http';
 
+// Playwright 1.58 polls the truthiness of a Promise without awaiting its value.
+// Poll in Node so false async results retry and only a fulfilled true completes.
+async function waitUntil(predicate, {timeout = 18000, interval = 50} = {}) {
+  const deadline = Date.now() + timeout;
+  do {
+    if (await predicate() === true) return;
+    await new Promise(resolve => setTimeout(resolve, interval));
+  } while (Date.now() < deadline);
+  throw new Error('Async condition did not become true within ' + timeout + 'ms');
+}
+
 const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-toolbar-ui-')));
 fs.writeFileSync(path.join(home, 'settings.json'), JSON.stringify({
   schemaVersion: 1, provider: 'rehearsal', model: '', timezone: 'UTC',
@@ -26,6 +37,7 @@ try {
   });
   const page = await app.firstWindow();
   page.setDefaultTimeout(15000);
+ const waitForAsync = (predicate, arg, options) => waitUntil(() => page.evaluate(predicate, arg), options);
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.route('**/api/team/lists', route => route.fulfill({ json: { identity: { accountId: 'fixture' }, teamLists: [] } }));
@@ -93,7 +105,7 @@ try {
     await page.screenshot({ path: '/private/tmp/proteus-toolbar-' + scope + '-off.png' });
     if (scope === 'main') await page.screenshot({ path: '/private/tmp/proteus-toolbar-compact-detail.png', clip: { x: 0, y: 0, width: 1200, height: 230 } });
     await button.click();
-    await page.waitForFunction(async id => (await window.desktop.browser({ action: 'list' })).find(tab => tab.id === id)?.shared === true, id);
+    await waitForAsync(async id => (await window.desktop.browser({ action: 'list' })).find(tab => tab.id === id)?.shared === true, id);
     await page.waitForFunction(selector => document.querySelector(selector)?.getAttribute('aria-pressed') === 'true', '#' + prefix + '-share');
     assert.match(await button.getAttribute('aria-label'), /ON.*revoke access.*cancel pending/);
     const onHandle = await page.waitForFunction(selector => {
@@ -109,11 +121,11 @@ try {
     await page.screenshot({ path: '/private/tmp/proteus-toolbar-' + scope + '-on.png' });
     await button.focus();
     await page.keyboard.press('Space');
-    await page.waitForFunction(async id => (await window.desktop.browser({ action: 'list' })).find(tab => tab.id === id)?.shared === false, id);
+    await waitForAsync(async id => (await window.desktop.browser({ action: 'list' })).find(tab => tab.id === id)?.shared === false, id);
     assert.equal(await address.inputValue(), url, 'Toggling does not submit or replace the address');
     await address.fill(url + '?typed=1');
     await address.press('Enter');
-    await page.waitForFunction(async id => (await window.desktop.browser({ action: 'list' })).find(tab => tab.id === id)?.url.endsWith('?typed=1'), id);
+    await waitForAsync(async id => (await window.desktop.browser({ action: 'list' })).find(tab => tab.id === id)?.url.endsWith('?typed=1'), id);
     await command({ action: 'navigate', id, url });
     // Restore the displayed value without testing unrelated Team navigation refresh behavior.
     await address.fill(url);
@@ -161,8 +173,8 @@ try {
   await page.locator('[data-page="team"]').click();
   await page.locator(`[data-tab="${chatId}"]`).click();
   assert.equal(await page.locator('.chat-subtab.selected [data-chat-subtab]').getAttribute('data-chat-subtab'), nestedId);
-  await page.waitForFunction(id=>window.desktop.browser({action:'list'}).then(items=>items.find(item=>item.id===id)?.loaded),nestedId);
-  await page.waitForFunction(async ({chatId,nestedId}) => (await window.desktop.workspaceSession({action:'get'}))?.selectedChildren?.[chatId] === nestedId, {chatId,nestedId});
+  await waitForAsync(id=>window.desktop.browser({action:'list'}).then(items=>items.find(item=>item.id===id)?.loaded),nestedId);
+  await waitForAsync(async ({chatId,nestedId}) => (await window.desktop.workspaceSession({action:'get'}))?.selectedChildren?.[chatId] === nestedId, {chatId,nestedId});
   await page.reload();
   await page.waitForFunction(id=>document.querySelector(`[data-tab-container="${id}"]`)?.classList.contains('selected'),chatId);
   await page.locator('.chat-subtab [data-chat-subtab]').first().waitFor();
@@ -185,7 +197,7 @@ try {
   }, team.id);
   await page.waitForFunction(() => document.querySelector('#team-browser-share')?.getAttribute('aria-pressed') === 'true');
   await page.locator('#team-browser-share').click();
-  await page.waitForFunction(async id => {
+  await waitForAsync(async id => {
     const tab = (await window.desktop.browser({ action: 'list' })).find(tab => tab.id === id);
     return !tab.owner && !tab.shared;
   }, team.id);
@@ -234,7 +246,7 @@ try {
     const activeID = await app.evaluate(({ app }) => process.mainModule.require(app.getAppPath() + '/desktop/main.cjs').getBrowser().active);
     assert.equal(activeID, id, scope+' native browser must match its selected toolbar');
     const back = page.locator('#'+prefix+'-back'), forward = page.locator('#'+prefix+'-forward');
-    await page.waitForFunction(async id => (await window.desktop.browser({action:'list'})).find(item => item.id === id)?.canGoBack, id);
+    await waitForAsync(async id => (await window.desktop.browser({action:'list'})).find(item => item.id === id)?.canGoBack, id);
     await page.waitForFunction(selector => {const button=document.querySelector(selector);return !!button&&!button.disabled;}, '#'+prefix+'-back');
     const before = await nativeHistory(id);
     assert.ok(before.index >= 3, scope+' has directional history');
@@ -251,7 +263,7 @@ try {
     await back.dispatchEvent('click', {button:0,detail:1});
     assert.equal((await nativeHistory(id)).index, before.index, scope+' release after hold does not also go back');
     await app.evaluate(() => globalThis.__proteusHistoryMenus.at(-1)[0].click());
-    await page.waitForFunction(async ({id,target}) => (await window.desktop.browser({action:'list'})).find(item => item.id === id)?.url === target, {id,target:backMenu[0].toolTip});
+    await waitForAsync(async ({id,target}) => (await window.desktop.browser({action:'list'})).find(item => item.id === id)?.url === target, {id,target:backMenu[0].toolTip});
     await page.waitForFunction(selector => {const button=document.querySelector(selector);return !!button&&!button.disabled;}, '#'+prefix+'-forward');
     const afterBack = await nativeHistory(id);
     await forward.dispatchEvent('pointerdown', {button:0,pointerId:1});
@@ -262,7 +274,7 @@ try {
     await forward.dispatchEvent('click', {button:0,detail:1});
     assert.equal((await nativeHistory(id)).index, afterBack.index, scope+' forward hold suppresses ordinary click');
     await app.evaluate(() => globalThis.__proteusHistoryMenus.at(-1)[0].click());
-    await page.waitForFunction(async ({id,target}) => (await window.desktop.browser({action:'list'})).find(item => item.id === id)?.url === target, {id,target:forwardMenu[0].toolTip});
+    await waitForAsync(async ({id,target}) => (await window.desktop.browser({action:'list'})).find(item => item.id === id)?.url === target, {id,target:forwardMenu[0].toolTip});
     // A menu opened against old navigation cannot act after the tab moves.
     await back.dispatchEvent('pointerdown', {button:0,pointerId:1});
     await page.waitForTimeout(650);
@@ -274,7 +286,7 @@ try {
     assert.equal((await nativeHistory(id)).index, fresh.index, scope+' stale menu cannot navigate changed history');
     await page.waitForTimeout(800);
     await back.click();
-    await page.waitForFunction(async ({id,target}) => (await window.desktop.browser({action:'list'})).find(item => item.id === id)?.url === target, {id,target:fresh.entries[fresh.index-1].url});
+    await waitForAsync(async ({id,target}) => (await window.desktop.browser({action:'list'})).find(item => item.id === id)?.url === target, {id,target:fresh.entries[fresh.index-1].url});
   }
   await checkHistory('team-browser', team.id, 'team');
   await page.locator(`[data-tab="${chatId}"]`).click();

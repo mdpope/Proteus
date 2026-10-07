@@ -5,6 +5,17 @@ import os from 'node:os';
 import path from 'node:path';
 import {createServer} from 'node:http';
 
+// Playwright 1.58 polls the truthiness of a Promise without awaiting its value.
+// Poll in Node so false async results retry and only a fulfilled true completes.
+async function waitUntil(predicate, {timeout = 18000, interval = 50} = {}) {
+  const deadline = Date.now() + timeout;
+  do {
+    if (await predicate() === true) return;
+    await new Promise(resolve => setTimeout(resolve, interval));
+  } while (Date.now() < deadline);
+  throw new Error('Async condition did not become true within ' + timeout + 'ms');
+}
+
 const home=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'proteus-next-ui-')));
 fs.writeFileSync(path.join(home,'settings.json'),JSON.stringify({schemaVersion:1,provider:'rehearsal',model:'',timezone:'UTC',workspace:{cwd:home,additionalDirectories:[]},skillDirectories:[],mcpServers:{}}));
 const fixture=createServer((_req,res)=>{res.setHeader('Content-Type','text/html');res.end('<!doctype html><title>Next changes fixture</title><body style="font:20px system-ui"><h1>Synthetic browser</h1><a href="https://example.com/full/path?q=1#part">Inspect link</a><input value="Typed content"></body>');});
@@ -14,6 +25,7 @@ let app;
 try{
   app=await electron.launch({args:['.','--use-mock-keychain','--user-data-dir='+path.join(home,'electron')],env:{...process.env,PROTEUS_HOME:home,COPILOT_HOME:path.join(home,'copilot'),PORT:'0'},timeout:60000});
   const page=await app.firstWindow();page.setDefaultTimeout(12000);
+ const waitForAsync = (predicate, arg, options) => waitUntil(() => page.evaluate(predicate, arg), options);
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
   await page.locator('#tab-add-menu summary').waitFor();
   const browser=value=>page.evaluate(value=>window.desktop.browser(value),value);
@@ -84,7 +96,7 @@ try{
   console.log('Passed: isolated Cmd-W, native hover/zoom gate, URL actions, grouped overview, remote refresh singleton and constrained composer.');
   // Public valid HTTPS certificate read, with no trust changes.
   const secure=await browser({action:'create',url:'https://example.com/'});await page.locator('[data-tab="'+secure.id+'"]').click();
-  await page.waitForFunction(async id=>{const tab=(await window.desktop.browser({action:'list'})).find(item=>item.id===id);return tab?.url.startsWith('https://example.com')&&tab.loading===false;},secure.id);
+  await waitForAsync(async id=>{const tab=(await window.desktop.browser({action:'list'})).find(item=>item.id===id);return tab?.url.startsWith('https://example.com')&&tab.loading===false;},secure.id);
   const certificate=await browser({action:'certificate',id:secure.id});assert.equal(certificate.available,true,certificate.reason);assert.equal(certificate.host,'example.com');assert.ok(certificate.chain[0].subject);assert.ok(certificate.chain[0].issuer);assert.ok(certificate.chain[0].validFrom);assert.ok(certificate.chain[0].validTo);assert.ok(certificate.chain[0].fingerprint256||certificate.source==='chromium-security-details');console.log('Passed: live valid HTTPS connection details returned read-only.');
 }catch(error){if(app){const page=await app.firstWindow();await page.screenshot({path:'/private/tmp/proteus-next-ui-failure.png'}).catch(()=>{});console.error((await page.locator('#main').innerText().catch(()=>'' )).slice(0,1200));}throw error;}
 finally{await app?.close();await new Promise(resolve=>fixture.close(resolve));fs.rmSync(home,{recursive:true,force:true});}

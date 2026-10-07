@@ -5,9 +5,10 @@
 The closed intake and operator-added BF-22 are implemented for 0.2.2. Read
 [October 6 release](2026-10-06-release.md) for verified source checks and actual installation status,
 then [the build handoff](2026-10-06-build-handoff.md) for original acceptance and design examples.
-Website, Build Mac, iPad and iPhone have verified 0.2.2 installations; HC's new runtime is
-verified but exposed a remembered-child restart regression. Both Macs require the corrected
-signed desktop rollout described in the release record before final continuity acceptance.
+Website, both Macs, iPad and iPhone have verified 0.2.2 installations. Both Macs run the final
+signed remembered-child correction; populated HC child selection survived restart, and visiting
+desktop browser children synchronized live. Read the release record's remaining device/workflow
+limits separately from successful installation and source validation.
 The earlier 0.2.1 release records below are historical baselines.
 
 Proteus is a local AI scheduler and resumable conversation client. The Mac owns execution,

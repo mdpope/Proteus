@@ -4,6 +4,17 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {createServer} from 'node:http';
+// Playwright 1.58 polls the truthiness of a Promise without awaiting its value.
+// Poll in Node so false async results retry and only a fulfilled true completes.
+async function waitUntil(predicate, {timeout = 18000, interval = 50} = {}) {
+  const deadline = Date.now() + timeout;
+  do {
+    if (await predicate() === true) return;
+    await new Promise(resolve => setTimeout(resolve, interval));
+  } while (Date.now() < deadline);
+  throw new Error('Async condition did not become true within ' + timeout + 'ms');
+}
+
 const home=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'proteus-oct6-desktop-')));
 fs.writeFileSync(path.join(home,'settings.json'),JSON.stringify({schemaVersion:1,provider:'rehearsal',model:'',timezone:'UTC',workspace:{cwd:home,additionalDirectories:[]},skillDirectories:[],mcpServers:{}}));
 const icon='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGUlEQVR4nGP4UKDwnxLMMGrAqAGjBgwXAwBZnn8fk0OzCAAAAABJRU5ErkJggg==';
@@ -14,7 +25,8 @@ const url='http://127.0.0.1:'+fixture.address().port+'/fixture';let app;
 const checks=[];
 try{
  app=await electron.launch({args:['.','--use-mock-keychain','--user-data-dir='+path.join(home,'electron')],env:{...process.env,PROTEUS_HOME:home,COPILOT_HOME:path.join(home,'copilot'),PORT:'0'},timeout:60000});
- const page=await app.firstWindow();page.setDefaultTimeout(18000);const errors=[];page.on('pageerror',error=>errors.push(error.message));
+ const page=await app.firstWindow();page.setDefaultTimeout(18000);
+ const waitForAsync = (predicate, arg, options) => waitUntil(() => page.evaluate(predicate, arg), options);const errors=[];page.on('pageerror',error=>errors.push(error.message));
  await page.route('**/api/team/lists',route=>route.fulfill({json:{identity:{accountId:'fixture'},teamLists:[]}}));await page.locator('#tab-add-menu summary').waitFor();
  const browser=value=>page.evaluate(value=>window.desktop.browser(value),value);
  const agent=value=>app.evaluate(({app},value)=>process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser().agent(value,'fixture-agent'),value);
@@ -33,7 +45,7 @@ try{
  await page.locator('#browser-url').click({button:'right'});await page.keyboard.press('Escape');
  await page.evaluate(()=>{const dialog=document.querySelector('#dialog');dialog.innerHTML='<h2>Synthetic overlay</h2><input id="overlay-input"><button id="close-fixture">Close</button>';dialog.showModal();document.querySelector('#close-fixture').onclick=()=>dialog.close();});
  await page.locator('#overlay-input').fill('interactive');assert.equal(await app.evaluate(({app},id)=>process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser().get(id).view.getVisible(),main.id),false);
- await page.locator('#close-fixture').click();await page.waitForFunction(async id=>{const infos=await window.desktop.browser({action:'list'});return infos.some(t=>t.id===id);},main.id);assert.equal(pageClicks,0);
+ await page.locator('#close-fixture').click();await waitForAsync(async id=>{const infos=await window.desktop.browser({action:'list'});return infos.some(t=>t.id===id);},main.id);assert.equal(pageClicks,0);
  assert.equal(await app.evaluate(({app},id)=>process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser().get(id).view.webContents.executeJavaScript('document.querySelector("input").value'),main.id),'retained page state');checks.push('overview interior/backdrop, modal input above native view, same browser page retained');
  const chatId=await app.evaluate(({app},home)=>{const engine=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getService().engine,run=engine.createRun({...engine.schedules.list()[0],name:'October fixture chat',provider:'rehearsal',model:'',workspace:{cwd:home,additionalDirectories:[]}},'chat',null,{deferStart:true});run.status='completed';run.title='October fixture chat';run.titleKind='manual';engine.persist(run);return run.id;},home);
  await page.reload();await page.locator('#tab-add-menu summary').waitFor();await page.locator('[data-page="runs"]').click();await page.locator('#chat-index-rows [title="October fixture chat"]').click();await page.locator('#chat-subtabs').waitFor().catch(async error=>{console.error(await page.locator('#main').innerText());console.error(errors);throw error;});
