@@ -40,7 +40,7 @@
                 @case('home')<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V10Z"/><path d="M9 21v-7h6v7"/>@break
                 @case('schedules')<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>@break
                 @case('chats')<path d="M3 4h10a3 3 0 0 1 3 3v5a3 3 0 0 1-3 3H8l-4 3v-4a3 3 0 0 1-1-2V4Z"/><path d="M17 8h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3l-3 2v-4"/>@break
-                @case('attention')<circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 17h.01"/>@break
+                @case('attention')<path d="M12 4v10M12 20h.01"/>@break
                 @case('transcription')<path d="M2 10v4M6 7v10M10 3v18M14 8v8M18 5v14M22 10v4"/>@break
                 @case('life')<path d="M20.8 9.2c0 4.2-8.8 10.4-8.8 10.4S3.2 13.4 3.2 9.2a4.7 4.7 0 0 1 8.8-2.1 4.7 4.7 0 0 1 8.8 2.1Z"/>@break
                 @case('team')<rect x="3" y="5" width="4" height="4" rx=".6"/><rect x="3" y="15" width="4" height="4" rx=".6"/><path d="M10 7h11M10 17h11"/>@break
@@ -50,10 +50,15 @@
             @if($key === 'life' && $activeFeature === 'life')<div class="shell-subitems rail-label"><a href="{{ route('garage') }}">Garage</a>@foreach(['nutrition','fuel','inbox'] as $child)<a data-shell-nav="{{ $child }}" href="{{ $sections[$child]['url'] }}">{{ $sections[$child]['label'] }}</a>@endforeach</div>@endif
             @if($key === 'chats')<div id="shell-recent-chats" class="shell-subitems rail-label" @if($activeFeature !== 'chats') hidden @endif><a href="{{ route('remote',['view'=>'chats']) }}">More</a></div>@endif
             @if($key === 'team' && $activeFeature === 'team')<div class="shell-subitems rail-label"><a href="{{ route('team') }}">Overview</a><a href="{{ route('team',['standup'=>1]) }}">Standup</a><a href="{{ route('browser-home') }}" target="_blank" rel="noopener">Browse ↗</a></div>@endif
-            @if($key === 'engine-room' && $activeFeature === 'engine-room')<div class="shell-subitems rail-label">@foreach(['resources'=>'Resources','connections'=>'Connections','setup'=>'App Setup','usage'=>'Usage','notifications'=>'Notifications','logs'=>'Logs'] as $sub=>$label)<a href="{{ route('engine-room',['tab'=>$sub]) }}">{{ $label }}</a>@endforeach<a href="{{ route('security') }}">Account &amp; Security</a></div>@endif
+            @if($key === 'engine-room' && $activeFeature === 'engine-room')<div class="shell-subitems rail-label">@foreach(['resources'=>'Resources','connections'=>'Connections','setup'=>'App Setup','usage'=>'Usage','notifications'=>'Notifications','logs'=>'Logs'] as $sub=>$label)<a data-engine-tab="{{ $sub }}" href="{{ route('engine-room',['tab'=>$sub]) }}">{{ $label }}</a>@endforeach<a href="{{ route('security') }}">Account &amp; Security</a></div>@endif
         @endforeach
     </nav>
     <section id="web-provider-usage" hidden aria-label="AI Allowance"></section>
+    @php
+        $sidebarReleasePath = resource_path('release.json');
+        $sidebarRelease = is_file($sidebarReleasePath) ? json_decode(file_get_contents($sidebarReleasePath), true) : [];
+    @endphp
+    <div class="shell-runtime rail-label"><p id="shell-default-status" role="status">Default Mac · checking connection…</p><p title="{{ $sidebarRelease['buildId'] ?? '' }}">Website · v{{ $sidebarRelease['version'] ?? 'Unknown' }}</p></div>
     <div class="account"><span class="account-name rail-label">{{ auth()->user()->name }}</span><form method="post" action="{{ route('logout') }}">@csrf<button>Sign out</button></form></div>
 </aside><div class="shell-tabbar"><a class="shell-tab-brand" href="{{ route('home') }}" aria-label="Proteus Home"><span aria-hidden="true">⤨</span><span>Proteus</span></a><nav id="shell-tabs" class="shell-tabs" aria-label="Open content tabs"></nav><details id="shell-add-menu" class="shell-add-menu"><summary aria-label="Add tab" title="Add tab">+</summary><div class="shell-add-options"><button type="button" data-shell-create="chat"><span class="tab-create-icon chat" aria-hidden="true"></span><span>Chat</span></button><button type="button" data-shell-create="browser"><span class="tab-create-icon browser" aria-hidden="true"></span><span>Browser</span></button><button type="button" data-shell-create="markdown"><span class="tab-create-icon markdown" aria-hidden="true"></span><span>Markdown file</span></button><button type="button" disabled title="Terminals run in the Mac app"><span class="tab-create-icon terminal" aria-hidden="true"></span><span>Terminal · Mac app</span></button></div></details><input id="shell-file-picker" type="file" accept=".md,.markdown,.html,.htm,text/markdown,text/html,text/plain" hidden></div><div class="shell-workspace"><main id="main-content" class="main" tabindex="-1">@include('partials.messages')@yield('content')</main></div></div>
 <script type="application/json" id="shell-sections">@json($sections, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)</script></body></html>

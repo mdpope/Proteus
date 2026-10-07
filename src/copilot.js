@@ -11,13 +11,17 @@ import { copilotModel, validateModelOptions } from './model-catalog.js';
 import { TurnWaiter } from './turn-waiter.js';
 
 export class CopilotProvider {
-  constructor(options = {}, { browser, context, settings, quotaClientFactory = baseDirectory => new CopilotClient({baseDirectory,mode:'empty',logLevel:'none'}), quotaTimeoutMs = 8000, quotaStopTimeoutMs = 1500 } = {}) { this.browser = browser; this.context = context; this.settings = settings; this.options = options; this.quotaClientFactory=quotaClientFactory;this.quotaTimeoutMs=quotaTimeoutMs;this.quotaStopTimeoutMs=quotaStopTimeoutMs;this.quotaPending=null;this.quotaProbe=null; this.client = null; this.starting = null; this.sessions = new Map(); this.authSessions = new Map(); this.acceptedMediaTypes=Object.freeze(['image/png','image/jpeg','image/gif','image/webp','application/pdf','text/plain']); }
+  constructor(options = {}, { browser, context, settings, clientFactory = value => new CopilotClient(value), quotaClientFactory, quotaTimeoutMs = 8000, quotaStopTimeoutMs = 1500 } = {}) { this.browser = browser; this.context = context; this.settings = settings; this.options = options;this.clientFactory=clientFactory;
+    // SDK empty mode disables Keychain and can silently select a different gh
+    // account. A fresh quota process must retain the conversation's auth options.
+    this.quotaClientFactory=quotaClientFactory || (baseDirectory => this.clientFactory({...this.options,baseDirectory,logLevel:'none'}));
+    this.quotaTimeoutMs=quotaTimeoutMs;this.quotaStopTimeoutMs=quotaStopTimeoutMs;this.quotaPending=null;this.quotaProbe=null; this.client = null; this.starting = null; this.sessions = new Map(); this.authSessions = new Map(); this.acceptedMediaTypes=Object.freeze(['image/png','image/jpeg','image/gif','image/webp','application/pdf','text/plain']); }
   dataDirectory() { return this.settings?.get().copilotDataDirectory || this.options.baseDirectory || process.env.COPILOT_HOME || path.join(os.homedir(), '.copilot'); }
   async connect(baseDirectory = this.dataDirectory()) {
     if (this.client && this.baseDirectory !== baseDirectory) await this.close();
     this.baseDirectory = baseDirectory;
     if (!this.starting) {
-      this.client = new CopilotClient({ ...this.options, baseDirectory });
+      this.client = this.clientFactory({ ...this.options, baseDirectory });
       this.starting = this.client.start().catch(error => { this.starting = null; this.client = null; throw error; });
     }
     await this.starting; return this.client;

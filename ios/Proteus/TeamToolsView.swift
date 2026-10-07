@@ -33,7 +33,7 @@ struct TeamToolsView: View {
                         }
                         ForEach(shared.tabs(in: "team")) { tab in
                             HStack(spacing: 4) {
-                                Button { shared.select(tab.id, in: "team"); section = tab.id } label: { Label(tab.title, systemImage: "globe").lineLimit(1).frame(minHeight: 44).contentShape(Rectangle()) }.frame(minHeight: 44).accessibilityIdentifier("browser-tab-select-" + tab.id)
+                                Button { shared.select(tab.id, in: "team"); section = tab.id } label: { Label(tab.title, systemImage: "globe").lineLimit(1).frame(minHeight: 44).contentShape(Rectangle()) }.frame(minHeight: 44).accessibilityIdentifier("browser-tab-select-" + tab.id).accessibilityValue(section == tab.id ? "Active" : "Inactive")
                                 Button { shared.close(tab.id); if section == tab.id { section = shared.selectedBrowser ?? "Overview" } } label: { Image(systemName: "xmark").font(.caption2).frame(width: 44, height: 44) }.accessibilityLabel("Close " + tab.title)
                             }.padding(.leading, 12).overlay(alignment: .bottom) { Rectangle().fill(section == tab.id ? NativeTheme.accent : .clear).frame(height: 2) }
                             .contextMenu {
@@ -194,12 +194,12 @@ struct TeamBrowserView: View {
             Button { if let id = selectedID { shared.goBack(id) } } label: { Image(systemName: "chevron.left").frame(minWidth: 44, minHeight: 44) }
                 .frame(width: 44, height: 44).contentShape(Rectangle()).disabled(!navigation.canGoBack).accessibilityLabel("Back").accessibilityIdentifier("browser-back")
                 .contextMenu { if let id = selectedID { ForEach(shared.browserHistory(id, back: true), id: \.self) { item in
-                    Button { shared.goBrowserHistory(item, in: id) } label: { Label(item.title ?? item.url.host ?? item.url.absoluteString, systemImage: "clock.arrow.circlepath") }
+                    Button { shared.goBrowserHistory(item, in: id) } label: { Label(item.title ?? item.url.host ?? item.url.absoluteString, systemImage: "clock.arrow.circlepath") }.accessibilityIdentifier("browser-history-back-\(item.index)")
                 } } }
             Button { if let id = selectedID { shared.goForward(id) } } label: { Image(systemName: "chevron.right").frame(minWidth: 44, minHeight: 44) }
                 .frame(width: 44, height: 44).contentShape(Rectangle()).disabled(!navigation.canGoForward).accessibilityLabel("Forward").accessibilityIdentifier("browser-forward")
                 .contextMenu { if let id = selectedID { ForEach(shared.browserHistory(id, back: false), id: \.self) { item in
-                    Button { shared.goBrowserHistory(item, in: id) } label: { Label(item.title ?? item.url.host ?? item.url.absoluteString, systemImage: "clock.arrow.circlepath") }
+                    Button { shared.goBrowserHistory(item, in: id) } label: { Label(item.title ?? item.url.host ?? item.url.absoluteString, systemImage: "clock.arrow.circlepath") }.accessibilityIdentifier("browser-history-forward-\(item.index)")
                 } } }
             Button { if let id = selectedID { navigation.isLoading ? shared.stopBrowser(id) : shared.refreshBrowser(id) } } label: { Image(systemName: navigation.isLoading ? "xmark" : "arrow.clockwise").frame(minWidth: 44, minHeight: 44) }.frame(width: 44, height: 44).contentShape(Rectangle()).disabled(selectedTab?.url == nil).accessibilityLabel(navigation.isLoading ? "Stop loading" : "Refresh page").accessibilityIdentifier("browser-refresh")
             TextField("Search or enter URL", text: $text).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL).submitLabel(.go).focused($addressFocused).onSubmit { navigate() }

@@ -27,7 +27,7 @@ try{
  app=await electron.launch({args:['.','--use-mock-keychain','--user-data-dir='+path.join(home,'electron')],env:{...process.env,PROTEUS_HOME:home,COPILOT_HOME:path.join(home,'copilot'),PORT:'0'},timeout:60000});
  const page=await app.firstWindow();page.setDefaultTimeout(18000);
  const waitForAsync = (predicate, arg, options) => waitUntil(() => page.evaluate(predicate, arg), options);const errors=[];page.on('pageerror',error=>errors.push(error.message));
- await page.route('**/api/team/lists',route=>route.fulfill({json:{identity:{accountId:'fixture'},teamLists:[]}}));await page.locator('#tab-add-menu summary').waitFor();
+ await page.route('**/api/team/lists',route=>route.fulfill({json:{identity:{accountId:'fixture'},teamLists:[]}}));await page.locator('#tab-add-menu summary').waitFor();await page.locator('#home-screen').waitFor();await page.screenshot({path:'/private/tmp/proteus-review-actual-desktop-home.png'});
  const browser=value=>page.evaluate(value=>window.desktop.browser(value),value);
  const agent=value=>app.evaluate(({app},value)=>process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser().agent(value,'fixture-agent'),value);
  const main=await browser({action:'create',url});await page.locator('[data-tab="'+main.id+'"]').click();
@@ -60,6 +60,18 @@ try{
  await page.locator('#chat-subtabs [title="Mobile browser"]').waitFor();assert.equal(await page.locator('[data-chat-subtab="'+chatId+'"]').getAttribute('class'),'selected');
  await page.evaluate(async id=>{const current=await fetch('/api/content-tabs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'get',scope:'chat',id})}).then(r=>r.json());await fetch('/api/content-tabs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'mutate',scope:'chat',id,expectedRevision:current.revision,operations:[{action:'rename',id:'mobile-browser',title:'Mobile renamed'}]})});},chatId);
  await page.locator('#chat-subtabs [title="Mobile renamed"]').waitFor();checks.push('host descriptor open/rename polling retains client selection');
+ // Close emits native browser state before its IPC response: stay within the chat.
+ const renamed=await page.locator('#chat-subtabs [title="Mobile renamed"]').getAttribute('data-chat-subtab');
+ await page.locator('[data-chat-subtab="'+renamed+'"]').click();
+ await page.locator('[data-chat-child-close="'+renamed+'"]').click();
+ await page.locator('.chat-subtab.selected [data-chat-subtab="'+child+'"]').waitFor();
+ await page.locator('[data-chat-child-close="'+child+'"]').click();
+ await page.locator('[data-chat-subtab="'+chatId+'"].selected').waitFor();
+ assert.equal(await page.locator('[data-chat-subtab="'+chatId+'"]').innerText(),'Chat');
+ const chatIconSize=await page.locator('[data-chat-subtab="'+chatId+'"] svg').evaluate(node=>node.getBoundingClientRect().width);assert.equal(chatIconSize,17);
+ assert.equal(await page.locator('#chat-index-rows').count(),0);
+ checks.push('native close race selects the child to the left, then Chat; 17px icon and Chat label');
+
  await page.locator('[data-page="team"]').click();await page.locator('[data-team-tab="overview"] svg').waitFor();assert.equal(await page.locator('[data-team-tab="standup"] svg').count(),1);checks.push('Team Tools and Standup icons');
  const teamInfo=await browser({action:'create',group:'team',url});await page.evaluate(async info=>{const team=await import('/team-tools.js');team.selectTeamBrowser(info);team.renderTeamTools();},teamInfo);await page.locator('#team-browser-overview').click();await page.locator('.browser-overview').waitFor();await page.mouse.click(2,2);await page.waitForFunction(()=>!document.querySelector('.browser-overview'));checks.push('Team browser overview backdrop restores same tab');
  const foreign=await browser({action:'create',url});await browser({action:'share',id:foreign.id,shared:true});await app.evaluate(({app},id)=>{const tab=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser().get(id);tab.certificateLease.release();tab.view.webContents.debugger.attach('1.3');},foreign.id);await assert.rejects(agent({action:'snapshot',tabId:foreign.id}),/another debugger/);assert.equal(await app.evaluate(({app},id)=>process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser().get(id).view.webContents.debugger.isAttached(),foreign.id),true);await app.evaluate(({app},id)=>process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser().get(id).view.webContents.debugger.detach(),foreign.id);assert.match((await agent({action:'snapshot',tabId:foreign.id})).snapshot,/Dynamic page/);await browser({action:'close',id:foreign.id});checks.push('foreign debugger stays attached, retry recovers after owner releases');

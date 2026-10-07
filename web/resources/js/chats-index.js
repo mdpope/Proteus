@@ -3,6 +3,8 @@ const saved={query:'',host:'',provider:'',status:'',workspace:'',schedule:'',aft
 const listeners=new WeakMap();
 export const chatIndexShowsArchived=()=>saved.showArchived;
 export function renderChatIndex(container,{rows,hosts,escape:e,time,timezone,open,refresh,loadMore,archive,remove,rename,onShowArchived,onError,hasMore=false,attention=false}){
+ const priorMenu=container.querySelector('#chat-index-menu:not([hidden])');
+ const priorSelection=priorMenu?{id:priorMenu.dataset.run,hostId:priorMenu.dataset.host,x:parseFloat(priorMenu.style.left),y:parseFloat(priorMenu.style.top),action:container.ownerDocument.activeElement?.dataset.chatAction}:null;
  listeners.get(container)?.abort();const lifecycle=new AbortController();listeners.set(container,lifecycle);
  const choices=(pairs,current)=>pairs.map(([id,label])=>`<option value="${e(id)}" ${id===current?'selected':''}>${e(label)}</option>`).join('');
  const selects=[['host','Mac','All Macs',hosts.map(h=>[h.hostId,h.label])],...['provider','status','workspace','schedule'].map(key=>[key,key[0].toUpperCase()+key.slice(1),'All '+(key==='status'?'statuses':key+'s'),[...new Set(rows.map(r=>r[{workspace:'workspaceName',schedule:'scheduleName'}[key]||key]).filter(Boolean))].map(v=>[v,v.replaceAll('_',' ')])])];
@@ -10,7 +12,7 @@ export function renderChatIndex(container,{rows,hosts,escape:e,time,timezone,ope
  const menu=container.querySelector('#chat-index-menu');let menuRow=null,menuButton=null;
  const closeMenu=(restore=false)=>{menu.hidden=true;if(restore)menuButton?.focus({preventScroll:true});menuRow=null;menuButton=null;};
  const openMenu=(event,row,button)=>{
-  event.preventDefault();menuRow=row;menuButton=button;
+  event.preventDefault();menuRow=row;menuButton=button;menu.dataset.run=row.id;menu.dataset.host=row.hostId;
   const archiveButton=menu.querySelector('[data-chat-action=archive]'),deleteButton=menu.querySelector('[data-chat-action=delete]');
   archiveButton.hidden=!archive;archiveButton.textContent=row.archivedAt||row.archived?'Unarchive chat':'Archive chat';deleteButton.hidden=!remove;
   menu.querySelector('[data-chat-action=rename]').hidden=!rename||!row.renameSupported;
@@ -33,4 +35,10 @@ export function renderChatIndex(container,{rows,hosts,escape:e,time,timezone,ope
  container.ownerDocument.addEventListener('keydown',event=>{if(event.key==='Escape'&&!menu.hidden){event.preventDefault();closeMenu(true);}}, {signal:lifecycle.signal});
  container.ownerDocument.addEventListener('pointerdown',event=>{if(!menu.hidden&&!menu.contains(event.target))closeMenu();},{signal:lifecycle.signal});
  container.querySelector('#chat-index-refresh').onclick=refresh;container.querySelector('#chat-index-more').onclick=async()=>{saved.limit+=100;if(hasMore)await loadMore();else paint();};paint();
+ if(priorSelection){
+  const row=rows.find(item=>item.id===priorSelection.id&&item.hostId===priorSelection.hostId);
+  const button=[...container.querySelectorAll('#chat-index-rows [data-run]')].find(item=>item.dataset.run===priorSelection.id&&item.dataset.runHost===priorSelection.hostId);
+  if(row&&button){openMenu({preventDefault(){},clientX:priorSelection.x,clientY:priorSelection.y},row,button);const action=[...menu.querySelectorAll('[data-chat-action]')].find(item=>item.dataset.chatAction===priorSelection.action);if(action&&!action.hidden&&!action.disabled)action.focus({preventScroll:true});}
+ }
+
 }

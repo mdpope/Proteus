@@ -26,6 +26,7 @@ Route::middleware(['auth', 'strong'])->group(function () {
         return view('home', [
             'version' => $release['version'] ?? 'Unknown',
             'buildId' => $release['buildId'] ?? null,
+            'readme' => $release['readme'] ?? null,
             'changelog' => $release['changelog'] ?? null,
             'updates' => $release['updates'] ?? null,
         ]);

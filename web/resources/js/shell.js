@@ -60,11 +60,13 @@ export function initShell(document=globalThis.document,window=globalThis.window)
         document.querySelectorAll('[data-shell-nav]').forEach(link=>{const selected=link.dataset.shellNav===active;link.classList.toggle('active',selected);if(selected)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');});
     }
     render();restoreScroll();
+    document.addEventListener('proteus:default-status',event=>{const target=document.querySelector('#shell-default-status');if(target)target.textContent='Default Mac · '+event.detail.message;});
     const overviewButton=document.createElement('button');overviewButton.type='button';overviewButton.className='shell-overview-button';overviewButton.textContent='▦';overviewButton.setAttribute('aria-label','Tab overview');overviewButton.title='Tab overview';document.querySelector('#shell-add-menu')?.before(overviewButton);
     const overview=document.createElement('dialog');overview.className='shell-overview';overview.setAttribute('aria-label','Open tabs');document.body.append(overview);
+    overview.addEventListener('click',event=>{if(event.target!==overview)return;const r=overview.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)overview.close();});
     overviewButton.onclick=()=>{
-        overview.replaceChildren();const heading=document.createElement('h2');heading.textContent='Open tabs';overview.append(heading);
-        const add=(parent,label,url,callback)=>{const link=document.createElement(callback?'button':'a');link.textContent=label;if(callback){link.type='button';link.onclick=()=>{overview.close();callback();};}else link.href=url;parent.append(link);};
+        overview.replaceChildren();const heading=document.createElement('h2');heading.textContent='Open tabs';overview.append(heading);const dismiss=document.createElement('button');dismiss.type='button';dismiss.className='overview-dismiss';dismiss.textContent='×';dismiss.setAttribute('aria-label','Close tab overview');dismiss.onclick=()=>overview.close();overview.append(dismiss);
+        const add=(parent,label,url,callback)=>{const link=document.createElement(callback?'button':'a');link.textContent=label;if(callback){link.type='button';link.onclick=()=>{overview.close();callback();};}else {link.href=url;link.onclick=()=>overview.close();}parent.append(link);};
         let children={};try{children=JSON.parse(window.localStorage.getItem('proteus.chat-child-tabs.v1.'+account)||'{}');}catch{}
         for(const descriptor of order){
             if(descriptor.type==='chat')continue;

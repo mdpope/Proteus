@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { UsageCache, ProviderUsageCache, normalizeProviderUsage } from '../src/usage.js';
-import { usageSummary } from '../public/usage.js';
+import { usageSummary, providerUsageSummary } from '../public/usage.js';
 import { agentName } from '../public/agent-name.js';
 import { CopilotProvider } from '../src/copilot.js';
 import { Engine } from '../src/engine.js';
@@ -38,6 +38,28 @@ test('Copilot usage gets a fresh same-profile process each time without touching
   const first=await Promise.all([provider.quota(),provider.quota()]);assert.deepEqual(first,[quota(80),quota(80)]);
   assert.deepEqual(await provider.quota(),quota(75));assert.deepEqual(homes,['/existing-profile','/existing-profile']);assert.deepEqual(probes.map(item=>[item.started,item.stopped]),[[1,1],[1,1]]);
   assert.equal(active.stops,0);assert.equal(provider.sessions.has('active-chat'),true);assert.equal(provider.baseDirectory,'/existing-profile');
+});
+test('default fresh quota probes preserve the connected account auth instead of disabling Keychain', async () => {
+  for (const options of [{logLevel:'warning'},{gitHubToken:'synthetic-test-credential',useLoggedInUser:false,logLevel:'warning'}]) {
+    const clients=[],captured=[];
+    const provider=new CopilotProvider(options,{settings:{get:()=>({copilotDataDirectory:'/synthetic-profile'})},clientFactory:value=>{
+      captured.push(value);
+      const keychainDisabled=value.mode==='empty';
+      const client={stops:0,start:async()=>{},stop:async()=>{client.stops++;},getAuthStatus:async()=>({isAuthenticated:true,login:keychainDisabled?'other-cli-account':'conversation-account'}),rpc:{account:{getQuota:async()=>keychainDisabled?{quotaSnapshots:{}}:quota(61)}}};
+      clients.push(client);return client;
+    }});
+    const active=await provider.connect();provider.sessions.set('synthetic-active-chat',{});
+    const cache=new ProviderUsageCache({copilot:provider});
+    const reading=(await cache.get(true)).providers.copilot;
+    assert.equal(reading.available,true);
+    assert.equal(providerUsageSummary(reading).remaining,61);
+    assert.deepEqual(captured[1],{...captured[0],logLevel:'none'});
+    assert.notEqual(clients[0],clients[1]);
+    assert.equal((await clients[1].getAuthStatus()).login,(await active.getAuthStatus()).login);
+    assert.equal(active.stops,0);assert.equal(clients[1].stops,1);
+    assert.equal(provider.sessions.has('synthetic-active-chat'),true);
+    await provider.close();
+  }
 });
 test('Copilot quota probes time out at start or RPC, force stop, and permit a fresh retry', async () => {
   for (const stalledAt of ['start','getQuota']) {

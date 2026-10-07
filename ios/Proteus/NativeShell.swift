@@ -78,7 +78,7 @@ func nativeNeedsAttention(_ run: JSON) -> Bool {
 private enum NativeArea: String, CaseIterable, Identifiable {
     case home = "Home", schedules = "Schedules", chats = "Chats", attention = "Needs Attention", life = "Life", team = "Team", engine = "Engine Room"
     var id: String { rawValue }
-    var icon: String { switch self { case .home: "house"; case .schedules: "calendar"; case .chats: "bubble.left.and.bubble.right"; case .attention: "exclamationmark.circle"; case .life: "heart.text.square"; case .team: "person.3"; case .engine: "gearshape.2" } }
+    var icon: String { switch self { case .home: "house"; case .schedules: "calendar"; case .chats: "bubble.left.and.bubble.right"; case .attention: "exclamationmark"; case .life: "heart.text.square"; case .team: "person.3"; case .engine: "gearshape.2" } }
 }
 private struct NativeContentTab: Identifiable, Codable, Equatable {
     let id: String

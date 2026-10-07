@@ -76,7 +76,17 @@ struct ProteusRoot: View {
                     if ProcessInfo.processInfo.arguments.contains("--synthetic-long-chat"),
                        let remote = destinations.remote(for: "10000000-0000-4000-8000-000000000001") {
                         let longText = (0..<180).map { "Line \($0): synthetic long-message reading-position fixture." }.joined(separator: "\n")
-                        let run: JSON = .object(["id": .string("long-chat"), "title": .string("Long fixture"), "status": .string("completed"), "createdAt": .string("2026-10-05T20:00:00Z"), "updatedAt": .string("2026-10-05T21:00:00Z"), "eventStart": .number(0), "events": .array([.object(["role": .string("assistant"), "text": .string(longText), "at": .string("2026-10-05T21:00:00Z")])]), "schedule": .object(["provider": .string("codex")]), "nextModelOptions": .object(["model": .string("gpt-6-sol")])])
+                        let events: [JSON]
+                        if ProcessInfo.processInfo.arguments.contains("--synthetic-activity-spacing") {
+                            events = (0..<40).map { index in
+                                index.isMultiple(of: 2)
+                                    ? .object(["role": .string("tool"), "data": .object(["tool": .object(["name": .string("Fixture tool"), "status": .string("completed")])])])
+                                    : .object(["role": .string("system"), "data": .object(["permission": .object(["automatic": .bool(true)])])])
+                            } + [.object(["role": .string("assistant"), "text": .string("")]), .object(["role": .string("system"), "text": .string("After activity fixture")])]
+                        } else {
+                            events = [.object(["role": .string("assistant"), "text": .string(longText), "at": .string("2026-10-05T21:00:00Z")])]
+                        }
+                        let run: JSON = .object(["id": .string("long-chat"), "title": .string("Long fixture"), "status": .string("completed"), "createdAt": .string("2026-10-05T20:00:00Z"), "updatedAt": .string("2026-10-05T21:00:00Z"), "eventStart": .number(0), "events": .array(events), "schedule": .object(["provider": .string("codex")]), "nextModelOptions": .object(["model": .string("gpt-6-sol")])])
                         remote.state = .object(["runs": .array([run]), "runCount": .number(1), "attentionCount": .number(0), "schedules": .array([]), "capabilities": .array([.string("chat.attachments.v1")]), "attachmentMediaTypes": .object(["codex": .array([.string("image/png")])])])
                         remote.chats["long-chat"] = run
                         remote.flushCache()

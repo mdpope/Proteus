@@ -339,6 +339,17 @@ struct ChatView: View {
         return agent.isEmpty || agent.caseInsensitiveCompare(providerName) == .orderedSame ? providerName : providerName + " · " + agent
     }
     private func routineActivity(_ event: JSON) -> Bool { event["data"]["tool"] != .null || event["data"]["permission"]["automatic"].bool }
+    private var visibleEventIndices: [Int] {
+        let events = run["events"].array
+        let start = run["eventStart"].int
+        // Absorbed activity and empty assistant events must not create stack rows:
+        // even a zero-height row adds the conversation's inter-message spacing.
+        return events.indices.filter { index in
+            let event = events[index]
+            if routineActivity(event) { return index == 0 || !routineActivity(events[index - 1]) }
+            return event["role"].string != "assistant" || !event["text"].string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }.map { start + $0 }
+    }
     private func activityGroup(startingAt index: Int) -> [JSON] {
         let events = run["events"].array
         guard events.indices.contains(index), routineActivity(events[index]) else { return [] }
@@ -357,7 +368,7 @@ struct ChatView: View {
     private var missingAttachments: [JSON] { missingAttachmentRecords(store: store, draftKey: attachmentDraftKey, items: attachments) }
     var body: some View {
         VStack(spacing: 0) {
-            compactHeader
+            if sizeClass != .regular { compactHeader }
             childTabs
             Divider()
             if let documentNotice { HStack { ProgressView().controlSize(.small); Text(documentNotice).font(.caption); Spacer(); Button("Cancel") { documentTask?.cancel(); self.documentNotice = nil } }.padding(8).background(.bar) }
@@ -512,19 +523,21 @@ struct ChatView: View {
                 HStack { if run["status"].string == "running" { ProgressView() }; Text(statusLabel(run["status"].string)).font(.subheadline).foregroundStyle(.secondary); Spacer() }
                 if !store.connected { Label("Offline · cached history", systemImage: "icloud.slash").font(.caption).foregroundStyle(.secondary) }
                 if run["earlier"].int > 0 {
-                    HStack { if loadingEarlier { ProgressView().controlSize(.small) }; if earlierError { Button("Retry earlier messages") { loadEarlier() } } else { Text("Earlier messages").font(.caption).foregroundStyle(.secondary) } }
+                    HStack { if loadingEarlier { ProgressView().controlSize(.small) }; Button(earlierError ? "Retry earlier messages" : "Load earlier messages") { loadEarlier() }.disabled(loadingEarlier || !store.connected).accessibilityIdentifier("load-earlier-messages") }.font(.subheadline)
                 }
-                ForEach(run["eventStart"].int..<(run["eventStart"].int + run["events"].array.count), id: \.self) { absoluteIndex in
+                ForEach(visibleEventIndices, id: \.self) { absoluteIndex in
                     let index = absoluteIndex - run["eventStart"].int
                     let event = run["events"].array[index]
                     VStack(alignment: .leading, spacing: 0) {
                         if routineActivity(event) {
-                            if index == 0 || !routineActivity(run["events"].array[index - 1]) { ChatActivityGroupView(events: activityGroup(startingAt: index), hostName: store.state["hostName"].string) }
+                            ChatActivityGroupView(events: activityGroup(startingAt: index), hostName: store.state["hostName"].string)
                         } else if event["role"].string != "assistant" || !event["text"].string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             if !event["data"]["delivery"]["state"].string.isEmpty { Text(event["data"]["delivery"]["state"].string.capitalized).font(.caption2).foregroundStyle(.teal) }
                             MessageView(role: event["role"].string == "assistant" ? assistantName(event) : event["role"].string, text: event["text"].string, runID: id, timestamp: event["timestamp"].string.isEmpty ? event["at"].string : event["timestamp"].string, actionID: MessageActions.eligible(event) ? "\(store.connection?.hostId ?? "local"):\(id):\(absoluteIndex):\(event["at"].string)" : nil, sentAttachments: event["data"]["attachments"].array, onDocumentLink: event["role"].string == "assistant" ? { source in openDocument(source) } : nil, onResize: { Task { @MainActor in await Task.yield(); if followLatest && !userReadingGesture && !restoringConversation { proxy.scrollTo("chat-end", anchor: .bottom) } } })
                         }
                     }.id(absoluteIndex)
+                        .accessibilityElement(children: .contain)
+                        .accessibilityIdentifier("chat-event-\(absoluteIndex)")
                         .onGeometryChange(for: CGRect.self) { geometry in geometry.frame(in: .global) } action: { frame in
                             if let prior = eventFrames[absoluteIndex], prior.start == run["eventStart"].int,
                                abs(prior.frame.minY - frame.minY) < 1,
@@ -924,7 +937,7 @@ struct ChatView: View {
         shared.chatScrollLocations[chatBrowserScope] = reading
         pendingHistoryRestore = reading
         Task { defer { loadingEarlier = false }
-            do { let value = try await store.request("chat.get", ["id": .string(id), "offset": .number(Double(offset))]); store.mergeChat(value) }
+            do { let value = try await store.request("chat.get", ["id": .string(id), "offset": .number(Double(offset)), "beforeEvent": .number(Double(oldFirst))]); store.mergeChat(value) }
             catch { earlierError = true; store.error = error.localizedDescription }
         }
     }
@@ -1151,7 +1164,7 @@ struct ChatActivityGroupView: View {
             }.padding(.top, 8)
         } label: {
             HStack { if running { ProgressView().controlSize(.small) } else { Image(systemName: failed ? "exclamationmark.triangle.fill" : "checkmark.circle").foregroundStyle(failed ? .orange : .teal) }; Text("Activity · " + summary).font(.subheadline); Spacer() }
-        }.padding(12).background(Color.secondary.opacity(0.09), in: RoundedRectangle(cornerRadius: 12))
+        }.padding(12).background(failed ? Color.orange.opacity(0.12) : Color.green.opacity(0.09), in: RoundedRectangle(cornerRadius: 12))
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(failed ? Color.orange.opacity(0.6) : Color.teal.opacity(0.25)))
             .onAppear { if running || failed { expanded = true } }
     }

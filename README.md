@@ -61,7 +61,8 @@ selects an available port. `PROTEUS_HOME` overrides the application-data directo
 ## Prototype boundaries
 
 The scheduler runs while the desktop app or server is open. Background service installation,
-distribution signing/notarization, notifications, and independent concurrent workspaces remain future work.
+automatic distribution/notarization and independent concurrent AI workspaces remain future work.
+Notification preferences and history are available; browser delivery requires notification permission.
 A locally signed, branded Mac bundle is available; closing its window keeps the menu bar host running.
 AI turns use one execution queue; a run waiting for feedback holds that
 queue until answered or stopped. Each managed Omi native job uses its own serial lane and native locks. Missed occurrences of an already-active schedule are skipped.

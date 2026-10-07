@@ -410,3 +410,27 @@ clients and visiting desktops use this boundary. Unknown store fields survive at
 Certificate inspection and browser automation share a lease only when Proteus owns the debugger.
 A foreign debugger is preserved. Each consumer releases its listeners and lease independently,
 so interrupted automation can recover without disabling certificate reporting or restarting the app.
+
+## October 6 evening — shared Home and evidence-based acceptance
+
+Home is one DOM renderer and one scoped stylesheet (`public/home.js`, `public/home.css`) imported
+by desktop and web. Platform adapters supply data and navigation; only a Mac-only instruction
+panel differs. The latest release is summarized with expansion, rather than rendering full
+history in a separate desktop design. A local demo uses this same renderer.
+
+The operator's latest direction reserves orange Activity groups for issues. Success-only groups
+remain green, and item side accents have straight left corners. This supersedes the earlier
+unconditional warm-group sample. Native browser-close notifications can arrive before the close
+promise resolves, so selection must be reconciled by stable ownership before dispatching close.
+
+Release acceptance is reopened item by item when screenshots or live evidence contradict a
+completion claim. Tests, source presence, installation and actual workflow verification remain
+separate. See `2026-10-07-acceptance-audit.md`.
+
+## 2026-10-07: bounded navigation history and stable transcript paging
+
+Authorized content descriptors may include a normalized 50-entry/32-KiB URL/title backstack.
+Use the existing safe-history filter; never synchronize cookies, page content or credentials.
+Keep selection local and keep loaded desktop pages intact. Native retains its existing WK view
+on a remote URL update rather than discarding it. Use absolute event boundaries for older chat
+pages and retain disjoint cached segments until gaps close.

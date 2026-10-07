@@ -54,3 +54,9 @@ test('host-open document registry remains private and resolves only an open chat
  tabs.mutate({scope:'chat',id:'run-a',expectedRevision:1,operations:[{action:'close',id:descriptor.id}]});assert.throws(()=>tabs.documentSource('run-a',descriptor.documentId),/no longer open/);assert.equal(fs.statSync(tabs.sourcesFile).mode&0o777,0o600);
  fs.writeFileSync(tabs.sourcesFile,'corrupt');assert.throws(()=>tabs.seedWorkspace(session),/preserved/);assert.equal(fs.readFileSync(tabs.sourcesFile,'utf8'),'corrupt');
 });
+test('shared browser history keeps selected page, bounds and redacts sensitive entries',t=>{
+ const {tabs}=store(t);const tab={...browser,history:{index:2,entries:[{url:'https://example.test/older',title:'Older'},{url:'https://example.test/callback?token=secret',title:'Login'},{url:browser.url,title:'Current',pageState:'secret'}]}};
+ const result=tabs.mutate({scope:'chat',id:'history',expectedRevision:0,operations:[{action:'open',tab}]});
+ assert.deepEqual(result.tabs[0].history,{index:1,entries:[{url:'https://example.test/older',title:'Older'},{url:browser.url,title:'Current'}]});
+ assert.deepEqual(tabs.get('chat','history'),result);
+});

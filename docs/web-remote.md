@@ -269,3 +269,20 @@ errors and text states. Structured tool counts, automatic approvals, failures an
 match desktop/native. Legacy plain output remains visible without an invented completed action.
 Reduced motion stops group/spinner animation. Reviewed-failure and offline cache guards keep Needs
 attention actionable. These source guarantees require separate live pairing and rollout evidence.
+
+## October 6 evening interface correction
+
+Home imports the desktop's shared renderer and stylesheet. Latest-release highlights expand to
+show the remainder and older versions; the desktop adds its local-running instructions separately.
+The website version and Default Mac's observed connection status live below AI Allowance.
+Engine Room sections belong to the sidebar, with the current section highlighted; duplicate top
+navigation is removed. Resources use totals, tab rows and a process table; notifications separate
+preferences from history and keep row actions aligned. The Default Mac selector and save action
+share a row at wide widths and stack with a gap on phones.
+
+Chat details now include the authorized working folders and loaded context, token usage, provider
+session, model history and schedule snapshot. Tool Details appears only for actual content.
+Activity groups are green except for issues, with straight left accents. Tab overview dismisses
+by backdrop, top close button or choosing a tab. Live index refresh keeps archived rows until the
+replacement arrives and restores an open action menu against the updated row, avoiding flicker
+and lost clicks. None of this represents new production deployment; the audit tracks acceptance.

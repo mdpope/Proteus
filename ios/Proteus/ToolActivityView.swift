@@ -29,9 +29,9 @@ struct ToolActivityView: View {
                 if presentation != .null { StructuredResultView(value: presentation["output"]) }
                 else if !tool["output"].string.isEmpty { Text(display("output")).font(.caption.monospaced()).textSelection(.enabled) }
                 if !tool["approval"].string.isEmpty { Label(tool["approval"].string, systemImage: "checkmark.shield").font(.caption2).foregroundStyle(.secondary) }
-                DisclosureGroup("Raw arguments & output") {
+                if !display("arguments").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !display("output").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { DisclosureGroup("Raw arguments & output") {
                     Text(display("arguments") + "\n\n" + display("output")).font(.caption2.monospaced()).textSelection(.enabled)
-                }.font(.caption).foregroundStyle(.secondary)
+                }.font(.caption).foregroundStyle(.secondary) }
             }.padding(.top, 8)
         } label: {
             HStack(alignment: .top, spacing: 8) {
@@ -42,8 +42,8 @@ struct ToolActivityView: View {
                     Text(status.capitalized + (tool["durationMs"] != .null ? " · \(String(format: "%.1f", Double(tool["durationMs"].int) / 1000))s" : "")).font(.caption).foregroundStyle(.secondary)
                 }
             }
-        }.padding(12).background(Color.secondary.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(status == "failed" ? Color.orange.opacity(0.5) : Color.teal.opacity(0.3)))
+        }.padding(12).background(status == "failed" ? Color.orange.opacity(0.17) : Color.green.opacity(0.12), in: UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 0, bottomTrailingRadius: 8, topTrailingRadius: 8))
+            .overlay(alignment: .leading) { Rectangle().fill(status == "failed" ? Color.orange.opacity(0.7) : Color.teal.opacity(0.6)).frame(width: 3) }
             .accessibilityIdentifier("tool-activity-\(tool["callId"].string)")
             .onAppear { if toolActivityFailed(tool) { expanded = true } }
     }

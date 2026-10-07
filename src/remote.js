@@ -21,8 +21,8 @@ const entryKeys = ['id', 'name', 'description', 'kind', 'path', 'sources', 'root
 const remoteEntry = entry => ({ ...pick(entry, entryKeys), ...(entry.agent ? { userInvocable: entry.agent.userInvocable } : {}) });
 const mutationMethods = new Set(['tabs.mutate','chat.start', 'chat.reply', 'chat.resume', 'chat.cancel', 'chat.send', 'chat.remove-queued', 'chat.review', 'chat.archive', 'chat.delete', 'chat.rename', 'chat.documents.request', 'chat.attachments.begin', 'chat.attachments.chunk', 'chat.attachments.finish', 'chat.attachments.authorize', 'schedule.run', 'schedule.save', 'context.mode', 'context.favorite', 'context.addFolders', 'chat.context', 'chat.permissions', 'mcp.login', 'notifications.read', 'resources.action', 'connection.revoke']);
 const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
-export function remoteRun(run, offset = 0, permissions) {
-  const end = Math.max(0, run.events.length - offset); const start = Math.max(0, end - 100);
+export function remoteRun(run, offset = 0, permissions, beforeEvent) {
+  const end = Number.isSafeInteger(beforeEvent) && beforeEvent >= 0 ? Math.min(run.events.length, beforeEvent) : Math.max(0, run.events.length - offset); const start = Math.max(0, end - 100);
   return { ...(permissions ? { permissionContext: permissions.describeRun?.(run) || permissions.describe(run.schedule), permissionRevision: permissions.get().revision } : {}), agentName: agentName(run), ...pick(run, ['id', 'title', 'titleKind', 'titleRevision', 'trigger', 'status', 'createdAt', 'updatedAt', 'failureReviewedAt', 'pending', 'usage', 'contextUsage', 'providerSessionId', 'nativeSessionPath', 'automaticApprovals', 'modelCapabilities', 'nextModelOptions', 'modelHistory']),archivedAt:run.archivedAt||null,archived:!!run.archivedAt,queuedMessages:(run.queuedMessages||[]).map(message=>pick(message,['id','prompt','at','modelOptions'])),failureEventAt:['failed','interrupted'].includes(run.status)?run.failureEventAt||run.updatedAt:null,attentionRequired:run.status==='awaiting_input'||(!run.archivedAt&&['failed','interrupted'].includes(run.status)&&!run.failureReviewedAt),
     events: run.events.slice(start, end).map(e=>e.data?.tool ? {...e,data:{...e.data,tool:{...e.data.tool,presentation:toolPresentation(e.data.tool)}}}:e), eventStart: start, eventCount: run.events.length, earlier: start, schedule: pick(run.schedule, scheduleKeys),
     context: { ...pick(run.schedule.context, ['workspaceId', 'selectedIds', 'agentId', 'includeDefaults', 'baseWorkspace', 'capturedAt']), entries: (run.schedule.context?.entries || []).map(remoteEntry) }, liveMessages: structuredClone(run.liveMessages || {}) };
@@ -262,7 +262,7 @@ export class RemoteHost {
       }else result=this.service.contentTabs.get(args.scope,args.id);
       return {...result,tabs:result.tabs.filter(tab=>tab.type!=='document'||canDocuments)};
     }
-    if (method === 'chat.get') { const run = engine.getRun(args.id); peer.runId = run.id; return remoteRun(run, Math.max(0, Math.floor(Number(args.offset) || 0)), engine.permissions); }
+    if (method === 'chat.get') { const run = engine.getRun(args.id); peer.runId = run.id; return remoteRun(run, Math.max(0, Math.floor(Number(args.offset) || 0)), engine.permissions, args.beforeEvent); }
     if (method === 'chat.rename') return this.api('/api/chat-title', pick(args, ['id', 'title', 'expectedTitleRevision']));
     if (method === 'chat.review') return engine.reviewFailure(args.id,args.expectedFailureEventAt);
     if (method === 'chat.archive') {if(typeof args.archived!=='boolean')throw new Error('Choose Archive or Unarchive.');return engine.lifecycle(args.id,args.archived?'archive':'unarchive',pick(args,['expectedUpdatedAt','expectedArchivedAt']));}

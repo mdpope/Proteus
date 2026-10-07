@@ -274,6 +274,19 @@ final class RemoteTests: XCTestCase {
         XCTAssertEqual(store.chats[id]?["id"].string, id)
         _ = try await store.request("chat.cancel", ["id": .string(id)])
     }
+    @MainActor func testBrowserBackstackSurvivesDescriptorRoundTrip() throws {
+        let history = BrowserTabHistory(entries: [BrowserHistoryEntry(url: "https://example.test/one", title: "One"), BrowserHistoryEntry(url: "https://example.test/login?token=secret", title: "Login"), BrowserHistoryEntry(url: "https://example.test/two", title: "Two")], index: 2)
+        let safe = try XCTUnwrap(SharedAppStore.safeBrowserHistory(history))
+        XCTAssertEqual(safe.entries.count, 2); XCTAssertEqual(safe.index, 1)
+        let descriptor = BrowserDescriptor(id: "test", title: "Two", url: "https://example.test/two", history: safe)
+        let restored = try JSONDecoder().decode(BrowserDescriptor.self, from: JSONEncoder().encode(descriptor))
+        let shared = SharedAppStore(); shared.browserTabs = [restored]
+        let back = try XCTUnwrap(shared.browserHistory("test", back: true).first)
+        XCTAssertEqual(back.url.absoluteString, "https://example.test/one")
+        shared.goBrowserHistory(back, in: "test")
+        XCTAssertEqual(shared.browserTabs.first?.history?.index, 0)
+        XCTAssertEqual(shared.browserHistory("test", back: false).first?.url.absoluteString, "https://example.test/two")
+    }
     @MainActor func testHistoryPagesStayContiguousWhenNewMessagesArrive() {
         let store = RemoteStore(); store.forget()
         func page(_ first: Int, _ last: Int) -> JSON {
@@ -286,6 +299,11 @@ final class RemoteTests: XCTestCase {
         store.mergeChat(page(1000, 1099))
         XCTAssertEqual(store.chats["synthetic"]?["events"].array.count, 100)
         XCTAssertEqual(store.chats["synthetic"]?["earlier"].int, 1000)
+        XCTAssertEqual(store.chats["synthetic"]?["retainedHistory"].array.first?["events"].array.count, 201)
+        for first in stride(from: 900, through: 200, by: -100) { store.mergeChat(page(first, first + 99)) }
+        XCTAssertEqual(store.chats["synthetic"]?["events"].array.count, 1100)
+        XCTAssertEqual(store.chats["synthetic"]?["eventCount"].int, 1100)
+        XCTAssertEqual(store.chats["synthetic"]?["earlier"].int, 0)
     }
     @MainActor func testQueueWhileWaitingRunsAfterReply() async throws {
         let (data, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/pair")!)

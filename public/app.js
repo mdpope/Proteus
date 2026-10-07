@@ -1,3 +1,4 @@
+import { mountHome } from './home.js';
 import { createTabSynchronizer, syncableTabURL } from './content-tab-sync.js';
 import { browserTabIcon } from './browser-icons.js';
 import { setMessageActionsContext, stopMessageSpeech } from './message-actions.js';
@@ -44,7 +45,7 @@ function saveWorkspace() {
   if(!workspaceReady || workspaceRestoring || workspaceClosing)return;
   if(!applyingContentTabs){clearTimeout(contentSyncTimer);contentSyncTimer=setTimeout(()=>void contentTabSync.all(),100);}
   const team=teamState();
-  const session={schemaVersion:1,active:state.tab,page:state.page,engineSection:state.engineSection,selectedChildren:Object.fromEntries(selectedChildren),team:{...team,tabs:team.tabs.map(tab=>({id:tab.id,type:tab.type||'browser',contentTabId:tab.contentTabId,customTitle:tab.customTitle,...(tab.browserId?{browserId:tab.browserId,url:tab.url||'',title:tab.title||'',favicon:tab.favicon,lastTouchedAt:tab.lastTouchedAt}:{}),...(tab.type==='terminal'?{label:tab.label,terminal:tab.terminal}:{}),...(tab.type==='markdown'?{label:tab.label,file:tab.file||tab.markdown?.file}:{})}))},tabs:state.tabs.map(tab=>({id:tab.id,type:tab.type,label:tab.label,contentTabId:tab.contentTabId,customTitle:tab.customTitle,...(tab.parentId?{parentId:tab.parentId}:{}),...(tab.type==='browser'?{url:tab.info?.url||'',history:tab.info?.history,unloaded:tab.info?.loaded===false,favicon:tab.info?.favicon,lastTouchedAt:tab.info?.lastTouchedAt}:{}),...(tab.type==='markdown'?{file:tab.markdown?.file}:{}),...(tab.type==='terminal'?{terminal:tab.terminal}:{}),...(['remote-run','remote-document'].includes(tab.type)?{hostId:tab.hostId,runId:tab.runId}:{}),...(tab.type==='remote-document'?{documentId:tab.documentId,mediaType:tab.mediaType}:{})}))};
+  const session={schemaVersion:1,active:state.tab,page:state.page,engineSection:state.engineSection,selectedChildren:Object.fromEntries(selectedChildren),team:{...team,tabs:team.tabs.map(tab=>({id:tab.id,type:tab.type||'browser',contentTabId:tab.contentTabId,customTitle:tab.customTitle,...(tab.browserId?{browserId:tab.browserId,url:tab.url||'',title:tab.title||'',favicon:tab.favicon,history:tab.history,lastTouchedAt:tab.lastTouchedAt}:{}),...(tab.type==='terminal'?{label:tab.label,terminal:tab.terminal}:{}),...(tab.type==='markdown'?{label:tab.label,file:tab.file||tab.markdown?.file}:{})}))},tabs:state.tabs.map(tab=>({id:tab.id,type:tab.type,label:tab.label,contentTabId:tab.contentTabId,customTitle:tab.customTitle,...(tab.parentId?{parentId:tab.parentId}:{}),...(tab.type==='browser'?{url:tab.info?.url||'',history:tab.info?.history,unloaded:tab.info?.loaded===false,favicon:tab.info?.favicon,lastTouchedAt:tab.info?.lastTouchedAt}:{}),...(tab.type==='markdown'?{file:tab.markdown?.file}:{}),...(tab.type==='terminal'?{terminal:tab.terminal}:{}),...(['remote-run','remote-document'].includes(tab.type)?{hostId:tab.hostId,runId:tab.runId}:{}),...(tab.type==='remote-document'?{documentId:tab.documentId,mediaType:tab.mediaType}:{})}))};
   const json=JSON.stringify(session);if(json===lastWorkspace)return;lastWorkspace=json;
   if(window.desktop?.workspaceSession)window.desktop.workspaceSession({action:'save',session}).catch(error=>{lastWorkspace='';toast(error.message);});
   else try{localStorage.setItem('proteus.workspace',json);}catch{}
@@ -73,7 +74,7 @@ async function restoreWorkspace() {
         if(!window.desktop)continue;
         // A renderer reload reuses the live view; an app restart creates a private tab.
         const previous=tab.id;tab.contentTabId??=previous;let info=existingBrowser.find(info=>info.id===tab.id);
-        if(!info){info=await window.desktop.browser({action:'create',restore:true,unloaded:saved.active!==previous,url:tab.url,history:tab.history,favicon:tab.favicon,lastTouchedAt:tab.lastTouchedAt});tab.info=info;tab.id=info.id;restoredBrowserIds.set(previous,tab.id);tabs.push(tab);if(saved.active===previous)saved.active=tab.id;continue;}
+        if(!info){info=await window.desktop.browser({action:'create',restore:true,unloaded:saved.active!==previous,url:tab.url,history:tab.history,favicon:tab.favicon,history:tab.history,lastTouchedAt:tab.lastTouchedAt});tab.info=info;tab.id=info.id;restoredBrowserIds.set(previous,tab.id);tabs.push(tab);if(saved.active===previous)saved.active=tab.id;continue;}
         tab.info=info;
       }
       if(!tabs.some(other=>other.id===tab.id))tabs.push(tab);
@@ -271,11 +272,7 @@ async function renderHome() {
   const main=$('#main');main.innerHTML='<p class="note">Loading Home…</p>';
   try {
     const value=await api('/api/home');if(state.page!=='home'||state.tab!=='overview')return;
-    main.innerHTML=`<div class="heading"><div><div class="eyebrow">Proteus</div><h1>Your work, together in one place.</h1><p class="muted">Schedule work, continue chats across your Macs, and keep browser, documents and tools close to the conversation.</p></div><span class="pill">Version ${escape(value.version)} · Build ${escape(value.buildRevision||'source')}</span></div><section class="card"><h2>Updates</h2><p class="note">${escape(value.update?.message||'Update status unavailable.')}</p><button id="home-check-updates">Check for updates</button></section><section class="card"><h2>What Proteus can do</h2><details><summary>Read project guide</summary><article id="home-guide" class="home-document"></article></details></section><section class="card"><h2>Release notes</h2><article id="home-release-notes" class="home-document"></article></section>`;
-    const homeLink=source=>{if(ProteusMarkdown.linkKind(source)==='web')window.desktop?.openExternal(source).catch(error=>toast(error.message));};
-    ProteusMarkdown.mount($('#home-guide'),value.readme||'',{allowExternalImages:false,link:homeLink,copy:text=>window.desktop?.copyText(text)});
-    ProteusMarkdown.mount($('#home-release-notes'),value.changelog||'',{allowExternalImages:false,link:homeLink,copy:text=>window.desktop?.copyText(text)});
-    $('#home-check-updates').onclick=()=>toast(value.update?.message||'Update status unavailable.');
+    mountHome(main,value,{desktop:true,markdown:(target,source)=>ProteusMarkdown.mount(target,source,{allowExternalImages:false,link:source=>{if(ProteusMarkdown.linkKind(source)==='web')window.desktop?.openExternal(source).catch(error=>toast(error.message));},copy:text=>window.desktop?.copyText(text)}),navigate:page=>navigate(page==='chats'?'runs':page==='schedules'?'overview':page)});
   } catch(error){if(state.page==='home'&&state.tab==='overview')main.innerHTML=`<p class="banner">${escape(error.message)}</p>`;}
 }
 function renderOverview() {
@@ -533,14 +530,14 @@ const scopeParent=scope=>state.tabs.find(tab=>scope.hostId?tab.type==='remote-ru
 async function descriptorFor(tab,parent){
   const title=tab.customTitle||tab.label||tab.title||'New tab',named=tab.customTitle?{customTitle:tab.customTitle}:{};
   if(tab.type==='browser'&&syncableTabURL(tab.info?.url||tab.url||'')===null)return null;
-  if(tab.type==='browser')return {id:tab.contentTabId||tab.id,type:'browser',title,...named,url:tab.info?.url||tab.url||''};
+  if(tab.type==='browser')return {id:tab.contentTabId||tab.id,type:'browser',title,...named,url:tab.info?.url||tab.url||'',...(tab.info?.history?{history:tab.info.history}:{})};
   if(tab.type==='remote-document')return {id:'document:'+tab.documentId,type:'document',title,...named,documentId:tab.documentId,mediaType:tab.mediaType||'text/markdown'};
   if(tab.type==='markdown'&&parent?.type==='run'){const file=tab.markdown?.file||tab.file;if(!file)return null;const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(parent.id+'\0'+file));const documentId=[...new Uint8Array(digest)].map(byte=>byte.toString(16).padStart(2,'0')).join('');return {id:'document:'+documentId,type:'document',title,...named,documentId,mediaType:'text/markdown'};}
   return null;
 }
 const contentTabSync=createTabSynchronizer({
   scopes:()=>window.desktop?[...state.tabs.filter(tab=>['run','remote-run'].includes(tab.type)).map(tab=>({scope:'chat',id:tab.runId||tab.id,...(tab.hostId?{hostId:tab.hostId}:{})})),{scope:'team',id:'team'}]:[],
-  readLocal:async scope=>{if(scope.scope==='team')return teamState().tabs.filter(tab=>tab.browserId&&syncableTabURL(tab.url||'')!==null).map(tab=>({id:tab.contentTabId||tab.id,type:'browser',title:tab.customTitle||tab.title||'New tab',...(tab.customTitle?{customTitle:tab.customTitle}:{}),url:tab.url||''}));const parent=scopeParent(scope);if(!parent)return [];return (await Promise.all(state.tabs.filter(tab=>tab.parentId===parent.id).map(tab=>descriptorFor(tab,parent)))).filter(Boolean);},
+  readLocal:async scope=>{if(scope.scope==='team')return teamState().tabs.filter(tab=>tab.browserId&&syncableTabURL(tab.url||'')!==null).map(tab=>({id:tab.contentTabId||tab.id,type:'browser',title:tab.customTitle||tab.title||'New tab',...(tab.customTitle?{customTitle:tab.customTitle}:{}),url:tab.url||'',...(tab.history?{history:tab.history}:{})}));const parent=scopeParent(scope);if(!parent)return [];return (await Promise.all(state.tabs.filter(tab=>tab.parentId===parent.id).map(tab=>descriptorFor(tab,parent)))).filter(Boolean);},
   request:(scope,action,args={})=>scope.hostId?window.desktop.peers({action:'request',hostId:scope.hostId,method:action==='get'?'tabs.get':'tabs.mutate',args:{scope:scope.scope,id:scope.id,...args}}):api('/api/content-tabs',{action,scope:scope.scope,id:scope.id,...args}),
   apply:async(scope,descriptors,captured)=>{
     const parent=scopeParent(scope);if(scope.scope==='chat'&&!parent)return;
@@ -550,18 +547,19 @@ const contentTabSync=createTabSynchronizer({
       const ids=new Set(descriptors.map(tab=>tab.id));
       const descriptorId=async tab=>scope.scope==='team'?(tab.contentTabId||tab.id):(await descriptorFor(tab,parent))?.id;
       const currentOrder=[];for(const tab of list){const id=await descriptorId(tab);if(id)currentOrder.push(id);}const orderChangedDuringRequest=currentOrder.join('\0')!==captured.map(tab=>tab.id).join('\0');
-      for(const tab of list.slice()){const id=await descriptorId(tab);if(!id||ids.has(id)||!captured.some(item=>item.id===id))continue;const currentDescriptor=scope.scope==='team'?{id:tab.contentTabId||tab.id,type:'browser',title:tab.customTitle||tab.title||'New tab',...(tab.customTitle?{customTitle:tab.customTitle}:{}),url:tab.url||''}:await descriptorFor(tab,parent);if(JSON.stringify(currentDescriptor)!==JSON.stringify(captured.find(item=>item.id===id)))continue;if(tab.type==='browser'||tab.browserId)await window.desktop.browser({action:'close',id:tab.browserId||tab.id});if(tab.type==='remote-document')forgetRemoteDocument(tab.id);if(scope.scope==='team'){teamState().tabs=teamState().tabs.filter(item=>item!==tab);if(teamState().active===tab.id)teamState().active='overview';}else{state.tabs=state.tabs.filter(item=>item!==tab);if(state.tab===tab.id)state.tab=parent.id;}changed=true;}
+      for(const tab of list.slice()){const id=await descriptorId(tab);if(!id||ids.has(id)||!captured.some(item=>item.id===id))continue;const currentDescriptor=scope.scope==='team'?{id:tab.contentTabId||tab.id,type:'browser',title:tab.customTitle||tab.title||'New tab',...(tab.customTitle?{customTitle:tab.customTitle}:{}),url:tab.url||'',...(tab.history?{history:tab.history}:{})}:await descriptorFor(tab,parent);if(JSON.stringify(currentDescriptor)!==JSON.stringify(captured.find(item=>item.id===id)))continue;if(tab.type==='browser'||tab.browserId)await window.desktop.browser({action:'close',id:tab.browserId||tab.id});if(tab.type==='remote-document')forgetRemoteDocument(tab.id);if(scope.scope==='team'){teamState().tabs=teamState().tabs.filter(item=>item!==tab);if(teamState().active===tab.id)teamState().active='overview';}else{state.tabs=state.tabs.filter(item=>item!==tab);if(state.tab===tab.id)state.tab=parent.id;}changed=true;}
       for(const descriptor of descriptors){let tab;for(const candidate of list){if(await descriptorId(candidate)===descriptor.id){tab=candidate;break;}}
-        if(!tab){if(descriptor.type==='browser'){const info=await window.desktop.browser({action:'create',group:scope.scope==='team'?'team':'main',restore:true,unloaded:true,url:descriptor.url,title:descriptor.title});if(scope.scope==='chat'&&!state.tabs.includes(parent)){await window.desktop.browser({action:'close',id:info.id});return;}tab=scope.scope==='team'?{id:'team:'+crypto.randomUUID(),type:'browser',browserId:info.id,url:info.url,title:descriptor.title,loaded:false}:{id:info.id,type:'browser',label:descriptor.title,parentId:parent.id,info};}
+        if(!tab){if(descriptor.type==='browser'){const info=await window.desktop.browser({action:'create',group:scope.scope==='team'?'team':'main',restore:true,unloaded:true,url:descriptor.url,history:descriptor.history,title:descriptor.title});if(scope.scope==='chat'&&!state.tabs.includes(parent)){await window.desktop.browser({action:'close',id:info.id});return;}tab=scope.scope==='team'?{id:'team:'+crypto.randomUUID(),type:'browser',browserId:info.id,url:info.url,history:info.history,title:descriptor.title,loaded:false}:{id:info.id,type:'browser',label:descriptor.title,parentId:parent.id,info};}
           else if(scope.hostId)tab={id:'document:'+scope.hostId+':'+scope.id+':'+descriptor.documentId,type:'remote-document',parentId:parent.id,hostId:scope.hostId,runId:scope.id,documentId:descriptor.documentId,mediaType:descriptor.mediaType,label:descriptor.title};
           else{const document=await api('/api/content-tabs',{action:'document',scope:'chat',id:scope.id,documentId:descriptor.documentId});if(!state.tabs.includes(parent))return;tab={id:'markdown:'+document.file,type:'markdown',parentId:parent.id,markdown:document,label:descriptor.title};}
           tab.contentTabId=descriptor.id;tab.customTitle=descriptor.customTitle;if(scope.scope==='team')teamState().tabs.push(tab);else{const existing=state.tabs.find(item=>item.id===tab.id);if(existing){Object.assign(existing,tab);tab=existing;}else state.tabs.push(tab);}changed=true;
         }
         // Preserve edits made while the request was in flight; they are sent next.
-        const current=scope.scope==='team'?{id:tab.contentTabId||tab.id,type:'browser',title:tab.customTitle||tab.title||'New tab',...(tab.customTitle?{customTitle:tab.customTitle}:{}),url:tab.url||''}:await descriptorFor(tab,parent);
+        const current=scope.scope==='team'?{id:tab.contentTabId||tab.id,type:'browser',title:tab.customTitle||tab.title||'New tab',...(tab.customTitle?{customTitle:tab.customTitle}:{}),url:tab.url||'',...(tab.history?{history:tab.history}:{})}:await descriptorFor(tab,parent);
         const initial=captured.find(item=>item.id===descriptor.id);
         if(initial&&JSON.stringify(current)!==JSON.stringify(initial))continue;
         if((tab.customTitle||tab.label||tab.title)!==descriptor.title||tab.customTitle!==descriptor.customTitle){tab.customTitle=descriptor.customTitle;if(scope.scope==='team')tab.title=descriptor.title;else tab.label=descriptor.title;changed=true;}
+        if(descriptor.type==='browser'&&!(tab.loaded||tab.info?.loaded)&&JSON.stringify(tab.info?.history||tab.history)!==JSON.stringify(descriptor.history)){const info=await window.desktop.browser({action:'restore-history',id:tab.browserId||tab.id,url:descriptor.url,history:descriptor.history});if(tab.info)tab.info=info;else Object.assign(tab,{url:info.url,history:info.history});changed=true;}
         if(descriptor.type==='browser'&&(tab.info?.url||tab.url||'')!==descriptor.url){if(tab.loaded||tab.info?.loaded)await window.desktop.browser({action:'navigate',id:tab.browserId||tab.id,url:descriptor.url});if(tab.info)tab.info.url=descriptor.url;else tab.url=descriptor.url;changed=true;}
       }
       const full=scope.scope==='team'?teamState().tabs:state.tabs;
@@ -578,13 +576,23 @@ function selectedChatParent(){
   if(['run','remote-run'].includes(selected?.type))return selected;
   return selected?.parentId?state.tabs.find(tab=>tab.id===selected.parentId&&['run','remote-run'].includes(tab.type)):null;
 }
+function tabToLeft(tab, tabs=state.tabs) {
+  const siblings=tabs.filter(item=>tab.parentId?item.parentId===tab.parentId:!item.parentId&&!['overview','omi','life','team','engine','home','standup'].includes(item.type));
+  const index=siblings.findIndex(item=>item.id===tab.id);
+  return siblings[index-1]?.id || tab.parentId || 'overview';
+}
 async function closeChildTab(tab){
+  // Native close emits browser-state before the IPC promise resolves. Move selection first.
+  const previous=state.tab, previousChild=selectedChildren.get(tab.parentId), replacement=tabToLeft(tab);
+  if(state.tab===tab.id)state.tab=replacement;
+  if(selectedChildren.get(tab.parentId)===tab.id)selectedChildren.set(tab.parentId,replacement);
+  try {
   if(tab.type==='browser')await window.desktop.browser({action:'close',id:tab.id});
   if(tab.type==='terminal'){const current=await window.desktop.terminal({action:'state'});if(current.sessions.some(session=>session.id===tab.terminal.id))await window.desktop.terminal({action:'close',id:tab.terminal.id});disposeTerminalUi(tab.id);}
   if(tab.type==='remote-document')forgetRemoteDocument(tab.id);
   state.tabs=state.tabs.filter(item=>item.id!==tab.id);
-  if(state.tab===tab.id)state.tab=tab.parentId;
   saveWorkspace();render();
+  } catch(error) { if(state.tabs.some(item=>item.id===previous))state.tab=previous;if(previousChild&&state.tabs.some(item=>item.id===previousChild))selectedChildren.set(tab.parentId,previousChild);render();throw error; }
 }
 function replaceChatContent(html){const main=$('#main'),bar=$('#chat-subtabs');const template=document.createElement('template');template.innerHTML=html;for(const node of [...main.childNodes])if(node!==bar)node.remove();main.append(template.content);}
 function renderChatSubtabs(){
@@ -594,7 +602,7 @@ function renderChatSubtabs(){
   if($('#chat-subtabs')?.dataset.signature===signature)return;
   cleanupChatEdges?.();const previousScroll=$('#chat-subtabs .chat-subtab-list')?.scrollLeft||0;$('#chat-subtabs')?.remove();
   const bar=document.createElement('nav');bar.id='chat-subtabs';bar.dataset.signature=signature;bar.setAttribute('aria-label','Chat tabs');
-  bar.innerHTML=`<div class="chat-subtab-list"><button class="${state.tab===parent.id?'selected':''}" data-chat-subtab="${escape(parent.id)}" title="${escape(parent.label)}">${pairedBubbles}<span>${escape(parent.label)}</span></button>${children.map(tab=>`<div class="chat-subtab ${state.tab===tab.id?'selected':''}"><button data-chat-subtab="${escape(tab.id)}" title="${escape(tab.label)}">${tab.type==='browser'?browserTabIcon(tab.info,escape):tab.type==='terminal'?'⌘':'▤'}<span>${escape(tab.label)}</span></button><button data-chat-child-close="${escape(tab.id)}" aria-label="Close ${escape(tab.label)}">×</button></div>`).join('')}</div><details class="chat-tab-add"><summary aria-label="Add tab to chat" title="Add tab to chat">＋</summary><div class="chat-tab-add-options">${addTabMenuItems('chat')}</div></details>`;
+  bar.innerHTML=`<div class="chat-subtab-list"><button class="${state.tab===parent.id?'selected':''}" data-chat-subtab="${escape(parent.id)}" title="${escape(parent.label)}">${pairedBubbles}<span>Chat</span></button>${children.map(tab=>`<div class="chat-subtab ${state.tab===tab.id?'selected':''}"><button data-chat-subtab="${escape(tab.id)}" title="${escape(tab.label)}">${tab.type==='browser'?browserTabIcon(tab.info,escape):tab.type==='terminal'?'⌘':'▤'}<span>${escape(tab.label)}</span></button><button data-chat-child-close="${escape(tab.id)}" aria-label="Close ${escape(tab.label)}">×</button></div>`).join('')}</div><details class="chat-tab-add"><summary aria-label="Add tab to chat" title="Add tab to chat">＋</summary><div class="chat-tab-add-options">${addTabMenuItems('chat')}</div></details>`;
   $('#main').prepend(bar);
   bar.querySelectorAll('[data-chat-subtab]').forEach(button=>button.onclick=()=>{const selected=state.tabs.find(tab=>tab.id===button.dataset.chatSubtab);if(!selected)return;state.tab=selected.id;selectedChildren.set(parent.id,selected.id);if(selected.type==='browser')selectBrowserTab(selected.info);else render();});
   const childList=bar.querySelector('.chat-subtab-list');childList.scrollLeft=previousScroll;cleanupChatEdges=bindTabEdges(childList);bindTabReorder(childList,'.chat-subtab',node=>node.querySelector('[data-chat-subtab]')?.dataset.chatSubtab,(source,target,after)=>reorderVisibleTabs(source,target,after,parent.id));
@@ -604,6 +612,8 @@ function renderChatSubtabs(){
 }
 
 async function closeTopTab(id){
+  const closing=state.tabs.find(item=>item.id===id);if(!closing)return;
+  if(state.tab===id||state.tabs.find(item=>item.id===state.tab)?.parentId===id){state.tab=tabToLeft(closing);const remembered=selectedChildren.get(state.tab);if(state.tabs.some(item=>item.id===remembered&&item.parentId===state.tab))state.tab=remembered;}
   const children=state.tabs.filter(tab=>tab.parentId===id);
   for(const child of children){if(child.type==='browser')await window.desktop.browser({action:'close',id:child.id});if(child.type==='terminal'){const current=await window.desktop.terminal({action:'state'});if(current.sessions.some(session=>session.id===child.terminal.id))await window.desktop.terminal({action:'close',id:child.terminal.id});disposeTerminalUi(child.id);}if(child.type==='remote-document')forgetRemoteDocument(child.id);}
   const tab=state.tabs.find(item=>item.id===id);if(!tab)return;
@@ -746,10 +756,11 @@ window.desktop?.onBrowserState(infos=>{
   const currentBrowser=state.tabs.find(tab=>tab.id===state.tab&&tab.type==='browser');
   const previousSurface=currentBrowser?`${!!currentBrowser.info?.url}:${currentBrowser.info?.loaded!==false}`:null;
   const ids=new Set(infos.map(info=>info.id));
+  if(currentBrowser&&!ids.has(currentBrowser.id)){state.tab=tabToLeft(currentBrowser);if(currentBrowser.parentId)selectedChildren.set(currentBrowser.parentId,state.tab);}
   state.tabs=state.tabs.filter(tab=>tab.type!=='browser'||ids.has(tab.id));
   syncTeamBrowsers(infos);
   for(const info of infos.filter(info=>info.group!=='team'&&!ownsTeamBrowser(info.id))){const tab=state.tabs.find(t=>t.id===info.id);if(tab){tab.info=info;tab.label=tab.customTitle||info.title||'New tab';}else state.tabs.push({id:info.id,type:'browser',label:info.title||'New tab',info});}
-  if(!state.tabs.some(tab=>tab.id===state.tab)){state.tab='overview';render();}else{renderTabs();renderChatSubtabs();updateBrowserControls();if(currentBrowser&&previousSurface!==`${!!currentBrowser.info?.url}:${currentBrowser.info?.loaded!==false}`)renderBrowser();}saveWorkspace();
+  if(!state.tabs.some(tab=>tab.id===state.tab)){state.tab='overview';render();}else if(currentBrowser&&!ids.has(currentBrowser.id)){render();}else{renderTabs();renderChatSubtabs();updateBrowserControls();if(currentBrowser&&previousSurface!==`${!!currentBrowser.info?.url}:${currentBrowser.info?.loaded!==false}`)renderBrowser();}saveWorkspace();
 });
 window.desktop?.onCloseCurrentTab?.(()=>void closeCurrentTab().catch(error=>toast(error.message)));
 window.desktop?.onCloseTool?.((id)=>{state.tabs=state.tabs.filter(t=>t.id!==id);if(state.tab===id)state.tab='overview';render();});

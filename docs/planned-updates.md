@@ -1,5 +1,10 @@
 # Implementation status and backlog
 
+> **Acceptance reopened — October 6 evening:** The operator rejected the delivered UI.
+> Read [the complete acceptance audit](2026-10-07-acceptance-audit.md) before relying on
+> the historical completion claims below. It reviews all 22 + 28 build items and current reports;
+> working-tree corrections are not installed release acceptance.
+
 Maintain this as the single backlog. Design rationale is in `decisions.md`; recent changes are in
 `../CHANGELOG.md`. Items below are status, not promises of completed validation. The October 5 design bullets are
 retained as acceptance criteria; the installed versus unverified state is summarized immediately
@@ -9,7 +14,7 @@ below and in `content-workspace-release.md`.
 
 The operator closed the original 21-item intake on October 6 and authorized implementation,
 build and deployment from the coordinating Mac. BF-22 adds visiting-desktop chat tab synchronization.
-All 22 items are implemented in the 0.2.2 source checkpoint; isolated validation and actual rollout
+The 0.2.2 handoff recorded all 22 items as implemented; that blanket acceptance is now reopened. Historical isolated validation and actual rollout
 are tracked separately in [October 6 release](2026-10-06-release.md). The original acceptance
 criteria and accepted examples remain in [the build handoff](2026-10-06-build-handoff.md).
 Website, both Macs, iPad and iPhone rollout is verified at 0.2.2, including the final desktop
@@ -2085,3 +2090,9 @@ normal click. Preserve disabled/no-history states, keyboard/touch accessibility,
 and menu layering above native browser content. Apply to main/chat/Team browsers
 and native long-press equivalents; website-owned browser chrome is outside the
 Proteus website’s control. Verify with synthetic multi-page history.
+
+### October 7 correction release
+
+0.2.3 implements the reopened Home, chrome, activity/details, tab-close, native spacing, stable
+chat paging, bounded browser-history persistence/sync and HC quota-auth corrections. See the
+acceptance audit for the all-50-item review and distinguish pending installed/live acceptance.

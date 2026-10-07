@@ -317,3 +317,13 @@ errors, timeout, interrupted probes, missing premium snapshots and unusable perc
 remains measured zero. Missing quota yields an unavailable reason and recovery action; a new check
 timestamp does not certify refreshed usage. The isolated probe does not start a model turn or stop
 an existing chat. Installed-host validation is recorded separately in the release receipt.
+
+### October 6 evening: quota authentication correction
+
+Quota probes use a fresh client with the conversation client's authentication options and profile.
+They must not force SDK `mode: 'empty'`: that mode disables Keychain and can select a different
+GitHub CLI identity with no allowance. The affected Mac confirmed normal-auth quota-only reads
+returned usable allowance and propagated through the cache and summary. The fresh process still
+stops independently and does not consume a model turn or interrupt an active conversation.
+The source regression covers both Keychain defaults and explicit token options using synthetic
+credentials. Signed installation and the affected installed sidebar remain separate acceptance.

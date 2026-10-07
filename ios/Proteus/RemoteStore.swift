@@ -326,16 +326,23 @@ import Combine
     func mergeChat(_ value: JSON) {
         let id = value["id"].string
         guard let old = chats[id] else { chats[id] = value; return }
-        let first = value["eventStart"].int; let previous = old["eventStart"].int
-        let newEvents = value["events"].array; let oldEvents = old["events"].array
-        guard first <= previous + oldEvents.count && previous <= first + newEvents.count else { chats[id] = value; return }
         var events: [Int: JSON] = [:]
-        for (index, event) in oldEvents.enumerated() { events[previous + index] = event }
-        for (index, event) in newEvents.enumerated() { events[first + index] = event }
-        var merged = value.object; merged["events"] = .array(events.keys.sorted().compactMap { events[$0] })
-        merged["eventStart"] = .number(Double(min(first, previous))); merged["earlier"] = merged["eventStart"]
-        chats[id] = .object(merged)
+        for page in old["retainedHistory"].array + [old, value] {
+            for (index, event) in page["events"].array.enumerated() { events[page["eventStart"].int + index] = event }
+        }
+        var pages: [(start: Int, events: [JSON])] = []
+        for key in events.keys.sorted() {
+            if let last = pages.last, last.start + last.events.count == key { pages[pages.count - 1].events.append(events[key]!) }
+            else { pages.append((key, [events[key]!])) }
+        }
+        let latest = pages.popLast() ?? (start: 0, events: [])
+        var merged = (value["eventCount"].int >= old["eventCount"].int ? value : old).object
+        merged["events"] = .array(latest.events)
+        merged["eventStart"] = .number(Double(latest.start)); merged["earlier"] = merged["eventStart"]
+        merged["retainedHistory"] = .array(pages.map { .object(["eventStart": .number(Double($0.start)), "events": .array($0.events)]) })
+        chats[id] = .object(merged); saveCache()
     }
+
     func loadModels(force: Bool = false, provider: String = "copilot") async {
         do { let value = try await request("provider.status", ["force": .bool(force), "provider": .string(provider)]); providerStatuses[provider] = value; if provider == "copilot" { modelStatus = value; models = value["models"].array }; if !value["available"].bool { error = value["error"].string.isEmpty ? "Provider is not available on the Mac." : value["error"].string } }
         catch { self.error = error.localizedDescription }

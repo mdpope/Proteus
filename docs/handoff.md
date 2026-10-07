@@ -1,8 +1,14 @@
 # Agent handoff
 
+> **Acceptance reopened — October 6 evening:** The operator rejected the delivered UI.
+> Read [the complete acceptance audit](2026-10-07-acceptance-audit.md) before relying on
+> the historical completion claims below. It reviews all 22 + 28 build items and current reports;
+> working-tree corrections are not installed release acceptance.
+
 ## October 6 build and deployment
 
-The closed intake and operator-added BF-22 are implemented for 0.2.2. Read
+The prior handoff recorded the closed intake and BF-22 as implemented for 0.2.2; the new audit
+identifies omissions and regressions in that claim. Read
 [October 6 release](2026-10-06-release.md) for verified source checks and actual installation status,
 then [the build handoff](2026-10-06-build-handoff.md) for original acceptance and design examples.
 Website, both Macs, iPad and iPhone have verified 0.2.2 installations. Both Macs run the final

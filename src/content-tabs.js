@@ -3,13 +3,13 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 const require=createRequire(import.meta.url);
-const {safeHistoryURL}=require('../desktop/browser-history.cjs');
+const {safeHistoryURL,normalizeHistory}=require('../desktop/browser-history.cjs');
 const ID=/^[a-zA-Z0-9_:.\-]{1,256}$/;
 const title=value=>typeof value==='string'?value.replace(/[\x00-\x1f\x7f]/g,'').slice(0,200):'';
 export function contentTab(value){
   if(!value||!ID.test(value.id||'')||!['browser','document'].includes(value.type))throw new Error('Choose a bounded browser or document tab.');
   const tab={id:value.id,type:value.type,title:title(value.title)||'New tab'};if(title(value.customTitle))tab.customTitle=title(value.customTitle);
-  if(tab.type==='browser') { if(tab.id.startsWith('document:'))throw new Error('Document tab IDs are reserved for host documents.');const url=value.url?safeHistoryURL(value.url):'';if(value.url&&!url)throw new Error('This private or sensitive browser URL cannot sync.');tab.url=url||''; }
+  if(tab.type==='browser') { if(tab.id.startsWith('document:'))throw new Error('Document tab IDs are reserved for host documents.');const url=value.url?safeHistoryURL(value.url):'';if(value.url&&!url)throw new Error('This private or sensitive browser URL cannot sync.');tab.url=url||'';const history=normalizeHistory(value.history);if(history&&history.entries[history.index].url===tab.url)tab.history=history; }
   else {if(!/^[a-f0-9]{64}$/.test(value.documentId||''))throw new Error('Choose a host-bound document ID.');tab.documentId=value.documentId;tab.mediaType=value.mediaType==='text/html'?'text/html':'text/markdown';tab.id='document:'+tab.documentId;}
   return tab;
 }
@@ -17,11 +17,11 @@ export function workspaceContentScopes(session){
   const scopes=[];
   for(const parent of session?.tabs||[])if(parent.type==='run'){
     const tabs=[];for(const child of session.tabs.filter(tab=>tab.parentId===parent.id))try{
-      if(child.type==='browser')tabs.push(contentTab({id:child.contentTabId||child.id,type:'browser',title:child.customTitle||child.label,customTitle:child.customTitle,url:child.url}));
+      if(child.type==='browser')tabs.push(contentTab({id:child.contentTabId||child.id,type:'browser',title:child.customTitle||child.label,customTitle:child.customTitle,url:child.url,history:child.history}));
       if(child.type==='markdown')tabs.push(contentTab({id:'document:x',type:'document',title:child.label,documentId:createHash('sha256').update(parent.id+'\0'+child.file).digest('hex')}));
     }catch{}scopes.push({scope:'chat',id:parent.id,tabs});
   }
-  scopes.push({scope:'team',id:'team',tabs:(session?.team?.tabs||[]).filter(tab=>tab.type==='browser').flatMap(tab=>{try{return [contentTab({id:tab.contentTabId||tab.id,type:'browser',title:tab.customTitle||tab.title,customTitle:tab.customTitle,url:tab.url})];}catch{return [];}})});
+  scopes.push({scope:'team',id:'team',tabs:(session?.team?.tabs||[]).filter(tab=>tab.type==='browser').flatMap(tab=>{try{return [contentTab({id:tab.contentTabId||tab.id,type:'browser',title:tab.customTitle||tab.title,customTitle:tab.customTitle,url:tab.url,history:tab.history})];}catch{return [];}})});
   return scopes;
 }
 /** Host-owned descriptors only. Selection, page state and document approval never enter this store. */

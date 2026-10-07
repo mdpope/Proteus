@@ -392,6 +392,12 @@ class BrowserTabs {
     if (action === 'hide') { if(this.acceptRendererSelection(value,null))this.show(null); return; }
     if (action === 'close') return this.close(id);
     if (action === 'navigate') return this.navigate(id, value.url);
+    if(action==='restore-history'){
+      const tab=this.get(id);if(tab.view)return this.state(tab,true);
+      const history=normalizeHistory(value.history,this.appOrigin);
+      tab.snapshot={...tab.snapshot,url:safeHistoryURL(value.url,this.appOrigin)||'',history,canGoBack:history.index>0,canGoForward:history.index<history.entries.length-1};
+      return this.state(tab,true);
+    }
     if (action === 'history-menu') {
       const tab=this.tabs.get(id);
       if(tab?.view && this.active===id && value.expectedGroup===tab.group && this.selectionMatches(value,id))this.historyMenu(tab,value);

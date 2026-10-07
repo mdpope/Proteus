@@ -58,7 +58,7 @@ struct NativeChatScrollLocation {
         let browsers = tabs(in: scope).compactMap { tab -> JSON? in
             guard tab.url == nil || Self.safeURL(tab.url ?? "") != nil else { return nil }
             var value: [String: JSON] = ["id": .string(tab.contentTabId ?? tab.id), "type": .string("browser"), "title": .string(tab.customTitle ?? tab.title), "url": .string(tab.url ?? "")]
-            if let customTitle = tab.customTitle { value["customTitle"] = .string(customTitle) }; return .object(value)
+            if let customTitle = tab.customTitle { value["customTitle"] = .string(customTitle) }; if let history = Self.safeBrowserHistory(tab.history), let data = try? JSONEncoder().encode(history), let json = try? JSONDecoder().decode(JSON.self, from: data) { value["history"] = json }; return .object(value)
         }
         let docs = documents(in: scope).map { tab -> JSON in var value: [String: JSON] = ["id": .string("document:" + tab.id), "type": .string("document"), "documentId": .string(tab.id), "title": .string(tab.title), "mediaType": .string(tab.mediaType)]; if let customTitle = tab.customTitle { value["customTitle"] = .string(customTitle) }; return .object(value) }
         let all = browsers + docs, order = scope == "team" ? [] : (chatChildOrder[scope] ?? [])
@@ -88,13 +88,13 @@ struct NativeChatScrollLocation {
         let privateLocal = existingBrowsers.filter { $0.url != nil && Self.safeURL($0.url ?? "") == nil }
         for old in existingBrowsers where !privateLocal.contains(old) && !ids.contains(old.contentTabId ?? old.id) { unload(old.id); unloadedBrowsers.remove(old.id) }
         for tab in incoming where tab["type"].string == "browser" {
-            if let existing = existingBrowsers.first(where: { ($0.contentTabId ?? $0.id) == tab["id"].string }), existing.url ?? "" != tab["url"].string { unload(existing.id) }
+            if let existing = existingBrowsers.first(where: { ($0.contentTabId ?? $0.id) == tab["id"].string }), existing.url ?? "" != tab["url"].string, let url = Self.safeURL(tab["url"].string) { browserViews[existing.id]?.load(URLRequest(url: url)) }
         }
         browserTabs.removeAll { $0.scope == scope && !privateLocal.contains($0) }
         for tab in incoming where tab["type"].string == "browser" {
             let existing = existingBrowsers.first { ($0.contentTabId ?? $0.id) == tab["id"].string }
             let localID = existing?.id ?? ("sync:" + SHA256.hash(data: Data((scope + "\0" + tab["id"].string).utf8)).map { String(format: "%02x", $0) }.joined())
-            let descriptor = BrowserDescriptor(id: localID, title: tab["title"].string, url: tab["url"].string.isEmpty ? nil : tab["url"].string, scope: scope, customTitle: tab["customTitle"].string.isEmpty ? nil : tab["customTitle"].string, contentTabId: tab["id"].string)
+            let descriptor = BrowserDescriptor(id: localID, title: tab["title"].string, url: tab["url"].string.isEmpty ? nil : tab["url"].string, scope: scope, customTitle: tab["customTitle"].string.isEmpty ? nil : tab["customTitle"].string, contentTabId: tab["id"].string, history: Self.decodeBrowserHistory(tab["history"]) ?? existing?.history)
             browserTabs.append(descriptor)
             if descriptor.url != nil && !isBrowserLoaded(descriptor.id) { unloadedBrowsers.insert(descriptor.id) }
         }
@@ -349,7 +349,7 @@ struct NativeChatScrollLocation {
     private static func retainedDescriptor(_ tab: BrowserDescriptor) -> BrowserDescriptor? {
         guard let text = tab.url else { return tab }
         guard let url = safeURL(text) else { return nil }
-        return BrowserDescriptor(id: tab.id, title: tab.title, url: url.absoluteString, scope: tab.scope, customTitle: tab.customTitle, contentTabId: tab.contentTabId)
+        return BrowserDescriptor(id: tab.id, title: tab.title, url: url.absoluteString, scope: tab.scope, customTitle: tab.customTitle, contentTabId: tab.contentTabId, history: safeBrowserHistory(tab.history))
     }
     private static func decodedForInspection(_ text: String) -> String {
         var result = text
@@ -453,16 +453,41 @@ struct NativeChatScrollLocation {
         browserViews[id]?.load(URLRequest(url: url))
         return true
     }
-    func goBack(_ id: String) { if let view = browserViews[id], view.canGoBack { view.goBack() } }
-    func goForward(_ id: String) { if let view = browserViews[id], view.canGoForward { view.goForward() } }
-    func browserHistory(_ id: String, back: Bool) -> [WKBackForwardListItem] {
-        guard let view = browserViews[id] else { return [] }
-        return back ? Array(view.backForwardList.backList.reversed()) : view.backForwardList.forwardList
+    func goBack(_ id: String) { if let item = browserHistory(id, back: true).first { goBrowserHistory(item, in: id) } }
+    func goForward(_ id: String) { if let item = browserHistory(id, back: false).first { goBrowserHistory(item, in: id) } }
+    func browserHistory(_ id: String, back: Bool) -> [BrowserHistoryItem] {
+        guard let history = Self.safeBrowserHistory(browserTabs.first(where: { $0.id == id })?.history) else { return [] }
+        let indices = back ? Array((0..<history.index).reversed()) : Array((history.index + 1)..<history.entries.count)
+        return indices.map { BrowserHistoryItem(index: $0, url: URL(string: history.entries[$0].url)!, title: history.entries[$0].title) }
     }
-    func goBrowserHistory(_ item: WKBackForwardListItem, in id: String) {
-        guard let view = browserViews[id],
-              (view.backForwardList.backList + view.backForwardList.forwardList).contains(where: { $0 === item }) else { return }
-        view.go(to: item)
+    func goBrowserHistory(_ item: BrowserHistoryItem, in id: String) {
+        guard let index = browserTabs.firstIndex(where: { $0.id == id }), let history = browserTabs[index].history,
+              history.entries.indices.contains(item.index), history.entries[item.index].url == item.url.absoluteString else { return }
+        browserTabs[index].history?.index = item.index
+        browserTabs[index].url = item.url.absoluteString
+        if let view = browserViews[id] {
+            let native = item.index < history.index ? view.backForwardList.backList.reversed().first(where: { $0.url == item.url }) : view.backForwardList.forwardList.first(where: { $0.url == item.url })
+            if let native { view.go(to: native) } else { view.load(URLRequest(url: item.url)) }
+        } else { reload(id) }
+    }
+    static func decodeBrowserHistory(_ json: JSON) -> BrowserTabHistory? {
+        guard let data = try? JSONEncoder().encode(json), let value = try? JSONDecoder().decode(BrowserTabHistory.self, from: data) else { return nil }
+        return safeBrowserHistory(value)
+    }
+    static func safeBrowserHistory(_ value: BrowserTabHistory?) -> BrowserTabHistory? {
+        guard let value, value.entries.indices.contains(value.index), safeURL(value.entries[value.index].url) != nil else { return nil }
+        var entries: [BrowserHistoryEntry] = []; var selected = 0
+        let start = max(0, min(value.index - 25, value.entries.count - 50))
+        for i in start..<min(value.entries.count, start + 50) {
+            guard let url = safeURL(value.entries[i].url) else { continue }
+            if i == value.index { selected = entries.count }
+            entries.append(BrowserHistoryEntry(url: url.absoluteString, title: String(value.entries[i].title.prefix(200))))
+        }
+        var result = BrowserTabHistory(entries: entries, index: selected)
+        while (try? JSONEncoder().encode(result).count) ?? 0 > 32768 && result.entries.count > 1 {
+            if result.index >= result.entries.count - 1 - result.index { result.entries.removeFirst(); result.index -= 1 } else { result.entries.removeLast() }
+        }
+        return result
     }
     func refreshBrowser(_ id: String) { if let view = browserViews[id] { view.reload() } else { reload(id) } }
     func stopBrowser(_ id: String) { browserViews[id]?.stopLoading() }
@@ -492,12 +517,20 @@ struct NativeChatScrollLocation {
             Task { @MainActor [weak self, weak view] in
                 guard let self, let view, self.browserViews[id] === view,
                       let index = self.browserTabs.firstIndex(where: { $0.id == id }) else { return }
-                let state = BrowserNavigationState(url: view.url?.absoluteString ?? "", title: view.title ?? "", canGoBack: view.canGoBack, canGoForward: view.canGoForward, isLoading: view.isLoading)
+                let state = BrowserNavigationState(url: view.url?.absoluteString ?? "", title: view.title ?? "", canGoBack: self.browserTabs[index].history.map { $0.index > 0 } ?? view.canGoBack, canGoForward: self.browserTabs[index].history.map { $0.index + 1 < $0.entries.count } ?? view.canGoForward, isLoading: view.isLoading)
                 if self.browserNavigation[id] != state { self.browserNavigation[id] = state }
                 var tab = self.browserTabs[index]
                 if !state.url.isEmpty && state.url != "about:blank" { tab.url = state.url }
                 if !state.title.isEmpty { tab.title = tab.customTitle ?? state.title }
-                if tab.url != self.browserTabs[index].url || tab.title != self.browserTabs[index].title { self.browserTabs[index] = tab }
+                if !view.isLoading, let url = tab.url, Self.safeURL(url) != nil {
+                    var history = tab.history ?? BrowserTabHistory(entries: [], index: 0)
+                    if !history.entries.indices.contains(history.index) || history.entries[history.index].url != url {
+                        history.entries = Array(history.entries.prefix(history.index + 1)); history.entries.append(BrowserHistoryEntry(url: url, title: tab.title)); history.index = history.entries.count - 1
+                    } else { history.entries[history.index].title = tab.title }
+                    tab.history = Self.safeBrowserHistory(history)
+                }
+                if tab != self.browserTabs[index] { self.browserTabs[index] = tab }
+                if let history = tab.history { var navigation = state; navigation.canGoBack = history.index > 0; navigation.canGoForward = history.index + 1 < history.entries.count; self.browserNavigation[id] = navigation }
             }
         }
     }
@@ -509,11 +542,14 @@ struct BrowserNavigationState: Equatable {
     var canGoForward = false
     var isLoading = false
 }
+struct BrowserHistoryEntry: Codable, Equatable { var url: String; var title: String }
+struct BrowserTabHistory: Codable, Equatable { var entries: [BrowserHistoryEntry]; var index: Int }
+struct BrowserHistoryItem: Hashable { var index: Int; var url: URL; var title: String? }
 struct BrowserDescriptor: Identifiable, Codable, Equatable {
-    var id: String; var title: String; var url: String?; var scope: String; var customTitle: String?; var contentTabId: String?
-    init(id: String, title: String, url: String?, scope: String = "team", customTitle: String? = nil, contentTabId: String? = nil) { self.id = id; self.title = title; self.url = url; self.scope = scope; self.customTitle = customTitle; self.contentTabId = contentTabId }
-    enum CodingKeys: String, CodingKey { case id, title, url, scope, customTitle, contentTabId }
-    init(from decoder: Decoder) throws { let values = try decoder.container(keyedBy: CodingKeys.self); id = try values.decode(String.self, forKey: .id); title = try values.decode(String.self, forKey: .title); url = try values.decodeIfPresent(String.self, forKey: .url); scope = try values.decodeIfPresent(String.self, forKey: .scope) ?? "team"; customTitle = try values.decodeIfPresent(String.self, forKey: .customTitle); contentTabId = try values.decodeIfPresent(String.self, forKey: .contentTabId) }
+    var id: String; var title: String; var url: String?; var scope: String; var customTitle: String?; var contentTabId: String?; var history: BrowserTabHistory?
+    init(id: String, title: String, url: String?, scope: String = "team", customTitle: String? = nil, contentTabId: String? = nil, history: BrowserTabHistory? = nil) { self.history = history; self.id = id; self.title = title; self.url = url; self.scope = scope; self.customTitle = customTitle; self.contentTabId = contentTabId }
+    enum CodingKeys: String, CodingKey { case id, title, url, scope, customTitle, contentTabId, history }
+    init(from decoder: Decoder) throws { let values = try decoder.container(keyedBy: CodingKeys.self); id = try values.decode(String.self, forKey: .id); title = try values.decode(String.self, forKey: .title); url = try values.decodeIfPresent(String.self, forKey: .url); scope = try values.decodeIfPresent(String.self, forKey: .scope) ?? "team"; customTitle = try values.decodeIfPresent(String.self, forKey: .customTitle); contentTabId = try values.decodeIfPresent(String.self, forKey: .contentTabId); history = try values.decodeIfPresent(BrowserTabHistory.self, forKey: .history) }
 }
 struct NativeDocumentDescriptor: Identifiable, Codable, Equatable {
     let id: String

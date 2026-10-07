@@ -17,6 +17,40 @@ final class RemoteUITests: XCTestCase {
         XCTAssertTrue(app.buttons["chat-attach"].exists)
         let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Native chat composer"; shot.lifetime = .keepAlways; add(shot)
     }
+    @MainActor func testGroupedActivityLeavesNoEmptyMessageGaps() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-long-chat", "--synthetic-activity-spacing"]
+        app.launch(); app.buttons["Chats"].firstMatch.tap()
+        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Long fixture")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 8)); row.tap()
+        XCTAssertTrue(app.buttons["chat-conversation-tab"].waitForExistence(timeout: 8))
+        app.buttons["chat-conversation-tab"].tap()
+        let activity = app.descendants(matching: .any)["chat-event-0"].firstMatch
+        let following = app.descendants(matching: .any)["chat-event-41"].firstMatch
+        XCTAssertTrue(activity.waitForExistence(timeout: 8))
+        XCTAssertTrue(following.waitForExistence(timeout: 8))
+        XCTAssertFalse(app.otherElements["chat-event-1"].exists)
+        XCTAssertFalse(app.otherElements["chat-event-40"].exists)
+        XCTAssertEqual(following.frame.minY - activity.frame.maxY, 18, accuracy: 2)
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Grouped activity without blank rows"; shot.lifetime = .keepAlways; add(shot)
+    }
+    @MainActor func testTabletUsesOnlyTopChatActions() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-long-chat"]
+        app.launch(); app.buttons["Chats"].firstMatch.tap()
+        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Long fixture")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 8)); row.tap()
+        XCTAssertTrue(app.buttons["chat-conversation-tab"].waitForExistence(timeout: 8))
+        XCTAssertFalse(app.staticTexts["chat-header-title"].exists)
+        XCTAssertFalse(app.buttons["chat-back"].exists)
+        XCTAssertEqual(app.buttons.matching(identifier: "Chat actions").count, 1)
+        app.buttons["Add chat tab"].tap(); app.buttons["Browser"].firstMatch.tap()
+        XCTAssertTrue(app.textFields["browser-address"].waitForExistence(timeout: 8))
+        XCTAssertFalse(app.staticTexts["chat-header-title"].exists)
+        XCTAssertFalse(app.buttons["chat-back"].exists)
+        XCTAssertEqual(app.buttons.matching(identifier: "Chat actions").count, 1)
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Tablet two tab rows"; shot.lifetime = .keepAlways; add(shot)
+    }
     @MainActor func testCompactHeaderStaysInChatWhenBrowserCloses() {
         let app = XCUIApplication()
         app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-long-chat"]
@@ -477,12 +511,12 @@ final class RemoteUITests: XCTestCase {
         let back = app.buttons["browser-back"]
         back.press(forDuration: 1)
         XCTAssertTrue(app.buttons["First browser page"].waitForExistence(timeout: 5))
-        app.buttons["First browser page"].tap()
+        app.buttons["browser-history-back-0"].tap()
         XCTAssertTrue(app.webViews.staticTexts["First browser page"].waitForExistence(timeout: 15))
         let forward = app.buttons["browser-forward"]
         forward.press(forDuration: 1)
         XCTAssertTrue(app.buttons["Third browser page"].waitForExistence(timeout: 5))
-        app.buttons["Third browser page"].tap()
+        app.buttons["browser-history-forward-2"].tap()
         XCTAssertTrue(app.webViews.staticTexts["Third browser page"].waitForExistence(timeout: 15))
     }
     @MainActor func testBrowserHistoryShowsLocalVisitDeviceAndPagesAfter25() {

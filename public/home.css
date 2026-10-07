@@ -1,0 +1,20 @@
+#home-screen{display:grid;gap:20px;max-width:1120px;margin:0 auto;color:var(--proteus-ink);font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+#home-screen .home-heading{margin:0 0 4px}#home-screen .home-eyebrow{color:var(--proteus-muted);font-size:11px;letter-spacing:1.7px;text-transform:uppercase;margin-bottom:10px}
+#home-screen h1{font-size:30px;line-height:1.2;letter-spacing:-.8px;margin:0 0 12px;font-weight:650}#home-screen p{margin:8px 0;line-height:1.6}#home-screen .home-heading p,#home-screen .home-note{color:var(--proteus-muted)}
+#home-screen .home-panel{padding:24px;background:var(--proteus-panel);border:1px solid var(--proteus-line);border-radius:12px;min-width:0}#home-screen h2{font-size:19px;line-height:1.4;letter-spacing:-.3px;margin:0 0 16px;font-weight:600}
+#home-screen .home-destinations{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}#home-screen button{font:inherit;cursor:pointer;border:1px solid var(--proteus-line);background:var(--proteus-control);color:var(--proteus-ink);border-radius:8px;padding:10px 14px}#home-screen button:hover{background:var(--proteus-control-hover)}
+#home-screen .home-destinations button{display:grid;justify-content:stretch;align-items:start;text-align:left;gap:4px;padding:16px}#home-screen .home-destinations strong{display:flex;justify-content:space-between;font-weight:600}#home-screen .home-destinations button>span{color:var(--proteus-muted);font-size:14px}#home-screen .home-capabilities>.home-note{margin-top:16px}
+#home-screen .home-section-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:12px}#home-screen .home-section-heading h2{margin:0}#home-screen .home-version{font-weight:400;font-size:13px;color:var(--proteus-muted);white-space:nowrap}
+#home-screen .home-prose{font-size:14px;line-height:1.65;overflow-wrap:anywhere}#home-screen .home-prose h2{font-size:16px;margin:0 0 10px;color:var(--proteus-accent)}#home-screen .home-prose ul{padding-left:20px;margin:10px 0}#home-screen .home-prose li{margin:8px 0}#home-screen .home-older{margin-top:18px;padding-top:16px;border-top:1px solid var(--proteus-line)}#home-screen summary{font-size:14px;font-weight:500;cursor:pointer;color:var(--proteus-ink)}#home-screen .home-older[open]>summary{margin-bottom:18px}
+#home-screen .home-update-row{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:16px}#home-screen .home-update-row button{flex-shrink:0}
+#home-screen button:focus-visible,#home-screen summary:focus-visible{outline:2px solid var(--proteus-accent);outline-offset:3px}
+@media(max-width:650px){#home-screen{gap:16px}#home-screen h1{font-size:26px}#home-screen .home-panel{padding:18px}#home-screen .home-destinations{grid-template-columns:1fr}#home-screen .home-update-row{align-items:stretch;flex-direction:column}#home-screen .home-section-heading{flex-wrap:wrap}#home-screen button,#home-screen summary{min-height:44px}}
+
+#home-screen .home-more{margin:12px 0 0}#home-screen .home-more[open]>summary{margin-bottom:12px}
+
+#home-screen .home-build{display:grid;grid-template-columns:minmax(100px,auto) minmax(0,1fr);gap:24px;padding:16px 24px}
+#home-screen .home-build .home-eyebrow{display:block;margin:0 0 4px}
+#home-screen .home-build strong{font-size:17px;font-weight:600}#home-screen .home-build code{font-size:13px;overflow-wrap:anywhere;user-select:text}
+#home-screen .home-guide{margin-top:18px;border-top:1px solid var(--proteus-line);padding-top:16px}#home-screen .home-guide[open]>summary{margin-bottom:20px}
+#home-screen .home-guide h1{font-size:23px}#home-screen .home-guide h2{margin-top:24px}#home-screen .home-guide pre{max-width:100%;overflow:auto}
+@media(max-width:420px){#home-screen .home-build{grid-template-columns:1fr;gap:12px;padding:18px}}

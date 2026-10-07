@@ -1,3 +1,5 @@
+import {mountHome} from '../../../public/home.js';
+import {mount as mountHomeMarkdown} from '../../../src/markdown-renderer.js';
 import {appRequest} from './shared-app.js';
 import {clearChatIndex,clearChatDrafts} from './remote-cache.js';
 import './app-tools.js';
@@ -51,3 +53,6 @@ logoutForm?.addEventListener('submit', async event => {
     try { const store = new PairingStore(account); await store.clear(); store.close(); } finally { logoutForm.dataset.remoteCleared = 'true'; logoutForm.requestSubmit(); }
 });
 if (document.querySelector('#remote-workspace')) import('./remote.js');
+
+const home=document.querySelector('#proteus-home');
+if(home){const value=JSON.parse(document.querySelector('#proteus-home-data').textContent);mountHome(home,value,{markdown:(target,source)=>mountHomeMarkdown(target,source,{allowExternalImages:false}),navigate:page=>{location.href=({chats:'/remote?view=chats',schedules:'/remote?view=schedules',team:'/team',life:'/garage'})[page];}});}

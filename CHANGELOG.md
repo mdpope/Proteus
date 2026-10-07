@@ -1,5 +1,27 @@
 # Changes
 
+## 0.2.3 — October 7, 2026
+
+- Expand the shared Home capabilities into the complete project guide and show the full version/build in its own box.
+- Preserve loaded chat history during live updates and recover earlier pages with a stable boundary.
+- Restore bounded browser Back/Forward history through synchronized chat/Team tabs and native app restarts; retain native browser views during URL reconciliation.
+
+- Share one Home renderer and stylesheet between desktop and website, with latest changes,
+  readable expansion and an optional Mac-only instructions panel.
+- Fix desktop chat-browser close selection before native state notifications; select the tab
+  to the left and preserve the chat. Label the fixed child tab Chat with a full-size icon.
+- Replace the clipped remote-only Next turn expander with inline model controls.
+- Omit empty tool Details, use straight activity-item accents and reserve orange groups for issues.
+- Remove duplicate website Engine Room navigation; align notification/resource rows and Default
+  Mac controls; add sidebar version/status and reliable overview dismissal.
+- Remove the redundant regular-width iPad chat header, add an explicit earlier-history button,
+  and eliminate blank rows left by grouped Activity events.
+- Show website working folders, loaded context, usage and session details; retain archived rows
+  and their action menu while refreshing live state.
+- Keep Copilot quota probes on the same authentication settings as conversations so Keychain
+  credentials remain available.
+- Reopen incomplete 0.2.2 acceptance; see the per-item audit for remaining live/device gates.
+
 ## 0.2.2 — October 6, 2026
 
 - Clarify website Mac pairing, connection and Default Mac navigation, with pairing-stage recovery

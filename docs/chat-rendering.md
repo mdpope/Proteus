@@ -117,9 +117,36 @@ Implementation and device/deployment evidence are recorded separately in the rel
 ## Accepted October 6 Activity presentation
 
 User and agent messages retain their side accents. Each contiguous tool/automatic approval group
-uses a restrained warm orange container without a side accent; contained successful rows use quiet
+uses a green container by default and warm orange only for issues, without a side accent; contained successful rows use quiet
 green and failed rows richer orange, each with its own accent and explicit status. Safe actionable
 error text is recovered from structured and saved tool output and redacts credentials. Summary
 wording is tools, automatic approvals, failed, running; only structured tool events count as actions.
 Working indicators and subtle group animation stop on completion and under reduced motion. Native
 uses the same summary wording with its existing running indicator. See the committed design examples.
+
+## October 6 evening corrections
+
+Successful desktop/web Activity groups retain green; groups containing issues use warm orange.
+Activity items keep straight left accents and rounded right corners. Details appears only when
+there is actual rendered content. Remote desktop model choices are inline in the composer,
+using destination metadata; the clipped Next turn expander is removed. The fixed child tab is
+Chat with a nonshrinking navigation-size icon. Closing a selected child picks its left sibling
+before native close events can invalidate selection; the last child falls back to Chat.
+
+Regular-width iPad uses its existing top chat menu without an additional back/title/menu row.
+Native earlier history has an explicit load/retry control; this does not establish complete
+disjoint-window reconnect recovery. Remaining parity gates are in the acceptance audit.
+
+Native conversation rows are emitted only for visible messages and the first event of an Activity
+group. Absorbed tool/approval events and empty assistant events emit no stack row; otherwise each
+invisible event added 18 points of whitespace. Visible rows retain absolute event IDs for reading
+anchors. A 40-event iPad fixture verifies the next message is exactly one 18-point gap away.
+Website details render the authorized projection of working folders, context entries, token usage,
+provider session, model history and schedule snapshot. Host file operations remain Mac actions.
+
+### October 7 complete history
+
+Remote paging accepts an absolute `beforeEvent` boundary, with offset fallback for older hosts.
+Web, visiting desktop and native clients retain loaded pages across live event windows and keep
+sparse segments separate until missing pages bridge them. Earlier messages is an actionable
+load/retry control. Native visible-row filtering precedes layout, avoiding empty Activity gaps.
