@@ -52,11 +52,12 @@ await second.remote.configure({label:'Work Mac',enabled:true,mode:'external',rel
 await until(() => second.remote.status === 'online', 20_000);
 const browserVisits = new Map();
 const fixture = http.createServer(async (req, res) => {
-  if (['/browser/one', '/browser/two'].includes(req.url)) {
+  if (['/browser/one', '/browser/two', '/browser/three'].includes(req.url)) {
     const count = (browserVisits.get(req.url) || 0) + 1; browserVisits.set(req.url, count);
-    const first = req.url.endsWith('/one');
+    const first = req.url.endsWith('/one'); const third = req.url.endsWith('/three');
+    const title = first ? 'First' : third ? 'Third' : 'Second';
     res.writeHead(200, {'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});
-    res.end(`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>${first?'First':'Second'} browser page</title><h1>${first?'First':'Second'} browser page</h1><p>Load ${count}</p><a href="/browser/${first?'two':'one'}">${first?'Next':'Previous'} browser page</a>`);return;
+    res.end(`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} browser page</title><h1>${title} browser page</h1><p>Load ${count}</p><a href="/browser/${first?'two':third?'two':'three'}">${third?'Previous':'Next'} browser page</a>`);return;
   }
   if (req.url === '/latest') { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ context: app.engine.listRuns()[0]?.schedule.context, reasoningEffort: app.engine.listRuns()[0]?.schedule.reasoningEffort, contextTier: app.engine.listRuns()[0]?.schedule.contextTier, queuedMessages: app.engine.listRuns()[0]?.queuedMessages })); return; }
   if (!req.url.startsWith('/pair')) { res.writeHead(404); res.end(); return; }

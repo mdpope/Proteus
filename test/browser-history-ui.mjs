@@ -5,12 +5,12 @@ const server=http.createServer((req,res)=>{requests.push({method:req.method,url:
 let app,page;const errors=[];
 const until=async fn=>{for(let i=0;i<150;i++){if(await fn())return;await new Promise(r=>setTimeout(r,100));}throw new Error('Condition timed out');};
 const saved=()=>JSON.parse(fs.readFileSync(path.join(home,'desktop-workspace.json')));
-const launch=async()=>{app=await electron.launch({args:['.','--user-data-dir='+path.join(home,'electron')],env:{...process.env,PROTEUS_HOME:home,COPILOT_HOME:path.join(home,'copilot'),PORT:'0'},timeout:60000});page=await app.firstWindow();page.setDefaultTimeout(15000);page.on('pageerror',e=>errors.push(e.message));await page.locator('#new-chat').waitFor();};
+const launch=async()=>{app=await electron.launch({args:['.','--use-mock-keychain','--user-data-dir='+path.join(home,'electron')],env:{...process.env,PROTEUS_HOME:home,COPILOT_HOME:path.join(home,'copilot'),PORT:'0'},timeout:60000});page=await app.firstWindow();page.setDefaultTimeout(15000);page.on('pageerror',e=>errors.push(e.message));await page.locator('#tab-add-menu summary').waitFor();};
 const command=(action,id,extra={})=>page.evaluate(value=>window.desktop.browser(value),{action,id,...extra});
 const inspect=(id,expr)=>app.evaluate(({app},{id,expr})=>process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser().get(id).view.webContents.executeJavaScript(expr),{id,expr});
 let id;
 try{
- await launch();await page.locator('#browser').click();id=await page.locator('.tabitem.selected [data-tab]').getAttribute('data-tab');
+ await launch();await page.locator('#tab-add-menu summary').click();await page.locator('#browser').click();id=await page.locator('.tabitem.selected [data-tab]').getAttribute('data-tab');
  for(const suffix of ['/A','/B','/redirect'])await command('navigate',id,{url:site+suffix});
  // Intercept only the native popup in this disposable test to inspect real menu items.
  await app.evaluate(({Menu})=>{process.__historyMenus=[];const original=Menu.prototype.popup;process.__restoreHistoryPopup=()=>{Menu.prototype.popup=original;};Menu.prototype.popup=function(){process.__historyMenus.push(this);};});

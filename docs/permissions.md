@@ -52,6 +52,23 @@ operation. Proteus remembers the rule itself, so revocation takes effect without
 cache of permanent grants. History records automatic approvals and their policy reason; only a
 direct approval response is attributed as interactive.
 
+## Chat-only auto-approval
+
+An individual chat can opt into Auto-approve for this chat only without changing
+`permissions.json` or any other chat or schedule. The override is stored with that
+chat on its owning Mac, survives continuation and app restart, and can be revoked
+back to the inherited workspace mode. Each change requires the current chat
+revision and permission-context ID. Changing provider, workspace roots, skills or
+MCP configuration permanently invalidates the override; switching back does not
+restore it. New chats do not inherit it.
+
+The override auto-approves supported operation requests within existing resource
+grants. Structured file reads and writes still require the same canonical-path
+folder authorization, and the Codex sandbox keeps its existing writable roots.
+Managed enterprise approvals, sandbox-bypass requests and unknown request kinds
+still ask. A changed override rechecks a waiting permission request in that chat.
+Automatic approval history records whether the source was chat or workspace.
+
 Legacy partial grants previously labeled Trusted workspace now display as Saved rules only; no
 authorizations are broadened during migration. Duplicate SDK checks for the identical active tool
 call share its one-time decision; the decision expires when the tool completes. Approval waits do

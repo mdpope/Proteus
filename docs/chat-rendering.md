@@ -113,3 +113,13 @@ Implementation and device/deployment evidence are recorded separately in the rel
   image rendering and HTML escaping in Electron against disposable synthetic data.
 - `ProteusTests/MarkdownTests` runs the bundled renderer in real WKWebView on iPhone/iPad simulators.
   The full native test suite also needs `node test/mobile-host.mjs` (see remote.md).
+
+## Accepted October 6 Activity presentation
+
+User and agent messages retain their side accents. Each contiguous tool/automatic approval group
+uses a restrained warm orange container without a side accent; contained successful rows use quiet
+green and failed rows richer orange, each with its own accent and explicit status. Safe actionable
+error text is recovered from structured and saved tool output and redacts credentials. Summary
+wording is tools, automatic approvals, failed, running; only structured tool events count as actions.
+Working indicators and subtle group animation stop on completion and under reduced motion. Native
+uses the same summary wording with its existing running indicator. See the committed design examples.

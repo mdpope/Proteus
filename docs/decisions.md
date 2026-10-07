@@ -365,3 +365,48 @@ An authentication requirement points to the owning Mac without claiming OAuth su
 Model aliases remain selectable and show resolved model IDs only when the runtime reports them.
 Preserve explicit IDs and provider capabilities; never infer model versions from an alias table.
 No workplace task or paid provider turn is used to test these adapter changes.
+
+## October 6 — chat-only approval and local chat titles
+
+Chat-only auto-approval is an explicit opt-in on one owning-host chat. It persists with that
+chat through continuation and restart, and can be revoked to inherit the workspace setting.
+It changes the effective approval mode only within the existing granted folders, tool rules,
+and sandbox; it does not add filesystem roots or change workspace defaults. A provider,
+root, or integration context change permanently invalidates the chat grant, even if a
+previous configuration later returns. The decision path retains protected-request and
+unknown-tool safeguards and records chat versus workspace provenance. Source and isolated
+tests implement this behavior; installed cross-client acceptance remains separate.
+
+For an unnamed new chat, the host derives a short title locally from the opening prompt.
+Naming requires no additional provider turn, network call, or wait before creation. A
+provided name or later manual rename takes precedence. Title revisions reject stale
+client edits, including on chats created before this metadata existed. Cross-client
+installed propagation remains to be verified.
+
+## October 6 — accepted chat activity presentation for the queued build
+
+Desktop chat is the visual reference for website typography, spacing, controls, and message
+organization. User and agent messages retain their side accent borders. A contiguous tool and
+approval sequence sits inside one restrained warm orange Activity box **without** a side accent;
+the individual activities inside it retain their own side accents. Successful items keep a quiet
+green fill. Failed or warning items use a lighter, richer orange fill and expose the actual safe
+failure reason. A running item uses the existing circular working indicator, and the enclosing
+Activity box may animate subtly while any item runs. Text labels and reduced-motion behavior must
+convey status independently of color and animation. See BF-2026-10-06-08, -09, and -13 and the
+examples in [the build handoff](2026-10-06-build-handoff.md). This is an accepted design direction,
+not an implementation or release claim.
+
+## October 6 — host-owned shared content descriptors
+
+Chat browser/document and Team browser descriptors use one bounded host-owned revisioned store.
+Authenticated remote get/mutate operations carry explicit scope and current revision. Clients rebase
+only their original operations after a conflict, preserving concurrent additions. Selection, scroll,
+cookies, page memory, terminal execution and document bodies remain local. Host document descriptors
+contain opaque IDs; a separate private source registry rechecks current roots and exact-version
+approvals. Startup seeds only an uninitialized scope, preventing stale saved tabs from resurrecting
+closed remote tabs. Revocation removes host-bound views and rejects delayed replies. Both native
+clients and visiting desktops use this boundary. Unknown store fields survive atomic replacement.
+
+Certificate inspection and browser automation share a lease only when Proteus owns the debugger.
+A foreign debugger is preserved. Each consumer releases its listeners and lease independently,
+so interrupted automation can recover without disabling certificate reporting or restarting the app.

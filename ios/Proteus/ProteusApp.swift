@@ -38,6 +38,8 @@ struct ProteusRoot: View {
                     if ProcessInfo.processInfo.arguments.contains("--reset-pairing") { destinations.resetForTesting() }
                     if ProcessInfo.processInfo.arguments.contains("--synthetic-destinations") {
                         destinations.resetForTesting()
+                        // Keep synthetic count and long-message fixtures isolated from relay reconnects.
+                        if ProcessInfo.processInfo.arguments.contains("--synthetic-nav-counts") || ProcessInfo.processInfo.arguments.contains("--synthetic-long-chat") { destinations.activity(false) }
                         for (id, label) in [("10000000-0000-4000-8000-000000000001", "Alpha Mac"), ("10000000-0000-4000-8000-000000000002", "Beta Mac")] {
                             try? destinations.register(DeviceConnection(relay: "ws://127.0.0.1:1", hostId: id, deviceId: UUID().uuidString, key: RemoteCrypto.random()), label: label)
                         }
@@ -59,10 +61,51 @@ struct ProteusRoot: View {
                         remote.allRuns = [current, archived, earlier]
                         remote.flushCache()
                     }
+                    if ProcessInfo.processInfo.arguments.contains("--synthetic-nav-counts") {
+                        for (hostID, chats, attention, schedules) in [
+                            ("10000000-0000-4000-8000-000000000001", 120, 7, 2),
+                            ("10000000-0000-4000-8000-000000000002", 9, 2, 1)
+                        ] {
+                            guard let remote = destinations.remote(for: hostID) else { continue }
+                            remote.connected = true
+                            remote.status = "Connected · synthetic fixture"
+                            remote.state = .object(["runCount": .number(Double(chats)), "attentionCount": .number(Double(attention)), "schedules": .array((0..<schedules).map { .object(["id": .string("fixture-\($0)"), "name": .string("Fixture \($0)")]) }), "runs": .array([.object(["id": .string("fixture-\(hostID)"), "title": .string("Fixture chat"), "status": .string("awaiting_input"), "attentionRequired": .bool(true), "updatedAt": .string("2026-10-05T21:00:00Z")])])])
+                        }
+                        return
+                    }
+                    if ProcessInfo.processInfo.arguments.contains("--synthetic-long-chat"),
+                       let remote = destinations.remote(for: "10000000-0000-4000-8000-000000000001") {
+                        let longText = (0..<180).map { "Line \($0): synthetic long-message reading-position fixture." }.joined(separator: "\n")
+                        let run: JSON = .object(["id": .string("long-chat"), "title": .string("Long fixture"), "status": .string("completed"), "createdAt": .string("2026-10-05T20:00:00Z"), "updatedAt": .string("2026-10-05T21:00:00Z"), "eventStart": .number(0), "events": .array([.object(["role": .string("assistant"), "text": .string(longText), "at": .string("2026-10-05T21:00:00Z")])]), "schedule": .object(["provider": .string("codex")]), "nextModelOptions": .object(["model": .string("gpt-6-sol")])])
+                        remote.state = .object(["runs": .array([run]), "runCount": .number(1), "attentionCount": .number(0), "schedules": .array([]), "capabilities": .array([.string("chat.attachments.v1")]), "attachmentMediaTypes": .object(["codex": .array([.string("image/png")])])])
+                        remote.chats["long-chat"] = run
+                        remote.flushCache()
+                        return
+                    }
+                    if ProcessInfo.processInfo.arguments.contains("--synthetic-many-chat"),
+                       let remote = destinations.remote(for: "10000000-0000-4000-8000-000000000001") {
+                        let events: [JSON] = (0..<100).map { index in
+                            .object(["role": .string(index.isMultiple(of: 2) ? "user" : "assistant"),
+                                     "text": .string("Synthetic message \(index): a short bounded-history fixture."),
+                                     "at": .string("2026-10-05T21:00:00Z")])
+                        }
+                        let run: JSON = .object(["id": .string("many-chat"), "title": .string("Many fixture"),
+                            "status": .string("completed"), "eventStart": .number(0), "events": .array(events),
+                            "schedule": .object(["provider": .string("rehearsal")])])
+                        remote.state = .object(["runs": .array([run]), "runCount": .number(1), "attentionCount": .number(0), "schedules": .array([])])
+                        remote.chats["many-chat"] = run
+                        remote.flushCache()
+                        return
+                    }
                     #endif
                     destinations.activity(true)
                 }
-                .onChange(of: phase) { _, value in destinations.activity(value == .active) }
+                .onChange(of: phase) { _, value in
+                    #if DEBUG
+                    if ProcessInfo.processInfo.arguments.contains("--synthetic-nav-counts") || ProcessInfo.processInfo.arguments.contains("--synthetic-long-chat") { return }
+                    #endif
+                    destinations.activity(value == .active)
+                }
                 .onChange(of: lifeEnabled) { _, enabled in if !enabled { area = "macs" } }
                 .alert("Proteus", isPresented: Binding(get: { destinations.error != nil }, set: { if !$0 { destinations.error = nil } })) { Button("OK") { destinations.error = nil } } message: { Text(destinations.error ?? "") }
     }

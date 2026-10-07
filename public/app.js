@@ -1,11 +1,18 @@
+import { createTabSynchronizer, syncableTabURL } from './content-tab-sync.js';
+import { browserTabIcon } from './browser-icons.js';
 import { setMessageActionsContext, stopMessageSpeech } from './message-actions.js';
 import { chatIconPaths, addTabMenuItems } from './add-tab-menu.js';
-import { initRemoteDesktops, attachChatDestinations, mountMachineHistory, renderRemoteRun, renderRemoteDocument, forgetRemoteDocument, openRemoteChat, mountRemoteSchedules } from './remote-desktops.js';
-import { initChatsIndex, renderChatsIndex, recentChats, openIndexedChat, loadChatsIndex } from './chats-index.js';
+import { initRemoteDesktops, attachChatDestinations, mountMachineHistory, renderRemoteRun, renderRemoteDocument, forgetRemoteDocument, openRemoteChat, renameRemoteChat, mountRemoteSchedules } from './remote-desktops.js';
+import { initChatsIndex, renderChatsIndex, recentChats, attentionChats, reconcileIndexedChat, openIndexedChat, loadChatsIndex } from './chats-index.js';
 import { initEngineRoom, engineSections, renderEngineRoom } from './engine-room.js';
-import { initTeamTools, renderTeamTools, teamState, restoreTeamState, leaveTeamTools, ownsTeamBrowser, syncTeamBrowsers, teamBrowserBounds, selectTeamBrowser, forgetTeamBrowser } from './team-tools.js';
+import { initTeamTools, renderTeamTools, teamState, restoreTeamState, leaveTeamTools, ownsTeamBrowser, syncTeamBrowsers, teamBrowserBounds, selectTeamBrowser, forgetTeamBrowser, closeTeamTabById } from './team-tools.js';
 import { initBrowserOverview, showBrowserOverview, isBrowserOverviewOpen } from './browser-overview.js';
 import { browserTarget, renderBrowserHome } from './browser-home.js';
+import { browserAddress, updateAgentAccess, bindBrowserHistoryButton, browserSurfaceIdentity, browserSurfaceRevision, selectBrowserSurface } from './browser-toolbar.js';
+import { bindBrowserAddressMenu } from './browser-address-menu.js';
+import { bindTabEdges, bindTabReorder, reorderById } from './tab-interactions.js';
+import { rememberView, restoreView } from './view-position.js';
+import { showContextMenu, copyContextText } from './context-menu.js';
 import { requestPresentation, mountStructured } from './tool-presentation.js';
 import { conversation, forgetConversation } from './conversation.js';
 import { mountAttachmentPicker, selectedAttachments, clearAttachments, prepareLocalAttachments } from './chat-attachments.js';
@@ -25,15 +32,19 @@ const runUsageNote=run=>run.usage?.observed?'Observed provider usage.':run.sched
 const badge = status => `<span class="badge ${escape(status)}">${escape(friendly(status))}</span>`;
 const time = (value, timezone) => value && !Number.isNaN(Date.parse(value)) ? new Date(value).toLocaleString(undefined, { timeZone: timezone || state.data?.settings?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone, year:'numeric', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }) : 'Time unavailable';
 let toastTimer, usageValue = null, usageBusy = false, appearanceBusy = false;
-let previousFeature='', tabScrollLeft=0, sidebarMinimized=localStorage.getItem('proteus.sidebar.minimized')==='true';
+let previousFeature='', tabScrollLeft=0, cleanupMainEdges, cleanupChatEdges, sidebarMinimized=localStorage.getItem('proteus.sidebar.minimized')==='true';
 document.body.classList.toggle('sidebar-minimized',sidebarMinimized);
 let workspaceReady=false, workspaceRestoring=false, workspaceClosing=false, lastWorkspace='';
+const selectedChildren=new Map();
+function reorderVisibleTabs(source,target,after,parentId=null){const visible=state.tabs.filter(tab=>parentId?tab.parentId===parentId:!tab.parentId&&!['overview','omi','life','team','engine','home','standup'].includes(tab.type));if(!visible.some(tab=>tab.id===source)||!visible.some(tab=>tab.id===target))return;const ordered=visible.slice();if(!reorderById(ordered,source,target,after))return;const positions=state.tabs.map((tab,index)=>visible.includes(tab)?index:-1).filter(index=>index>=0);positions.forEach((position,index)=>state.tabs[position]=ordered[index]);saveWorkspace();if(parentId)renderChatSubtabs();else renderTabs();}
 const syncMessageContext=()=>setMessageActionsContext(JSON.stringify([state.data?.life?.identity?.accountId||'',state.data?.life?.identity?.workspaceId||'',state.data?.life?.identity?.origin||'',state.data?.life?.identity?.sessionId||'',state.tab,state.tabs.find(t=>t.id===state.tab)?.hostId||'local']));
 const lifeVisible = () => state.data?.life?.enabled === true;
+let applyingContentTabs=false, contentSyncTimer;
 function saveWorkspace() {
   if(!workspaceReady || workspaceRestoring || workspaceClosing)return;
+  if(!applyingContentTabs){clearTimeout(contentSyncTimer);contentSyncTimer=setTimeout(()=>void contentTabSync.all(),100);}
   const team=teamState();
-  const session={schemaVersion:1,active:state.tab,page:state.page,engineSection:state.engineSection,team:{...team,tabs:team.tabs.map(tab=>({id:tab.id,type:tab.type||'browser',...(tab.browserId?{browserId:tab.browserId,url:tab.url||'',title:tab.title||'',lastTouchedAt:tab.lastTouchedAt}:{}),...(tab.type==='terminal'?{label:tab.label,terminal:tab.terminal}:{}),...(tab.type==='markdown'?{label:tab.label,file:tab.file||tab.markdown?.file}:{})}))},tabs:state.tabs.map(tab=>({id:tab.id,type:tab.type,label:tab.label,...(tab.parentId?{parentId:tab.parentId}:{}),...(tab.type==='browser'?{url:tab.info?.url||'',history:tab.info?.history,unloaded:tab.info?.loaded===false,lastTouchedAt:tab.info?.lastTouchedAt}:{}),...(tab.type==='markdown'?{file:tab.markdown?.file}:{}),...(tab.type==='terminal'?{terminal:tab.terminal}:{}),...(['remote-run','remote-document'].includes(tab.type)?{hostId:tab.hostId,runId:tab.runId}:{}),...(tab.type==='remote-document'?{documentId:tab.documentId,mediaType:tab.mediaType}:{})}))};
+  const session={schemaVersion:1,active:state.tab,page:state.page,engineSection:state.engineSection,selectedChildren:Object.fromEntries(selectedChildren),team:{...team,tabs:team.tabs.map(tab=>({id:tab.id,type:tab.type||'browser',contentTabId:tab.contentTabId,customTitle:tab.customTitle,...(tab.browserId?{browserId:tab.browserId,url:tab.url||'',title:tab.title||'',favicon:tab.favicon,lastTouchedAt:tab.lastTouchedAt}:{}),...(tab.type==='terminal'?{label:tab.label,terminal:tab.terminal}:{}),...(tab.type==='markdown'?{label:tab.label,file:tab.file||tab.markdown?.file}:{})}))},tabs:state.tabs.map(tab=>({id:tab.id,type:tab.type,label:tab.label,contentTabId:tab.contentTabId,customTitle:tab.customTitle,...(tab.parentId?{parentId:tab.parentId}:{}),...(tab.type==='browser'?{url:tab.info?.url||'',history:tab.info?.history,unloaded:tab.info?.loaded===false,favicon:tab.info?.favicon,lastTouchedAt:tab.info?.lastTouchedAt}:{}),...(tab.type==='markdown'?{file:tab.markdown?.file}:{}),...(tab.type==='terminal'?{terminal:tab.terminal}:{}),...(['remote-run','remote-document'].includes(tab.type)?{hostId:tab.hostId,runId:tab.runId}:{}),...(tab.type==='remote-document'?{documentId:tab.documentId,mediaType:tab.mediaType}:{})}))};
   const json=JSON.stringify(session);if(json===lastWorkspace)return;lastWorkspace=json;
   if(window.desktop?.workspaceSession)window.desktop.workspaceSession({action:'save',session}).catch(error=>{lastWorkspace='';toast(error.message);});
   else try{localStorage.setItem('proteus.workspace',json);}catch{}
@@ -61,14 +72,14 @@ async function restoreWorkspace() {
       if(tab.type==='browser') {
         if(!window.desktop)continue;
         // A renderer reload reuses the live view; an app restart creates a private tab.
-        const previous=tab.id;let info=existingBrowser.find(info=>info.id===tab.id);
-        if(!info){info=await window.desktop.browser({action:'create',restore:true,unloaded:true,url:tab.url,history:tab.history,lastTouchedAt:tab.lastTouchedAt});tab.info=info;tab.id=info.id;tabs.push(tab);if(saved.active===previous)saved.active=tab.id;continue;}
+        const previous=tab.id;tab.contentTabId??=previous;let info=existingBrowser.find(info=>info.id===tab.id);
+        if(!info){info=await window.desktop.browser({action:'create',restore:true,unloaded:saved.active!==previous,url:tab.url,history:tab.history,favicon:tab.favicon,lastTouchedAt:tab.lastTouchedAt});tab.info=info;tab.id=info.id;tabs.push(tab);if(saved.active===previous)saved.active=tab.id;continue;}
         tab.info=info;
       }
       if(!tabs.some(other=>other.id===tab.id))tabs.push(tab);
     }
-    state.tabs=tabs.length?tabs.filter(tab=>!tab.parentId||tabs.some(parent=>parent.id===tab.parentId&&['run','remote-run'].includes(parent.type))):state.tabs;state.page='home';state.engineSection=saved.engineSection||'resources';restoreTeamState(saved.team,existingBrowser);state.tab='overview';
-    for(const info of existingBrowser.filter(item=>item.loaded!==false))try{await window.desktop.browser({action:'unload',id:info.id});info.loaded=false;}catch{/* Protected audible, agent-owned or downloading views retain their work. */}
+    selectedChildren.clear();for(const [parent,child] of Object.entries(saved.selectedChildren||{}))selectedChildren.set(parent,child);state.tabs=tabs.length?tabs.filter(tab=>!tab.parentId||tabs.some(parent=>parent.id===tab.parentId&&['run','remote-run'].includes(parent.type))):state.tabs;state.page=saved.page||'home';state.engineSection=saved.engineSection||'resources';restoreTeamState(saved.team,existingBrowser);state.tab=state.tabs.some(tab=>tab.id===saved.active)?saved.active:'overview';
+    for(const info of existingBrowser.filter(item=>item.loaded!==false&&item.id!==state.tab))try{await window.desktop.browser({action:'unload',id:info.id});info.loaded=false;}catch{/* Protected audible, agent-owned or downloading views retain their work. */}
   } catch(error) {toast(error.message);return;}
   finally {workspaceRestoring=false;}
   workspaceReady=true;render();saveWorkspace();
@@ -137,13 +148,13 @@ async function api(url, data) {
 async function refresh(force = false) {
   if (!force && window.getSelection()?.isCollapsed === false) return;
   const data = await api('/api/state'); const signature = JSON.stringify(data);
-  state.data = data;syncMessageContext();
+  state.data = data;syncMessageContext();if(workspaceReady)void contentTabSync.all();
   if (force || signature !== state.signature || $('#main').dataset.deferredControls) {
     state.signature = signature;
     const tab=state.tabs.find(t=>t.id===state.tab);
     if(tab?.type==='run' && $('#main').dataset.runId===tab.id && $('#conversation-host')) {
       renderRun(tab.id);
-      for(const [page,count] of [['runs',recentChats(data.runs).length],['attention',recentChats(data.runs).filter(r=>r.attentionRequired===true||(r.attentionRequired===undefined&&['awaiting_input','failed','interrupted'].includes(r.status))).length]]) {
+      for(const [page,count] of [['runs',recentChats(data.runs).length],['attention',attentionChats(data.runs).length]]) {
         const node=$(`[data-page="${page}"] .count`);if(node)node.textContent=count;
       }
     } else if(tab?.type==='browser' && $('#browser-form')) {renderTabs();updateBrowserControls();requestAnimationFrame(browserBounds);}
@@ -155,7 +166,7 @@ function openTab(tab) {
   const existing = state.tabs.find(item => item.id === tab.id);
   if (!existing) state.tabs.push(tab);
   else if (tab.type === 'markdown' || tab.parentId) Object.assign(existing, tab);
-  state.tab = tab.id; state.selected = tab.id; render();
+  const remembered=!tab.parentId&&['run','remote-run'].includes(tab.type)?selectedChildren.get(tab.id):null;state.tab=remembered&&state.tabs.some(child=>child.id===remembered&&child.parentId===tab.id)?remembered:tab.id; if(tab.parentId)selectedChildren.set(tab.parentId,tab.id);state.selected = state.tab; render();
 }
 async function schedule(id) {
   try { state.data = await api('/api/state'); } catch (error) { toast(error.message); return; }
@@ -164,6 +175,16 @@ async function schedule(id) {
   openTab({ id, label:value.name, type:'schedule' });
 }
 function runTab(run) { state.page = 'runs'; openTab({ id:run.id, label:run.title, type:'run' }); }
+function revokeHostContent(hostId){
+  contentTabSync.forgetHost(hostId);
+  const parents=new Set(state.tabs.filter(tab=>tab.type==='remote-run'&&tab.hostId===hostId).map(tab=>tab.id));
+  const removed=state.tabs.filter(tab=>(tab.type==='remote-run'&&tab.hostId===hostId)||(tab.type==='remote-document'&&tab.hostId===hostId)||(tab.type==='browser'&&parents.has(tab.parentId)));
+  for(const tab of state.tabs){if(parents.has(tab.parentId)&&!removed.includes(tab))delete tab.parentId;}
+  state.tabs=state.tabs.filter(tab=>!removed.includes(tab));for(const parent of parents)selectedChildren.delete(parent);
+  if(removed.some(tab=>tab.id===state.tab)){state.tab='overview';state.page='runs';}
+  for(const tab of removed){if(tab.type==='remote-document')forgetRemoteDocument(tab.id);if(tab.type==='browser')void window.desktop.browser({action:'close',id:tab.id}).catch(()=>{});}
+  saveWorkspace();render();
+}
 function reconcileDeletedChat(row){
   const parent=row.local||row.hostId==='local'?row.chatId:'peer:'+row.hostId+':'+row.chatId;
   const removed=new Set([parent]);
@@ -181,7 +202,7 @@ function reviewLocalFailure(run){
   if(!['failed','interrupted'].includes(run.status)||run.failureReviewedAt||$('#main')?.dataset.runId!==run.id)return;
   const expectedFailureEventAt=run.failureEventAt||run.updatedAt,key=run.id+':'+expectedFailureEventAt;
   if(reviewingFailures.has(key))return;reviewingFailures.add(key);
-  void api('/api/chat-attention',{action:'review',id:run.id,expectedFailureEventAt}).then(()=>refresh(true)).catch(error=>toast(error.message)).finally(()=>reviewingFailures.delete(key));
+  void api('/api/chat-attention',{action:'review',id:run.id,expectedFailureEventAt}).then(response=>{reconcileIndexedChat({...recentChats(state.data.runs).find(row=>row.local&&row.chatId===run.id),...response});return refresh(true);}).catch(error=>toast(error.message)).finally(()=>reviewingFailures.delete(key));
 }
 function navigate(page, section) {
   const previous=state.tabs.find(tab=>tab.id===state.tab);
@@ -193,18 +214,20 @@ function navigate(page, section) {
 }
 function render() {
   const data = state.data; if (!data) return;
+  const outgoingBrowserRevision=browserSurfaceRevision();selectBrowserSurface();
+  const main=$('#main');rememberView(main,main.dataset.viewKey);const nextViewKey=state.tab==='overview'?'page:'+state.page:'tab:'+state.tab;main.dataset.viewKey=nextViewKey;
   restoreFeatureTabs();syncMessageContext();
-  const activeTab=state.tabs.find(tab=>tab.id===state.tab);
+  const activeTab=state.tabs.find(tab=>tab.id===state.tab);if(activeTab?.parentId)selectedChildren.set(activeTab.parentId,activeTab.id);
   const parentTab=activeTab?.parentId?state.tabs.find(tab=>tab.id===activeTab.parentId):null;
   const activePage=['omi','life','team'].includes(activeTab?.type)?activeTab.type:['run','remote-run'].includes(activeTab?.type)||parentTab?'runs':activeTab?.type==='schedule'?'schedules':state.page;
-  const waiting = recentChats(data.runs).filter(r => r.attentionRequired===true||(r.attentionRequired===undefined&&['awaiting_input','failed','interrupted'].includes(r.status))).length;
+  const waiting = attentionChats(data.runs).length;
   const nav=[['home','⌂','Home',''],['schedules','◷','Schedules',data.schedules.length],['runs',pairedBubbles,'Chats',recentChats(data.runs).length],['attention','!','Needs attention',waiting],['omi','<svg class="transcription-nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M2 10v4M6 7v10M10 3v18M14 8v8M18 5v14M22 10v4"/></svg>','Transcription',''],...(lifeVisible()?[['life','♡','Life','']]:[]),['team','☷','Team Tools',''],['context','▦','Workspaces',''],['engine','⚙','Engine Room','']];
   const children=id=>id==='runs'?recentChats(data.runs).slice(0,5).map((row,i)=>`<button class="navchild" data-recent-chat="${i}" title="${escape(row.title||'Chat')}"><span>${escape(row.title||'Chat')}</span><small>${escape(row.destinationName||'This Mac')}</small></button>`).join('')+'<button class="navchild" data-page="runs">More</button>':id==='life'?['Overview','Nutrition','Garage','Fuel & mileage','Capture inbox','New capture','Account & security','Connections'].map((name,i)=>`<button class="navchild" data-life-section="${['overview','nutrition','garage','fuel','inbox','capture','security','connections'][i]}">${escape(name)}</button>`).join(''):id==='engine'?engineSections().map(([key,label])=>`<button class="navchild ${state.engineSection===key?'active':''}" data-engine-section="${key}">${escape(label)}</button>`).join(''):id==='team'?'<button class="navchild" data-team-section="overview">Overview</button><button class="navchild" data-team-section="standup">Standup</button>':' ';
   $('#sidebar').innerHTML = `<div class="brand"><span class="brandmark">⤨</span><span class="brand-text">Proteus</span><button id="sidebar-toggle" class="subtle" aria-label="Collapse sidebar" title="Collapse sidebar">‹</button></div><nav aria-label="Features">${nav.map(([id,icon,label,count])=>`<button class="navitem ${activePage===id?'active':''}" data-page="${id}"><span><span class="nav-icon">${icon}</span><span class="navlabel">${label}</span></span>${count!==''?`<span class="count">${count}</span>`:''}</button>${activePage===id?`<div class="navchildren">${children(id)}</div>`:''}`).join('')}</nav><div class="sidebottom"><section id="provider-usage" aria-label="Provider allowance remaining"></section><div><span class="dot"></span>Local runner online</div><p>Prototype · v${data.version}<br>${data.scheduler.background ? 'Keeps running in the menu bar.' : 'Runs while the host is running.'}</p><button class="subtle" id="data-folder">Open data folder ↗</button></div>`;
   renderUsage();
   renderTabs();
   saveWorkspace();
-  if(previousFeature==='team'&&activePage!=='team')void leaveTeamTools().catch(error=>toast(error.message));
+  if(previousFeature==='team'&&activePage!=='team')void leaveTeamTools(outgoingBrowserRevision).catch(error=>toast(error.message));
   previousFeature=activePage;
   $('#main').classList.remove('browser-main', 'run-main', 'team-main');
   const tab = state.tabs.find(t => t.id === state.tab);
@@ -232,7 +255,7 @@ function render() {
   else if (state.page === 'omi') renderOmi();
   else if (state.page === 'life') renderLife();
   else renderOverview();
-  if(tab?.type!=='remote-run')renderChatSubtabs();
+  if(tab?.type!=='remote-run'&&tab?.type!=='browser')renderChatSubtabs();
   document.querySelectorAll('[data-page]').forEach(button => button.onclick = () => navigate(button.dataset.page));
   document.querySelectorAll('[data-engine-section]').forEach(button=>button.onclick=()=>navigate('engine',button.dataset.engineSection));
   document.querySelectorAll('[data-team-section]').forEach(button=>button.onclick=()=>{teamState().active=button.dataset.teamSection;openFeatureTab('team');});
@@ -240,7 +263,7 @@ function render() {
   document.querySelectorAll('[data-recent-chat]').forEach(button=>button.onclick=()=>openIndexedChat(recentChats(data.runs)[Number(button.dataset.recentChat)]));
   $('#sidebar-toggle').textContent=sidebarMinimized?'›':'‹';$('#sidebar-toggle').setAttribute('aria-label',sidebarMinimized?'Expand sidebar':'Collapse sidebar');$('#sidebar-toggle').onclick=()=>{sidebarMinimized=!sidebarMinimized;document.body.classList.toggle('sidebar-minimized',sidebarMinimized);localStorage.setItem('proteus.sidebar.minimized',String(sidebarMinimized));render();requestAnimationFrame(browserBounds);};
   $('#data-folder').onclick = () => window.desktop ? window.desktop.openPath(data.home) : toast(data.home);
-  if (tab?.type!=='browser'&&activePage!=='team') window.desktop?.browser({action:'hide'}).catch(e=>toast(e.message));
+  if (tab?.type!=='browser'&&activePage!=='team') window.desktop?.browser({action:'hide',...browserSurfaceIdentity()}).catch(e=>toast(e.message));
 }
 async function renderHome() {
   const main=$('#main');main.innerHTML='<p class="note">Loading Home…</p>';
@@ -314,12 +337,12 @@ function updateConversation(run) {
 }
 function renderNativeRun(run) {
   $('#main').classList.remove('run-main');
-  $('#main').innerHTML=`<div class="heading"><div><div class="eyebrow">Omi / Native processing</div><h1>${escape(run.title)}</h1><p class="muted">${escape(time(run.createdAt))}</p></div><div class="actions">${badge(run.status)}${['queued','running'].includes(run.status)?'<button class="danger" id="native-cancel">Stop process</button>':''}</div></div><section class="card"><h2>Processing activity</h2><p class="note">Process completion is separate from successful transcription or filing. The worker retains its own outcomes, claims and recovery state.</p>${run.events.map(event=>`<article class="message system"><span class="note">${escape(time(event.at))}</span><pre>${escape(event.text)}</pre></article>`).join('')}</section>`;
+  replaceChatContent(`<div class="heading"><div><div class="eyebrow">Omi / Native processing</div><h1>${escape(run.title)}</h1><p class="muted">${escape(time(run.createdAt))}</p></div><div class="actions">${badge(run.status)}${['queued','running'].includes(run.status)?'<button class="danger" id="native-cancel">Stop process</button>':''}</div></div><section class="card"><h2>Processing activity</h2><p class="note">Process completion is separate from successful transcription or filing. The worker retains its own outcomes, claims and recovery state.</p>${run.events.map(event=>`<article class="message system"><span class="note">${escape(time(event.at))}</span><pre>${escape(event.text)}</pre></article>`).join('')}</section>`);
   $('#native-cancel')?.addEventListener('click',async()=>{try{await api(`/api/runs/${run.id}/cancel`,{});await refresh(true);}catch(error){toast(error.message);}});
 }
 function renderRun(id) {
   const nativeRun=state.data.runs.find(run=>run.id===id && run.schedule.provider==='local-process');
-  if(nativeRun)return renderNativeRun(nativeRun);
+  if(nativeRun){renderNativeRun(nativeRun);renderChatSubtabs();return;}
   $('#main').classList.add('run-main');
   $('#main').classList.toggle('show-chat-details', !!state.showChatDetails);
   state.detailScroll ??= {};
@@ -347,19 +370,21 @@ function renderRun(id) {
   const composerFocus=document.activeElement?.id==='followup';const cursor=$('#followup')?.selectionStart;
   state.chatDrafts ??= {};state.chatModelDrafts ??= {};
   const modelDraft = state.chatModelDrafts[id] || run.nextModelOptions || run.schedule;
-  $('#main').innerHTML=`<div class="heading"><div><div class="eyebrow">${escape(run.schedule.provider)} / ${run.id.slice(0,8)}</div><h1>${escape(run.title)}</h1><div class="muted">${time(run.createdAt)} · ${escape(run.schedule.model || (run.schedule.provider==='rehearsal'?'Local rehearsal, no AI calls':'Provider default model'))}</div></div><div class="actions"><button id="toggle-chat-details">${state.showChatDetails?'Chat':'Details'}</button><button id="chat-archive">${run.archivedAt?'Unarchive':'Archive'}</button><button id="chat-delete" class="danger">Delete</button>${badge(run.status)}</div></div><div class="grid chat-grid"><section class="card chat-pane"><div id="conversation-host"></div>${pending?`<div class="pending"><div class="eyebrow">Your input is needed</div><p>${escape(pending.question)}</p>${pending.details?`<div id="request-summary"></div><details class="raw-details"><summary>Raw request</summary><pre>${escape(JSON.stringify(pending.details,null,2))}</pre></details>`:''}${pending.type==='permission'?'<div class="actions"><button id="deny">Deny</button><button class="primary" id="approve">Approve once</button></div>'+permissionChoices(pending):`<textarea id="answer" placeholder="Add your feedback…" rows="2"></textarea><div class="actions"><button class="primary" id="reply">Send feedback</button></div>`}</div>`:run.status==='running'?'<p class="note" role="status"><span class="spinner" aria-hidden="true"></span>Working… you can queue a message or steer this turn.</p>':''}<div class="composer"><textarea id="followup" placeholder="${active?'Add an update while this runs…':'Continue this conversation…'}" rows="2">${escape(state.chatDrafts[id]||'')}</textarea><div class="composer-footer"><div class="composer-models" ${run.schedule.provider==='rehearsal'?'hidden':''}><input type="hidden" id="run-provider" value="${escape(run.schedule.provider)}">${modelPicker('run-model',modelDraft.model,run.schedule.provider)}${modelControls('run-model',modelDraft,true)}<button class="subtle" id="run-model-refresh" aria-label="Refresh model choices" title="Refresh model choices">↻</button></div><div id="run-attachments"></div><div class="composer-actions">${active?`<button id="steer" title="Send into the running turn using its current model settings" ${run.status!=='running'?'disabled':''}>Steer</button>`:''}<button class="primary" id="continue" title="${active?'Send after the current turn finishes':'Send message'}">${active?'Queue':'Send ↑'}</button>${['running','awaiting_input'].includes(run.status)?'<button class="danger" id="cancel" title="Stop the running turn">Stop</button>':''}</div></div>${run.queuedMessages?.length?`<p class="note">${run.queuedMessages.length} message(s) queued for after this turn.</p>${run.queuedMessages.map(m=>`<div class="queued-message"><span>${escape(m.prompt.slice(0,120))}</span><button data-remove-message="${escape(m.id)}" aria-label="Remove queued message">×</button></div>`).join('')}`:''}</div></section><div class="stack chat-details"><section class="card"><h2>Run details</h2>${permissionControls(run.permissionContext,{runId:run.id})}<p class="note"><span data-auto-approvals>${run.automaticApprovals || 0}</span> tool requests approved automatically. Approval details are retained in the run record.</p><p class="note">The original schedule and earlier context versions are retained when you refresh this chat.</p><div class="filepath">${[run.schedule.workspace.cwd,...run.schedule.workspace.additionalDirectories].map(escape).join('<br>')}</div><hr class="divider"><div class="usagegrid"><div class="usagebox"><span class="eyebrow">Input tokens</span><strong data-usage-input>${run.usage.observed?run.usage.inputTokens.toLocaleString():'—'}</strong></div><div class="usagebox"><span class="eyebrow">Output tokens</span><strong data-usage-output>${run.usage.observed?run.usage.outputTokens.toLocaleString():'—'}</strong></div></div><p class="note" data-usage-note>${runUsageNote(run)}</p><div class="note">${run.providerSessionId?'Provider session: '+escape(run.providerSessionId):'Session history saved locally.'}</div></section>${state.data.mcpStatusProviders?.includes(run.schedule.provider) ? `<section class="card"><h2>MCP connections</h2><p class="note">${state.data.mcpLoginProviders?.includes(run.schedule.provider)?'Inspect selected integrations and open supported sign-in on this Mac.':'Inspect the selected connections for this chat. Complete any required sign-in in the provider on this Mac.'}</p><button id="mcp-connections">Manage connections</button></section>` : ''}${sessionDetails(run)}<section class="card"><h2>Completion means a turn ended</h2><p class="note">Workflow completion still depends on its own validation and source coverage. A model finishing its response doesn’t certify external work.</p><details><summary>Schedule snapshot</summary><pre>${escape(JSON.stringify(run.schedule,null,2))}</pre></details></section></div></div>`;
+  replaceChatContent(`<div class="heading"><div><div class="eyebrow">${escape(run.schedule.provider)} / ${run.id.slice(0,8)}</div><div class="chat-title-line"><h1>${escape(run.title)}</h1><button id="chat-rename" class="chat-rename" type="button" aria-label="Rename chat" title="Rename chat">✎</button></div><div class="muted">${time(run.createdAt)} · ${escape(run.schedule.model || (run.schedule.provider==='rehearsal'?'Local rehearsal, no AI calls':'Provider default model'))}</div></div><div class="actions"><button id="toggle-chat-details">${state.showChatDetails?'Chat':'Details'}</button><button id="chat-archive" class="chat-secondary-action">${run.archivedAt?'Unarchive':'Archive'}</button><button id="chat-delete" class="chat-secondary-action danger">Delete</button>${badge(run.status)}</div></div><div class="grid chat-grid"><section class="card chat-pane"><div id="conversation-host"></div>${pending?`<div class="pending"><div class="eyebrow">Your input is needed</div><p>${escape(pending.question)}</p>${pending.details?`<div id="request-summary"></div><details class="raw-details"><summary>Raw request</summary><pre>${escape(JSON.stringify(pending.details,null,2))}</pre></details>`:''}${pending.type==='permission'?'<div class="actions"><button id="deny">Deny</button><button class="primary" id="approve">Approve once</button></div>'+permissionChoices(pending):`<textarea id="answer" placeholder="Add your feedback…" rows="2"></textarea><div class="actions"><button class="primary" id="reply">Send feedback</button></div>`}</div>`:run.status==='running'?'<p class="note" role="status"><span class="spinner" aria-hidden="true"></span>Working… you can queue a message or steer this turn.</p>':''}<div class="composer"><textarea id="followup" placeholder="${active?'Add an update while this runs…':'Continue this conversation…'}" rows="2">${escape(state.chatDrafts[id]||'')}</textarea><div class="composer-footer"><div id="run-attachments"></div><div class="composer-models" ${run.schedule.provider==='rehearsal'?'hidden':''}><input type="hidden" id="run-provider" value="${escape(run.schedule.provider)}">${modelPicker('run-model',modelDraft.model,run.schedule.provider)}${modelControls('run-model',modelDraft,true)}<button class="subtle" id="run-model-refresh" aria-label="Refresh model choices" title="Refresh model choices">↻</button></div><div class="composer-actions">${active?`<button id="steer" title="Send into the running turn using its current model settings" ${run.status!=='running'?'disabled':''}>Steer</button>`:''}<button class="primary" id="continue" title="${active?'Send after the current turn finishes':'Send message'}">${active?'Queue':'Send ↑'}</button>${['running','awaiting_input'].includes(run.status)?'<button class="danger" id="cancel" title="Stop the running turn">Stop</button>':''}</div></div>${run.queuedMessages?.length?`<p class="note">${run.queuedMessages.length} message(s) queued for after this turn.</p>${run.queuedMessages.map(m=>`<div class="queued-message"><span>${escape(m.prompt.slice(0,120))}</span><button data-remove-message="${escape(m.id)}" aria-label="Remove queued message">×</button></div>`).join('')}`:''}</div></section><div class="stack chat-details"><section class="card"><h2>Run details</h2>${permissionControls(run.permissionContext,{runId:run.id})}<p class="note"><span data-auto-approvals>${run.automaticApprovals || 0}</span> tool requests approved automatically. Approval details are retained in the run record.</p><p class="note">The original schedule and earlier context versions are retained when you refresh this chat.</p><div class="filepath">${[run.schedule.workspace.cwd,...run.schedule.workspace.additionalDirectories].map(escape).join('<br>')}</div><hr class="divider"><div class="usagegrid"><div class="usagebox"><span class="eyebrow">Input tokens</span><strong data-usage-input>${run.usage.observed?run.usage.inputTokens.toLocaleString():'—'}</strong></div><div class="usagebox"><span class="eyebrow">Output tokens</span><strong data-usage-output>${run.usage.observed?run.usage.outputTokens.toLocaleString():'—'}</strong></div></div><p class="note" data-usage-note>${runUsageNote(run)}</p><div class="note">${run.providerSessionId?'Provider session: '+escape(run.providerSessionId):'Session history saved locally.'}</div></section>${state.data.mcpStatusProviders?.includes(run.schedule.provider) ? `<section class="card"><h2>MCP connections</h2><p class="note">${state.data.mcpLoginProviders?.includes(run.schedule.provider)?'Inspect selected integrations and open supported sign-in on this Mac.':'Inspect the selected connections for this chat. Complete any required sign-in in the provider on this Mac.'}</p><button id="mcp-connections">Manage connections</button></section>` : ''}${sessionDetails(run)}<section class="card"><h2>Completion means a turn ended</h2><p class="note">Workflow completion still depends on its own validation and source coverage. A model finishing its response doesn’t certify external work.</p><details><summary>Schedule snapshot</summary><pre>${escape(JSON.stringify(run.schedule,null,2))}</pre></details></section></div></div>`);
+  renderChatSubtabs();
   updateConversation(run);
   reviewLocalFailure(run);
   main.querySelectorAll('.chat-details details').forEach(d=>{if(expanded.has(d.querySelector('summary')?.textContent))d.open=true;});
   const details = $('.chat-details'); details.dataset.runId = id; details.scrollTop = state.detailScroll[id] || 0;
   details.addEventListener('scroll', () => state.detailScroll[id] = details.scrollTop, { passive: true });
   $('#toggle-chat-details').onclick=()=>{state.showChatDetails=!state.showChatDetails;renderRun(id);};
+  $('#chat-rename').onclick=()=>renameChat({id:run.id,title:run.title,titleRevision:run.titleRevision,local:true});
   $('#chat-archive').onclick=async()=>{try{await api('/api/chat-lifecycle',{action:run.archivedAt?'unarchive':'archive',id,expectedUpdatedAt:run.updatedAt,expectedArchivedAt:run.archivedAt||null});await loadChatsIndex();await refresh(true);}catch(error){toast(error.message);}};
   $('#chat-delete').onclick=()=>showDialog(`<h2>Delete ${escape(run.title)}?</h2><p>This removes only the Proteus chat record. Generated files and the provider's original session remain untouched. Independent browser and terminal tabs stay open. Running or queued work must finish or be stopped first.</p><button id="close-dialog">Cancel</button><button id="dialog-submit" class="danger">Delete chat</button>`,async()=>{await api('/api/chat-lifecycle',{action:'delete',id,expectedUpdatedAt:run.updatedAt,expectedArchivedAt:run.archivedAt||null});reconcileDeletedChat({chatId:id,local:true});await loadChatsIndex();await refresh(true);});
   bindSessionDetails(run);
   $('#mcp-connections')?.addEventListener('click',()=>manageMcp(run));
   if($('#request-summary'))mountStructured($('#request-summary'),requestPresentation(pending.details));
-  const updateButtons=()=>{ const empty=!$('#followup').value.trim(); $('#continue').disabled=empty; if($('#steer'))$('#steer').disabled=empty || run.status!=='running'; };
+  const updateButtons=()=>{if(!$('#followup')||!$('#continue'))return;const empty=!$('#followup').value.trim(); $('#continue').disabled=empty; if($('#steer'))$('#steer').disabled=empty || run.status!=='running'; };
   $('#followup').oninput=()=>{state.chatDrafts[id]=$('#followup').value;updateButtons();}; updateButtons();
   const attachmentPicker=mountAttachmentPicker({key:'run:'+id,host:$('#run-attachments'),textarea:$('#followup'),provider:()=>run.schedule.provider,mediaTypes:state.data.attachmentMediaTypes||{},notify:toast,onChange:updateButtons});
   refreshModels('run-model','run-provider');
@@ -373,7 +398,7 @@ function renderRun(id) {
   $('#deny')?.addEventListener('click',()=>submit('reply',{answer:'deny',requestId:pending.id}));
   document.querySelectorAll('[data-permission-answer]').forEach(button=>button.onclick=()=>submit('reply',{answer:button.dataset.permissionAnswer,requestId:pending.id}));
   bindPermissionControls();
-  const sendMessage=async mode=>{const text=$('#followup').value;const modelOptions={model:$('#run-model').value,...modelSelection('run-model')};try{if(mode==='steer'&&selectedAttachments('run:'+id).length)throw new Error('Attachments must be queued as a new turn.');const messageId=crypto.randomUUID();const delivery=mode==='queue'?await prepareLocalAttachments({key:'run:'+id,providerId:run.schedule.provider,destination:'This Mac · '+run.title,chatId:id,messageId,mediaTypes:state.data.attachmentMediaTypes||{},post:api}):null;await api(`/api/runs/${id}/send`,{prompt:text,mode,messageId,...(delivery||{}),...(mode==='queue'&&run.schedule.provider!=='rehearsal'?{modelOptions}:{})});clearAttachments('run:'+id);state.chatDrafts[id]='';$('#followup').value='';updateButtons();if(mode==='queue')delete state.chatModelDrafts[id];await refresh(true);}catch(e){if(e.message!=='Attachment send cancelled.')toast(e.message);}};
+  const sendMessage=async mode=>{const text=$('#followup').value;const modelOptions={model:$('#run-model').value,...modelSelection('run-model')};try{if(mode==='steer'&&selectedAttachments('run:'+id).length)throw new Error('Attachments must be queued as a new turn.');const messageId=crypto.randomUUID();const delivery=mode==='queue'?await prepareLocalAttachments({key:'run:'+id,providerId:run.schedule.provider,destination:'This Mac · '+run.title,chatId:id,messageId,mediaTypes:state.data.attachmentMediaTypes||{},post:api}):null;await api(`/api/runs/${id}/send`,{prompt:text,mode,messageId,...(delivery||{}),...(mode==='queue'&&run.schedule.provider!=='rehearsal'?{modelOptions}:{})});clearAttachments('run:'+id);state.chatDrafts[id]='';if($('#main').dataset.runId===id&&$('#followup'))$('#followup').value='';updateButtons();if(mode==='queue')delete state.chatModelDrafts[id];await refresh(true);}catch(e){if(e.message!=='Attachment send cancelled.')toast(e.message);}};
   $('#continue').onclick=()=>sendMessage('queue');
   $('#steer')?.addEventListener('click',()=>sendMessage('steer'));
   document.querySelectorAll('[data-remove-message]').forEach(button=>button.onclick=()=>submit('remove-queued',{messageId:button.dataset.removeMessage}));
@@ -436,13 +461,24 @@ async function manageMcp(run) {
   $('#dialog-submit').onclick=load;await load();timer=setTimeout(poll,5000);
 }
 function showDialog(html, submit) {
+  void window.desktop?.browser({action:'overlay',token:'renderer-overlays',visible:true});
   $('#dialog').innerHTML=html;$('#dialog').showModal();$('#close-dialog').onclick=()=>$('#dialog').close();if($('#dialog-submit'))$('#dialog-submit').onclick=async()=>{try{await submit();$('#dialog').close();await refresh(true);}catch(e){toast(e.message);}};
+}
+function renameChat(row){
+  showDialog(`<h2>Rename chat</h2><label for="rename-chat-title">Chat name</label><input id="rename-chat-title" maxlength="200" value="${escape(row.title||'')}"><div class="actions"><button id="close-dialog">Cancel</button><button class="primary" id="dialog-submit">Save name</button></div>`,async()=>{
+    const title=$('#rename-chat-title').value.trim();if(!title)throw new Error('Enter a chat name.');
+    const result=row.local||!row.hostId||row.hostId==='local'?await api('/api/chat-title',{id:row.chatId||row.id,title,expectedTitleRevision:row.titleRevision}):await renameRemoteChat(row.hostId,row.chatId||row.id,title,row.titleRevision);
+    const id=row.local||!row.hostId||row.hostId==='local'?row.chatId||row.id:'peer:'+row.hostId+':'+(row.chatId||row.id);
+    const tab=state.tabs.find(item=>item.id===id);if(tab)tab.label=tab.type==='remote-run'?result.title+' · '+(tab.hostLabel||'Paired Mac'):result.title;
+    await loadChatsIndex();saveWorkspace();renderTabs();
+  });
+  $('#rename-chat-title').focus();$('#rename-chat-title').select();
 }
 function chatDialog() {
   const defaults=state.data.settings; const context=state.data.context;
   const profile=context.workspaces.find(w=>w.id===context.defaultWorkspaceId);
-  showDialog(`<h2>Start a workspace chat</h2><div class="field"><label>Workspace</label><select id="chat-workspace">${context.workspaces.map(w=>`<option value="${escape(w.id)}" ${w.id===profile.id?'selected':''}>${escape(w.name)}</option>`).join('')}</select></div><div class="field"><label>Command starting folder</label><input id="chat-cwd" value="${escape(profile.cwd)}"></div><details><summary>Workspace folders</summary><textarea id="chat-roots" rows="3">${escape(profile.additionalDirectories.join('\n'))}</textarea></details><div class="row"><div><label>Provider</label><select id="chat-provider"><option value="copilot" ${defaults.provider==='copilot'?'selected':''}>Copilot</option><option value="codex" ${defaults.provider==='codex'?'selected':''}>Codex</option><option value="claude" ${defaults.provider==='claude'?'selected':''}>Claude</option><option value="rehearsal" ${defaults.provider==='rehearsal'?'selected':''}>Local rehearsal</option></select></div><div><label>Model</label>${modelPicker('chat-model',defaults.model,defaults.provider)}<button class="subtle" id="chat-model-refresh">↻ Refresh models</button></div></div>${modelControls('chat-model',defaults)}${contextPicker()}<div class="field"><label>Message</label><textarea id="chat-prompt" rows="4" placeholder="What would you like to work on?"></textarea></div><div class="actions"><button id="close-dialog">Cancel</button><div id="chat-attachments"></div><button class="primary" id="dialog-submit">Start chat</button></div>`,async()=>{
-    const messageId=crypto.randomUUID(),draftId=crypto.randomUUID(),providerId=$('#chat-provider').value;const delivery=await prepareLocalAttachments({key:'new-chat',providerId,destination:'This Mac · new chat',draftId,messageId,mediaTypes:state.data.attachmentMediaTypes||{},post:api});const run=await api('/api/chat',{workspaceId:$('#chat-workspace').value,workspace:{cwd:$('#chat-cwd').value,additionalDirectories:lines($('#chat-roots').value)},provider:providerId,model:$('#chat-model').value,...modelSelection('chat-model'),prompt:$('#chat-prompt').value,...contextSelection(),...(delivery||{})});clearAttachments('new-chat');await refresh();runTab(run);
+  showDialog(`<h2>Start a workspace chat</h2><div class="field"><label>Workspace</label><select id="chat-workspace">${context.workspaces.map(w=>`<option value="${escape(w.id)}" ${w.id===profile.id?'selected':''}>${escape(w.name)}</option>`).join('')}</select></div><div class="field"><label>Command starting folder</label><input id="chat-cwd" value="${escape(profile.cwd)}"></div><details><summary>Workspace folders</summary><textarea id="chat-roots" rows="3">${escape(profile.additionalDirectories.join('\n'))}</textarea></details><div class="row"><div><label>Provider</label><select id="chat-provider"><option value="copilot" ${defaults.provider==='copilot'?'selected':''}>Copilot</option><option value="codex" ${defaults.provider==='codex'?'selected':''}>Codex</option><option value="claude" ${defaults.provider==='claude'?'selected':''}>Claude</option><option value="rehearsal" ${defaults.provider==='rehearsal'?'selected':''}>Local rehearsal</option></select></div><div><label>Model</label>${modelPicker('chat-model',defaults.model,defaults.provider)}<button class="subtle" id="chat-model-refresh">↻ Refresh models</button></div></div>${modelControls('chat-model',defaults)}${contextPicker()}<div class="field"><label for="chat-title">Chat name (optional)</label><input id="chat-title" maxlength="200" placeholder="A name can be chosen automatically"></div><div class="field"><label>Message</label><textarea id="chat-prompt" rows="4" placeholder="What would you like to work on?"></textarea></div><div class="actions"><button id="close-dialog">Cancel</button><div id="chat-attachments"></div><button class="primary" id="dialog-submit">Start chat</button></div>`,async()=>{
+    const messageId=crypto.randomUUID(),draftId=crypto.randomUUID(),providerId=$('#chat-provider').value;const delivery=await prepareLocalAttachments({key:'new-chat',providerId,destination:'This Mac · new chat',draftId,messageId,mediaTypes:state.data.attachmentMediaTypes||{},post:api});const run=await api('/api/chat',{workspaceId:$('#chat-workspace').value,workspace:{cwd:$('#chat-cwd').value,additionalDirectories:lines($('#chat-roots').value)},provider:providerId,model:$('#chat-model').value,name:$('#chat-title').value.trim(),...modelSelection('chat-model'),prompt:$('#chat-prompt').value,...contextSelection(),...(delivery||{})});clearAttachments('new-chat');await refresh();runTab(run);
   });
   $('#chat-workspace').onchange=()=>{const workspace=context.workspaces.find(w=>w.id===$('#chat-workspace').value);$('#chat-cwd').value=workspace.cwd;$('#chat-roots').value=workspace.additionalDirectories.join('\n');};
   const newChatPicker=mountAttachmentPicker({key:'new-chat',host:$('#chat-attachments'),textarea:$('#chat-prompt'),provider:()=>$('#chat-provider').value,mediaTypes:state.data.attachmentMediaTypes||{},notify:toast});
@@ -490,6 +526,51 @@ async function openMessageLink(source, cwd) {
   } catch (error) { toast(error.message); }
 }
 
+function renameContentTab(tab){showDialog(`<h2>Rename tab</h2><label>Tab name<input id="content-tab-title" maxlength="200" value="${escape(tab.label||'')}"></label><button id="close-dialog">Cancel</button><button id="dialog-submit">Save name</button>`,async()=>{const title=$('#content-tab-title').value.trim();if(!title)throw new Error('Enter a tab name.');tab.customTitle=title;tab.label=title;saveWorkspace();renderChatSubtabs();});}
+const scopeParent=scope=>state.tabs.find(tab=>scope.hostId?tab.type==='remote-run'&&tab.hostId===scope.hostId&&tab.runId===scope.id:tab.type==='run'&&tab.id===scope.id);
+async function descriptorFor(tab,parent){
+  const title=tab.customTitle||tab.label||tab.title||'New tab',named=tab.customTitle?{customTitle:tab.customTitle}:{};
+  if(tab.type==='browser'&&syncableTabURL(tab.info?.url||tab.url||'')===null)return null;
+  if(tab.type==='browser')return {id:tab.contentTabId||tab.id,type:'browser',title,...named,url:tab.info?.url||tab.url||''};
+  if(tab.type==='remote-document')return {id:'document:'+tab.documentId,type:'document',title,...named,documentId:tab.documentId,mediaType:tab.mediaType||'text/markdown'};
+  if(tab.type==='markdown'&&parent?.type==='run'){const file=tab.markdown?.file||tab.file;if(!file)return null;const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(parent.id+'\0'+file));const documentId=[...new Uint8Array(digest)].map(byte=>byte.toString(16).padStart(2,'0')).join('');return {id:'document:'+documentId,type:'document',title,...named,documentId,mediaType:'text/markdown'};}
+  return null;
+}
+const contentTabSync=createTabSynchronizer({
+  scopes:()=>window.desktop?[...state.tabs.filter(tab=>['run','remote-run'].includes(tab.type)).map(tab=>({scope:'chat',id:tab.runId||tab.id,...(tab.hostId?{hostId:tab.hostId}:{})})),{scope:'team',id:'team'}]:[],
+  readLocal:async scope=>{if(scope.scope==='team')return teamState().tabs.filter(tab=>tab.browserId&&syncableTabURL(tab.url||'')!==null).map(tab=>({id:tab.contentTabId||tab.id,type:'browser',title:tab.customTitle||tab.title||'New tab',...(tab.customTitle?{customTitle:tab.customTitle}:{}),url:tab.url||''}));const parent=scopeParent(scope);if(!parent)return [];return (await Promise.all(state.tabs.filter(tab=>tab.parentId===parent.id).map(tab=>descriptorFor(tab,parent)))).filter(Boolean);},
+  request:(scope,action,args={})=>scope.hostId?window.desktop.peers({action:'request',hostId:scope.hostId,method:action==='get'?'tabs.get':'tabs.mutate',args:{scope:scope.scope,id:scope.id,...args}}):api('/api/content-tabs',{action,scope:scope.scope,id:scope.id,...args}),
+  apply:async(scope,descriptors,captured)=>{
+    const parent=scopeParent(scope);if(scope.scope==='chat'&&!parent)return;
+    applyingContentTabs=true;let changed=false;
+    try{
+      const list=scope.scope==='team'?teamState().tabs:state.tabs.filter(tab=>tab.parentId===parent.id);
+      const ids=new Set(descriptors.map(tab=>tab.id));
+      const descriptorId=async tab=>scope.scope==='team'?(tab.contentTabId||tab.id):(await descriptorFor(tab,parent))?.id;
+      const currentOrder=[];for(const tab of list){const id=await descriptorId(tab);if(id)currentOrder.push(id);}const orderChangedDuringRequest=currentOrder.join('\0')!==captured.map(tab=>tab.id).join('\0');
+      for(const tab of list.slice()){const id=await descriptorId(tab);if(!id||ids.has(id)||!captured.some(item=>item.id===id))continue;const currentDescriptor=scope.scope==='team'?{id:tab.contentTabId||tab.id,type:'browser',title:tab.customTitle||tab.title||'New tab',...(tab.customTitle?{customTitle:tab.customTitle}:{}),url:tab.url||''}:await descriptorFor(tab,parent);if(JSON.stringify(currentDescriptor)!==JSON.stringify(captured.find(item=>item.id===id)))continue;if(tab.type==='browser'||tab.browserId)await window.desktop.browser({action:'close',id:tab.browserId||tab.id});if(tab.type==='remote-document')forgetRemoteDocument(tab.id);if(scope.scope==='team'){teamState().tabs=teamState().tabs.filter(item=>item!==tab);if(teamState().active===tab.id)teamState().active='overview';}else{state.tabs=state.tabs.filter(item=>item!==tab);if(state.tab===tab.id)state.tab=parent.id;}changed=true;}
+      for(const descriptor of descriptors){let tab;for(const candidate of list){if(await descriptorId(candidate)===descriptor.id){tab=candidate;break;}}
+        if(!tab){if(descriptor.type==='browser'){const info=await window.desktop.browser({action:'create',group:scope.scope==='team'?'team':'main',restore:true,unloaded:true,url:descriptor.url,title:descriptor.title});if(scope.scope==='chat'&&!state.tabs.includes(parent)){await window.desktop.browser({action:'close',id:info.id});return;}tab=scope.scope==='team'?{id:'team:'+crypto.randomUUID(),type:'browser',browserId:info.id,url:info.url,title:descriptor.title,loaded:false}:{id:info.id,type:'browser',label:descriptor.title,parentId:parent.id,info};}
+          else if(scope.hostId)tab={id:'document:'+scope.hostId+':'+scope.id+':'+descriptor.documentId,type:'remote-document',parentId:parent.id,hostId:scope.hostId,runId:scope.id,documentId:descriptor.documentId,mediaType:descriptor.mediaType,label:descriptor.title};
+          else{const document=await api('/api/content-tabs',{action:'document',scope:'chat',id:scope.id,documentId:descriptor.documentId});if(!state.tabs.includes(parent))return;tab={id:'markdown:'+document.file,type:'markdown',parentId:parent.id,markdown:document,label:descriptor.title};}
+          tab.contentTabId=descriptor.id;tab.customTitle=descriptor.customTitle;if(scope.scope==='team')teamState().tabs.push(tab);else{const existing=state.tabs.find(item=>item.id===tab.id);if(existing){Object.assign(existing,tab);tab=existing;}else state.tabs.push(tab);}changed=true;
+        }
+        // Preserve edits made while the request was in flight; they are sent next.
+        const current=scope.scope==='team'?{id:tab.contentTabId||tab.id,type:'browser',title:tab.customTitle||tab.title||'New tab',...(tab.customTitle?{customTitle:tab.customTitle}:{}),url:tab.url||''}:await descriptorFor(tab,parent);
+        const initial=captured.find(item=>item.id===descriptor.id);
+        if(initial&&JSON.stringify(current)!==JSON.stringify(initial))continue;
+        if((tab.customTitle||tab.label||tab.title)!==descriptor.title||tab.customTitle!==descriptor.customTitle){tab.customTitle=descriptor.customTitle;if(scope.scope==='team')tab.title=descriptor.title;else tab.label=descriptor.title;changed=true;}
+        if(descriptor.type==='browser'&&(tab.info?.url||tab.url||'')!==descriptor.url){if(tab.loaded||tab.info?.loaded)await window.desktop.browser({action:'navigate',id:tab.browserId||tab.id,url:descriptor.url});if(tab.info)tab.info.url=descriptor.url;else tab.url=descriptor.url;changed=true;}
+      }
+      const full=scope.scope==='team'?teamState().tabs:state.tabs;
+      const relevant=[];for(const tab of full)if(scope.scope==='team'||tab.parentId===parent.id){const id=await descriptorId(tab);if(ids.has(id))relevant.push({tab,id});}
+      const ordered=descriptors.map(item=>relevant.find(entry=>entry.id===item.id)?.tab).filter(Boolean);const positions=full.map((tab,index)=>relevant.some(entry=>entry.tab===tab)?index:-1).filter(index=>index>=0);
+      if(!orderChangedDuringRequest&&positions.some((position,index)=>full[position]!==ordered[index])){positions.forEach((position,index)=>full[position]=ordered[index]);changed=true;}
+      if(changed){saveWorkspace();renderTabs();renderChatSubtabs();if(state.page==='team'&&state.tab==='overview')renderTeamTools();}
+    }finally{applyingContentTabs=false;}
+  },
+  onError:(error,scope,initialized)=>{if(initialized&&!/offline|closed|not paired|unavailable|not connected/i.test(error.message))toast(error.message);}
+});
 function selectedChatParent(){
   const selected=state.tabs.find(tab=>tab.id===state.tab);
   if(['run','remote-run'].includes(selected?.type))return selected;
@@ -503,26 +584,45 @@ async function closeChildTab(tab){
   if(state.tab===tab.id)state.tab=tab.parentId;
   saveWorkspace();render();
 }
+function replaceChatContent(html){const main=$('#main'),bar=$('#chat-subtabs');const template=document.createElement('template');template.innerHTML=html;for(const node of [...main.childNodes])if(node!==bar)node.remove();main.append(template.content);}
 function renderChatSubtabs(){
-  $('#chat-subtabs')?.remove();
-  const parent=selectedChatParent();if(!parent)return;
+  const parent=selectedChatParent();if(!parent){cleanupChatEdges?.();$('#chat-subtabs')?.remove();return;}
   const children=state.tabs.filter(tab=>tab.parentId===parent.id);
-  const bar=document.createElement('nav');bar.id='chat-subtabs';bar.setAttribute('aria-label','Chat tabs');
-  bar.innerHTML=`<div class="chat-subtab-list"><button class="${state.tab===parent.id?'selected':''}" data-chat-subtab="${escape(parent.id)}" title="${escape(parent.label)}">${escape(parent.label)}</button>${children.map(tab=>`<div class="chat-subtab ${state.tab===tab.id?'selected':''}"><button data-chat-subtab="${escape(tab.id)}" title="${escape(tab.label)}">${escape(tab.label)}</button><button data-chat-child-close="${escape(tab.id)}" aria-label="Close ${escape(tab.label)}">×</button></div>`).join('')}</div><details class="chat-tab-add"><summary aria-label="Add tab to chat" title="Add tab to chat">＋</summary><div class="chat-tab-add-options">${addTabMenuItems('chat')}</div></details>`;
+  const signature=JSON.stringify([parent.id,parent.label,state.tab,children.map(tab=>[tab.id,tab.label,tab.type,tab.info?.favicon,tab.info?.agentControlling])]);
+  if($('#chat-subtabs')?.dataset.signature===signature)return;
+  cleanupChatEdges?.();const previousScroll=$('#chat-subtabs .chat-subtab-list')?.scrollLeft||0;$('#chat-subtabs')?.remove();
+  const bar=document.createElement('nav');bar.id='chat-subtabs';bar.dataset.signature=signature;bar.setAttribute('aria-label','Chat tabs');
+  bar.innerHTML=`<div class="chat-subtab-list"><button class="${state.tab===parent.id?'selected':''}" data-chat-subtab="${escape(parent.id)}" title="${escape(parent.label)}">${pairedBubbles}<span>${escape(parent.label)}</span></button>${children.map(tab=>`<div class="chat-subtab ${state.tab===tab.id?'selected':''}"><button data-chat-subtab="${escape(tab.id)}" title="${escape(tab.label)}">${tab.type==='browser'?browserTabIcon(tab.info,escape):tab.type==='terminal'?'⌘':'▤'}<span>${escape(tab.label)}</span></button><button data-chat-child-close="${escape(tab.id)}" aria-label="Close ${escape(tab.label)}">×</button></div>`).join('')}</div><details class="chat-tab-add"><summary aria-label="Add tab to chat" title="Add tab to chat">＋</summary><div class="chat-tab-add-options">${addTabMenuItems('chat')}</div></details>`;
   $('#main').prepend(bar);
-  bar.querySelectorAll('[data-chat-subtab]').forEach(button=>button.onclick=()=>{const selected=state.tabs.find(tab=>tab.id===button.dataset.chatSubtab);if(!selected)return;state.tab=selected.id;if(selected.type==='browser')selectBrowserTab(selected.info);else render();});
+  bar.querySelectorAll('[data-chat-subtab]').forEach(button=>button.onclick=()=>{const selected=state.tabs.find(tab=>tab.id===button.dataset.chatSubtab);if(!selected)return;state.tab=selected.id;selectedChildren.set(parent.id,selected.id);if(selected.type==='browser')selectBrowserTab(selected.info);else render();});
+  const childList=bar.querySelector('.chat-subtab-list');childList.scrollLeft=previousScroll;cleanupChatEdges=bindTabEdges(childList);bindTabReorder(childList,'.chat-subtab',node=>node.querySelector('[data-chat-subtab]')?.dataset.chatSubtab,(source,target,after)=>reorderVisibleTabs(source,target,after,parent.id));
   bar.querySelectorAll('[data-chat-child-close]').forEach(button=>button.onclick=event=>{event.stopPropagation();const tab=state.tabs.find(item=>item.id===button.dataset.chatChildClose);if(tab)void closeChildTab(tab).catch(error=>toast(error.message));});
+  bar.querySelector('.chat-tab-add summary').onclick=event=>{if(state.tabs.find(tab=>tab.id===state.tab)?.type!=='browser')return;event.preventDefault();const rect=event.currentTarget.getBoundingClientRect();void window.desktop.browser({action:'popup-menu',items:[{id:'markdown',label:'Markdown file'},{id:'browser',label:'Browser'},{id:'terminal',label:'Terminal'}],x:rect.left,y:rect.bottom}).then(choice=>{if(choice)bar.querySelector('[data-chat-add="'+choice+'"]')?.click();}).catch(error=>toast(error.message));};
   bar.querySelectorAll('[data-chat-add]').forEach(button=>button.onclick=async()=>{bar.querySelector('details').open=false;try{if(button.dataset.chatAdd==='browser'){const info=await window.desktop.browser({action:'create'});openTab({id:info.id,type:'browser',label:info.title||'New tab',parentId:parent.id,info});}else if(button.dataset.chatAdd==='terminal')void openTerminalDialog(parent.id);else markdownDialog(parent.id);}catch(error){toast(error.message);}});
 }
 
+async function closeTopTab(id){
+  const children=state.tabs.filter(tab=>tab.parentId===id);
+  for(const child of children){if(child.type==='browser')await window.desktop.browser({action:'close',id:child.id});if(child.type==='terminal'){const current=await window.desktop.terminal({action:'state'});if(current.sessions.some(session=>session.id===child.terminal.id))await window.desktop.terminal({action:'close',id:child.terminal.id});disposeTerminalUi(child.id);}if(child.type==='remote-document')forgetRemoteDocument(child.id);}
+  const tab=state.tabs.find(item=>item.id===id);if(!tab)return;
+  if(tab.type==='browser')await window.desktop.browser({action:'close',id});
+  if(tab.type==='terminal'){const current=await window.desktop.terminal({action:'state'});if(current.sessions.some(session=>session.id===tab.terminal.id))await window.desktop.terminal({action:'close',id:tab.terminal.id});disposeTerminalUi(tab.id);}
+  forgetConversation(id);selectedChildren.delete(id);state.tabs=state.tabs.filter(item=>item.id!==id&&item.parentId!==id);
+  if(state.tab===id||children.some(child=>child.id===state.tab))state.tab='overview';saveWorkspace();render();
+}
+async function closeCurrentTab(){
+  const tab=state.tabs.find(item=>item.id===state.tab);if(!tab)return;
+  if(tab.parentId)await closeChildTab(tab);else if(!['overview','omi','life','team','engine','home','standup'].includes(tab.type))await closeTopTab(tab.id);
+}
 function renderTabs() {
-  tabScrollLeft=$('#tabs .tab-list')?.scrollLeft??tabScrollLeft;
-  $('#tabs').innerHTML='<button id="topbar-home" aria-label="Proteus Home" title="Proteus Home"><span class="brandmark" aria-hidden="true">⤨</span><strong>Proteus</strong></button><div class="tab-list">'+state.tabs.filter(tab=>!tab.parentId&&!['overview','omi','life','team','engine','home','standup'].includes(tab.type)).map(tab=>`<div data-tab-container="${escape(tab.id)}" class="tabitem ${state.tab===tab.id||state.tabs.find(active=>active.id===state.tab)?.parentId===tab.id?'selected':''}"><button data-tab="${escape(tab.id)}" title="${escape(tab.info?.url || tab.label)}">${tab.type==='browser' ? (tab.info?.loading?'◌':'◎') : (['run','remote-run'].includes(tab.type)||(tab.type==='overview'&&state.page==='runs'))?pairedBubbles:tab.type==='team'?'☷':tab.type==='engine'||(tab.type==='overview'&&state.page==='engine')?'⚙':tab.type==='markdown'?'▤':tab.type==='life'?'♡':tab.type==='terminal'?'⌘':'◷'} &nbsp;${escape(tab.label || 'New tab')}</button>${`<button class="tabclose" aria-label="Close ${escape(tab.label || 'tab')}" data-close="${escape(tab.id)}">×</button>`}</div>`).join('')+'</div><div class="tab-actions"><details id="tab-add-menu" class="tab-add-menu"><summary class="tab-create" aria-label="Add tab" title="Add tab">＋</summary><div class="tab-add-options">'+addTabMenuItems('main')+'</div></details></div>';
+  cleanupMainEdges?.();tabScrollLeft=$('#tabs .tab-list')?.scrollLeft??tabScrollLeft;
+  $('#tabs').innerHTML='<button id="topbar-home" aria-label="Proteus Home" title="Proteus Home"><span class="brandmark" aria-hidden="true">⤨</span><strong>Proteus</strong></button><div class="tab-list">'+state.tabs.filter(tab=>!tab.parentId&&!['overview','omi','life','team','engine','home','standup'].includes(tab.type)).map(tab=>`<div data-tab-container="${escape(tab.id)}" class="tabitem ${state.tab===tab.id||state.tabs.find(active=>active.id===state.tab)?.parentId===tab.id?'selected':''}"><button data-tab="${escape(tab.id)}" title="${escape(tab.info?.url || tab.label)}">${tab.type==='browser' ? browserTabIcon(tab.info,escape) : (['run','remote-run'].includes(tab.type)||(tab.type==='overview'&&state.page==='runs'))?pairedBubbles:tab.type==='team'?'☷':tab.type==='engine'||(tab.type==='overview'&&state.page==='engine')?'⚙':tab.type==='markdown'?'▤':tab.type==='life'?'♡':tab.type==='terminal'?'⌘':'◷'} &nbsp;${escape(tab.label || 'New tab')}</button>${`<button class="tabclose" aria-label="Close ${escape(tab.label || 'tab')}" data-close="${escape(tab.id)}">×</button>`}</div>`).join('')+'</div><div class="tab-actions"><details id="tab-add-menu" class="tab-add-menu"><summary class="tab-create" aria-label="Add tab" title="Add tab">＋</summary><div class="tab-add-options">'+addTabMenuItems('main')+'</div></details></div>';
   $('#topbar-home').onclick=()=>navigate('home');
-  const list=$('#tabs .tab-list');if(list){list.scrollLeft=tabScrollLeft;list.onscroll=()=>{tabScrollLeft=list.scrollLeft;};}
-  document.querySelectorAll('[data-tab-container]').forEach(item=>item.onclick=event=>{if(event.target.closest('[data-close]') || window.getSelection()?.isCollapsed===false)return;state.tab=item.dataset.tabContainer;const tab=state.tabs.find(t=>t.id===state.tab);if(tab.type==='schedule')schedule(tab.id);else if(tab.type==='browser')selectBrowserTab(tab.info);else render();});
-  document.querySelectorAll('[data-close]').forEach(button=>button.onclick=async event=>{event.stopPropagation();try{const id=button.dataset.close;const children=state.tabs.filter(tab=>tab.parentId===id);for(const child of children){if(child.type==='browser')await window.desktop.browser({action:'close',id:child.id});if(child.type==='terminal'){const current=await window.desktop.terminal({action:'state'});if(current.sessions.some(session=>session.id===child.terminal.id))await window.desktop.terminal({action:'close',id:child.terminal.id});disposeTerminalUi(child.id);}if(child.type==='remote-document')forgetRemoteDocument(child.id);}const tab=state.tabs.find(t=>t.id===id);if(tab?.type==='browser')await window.desktop.browser({action:'close',id});if(tab?.type==='terminal'){const current=await window.desktop.terminal({action:'state'});if(current.sessions.some(session=>session.id===tab.terminal.id))await window.desktop.terminal({action:'close',id:tab.terminal.id});disposeTerminalUi(tab.id);}forgetConversation(id);state.tabs=state.tabs.filter(t=>t.id!==id&&t.parentId!==id);if(state.tab===id||children.some(child=>child.id===state.tab))state.tab='overview';saveWorkspace();render();}catch(e){toast(e.message);}});
+  const list=$('#tabs .tab-list');if(list){list.scrollLeft=tabScrollLeft;list.onscroll=()=>{tabScrollLeft=list.scrollLeft;};cleanupMainEdges=bindTabEdges(list);bindTabReorder(list,'.tabitem',node=>node.dataset.tabContainer,(source,target,after)=>reorderVisibleTabs(source,target,after));}
+  document.querySelectorAll('[data-tab-container]').forEach(item=>item.onclick=event=>{if(event.target.closest('[data-close]') || window.getSelection()?.isCollapsed===false)return;state.tab=item.dataset.tabContainer;const remembered=selectedChildren.get(state.tab);if(remembered&&state.tabs.some(child=>child.id===remembered&&child.parentId===state.tab))state.tab=remembered;const tab=state.tabs.find(t=>t.id===state.tab);if(tab.type==='schedule')schedule(tab.id);else if(tab.type==='browser')selectBrowserTab(tab.info);else render();});
+  document.querySelectorAll('[data-close]').forEach(button=>button.onclick=event=>{event.stopPropagation();void closeTopTab(button.dataset.close).catch(error=>toast(error.message));});
   document.querySelectorAll('[data-tab-container]').forEach(item=>{const tab=state.tabs.find(t=>t.id===item.dataset.tabContainer);if(tab?.type==='browser')item.oncontextmenu=event=>{event.preventDefault();showDialog('<h2>Browser tab</h2><button id="unload-browser-tab">Unload tab</button><button id="close-dialog">Cancel</button>',()=>{});$('#unload-browser-tab').onclick=async()=>{try{await window.desktop.browser({action:'unload',id:tab.id});tab.info.loaded=false;$('#dialog').close();if(state.tab===tab.id)renderBrowser();}catch(error){toast(error.message);}};};});
+  const mainMenu=$('#tab-add-menu');mainMenu.querySelector('summary').onclick=event=>{if(state.tabs.find(tab=>tab.id===state.tab)?.type!=='browser')return;event.preventDefault();const rect=event.currentTarget.getBoundingClientRect();void window.desktop.browser({action:'popup-menu',items:[{id:'markdown',label:'Markdown file'},{id:'browser',label:'Browser'},{id:'terminal',label:'Terminal'},{id:'new-chat',label:'New chat'}],x:rect.left,y:rect.bottom}).then(choice=>{if(choice)mainMenu.querySelector('#'+choice)?.click();}).catch(error=>toast(error.message));};
   $('#new-chat').onclick=()=>{ $('#tab-add-menu').open=false;chatDialog(); };$('#markdown').onclick=()=>{ $('#tab-add-menu').open=false;markdownDialog(); };
   $('#terminal').onclick=()=>{ $('#tab-add-menu').open=false;openTerminalDialog(); };
   $('#browser').onclick=async()=>{ $('#tab-add-menu').open=false;try{if(!window.desktop)throw new Error('Open the desktop app to use browser tabs.');const info=await window.desktop.browser({action:'create'});openTab({id:info.id,type:'browser',label:info.title||'New tab',info});}catch(error){toast(error.message);}};
@@ -530,10 +630,14 @@ function renderTabs() {
 
 function browserBounds() {
   if(isBrowserOverviewOpen())return;
-  if(previousFeature==='team'){teamBrowserBounds();return;}
-  if($('#dialog').open){window.desktop?.browser({action:'hide'}).catch(e=>toast(e.message));return;}
-  const area=$('#browser-area');const tab=state.tabs.find(t=>t.id===state.tab);if(!area || tab?.type!=='browser'||!tab.info?.url||tab.info?.loaded===false)return;
-  const r=area.getBoundingClientRect();window.desktop?.browser({action:'show',id:tab.id,bounds:{x:r.x,y:r.y,width:r.width,height:r.height}}).catch(e=>toast(e.message));
+  if($('#dialog').open){window.desktop?.browser({action:'hide',...browserSurfaceIdentity()}).catch(e=>toast(e.message));return;}
+  const area=$('#browser-area'),tab=state.tabs.find(t=>t.id===state.tab);
+  if(area&&tab?.type==='browser'){
+    if(!tab.info?.url||tab.info?.loaded===false)return;
+    const r=area.getBoundingClientRect();selectBrowserSurface();window.desktop?.browser({action:'show',id:tab.id,bounds:{x:r.x,y:r.y,width:r.width,height:r.height},...browserSurfaceIdentity()}).catch(e=>toast(e.message));
+    return;
+  }
+  if(previousFeature==='team')teamBrowserBounds();
 }
 function updateBrowserControls() {
   const tab=state.tabs.find(t=>t.id===state.tab);if(tab?.type!=='browser'||!$('#browser-url'))return;
@@ -541,45 +645,36 @@ function updateBrowserControls() {
   if(document.activeElement!==$('#browser-url'))$('#browser-url').value=info.url||'';
   $('#browser-back').disabled=!info.canGoBack;$('#browser-forward').disabled=!info.canGoForward;
   $('#browser-reload').textContent=info.loading?'×':'↻';$('#browser-reload').title=info.loading?'Stop loading':'Reload';
-  $('#browser-share').setAttribute('aria-pressed',String(!!(info.shared||info.owner)));
-  $('#browser-share').title=info.shared||info.owner?'Agent access on. You can interact too; turn off to take over privately.':'Private tab. Turn on Agent access to let a run use this page.';
+  updateAgentAccess($('#browser-share'), info);
   $('#browser-status').textContent=info.error||'';$('#browser-status').hidden=!info.error;
 }
 function renderBrowser() {
+  selectBrowserSurface();
   $('#main').classList.add('browser-main');
-  $('#main').innerHTML='<form class="browserbar" id="browser-form"><button type="button" id="browser-back" aria-label="Back">←</button><button type="button" id="browser-forward" aria-label="Forward">→</button><button type="button" id="browser-reload" aria-label="Reload or stop">↻</button><input id="browser-url" aria-label="Browser address" placeholder="Enter a website address" autocomplete="off" spellcheck="false"><button class="browser-go" type="submit" id="browser-go" aria-label="Load address" title="Load address">↵</button><button type="button" id="browser-fill-login" title="Fill login" aria-label="Fill login">⚿</button><button type="button" id="browser-share" aria-pressed="false">Agent access</button></form><div class="browserstatus" id="browser-status"></div><div id="browser-area" class="browserarea"></div>';
+  $('#main').innerHTML='<form class="browserbar" id="browser-form"><button type="button" id="browser-back" aria-label="Back">←</button><button type="button" id="browser-forward" aria-label="Forward">→</button><button type="button" id="browser-reload" aria-label="Reload or stop">↻</button>'+browserAddress('browser','Browser address')+'<button class="browser-go" type="submit" id="browser-go" aria-label="Load address" title="Load address">↵</button><button type="button" id="browser-fill-login" title="Fill login" aria-label="Fill login">⚿</button></form><div class="browserstatus" id="browser-status"></div><div id="browser-area" class="browserarea"></div>';
   const command=async(action,extra={})=>{try{await window.desktop.browser({action,id:state.tab,...extra});}catch(e){toast(e.message);}};
   $('#browser-fill-login').onclick=()=>fillBrowserLogin(state.tab);
-  $('#browser-share').insertAdjacentHTML('beforebegin','<button type="button" id="browser-overview" aria-label="Show all browser tabs" title="Tab overview · ⌘⇧\\">▦</button>');
+  $('#browser-fill-login').insertAdjacentHTML('afterend','<button type="button" id="browser-overview" aria-label="Show all browser tabs" title="Tab overview · ⌘⇧\\">▦</button>');
   $('#browser-overview').onclick=()=>void showBrowserOverview('main');
+  bindBrowserAddressMenu($('#browser-url'),state.tab,{showDialog,toast});
   const navigateBrowser=async raw=>{try{const url=browserTarget(raw);await command('navigate',{url});const tab=state.tabs.find(t=>t.id===state.tab);if(tab){tab.info={...tab.info,url,loaded:true};renderBrowser();}}catch(error){toast(error.message);}};
   $('#browser-form').onsubmit=event=>{event.preventDefault();void navigateBrowser($('#browser-url').value);$('#browser-url').blur();};
   $('#browser-url').onfocus=()=>$('#browser-url').select();
   for (const direction of ['back', 'forward']) {
     const button = $('#browser-' + direction), tabId = state.tab;
-    let holdTimer = null, held = false;
-    const cancelHold = () => { clearTimeout(holdTimer); holdTimer = null; };
-    const openHistory = () => {
-      cancelHold();
-      if (!button.isConnected || button.disabled || state.tab !== tabId) return;
-      held = true; const bounds = button.getBoundingClientRect();
-      void command('history-menu', {direction, x: bounds.left, y: bounds.bottom});
-    };
-    button.title = (direction === 'back' ? 'Back' : 'Forward') + ' · hold for history';
-    button.setAttribute('aria-haspopup', 'menu');
-    button.onpointerdown = event => { if (event.button !== 0) return; cancelHold(); held = false; holdTimer = setTimeout(openHistory, 450); };
-    button.onpointerup = cancelHold; button.onpointercancel = cancelHold; button.onpointerleave = cancelHold;
-    button.oncontextmenu = event => { event.preventDefault(); openHistory(); };
-    button.onkeydown = event => { if (event.key === 'ArrowDown' || (event.shiftKey && event.key === 'F10')) { event.preventDefault(); openHistory(); } };
-    button.onclick = event => { cancelHold(); if (held && event.detail !== 0) { held = false; return; } void command(direction); };
+    bindBrowserHistoryButton(button, {direction, tabId, group:'main', selectionRevision:browserSurfaceRevision,
+      isCurrent:()=>state.tab===tabId,
+      command:(action,extra)=>window.desktop.browser({action,id:tabId,...extra}),
+      onError:error=>toast(error.message)});
   }
   $('#browser-reload').onclick=()=>command(state.tabs.find(t=>t.id===state.tab)?.info?.loading?'stop':'reload');
   $('#browser-share').onclick=()=>command('share',{shared:$('#browser-share').getAttribute('aria-pressed')!=='true'});
   updateBrowserControls();
   const current=state.tabs.find(t=>t.id===state.tab);
-  if(!current?.info?.url){void window.desktop?.browser({action:'hide'});void renderBrowserHome($('#browser-area'),{escape,toast,time,api,showDialog,browser:window.desktop.browser,navigate:navigateBrowser});}
-  else if(current.info.loaded===false){void window.desktop?.browser({action:'hide'});$('#browser-area').innerHTML='<div class="empty"><p>This tab is unloaded.</p><button id="browser-load">Load tab</button></div>';$('#browser-load').onclick=async()=>{await command('activate');current.info.loaded=true;renderBrowser();};}
+  if(!current?.info?.url){void window.desktop?.browser({action:'hide',...browserSurfaceIdentity()});void renderBrowserHome($('#browser-area'),{escape,toast,time,api,showDialog,browser:window.desktop.browser,navigate:navigateBrowser});}
+  else if(current.info.loaded===false){void window.desktop?.browser({action:'hide',...browserSurfaceIdentity()});$('#browser-area').innerHTML='<div class="empty"><p>This tab is unloaded.</p><button id="browser-load">Load tab</button></div>';$('#browser-load').onclick=async()=>{await command('activate');current.info.loaded=true;renderBrowser();};}
   else requestAnimationFrame(browserBounds);
+  renderChatSubtabs();
 }
 const lines=value=>value.split('\n').map(s=>s.trim()).filter(Boolean);
 const permissionModeNames={ask:'Ask each time',custom:'Saved rules only',trusted:'Trusted workspace',autopilot:'Auto-approve tools'};
@@ -591,7 +686,7 @@ function permissionChoices(pending) {
 }
 function permissionControls(context, ref) {
   if(!context)return '';
-  return `<div class="permission-control" data-context-id="${escape(context.id)}" data-permission-ref="${escape(JSON.stringify(ref))}"><label>Tool approvals</label><div class="actions"><select aria-label="Tool approval mode" data-permission-mode>${Object.entries(permissionModeNames).map(([mode,name])=>`<option value="${mode}" ${(permissionDrafts.get(context.id)||displayedMode(context))===mode?'selected':''}>${name}</option>`).join('')}</select><button data-save-permissions>Apply permissions</button></div><p class="note">Current: <strong>${escape(permissionModeNames[displayedMode(context)])}</strong>. Applying changes takes effect immediately in this chat, including a waiting tool. Saved rules only approves the folders and operations listed below.</p><p class="note">Trusted workspace allows file reads/writes in its folders, read-only MCP calls, and browser reading/navigation. Other operations use saved rules or ask. Auto-approve tools also allows terminal commands and configured tools; commands can access beyond these folders. Questions and enterprise-required approvals still pause.</p><details><summary>Authorized folders and saved rules</summary><ul>${context.folders.map(folder=>`<li><code>${escape(folder.path)}</code> · ${escape(folder.access)}</li>`).join('') || '<li>No folders trusted yet.</li>'}</ul><pre>${escape(JSON.stringify(context.rules,null,2))}</pre></details></div>`;
+  return `<div class="permission-control" data-context-id="${escape(context.id)}" data-permission-ref="${escape(JSON.stringify(ref))}"><label>Workspace tool approvals</label><div class="actions"><select aria-label="Tool approval mode" data-permission-mode>${Object.entries(permissionModeNames).map(([mode,name])=>`<option value="${mode}" ${(permissionDrafts.get(context.id)||context.workspaceMode||displayedMode(context))===mode?'selected':''}>${name}</option>`).join('')}</select><button data-save-permissions>Apply permissions</button></div><p class="note">Effective: <strong>${escape(permissionModeNames[displayedMode(context)])}</strong> from ${context.source==='chat'?'this chat':'the workspace'}. Workspace setting: ${escape(permissionModeNames[context.workspaceMode||displayedMode(context)])}. Changing the workspace setting also affects other chats and schedules with this context.</p><p class="note">Trusted workspace allows file reads/writes in its folders, read-only MCP calls, and browser reading/navigation. Other operations use saved rules or ask. Auto-approve tools also allows terminal commands and configured tools; commands can access beyond these folders. Questions and enterprise-required approvals still pause.</p><details><summary>Authorized folders and saved rules</summary><ul>${context.folders.map(folder=>`<li><code>${escape(folder.path)}</code> · ${escape(folder.access)}</li>`).join('') || '<li>No folders trusted yet.</li>'}</ul><pre>${escape(JSON.stringify(context.rules,null,2))}</pre></details>${ref.runId?`<div class="chat-permission-scope"><h3>This chat only</h3><p class="note">${context.chatMode==='autopilot'?'Auto-approve for this chat only is on. It lasts through continuation and restart until revoked or this chat’s permission context changes.':'This chat inherits its workspace setting.'} Auto-approval stays within existing granted resources; it does not grant new filesystem access. Mandatory approvals and sandbox rules still apply.</p><div class="actions"><button data-chat-autoapprove ${context.chatMode==='autopilot'?'disabled':''}>Auto-approve for this chat only</button><button data-chat-inherit ${context.chatMode==='autopilot'?'':'disabled'}>Use workspace setting</button></div></div>`:''}</div>`;
 }
 function permissionSettings() {
   const saved=state.data.permissions;
@@ -603,6 +698,7 @@ function bindPermissionControls() {
     const control=button.closest('.permission-control');
     try {await api('/api/permissions',{action:'set-mode',...JSON.parse(control.dataset.permissionRef),mode:control.querySelector('[data-permission-mode]').value,expectedContextId:control.dataset.contextId,expectedRevision:state.data.permissions.revision});permissionDrafts.delete(control.dataset.contextId);await refresh(true);toast('Permissions saved.');}catch(error){toast(error.message);}
   });
+  document.querySelectorAll('[data-chat-autoapprove],[data-chat-inherit]').forEach(button=>button.onclick=async()=>{const control=button.closest('.permission-control'),ref=JSON.parse(control.dataset.permissionRef),run=state.data.runs.find(item=>item.id===ref.runId);if(!run)return;try{await api('/api/permissions',{action:'set-chat-mode',runId:run.id,mode:button.hasAttribute('data-chat-autoapprove')?'autopilot':'inherit',expectedContextId:control.dataset.contextId,expectedChatRevision:run.permissionContext.chatRevision});await refresh(true);toast(button.hasAttribute('data-chat-autoapprove')?'Chat-only auto-approval saved.':'Chat now uses its workspace setting.');}catch(error){toast(error.message);}});
   document.querySelectorAll('[data-revoke-permissions]').forEach(button=>button.onclick=async()=>{
     try {await api('/api/permissions',{action:'revoke',id:button.dataset.revokePermissions,expectedRevision:state.data.permissions.revision});await refresh(true);toast('Authorization revoked. Future tool requests will ask.');}catch(error){toast(error.message);}
   });
@@ -624,6 +720,24 @@ function renderSettings() {
   $('#main').insertAdjacentHTML('beforeend',permissionSettings());
   bindPermissionControls();
 }
+async function closeTabSet(tabs){for(const tab of tabs){if(!state.tabs.some(item=>item.id===tab.id))continue;if(tab.parentId)await closeChildTab(tab);else await closeTopTab(tab.id);}}
+function selectedText(){return window.getSelection()?.toString()||'';}
+function selectContents(node){const range=document.createRange();range.selectNodeContents(node);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);}
+async function openContextLink(href,external=false){const url=new URL(href,location.href);if(!['https:','http:'].includes(url.protocol))throw new Error('Only HTTP and HTTPS links can open as browser tabs.');if(external){await window.desktop.openExternal(url.href);return;}const info=await window.desktop.browser({action:'create',url:url.href});const current=state.tabs.find(tab=>tab.id===state.tab),parentId=current?.parentId||(['run','remote-run'].includes(current?.type)?current.id:null);openTab({id:info.id,type:'browser',label:info.title||url.host,info,...(parentId?{parentId}:{})});}
+document.addEventListener('contextmenu',event=>{
+  if(event.defaultPrevented||event.target.closest('#chat-context-menu,.proteus-context-menu'))return;
+  const target=event.target,selection=selectedText();
+  const tabNode=target.closest('[data-tab-container],.chat-subtab');
+  if(tabNode){const id=tabNode.dataset.tabContainer||tabNode.querySelector('[data-chat-subtab]')?.dataset.chatSubtab,tab=state.tabs.find(item=>item.id===id);if(!tab)return;const siblings=tab.parentId?state.tabs.filter(item=>item.parentId===tab.parentId):state.tabs.filter(item=>!item.parentId&&!['overview','omi','life','team','engine','home','standup'].includes(item.type));const index=siblings.findIndex(item=>item.id===id);const items=[...(tab.parentId?[{id:'rename-tab',label:'Rename tab…'}]:[]),{id:'close',label:'Close tab'},{id:'close-others',label:'Close other tabs',enabled:siblings.length>1},{id:'close-right',label:'Close tabs to the right',enabled:index<siblings.length-1}];if(['run','remote-run'].includes(tab.type))items.unshift({id:'rename',label:'Rename chat…'});if(tab.type==='browser')items.push({id:'unload',label:'Unload browser tab'});
+    void showContextMenu(event,items,toast).then(async choice=>{if(choice==='rename')renameChat({id:tab.id,chatId:tab.runId||tab.id,title:tab.chatTitle||tab.label,titleRevision:tab.titleRevision||state.data.runs.find(run=>run.id===tab.id)?.titleRevision,hostId:tab.hostId,local:tab.type==='run'});else if(choice==='rename-tab')renameContentTab(tab);else if(choice==='close')await closeTabSet([tab]);else if(choice==='close-others')await closeTabSet(siblings.filter(item=>item.id!==id));else if(choice==='close-right')await closeTabSet(siblings.slice(index+1));else if(choice==='unload'){await window.desktop.browser({action:'unload',id});tab.info.loaded=false;if(state.tab===id)renderBrowser();}}).catch(error=>toast(error.message));return;
+  }
+  if(target.closest('[data-chat-index],.terminal-canvas,#browser-url,#team-browser-url'))return;
+  if(target.closest('#chat-rename,#peer-chat-rename,#peer-run-title,.chat-title-line h1')){const tab=state.tabs.find(item=>item.id===state.tab);if(tab&&['run','remote-run'].includes(tab.type)){void showContextMenu(event,[{id:'rename',label:'Rename chat…'}],toast).then(choice=>{if(choice==='rename')renameChat({id:tab.id,chatId:tab.runId||tab.id,title:tab.chatTitle||tab.label,titleRevision:tab.titleRevision||state.data.runs.find(run=>run.id===tab.id)?.titleRevision,hostId:tab.hostId,local:tab.type==='run'});});return;}}
+  const editable=target.closest('input,textarea,[contenteditable=true]');if(editable){const start=editable.selectionStart,end=editable.selectionEnd,value=editable.value||'',picked=Number.isInteger(start)?value.slice(start,end):selection;const items=[{id:'undo',label:'Undo'},{id:'redo',label:'Redo'},{id:'cut',label:'Cut',enabled:!!picked},{id:'copy',label:'Copy',enabled:!!picked},{id:'paste',label:'Paste'},{id:'select-all',label:'Select All'}];void showContextMenu(event,items,toast).then(async choice=>{if(!choice)return;editable.focus({preventScroll:true});if(Number.isInteger(start))editable.setSelectionRange(start,end);if(choice==='copy')await copyContextText(picked);else if(choice==='cut'){await copyContextText(picked);editable.setRangeText('',start,end,'start');editable.dispatchEvent(new Event('input',{bubbles:true}));}else if(choice==='paste'){const text=await navigator.clipboard.readText();if(Number.isInteger(start))editable.setRangeText(text,start,end,'end');else document.execCommand('insertText',false,text);editable.dispatchEvent(new Event('input',{bubbles:true}));}else if(choice==='select-all')editable.select?.();else document.execCommand(choice);}).catch(error=>toast(error.message));return;}
+  const link=target.closest('a[href]');if(link){const href=link.href;const items=[{id:'copy-link',label:'Copy link address'},{id:'open-tab',label:'Open in new browser tab'},{id:'open-external',label:'Open in default browser'}];if(selection)items.unshift({id:'copy-selection',label:'Copy selection'});void showContextMenu(event,items,toast).then(async choice=>{if(choice==='copy-selection')await copyContextText(selection);else if(choice==='copy-link')await copyContextText(href);else if(choice==='open-tab')await openContextLink(href);else if(choice==='open-external')await openContextLink(href,true);}).catch(error=>toast(error.message));return;}
+  const message=target.closest('.message');if(message){const markdown=message.messageMarkdown||message.querySelector('.text')?.textContent||'',code=target.closest('pre code,pre')?.textContent;const items=selection?[{id:'copy-selection',label:'Copy selection'}]:[{id:'copy-message',label:'Copy message'},{id:'copy-markdown',label:'Copy as Markdown'}];if(code)items.push({id:'copy-code',label:'Copy code'});if(message.querySelector('[data-message-action="speak"]'))items.push({id:'read-aloud',label:'Read Aloud'});void showContextMenu(event,items,toast).then(async choice=>{if(choice==='copy-selection')await copyContextText(selection);else if(choice==='copy-message')await copyContextText(message.querySelector('.text')?.innerText||markdown);else if(choice==='copy-markdown')await copyContextText(markdown);else if(choice==='copy-code')await copyContextText(code);else if(choice==='read-aloud')message.querySelector('[data-message-action="speak"]')?.click();}).catch(error=>toast(error.message));return;}
+  const area=target.closest('.markdown-preview,.home-document,.detail-facts,.tool-content,pre,.resource-row,.chat-details,#team-content');if(area){const items=[selection?{id:'copy-selection',label:'Copy selection'}:{id:'copy-value',label:'Copy value or entry'},{id:'select-all',label:'Select All in this area'}];void showContextMenu(event,items,toast).then(async choice=>{if(choice==='copy-selection')await copyContextText(selection);else if(choice==='copy-value')await copyContextText(target.closest('dd,pre,.resource-row')?.textContent||area.textContent);else if(choice==='select-all')selectContents(area);}).catch(error=>toast(error.message));}
+},true);
 window.desktop?.onShutdown?.(()=>{stopMessageSpeech();workspaceClosing=true;liveEvents.close();clearInterval(refreshInterval);clearInterval(usageInterval);clearTimeout(liveRefreshTimer);});
 window.desktop?.onBrowserState(infos=>{
   if(workspaceRestoring||workspaceClosing)return;
@@ -632,9 +746,10 @@ window.desktop?.onBrowserState(infos=>{
   const ids=new Set(infos.map(info=>info.id));
   state.tabs=state.tabs.filter(tab=>tab.type!=='browser'||ids.has(tab.id));
   syncTeamBrowsers(infos);
-  for(const info of infos.filter(info=>info.group!=='team'&&!ownsTeamBrowser(info.id))){const tab=state.tabs.find(t=>t.id===info.id);if(tab){tab.info=info;tab.label=info.title||'New tab';}else state.tabs.push({id:info.id,type:'browser',label:info.title||'New tab',info});}
-  if(!state.tabs.some(tab=>tab.id===state.tab)){state.tab='overview';render();}else{renderTabs();updateBrowserControls();if(currentBrowser&&previousSurface!==`${!!currentBrowser.info?.url}:${currentBrowser.info?.loaded!==false}`)renderBrowser();}saveWorkspace();
+  for(const info of infos.filter(info=>info.group!=='team'&&!ownsTeamBrowser(info.id))){const tab=state.tabs.find(t=>t.id===info.id);if(tab){tab.info=info;tab.label=tab.customTitle||info.title||'New tab';}else state.tabs.push({id:info.id,type:'browser',label:info.title||'New tab',info});}
+  if(!state.tabs.some(tab=>tab.id===state.tab)){state.tab='overview';render();}else{renderTabs();renderChatSubtabs();updateBrowserControls();if(currentBrowser&&previousSurface!==`${!!currentBrowser.info?.url}:${currentBrowser.info?.loaded!==false}`)renderBrowser();}saveWorkspace();
 });
+window.desktop?.onCloseCurrentTab?.(()=>void closeCurrentTab().catch(error=>toast(error.message)));
 window.desktop?.onCloseTool?.((id)=>{state.tabs=state.tabs.filter(t=>t.id!==id);if(state.tab===id)state.tab='overview';render();});
 window.desktop?.onNotification?.(()=>{if(state.page==='engine'&&state.engineSection==='notifications')renderEngineRoom('notifications');});
 window.desktop?.onAddressFocus(()=>$('#browser-url')?.focus());
@@ -647,7 +762,7 @@ function selectBrowserTab(info) {
       tab.activating=true;
       void window.desktop.browser({action:'activate',id:info.id}).then(current=>{
         if(!state.tabs.includes(tab))return;
-        tab.info=current;tab.label=current.title||tab.label;saveWorkspace();
+        tab.info=current;tab.label=tab.customTitle||current.title||tab.label;saveWorkspace();
         if(state.tab===tab.id)renderBrowser();
       }).catch(error=>{if(state.tab===tab.id)toast(error.message);}).finally(()=>{tab.activating=false;});
     }
@@ -663,9 +778,27 @@ window.desktop?.onBrowserResize(()=>requestAnimationFrame(browserBounds));
 window.addEventListener('resize',()=>requestAnimationFrame(browserBounds));
 window.addEventListener('keydown',event=>{if((event.metaKey||event.ctrlKey)&&event.key==='l'&&$('#browser-url')){event.preventDefault();$('#browser-url').focus();}});
 window.addEventListener('keydown',event=>{if((event.metaKey||event.ctrlKey)&&event.shiftKey&&event.code==='Backslash'){event.preventDefault();void showBrowserOverview(previousFeature==='team'?'team':'main');}});
-initBrowserOverview({escape,toast,select:selectBrowserTab,closed:forgetTeamBrowser,restore:()=>render()});
-initRemoteDesktops({state,escape,toast,showDialog,openTab,time,refresh,renderChatSubtabs,onDeleted:reconcileDeletedChat});
-initChatsIndex({state,api,escape,toast,time,showDialog,openLocal:runTab,openRemote:openRemoteChat,onDeleted:reconcileDeletedChat});
+function overviewGroups(browserTabs){
+  const previews=new Map(browserTabs.map(tab=>[tab.id,tab]));
+  const item=(tab,team=false,locked=false)=>{const preview=previews.get(team?tab.browserId:tab.id),kind=tab.type||'browser';return {id:tab.id,title:tab.label||tab.title||preview?.title||'New tab',kind,url:tab.info?.url||tab.url||preview?.url||'',thumbnail:preview?.thumbnail,loaded:preview?.loaded??tab.loaded,icon:({browser:'◎',terminal:'⌘',markdown:'▤',run:'☷','remote-run':'☷','remote-document':'▤',schedule:'◷',overview:'☷',standup:'☷'})[kind]||'▤',closable:!locked,parentId:tab.parentId||null,team};};
+  const top=state.tabs.filter(tab=>!tab.parentId&&!['overview','omi','life','team','engine','home','standup'].includes(tab.type));
+  const groups=[{id:'main',title:'',items:top.filter(tab=>!['run','remote-run'].includes(tab.type)).map(tab=>item(tab))}];
+  for(const parent of top.filter(tab=>['run','remote-run'].includes(tab.type)))groups.push({id:parent.id,title:parent.label||'Chat',items:[item(parent,false,true),...state.tabs.filter(tab=>tab.parentId===parent.id).map(tab=>item(tab))]});
+  const team=teamState();groups.push({id:'team',title:'Team Tools',items:[item({id:'team-overview',label:'Team Tools',type:'overview'},true,true),item({id:'team-standup',label:'Standup',type:'standup'},true,true),...team.tabs.map(tab=>item(tab,true))]});
+  return groups.filter(group=>group.items.length);
+}
+function selectOverview(item){
+  if(item.team){teamState().active=item.id==='team-overview'?'overview':item.id==='team-standup'?'standup':item.id;openFeatureTab('team');return;}
+  if(item.parentId)selectedChildren.set(item.parentId,item.id);
+  const tab=state.tabs.find(entry=>entry.id===item.id);if(!tab)return;state.tab=tab.id;if(tab.type==='browser')selectBrowserTab(tab.info);else render();
+}
+async function closeOverview(item){
+  if(item.team){await closeTeamTabById(item.id);return;}
+  const tab=state.tabs.find(entry=>entry.id===item.id);if(!tab)return;if(tab.parentId)await closeChildTab(tab);else await closeTopTab(tab.id);
+}
+initBrowserOverview({escape,toast,overviewGroups,selectOverview,closeOverview,restore:()=>render()});
+initRemoteDesktops({state,escape,toast,showDialog,openTab,time,refresh,renderChatSubtabs,syncContentTabs:()=>contentTabSync.all(),revokeHostContent,replaceChatContent,onDeleted:reconcileDeletedChat,rename:renameChat,rememberView:()=>rememberView($('#main'),$('#main').dataset.viewKey),restoreView:()=>restoreView($('#main'),$('#main').dataset.viewKey)});
+initChatsIndex({state,api,escape,toast,time,showDialog,openLocal:runTab,openRemote:openRemoteChat,onDeleted:reconcileDeletedChat,rename:renameChat,onIndexChanged:()=>{const count=$('[data-page="attention"] .count');if(count&&state.data)count.textContent=attentionChats(state.data.runs).length;}});
 initTeamTools({state,api,escape,toast,time,lines,showDialog,browserTarget,fillBrowserLogin,timezone:()=>state.data.settings.timezone,onChange:saveWorkspace,openTeamTerminal:callback=>openTerminalDialog(null,callback),renderTeamTerminal:renderTerminal,disposeTeamTerminal:disposeTerminalUi,openTeamMarkdown:callback=>openMarkdownPicker('open',null,callback),openTeamLink:async(source,cwd)=>{try{const kind=ProteusMarkdown.linkKind(source);if(kind==='web'){const info=await window.desktop.browser({action:'create',url:source,group:'team'});selectTeamBrowser(info);renderTeamTools();}else if(kind==='file'){const file=decodeURIComponent(new URL(source,'file://'+cwd.replace(/\/$/,'')+'/').pathname);if(file.endsWith('.md')){const markdown=await api('/api/markdown',{file});const tab={id:'markdown:'+file,type:'markdown',label:file.split('/').pop(),file,markdown};const current=teamState();const old=current.tabs.find(item=>item.id===tab.id);if(old)Object.assign(old,tab);else current.tabs.push(tab);current.active=tab.id;saveWorkspace();renderTeamTools();}else await window.desktop.openPath(file);}else if(kind==='mail'){await navigator.clipboard.writeText(source.slice(7));toast('Email address copied.');}}catch(error){toast(error.message);}}});
 initEngineRoom({state,api,escape,toast,time,providers:renderProviders,connections:()=>renderRemote({api,escape,toast}),setup:renderSettings,resourceChanged:(action,id)=>{if(action==='close')state.tabs=state.tabs.filter(tab=>tab.id!==id);saveWorkspace();},openAccount:()=>window.desktop?.openExternal(new URL('/security',state.data.life?.websiteOrigin||'https://proteus.example').href)});
 initTerminals({state,escape,toast,showDialog,openTab});
@@ -673,7 +806,9 @@ initFeatures({state,escape,api,toast,refresh,openTab,showDialog,lines,restoreBro
 initOmi({state,escape,api,toast,refresh,openSchedule:schedule,openRun:id=>{const run=state.data.runs.find(item=>item.id===id);if(run)runTab(run);}});
 initLife({state,escape,api,toast,refresh,openTab,showDialog,openSettings:()=>{navigate('engine','setup');}});
 initMarkdownPicker({api,escape,showDialog,openTab,toast,defaultWorkspaceId:()=>state.data.context.defaultWorkspaceId});
-new MutationObserver(()=>{if($('#dialog').open)window.desktop?.browser({action:'hide'}).catch(e=>toast(e.message));else requestAnimationFrame(browserBounds);}).observe($('#dialog'),{attributes:true,attributeFilter:['open']});
+let rendererOverlayVisible=false;
+new MutationObserver(()=>{const visible=!!document.querySelector('dialog[open],.proteus-context-menu,#chat-context-menu');if(visible===rendererOverlayVisible)return;rendererOverlayVisible=visible;void window.desktop?.browser({action:'overlay',token:'renderer-overlays',visible}).catch(error=>toast(error.message));if(!visible)requestAnimationFrame(browserBounds);}).observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['open']});
+void window.desktop?.browser({action:'selection-init',...browserSurfaceIdentity()}).catch(error=>toast(error.message));
 refresh().then(restoreWorkspace).then(async()=>{await Promise.allSettled([refreshUsage(),loadChatsIndex()]);render();}).catch(e=>toast(e.message));
 const usageInterval=setInterval(() => refreshUsage(), 60_000);
 const refreshInterval=setInterval(()=>{if((!document.activeElement?.matches('input,textarea,select') || !!$('#conversation-host'))&&!$('#dialog').open)refresh().catch(()=>{});},1500);

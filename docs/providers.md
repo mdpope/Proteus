@@ -309,3 +309,11 @@ a symlink escape and loopback network binding are denied. Empty native threads h
 rollout to resume before a first turn, so native live continuation is not claimed by that smoke
 test; continuation configuration is covered by the synthetic protocol regression. No production
 transcript, vault file, automation state or native permission profile was changed during validation.
+
+## Copilot allowance availability (0.2.2)
+
+A fresh quota-only probe checks provider authentication where reported and distinguishes provider
+errors, timeout, interrupted probes, missing premium snapshots and unusable percentages. Real zero
+remains measured zero. Missing quota yields an unavailable reason and recovery action; a new check
+timestamp does not certify refreshed usage. The isolated probe does not start a model turn or stop
+an existing chat. Installed-host validation is recorded separately in the release receipt.

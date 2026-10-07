@@ -24,11 +24,28 @@ class BrowserActions {
     return {};
   }
   menu(tab, params) {
-    const url = this.link(params.linkURL); if (!url) return;
+    const url = this.link(params.linkURL);
     const run = action => () => { if (this.browser.shuttingDown || !this.browser.tabs.has(tab.id)) return; Promise.resolve().then(action).catch(error => this.send({type:'error',message:error.message})); };
+    const items=[];
+    if(params.isEditable){
+      items.push({role:'undo'},{role:'redo'},{type:'separator'},{role:'cut'},{role:'copy'},{role:'paste'},{role:'selectAll'});
+    } else if(params.selectionText){
+      items.push({label:'Copy Selection',role:'copy'},{role:'selectAll'});
+    }
+    if(!url){
+      const wc=tab.view?.webContents;
+      if(wc){
+        if(items.length)items.push({type:'separator'});
+        items.push({label:'Back',enabled:wc.navigationHistory.canGoBack(),click:run(()=>this.browser.command({action:'back',id:tab.id}))},
+          {label:'Forward',enabled:wc.navigationHistory.canGoForward(),click:run(()=>this.browser.command({action:'forward',id:tab.id}))},
+          {label:'Reload',click:run(()=>this.browser.command({action:'reload',id:tab.id}))});
+      }
+      return items.length?Menu.buildFromTemplate(items):null;
+    }
     let browserName = 'Default Browser';
     try { browserName = app.getApplicationNameForProtocol('https://') || browserName; } catch {}
-    return Menu.buildFromTemplate([
+    if(items.length)items.push({type:'separator'});
+    return Menu.buildFromTemplate([...items,
       {label:'Open Link in New Tab',...this.icon('NSAddTemplate'),click:run(async () => { const info = await this.browser.create(url,null,null,{group:tab.group}); this.send({type:'select-tab',info}); })},
       {label:`Open Link in ${browserName.replace(/[\r\n]/g,' ').replace(/&/g,'&&')}`, ...this.icon('NSFollowLinkFreestandingTemplate'), click:run(() => shell.openExternal(url))},
       {type:'separator'},

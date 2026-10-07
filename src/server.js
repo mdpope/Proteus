@@ -24,6 +24,7 @@ import { atomicJSON, defaultHome, readJSON, isWithin } from './files.js';
 import { nextRuns, revision, validateSchedule } from './schedules.js';
 import { readChatImage, readImage } from './chat-images.js';
 import { RemoteHost } from './remote.js';
+import { ContentTabs } from './content-tabs.js';
 import { ChatAttachmentStore, chatAttachmentLimits } from './chat-attachments.js';
 import { ProviderAuthManager } from './provider-auth.js';
 
@@ -116,7 +117,8 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   function buildChatSchedule(value){
     const defaults=settings.get();
     const snapshot=context.capture({workspaceId:value.workspaceId,workspace:value.workspace||(!value.workspaceId?defaults.workspace:undefined),selectedIds:value.selectedIds,agentId:value.agentId,includeDefaults:value.includeDefaults});
-    return validateSchedule({schemaVersion:1,id:`chat-${Date.now()}-${randomBytes(4).toString('hex')}`,name:value.name||'Workspace chat',enabled:false,cron:'0 9 * * 1-5',timezone:value.timezone||defaults.timezone,provider:value.provider||defaults.provider,model:value.model||defaults.model,reasoningEffort:value.reasoningEffort??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.reasoningEffort:undefined),contextTier:value.contextTier??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.contextTier:undefined),serviceTier:value.serviceTier??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.serviceTier:undefined),workspace:snapshot.workspace,context:snapshot,skillDirectories:value.skillDirectories||defaults.skillDirectories,mcpServers:value.mcpServers||defaults.mcpServers,editorContext:value.editorContext,misfire:'skip',prompt:value.prompt});
+    const chatTitle=typeof value.name==='string'?value.name.trim():'';
+    return validateSchedule({schemaVersion:1,id:`chat-${Date.now()}-${randomBytes(4).toString('hex')}`,name:chatTitle||'Workspace chat',chatTitleManual:!!chatTitle,enabled:false,cron:'0 9 * * 1-5',timezone:value.timezone||defaults.timezone,provider:value.provider||defaults.provider,model:value.model||defaults.model,reasoningEffort:value.reasoningEffort??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.reasoningEffort:undefined),contextTier:value.contextTier??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.contextTier:undefined),serviceTier:value.serviceTier??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.serviceTier:undefined),workspace:snapshot.workspace,context:snapshot,skillDirectories:value.skillDirectories||defaults.skillDirectories,mcpServers:value.mcpServers||defaults.mcpServers,editorContext:value.editorContext,misfire:'skip',prompt:value.prompt});
   }
   const token = randomBytes(32).toString('hex'); let origin; let remote; const schedulerErrors = []; const eventClients = new Set();
   const notify = () => { for (const client of eventClients) client.write('event: change\ndata: {}\n\n'); };
@@ -147,12 +149,14 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         const value = await body(req);
         if (value.action === 'configure') return json(200, await remote.configure(value));
         if (value.action === 'pair') return json(200, await remote.pairing(value.publicURL));
+        if (value.action === 'device-status') return json(200, remote.deviceStatus(value.id));
         if (value.action === 'revoke') return json(200, remote.revoke(value.id));
         if (value.action === 'resource-access') return json(200, remote.setResourceAccess(value.id, value.enabled));
         if (value.action === 'document-access') return json(200, remote.setDocumentAccess(value.id, value.enabled));
         if (value.action === 'document-review') return json(200, remote.reviewDocument(value.requestId,value.approved));
         throw new Error('Unknown remote action.');
       }
+      if (url.pathname === '/api/content-tabs' && req.method === 'POST') { const value=await body(req); if(value.scope==='chat')engine.getRun(value.id); if(value.action==='document'){if(!service.contentTabDocument)throw new Error('Document is not available on this desktop.');return json(200,service.contentTabDocument(value));} if(value.action==='get')return json(200,service.contentTabs.get(value.scope,value.id)); if(value.action==='mutate')return json(200,service.contentTabs.mutate(value)); throw new Error('Unknown tab action.'); }
       if (url.pathname === '/api/app' && req.method === 'GET') return json(200, await account.request());
       if (url.pathname === '/api/app' && req.method === 'POST') return json(200, await account.request(await body(req)));
       if (url.pathname === '/api/team/lists' && req.method === 'GET') return json(200, await account.lists());
@@ -189,7 +193,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         return json(200,{items,hosts:[{id:info.hostId,name:info.label,online:true,lastSyncAt},...peer.hosts],partial:peer.partial});
       }
       if (url.pathname === '/api/state') return json(200, {
-        schedules: engine.schedules.list(), runs: engine.listRuns().map(run => ({ ...run, storage: storagePaths(home, run), permissionContext: engine.permissions.describe(run.schedule) })), providerStatus: catalog.value, providerStatuses: providerStatuses(),attachmentMediaTypes:Object.fromEntries(['copilot','codex','claude'].map(id=>[id,adapters[id]?.acceptedMediaTypes||[]])),mcpStatusProviders:['copilot','codex','claude'].filter(id=>typeof adapters[id]?.mcpStatus==='function'),mcpLoginProviders:['copilot','codex','claude'].filter(id=>typeof adapters[id]?.mcpLogin==='function'),
+        schedules: engine.schedules.list(), runs: engine.listRuns().map(run => ({ ...run, storage: storagePaths(home, run), permissionContext: engine.permissions.describeRun(run) })), providerStatus: catalog.value, providerStatuses: providerStatuses(),attachmentMediaTypes:Object.fromEntries(['copilot','codex','claude'].map(id=>[id,adapters[id]?.acceptedMediaTypes||[]])),mcpStatusProviders:['copilot','codex','claude'].filter(id=>typeof adapters[id]?.mcpStatus==='function'),mcpLoginProviders:['copilot','codex','claude'].filter(id=>typeof adapters[id]?.mcpLogin==='function'),
         permissions: engine.permissions.get(), permissionWorkspaces: [...new Map([
           { ...settings.get(), name: 'Default workspace', ref: { defaults: true } },
           ...engine.schedules.list().filter(schedule => !schedule.error).map(schedule => ({ ...schedule, ref: { scheduleId: schedule.id } })),
@@ -291,6 +295,10 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       }
       if (url.pathname === '/api/permissions' && req.method === 'POST') {
         const value = await body(req);
+        if (value.action === 'set-chat-mode') {
+          const context = engine.setChatPermission(value.runId, value.mode, value.expectedContextId, value.expectedChatRevision);
+          return json(200, { permissionContext: context, permissionRevision: engine.permissions.get().revision });
+        }
         if (typeof value.expectedRevision !== 'string') throw new Error('Reload permissions before saving.');
         if (value.action === 'revoke') engine.permissions.revoke(value.id, value.expectedRevision);
         else if (value.action === 'set-mode') {
@@ -318,6 +326,10 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         return json(200, { imported: schedules.length, enabled: false });
       }
       if (url.pathname === '/api/run' && req.method === 'POST') { const { id } = await body(req); return json(200, engine.createRun(engine.schedules.get(id))); }
+      if (url.pathname === '/api/chat-title' && req.method === 'POST') {
+        const value = await body(req);
+        return json(200, engine.renameChat(value.id, value.title, value.expectedTitleRevision));
+      }
       if(url.pathname==='/api/attachments'&&req.method==='POST'){
         const value=await body(req),deviceId='local-desktop',providerId=value.id?engine.getRun(value.id).schedule.provider:value.providerId;
         if(value.action==='begin'){
@@ -457,6 +469,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
     });
     fs.rmSync(path.join(home, 'connection.json'), { force: true }); unlock();
   } };
+  service.contentTabs=new ContentTabs(home,{onChange:result=>{notify();remote?.broadcast('tabs',{scope:result.scope,id:result.id,revision:result.revision},result.scope==='chat'?result.id:undefined);}});
   remote = service.remote = new RemoteHost(service); activity.attach(engine,()=>remote.info().hostId); activity.log('info','app.started','Proteus started.'); await remote.start();
   const activityTimer = timers ? setInterval(()=>void activity.flush(),60000) : null;
   const refreshCatalog = () => Promise.allSettled(Object.values(catalogs).map(c => c.get())).then(() => { notify(); remote.changed(); });

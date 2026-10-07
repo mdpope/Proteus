@@ -5,13 +5,18 @@ import { EventEmitter } from 'node:events';
 import { atomicJSON, jsonFiles, readJSON } from './files.js';
 import { ScheduleStore, lastDue, revision, validateSchedule } from './schedules.js';
 import { RehearsalProvider } from './rehearsal.js';
-import { PermissionStore } from './permissions.js';
+import { PermissionStore, permissionContext } from './permissions.js';
 
 import { chatModelOptions } from './model-catalog.js';
 import { agentName } from '../public/agent-name.js';
 import { ChatAttachmentConsents } from './chat-attachment-consent.js';
 
 const active = new Set(['queued', 'running', 'awaiting_input']);
+export function suggestedChatTitle(prompt) {
+  const clean = String(prompt || '').replace(/\s+/g, ' ').trim().replace(/^(?:please\s+|can you\s+|could you\s+|i (?:want|need) (?:you )?to\s+)/i, '');
+  const sentence = clean.split(/(?<=[.!?])\s/)[0].replace(/[.!?]+$/, '');
+  return (sentence.split(' ').filter(Boolean).slice(0, 9).join(' ') || 'New chat').slice(0, 90);
+}
 export class Engine extends EventEmitter {
   constructor(home, providers = {}, clock = () => new Date()) {
     super(); this.home = home; this.clock = clock;
@@ -29,6 +34,10 @@ export class Engine extends EventEmitter {
       try {
         const run = readJSON(file);
         if (this.tombstones[run.id]) { fs.rmSync(file, { force: true }); continue; }
+        if (run.trigger === 'chat' && (!run.titleRevision || !run.titleKind)) {
+          run.titleRevision ||= randomUUID(); run.titleKind ||= 'legacy';
+          atomicJSON(file, run);
+        }
         if (active.has(run.status)) {
           run.status = 'interrupted'; run.pending = null; delete run.liveMessages;
           run.failureEventAt = clock().toISOString(); delete run.failureReviewedAt;
@@ -41,7 +50,9 @@ export class Engine extends EventEmitter {
     }
   }
   now() { return this.clock().toISOString(); }
-  persist(run) { if(this.tombstones[run.id]||!this.runs.has(run.id))throw new Error('Deleted chat cannot be restored.');run.updatedAt = this.now(); atomicJSON(path.join(this.runsDir, `${run.id}.json`), run); this.emit('change', run); }
+  persist(run) { if(this.tombstones[run.id]||!this.runs.has(run.id))throw new Error('Deleted chat cannot be restored.');
+    if(run.chatPermission && run.chatPermission.contextId !== permissionContext(run.schedule).id){run.chatPermission=null;run.chatPermissionRevision=randomUUID();}
+    run.updatedAt = this.now(); atomicJSON(path.join(this.runsDir, `${run.id}.json`), run); this.emit('change', run); }
   event(run, role, text, data) {
     run.events.push({ role, text, ...(role === 'assistant' ? { agentName: agentName(run) } : {}), ...(data ? { data } : {}), at: this.now() }); this.persist(run);
   }
@@ -52,6 +63,31 @@ export class Engine extends EventEmitter {
   listRuns() { return [...this.runs.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)); }
   visibleRuns(includeArchived = false) { return this.listRuns().filter(run => includeArchived || !run.archivedAt); }
   getRun(id) { const run = this.runs.get(id); if (!run) throw new Error('Run not found.'); return run; }
+  describePermissions(run) {
+    return this.permissions.describeRun(run);
+  }
+  setChatPermission(id, mode, expectedContextId, expectedChatRevision) {
+    const run = this.getRun(id), context = this.permissions.describe(run.schedule);
+    if (run.trigger !== 'chat') throw new Error('Chat-only approval requires a chat.');
+    if (context.id !== expectedContextId) throw new Error('Workspace configuration changed. Review the permission context.');
+    if (expectedChatRevision !== (run.chatPermissionRevision || null)) throw new Error('Chat approval changed. Refresh before saving.');
+    if (!['autopilot', 'inherit'].includes(mode)) throw new Error('Choose chat auto-approval or inherit workspace settings.');
+    run.chatPermission = mode === 'autopilot' ? { mode, contextId: context.id, grantedAt: this.now() } : null;
+    run.chatPermissionRevision = randomUUID(); this.persist(run); this.recheckPermissions();
+    return this.describePermissions(run);
+  }
+  decidePermission(run, request) {
+    const profile = this.describePermissions(run);
+    return { ...this.permissions.decide(run.schedule, request, profile), source: profile.source };
+  }
+  renameChat(id, title, expectedTitleRevision) {
+    const run = this.getRun(id);
+    if (run.trigger !== 'chat') throw new Error('Only chats can be renamed.');
+    if (typeof expectedTitleRevision !== 'string' || expectedTitleRevision !== run.titleRevision) throw new Error('This chat name changed. Refresh before saving.');
+    if (typeof title !== 'string' || !title.trim() || title.trim().length > 200 || /[\x00-\x1f]/.test(title)) throw new Error('Enter a chat name between 1 and 200 characters.');
+    run.title = title.trim(); run.titleKind = 'manual'; run.titleRevision = randomUUID(); this.persist(run);
+    return { id: run.id, title: run.title, titleKind: run.titleKind, titleRevision: run.titleRevision };
+  }
   lifecycle(id, action, { expectedUpdatedAt, expectedArchivedAt } = {}) {
     const run = this.getRun(id);
     if (expectedUpdatedAt !== undefined && expectedUpdatedAt !== run.updatedAt) throw new Error('This chat changed. Refresh it before continuing.');
@@ -95,7 +131,9 @@ export class Engine extends EventEmitter {
     for (const dir of [schedule.workspace.cwd, ...schedule.workspace.additionalDirectories]) if (!fs.statSync(dir).isDirectory()) throw new Error(`Workspace directory unavailable: ${dir}`);
     const run = {
       id: randomUUID(), schedule: structuredClone(schedule), scheduleRevision: revision(schedule),
-      title: schedule.name, trigger, slot, status: 'queued', createdAt: this.now(), updatedAt: this.now(),
+      title: trigger === 'chat' ? (schedule.chatTitleManual ? schedule.name.trim() : suggestedChatTitle(schedule.prompt)) : schedule.name,
+      ...(trigger === 'chat' ? { titleKind: schedule.chatTitleManual ? 'manual' : 'generated', titleRevision: randomUUID() } : {}),
+      trigger, slot, status: 'queued', createdAt: this.now(), updatedAt: this.now(),
       events: [{ role: 'user', text: schedule.prompt, at: this.now() }], pending: null,
       providerSessionId: null, usage: { inputTokens: 0, outputTokens: 0, observed: false },
       nextPrompt: schedule.prompt,...(deferStart?{deferredStart:true}:{})
@@ -194,7 +232,7 @@ export class Engine extends EventEmitter {
   askNext(run, request, signal) {
     if (signal.aborted) return Promise.reject(new Error('Cancelled'));
     if (request.type === 'permission') {
-      const decision = this.permissions.decide(run.schedule, request.details || {});
+      const decision = this.decidePermission(run, request.details || {});
       if (decision.allowed) { this.recordAutomaticPermission(run, request.details, decision); return Promise.resolve('approve-auto'); }
       request = { ...request, permissionChoices: this.permissions.choices(run.schedule, request.details || {}), permissionReason: decision.reason };
     }
@@ -212,13 +250,13 @@ export class Engine extends EventEmitter {
     run.automaticApprovals = (run.automaticApprovals || 0) + 1;
     const tool = request?.toolCallId ? run.events.findLast(event => event.data?.tool?.callId === request.toolCallId)?.data?.tool : null;
     if (tool) tool.approval = decision.reason;
-    this.event(run, 'system', `Auto-approved ${request?.kind || 'tool'}: ${decision.reason}.`, { permission: { kind: request?.kind, automatic: true, reason: decision.reason, mode: decision.mode,...(typeof request?.toolCallId==='string'?{toolCallId:request.toolCallId.slice(0,128)}:{}),...(decision.resolvedTarget?{resolvedTarget:decision.resolvedTarget.slice(0,1024)}:{}),...(decision.matchedRoot?{matchedRoot:decision.matchedRoot.slice(0,1024)}:{}) } });
+    this.event(run, 'system', `Auto-approved ${request?.kind || 'tool'}: ${decision.reason}.`, { permission: { kind: request?.kind, automatic: true, reason: decision.reason, mode: decision.mode, source: decision.source || 'workspace',...(typeof request?.toolCallId==='string'?{toolCallId:request.toolCallId.slice(0,128)}:{}),...(decision.resolvedTarget?{resolvedTarget:decision.resolvedTarget.slice(0,1024)}:{}),...(decision.matchedRoot?{matchedRoot:decision.matchedRoot.slice(0,1024)}:{}) } });
   }
   recheckPermissions() {
     for (const provider of Object.values(this.providers)) provider.recheckPermissions?.();
     for (const [id, waiting] of this.pending) {
       const run = this.getRun(id); if (run.pending?.type !== 'permission') continue;
-      const decision = this.permissions.decide(run.schedule, run.pending.details || {});
+      const decision = this.decidePermission(run, run.pending.details || {});
       if (!decision.allowed) continue;
       this.recordAutomaticPermission(run, run.pending.details, decision);
       this.pending.delete(id); run.pending = null; run.status = 'running'; this.persist(run); waiting.resolve('approve-auto');
@@ -249,7 +287,7 @@ export class Engine extends EventEmitter {
       const attachments=dispatch?await this.attachmentConsents.readForProvider({...dispatch,chatId:run.id,providerId:run.schedule.provider}):[];
       await provider.run({
         run, prompt, attachments, signal: controller.signal,
-        permissionProfile: () => this.permissions.describe(run.schedule),
+        permissionProfile: () => this.describePermissions(run),
         emit: (role, text, data) => this.event(run, role, text, data),
         stream: (id, text) => this.stream(run, id, text),
         update: () => this.persist(run),

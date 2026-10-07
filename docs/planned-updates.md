@@ -5,7 +5,350 @@ Maintain this as the single backlog. Design rationale is in `decisions.md`; rece
 retained as acceptance criteria; the installed versus unverified state is summarized immediately
 below and in `content-workspace-release.md`.
 
+## October 6 bug/feature list — closed for build handoff
+
+The operator closed the original 21-item intake on October 6 and authorized implementation,
+build and deployment from the coordinating Mac. BF-22 adds visiting-desktop chat tab synchronization.
+All 22 items are implemented in the 0.2.2 source checkpoint; isolated validation and actual rollout
+are tracked separately in [October 6 release](2026-10-06-release.md). The original acceptance
+criteria and accepted examples remain in [the build handoff](2026-10-06-build-handoff.md).
+
+### BF-2026-10-06-01 — Make website Mac connections easy to find and complete
+
+- **Observed:** Engine Room → Connections (`/engine-room?tab=connections`) contains a visually
+  quiet “Manage and pair Macs” link to the Mac connections page (`/remote?view=connections`).
+  The sidebar's Connections item returns to Engine Room, so the separate pairing page is easy
+  to miss. The pairing page refers users back to Engine Room to choose the Default Mac without
+  an obvious direct action.
+- **Requested flow:** Give website users a clear route from Engine Room to pairing and managing
+  Macs, and a clear route from the Mac connections page to choosing or changing the Default Mac.
+  Present pairing, selecting a default, and connecting as one understandable sequence. Make the
+  difference between the currently connected Mac and the account's Default Mac explicit.
+- **Acceptance:** A user starting from either Connections screen can reach the other task in one
+  obvious action; navigation labels and active state make the destination clear. The flow does
+  not silently set or switch the Default Mac, change pairing authority, or imply that an
+  offline/default-missing Mac has an automatic fallback. Verify the website flow at desktop and
+  narrow widths, including keyboard navigation.
+
+### BF-2026-10-06-02 — Dismiss desktop tab overview from its backdrop
+
+- **Observed:** The desktop browser Tab overview opens as a modal with a dimmed area outside its
+  panel. Closing it currently requires Done, Escape, or selecting a tab.
+- **Requested behavior:** Clicking the dimmed area outside the overview panel closes the overview.
+- **Acceptance:** A backdrop click dismisses the overview and restores the previously active
+  view without selecting or closing a tab or activating a control behind the modal. Clicking
+  inside the panel, including unused panel space, leaves it open; existing Done, Escape, tab
+  selection, and tab-close actions continue to work. Cover both main and Team browser overviews.
+
+### BF-2026-10-06-03 — Clarify paired-device permissions and refresh controls
+
+- **Observed:** The desktop Connections page presents permission checkboxes above long descriptions
+  for each paired device, with Revoke nearby and a single “Refresh status” button at the bottom.
+  The layout makes the checkboxes look like selections for that refresh action. In the current
+  checkout, changing “Allow resource access” saves that device's permission immediately, while
+  “Refresh status” reloads the whole page; it does not refresh checked devices. The supplied
+  screenshot also shows a “View chat documents” permission absent from this checkout, so verify
+  the target build before changing that control.
+- **Requested design:** Give each device a distinct, compact card or row with its identity,
+  connection status and freshness, pairing details, clearly labeled permission switches, and
+  a separate Revoke action. Explain that permission changes save immediately and are unrelated
+  to refreshing status. Put **Refresh all** at the top of the device list and provide a
+  **Refresh** action on each device for its own status.
+- **Acceptance:** Individual refresh updates the indicated device's status; Refresh all updates
+  the list. Neither refresh action changes permissions, selects devices, or revokes access.
+  Permission changes give clear saved/error feedback and retain the existing authorization
+  checks. Status and permission controls remain understandable on narrow layouts and by keyboard.
+
+### BF-2026-10-06-04 — Diagnose and fix website Mac pairing connection closure
+
+- **Observed:** Attempting to pair a Mac from the website's Mac connections page reports
+  “Remote connection closed. Reconnect to continue.” and leaves no destination selected. This
+  is a reported live failure; its cause and the point of failure are not yet established.
+  The browser client currently uses that message for most WebSocket close codes, and the pairing
+  form clears the pasted code before the attempt finishes.
+- **Investigation:** Reproduce with a fresh, unexpired invitation and trace the browser-to-relay,
+  relay-to-Mac, pairing handshake, account credential save, and first authenticated connection
+  stages separately. Check the actual close code and safe relay/host status without recording
+  the invitation, device key, chat content, or other secrets. Distinguish Mac offline, relay
+  refusal, rejected or consumed invitation, authentication failure, and account-save failure.
+- **Acceptance:** A valid invitation pairs, saves the destination to the website account, and
+  connects. Failures identify the stage and give a useful recovery action; an unsuccessful
+  attempt does not claim a saved pairing or silently change the Default Mac. Cover interrupted
+  and expired attempts with isolated tests, then report live pairing verification separately.
+
+### BF-2026-10-06-05 — Keep pop-up dialogs above the desktop browser view
+
+- **Observed:** With an embedded browser tab active, a pop-up/modal can be dimmed or blocked by
+  the browser surface, leaving its controls inaccessible. The desktop uses a separate Electron
+  `WebContentsView` for page content; the app tries to hide it when its dialog opens, so verify
+  where that visibility handoff fails rather than assuming a CSS stacking fix will suffice.
+- **Requested behavior:** Pop-ups opened over the desktop browser remain fully visible and
+  interactive. While a Proteus dialog is open, the browser page must not cover it or receive
+  its clicks or keys. Restore the same browser tab, scroll position, and focus appropriately
+  after dismissal.
+- **Acceptance:** Exercise dialogs launched from both main and Team browser tabs, including
+  context-menu actions and app controls. Opening and closing each dialog works without a flash
+  of browser content above it, lost input, accidental page activation, or a changed active tab.
+
+### BF-2026-10-06-06 — Show website favicons and active agent control on browser tabs
+
+- **Observed:** Embedded website tabs show the same generic circle in the main tab strip,
+  making open sites harder to distinguish at a glance. Team browser tabs should use the same
+  icon behavior for consistency.
+- **Requested behavior:** Display each site's favicon when the embedded page supplies one.
+  Update it when the tab navigates; use the existing generic icon when no usable favicon is
+  available or while a new page loads. Replace the favicon with a small cursor indicator while
+  an agent is actively controlling that tab, then restore the current favicon when control
+  returns to the user. Merely enabling Agent access must not show the cursor.
+- **Acceptance:** Multiple sites show their own icons in main and Team browser tabs without
+  mixing icons between tabs. Unloaded and restored tabs show a safe cached icon when available
+  or the fallback, and resolve the current icon when loaded. Obtain icons within the existing
+  browser session without introducing a separate website-tracking fetch or exposing private
+  browsing data to the application server. Show and clear the cursor on the correct tab as
+  agent control starts and ends, including revocation and tab closure. Keep tab titles and
+  accessible labels intact, with an accessible indication of active agent control.
+- **Investigation:** The chat browser subtab strip shown in the installed build is absent from
+  this checkout. Locate its owning source before implementation and verify all tab surfaces.
+
+### BF-2026-10-06-07 — Recover agent browser reads from debugger attachment conflicts
+
+- **Observed:** A Copilot chat using `gpt-6-luna` opened an in-app Slack thread but could not
+  read its page content. The browser snapshot failed with “Debugger is already attached to the
+  target”; retrying in a fresh in-app tab did not resolve it. The thread URL, chat identifier,
+  message text, and other workplace details are intentionally omitted from this repository.
+- **Investigation:** Reproduce with an authorized synthetic dynamic page, then trace the
+  per-tab Playwright/CDP bridge's attach, reuse, failure cleanup, and detach lifecycle. Check
+  for competing debugger attachment or concurrent snapshots, and distinguish this error from
+  page loading, site authentication, and access-permission failures. Do not infer the thread's
+  contents from a successful tab open or substitute unrelated source material for the page.
+- **Acceptance:** An authorized agent can open and read the visible content of a loaded in-app
+  page, including after a failed or interrupted snapshot, without restarting Proteus. Repeated
+  and concurrent requests cannot strand a debugger attachment. Private tabs remain inaccessible
+  without Agent access, and errors identify a recoverable browser bridge failure without
+  exposing page content or credentials. Report any live Slack verification separately.
+
+### BF-2026-10-06-08 — Show the actual failed-tool error on desktop
+
+- **Observed:** For the same failed browser snapshot, the website shows “Debugger is already
+  attached to the target” in the activity, while the desktop activity shows failure without
+  that error text. The underlying browser failure is tracked separately in BF-2026-10-06-07.
+- **Investigation:** Follow the tool failure from provider result through the saved event,
+  desktop presentation model, and web rendering. Check whether the message is absent from
+  `tool.error`, present only in a structured output, or lost during normalization. Use synthetic
+  error fixtures; do not add the real chat or workplace link to tests or documentation.
+- **Acceptance:** Desktop and website show the same safe, actionable error text for a failed
+  activity without requiring raw-output inspection. Keep failure status, timing, and details
+  consistent across refresh and saved-chat reload, while redacting credentials and secrets.
+
+### BF-2026-10-06-09 — Bring website visual presentation in line with desktop
+
+- **Observed:** Website organization broadly matches desktop, but typography, scale, spacing,
+  controls, and content formatting still differ across pages. Chat makes the mismatch especially
+  clear: message blocks and activity details have different size and emphasis.
+- **Requested design:** Make desktop the visual reference for website heading and body sizes,
+  spacing, controls, panels, and content density while retaining the website's responsive layout.
+  In chat, preserve the existing message/event order and desktop line wrapping, hierarchy, and
+  activity structure. Keep the side accent borders on user and agent message boxes. Put the tool
+  and approval sequence inside one noticeably but still restrained warm orange Activity box
+  with no side accent border. Keep a side accent border on each activity item inside that box.
+  Successful items retain their current quiet green fill; failed or warning items use a
+  distinctly lighter, richer orange fill and matching side accent. Show explicit Failed
+  text/icon and keep the real failure reason plainly visible.
+- **Acceptance:** Compare representative desktop and website pages at wide and narrow widths,
+  then compare the same synthetic conversation with user/agent messages, successful and failed
+  tools, approvals, long titles/URLs, expanded details, timestamps, and Markdown. Preserve
+  readable contrast, keyboard access, and status labels that do not rely on color alone.
+  The operator accepted the chat design direction on October 6, including the visible failed-tool
+  error required by BF-2026-10-06-08. No UI has been changed yet.
+
+### BF-2026-10-06-10 — Update Needs attention as soon as the last item is reviewed
+
+- **Observed:** After the final attention item was reviewed, the desktop Needs attention view
+  showed no matching item while its sidebar badge still read 1. The view also warned that some
+  Macs were offline and cached chats were present; whether a stale cached status caused this
+  mismatch is not yet established.
+- **Requested behavior:** Refresh the attention list and badge promptly when an item is
+  reviewed or its status changes. Derive both from the same current, authorized status set so
+  an empty list cannot coexist with an unexplained nonzero badge. If an offline Mac leaves a
+  status unverified, label that cached state clearly rather than presenting it as a current
+  item that the user cannot see or act on.
+- **Acceptance:** Reviewing the last actionable item updates the row, badge, and empty state
+  without navigating away or waiting for a periodic refresh. Cover local and remote items,
+  failed/awaiting-input transitions, offline cached results, and reconnect reconciliation;
+  stale replies must not restore a cleared count.
+
+### BF-2026-10-06-11 — Keep a chat's tabs visible after submitting a message
+
+- **Observed:** Submitting a message makes the selected chat's own tab bar disappear, while the
+  top navigation tabs remain visible. Switching to another top navigation tab and back restores
+  the chat's tab bar.
+- **Requested behavior:** Keep the chat's tab bar mounted and its selected tab intact through
+  message submission and subsequent chat refreshes, including while a turn is running.
+- **Acceptance:** Sending, queuing, or steering a message does not hide the chat's tabs or
+  change the selected chat tab. The tabs remain usable as the conversation updates, without
+  switching away and back to restore them.
+
+### BF-2026-10-06-12 — Diagnose and restore Copilot allowance refresh on this Mac
+
+- **Observed:** The desktop AI Allowance sidebar shows a dash for Copilot. Its account allowance
+  detail says the allowance has not been reported; Refresh usage advances the last-checked time
+  but still does not show a value. Codex and Claude values are visible on the same Mac. The
+  cause and whether other Macs are affected are not yet known.
+- **Requested behavior:** Trace the Copilot account-quota refresh from the authenticated
+  provider through the local runner and UI. Display a current allowance when the provider
+  reports one; when it cannot, show the actual reason and a useful recovery action rather than
+  treating a completed check as a successful usage update.
+- **Acceptance:** On the affected Mac, Refresh usage either updates the Copilot sidebar and
+  detail from a verified provider response or clearly reports why no allowance is available.
+  Check authentication, provider response and parsing, cache behavior, and UI propagation;
+  distinguish unavailable data from zero remaining allowance without inventing usage.
+
+### BF-2026-10-06-13 — Align running activity indicators and summary wording
+
+- **Observed:** Mobile shows animated indicators on running tool items and animates the enclosing
+  Activity section. Desktop and website do not consistently expose those working states in the
+  activity list. Mobile's summary says “tool actions” and “approvals,” while desktop says
+  “tools” and “automatic approvals” and includes failure/running counts.
+- **Requested behavior:** Use the existing desktop/web “Working…” animated icon for each running
+  tool item on desktop and website, replacing that item's completed/failed symbol only while it
+  runs. Keep a subtle animation on the whole Activity group whenever any contained item is
+  running; retain the accepted warm group fill without a side accent and the individual item
+  side borders and status fills from BF-2026-10-06-09. Use desktop's Activity summary wording
+  and count order on desktop, website, and mobile.
+- **Acceptance:** The same synthetic running conversation shows matching tool, automatic
+  approval, failed, and running counts and wording on all three surfaces. Running indicators
+  start and stop with the actual item state, and group animation stops when no item is running.
+  Completed and failed items keep their distinct symbols and fills. Provide text status and a
+  static reduced-motion presentation so progress does not depend on animation alone.
+
+### BF-2026-10-06-14 — Align chat and Team Tools tab icons and text colors
+
+- **Observed:** The installed desktop build shows a chat browser subtab strip whose chat title
+  lacks the chat icon and whose tab text is brighter than the primary app tabs. Team Tools has
+  the same need for its initial icon, plus a distinct Standup icon. The AI Allowance panel's
+  label color also appears inconsistent with nearby sidebar labels.
+- **Requested behavior:** Use the chat icon immediately before each chat title, the Team Tools
+  icon on its initial tab, and a standup-specific icon on Standup. Browser child tabs should use
+  their site favicon from BF-2026-10-06-06. Match secondary tab and allowance label colors to
+  the established selected/unselected navigation palette.
+- **Acceptance:** Locate the installed build's chat browser subtab implementation, then compare
+  active/inactive states and long names in main, chat, and Team Tools tabs at narrow and wide
+  widths, including keyboard and accessible names.
+
+### BF-2026-10-06-15 — Share chat and Team browser tab memory with mobile
+
+- **Observed:** Mobile chat and Team views do not show the same open feature/browser tab list as
+  desktop. A browser tab opened on mobile does not reappear in the corresponding desktop view.
+- **Requested behavior:** For the same authorized Mac destination, make the chat and Team tab
+  descriptors available on both clients. Opening, closing, and renaming a mobile browser tab
+  should reconcile with desktop tab memory; both clients should show the same relevant tab list
+  after reconnect or restart. Keep each client's selection and scroll position local.
+- **Acceptance:** Open a synthetic browser tab from mobile while desktop is connected, find it
+  in the matching desktop chat or Team view, and reopen it there; verify the reverse direction,
+  offline reconciliation, duplicate prevention, and revocation. Sync bounded tab descriptors,
+  not WebKit/Electron cookies, page memory, or private browser credentials.
+
+### BF-2026-10-06-16 — Collapse the mobile chat composer while reading
+
+- **Observed:** Mobile's full-height chat composer keeps its text area, connection status,
+  model choices, and actions visible while the user scrolls the conversation, reducing reading
+  space.
+- **Requested behavior:** When focus leaves the composer for the conversation, reduce it to a
+  single-line preview of the unsent draft with truncation. Touching the preview restores the
+  current full composer, including connection status and model controls, with the draft intact.
+  Replace the Stop text button with a stop icon inside a circular button that remains visible
+  and actionable in both sizes while a turn is active.
+- **Acceptance:** Scrolling/tapping the conversation collapses the composer; tapping the preview
+  expands it without changing draft text, model, or queued/steer state. Stop works immediately
+  from either size, is labeled for accessibility, and is absent or disabled when no turn can be
+  stopped. Keyboard, VoiceOver, safe-area, and reduced-motion behavior remain usable.
+
+### BF-2026-10-06-17 — Reduce mobile chat header height
+
+- **Observed:** The mobile chat header's back/menu controls and surrounding padding use more
+  vertical space than needed above the feature tabs and conversation.
+- **Requested behavior:** Tighten the header's visual button size and vertical padding while
+  retaining readable title truncation and accessible touch targets. Keep the feature tabs and
+  composer from overlapping the safe areas.
+- **Acceptance:** Compare the chat view on compact and large iPhone sizes with long titles,
+  active browser tabs, keyboard open/closed, and VoiceOver; controls remain at least 44 points
+  tappable and the conversation gains visible vertical space.
+
+### BF-2026-10-06-18 — Match the desktop browser address action on mobile
+
+- **Observed:** The mobile browser toolbar uses a text “Enter” action where desktop uses an icon.
+- **Requested behavior:** Use the same icon and meaning on mobile while preserving the address
+  field's submit behavior and a clear accessible action name.
+- **Acceptance:** On an iPhone, entering a URL or search and tapping the icon performs the same
+  navigation as the current Enter button; keyboard submission still works, and the icon has a
+  usable touch target and VoiceOver label.
+
+### BF-2026-10-06-19 — Simplify mobile Team Tools tabs and place Standup action locally
+
+- **Observed:** Mobile Team Tools has a “Browser” category with another tab row beneath it, and
+  “Open standup” appears while Browser is selected.
+- **Requested behavior:** Put browser tabs directly in the Team Tools primary tab row alongside
+  Overview and Standup. Remove the Browser category and nested browser tab row on iPhone. Move
+  “Open standup” into the Standup tab. The add-tab action should create a primary browser tab.
+- **Acceptance:** Open, switch, close, and restore multiple browser tabs from one Team Tools tab
+  row on compact iPhone screens, with usable overflow and selected states. “Open standup” appears
+  in Standup and opens the intended view. Tab memory remains compatible with BF-2026-10-06-15.
+
+### BF-2026-10-06-20 — Preserve the mobile chat header when browser tabs are active
+
+- **Observed:** At times, selecting a browser tab within a mobile chat removes the chat title
+  and menu and leaves a large blank area at the top. The normal chat view retains those controls.
+- **Requested behavior:** Keep the back button, truncated chat title, and menu visible at the
+  compact height specified in BF-2026-10-06-17 for chat and browser tabs alike; avoid an empty
+  spacer when the selected tab changes.
+- **Acceptance:** Switching among the chat, empty browser tabs, and loaded browser tabs, then
+  scrolling, returning, and reopening the chat, never hides the title/menu or adds excess top
+  space. Check compact and large iPhones, safe areas, and keyboard open/closed states.
+
+### BF-2026-10-06-21 — Keep the chat selected when closing its browser tab
+
+- **Observed:** Closing a browser tab opened within a chat changes the screen to Team Tools.
+- **Requested behavior:** Closing a chat-owned browser tab should keep the user in that chat and
+  select the chat view or another remaining tab in the same chat. It must not switch the active
+  feature to Team Tools.
+- **Acceptance:** On mobile, close the active and an inactive browser tab from a chat with one
+  and multiple browser tabs. The chat title, menu, conversation, and remaining tabs stay in the
+  same chat; closing the last browser tab returns to its conversation. Repeat after switching
+  between chats and Team Tools to catch stale tab-owner or selection state.
+
+### BF-2026-10-06-22 — Sync open remote chat tabs on visiting desktops
+
+- **Requested October 6 by the operator:** A desktop viewing a chat hosted on another authorized
+  Mac must load and reconcile that chat's open tabs, matching the mobile tab-memory scope in BF-15.
+- **Acceptance:** Both Macs show the host chat's bounded document/browser descriptors. Open, close,
+  rename and reorder changes converge without duplicates after reconnect; stale replies cannot
+  overwrite newer revisions. Selection and reading position remain local. Revocation removes
+  access; browser cookies, page memory, credentials and terminal execution never cross hosts.
+
 ## Next changes
+
+**Implementation and rollout authorized — October 5:** the operator lifted the
+queue/build hold and requested coordinated implementation of items 1–26 using
+GPT-6 Sol subagents at medium effort, with app updates installed as platforms become
+ready. Website backups/uploads are approved; iPad, Work Mac and Build Mac were
+reported unlocked. Verify current device/access state when installing. Preserve
+existing data, identities, signing and uncommitted item 19 work. The specific
+message-level More actions proposal remains deferred. Earlier item-level references
+to the general hold are historical; implementation, test and install receipts will
+be tracked in `next-changes-release.md`. Authorization alone is not completion.
+
+
+Current rollout (October 6): Build Mac's signed 0.2.1 revision
+`a65d8df542a2+dirty.803bbc240e31` includes items 27–28 and passed final continuity
+checks. Website release `20261006T053613Z` is live. Native iPhone and iPad 0.2.1 (2610.5.3) and Work Mac 0.2.1 are installed. The
+operator lifted the iPad hold on October 6; its in-place update and preservation
+checks passed. Personal→HC paired-connection
+verification remains pending; no pairing or grant changes were made. Item-level descriptions below
+retain the original reported defects and acceptance criteria; their initial
+"pending" labels are historical, not the current platform-wide implementation
+status. See `next-changes-release.md` for exact tests, installed observations and
+unverified acceptance conditions.
+
 
 ### 1. Command W closes the current tab
 
@@ -27,6 +370,649 @@ Acceptance criteria:
   both the tab and window open.
 - Verify shortcut handling with focus in ordinary content, embedded browser content,
   terminals and text inputs, so the main window cannot receive a fallback close.
+
+### 2. Remote chats must match the regular chat layout
+
+Requested October 5, 2026. Status: operator-reported defects in the installed Mac
+interface; correction and installed acceptance pending. This carries forward the
+existing remote desktop chat parity requirement below.
+
+Remote chats must use the same chat container, details sidebar and composer as
+regular local chats. The operator reports missing chat-specific sidebar items,
+a different message box with a Queue/Steer dropdown, and a page taller than the
+window that pushes the header/details and composer out of view. The supplied
+screenshot also shows repeated Archive/Delete button pairs and a missing rounded
+outer chat container. The application navigation sidebar is present; the missing
+sidebar requirement concerns the regular chat's details and controls.
+
+Acceptance criteria:
+
+- Restore the regular chat's rounded outer container, spacing, header and details
+  sidebar, including the same applicable sections and controls. Retain the existing
+  remote capability and read-only metadata boundaries described below.
+- Match the regular composer appearance and layout. Use the same distinct Send,
+  Queue, Steer and Stop buttons with appropriate states; remove the remote-only
+  Queue/Steer dropdown.
+- Constrain the chat workspace to the available window height beneath the tab bars.
+  Keep the chat header and composer visible while the conversation scrolls within
+  its own area. Long details scroll within their own panel. At smaller sizes, use
+  the regular chat's adaptive layout without pushing controls outside the window.
+- Render one applicable set of Archive/Delete controls. Reopening, switching tabs,
+  streaming updates and reconnecting must not duplicate those controls. A later
+  October 5 screenshot shows five Archive/Delete pairs in one remote chat header;
+  treat this as a recurring installed defect. The operator subsequently reports
+  that another pair appears on every desktop refresh. Verify repeated automatic
+  and manual refreshes retain exactly one set of controls and each click invokes
+  its action only once; do not merely hide duplicated elements.
+- Restyle desktop Archive/Delete as compact, understated secondary actions that
+  fit the chat header: lighter visual weight, minimal background/border treatment
+  and consistent spacing. Keep clear labels or accessible labeled icons, readable
+  contrast and adequate hit areas. Use a restrained destructive cue for Delete;
+  retain deletion confirmation and existing active-work restrictions. Do not move
+  these actions into the deferred More actions menu as part of this change.
+- Compare local and remote chats side by side using equivalent synthetic content
+  and idle/running/queued/failed states. Check long histories, expanded activity,
+  long titles, multiline drafts, window resizing and UI scaling.
+- Verify the corrected layout in the installed Mac app with a remote chat; record
+  installed observations separately from software tests. Keep chat content out of
+  repository fixtures and screenshots.
+
+### 3. New tab menu appears behind browser content
+
+Requested October 5, 2026. Status: operator-reported defect with screenshot evidence;
+implementation approach and installed verification pending.
+
+When an embedded browser tab is active, clicking the tab strip's **+** opens the
+creation menu partly behind the browser content. Choices for new tabs, terminals
+and other content become obscured. The entire menu must appear above the active
+browser and remain usable.
+
+Acceptance criteria:
+
+- Show the complete creation menu above embedded browser content in the main tab
+  strip and applicable nested chat and Team workspaces. Keep the menu within the
+  available window bounds, with scrolling when needed.
+- Menu choices receive pointer and keyboard input; clicks on them must not pass
+  through to the underlying browser. Preserve normal focus, Escape dismissal and
+  outside-click dismissal.
+- Opening and dismissing the menu preserves the browser's page, navigation history,
+  scroll position and entered content; it must not require reloading the browser.
+- Verify with an actual embedded browser in the installed Mac app, including resized
+  windows, UI scaling and switching between browser and non-browser tabs. A test
+  with only ordinary page elements does not establish native browser layering.
+
+Investigate how the embedded browser surface is layered relative to app menus
+before selecting the fix; do not assume a CSS stacking change alone is sufficient.
+
+### 4. Missing divider after Standup in Team Tools
+
+Requested October 5, 2026. Status: operator-reported visual defect with screenshot
+evidence; implementation and installed verification pending.
+
+Add the missing vertical tab divider between **Standup** and the first browser tab
+in the Team Tools tab strip. Match the existing divider between Team Tools and
+Standup in color, height, thickness and spacing.
+
+Acceptance criteria:
+
+- The divider is visible after Standup when a browser tab follows it, including a
+  newly opened **New tab**.
+- Preserve the divider when switching between Standup and browser tabs, opening or
+  closing browser tabs, and resizing or scrolling the tab strip.
+- Verify the appearance in the installed Mac app without changing tab order or
+  selection behavior.
+
+### 5. Consistent right click menus throughout the interface
+
+Requested October 5, 2026. Status: operator reports interface-wide context menus
+with Copy are still missing; implementation and installed verification pending.
+The earlier chat-row/tab context-menu work does not satisfy this broader request.
+
+Provide consistent, context-sensitive right-click menus throughout Proteus,
+including local and remote chats, messages, details, text fields, tabs, list rows,
+documents, logs, terminals and embedded browsers. **Copy** must be available wherever
+there is applicable selectable or copyable content. Copy selected text when a
+selection exists; otherwise label the target explicitly, such as Copy message,
+Copy link or Copy value. Preserve the selection while opening the menu.
+
+The operator approved the following additional actions on October 5, 2026. Include
+them in the planned implementation, according to the target and supported capabilities:
+
+| Target | Approved menu options |
+| --- | --- |
+| Editable text and composer | Cut, Copy, Paste, Select All, Undo, Redo, using normal editing availability. |
+| Chat messages | Copy message, Copy as Markdown, Copy code for a code block, Read Aloud where supported. |
+| Links | Copy link address, Open in new browser tab, Open in default browser where supported. |
+| Tabs | Close tab, Close other tabs and Close tabs to the right, with existing close protections. |
+| Chat rows | Open, Rename (see item 16), Archive or Unarchive, Delete with the existing confirmation and active-work restrictions. |
+| Documents, details and logs | Copy selection, Copy value or entry, Select All within the current content area; Find where supported. |
+| Embedded browser | Back, Forward, Reload, Copy selection and link actions, preserving normal editable-field menus. |
+| Terminal | Copy selection, Paste, Select All within terminal output, Clear visible output without ending the session; retain terminal-specific keyboard behavior. |
+
+Acceptance criteria:
+
+- Audit the major interface surfaces for missing menus, including nested Team/chat
+  tabs and remote views; expose relevant actions consistently without showing
+  unrelated choices everywhere.
+- Reuse existing action handlers, permission checks and confirmations. A menu must
+  not introduce unavailable remote file actions or imply unsupported capabilities.
+- Selection Copy copies only the selected text. Whole-message, link, code and value
+  actions copy the clearly identified target; invoking the menu performs no action.
+- Menus remain above embedded browser content and inside window bounds, consistent
+  with item 3. Verify pointer targeting, keyboard navigation, Escape dismissal and
+  focus restoration. Opening a menu must not clear drafts or change the current tab.
+- Verify installed Mac behavior across local/remote chat, inputs, browser, terminal,
+  document and log views. Check existing website/native equivalents where applicable;
+  preserve native touch selection and long-press behavior.
+
+#### Website coverage
+
+Include applicable custom actions on the Proteus website. The current website
+source already provides chat-row Archive/Unarchive and Delete menus, plus clipboard
+copy handlers in Markdown views; extend those foundations to cover the missing
+approved actions. Source inspection is not live website acceptance.
+
+- Use custom menus on Proteus messages, chat rows, internal tabs, code blocks,
+  document views and log entries. Include Copy selection/message/Markdown/code/value,
+  chat actions and internal tab actions as appropriate to the target.
+- Preserve the browser's normal menu for editable fields, ordinary links, images
+  and other surfaces where it provides useful built-in actions.
+- **On hold, October 5:** defer the proposed ellipsis / More actions button and its
+  menu. The operator reviewed the preview and asked to hold this idea. Keep the
+  approved context-sensitive right-click work in scope; do not add the separate
+  More actions control. Preserve existing keyboard and touch access to actions.
+  This hold does not prevent relocating the existing iPad chat menu as requested
+  in item 13; it remains a separate, already-present control.
+- A website can display its own context menu; adding entries directly to the
+  browser's native menu requires extension capabilities and is outside this scope.
+  Do not globally suppress the browser menu or replace spelling/editing features.
+- Use HTTPS clipboard APIs from explicit user actions. Report unavailable or denied
+  clipboard access and retain normal keyboard/native copy and paste alternatives;
+  custom Paste cannot be assumed to work identically across browsers.
+- Tab close actions affect Proteus's internal tabs only. Browser-owned tabs,
+  external sites and unsupported remote terminal/file operations retain their
+  existing capability boundaries. Do not promise browser-level Command-W control.
+- Verify custom and native-menu coexistence, selection retention, clipboard failure,
+  keyboard/touch access and menu positioning in Safari, Chrome and Firefox.
+
+Platform references: [context menu events](https://developer.mozilla.org/en-US/docs/Web/API/Element/contextmenu_event),
+[browser extension menus](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/menus),
+and [clipboard capabilities](https://developer.mozilla.org/en-US/docs/Web/API/Clipboard_API).
+
+### 6. Compact attachment control on the composer action line
+
+Requested October 5, 2026. Status: planned; implementation and installed verification
+pending. Apply to the regular and remote chat composers across applicable clients.
+
+Move **+ Attach** immediately to the left of the model selector and remove the
+visible word **Attach**, leaving **+**. Match the control's visual size, font,
+weight and alignment to the model selection line. Keep the attachment control,
+model selector and **Send** button on the same horizontal line, with Send at the
+right. Retain an accessible Attach files name and an adequate touch target.
+
+Acceptance includes narrow mobile widths, long model names, keyboard-visible
+layouts and text scaling. Keep the controls reachable without overlap or clipping;
+use compact/truncated model labels as needed. Preserve attachment selection,
+staging and send behavior.
+
+### 7. Visible mobile Send button before text is entered
+
+Requested October 5, 2026. Status: operator reports black-on-black Send presentation
+with an empty composer; correction and installed verification pending.
+
+Make the mobile **Send** label or icon visible before text is entered while keeping
+its disabled state clear. The operator suggested gray text; choose a gray with
+sufficient contrast against the actual button/background rather than fixing a dark
+gray that remains hard to see. Preserve enabled/disabled behavior and distinguish
+the active state once valid sendable content is present.
+
+Verify empty, text-entered, attachment-only and sending states in light and dark
+appearance on mobile. A visual correction must not enable an otherwise invalid send.
+
+### 8. Date and time on mobile chat rows
+
+Requested October 5, 2026. Status: planned; implementation and installed verification
+pending.
+
+Show a date and time on mobile chat rows, matching the desktop chat list's timestamp
+meaning and presentation. Put it on the **right side of the Mac/status line**, with
+Mac identity and status retained on the left. Use the actual chat timestamp and the
+client's configured timezone behavior.
+
+Verify local and remote chat entries, long Mac names/status labels, narrow screens
+and text scaling. Keep date/time readable without overlapping the Mac/status text;
+do not substitute message timestamps for the chat-list timestamp.
+
+### 9. Larger mobile message box and tap area
+
+Requested October 5, 2026. Status: operator reports the single-line message area
+is too small to tap comfortably; implementation and installed verification pending.
+
+Increase the mobile chat message box's minimum height and internal padding so it
+has a comfortable multiline-sized input area even when empty. Make the full padded
+input area focus the editor and open the keyboard when tapped. Apply consistently
+to regular and remote mobile chats, including the mobile website where applicable.
+
+Keep the attachment, model selector and Send controls together on their own action
+line as requested in item 6. Let the message box grow with the draft up to a bounded
+height, then scroll its text without pushing the action line outside the viewport.
+
+Verify easy tapping with an empty or single-line draft, multiline entry, keyboard
+open/closed, smaller screens and larger text settings. Preserve enough visible
+conversation space and keep the input and Send controls accessible above the keyboard.
+
+### 10. Fade tab labels only at an actual clipped edge
+
+Requested October 5, 2026. Status: screenshot shows the last nested tab fading while
+far from the tab strip's right edge; correction and installed verification pending.
+
+Base the trailing fade on actual clipping at the visible tab strip boundary or
+new-tab control. A fully visible tab must retain its complete label and selection
+indicator, even when it is the last tab. Do not fade a tab simply because it is last.
+
+Verify main and nested chat/Team tab strips with one short tab, multiple tabs that
+fit, overflowing tabs, and horizontal scrolling in both directions. Recalculate
+clipping after resize, label changes, and tab creation/removal; remove the fade as
+soon as the tab is fully visible.
+
+### 11. Place nested tabs flush in the upper left corner
+
+Requested October 5, 2026. Status: screenshots show unnecessary top and left space
+around the second tab strip; correction and installed verification pending.
+
+Place the second-level chat/Team tab strip flush in the content area's upper-left
+corner: immediately beneath the main tab strip and directly against the sidebar
+boundary (or content area's left edge when the sidebar is hidden). Remove all outer
+padding and margins around the sub-tab strip, including any inset before the first
+tab. The operator reiterated the existing top-spacing requirement and explicitly
+added the left inset in the follow-up screenshot.
+
+Keep padding inside each tab for its label and hit area; surrounding content padding
+must not inset the strip. Preserve the intended dividers. Verify consistent alignment
+when switching between local chats, remote chats, Team Tools and their browser/document
+tabs, including resized windows and expanded/collapsed sidebar states.
+
+### 12. Preserve the current view position through refreshes
+
+Requested October 5, 2026. Status: operator reports chats and other views apparently
+refreshing at unexpected times and jumping back to the top. The refresh trigger is
+not yet diagnosed; correction and installed verification pending.
+
+Keep the user's current reading and working position through automatic or manual
+refreshes, polling, live updates, reconnects and rerenders. This applies to chats
+and other scrollable Proteus views, not only tab-strip scrolling.
+
+Acceptance criteria:
+
+- Preserve each view's vertical and horizontal position independently, including
+  conversation, details, lists, documents and nested scroll areas. Restore the same
+  position when returning to an already-open tab.
+- When content above the viewport changes, retain the visible item/message and its
+  relative screen position instead of relying only on a stale pixel offset. If the
+  anchor disappears, stay near the previous position rather than jumping to the top.
+- In chats, follow new output only when the user is already following the latest
+  messages. Scrolling up must retain the reading position during streaming, earlier
+  history loading, image/layout updates and refreshes. Explicit Jump to latest and
+  other intentional navigation remain available.
+- Preserve drafts, caret/focus, selection and expanded details during updates.
+  Routine refreshes must not reset the selected tab or recreate duplicate controls.
+- Identify unnecessary refresh/remount triggers and reduce them where appropriate;
+  refreshes that remain necessary must still preserve the current position.
+- Verify repeated automatic and manual updates while scrolled partway through long
+  content, including local/remote chats and other affected views on applicable
+  desktop, website and mobile clients. Record actual installed observations.
+
+### 13. Remove the redundant iPad chat title row
+
+Requested October 5, 2026. Status: screenshot shows the same chat name in the top
+tab, a separate centered title row and the nested chat tab; implementation and
+installed verification pending.
+
+On iPad, retain the top-level tabs and the nested chat tabs. Remove the redundant
+centered chat-name header and its reserved vertical space. Move the existing chat
+**ellipsis menu** into the top tab area immediately beside its **+** control.
+Keep the nested tab strip's own + in its existing scope.
+
+Acceptance criteria:
+
+- Show only the two requested tab levels above the conversation, with no third
+  chat-title row or leftover gap. Keep the sidebar's chat navigation unchanged.
+- The relocated menu acts on the currently selected chat and preserves its current
+  actions and safeguards. Switching chats updates the target; a non-chat tab must
+  not expose stale actions for a previously selected chat.
+- Keep the ellipsis and + distinct, accessible and reachable in landscape, portrait,
+  split view and with overflowing tab strips. Preserve chat state and scroll position.
+- Verify the installed iPad layout. This relocates an existing menu; the proposed
+  new message-level More actions menu in item 5 remains on hold.
+
+### 14. Prevent unintended blue accents on iPad
+
+Requested October 5, 2026. Status: operator reports intermittent blue colors on iPad;
+the supplied screenshot shows a blue selection line on the nested chat tab while
+other app accents remain green. Cause and correction are not yet verified.
+
+Keep tab selection indicators and other app-owned controls consistent with the
+Proteus theme instead of intermittently switching to a default blue accent.
+Investigate affected iPad states and inherited tint behavior before choosing the fix.
+
+Verify selection, tab switching, refresh/reconnect, opening and dismissing menus or
+sheets, appearance changes, rotation and split view. Check both top and nested tab
+strips and other affected controls in the installed iPad app. Preserve intentional
+semantic colors and platform accessibility behavior.
+
+### 15. Auto approve tools for this chat only
+
+Requested October 5, 2026. Status: chat-only approval scope is missing from the
+inspected source; implementation and verification pending. No live approval setting
+was changed while recording this request.
+
+Provide an explicit **Auto-approve for this chat only** choice that does not change
+the workspace's saved permission profile. Current source routes chat permission
+changes through the run's schedule into `PermissionStore.setMode`; profiles are
+keyed by provider, working directory, roots and integrations, not chat identity.
+Other chats and schedules with the same permission context therefore share the
+current setting, despite the control appearing inside an individual chat.
+
+Acceptance criteria:
+
+- Bind chat-only approval to the exact chat on its owning host and its authorized
+  permission context. Keep workspace defaults and other existing/new chats and
+  scheduled runs unchanged. New, copied or forked chats must not inherit the grant.
+- Label the scope clearly in desktop, remote, website and mobile views. Distinguish
+  Approve once, Auto-approve for this chat only, and workspace-wide authorization;
+  never silently promote a chat choice into persistent workspace trust.
+- Show the effective mode and whether it comes from the chat or workspace. Provide
+  a clear way to revoke the chat override and show the resulting inherited mode;
+  restoring defaults must not misleadingly imply approval is off if the workspace
+  itself is already authorized.
+- Define and display the grant's lifetime explicitly, including continuation,
+  reopening and application restart. It must never migrate to another chat, and
+  changed roots/provider/integrations require a fresh scope review.
+- Enforce scope on the owning host for every tool decision, including pending
+  approvals. Retain existing mandatory approval and sandbox boundaries. Record
+  chat versus workspace approval provenance in the audit trail.
+- Validate with two chats sharing the same workspace/context and a scheduled run:
+  enabling chat-only approval affects only the selected chat, leaves the workspace
+  profile unchanged, and revokes without affecting the others. Test remote changes,
+  stale revisions, continuation/restart behavior and context changes explicitly.
+
+### 16. Automatic chat names and rename after starting
+
+Requested October 5, 2026. Status: planned; implementation and installed verification
+pending. Native new-chat source already has an optional title field and falls back
+to the first 64 prompt characters; this does not establish meaningful automatic
+naming or a complete rename workflow across clients.
+
+Provide a **Chat name (optional)** field directly above the initial message box on
+desktop, website and mobile. Use the supplied name when nonblank. Otherwise choose
+a short, descriptive title from the opening conversation. Chat creation must not
+wait for naming; show a temporary title while a generated name is pending and keep
+a useful fallback if generation fails. Do not assume the Codex, Claude or Copilot
+adapters expose identical automatic-title support; verify capabilities before choosing
+the implementation, preserving the chat's provider and host boundaries.
+
+Allow the name to be edited after the chat has started:
+
+- Desktop and website: right-click the chat name in a row, tab or title to choose
+  **Rename**. Add a subtle edit/pencil icon beside the displayed chat title, visually
+  smaller than the name but with an accessible label and usable hit area. Do not
+  introduce a redundant title row just to display the icon.
+- Mobile: put **Rename** in the existing chat ellipsis menu and offer it by long
+  pressing the chat name. On iPad use the existing menu relocated in item 13. This
+  does not revive the deferred new message-level More actions menu.
+- Open a prefilled name editor with Save and Cancel. Trim surrounding whitespace,
+  reject an empty renamed title, and preserve the old name on cancellation or error.
+
+Acceptance criteria:
+
+- A manually supplied or edited name always takes precedence; delayed automatic
+  naming must never overwrite it. Distinguish temporary, generated and manual names.
+- Persist the title on the owning host and propagate it to chat lists, sidebar
+  entries, top tabs, nested conversation tabs and open views across clients.
+  Preserve it through refresh, reconnect and restart; guard against stale edits.
+- Renaming changes chat display metadata without restarting a turn, changing the
+  provider session, granting permissions, renaming the source schedule or losing
+  messages, drafts, attachments, tab order or reading position. Permit rename while
+  work is running without interrupting that work.
+- Cover provided/blank/whitespace-only names, generation failure, a manual rename
+  while automatic naming is pending, long and non-ASCII titles, concurrent client
+  edits and local/remote chats. Verify installed desktop, website and mobile flows.
+
+### 17. Compact browser link hover status overlay
+
+Requested October 5, 2026. Status: planned; implementation and installed verification
+pending.
+
+When the pointer hovers over a link in a Proteus browser tab, show the full destination
+URL in a compact overlay at the bottom-left of that browser's visible content area.
+Use the operator's Safari-style reference: a content-sized label with a translucent
+background that keeps the URL readable over the page, not a full-width status bar.
+
+Acceptance criteria:
+
+- Display the actual resolved link destination, including its scheme, host, path,
+  query and fragment, rather than only the link text or a shortened domain. Update
+  immediately when moving between links; clear it when leaving the link/browser,
+  navigating or switching tabs so no stale destination remains.
+- Size the overlay to its content, with subtle padding and readable contrast over
+  light, dark and visually busy pages. For long URLs, wrap within the browser's
+  visible bounds so the full destination remains inspectable without a fixed
+  full-width bar or silent truncation.
+- Layer the overlay above the embedded browser page without shifting page layout,
+  changing scroll position, taking focus or intercepting clicks. Keep it anchored
+  to the active browser viewport when the window/sidebar is resized.
+- Apply consistently to main, chat-workspace and Team browser tabs. Verify actual
+  embedded browser behavior, including image links, dynamically added links and
+  links inside frames, using synthetic pages and URLs.
+- Keep hover state transient; do not persist destination URLs in logs or shared
+  state. External browser tabs launched by the website retain their own browser's
+  status UI. Touch-only clients need no simulated hover; verify pointer-equipped
+  clients where embedded browser hover is supported.
+
+### 18. Unboxed browser navigation and new tab controls
+
+Requested October 5, 2026. Status: planned; implementation and installed verification
+pending.
+
+Replace the boxed browser Back, Forward and Reload buttons with standalone arrow
+and circular-refresh icons. Use slightly larger glyphs as needed for legibility,
+retaining comfortable invisible hit areas. Dim unavailable actions, such as Forward
+at the end of history, and actually disable them. Preserve visible keyboard focus,
+accessible names and subtle hover/pressed feedback without permanent button boxes.
+
+Apply the same unboxed treatment to the tab strips' **+** menu controls at main,
+chat and Team levels. Keep their menu behavior and touch targets intact. Verify
+light/dark appearance, pointer and keyboard use, navigation availability changes
+and constrained widths in the installed app.
+
+### 19. Compact Agent access control design
+
+Requested October 5, 2026. Status: visual direction approved; desktop implementation is in progress.
+Before release authorization, partial source work passed syntax checks and all 340
+Node tests; main/chat toolbar checks passed before Team screenshot instability.
+That earlier result is not current full UI acceptance. New checks and installations
+are tracked in `next-changes-release.md`.
+
+Replace the space-heavy Agent access control with a compact robot icon at the right
+of the address bar. Pressing it toggles access for that browser tab directly. Make
+the enabled state obviously illuminated with a filled accent highlight and inverted
+icon colors. When off, show only the muted robot glyph with no box, border or badge.
+Use the filled/unfilled treatment and accessible pressed state alongside color.
+Use a lighter background for the URL field, matching the approved preview and
+keeping the URL readable against the surrounding darker toolbar.
+
+Hovering or keyboard-focusing the icon explains the current state and meaning:
+**Off — private tab; agents cannot interact. Click to allow access.**
+**On — agents may interact with this tab. Click to revoke access.**
+Expose the same meaning through an accessible name and pressed state. Allowing
+access does not imply an agent is currently working; show actual ownership separately
+when present. Do not use the site-security lock icon for this permission.
+
+Preserve existing semantics: human-created tabs start private; enabling access makes
+the tab available to runs; disabling revokes ownership, disconnects automation and
+cancels pending actions. Include this revocation effect in the on-state explanation.
+Keep scope visibly per-tab and distinguish this from chat/workspace tool auto-approval.
+Design previews change no real permissions. Verify obvious on/off contrast in light
+and dark appearance, hover/focus explanations and pointer/touch hit areas.
+
+### 20. URL bar Copy URL and certificate information
+
+Requested October 5, 2026. Status: planned; implementation and installed verification
+pending.
+
+Add **Copy URL** and **View certificate information** to the browser address bar's
+right-click menu, alongside normal text-editing actions. Apply to main, chat and
+Team embedded browser tabs.
+
+- Copy URL copies the complete current page URL, including scheme, path, query and
+  fragment, regardless of selection or visual truncation. Keep normal Copy for
+  selected address-field text. Distinguish the committed page URL from an unsubmitted
+  edited address or search query.
+- Certificate information refers to the active page's HTTPS connection and actual
+  certificate: subject/domain names, issuer, validity dates, fingerprint and chain
+  where available. Clear stale data on navigation/tab changes and identify the host
+  whose certificate is displayed. For HTTP, local pages or unavailable information,
+  explain why no certificate is available; do not show a previous page's certificate.
+- Electron provides `dialog.showCertificateTrustDialog` on macOS and Windows. Its
+  documented macOS dialog displays certificate information and also offers trust/
+  import actions; it is not a dedicated read-only browser certificate inspector.
+  Evaluate it against a read-only Proteus details panel for routine inspection.
+  Viewing information must not automatically import, trust or bypass validation.
+- Verify with the project's Electron version, valid HTTPS, HTTP/local pages,
+  redirects, navigation while inspecting and certificate-error states. Preserve
+  existing certificate validation and address-field editing behavior.
+
+Reference: [Electron certificate trust dialog](https://www.electronjs.org/docs/latest/api/dialog#dialogshowcertificatetrustdialogwindow-options-macos-windows).
+The website's external browser tabs retain browser-owned certificate inspection.
+
+### 21. Remember the selected sub tab when returning
+
+Requested October 5, 2026. Status: implementation authorized and in progress;
+verification and installed acceptance pending.
+
+Remember the selected sub-tab independently for each chat and for Team Tools. When
+the user switches to a top-level browser tab, another chat or another feature and
+then returns, restore the same selected sub-tab instead of resetting to the primary
+conversation, Team overview or Standup.
+
+Acceptance criteria:
+
+- Returning to a chat through its top-level tab or sidebar entry selects its last
+  active conversation, browser, terminal or document sub-tab. Team Tools restores
+  its last active tool or content sub-tab in the same way.
+- Track selection by stable parent/chat/host and child identity, not by tab index.
+  Switching between chats must not overwrite another chat's remembered selection.
+- Resume the existing view without creating a duplicate tab, unnecessarily reloading
+  a browser, restarting a terminal command or losing drafts, reading position or
+  tab-strip scroll position. Apply item 12's view-position preservation as well.
+- If the remembered child was closed or is no longer available, fall back to the
+  chat's conversation or Team overview. Do not resurrect a closed child. Explicit
+  selection of a different child updates the remembered selection.
+- Preserve the selection through ordinary refresh/reconnect and the existing saved
+  tab restoration flow, without eagerly loading browsers at application startup.
+  Honor intentional navigation to a specific message, document or tool when requested.
+- Verify chat A to chat B and back, chat to top-level browser and back, and Team
+  Tools to another feature and back, with different selected child types, reordered
+  or closed tabs, local/remote chats and applicable desktop, website and iPad layouts.
+
+### 22. Pause at normal zoom before opening the tab overview
+
+Requested October 5, 2026. Status: implementation authorized and in progress;
+verification and installed acceptance pending.
+
+When pinching out toward the normal page scale, pause at the unzoomed baseline
+(the operator's **0%** point; 1x / 100% page scale) before allowing a further outward
+pinch to open the tab overview. Reaching baseline must not immediately replace the
+page with the overview.
+
+Acceptance criteria:
+
+- Introduce a perceptible pause at baseline and require deliberate continued or
+  renewed zoom-out input after it. Tune the delay and gesture threshold during
+  physical trackpad acceptance; no exact duration has been selected yet.
+- Coalesce gesture events so momentum or a burst of zoom events cannot bypass the
+  pause or open the overview multiple times. Releasing at baseline must leave the
+  page visible; a timer alone must not open the overview afterward.
+- Reset pending overview entry on reversing the gesture, changing tabs, navigating
+  or dismissing the overview. Preserve normal zooming above baseline and other
+  explicit overview entry controls.
+- Verify actual pinch behavior from a zoomed page and from baseline, including fast,
+  slow, repeated and interrupted gestures, without changing another tab's zoom.
+
+### 23. Group the tab overview by main tabs and named workspaces
+
+Requested October 5, 2026. Status: implementation authorized and in progress;
+verification and installed acceptance pending.
+
+Arrange the tab overview in groups that reflect the visible tab hierarchy:
+
+- Show standalone main app content tabs first, without a Main heading or other
+  group label. These are tabs that do not belong to a chat or Team Tools.
+- Group each chat's sub-tabs under that chat's current name, and Team Tools sub-tabs
+  under **Team Tools**. Keep separate chats distinct even if their names match.
+- After the unlabeled main group, order groups by their parent tabs' displayed order;
+  fixed feature workspaces retain their established navigation order. Within each
+  group, match the corresponding tab strip's order. Do not sort by title or recency.
+
+Selecting an item activates its existing parent and child tab, preserving position
+and content state. Show each eligible open content tab only once. Use browser
+previews where available and honest type/title representations for other content;
+do not start background browser loads or terminal work to populate the overview.
+Reflect renames, opens, closes and item 24 reordering without losing selection.
+Verify main-only, mixed chat/Team, duplicate chat names and overflowing groups.
+
+### 24. Reorder movable tabs while keeping fixed navigation anchored
+
+Requested October 5, 2026. Status: implementation authorized and in progress;
+verification and installed acceptance pending.
+
+Allow drag-and-drop reordering of user content tabs, including top-level browser,
+chat, terminal and document tabs, and movable children within chat/Team tab strips.
+Keep **Proteus** and fixed feature/navigation tabs anchored; do not make protected
+feature tabs reorderable or allow a movable tab to displace them. Preserve fixed
+conversation/tool tabs where the workspace requires them.
+
+Acceptance criteria:
+
+- Reorder within the current strip/group. Moving content between chats or between
+  main and Team is a separate capability and is not part of this request.
+- Provide a clear drag indicator and drop position, with edge scrolling in overflowed
+  strips. Support an equivalent keyboard action and applicable pointer/touch input.
+- Persist the new order through refresh and restart. Use stable identities so the
+  selected tab, remembered child selection, drafts and scroll positions survive.
+  Reordering must not reload browsers, restart terminals or change access grants.
+- Update item 23's overview order to match. Closing or renaming a tab during a drag
+  must not duplicate, lose or resurrect tabs. Verify fixed/movable boundaries and
+  main/chat/Team strips, including local/remote chats and applicable client layouts.
+
+### 25. Restore prominent Proteus branding on iPad and iPhone
+
+Requested October 5, 2026. Status: implementation authorized and in progress;
+verification and installed acceptance pending.
+
+- In the iPad app chrome, place the existing Proteus arrow logo immediately to the
+  left of the **Proteus** name, matching the established brand mark.
+- Make the logo and Proteus name prominent on the iPhone Home page. Use the same
+  branding treatment on the iPad Home page, sized appropriately for its layout.
+- Reuse the existing logo asset and theme colors, with clear alignment, spacing and
+  contrast. Verify narrow iPhone layouts and iPad portrait/landscape layouts without
+  clipping the brand or crowding navigation controls.
+
+### 26. Match desktop navigation counts on iOS
+
+Requested during the authorized implementation rollout. Status: assigned to native
+mobile implementation; tests and installed acceptance pending.
+
+Show item counts/badges on iPhone and iPad navigation like desktop, especially
+**Needs Attention**, and other applicable items such as Chats and Schedules. Match
+the desktop definitions and connected-host scope; do not substitute the number of
+currently loaded rows or messages. Adapt placement to the iPad sidebar and iPhone
+navigation/Home while preserving label readability and the app's theme.
+
+Counts should update after approval/status changes, reviewing failures, archiving
+or deleting chats, and reconnecting. Match desktop zero-count behavior and avoid
+presenting unavailable data as a confirmed zero. Verify accessibility, narrow
+layouts, and matching synthetic state across desktop and native clients.
 
 ## 0.2.0 implementation and rollout status
 
@@ -334,6 +1320,12 @@ after inspection.
 
 Status: local/remote parity and automatic-history behavior passed synthetic client acceptance;
 installed Personal retained both online Mac destinations. No live paid remote model turn was used.
+
+October 5 operator follow-up: the installed remote chat still differs from the regular
+chat in its details sidebar, composer and viewport layout, with duplicated action
+controls visible in the supplied screenshot. The earlier synthetic results do not
+establish installed visual parity. See Next changes item 2 for the correction and
+required installed acceptance.
 
 - Reuse the local chat composer and layout for remote desktop chats: the same message box,
   Send/Queue/Steer/Stop behavior and destination-provider model, effort, speed and applicable
@@ -1061,3 +2053,31 @@ pairings do not grant agents new authority, and company-source policy stays in i
 
 Operator paths, team rosters, private instructions, chat content, and workspace membership remain
 in local configuration or their owning workflow sources, outside the app repository.
+
+
+### 27. Browser toolbar density and colors
+
+Added during rollout, October 5: match browser-toolbar background to the left
+navigation green, reduce toolbar and address-field height, and remove boxes from
+Stop, Login and Enter so they match Back/Forward/Refresh. Use the same muted text
+tint for toolbar controls instead of bright white. Preserve disabled states,
+keyboard/accessibility behavior and adequate touch targets. Apply to main, chat
+and Team browsers and corresponding controls on other clients.
+
+Work Mac package transfer/install is explicitly on hold until this update is
+completed. The separate request to upload the signed app delta to the private
+GitHub artifact branch has not been approved; do not retry that transfer while
+the hold remains. Build Mac 0.2.1 and website release 20261006T053613Z were
+already installed/activated before this follow-up.
+
+
+### 28. Directional history on held Back/Forward
+
+Added during rollout, October 5: pressing and holding Back or Forward should show
+that direction’s page history, nearest first, like a regular browser. Show useful
+titles and URLs and navigate directly to the chosen history entry. Normal click
+or tap still navigates one entry. A held/dismissed menu must not also trigger a
+normal click. Preserve disabled/no-history states, keyboard/touch accessibility,
+and menu layering above native browser content. Apply to main/chat/Team browsers
+and native long-press equivalents; website-owned browser chrome is outside the
+Proteus website’s control. Verify with synthetic multi-page history.

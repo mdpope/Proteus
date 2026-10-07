@@ -1,5 +1,52 @@
 # Changes
 
+## 0.2.2 — October 6, 2026
+
+- Clarify website Mac pairing, connection and Default Mac navigation, with pairing-stage recovery
+  messages and retained invitation text until authentication succeeds.
+- Keep desktop dialogs above browser pages, dismiss tab overview by its backdrop, and preserve
+  chat tabs through Send, Queue and Steer. Show site favicons and an active agent cursor.
+- Recover browser reads by sharing Proteus-owned debugger attachments with certificate inspection.
+- Match website chat density to desktop and preserve safe failed-tool details. Use the accepted
+  warm Activity group, green successful rows, orange failures, consistent counts and running states.
+- Reconcile Needs attention rows and badges immediately after review, including remote and offline
+  status; explain unavailable Copilot quota without inventing allowance.
+- Sync bounded chat browser/document tabs and Team browser tabs between the host and native clients;
+  visiting desktops also reconcile remote chat tabs. Keep selection and page state local.
+- Compact native chat headers and collapse the composer to a draft preview while reading, with a
+  circular Stop in both sizes. Flatten Team browser tabs and retain chat ownership when closing.
+
+## 0.2.1 — October 5, 2026
+
+- Make Command-W close the selected closable content tab while keeping the Mac window open.
+- Match remote chat layout and controls to regular chats, constrain the conversation to the
+  window, and keep one compact Archive/Delete action pair through repeated refreshes.
+- Keep new-tab menus above embedded browser pages. Add context-sensitive copy, editing, chat,
+  document, log, terminal and tab actions while preserving native website editing menus.
+- Put the compact + attachment control beside model selection and Send. Increase the mobile
+  message-entry area, improve disabled Send contrast, and add chat-list date/time details.
+- Remove outer subtab padding, restore the Standup divider, and fade tab strips only where
+  content is actually clipped. Keep the selected chat or Team child when returning.
+- Preserve conversation reading anchors, draft state and expanded activity during refresh.
+  Reorder movable content tabs with pointer, keyboard or available native move actions.
+- Group the tab overview by main content, chats and Team Tools. Add a deliberate pause at
+  baseline zoom before another outward pinch opens the overview.
+- Use a shorter browser toolbar matching the sidebar green, a compact lighter URL field,
+  and unboxed, muted navigation, Stop, Login, Enter and + controls. Highlight the robot icon
+  when agent access is enabled. Show hovered links in a compact translucent overlay.
+- Hold Back or Forward to choose a page from that direction’s navigation history; a normal
+  click or tap still moves one page.
+- Add Copy URL and read-only current HTTPS connection details to the URL-field menu. Show
+  only certificate fields Chromium reports; do not fabricate an unavailable fingerprint.
+- Add optional starting chat names, prompt-derived automatic names, and guarded rename actions.
+- Add opt-in Auto-approve for this chat within existing allowed resources. It persists across
+  restart, is revocable, clears when the provider/roots/integrations change, and leaves workspace
+  defaults and other chats unchanged.
+- Simplify iPad chat chrome to top tabs and chat tabs, move its existing chat menu beside +,
+  retain the green accent, and show the Proteus arrow/name prominently on mobile Home.
+- Add iOS navigation counts for Chats, Schedules and Needs Attention with exact host totals
+  and unavailable-state handling. Preserve the existing five iPhone bottom tabs.
+
 ## 0.2.0 — October 5, 2026
 
 - Keep open chats, schedules, browsers, terminals and documents as content tabs. Chat and Team

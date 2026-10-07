@@ -196,3 +196,13 @@ commands, reply, restart and revocation. `node test/desktop-peers-ui.mjs` launch
 Electron home and two synthetic hosts for the complete pairing/catalog/chat/approval/history/
 restart flow. These tests do not pair production Macs or invoke a real model. Production desktop
 pairing is a separate operator step using a newly issued destination code.
+
+## Shared chat and Team tabs (0.2.2)
+
+The host advertises `content-tabs.v1` with authenticated `tabs.get` and `tabs.mutate`. Each request
+names an authorized chat or the Team scope and each mutation includes the current revision.
+Browser/document descriptors converge through open, close, rename and reorder operations, with
+current document-grant filtering including mutation replays. Scope/revision notifications contain
+no content. Visiting desktops reconcile the host's chat tabs; native clients also reconcile Team
+browser tabs. Browser-only reorder preserves hidden document slots. Cookies, history, page state,
+terminals, selection and document approval do not synchronize. See `src/content-tabs.js`.

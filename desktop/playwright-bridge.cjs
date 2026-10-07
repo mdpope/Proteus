@@ -4,11 +4,13 @@ const http = require('node:http');
 const { randomBytes } = require('node:crypto');
 const { WebSocketServer } = require('ws');
 const { chromium } = require('playwright');
+const { acquireDebugger } = require('./debugger-session.cjs');
 
 async function connectPage(contents) {
-  const debug = contents.debugger;
-  debug.attach('1.3');
-  const { targetInfo } = await debug.sendCommand('Target.getTargetInfo');
+  const lease = acquireDebugger(contents), debug = lease.debug;
+  let targetInfo;
+  try { ({ targetInfo } = await debug.sendCommand('Target.getTargetInfo')); }
+  catch (error) { lease.release(); throw error; }
   const info = { ...targetInfo, type: 'page', browserContextId: 'proteus-tab' };
   const secret = randomBytes(32).toString('hex');
   const server = http.createServer((_req, res) => { res.writeHead(404); res.end(); });
@@ -21,11 +23,15 @@ async function connectPage(contents) {
   });
   const topSession = 'proteus-page';
   const childSessions = new Set();
+  let disposed = false, browser;
   const cleanup = () => {
+    if (disposed) return; disposed = true;
+    debug.removeListener('detach', cleanup);
+    contents.removeListener('destroyed', cleanup);
     debug.removeListener('message', forward);
     for (const socket of sockets.clients) socket.terminate();
     sockets.close(); server.close();
-    if (!contents.isDestroyed() && debug.isAttached()) debug.detach();
+    lease.release();
   };
   let send = () => {};
   const forward = (_event, method, params, sessionId) => {
@@ -34,6 +40,8 @@ async function connectPage(contents) {
     send({ method, params, sessionId: sessionId || topSession });
   };
   debug.on('message', forward);
+  debug.once('detach', cleanup);
+  contents.once('destroyed', cleanup);
   sockets.on('connection', ws => {
     send = message => { if (ws.readyState === 1) ws.send(JSON.stringify(message)); };
     ws.on('message', async raw => {
@@ -60,13 +68,13 @@ async function connectPage(contents) {
       }
     });
   });
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   try {
-    const browser = await chromium.connectOverCDP(`ws://127.0.0.1:${server.address().port}/${secret}`, { timeout: 15000 });
+    await new Promise((resolve,reject) => { server.once('error',reject); server.listen(0, '127.0.0.1', resolve); });
+    browser = await chromium.connectOverCDP(`ws://127.0.0.1:${server.address().port}/${secret}`, { timeout: 15000 });
     const page = browser.contexts()[0].pages()[0];
     if (!page) throw new Error('Embedded page did not attach.');
     page.setDefaultTimeout(10000);
-    return { page, async close() { await browser.close(); cleanup(); } };
+    return { page, get closed() { return disposed || !browser.isConnected() || !lease.active; }, async close() { try { await browser.close(); } finally { cleanup(); } } };
   } catch (error) { cleanup(); throw error; }
 }
 module.exports = { connectPage };

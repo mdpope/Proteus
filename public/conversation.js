@@ -1,5 +1,5 @@
 import { mountMessageActions } from './message-actions.js';
-import { toolPresentation, mountStructured } from './tool-presentation.js';
+import { toolPresentation, mountStructured, normalizedTool, activitySummary } from './tool-presentation.js';
 import { agentName } from './agent-name.js';
 import { sentAttachmentPreview, openSentAttachmentPreview } from './chat-attachments.js';
 const views = new Map();
@@ -34,6 +34,11 @@ export function conversation(target, run, options) {
       if (view.updating || !shell.isConnected) return;
       view.top = scroll.scrollTop; view.following = scroll.scrollHeight - scroll.clientHeight - scroll.scrollTop < 40; jump.hidden = view.following;
     }, { passive: true });
+    scroll.addEventListener('proteus:view-restored', () => {
+      view.top = scroll.scrollTop;
+      view.following = scroll.scrollHeight - scroll.clientHeight - scroll.scrollTop < 40;
+      jump.hidden = view.following;
+    });
     // User input wins even while a streamed update is being laid out.
     scroll.addEventListener('wheel', event => { if (event.deltaY < 0) { view.updating = false; view.following = false; jump.hidden = false; } }, { passive: true });
     jump.onclick = () => { view.following = true; position(); };
@@ -49,10 +54,29 @@ export function conversation(target, run, options) {
     let node = nodes.get(entry.key);
     if(entry.role==='activity'){
       if(!node){node=document.createElement('details');node.dataset.key=entry.key;node.className='activity-group';node.innerHTML='<summary></summary><div class="activity-group-items"></div>';}
-      const tools=entry.items.filter(item=>item.data?.tool), approvals=entry.items.filter(item=>item.data?.permission?.automatic),failed=tools.filter(item=>item.data.tool.status==='failed').length,running=tools.filter(item=>item.data.tool.status==='running').length;
-      node.querySelector('summary').textContent=`Activity · ${tools.length} ${tools.length===1?'tool':'tools'}${approvals.length?' · '+approvals.length+' automatic '+(approvals.length===1?'approval':'approvals'):''}${failed?' · '+failed+' failed':running?' · '+running+' running':''}`;
-      const signature=JSON.stringify(entry.items.map(item=>[item.key,item.data?.tool?.status,item.data?.tool?.summary,item.data?.tool?.output,item.data?.permission]));
-      if(node.activitySignature!==signature){const content=node.querySelector('.activity-group-items');content.replaceChildren();for(const item of entry.items){const row=document.createElement('div');row.className='activity-group-item';if(item.data?.tool){const tool=item.data.tool,presentation=toolPresentation(tool);const title=document.createElement('strong');title.textContent=(tool.status==='completed'?'✓ ':tool.status==='running'?'◌ ':'! ')+(tool.summary||tool.name||'Tool');row.append(title);if(presentation.targets.length){const target=document.createElement('div');target.className='note';target.textContent=presentation.targets.join(' · ');row.append(target);}if(presentation.approval){const note=document.createElement('div');note.className='note';note.textContent=presentation.approval;row.append(note);}const details=document.createElement('details');details.innerHTML='<summary>Details</summary><div></div>';mountStructured(details.querySelector('div'),presentation.output);row.append(details);}else{const approval=item.data.permission;const title=document.createElement('strong');title.textContent='✓ Automatic approval'+(approval.kind?' · '+approval.kind:'');row.append(title);const note=document.createElement('div');note.className='note';note.textContent=[approval.reason,approval.toolCallId?'Tool call '+approval.toolCallId:null,approval.resolvedTarget?'Target '+approval.resolvedTarget:null,approval.matchedRoot?'Trusted root '+approval.matchedRoot:null].filter(Boolean).join(' · ');row.append(note);}content.append(row);}node.activitySignature=signature;}
+      const tools=entry.items.filter(item=>item.data?.tool).map(item=>normalizedTool(item.data.tool)), approvals=entry.items.filter(item=>item.data?.permission?.automatic);
+      node.classList.toggle('running',tools.some(tool=>tool.status==='running'));
+      node.querySelector('summary').textContent=activitySummary(tools,approvals.length);
+      const signature=JSON.stringify(entry.items.map(item=>[item.key,item.data?.tool,item.data?.permission]));
+      if(node.activitySignature!==signature){
+        const content=node.querySelector('.activity-group-items'),openItems=new Set([...content.querySelectorAll('[data-activity-key]')].filter(row=>row.querySelector('details')?.open).map(row=>row.dataset.activityKey));content.replaceChildren();
+        for(const item of entry.items){
+          const row=document.createElement('div');row.className='activity-group-item';row.dataset.activityKey=item.key;
+          if(item.data?.tool){
+            const tool=normalizedTool(item.data.tool),presentation=toolPresentation(tool);row.classList.add(tool.status||'completed');
+            const title=document.createElement('strong'),icon=document.createElement('span');icon.className='tool-icon'+(tool.status==='running'?' spinner':'');icon.setAttribute('aria-hidden','true');icon.textContent=tool.status==='running'?'':tool.status==='completed'?'✓':'!';title.append(icon,document.createTextNode(' '+(tool.summary||tool.name||'Tool')));row.append(title);
+            const status=document.createElement('div');status.className='note';status.textContent=(tool.status==='running'?'Working…':tool.status==='failed'?'Failed':tool.status==='completed'?'Completed':tool.status)+(tool.durationMs!==undefined?` · ${(tool.durationMs/1000).toFixed(1)}s`:'')+(item.at?' · '+options.time(item.at):'');row.append(status);
+            if(presentation.error){const error=document.createElement('p');error.className='tool-error';error.textContent=presentation.error;row.append(error);}
+            if(presentation.targets.length){const target=document.createElement('div');target.className='note';target.textContent=presentation.targets.join(' · ');row.append(target);}
+            if(presentation.approval){const note=document.createElement('div');note.className='note';note.textContent=presentation.approval;row.append(note);}
+            const details=document.createElement('details');details.innerHTML='<summary>Details</summary><div></div>';const body=details.querySelector('div');if(presentation.command){const command=document.createElement('pre');command.textContent=presentation.command;body.append(command);}if(presentation.facts.length){const facts=document.createElement('div');mountStructured(facts,{kind:'facts',facts:presentation.facts});body.append(facts);}if(presentation.progress){const progress=document.createElement('p');progress.textContent=presentation.progress;body.append(progress);}const output=document.createElement('div');mountStructured(output,presentation.output);body.append(output);details.open=openItems.has(item.key);row.append(details);
+          }else{
+            const approval=item.data.permission;row.classList.add('completed');const title=document.createElement('strong');title.textContent='✓ Automatic approval'+(approval.kind?' · '+approval.kind:'');row.append(title);const note=document.createElement('div');note.className='note';note.textContent=[approval.reason,approval.toolCallId?'Tool call '+approval.toolCallId:null,approval.resolvedTarget?'Target '+approval.resolvedTarget:null,approval.matchedRoot?'Trusted root '+approval.matchedRoot:null].filter(Boolean).join(' · ');row.append(note);
+          }
+          content.append(row);
+        }
+        node.activitySignature=signature;
+      }
       place(node);nodes.delete(entry.key);continue;
     }
     if (entry.data?.tool) {
@@ -84,6 +108,7 @@ export function conversation(target, run, options) {
       place(node); nodes.delete(entry.key); continue;
     }
     if (!node) { node = document.createElement('div'); node.className = 'message'; node.dataset.key = entry.key; node.innerHTML = '<div class="role"></div><div class="text"></div>'; }
+    node.messageMarkdown=entry.text||'';
     node.className = `message ${['user', 'assistant', 'tool', 'system'].includes(entry.role) ? entry.role : 'system'}`;
     node.firstChild.textContent = `${entry.data?.delivery ? ({queued:'Queued next',steered:'Steering',sending:'Sending steering',failed:'Not delivered',removed:'Removed from queue',delivered:'Queued message delivered'}[entry.data.delivery.state] || '') + ' · ' : ''}${entry.role === 'assistant' ? entry.agentName || agentName(run) : entry.role}${entry.streaming ? ' · streaming' : entry.at ? ' · ' + options.time(entry.at) : ''}`;
     const body=node.querySelector('.text');

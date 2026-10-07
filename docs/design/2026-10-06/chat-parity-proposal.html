@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Accepted chat activity styling example</title>
+<style>
+  #proteus-chat-concept {
+    --pc-bg: #0f1715;
+    --pc-panel: #1c2823;
+    --pc-user: #263328;
+    --pc-ink: #eef2eb;
+    --pc-muted: #9baaa1;
+    --pc-rule: #344139;
+    --pc-activity-bg: #332c20;
+    --pc-success-bg: #26332d;
+    --pc-success-edge: #8aafa5;
+    --pc-amber-bg: #493923;
+    --pc-amber-edge: #e5bd74;
+    --pc-amber-ink: #f0cf8a;
+    color: var(--pc-ink);
+    font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 14px;
+    line-height: 1.48;
+  }
+  #proteus-chat-concept * { box-sizing: border-box; }
+  #proteus-chat-concept .preview { padding: 16px; }
+  #proteus-chat-concept .chat-window {
+    width: 100%;
+    background: var(--pc-bg);
+    border: 1px solid var(--pc-rule);
+    border-radius: 13px;
+    padding: 24px;
+  }
+  #proteus-chat-concept .chat-kicker {
+    color: var(--pc-muted);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+  }
+  #proteus-chat-concept h2 {
+    margin: 6px 0 4px;
+    color: var(--pc-ink);
+    font-size: 24px;
+    line-height: 1.22;
+    font-weight: 500;
+    letter-spacing: -.025em;
+  }
+  #proteus-chat-concept .chat-subtitle { color: var(--pc-muted); font-size: 12px; }
+  #proteus-chat-concept .conversation { display: grid; gap: 12px; margin-top: 20px; }
+  #proteus-chat-concept .message {
+    padding: 13px 15px;
+    border-radius: 9px;
+    background: var(--pc-panel);
+    border-left: 3px solid #87b4b8;
+  }
+  #proteus-chat-concept .message.user { background: var(--pc-user); border-left-color: #a7cf87; margin-left: 30px; }
+  #proteus-chat-concept .message p { margin: 7px 0 0; }
+  #proteus-chat-concept .message-meta {
+    color: var(--pc-muted);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+  }
+  #proteus-chat-concept .activity-group {
+    margin: 1px 0;
+    padding: 12px;
+    border: 0;
+    border-radius: 9px;
+    background: var(--pc-activity-bg);
+  }
+  #proteus-chat-concept .activity-group > summary {
+    color: var(--pc-ink);
+    font-size: 13px;
+    font-weight: 500;
+  }
+  #proteus-chat-concept .activity-list { display: grid; gap: 7px; margin-top: 10px; }
+  #proteus-chat-concept .activity-row {
+    color: var(--pc-muted);
+    font-size: 12px;
+    padding: 10px 12px;
+    background: var(--pc-success-bg);
+    border: 0;
+    border-left: 3px solid var(--pc-success-edge);
+    border-radius: 0 6px 6px 0;
+  }
+  #proteus-chat-concept .activity-row strong { color: #bfcbc2; font-weight: 500; }
+  #proteus-chat-concept .activity-note { margin-top: 4px; color: var(--pc-muted); }
+  #proteus-chat-concept .activity-failed {
+    padding: 10px 12px;
+    border-radius: 0 6px 6px 0;
+    background: var(--pc-amber-bg);
+    border: 0;
+    border-left: 3px solid var(--pc-amber-edge);
+  }
+  #proteus-chat-concept .activity-heading {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    align-items: baseline;
+    justify-content: space-between;
+    font-size: 12px;
+  }
+  #proteus-chat-concept .activity-heading strong { font-weight: 500; color: var(--pc-ink); }
+  #proteus-chat-concept .failed-status { color: var(--pc-amber-ink); font-weight: 500; }
+  #proteus-chat-concept .activity-error {
+    color: var(--pc-amber-ink);
+    margin: 6px 0 0;
+    font-size: 13px;
+    overflow-wrap: anywhere;
+  }
+  #proteus-chat-concept .activity-list details { margin-top: 8px; color: var(--pc-muted); font-size: 12px; }
+  #proteus-chat-concept .activity-list details summary { width: fit-content; }
+  #proteus-chat-concept .activity-list details p { margin: 6px 0 0 17px; }
+  #proteus-chat-concept .reply { margin-top: 2px; }
+  @media (max-width: 480px) {
+    #proteus-chat-concept .preview { padding: 8px; }
+    #proteus-chat-concept .chat-window { padding: 17px 14px; }
+    #proteus-chat-concept h2 { font-size: 21px; }
+    #proteus-chat-concept .message.user { margin-left: 12px; }
+  }
+</style>
+<style>body { margin: 0; background: #0d1210; }</style>
+</head>
+<body>
+<div id="proteus-chat-concept" class="viz-dotted-background">
+  <div class="preview">
+    <section class="chat-window" aria-label="Proposed Proteus conversation style">
+      <header>
+        <div class="chat-kicker">Copilot · example chat</div>
+        <h2>Check a project update</h2>
+        <div class="chat-subtitle">Oct 6, 2026, 10:12 AM · gpt-6-luna</div>
+      </header>
+
+      <div class="conversation">
+        <article class="message user">
+          <div class="message-meta">You · 10:12 AM</div>
+          <p>Read the linked update and summarize the open question.</p>
+        </article>
+
+        <details class="activity-group" open>
+          <summary>Activity · 2 tools · 2 automatic approvals · 1 failed</summary>
+          <div class="activity-list">
+          <article class="activity-row">
+            <div class="activity-heading"><strong>✓ Browser · open · example.test/project/update</strong><span>completed · 1.2 s</span></div>
+            <div class="activity-note">Saved operation approval</div>
+            <details>
+              <summary>Details</summary>
+              <p>URL: https://example.test/project/update</p>
+            </details>
+          </article>
+          <article class="activity-row">
+            <div class="activity-heading"><strong>✓ Automatic approval · custom-tool</strong><span>10:15 AM</span></div>
+            <div class="activity-note">Saved operation approval</div>
+          </article>
+          <article class="activity-failed" aria-label="Browser snapshot failed">
+            <div class="activity-heading"><strong>! Browser · snapshot</strong><span class="failed-status">Failed · 0 s</span></div>
+            <p class="activity-error">Debugger is already attached to the target</p>
+            <details>
+              <summary>Details</summary>
+              <p>Action: snapshot · The browser page could not be read.</p>
+            </details>
+          </article>
+          <article class="activity-row">
+            <div class="activity-heading"><strong>✓ Automatic approval · custom-tool</strong><span>10:15 AM</span></div>
+            <div class="activity-note">Workspace auto-approval</div>
+          </article>
+          </div>
+        </details>
+
+        <article class="message reply">
+          <div class="message-meta">Copilot · 10:15 AM</div>
+          <p>I opened the page, but the browser read failed. I can retry after the browser connection recovers; I can’t summarize the update from this result.</p>
+        </article>
+      </div>
+    </section>
+  </div>
+</div>
+</body>
+</html>

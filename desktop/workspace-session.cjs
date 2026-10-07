@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {normalizeHistory,safeHistoryURL}=require('./browser-history.cjs');
 const MAX_SESSION_BYTES=2*1024*1024, MAX_TOTAL_HISTORY_BYTES=512*1024;
+const safeFavicon=value=>typeof value==='string'&&value.length<=96*1024&&/^data:image\/png;base64,[A-Za-z0-9+/]+=*$/.test(value)?value:undefined;
 const text = (value, max = 4096) => typeof value === 'string' ? value.slice(0, max) : '';
 const engineSections=['resources','providers','connections','security','account','settings','setup','usage','notifications','logs'];
 function normalizeTeam(value){
@@ -12,7 +13,7 @@ function normalizeTeam(value){
     if(!id||seen.has(id)||item?.url&&!url)continue;seen.add(id);
     if(type==='markdown') {const file=text(item.file||item.markdown?.file);if(!path.isAbsolute(file))continue;tabs.push({id,type,file,label:text(item.label,200)||path.basename(file)});continue;}
     if(type==='terminal'){if(!item.terminal?.id)continue;tabs.push({id,type,label:text(item.label,200)||'Terminal',terminal:Object.fromEntries(['id','profileId','rootId','directory','persistence','tmuxSessionId','tmuxSessionTag'].map(key=>[key,text(item.terminal[key])]))});continue;}
-    tabs.push({id,type,browserId:text(item.browserId,128),url,title:text(item.title,200),loaded:false,...(Number.isFinite(Date.parse(item.lastTouchedAt))?{lastTouchedAt:new Date(item.lastTouchedAt).toISOString()}:{})});
+    tabs.push({id,type,...(text(item.customTitle,200)?{customTitle:text(item.customTitle,200)}:{}),...(text(item.contentTabId,256)?{contentTabId:text(item.contentTabId,256)}:{}),...(safeFavicon(item.favicon)?{favicon:item.favicon}:{}),browserId:text(item.browserId,128),url,title:text(item.title,200),loaded:false,...(Number.isFinite(Date.parse(item.lastTouchedAt))?{lastTouchedAt:new Date(item.lastTouchedAt).toISOString()}:{})});
   }
   const orders={};
   for(const [id,item]of Object.entries(value.orders||{}).slice(0,32)){
@@ -27,6 +28,8 @@ function normalizeSession(value) {
   for (const item of Array.isArray(value?.tabs) ? value.tabs.slice(0, 100) : []) {
     if (!item || !['overview','schedule','run','markdown','browser','standup','omi','life','terminal','remote-run','remote-document','team','engine','home'].includes(item.type)) continue;
     const tab = {id:text(item.id,256),type:item.type,label:text(item.label,200)};
+    if(text(item.customTitle,200))tab.customTitle=text(item.customTitle,200);
+    if(text(item.contentTabId,256))tab.contentTabId=text(item.contentTabId,256);
     if(['browser','markdown','terminal','remote-document'].includes(tab.type)&&typeof item.parentId==='string')tab.parentId=text(item.parentId,256);
     if (!tab.id || seen.has(tab.id) || (tab.id==='overview') !== (tab.type==='overview')) continue;
     if (tab.type === 'remote-run') { if(!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(item.hostId||'')||!/^[a-zA-Z0-9_-]{1,128}$/.test(item.runId||''))continue;tab.hostId=item.hostId;tab.runId=item.runId;tab.id='peer:'+tab.hostId+':'+tab.runId; }
@@ -36,6 +39,7 @@ function normalizeSession(value) {
     }
     if (tab.type === 'markdown') { tab.file=text(item.file); if (!path.isAbsolute(tab.file)) continue; }
     if (tab.type === 'browser') {
+      if(safeFavicon(item.favicon))tab.favicon=item.favicon;
       const history=normalizeHistory(item.history), url=history?.entries[history.index].url || safeHistoryURL(item.url);
       if(item.url&&!url)continue;
       tab.url=url||'';tab.group=item.group==='team'?'team':'main';tab.unloaded=item.unloaded===true||item.loaded===false;if(Number.isFinite(Date.parse(item.lastTouchedAt)))tab.lastTouchedAt=new Date(item.lastTouchedAt).toISOString();
@@ -52,8 +56,9 @@ function normalizeSession(value) {
   if(overview<0)tabs.unshift({id:'overview',type:'overview',label:'Schedules'});
   else if(overview>0)tabs.unshift(...tabs.splice(overview,1));
   const validTabs=tabs.filter(tab=>!tab.parentId||tabs.some(parent=>parent.id===tab.parentId&&['run','remote-run'].includes(parent.type)));
+  const selectedChildren=Object.fromEntries(Object.entries(value?.selectedChildren&&typeof value.selectedChildren==='object'&&!Array.isArray(value.selectedChildren)?value.selectedChildren:{}).slice(0,100).filter(([parentId,childId])=>typeof parentId==='string'&&parentId.length<=256&&typeof childId==='string'&&childId.length<=256&&validTabs.some(parent=>parent.id===parentId&&['run','remote-run'].includes(parent.type))&&validTabs.some(child=>child.id===childId&&child.parentId===parentId)));
   const pages=['schedules','runs','attention','context','credentials','providers','remote','settings','team','engine','home'];
-  return {schemaVersion:1,tabs:validTabs,active:validTabs.some(tab=>tab.id===value?.active)?value.active:'overview',page:pages.includes(value?.page)?value.page:'home',...(normalizeTeam(value?.team)?{team:normalizeTeam(value.team)}:{}),...(engineSections.includes(value?.engineSection)?{engineSection:value.engineSection}:{})};
+  return {schemaVersion:1,tabs:validTabs,selectedChildren,active:validTabs.some(tab=>tab.id===value?.active)?value.active:'overview',page:pages.includes(value?.page)?value.page:'home',...(normalizeTeam(value?.team)?{team:normalizeTeam(value.team)}:{}),...(engineSections.includes(value?.engineSection)?{engineSection:value.engineSection}:{})};
 }
 class WorkspaceSession {
   constructor(home) { this.file=path.join(home,'desktop-workspace.json'); this.last=''; }

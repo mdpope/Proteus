@@ -21,7 +21,24 @@ export function structuredOutput(input) {
  }
  return {kind:'text',text:clip(typeof value==='string'?value:Array.isArray(value)&&value.every(scalar)?value.join('\n'):JSON.stringify(value,null,2),8000)};
 }
+export function safeToolError(value) {
+ const candidate=parse(value);
+ if(Array.isArray(candidate))return safeToolError(candidate.filter(item=>item?.type==='text').map(item=>item.text).join('\n'));
+ if(candidate&&typeof candidate==='object')return safeToolError(candidate.error??candidate.message??candidate.failureReason??candidate.structuredContent?.error??candidate.content??candidate.contents?.filter(x=>x.type==='text').map(x=>x.text).join('\n'));
+ if(typeof candidate!=='string'||!candidate.trim())return null;
+ return clip(candidate.replace(/\b(Bearer\s+)[\w.+/=-]+/gi,'$1[redacted]').replace(/((?:password|passwd|secret|token|access[_ -]?token|refresh[_ -]?token|api[_ -]?key|authorization|cookie|credential)"?\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s,}]+)/gi,'$1[redacted]').replace(/(https?:\/\/)[^/@\s]+:[^/@\s]+@/gi,'$1[redacted]@').replace(/([?&](?:token|key|secret|code|password|access_token|refresh_token|api_key)=)[^&#\s]+/gi,'$1[redacted]'),4000);
+}
+export function normalizedTool(tool) {
+ const exitCode=['bash','shell','powershell'].includes(tool.name)&&typeof tool.output==='string'&&tool.output.match(/<shellId: [^<>\r\n]+ completed with exit code ([1-9]\d*)>\s*$/)?.[1];
+ const output=parse(tool.output),error=safeToolError(tool.error)||safeToolError(tool.presentation?.error)||safeToolError(output?.error)||(exitCode?`Command exited with code ${exitCode}.`:null);
+ return {...tool,...(error?{error,status:'failed'}:{})};
+}
+export function activitySummary(tools,approvals=0) {
+ const failed=tools.filter(tool=>['failed','error'].includes(normalizedTool(tool).status)).length,running=tools.filter(tool=>normalizedTool(tool).status==='running').length;
+ return `Activity · ${tools.length} ${tools.length===1?'tool':'tools'}${approvals?' · '+approvals+' automatic '+(approvals===1?'approval':'approvals'):''}${failed?' · '+failed+' failed':''}${running?' · '+running+' running':''}`;
+}
 export function toolPresentation(tool) {
+ tool=normalizedTool(tool);
  const args=safe(parse(tool.arguments)||{}), facts=[];
  const targets=[args.path,args.file_path,args.filePath,args.fileName,args.url,args.cwd].filter(x=>typeof x==='string'&&x);
  const command=args.command||args.cmd||args.fullCommandText;

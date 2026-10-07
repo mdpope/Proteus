@@ -66,6 +66,13 @@ export class PermissionStore {
     const context = permissionContext(schedule); const saved = this.get().workspaces.find(value => value.id === context.id);
     return { ...context, mode: effectivePermissionMode(saved), readOnlyTools: saved?.readOnlyTools === true, folders: saved?.folders || [], rules: saved?.rules || [] };
   }
+  describeRun(run) {
+    const workspace = this.describe(run.schedule);
+    const valid = run.chatPermission?.contextId === workspace.id && run.chatPermission?.mode === 'autopilot';
+    return { ...workspace, workspaceMode: workspace.mode, mode: valid ? 'autopilot' : workspace.mode,
+      source: valid ? 'chat' : 'workspace', chatMode: valid ? 'autopilot' : null,
+      chatRevision: run.chatPermissionRevision || null };
+  }
   mutate(schedule, change, expectedRevision) {
     const value = this.get();
     if (expectedRevision !== undefined && expectedRevision !== value.revision) throw new Error('Permissions changed outside the app. Reload before saving.');
@@ -125,9 +132,8 @@ export class PermissionStore {
       } else { const rule = operationRule(request); if (!profile.rules.some(value => hash(value) === hash(rule))) profile.rules.push(rule); }
     });
   }
-  decide(schedule, request) {
+  decide(schedule, request, profile = this.describe(schedule)) {
     if (protectedRequest(request)) return { allowed: false, reason: 'Enterprise policy or sandbox escape requires a direct response.' };
-    const profile = this.describe(schedule);
     if (profile.mode === 'ask') return { allowed: false, reason: 'Ask for approval' };
     if (['read','write'].includes(request.kind)) {
       const target = requestedPath(request, profile);
@@ -139,7 +145,7 @@ export class PermissionStore {
     }
     const rule = operationRule(request);
     if (rule && profile.rules.some(value => hash(value) === hash(rule))) return { allowed: true, reason: 'Saved operation approval', mode: profile.mode };
-    if (profile.mode === 'autopilot' && knownKinds.has(request.kind)) return { allowed: true, reason: 'Workspace auto-approval', mode: profile.mode };
+    if (profile.mode === 'autopilot' && knownKinds.has(request.kind)) return { allowed: true, reason: profile.source === 'chat' ? 'Chat-only auto-approval' : 'Workspace auto-approval', mode: profile.mode };
     if (profile.readOnlyTools && ((request.kind === 'mcp' && request.readOnly === true) || (request.kind === 'custom-tool' && request.toolName === 'proteus_browser' && browserReads.has(request.args?.action)))) return { allowed: true, reason: 'Trusted workspace read-only tool', mode: profile.mode };
     return { allowed: false, reason: 'No saved approval', mode: profile.mode };
   }

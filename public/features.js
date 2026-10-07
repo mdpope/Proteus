@@ -1,4 +1,5 @@
 import { contextPlan } from './context-plan.js';
+import { browserSurfaceIdentity } from './browser-toolbar.js';
 let u;
 const $ = selector => document.querySelector(selector);
 const modes = { universal: 'Every chat', workspace: 'With workspace', available: 'Choose per chat', disabled: 'Disabled' };
@@ -249,7 +250,7 @@ export async function fillBrowserLogin(tabId) {
     const origin = new URL(tab.url).origin; const config = await window.desktop.credentials({ action: 'get' });
     const bindings = config.bindings.filter(binding => binding.origins.includes(origin));
     if (!bindings.length) throw new Error('Add a login binding for ' + origin + ' in Credentials first.');
-    await window.desktop.browser({ action: 'hide' });
+    await window.desktop.browser({ action: 'hide', ...browserSurfaceIdentity() });
     u.showDialog(`<h2>Fill login</h2><p>${esc(origin)}</p><label>Saved login<select id="browser-login-binding">${bindings.map(binding => `<option value="${esc(binding.id)}">${esc(binding.name)}</option>`).join('')}</select></label><p class="note">This tab becomes private. Proteus fills the fields; you submit the form and complete MFA. Agent access stays off until you enable it.</p><div class="actions"><button id="close-dialog">Cancel</button><button class="primary" id="dialog-submit">Fill fields</button></div>`, async () => { await window.desktop.credentials({ action: 'fill', tabId, bindingId: $('#browser-login-binding').value }); u.toast('Login fields filled. Continue sign-in in the private tab.'); });
     $('#dialog').addEventListener('close', () => u.restoreBrowser(), { once: true });
   });

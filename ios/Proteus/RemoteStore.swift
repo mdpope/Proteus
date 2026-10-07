@@ -18,6 +18,7 @@ import Combine
     var onPaired: ((DeviceConnection) throws -> Void)?
     var onHostName: ((String) -> Void)?
     var onChatDeleted: ((String) -> Void)?
+    var onAuthenticatedRevocation: (() -> Void)?
     private let cacheRoot: URL?
     private let legacyCredentials: Bool
     private(set) var connection: DeviceConnection?
@@ -160,7 +161,7 @@ import Combine
             let value = try RemoteCrypto.open(packet["box"].string, key: connection.key, aad: "\(prefix):host:\(seq)"); incoming = seq
             if value["type"].string == "revoked" {
                 guard value["deviceId"].string == connection.deviceId else { throw RemoteError(message: "Invalid revocation identity.") }
-                suspend(reason: "This Mac authenticated revocation of this device."); status = "Access revoked by Mac"; error = "This Mac revoked access. Your cached history remains available. Add a new pairing from Connections to reconnect."
+                suspend(reason: "This Mac authenticated revocation of this device."); status = "Access revoked by Mac"; onAuthenticatedRevocation?(); error = "This Mac revoked access. Your cached history remains available. Add a new pairing from Connections to reconnect."
             } else if value["type"].string == "result" {
                 let id = value["id"].string
                 timeouts.removeValue(forKey: id)?.cancel()
@@ -319,7 +320,7 @@ import Combine
             var updated = chat.object; updated["attentionRequired"] = .bool(false); updated["failureReviewedAt"] = reviewed["failureReviewedAt"]; chats[id] = .object(updated)
             var snapshot = state.object
             snapshot["runs"] = .array(state["runs"].array.map { row in guard row["id"].string == id else { return row }; var item = row.object; item["attentionRequired"] = .bool(false); item["failureReviewedAt"] = reviewed["failureReviewedAt"]; return .object(item) })
-            state = .object(snapshot); saveCache()
+            state = .object(snapshot); saveCache(); await refresh()
         } catch { self.error = error.localizedDescription }
     }
     func mergeChat(_ value: JSON) {

@@ -24,12 +24,14 @@ export function normalizeProviderUsage(provider, raw, currentTime=Date.now()) {
   if (Array.isArray(raw?.windows)) return { ...raw, provider, windows:raw.windows.map(w=>({...w,remainingPercent:percentage(w.remainingPercent)})) };
   if (provider === 'copilot') {
     const q=raw?.quotaSnapshots?.premium_interactions;
+    const available=!!q&&(Number.isFinite(q.remainingPercentage)||q.isUnlimitedEntitlement===true);
+    const error=!q?'Copilot returned no account allowance snapshot. Check Copilot sign-in and account entitlement, then refresh.':!available?'Copilot returned an allowance snapshot without a remaining percentage. Refresh again; the provider has not reported a usable value.':null;
     // This SDK has also returned resetDate as the time of the quota query. A
     // near-now value is not evidence of the billing reset, even with clock skew.
     const observedReset=date(q?.resetDate),future=observedReset&&Date.parse(observedReset)>currentTime+24*60*60*1000;
     const now=new Date(currentTime),nextMonth=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()+1,1)).toISOString();
     const billing=raw?.billingMode==='ai-credits'?'AI Credits':raw?.billingMode==='premium-requests'?'Premium requests':'Copilot allowance';
-    return {provider,source:'GitHub Copilot account quota',available:!!q,windows:q?[{id:'premium_interactions',label:billing,remainingPercent:percentage(q.remainingPercentage),unlimited:q.isUnlimitedEntitlement===true,resetAt:future?observedReset:nextMonth,reportedResetAt:observedReset,resetSource:future?'provider':'expected-monthly',...(!future?{resetNote:'Expected first of next month at 00:00 UTC; provider reset is missing or past.'}:{}),...(raw?.billingMode?{}:{billingNote:'Billing type unverified; AI Credits and legacy premium requests are distinct.'})}]:[]};
+    return {provider,source:'GitHub Copilot account quota',available,error,windows:q?[{id:'premium_interactions',label:billing,remainingPercent:percentage(q.remainingPercentage),unlimited:q.isUnlimitedEntitlement===true,resetAt:future?observedReset:nextMonth,reportedResetAt:observedReset,resetSource:future?'provider':'expected-monthly',...(!future?{resetNote:'Expected first of next month at 00:00 UTC; provider reset is missing or past.'}:{}),...(raw?.billingMode?{}:{billingNote:'Billing type unverified; AI Credits and legacy premium requests are distinct.'})}]:[]};
   }
   if (provider === 'codex') {
     const limits=raw?.rateLimitsByLimitId ? Object.entries(raw.rateLimitsByLimitId) : raw?.rateLimits ? [['codex',raw.rateLimits]] : [];

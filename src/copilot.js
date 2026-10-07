@@ -1,3 +1,4 @@
+import { safeToolError } from '../public/tool-presentation.js';
 import { CopilotClient } from '@github/copilot-sdk';
 import { browserTools } from './browser-tools.js';
 import fs from 'node:fs';
@@ -46,9 +47,9 @@ export class CopilotProvider {
     };
     const pending=(async()=>{
       try{
-        const result=await bounded(()=>Promise.race([(async()=>{await client.start();return client.rpc.account.getQuota({});})(),cancelled]),this.quotaTimeoutMs);
+        const result=await bounded(()=>Promise.race([(async()=>{await client.start();if(client.getAuthStatus){const auth=await client.getAuthStatus();if(auth?.isAuthenticated===false)throw new Error('Copilot is signed out. Sign in with Copilot CLI on this Mac, then refresh.');}return client.rpc.account.getQuota({});})(),cancelled]),this.quotaTimeoutMs);
         return result;
-      }catch{throw new Error('Fresh Copilot allowance unavailable. Check sign-in on this Mac and retry.');}
+      }catch(error){const reason=error.message==='Timed out'?'Provider quota request timed out. Retry when Copilot is available.':error.message==='Cancelled'?'Allowance check was interrupted. Refresh again.':/signed out/.test(error.message)?error.message:(safeToolError(error.message)||'Provider did not return account allowance.')+' Check Copilot sign-in and retry.';throw new Error('Fresh Copilot allowance unavailable. '+reason);}
       finally{
         try{await cleanup();}
         catch{throw new Error('Copilot allowance probe could not close cleanly.');}

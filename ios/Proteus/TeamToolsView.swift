@@ -5,11 +5,15 @@ private struct TeamListEditorItem: Identifiable { let id: String; let original: 
 struct TeamToolsView: View {
     @EnvironmentObject var life: LifeStore
     @EnvironmentObject var shared: SharedAppStore
+    @EnvironmentObject var destinations: DestinationStore
     @Environment(\.horizontalSizeClass) private var sizeClass
     @AppStorage("nativeTeamSection") private var section = "Overview"
     @State private var docked = false
     @State private var popout = false
     @State private var editingList: TeamListEditorItem?
+    @State private var renameBrowserID: String?
+    @State private var renameBrowserTitle = ""
+    @State private var teamTabsClipped = false
     private var authorized: Bool {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--synthetic-browser-workspace") || ProcessInfo.processInfo.arguments.contains("--synthetic-team-lists") { return true }
@@ -22,35 +26,59 @@ struct TeamToolsView: View {
             else {
                 VStack(spacing: 0) {
                     HStack(spacing: 0) { ScrollView(.horizontal) { HStack(spacing: 0) {
-                        ForEach(["Overview", "Standup", "Browser"], id: \.self) { name in
-                            Button(name) { section = name }.padding(.horizontal, 14).padding(.vertical, 12)
-                                .overlay(alignment: .bottom) { Rectangle().fill(section == name ? Color.accentColor : .clear).frame(height: 2) }
+                        ForEach(["Overview", "Standup"], id: \.self) { name in
+                            Button(name) { section = name }.padding(.horizontal, 14).padding(.vertical, 12).accessibilityIdentifier("team-section-" + name.lowercased())
+                                .overlay(alignment: .bottom) { Rectangle().fill(section == name ? NativeTheme.accent : .clear).frame(height: 2) }
                             Divider().frame(height: 24)
                         }
-                    }.buttonStyle(.plain) }.scrollIndicators(.hidden)
-                        .mask { LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.9), .init(color: .clear, location: 1)], startPoint: .leading, endPoint: .trailing) }
-                        Menu { Button("Browser", systemImage: "globe") { shared.open(nil); section = "Browser" }; Button("Standup", systemImage: "person.3") { section = "Standup" } } label: { Image(systemName: "plus") }.padding(12).accessibilityLabel("Add Team tab").accessibilityIdentifier("team-new-browser-tab")
+                        ForEach(shared.tabs(in: "team")) { tab in
+                            HStack(spacing: 4) {
+                                Button { shared.select(tab.id, in: "team"); section = tab.id } label: { Label(tab.title, systemImage: "globe").lineLimit(1).frame(minHeight: 44).contentShape(Rectangle()) }.frame(minHeight: 44).accessibilityIdentifier("browser-tab-select-" + tab.id)
+                                Button { shared.close(tab.id); if section == tab.id { section = shared.selectedBrowser ?? "Overview" } } label: { Image(systemName: "xmark").font(.caption2).frame(width: 44, height: 44) }.accessibilityLabel("Close " + tab.title)
+                            }.padding(.leading, 12).overlay(alignment: .bottom) { Rectangle().fill(section == tab.id ? NativeTheme.accent : .clear).frame(height: 2) }
+                            .contextMenu {
+                                Button("Rename tab", systemImage: "pencil") { renameBrowserID = tab.id; renameBrowserTitle = tab.title }
+                                Button("Move left", systemImage: "arrow.left") { shared.shiftBrowser(tab.id, by: -1) }
+                                Button("Move right", systemImage: "arrow.right") { shared.shiftBrowser(tab.id, by: 1) }
+                            }
+                            Divider().frame(height: 24)
+                        }
+                    }.buttonStyle(.plain).background(NativeTabClipProbe { teamTabsClipped = $0 }.frame(width: 1, height: 1).opacity(0)) }.scrollIndicators(.hidden)
+                        .mask { LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: teamTabsClipped ? 0.9 : 1), .init(color: teamTabsClipped ? .clear : .black, location: 1)], startPoint: .leading, endPoint: .trailing) }
+                        Menu { Button("Browser", systemImage: "globe") { shared.open(nil); section = shared.selectedBrowser ?? "Overview" }; Button("Standup", systemImage: "person.3") { section = "Standup" } } label: { Image(systemName: "plus") }.padding(12).accessibilityLabel("Add Team tab").accessibilityIdentifier("team-new-browser-tab")
                         if sizeClass == .regular { Button(docked ? "Undock standup" : "Dock standup", systemImage: "sidebar.left") { docked.toggle() }.padding(8) }
-                        Button("Open standup", systemImage: "rectangle.portrait.and.arrow.right") { popout = true }.padding(8)
+
                     }
                     Divider()
                     HStack(spacing: 0) {
                         if docked && sizeClass == .regular { StandupView().frame(width: 300); Divider() }
-                        Group { if section == "Standup" && !docked { StandupView() } else if section == "Browser" { TeamBrowserView() } else { overview } }
+                        Group { if section == "Standup" { VStack(spacing: 0) { Button("Open standup", systemImage: "rectangle.portrait.and.arrow.right") { popout = true }.frame(minHeight: 44); if !docked { StandupView() } else { Text("Standup is docked").font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity) } } } else if shared.tabs(in: "team").contains(where: { $0.id == section }) { TeamBrowserView(scope: "team", showTabs: false) } else { overview } }
                     }
                 }.navigationTitle("Team Tools").navigationBarTitleDisplayMode(.inline)
+                    .alert("Rename tab", isPresented: Binding(get: { renameBrowserID != nil }, set: { if !$0 { renameBrowserID = nil } })) {
+                        TextField("Tab name", text: $renameBrowserTitle)
+                        Button("Save") { if let id = renameBrowserID { shared.renameBrowser(id, title: renameBrowserTitle) }; renameBrowserID = nil }
+                        Button("Cancel", role: .cancel) { renameBrowserID = nil }
+                    }
                     .sheet(item: $editingList) { selection in TeamListEditor(original: selection.original).id(selection.id) }
                     .sheet(isPresented: $popout) { NavigationStack { StandupView().navigationTitle("Standup").toolbar { Button("Done") { popout = false } } } }
-                    .onChange(of: shared.selectedBrowser) { _, _ in section = "Browser" }
+                    .onAppear { if section == "Browser" { section = shared.selectedBrowser ?? "Overview" } }
+                    .onChange(of: shared.selectedBrowser) { _, value in if let value { section = value } else if section != "Overview" && section != "Standup" { section = "Overview" } }
             }
         }.task { await shared.refresh(life) }
+        .task(id: destinations.selectedID) {
+            while !Task.isCancelled {
+                if let host = destinations.selectedID, let remote = destinations.remote(for: host) { await shared.refreshContentTabs(scope: "team", remote: remote, kind: "team", id: "team") }
+                try? await Task.sleep(for: .seconds(2))
+            }
+        }
     }
     private var overview: some View {
         List {
             Button("Refresh Team lists", systemImage: "arrow.clockwise") { Task { await shared.refresh(life) } }
             Section { Text("Shared lists and links belong to your authenticated website account.").font(.caption).foregroundStyle(.secondary); if let error = shared.error { Text(error).foregroundStyle(.orange) } }
             Section("Team lists") { ForEach(shared.lists, id: \.self) { list in Button { editingList = TeamListEditorItem(id: list["id"].string, original: list) } label: { VStack(alignment: .leading) { Text(list["name"].string); Text("\(list["members"].array.count) people · \(list["links"].array.count) links").font(.caption).foregroundStyle(.secondary) } } }; Button("Create team list", systemImage: "plus") { editingList = TeamListEditorItem(id: "new", original: .null) } }
-            Section("Shared links") { ForEach(shared.snapshot["links"].array, id: \.self) { link in Button(link["title"].string.isEmpty ? link["url"].string : link["title"].string) { if let url = SharedAppStore.safeURL(link["url"].string) { shared.open(url, title: link["title"].string); section = "Browser" } } } }
+            Section("Shared links") { ForEach(shared.snapshot["links"].array, id: \.self) { link in Button(link["title"].string.isEmpty ? link["url"].string : link["title"].string) { if let url = SharedAppStore.safeURL(link["url"].string) { shared.open(url, title: link["title"].string); section = shared.selectedBrowser ?? "Overview" } } } }
         }
     }
 }
@@ -108,6 +136,7 @@ struct StandupView: View {
 struct TeamBrowserView: View {
     @EnvironmentObject var life: LifeStore
     @EnvironmentObject var shared: SharedAppStore
+    @Environment(\.colorScheme) private var colorScheme
     @State private var text = ""
     @State private var engine = "Google"
     @State private var overview = false
@@ -128,9 +157,17 @@ struct TeamBrowserView: View {
                             .accessibilityValue(selectedID == tab.id ? "Active" : "Inactive")
                             .accessibilityAddTraits(selectedID == tab.id ? .isSelected : [])
                         Button { shared.close(tab.id) } label: { Image(systemName: "xmark").font(.caption2) }.accessibilityLabel("Close " + (tab.title.isEmpty ? "browser tab" : tab.title))
-                    }.padding(12).background(selectedID == tab.id ? Color.accentColor.opacity(0.08) : .clear)
-                        .overlay(alignment: .bottom) { Rectangle().fill(selectedID == tab.id ? Color.accentColor : .clear).frame(height: 2) }
-                        .contextMenu { Button("Unload") { shared.unload(tab.id) }; Button("Close") { shared.close(tab.id) } }
+                    }.padding(12).background(selectedID == tab.id ? NativeTheme.accent.opacity(0.08) : .clear)
+                        .overlay(alignment: .bottom) { Rectangle().fill(selectedID == tab.id ? NativeTheme.accent : .clear).frame(height: 2) }
+                        .draggable(tab.id).dropDestination(for: String.self) { ids, _ in guard let source = ids.first, tabs.contains(where: { $0.id == source }) else { return false }; shared.moveBrowser(source, before: tab.id); return true }
+                        .contextMenu {
+                            Button("Move left", systemImage: "arrow.left") { shared.shiftBrowser(tab.id, by: -1) }.disabled(tabs.first?.id == tab.id)
+                            Button("Move right", systemImage: "arrow.right") { shared.shiftBrowser(tab.id, by: 1) }.disabled(tabs.last?.id == tab.id)
+                            Button("Unload") { shared.unload(tab.id) }
+                            Button("Close") { shared.close(tab.id) }
+                            Button("Close other tabs") { for other in tabs where other.id != tab.id { shared.close(other.id) } }.disabled(tabs.count < 2)
+                            Button("Close tabs to the right") { if let index = tabs.firstIndex(where: { $0.id == tab.id }) { for other in tabs.dropFirst(index + 1) { shared.close(other.id) } } }.disabled(tabs.last?.id == tab.id)
+                        }
                     Divider().frame(height: 24)
                 }
             }.buttonStyle(.plain) }.scrollIndicators(.hidden)
@@ -150,15 +187,28 @@ struct TeamBrowserView: View {
         .onChange(of: navigation.url) { _, url in if !addressFocused && !url.isEmpty { text = url } }
     }
     private var toolbar: some View {
-        HStack(spacing: 8) {
-            Button { if let id = selectedID { shared.goBack(id) } } label: { Image(systemName: "chevron.left") }.disabled(!navigation.canGoBack).accessibilityLabel("Back").accessibilityIdentifier("browser-back")
-            Button { if let id = selectedID { shared.goForward(id) } } label: { Image(systemName: "chevron.right") }.disabled(!navigation.canGoForward).accessibilityLabel("Forward").accessibilityIdentifier("browser-forward")
-            Button { if let id = selectedID { navigation.isLoading ? shared.stopBrowser(id) : shared.refreshBrowser(id) } } label: { Image(systemName: navigation.isLoading ? "xmark" : "arrow.clockwise") }.disabled(selectedTab?.url == nil).accessibilityLabel(navigation.isLoading ? "Stop loading" : "Refresh page").accessibilityIdentifier("browser-refresh")
-            Divider().frame(height: 24)
-            TextField("Search or enter URL", text: $text).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL).submitLabel(.go).focused($addressFocused).onSubmit { navigate() }.textFieldStyle(.roundedBorder).accessibilityIdentifier("browser-address")
-            Button("Go", action: navigate).disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty).accessibilityIdentifier("browser-go")
-            Button { overview = true } label: { Image(systemName: "square.grid.2x2") }.accessibilityLabel("Tab overview").accessibilityIdentifier("browser-tab-overview")
-        }.buttonStyle(.borderless).padding(10)
+        let chrome = Color(red: 20 / 255, green: 27 / 255, blue: 24 / 255)
+        let field = colorScheme == .dark ? Color(red: 36 / 255, green: 46 / 255, blue: 41 / 255) : Color(uiColor: .secondarySystemGroupedBackground)
+        let control = colorScheme == .dark ? Color(red: 167 / 255, green: 182 / 255, blue: 172 / 255) : Color(red: 78 / 255, green: 102 / 255, blue: 85 / 255)
+        return HStack(spacing: 2) {
+            Button { if let id = selectedID { shared.goBack(id) } } label: { Image(systemName: "chevron.left").frame(minWidth: 44, minHeight: 44) }
+                .frame(width: 44, height: 44).contentShape(Rectangle()).disabled(!navigation.canGoBack).accessibilityLabel("Back").accessibilityIdentifier("browser-back")
+                .contextMenu { if let id = selectedID { ForEach(shared.browserHistory(id, back: true), id: \.self) { item in
+                    Button { shared.goBrowserHistory(item, in: id) } label: { Label(item.title ?? item.url.host ?? item.url.absoluteString, systemImage: "clock.arrow.circlepath") }
+                } } }
+            Button { if let id = selectedID { shared.goForward(id) } } label: { Image(systemName: "chevron.right").frame(minWidth: 44, minHeight: 44) }
+                .frame(width: 44, height: 44).contentShape(Rectangle()).disabled(!navigation.canGoForward).accessibilityLabel("Forward").accessibilityIdentifier("browser-forward")
+                .contextMenu { if let id = selectedID { ForEach(shared.browserHistory(id, back: false), id: \.self) { item in
+                    Button { shared.goBrowserHistory(item, in: id) } label: { Label(item.title ?? item.url.host ?? item.url.absoluteString, systemImage: "clock.arrow.circlepath") }
+                } } }
+            Button { if let id = selectedID { navigation.isLoading ? shared.stopBrowser(id) : shared.refreshBrowser(id) } } label: { Image(systemName: navigation.isLoading ? "xmark" : "arrow.clockwise").frame(minWidth: 44, minHeight: 44) }.frame(width: 44, height: 44).contentShape(Rectangle()).disabled(selectedTab?.url == nil).accessibilityLabel(navigation.isLoading ? "Stop loading" : "Refresh page").accessibilityIdentifier("browser-refresh")
+            TextField("Search or enter URL", text: $text).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL).submitLabel(.go).focused($addressFocused).onSubmit { navigate() }
+                .font(.system(size: 14)).foregroundStyle(colorScheme == .dark ? Color.white : Color.primary).padding(.horizontal, 10).frame(height: 34).background(field, in: RoundedRectangle(cornerRadius: 6)).accessibilityIdentifier("browser-address")
+            Button(action: navigate) { Image(systemName: "arrow.turn.down.left") }.frame(width: 44, height: 44).contentShape(Rectangle()).disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty).accessibilityLabel("Go to address or search").accessibilityIdentifier("browser-go")
+            Button { overview = true } label: { Image(systemName: "square.grid.2x2") }.frame(width: 44, height: 44).contentShape(Rectangle()).accessibilityLabel("Tab overview").accessibilityIdentifier("browser-tab-overview")
+        }.buttonStyle(.plain).foregroundStyle(control).font(.system(size: 14, weight: .medium))
+            .padding(.horizontal, 4).padding(.vertical, 2)
+            .frame(minHeight: 44).background { if colorScheme == .dark { chrome } else { Rectangle().fill(.bar) } }
     }
     private var home: some View {
         List {
@@ -257,7 +307,7 @@ struct NativeBrowser: UIViewRepresentable {
                 return UIMenu(children: actions)
             })
         }
-        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { guard let url = webView.url else { return }; if let index = shared.browserTabs.firstIndex(where: { $0.id == id }) { shared.browserTabs[index].title = webView.title ?? url.host ?? "Browser"; shared.browserTabs[index].url = url.absoluteString }; Task { await shared.record(url, title: webView.title ?? url.host ?? "Browser", life: life) } }
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { guard let url = webView.url else { return }; if let index = shared.browserTabs.firstIndex(where: { $0.id == id }) { shared.browserTabs[index].title = shared.browserTabs[index].customTitle ?? webView.title ?? url.host ?? "Browser"; shared.browserTabs[index].url = url.absoluteString }; Task { await shared.record(url, title: webView.title ?? url.host ?? "Browser", life: life) } }
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) { guard let url = navigationAction.request.url, ["http", "https", "about"].contains(url.scheme) else { decisionHandler(.cancel); return }; decisionHandler(.allow) }
         func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? { if let url = navigationAction.request.url, ["http", "https"].contains(url.scheme) { shared.open(url, title: url.host ?? "Browser", scope: shared.browserTabs.first(where: { $0.id == id })?.scope ?? "team") }; return nil }
     }
@@ -286,7 +336,7 @@ struct BrowserTabOverview: View {
                                 Button { shared.unload(tab.id) } label: { Image(systemName: "pause.circle") }.accessibilityLabel("Unload " + tab.title).disabled(tab.url == nil)
                                 Button(role: .destructive) { shared.close(tab.id) } label: { Image(systemName: "xmark.circle") }.accessibilityLabel("Close " + tab.title)
                             }.buttonStyle(.borderless)
-                        }.padding(12).background(.background, in: RoundedRectangle(cornerRadius: 12)).overlay(RoundedRectangle(cornerRadius: 12).stroke(shared.selected(in: scope) == tab.id ? Color.accentColor : Color.secondary.opacity(0.3), lineWidth: 1))
+                        }.padding(12).background(.background, in: RoundedRectangle(cornerRadius: 12)).overlay(RoundedRectangle(cornerRadius: 12).stroke(shared.selected(in: scope) == tab.id ? NativeTheme.accent : Color.secondary.opacity(0.3), lineWidth: 1))
                     }
                 }.padding()
             }.background(Color(uiColor: .systemGroupedBackground)).navigationTitle("Browser tabs").toolbar {

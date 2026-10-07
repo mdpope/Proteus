@@ -140,28 +140,48 @@ struct ChatPermissionsView: View {
     private let modes = ["ask", "custom", "trusted", "autopilot"]
     private let names = ["ask": "Ask each time", "custom": "Saved rules only", "trusted": "Trusted workspace", "autopilot": "Auto-approve tools"]
     private var context: JSON { run["permissionContext"] }
+    private var chatScopeAvailable: Bool { store.state["capabilities"].array.contains(.string("chat.permissions.chat.v1")) }
     var body: some View {
         if context != .null {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Tool approvals").font(.headline)
-                Text("Current: \(names[context["mode"].string] ?? context["mode"].string)").font(.caption)
+                Text("Current: \(names[context["mode"].string] ?? context["mode"].string) · \(context["source"].string == "chat" ? "this chat only" : "workspace setting")").font(.caption)
                 Text("\(run["automaticApprovals"].int) tool requests approved automatically").font(.caption).foregroundStyle(.secondary)
-                Picker("Tool approval mode", selection: $selected) { ForEach(modes, id: \.self) { Text(names[$0]!).tag($0) } }.accessibilityIdentifier("permission-mode")
-                Button("Apply permissions now") { apply() }.disabled(busy || !store.connected || selected.isEmpty).accessibilityIdentifier("apply-permissions")
-                Text("Applies immediately to this chat, including waiting tools. Saved rules only covers individual grants. Trusted workspace allows its files and read-only tools. Auto-approve tools also permits commands and configured tools; commands can access beyond workspace folders. Questions and enterprise-required approvals still pause.").font(.caption).foregroundStyle(.secondary)
+                if chatScopeAvailable {
+                    if context["source"].string == "chat" {
+                        Button("Revoke chat-only auto-approval") { applyChat("inherit") }.disabled(busy || !store.connected).accessibilityIdentifier("revoke-chat-auto-approval")
+                    } else {
+                        Button("Auto-approve for this chat only") { applyChat("autopilot") }.disabled(busy || !store.connected).accessibilityIdentifier("chat-only-auto-approval")
+                    }
+                    Text("This chat-only choice survives app restart, applies to pending tools and this chat’s future turns, and is revoked when its provider, roots or integrations change. It uses existing granted resources and keeps mandatory approval and sandbox rules.").font(.caption).foregroundStyle(.secondary)
+                }
+                Picker("Workspace approval mode", selection: $selected) { ForEach(modes, id: \.self) { Text(names[$0]!).tag($0) } }.accessibilityIdentifier("permission-mode")
+                Button("Apply to workspace") { applyWorkspace() }.disabled(busy || !store.connected || selected.isEmpty).accessibilityIdentifier("apply-permissions")
+                Text("Workspace mode applies to other chats and schedules with this same permission context. Saved rules only covers individual grants; trusted and auto-approve modes can authorize broader tools within their existing boundaries. Questions and enterprise-required approvals still pause.").font(.caption).foregroundStyle(.secondary)
                 DisclosureGroup("Authorized folders and saved rules") {
                     ForEach(context["folders"].array, id: \.self) { folder in Label(folder["path"].string + " · " + folder["access"].string, systemImage: "folder").font(.caption).textSelection(.enabled) }
                     ForEach(context["rules"].array, id: \.self) { rule in Text([rule["kind"].string,rule["command"].string,rule["server"].string,rule["tool"].string,rule["action"].string,rule["origin"].string].filter{!$0.isEmpty}.joined(separator:" · ")).font(.caption).textSelection(.enabled) }
                 }
-            }.task(id: context["id"].string) { selected = context["mode"].string }
+            }.task(id: context["id"].string + ":" + context["chatRevision"].pretty) { selected = context["workspaceMode"].string.isEmpty ? context["mode"].string : context["workspaceMode"].string }
         }
     }
-    private func apply() {
+    private func applyChat(_ mode: String) {
         busy = true
         Task { defer { busy = false }
             do {
-                let updated = try await store.request("chat.permissions", ["id": run["id"], "mode": .string(selected), "expectedContextId": context["id"], "expectedRevision": run["permissionRevision"]])
+                let updated = try await store.request("chat.permissions", ["id": run["id"], "scope": .string("chat"), "mode": .string(mode), "expectedContextId": context["id"], "expectedChatRevision": context["chatRevision"]])
                 store.mergeChat(updated)
+                await store.refresh()
+            } catch { store.error = error.localizedDescription }
+        }
+    }
+    private func applyWorkspace() {
+        busy = true
+        Task { defer { busy = false }
+            do {
+                let updated = try await store.request("chat.permissions", ["id": run["id"], "scope": .string("workspace"), "mode": .string(selected), "expectedContextId": context["id"], "expectedRevision": run["permissionRevision"]])
+                store.mergeChat(updated)
+                await store.refresh()
             } catch { store.error = error.localizedDescription }
         }
     }

@@ -35,7 +35,7 @@ html,body{height:100%;overflow:hidden}#app{height:100dvh;min-height:0;overflow:h
 .detail-facts{display:grid;grid-template-columns:minmax(70px,auto) minmax(0,1fr);gap:7px 14px;margin:10px 0;font-size:12px}.detail-facts dt{color:var(--soft)}.detail-facts dd{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
 .tool-table{overflow:auto;border:1px solid var(--line);border-radius:7px}.tool-table th,.tool-table td{padding:7px 10px;white-space:pre-wrap;max-width:320px;overflow-wrap:anywhere}.tool-table th{background:#24342d}.tool-result>p{color:var(--soft)}.tool-command{border-left:2px solid #8eabb9}.tool-error{padding:10px;background:#392c23;border-radius:6px;color:#ffd2ac}.raw-details{margin-top:10px;font-size:11px;color:var(--soft)}.raw-details pre{max-height:220px;overflow:auto}
 .message.assistant{border-left:3px solid #8cb6bc}.message.user{border-left:3px solid var(--accent)}.message.system{font-size:12px;background:#17201c;border-style:dashed}.message .text{line-height:1.65}.queued-message{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--soft)}.queued-message span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.browserbar{gap:6px;padding:8px 10px}.browserbar button{padding:6px 10px;white-space:nowrap;font-size:12px;min-height:32px}.browserbar input{padding:7px 11px;height:34px;border-radius:9px;background:#0f1815}.browserbar #browser-share[aria-pressed=true]{background:#354e36;border-color:var(--accent);color:var(--accent);box-shadow:inset 0 1px 4px #0006}.browserstatus:empty,.browserstatus[hidden]{display:none}.browserstatus{padding:6px 12px;color:var(--warn)}
+.browserbar{gap:6px;padding:8px 10px}.browserbar button{padding:6px 10px;white-space:nowrap;font-size:12px;min-height:32px}.browserbar input{padding:7px 11px;height:34px;border-radius:9px;background:#0f1815}.browserstatus:empty,.browserstatus[hidden]{display:none}.browserstatus{padding:6px 12px;color:var(--warn)}
 .composer .actions select{width:auto;min-width:130px;max-width:65%}.composer{margin-top:10px;padding-top:10px}.composer textarea{min-height:58px;max-height:140px}.chat-pane .queued-message{max-height:60px;overflow:auto}.chat-pane>.composer{max-height:40%;overflow:auto}.jump-latest{opacity:1;background:var(--accent);color:#182414}.tool-target{max-width:100%;overflow-wrap:anywhere}
 
 /* The composer owns the controls for the next message. */
@@ -57,3 +57,33 @@ html,body{height:100%;overflow:hidden}#app{height:100dvh;min-height:0;overflow:h
 #tabs{height:48px;display:grid;grid-template-columns:minmax(0,1fr) auto;padding:0 12px 0 16px;gap:12px;overflow:hidden}.tab-list{display:flex;min-width:0;overflow-x:auto;align-items:stretch;gap:3px}.tab-actions{display:flex;align-items:center;gap:4px;background:var(--bg)}#tabs .tab-create{display:flex;align-items:center;justify-content:center;gap:5px;border:1px solid var(--line);border-radius:7px;height:32px;padding:0 9px;color:var(--ink)}.tab-create svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round}#tabs #new-chat{color:var(--accent);border-color:#4d6748}.usage-heading{display:flex;align-items:center;justify-content:space-between;font-size:10px;text-transform:uppercase;letter-spacing:.08em}.usage-heading button{font-size:15px;padding:0 5px}.provider-usage-row{padding:6px 3px}.usage-pill{position:relative;display:block;width:84px;height:22px;border:1px solid #48775b;border-radius:999px;overflow:hidden;background:#253b2e;flex-shrink:0}.usage-pill progress{margin:0;appearance:none;-webkit-appearance:none;border:0;width:100%;height:100%;display:block;background:transparent}.usage-pill progress::-webkit-progress-bar{background:transparent}.usage-pill progress::-webkit-progress-value{background:#28784d}.usage-pill progress::-moz-progress-bar{background:#28784d}.provider-usage-row .usage-pill strong{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;text-shadow:0 1px 2px #10251a}.setup-appearance{margin-bottom:18px}.setup-appearance label{margin:0}#life-setup{margin-bottom:22px}#provider-usage[hidden]{display:none}
 
 #provider-usage-rows{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;align-items:start}.provider-usage-row{flex-direction:column;justify-content:flex-start;gap:5px;padding:6px 1px;font-size:11px;min-width:0}.provider-usage-row .usage-pill{width:100%;max-width:68px;height:22px}.provider-usage-row .usage-stale{max-width:100%;font-size:9px;line-height:1.3;text-align:center;white-space:normal}.provider-usage-row:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+
+/* Address contrast and compact per-tab agent toggle, shared by main/chat/Team browsers. */
+.browserbar .browser-address{display:flex;align-items:center;gap:6px;flex:1;min-width:0;padding:3px 5px 3px 0;background:var(--proteus-control);border:1px solid var(--line);border-radius:10px}
+.browserbar .browser-address:focus-within{outline:2px solid var(--proteus-focus);outline-offset:1px}
+.browserbar .browser-address input#browser-url,.browserbar .browser-address input#team-browser-url{flex:1;min-width:0;width:0;height:32px;padding:6px 11px;background:transparent;border:0;border-radius:0;outline:none;color:var(--ink)}
+.browserbar .browser-agent-toggle{display:inline-flex;align-items:center;justify-content:center;width:36px;height:32px;min-height:32px;padding:4px;border:0;border-radius:7px;background:transparent;color:var(--soft);box-shadow:none}
+.browserbar .browser-agent-toggle svg{width:24px;height:24px;pointer-events:none}
+.browserbar .browser-agent-toggle:hover{background:transparent;color:var(--ink)}
+.browserbar .browser-agent-toggle[aria-pressed=true],.browserbar .browser-agent-toggle[aria-pressed=true]:hover{background:var(--accent);color:var(--proteus-accent-ink);box-shadow:0 0 10px color-mix(in srgb,var(--accent) 18%,transparent)}
+.browserbar .browser-agent-toggle:focus-visible{outline:2px solid var(--proteus-focus);outline-offset:2px}
+@media(pointer:coarse){.browserbar .browser-agent-toggle{width:44px;height:44px}}
+
+/* Secondary content tabs share the primary navigation palette. */
+.browser-tab-icon,.feature-tab-icon{display:inline-block;width:16px;height:16px;flex:0 0 16px;vertical-align:middle;object-fit:contain}
+.chat-subtab-list [data-chat-subtab],.team-subtab-list [data-team-tab]{display:flex;align-items:center;gap:7px;color:var(--soft)}
+.chat-subtab-list [data-chat-subtab]>span:not(.sr-only),.team-subtab-list [data-team-tab]>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chat-subtab-list>button.selected,.chat-subtab.selected [data-chat-subtab],.team-subtab-list>button.selected,.team-tab.selected [data-team-tab]{color:var(--ink)}
+.agent-cursor{color:var(--accent)}
+.usage-sidebar .eyebrow,.usage-heading{color:var(--soft)}
+
+.device-list-heading{align-items:center;margin:24px 0 10px}.device-list-heading h2{margin:0}
+.paired-device-card{padding:16px 0;border-top:1px solid var(--line)}.paired-device-heading{display:flex;justify-content:space-between;gap:12px}.paired-device-heading p{margin:4px 0}
+.device-permissions{display:grid;gap:10px;margin-top:12px}.device-permission{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0;font-size:12px;letter-spacing:0}.device-permission small{display:block;color:var(--soft);font-weight:400;line-height:1.5;margin-top:3px}.device-permission input{width:34px;flex-shrink:0;accent-color:var(--accent)}.device-feedback{min-height:18px;margin:8px 0 0}
+@media(max-width:700px){.paired-device-heading{flex-wrap:wrap}.paired-device-heading>.actions{width:100%}}
+#remote-screen .device-permission{display:flex;margin:0;align-items:center;justify-content:space-between}
+#remote-screen .device-permission input[type=checkbox]{appearance:none;-webkit-appearance:none;display:block;width:36px;height:22px;padding:2px;margin:0;flex:0 0 36px;border:1px solid var(--line);border-radius:20px;background:#364239;cursor:pointer}
+#remote-screen .device-permission input[type=checkbox]::after{content:'';display:block;width:16px;height:16px;border-radius:50%;background:var(--ink);transition:transform .12s}
+#remote-screen .device-permission input[type=checkbox]:checked{background:var(--accent)}
+#remote-screen .device-permission input[type=checkbox]:checked::after{background:#182414;transform:translateX(14px)}
+@media(prefers-reduced-motion:reduce){#remote-screen .device-permission input[type=checkbox]::after{transition:none}}

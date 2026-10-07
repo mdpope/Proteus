@@ -2,6 +2,203 @@ import XCTest
 
 final class RemoteUITests: XCTestCase {
     override func setUp() { super.setUp(); continueAfterFailure = false }
+    @MainActor func testSyntheticChatComposerShowsCompactActions() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-long-chat"]
+        app.launch()
+        let chats = app.buttons["Chats"].firstMatch
+        XCTAssertTrue(chats.waitForExistence(timeout: 8)); chats.tap()
+        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Long fixture")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 8)); row.tap()
+        if app.buttons["chat-conversation-tab"].waitForExistence(timeout: 8) { app.buttons["chat-conversation-tab"].tap() }
+        XCTAssertTrue(app.buttons["composer-preview"].waitForExistence(timeout: 8)); app.buttons["composer-preview"].tap()
+        XCTAssertTrue(app.buttons["send-message"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.buttons["composer-model"].exists)
+        XCTAssertTrue(app.buttons["chat-attach"].exists)
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Native chat composer"; shot.lifetime = .keepAlways; add(shot)
+    }
+    @MainActor func testCompactHeaderStaysInChatWhenBrowserCloses() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-long-chat"]
+        app.launch(); app.buttons["Chats"].firstMatch.tap()
+        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Long fixture")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 8)); row.tap()
+        XCTAssertTrue(app.staticTexts["chat-header-title"].waitForExistence(timeout: 8))
+        XCTAssertEqual(app.buttons["chat-back"].frame.height, 44, accuracy: 1)
+        let conversationTab = app.buttons["chat-conversation-tab"]
+        for _ in 0..<12 where !conversationTab.isHittable { app.scrollViews["chat-child-tab-strip"].swipeRight() }
+        conversationTab.tap()
+        XCTAssertTrue(app.buttons["composer-preview"].exists)
+        app.buttons["composer-preview"].tap()
+        let field = app.textFields["reply-text"]
+        XCTAssertTrue(field.waitForExistence(timeout: 8)); field.tap(); field.typeText("Draft preserved")
+        app.staticTexts["chat-header-title"].tap()
+        app.swipeUp()
+        XCTAssertTrue(app.buttons["composer-preview"].waitForExistence(timeout: 8))
+        let startingCloseCount = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Close New tab")).count
+        app.buttons["Add chat tab"].tap(); app.buttons["Browser"].firstMatch.tap()
+        XCTAssertTrue(app.textFields["browser-address"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.staticTexts["chat-header-title"].exists)
+        XCTAssertTrue(app.buttons["chat-actions"].exists)
+        app.buttons["Add chat tab"].tap(); app.buttons["Browser"].firstMatch.tap()
+        let closeButtons = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Close New tab"))
+        XCTAssertEqual(closeButtons.count, startingCloseCount + 2)
+        let firstNewClose = closeButtons.element(boundBy: startingCloseCount)
+        for _ in 0..<12 where !firstNewClose.isHittable { app.scrollViews["chat-child-tab-strip"].swipeLeft() }
+        firstNewClose.tap()
+        XCTAssertTrue(app.textFields["browser-address"].exists, "Closing an inactive sibling keeps the active browser in this chat")
+        XCTAssertTrue(app.staticTexts["chat-header-title"].exists)
+        closeButtons.element(boundBy: startingCloseCount).tap()
+        XCTAssertTrue(app.buttons["chat-conversation-tab"].exists)
+        XCTAssertTrue(app.buttons["composer-preview"].waitForExistence(timeout: 8))
+        app.buttons["composer-preview"].tap(); XCTAssertEqual(app.textFields["reply-text"].value as? String, "Draft preserved")
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Compact header and restored draft"; shot.lifetime = .keepAlways; add(shot)
+    }
+    @MainActor func testCompactAndExpandedStopCancelHostTurn() async throws {
+        let (data, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/pair")!)
+        let fixture = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        let app = XCUIApplication(); app.launchArguments = ["--reset-pairing"]; app.launch()
+        let link = app.textFields["pairing-link"]; XCTAssertTrue(link.waitForExistence(timeout: 15)); link.tap(); link.typeText(fixture["code"] as! String)
+        app.buttons["pair-mac"].tap(); showChats(app)
+        for expanded in [false, true] {
+            let newChat = app.buttons["new-chat"]; XCTAssertTrue(newChat.waitForExistence(timeout: 25)); newChat.tap()
+            let prompt = app.textFields["chat-prompt"]; XCTAssertTrue(prompt.waitForExistence(timeout: 10)); prompt.tap(); prompt.typeText("Stop synthetic host rehearsal")
+            app.buttons["start-chat"].tap()
+            let stop = app.buttons["stop-turn"]; XCTAssertTrue(stop.waitForExistence(timeout: 20))
+            XCTAssertTrue(app.buttons["composer-preview"].exists)
+            if expanded { app.buttons["composer-preview"].tap() }
+            XCTAssertTrue(stop.isEnabled); XCTAssertGreaterThanOrEqual(stop.frame.height, 44)
+            let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = expanded ? "Expanded composer with circular Stop" : "Compact composer with circular Stop"; shot.lifetime = .keepAlways; add(shot)
+            stop.tap(); XCTAssertTrue(app.staticTexts["Cancelled"].waitForExistence(timeout: 15))
+            XCTAssertFalse(stop.exists)
+            app.buttons["chat-back"].tap()
+        }
+    }
+    @MainActor func testTeamBrowsersUseOnePrimaryRowAndStandupActionStaysLocal() {
+        let app = XCUIApplication(); app.launchArguments = ["--synthetic-destinations", "--synthetic-browser-workspace"]; app.launch()
+        app.buttons["Team"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["team-section-overview"].waitForExistence(timeout: 10)); app.buttons["team-section-overview"].tap()
+        XCTAssertFalse(app.buttons["Open standup"].exists)
+        let primaryTabs = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "browser-tab-select-"))
+        let startingCount = primaryTabs.count
+        app.buttons["team-new-browser-tab"].tap(); app.buttons["Browser"].firstMatch.tap()
+        XCTAssertTrue(app.textFields["browser-address"].waitForExistence(timeout: 10))
+        XCTAssertEqual(primaryTabs.count, startingCount + 1)
+        XCTAssertFalse(app.buttons["browser-new-tab"].exists, "Team browsers must not add a nested tab strip")
+        XCTAssertFalse(app.buttons["Open standup"].exists)
+        app.buttons["team-section-standup"].tap(); XCTAssertTrue(app.buttons["Open standup"].waitForExistence(timeout: 8))
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Flat Team primary tabs"; shot.lifetime = .keepAlways; add(shot)
+    }
+    @MainActor func testNavigationCountsKeepPhoneTabsAndMatchTabletScopes() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-nav-counts"]
+        app.launch()
+        if app.tabBars.firstMatch.exists {
+            let tabBar = app.tabBars.firstMatch
+            for name in ["Home", "Chats", "Life", "Team", "Engine Room"] { XCTAssertTrue(tabBar.buttons[name].exists) }
+            XCTAssertEqual(tabBar.buttons.count, 5, "Counts must not change the established iPhone navigation")
+            XCTAssertTrue(app.staticTexts["Schedules · 2"].waitForExistence(timeout: 8))
+            let attention = app.staticTexts["Needs attention · 9"]
+            for _ in 0..<4 where !attention.exists { app.swipeUp() }
+            XCTAssertTrue(attention.exists)
+        } else {
+            XCTAssertTrue(app.staticTexts["nav-count-Schedules"].waitForExistence(timeout: 8))
+            XCTAssertEqual(app.staticTexts["nav-count-Schedules"].label, "2 schedules")
+            XCTAssertEqual(app.staticTexts["nav-count-Chats"].label, "129 chats")
+            XCTAssertEqual(app.staticTexts["nav-count-Needs Attention"].label, "9 needs attention")
+        }
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Native navigation counts"; shot.lifetime = .keepAlways; add(shot)
+    }
+    @MainActor func testHundredMessageChatRemainsResponsive() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-many-chat"]
+        app.launch()
+        guard app.tabBars.firstMatch.exists else { throw XCTSkip("Phone responsiveness fixture") }
+        app.tabBars.buttons["Chats"].tap()
+        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Many fixture")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10)); row.tap()
+        let scroll = app.scrollViews["chat-conversation-scroll"]
+        XCTAssertTrue(scroll.waitForExistence(timeout: 20))
+        scroll.swipeDown()
+        XCTAssertTrue(app.buttons["send-message"].waitForExistence(timeout: 20), "The 100-message history window must remain interactive")
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Native 100-message history"; shot.lifetime = .keepAlways; add(shot)
+    }
+    @MainActor func testLongMessageKeepsIntraMessagePositionWhenReopenedOnPhone() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-long-chat", "--show-scroll-fixture-controls"]
+        app.launch()
+        guard app.tabBars.firstMatch.exists else { throw XCTSkip("Phone navigation regression") }
+        app.tabBars.buttons["Chats"].tap()
+        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Long fixture")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10)); row.tap()
+        let composerShot = XCTAttachment(screenshot: app.screenshot()); composerShot.name = "Native chat composer"; composerShot.lifetime = .keepAlways; add(composerShot)
+        let scroll = app.scrollViews["chat-conversation-scroll"]
+        XCTAssertTrue(scroll.waitForExistence(timeout: 10))
+        app.buttons["read-long-message-fixture"].tap()
+        let readingAnchor = app.staticTexts["chat-scroll-anchor"]
+        XCTAssertTrue(readingAnchor.waitForExistence(timeout: 5))
+        let offset = app.staticTexts["chat-scroll-offset"]
+        XCTAssertTrue(offset.waitForExistence(timeout: 5))
+        for _ in 0..<30 {
+            if (Int(readingAnchor.label.split(separator: ":").last ?? "") ?? 0) > 200 { break }
+            Thread.sleep(forTimeInterval: 0.2)
+        }
+        let positioned = Int(offset.label) ?? 0
+        scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45))
+            .press(forDuration: 0.2, thenDragTo: scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.65)))
+        for _ in 0..<20 {
+            if abs((Int(offset.label) ?? 0) - positioned) > 30 { break }
+            Thread.sleep(forTimeInterval: 0.2)
+        }
+        XCTAssertGreaterThan(abs((Int(offset.label) ?? 0) - positioned), 30, "A real finger drag must change the native reading offset")
+        let before = Int(offset.label) ?? 0
+        let beforeAnchor = readingAnchor.label
+        XCTAssertGreaterThan(before, 200, "The fixture must be scrolled well inside its one long message")
+        XCTAssertTrue(readingAnchor.label.hasPrefix("0:"), "The reader must be anchored inside the long message, not following the bottom; offset \(before), trace \(app.staticTexts["chat-scroll-trace"].label)")
+        XCTAssertGreaterThan(Int(beforeAnchor.replacingOccurrences(of: ",", with: "").split(separator: ":").last ?? "") ?? 0, 200, "The saved anchor must be deep inside the long message; offset \(before), anchor \(beforeAnchor), trace \(app.staticTexts["chat-scroll-trace"].label)")
+        app.navigationBars.buttons["Chats"].tap()
+        XCTAssertTrue(row.waitForExistence(timeout: 8)); row.tap()
+        XCTAssertTrue(offset.waitForExistence(timeout: 8))
+        let restoredExpectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", String(before)), object: offset)
+        _ = XCTWaiter.wait(for: [restoredExpectation], timeout: 10)
+        let restored = Int(offset.label) ?? 0
+        XCTAssertLessThanOrEqual(abs(restored - before), 35, "Reopening should keep the reading point within the long message; before \(before), before anchor \(beforeAnchor), after \(restored), anchor \(app.staticTexts["chat-scroll-anchor"].label), trace \(app.staticTexts["chat-scroll-trace"].label)")
+    }
+    @MainActor func testPrependingHistoryKeepsVisibleLongMessageAndInsetOnPhone() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-long-chat", "--show-scroll-fixture-controls"]
+        app.launch()
+        guard app.tabBars.firstMatch.exists else { throw XCTSkip("Phone reading-position regression") }
+        app.tabBars.buttons["Chats"].tap()
+        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Long fixture")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 8)); row.tap()
+        let scroll = app.scrollViews["chat-conversation-scroll"]
+        XCTAssertTrue(scroll.waitForExistence(timeout: 8))
+        app.buttons["read-long-message-fixture"].tap()
+        let anchor = app.staticTexts["chat-scroll-anchor"]
+        XCTAssertTrue(anchor.waitForExistence(timeout: 5))
+        for _ in 0..<30 {
+            if (Int(anchor.label.split(separator: ":").last ?? "") ?? 0) > 200 { break }
+            Thread.sleep(forTimeInterval: 0.2)
+        }
+        let nativeOffset = app.staticTexts["chat-scroll-offset"]
+        let positioned = Int(nativeOffset.label) ?? 0
+        scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45))
+            .press(forDuration: 0.2, thenDragTo: scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.65)))
+        for _ in 0..<20 {
+            if abs((Int(nativeOffset.label) ?? 0) - positioned) > 30 { break }
+            Thread.sleep(forTimeInterval: 0.2)
+        }
+        XCTAssertGreaterThan(abs((Int(nativeOffset.label) ?? 0) - positioned), 30, "A real finger drag must change the native reading offset")
+        let before = anchor.label.replacingOccurrences(of: ",", with: "").split(separator: ":").compactMap { Int($0) }
+        XCTAssertEqual(before.count, 2, "Visible anchor label: \(anchor.label)")
+        XCTAssertEqual(before.first, 0, "trace \(app.staticTexts["chat-scroll-trace"].label)")
+        XCTAssertGreaterThan(before[1], 200)
+        app.buttons["prepend-chat-fixture"].tap()
+        let after = anchor.label.replacingOccurrences(of: ",", with: "").split(separator: ":").compactMap { Int($0) }
+        XCTAssertEqual(after.first, 0, "The same absolute message must stay visible after prepending history")
+        XCTAssertLessThanOrEqual(abs(after[1] - before[1]), 35, "The relative reading point within that message must remain stable")
+    }
     @MainActor func testActualSimulatorLocalNotificationTapRoutesThroughSpringBoard() {
         let app = XCUIApplication()
         app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-notification-fixtures", "--synthetic-notification-controls"]
@@ -190,7 +387,6 @@ final class RemoteUITests: XCTestCase {
         XCTAssertTrue(app.buttons[mainID].exists)
         app.terminate(); app.launch()
         XCTAssertTrue(app.buttons[mainID].waitForExistence(timeout: 12))
-        XCTAssertTrue(app.staticTexts["Welcome to Proteus"].exists)
         XCTAssertEqual(app.webViews.count, 0, "Restored browser descriptors must remain unloaded on launch")
         app.buttons[mainID].tap()
         XCTAssertTrue(app.textFields["browser-address"].waitForExistence(timeout: 10))
@@ -225,17 +421,18 @@ final class RemoteUITests: XCTestCase {
     }
     @MainActor func testBrowserGoKeepsTabAndToolbarTracksBackForwardRefresh() {
         let app = XCUIApplication(); app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-browser-workspace"]; app.launch()
-        XCTAssertTrue(app.staticTexts["Welcome to Proteus"].waitForExistence(timeout: 20))
         XCTAssertTrue(app.buttons["destination-picker"].waitForExistence(timeout: 20), "Synthetic Alpha Mac must be selected before browser navigation")
         if app.tabBars.buttons["Team"].exists { app.tabBars.buttons["Team"].tap() } else { app.buttons["Team"].firstMatch.tap() }
         if !app.textFields["browser-address"].waitForExistence(timeout: 2) { app.buttons["team-new-browser-tab"].tap(); app.buttons["Browser"].firstMatch.tap() }
+        app.buttons["team-new-browser-tab"].tap(); app.buttons["Browser"].firstMatch.tap()
         let address = app.textFields["browser-address"]
         XCTAssertTrue(address.waitForExistence(timeout: 15))
         let tabs = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "browser-tab-select-"))
         let startingCount = tabs.count
         XCTAssertGreaterThanOrEqual(startingCount, 1)
         let originalID = tabs.matching(NSPredicate(format: "value == %@", "Active")).firstMatch.identifier
-        address.tap(); address.typeText("http://127.0.0.1:4329/browser/one"); app.buttons["browser-go"].tap()
+        address.tap()
+        address.typeText("http://127.0.0.1:4329/browser/one"); app.buttons["browser-go"].tap()
         XCTAssertTrue(app.webViews.staticTexts["First browser page"].waitForExistence(timeout: 15))
         XCTAssertEqual(tabs.count, startingCount); XCTAssertTrue(app.buttons[originalID].exists)
         XCTAssertEqual(app.buttons[originalID].value as? String, "Active")
@@ -254,13 +451,39 @@ final class RemoteUITests: XCTestCase {
         app.buttons["browser-refresh"].tap()
         expectation(for: NSPredicate(format: "label != %@", before), evaluatedWith: load); waitForExpectations(timeout: 15)
         XCTAssertEqual(tabs.count, startingCount); XCTAssertTrue(app.buttons[originalID].exists)
-        app.buttons["browser-new-tab"].tap(); app.buttons["Browser"].firstMatch.tap(); XCTAssertEqual(tabs.count, startingCount + 1)
+        app.buttons["team-new-browser-tab"].tap(); app.buttons["Browser"].firstMatch.tap(); XCTAssertEqual(tabs.count, startingCount + 1)
         XCTAssertEqual(app.buttons[originalID].value as? String, "Inactive")
         app.buttons[originalID].tap()
         XCTAssertTrue(app.webViews.staticTexts["Second browser page"].waitForExistence(timeout: 15))
         XCTAssertEqual(app.buttons[originalID].value as? String, "Active")
         XCTAssertTrue(app.buttons["browser-back"].isEnabled)
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Native browser toolbar and active tab"; screenshot.lifetime = .keepAlways; add(screenshot)
+    }
+    @MainActor func testHeldBrowserArrowsJumpToChosenHistoryPage() {
+        let app = XCUIApplication(); app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-browser-workspace"]; app.launch()
+        XCTAssertTrue(app.buttons["destination-picker"].waitForExistence(timeout: 20))
+        if app.tabBars.buttons["Team"].exists { app.tabBars.buttons["Team"].tap() } else { app.buttons["Team"].firstMatch.tap() }
+        if !app.textFields["browser-address"].waitForExistence(timeout: 2) { app.buttons["team-new-browser-tab"].tap(); app.buttons["Browser"].firstMatch.tap() }
+        app.buttons["team-new-browser-tab"].tap(); app.buttons["Browser"].firstMatch.tap()
+        let address = app.textFields["browser-address"]
+        XCTAssertTrue(address.waitForExistence(timeout: 15))
+        address.tap()
+        address.typeText("http://127.0.0.1:4329/browser/one"); app.buttons["browser-go"].tap()
+        XCTAssertTrue(app.webViews.staticTexts["First browser page"].waitForExistence(timeout: 15))
+        app.webViews.links["Next browser page"].tap()
+        XCTAssertTrue(app.webViews.staticTexts["Second browser page"].waitForExistence(timeout: 15))
+        app.webViews.links["Next browser page"].tap()
+        XCTAssertTrue(app.webViews.staticTexts["Third browser page"].waitForExistence(timeout: 15))
+        let back = app.buttons["browser-back"]
+        back.press(forDuration: 1)
+        XCTAssertTrue(app.buttons["First browser page"].waitForExistence(timeout: 5))
+        app.buttons["First browser page"].tap()
+        XCTAssertTrue(app.webViews.staticTexts["First browser page"].waitForExistence(timeout: 15))
+        let forward = app.buttons["browser-forward"]
+        forward.press(forDuration: 1)
+        XCTAssertTrue(app.buttons["Third browser page"].waitForExistence(timeout: 5))
+        app.buttons["Third browser page"].tap()
+        XCTAssertTrue(app.webViews.staticTexts["Third browser page"].waitForExistence(timeout: 15))
     }
     @MainActor func testBrowserHistoryShowsLocalVisitDeviceAndPagesAfter25() {
         let app = XCUIApplication()
@@ -322,6 +545,7 @@ final class RemoteUITests: XCTestCase {
         let prompt = app.textFields["chat-prompt"]
         XCTAssertTrue(prompt.waitForExistence(timeout: 10)); prompt.tap(); prompt.typeText("Mobile UI rehearsal")
         app.buttons["start-chat"].tap()
+        if app.buttons["composer-preview"].waitForExistence(timeout: 8) { app.buttons["composer-preview"].tap() }
         let reply = app.textFields["reply-text"]
         XCTAssertTrue(reply.waitForExistence(timeout: 20))
         let inputNeeded = app.staticTexts["Your input is needed"]
@@ -424,6 +648,7 @@ extension RemoteUITests {
         XCTAssertTrue(app.buttons["steer-message"].exists); XCTAssertFalse(app.buttons["steer-message"].isEnabled)
         XCTAssertTrue(app.buttons["stop-turn"].exists)
         app.buttons["composer-effort"].tap(); app.buttons["high"].tap()
+        if app.buttons["composer-preview"].waitForExistence(timeout: 8) { app.buttons["composer-preview"].tap() }
         let reply = app.textFields["reply-text"]; reply.tap(); reply.typeText("Queued with new effort")
         app.buttons["send-message"].tap()
         XCTAssertTrue(app.buttons["Remove"].waitForExistence(timeout: 10))
@@ -604,6 +829,7 @@ extension RemoteUITests {
         app.buttons["pair-mac"].tap(); showChats(app); app.buttons["new-chat"].tap()
         let prompt = app.textFields["chat-prompt"]; XCTAssertTrue(prompt.waitForExistence(timeout: 10)); prompt.tap(); prompt.typeText("Reading controls test")
         app.buttons["start-chat"].tap(); XCTAssertTrue(app.staticTexts["Your input is needed"].waitForExistence(timeout: 20))
+        if app.buttons["composer-preview"].waitForExistence(timeout: 8) { app.buttons["composer-preview"].tap() }
         let reply = app.textFields["reply-text"]; reply.tap()
         reply.typeText(String(repeating: "Read this completed response while the playback controls remain available for pause, resume and seeking. ", count: 4))
         app.buttons["Send feedback"].tap()

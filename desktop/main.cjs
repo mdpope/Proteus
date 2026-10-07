@@ -32,6 +32,16 @@ else {
       webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
     const browsingHistory = new BrowsingHistory(service.home,{device:()=>{const host=service.remote.info();return {id:host.hostId,name:host.label};},onVisit:item=>service.activity.queue('history',{...item,title:item.title.slice(0,160),createdAt:item.visitedAt,hostId:service.remote.info().hostId})});
     browser = new BrowserTabs(window, service.origin,{history:browsingHistory});
+    window.webContents.on('did-start-navigation', details => {
+      if(details.isMainFrame && !details.isSameDocument)browser.invalidateRendererSelection();
+    });
+    const closeCurrentTab = () => { if (!closing && !window.isDestroyed()) window.webContents.send('proteus:close-current-tab'); };
+    window.webContents.on('before-input-event', (event, input) => {
+      if (input.type === 'keyDown' && (input.meta || input.control) && !input.shift && !input.alt && String(input.key).toLowerCase() === 'w') {
+        event.preventDefault(); closeCurrentTab();
+      }
+    });
+    browser.closeCurrentTab = closeCurrentTab;
     preview = new ArtifactPreview(window);
     credentials = new CredentialBroker(service.home);
     const trusted = event => { if (new URL(event.senderFrame.url).origin !== service.origin || event.sender !== window.webContents) throw new Error('Untrusted renderer.'); };
@@ -48,6 +58,14 @@ else {
     peers.on('event', value => { if(window&&!window.isDestroyed()&&new URL(window.webContents.getURL()).origin===service.origin)window.webContents.send('proteus:desktop-peer-event',value); });
     service.peers=peers;
     const workspaceSession = new WorkspaceSession(service.home);
+    try{service.contentTabs.seedWorkspace(workspaceSession.get());}catch(error){service.activity.log('warn','tabs.restore-failed',error.message);}
+    service.contentTabDocument = value => {
+      if(value.scope!=='chat'||!/^[a-f0-9]{64}$/.test(value.documentId||''))throw new Error('Choose a host-bound chat document.');
+      service.engine.getRun(value.id);
+      const file=service.contentTabs.documentSource(value.id,value.documentId),descriptor=service.contentTabs.get('chat',value.id).tabs.find(tab=>tab.documentId===value.documentId);
+      for(const root of service.workspaceFiles.roots().roots.filter(root=>root.available)){const relative=path.relative(root.path,file);if(relative&&!relative.startsWith('..'+path.sep)&&relative!=='..'&&!path.isAbsolute(relative))return {...service.workspaceFiles.read({rootId:root.id,file:relative}),title:descriptor.title,mediaType:'text/markdown'};}
+      throw new Error('Document is outside a currently authorized workspace.');
+    };
     service.resources={
       list:()=>{
         const tabs=browser.list().map(({id,title,url,group,loaded,pid,error})=>({id,title,url,group,loaded,pid,error}));
@@ -72,7 +90,7 @@ else {
     };
     service.activity.on('notification',item=>{const p=service.activity.data.preferences;if(!p.systemEnabled||p[item.type]===false||!Notification.isSupported())return;const notification=new Notification({title:item.title,body:item.body,silent:false});notification.on('click',()=>{showWindow();window.webContents.send('proteus:notification-open',item);});notification.show();});
 
-    ipcMain.handle('proteus:workspace-session', (event, value) => { trusted(event); if(value?.action==='get')return workspaceSession.get(); if(value?.action==='save'&&!closing)return workspaceSession.save(value.session); });
+    ipcMain.handle('proteus:workspace-session', (event, value) => { trusted(event); if(value?.action==='get')return workspaceSession.get(); if(value?.action==='save'&&!closing){workspaceSession.save(value.session);service.contentTabs.seedWorkspace(workspaceSession.get());return;} });
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     window.webContents.on('will-navigate', (event, url) => { if (new URL(url).origin !== service.origin) event.preventDefault(); });
     ipcMain.handle('proteus:open-path', async (event, file) => {
@@ -96,7 +114,11 @@ else {
       const result = await dialog.showOpenDialog(window, { properties: [folder ? 'openDirectory' : 'openFile', ...(options.multiple ? ['multiSelections'] : [])], ...(folder ? {} : { filters: [{ name: options.kind === 'workspace' ? 'VS Code workspace' : options.kind === 'life-profile' ? 'Private database profile' : options.kind === 'life-backup' ? 'Private SQL backup' : 'Markdown', extensions: options.kind === 'workspace' ? ['code-workspace'] : options.kind === 'life-profile' ? ['json'] : options.kind === 'life-backup' ? ['sql'] : ['md'] }] }) });
       return result.canceled ? [] : result.filePaths;
     });
-    ipcMain.handle('proteus:browser', (event, value) => { trusted(event); return browser.command(value); });
+    ipcMain.handle('proteus:browser', (event, value) => {
+      trusted(event);
+      if(event.senderFrame !== window.webContents.mainFrame || closing)throw new Error('Browser access is unavailable from this document.');
+      return browser.command(value);
+    });
     ipcMain.handle('proteus:standup-popout', async (event, width) => {
       trusted(event);
       if (standupWindow && !standupWindow.isDestroyed()) { standupWindow.show(); standupWindow.focus(); return; }

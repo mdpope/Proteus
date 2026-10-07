@@ -171,3 +171,17 @@ stale stores. Device-timezone chat tests cover summer/winter and a shared UTC se
 override the current device timezone. See `release-validation.md` for simulator results and the
 physical receipts. Physical iPad shared-Team account consent is still unverified; installation
 and relay connectivity alone do not establish website-account authorization.
+
+## Shared tabs and compact chat controls (0.2.2)
+
+For the same authorized destination, chat browser/document tabs and Team browser tabs reconcile
+with host memory. Pending operations retain their scope and rebase on a fresh revision after an
+offline conflict. Browser identities remain local, custom names persist, and selection and reading
+position remain on the client. Revocation clears the affected host's views; document-grant denial
+clears document content and denied pending operations. Sensitive browser addresses remain local.
+
+The chat header keeps Back, title and menu in a compact 44-point touch area across conversation,
+browser and document views. Reading collapses the composer to a single-line draft preview; touching
+it restores the same draft and model controls. Accessible circular Stop works in either size.
+Team has one row for Overview, Standup and browser tabs; Open standup belongs to Standup.
+Closing a chat browser selects a sibling or the conversation in the same chat.

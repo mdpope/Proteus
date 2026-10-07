@@ -64,7 +64,7 @@ function snapshot(run,source,currentRoots,verifiedLink=false){
   }finally{fs.closeSync(handle);}
 }
 export class ChatDocumentApprovals {
-  constructor({currentRoots}={}){this.requests=new Map();this.currentRoots=currentRoots;}
+  constructor({currentRoots,documentSource}={}){this.requests=new Map();this.currentRoots=currentRoots;this.documentSource=documentSource;}
   revokeDevice(deviceId){for(const [id,item] of this.requests)if(item.deviceId===deviceId)this.requests.delete(id);}
   revokeChat(chatId){for(const [id,item] of this.requests)if(item.chatId===chatId)this.requests.delete(id);}
   clear(){this.requests.clear();}
@@ -86,6 +86,7 @@ export class ChatDocumentApprovals {
     }else if(documentId!==undefined){
       if(typeof documentId!=='string'||!/^[0-9a-f]{64}$/.test(documentId))throw new Error('Invalid document ID.');
       for(const linked of linkedSources(run)){try{const candidate=snapshot(run,linked,this.currentRoots,true);if(candidate.documentId===documentId){source=linked;doc=candidate;break;}}catch{/* An unavailable link does not authorize another file. */}}
+      if(!doc&&this.documentSource){try{source=pathToFileURL(this.documentSource(run.id,documentId)).href;doc=snapshot(run,source,this.currentRoots,true);verifiedLink=true;if(doc.documentId!==documentId)doc=null;}catch{}}
       if(!doc)throw new Error('This linked document is no longer available in a currently authorized workspace.');
     }else doc=snapshot(run,source,this.currentRoots);
     const requestId=randomUUID(),expiresAt=Date.now()+TTL_MS;

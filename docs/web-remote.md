@@ -255,3 +255,17 @@ The current connection/Chats/history update requires no schema migration. Its af
 API/page suites passed 22 tests and 288 assertions with isolated storage and disposable keys;
 the adapter/allowance Node checks passed five tests. These are implementation and local regression
 results, not production deployment or actual-Mac acceptance claims.
+
+## October 6 connection and presentation corrections
+
+Connections links prominently between pairing/managing Macs and choosing the account Default Mac.
+The connected destination and default are separate; neither an offline host nor pairing switches
+the default. Pairing reports safe relay/invitation/save/authentication stages, retains the pasted
+invitation until authenticated, and provides stage-specific recovery without exposing close reasons.
+
+Website typography and chat density follow desktop. Contiguous activity uses the accepted warm
+group without a side accent; individual successful/failed items retain green/orange accents, safe
+errors and text states. Structured tool counts, automatic approvals, failures and running counts
+match desktop/native. Legacy plain output remains visible without an invented completed action.
+Reduced motion stops group/spinner animation. Reviewed-failure and offline cache guards keep Needs
+attention actionable. These source guarantees require separate live pairing and rollout evidence.

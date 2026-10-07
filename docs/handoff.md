@@ -1,9 +1,70 @@
 # Agent handoff
 
+## October 6 build and deployment
+
+The closed intake and operator-added BF-22 are implemented for 0.2.2. Read
+[October 6 release](2026-10-06-release.md) for verified source checks and actual installation status,
+then [the build handoff](2026-10-06-build-handoff.md) for original acceptance and design examples.
+The earlier 0.2.1 release records below remain historical until new install receipts supersede them.
+
 Proteus is a local AI scheduler and resumable conversation client. The Mac owns execution,
 authorization, files, sessions and browser profiles. iOS is a remote client. A relay transports
 encrypted traffic and cannot execute work. organization workflows and other workflow repositories own their policy
 and manifests; this repository owns the generic app and provider adapters.
+
+## October 5 next changes implementation and rollout
+
+Current rollout checkpoint: website release **20261006T053613Z** is live with
+14/14 endpoint checks passed. Build Mac has the final signed **0.2.1** toolbar
+and held-history update, revision `a65d8df542a2+dirty.803bbc240e31`, full fingerprint
+`803bbc240e3186e3be7ffd7e935e6a8b2ffb7b4750952b23cd9849f2990a83da`.
+Strict/deep signature and embedded source-manifest checks passed. Protected
+settings, credentials, pairing, six runs and six schedules remained byte-identical;
+all 12 ordered tabs, selected children and the active browser were preserved.
+The integrated Node suite passed 343/343 before the final selection/redraw fixes;
+those passed focused quit/relaunch (13 checks), toolbar/history and syntax checks.
+Native real-gesture long-message reopen/prepend, 100-event responsiveness smoke,
+and focused iPhone/iPad counts/composer/browser-history checks pass. The operator
+reports iPhone unlocked; its signed **0.2.1 (2610.5.3)** update is now installed
+and launched with app data/preferences/two destination identities preserved. The
+operator lifted the iPad hold on October 6; iPad is now also installed and running
+**0.2.1 (2610.5.3)**. Its six app-data files and preferences were preserved across
+installation; both destination identities and the selected destination survived
+launch. Signing, profile validity and installed version were freshly verified.
+The final app-only signed delta is uploaded to the private artifact branch after
+completion of the conditional Mac follow-up. Work Mac’s Codex chat verified it
+and completed the in-place replacement, signature and continuity checks. HC→Personal
+is online; Personal→HC remains unverified after an offline observation because
+Personal is locked. A metadata-sync fallback was rejected by automatic approval
+review and not retried; an unlock/status-check question is pending.
+Earlier bundles/deltas are superseded. The chronological records below are
+historical baselines; `next-changes-release.md` records rollout and limitations.
+
+
+The operator has lifted the general queue/build hold and authorized implementation
+of all 26 next-change items using GPT-6 Sol subagents at medium effort, with updates
+installed as ready. Website backups/uploads are approved; iPad, Work Mac and Personal
+Mac were reported unlocked. Recheck current state before installation and preserve
+app data, pairing, credentials and signing. The separate More actions concept and
+unrelated historical deferred scope remain deferred. See `next-changes-release.md`
+for current ownership, acceptance and deployment receipts. The installed release
+state below remains the baseline until new receipts establish updates.
+
+Before the hold, item 19 produced uncommitted source edits in `public/app.js`,
+`public/team-tools.js`, `public/style.css`, new `public/browser-toolbar.js` and a
+new `test/browser-toolbar-ui.mjs`. Main/chat/Team toolbars now share an icon-only
+Agent access control inside a lighter address field. Off has no box; on uses an
+accent fill and dark icon. Team access state follows browser updates; clicking an
+owned but unshared tab's lit control is intended to revoke rather than share it.
+No live browser permission was changed by this work.
+
+`npm run check` and 340/340 Node tests passed. Disposable Electron testing used a
+mock Keychain, synthetic pages and a separate app-data directory. Main/chat checks
+passed before the script failed in Team testing due to elements being replaced
+while reading styles/taking screenshots. Final run failed during Team screenshot
+capture; full Team toggle/ownership and minimum-width checks remain unverified.
+The isolated process has exited. Preserve these edits for the combined change set;
+do not describe the partial source work as installed or fully UI-verified.
 
 ## Latest release state
 

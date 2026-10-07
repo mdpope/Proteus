@@ -8,6 +8,13 @@ This repository owns reusable application code, migrations, tests, and UI assets
 
 This is the complete personal-records web application incorporated from Mnemosyne into Proteus. Desktop and mobile Life views use the protected website API; the desktop retains an optional local database integration. This complete Laravel source remains available for the separately deployed Proteus website. Personal operating workflows belong to operator workflows and durable personal context belongs to private notes; the application has no runtime dependency on either. Professional workflows retain their own organization workflows policy and records boundary. AI execution remains on connected desktops. The web client controls them through the encrypted relay; Laravel stores account-scoped shared application records and optional encrypted pairing custody. See `../docs/life.md` for source provenance, integration and future deployment checks.
 
+The paired-Mac chat UI offers optional initial names, guarded renaming, and a
+per-chat auto-approval choice when the host advertises those capabilities. The
+host retains all existing folder grants and sandbox rules; the website cannot
+grant new filesystem access. Website tab controls organize only Proteus content
+tabs and remembered chat/Team child views. External browser tabs remain under
+the browser's own controls.
+
 ## Local development
 
 Use PHP 8.3 or newer, Composer and Node.js. For a **new, empty development installation only**, copy `.env.example` to a private `.env`, configure a disposable database and run:

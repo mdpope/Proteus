@@ -1,6 +1,22 @@
 // Sandboxed, isolated-world preload. No API or Node capability is exposed to pages.
 const { ipcRenderer } = require('electron');
 let history={back:false,forward:false}, amount=0, direction=null, timer, cooldown=0, overlay;
+let overviewGate=null;
+let hoverHost, hoverText;
+function hoverStatus(url) {
+  if(!url){hoverHost?.remove();hoverHost=null;hoverText=null;return;}
+  if(!hoverHost){
+    hoverHost=document.createElement('div');
+    hoverHost.style.cssText='position:fixed;left:10px;bottom:10px;z-index:2147483647;pointer-events:none;max-width:calc(100vw - 20px);';
+    const shadow=hoverHost.attachShadow({mode:'closed'});
+    hoverText=document.createElement('div');
+    hoverText.style.cssText='box-sizing:border-box;width:max-content;max-width:100%;padding:5px 9px;border-radius:7px;background:rgba(20,25,26,.86);color:#fff;box-shadow:0 2px 12px #0005;backdrop-filter:blur(12px);font:12px/1.35 system-ui,sans-serif;overflow-wrap:anywhere;white-space:normal;';
+    shadow.append(hoverText);document.documentElement.append(hoverHost);
+  }
+  hoverText.textContent=url;
+}
+ipcRenderer.on('proteus:link-hover',(_event,url)=>hoverStatus(url));
+ipcRenderer.on('proteus:gesture-reset',()=>{overviewGate=null;});
 ipcRenderer.on('proteus:browser-history', (_event,value)=>{history=value;});
 function clear() { amount=0;direction=null;overlay?.remove();overlay=null; }
 function canScroll(event, delta) {
@@ -19,7 +35,16 @@ function draw() {
   const progress=Math.min(1,Math.abs(amount)/140),back=direction==='back';overlay.bubble.textContent=back?'←':'→';overlay.bubble.style[back?'left':'right']='0';overlay.bubble.style.transform=`translateX(${(back?1:-1)*(-50+progress*68)}px) scale(${.8+progress*.2})`;overlay.bubble.style.opacity=String(.3+progress*.7);
 }
 window.addEventListener('wheel', event=>{
-  if(event.isTrusted&&event.ctrlKey&&event.deltaY>0&&(window.visualViewport?.scale||1)<=1.01&&Date.now()>=cooldown){event.preventDefault();cooldown=Date.now()+900;ipcRenderer.send('proteus:browser-gesture','overview');return;}
+  if(event.isTrusted&&event.ctrlKey){
+    if(event.deltaY<=0||(window.visualViewport?.scale||1)>1.01){overviewGate=null;return;}
+    event.preventDefault();
+    const now=Date.now();
+    if(now<cooldown)return;
+    if(!overviewGate||now-overviewGate.last>420){overviewGate={started:now,last:now,delta:Math.abs(event.deltaY)};return;}
+    overviewGate.last=now;overviewGate.delta+=Math.abs(event.deltaY);
+    if(now-overviewGate.started>=260&&overviewGate.delta>=95){overviewGate=null;cooldown=now+900;ipcRenderer.send('proteus:browser-gesture','overview');}
+    return;
+  }
   if(!event.isTrusted||event.ctrlKey||event.shiftKey||event.deltaMode!==0||Date.now()<cooldown||(window.visualViewport?.scale||1)>1.01)return;
   if(!direction) {
     if(Math.abs(event.deltaX)<3||Math.abs(event.deltaX)<Math.abs(event.deltaY)*1.5||canScroll(event,event.deltaX))return;
@@ -31,4 +56,4 @@ window.addEventListener('wheel', event=>{
     else {overlay?.animate([{opacity:1},{opacity:0}],{duration:150,fill:'forwards'});setTimeout(clear,150);cooldown=Date.now()+160;}
   },150);
 },{capture:true,passive:false});
-window.addEventListener('pagehide',()=>{clearTimeout(timer);clear();});
+window.addEventListener('pagehide',()=>{clearTimeout(timer);clear();hoverStatus('');overviewGate=null;});

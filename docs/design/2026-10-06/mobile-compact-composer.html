@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mobile compact composer example</title>
+<style>
+  #proteus-mobile-composer {
+    --pm-bg:#0d1210;
+    --pm-panel:#202725;
+    --pm-card:#18211d;
+    --pm-line:#303b35;
+    --pm-ink:#edf2ec;
+    --pm-muted:#9aa99e;
+    --pm-accent:#c2e8a0;
+    --pm-warn:#ef827c;
+    --pm-tools:#332c20;
+    color:var(--pm-ink);
+    font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    font-size:14px;
+    line-height:1.45;
+    color-scheme:dark;
+  }
+  #proteus-mobile-composer * { box-sizing:border-box; }
+  #proteus-mobile-composer .preview { padding:12px;display:grid;justify-items:center; }
+  #proteus-mobile-composer .phone {
+    width:min(100%,390px);
+    overflow:hidden;
+    border:1px solid var(--pm-line);
+    border-radius:22px;
+    background:var(--pm-bg);
+  }
+  #proteus-mobile-composer .header {
+    display:flex;align-items:center;gap:6px;
+    padding:7px 10px 6px;
+    border-bottom:1px solid var(--pm-line);
+  }
+  #proteus-mobile-composer .header strong { flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px;font-weight:500; }
+  #proteus-mobile-composer .header-button { display:grid;place-items:center;width:44px;height:44px;flex:0 0 44px;padding:0;border:0;background:transparent;color:var(--pm-ink); }
+  #proteus-mobile-composer .header-button .disc { display:grid;place-items:center;width:34px;height:34px;border:1px solid #3b4540;border-radius:50%;background:#1b211e;font-size:22px;line-height:1; }
+  #proteus-mobile-composer .header-button.menu .disc { color:var(--pm-accent);font-size:20px; }
+  #proteus-mobile-composer .tabs { display:flex;align-items:stretch;gap:0;height:41px;overflow:hidden;border-bottom:1px solid var(--pm-line); }
+  #proteus-mobile-composer .tabs button { display:flex;align-items:center;gap:6px;min-width:0;padding:0 11px;border:0;border-right:1px solid var(--pm-line);border-radius:0;background:transparent;color:var(--pm-muted);font-size:12px;white-space:nowrap; }
+  #proteus-mobile-composer .tabs button.active { flex:1;color:var(--pm-ink);border-bottom:2px solid var(--pm-accent); }
+  #proteus-mobile-composer .tabs span { overflow:hidden;text-overflow:ellipsis; }
+  #proteus-mobile-composer .tabs [data-lucide] { width:15px;height:15px;flex:0 0 15px; }
+  #proteus-mobile-composer .thread {
+    display:grid;align-content:start;gap:12px;
+    min-height:315px;padding:16px 14px 18px;
+  }
+  #proteus-mobile-composer .message { background:var(--pm-card);border-left:3px solid #87b4b8;border-radius:8px;padding:11px 12px; }
+  #proteus-mobile-composer .message.user { margin-left:18px;border-left-color:var(--pm-accent); }
+  #proteus-mobile-composer .meta { color:var(--pm-muted);font-size:10px;letter-spacing:.1em;text-transform:uppercase; }
+  #proteus-mobile-composer .message p { margin:5px 0 0; }
+  #proteus-mobile-composer .activity { padding:12px;border-radius:8px;background:var(--pm-tools);font-size:12px; }
+  #proteus-mobile-composer .activity .ring { display:inline-block;width:12px;height:12px;margin-right:6px;border:2px solid #53654b;border-top-color:var(--pm-accent);border-radius:50%;vertical-align:-2px;animation:pm-spin .9s linear infinite; }
+  #proteus-mobile-composer .thread-status { color:var(--pm-muted);font-size:12px; }
+  #proteus-mobile-composer .composer-area { border-top:1px solid var(--pm-line);background:var(--pm-bg);padding:8px 10px 10px; }
+  #proteus-mobile-composer .mini { display:flex;align-items:center;gap:8px; }
+  #proteus-mobile-composer .mini-preview { flex:1;min-width:0;height:43px;border:1px solid #3c4840;border-radius:12px;background:var(--pm-panel);padding:0 13px;color:var(--pm-ink);text-align:left; }
+  #proteus-mobile-composer .mini-preview span { display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+  #proteus-mobile-composer .stop { display:grid;place-items:center;flex:0 0 43px;width:43px;height:43px;padding:0;border:1px solid #745049;border-radius:50%;background:#302521;color:var(--pm-warn); }
+  #proteus-mobile-composer .stop-mark { display:block;width:14px;height:14px;border-radius:2px;background:currentColor; }
+  #proteus-mobile-composer .expanded { display:none; }
+  #proteus-mobile-composer .phone.is-expanded .mini { display:none; }
+  #proteus-mobile-composer .phone.is-expanded .expanded { display:block; }
+  #proteus-mobile-composer .connection { display:flex;align-items:center;gap:6px;color:var(--pm-muted);font-size:12px;margin:0 0 7px 4px; }
+  #proteus-mobile-composer .connection::before { content:"";width:7px;height:7px;border-radius:50%;background:#35d270; }
+  #proteus-mobile-composer .editor { background:var(--pm-panel);border:1px solid #3c4840;border-radius:15px;padding:11px; }
+  #proteus-mobile-composer textarea { display:block;width:100%;min-height:102px;padding:1px 2px;background:transparent;border:0;resize:none;color:var(--pm-ink);font:inherit;outline-offset:4px; }
+  #proteus-mobile-composer .controls { display:flex;align-items:center;gap:7px;min-width:0;margin-top:5px; }
+  #proteus-mobile-composer .controls button { border:0;background:transparent;color:var(--pm-muted);padding:5px 2px;white-space:nowrap;font:inherit;font-size:12px; }
+  #proteus-mobile-composer .controls .plus { color:var(--pm-accent);font-size:22px;line-height:1; }
+  #proteus-mobile-composer .controls .grow { flex:1;min-width:0; }
+  #proteus-mobile-composer .controls .queue { padding:7px 9px;border-radius:7px;background:#b8db9b;color:#172310;font-weight:500; }
+  #proteus-mobile-composer .controls .stop { width:40px;height:40px;flex:0 0 40px;padding:0;background:#302521;color:var(--pm-warn);border:1px solid #745049; }
+  #proteus-mobile-composer .notice { min-height:16px;color:var(--pm-muted);font-size:11px;padding:3px 4px 0; }
+  @keyframes pm-spin { to { transform:rotate(360deg); } }
+  @media (prefers-reduced-motion:reduce) { #proteus-mobile-composer .activity .ring { animation:none;border-style:dotted; } }
+  @media (max-width:360px) { #proteus-mobile-composer .preview { padding:4px; } #proteus-mobile-composer .controls { gap:4px; } #proteus-mobile-composer .controls button { font-size:11px; } }
+</style>
+<style>body { margin: 0; background: #0d1210; }</style>
+</head>
+<body>
+<div id="proteus-mobile-composer" class="viz-dotted-background">
+  <div class="preview">
+    <section class="phone" aria-label="Compact mobile chat composer example">
+      <header class="header">
+        <button class="header-button" type="button" aria-label="Back"><span class="disc" aria-hidden="true">‹</span></button>
+        <strong>Check the project update</strong>
+        <button class="header-button menu" type="button" aria-label="More options"><span class="disc" aria-hidden="true">⋯</span></button>
+      </header>
+      <nav class="tabs" aria-label="Chat tabs">
+        <button type="button" class="active"><i data-lucide="messages-square" aria-hidden="true"></i><span>Check the project update</span></button>
+        <button type="button"><span aria-hidden="true">◎</span><span>Notes</span></button>
+      </nav>
+      <div class="thread" aria-label="Conversation; tap to return to reading">
+        <article class="message user"><div class="meta">You · 10:12 AM</div><p>What is still waiting for a decision?</p></article>
+        <article class="message"><div class="meta">Copilot · 10:13 AM</div><p>I’ll review the linked update and check the current notes.</p></article>
+        <div class="activity"><span class="ring" aria-hidden="true"></span>Activity · 3 tools · 1 automatic approval · 1 running</div>
+        <div class="thread-status">Working… you can queue an update.</div>
+      </div>
+      <div class="composer-area">
+        <div class="mini">
+          <button class="mini-preview" type="button" aria-label="Expand message composer"><span></span></button>
+          <button class="stop" type="button" aria-label="Stop current turn"><span class="stop-mark" aria-hidden="true"></span></button>
+        </div>
+        <div class="expanded">
+          <div class="connection">Connected</div>
+          <div class="editor">
+            <textarea aria-label="Message draft">Please check the latest notes and tell me which item still needs a decision.</textarea>
+            <div class="controls">
+              <button class="plus" type="button" aria-label="Add context">＋</button>
+              <button type="button">GPT-6 Luna⌄</button>
+              <button type="button">High⌄</button>
+              <span class="grow"></span>
+              <button type="button">Steer</button>
+              <button class="queue" type="button">Queue</button>
+              <button class="stop" type="button" aria-label="Stop current turn"><span class="stop-mark" aria-hidden="true"></span></button>
+            </div>
+          </div>
+        </div>
+        <div class="notice" role="status" aria-live="polite"></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+  (() => {
+    const root = document.getElementById('proteus-mobile-composer');
+    const phone = root.querySelector('.phone');
+    const draft = root.querySelector('textarea');
+    const preview = root.querySelector('.mini-preview span');
+    const notice = root.querySelector('.notice');
+    const syncPreview = () => { preview.textContent = draft.value.trim() || 'Message…'; };
+    syncPreview();
+    draft.addEventListener('input', syncPreview);
+    root.querySelector('.mini-preview').addEventListener('click', () => { phone.classList.add('is-expanded'); draft.focus(); });
+    root.querySelector('.thread').addEventListener('pointerdown', () => { if (phone.classList.contains('is-expanded')) { phone.classList.remove('is-expanded'); draft.blur(); syncPreview(); } });
+    draft.addEventListener('keydown', event => { if (event.key === 'Escape') { phone.classList.remove('is-expanded'); draft.blur(); syncPreview(); } });
+    root.querySelectorAll('.stop').forEach(button => button.addEventListener('click', event => {
+      event.stopPropagation();
+      root.querySelectorAll('.stop').forEach(stop => { stop.disabled = true; stop.style.opacity = '.45'; });
+      notice.textContent = 'Turn stopped';
+    }));
+  })();
+</script>
+</body>
+</html>

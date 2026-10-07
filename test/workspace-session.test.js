@@ -24,3 +24,12 @@ test('restored generated document retains stable identity but no read grant or c
  assert.equal(document.id,saved.active);assert.equal(document.documentId,documentId);assert.equal(document.mediaType,'text/html');
  assert.doesNotMatch(JSON.stringify(saved),/grant|secret|enabled/);
 });
+test('selected chat child survives restart only while its parent and child remain valid',()=>{
+ const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-workspace-'));
+ try {
+  const store=new WorkspaceSession(home),tabs=[{id:'chat-a',type:'run',label:'A'},{id:'child-a',type:'browser',parentId:'chat-a',url:'https://example.test/'},{id:'chat-b',type:'run',label:'B'},{id:'child-b',type:'browser',parentId:'chat-b',url:'https://example.test/other'}];
+  store.save({tabs,active:'child-a',selectedChildren:{'chat-a':'child-a','chat-b':'child-b',missing:'child-a','child-a':'child-b'}});
+  const restored=new WorkspaceSession(home).get();assert.deepEqual(restored.selectedChildren,{'chat-a':'child-a','chat-b':'child-b'});assert.equal(restored.active,'child-a');
+  const removed=normalizeSession({tabs:tabs.slice(0,1),selectedChildren:restored.selectedChildren});assert.deepEqual(removed.selectedChildren,{});
+ } finally {fs.rmSync(home,{recursive:true,force:true});}
+});

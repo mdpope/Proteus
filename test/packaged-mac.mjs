@@ -31,8 +31,16 @@ try {
   return {home:process.env.PROTEUS_HOME,userData:app.getPath('userData'),electron:process.versions.electron,cookie: cookies[0]?.value};
  });
  assert.equal(isolation.home,home);assert.equal(isolation.userData,path.join(home,'browser'));assert.equal(isolation.cookie,'mock-keychain-test');
- const page=await app.firstWindow();await page.getByRole('heading',{name:'Work that keeps moving.'}).waitFor();
+ const page=await app.firstWindow();await page.locator('#topbar-home').waitFor();
  const state=await app.evaluate(async ({app})=>{const {getService}=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs');const status=await getService().catalog.get();return {name:app.getName(),models:status.models?.length,available:status.available,error:status.error};});
  assert.equal(state.name,'Proteus');assert.ok(state.available,state.error);assert.ok(state.models>0);
  console.log(JSON.stringify({passed:true,checks:['bundle identity','shared iOS artwork','valid local signature','GitHub Copilot signatures preserved','window launches','mock Keychain synthetic cookie persistence','bundled Copilot runtime lists live models'],models:state.models,electron:isolation.electron,keychain:'mock; real Keychain access not verified'}));
-} finally {if(app)await app.close();fs.rmSync(home,{recursive:true,force:true});}
+} finally {
+ if(app){
+  const child=app.process();
+  const graceful=app.close().then(()=>true,()=>false);
+  const closed=await Promise.race([graceful,new Promise(resolve=>setTimeout(()=>resolve(false),10000))]);
+  if(!closed&&!child.killed)child.kill('SIGKILL');
+ }
+ fs.rmSync(home,{recursive:true,force:true});
+}

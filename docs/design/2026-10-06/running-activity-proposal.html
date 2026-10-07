@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Running activity example</title>
+<style>
+  #proteus-running-activity {
+    --pra-bg: #0f1715;
+    --pra-message: #1c2823;
+    --pra-user: #263328;
+    --pra-text: #eef2eb;
+    --pra-muted: #a7b4a9;
+    --pra-line: #344139;
+    --pra-group: #332c20;
+    --pra-group-lit: #3b3122;
+    --pra-item: #26332d;
+    --pra-item-edge: #8aafa5;
+    --pra-running: #c0e99e;
+    --pra-failed: #493923;
+    --pra-failed-edge: #e5bd74;
+    --pra-failed-text: #f0cf8a;
+    color: var(--pra-text);
+    font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 14px;
+    line-height: 1.48;
+    color-scheme: dark;
+  }
+  #proteus-running-activity * { box-sizing: border-box; }
+  #proteus-running-activity .preview { padding: 14px; }
+  #proteus-running-activity .surface {
+    width: 100%;
+    background: var(--pra-bg);
+    border: 1px solid var(--pra-line);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  #proteus-running-activity .conversation { display: grid; gap: 12px; }
+  #proteus-running-activity .message {
+    padding: 12px 14px;
+    border-radius: 9px;
+    background: var(--pra-message);
+    border-left: 3px solid #87b4b8;
+  }
+  #proteus-running-activity .message.user {
+    margin-left: 24px;
+    background: var(--pra-user);
+    border-left-color: #a7cf87;
+  }
+  #proteus-running-activity .message-meta {
+    color: var(--pra-muted);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+  }
+  #proteus-running-activity .message p { margin: 6px 0 0; }
+  #proteus-running-activity .activity-group {
+    padding: 12px;
+    border: 1px solid var(--pra-line);
+    border-radius: 9px;
+    background: var(--pra-group);
+    animation: pra-group-work 3.2s ease-in-out infinite;
+  }
+  #proteus-running-activity .activity-group > summary {
+    color: var(--pra-text);
+    font-size: 13px;
+    font-weight: 500;
+    list-style-position: inside;
+  }
+  #proteus-running-activity .activity-group > summary::marker { content: '▾  '; }
+  #proteus-running-activity .group-spinner { margin: 0 7px 0 2px; }
+  #proteus-running-activity .activity-list { display: grid; gap: 7px; margin-top: 10px; }
+  #proteus-running-activity .activity-row {
+    padding: 10px 12px;
+    background: var(--pra-item);
+    border-left: 3px solid var(--pra-item-edge);
+    border-radius: 0 6px 6px 0;
+  }
+  #proteus-running-activity .activity-row.failed {
+    background: var(--pra-failed);
+    border-left-color: var(--pra-failed-edge);
+  }
+  #proteus-running-activity .item-title {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-weight: 500;
+  }
+  #proteus-running-activity .item-title .check { color: var(--pra-item-edge); }
+  #proteus-running-activity .item-title .warning,
+  #proteus-running-activity .failed .item-status,
+  #proteus-running-activity .failed .error { color: var(--pra-failed-text); }
+  #proteus-running-activity .item-status,
+  #proteus-running-activity .item-note { color: var(--pra-muted); font-size: 12px; }
+  #proteus-running-activity .item-status { margin: 3px 0 0 22px; }
+  #proteus-running-activity .item-note { margin: 3px 0 0 22px; }
+  #proteus-running-activity .failed .error { margin: 5px 0 0 22px; overflow-wrap: anywhere; }
+  #proteus-running-activity .running .item-status { color: var(--pra-running); }
+  #proteus-running-activity .working-icon {
+    display: inline-block;
+    flex: 0 0 auto;
+    width: 15px;
+    height: 15px;
+    border: 3px solid rgba(192, 233, 158, .22);
+    border-top-color: var(--pra-running);
+    border-right-color: var(--pra-running);
+    border-radius: 50%;
+    vertical-align: -2px;
+    animation: pra-spin .85s linear infinite;
+  }
+  #proteus-running-activity .group-spinner { width: 13px; height: 13px; border-width: 2px; }
+  @keyframes pra-spin { to { transform: rotate(360deg); } }
+  @keyframes pra-group-work {
+    0%, 100% { background: var(--pra-group); border-color: var(--pra-line); }
+    50% { background: var(--pra-group-lit); border-color: #61513b; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #proteus-running-activity .activity-group,
+    #proteus-running-activity .working-icon { animation: none; }
+  }
+  @media (max-width: 480px) {
+    #proteus-running-activity .preview { padding: 8px; }
+    #proteus-running-activity .surface { padding: 14px; }
+    #proteus-running-activity .message.user { margin-left: 12px; }
+  }
+</style>
+<style>body { margin: 0; background: #0d1210; }</style>
+</head>
+<body>
+<div id="proteus-running-activity" class="viz-dotted-background">
+  <div class="preview">
+    <section class="surface" aria-label="Proteus chat running activity example">
+      <div class="conversation">
+        <article class="message user">
+          <div class="message-meta">You · 10:12 AM</div>
+          <p>Check the project update and summarize what still needs a decision.</p>
+        </article>
+
+        <article class="message">
+          <div class="message-meta">Copilot · 10:13 AM</div>
+          <p>I’ll open the update and check the linked notes.</p>
+        </article>
+
+        <details class="activity-group" open>
+          <summary><span class="working-icon group-spinner" aria-hidden="true"></span>Activity · 3 tools · 1 automatic approval · 1 failed · 1 running</summary>
+          <div class="activity-list">
+            <article class="activity-row">
+              <div class="item-title"><span class="check" aria-hidden="true">✓</span> Browser · open</div>
+              <div class="item-status">Completed · 1.2 s</div>
+            </article>
+            <article class="activity-row">
+              <div class="item-title"><span class="check" aria-hidden="true">✓</span> Automatic approval · custom-tool</div>
+              <div class="item-note">Saved operation approval</div>
+            </article>
+            <article class="activity-row failed">
+              <div class="item-title"><span class="warning" aria-hidden="true">!</span> Browser · snapshot</div>
+              <div class="item-status">Failed · 0 s</div>
+              <p class="error">Debugger is already attached to the target</p>
+            </article>
+            <article class="activity-row running">
+              <div class="item-title"><span class="working-icon" aria-hidden="true"></span> Searching files</div>
+              <div class="item-status">Working…</div>
+            </article>
+          </div>
+        </details>
+      </div>
+    </section>
+  </div>
+</div>
+</body>
+</html>

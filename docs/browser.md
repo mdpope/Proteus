@@ -16,6 +16,13 @@ remote-debugging port. The app window is never registered as an automation targe
 an intentionally limited adapter, tested against the pinned Electron/Playwright versions; it is
 not a full Chromium CDP server. Cross-origin frame behavior on complex sites needs further testing.
 
+The certificate observer and Playwright bridge share an explicitly owned debugger attachment.
+Bridge setup failures release listeners, sockets and their own lease; later reads reopen a closed
+bridge. Proteus does not detach or reuse a debugger attached by another owner. That case returns
+an actionable close-debugger-and-retry message. Concurrent synthetic reads, dynamic content,
+closed-bridge recovery and foreign-owner preservation are covered by the October 6 desktop check.
+Live Slack reading remains a separate verification.
+
 The provider-neutral broker supports listing, opening, navigating, accessibility snapshots,
 clicking, filling, key presses, selecting, scrolling, and closing. The Copilot adapter exposes
 `proteus_browser` as a native SDK tool. It does not expose arbitrary JavaScript, cookies, tokens,
@@ -41,6 +48,29 @@ If sign-in is needed, the run must ask the user instead of claiming an empty res
 Sources: [Electron WebContentsView](https://www.electronjs.org/docs/latest/api/web-contents-view),
 [Electron debugger](https://www.electronjs.org/docs/latest/api/debugger),
 [Playwright CDP connection](https://playwright.dev/docs/api/class-browsertype#browser-type-connect-over-cdp).
+
+Main, chat and Team browser tabs use site-supplied favicons. Resolution stays within the existing
+Electron browser session: observed/cached icon responses are preferred; otherwise only the supplied
+icon URL is requested through that session, with cross-origin credentials omitted. Icons have
+bounded download time and bytes and become a 16-pixel PNG before reaching the app renderer or
+workspace store. No external favicon proxy or application-server website fetch is used. Navigation
+clears stale icons; unloaded tabs retain safe cached PNGs. The cursor replaces the icon only during
+an actual agent browser operation, including its initial page load, and clears after completion,
+failure or revocation. Agent access alone does not display the cursor.
+
+Native browser surfaces are suppressed while any Proteus modal, renderer context menu or native
+tab menu is open. Closing the overlay restores the selected view without navigating its page.
+Main and Team tab overviews accept backdrop dismissal; unused space inside the panel stays open.
+Chat navigation keeps the same mounted bar through send, queue and steer refreshes. Chat, Team
+Tools and Standup tabs have their own icons and share the primary selected/unselected palette.
+
+Chat and Team tab descriptors reconcile through the host's revision-protected content-tab store.
+Desktop-to-mobile and visiting-Mac changes carry bounded browser/document identifiers, titles,
+explicit renamed titles, addresses and order. Reconciliation preserves concurrent additions,
+client selection and scroll positions; it does not transfer cookies or page contents. Stable
+content-tab identifiers prevent duplicate views after local browser IDs change during restoration.
+Sensitive authentication addresses remain local. Synced documents still require the existing
+current-root checks, View chat documents grant and exact-version approval before remote viewing.
 
 ## Desktop workspace and trackpad gestures
 
@@ -204,3 +234,29 @@ The shared history API retains URL/auth filtering, account isolation, idempotent
 checks verify a UTC visit rendered in the browser's local timezone, named and legacy records,
 and a new browser-originated visit. These checks do not assert production deployment or delivery
 from an actual desktop/mobile device.
+
+## Desktop toolbar styling
+
+The desktop source uses a shared robot toggle at the right of the address
+field in main/chat/Team browsers. Off is an unboxed glyph; on has an accent fill and
+inverted icon colors. The lighter URL background and hover/accessibility text make
+the state visible without the old Agent access text button. Existing per-tab access
+semantics remain. The isolated Electron fixture verifies main/chat/Team appearance,
+keyboard toggling, sharing and revocation. Installed appearance needs a release check.
+
+## Native browser interactions in the next change set
+
+The Mac renderer asks Electron to show native tab-creation menus over embedded
+browser views. Menu selection returns an item ID; dismissing it returns null.
+Browser link hover URLs appear in an isolated, transient overlay inside the
+browser view. The address bar can copy the committed page URL and request a
+read-only certificate summary from Chromium's active HTTPS connection. Chromium
+may expose only the document response's subject, issuer, validity, names and TLS
+protocol rather than DER bytes; in that case the panel omits chain fingerprints
+instead of inventing them. When Chromium exposes neither, it reports unavailable
+without changing trust settings.
+
+Command-W is routed by the main and embedded web contents to the renderer's
+protected current-tab close action. Pinch-out overview entry requires additional
+input after reaching baseline; tab switches, navigation and dismissal reset the
+pending gesture. Hardware timing remains subject to installed trackpad validation.

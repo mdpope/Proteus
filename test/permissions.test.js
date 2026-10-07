@@ -149,6 +149,16 @@ test('permission API enforces authentication, revision checks, scope selection, 
     const result=await post({action:'set-mode',scheduleId:'workspace-pulse',mode:'autopilot',expectedContextId,expectedRevision:state.permissions.revision});assert.equal(result.status,200);
     assert.equal((await post({action:'set-mode',scheduleId:'workspace-pulse',mode:'ask',expectedContextId,expectedRevision:state.permissions.revision})).status,400);
     assert.equal((await post({action:'set-mode',workspace:{cwd:'/ignored'},mode:'autopilot'})).status,400);
+    const chat=app.engine.createRun(schedule(home),'chat',null,{deferStart:true});
+    const chatContext=app.engine.permissions.describe(chat.schedule).id;
+    const workspaceRevision=app.engine.permissions.get().revision;
+    const chatGrant=await post({action:'set-chat-mode',runId:chat.id,mode:'autopilot',expectedContextId:chatContext,expectedChatRevision:null});
+    assert.equal(chatGrant.status,200);
+    const granted=await chatGrant.json();assert.equal(granted.permissionContext.source,'chat');
+    assert.equal(app.engine.permissions.get().revision,workspaceRevision);
+    assert.equal((await post({action:'set-chat-mode',runId:chat.id,mode:'inherit',expectedContextId:chatContext,expectedChatRevision:null})).status,400);
+    const revoked=await post({action:'set-chat-mode',runId:chat.id,mode:'inherit',expectedContextId:chatContext,expectedChatRevision:granted.permissionContext.chatRevision});
+    assert.equal(revoked.status,200);assert.equal((await revoked.json()).permissionContext.source,'workspace');
     state=await (await fetch(app.origin+'/api/state',{headers})).json();const profile=state.permissions.workspaces[0];
     assert.equal((await post({action:'revoke',id:profile.id,expectedRevision:state.permissions.revision})).status,200);
     assert.equal(app.engine.permissions.get().workspaces.length,0);

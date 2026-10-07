@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('desktop', {
   openExternal:value=>ipcRenderer.invoke('proteus:open-external',value),
   onCloseTool:handler=>{const listener=(_event,id)=>handler(id);ipcRenderer.on('proteus:close-tool',listener);return()=>ipcRenderer.removeListener('proteus:close-tool',listener);},
+  onCloseCurrentTab:handler=>{const listener=()=>handler();ipcRenderer.on('proteus:close-current-tab',listener);return()=>ipcRenderer.removeListener('proteus:close-current-tab',listener);},
   onNotification:handler=>{const listener=(_event,item)=>handler(item);ipcRenderer.on('proteus:notification-open',listener);return()=>ipcRenderer.removeListener('proteus:notification-open',listener);},
   lifeAccount: value => ipcRenderer.invoke('proteus:life-account', value),
   peers: value => ipcRenderer.invoke('proteus:desktop-peers', value),

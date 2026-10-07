@@ -1,3 +1,4 @@
+import { safeToolError } from '../public/tool-presentation.js';
 const maxText = 24000;
 const secretKey = /^(?:password|passwd|secret|token|access[_-]?token|refresh[_-]?token|api[_-]?key|authorization|cookie|set-cookie|credential|credentials)$/i;
 export function displayText(value, limit = maxText) {
@@ -41,16 +42,17 @@ export function toolActivity({ run, emit, update }) {
     } else if (event.type === 'tool.execution_progress') item.progress = displayText(d.progressMessage, 2000);
     else if (event.type === 'tool.execution_partial_result') item.output = displayText((item.output || '') + d.partialOutput);
     else if (event.type === 'tool.execution_complete') {
-      let browserError;
-      if (item.name === 'proteus_browser') { try { browserError = JSON.parse(d.result?.content || '{}').error; } catch { /* Plain error/result text. */ } }
-      item.status = d.success === false || browserError ? 'failed' : 'completed';
+      const parse=value=>{try{return typeof value==='string'?JSON.parse(value):value;}catch{return null;}};
+      const content=parse(d.result?.content),structured=d.result?.structuredContent;
+      const error=safeToolError(d.error)||safeToolError(content?.error)||safeToolError(structured?.error)||(d.success===false||d.result?.isError===true?safeToolError(d.result?.detailedContent||d.result?.content||structured||d.result):null);
+      item.status = d.success === false || d.result?.isError === true || error ? 'failed' : 'completed';
       item.finishedAt = event.timestamp || new Date().toISOString();
       item.durationMs = Math.max(0, Date.parse(item.finishedAt) - Date.parse(item.startedAt));
       const output = resultText(d.result?.detailedContent || d.result?.content || d.result?.structuredContent || item.output || '');
       item.output = displayText(output);
       const exitCode = ['bash', 'shell', 'powershell'].includes(item.name) && typeof output === 'string' && output.match(/<shellId: [^<>\r\n]+ completed with exit code ([1-9]\d*)>\s*$/)?.[1];
       if (exitCode) { item.status = 'failed'; item.error = `Command exited with code ${exitCode}.`; }
-      if (d.error || browserError) item.error = displayText(d.error?.message || d.error || browserError);
+      if (error) item.error = error;
       if (d.result?.contents?.some(c => c.type !== 'text') || d.result?.binaryResultsForLlm?.length) item.attachments = 'This tool also returned media or a resource. See the provider session for the original payload.';
     }
     update(); return true;
