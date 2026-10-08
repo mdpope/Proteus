@@ -15,7 +15,7 @@ below and in `content-workspace-release.md`.
 The operator authorized implementation, build and installation of this follow-up batch, including
 four performance/navigation additions below. Sanitized screenshot evidence is retained in these
 entries; private source material remains outside Git. Current validation/deployment status is in
-[the follow-up release ledger](2026-10-07-followup-release.md). Build Mac 0.2.5 is installed; other destinations remain pending. Installed inspection also found a repeated disconnected-peer toast and browser history-restoration timeout warning; retain these for follow-up live reproduction.
+[the follow-up release ledger](2026-10-07-followup-release.md). Build Mac, iPhone and iPad 0.2.5 are installed, and the website release is live; HC has verified the staged update but awaits direct chat confirmation. Installed inspection also found a repeated disconnected-peer toast and browser history-restoration timeout warning; retain these for follow-up live reproduction.
 
 ### BF-2026-10-07-18 — Edit and resend sent or cancelled messages
 

@@ -34,13 +34,20 @@ binary signatures and all 147 runtime input hashes.
   Strict initial metadata comparison stopped on two refreshed browser titles; a separate
   verification confirmed these were the only differences. Installed chat and tab separators
   visually inspected. No provider turn was sent.
-- Work Mac: signed app-only delta built and rehearsed against the exact 0.2.4 baseline. Delivery
-  is prepared; sending instructions to the existing HC chat awaits explicit messaging authorization.
-- iPhone/iPad: signed 0.2.5 (2610.7.2) build complete. Both preflights stopped at device unlock,
-  before backup or installation. Existing installs remain 0.2.4 (2610.7.1).
-- Website: release built and staged; no activation. The required existing signed-in in-app
-  administration tab was unavailable. Automatic approval review rejected opening a replacement
-  tab; explicit approval is pending. Existing deployed version remains the previous release.
+- Work Mac: signed app-only delta delivered through the existing private repository and independently
+  verified on HC against its exact 0.2.4 baseline. All 147 runtime hashes and original signer/vendor
+  signatures passed there. Installation is pending direct confirmation in the HC chat because it
+  could not access the originating chat to independently verify the operator approval. No HC restart
+  or app-data mutation has occurred.
+- iPhone/iPad: signed 0.2.5 (2610.7.2) installed and launched on both physical devices.
+  Exact source/bundle hashes, original signer/team/profile/entitlements, six data files, preferences,
+  both paired destinations and selected destination verified. Running processes independently
+  confirmed after launch. Native source behavior is unchanged in this desktop-focused release.
+- Website: release `20261008T003911Z` activated after approved in-app administration access,
+  a verified off-server recovery copy and isolated database restore. All 9,212 deployed hashes
+  matched; runtime configuration, schema and nutrition fingerprints preserved. All 14 HTTPS,
+  redirect and unauthenticated access-boundary probes passed. Existing backups retained; automatic
+  approval review blocked destructive retention rotation, so registration used no rotation.
 
 ## Remaining live observations
 

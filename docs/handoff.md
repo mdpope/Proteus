@@ -11,8 +11,9 @@ The operator authorized build and installation of BF-2026-10-07-18–28, includi
 cleanup/resumption, incremental history, inactive-tab throttling, remote disconnect layout and
 overview selection. Read [the follow-up release ledger](2026-10-07-followup-release.md) for current
 validation/install status. Build Mac has a verified 0.2.5 app/data-continuity receipt;
-HC, website and mobile installs remain at the prior baseline pending messaging authorization,
-administration-tab approval or device unlock. Two live warning observations remain open in the ledger.
+iPhone/iPad are installed at 0.2.5 (2610.7.2), and website release `20261008T003911Z` is live.
+HC has independently verified the signed update but still requires confirmation in its own chat
+because it cannot access the originating approval. Two live warning observations remain open in the ledger.
 
 ## October 7 implementation work
 
