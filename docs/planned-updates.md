@@ -12,7 +12,7 @@ below and in `content-workspace-release.md`.
 
 ## October 7 desktop tab-layout correction
 
-BF-2026-10-07-41: Fix shell and Markdown/file child-tab borders and spacing across local/remote chat views. Implemented for 0.2.7; both Mac deployments authorized. See [the tab-layout release ledger](2026-10-07-tab-layout-release.md) for validation and installation status.
+BF-2026-10-07-41: Fix shell and Markdown/file child-tab borders and spacing across local/remote chat views. Implemented for 0.2.7 and verified on Build Mac; HC staged with terminal/approval gates pending. Both Mac deployments authorized. See [the tab-layout release ledger](2026-10-07-tab-layout-release.md) for validation and installation status.
 
 ## October 7 post-0.2.5 intake — implementation and deployment authorized
 

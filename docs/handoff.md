@@ -7,7 +7,7 @@
 
 ## October 7 desktop tab-layout correction
 
-0.2.7 moves the child-tab strip outside view-specific padding and scrolling. Both Mac installations are authorized; [the tab-layout release ledger](2026-10-07-tab-layout-release.md) tracks validation and deployment. HC has now completed its verified 0.2.6 installation.
+0.2.7 moves the child-tab strip outside view-specific padding and scrolling. Build Mac has a verified 0.2.7 installation; HC has verified staging but awaits an idle terminal and direct approval in its installer chat. Both Mac installations are authorized; [the tab-layout release ledger](2026-10-07-tab-layout-release.md) tracks validation and deployment. HC has now completed its verified 0.2.6 installation.
 
 ## October 7 search and chat release
 
