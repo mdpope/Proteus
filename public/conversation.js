@@ -73,12 +73,13 @@ export function conversation(target, run, options) {
             const tool=normalizedTool(item.data.tool),presentation=toolPresentation(tool);row.classList.add(tool.status||'completed');
             const title=document.createElement('strong'),icon=document.createElement('span');icon.className='tool-icon'+(tool.status==='running'?' spinner':'');icon.setAttribute('aria-hidden','true');icon.textContent=tool.status==='running'?'':tool.status==='completed'?'✓':'!';title.append(icon,document.createTextNode(' '+(tool.summary||tool.name||'Tool')));row.append(title);
             const status=document.createElement('div');status.className='note';status.textContent=(tool.status==='running'?'Working…':tool.status==='failed'?'Failed':tool.status==='completed'?'Completed':tool.status)+(item.at?' · '+options.time(item.at):'');row.append(status);const timer=document.createElement('span');status.append(timer);bindRuntimeTimer(timer,()=>durationText(toolDuration(tool,now(),view.verified,run.turns)));
+            for(const fact of presentation.facts.filter(f=>f.label==='Pattern')){const line=document.createElement('div');line.className='tool-search-pattern';line.textContent='Pattern: '+fact.value;row.append(line);}
             if(presentation.error){const error=document.createElement('p');error.className='tool-error';error.textContent=presentation.error;row.append(error);}
             if(presentation.targets.length){const target=document.createElement('div');target.className='note';target.textContent=presentation.targets.join(' · ');row.append(target);}
             if(presentation.approval){const note=document.createElement('div');note.className='note';note.textContent=presentation.approval;row.append(note);}
             const details=document.createElement('details');details.innerHTML='<summary>Details</summary><div></div>';const body=details.querySelector('div');if(presentation.command){const command=document.createElement('pre');command.textContent=presentation.command;body.append(command);}if(presentation.facts.length){const facts=document.createElement('div');mountStructured(facts,{kind:'facts',facts:presentation.facts});body.append(facts);}if(presentation.progress){const progress=document.createElement('p');progress.textContent=presentation.progress;body.append(progress);}const output=document.createElement('div');mountStructured(output,presentation.output);body.append(output);details.open=openItems.has(item.key);if(body.textContent.trim())row.append(details);
           }else{
-            const approval=item.data.permission;row.classList.add('completed');const title=document.createElement('strong');title.textContent='✓ Automatic approval'+(approval.kind?' · '+approval.kind:'');row.append(title);const note=document.createElement('div');note.className='note';note.textContent=[approval.reason,approval.toolCallId?'Tool call '+approval.toolCallId:null,approval.resolvedTarget?'Target '+approval.resolvedTarget:null,approval.matchedRoot?'Trusted root '+approval.matchedRoot:null].filter(Boolean).join(' · ');row.append(note);
+            const approval=item.data.permission;row.classList.add('completed');const title=document.createElement('strong');title.textContent='✓ Automatic approval'+(approval.intention?' · '+approval.intention:approval.kind?' · '+approval.kind:'');row.append(title);const note=document.createElement('div');note.className='note';note.textContent=[approval.reason,approval.toolCallId?'Tool call '+approval.toolCallId:null,approval.resolvedTarget?'Target '+approval.resolvedTarget:null,approval.matchedRoot?'Trusted root '+approval.matchedRoot:null].filter(Boolean).join(' · ');row.append(note);if(approval.request){const details=document.createElement('details');const summary=document.createElement('summary');summary.textContent='Original approval request';const pre=document.createElement('pre');pre.textContent=approval.request;details.append(summary,pre);row.append(details);}
           }
           content.append(row);
         }
@@ -98,6 +99,7 @@ export function conversation(target, run, options) {
       node.querySelector('.tool-status').textContent = tool.status;const toolTimer=document.createElement('span');node.querySelector('.tool-status').append(toolTimer);bindRuntimeTimer(toolTimer,()=>durationText(toolDuration(tool,now(),view.verified,run.turns)));
       const content = node.querySelector('.tool-content');
       const presentation = toolPresentation(tool);
+      const pattern=presentation.facts.find(f=>f.label==='Pattern');if(pattern)node.querySelector('.tool-summary').textContent=(tool.summary||tool.name)+' · '+pattern.value;
       const signature = JSON.stringify([presentation,tool.arguments,tool.output]);
       if (node.toolSignature !== signature) {
         const oldTop = content.scrollTop; content.replaceChildren();
@@ -123,6 +125,7 @@ export function conversation(target, run, options) {
       const first=entry.streaming?!(run.events||[]).some(e=>e.role==='assistant'&&e.data?.turnId===turn?.id):!entries.some(e=>e.key!==entry.key&&e.role==='assistant'&&e.data?.turnId===turn?.id&&entries.indexOf(e)<entries.indexOf(entry));
       if(first){const timer=document.createElement('span');node.firstChild.append(timer);bindRuntimeTimer(timer,()=>durationText(turnDuration(turn,now(),view.verified))+(turn?.incomplete?' · partial':''));}
     }
+    if(entry.data?.permission&&!entry.data.permission.automatic){let details=node.querySelector('.permission-original');if(!details){details=document.createElement('details');details.className='permission-original';node.append(details);}details.replaceChildren();const summary=document.createElement('summary');summary.textContent=entry.data.permission.intention||'Original approval request';const pre=document.createElement('pre');pre.textContent=entry.data.permission.request||'Original request was not recorded by this version.';details.append(summary,pre);}
     const body=node.querySelector('.text');
     ProteusMarkdown.mount(body, entry.text, { ...options, resize: view.position });
     let files=node.querySelector('.message-attachments');

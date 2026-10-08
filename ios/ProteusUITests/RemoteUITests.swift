@@ -1002,3 +1002,20 @@ extension RemoteUITests {
         XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label == %@", "Stop reading aloud")).firstMatch.exists, "Leaving the chat must stop its speech")
     }
 }
+
+
+extension RemoteUITests {
+    @MainActor func testEnterSendsNewChatAndFeedback() async throws {
+        let (data, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/pair")!)
+        let fixture = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        let app = XCUIApplication(); app.launchArguments = ["--reset-pairing"]; app.launch()
+        let link = app.textFields["pairing-link"]; XCTAssertTrue(link.waitForExistence(timeout: 15)); link.tap(); link.typeText(fixture["code"] as! String)
+        app.buttons["pair-mac"].tap(); showChats(app); app.buttons["new-chat"].tap()
+        let prompt = app.textFields["chat-prompt"]; XCTAssertTrue(prompt.waitForExistence(timeout: 10)); prompt.tap(); prompt.typeText("Synthetic Enter send"); app.keyboards.buttons["Send"].tap()
+        XCTAssertTrue(app.staticTexts["Your input is needed"].waitForExistence(timeout: 20))
+        if app.buttons["composer-preview"].waitForExistence(timeout: 8) { app.buttons["composer-preview"].tap() }
+        let reply = app.textFields["reply-text"]; reply.tap(); reply.typeText("Synthetic Enter feedback"); app.keyboards.buttons["Send"].tap()
+        let completed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "Send message"), object: app.buttons["send-message"])
+        await fulfillment(of: [completed], timeout: 20)
+    }
+}

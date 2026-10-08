@@ -105,3 +105,22 @@ use bounded caches; earlier events load on demand and durable history remains in
 state polling requests summaries, and selected history uses transient cursors and absolute-index
 patches. Legacy remote clients keep compatible page responses and events. See the
 [follow-up ledger](2026-10-07-followup-release.md) for validation/install status.
+
+## Search chats and keyboard delivery (0.2.6)
+
+Chats has User Chats, Scheduled Tasks and Internet Searches tabs with the same filters. Sidebar
+recents show up to seven user chats or searches. Internet Searches starts a normal provider
+conversation using the selected workspace and that execution Mac's configured provider defaults.
+Engine Room configures model, reasoning effort and speed using refreshed provider metadata.
+Promotion beside Archive permanently moves a search into User Chats; it does not fork its session.
+Model changes remain available after creation.
+
+Enter sends; Shift+Enter inserts a newline. The native software keyboard's Send key submits the
+message; pasted multiline text remains a draft. During active execution the default send queues.
+A queued text entry's Steer now action uses the active turn's settings and retains the queue entry
+if the provider rejects delivery. Queued attachments cannot be converted to steering.
+
+Approval messages include short intent plus original request details when recorded. Request
+payloads are redacted and bounded. File-search patterns remain visible without opening Details.
+Closing a chat's main tab unloads its child browser views but retains their URLs and order; reopening
+the chat restores unloaded tabs rather than creating duplicate destinations.

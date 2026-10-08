@@ -476,7 +476,7 @@ struct NativeChatScrollLocation {
     }
     func open(_ url: URL?, title: String = "New tab", scope: String = "team") {
         let tab = BrowserDescriptor(id: UUID().uuidString, title: title, url: url?.absoluteString, scope: scope)
-        browserTabs.append(tab); select(tab.id, in: scope)
+        browserTabs.append(tab); select(tab.id, in: scope); if scope != "main" && scope != "team" { selectChatChild(tab.id, for: scope) }
     }
     @discardableResult func navigate(_ url: URL, in id: String) -> Bool {
         guard ["http", "https"].contains(url.scheme), url.host != nil, url.user == nil, url.password == nil,

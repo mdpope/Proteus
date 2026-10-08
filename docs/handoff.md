@@ -5,6 +5,14 @@
 > the historical completion claims below. It reviews all 22 + 28 build items and current reports;
 > working-tree corrections are not installed release acceptance.
 
+## October 7 search and chat release
+
+The operator superseded the post-0.2.5 deployment hold with “build it, deploy it, validate it”,
+then added approval details, document tabs, rename persistence, Enter-to-send and queued steering.
+These changes are implemented in the 0.2.6 working tree. Start with
+[the search release ledger](2026-10-07-search-release.md) for validation and per-target installation
+status. Source completion is separate from deployment and live-provider acceptance.
+
 ## October 7 follow-up implementation
 
 The operator authorized build and installation of BF-2026-10-07-18–28, including browser resource

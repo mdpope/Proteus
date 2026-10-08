@@ -124,3 +124,8 @@ html,body{height:100%;overflow:hidden}#app{height:100dvh;min-height:0;overflow:h
 .new-chat-toolbar .attachment-strip{order:-1;flex-basis:100%;max-height:110px;overflow:auto}
 .new-chat-toolbar .attachment-strip:empty{display:none}
 .new-chat-toolbar .attachment-controls{flex:0 0 auto}
+
+/* Chat types and compact search entry. */
+.chat-type-tabs{display:flex;gap:6px;margin:16px 0;flex-wrap:wrap}.chat-type-tabs [aria-selected=true]{background:var(--accent);color:#182414;border-color:var(--accent)}
+.message.assistant{margin-right:24px}.runtime-timer{text-transform:none;letter-spacing:normal}.tool-search-pattern{overflow-wrap:anywhere;font-size:12px;margin:6px 0}
+#dialog>.field{margin-bottom:18px}.internet-search-composer{margin-top:18px}.internet-search-composer .composer-actions{flex-wrap:wrap}.internet-search-composer textarea{border:0;background:transparent}.internet-search-composer+.actions{margin-top:16px}

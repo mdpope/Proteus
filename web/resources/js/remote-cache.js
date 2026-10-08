@@ -4,7 +4,7 @@ const cacheKey = (account,host) => prefix(account)+host.hostId+'.'+host.deviceId
 const aad = (account,host) => 'proteus-browser-chat-index:v1:'+account+':'+host.hostId+':'+host.deviceId;
 export async function saveChatIndex(account,host,runs,storage=localStorage){
     if(!host.key||!host.deviceId)return;
-    const items=(runs||[]).slice(0,250).map(run=>({id:String(run.id).slice(0,100),title:String(run.title||'Chat').slice(0,200),status:String(run.status||'unknown').slice(0,30),createdAt:run.createdAt,updatedAt:run.updatedAt}));
+    const items=(runs||[]).slice(0,250).map(run=>({id:String(run.id).slice(0,100),title:String(run.title||'Chat').slice(0,200),chatType:['user','scheduled','internet'].includes(run.chatType)?run.chatType:undefined,trigger:String(run.trigger||'').slice(0,30),scheduleName:String(run.scheduleName||'').slice(0,200),status:String(run.status||'unknown').slice(0,30),createdAt:run.createdAt,updatedAt:run.updatedAt}));
     const box=await seal(host.key,{items,observedAt:new Date().toISOString()},aad(account,host));
     if(box.length<=250_000&&!globalThis.proteusSigningOut)storage.setItem(cacheKey(account,host),box);
 }

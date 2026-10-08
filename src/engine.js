@@ -1,3 +1,4 @@
+import {displayText} from './tool-activity.js';
 import { RunHistoryCache } from './run-history-cache.js';
 import {startTurn,pauseTurn,resumeTurn,finishTurn,interruptTiming} from './run-timing.js';
 import fs from 'node:fs';
@@ -28,7 +29,7 @@ export class Engine extends EventEmitter {
     this.tombstoneFile = path.join(home, 'chat-tombstones.json');
     this.tombstones = readJSON(this.tombstoneFile, {});
     this.providers = { rehearsal: new RehearsalProvider(), ...providers };
-    this.pending = new Map(); this.questionQueues = new Map(); this.running = null; this.backgroundRuns = new Map(); this.executions = new Set(); this.stopping = false;
+    this.queuedSteers = new Map(); this.pending = new Map(); this.questionQueues = new Map(); this.running = null; this.backgroundRuns = new Map(); this.executions = new Set(); this.stopping = false;
     fs.mkdirSync(this.runsDir, { recursive: true, mode: 0o700 });
     this.journal = readJSON(path.join(home, 'scheduler.json'), { lastPoll: clock().toISOString(), slots: {} });
     this.runs = new Map();
@@ -117,6 +118,14 @@ export class Engine extends EventEmitter {
     this.emit('lifecycle', result);
     return result;
   }
+  promoteChat(id) {
+    const run=this.getRun(id);
+    if(run.trigger!=='chat')throw new Error('Only an Internet Search can be promoted.');
+    if(run.chatType!=='internet')return {id:run.id,chatType:'user',updatedAt:run.updatedAt};
+    // One-way field mutation on the live run: streaming events must not block promotion.
+    run.chatType='user';this.persist(run);
+    const result={id:run.id,chatType:'user',updatedAt:run.updatedAt};this.emit('lifecycle',result);return result;
+  }
   reviewFailure(id, expectedFailureEventAt) {
     const run=this.getRun(id);
     if(!['failed','interrupted'].includes(run.status))throw new Error('This chat does not have a failure to review.');
@@ -137,6 +146,7 @@ export class Engine extends EventEmitter {
       id: randomUUID(), schedule: structuredClone(schedule), scheduleRevision: revision(schedule),
       title: trigger === 'chat' ? (schedule.chatTitleManual ? schedule.name.trim() : suggestedChatTitle(schedule.prompt)) : schedule.name,
       ...(trigger === 'chat' ? { titleKind: schedule.chatTitleManual ? 'manual' : 'generated', titleRevision: randomUUID() } : {}),
+      chatType:trigger==='chat'&&schedule.chatType==='internet'?'internet':trigger==='chat'?'user':'scheduled',
       trigger, slot, status: 'queued', createdAt: this.now(), updatedAt: this.now(),
       events: [{ role: 'user', text: schedule.prompt, at: this.now() }], pending: null,
       providerSessionId: null, usage: { inputTokens: 0, outputTokens: 0, observed: false },
@@ -198,7 +208,19 @@ export class Engine extends EventEmitter {
     // Persist together with the caller's queue transition; no half-delivered message on a crash.
     run.events.push({role:'system',at:this.now(),text:`Next turn: ${options.model || 'Local rehearsal'} · effort ${options.reasoningEffort || 'default'} · speed ${options.serviceTier || 'default'} · context ${options.contextTier}. Earlier messages remain in this session; the provider may compact them to fit.`,data:{modelOptions:options}});
   }
+  async steerQueued(id,messageId) {
+    const run=this.getRun(id),message=run.queuedMessages?.find(item=>item.id===messageId);
+    if(!message){if(run.events.some(e=>e.data?.delivery?.id===messageId&&e.data.delivery.state==='steered'))return run;throw new Error('This queued message was already delivered or removed.');}
+    if(run.status!=='running'||this.running?.id!==id)throw new Error('Steering is available during a running turn.');
+    if(message.attachmentDispatch)throw new Error('Messages with attachments must stay queued.');
+    const provider=this.providers[run.schedule.provider];if(!provider.steer)throw new Error('This provider does not support steering. The message remains queued.');
+    if(this.queuedSteers.has(id))throw new Error('Wait for the current steering request.');
+    const delivery=run.events.find(e=>e.data?.delivery?.id===messageId)?.data.delivery;
+    const operation=(async()=>{try{await provider.steer(run,message.prompt);run.queuedMessages=run.queuedMessages.filter(item=>item.id!==messageId);if(delivery){delivery.state='steered';delete delivery.error;}}catch(error){if(delivery)delivery.error=error.message;throw error;}finally{this.persist(run);}})();
+    this.queuedSteers.set(id,operation);try{await operation;return run;}finally{this.queuedSteers.delete(id);}
+  }
   removeQueued(id, messageId) {
+    if(this.queuedSteers.has(id))throw new Error('Wait for the current steering request.');
     const run = this.getRun(id); const index = run.queuedMessages?.findIndex(m=>m.id===messageId) ?? -1;
     if (index < 0) throw new Error('This message has already been delivered.');
     const [removed]=run.queuedMessages.splice(index,1);if(removed.attachmentDispatch)void this.attachmentConsents?.releaseProof(removed.attachmentDispatch.proofId).catch(()=>{});
@@ -219,7 +241,7 @@ export class Engine extends EventEmitter {
         if (!offered || offered.label !== current?.label) throw new Error('Permission scope changed. Review the workspace permissions before continuing.');
         this.permissions.remember(run.schedule, run.pending.details, answer);
       }
-      this.event(run, 'system', answer === 'deny' ? 'Permission denied.' : `Permission approved: ${answer}.`, { permission: { kind: run.pending.details?.kind, decision: answer, automatic: false } });
+      this.event(run, 'system', answer === 'deny' ? 'Permission denied.' : `Permission approved: ${answer}.`, { permission: { kind: run.pending.details?.kind, intention:displayText(run.pending.details?.intention||run.pending.question||'Tool permission',240), request:displayText(run.pending.details||{},12000), decision: answer, automatic: false } });
     }
     this.pending.delete(id); run.pending = null; run.status = 'running';resumeTurn(run,this.now());
     if (!isPermission) this.event(run, 'user', answer, {questionReply:{requestId}}); else this.persist(run);
@@ -258,7 +280,7 @@ export class Engine extends EventEmitter {
     run.automaticApprovals = (run.automaticApprovals || 0) + 1;
     const tool = request?.toolCallId ? run.events.findLast(event => event.data?.tool?.callId === request.toolCallId)?.data?.tool : null;
     if (tool) tool.approval = decision.reason;
-    this.event(run, 'system', `Auto-approved ${request?.kind || 'tool'}: ${decision.reason}.`, { permission: { kind: request?.kind, automatic: true, reason: decision.reason, mode: decision.mode, source: decision.source || 'workspace',...(typeof request?.toolCallId==='string'?{toolCallId:request.toolCallId.slice(0,128)}:{}),...(decision.resolvedTarget?{resolvedTarget:decision.resolvedTarget.slice(0,1024)}:{}),...(decision.matchedRoot?{matchedRoot:decision.matchedRoot.slice(0,1024)}:{}) } });
+    this.event(run, 'system', `Auto-approved ${request?.kind || 'tool'}: ${decision.reason}.`, { permission: { kind: request?.kind, request:displayText(request||{},12000), intention:displayText(request?.intention||request?.toolName||request?.fullCommandText||request?.fileName||request?.kind||'Tool request',240), automatic: true, reason: decision.reason, mode: decision.mode, source: decision.source || 'workspace',...(typeof request?.toolCallId==='string'?{toolCallId:request.toolCallId.slice(0,128)}:{}),...(decision.resolvedTarget?{resolvedTarget:decision.resolvedTarget.slice(0,1024)}:{}),...(decision.matchedRoot?{matchedRoot:decision.matchedRoot.slice(0,1024)}:{}) } });
   }
   recheckPermissions() {
     for (const provider of Object.values(this.providers)) provider.recheckPermissions?.();
@@ -314,6 +336,7 @@ export class Engine extends EventEmitter {
       if(['failed','interrupted'].includes(run.status)){run.failureEventAt=this.now();delete run.failureReviewedAt;}
       this.pending.delete(run.id); run.pending = null; delete run.liveMessages;delete run.nextAttachmentDispatch;
       if(dispatch)await this.attachmentConsents.releaseProof(dispatch.proofId).catch(()=>{});
+      await this.queuedSteers.get(run.id)?.catch(()=>{});
       if (run.status === 'completed' && run.queuedMessages?.length && !this.stopping) {
         const next = run.queuedMessages.shift(); if (next.modelOptions) this.applyModelOptions(run, next.modelOptions); run.nextPrompt = next.prompt;run.nextAttachmentDispatch=next.attachmentDispatch; run.status = 'queued';
         const event=run.events.find(e=>e.data?.delivery?.id===next.id);if(event)event.data.delivery.state='delivered';

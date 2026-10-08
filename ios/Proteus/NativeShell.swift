@@ -107,9 +107,9 @@ func nativeNeedsAttention(_ run: JSON) -> Bool {
 }
 
 private enum NativeArea: String, CaseIterable, Identifiable {
-    case home = "Home", schedules = "Schedules", chats = "Chats", attention = "Needs Attention", life = "Life", team = "Team", engine = "Engine Room"
+    case home = "Home", schedules = "Schedules", chats = "Chats", internet = "Internet Searches", attention = "Needs Attention", life = "Life", team = "Team", engine = "Engine Room"
     var id: String { rawValue }
-    var icon: String { switch self { case .home: "house"; case .schedules: "calendar"; case .chats: "bubble.left.and.bubble.right"; case .attention: "exclamationmark"; case .life: "heart.text.square"; case .team: "person.3"; case .engine: "gearshape.2" } }
+    var icon: String { switch self { case .home: "house"; case .schedules: "calendar"; case .chats: "bubble.left.and.bubble.right"; case .internet: "magnifyingglass"; case .attention: "exclamationmark"; case .life: "heart.text.square"; case .team: "person.3"; case .engine: "gearshape.2" } }
 }
 private struct NativeContentTab: Identifiable, Codable, Equatable {
     let id: String
@@ -182,7 +182,7 @@ struct NativeShell: View {
     private var recentChats: [AggregateChat] {
         Array(destinations.destinations.flatMap { destination in
             (destinations.remote(for: destination.id)?.state["runs"].array ?? []).map { AggregateChat(hostID: destination.id, hostName: destination.label, run: $0) }
-        }.sorted { ($0.run["updatedAt"].string.isEmpty ? $0.run["createdAt"].string : $0.run["updatedAt"].string) > ($1.run["updatedAt"].string.isEmpty ? $1.run["createdAt"].string : $1.run["updatedAt"].string) }.prefix(5))
+        }.sorted { ($0.run["updatedAt"].string.isEmpty ? $0.run["createdAt"].string : $0.run["updatedAt"].string) > ($1.run["updatedAt"].string.isEmpty ? $1.run["createdAt"].string : $1.run["updatedAt"].string) }.filter { nativeChatType($0.run) == (area == .internet ? "internet" : "user") }.prefix(7))
     }
     private func title(for tab: NativeContentTab) -> String {
         if tab.kind == "browser" { return shared.browserTabs.first(where: { $0.id == tab.id })?.title ?? tab.title }
@@ -234,7 +234,7 @@ struct NativeShell: View {
                                 }
                                 Menu {
                                     Button("Browser", systemImage: "globe") { shared.open(nil, scope: "main") }
-                                    Button("Chat", systemImage: "bubble.left.and.bubble.right") { area = .chats; selectedTab = nil }
+                                    Button("Chat", systemImage: "bubble.left.and.bubble.right") { area = .chats; selectedTab = nil }; Button("Internet Search", systemImage: "magnifyingglass") { area = .internet; selectedTab = nil }
                                     Button("Schedule", systemImage: "calendar") { area = .home; selectedTab = nil }
                                     Button("Terminal · Mac only", systemImage: "terminal") {}.disabled(true)
                                     Button("File · grant required", systemImage: "doc") {}.disabled(true)
@@ -287,6 +287,7 @@ struct NativeShell: View {
         } message: { Text("Only the Proteus chat record will be removed. Generated files and the provider’s original chat remain.") }
         .alert("Download", isPresented: Binding(get: { shared.downloadError != nil }, set: { if !$0 { shared.downloadError = nil } })) { Button("OK") { shared.downloadError = nil } } message: { Text(shared.downloadError ?? "") }
         .onChange(of: area) { _, _ in MessageSpeech.shared.stop(); selectedTab = nil }
+        .onChange(of: shared.selectedMainBrowser) { _, id in if navigationReady, let id, opened.contains(where: { $0.id == id }) { selectedTab = id } }
         .onChange(of: shared.browserTabs) { _, tabs in
             for tab in tabs where tab.scope == "main" && !opened.contains(where: { $0.id == tab.id }) {
                 opened.append(NativeContentTab(id: tab.id, title: tab.title, kind: "browser", hostID: nil))
@@ -346,12 +347,11 @@ struct NativeShell: View {
                     .accessibilityIdentifier("sidebar-" + item.id)
                     .accessibilityValue(activeArea == item ? "Active" : "Inactive")
                     .accessibilityAddTraits(activeArea == item ? .isSelected : [])
-                    if area == item && item == .chats {
+                    if area == item && (item == .chats || item == .internet) {
                         ForEach(recentChats) { entry in
                             Button { openChat(entry) }
                                 label: { HStack { if entry.run["status"].string == "awaiting_input" { Text("!").foregroundStyle(.orange) }; Text(entry.run["title"].string).lineLimit(1).font(.caption) } }.padding(.leading).listRowBackground(selectedTab == entry.id ? NativeTheme.accent.opacity(0.10) : Color.clear)
                         }
-                        Button("More…") { area = .chats }.padding(.leading)
                     }
                     if area == item && item == .team {
                         ForEach(["Overview", "Standup"], id: \.self) { title in Button(title) { teamSection = title }.font(.caption).padding(.leading).accessibilityIdentifier("team-sidebar-" + title.lowercased()).listRowBackground(activeArea == .team && teamSection == title ? NativeTheme.accent.opacity(0.10) : Color.clear) }
@@ -457,7 +457,7 @@ struct NativeShell: View {
         }
     }
     @ViewBuilder private func content(_ item: NativeArea) -> some View {
-        switch item { case .home: NativeHome(showAllowance: false, onSchedule: tablet ? { schedule in if let hostID = destinations.selectedID { openSchedule(schedule, hostID: hostID) } } : nil); case .schedules: if let remote = destinations.selected { SchedulesView(onSelect: { schedule in if let hostID = destinations.selectedID { openSchedule(schedule, hostID: hostID) } }).environmentObject(remote) } else { NativeHome() }; case .chats: AggregateChatsView(onSelect: tablet ? openChat : nil, notificationRequest: notificationChatRequest, onNotificationConsumed: { notificationChatRequest = nil }); case .attention: AggregateChatsView(onSelect: tablet ? openChat : nil, attentionOnly: true); case .life: if lifeEnabled || ProcessInfo.processInfo.arguments.contains("--synthetic-life") { LifeRootView() } else { NavigationStack { NativeSetupView() } }; case .team: TeamToolsView(); case .engine: EngineRoomView(page: $enginePage) }
+        switch item { case .home: NativeHome(showAllowance: false, onSchedule: tablet ? { schedule in if let hostID = destinations.selectedID { openSchedule(schedule, hostID: hostID) } } : nil); case .schedules: if let remote = destinations.selected { SchedulesView(onSelect: { schedule in if let hostID = destinations.selectedID { openSchedule(schedule, hostID: hostID) } }).environmentObject(remote) } else { NativeHome() }; case .chats: AggregateChatsView(onSelect: tablet ? openChat : nil, notificationRequest: notificationChatRequest, onNotificationConsumed: { notificationChatRequest = nil }); case .internet: AggregateChatsView(onSelect: tablet ? openChat : nil, initialChatType: "internet"); case .attention: AggregateChatsView(onSelect: tablet ? openChat : nil, attentionOnly: true); case .life: if lifeEnabled || ProcessInfo.processInfo.arguments.contains("--synthetic-life") { LifeRootView() } else { NavigationStack { NativeSetupView() } }; case .team: TeamToolsView(); case .engine: EngineRoomView(page: $enginePage) }
     }
 }
 struct NativeHome: View {
@@ -597,10 +597,17 @@ private func chatRowTimestamp(_ run: JSON, timeZone: TimeZone) -> String {
     let formatter = DateFormatter(); formatter.dateStyle = .short; formatter.timeStyle = .short; formatter.timeZone = timeZone
     return formatter.string(from: date)
 }
+func nativeChatType(_ run: JSON) -> String {
+    if run["chatType"].string == "internet" { return "internet" }
+    let trigger = run["trigger"].string
+    return (!trigger.isEmpty && trigger != "chat") || !run["scheduleName"].string.isEmpty ? "scheduled" : "user"
+}
 struct AggregateChatsView: View {
     @EnvironmentObject var destinations: DestinationStore
     @Environment(\.timeZone) private var timeZone
     var onSelect: ((AggregateChat) -> Void)? = nil
+    var initialChatType = "user"
+    @State private var chatType = "user"
     var attentionOnly = false
     var notificationRequest: NotificationChatRequest? = nil
     var onNotificationConsumed: (() -> Void)? = nil
@@ -625,6 +632,7 @@ struct AggregateChatsView: View {
             .filter { item in
                 guard (filter == "all" || item.hostID == filter),
                       (showArchived || item.run["archivedAt"].string.isEmpty),
+                      (attentionOnly || nativeChatType(item.run) == chatType),
                       (!attentionOnly || nativeNeedsAttention(item.run)),
                       (query.isEmpty || (item.run["title"].string + " " + item.hostName).localizedCaseInsensitiveContains(query)) else { return false }
                 guard fromEnabled || throughEnabled else { return true }
@@ -639,6 +647,7 @@ struct AggregateChatsView: View {
     var body: some View {
         NavigationStack {
             List {
+                if !attentionOnly { Picker("Chat type", selection: $chatType) { Text("User Chats").tag("user"); Text("Scheduled Tasks").tag("scheduled"); Text("Internet Searches").tag("internet") }.pickerStyle(.segmented) }
                 DisclosureGroup("Filters", isExpanded: $filtersExpanded) {
                     Picker("Host filter", selection: $filter) { Text("All Macs").tag("all"); ForEach(destinations.destinations) { Text($0.label).tag($0.id) } }
                     Toggle("From Date", isOn: $fromEnabled)
@@ -650,9 +659,9 @@ struct AggregateChatsView: View {
                 Section { Text("New chats execute on \(destinations.selectedLabel). Viewing another Mac’s history does not change that destination.").font(.caption).foregroundStyle(.secondary) }
                 ForEach(chats) { item in chatRow(item) }
                 ForEach(destinations.destinations) { d in if let remote = destinations.remote(for: d.id), (showArchived ? remote.allRuns.count < remote.allRunCount : remote.state["runs"].array.count < remote.state["runCount"].int) { Button("Load older · " + d.label) { Task { if showArchived { await remote.loadAllRuns() } else { await remote.loadMoreRuns() } } }.disabled(!remote.connected) } }
-            }.navigationTitle("Chats").searchable(text: $query).refreshable { await destinations.refreshAll() }
+            }.navigationTitle("Chats").onAppear { chatType = initialChatType }.onChange(of: initialChatType) { _, value in chatType = value }.searchable(text: $query).refreshable { await destinations.refreshAll() }
                 .toolbar { Menu { ForEach(destinations.destinations) { d in Button(d.label) { try? destinations.select(d.id) } } } label: { Label(destinations.selectedLabel, systemImage: "desktopcomputer") }; Button("New chat", systemImage: "square.and.pencil") { newChat = true }.disabled(destinations.selected?.connected != true).accessibilityIdentifier("new-chat") }
-                .sheet(isPresented: $newChat) { if let remote = destinations.selected { NewChatView { id in newChat = false; let item = AggregateChat(hostID: remote.connection?.hostId ?? "", hostName: destinations.destinations.first(where: { $0.id == remote.connection?.hostId })?.label ?? "Mac", run: .object(["id": .string(id)])); if let onSelect { onSelect(item) } else { selected = item } }.environmentObject(remote) } }
+                .sheet(isPresented: $newChat) { if let remote = destinations.selected { NewChatView(internet: chatType == "internet") { id in newChat = false; let item = AggregateChat(hostID: remote.connection?.hostId ?? "", hostName: destinations.destinations.first(where: { $0.id == remote.connection?.hostId })?.label ?? "Mac", run: .object(["id": .string(id)])); if let onSelect { onSelect(item) } else { selected = item } }.environmentObject(remote) } }
                 .navigationDestination(item: $selected) { item in if let remote = destinations.remote(for: item.hostID) { ChatView(id: item.run["id"].string).environmentObject(remote) } }
                 .onChange(of: destinations.selected?.selectedChat) { _, id in if let id, let hostID = destinations.selectedID { let item = AggregateChat(hostID: hostID, hostName: destinations.selectedLabel, run: .object(["id": .string(id)])); if let onSelect { onSelect(item) } else { selected = item } } }
                 .onChange(of: notificationRequest) { _, request in if let request { openNotificationChat(request) } }

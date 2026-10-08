@@ -7,6 +7,14 @@ import { revision } from './schedules.js';
 export function validateSettings(value) {
   if (value?.schemaVersion !== 1) throw new Error('Settings schemaVersion must be 1.');
   validateModelOptionShape(value);
+  if(value.internetSearches!==undefined){
+    if(!value.internetSearches||typeof value.internetSearches!=='object'||Array.isArray(value.internetSearches))throw new Error('Internet Search defaults must be a provider map.');
+    for(const [provider,options] of Object.entries(value.internetSearches)){
+      if(!['copilot','codex','claude'].includes(provider)||!options||typeof options!=='object'||Array.isArray(options)||typeof options.model!=='string'||!options.model.trim()||options.model==='auto')throw new Error('Choose a provider and explicit Internet Search model.');
+      if(Object.keys(options).some(key=>!['model','reasoningEffort','contextTier','serviceTier'].includes(key)))throw new Error('Internet Search defaults only contain model options.');
+      validateModelOptionShape(options);
+    }
+  }
   if(value.preferences!==undefined&&(!value.preferences||typeof value.preferences!=='object'||Array.isArray(value.preferences)||value.preferences.clickedLinks!==undefined&&!['in-app','system'].includes(value.preferences.clickedLinks)))throw new Error('Choose in-app or system browser for clicked links.');
   if(value.appearance!==undefined&&(!value.appearance||typeof value.appearance!=='object'||Array.isArray(value.appearance)||(['showProviderUsage','providerUsageCollapsed','sidebarCollapsed'].some(key=>value.appearance[key]!==undefined&&typeof value.appearance[key]!=='boolean'))))throw new Error('Appearance settings must contain boolean usage preferences.');
   if (!['copilot','codex','claude','rehearsal'].includes(value.provider)) throw new Error('Choose a supported default provider.');

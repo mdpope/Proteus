@@ -327,3 +327,17 @@ returned usable allowance and propagated through the cache and summary. The fres
 stops independently and does not consume a model turn or interrupt an active conversation.
 The source regression covers both Keychain defaults and explicit token options using synthetic
 credentials. Signed installation and the affected installed sidebar remain separate acceptance.
+
+## Built-in app guidance and document tabs
+
+Every provider receives Proteus runtime instructions describing browser-tab reuse and the
+`proteus_open_document` operation. This is app behavior, independent of repository AGENTS.md and
+optional user skills. The document operation opens a saved Markdown file in the owning chat and
+reuses a stable descriptor. Both the run's workspace snapshot and current workspace authorization
+must include the canonical file; symlink escapes are rejected.
+
+Copilot uses its custom-tool boundary. Claude and Codex receive a narrow stdio MCP adapter backed
+by an ephemeral loopback capability tied to one run and turn. The adapter receives no application
+API credential. It supports document listing/opening only and closes after the turn. Codex resume
+uses MCP configuration rather than unsupported dynamic-tool changes. `proteus_app` is reserved.
+Normal provider tool-approval behavior still applies; runtime guidance does not grant permission.

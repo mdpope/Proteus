@@ -1,6 +1,7 @@
+import {renderInternetDefaults} from './internet-search.js';
 let ui;
 const $ = selector => document.querySelector(selector);
-const sections = [['resources','Resources'],['providers','Providers'],['connections','Connections'],['integrations','Integration profiles'],['account','Account & Security'],['preferences','Preferences'],['setup','App Setup'],['usage','Usage'],['notifications','Notifications'],['logs','Logs']];
+const sections = [['resources','Resources'],['providers','Providers'],['connections','Connections'],['integrations','Integration profiles'],['account','Account & Security'],['internet-searches','Internet Searches'],['preferences','Preferences'],['setup','App Setup'],['usage','Usage'],['notifications','Notifications'],['logs','Logs']];
 export function initEngineRoom(options){ui=options;}
 async function activity(kind){const local=await ui.api('/api/'+kind);if(!ui.state.data.life?.identity)return local;try{const account=await ui.api('/api/app'),merged=new Map((local.items||[]).map(item=>[item.id,{...item,localId:item.id}]));for(const item of account[kind]||[]){const key=item.eventId||item.id,previous=merged.get(key);merged.set(key,{...previous,...item,localId:previous?.localId,shared:true,identity:account.identity});}return {...local,items:[...merged.values()].sort((a,b)=>Date.parse(b.createdAt||b.at)-Date.parse(a.createdAt||a.at))};}catch{return {...local,sharedUnavailable:true};}}
 
@@ -15,7 +16,8 @@ export function renderEngineRoom(section='resources'){
   const active=()=>ui.state.page==='engine'&&ui.state.engineSection===section&&$('#engine-content');
   const render=async()=>{
     try{
-      if(section==='integrations'){
+      if(section==='internet-searches'){await renderInternetDefaults(ui,$('#engine-content'),active);
+      } else if(section==='integrations'){
         const runs=ui.state.data.runs.filter(run=>ui.state.data.mcpStatusProviders?.includes(run.schedule.provider));
         $('#engine-content').innerHTML=`<section class="card"><h2>Integration profiles on this Mac</h2><p>Choose the chat whose provider and selected MCP configuration you want to inspect. Status checks and sign-in use that exact consumer. Credentials remain in its provider-owned store.</p><label>Chat / MCP consumer<select id="integration-chat"><option value="">Select a chat</option>${runs.map(run=>`<option value="${ui.escape(run.id)}">${ui.escape(run.title)} · ${ui.escape(run.schedule.provider)}</option>`).join('')}</select></label><p id="integration-context" class="note"></p><button id="integration-manage" disabled>Inspect connections and sign-in</button></section><section class="card"><h2>Azure CLI</h2><p>New isolated Azure CLI login profiles are not enabled. Azure CLI’s documented macOS cache is plaintext; protected per-profile credential isolation needs a separate adapter. Existing CLI sessions are unchanged.</p></section><section class="card"><h2>Jira and Azure DevOps</h2><p>These connections use the selected provider’s existing MCP sign-in and status support. A connected Azure CLI account does not certify Jira or Azure DevOps access. Account, tenant and token expiry are unavailable when the MCP adapter does not report them. Creating independent OAuth profiles across providers is deferred until each adapter exposes an isolated credential store.</p></section>`;
         $('#integration-chat').onchange=()=>{const run=runs.find(row=>row.id===$('#integration-chat').value);$('#integration-manage').disabled=!run;$('#integration-context').textContent=run?'This Mac · '+run.schedule.provider+' · '+(run.schedule.context?.entries||[]).filter(e=>e.kind==='mcp').map(e=>e.name).join(', '):'';};

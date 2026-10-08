@@ -1,3 +1,4 @@
+import {appInstructions,documentBridge} from './document-tools.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -143,7 +144,7 @@ export class ClaudeRPC extends EventEmitter {
   retryClose(){if(this.cleanupFailure){this.closing=null;this.cleanupFailure=null;}return this.close();}
 }
 export class ClaudeProvider {
-  constructor(options={}, {context}={}) {this.options=options;this.context=context;this.active=null;this.cleanupClients=new Set();this.cleanupError=null;this.acceptedMediaTypes=Object.freeze(['image/png','image/jpeg','image/gif','image/webp','text/plain']);}
+  constructor(options={}, {context,browser}={}) {this.browser=browser;this.options=options;this.context=context;this.active=null;this.cleanupClients=new Set();this.cleanupError=null;this.acceptedMediaTypes=Object.freeze(['image/png','image/jpeg','image/gif','image/webp','text/plain']);}
   client(args=[],cwd,mcpConfigPath=null){return this.options.clientFactory ? this.options.clientFactory({args,cwd,mcpConfigPath}) : new ClaudeRPC({...this.options,args,cwd,mcpConfigPath});}
   selectedMcp(run){const snapshot=run.schedule.context,managed=snapshot&&this.context?this.context.providerContext(snapshot):null;return managed?{...Object.fromEntries(Object.entries(snapshot.includeDefaults!==false?run.schedule.mcpServers||{}:{}).filter(([name])=>!managed.disabledLegacyMcp.includes(name))),...managed.mcpServers}:run.schedule.mcpServers||{};}
   async mcpState(client,names,timeout=10000,selected={}){
@@ -243,9 +244,10 @@ export class ClaudeProvider {
     const snapshot=run.schedule.context,managed=snapshot&&this.context?this.context.providerContext(snapshot):null;
     if(managed?.customAgents?.some(a=>a.tools!==null))throw new Error('Claude cannot enforce selected editor agent tool filters. Deselect restricted agents.');
     const selected=this.selectedMcp(run);
+    if(Object.hasOwn(selected,'proteus_app'))throw new Error('The proteus_app MCP name is reserved for Proteus document tools.');
     if(run.schedule.skillDirectories?.length&&snapshot?.includeDefaults!==false)throw new Error('For Claude select individual skills; legacy skill directories cannot be isolated.');
     if(signal.aborted)throw new Error('Cancelled');
-    const instructions=`You are running inside Proteus. Use only the following explicitly supplied instructions and sources. Do not discover instruction, skill, agent, or memory files automatically.\nWorkspace: ${run.schedule.workspace.cwd}\n${managed?.instructionText||''}\n${(managed?.customAgents||[]).map(a=>`Agent ${a.displayName}:\n${a.prompt}`).join('\n\n')}\nEditor context: ${JSON.stringify(run.schedule.editorContext||null)}`;
+    const instructions=`${appInstructions}\nYou are running inside Proteus. Use only the following explicitly supplied instructions and sources. Do not discover instruction, skill, agent, or memory files automatically.\nWorkspace: ${run.schedule.workspace.cwd}\n${managed?.instructionText||''}\n${(managed?.customAgents||[]).map(a=>`Agent ${a.displayName}:\n${a.prompt}`).join('\n\n')}\nEditor context: ${JSON.stringify(run.schedule.editorContext||null)}`;
     // A custom system prompt omits Claude Code's automatic instruction context. Settings,
     // skills, MCPs and plugins are excluded independently, while native credentials stay native.
     const settings={claudeMdExcludes:['/**'],autoMemoryEnabled:false,enabledPlugins:{},fastMode:run.schedule.serviceTier==='fast'};
@@ -255,8 +257,10 @@ export class ClaudeProvider {
     if(run.providerSessionId)args.push('--resume',run.providerSessionId);
     // Additional roots are conveyed to the native permission system, with skills disabled.
     for(const root of run.schedule.workspace.additionalDirectories||[])args.push('--add-dir',root);
-    const mcpConfig=Object.keys(selected).length?privateClaudeMcpConfig(selected,run.schedule.workspace.cwd):null;
-    let client;try{client=this.client(args,run.schedule.workspace.cwd,mcpConfig?.file||null);}catch(error){mcpConfig?.dispose();throw error;}
+    const bridge=await documentBridge(this.browser,run.id);
+    const configured={...selected,...(bridge?{proteus_app:bridge.config}:{})};
+    let mcpConfig;try{mcpConfig=Object.keys(configured).length?privateClaudeMcpConfig(configured,run.schedule.workspace.cwd):null;}catch(error){await bridge?.close();throw error;}
+    let client;try{client=this.client(args,run.schedule.workspace.cwd,mcpConfig?.file||null);}catch(error){mcpConfig?.dispose();await bridge?.close();throw error;}
     this.active=client;this.activeRunId=run.id;
     let resolve,reject;const done=new Promise((a,b)=>{resolve=a;reject=b;});done.catch(()=>{});
     const calls=new Map();let currentId='claude',resultSeen=false;const approved=new Map();
@@ -321,7 +325,7 @@ export class ClaudeProvider {
     }finally{
       finished=true;clearTimeout(timer);signal.removeEventListener('abort',abort);let cleanupError;
       try{await client.close();}catch(error){cleanupError=error;this.cleanupError=error;this.cleanupClients.add(client);}
-      finally{client.off('message',message);client.off('request',request);client.off('closed',closed);mcpConfig?.dispose();if(!cleanupError){this.active=null;this.activeRunId=null;}for(const tool of calls.values())if(tool.status==='running')tool.status='interrupted';update();}
+      finally{client.off('message',message);client.off('request',request);client.off('closed',closed);mcpConfig?.dispose();await bridge?.close();if(!cleanupError){this.active=null;this.activeRunId=null;}for(const tool of calls.values())if(tool.status==='running')tool.status='interrupted';update();}
       if(cleanupError)throw cleanupError;
     }
   }

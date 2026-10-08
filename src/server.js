@@ -115,11 +115,19 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
     }
     return permissionPreviews.get(key);
   }
-  function buildChatSchedule(value){
+  async function buildChatSchedule(value){
     const defaults=settings.get();
+    if(value.chatType==='internet'){
+      const provider=value.provider,configured=defaults.internetSearches?.[provider];
+      if(!configured?.model)throw new Error('Configure Internet Searches for this provider in Engine Room first.');
+      const catalog=await catalogs[provider]?.get(),model=catalog?.models?.find(m=>m.id===configured.model);
+      if(!model||catalog.stale||catalog.error)throw new Error('Internet Search defaults are unavailable. Refresh the provider in Engine Room.');
+      validateModelOptions(configured,model);
+      value={chatType:'internet',provider,...configured,workspaceId:value.workspaceId||context.get().defaultWorkspaceId,prompt:value.prompt,includeDefaults:true,selectedIds:[],skillDirectories:[],mcpServers:{}};
+    }
     const snapshot=context.capture({workspaceId:value.workspaceId,workspace:value.workspace||(!value.workspaceId?defaults.workspace:undefined),selectedIds:value.selectedIds,agentId:value.agentId,includeDefaults:value.includeDefaults});
     const chatTitle=typeof value.name==='string'?value.name.trim():'';
-    return validateSchedule({schemaVersion:1,id:`chat-${Date.now()}-${randomBytes(4).toString('hex')}`,name:chatTitle||'Workspace chat',chatTitleManual:!!chatTitle,enabled:false,cron:'0 9 * * 1-5',timezone:value.timezone||defaults.timezone,provider:value.provider||defaults.provider,model:value.model||defaults.model,reasoningEffort:value.reasoningEffort??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.reasoningEffort:undefined),contextTier:value.contextTier??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.contextTier:undefined),serviceTier:value.serviceTier??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.serviceTier:undefined),workspace:snapshot.workspace,context:snapshot,skillDirectories:value.skillDirectories||defaults.skillDirectories,mcpServers:value.mcpServers||defaults.mcpServers,editorContext:value.editorContext,misfire:'skip',prompt:value.prompt});
+    return validateSchedule({schemaVersion:1,id:`chat-${Date.now()}-${randomBytes(4).toString('hex')}`,name:chatTitle||'Workspace chat',chatType:value.chatType==='internet'?'internet':'user',chatTitleManual:!!chatTitle,enabled:false,cron:'0 9 * * 1-5',timezone:value.timezone||defaults.timezone,provider:value.provider||defaults.provider,model:value.model||defaults.model,reasoningEffort:value.reasoningEffort??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.reasoningEffort:undefined),contextTier:value.contextTier??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.contextTier:undefined),serviceTier:value.serviceTier??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.serviceTier:undefined),workspace:snapshot.workspace,context:snapshot,skillDirectories:value.skillDirectories||defaults.skillDirectories,mcpServers:value.mcpServers||defaults.mcpServers,editorContext:value.editorContext,misfire:'skip',prompt:value.prompt});
   }
   const token = randomBytes(32).toString('hex'); let origin; let remote; const schedulerErrors = []; const eventClients = new Set();
   const notify = () => { for (const client of eventClients) client.write('event: change\ndata: {}\n\n'); };
@@ -177,18 +185,19 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (url.pathname === '/api/chat-attention' && req.method === 'POST') {const value=await body(req,16000);if(value.action!=='review'||typeof value.id!=='string')throw new Error('Choose a chat failure to review.');return json(200,engine.reviewFailure(value.id,value.expectedFailureEventAt));}
       if (url.pathname === '/api/chat-lifecycle' && req.method === 'POST') {
         const value=await body(req,16000);
-        if(!['archive','unarchive','delete'].includes(value.action)||typeof value.id!=='string')throw new Error('Choose a chat and archive, unarchive or delete action.');
+        if(!['archive','unarchive','delete','promote'].includes(value.action)||typeof value.id!=='string')throw new Error('Choose a chat and archive, unarchive or delete action.');
         const hostId=value.hostId||remote.info().hostId;
+        if(hostId===remote.info().hostId&&value.action==='promote')return json(200,engine.promoteChat(value.id,value.expectedUpdatedAt));
         if(hostId===remote.info().hostId)return json(200,engine.lifecycle(value.id,value.action,{expectedUpdatedAt:value.expectedUpdatedAt,expectedArchivedAt:value.expectedArchivedAt}));
         if(!service.peers)throw new Error('The paired Mac is unavailable.');
-        const result=await service.peers.request(hostId,value.action==='delete'?'chat.delete':'chat.archive',{id:value.id,...(value.action==='delete'?{}:{archived:value.action==='archive'}),expectedUpdatedAt:value.expectedUpdatedAt,expectedArchivedAt:value.expectedArchivedAt});
+        const result=await service.peers.request(hostId,value.action==='promote'?'chat.promote':value.action==='delete'?'chat.delete':'chat.archive',{id:value.id,...(value.action==='delete'?{}:{archived:value.action==='archive'}),expectedUpdatedAt:value.expectedUpdatedAt,expectedArchivedAt:value.expectedArchivedAt});
         service.peers.reconcileChat(hostId,result);
         return json(200,result);
       }
       if (url.pathname === '/api/chats/index' && req.method === 'GET') {
         const info=remote.info(),lastSyncAt=new Date().toISOString();
         const includeArchived=url.searchParams.get('includeArchived')==='1';
-        const local=engine.visibleRuns(includeArchived).slice(0,1000).map(r=>({id:r.id,chatId:r.id,hostId:info.hostId,local:true,title:r.title,provider:r.schedule.provider,status:r.status,createdAt:r.createdAt,updatedAt:r.updatedAt,archivedAt:r.archivedAt||null,archived:!!r.archivedAt,attentionRequired:r.status==='awaiting_input'||(!r.archivedAt&&['failed','interrupted'].includes(r.status)&&!r.failureReviewedAt),failureEventAt:['failed','interrupted'].includes(r.status)?r.failureEventAt||r.updatedAt:null,failureReviewedAt:r.failureReviewedAt||null,workspaceName:r.schedule.context?.workspaceId||'',scheduleName:r.trigger==='chat'?'':r.schedule.name,destinationName:info.label}));
+        const local=engine.visibleRuns(includeArchived).slice(0,1000).map(r=>({id:r.id,chatId:r.id,hostId:info.hostId,local:true,title:r.title,titleRevision:r.titleRevision,trigger:r.trigger,chatType:r.chatType,provider:r.schedule.provider,status:r.status,createdAt:r.createdAt,updatedAt:r.updatedAt,archivedAt:r.archivedAt||null,archived:!!r.archivedAt,attentionRequired:r.status==='awaiting_input'||(!r.archivedAt&&['failed','interrupted'].includes(r.status)&&!r.failureReviewedAt),failureEventAt:['failed','interrupted'].includes(r.status)?r.failureEventAt||r.updatedAt:null,failureReviewedAt:r.failureReviewedAt||null,workspaceName:r.schedule.context?.workspaceId||'',scheduleName:r.trigger==='chat'?'':r.schedule.name,destinationName:info.label}));
         const peer=service.peers?await service.peers.index():{items:[],hosts:[],partial:false};
         const items=[...local,...peer.items.filter(item=>includeArchived||!item.archivedAt)].sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt))||a.hostId.localeCompare(b.hostId)||a.chatId.localeCompare(b.chatId));
         return json(200,{items,hosts:[{id:info.hostId,name:info.label,online:true,lastSyncAt},...peer.hosts],partial:peer.partial});
@@ -231,6 +240,12 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (url.pathname === '/api/workspace-files/create' && req.method === 'POST') return json(200, workspaceFiles.createMarkdown(await body(req)));
       if (url.pathname === '/api/settings' && req.method === 'POST') {
         const value = await body(req); const old = settings.get();
+        for(const [provider,options] of Object.entries(value.settings?.internetSearches||{})){
+          if(JSON.stringify(old.internetSearches?.[provider])===JSON.stringify(options))continue;
+          const metadata=await catalogs[provider]?.get(),model=metadata?.models?.find(m=>m.id===options.model);
+          if(!model||metadata.stale||metadata.error)throw new Error('Refresh the Internet Search provider catalog before saving defaults.');
+          validateModelOptions(options,model);
+        }
         const saved = settings.save(value.settings, value.expectedRevision);
         if (JSON.stringify(old.workspace) !== JSON.stringify(saved.workspace)) {
           const config = context.config();
@@ -350,7 +365,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         throw new Error('Unknown attachment action.');
       }
       if (url.pathname === '/api/chat' && req.method === 'POST') {
-        const value = await body(req),schedule=buildChatSchedule(value),files=Array.isArray(value.attachments)?value.attachments:[];
+        const value = await body(req),schedule=await buildChatSchedule(value),files=Array.isArray(value.attachments)?value.attachments:[];
         if(!files.length)return json(200,engine.createRun(schedule,'chat'));
         if(files.length>chatAttachmentLimits.maxBatchFiles||!value.consentId||!value.draftId||!value.messageId||value.providerId!==schedule.provider)throw new Error('Review the exact files and named provider before sending.');
         await remote.attachmentConsents.verify({consentId:value.consentId,draftId:value.draftId,messageId:value.messageId,providerId:schedule.provider,deviceId:'local-desktop',attachmentIds:files});
@@ -358,7 +373,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         try{prepared=await remote.attachmentConsents.prepareSend({consentId:value.consentId,draftId:value.draftId,chatId:run.id,messageId:value.messageId,providerId:schedule.provider,deviceId:'local-desktop',attachmentIds:files});engine.startDeferredRun(run.id,{proofId:prepared.proofId,attachmentIds:files,messageId:value.messageId});return json(200,run);}
         catch(error){if(prepared)await remote.attachmentConsents.releaseProof(prepared.proofId).catch(()=>{});engine.discardDeferredRun(run.id);throw error;}
       }
-      const match = url.pathname.match(/^\/api\/runs\/([a-f0-9-]+)\/(reply|resume|cancel|send|remove-queued)$/);
+      const match = url.pathname.match(/^\/api\/runs\/([a-f0-9-]+)\/(reply|resume|cancel|send|remove-queued|steer-queued)$/);
       if (match && req.method === 'POST') {
         const value = await body(req); const [, id, action] = match;
         if (action === 'reply') return json(200, engine.reply(id, value.answer, value.requestId));
@@ -401,6 +416,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
           }
           return json(200, await engine.send(id, value.prompt, value.mode, value.messageId, value.modelOptions));
         }
+        if (action === 'steer-queued') return json(200,await engine.steerQueued(id,value.messageId));
         if (action === 'remove-queued') return json(200, engine.removeQueued(id, value.messageId));
         if (action === 'resume') {
           if(value.modelOptions){

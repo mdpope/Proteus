@@ -43,7 +43,7 @@ test('deferred draft cannot execute during an unrelated drain',async t=>{
   const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-attachment-deferred-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
   atomicJSON(path.join(home,'settings.json'),{schemaVersion:1,provider:'copilot',model:'fixture',timezone:'UTC',workspace:{cwd:home,additionalDirectories:[]},skillDirectories:[],mcpServers:{}});
   let calls=0;const app=await startServer({home,port:0,timers:false,providers:{copilot:{async run(){calls++;},async status(){return {available:true,models:[]};}}}});t.after(()=>app.close());
-  const run=app.engine.createRun(app.buildChatSchedule({prompt:'Never run before consent',provider:'copilot',model:'fixture'}),'chat',null,{deferStart:true});
+  const run=app.engine.createRun(await app.buildChatSchedule({prompt:'Never run before consent',provider:'copilot',model:'fixture'}),'chat',null,{deferStart:true});
   await app.engine.drain();await new Promise(resolve=>setTimeout(resolve,20));assert.equal(calls,0);assert.equal(run.status,'queued');
   app.engine.discardDeferredRun(run.id);assert.equal(app.engine.runs.has(run.id),false);
 });

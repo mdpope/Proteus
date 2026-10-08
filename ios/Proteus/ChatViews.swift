@@ -6,6 +6,34 @@ import UniformTypeIdentifiers
 import CryptoKit
 import UIKit
 
+// SwiftUI multiline fields ignore submitLabel on the software keyboard. Recognize
+// a single inserted Return while preserving pasted multiline text and Shift+Return.
+private struct ChatReturnKey: ViewModifier {
+    @Binding var text: String
+    let submit: () -> Void
+    @State private var shiftedReturnAt = Date.distantPast
+    func body(content: Content) -> some View {
+        content.submitLabel(.send).onSubmit(submit)
+            .onKeyPress(keys: [.return], phases: .down) { press in
+                if press.modifiers.contains(.shift) {
+                    shiftedReturnAt = Date(); return .ignored
+                }
+                submit(); return .handled
+            }
+            .onChange(of: text) { before, after in
+                let inserted = after.difference(from: before)
+                guard inserted.count == 1,
+                      case let .insert(_, character, _) = inserted.first,
+                      character == "\n" else { return }
+                if Date().timeIntervalSince(shiftedReturnAt) < 0.5 {
+                    shiftedReturnAt = .distantPast; return
+                }
+                text = before
+                submit()
+            }
+    }
+}
+
 enum NativeAttachmentBudget {
     static let maxFiles = 256
     static let maxFileBytes = 8 * 1024 * 1024
@@ -60,6 +88,7 @@ struct NewChatView: View {
     @EnvironmentObject var store: RemoteStore
     @EnvironmentObject var shared: SharedAppStore
     @Environment(\.dismiss) private var dismiss
+    var internet = false
     var onStarted: (String) -> Void
     @State private var name = ""
     @State private var prompt = ""
@@ -83,20 +112,33 @@ struct NewChatView: View {
     private var missingAttachments: [JSON] { missingAttachmentRecords(store: store, draftKey: "new-chat-attachments", items: attachments) }
     private var attachmentMessageID: String { shared.draftMessageIDs[attachmentScope] ?? "" }
     private var attachmentDraftID: String { shared.draftSessionIDs[attachmentScope] ?? "" }
-    private var supportedAttachmentTypes: [String] { store.state["attachmentMediaTypes"][provider].array.map(\.string) }
+    private var supportedAttachmentTypes: [String] { internet ? Array(Set(store.state["attachmentMediaTypes"].object.values.flatMap { $0.array.map(\.string) })) : store.state["attachmentMediaTypes"][provider].array.map(\.string) }
     private var attachmentsEnabled: Bool { store.state["capabilities"].array.contains(.string("chat.attachments.v1")) && !supportedAttachmentTypes.isEmpty }
     private var hasUnsupportedAttachment: Bool { attachments.contains { !supportedAttachmentTypes.contains($0.mediaType) } }
     private var providerName: String { provider == "copilot" ? "GitHub Copilot" : provider == "codex" ? "Codex" : provider == "claude" ? "Claude" : provider }
+    private func submitPrompt() {
+        guard !sending, !loading, !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        if attachments.isEmpty { start() } else { confirmAttachmentStart = true }
+    }
+    private var promptField: some View {
+        TextField("What would you like to work on?", text: $prompt, axis: .vertical)
+            .lineLimit(4...10).modifier(ChatReturnKey(text: $prompt, submit: submitPrompt))
+            .accessibilityIdentifier("chat-prompt")
+    }
     var body: some View {
         NavigationStack {
             Form {
-                Section("Conversation") { TextField("Chat name (optional)", text: $name).accessibilityIdentifier("new-chat-name"); TextField("What would you like to work on?", text: $prompt, axis: .vertical).lineLimit(4...10).accessibilityIdentifier("chat-prompt") }
+                Section("Conversation") {
+                    if !internet { TextField("Chat name (optional)", text: $name).accessibilityIdentifier("new-chat-name") }
+                    promptField
+                }
                 Section("Run on your Mac") {
                     Picker("Workspace", selection: $workspace) { ForEach(store.state["context"]["workspaces"].array, id: \.self) { Text($0["name"].string).tag($0["id"].string) } }
-                    Picker("Provider", selection: $provider) { Text("GitHub Copilot").tag("copilot"); Text("Codex").tag("codex"); Text("Claude").tag("claude"); Text("Local rehearsal").tag("rehearsal") }.accessibilityIdentifier("chat-provider")
+                    if !internet { Picker("Provider", selection: $provider) { Text("GitHub Copilot").tag("copilot"); Text("Codex").tag("codex"); Text("Claude").tag("claude"); Text("Local rehearsal").tag("rehearsal") }.accessibilityIdentifier("chat-provider")
                     if provider != "rehearsal" {
                         ProviderModelPicker(model: $model, effort: $effort, contextTier: $contextTier, serviceTier: $serviceTier, provider: provider)
                     }
+                }
                 }
                 if attachmentsEnabled || !attachments.isEmpty || !missingAttachments.isEmpty {
                     Section {
@@ -120,11 +162,12 @@ struct NewChatView: View {
                         if hasUnsupportedAttachment { Text("Remove files this provider does not accept before starting.").font(.caption).foregroundStyle(.orange) }
                     }
                 }
-                ContextSelection(selected: $selected, agent: $agent, includeDefaults: $includeDefaults, workspaceID: workspace)
+                if !internet { ContextSelection(selected: $selected, agent: $agent, includeDefaults: $includeDefaults, workspaceID: workspace) }
+                if internet { Section { HStack { Spacer(); ForEach(store.state["providerStatuses"].object.keys.sorted().filter { !["local-process", "rehearsal"].contains($0) }, id: \.self) { id in Button("Search with " + id.capitalized) { provider = id; if store.state["defaults"]["internetSearches"][id]["model"].string.isEmpty { store.error = "Configure Internet Search defaults in Engine Room on this Mac first." } else if attachments.isEmpty { start() } else { confirmAttachmentStart = true } }.disabled(prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || sending || !store.connected) } } } }
                 if let error = store.error { Section { Text(error).foregroundStyle(.orange) } }
-            }.scrollDismissesKeyboard(.interactively).disabled(loading || sending).accessibilityIdentifier("new-chat-form").navigationTitle("New chat").toolbar {
+            }.scrollDismissesKeyboard(.interactively).disabled(loading || sending).accessibilityIdentifier("new-chat-form").navigationTitle(internet ? "Internet Search" : "New chat").toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button { if attachments.isEmpty { start() } else { confirmAttachmentStart = true } } label: { if sending { ProgressView() } else { Text("Start chat") } }.disabled(loading || sending || !store.connected || prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || workspace.isEmpty || (provider != "rehearsal" && model.isEmpty) || !missingAttachments.isEmpty || (!attachments.isEmpty && (!attachmentsEnabled || hasUnsupportedAttachment))).accessibilityIdentifier("start-chat") }
+                ToolbarItem(placement: .confirmationAction) { if !internet { Button { if attachments.isEmpty { start() } else { confirmAttachmentStart = true } } label: { if sending { ProgressView() } else { Text("Start chat") } }.disabled(loading || sending || !store.connected || prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || workspace.isEmpty || (provider != "rehearsal" && model.isEmpty) || !missingAttachments.isEmpty || (!attachments.isEmpty && (!attachmentsEnabled || hasUnsupportedAttachment))).accessibilityIdentifier("start-chat") } }
             }.onChange(of: draftValue) { _, value in if !loading { store.setDraft("new-chat", value) } }.onChange(of: provider) { old, value in if !loading && old != value { model = ""; effort = ""; contextTier = "default"; serviceTier = "" }; if value != "rehearsal" { Task { await store.loadModels(provider: value) } } }.task { await store.refresh(); workspace = store.state["context"]["defaultWorkspaceId"].string; provider = store.state["defaults"]["provider"].string; model = store.state["defaults"]["model"].string; effort = store.state["defaults"]["reasoningEffort"].string; serviceTier = store.state["defaults"]["serviceTier"].string; contextTier = store.state["defaults"]["contextTier"].string.isEmpty ? "default" : store.state["defaults"]["contextTier"].string; if let saved = store.drafts["new-chat"] { restore(saved) }; if provider != "rehearsal" { await store.loadModels(provider: provider) }; loading = false }
             .onChange(of: pickedPhotos) { _, value in if !value.isEmpty { Task { await importPhotos(value) } } }
             .fileImporter(isPresented: $filePicker, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in if case .success(let urls) = result { for url in urls { if !importFile(url) { break } } } else if case .failure(let error) = result { store.error = error.localizedDescription } }
@@ -135,12 +178,14 @@ struct NewChatView: View {
     private var draftValue: JSON { .object(["name": .string(name), "prompt": .string(prompt), "provider": .string(provider), "model": .string(model), "effort": .string(effort), "contextTier": .string(contextTier), "serviceTier": .string(serviceTier), "workspace": .string(workspace), "selected": .array(selected.sorted().map(JSON.string)), "agent": .string(agent), "includeDefaults": .bool(includeDefaults)]) }
     private func restore(_ value: JSON) { name = value["name"].string; prompt = value["prompt"].string; provider = value["provider"].string; model = value["model"].string; effort = value["effort"].string; contextTier = value["contextTier"].string; serviceTier = value["serviceTier"].string; workspace = value["workspace"].string; selected = Set(value["selected"].array.map(\.string)); agent = value["agent"].string; includeDefaults = value["includeDefaults"] != .bool(false) }
     private func start() {
+        if internet && store.state["defaults"]["internetSearches"][provider]["model"].string.isEmpty { store.error = "Configure Internet Search defaults for " + provider + " first."; return }
         guard missingAttachments.isEmpty else { store.error = "Remove or reattach the missing files before starting this chat."; return }
         sending = true
         Task { defer { sending = false }
             do {
                 var ids = selected; if !agent.isEmpty { ids.insert(agent) }
                 var values: [String: JSON] = ["name": .string(name.trimmingCharacters(in: .whitespacesAndNewlines)), "prompt": .string(prompt), "provider": .string(provider), "model": .string(provider != "rehearsal" ? model : ""), "reasoningEffort": .string(effort), "contextTier": .string(contextTier), "serviceTier": .string(serviceTier), "workspaceId": .string(workspace), "selectedIds": .array(ids.sorted().map(JSON.string)), "agentId": .string(agent), "includeDefaults": .bool(includeDefaults)]
+                if internet { values = ["chatType": .string("internet"), "provider": .string(provider), "workspaceId": .string(workspace), "prompt": .string(prompt)] }
                 if !attachments.isEmpty {
                     guard attachmentsEnabled else { throw RemoteError(message: "This Mac has not enabled approved attachments.") }
                     shared.draftMessageIDs[attachmentScope] = attachmentMessageID.isEmpty ? UUID().uuidString : attachmentMessageID
@@ -338,7 +383,7 @@ struct ChatView: View {
         let agent = event["agentName"].string.isEmpty ? run["agentName"].string : event["agentName"].string
         return agent.isEmpty || agent.caseInsensitiveCompare(providerName) == .orderedSame ? providerName : providerName + " · " + agent
     }
-    private func routineActivity(_ event: JSON) -> Bool { event["data"]["tool"] != .null || event["data"]["permission"]["automatic"].bool }
+    private func routineActivity(_ event: JSON) -> Bool { event["data"]["tool"] != .null || event["data"]["permission"] != .null }
     private var visibleEventIndices: [Int] {
         let events = run["events"].array
         let start = run["eventStart"].int
@@ -407,6 +452,9 @@ struct ChatView: View {
             selectedChild = saved == "chat" || shared.tabs(in: chatBrowserScope).contains(where: { $0.id == saved }) || documents.contains(where: { $0.id == saved }) ? saved : "chat"
         }
             .onDisappear { documentTask?.cancel(); documents = [] }
+            .onChange(of: shared.chatSelectedChildren[chatBrowserScope]) { _, value in
+                if let value, value == "chat" || shared.tabs(in: chatBrowserScope).contains(where: { $0.id == value }) || documents.contains(where: { $0.id == value }) { selectedChild = value }
+            }
             .onChange(of: shared.documentTabs) { _, _ in
                 documents = restoredDocumentTabs()
                 if selectedChild != "chat" && !shared.tabs(in: chatBrowserScope).contains(where: { $0.id == selectedChild }) && !documents.contains(where: { $0.id == selectedChild }) { selectedChild = "chat" }
@@ -458,7 +506,7 @@ struct ChatView: View {
             Menu {
                 if store.state["capabilities"].array.contains(.string("chat.rename.v1")) { Button("Rename", systemImage: "pencil") { showRename = true } }
                 if lifecycleEnabled {
-                    Button(run["archived"].bool ? "Unarchive chat" : "Archive chat", systemImage: "archivebox") { Task { await archiveChat() } }.disabled(chatHasPendingWork(run))
+                    if run["chatType"].string == "internet" { Button("Promote to User Chat") { Task { do { _ = try await store.request("chat.promote", ["id": .string(id), "expectedUpdatedAt": run["updatedAt"]]); await store.openChat(id) } catch { store.error = error.localizedDescription } } } }; Button(run["archived"].bool ? "Unarchive chat" : "Archive chat", systemImage: "archivebox") { Task { await archiveChat() } }.disabled(chatHasPendingWork(run))
                     Button("Delete chat", systemImage: "trash", role: .destructive) { confirmDelete = true }.disabled(chatHasPendingWork(run))
                 }
             } label: { Image(systemName: "ellipsis.circle").font(.system(size: 22)).frame(width: 44, height: 44).contentShape(Rectangle()) }.frame(width: 44, height: 44).contentShape(Rectangle()).accessibilityLabel("Chat actions").accessibilityIdentifier("chat-actions")
@@ -612,7 +660,7 @@ struct ChatView: View {
                         RuntimeTimerView(turns:run["turns"].array,total:true,partial:run["timingPartial"].bool)
                         if lifecycleEnabled {
                             HStack {
-                                Button(run["archived"].bool ? "Unarchive chat" : "Archive chat") { Task { await archiveChat() } }.disabled(chatHasPendingWork(run))
+                                if run["chatType"].string == "internet" { Button("Promote to User Chat") { Task { do { _ = try await store.request("chat.promote", ["id": .string(id), "expectedUpdatedAt": run["updatedAt"]]); await store.openChat(id) } catch { store.error = error.localizedDescription } } } }; Button(run["archived"].bool ? "Unarchive chat" : "Archive chat") { Task { await archiveChat() } }.disabled(chatHasPendingWork(run))
                                 Button("Delete chat", role: .destructive) { confirmDelete = true }.disabled(chatHasPendingWork(run))
                             }
                         }
@@ -772,12 +820,26 @@ struct ChatView: View {
         do { try await store.deleteChat(id); dismiss() }
         catch { store.error = error.localizedDescription }
     }
+    private func submitReply() {
+        guard !cannotSend else { return }
+        if pending["type"].string == "question" { answer(text) } else { send("queue") }
+    }
+    private var replyPlaceholder: String {
+        pending["type"].string == "question" ? "Add your feedback…" : active ? "Add an update while this runs…" : "Continue this conversation…"
+    }
+    private var replyField: some View {
+        TextField(replyPlaceholder, text: $text, axis: .vertical)
+            .modifier(ChatReturnKey(text: $text, submit: submitReply)).lineLimit(3...8).padding(.horizontal, 10).padding(.vertical, 12)
+            .frame(minHeight: 88, alignment: .topLeading)
+            .contentShape(Rectangle()).onTapGesture { composerFocused = true }
+            .accessibilityIdentifier("reply-text").focused($composerFocused)
+    }
     private var composer: some View {
         VStack(spacing: 8) {
             if composerExpanded {
             ConnectionStatus()
             ForEach(run["queuedMessages"].array, id: \.self) { message in
-                HStack { Text(message["prompt"].string).lineLimit(1).font(.caption); Spacer(); Button("Remove") { act("chat.remove-queued", ["messageId":message["id"]]) }.font(.caption) }
+                HStack { Text(message["prompt"].string).lineLimit(1).font(.caption); Spacer(); if run["status"].string == "running" { Button("Steer now") { act("chat.steer-queued", ["messageId":message["id"]]) }.font(.caption) }; Button("Remove") { act("chat.remove-queued", ["messageId":message["id"]]) }.font(.caption) }
             }
             VStack(alignment: .leading, spacing: 8) {
                 if !attachments.isEmpty || !missingAttachments.isEmpty {
@@ -793,11 +855,7 @@ struct ChatView: View {
                         Button("Remove missing files") { removeMissingAttachments() }.font(.caption).disabled(busy)
                     }
                 }
-                TextField(pending["type"].string == "question" ? "Add your feedback…" : active ? "Add an update while this runs…" : "Continue this conversation…", text: $text, axis: .vertical)
-                    .lineLimit(3...8).padding(.horizontal, 10).padding(.vertical, 12)
-                    .frame(minHeight: 88, alignment: .topLeading)
-                    .contentShape(Rectangle()).onTapGesture { composerFocused = true }
-                    .accessibilityIdentifier("reply-text").focused($composerFocused)
+                replyField
                 HStack(spacing: 12) {
                     if attachmentsEnabled {
                         Menu {
@@ -949,7 +1007,7 @@ struct ChatView: View {
     private func answer(_ value: String) { act("chat.reply", ["answer": .string(value), "requestId": pending["id"]]) }
     private func act(_ method: String, _ values: [String: JSON]) {
         busy = true
-        Task { defer { busy = false }; do { var args = values; args["id"] = .string(id); _ = try await store.request(method, args); if method != "chat.remove-queued" && method != "chat.cancel" { text = ""; composerFocused = false; followLatest = true }; await store.openChat(id) } catch { store.error = error.localizedDescription } }
+        Task { defer { busy = false }; do { var args = values; args["id"] = .string(id); _ = try await store.request(method, args); if method != "chat.remove-queued" && method != "chat.steer-queued" && method != "chat.cancel" { text = ""; composerFocused = false; followLatest = true }; await store.openChat(id) } catch { store.error = error.localizedDescription } }
     }
     private func loadEarlier() {
         guard !loadingEarlier, run["earlier"].int > 0, store.connected else { return }
@@ -1167,9 +1225,11 @@ struct ChatActivityGroupView: View {
     private var failed: Bool { tools.contains(where: toolActivityFailed) }
     private var running: Bool { tools.contains { $0["status"].string == "running" } }
     private var summary: String {
-        var parts = ["\(tools.count) tool\(tools.count == 1 ? "" : "s")"]
+        var parts = tools.isEmpty ? [] : ["\(tools.count) tool\(tools.count == 1 ? "" : "s")"]
         let approvals = events.filter { $0["data"]["permission"]["automatic"].bool }.count
         if approvals > 0 { parts.append("\(approvals) automatic approval\(approvals == 1 ? "" : "s")") }
+        let decisions = events.filter { $0["data"]["permission"] != .null && !$0["data"]["permission"]["automatic"].bool }.count
+        if decisions > 0 { parts.append("\(decisions) permission decision\(decisions == 1 ? "" : "s")") }
         let failures = tools.filter(toolActivityFailed).count
         if failures > 0 { parts.append("\(failures) failed") }
         let activeTools = tools.filter { $0["status"].string == "running" }.count
@@ -1182,11 +1242,11 @@ struct ChatActivityGroupView: View {
                 if !hostName.isEmpty { Text("On \(hostName)").font(.caption).foregroundStyle(.secondary) }
                 ForEach(Array(events.enumerated()), id: \.offset) { _, event in
                     if event["data"]["tool"] != .null { ToolActivityView(tool: event["data"]["tool"]) }
-                    else { Label("Automatically approved" + (event["data"]["permission"]["reason"].string.isEmpty ? "" : " · " + event["data"]["permission"]["reason"].string), systemImage: "checkmark.shield").font(.caption).foregroundStyle(.secondary) }
+                    else { VStack(alignment: .leading) { Label((event["data"]["permission"]["automatic"].bool ? "Automatically approved · " : "Permission " + event["data"]["permission"]["decision"].string + " · ") + event["data"]["permission"]["intention"].string, systemImage: "checkmark.shield").font(.caption); Text(event["data"]["permission"]["reason"].string).font(.caption).foregroundStyle(.secondary); if !event["data"]["permission"]["request"].string.isEmpty { DisclosureGroup("Original approval request") { Text(event["data"]["permission"]["request"].string).font(.caption.monospaced()).textSelection(.enabled) } } } }
                 }
             }.padding(.top, 8)
         } label: {
-            HStack { if running { ProgressView().controlSize(.small) } else { Image(systemName: failed ? "exclamationmark.triangle.fill" : "checkmark.circle").foregroundStyle(failed ? .orange : .teal) }; Text("Activity · " + summary).font(.subheadline); Spacer(); RuntimeTimerView(tools:tools) }
+            HStack { if running { ProgressView().controlSize(.small) } else { Image(systemName: failed ? "exclamationmark.triangle.fill" : "checkmark.circle").foregroundStyle(failed ? .orange : .teal) }; Text("Activity · " + summary).font(.subheadline); Spacer(); if !tools.isEmpty { RuntimeTimerView(tools:tools) } }
         }.padding(12).background(failed ? Color.orange.opacity(0.12) : Color.green.opacity(0.09), in: RoundedRectangle(cornerRadius: 12))
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(failed ? Color.orange.opacity(0.6) : Color.teal.opacity(0.25)))
             .onAppear { if running || failed { expanded = true } }
@@ -1217,7 +1277,7 @@ struct MessageView: View {
                     .font(.caption).padding(6).background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
             }
             if let actionID { MessageActionBar(messageID: actionID, markdown: text) }
-        }.padding().background(role == "user" ? Color.accentColor.opacity(0.13) : Color.secondary.opacity(0.09), in: RoundedRectangle(cornerRadius: 16))
+        }.padding().background(role == "user" ? Color.accentColor.opacity(0.13) : Color.secondary.opacity(0.09), in: RoundedRectangle(cornerRadius: 16)).padding(.leading, role == "user" ? 20 : 0).padding(.trailing, actionID != nil || role.contains("streaming") ? 20 : 0)
     }
 }
 

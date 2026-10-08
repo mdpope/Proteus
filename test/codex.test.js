@@ -71,3 +71,18 @@ test('Codex existing Autopilot never auto-approves sandbox expansion or managed 
  f.store.setMode(f.run.schedule,'custom');assert.equal(codexSandbox(f.run.schedule,f.store.describe(f.run.schedule)).sandbox,'read-only','retained folder rules alone do not opt Custom into workspace-write');
  }finally{await f.dispose();}
 });
+
+test('Codex document tool remains available on resumed chats and enforces approval',async()=>{
+ const f=fixture();let opened=0;f.provider.browser={openDocument:async()=>{opened++;return {opened:true};}};
+ f.args.ask=async()=> 'deny';
+ try{for(let turn=1;turn<=2;turn++){
+  const task=f.provider.run(f.args);await until(()=>f.rpc.turn===turn);
+  const params=f.rpc.calls.findLast(c=>c.method=== (turn===1?'thread/start':'thread/resume')).params;
+  const config=params.config.mcp_servers.proteus_app,env=config.env;
+  assert.equal(config.enabled,true);assert.match(params.developerInstructions,/proteus_open_document/);
+  const response=await fetch(env.PROTEUS_DOCUMENT_ENDPOINT,{method:'POST',headers:{authorization:env.PROTEUS_DOCUMENT_CAPABILITY},body:JSON.stringify({action:'open',arguments:{path:'/synthetic/doc.md'}})});
+  assert.equal(response.status,400);assert.equal(opened,0);
+  f.rpc.notice('turn/completed',{turn:{status:'completed'}});await task;
+  await assert.rejects(fetch(env.PROTEUS_DOCUMENT_ENDPOINT));
+ }}finally{await f.provider.close();}
+});

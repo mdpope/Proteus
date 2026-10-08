@@ -10,6 +10,28 @@ Maintain this as the single backlog. Design rationale is in `decisions.md`; rece
 retained as acceptance criteria; the installed versus unverified state is summarized immediately
 below and in `content-workspace-release.md`.
 
+## October 7 post-0.2.5 intake — implementation and deployment authorized
+
+The operator's subsequent “build it, deploy it, validate it” supersedes the initial hold.
+All items below are implemented in the 0.2.6 source batch; validation and individual installation
+status are recorded in [the release ledger](2026-10-07-search-release.md). Private screenshots,
+actual search queries, document names and workplace content remain outside Git.
+
+| ID | Scope and acceptance |
+| --- | --- |
+| BF-2026-10-07-29 | Show literal file-search patterns outside Details, wrapping long queries on desktop, web and native. |
+| BF-2026-10-07-30 | Separate User Chats, Scheduled Tasks and Internet Searches in Chats; preserve filters; exclude scheduled runs from sidebar recents. |
+| BF-2026-10-07-31 | Internet Search composer: workspace, prompt, attachments/paste and catalog provider buttons. Host-owned model/effort/speed defaults in Engine Room; enforce workspace defaults at execution. |
+| BF-2026-10-07-32 | Internet Search navigation/global add menu, seven recents per user/search list, no redundant More; one-way promotion beside Archive. |
+| BF-2026-10-07-33 | Correct workspace/rename dialog spacing and persist/display renamed titles across local and remote refreshes. |
+| BF-2026-10-07-34 | Lowercase runtime units, preserve metadata capitalization, show web execution timers and align web composer/actions/filters with desktop. |
+| BF-2026-10-07-35 | Inset only assistant responses on the right, retaining full-width activity/system messages. |
+| BF-2026-10-07-36 | Select iPad popup tabs immediately; retain each chat's ordered browser descriptors when its parent closes and restore them unloaded. |
+| BF-2026-10-07-37 | Permission decision messages include short original intent and expandable bounded, redacted request details. Older entries without stored requests say so. |
+| BF-2026-10-07-38 | Supply provider runtime app guidance and a real Markdown document-tab tool; reuse stable descriptors, honor current workspace roots and normal approval. |
+| BF-2026-10-07-39 | Enter sends from chat composers; Shift+Enter preserves multiline drafting. Preserve composition, held-key and paste behavior. |
+| BF-2026-10-07-40 | Convert an existing queued text message to steering using its identity; preserve queue on failure, remove only after successful provider delivery, never run concurrent turns. |
+
 ## October 7 post-0.2.4 feedback — implementation authorized
 
 The operator authorized implementation, build and installation of this follow-up batch, including

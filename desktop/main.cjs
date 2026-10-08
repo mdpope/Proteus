@@ -26,7 +26,7 @@ else {
     const { CredentialBroker } = await import('../src/credentials.js');
     const { TerminalStore } = await import('../src/terminals.js');
     // The provider only receives this bounded interface, never Electron or a CDP endpoint.
-    service = await startServer({ port: Number(process.env.PORT || 4317), openExternal: url => shell.openExternal(url), browser: { agent: (...args) => browser.agent(...args) }, background: true, lifeOptions: { safeStorage, Notification, powerMonitor } });
+    service = await startServer({ port: Number(process.env.PORT || 4317), openExternal: url => shell.openExternal(url), browser: { agent: (...args) => browser.agent(...args), openDocument:async(args,runId)=>(await import('../src/document-tools.js')).openChatDocument(service,args,runId) }, background: true, lifeOptions: { safeStorage, Notification, powerMonitor } });
     if (lifeCallback) { const value=lifeCallback; lifeCallback=null; void service.life.callback(value).catch(()=>{}); }
     window = new BrowserWindow({ width: 1440, height: 960, minWidth: 850, minHeight: 650, title: 'Proteus', icon: appIcon, backgroundColor: '#111716',
       webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
@@ -69,6 +69,7 @@ else {
       for(const root of service.workspaceFiles.roots().roots.filter(root=>root.available)){const relative=path.relative(root.path,file);if(relative&&!relative.startsWith('..'+path.sep)&&relative!=='..'&&!path.isAbsolute(relative))return {...service.workspaceFiles.read({rootId:root.id,file:relative}),title:descriptor.title,mediaType:'text/markdown'};}
       throw new Error('Document is outside a currently authorized workspace.');
     };
+    service.onDocumentOpened=value=>{if(window&&!window.isDestroyed())window.webContents.send('proteus:open-document',value);};
     service.engine.releaseBrowser=runId=>browser.releaseRun(runId).catch(()=>{});
     service.resources={
       list:()=>{

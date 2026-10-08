@@ -494,3 +494,22 @@ Changed existing events are patches by absolute event position. Unknown cursors 
 full bounded page. Inactive rendered conversations and completed host histories have four-entry
 caches; active provider histories remain pinned so callbacks retain valid event references.
 Durable history, drafts and descriptors are independent of rendered-view eviction.
+
+## 2026-10-07 — Search chats, document tools and queued steering
+
+Internet Search is a persistent chat classification, not a separate execution engine. Its first
+turn uses host-owned provider defaults and workspace defaults, reducing setup choices while keeping
+normal model changes and one-way promotion after creation. Scheduled runs remain a separate list
+classification; classification is persisted through remote summaries and offline caches.
+
+App capabilities belong in provider runtime instructions and actual tool adapters, rather than a
+repo-only skill that ordinary user workspaces would not load. Markdown opening uses canonical
+workspace authorization and stable chat descriptors. A per-turn MCP capability supports existing
+Codex sessions without assuming the resume API can install new dynamic tools.
+
+Queue-to-steer preserves the queued message until provider delivery succeeds. An in-flight map
+serializes conversion by message identity and completion waits for pending conversions before
+consuming the next queue entry. Failure is visible and leaves the original queued message intact.
+
+Search promotion mutates only the current run’s classification and is idempotent. It does not
+reject an unrelated streaming-event revision: no transcript, model choice or title is overwritten.

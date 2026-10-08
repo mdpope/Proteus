@@ -4,6 +4,7 @@ import os from 'node:os';
 import { spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { createInterface } from 'node:readline';
+import {appInstructions,documentBridge} from './document-tools.js';
 import { browserTools } from './browser-tools.js';
 import { displayText, toolSummary } from './tool-activity.js';
 import { canonicalPath, effectivePermissionMode } from './permissions.js';
@@ -70,7 +71,7 @@ export class CodexProvider {
  async steer(run,prompt){const a=this.active;if(!a||a.run.id!==run.id||!a.turnId)throw new Error('Codex is still starting or the turn ended. Queue this message.');await a.client.request('turn/steer',{threadId:run.providerSessionId,expectedTurnId:a.turnId,input:[{type:'text',text:prompt}]});}
  async run({run,prompt,attachments=[],emit,ask,update,signal,stream,permissionProfile}){
   for(const item of attachments)if(!this.acceptedMediaTypes.includes(item.mediaType)||!Buffer.isBuffer(item.bytes))throw new Error('Codex can receive images and plain text here. PDF and other files are not supported.');
-  let imageDir=null;
+  let imageDir=null,appBridge=null;
   const client=await this.connect();const model=(await this.models(client)).find(m=>m.id===run.schedule.model);if(!model)throw new Error('Choose an available Codex model from the provider catalog.');validateModelOptions(run.schedule,model);
   const snapshot=run.schedule.context, managed=snapshot&&this.context?this.context.providerContext(snapshot):null;
   // Tool scopes are an execution contract. Do not silently drop provider-specific restrictions.
@@ -127,7 +128,7 @@ export class CodexProvider {
    if(active.recheckPermissions())throw new Error('Workspace permissions changed; this tool request was cancelled.');
    if(msg.method==='item/tool/call'){
      const tool=browser.find(t=>t.name===p.tool);if(!tool)throw new Error('Unknown Proteus tool.');
-     const answer=await ask({type:'permission',question:'Allow browser action?',details:{kind:'custom-tool',toolCallId:p.callId,toolName:p.tool,args:p.arguments,intention:`Browser ${p.arguments?.action||'action'}`}});
+     const answer=await ask({type:'permission',question:'Allow Proteus app action?',details:{kind:'custom-tool',toolCallId:p.callId,toolName:p.tool,args:p.arguments,intention:p.tool==='proteus_open_document'?`Open Markdown tab: ${p.arguments?.path||''}`:`Browser ${p.arguments?.action||'action'}`}});
      const result=['approve','approve-auto'].includes(answer)?await tool.handler(p.arguments):{resultType:'failure',textResultForLlm:'User declined.'};
      client.respond(msg.id,{success:result?.resultType!=='failure',contentItems:[{type:'inputText',text:typeof result==='string'?result:result.textResultForLlm||JSON.stringify(result)}]});
    }else if(msg.method==='item/commandExecution/requestApproval'){
@@ -144,10 +145,20 @@ export class CodexProvider {
   const closed=e=>rejectTurn(e);client.on('notification',onNotification);client.on('request',onRequest);client.on('closed',closed);
   const abort=()=>{if(abortTimer)return;if(active.turnId)void client.request('turn/interrupt',{threadId:run.providerSessionId,turnId:active.turnId}).catch(()=>client.close());abortTimer=setTimeout(()=>{client.close();rejectTurn(new Error('Codex did not confirm interruption; its Proteus runtime was stopped.'));},5000);};signal.addEventListener('abort',abort,{once:true});
   try{
-   const instructions=`You are working inside Proteus. Use only the selected sources below. Workspace folders:\n${roots.join('\n')}\n${managed?.instructionText||''}\n${(managed?.customAgents||[]).map(a=>`Agent: ${a.displayName}${a.name===managed.agent?' (main identity)':''}\n${a.prompt}`).join('\n\n')}\nEditor context: ${JSON.stringify(run.schedule.editorContext||null)}`;
+   if(this.browser?.openDocument){
+    if(selected.proteus_app)throw new Error('The MCP name proteus_app is reserved for Proteus app tools.');
+    appBridge=await documentBridge({openDocument:async(args,id)=>{
+      if(active.recheckPermissions())throw new Error('Workspace permissions changed.');
+      const answer=await ask({type:'permission',question:'Open this Markdown document in the chat?',details:{kind:'custom-tool',toolName:'proteus_open_document',args,intention:`Open Markdown tab: ${args.path||''}`}});
+      if(!['approve','approve-auto'].includes(answer))throw new Error('Document opening was declined.');
+      return this.browser.openDocument(args,id);
+    }},run.id);
+    mcp.proteus_app={enabled:true,...appBridge.config};
+   }
+   const instructions=`${appInstructions}\nYou are working inside Proteus. Use only the selected sources below. Workspace folders:\n${roots.join('\n')}\n${managed?.instructionText||''}\n${(managed?.customAgents||[]).map(a=>`Agent: ${a.displayName}${a.name===managed.agent?' (main identity)':''}\n${a.prompt}`).join('\n\n')}\nEditor context: ${JSON.stringify(run.schedule.editorContext||null)}`;
    const config={...sandbox.config,project_doc_max_bytes:0,developer_instructions:instructions,mcp_servers:mcp,features:{skip_host_skill_discovery:true,skill_mcp_dependency_install:false,enable_mcp_apps:false,multi_agent:false},plugins:Object.fromEntries(Object.keys(plugins).map(name=>[name,{enabled:false}])),apps:{_default:{enabled:false}},web_search:'disabled'};
    const params={model:run.schedule.model,cwd:sandbox.cwd,runtimeWorkspaceRoots:sandbox.runtimeWorkspaceRoots,approvalPolicy:'untrusted',approvalsReviewer:'user',sandbox:sandbox.sandbox,developerInstructions:instructions,config};
-   const thread=run.providerSessionId?await client.request('thread/resume',{...params,threadId:run.providerSessionId}):await client.request('thread/start',{...params,dynamicTools:browser.map(t=>({type:'function',name:t.name,description:t.description,inputSchema:t.parameters}))});
+   const thread=run.providerSessionId?await client.request('thread/resume',{...params,threadId:run.providerSessionId}):await client.request('thread/start',{...params,dynamicTools:browser.filter(t=>t.name!=='proteus_open_document').map(t=>({type:'function',name:t.name,description:t.description,inputSchema:t.parameters}))});
    verifyCodexSandbox(thread,sandbox,sandbox.cwd);
    run.providerSessionId=thread.thread.id;run.providerHome=process.env.CODEX_HOME||path.join(os.homedir(),'.codex');run.nativeSessionPath=thread.thread.path||null;run.modelCapabilities={id:model.id,controls:model.controls,capturedAt:new Date().toISOString()};run.explicitProviderContext={mcpNames:Object.keys(selected),skillDirectories:[],disabledSkills:managed?.disabledSkills||[]};if(snapshot){snapshot.suppliedAt=new Date().toISOString();snapshot.delivery='Codex thread configuration accepted';}update();
    if(signal.aborted)throw new Error('Cancelled');
@@ -166,7 +177,7 @@ export class CodexProvider {
     }
    }
    const result=await client.request('turn/start',{threadId:run.providerSessionId,sandboxPolicy:sandbox.policy,approvalPolicy:'untrusted',approvalsReviewer:'user',runtimeWorkspaceRoots:sandbox.runtimeWorkspaceRoots,input,effort:run.schedule.reasoningEffort||model.controls.defaultReasoningEffort||null,serviceTier:run.schedule.serviceTier||null});active.turnId=result.turn.id;if(signal.aborted||active.permissionRevoked){clearTimeout(abortTimer);abortTimer=null;abort();}await completed;
-  }finally{clearTimeout(abortTimer);if(active.turnId&&!settled)await client.close();signal.removeEventListener('abort',abort);client.off('notification',onNotification);client.off('request',onRequest);client.off('closed',closed);for(const tool of calls.values())if(tool.status==='running')tool.status='interrupted';if(this.active===active)this.active=null;if(imageDir)fs.rmSync(imageDir,{recursive:true,force:true});update();}
+  }finally{if(appBridge)await appBridge.close();clearTimeout(abortTimer);if(active.turnId&&!settled)await client.close();signal.removeEventListener('abort',abort);client.off('notification',onNotification);client.off('request',onRequest);client.off('closed',closed);for(const tool of calls.values())if(tool.status==='running')tool.status='interrupted';if(this.active===active)this.active=null;if(imageDir)fs.rmSync(imageDir,{recursive:true,force:true});update();}
  }
  recheckPermissions(){this.active?.recheckPermissions?.();}
  async close(){await this.client?.close();this.client=null;this.starting=null;}

@@ -25,13 +25,14 @@ export function createTabSynchronizer({scopes,readLocal,apply,request,onError=()
     const work=async()=>{
       const local=await readLocal(scope);
       let remote=await request(scope,'get');
+      if(records.get(id)!==record)return;
       // An existing revision is authoritative at first connection. A brand-new scope
       // can adopt locally opened descriptors without resurrecting remotely closed tabs.
       const operations=record.baseline===null?(remote.revision===0?tabChanges([],local):[]):tabChanges(record.baseline,local);
       if(operations.length){
         let rebased=rebaseTabChanges(operations,remote.tabs);
         try{remote=await request(scope,'mutate',{expectedRevision:remote.revision,operations:rebased});}
-        catch(error){if(!/Content tabs changed/.test(error.message))throw error;remote=await request(scope,'get');rebased=rebaseTabChanges(operations,remote.tabs);remote=await request(scope,'mutate',{expectedRevision:remote.revision,operations:rebased});}
+        catch(error){if(!/Content tabs changed/.test(error.message))throw error;remote=await request(scope,'get');if(records.get(id)!==record)return;rebased=rebaseTabChanges(operations,remote.tabs);remote=await request(scope,'mutate',{expectedRevision:remote.revision,operations:rebased});}
       }
       // apply receives the captured snapshot, so it preserves additions made during I/O.
       if(records.get(id)!==record)return;
@@ -41,5 +42,5 @@ export function createTabSynchronizer({scopes,readLocal,apply,request,onError=()
     record.busy=work().catch(error=>{onError(error,scope,record.baseline!==null);}).finally(()=>{record.busy=null;if(record.again&&records.get(id)===record){record.again=false;void sync(scope);}});
     return record.busy;
   }
-  return {sync,forgetHost(hostId){for(const id of records.keys())if(JSON.parse(id)[0]===hostId)records.delete(id);},async all(){await Promise.all(scopes().map(sync));}};
+  return {sync,forget(scope){records.delete(key(scope));},forgetHost(hostId){for(const id of records.keys())if(JSON.parse(id)[0]===hostId)records.delete(id);},async all(){await Promise.all(scopes().map(sync));}};
 }

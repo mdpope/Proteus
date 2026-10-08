@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('desktop', {
   choosePaths: options => ipcRenderer.invoke('proteus:choose-paths', options),
   openPath: file => ipcRenderer.invoke('proteus:open-path', file),
   browser: value => ipcRenderer.invoke('proteus:browser', value),
+  onDocumentOpened: handler => {const listener=(_event,value)=>handler(value);ipcRenderer.on('proteus:open-document',listener);return ()=>ipcRenderer.removeListener('proteus:open-document',listener);},
   onBrowserAction: handler => { const listener = (_event, value) => handler(value); ipcRenderer.on('proteus:browser-action', listener); return () => ipcRenderer.removeListener('proteus:browser-action', listener); },
   onAddressFocus: handler => { const listener = () => handler(); ipcRenderer.on('proteus:focus-address', listener); return () => ipcRenderer.removeListener('proteus:focus-address', listener); },
   onBrowserState: handler => { const listener = (_event, value) => handler(value); ipcRenderer.on('proteus:browser-state', listener); return () => ipcRenderer.removeListener('proteus:browser-state', listener); },

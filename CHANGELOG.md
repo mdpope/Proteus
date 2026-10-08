@@ -1,5 +1,16 @@
 # Changes
 
+## 0.2.6 — October 7, 2026
+
+- Separate User Chats, Scheduled Tasks and Internet Searches while preserving chat filters; show seven recent user chats and searches without scheduled-run sidebar noise.
+- Start Internet Searches with a workspace, attachments and provider buttons; configure provider defaults in Engine Room and promote searches to ordinary chats.
+- Send with Enter, retain Shift+Enter for multiline drafts, and convert queued messages to steering without losing them on delivery failure.
+- Show file-search patterns and original permission requests; supply agents with a workspace-authorized Markdown document-tab tool and runtime guidance.
+- Persist renamed chat titles and retained browser child descriptors after closing a parent; select new iPad browser tabs immediately.
+- Align web composer, filters, message actions and runtime display with desktop; inset assistant messages and correct dialog spacing.
+
+Validation and installation status: `docs/2026-10-07-search-release.md`.
+
 ## 0.2.5 — October 7, 2026
 
 - Reuse sent or cancelled user messages as editable drafts, retaining available same-session attachments for explicit resubmission.

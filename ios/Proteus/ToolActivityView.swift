@@ -39,7 +39,7 @@ struct ToolActivityView: View {
                 else { Image(systemName: status == "completed" ? "checkmark.circle" : "exclamationmark.circle").foregroundStyle(status == "completed" ? Color.green : Color.orange) }
                 VStack(alignment: .leading, spacing: 3) {
                     RuntimeTimerView(tools: [tool])
-                    Text(tool["summary"].string).font(.subheadline)
+                    Text(tool["summary"].string + (tool["presentation"]["facts"].array.first(where: { $0["label"].string == "Pattern" }).map { " · " + $0["value"].string } ?? "")).font(.subheadline)
                     Text(status.capitalized).font(.caption).foregroundStyle(.secondary)
                 }
             }
