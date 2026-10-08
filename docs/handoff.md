@@ -10,8 +10,9 @@
 The operator authorized build and installation of BF-2026-10-07-18–28, including browser resource
 cleanup/resumption, incremental history, inactive-tab throttling, remote disconnect layout and
 overview selection. Read [the follow-up release ledger](2026-10-07-followup-release.md) for current
-validation/install status. 0.2.4 receipts below remain the installed baseline until replaced by
-verified 0.2.5 receipts.
+validation/install status. Build Mac has a verified 0.2.5 app/data-continuity receipt;
+HC, website and mobile installs remain at the prior baseline pending messaging authorization,
+administration-tab approval or device unlock. Two live warning observations remain open in the ledger.
 
 ## October 7 implementation work
 
