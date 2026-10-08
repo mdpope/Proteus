@@ -26,6 +26,18 @@ try{
  await page.locator('[data-page="runs"]').first().click();await page.locator('.chat-index-row').filter({hasText:'Alpha remote chat'}).waitFor();await page.locator('#chat-index-host').selectOption(a);assert.match(await page.locator('#chat-index-rows').innerText(),/Alpha remote chat/);await page.screenshot({path:'/private/tmp/proteus-desktop-peer-history.png'});await page.locator('#chat-index-host').selectOption('');
 
  await page.locator('[data-tab]').filter({hasText:'Alpha remote chat'}).click();await page.locator('#peer-followup').waitFor();assert.equal(await page.locator('#peer-followup').inputValue(),'Retained Alpha draft');await page.locator('#peer-followup').fill('Synthetic followup');await page.locator('#peer-reply-form button.primary').click();await until(()=>apps[0].engine.listRuns()[0].pending?.type==='permission');await page.getByRole('button',{name:'Approve once',exact:true}).click();await until(()=>apps[0].engine.listRuns()[0].status==='completed');
+ await page.waitForFunction(()=>!document.querySelector('#peer-cancel'));
+ await page.locator('#peer-followup').fill('Stable draft through updates');
+ await page.evaluate(()=>{window.fixtureComposer=document.querySelector('#peer-reply-form');window.fixtureTop=window.fixtureComposer.getBoundingClientRect().top;});
+ for(let i=0;i<3;i++){apps[0].engine.emit('change',apps[0].engine.listRuns()[0]);await page.waitForTimeout(300);}
+ assert.equal(await page.evaluate(()=>window.fixtureComposer===document.querySelector('#peer-reply-form')),true,'unchanged remote controls stay mounted');
+ assert.equal(await page.locator('#peer-followup').inputValue(),'Stable draft through updates');assert.equal(await page.locator('#peer-model-note').isVisible(),false);
+ await app.evaluate(({app},hostId)=>process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getDesktopPeers().emit('event',{hostId,status:'offline'}),a);
+ await page.locator('#peer-connection-status').waitFor();
+ assert.equal(await page.locator('#peer-connection-status').evaluate(node=>node.parentElement.id==='peer-run-content'),false,'disconnect notice cannot become a chat-grid column');
+ const layout=await page.locator('#peer-run-content').evaluate(node=>({pane:node.querySelector('.chat-pane').getBoundingClientRect().width,width:node.getBoundingClientRect().width}));assert.ok(layout.pane>layout.width*.5,'chat stays in primary column');
+ await app.evaluate(({app},hostId)=>process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getDesktopPeers().emit('event',{hostId,status:'online',recovered:true,changed:true}),a);
+ await page.waitForFunction(()=>!document.querySelector('#peer-connection-status'));
  await page.screenshot({path:'/private/tmp/proteus-desktop-peer-chat.png'});
  // Two pending-input tabs must never inherit the other host's answer, including direct tab switches.
  const questions=apps.map((remote,index)=>remote.engine.createRun({...remote.engine.schedules.list()[0],name:(index?'Beta':'Alpha')+' question',provider:'copilot',model:'synthetic',prompt:'Question draft fixture'}));

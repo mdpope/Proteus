@@ -11,10 +11,16 @@ export const readJSON = (file, fallback) => {
 export function atomicJSON(file, value) {
   fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
   const temp = `${file}.${randomUUID()}.tmp`;
-  const fd = fs.openSync(temp, 'wx', 0o600);
-  try { fs.writeFileSync(fd, JSON.stringify(value, null, 2) + '\n'); fs.fsyncSync(fd); }
-  finally { fs.closeSync(fd); }
-  try { fs.renameSync(temp, file); } finally { if (fs.existsSync(temp)) fs.unlinkSync(temp); }
+  let fd, created=false;
+  try {
+    fd = fs.openSync(temp, 'wx', 0o600);created=true;
+    fs.writeFileSync(fd, JSON.stringify(value, null, 2) + '\n'); fs.fsyncSync(fd);
+    fs.closeSync(fd); fd = undefined;
+    fs.renameSync(temp, file);
+  } finally {
+    if (fd !== undefined) try { fs.closeSync(fd); } catch {}
+    if(created)try { fs.unlinkSync(temp); } catch {} // Cleanup must never mask the original save failure.
+  }
 }
 export function jsonFiles(dir) {
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });

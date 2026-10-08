@@ -4,6 +4,7 @@ export function mergeChatHistory(previous, incoming) {
   const events = new Map();
   for (const page of [...(previous.retainedHistory || []), previous, incoming])
     (page.events || []).forEach((event, index) => events.set((page.eventStart || 0) + index, event));
+  for(const patch of incoming.eventPatches||[])events.set(patch.index,patch.event);
   const keys = [...events.keys()].sort((a,b) => a-b), pages = [];
   for (const key of keys) {
     let page = pages.at(-1);

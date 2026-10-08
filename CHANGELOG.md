@@ -1,5 +1,17 @@
 # Changes
 
+## 0.2.5 — October 7, 2026
+
+- Reuse sent or cancelled user messages as editable drafts, retaining available same-session attachments for explicit resubmission.
+- Compact new-chat controls into the bottom action bar and place attachment previews above them.
+- Preserve remote chat controls across refreshes and keep disconnect notices outside the chat/details grid.
+- Restore tab close separators and the final chat-tab border; reveal and highlight the current tab in overview.
+- Release browser automation connections after turns while retaining chat-scoped same-tab resumption. Throttle inactive pages with visible, automation and audio exceptions.
+- Refresh desktop summaries without full histories; load history on demand, send cursor updates and bound inactive chat/history caches.
+- Preserve valid JSON and clean temporary files after failed atomic writes; handle disk-full scheduler diagnostics without an uncaught reporting exception.
+
+Validation and installation status: `docs/2026-10-07-followup-release.md`.
+
 ## 0.2.4 — October 7, 2026
 
 - Automatically recover eligible desktop peer connections with bounded jitter, heartbeat checks and authoritative refresh, preserving drafts and respecting manual disconnect and authentication failures.

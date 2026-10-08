@@ -1,3 +1,4 @@
+import { RunHistoryCache } from './run-history-cache.js';
 import {startTurn,pauseTurn,resumeTurn,finishTurn,interruptTiming} from './run-timing.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -20,7 +21,7 @@ export function suggestedChatTitle(prompt) {
 }
 export class Engine extends EventEmitter {
   constructor(home, providers = {}, clock = () => new Date()) {
-    super(); this.home = home; this.clock = clock;
+    super();this.historyCache=new RunHistoryCache(id=>path.join(home,'runs',id+'.json')); this.home = home; this.clock = clock;
     this.schedules = new ScheduleStore(path.join(home, 'schedules'));
     this.permissions = new PermissionStore(home);
     this.runsDir = path.join(home, 'runs');
@@ -48,14 +49,14 @@ export class Engine extends EventEmitter {
           run.events.push({ role: 'system', text: 'The runner stopped. Continue this session to recover; no work was silently replayed.', at: clock().toISOString() });
           atomicJSON(file, run);
         }
-        this.runs.set(run.id, run);
+        this.runs.set(run.id, run);this.historyCache.attach(run);
       } catch (error) { this.recoveryErrors ??= []; this.recoveryErrors.push({ file, error: error.message }); }
     }
   }
   now() { return this.clock().toISOString(); }
   persist(run) { if(this.tombstones[run.id]||!this.runs.has(run.id))throw new Error('Deleted chat cannot be restored.');
     if(run.chatPermission && run.chatPermission.contextId !== permissionContext(run.schedule).id){run.chatPermission=null;run.chatPermissionRevision=randomUUID();}
-    run.updatedAt = this.now(); atomicJSON(path.join(this.runsDir, `${run.id}.json`), run); this.emit('change', run); }
+    run.updatedAt = this.now(); atomicJSON(path.join(this.runsDir, `${run.id}.json`), run); this.historyCache.attach(run);this.historyCache.trim(run.id);this.emit('change', run); }
   event(run, role, text, data) {
     run.events.push({ role, text, ...(role === 'assistant' ? { agentName: agentName(run) } : {}), data:{...data,...(run.turns?.at(-1)&&['running','awaiting_input'].includes(run.status)?{turnId:run.turns.at(-1).id}:{})}, at: this.now() }); this.persist(run);
   }
@@ -110,7 +111,7 @@ export class Engine extends EventEmitter {
     this.tombstones[run.id] = deletedAt;
     atomicJSON(this.tombstoneFile, this.tombstones);
     fs.rmSync(path.join(this.runsDir, `${run.id}.json`), { force: true });
-    this.runs.delete(run.id);
+    this.runs.delete(run.id);this.historyCache.forget(run.id);
     this.emit('change', { id: run.id, deleted: true, deletedAt });
     const result = { id: run.id, deleted: true, deletedAt };
     this.emit('lifecycle', result);
@@ -145,7 +146,7 @@ export class Engine extends EventEmitter {
   }
   verifyAttachmentDispatch(run,dispatch){if(!(this.attachmentConsents instanceof ChatAttachmentConsents)||!dispatch||typeof dispatch.proofId!=='string')throw new Error('Attachment send authorization is unavailable.');return this.attachmentConsents.assertPrepared({...dispatch,chatId:run.id,providerId:run.schedule.provider});}
   startDeferredRun(id,dispatch){const run=this.getRun(id);if(run.trigger!=='chat'||run.status!=='queued'||run.deferredStart!==true)throw new Error('Chat draft changed.');if(dispatch){run.events[0].data={attachments:this.verifyAttachmentDispatch(run,dispatch),delivery:{id:dispatch.messageId,state:'delivered'}};run.nextAttachmentDispatch=dispatch;}delete run.deferredStart;this.persist(run);queueMicrotask(()=>this.drain());return run;}
-  discardDeferredRun(id){const run=this.getRun(id);if(run.trigger!=='chat'||run.status!=='queued'||run.deferredStart!==true)throw new Error('Chat draft changed.');this.runs.delete(id);fs.rmSync(path.join(this.runsDir,`${id}.json`),{force:true});this.emit('change',run);}
+  discardDeferredRun(id){const run=this.getRun(id);if(run.trigger!=='chat'||run.status!=='queued'||run.deferredStart!==true)throw new Error('Chat draft changed.');this.runs.delete(id);this.historyCache.forget(id);fs.rmSync(path.join(this.runsDir,`${id}.json`),{force:true});this.emit('change',run);}
   resume(id, prompt) {
     const run = this.getRun(id);
     if (active.has(run.status)) throw new Error('Reply to the pending question, or wait for the active turn.');
@@ -309,6 +310,7 @@ export class Engine extends EventEmitter {
       // before another turn reuses this run's serialized question queue.
       finishTurn(run,this.now(),run.status);
       controller.abort();
+      await this.releaseBrowser?.(run.id);
       if(['failed','interrupted'].includes(run.status)){run.failureEventAt=this.now();delete run.failureReviewedAt;}
       this.pending.delete(run.id); run.pending = null; delete run.liveMessages;delete run.nextAttachmentDispatch;
       if(dispatch)await this.attachmentConsents.releaseProof(dispatch.proofId).catch(()=>{});

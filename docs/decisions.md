@@ -480,3 +480,17 @@ reads reported tool activity and does not invent an attachable interactive proce
 Integration status belongs to a specific host/provider/MCP consumer. A successful Azure login
 cannot establish Jira/ADO MCP authentication. New credential isolation must meet the protected
 storage requirement; see the official adapter investigation in the implementation ledger.
+
+## October 7 — Separate tab resumption from active automation; bound chat history residency
+
+A completed turn releases browser automation connections and active ownership while retaining a
+chat-scoped in-memory resumption association. This permits same-tab continuation and lazy reload
+without granting another chat access or persisting agent authority across app restart. Explicit
+revocation and transfer clear the association. Visible, actively automated and audible pages are
+exempt from background throttling; no new aggressive unloading policy is introduced.
+
+Desktop refresh uses summaries plus on-demand history pages with bounded transient delta cursors.
+Changed existing events are patches by absolute event position. Unknown cursors recover with a
+full bounded page. Inactive rendered conversations and completed host histories have four-entry
+caches; active provider histories remain pinned so callbacks retain valid event references.
+Durable history, drafts and descriptors are independent of rendered-view eviction.

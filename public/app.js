@@ -1,3 +1,4 @@
+import { mergeChatHistory } from './chat-history.js';
 import { renderAgentTerminal } from './agent-terminal.js';
 import {usageSidebar,usageDetails} from './provider-usage-view.js';
 import { bindDesktopBrowserRecents } from './browser-recents.js';
@@ -19,7 +20,7 @@ import { rememberView, restoreView } from './view-position.js';
 import { showContextMenu, copyContextText } from './context-menu.js';
 import { requestPresentation, mountStructured } from './tool-presentation.js';
 import { conversation, forgetConversation } from './conversation.js';
-import { mountAttachmentPicker, selectedAttachments, clearAttachments, prepareLocalAttachments } from './chat-attachments.js';
+import { mountAttachmentPicker, restoreSentAttachments, selectedAttachments, clearAttachments, prepareLocalAttachments } from './chat-attachments.js';
 import { renderProviderAuth } from './provider-auth.js';
 import { renderRemote } from './remote.js';
 import { initOmi, renderOmi } from './omi.js';
@@ -144,11 +145,23 @@ async function api(url, data) {
   const response = await fetch(url, data === undefined ? {} : { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(data) });
   const result = await response.json(); if (!response.ok) throw new Error(result.error || response.statusText); return result;
 }
-async function refresh(force = false) {
+const localHistories=new Map(), historyRequests=new Map();
+async function loadRunView(id,before){
+  if(before===undefined&&historyRequests.has(id))return historyRequests.get(id);
+  const task=(async()=>{const prior=localHistories.get(id),query=new URLSearchParams({id});if(before!==undefined)query.set('beforeEvent',before);else if(prior?.historyCursor)query.set('cursor',prior.historyCursor);
+    const incoming=await api('/api/chat-view?'+query),run=mergeChatHistory(localHistories.get(id),incoming);
+    localHistories.delete(id);localHistories.set(id,run);while(localHistories.size>4){const old=localHistories.keys().next().value;localHistories.delete(old);forgetConversation(old);}return run;
+  })();if(before===undefined)historyRequests.set(id,task);
+  try{return await task;}finally{if(historyRequests.get(id)===task)historyRequests.delete(id);}
+}
+let refreshing=null;
+async function refresh(force=false){if(refreshing)return refreshing;refreshing=refreshState(force);try{return await refreshing;}finally{refreshing=null;}}
+async function refreshState(force = false) {
   if (!force && window.getSelection()?.isCollapsed === false) return;
-  const data = await api('/api/state'); const signature = JSON.stringify(data);
+  const data = await api('/api/state?summaries=1'); const signature = JSON.stringify(data);
+  const selected=state.tabs.find(tab=>tab.id===state.tab);if(selected?.type==='run'||selected?.type==='agent-terminal')await loadRunView(selected.type==='run'?selected.id:selected.parentId);
   state.data = data;syncMessageContext();if(workspaceReady)void contentTabSync.all();
-  if (force || signature !== state.signature || $('#main').dataset.deferredControls) {
+  if (force || selected?.type==='run' || selected?.type==='agent-terminal' || signature !== state.signature || $('#main').dataset.deferredControls) {
     state.signature = signature;
     const tab=state.tabs.find(t=>t.id===state.tab);
     if(tab?.type==='run' && $('#main').dataset.runId===tab.id && $('#conversation-host')) {
@@ -168,7 +181,7 @@ function openTab(tab) {
   const remembered=!tab.parentId&&['run','remote-run'].includes(tab.type)?selectedChildren.get(tab.id):null;state.tab=remembered&&state.tabs.some(child=>child.id===remembered&&child.parentId===tab.id)?remembered:tab.id; if(tab.parentId)selectedChildren.set(tab.parentId,tab.id);state.selected = state.tab; render();
 }
 async function schedule(id) {
-  try { state.data = await api('/api/state'); } catch (error) { toast(error.message); return; }
+  try { state.data = await api('/api/state?summaries=1'); } catch (error) { toast(error.message); return; }
   const value = state.data.schedules.find(s => s.id === id); if (!value || value.error) return toast(value?.error || 'Schedule missing.');
   state.draft = structuredClone(value); state.dirty = false;
   openTab({ id, label:value.name, type:'schedule' });
@@ -241,7 +254,7 @@ function render() {
   else if (tab?.type === 'omi') renderOmi();
   else if (tab?.type === 'life') renderLife();
   else if (tab?.type === 'team') renderTeamTools();
-  else if(tab?.type==='agent-terminal'){renderAgentTerminal(main,state.data.runs.find(run=>run.id===tab.parentId));}
+  else if(tab?.type==='agent-terminal'){const run=localHistories.get(tab.parentId);if(run)renderAgentTerminal(main,run);else void loadRunView(tab.parentId).then(()=>{if(state.tab===tab.id)render();});}
   else if (tab?.type === 'terminal') { main.classList.add('terminal-main');renderTerminal(tab); }
   else if (state.page === 'context') renderContext();
   else if (state.page === 'credentials') renderCredentials();
@@ -325,7 +338,11 @@ function renderRuns() {
   if(state.page==='runs')mountMachineHistory();
 }
 function updateConversation(run) {
+  const host=$('#conversation-host');let earlier=host.parentElement.querySelector('[data-local-earlier]');
+  if(run.earlier&&!earlier){earlier=document.createElement('button');earlier.dataset.localEarlier='';earlier.textContent='Load earlier messages';host.before(earlier);}
+  if(earlier){earlier.hidden=!run.earlier;earlier.onclick=async()=>{earlier.disabled=true;try{await loadRunView(run.id,run.eventStart);if(state.tab===run.id)renderRun(run.id);}catch(error){toast(error.message);}finally{earlier.disabled=false;}};}
   conversation($('#conversation-host'), run, {
+    edit:entry=>{const input=$('#followup');if(!input)return;if((input.value.trim()&&input.value!==entry.text||selectedAttachments('run:'+run.id).length)&&!confirm('Replace the current unsent draft with this message?'))return;input.value=entry.text||'';input.dispatchEvent(new Event('input'));input.focus();const restored=restoreSentAttachments('run:'+run.id,entry.data?.delivery?.id);if((entry.data?.attachments?.length||0)>restored)toast('Text restored. Some files are no longer available here; reattach them before sending.');},
     time, copy: text => window.desktop ? window.desktop.copyText(text) : navigator.clipboard.writeText(text),
     link: source => openMessageLink(source, run.schedule.workspace.cwd, run.id),
     image: async source => (await api('/api/chat-image', { id: run.id, source })).dataURL
@@ -337,14 +354,15 @@ function renderNativeRun(run) {
   $('#native-cancel')?.addEventListener('click',async()=>{try{await api(`/api/runs/${run.id}/cancel`,{});await refresh(true);}catch(error){toast(error.message);}});
 }
 function renderRun(id) {
-  const nativeRun=state.data.runs.find(run=>run.id===id && run.schedule.provider==='local-process');
+  const loaded=localHistories.get(id);if(!loaded){void loadRunView(id).then(()=>{if(state.tab===id)renderRun(id);}).catch(error=>toast(error.message));return;}
+  const nativeRun=loaded.schedule.provider==='local-process'?loaded:null;
   if(nativeRun){renderNativeRun(nativeRun);renderChatSubtabs();return;}
   $('#main').classList.add('run-main');
   $('#main').classList.toggle('show-chat-details', !!state.showChatDetails);
   state.detailScroll ??= {};
   const previousDetails = $('.chat-details');
   if (previousDetails) state.detailScroll[previousDetails.dataset.runId] = previousDetails.scrollTop;
-  const run=state.data.runs.find(r=>r.id===id);if(!run)return;
+  const run=loaded;
   const main=$('#main');
   const controlSignature=JSON.stringify([run.status,run.archivedAt,run.pending,run.queuedMessages,run.schedule,run.permissionContext,run.permissionRevision,run.providerSessionId,run.nativeSessionPath,run.modelCapabilities,run.nextModelOptions,state.showChatDetails]);
   const interacting=main.contains(document.activeElement)&&document.activeElement.matches('input,select,textarea')&&document.activeElement.id!=='followup';
@@ -491,6 +509,7 @@ function chatDialog(onCreated=null,guard=()=>{},draft={}) {
   $('#chat-add-folder').onclick=async()=>{try{if(!window.desktop?.choosePaths)throw new Error('Open the desktop app to choose additional folders.');const paths=await window.desktop.choosePaths({kind:'folder',multiple:true});if(!alive())return;added=[...new Set([...added,...paths.filter(p=>!folders().includes(p))])];drawFolders();}catch(error){toast(error.message);}};
   $('#chat-workspace').onchange=()=>{$('#chat-cwd').value='';added=[];drawFolders();};$('#chat-cwd').onchange=updateRoots;
   bindContextPicker('chat',{workspace:()=>({cwd:$('#chat-cwd').value,additionalDirectories:lines($('#chat-roots').value)})});drawFolders();
+  $('.new-chat-toolbar').append($('#dialog-submit'));$('.new-chat-submit')?.remove();
   const picker=mountAttachmentPicker({key:'new-chat',host:$('#chat-attachments'),textarea:$('#chat-prompt'),provider:()=>$('#chat-provider').value,mediaTypes:state.data.attachmentMediaTypes||{},notify:toast,onChange:validate});
   $('#chat-provider').onchange=async()=>{const version=++catalogGeneration,p=$('#chat-provider').value;catalogReady=false;$('#chat-model-label').hidden=!p;fields.hidden=!p;$('#chat-catalog-status').textContent=p?'Loading models…':'';$('#chat-model').value='';validate();picker.refresh();if(!p)return;await refreshModels('chat-model','chat-provider',true);if(!alive()||version!==catalogGeneration)return;const data=state.data.providerStatuses?.[p];catalogReady=p==='rehearsal'||(data?.available!==false&&!data?.error&&data?.models?.length>0);$('#chat-catalog-status').textContent=catalogReady?'':data?.error||'No model catalog is available. Select the provider again to retry.';validate();};
   $('#chat-model').addEventListener('change',validate);$('#chat-prompt').addEventListener('input',validate);
@@ -628,7 +647,7 @@ async function closeTopTab(id){
   const tab=state.tabs.find(item=>item.id===id);if(!tab)return;
   if(tab.type==='browser')await window.desktop.browser({action:'close',id});
   if(tab.type==='terminal'){const current=await window.desktop.terminal({action:'state'});if(current.sessions.some(session=>session.id===tab.terminal.id))await window.desktop.terminal({action:'close',id:tab.terminal.id});disposeTerminalUi(tab.id);}
-  forgetConversation(id);selectedChildren.delete(id);state.tabs=state.tabs.filter(item=>item.id!==id&&item.parentId!==id);
+  localHistories.delete(id);forgetConversation(id);selectedChildren.delete(id);state.tabs=state.tabs.filter(item=>item.id!==id&&item.parentId!==id);
   if(state.tab===id||children.some(child=>child.id===state.tab))state.tab='overview';saveWorkspace();render();
 }
 async function closeCurrentTab(){
@@ -839,7 +858,7 @@ window.addEventListener('keydown',event=>{if((event.metaKey||event.ctrlKey)&&eve
 window.addEventListener('keydown',event=>{if((event.metaKey||event.ctrlKey)&&event.shiftKey&&event.code==='Backslash'){event.preventDefault();void showBrowserOverview(previousFeature==='team'?'team':selectedChatParent()?.id||'main');}});
 function overviewGroups(browserTabs,scope='main'){
   const previews=new Map(browserTabs.map(tab=>[tab.id,tab]));
-  const item=(tab,team=false,locked=false)=>{const preview=previews.get(team?tab.browserId:tab.id),kind=tab.type||'browser';return {id:tab.id,title:tab.label||tab.title||preview?.title||'New tab',kind,url:tab.info?.url||tab.url||preview?.url||'',thumbnail:preview?.thumbnail,loaded:preview?.loaded??tab.loaded,icon:({browser:'◎',terminal:'⌘',markdown:'▤',run:'☷','remote-run':'☷','remote-document':'▤',schedule:'◷',overview:'☷',standup:'☷'})[kind]||'▤',closable:!locked,parentId:tab.parentId||null,team};};
+  const item=(tab,team=false,locked=false)=>{const preview=previews.get(team?tab.browserId:tab.id),kind=tab.type||'browser';return {id:tab.id,selected:team?(state.page==='team'&&state.tab==='overview'&&(teamState().active===tab.id||tab.id==='team-'+teamState().active)):state.tab===tab.id,title:tab.label||tab.title||preview?.title||'New tab',kind,url:tab.info?.url||tab.url||preview?.url||'',thumbnail:preview?.thumbnail,loaded:preview?.loaded??tab.loaded,icon:({browser:'◎',terminal:'⌘',markdown:'▤',run:'☷','remote-run':'☷','remote-document':'▤',schedule:'◷',overview:'☷',standup:'☷'})[kind]||'▤',closable:!locked,parentId:tab.parentId||null,team};};
   const top=state.tabs.filter(tab=>!tab.parentId&&!['overview','omi','life','team','engine','home','standup'].includes(tab.type));
   const groups=[{id:'main',title:'',items:top.filter(tab=>!['run','remote-run'].includes(tab.type)).map(tab=>item(tab))}];
   for(const parent of top.filter(tab=>['run','remote-run'].includes(tab.type)))groups.push({id:parent.id,title:parent.label||'Chat',items:[item(parent,false,true),...state.tabs.filter(tab=>tab.parentId===parent.id).map(tab=>item(tab))]});

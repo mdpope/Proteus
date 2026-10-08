@@ -69,6 +69,7 @@ else {
       for(const root of service.workspaceFiles.roots().roots.filter(root=>root.available)){const relative=path.relative(root.path,file);if(relative&&!relative.startsWith('..'+path.sep)&&relative!=='..'&&!path.isAbsolute(relative))return {...service.workspaceFiles.read({rootId:root.id,file:relative}),title:descriptor.title,mediaType:'text/markdown'};}
       throw new Error('Document is outside a currently authorized workspace.');
     };
+    service.engine.releaseBrowser=runId=>browser.releaseRun(runId).catch(()=>{});
     service.resources={
       list:()=>{
         const tabs=browser.list().map(({id,title,url,group,loaded,pid,error})=>({id,title,url,group,loaded,pid,error}));

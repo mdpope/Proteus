@@ -10,9 +10,14 @@ export function selectedAttachments(key){return selections.get(key)||[];}
 export function clearAttachments(key){for(const item of selections.get(key)||[])if(item.url)URL.revokeObjectURL(item.url);selections.delete(key);}
 export function sentAttachmentPreview(messageId,name){return sentPreviews.get(messageId)?.find(item=>item.file.name===name)?.url||null;}
 export function openSentAttachmentPreview(messageId,name){const item=sentPreviews.get(messageId)?.find(entry=>entry.file.name===name);if(item?.url)showPreview(item);}
+export function restoreSentAttachments(key,messageId){
+  clearAttachments(key);const files=sentPreviews.get(messageId)||[];
+  selections.set(key,files.map(item=>({...item,url:preview(item.file)})));
+  document.querySelectorAll('.chat-attachment-picker').forEach(host=>{if(host.dataset.attachmentKey===key)host.dispatchEvent(new Event('attachments-restored'));});return files.length;
+}
 export function mountAttachmentPicker({key,host,textarea,provider,mediaTypes={},notify,onChange=()=>{}}){
   const accepted=()=>mediaTypes[provider()]||[];
-  host.classList.add('chat-attachment-picker');
+  host.classList.add('chat-attachment-picker');host.dataset.attachmentKey=key;
   const render=()=>{const items=selectedAttachments(key);host.innerHTML=`<div class="attachment-controls"><button type="button" class="subtle attachment-add" data-attach-add aria-label="Attach files" title="Attach files" ${accepted().length?'':'disabled'}><span aria-hidden="true">＋</span></button><input type="file" multiple hidden></div><div class="attachment-strip">${items.map((item,index)=>`<div class="attachment-chip"><button type="button" data-attach-preview="${index}" ${item.url?'':'disabled'}>${item.url?`<img src="${item.url}" alt="">`:'▤'} <span>${escape(item.file.name)}<small>${sizeLabel(item.file.size)}</small></span></button><button type="button" data-attach-remove="${index}" aria-label="Remove ${escape(item.file.name)}">×</button></div>`).join('')}</div>`;
     const input=host.querySelector('input[type=file]');input.accept=accepted().join(',');host.querySelector('[data-attach-add]').onclick=()=>input.click();input.onchange=()=>{add([...input.files]);input.value='';};
     host.querySelectorAll('[data-attach-preview]').forEach(button=>button.onclick=()=>{const item=selectedAttachments(key)[Number(button.dataset.attachPreview)];if(item?.url)showPreview(item);});
@@ -20,7 +25,7 @@ export function mountAttachmentPicker({key,host,textarea,provider,mediaTypes={},
   };
   const add=files=>{const items=selectedAttachments(key).slice();for(const file of files){if(items.length>=MAX_BATCH_FILES){notify('This message has too many attachments.');break;}if(!accepted().includes(file.type)){notify(`${providerName(provider())} cannot receive ${file.type||'this file type'}.`);continue;}if(!file.size||file.size>MAX_BYTES){notify('Each attachment must be 8 MB or smaller.');continue;}if(items.reduce((total,item)=>total+item.file.size,0)+file.size>MAX_BATCH_BYTES){notify('This message exceeds the attachment batch size.');break;}items.push({file,url:preview(file)});}selections.set(key,items);render();onChange();};
   textarea?.addEventListener('paste',event=>{const files=[...(event.clipboardData?.items||[])].filter(item=>item.kind==='file').map(item=>item.getAsFile()).filter(Boolean);if(files.length){event.preventDefault();add(files);}});
-  render();return {refresh:render,clear:()=>{clearAttachments(key);render();onChange();}};
+  host.addEventListener('attachments-restored',()=>{render();onChange();});render();return {refresh:render,clear:()=>{clearAttachments(key);render();onChange();}};
 }
 function confirmDelivery(files,destination,providerId){return new Promise(resolve=>{const dialog=document.createElement('dialog');dialog.className='attachment-confirm';dialog.innerHTML=`<h2>Send these files?</h2><p>Destination: <strong>${escape(destination)}</strong><br>AI provider: <strong>${escape(providerName(providerId))}</strong></p><ul>${files.map(item=>`<li>${escape(item.file.name)} · ${escape(item.file.type)} · ${sizeLabel(item.file.size)}</li>`).join('')}</ul><p class="note">Only these selected files will be sent with this message.</p><div class="actions"><button data-cancel>Cancel</button><button class="primary" data-confirm>Confirm Send</button></div>`;document.body.append(dialog);const finish=value=>{dialog.close();dialog.remove();resolve(value);};dialog.querySelector('[data-cancel]').onclick=()=>finish(false);dialog.querySelector('[data-confirm]').onclick=()=>finish(true);dialog.addEventListener('cancel',event=>{event.preventDefault();finish(false);},{once:true});dialog.showModal();});}
 async function sha256(bytes){const digest=await crypto.subtle.digest('SHA-256',bytes);return [...new Uint8Array(digest)].map(byte=>byte.toString(16).padStart(2,'0')).join('');}
@@ -34,6 +39,7 @@ export async function prepareAttachments({key,providerId,destination,chatId,draf
   for(const item of items){const bytes=new Uint8Array(await item.file.arrayBuffer()),hash=await sha256(bytes),scope=chatId?{id:chatId}:{draftId};const begun=await send('begin',{...scope,providerId,messageId,name:item.file.name,mediaType:item.file.type,size:bytes.length,sha256:hash});for(let offset=0,index=0;offset<bytes.length;offset+=CHUNK_BYTES,index++)await send('chunk',{uploadId:begun.uploadId,index,dataBase64:base64(bytes.subarray(offset,offset+CHUNK_BYTES))});attachments.push(await send('finish',{uploadId:begun.uploadId}));}
   const scope=chatId?{id:chatId}:{draftId},grant=await send('authorize',{...scope,providerId,messageId,attachments});
   sentPreviews.set(messageId,items.map(item=>({...item,url:preview(item.file)})));
+  while(sentPreviews.size>8||[...sentPreviews.values()].flat().reduce((total,item)=>total+item.file.size,0)>MAX_BATCH_BYTES){const id=sentPreviews.keys().next().value;for(const item of sentPreviews.get(id))if(item.url)URL.revokeObjectURL(item.url);sentPreviews.delete(id);}
   return {...scope,providerId,messageId,attachments:attachments.map(item=>item.attachmentId),consentId:grant.consentId};
 }
 export const prepareLocalAttachments=options=>prepareAttachments({...options,send:(action,args)=>options.post('/api/attachments',{action,...args})});

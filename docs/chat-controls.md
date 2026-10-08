@@ -69,6 +69,18 @@ submission. Provider capability validation, bounded encrypted delivery to a remo
 previewing and cleanup/retry behavior are requirements, not completed implementations.
 See `planned-updates.md` for acceptance coverage.
 
+## October 7 follow-up queue
+
+BF-2026-10-07-24 in [planned updates](planned-updates.md) queues the remote-chat footer
+message repeatedly appearing/disappearing and pushing the composer upward, reported on the HC
+Mac. Exact message and cause await observation; stable layout across refresh cycles is required.
+
+BF-2026-10-07-18 in [planned updates](planned-updates.md) requests sent/cancelled-message
+reuse as an editable draft followed by explicit resubmission. BF-20/21 reopen the new-chat visual
+acceptance: compact bottom controls beside Attach/Start chat, minimal routine explanation, and
+attachment previews above that bar matching the full-chat composer. These corrections are queued;
+the source behavior below is not evidence of accepted visual parity.
+
 ## October 7 desktop new chat
 
 The wide dialog groups Run on/Workspace, uses a starting-folder dropdown and expandable folders,
@@ -78,3 +90,18 @@ chat-specific. Remote starts can select an existing configured workspace folder;
 new remote roots still requires configuration on that Mac. Draft text/title and the attachment
 selection survive destination/provider switches, with final destination/provider consent still
 required for attachment delivery. Context selections reset when the destination changes.
+
+## October 7 follow-up implementation
+
+Desktop user messages offer Edit and resend, restoring a draft without rewriting history or
+sending automatically. Replacing a nonempty different draft or selected files requires confirmation.
+Recent same-session attachments can be restored; unavailable files receive explicit feedback.
+Attachment consent and provider validation run again on send. Sent-preview retention is bounded.
+
+The new-chat toolbar groups Attach, compact model controls and Start chat, with selected files
+above the toolbar. Remote chat refresh keeps structurally unchanged controls mounted; disconnect
+feedback sits outside the two-column grid. Completed host history and detached conversation views
+use bounded caches; earlier events load on demand and durable history remains intact. Desktop
+state polling requests summaries, and selected history uses transient cursors and absolute-index
+patches. Legacy remote clients keep compatible page responses and events. See the
+[follow-up ledger](2026-10-07-followup-release.md) for validation/install status.

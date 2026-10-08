@@ -9,7 +9,7 @@ Frozen source: `72d198e6ec0a6621578a66cddba2f2f213e46cea`. Release: 0.2.4, nativ
 | 01 Recovery | Per-host backoff, heartbeat, wake/network retry; manual/auth boundaries; preserved chat drafts | Encrypted peer regression including no mutation replay and 19 two-host UI groups pass | Both Macs |
 | 02 Schedule layout | Separate source/action rows; wrapping long paths | Actual Electron at 1440/900/620 passes | Both Macs |
 | 03 Model labels | Use metadata display names without redundant invocation IDs; no false warning when unselected | Catalog-driven composer regression passes | Both Macs |
-| 04 Approved new chat | Wide composer, provider-first, local chat-only folders, configured remote starting folders, retained draft/title/attachments | Electron layout and local/remote destination-switch checks pass; arbitrary new remote roots require Mac configuration | Both Macs |
+| 04 Approved new chat (acceptance reopened; BF-20/21) | Wide composer, provider-first, local chat-only folders, configured remote starting folders, retained draft/title/attachments | Electron layout and local/remote destination-switch checks pass; arbitrary new remote roots require Mac configuration | Both Macs |
 | 05 Approval scope | Explicit once/chat/workspace lifetime and restart language across clients; grant semantics unchanged | Permission unit regressions pass; installed review pending | Both Macs, website and native where applicable |
 | 06 Runtime | Persist active intervals; live desktop/web/native timers; exclude waits/idle; union overlaps; partial/offline labels and host clock offset | Interval/overlap/crash tests and iPhone/iPad simulator timing and expanded-output checks pass | Both Macs, website and native where applicable |
 | 07 Question history | Original wording/options/descriptions, stable IDs and replies, cancellation/interruption | Serialized-question, answer-association and disk-persistence regression passes | Both Macs |
@@ -29,6 +29,14 @@ pre-freeze checkpoint. New Electron composer, tab interaction, standup-order and
 conversation/pairing/approval tests pass against rebuilt assets. iPhone and iPad simulator activity
 output and runtime tests pass. These are synthetic
 results, not live account authentication, physical gesture or installed workflow certification.
+
+## Post-release operator feedback
+
+The operator rejected the new-chat footer density and attachment layout after installation.
+BF-2026-10-07-20/21 reopen BF-04 visual acceptance despite the earlier synthetic checks above.
+The screenshot also reports ENOSPC during scheduler-error persistence (BF-22); message reuse
+and named chat-browser discovery are queued as BF-18/19. See [planned updates](planned-updates.md)
+for sanitized evidence and acceptance criteria. This intake changes documentation only.
 
 ## Authentication mechanism investigation
 

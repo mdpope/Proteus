@@ -58,10 +58,10 @@ class BrowserTabs {
     });
   }
   state(tab, includeHistory=false) {
-    if(!tab.view||tab.view.webContents.isDestroyed())return {...tab.snapshot,id:tab.id,group:tab.group||'main',parentId:tab.parentId||null,loaded:false,loading:false,shared:false,owner:null,agentControlling:false,lastTouchedAt:new Date(tab.lastTouchedAt||Date.now()).toISOString()};
+    if(!tab.view||tab.view.webContents.isDestroyed())return {...tab.snapshot,id:tab.id,group:tab.group||'main',parentId:tab.parentId||null,loaded:false,loading:false,shared:false,owner:null,resumeOwner:tab.resumeOwner||null,agentControlling:false,lastTouchedAt:new Date(tab.lastTouchedAt||Date.now()).toISOString()};
     const wc = tab.view.webContents;
     return { id: tab.id,group:tab.group||'main',parentId:tab.parentId||null,loaded:true,pid:wc.getOSProcessId(),lastTouchedAt:new Date(tab.lastTouchedAt||Date.now()).toISOString(), url: wc.getURL(), title: wc.getTitle() || (wc.getURL() ? new URL(wc.getURL()).hostname : 'New tab'), loading: wc.isLoading()||this.reloading.has(tab.id),
-      canGoBack: wc.navigationHistory.canGoBack(), canGoForward: wc.navigationHistory.canGoForward(), shared: tab.shared, owner: tab.owner, agentControlling:!!tab.agentActions, favicon:tab.favicon||'', error: tab.error || null, ...(includeHistory?{history:normalizeHistory({entries:wc.navigationHistory.getAllEntries(),index:wc.navigationHistory.getActiveIndex()},this.appOrigin)}:{}) };
+      canGoBack: wc.navigationHistory.canGoBack(), canGoForward: wc.navigationHistory.canGoForward(), shared: tab.shared, owner: tab.owner,resumeOwner:tab.resumeOwner||null, agentControlling:!!tab.agentActions, favicon:tab.favicon||'', error: tab.error || null, ...(includeHistory?{history:normalizeHistory({entries:wc.navigationHistory.getAllEntries(),index:wc.navigationHistory.getActiveIndex()},this.appOrigin)}:{}) };
   }
   list(includeHistory=false) { return [...this.tabs.values()].map(tab => this.state(tab,includeHistory)); }
   invalidateRendererSelection() {
@@ -98,7 +98,22 @@ class BrowserTabs {
     return true;
   }
   prepareShutdown() { this.shuttingDown = true; this.transition?.cancel(); }
-  changed() { if (!this.shuttingDown && !this.window.isDestroyed()) this.window.webContents.send('proteus:browser-state', this.list(true)); }
+  updateThrottling() {
+    for (const tab of this.tabs.values()) {
+      const wc=tab.view?.webContents;if(!wc||wc.isDestroyed())continue;
+      const visible=tab.id===this.active&&!!this.bounds&&!this.overlays.size&&!this.overviewOpen;
+      wc.setBackgroundThrottling(!(visible||tab.agentActions>0||wc.isCurrentlyAudible()));
+    }
+  }
+  async releaseRun(runId) {
+    for(const tab of this.tabs.values())if(tab.owner===runId||tab.automationRuns?.has(runId)){
+      if(tab.owner===runId){tab.resumeOwner=runId;tab.owner=null;}
+      tab.automationRuns?.delete(runId);
+      await this.disconnect(tab);
+    }
+    this.changed();
+  }
+  changed() { this.updateThrottling(); if (!this.shuttingDown && !this.window.isDestroyed()) this.window.webContents.send('proteus:browser-state', this.list(true)); }
   get(id) { const tab = this.tabs.get(id); if (!tab) throw new Error('Browser tab is closed or unavailable.'); return tab; }
   touch(tab) { tab.lastTouchedAt = Date.now(); }
   requestOverview(tab) {
@@ -123,7 +138,7 @@ class BrowserTabs {
       this.tabs.set(tab.id,tab);this.changed();return this.state(tab,true);
     }
     const tab = { parentId:typeof descriptor.parentId==='string'?descriptor.parentId.slice(0,256):owner,id: descriptor.id||randomUUID(), group:descriptor.group==='team'?'team':'main', favicon:safeFavicon(descriptor.favicon), agentActions:owner?1:0, shared: false, owner, lastTouchedAt:Date.parse(descriptor.lastTouchedAt)||Date.now(), view: new WebContentsView({ webPreferences: {
-      preload: require('node:path').join(__dirname,'browser-preload.cjs'), session: this.partition, nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true, backgroundThrottling: false
+      preload: require('node:path').join(__dirname,'browser-preload.cjs'), session: this.partition, nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true, backgroundThrottling: true
     } }) };
     this.tabs.set(tab.id, tab); this.window.contentView.addChildView(tab.view);
     // Agent-created tabs may never have been selected. Give them a real viewport
@@ -131,6 +146,7 @@ class BrowserTabs {
     const { width, height } = this.window.getContentBounds();
     tab.view.setBounds(this.bounds || { x: 0, y: 0, width, height });
     tab.view.setVisible(false);
+    for(const event of ['media-started-playing','media-paused'])tab.view.webContents.on(event,()=>this.updateThrottling());
     const wc = tab.view.webContents;
     wc.setZoomMode('isolated');
     // Chromium only exposes the current TLS chain while its navigation is in flight.
@@ -233,10 +249,11 @@ class BrowserTabs {
     if(previousActive&&previousActive!==id){const prior=this.tabs.get(previousActive)?.view?.webContents;if(prior&&!prior.isDestroyed())prior.send('proteus:link-hover','');}
     if(id&&id!==previousActive)this.touch(this.get(id));
     for (const tab of this.tabs.values()) { if(!tab.view)continue; if (tab.id === id && this.bounds) tab.view.setBounds(this.bounds); tab.view.setVisible(tab.id === id && !!this.bounds && !!tab.view.webContents.getURL()); }
+    this.updateThrottling();
   }
   async close(id) {
     if(id===this.active)this.transition?.cancel();
-    const tab = this.get(id); tab.shared = false; tab.owner = null;
+    const tab = this.get(id); tab.shared = false; tab.owner = null;tab.resumeOwner=null;
     if(tab.view){cancelNavigation(tab.view.webContents, 'Browser tab closed during navigation.');
     await this.disconnect(tab); this.window.contentView.removeChildView(tab.view); tab.view.webContents.close();}
     this.tabs.delete(id); if (this.active === id) this.active = null; this.changed();
@@ -258,12 +275,13 @@ class BrowserTabs {
     const tab=this.get(id);if(tab.view)return this.state(tab,true);
     const pending=this.create(restore?tab.snapshot.url:'',null,restore?tab.snapshot.history:null,{id:tab.id,group:tab.group,parentId:tab.parentId,favicon:tab.snapshot.favicon});
     this.reloading.set(id,pending);this.changed();
-    try{return await pending;}finally{this.reloading.delete(id);this.changed();}
+    try{const result=await pending;this.get(id).resumeOwner=tab.resumeOwner;return result;}finally{this.reloading.delete(id);this.changed();}
   }
   setOverlay(token, visible) {
     if(visible)this.overlays.add(token);else this.overlays.delete(token);
     this.transition?.cancel();
     for(const tab of this.tabs.values())tab.view?.setVisible(!this.overlays.size&&!this.overviewOpen&&tab.id===this.active&&!!this.bounds&&!!tab.view.webContents.getURL());
+    this.updateThrottling();
     if(visible)this.window.webContents.focus();
   }
   async resolveFavicon(tab,icons) {
@@ -390,7 +408,7 @@ class BrowserTabs {
     }
     if(action==='transfer'){
       const tab=this.get(id);if(tab.agentActions)throw new Error('Wait for the active browser operation to finish.');
-      await this.disconnect(tab);tab.shared=false;tab.owner=null;tab.parentId=typeof value.parentId==='string'?value.parentId.slice(0,256):null;tab.group=value.group==='team'?'team':'main';this.changed();return this.state(tab,true);
+      await this.disconnect(tab);tab.shared=false;tab.owner=null;tab.parentId=typeof value.parentId==='string'?value.parentId.slice(0,256):null;tab.resumeOwner=null;tab.group=value.group==='team'?'team':'main';this.changed();return this.state(tab,true);
     }
     if (action === 'show') { if(this.acceptRendererSelection(value,id))this.show(id, value.bounds); return; }
     if (action === 'hide') { if(this.acceptRendererSelection(value,null))this.show(null); return; }
@@ -416,16 +434,19 @@ class BrowserTabs {
     else if (action === 'stop' && !cancelNavigation(wc)) wc.stop();
     else if (action === 'share') {
       tab.shared = value.shared === true;
-      if (!tab.shared) { tab.owner = null; await this.disconnect(tab); }
+      if (!tab.shared) { tab.owner = null;tab.resumeOwner=null; await this.disconnect(tab); }
     }
     this.changed(); return this.state(tab);
   }
   async agent(value, runId) {
-    const allowed = tab => tab.shared || tab.owner === runId;
+    const allowed = tab => tab.shared || tab.owner === runId || tab.resumeOwner === runId;
     if (value.action === 'list') return this.list().filter(info => allowed(this.get(info.id)));
     if (value.action === 'open') return this.create(this.address(value.url), runId);
     const tab = this.get(value.tabId);
     if (!allowed(tab)) throw new Error('This tab is private. Ask the user to enable Agent access on this tab.');
+    if(!tab.view)await this.reload(tab.id);
+    const current=this.get(tab.id);if(current!==tab)return this.agent(value,runId);
+    tab.automationRuns??=new Set();tab.automationRuns.add(runId);
     this.touch(tab);
     tab.agentActions=(tab.agentActions||0)+1;this.changed();
     try {
@@ -455,7 +476,7 @@ class BrowserTabs {
     const tab = this.get(id); const wc = tab.view.webContents;
     const origin = new URL(wc.getURL()).origin;
     // Authentication is user-controlled. Revoke automation before retrieving any secret.
-    tab.shared = false; tab.owner = null; await this.disconnect(tab); this.changed();
+    tab.shared = false; tab.owner = null;tab.resumeOwner=null; await this.disconnect(tab); this.changed();
     return credentials.fill(bindingId, origin, async login => {
       if (wc.isDestroyed() || new URL(wc.getURL()).origin !== origin) throw new Error('The login page changed. Try again on the intended site.');
       const fill = ({ origin, username, password }) => {

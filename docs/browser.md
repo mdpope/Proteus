@@ -1,5 +1,14 @@
 # Shared embedded browser
 
+Queued visual regression: BF-2026-10-07-23 in [planned updates](planned-updates.md) requests
+restoring the separator before × close controls and the closing right border of the last chat
+child tab. Implementation and desktop visual verification remain pending.
+
+October 7 follow-up: BF-2026-10-07-19 in [planned updates](planned-updates.md) queues
+end-to-end verification and completion of named chat-child discovery. The agent list already
+filters by sharing/current-run ownership across the tab registry; installed natural-language
+selection and provider/remote coverage remain unverified by this intake.
+
 October 7 planning: BF-2026-10-07-08 through BF-2026-10-07-14 in
 [planned updates](planned-updates.md) queue chat-owned routing, clicked-link preferences,
 pinch overview, standup ordering, tab insertion/transfers, and a movement audit. These are
@@ -310,3 +319,15 @@ are deferred. Overview respects the current container and includes non-browser c
 the visible overview button and Command-Shift-Backslash are available without a trackpad.
 Renderer pinch detection excludes editors/terminals/dialogs and ordinary scrolling. Native browser
 pinch remains distinct from renderer surfaces; actual physical trackpad feel requires acceptance.
+
+## October 7 follow-up implementation
+
+0.2.5 releases active ownership and browser automation connections when a turn ends, keeping a
+chat-scoped runtime association for same-ID resumption. Unloading/reloading preserves that
+association; explicit revocation or transfer clears it. The access toggle includes resumable
+access. Restarted workspace descriptors do not restore grants. Named-tab requests use list first
+and ask for sharing when necessary instead of opening duplicate copies.
+
+Background throttling is enabled for inactive pages, with visible-page, active automation and
+audio exceptions. It does not unload pages. Overview highlights and reveals the current card.
+See the [follow-up ledger](2026-10-07-followup-release.md) for verification and rollout boundaries.

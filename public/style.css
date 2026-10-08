@@ -102,3 +102,25 @@ html,body{height:100%;overflow:hidden}#app{height:100dvh;min-height:0;overflow:h
 .runtime-timer{font-variant-numeric:tabular-nums;font-size:12px;font-weight:400;color:var(--soft);margin-left:12px;white-space:nowrap}.message>.role{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}.activity-group>summary>.runtime-timer{float:right}
 
 .agent-command{border-top:1px solid var(--line);padding:16px 0}.agent-command pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:500px;overflow:auto}.agent-command h3{overflow-wrap:anywhere}
+
+/* Keep transient remote notices outside the two-column chat layout. */
+#peer-connection-status{flex:none;margin:0 0 8px;max-height:90px;overflow:auto}
+#peer-run-content>.banner{grid-column:1/-1}
+.browser-overview{overflow-y:auto;max-height:90vh}
+.browser-overview-card.current{outline:2px solid var(--accent);outline-offset:2px}
+.tabclose::before,[data-chat-child-close]::before{content:"";position:absolute;left:0;top:25%;height:50%;border-left:1px solid var(--line)}
+.tabclose,[data-chat-child-close]{position:relative}
+
+.chat-subtab-list>.chat-subtab:last-of-type{border-right:1px solid var(--line)}
+.new-chat-toolbar{display:flex;align-items:center;gap:8px}
+.new-chat-toolbar>label,.new-chat-toolbar .model-controls>div{flex:0 1 auto;min-width:90px;max-width:220px}
+.new-chat-toolbar select{width:auto;max-width:220px;padding:6px 8px}
+.new-chat-toolbar label{font-size:11px}
+.new-chat-toolbar>#dialog-submit{margin-left:auto;align-self:center}
+.new-chat-toolbar .model-controls .note,#chat-catalog-status:empty{display:none}
+.new-chat-composer{position:relative;padding:12px}
+.new-chat-composer textarea{min-height:110px}
+.new-chat-toolbar .chat-attachment-picker{display:contents}
+.new-chat-toolbar .attachment-strip{order:-1;flex-basis:100%;max-height:110px;overflow:auto}
+.new-chat-toolbar .attachment-strip:empty{display:none}
+.new-chat-toolbar .attachment-controls{flex:0 0 auto}

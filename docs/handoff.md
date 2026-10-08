@@ -5,6 +5,14 @@
 > the historical completion claims below. It reviews all 22 + 28 build items and current reports;
 > working-tree corrections are not installed release acceptance.
 
+## October 7 follow-up implementation
+
+The operator authorized build and installation of BF-2026-10-07-18–28, including browser resource
+cleanup/resumption, incremental history, inactive-tab throttling, remote disconnect layout and
+overview selection. Read [the follow-up release ledger](2026-10-07-followup-release.md) for current
+validation/install status. 0.2.4 receipts below remain the installed baseline until replaced by
+verified 0.2.5 receipts.
+
 ## October 7 implementation work
 
 The 0.2.4 source work is tracked in [the implementation ledger](2026-10-07-implementation.md).

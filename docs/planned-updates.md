@@ -10,6 +10,200 @@ Maintain this as the single backlog. Design rationale is in `decisions.md`; rece
 retained as acceptance criteria; the installed versus unverified state is summarized immediately
 below and in `content-workspace-release.md`.
 
+## October 7 post-0.2.4 feedback — implementation authorized
+
+The operator authorized implementation, build and installation of this follow-up batch, including
+four performance/navigation additions below. Sanitized screenshot evidence is retained in these
+entries; private source material remains outside Git. Current validation/deployment status is in
+[the follow-up release ledger](2026-10-07-followup-release.md).
+
+### BF-2026-10-07-18 — Edit and resend sent or cancelled messages
+
+Status: Queued.
+
+Add an Edit/resend action to the user's sent and cancelled messages. Populate the current message
+field with the previous contents, focus it, and let the user revise and explicitly send again.
+This is draft reuse: preserve the original transcript entry and its delivery/cancellation state;
+do not rewrite provider history, replay automatically, or create a concurrent turn.
+
+Acceptance: cover sent and cancelled entries, multiline text, keyboard access, and an existing
+unsent draft without silently discarding it. Identify any original attachments and restore only
+still-available, authorized draft references; clearly report unavailable files and retain normal
+submission consent/capability checks. Send/Queue/Steer retain their existing semantics, and a
+resubmission receives a new message identity. Verify local and remote chat behavior and document
+any client scope still deferred.
+
+### BF-2026-10-07-19 — Discover and use named browser tabs within chat navigation
+
+Status: Queued investigation and completion; basic authorized tab listing already exists.
+
+Requested flow: “Look at the X tab for context” should find the existing browser child in chat
+navigation, read it and interact with it through the existing browser tool, without opening a
+duplicate page merely because the tab is nested under a chat.
+
+Source evidence: `src/browser-tools.js` exposes `proteus_browser` list and interaction actions.
+`desktop/browser.cjs` lists tabs across its registry and filters agent results by explicit sharing
+or ownership by the current run, not by main-versus-chat placement. State includes title, URL,
+tab ID and parent ID. Thus eligible chat children appear supported in source; installed/provider
+end-to-end discoverability and natural-language selection have not been verified by this intake.
+BF-08 covers placement of new tabs; this item covers finding and using existing tabs.
+
+Acceptance: exercise a human-opened chat child with Agent access enabled, a current-run-owned
+child, inactive children, duplicate titles, renamed tabs, close/reopen, and revoked access.
+Resolve title/URL references to the correct stable tab and chat/host; clarify ambiguous matches.
+Use fresh page snapshots before interaction and preserve chat placement. Private tabs remain
+private until shared; report missing access accurately without claiming missing authentication
+or silently granting control. Verify each supported provider's tool exposure and remote routing;
+report any unsupported route explicitly. Keep page content treated as untrusted evidence.
+
+### BF-2026-10-07-20 — Restore the approved compact new-chat composer
+
+Status: Queued correction; BF-04 visual acceptance reopened by operator feedback.
+
+The delivered message area is too tall and contains too much explanatory copy. Provider/model
+controls consume large columns, while Start chat sits on a separate lower row. The operator
+expects the [approved design](design/2026-10-07/new-chat-approved.html), with compact provider,
+model and applicable effort/speed/context controls at the bottom beside Attach and Send/Start chat.
+Keep Cancel separate. Remove routine catalog timestamps, refresh cadence and provider capability
+explanations from the default composer; retain concise actionable loading/validation/errors and
+make secondary information available on demand where useful.
+
+Read-only source evidence: `public/app.js` renders a separate `.new-chat-submit` row and catalog
+status paragraph. `public/style.css` grows toolbar fields with `flex:1 1 160px`, makes notes span
+the toolbar, and gives the submit row extra margin. These structures explain the visible departure
+from the requested compact bottom toolbar; previous synthetic layout checks did not establish
+operator acceptance of the design.
+
+Acceptance: compare actual desktop new-chat UI against the approved sample and continued-chat
+composer at wide/narrow widths and increased zoom, before/after provider selection and with
+attachments. Use one compact wrapping bottom action bar without excessive reserved footer space,
+overlap or clipped controls. Preserve accessible labels, keyboard flow, destination/draft state,
+fresh provider metadata and real errors. Require actual UI review; a clean build is insufficient.
+
+### BF-2026-10-07-21 — Match full-chat attachment placement in new chats
+
+Status: Queued correction; linked to BF-04 and BF-20.
+
+The screenshots show attachment chips taking space alongside provider/model fields and the plus
+control sitting above them. Match the full chat tab's message box: a bounded preview/filename strip
+above the bottom controls, with per-item removal, and an unboxed Attach button on the same bottom
+bar as provider/model and Send/Start chat. Reuse the established composer/picker behavior.
+
+Acceptance: verify zero, one and multiple files, image previews, long names, removal, paste,
+keyboard access and narrow windows. Chips must not push model fields into oversized columns or
+separate the send action from its toolbar. Preserve attachment references and draft text through
+provider/destination changes, and keep existing delivery consent and format checks intact.
+
+### BF-2026-10-07-22 — Handle disk-full errors without an uncaught main-process exception
+
+Status: Queued reliability fix; highest priority in this intake.
+
+Reported while the new-chat dialog was open. The screenshot explicitly shows `ENOSPC: no space
+left on device` opening `scheduler-errors.json.<id>.tmp` in application data. The stack passes
+through `atomicJSON` (`src/files.js:14`) and the scheduler-error listener (`src/server.js:126`),
+then a timer callback. This identifies a failed error-log write, not proof that the composer
+caused the storage exhaustion or that any particular folder should be deleted.
+
+Current source calls `atomicJSON` directly from that listener without catching persistence failure.
+Investigate the initiating scheduler error as well as this secondary reporting failure. Keep the
+app responsive with concise actionable storage feedback; avoid recursive error logging, repeated
+exception dialogs or tight retry loops. Never report a failed durable save as successful.
+
+Acceptance: inject ENOSPC at temp-file open/write/fsync/rename using isolated data. Preserve the
+last valid file, clean up temporary files where possible, bound any in-memory diagnostic fallback,
+and ensure diagnostic persistence failure cannot escape the event/timer handler. Verify recovery
+after writable storage returns and related permission/I/O failures. Preserve drafts and existing
+chat/schedule state, and keep execution gated when required state cannot be saved safely. Run
+`npm test`, `npm run check`, and an isolated desktop error-path exercise; do not fill the real disk
+or delete user data to test this. Live disk usage and recovery are not verified by this intake.
+
+### BF-2026-10-07-23 — Restore tab close separators and the final chat-tab border
+
+Status: Source correction implemented; desktop verification and installation tracked in the follow-up release ledger.
+
+Restore the vertical separator immediately before the × close button where it is missing in
+tab navigation. Restore the trailing/right closing border on the last tab in the chat's child
+tab strip. The screenshot shows chat-child close controls without their separators; the final
+child tab also lacks its closing edge. Match the established main-tab styling and spacing.
+The screenshot is visual evidence only; no page contents or machine-specific paths are retained.
+
+Acceptance: inspect main and chat-child navigation with one and multiple tabs, active/inactive
+and hovered tabs, long truncated titles, and narrow/overflowing strips. Every closable tab retains
+its separator before ×, and the final chat child has a visible closing border without doubled
+inter-tab borders. Preserve the active underline, close-button hit area, keyboard focus and
+existing close/selection behavior. Exercise the desktop UI with synthetic tabs and compare the
+actual rendering to the reported regression. This intake records no implementation or UI fix.
+
+### BF-2026-10-07-24 — Stop remote-chat footer flicker and composer layout shifts
+
+Status: Implementation in progress; operator reports it occurring live on the Work Mac on October 7.
+
+In the remote chat view, a message repeatedly appears and disappears at the bottom, pushing the
+message box upward. Keep the composer stable while remote state updates. The attached still
+image shows the composer and Jump to latest control but does not identify the transient message
+or establish the repeated motion. Subsequent screenshot shows a disconnect notice occupying the primary grid column and the chat
+squeezed into the details column. Source review found the banner inserted as an extra grid child
+and the composer rebuilt with a loading-model notice on refresh. These causes are being corrected;
+no live HC inspection was performed during this intake. The operator offered that Mac for live
+observation. Record only sanitized UI evidence; professional chat contents stay outside this repo.
+
+Investigation: capture the transient footer text and timing, then trace remote refresh/render,
+connection and provider-metadata status changes to the responsible element. Determine whether
+unchanged state is repeatedly inserting/removing a notice or another element is changing height;
+do not assume Jump to latest, network recovery or model metadata is the cause from this image.
+
+Acceptance: observe multiple refresh cycles in idle and streaming remote chats, while typing and
+while reading older messages, including transient disconnect/reconnect and real error states.
+Unchanged status must not flash or repeatedly shift the composer, transcript or scroll position.
+Keep genuine loading/error feedback visible and actionable without repeated layout churn; preserve
+draft text, caret/focus, attachments, selected options and Send/Queue/Steer/Stop behavior. Check
+local-chat parity and wide/narrow desktop layouts. Exercise the desktop UI with synthetic remote
+state updates and verify the reported HC scenario separately when available; a static screenshot
+or build alone does not establish that an intermittent flicker is fixed. Run required execution/
+persistence checks if the eventual correction touches those paths.
+
+### BF-2026-10-07-25 — Release automation connections and retain resumable tabs
+
+Status: Source implemented; validation and installation tracked in the follow-up release ledger.
+
+Release active automation ownership and Playwright connections when a model turn completes,
+fails or is cancelled. Preserve tab ID, chat placement, page state and history so the same chat
+can discover and reuse its existing tabs on continuation. Separate the resumable chat association
+from an active connection; do not grant unrelated chats access. Explicit revocation/move must
+clear the association. Restored descriptors after app restart remain subject to Agent access;
+never persist credentials or browser-control grants in the workspace descriptor file.
+Verify continuation, unload/reload, revocation and failed/cancelled turn cleanup.
+
+### BF-2026-10-07-26 — Replace full-history polling and bound retained chat views
+
+Status: Source implemented; validation and installation tracked in the follow-up release ledger.
+
+Use lightweight summaries for the application refresh loop. Fetch the selected chat's history
+on demand, page earlier events and send incremental changes with cursor recovery. Handle changes
+to existing events as well as appends/streaming without duplicating or dropping messages.
+Bound inactive rendered views and completed host history caches while preserving drafts,
+selected tabs, durable history, live provider references and reading position. Verify long
+histories, multiple chats, stale cursors and reconnects. This is not authorization to delete chats.
+
+### BF-2026-10-07-27 — Throttle inactive browser tabs with visible/automation exceptions
+
+Status: Source implemented; validation and installation tracked in the follow-up release ledger.
+
+Enable background throttling on inactive browser pages. Visible tabs and pages under active
+automation are exempt; restore throttling when those exceptions end. Preserve appropriate audio
+activity exceptions. Throttling keeps pages loaded and must not discard forms or navigate/reload
+them. Do not conflate this request with aggressive unloading or a new memory-budget policy.
+Exercise actual Electron visibility transitions and temporary automation exceptions.
+
+### BF-2026-10-07-28 — Reveal and highlight the current tab in overview
+
+Status: Source implemented; validation and installation tracked in the follow-up release ledger.
+
+When overview opens, highlight the currently visible tab and scroll its card into view. Keep the
+overview vertically scrollable with many cards, keyboard reachable and scoped to main/chat/Team
+navigation as appropriate. Test a selected card below the initial viewport and reopening after
+changing selection, without navigating or duplicating the underlying tab.
+
 ## October 7 0.2.4 rollout
 
 The [implementation ledger](2026-10-07-implementation.md) records current scope and acceptance.
@@ -205,7 +399,7 @@ capacity, catalog changes, and unavailable saved selections in focused tests and
 
 ### BF-2026-10-07-04 — Widen and simplify the new chat dialog
 
-Current status: Implemented for local composer and configured remote folders; new arbitrary remote roots require owning-Mac configuration. See [implementation and acceptance](2026-10-07-implementation.md).
+Current status: Source implemented, but operator visual acceptance reopened after 0.2.4 review. BF-20/21 queue compact toolbar and attachment corrections. New arbitrary remote roots require owning-Mac configuration. See [implementation and acceptance](2026-10-07-implementation.md).
 
 Replace the tall form with a substantially wider desktop dialog, initially targeting about
 1,240 CSS pixels subject to viewport margins, and use the existing continued-chat composer styling.

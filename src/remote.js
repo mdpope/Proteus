@@ -1,3 +1,4 @@
+import { chatDelta } from './chat-deltas.js';
 import fs from 'node:fs';
 import { toolPresentation } from '../public/tool-presentation.js';
 import { agentName } from '../public/agent-name.js';
@@ -262,7 +263,7 @@ export class RemoteHost {
       }else result=this.service.contentTabs.get(args.scope,args.id);
       return {...result,tabs:result.tabs.filter(tab=>tab.type!=='document'||canDocuments)};
     }
-    if (method === 'chat.get') { const run = engine.getRun(args.id); peer.runId = run.id; return remoteRun(run, Math.max(0, Math.floor(Number(args.offset) || 0)), engine.permissions, args.beforeEvent); }
+    if (method === 'chat.get') { const run = engine.getRun(args.id); peer.runId = run.id;peer.summaryOnly=args.watch==='summary'; const view=remoteRun(run, Math.max(0, Math.floor(Number(args.offset) || 0)), engine.permissions, args.beforeEvent);return args.historyCursor?chatDelta(run,view,args.historyCursor):{...view,...(!args.offset&&args.beforeEvent===undefined?chatDelta(run,view):{})}; }
     if (method === 'chat.rename') return this.api('/api/chat-title', pick(args, ['id', 'title', 'expectedTitleRevision']));
     if (method === 'chat.review') return engine.reviewFailure(args.id,args.expectedFailureEventAt);
     if (method === 'chat.archive') {if(typeof args.archived!=='boolean')throw new Error('Choose Archive or Unarchive.');return engine.lifecycle(args.id,args.archived?'archive':'unarchive',pick(args,['expectedUpdatedAt','expectedArchivedAt']));}
@@ -342,11 +343,12 @@ export class RemoteHost {
     const state = remoteState(this.service); const signature = JSON.stringify(state);
     if (signature !== this.signature) { this.signature = signature; this.broadcast('state', state); }
     const watched = new Set([...this.peers.values()].filter(p => p.device).map(p => p.runId).filter(Boolean));
+    for(const id of this.runSignatures?.keys()||[])if(!watched.has(id))this.runSignatures.delete(id);
     for (const id of watched) {
       if (!this.service.engine.runs.has(id)) continue;
-      const run = remoteRun(this.service.engine.getRun(id), 0, this.service.engine.permissions); const hash = JSON.stringify(run);
+      const run = remoteRun(this.service.engine.getRun(id), 0, this.service.engine.permissions); const hash = createHash('sha256').update(JSON.stringify({...run,observedAt:undefined})).digest('hex');
       if (this.runSignatures?.get(id) === hash) continue;
-      this.runSignatures ??= new Map(); this.runSignatures.set(id, hash); this.broadcast('run', run, id);
+      this.runSignatures ??= new Map(); this.runSignatures.set(id, hash);const summaryOnly=[...this.peers.values()].filter(peer=>peer.device&&peer.runId===id).every(peer=>peer.summaryOnly);this.broadcast(summaryOnly?'run.changed':'run',summaryOnly?{id,status:run.status,updatedAt:run.updatedAt}:run,id);
     }
   }
   broadcast(event, data, runId) {

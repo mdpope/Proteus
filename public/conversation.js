@@ -19,6 +19,8 @@ function groupActivity(entries){
 }
 export function conversation(target, run, options) {
   let view = views.get(run.id);
+  if(view){views.delete(run.id);views.set(run.id,view);}
+  for(const [id,cached] of views)if(views.size>=4&&id!==run.id&&!cached.shell.isConnected)forgetConversation(id);
   if (!view) {
     const shell = document.createElement('div'); shell.className = 'conversation-shell';
     shell.innerHTML = '<div class="conversation" id="conversation" tabindex="0" aria-label="Conversation"><div class="conversation-messages"></div></div><button class="jump-latest" hidden>↓ Jump to latest</button>';
@@ -139,6 +141,7 @@ export function conversation(target, run, options) {
       let actions=node.querySelector('.message-actions');if(!actions){actions=document.createElement('div');node.append(actions);}
       node.messageActions=mountMessageActions(actions,{key:run.id+':'+entry.key,text:entry.text,rendered:body,copy:options.copy,notify:options.notify});
     }else if(node.messageActions){node.messageActions.destroy();node.querySelector('.message-actions')?.remove();node.messageActions=null;}
+    if(entry.role==='user'&&options.edit){let edit=node.querySelector('[data-edit-message]');if(!edit){edit=document.createElement('button');edit.dataset.editMessage='';edit.className='subtle';edit.textContent='Edit and resend';node.append(edit);}edit.onclick=()=>options.edit(entry);}
     place(node); nodes.delete(entry.key);
   }
   for (const node of nodes.values()){node.messageActions?.destroy();node.remove();}

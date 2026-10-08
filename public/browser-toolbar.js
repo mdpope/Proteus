@@ -16,7 +16,7 @@ export function browserAddress(prefix, label) {
 
 export function updateAgentAccess(button, info = {}) {
   if (!button) return;
-  const enabled = !!(info.shared || info.owner);
+  const enabled = !!(info.shared || info.owner || info.resumeOwner);
   const description = enabled
     ? 'Agent access ON — Agents may interact with this tab. Click to revoke access, disconnect automation and cancel pending agent actions.'
     : 'Agent access OFF — Private tab. Agents cannot interact with it. Click to allow agents to use this tab.';
