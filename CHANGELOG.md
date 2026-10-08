@@ -1,5 +1,12 @@
 # Changes
 
+## 0.2.7 — October 7, 2026
+
+- Keep the chat child-tab strip flush with the workspace across shell, local Markdown, remote file, browser and conversation views. Its borders and close controls no longer inherit content padding, and document scrolling leaves navigation visible.
+- Desktop-only correction; website and native clients remain on 0.2.6.
+
+Validation and installation status: `docs/2026-10-07-tab-layout-release.md`.
+
 ## 0.2.6 — October 7, 2026
 
 - Separate User Chats, Scheduled Tasks and Internet Searches while preserving chat filters; show seven recent user chats and searches without scheduled-run sidebar noise.

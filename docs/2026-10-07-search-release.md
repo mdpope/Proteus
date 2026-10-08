@@ -55,7 +55,7 @@ Source `cb1d02253c63bc0bf45eaeaf856cb0219d09d8f4` is built and published.
 | Website | Release `20261008T040237Z` active; 9,212 files matched, six public built assets matched, 14/14 endpoint checks passed. Runtime configuration, schema and protected data preserved; rollback release retained. |
 | iPad | Installed and launched 0.2.6 (2610.7.3); six data files, preferences and both destination identities preserved. Original signer, profile and entitlements matched. |
 | iPhone | Installed and launched 0.2.6 (2610.7.3) after the operator unlocked it; the same data, signing and pairing checks passed. |
-| Work Mac | Still 0.2.4 when checked. Signed 0.2.6 is staged with all 151 runtime hashes verified. Installation awaits the direct approval requested in the HC chat, which cannot read this chat’s authorization. |
+| Work Mac | Subsequently installed and running 0.2.6. HC verified all 151 runtime hashes, original signer, five pairings, credentials/grants, chats, schedules and tab history/order; relay and paired Mac online. Full cold backups retained. No model turns sent during installation validation. |
 
 The operator’s old remote Copilot chat failed while executing on HC 0.2.4. The viewer’s 0.2.6
 installation cannot provide tools to an older remote execution host. A temporary connection/auth

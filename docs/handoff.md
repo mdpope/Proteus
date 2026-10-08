@@ -5,13 +5,16 @@
 > the historical completion claims below. It reviews all 22 + 28 build items and current reports;
 > working-tree corrections are not installed release acceptance.
 
+## October 7 desktop tab-layout correction
+
+0.2.7 moves the child-tab strip outside view-specific padding and scrolling. Both Mac installations are authorized; [the tab-layout release ledger](2026-10-07-tab-layout-release.md) tracks validation and deployment. HC has now completed its verified 0.2.6 installation.
+
 ## October 7 search and chat release
 
 The operator superseded the post-0.2.5 deployment hold with “build it, deploy it, validate it”,
 then added approval details, document tabs, rename persistence, Enter-to-send and queued steering.
 These changes are implemented in source `cb1d0225`. Build Mac, website, iPhone and iPad
-have verified 0.2.6 installations. HC remains on 0.2.4 with 0.2.6 staged, awaiting direct approval
-in its installation chat because that chat cannot access the originating authorization. Start with
+have verified 0.2.6 installations. HC subsequently completed its approved, verified 0.2.6 installation. Start with
 [the search release ledger](2026-10-07-search-release.md) for validation and per-target installation
 status. Source completion is separate from deployment and live-provider acceptance.
 

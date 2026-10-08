@@ -10,11 +10,15 @@ Maintain this as the single backlog. Design rationale is in `decisions.md`; rece
 retained as acceptance criteria; the installed versus unverified state is summarized immediately
 below and in `content-workspace-release.md`.
 
+## October 7 desktop tab-layout correction
+
+BF-2026-10-07-41: Fix shell and Markdown/file child-tab borders and spacing across local/remote chat views. Implemented for 0.2.7; both Mac deployments authorized. See [the tab-layout release ledger](2026-10-07-tab-layout-release.md) for validation and installation status.
+
 ## October 7 post-0.2.5 intake — implementation and deployment authorized
 
 The operator's subsequent “build it, deploy it, validate it” supersedes the initial hold.
 All items below are implemented in the 0.2.6 source batch. Build Mac, website, iPad and iPhone
-are installed; HC is staged pending its direct approval. Validation and individual installation
+are installed; HC subsequently completed its verified 0.2.6 installation. Validation and individual installation
 status are recorded in [the release ledger](2026-10-07-search-release.md). Private screenshots,
 actual search queries, document names and workplace content remain outside Git.
 

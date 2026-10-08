@@ -628,7 +628,7 @@ async function closeChildTab(tab){
   saveWorkspace();render();
   } catch(error) { if(state.tabs.some(item=>item.id===previous))state.tab=previous;if(previousChild&&state.tabs.some(item=>item.id===previousChild))selectedChildren.set(tab.parentId,previousChild);render();throw error; }
 }
-function replaceChatContent(html){const main=$('#main'),bar=$('#chat-subtabs');const template=document.createElement('template');template.innerHTML=html;for(const node of [...main.childNodes])if(node!==bar)node.remove();main.append(template.content);}
+function replaceChatContent(html){$('#main').innerHTML=html;}
 function renderChatSubtabs(){
   const parent=selectedChatParent();if(!parent){cleanupChatEdges?.();$('#chat-subtabs')?.remove();return;}
   const children=state.tabs.filter(tab=>tab.parentId===parent.id);
@@ -637,7 +637,8 @@ function renderChatSubtabs(){
   cleanupChatEdges?.();const previousScroll=$('#chat-subtabs .chat-subtab-list')?.scrollLeft||0;$('#chat-subtabs')?.remove();
   const bar=document.createElement('nav');bar.id='chat-subtabs';bar.dataset.signature=signature;bar.setAttribute('aria-label','Chat tabs');
   bar.innerHTML=`<div class="chat-subtab-list"><button class="${state.tab===parent.id?'selected':''}" data-chat-subtab="${escape(parent.id)}" title="${escape(parent.label)}">${pairedBubbles}<span>Chat</span></button>${children.map(tab=>`<div class="chat-subtab ${state.tab===tab.id?'selected':''}"><button data-chat-subtab="${escape(tab.id)}" title="${escape(tab.label)}">${tab.type==='browser'?browserTabIcon(tab.info,escape):tab.type==='terminal'?'⌘':'▤'}<span>${escape(tab.label)}</span></button><button data-chat-child-close="${escape(tab.id)}" aria-label="Close ${escape(tab.label)}">×</button></div>`).join('')}</div><details class="chat-tab-add"><summary aria-label="Add tab to chat" title="Add tab to chat">＋</summary><div class="chat-tab-add-options">${addTabMenuItems('chat')}</div></details>`;
-  $('#main').prepend(bar);
+  // Navigation belongs to the workspace, independent of each content view's padding/scroll.
+  $('#main').before(bar);
   bar.querySelectorAll('[data-chat-subtab]').forEach(button=>button.onclick=()=>{const selected=state.tabs.find(tab=>tab.id===button.dataset.chatSubtab);if(!selected)return;state.tab=selected.id;selectedChildren.set(parent.id,selected.id);if(selected.type==='browser')selectBrowserTab(selected.info);else render();});
   const childList=bar.querySelector('.chat-subtab-list');childList.scrollLeft=previousScroll;cleanupChatEdges=bindTabEdges(childList);bindTabReorder(childList,'.chat-subtab',node=>node.querySelector('[data-chat-subtab]')?.dataset.chatSubtab,(source,target,after)=>reorderVisibleTabs(source,target,after,parent.id));
   bar.querySelectorAll('[data-chat-child-close]').forEach(button=>button.onclick=event=>{event.stopPropagation();const tab=state.tabs.find(item=>item.id===button.dataset.chatChildClose);if(tab)void closeChildTab(tab).catch(error=>toast(error.message));});

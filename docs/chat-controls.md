@@ -124,3 +124,5 @@ Approval messages include short intent plus original request details when record
 payloads are redacted and bounded. File-search patterns remain visible without opening Details.
 Closing a chat's main tab unloads its child browser views but retains their URLs and order; reopening
 the chat restores unloaded tabs rather than creating duplicate destinations.
+
+Chat child navigation is a fixed-height workspace row above the content panel. Conversation, shell, browser and local/remote document views share the same full-width strip; their padding and scroll positions do not affect its borders or close controls.

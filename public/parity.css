@@ -77,8 +77,7 @@ body.sidebar-minimized #sidebar:hover .nav-icon,body.sidebar-minimized #sidebar:
 #team-subtabs .team-tab-add{margin:auto 0 auto 6px}
 #team-content:has(.terminal-page){padding:0;overflow:hidden}
 #team-content .terminal-page{height:100%;padding:20px}
-#chat-subtabs{display:flex;align-items:stretch;justify-content:space-between;gap:8px;min-height:43px;margin:-22px -24px 16px;padding:0 12px;border-bottom:1px solid var(--line);flex-shrink:0;position:relative;z-index:4;background:var(--bg)}
-#main.browser-main #chat-subtabs{margin:0}
+#chat-subtabs{display:flex;align-items:stretch;justify-content:space-between;gap:8px;min-height:43px;margin:0;padding:0 12px;border-bottom:1px solid var(--line);flex-shrink:0;position:relative;z-index:4;background:var(--bg)}
 .chat-subtab-list{display:flex;align-items:stretch;min-width:0;overflow-x:auto;scrollbar-width:none;mask-image:linear-gradient(to right,#000 0%,#000 calc(100% - 32px),transparent 100%)}
 .chat-subtab-list::-webkit-scrollbar{display:none}
 #chat-subtabs button,#chat-subtabs summary{background:transparent;border:0;border-radius:0;white-space:nowrap;padding:0 13px;font-size:12px}
@@ -160,7 +159,7 @@ body.sidebar-minimized #sidebar [data-page="team"] .nav-icon,body.sidebar-minimi
 .attachment-image-preview .heading{display:flex;justify-content:space-between;align-items:center;gap:12px}
 
 /* October 5 tab and composer corrections. */
-#chat-subtabs{padding:0;margin-top:-22px;margin-left:-24px;margin-right:-24px}
+#chat-subtabs{padding:0}
 #team-subtabs{padding:0}
 #team-subtabs .team-subtab-list>[data-team-tab="standup"]+.team-tab{border-left:1px solid var(--line)}
 #chat-subtabs .chat-subtab-list,#team-subtabs .team-subtab-list{mask-image:none}
@@ -192,7 +191,7 @@ body.sidebar-minimized #sidebar [data-page="team"] .nav-icon,body.sidebar-minimi
 .remote-run-main #peer-run-details{min-height:0;overflow:auto}
 .remote-run-main .peer-status{flex-shrink:0;margin-bottom:8px}
 .remote-run-main #peer-reply-form{margin-top:8px}
-@media(max-width:900px){#chat-subtabs{margin-top:-16px;margin-left:-16px;margin-right:-16px}.remote-run-main #peer-run-details{display:none}.remote-run-main.show-chat-details #peer-run-details{display:flex}.remote-run-main.show-chat-details .chat-pane{display:none}}
+@media(max-width:900px){.remote-run-main #peer-run-details{display:none}.remote-run-main.show-chat-details #peer-run-details{display:flex}.remote-run-main.show-chat-details .chat-pane{display:none}}
 .chat-title-line{display:flex;align-items:center;gap:4px;min-width:0}.chat-title-line h1{min-width:0}.chat-rename{flex:0 0 auto;width:31px;height:31px;padding:0;border:0;background:transparent;color:var(--soft);font-size:17px}.chat-rename:hover{background:#ffffff12;color:var(--ink)}.chat-rename:focus-visible{outline:2px solid var(--accent)}
 .remote-run-main #peer-toggle-chat-details{display:none}@media(max-width:900px){.remote-run-main #peer-toggle-chat-details{display:inline-flex}}
 .overview-group{margin:0 0 26px}.overview-group>h2{font-size:15px;margin:0 0 12px;padding:0 2px;color:var(--ink)}.overview-group .browser-overview-grid{align-items:start}.browser-overview-card .browser-overview-preview>span{font-size:36px}.browser-overview-card .note{text-transform:capitalize}

@@ -513,3 +513,7 @@ consuming the next queue entry. Failure is visible and leaves the original queue
 
 Search promotion mutates only the current run’s classification and is idempotent. It does not
 reject an unrelated streaming-event revision: no transcript, model choice or title is overwritten.
+
+## October 7 — Keep chat navigation outside view padding
+
+The child-tab strip belongs directly to the workspace above its scrollable content. Per-view negative margins coupled navigation to conversation padding and broke shell/document borders at normal and narrow sizes. A shared workspace row also keeps navigation mounted through document scroll and asynchronous chat replacement without per-view CSS offsets.
