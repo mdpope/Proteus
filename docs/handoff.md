@@ -9,7 +9,9 @@
 
 The operator superseded the post-0.2.5 deployment hold with “build it, deploy it, validate it”,
 then added approval details, document tabs, rename persistence, Enter-to-send and queued steering.
-These changes are implemented in the 0.2.6 working tree. Start with
+These changes are implemented in source `cb1d0225`. Build Mac, website, iPhone and iPad
+have verified 0.2.6 installations. HC remains on 0.2.4 with 0.2.6 staged, awaiting direct approval
+in its installation chat because that chat cannot access the originating authorization. Start with
 [the search release ledger](2026-10-07-search-release.md) for validation and per-target installation
 status. Source completion is separate from deployment and live-provider acceptance.
 

@@ -13,7 +13,8 @@ below and in `content-workspace-release.md`.
 ## October 7 post-0.2.5 intake — implementation and deployment authorized
 
 The operator's subsequent “build it, deploy it, validate it” supersedes the initial hold.
-All items below are implemented in the 0.2.6 source batch; validation and individual installation
+All items below are implemented in the 0.2.6 source batch. Build Mac, website, iPad and iPhone
+are installed; HC is staged pending its direct approval. Validation and individual installation
 status are recorded in [the release ledger](2026-10-07-search-release.md). Private screenshots,
 actual search queries, document names and workplace content remain outside Git.
 
