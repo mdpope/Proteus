@@ -3,7 +3,15 @@ import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 
-export const defaultHome = () => process.env.PROTEUS_HOME || path.join(os.homedir(), 'Library', 'Application Support', 'Proteus');
+export function applicationHome({ platform = process.platform, home = os.homedir(), env = process.env } = {}) {
+  if (env.PROTEUS_HOME) return env.PROTEUS_HOME;
+  if (platform === 'linux') {
+    const base = env.XDG_DATA_HOME && path.isAbsolute(env.XDG_DATA_HOME) ? env.XDG_DATA_HOME : path.join(home, '.local', 'share');
+    return path.join(base, 'proteus');
+  }
+  return path.join(home, 'Library', 'Application Support', 'Proteus');
+}
+export const defaultHome = () => applicationHome();
 export const readJSON = (file, fallback) => {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); }
   catch (error) { if (error.code === 'ENOENT' && fallback !== undefined) return fallback; throw error; }

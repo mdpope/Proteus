@@ -1,3 +1,12 @@
+## Local Linux adaptation of current 0.2.19
+
+The Linux branch imports the verified accepted canonical Mac source (`82cd923`, fingerprint
+`eb9548dbcce9`) and adds independent packaging, XDG paths and desktop lifecycle handling.
+607 Node checks, current tab UI acceptance, live packaged Codex approvals/restart/cancel/relay
+and packaged native terminal input/output pass on Manjaro x86-64. See `linux-app.md`.
+Physical iOS, other provider authentication, Life database credential resolution, ARM64 and broader
+Linux distribution acceptance remain deferred. Mac package acceptance remains a separate gate.
+
 ## October 14 final follow-up scope — 0.2.19 / native 2610.14.2 candidate
 
 The operator withdrew redirect pausing after Microsoft sign-in failures and explicitly requests full

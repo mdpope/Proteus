@@ -977,3 +977,11 @@ Same-URL title metadata still updates without a new visit. A native cached Tabs 
 local title selection while owner mutations remain disabled offline, and does not create a
 connection alert for that cache read. History reconstruction rejects the privileged app origin
 in both native and logical restoration; normal agent tab listings omit complete backstacks.
+# Linux source and build ownership
+
+The current Linux build uses the verified accepted 0.2.19 source archive from transfer commit
+`82cd923`, not the older `main` checkout or an independently reconstructed Mac artifact. Record
+the upstream source identity separately from the Linux runtime fingerprint. Linux packaging
+rebuilds only its copied PTY, retains pinned dependencies and leaves Mac signing/iOS files alone.
+Platform data paths and desktop lifecycle changes stay conditional; secure-storage requirements,
+provider approvals and relay protocol remain intact. Keep private prelaunch backups outside Git.

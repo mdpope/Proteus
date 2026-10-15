@@ -25,7 +25,9 @@
     "ios:build": "node scripts/apple-build.mjs build",
     "ios:test": "node scripts/apple-build.mjs test",
     "terminal:build": "node scripts/build-terminal.mjs",
-    "postinstall": "node scripts/prepare-pty.mjs"
+    "postinstall": "node scripts/prepare-pty.mjs",
+    "package:linux": "node scripts/package-linux.mjs",
+    "test:linux": "node test/linux-current.mjs"
   },
   "dependencies": {
     "@ghostery/adblocker-electron": "2.20.1",

@@ -4,6 +4,9 @@ A local control room for scheduled AI work: set the cadence, watch each run, and
 conversation when it needs you. Provider-independent scheduling and storage, with GitHub Copilot,
 Codex and Claude adapters, native Omi processing schedules, and optional native Life records.
 
+For the current Linux/Codex package, source identity and local build steps, see
+[Linux setup](docs/linux-app.md).
+
 ## Omi, Life and Apple builds
 
 The **Omi** section observes the installed recording pipeline and prepares disabled replacement

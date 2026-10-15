@@ -1,3 +1,11 @@
+## Linux port of accepted October 14 source
+
+The local Linux branch imports the exact accepted 0.2.19 source companion from transfer commit
+`82cd923`, verified against all 877 archive manifest hashes. See `linux-app.md` and
+`linux-upstream-source.json`. Linux packaging is separate from Mac signing/iOS builds, rebuilds
+the copied PTY for Electron, and records its own runtime fingerprint. The earlier Linux build
+from `main` is historical and retained separately. Do not use that old source for current work.
+
 ## October 14 final follow-up scope — 0.2.19 / native 2610.14.2 candidate
 
 The operator withdrew redirect pausing after Microsoft sign-in failures and explicitly requests full

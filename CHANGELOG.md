@@ -1,3 +1,7 @@
+## Linux adaptation of accepted 0.2.19
+
+- Build from the verified canonical 0.2.19 Mac source companion, retaining current workspace/tab/browser behavior. Add separate Linux packaging with source provenance and Electron PTY rebuild, XDG storage, user executable discovery, Linux tray/minimize/Quit controls and user-shell defaults. Preserve Mac packaging/signatures, native clients, protocol and pinned dependencies.
+
 ## 0.2.19 — Navigation, redirect history and scheduled conversations
 
 - Relocate the saved chat-tab descriptor from main navigation into its workspace in the owner store, independently of paused browser synchronization. Repeated Move converges duplicate placements while preserving other tabs, custom names, dates and metadata.
