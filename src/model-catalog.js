@@ -1,3 +1,4 @@
+import { uniqueModels } from '../public/model-choices.js';
 // Provider adapters publish this common capability shape; clients never invent model limits.
 const positive = value => Number.isFinite(value) && value > 0 ? value : null;
 const identifiers = values => [...new Set((Array.isArray(values) ? values : []).filter(v => typeof v === 'string' && /^[a-zA-Z0-9_.-]{1,80}$/.test(v)))];
@@ -34,7 +35,7 @@ export class ModelCatalog {
       try {
         const result = reported = await this.load();
         if (result.error || result.available === false) throw new Error(result.error || 'Provider unavailable.');
-        this.value = { ...result, stale: false, attemptedAt: null, checkedAt: new Date(this.now()).toISOString(), refreshIntervalMs: this.ttl, error: null };
+        this.value = { ...result, models: uniqueModels(result.models), stale: false, attemptedAt: null, checkedAt: new Date(this.now()).toISOString(), refreshIntervalMs: this.ttl, error: null };
       } catch (error) {
         this.value = { ...(this.value || { available: false, models: [], checkedAt: null }), ...(reported?.authenticationCommand ? { authenticationCommand: reported.authenticationCommand } : {}), stale: true, error: error.message, attemptedAt: new Date(this.now()).toISOString(), refreshIntervalMs: this.ttl };
       }

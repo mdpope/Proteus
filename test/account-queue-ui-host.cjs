@@ -1,0 +1,12 @@
+const {app,BrowserWindow}=require('electron');let service,closing=false;
+exports.service=()=>service;
+app.whenReady().then(async()=>{
+ const {startServer}=await import('../src/server.js');const provider={acceptedMediaTypes:['image/png'],status:async()=>({available:true,models:[{id:'fixture',name:'Synthetic model',controls:{reasoningEfforts:['high'],contextTiers:[{id:'default'}],serviceTiers:[]}}]}),selectedMcp:run=>run.schedule.mcpServers,mcpStatus:async()=>({servers:[{name:'example',status:'connected',observedAt:new Date().toISOString(),scope:'active-chat',remote:true}]}),mcpHealth:async()=>({servers:[{name:'example',status:'connected',authentication:'token-accepted'}]}),steer:async(run,prompt)=>{service.engine.event(run,'assistant','Steered: '+prompt);},run:async({ask,emit,signal})=>{await ask({type:'question',question:'Synthetic question for dismissal'});emit('assistant','Synthetic response streaming');await new Promise(resolve=>signal.addEventListener('abort',resolve,{once:true}));}};
+ service=await startServer({home:process.env.PROTEUS_HOME,port:0,timers:false,withSeed:false,providers:{copilot:provider}});
+ service.engine.createRun({schemaVersion:1,id:'queue-ui',name:'Queue and account fixture',chatTitleManual:true,enabled:false,cron:'0 9 * * *',timezone:'UTC',provider:'copilot',model:'fixture',workspace:{cwd:process.env.PROTEUS_HOME,additionalDirectories:[]},mcpServers:{example:{type:'http',url:'https://example.test/mcp'}},misfire:'skip',prompt:'Synthetic fixture'},'chat');
+ if(process.env.PROTEUS_TEST_LONG_HISTORY==='1'){
+  const source=service.engine.listRuns()[0],run={...source,id:'long-history-fixture',title:'Long mixed history fixture',status:'completed',pending:null,turns:[],events:Array.from({length:2507},(_,i)=>({role:i%24===0?'user':i%24===1?'assistant':i%2?'system':'tool',text:i%24<2||i===2506?'History marker '+i+' '+('Synthetic rich **content**. '.repeat(i%24===1?50:3)):'Synthetic activity '+i,data:i%24<2||i===2506?{}:i%2?{permission:{automatic:true,kind:'read'}}:{tool:{id:'tool-'+i,name:'Synthetic read',status:'completed',output:'Synthetic result'}},at:'2026-10-10T18:00:00Z'}))};
+  service.engine.runs.set(run.id,run);service.engine.persist(run);
+ }
+ const window=new BrowserWindow({width:1200,height:950,webPreferences:{contextIsolation:true,nodeIntegration:false,sandbox:true}});await window.loadURL(service.url);
+});app.on('before-quit',event=>{if(closing||!service)return;event.preventDefault();closing=true;service.close().finally(()=>app.quit());});

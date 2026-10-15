@@ -13,13 +13,13 @@ const until=async predicate=>{for(let i=0;i<100;i++){if(await predicate())return
 const saved=()=>JSON.parse(fs.readFileSync(settingsFile));
 const session=()=>JSON.parse(fs.readFileSync(path.join(home,'desktop-workspace.json')));
 async function launch(){
- app=await electron.launch({args:['.','--user-data-dir='+path.join(home,'electron')],env:{...process.env,PROTEUS_HOME:home,COPILOT_HOME:path.join(home,'copilot'),PORT:'0'},timeout:60000});
+ app=await electron.launch({args:['.','--use-mock-keychain','--user-data-dir='+path.join(home,'electron')],env:{...process.env,PROTEUS_HOME:home,COPILOT_HOME:path.join(home,'copilot'),PORT:'0'},timeout:60000});
  page=await app.firstWindow();page.setDefaultTimeout(15000);page.on('pageerror',error=>errors.push(error.message));
  await page.route('**/api/usage',route=>route.fulfill({json:{providers:Object.fromEntries(['copilot','codex','claude'].map((id,i)=>[id,{windows:[{id:'test',label:'Synthetic allowance',remainingPercent:70+i,resetAt:'2030-01-01T00:00:00Z'}]}]))}}));
  await page.locator('#tab-add-menu').waitFor();
 }
 try{
- await launch();await page.locator('#home-release-notes h2').first().waitFor();await page.locator('#home-release-notes li').first().waitFor();assert.ok(await page.locator('#home-release-notes li').count()>0,'Home release notes render readable Markdown lists');
+ await launch();await page.locator('[data-home-latest] h2').first().waitFor();await page.locator('[data-home-latest] li').first().waitFor();assert.ok(await page.locator('[data-home-latest] li').count()>0,'Home release notes render readable Markdown lists');
  await page.locator('[data-page="engine"]').click();await page.locator('[data-engine-section="setup"]').click();
  assert.equal(await page.locator('#provider-usage').isVisible(),false,'Existing disabled flag is preserved');
  await page.locator('#settings-timezone').fill('America/Denver');
@@ -38,8 +38,9 @@ try{
  await page.locator('#settings-show-usage').check();await page.locator('#provider-usage').waitFor({state:'visible'});await until(()=>saved().appearance.showProviderUsage===true);
  assert.equal(await page.locator('#provider-usage').evaluate(node=>node.classList.contains('usage-collapsed')),true);
  // Failed saves restore the checkbox and leave the persisted preference unchanged.
+ const priorNotice=app.windows().find(window=>window.url().endsWith('/notice.html'));if(priorNotice)await priorNotice.getByRole('button',{name:'Dismiss notification',exact:true}).click();
  await page.route('**/api/settings',route=>route.fulfill({status:409,json:{error:'Synthetic settings conflict'}}));
- await page.locator('#settings-show-usage').uncheck();await page.getByText('Synthetic settings conflict',{exact:true}).waitFor();
+ await page.locator('#settings-show-usage').uncheck();await until(()=>app.windows().some(window=>window.url().endsWith('/notice.html')));const conflictNotice=app.windows().find(window=>window.url().endsWith('/notice.html'));await conflictNotice.getByText('Synthetic settings conflict',{exact:true}).waitFor();await conflictNotice.getByRole('button',{name:'Dismiss notification',exact:true}).click();
  assert.equal(await page.locator('#settings-show-usage').isChecked(),true);assert.equal(saved().appearance.showProviderUsage,true);
  await page.unroute('**/api/settings');
  // Real isolated application restart; never touch the operator's installed application.

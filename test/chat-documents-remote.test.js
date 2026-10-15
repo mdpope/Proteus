@@ -9,7 +9,7 @@ import { atomicJSON } from '../src/files.js';
 import { secret } from '../src/remote-crypto.js';
 import { RemoteClient, until } from './remote-client.mjs';
 
-test('remote linked Markdown needs device grant and exact Mac approval', async t=>{
+test('remote documents allow one-time shares or direct device access with identity and revocation checks', async t=>{
   const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-doc-grant-'));
   atomicJSON(path.join(home,'settings.json'),{schemaVersion:1,provider:'rehearsal',model:'',timezone:'UTC',workspace:{cwd:home,additionalDirectories:[]},skillDirectories:[],mcpServers:{}});
   const file=path.join(home,'brief.md');fs.writeFileSync(file,'# Approved bytes\n');
@@ -21,19 +21,20 @@ test('remote linked Markdown needs device grant and exact Mac approval', async t
   const run={id:'test-chat',status:'completed',title:'Test chat',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),schedule:{provider:'rehearsal',workspace:{cwd:home,additionalDirectories:[]},context:{workspaceId:'default'}},events:[{role:'assistant',text:'Read [brief](brief.md) when needed.'}],usage:{observed:false}};
   app.engine.runs.set(run.id,run);
   const local=async value=>{const response=await fetch(`${app.origin}/api/remote`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${app.token}`},body:JSON.stringify(value)});assert.equal(response.status,200);return response.json();};
-  await assert.rejects(a.request('chat.documents.request',{id:run.id,source:'brief.md'}),/View chat documents is not enabled/);
-  await local({action:'document-access',id:a.device.id,enabled:true});
   const request=await a.request('chat.documents.request',{id:run.id,source:'brief.md'});
   assert.equal(request.status,'pending');assert.equal((await a.request('chat.documents.status',{requestId:request.requestId})).status,'pending');
   await assert.rejects(a.request('chat.documents.read',{requestId:request.requestId}),/not been approved/);
-  await assert.rejects(b.request('chat.documents.read',{requestId:request.requestId}),/View chat documents is not enabled/);
+  await assert.rejects(b.request('chat.documents.read',{requestId:request.requestId}),/not been approved/);
   assert.equal((await app.remote.info()).documentRequests[0].deviceName,a.device.name);
   await local({action:'document-review',requestId:request.requestId,approved:true});
   assert.equal((await a.request('chat.documents.read',{requestId:request.requestId})).content,'# Approved bytes\n');
   fs.writeFileSync(file,'# Changed bytes\n');
   await assert.rejects(a.request('chat.documents.read',{requestId:request.requestId}),/changed/);
+  await local({action:'document-access',id:a.device.id,enabled:true});
+  const direct=await a.request('chat.documents.request',{id:run.id,source:'brief.md'});assert.equal(direct.status,'approved');assert.equal((await a.request('chat.documents.read',{requestId:direct.requestId})).content,'# Changed bytes\n');
   await local({action:'document-access',id:a.device.id,enabled:false});
-  await assert.rejects(a.request('chat.documents.read',{requestId:request.requestId}),/View chat documents is not enabled/);
+  await assert.rejects(a.request('chat.documents.read',{requestId:direct.requestId}),/not been approved/);
+  await assert.rejects(a.request('chat.documents.read',{requestId:request.requestId}),/not been approved/);
 });
 
 test('remote document image and relative link stay inside one exact parent approval',async t=>{
@@ -47,7 +48,6 @@ test('remote document image and relative link stay inside one exact parent appro
   const a=new RemoteClient(RemoteClient.capsule((await app.remote.pairing()).code));clients.push(a);await a.connect();
   const run={id:'assets-chat',status:'completed',title:'Asset chat',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),schedule:{provider:'rehearsal',workspace:{cwd:home,additionalDirectories:[]},context:{workspaceId:'default'}},events:[{role:'assistant',text:'Read [brief](brief.md) when needed.'}],usage:{observed:false}};app.engine.runs.set(run.id,run);
   const local=async value=>{const response=await fetch(`${app.origin}/api/remote`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${app.token}`},body:JSON.stringify(value)});assert.equal(response.status,200);return response.json();};
-  await local({action:'document-access',id:a.device.id,enabled:true});
   const parent=await a.request('chat.documents.request',{id:run.id,source:'brief.md'});assert.equal(parent.assets.length,1);assert.equal(parent.links.length,1);
   await assert.rejects(a.request('chat.documents.asset',{requestId:parent.requestId,assetId:parent.assets[0].assetId}),/not been approved/);
   await local({action:'document-review',requestId:parent.requestId,approved:true});

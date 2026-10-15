@@ -1,5 +1,5 @@
 // Explicit endpoint projection: renderers never receive OAuth tokens or arbitrary HTTP access.
-const allowed = /^(?:\/preferences|\/team-lists(?:\/[a-f0-9-]{36})?|\/links(?:\/[a-f0-9-]{36})?|\/history(?:\/[a-f0-9-]{36})?|\/notifications(?:\/[a-f0-9-]{36})?|\/logs|\/push-subscriptions)?$/;
+const allowed = /^(?:\/browser-profiles(?:\/[a-f0-9-]{36})?|\/preferences|\/team-lists(?:\/[a-f0-9-]{36})?|\/links(?:\/[a-f0-9-]{36})?|\/history(?:\/[a-f0-9-]{36})?|\/notifications(?:\/[a-f0-9-]{36})?|\/logs|\/push-subscriptions)?$/;
 export class AppAccount {
   constructor(life) { this.life = life; }
   async request({ path = '', method = 'GET', body, identity } = {}) {

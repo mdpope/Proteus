@@ -1,0 +1,29 @@
+import {_electron as electron} from 'playwright';
+import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import http from 'node:http';import assert from 'node:assert/strict';
+const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-tab-management-ui-'));
+fs.writeFileSync(path.join(home,'settings.json'),JSON.stringify({schemaVersion:1,provider:'rehearsal',timezone:'UTC',workspace:{cwd:home,additionalDirectories:[]},skillDirectories:[],mcpServers:{}}));
+const fixture=http.createServer((req,res)=>{res.setHeader('content-type','text/html');res.end('<!doctype html><title>Visual fixture</title><style>canvas{display:block}</style><h1>Browser fixture</h1><canvas width="400" height="200"></canvas><output id="result">Waiting</output><script>const c=document.querySelector("canvas"),ctx=c.getContext("2d");ctx.fillStyle="green";ctx.fillRect(0,0,400,200);c.addEventListener("click",()=>document.querySelector("output").textContent="Clicked canvas");c.addEventListener("pointerup",()=>window.dragCompleted=true);console.log("Synthetic console evidence");</script>');});
+await new Promise(resolve=>fixture.listen(0,'127.0.0.1',resolve));let app;
+try{
+ app=await electron.launch({...(process.env.PROTEUS_TEST_EXECUTABLE?{executablePath:process.env.PROTEUS_TEST_EXECUTABLE}:{}),args:[...(process.env.PROTEUS_TEST_EXECUTABLE?[]:['.']),'--use-mock-keychain','--user-data-dir='+path.join(home,'electron')],env:{...process.env,PROTEUS_HOME:home,PORT:'0'},timeout:60000});
+ const shell=await app.firstWindow();await shell.locator('#topbar-home').waitFor({timeout:60000});
+ const command=value=>shell.evaluate(value=>window.desktop.browser(value),value);
+ const url='http://127.0.0.1:'+fixture.address().port;
+ const tab=await command({action:'create',url});await app.evaluate(({app},info)=>{const browser=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser();browser.actions.send({type:'select-tab',info});},tab);await shell.waitForTimeout(500);await command({action:'share',id:tab.id,shared:true});
+ const agent=value=>app.evaluate(({app},value)=>process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser().agent(value,'synthetic'),value);
+ const beforeRead=(await command({action:'list'})).find(item=>item.id===tab.id).lastTouchedAt;
+ const capture=await agent({action:'screenshot',tabId:tab.id});assert.equal(capture.content[1].type,'image');const metadata=JSON.parse(capture.content[0].text);assert.ok(metadata.width>100);assert.equal(metadata.coordinateSpace.startsWith('CSS'),true);assert.equal((await command({action:'list'})).find(item=>item.id===tab.id).lastTouchedAt,beforeRead,'A screenshot is an observation, not an interaction');
+ await agent({action:'coordinate-click',tabId:tab.id,captureId:metadata.captureId,x:100,y:110});
+ assert.match((await agent({action:'snapshot',tabId:tab.id})).snapshot,/Clicked canvas/);
+ await assert.rejects(agent({action:'coordinate-click',tabId:tab.id,captureId:metadata.captureId,x:100,y:110}),/stale/);
+ const framework=await agent({action:'mcp-list',backend:'playwright',tabId:tab.id});assert.ok(framework.tools.some(tool=>tool.name==='browser_snapshot'));
+ const snapshot=await agent({action:'mcp-call',backend:'playwright',tabId:tab.id,tool:'browser_snapshot',arguments:{}});assert.ok(snapshot.content.some(item=>item.type==='text'&&item.text.includes('Browser fixture')),JSON.stringify(snapshot.content.filter(item=>item.type==='text')));
+ await assert.rejects(agent({action:'mcp-list',backend:'developer',tabId:tab.id}),/developer mode/);
+ await command({action:'developer-access',id:tab.id,enabled:true});
+ const developer=await agent({action:'mcp-list',backend:'developer',tabId:tab.id});assert.ok(developer.tools.some(tool=>tool.name==='list_pages'),JSON.stringify(developer.tools.map(tool=>tool.name)));
+ const pages=await agent({action:'mcp-call',backend:'developer',tabId:tab.id,tool:'list_pages',arguments:{}});assert.ok(pages.content.some(item=>item.type==='text'&&item.text.includes('127.0.0.1')),JSON.stringify(pages.content.filter(item=>item.type==='text')));
+ await command({action:'devtools',id:tab.id});assert.equal((await command({action:'list'})).some(info=>info.id===tab.id),true);await command({action:'devtools',id:tab.id,close:true});
+ assert.match((await agent({action:'snapshot',tabId:tab.id})).snapshot,/Browser fixture/);
+ await command({action:'persist',id:tab.id,enabled:true});assert.equal((await command({action:'list'})).find(item=>item.id===tab.id).persist,true);
+ console.log(JSON.stringify({passed:true,visualInput:true,staleCapture:true,playwrightMCP:true,developerMCP:true,scopedPages:true,humanInspectorHandoff:true,persist:true}));
+}finally{await app?.close();await new Promise(resolve=>fixture.close(resolve));fs.rmSync(home,{recursive:true,force:true});}

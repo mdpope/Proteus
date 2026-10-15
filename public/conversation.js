@@ -1,6 +1,7 @@
+import {chatHistoryWindowStart} from './chat-history.js';
 import {bindRuntimeTimer,formatDuration,turnDuration,runtimeTotal,toolDuration,groupDuration} from './runtime.js';
 import { mountMessageActions } from './message-actions.js';
-import { toolPresentation, mountStructured, normalizedTool, activitySummary } from './tool-presentation.js';
+import { toolPresentation, mountStructured, normalizedTool, activitySummary, groupActivity, permissionToolCallId, toolEventTime } from './tool-presentation.js';
 import { agentName } from './agent-name.js';
 import { sentAttachmentPreview, openSentAttachmentPreview } from './chat-attachments.js';
 const views = new Map();
@@ -12,10 +13,8 @@ function readableOutput(value) {
     return JSON.stringify(parsed, null, 2);
   } catch { return value; }
 }
-function groupActivity(entries){
-  const result=[];let batch=[];
-  const flush=()=>{if(batch.length){result.push({key:'activity-'+batch[0].key,role:'activity',items:batch,at:batch.at(-1).at});batch=[];}};
-  for(const entry of entries){if(entry.data?.tool||entry.data?.permission?.automatic){batch.push(entry);continue;}flush();result.push(entry);}flush();return result;
+function rememberDisclosures(body,states){
+  for(const details of body.querySelectorAll('[data-disclosure-key]')){if(details.open)states.add(details.dataset.disclosureKey);else states.delete(details.dataset.disclosureKey);}
 }
 export function conversation(target, run, options) {
   let view = views.get(run.id);
@@ -33,6 +32,23 @@ export function conversation(target, run, options) {
       cancelAnimationFrame(view.frames); view.frames = requestAnimationFrame(() => { view.updating = false; });
     };
     view.position = position;
+    const earlier=document.createElement('div');earlier.className='history-status';earlier.setAttribute('role','status');scroll.prepend(earlier);view.earlier=earlier;
+    view.loadEarlier=async(manual=false)=>{
+      if(!view.more||!view.fetchEarlier||view.paging||(!manual&&view.pageError)||!shell.isConnected)return;
+      if(!manual&&scroll.scrollTop>Math.max(240,scroll.clientHeight*.65))return;
+      const underfilled=scroll.scrollHeight<=scroll.clientHeight+80;
+      if(!manual&&!underfilled&&(!view.historyGestureAvailable||view.updating))return;
+      // Keep the reading gesture available until its already-started cache fill completes.
+      if(view.prefetching&&view.eventStart===(view.run.eventStart||0))return;
+      view.historyGestureAvailable=false;
+      view.paging=true;view.pageError=false;earlier.textContent='Loading earlier messages…';
+      try{if(view.eventStart>(view.run.eventStart||0)){view.renderStart=(view.run.eventStart||0)+chatHistoryWindowStart(view.run.events,view.eventStart-(view.run.eventStart||0));conversation(view.target,view.run,view.options);}else {view.renderStart=Math.max(0,view.eventStart-100);await view.fetchEarlier();}earlier.textContent='';}catch(error){view.pageError=true;const retry=document.createElement('button');retry.textContent='Retry earlier messages';retry.title=error.message;retry.onclick=()=>void view.loadEarlier(true);earlier.replaceChildren(retry);}finally{view.paging=false;if(!view.pageError)requestAnimationFrame(()=>void view.loadEarlier());}
+    };
+    view.prefetch=async()=>{
+      if(!view.fetchEarlier||view.prefetching||view.paging||view.following||!view.run?.eventStart||view.prefetchFailedAt===view.run.eventStart||view.eventStart-view.run.eventStart>=40||scroll.scrollTop>scroll.clientHeight*2)return;
+      view.prefetching=true;const first=view.run.eventStart;try{await view.fetchEarlier();}catch{view.prefetchFailedAt=first;}finally{view.prefetching=false;if(view.historyGestureAvailable)void view.loadEarlier();}
+    };
+    scroll.addEventListener('scroll',()=>{void view.loadEarlier();void view.prefetch();},{passive:true});
     scroll.addEventListener('scroll', () => {
       if (view.updating || !shell.isConnected) return;
       view.top = scroll.scrollTop; view.following = scroll.scrollHeight - scroll.clientHeight - scroll.scrollTop < 40; jump.hidden = view.following;
@@ -43,16 +59,24 @@ export function conversation(target, run, options) {
       jump.hidden = view.following;
     });
     // User input wins even while a streamed update is being laid out.
-    scroll.addEventListener('wheel', event => { if (event.deltaY < 0) { view.updating = false; view.following = false; jump.hidden = false; } }, { passive: true });
+    scroll.addEventListener('wheel', event => { if (event.deltaY < 0) {const now=Date.now();if(now-(view.lastHistoryGesture||0)>100){view.historyGestureAvailable=true;view.lastHistoryGesture=now;} view.updating = false; view.following = false; jump.hidden = false; void view.loadEarlier(); } }, { passive: true });
+    scroll.addEventListener('touchstart',()=>{view.historyGestureAvailable=true;view.updating=false;view.following=false;},{passive:true});
+    scroll.addEventListener('keydown',event=>{if(['ArrowUp','PageUp','Home'].includes(event.key)){view.historyGestureAvailable=true;view.updating=false;view.following=false;void view.loadEarlier();}});
     jump.onclick = () => { view.following = true; position(); };
     view.observer = new ResizeObserver(position); view.observer.observe(messages); view.observer.observe(scroll);
   }
+  view.run=run;view.options=options;view.target=target;
+  const transportStart=run.eventStart||0;
+  view.renderStart=Math.max(transportStart,view.renderStart??transportStart+chatHistoryWindowStart(run.events));
+  view.more=view.renderStart>0;view.fetchEarlier=options.loadEarlier;
+  view.scroll.dataset.eventStart=String(view.renderStart);view.scroll.dataset.eventCount=String(run.eventCount??run.events.length);
+  const oldStart=view.eventStart,oldHeight=view.scroll.scrollHeight,oldTop=view.scroll.scrollTop;view.eventStart=view.renderStart;
   view.verified=run.runtimeVerified!==false;const receipt=Date.now(),hostAt=Date.parse(run.observedAt),now=()=>Number.isFinite(hostAt)?hostAt+Date.now()-receipt:Date.now();
   const durationText=value=>formatDuration(value)+(view.verified?'':' · offline, unverified');
   bindRuntimeTimer(document.querySelector('[data-runtime-total]'),()=>durationText(runtimeTotal(run.turns,now(),view.verified))+((run.timingPartial||run.turns?.some(t=>t.incomplete))?' · partial':''));
   view.updating = true;
   if(view.shell.parentElement!==target)target.replaceChildren(view.shell);
-  const entries = groupActivity([...run.events.map((event, index) => ({ key: `event-${(run.eventStart||0)+index}`, ...event })), ...Object.entries(run.liveMessages || {}).map(([id, text]) => ({ key: `stream-${id}`, role: 'assistant', text, streaming: true,data:{turnId:run.turns?.at(-1)?.id} }))].filter(entry => entry.role !== 'assistant' || entry.text?.trim()));
+  const entries = groupActivity([...run.events.slice(view.renderStart-transportStart).map((event, index) => ({ key: `event-${view.renderStart+index}`, ...event })), ...Object.entries(run.liveMessages || {}).map(([id, text]) => ({ key: `stream-${id}`, role: 'assistant', text, streaming: true,data:{turnId:run.turns?.at(-1)?.id} }))].filter(entry => entry.role !== 'assistant' || entry.text?.trim()));
   const nodes = new Map([...view.messages.children].map(node => [node.dataset.key, node]));
   let next=view.messages.firstElementChild;
   const place=node=>{if(node===next)next=next.nextElementSibling;else view.messages.insertBefore(node,next);};
@@ -60,31 +84,44 @@ export function conversation(target, run, options) {
     let node = nodes.get(entry.key);
     if(entry.role==='activity'){
       if(!node){node=document.createElement('details');node.dataset.key=entry.key;node.className='activity-group';node.innerHTML='<summary></summary><div class="activity-group-items"></div>';}
-      const tools=entry.items.filter(item=>item.data?.tool).map(item=>normalizedTool(item.data.tool)), approvals=entry.items.filter(item=>item.data?.permission?.automatic);
+      const tools=entry.items.filter(item=>item.data?.tool).map(item=>normalizedTool(item.data.tool)), approvals=entry.items.filter(item=>item.data?.permission?.automatic),decisions=entry.items.filter(item=>item.data?.permission&&!item.data.permission.automatic),systems=entry.items.filter(item=>!item.data?.tool&&!item.data?.permission&&item.role!=='tool');
       node.classList.toggle('running',tools.some(tool=>tool.status==='running'));
       node.classList.toggle('failed',tools.some(tool=>['failed','error','interrupted'].includes(tool.status)));
-      node.querySelector('summary').textContent=activitySummary(tools,approvals.length);const groupTimer=document.createElement('span');node.querySelector('summary').append(groupTimer);bindRuntimeTimer(groupTimer,()=>durationText(groupDuration(tools,now(),view.verified,run.turns)));
-      const signature=JSON.stringify(entry.items.map(item=>[item.key,item.data?.tool,item.data?.permission]));
-      if(node.activitySignature!==signature){
-        const content=node.querySelector('.activity-group-items'),openItems=new Set([...content.querySelectorAll('[data-activity-key]')].filter(row=>row.querySelector('details')?.open).map(row=>row.dataset.activityKey));content.replaceChildren();
+      node.querySelector('summary').textContent=activitySummary(tools,approvals.length,decisions.length,systems.length);if(tools.length){const groupTimer=document.createElement('span');node.querySelector('summary').append(groupTimer);bindRuntimeTimer(groupTimer,()=>durationText(groupDuration(tools,now(),view.verified,run.turns)));}
+      node.populateActivity=()=>{
+        if(!node.open)return;
+        const signature=JSON.stringify(entry.items.map(item=>[item.key,item.role,item.at,item.text,item.data]));
+        if(node.activitySignature!==signature){
+        const content=node.querySelector('.activity-group-items');view.activityDisclosures ||= new Set();rememberDisclosures(content,view.activityDisclosures);content.replaceChildren();
         for(const item of entry.items){
           const row=document.createElement('div');row.className='activity-group-item';row.dataset.activityKey=item.key;
-          if(item.data?.tool){
-            const tool=normalizedTool(item.data.tool),presentation=toolPresentation(tool);row.classList.add(tool.status||'completed');
+          if(item.data?.tool||item.role==='tool'){
+            const tool=normalizedTool(item.data?.tool||{name:'Tool output',status:'output',output:item.text}),presentation=tool.presentation||toolPresentation(tool);row.classList.add(tool.status||'completed');
             const title=document.createElement('strong'),icon=document.createElement('span');icon.className='tool-icon'+(tool.status==='running'?' spinner':'');icon.setAttribute('aria-hidden','true');icon.textContent=tool.status==='running'?'':tool.status==='completed'?'✓':'!';title.append(icon,document.createTextNode(' '+(tool.summary||tool.name||'Tool')));row.append(title);
-            const status=document.createElement('div');status.className='note';status.textContent=(tool.status==='running'?'Working…':tool.status==='failed'?'Failed':tool.status==='completed'?'Completed':tool.status)+(item.at?' · '+options.time(item.at):'');row.append(status);const timer=document.createElement('span');status.append(timer);bindRuntimeTimer(timer,()=>durationText(toolDuration(tool,now(),view.verified,run.turns)));
+            const status=document.createElement('div');status.className='note';const at=toolEventTime(tool,item);status.textContent=(tool.status==='running'?'Working…':tool.status==='failed'?'Failed':tool.status==='completed'?'Completed':tool.status)+(at?' · '+(options.activityTime||options.time)(at):' · Completion time unavailable');row.append(status);const timer=document.createElement('span');status.append(timer);bindRuntimeTimer(timer,()=>durationText(toolDuration(tool,now(),view.verified,run.turns)));
+            if(tool.callId){const reference=document.createElement('div');reference.className='note tool-call-reference';reference.textContent='Tool call '+tool.callId;row.dataset.toolCallId=tool.callId;row.append(reference);}
             for(const fact of presentation.facts.filter(f=>f.label==='Pattern')){const line=document.createElement('div');line.className='tool-search-pattern';line.textContent='Pattern: '+fact.value;row.append(line);}
             if(presentation.error){const error=document.createElement('p');error.className='tool-error';error.textContent=presentation.error;row.append(error);}
             if(presentation.targets.length){const target=document.createElement('div');target.className='note';target.textContent=presentation.targets.join(' · ');row.append(target);}
             if(presentation.approval){const note=document.createElement('div');note.className='note';note.textContent=presentation.approval;row.append(note);}
-            const details=document.createElement('details');details.innerHTML='<summary>Details</summary><div></div>';const body=details.querySelector('div');if(presentation.command){const command=document.createElement('pre');command.textContent=presentation.command;body.append(command);}if(presentation.facts.length){const facts=document.createElement('div');mountStructured(facts,{kind:'facts',facts:presentation.facts});body.append(facts);}if(presentation.progress){const progress=document.createElement('p');progress.textContent=presentation.progress;body.append(progress);}const output=document.createElement('div');mountStructured(output,presentation.output);body.append(output);details.open=openItems.has(item.key);if(body.textContent.trim())row.append(details);
+            const details=document.createElement('details');details.innerHTML='<summary>Details</summary><div></div>';const body=details.querySelector('div');const populate=()=>{if(body.childElementCount)return;if(presentation.command){const command=document.createElement('pre');command.textContent=presentation.command;body.append(command);}if(presentation.facts.length){const facts=document.createElement('div');mountStructured(facts,{kind:'facts',facts:presentation.facts});body.append(facts);}if(presentation.progress){const progress=document.createElement('p');progress.textContent=presentation.progress;body.append(progress);}const output=document.createElement('div');mountStructured(output,presentation.output);body.append(output);};details.dataset.disclosureKey=item.key+':tool';details.open=view.activityDisclosures.has(details.dataset.disclosureKey);details.ontoggle=()=>{if(details.open)populate();};if(details.open)populate();row.append(details);
+          }else if(item.data?.permission){
+            const approval=item.data.permission,callId=permissionToolCallId(approval);row.classList.add('permission-entry');
+            const title=document.createElement('strong');title.textContent=(approval.automatic?'✓ Automatic approval':'Permission '+(approval.decision||'decision'))+(approval.intention?' · '+approval.intention:approval.kind?' · '+approval.kind:'');row.append(title);
+            const stamp=document.createElement('div');stamp.className='note';stamp.textContent=item.at?options.time(item.at):'Decision time unavailable';row.append(stamp);
+            const note=document.createElement('div');note.className='note';note.textContent=[approval.reason||item.text,callId?'Tool call '+callId:null,approval.resolvedTarget?'Target '+approval.resolvedTarget:null,approval.matchedRoot?'Trusted root '+approval.matchedRoot:null].filter(Boolean).join(' · ');row.append(note);if(callId)row.dataset.toolCallId=callId;
+            const details=document.createElement('details');details.dataset.disclosureKey=item.key+':request';details.open=view.activityDisclosures.has(details.dataset.disclosureKey);const summary=document.createElement('summary');summary.textContent='Original approval request';const pre=document.createElement('pre');pre.textContent=approval.request||'Original request was not recorded by this version.';details.append(summary,pre);row.append(details);
           }else{
-            const approval=item.data.permission;row.classList.add('completed');const title=document.createElement('strong');title.textContent='✓ Automatic approval'+(approval.intention?' · '+approval.intention:approval.kind?' · '+approval.kind:'');row.append(title);const note=document.createElement('div');note.className='note';note.textContent=[approval.reason,approval.toolCallId?'Tool call '+approval.toolCallId:null,approval.resolvedTarget?'Target '+approval.resolvedTarget:null,approval.matchedRoot?'Trusted root '+approval.matchedRoot:null].filter(Boolean).join(' · ');row.append(note);if(approval.request){const details=document.createElement('details');const summary=document.createElement('summary');summary.textContent='Original approval request';const pre=document.createElement('pre');pre.textContent=approval.request;details.append(summary,pre);row.append(details);}
+            row.className='activity-group-item message system';
+            const role=document.createElement('div');role.className='role';role.textContent='system'+(item.at?' · '+options.time(item.at):'');const body=document.createElement('div');body.className='text';row.append(role,body);ProteusMarkdown.mount(body,item.text||'',{...options,resize:view.position});
           }
           content.append(row);
         }
         node.activitySignature=signature;
       }
+      };
+      node.ontoggle=()=>{if(node.open)node.populateActivity();else{const body=node.querySelector('.activity-group-items');rememberDisclosures(body,view.activityDisclosures ||= new Set());body.replaceChildren();node.activitySignature=null;}view.position();};
+      node.populateActivity();
       place(node);nodes.delete(entry.key);continue;
     }
     if (entry.data?.tool) {
@@ -120,6 +157,8 @@ export function conversation(target, run, options) {
     node.messageMarkdown=entry.text||'';
     node.className = `message ${['user', 'assistant', 'tool', 'system'].includes(entry.role) ? entry.role : 'system'}`;
     node.firstChild.textContent = `${entry.data?.delivery ? ({queued:'Queued next',steered:'Steering',sending:'Sending steering',failed:'Not delivered',removed:'Removed from queue',delivered:'Queued message delivered'}[entry.data.delivery.state] || '') + ' · ' : ''}${entry.role === 'assistant' ? entry.agentName || agentName(run) : entry.role}${entry.streaming ? ' · streaming' : entry.at ? ' · ' + options.time(entry.at) : ''}`;
+    if(entry.data?.question){node.classList.add('agent-question');node.firstChild.textContent=`${agentName(run)} · Question · ${entry.data.question.status||'pending'}${entry.at?' · '+options.time(entry.at):''}`;node.dataset.requestId=entry.data.question.id;}
+    if(entry.data?.questionReply)node.dataset.requestId=entry.data.questionReply.requestId;
     if(entry.role==='assistant'){
       const turn=run.turns?.find(t=>t.id===entry.data?.turnId)||(entry.streaming?run.turns?.at(-1):null);
       const first=entry.streaming?!(run.events||[]).some(e=>e.role==='assistant'&&e.data?.turnId===turn?.id):!entries.some(e=>e.key!==entry.key&&e.role==='assistant'&&e.data?.turnId===turn?.id&&entries.indexOf(e)<entries.indexOf(entry));
@@ -148,7 +187,8 @@ export function conversation(target, run, options) {
     place(node); nodes.delete(entry.key);
   }
   for (const node of nodes.values()){node.messageActions?.destroy();node.remove();}
-  view.position();
+  if(oldStart!==undefined&&view.eventStart<oldStart&&!view.following)view.top=oldTop+view.scroll.scrollHeight-oldHeight;
+  view.position();requestAnimationFrame(()=>void view.loadEarlier());
 }
 export function forgetConversation(id) { const view = views.get(id); view?.observer.disconnect();view?.messages.querySelectorAll('.message').forEach(node=>node.messageActions?.destroy()); if (view) cancelAnimationFrame(view.frames); views.delete(id); }
 

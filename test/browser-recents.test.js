@@ -10,3 +10,8 @@ test('recent address suggestions keep the latest device for each URL and cap at 
 test('legacy visit timestamps sort correctly, missing timestamps come last',()=>{
  const result=recentBrowserVisits([{url:'https://example.test/unknown'},{url:'https://example.test/old',at:'2026-10-01T00:00:00Z'},{url:'https://example.test/new',createdAt:'2026-10-02T00:00:00Z'}]);assert.deepEqual(result.map(x=>x.url.split('/').at(-1)),['new','old','unknown']);
 });
+test('history matching happens before result cap and matches case-insensitive titles',()=>{
+ const visits=Array.from({length:80},(_,i)=>({url:`https://example.test/${i}`,title:i===0?'Older Needle':'Recent '+i,visitedAt:new Date(100000+i).toISOString()}));
+ assert.deepEqual(recentBrowserVisits(visits,20,'NEEDLE').map(x=>x.title),['Older Needle']);
+ assert.equal(recentBrowserVisits(visits,20,'example.test').length,20);
+});

@@ -56,7 +56,9 @@ test('chat-only approval is isolated, revocable, context-bound and keeps filesys
     assert.throws(()=>engine.setChatPermission(one.id,'inherit',context.id,null),/changed/);
     const waiting=engine.askNext(two,{type:'permission',details:{kind:'shell',fullCommandText:'synthetic'}},new AbortController().signal);
     assert.equal(two.status,'awaiting_input');
-    engine.setChatPermission(two.id,'autopilot',context.id,null);
+    assert.throws(()=>engine.setChatPermission(two.id,'autopilot',context.id,null,'stale-request'),/request changed/);
+    assert.equal(engine.describePermissions(two).source,'workspace');
+    engine.setChatPermission(two.id,'autopilot',context.id,null,two.pending.id);
     assert.equal(await waiting,'approve-auto');
     engine.setChatPermission(two.id,'inherit',context.id,two.chatPermissionRevision);
     assert.equal(engine.decidePermission(two,{kind:'shell',fullCommandText:'synthetic'}).allowed,false);
@@ -72,4 +74,20 @@ test('chat-only approval is isolated, revocable, context-bound and keeps filesys
     engine.setChatPermission(one.id,'inherit',engine.permissions.describe(restored.schedule).id,restored.chatPermissionRevision);
     assert.equal(engine.describePermissions(restored).source,'workspace');
   }finally{await engine.close();fs.rmSync(home,{recursive:true,force:true});}
+});
+
+test('queued edits preserve identity and attachments and reject processed, stale and steering messages',async()=>{
+ const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-edit-queue-')),engine=new Engine(home);
+ try{const run=engine.createRun(schedule(home,'Initial'),'chat',null,{deferStart:true});await engine.send(run.id,'Original','queue','message-one');const queued=run.queuedMessages[0];queued.attachmentDispatch={proofId:'synthetic-proof'};const model=queued.modelOptions;
+ engine.editQueued(run.id,'message-one','Revised','Original');assert.equal(queued.prompt,'Revised');assert.equal(queued.modelOptions,model);assert.equal(queued.attachmentDispatch.proofId,'synthetic-proof');assert.equal(run.events.find(e=>e.data?.delivery?.id==='message-one').text,'Revised');assert.equal(remoteRun(run).queuedMessages[0].hasAttachments,true);
+ assert.throws(()=>engine.editQueued(run.id,'message-one','Lost','Original'),/changed/);engine.queuedSteers.set(run.id,Promise.resolve());assert.throws(()=>engine.editQueued(run.id,'message-one','Lost','Revised'),/steering/);engine.queuedSteers.clear();run.queuedMessages=[];assert.throws(()=>engine.editQueued(run.id,'message-one','Lost','Revised'),/delivered/);
+ }finally{await engine.close();fs.rmSync(home,{recursive:true,force:true});}
+});
+
+test('remote full chats and index summaries expose the same workspace association with captured-context fallback',()=>{
+ const make=context=>({id:'synthetic',title:'Workspace chat',trigger:'chat',status:'completed',createdAt:'2026-10-12T00:00:00Z',events:[],schedule:{provider:'rehearsal',name:'Synthetic',...context.schedule},...context.run});
+ for(const run of [make({schedule:{context:{workspaceId:'schedule-workspace',workspaceName:'Schedule workspace'}}}),make({run:{context:{workspaceId:'captured-workspace',workspaceName:'Captured workspace',entries:[]}}}),make({schedule:{context:{workspaceId:'only-id'}}}),make({schedule:{context:{}},run:{context:{workspaceId:'captured-with-empty',workspaceName:'Captured fallback'}}})]){
+   const summary=runSummary(run),full=remoteRun(run);assert.equal(full.workspaceId,summary.workspaceId);assert.equal(full.workspaceName,summary.workspaceName);assert.equal(full.context.workspaceId,full.workspaceId);
+ }
+ const detached=make({});assert.equal(remoteRun(detached).workspaceId,null);assert.equal(runSummary(detached).workspaceName,'');
 });

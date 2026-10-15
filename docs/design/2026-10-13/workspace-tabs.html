@@ -1,0 +1,149 @@
+<div id="proteus-workspace-tabs-preview">
+  <style>
+    #proteus-workspace-tabs-preview{--pt-bg:light-dark(#f5f7f4,#101815);--pt-panel:light-dark(#ffffff,#17211c);--pt-raised:light-dark(#e9efe6,#243128);--pt-text:light-dark(#1b2b21,#edf2ee);--pt-muted:light-dark(#546557,#a0b0a6);--pt-line:light-dark(#cbd5cc,#344139);--pt-green:light-dark(#335c20,#c5e69f);--pt-on-green:light-dark(#ffffff,#1c3016);--pt-red:light-dark(#a52f32,#ef9f9f);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--pt-text);background:var(--pt-bg);color-scheme:light dark;position:relative;min-width:0}
+    #proteus-workspace-tabs-preview *{box-sizing:border-box}
+    #proteus-workspace-tabs-preview button,#proteus-workspace-tabs-preview select{font:inherit;color:inherit}
+    #proteus-workspace-tabs-preview button{border:1px solid var(--pt-line);background:var(--pt-panel);border-radius:7px;padding:8px 12px;display:inline-flex;align-items:center;justify-content:center;gap:7px}
+    #proteus-workspace-tabs-preview button:hover{background:var(--pt-raised)}
+    #proteus-workspace-tabs-preview button:disabled{opacity:.35}
+    #proteus-workspace-tabs-preview button[aria-selected=true],#proteus-workspace-tabs-preview .primary{background:var(--pt-green);color:var(--pt-on-green);border-color:var(--pt-green)}
+    #proteus-workspace-tabs-preview .muted{color:var(--pt-muted)}
+    #proteus-workspace-tabs-preview .top{display:flex;align-items:center;gap:0;border-bottom:1px solid var(--pt-line);background:var(--pt-panel);padding-right:92px;min-height:49px;flex-wrap:wrap}
+    #proteus-workspace-tabs-preview .brand{padding:12px 17px;font-size:17px;font-weight:650;white-space:nowrap;display:flex;align-items:center;gap:9px}
+    #proteus-workspace-tabs-preview .top button{border:0;border-left:1px solid var(--pt-line);border-radius:0;background:transparent;color:var(--pt-muted);min-height:49px;padding:10px 16px}
+    #proteus-workspace-tabs-preview .top .current{color:var(--pt-text);box-shadow:inset 0 -3px var(--pt-green)}
+    #proteus-workspace-tabs-preview .layout{display:grid;grid-template-columns:168px minmax(0,1fr);min-height:550px}
+    #proteus-workspace-tabs-preview .sidebar{padding:19px 11px;border-right:1px solid var(--pt-line)}
+    #proteus-workspace-tabs-preview .nav-item{display:flex;align-items:center;gap:11px;color:var(--pt-muted);padding:11px 10px;margin-bottom:3px;border-radius:7px;white-space:nowrap}
+    #proteus-workspace-tabs-preview .nav-item.active{background:var(--pt-raised);color:var(--pt-text)}
+    #proteus-workspace-tabs-preview .recent{padding:8px 0 8px 43px;color:var(--pt-muted);font-size:12px}
+    #proteus-workspace-tabs-preview .subnav{display:flex;align-items:center;gap:0;border-bottom:1px solid var(--pt-line);background:var(--pt-panel);padding:0 12px;min-height:42px;flex-wrap:wrap}
+    #proteus-workspace-tabs-preview .subnav button{border:0;border-right:1px solid var(--pt-line);background:transparent;border-radius:0;font-size:12px;max-width:154px;min-height:42px;padding:9px 10px}
+    #proteus-workspace-tabs-preview .subnav button span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    #proteus-workspace-tabs-preview .subnav .workspace-home{box-shadow:inset 0 -3px var(--pt-green)}
+    #proteus-workspace-tabs-preview main{padding:29px 22px 22px;min-width:0}
+    #proteus-workspace-tabs-preview h1{font-size:29px;letter-spacing:-.7px;margin:0 0 3px;font-weight:650}
+    #proteus-workspace-tabs-preview .host{margin:0 0 24px;color:var(--pt-muted)}
+    #proteus-workspace-tabs-preview .sections{display:flex;gap:8px;margin-bottom:25px}
+    #proteus-workspace-tabs-preview .sections button{font-weight:550;padding:9px 16px}
+    #proteus-workspace-tabs-preview .list-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}
+    #proteus-workspace-tabs-preview h2{font-size:18px;margin:0;font-weight:600}
+    #proteus-workspace-tabs-preview .summary{font-size:12px;color:var(--pt-muted)}
+    #proteus-workspace-tabs-preview .tab-grid{display:grid;grid-template-columns:23px minmax(100px,137px) minmax(65px,1fr) 82px 82px 139px;gap:9px;align-items:center;min-width:0}
+    #proteus-workspace-tabs-preview .columns{font-size:11px;color:var(--pt-muted);padding:0 0 9px;border-bottom:1px solid var(--pt-line)}
+    #proteus-workspace-tabs-preview .tab-row{padding:16px 0;border-bottom:1px solid var(--pt-line)}
+    #proteus-workspace-tabs-preview .tab-row.hidden-tab{background:var(--pt-panel)}
+    #proteus-workspace-tabs-preview .tab-row.drag-target{box-shadow:inset 0 2px var(--pt-green)}
+    #proteus-workspace-tabs-preview .title-cell{min-width:0}
+    #proteus-workspace-tabs-preview .page-title{padding:0;border:0;background:transparent;text-align:left;display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-radius:0;font-weight:550;font-size:13px}
+    #proteus-workspace-tabs-preview .page-title:hover{text-decoration:underline;background:transparent}
+    #proteus-workspace-tabs-preview .row-state{font-size:11px;color:var(--pt-muted);margin-top:3px}
+    #proteus-workspace-tabs-preview .url{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--pt-muted);font-size:12px;min-width:0}
+    #proteus-workspace-tabs-preview time{display:block;font-size:11px;font-variant-numeric:tabular-nums}
+    #proteus-workspace-tabs-preview time small{display:block;font-size:11px;color:var(--pt-muted);margin-top:3px}
+    #proteus-workspace-tabs-preview .row-actions{display:flex;gap:3px;justify-content:flex-end}
+    #proteus-workspace-tabs-preview .row-actions button{padding:6px 4px;width:25px;min-height:29px;border:0;background:transparent}
+    #proteus-workspace-tabs-preview .row-actions button:hover{background:var(--pt-raised)}
+    #proteus-workspace-tabs-preview .danger{color:var(--pt-red)}
+    #proteus-workspace-tabs-preview .type-icon{display:flex;align-items:center;justify-content:center;cursor:grab}
+    #proteus-workspace-tabs-preview .favicon{display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border-radius:4px;background:var(--pt-raised);color:var(--pt-green);font-size:13px;font-weight:700}
+    #proteus-workspace-tabs-preview .foot{margin-top:17px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--pt-muted)}
+    #proteus-workspace-tabs-preview .empty{padding:28px 0;color:var(--pt-muted)}
+    #proteus-workspace-tabs-preview .overlay{position:absolute;inset:0;z-index:4;background:light-dark(#10241855,#0009);display:flex;align-items:flex-start;justify-content:center;padding:110px 18px 30px}
+    #proteus-workspace-tabs-preview .overlay[hidden]{display:none}
+    #proteus-workspace-tabs-preview .dialog{width:400px;max-width:100%;padding:24px;border-radius:12px;background:var(--pt-panel);border:1px solid var(--pt-line);box-shadow:0 14px 40px light-dark(#14281933,#0007)}
+    #proteus-workspace-tabs-preview .dialog h2{margin-bottom:12px}
+    #proteus-workspace-tabs-preview .dialog label{display:block;margin:17px 0 6px;font-size:12px;color:var(--pt-muted)}
+    #proteus-workspace-tabs-preview .dialog select{width:100%;background:var(--pt-bg);border:1px solid var(--pt-line);border-radius:7px;padding:10px}
+    #proteus-workspace-tabs-preview .dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:22px}
+    #proteus-workspace-tabs-preview .mobile-label{display:none}
+    #proteus-workspace-tabs-preview .sample-state{padding:25px 0}
+    @media(max-width:900px){#proteus-workspace-tabs-preview .layout{grid-template-columns:48px minmax(0,1fr)}#proteus-workspace-tabs-preview .sidebar{padding:16px 4px}#proteus-workspace-tabs-preview .nav-item{padding:12px 10px}#proteus-workspace-tabs-preview .nav-item span,#proteus-workspace-tabs-preview .recent{display:none}#proteus-workspace-tabs-preview main{padding:24px 18px}#proteus-workspace-tabs-preview .tab-grid{grid-template-columns:22px minmax(90px,122px) minmax(50px,1fr) 78px 78px 133px;gap:7px}}
+    @media(max-width:710px){#proteus-workspace-tabs-preview .layout{grid-template-columns:1fr}#proteus-workspace-tabs-preview .sidebar{display:none}#proteus-workspace-tabs-preview .top{padding-right:90px}#proteus-workspace-tabs-preview .top button{display:none}#proteus-workspace-tabs-preview .subnav{padding:0 5px}#proteus-workspace-tabs-preview main{padding:22px 15px}#proteus-workspace-tabs-preview h1{font-size:26px}#proteus-workspace-tabs-preview .sections button{padding:9px 13px}#proteus-workspace-tabs-preview .columns{display:none}#proteus-workspace-tabs-preview .tab-row{grid-template-columns:23px minmax(0,1fr) auto;gap:8px;padding:16px 0}#proteus-workspace-tabs-preview .title-cell{grid-column:2/4}#proteus-workspace-tabs-preview .url{grid-column:2/4}#proteus-workspace-tabs-preview time{grid-column:2;font-size:12px}#proteus-workspace-tabs-preview time.last{grid-column:3}#proteus-workspace-tabs-preview .row-actions{grid-column:2/4;justify-content:flex-start;margin-top:3px}#proteus-workspace-tabs-preview .row-actions button{width:44px;min-height:44px;border:1px solid var(--pt-line)}#proteus-workspace-tabs-preview .mobile-label{display:inline;color:var(--pt-muted)}#proteus-workspace-tabs-preview .list-heading{align-items:flex-start}#proteus-workspace-tabs-preview .summary{text-align:right}#proteus-workspace-tabs-preview .overlay{padding-top:80px}}
+    @media(max-width:710px){#proteus-workspace-tabs-preview .sections{flex-wrap:wrap}#proteus-workspace-tabs-preview .tab-row{grid-template-columns:23px minmax(0,1fr) minmax(0,1fr)}#proteus-workspace-tabs-preview .row-actions{grid-column:1/-1;flex-wrap:wrap;gap:5px}#proteus-workspace-tabs-preview .row-actions button{flex:0 0 44px}#proteus-workspace-tabs-preview .mobile-label{display:block}#proteus-workspace-tabs-preview .list-heading h2{flex-shrink:0}#proteus-workspace-tabs-preview .summary{max-width:50%}}
+  </style>
+  <div class="top"><div class="brand"><i data-lucide="waypoints" aria-hidden="true"></i>Proteus</div><button type="button" class="cursor-interaction"><i data-lucide="panels-top-left" aria-hidden="true"></i>Default workspace</button><button type="button" class="current cursor-interaction"><i data-lucide="panels-top-left" aria-hidden="true"></i>Research workspace</button><span data-main-tabs></span></div>
+  <div class="layout">
+    <aside class="sidebar" aria-label="Application navigation">
+      <div class="nav-item"><i data-lucide="house" aria-hidden="true"></i><span>Home</span></div>
+      <div class="nav-item"><i data-lucide="clock" aria-hidden="true"></i><span>Schedules</span></div>
+      <div class="nav-item"><i data-lucide="messages-square" aria-hidden="true"></i><span>Chats</span></div>
+      <div class="nav-item"><i data-lucide="search" aria-hidden="true"></i><span>Internet Searches</span></div>
+      <div class="nav-item"><i data-lucide="circle-alert" aria-hidden="true"></i><span>Needs attention</span></div>
+      <div class="nav-item"><i data-lucide="audio-lines" aria-hidden="true"></i><span>Transcription</span></div>
+      <div class="nav-item"><i data-lucide="heart" aria-hidden="true"></i><span>Life</span></div>
+      <div class="nav-item"><i data-lucide="list" aria-hidden="true"></i><span>Team Tools</span></div>
+      <div class="nav-item active"><i data-lucide="panels-top-left" aria-hidden="true"></i><span>Workspaces</span></div>
+      <div class="recent">Research workspace</div><div class="recent">Default workspace</div>
+      <div class="nav-item"><i data-lucide="settings" aria-hidden="true"></i><span>Engine Room</span></div>
+    </aside>
+    <div>
+      <nav class="subnav" aria-label="Workspace navigation" data-workspace-nav></nav>
+      <main>
+        <h1>Research workspace</h1><p class="host">Build Mac</p>
+        <div class="sections" role="tablist" aria-label="Workspace sections">
+          <button type="button" role="tab" id="pt-chats" aria-controls="pt-section" aria-selected="false" data-section="chats" class="cursor-interaction">Chats</button>
+          <button type="button" role="tab" id="pt-tabs" aria-controls="pt-section" aria-selected="true" data-section="tabs" class="cursor-interaction">Tabs</button>
+          <button type="button" role="tab" id="pt-configuration" aria-controls="pt-section" aria-selected="false" data-section="configuration" class="cursor-interaction">Configuration</button>
+        </div>
+        <section id="pt-section" role="tabpanel" aria-labelledby="pt-tabs" data-panel></section>
+        <div class="foot"><span>Design preview · sample data · MDT</span><output aria-live="polite" data-feedback>6 tabs · 1 hidden from navigation</output></div>
+      </main>
+    </div>
+  </div>
+  <div class="overlay" hidden data-overlay><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="pt-dialog-title" data-dialog></section></div>
+  <script>
+    (()=>{
+      const root=document.getElementById('proteus-workspace-tabs-preview');
+      const samples=[
+        {id:'guide',type:'browser',icon:'globe',favicon:'E',title:'Example research guide',url:'https://example.com/research/guides/browser-history?view=results',opened:'Oct 12, 2026',openedTime:'9:42 AM',touched:'Oct 13, 2026',touchedTime:'3:08 PM'},
+        {id:'shell',type:'terminal',icon:'terminal',title:'Research shell',url:'/workspace/research · zsh',opened:'Oct 12, 2026',openedTime:'10:15 AM',touched:'Oct 13, 2026',touchedTime:'2:54 PM'},
+        {id:'notes',type:'viewer',icon:'file-text',title:'Research notes.md',url:'/workspace/research/notes/research-notes.md',opened:'Oct 13, 2026',openedTime:'8:24 AM',touched:'Oct 13, 2026',touchedTime:'2:31 PM'},
+        {id:'reference',type:'browser',icon:'globe',favicon:'R',title:'Reference library',url:'https://example.org/library/platforms/navigation-and-session-state',opened:'Oct 11, 2026',openedTime:'4:10 PM',touched:'Oct 13, 2026',touchedTime:'1:16 PM'},
+        {id:'preview',type:'viewer',icon:'panels-top-left',title:'Layout preview',url:'/workspace/research/previews/layout.html',opened:'Oct 13, 2026',openedTime:'11:09 AM',touched:'Oct 13, 2026',touchedTime:'12:42 PM',hidden:true},
+        {id:'chat',type:'chat',icon:'messages-square',title:'Compare navigation options',url:'—',opened:'Oct 12, 2026',openedTime:'2:18 PM',touched:'Oct 13, 2026',touchedTime:'11:22 AM'}
+      ];
+      const saved=window.openai?.widgetState?.privateContent;
+      let tabs=Array.isArray(saved?.tabs)?saved.tabs:samples.map(t=>({...t})),section='tabs',moving=null,returnFocus=null,dragId=null;
+      const density={spacing:16};
+      const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+      const icon=(name)=>`<i data-lucide="${name}" aria-hidden="true"></i>`;
+      const ico=t=>t.favicon?`<span class="favicon" role="img" aria-label="Sample site favicon">${escape(t.favicon)}</span>`:icon(t.icon);
+      const current=()=>tabs.filter(t=>!t.destination);
+      function message(text){root.querySelector('[data-feedback]').textContent=text;}
+      function persist(){window.openai?.setWidgetState?.({modelContent:{workspaceTabsDesign:'Tabs section with universal tab actions',order:current().map(t=>t.id),hidden:current().filter(t=>t.hidden).map(t=>t.id)},privateContent:{tabs}})?.catch(()=>{});}
+      function icons(){globalThis.lucide?.createIcons({attrs:{width:16,height:16}});}
+      function reorder(id,delta){const rows=current(),index=rows.findIndex(t=>t.id===id),next=index+delta;if(index<0||next<0||next>=rows.length)return;const a=tabs.indexOf(rows[index]),b=tabs.indexOf(rows[next]);[tabs[a],tabs[b]]=[tabs[b],tabs[a]];render();message(rows[index].title+' moved '+(delta<0?'up':'down'));persist();}
+      function render(){
+        const rows=current(),visible=rows.filter(t=>!t.hidden),hidden=rows.length-visible.length;
+        root.querySelector('[data-workspace-nav]').innerHTML='<button type="button" class="workspace-home cursor-interaction" data-workspace-home>'+icon('panels-top-left')+'Workspace</button>'+visible.map(t=>`<button type="button" data-activate="${t.id}" class="cursor-interaction" aria-label="Open ${escape(t.title)}">${ico(t)}<span data-tooltip="${escape(t.title)}">${escape(t.title)}</span></button>`).join('');
+        root.querySelector('[data-main-tabs]').innerHTML=tabs.filter(t=>t.destination==='main').map(t=>`<button type="button" class="cursor-interaction">${ico(t)}${escape(t.title)}</button>`).join('');
+        const panel=root.querySelector('[data-panel]');
+        root.querySelectorAll('[data-section]').forEach(button=>button.setAttribute('aria-selected',String(button.dataset.section===section)));
+        panel.setAttribute('aria-labelledby','pt-'+section);
+        if(section!=='tabs'){panel.innerHTML=`<div class="sample-state"><h2>${section==='chats'?'Chats':'Workspace configuration'}</h2><p class="muted">${section==='chats'?'Compare navigation options':'Research workspace · configured sources and run defaults'}</p></div>`;icons();return;}
+        panel.innerHTML=`<div class="list-heading"><h2>Workspace tabs</h2><span class="summary">${rows.length} open · ${visible.length} in navigation${hidden?' · '+hidden+' hidden':''}</span></div><div role="table" aria-label="Workspace tabs"><div class="tab-grid columns" role="row"><span role="columnheader">Type</span><span role="columnheader">Title</span><span role="columnheader">URL / location</span><span role="columnheader">Opened</span><span role="columnheader">Last interaction</span><span role="columnheader">Actions</span></div>${rows.map((t,index)=>`<div class="tab-grid tab-row ${t.hidden?'hidden-tab':''}" role="row" data-row="${t.id}" draggable="true"><span class="type-icon" role="cell" data-tooltip="${escape(t.type)} · drag to reorder">${ico(t)}</span><div class="title-cell" role="cell"><button type="button" class="page-title cursor-interaction" data-activate="${t.id}" data-tooltip="${escape(t.title)}">${escape(t.title)}</button><div class="row-state">${t.hidden?'Hidden from navigation':t.type==='terminal'?'Terminal · running':t.type==='browser'?'Browser':t.type==='chat'?'Chat':'Viewer'}</div></div><span class="url" role="cell" data-tooltip="${escape(t.url)}">${escape(t.url)}</span><time role="cell"><span class="mobile-label">Opened · </span>${t.opened}<small>${t.openedTime}</small></time><time class="last" role="cell"><span class="mobile-label">Last interaction · </span>${t.touched}<small>${t.touchedTime}</small></time><div class="row-actions" role="cell"><button type="button" data-hide="${t.id}" aria-label="${t.hidden?'Restore':'Hide'} ${escape(t.title)} in navigation" data-tooltip="${t.hidden?'Restore to navigation':'Hide from navigation'}" class="cursor-interaction">${icon(t.hidden?'eye':'eye-off')}</button><button type="button" data-up="${t.id}" aria-label="Move ${escape(t.title)} up" data-tooltip="Move up" ${index===0?'disabled':''} class="cursor-interaction">${icon('arrow-up')}</button><button type="button" data-down="${t.id}" aria-label="Move ${escape(t.title)} down" data-tooltip="Move down" ${index===rows.length-1?'disabled':''} class="cursor-interaction">${icon('arrow-down')}</button><button type="button" data-move="${t.id}" aria-label="Move ${escape(t.title)} to another destination" data-tooltip="Move to…" class="cursor-interaction">${icon('folder-input')}</button><button type="button" data-close="${t.id}" aria-label="Close ${escape(t.title)} tab" data-tooltip="Close tab" class="danger cursor-interaction">${icon('x')}</button></div></div>`).join('')}</div>${rows.length?'':'<p class="empty">No open tabs in this workspace.</p>'}`;
+        root.querySelectorAll('.tab-row').forEach(row=>{row.style.paddingBlock=density.spacing+'px';row.addEventListener('dragstart',event=>{dragId=row.dataset.row;event.dataTransfer.setData('text/plain',dragId);});row.addEventListener('dragover',event=>{event.preventDefault();row.classList.add('drag-target');});row.addEventListener('dragleave',()=>row.classList.remove('drag-target'));row.addEventListener('drop',event=>{event.preventDefault();const target=row.dataset.row,source=dragId;if(source&&source!==target){const moving=tabs.find(t=>t.id===source),at=tabs.findIndex(t=>t.id===target);tabs=tabs.filter(t=>t.id!==source);tabs.splice(Math.min(at,tabs.length),0,moving);render();message('Workspace navigation order updated');persist();}});});
+        icons();
+      }
+      function dismiss(){root.querySelector('[data-overlay]').hidden=true;moving=null;returnFocus?.focus();}
+      function showDialog(id,close=false){const t=tabs.find(t=>t.id===id);if(!t)return;moving=id;returnFocus=document.activeElement;root.querySelector('[data-overlay]').hidden=false;const box=root.querySelector('[data-dialog]');box.innerHTML=close?`<h2 id="pt-dialog-title">Close terminal tab?</h2><p>${escape(t.title)}</p><p class="muted">Closing this temporary terminal ends its running shell. Hiding keeps it open.</p><div class="dialog-actions"><button type="button" data-cancel class="cursor-interaction">Cancel</button><button type="button" data-confirm-close class="danger cursor-interaction">Close terminal</button></div>`:`<h2 id="pt-dialog-title">Move ${t.type==='chat'?'chat':t.type==='terminal'?'terminal':t.type==='viewer'?'viewer':'browser'} tab</h2><p>${escape(t.title)}</p><label for="pt-destination">Destination</label><select id="pt-destination"><option value="main">Top navigation</option><option value="team">Team Tools</option><optgroup label="Workspaces"><option value="workspace:planning">Planning workspace</option><option value="workspace:default">Default workspace</option></optgroup>${t.type==='chat'?'':'<optgroup label="Chats"><option value="chat:notes">Research notes chat</option><option value="chat:planning">Weekly planning chat</option></optgroup>'}</select><div class="dialog-actions"><button type="button" data-cancel class="cursor-interaction">Cancel</button><button type="button" data-confirm-move class="primary cursor-interaction">Move tab</button></div>`;box.querySelector('select,button')?.focus();}
+      root.addEventListener('click',event=>{const button=event.target.closest('button');if(!button||button.disabled)return;
+        if(button.dataset.section){section=button.dataset.section;render();return;}
+        if(button.hasAttribute('data-workspace-home')){section='tabs';render();return;}
+        if(button.dataset.activate){const t=tabs.find(t=>t.id===button.dataset.activate);if(t){t.touched='Oct 13, 2026';t.touchedTime='3:15 PM';render();message('Opened '+t.title+' · sample view');persist();}return;}
+        if(button.dataset.hide){const t=tabs.find(t=>t.id===button.dataset.hide);t.hidden=!t.hidden;render();message(t.title+(t.hidden?' hidden · still open':' restored to navigation'));persist();return;}
+        if(button.dataset.up){reorder(button.dataset.up,-1);return;}if(button.dataset.down){reorder(button.dataset.down,1);return;}
+        if(button.dataset.move){showDialog(button.dataset.move);return;}
+        if(button.dataset.close){const t=tabs.find(t=>t.id===button.dataset.close);if(t.type==='terminal'){showDialog(t.id,true);return;}tabs=tabs.filter(row=>row!==t);render();message(t.title+(t.type==='chat'?' tab closed · conversation retained':' tab closed'));persist();return;}
+        if(button.hasAttribute('data-cancel')){dismiss();return;}
+        if(button.hasAttribute('data-confirm-move')){const t=tabs.find(t=>t.id===moving),destination=root.querySelector('#pt-destination');t.destination=destination.value;const name=destination.options[destination.selectedIndex].text;dismiss();render();message(t.title+' moved to '+name);persist();return;}
+        if(button.hasAttribute('data-confirm-close')){const t=tabs.find(t=>t.id===moving);tabs=tabs.filter(row=>row!==t);dismiss();render();message(t.title+' closed · sample shell ended');persist();}
+      });
+      root.addEventListener('keydown',event=>{const overlay=root.querySelector('[data-overlay]');if(overlay.hidden)return;if(event.key==='Escape'){dismiss();return;}if(event.key==='Tab'){const fields=[...overlay.querySelectorAll('button,select')];const first=fields[0],last=fields.at(-1);if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}}});
+      window.addEventListener('openai:set_globals',event=>{const state=event.detail?.globals?.widgetState?.privateContent;if(Array.isArray(state?.tabs)){tabs=state.tabs;render();}});
+      render();
+      if(globalThis.Tweak){const tweak=new Tweak({container:root,onChange:render});tweak.addSlider(density,'spacing',{label:'Row spacing',min:10,max:22,step:2,unit:'px'});}
+    })();
+  </script>
+</div>

@@ -7,34 +7,34 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		C0A0C0A0C0A0C0A0C0A0C003 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = C0A0C0A0C0A0C0A0C0A0C004 /* README.md */; };
 		0251FE479F24F5A96EA70F96 /* RemoteStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9023FEA1077763EA7555C94D /* RemoteStore.swift */; };
 		1162CF50A47019EEE0F0B91C /* ScheduleViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99814D317E2043305330CB8E /* ScheduleViews.swift */; };
 		2DA06CE96BFC9F1B53D5955C /* MarkdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8599964FC6EFDA8704A9F1CF /* MarkdownView.swift */; };
+		30B1A0694148D8AA25AD8B3C /* UsageViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E775F33FC902E4E594401A1 /* UsageViews.swift */; };
 		398B9FDDC1D1B5A441D3E044 /* markdown in Resources */ = {isa = PBXBuildFile; fileRef = 4FA0511E62085A38609D5D2C /* markdown */; };
-		C0A0C0A0C0A0C0A0C0A0C001 /* CHANGELOG.md in Resources */ = {isa = PBXBuildFile; fileRef = C0A0C0A0C0A0C0A0C0A0C002 /* CHANGELOG.md */; };
+		42B1CE228634AE5F8B512A86 /* EngineRoomView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 284BE80DCDBBFD7A264CF03C /* EngineRoomView.swift */; };
+		4FB84798FFDA898F674E687B /* LifeForms.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABF0057B2DB7BDE6C2A5BEA1 /* LifeForms.swift */; };
+		5023E16EAE07DA09B8342690 /* NativeNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDD8BC386822017A41442984 /* NativeNotifications.swift */; };
 		54B2034637BB14023E216F1B /* RemoteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD304CE5E2D4AA434F2B24CC /* RemoteTests.swift */; };
 		5740FAB8AE1ED396820BEC60 /* ToolActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2C219FBBECD427ED9810FAF /* ToolActivityView.swift */; };
+		5AF04EA8A646DCCFDEEF17BA /* NativeShell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2627C7D5A4DE8F9F996B47F8 /* NativeShell.swift */; };
 		5F7A96C7CCAC62FF1B3C0FE2 /* ChatViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A814582040CD2B969E3FED0 /* ChatViews.swift */; };
-		7A6C3D8E4B1F4906A2E35C70 /* NativeScrollProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B8D3E1C69F2448DBA0E2771 /* NativeScrollProbe.swift */; };
 		68FFA33EBE3DB02F0593900F /* RemoteCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B068C230D5ED165EE25D9DD /* RemoteCrypto.swift */; };
 		6BF7A7A42FCA9E2E7B40DD85 /* RemoteUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5F927DCF4BF815F06256F2A /* RemoteUITests.swift */; };
+		7022D275A902DE896A1918FC /* LifeStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61F0564BC9EBE73040AC8CEB /* LifeStore.swift */; };
 		72DBBD6D208FC0DF6672ED87 /* ContextViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF35BFD81ECE37D5F8218105 /* ContextViews.swift */; };
+		7A6C3D8E4B1F4906A2E35C70 /* NativeScrollProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B8D3E1C69F2448DBA0E2771 /* NativeScrollProbe.swift */; };
+		891380DFDF602E8C8B8B7A29 /* LifeFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54D0EA83FA3341E9AD922ED5 /* LifeFixtures.swift */; };
 		94928203EE4720AE61143A35 /* JSON.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EE5D84DB0FFFCF87E643DDA /* JSON.swift */; };
 		A4B6B84AF204B4F3F0EC0971 /* MarkdownTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCFA7F851DB57CA3BDECDDF2 /* MarkdownTests.swift */; };
+		AF0F1C0D85782B82FE42F56A /* TeamToolsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 760C1739284F94041B2F7D83 /* TeamToolsView.swift */; };
 		BE2EFD83DC4255BFC6852B7C /* ProteusApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89BCB9A523FAD7012BFBFBE2 /* ProteusApp.swift */; };
+		C0A0C0A0C0A0C0A0C0A0C001 /* CHANGELOG.md in Resources */ = {isa = PBXBuildFile; fileRef = C0A0C0A0C0A0C0A0C0A0C002 /* CHANGELOG.md */; };
+		C0A0C0A0C0A0C0A0C0A0C003 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = C0A0C0A0C0A0C0A0C0A0C004 /* README.md */; };
+		D26BCA5F8CC14636821B06A3 /* SharedAppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 754660009D54CA67C3B12C53 /* SharedAppStore.swift */; };
 		D5382767A692259B940198E9 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C3669D14C35D62493F9512B7 /* Assets.xcassets */; };
 		E3CCE5A289BFA2C55DB7BBA0 /* QRScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAE0DEDA1094847BDFC976EB /* QRScanner.swift */; };
-		30B1A0694148D8AA25AD8B3C /* UsageViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E775F33FC902E4E594401A1 /* UsageViews.swift */; };
-		7022D275A902DE896A1918FC /* LifeStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61F0564BC9EBE73040AC8CEB /* LifeStore.swift */; };
 		EFB5B876A5E8C0845798EFDB /* LifeViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92BF81FE2FB7FD30E6747EA6 /* LifeViews.swift */; };
-		4FB84798FFDA898F674E687B /* LifeForms.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABF0057B2DB7BDE6C2A5BEA1 /* LifeForms.swift */; };
-		891380DFDF602E8C8B8B7A29 /* LifeFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54D0EA83FA3341E9AD922ED5 /* LifeFixtures.swift */; };
-		D26BCA5F8CC14636821B06A3 /* SharedAppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 754660009D54CA67C3B12C53 /* SharedAppStore.swift */; };
-		5023E16EAE07DA09B8342690 /* NativeNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDD8BC386822017A41442984 /* NativeNotifications.swift */; };
-		5AF04EA8A646DCCFDEEF17BA /* NativeShell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2627C7D5A4DE8F9F996B47F8 /* NativeShell.swift */; };
-		42B1CE228634AE5F8B512A86 /* EngineRoomView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 284BE80DCDBBFD7A264CF03C /* EngineRoomView.swift */; };
-		AF0F1C0D85782B82FE42F56A /* TeamToolsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 760C1739284F94041B2F7D83 /* TeamToolsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -55,38 +55,38 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		C0A0C0A0C0A0C0A0C0A0C004 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = text; name = README.md; path = ../README.md; sourceTree = SOURCE_ROOT; };
+		0E775F33FC902E4E594401A1 /* UsageViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageViews.swift; sourceTree = "<group>"; };
+		2627C7D5A4DE8F9F996B47F8 /* NativeShell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeShell.swift; sourceTree = "<group>"; };
+		284BE80DCDBBFD7A264CF03C /* EngineRoomView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineRoomView.swift; sourceTree = "<group>"; };
 		2B068C230D5ED165EE25D9DD /* RemoteCrypto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteCrypto.swift; sourceTree = "<group>"; };
 		3B1F7B75CFDD99F635051F0D /* Proteus.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Proteus.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		4B8D3E1C69F2448DBA0E2771 /* NativeScrollProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeScrollProbe.swift; sourceTree = "<group>"; };
 		4FA0511E62085A38609D5D2C /* markdown */ = {isa = PBXFileReference; lastKnownFileType = folder; name = markdown; path = ../public/markdown; sourceTree = SOURCE_ROOT; };
-		C0A0C0A0C0A0C0A0C0A0C002 /* CHANGELOG.md */ = {isa = PBXFileReference; lastKnownFileType = text; name = CHANGELOG.md; path = ../CHANGELOG.md; sourceTree = SOURCE_ROOT; };
+		54D0EA83FA3341E9AD922ED5 /* LifeFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeFixtures.swift; sourceTree = "<group>"; };
+		61F0564BC9EBE73040AC8CEB /* LifeStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeStore.swift; sourceTree = "<group>"; };
+		754660009D54CA67C3B12C53 /* SharedAppStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedAppStore.swift; sourceTree = "<group>"; };
+		760C1739284F94041B2F7D83 /* TeamToolsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeamToolsView.swift; sourceTree = "<group>"; };
 		7DB8DB7C2A0FFB5C4A9E2425 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		8599964FC6EFDA8704A9F1CF /* MarkdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownView.swift; sourceTree = "<group>"; };
 		89BCB9A523FAD7012BFBFBE2 /* ProteusApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProteusApp.swift; sourceTree = "<group>"; };
 		8EE5D84DB0FFFCF87E643DDA /* JSON.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSON.swift; sourceTree = "<group>"; };
 		9023FEA1077763EA7555C94D /* RemoteStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteStore.swift; sourceTree = "<group>"; };
+		92BF81FE2FB7FD30E6747EA6 /* LifeViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeViews.swift; sourceTree = "<group>"; };
 		99814D317E2043305330CB8E /* ScheduleViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleViews.swift; sourceTree = "<group>"; };
 		9A814582040CD2B969E3FED0 /* ChatViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViews.swift; sourceTree = "<group>"; };
-		4B8D3E1C69F2448DBA0E2771 /* NativeScrollProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeScrollProbe.swift; sourceTree = "<group>"; };
 		A381A2CE3D0727C537781BBD /* ProteusTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = ProteusTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		ABF0057B2DB7BDE6C2A5BEA1 /* LifeForms.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeForms.swift; sourceTree = "<group>"; };
 		B5F927DCF4BF815F06256F2A /* RemoteUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteUITests.swift; sourceTree = "<group>"; };
 		BCFA7F851DB57CA3BDECDDF2 /* MarkdownTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownTests.swift; sourceTree = "<group>"; };
+		C0A0C0A0C0A0C0A0C0A0C002 /* CHANGELOG.md */ = {isa = PBXFileReference; lastKnownFileType = text; name = CHANGELOG.md; path = ../CHANGELOG.md; sourceTree = SOURCE_ROOT; };
+		C0A0C0A0C0A0C0A0C0A0C004 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = text; name = README.md; path = ../README.md; sourceTree = SOURCE_ROOT; };
 		C3669D14C35D62493F9512B7 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		CF35BFD81ECE37D5F8218105 /* ContextViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextViews.swift; sourceTree = "<group>"; };
 		E79E4AFD22E1C4D4C5FAA5EE /* ProteusUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = ProteusUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F2C219FBBECD427ED9810FAF /* ToolActivityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolActivityView.swift; sourceTree = "<group>"; };
 		FAE0DEDA1094847BDFC976EB /* QRScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRScanner.swift; sourceTree = "<group>"; };
 		FD304CE5E2D4AA434F2B24CC /* RemoteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteTests.swift; sourceTree = "<group>"; };
-		0E775F33FC902E4E594401A1 /* UsageViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageViews.swift; sourceTree = "<group>"; };
-		61F0564BC9EBE73040AC8CEB /* LifeStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeStore.swift; sourceTree = "<group>"; };
-		92BF81FE2FB7FD30E6747EA6 /* LifeViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeViews.swift; sourceTree = "<group>"; };
-		ABF0057B2DB7BDE6C2A5BEA1 /* LifeForms.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeForms.swift; sourceTree = "<group>"; };
-		54D0EA83FA3341E9AD922ED5 /* LifeFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeFixtures.swift; sourceTree = "<group>"; };
-		754660009D54CA67C3B12C53 /* SharedAppStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedAppStore.swift; sourceTree = "<group>"; };
 		FDD8BC386822017A41442984 /* NativeNotifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeNotifications.swift; sourceTree = "<group>"; };
-		2627C7D5A4DE8F9F996B47F8 /* NativeShell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeShell.swift; sourceTree = "<group>"; };
-		284BE80DCDBBFD7A264CF03C /* EngineRoomView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineRoomView.swift; sourceTree = "<group>"; };
-		760C1739284F94041B2F7D83 /* TeamToolsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeamToolsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -387,7 +387,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 2610.7.3;
+				CURRENT_PROJECT_VERSION = 2610.14.2;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -406,7 +406,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 0.2.6;
+				MARKETING_VERSION = 0.2.19;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -490,7 +490,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 2610.7.3;
+				CURRENT_PROJECT_VERSION = 2610.14.2;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -503,7 +503,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 0.2.6;
+				MARKETING_VERSION = 0.2.19;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";

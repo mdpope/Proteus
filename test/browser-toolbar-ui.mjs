@@ -78,7 +78,7 @@ try {
       const form = input.closest('.browserbar');
       const field = input.closest('.browser-address');
       const sidebar = document.querySelector('#sidebar');
-      const controls = [...form.querySelectorAll('button:not(.browser-agent-toggle)')].map(button => {
+      const controls = [...form.querySelectorAll('button:not(.browser-agent-toggle)')].filter(button=>!button.hidden).map(button => {
         const style = getComputedStyle(button), bounds = button.getBoundingClientRect();
         return { id: button.id, background: style.backgroundColor, border: style.borderWidth, color: style.color, width: bounds.width, height: bounds.height };
       });
@@ -203,7 +203,7 @@ try {
   }, team.id);
   assert.ok((await command({ action: 'list' })).every(tab => !tab.shared && !tab.owner), 'Other tabs remain private');
 
-  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(850, 650));
+  await app.evaluate(({app})=>process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser().window.setSize(850,650));
   await page.waitForFunction(() => innerWidth === 850);
   const fits = await page.locator('#team-browser-form').evaluate(form => {
     const address = form.querySelector('.browser-address').getBoundingClientRect();
@@ -226,8 +226,12 @@ try {
   });
   const nativeHistory = id => app.evaluate(({ app }, id) => {
     const browser = process.mainModule.require(app.getAppPath() + '/desktop/main.cjs').getBrowser();
-    const history = browser.get(id).view.webContents.navigationHistory;
-    return { entries: history.getAllEntries().map(entry => ({url:entry.url,title:entry.title})), index: history.getActiveIndex() };
+    // Menus use the portable stack: a shared traversal can reconstruct Chromium's
+    // stack with loadURL, while logical Forward entries intentionally survive.
+    const tab=browser.get(id),portable=browser.state(tab,true).history;
+    if(portable)return {entries:portable.entries.map(entry=>({url:entry.url,title:entry.title})),index:portable.index};
+    const history=tab.view.webContents.navigationHistory;
+    return {entries:history.getAllEntries().map(entry=>({url:entry.url,title:entry.title})),index:history.getActiveIndex()};
   }, id);
   // A browser-state redraw can replace the held control before pointer-up.
   // Its release click must still be consumed by the same tab/direction.

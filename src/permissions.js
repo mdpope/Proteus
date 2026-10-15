@@ -30,7 +30,7 @@ export function canonicalPath(value, cwd) {
 export function permissionContext(schedule) {
   const cwd = canonicalPath(schedule.workspace.cwd, schedule.workspace.cwd) || schedule.workspace.cwd;
   const roots = [...new Set([cwd, ...schedule.workspace.additionalDirectories.map(dir => canonicalPath(dir, cwd) || dir)])].sort();
-  const context = { provider: schedule.provider, cwd, roots, integrations: hash({ mcp: schedule.mcpServers || {}, selectedTools: (schedule.context?.entries || []).filter(entry => ['mcp', 'skill', 'agent'].includes(entry.kind)).map(entry => ({ id: entry.id, hash: entry.hash })), skills: (schedule.skillDirectories || []).map(dir => canonicalPath(dir, cwd) || dir).sort() }) };
+  const context = { ...(schedule.context?.workspaceId ? { workspaceId: schedule.context.workspaceId } : {}), provider: schedule.provider, cwd, roots, integrations: hash({ mcp: schedule.mcpServers || {}, selectedTools: (schedule.context?.entries || []).filter(entry => ['mcp', 'skill', 'agent'].includes(entry.kind)).map(entry => ({ id: entry.id, hash: entry.hash })), skills: (schedule.skillDirectories || []).map(dir => canonicalPath(dir, cwd) || dir).sort() }) };
   return { ...context, id: hash(context), label: schedule.name || path.basename(cwd) };
 }
 const protectedRequest = request => request.managedApprovalRequired === true || request.requestSandboxBypass === true;
@@ -63,13 +63,15 @@ export class PermissionStore {
     return { ...value, file: this.file, revision: revision(value) };
   }
   describe(schedule) {
-    const context = permissionContext(schedule); const saved = this.get().workspaces.find(value => value.id === context.id);
+    const context = permissionContext(schedule); const saved = this.get().workspaces.find(value => value.id === context.id) || this.workspaceDefaults?.(context.workspaceId);
     return { ...context, mode: effectivePermissionMode(saved), readOnlyTools: saved?.readOnlyTools === true, folders: saved?.folders || [], rules: saved?.rules || [] };
   }
   describeRun(run) {
     const workspace = this.describe(run.schedule);
-    const valid = run.chatPermission?.contextId === workspace.id && run.chatPermission?.mode === 'autopilot';
-    return { ...workspace, workspaceMode: workspace.mode, mode: valid ? 'autopilot' : workspace.mode,
+    const chat = run.chatPermission?.contextId === workspace.id ? run.chatPermission : null;
+    const valid = chat?.mode === 'autopilot';
+    const chatFolders = chat?.folders || [];
+    return { ...workspace, ...(workspace.mode === 'ask' && !valid && chatFolders.length ? { rules: [], readOnlyTools: false } : {}), folders: [...(workspace.mode === 'ask' && !valid ? [] : workspace.folders), ...chatFolders], chatFolders, workspaceFolders: workspace.folders, workspaceMode: workspace.mode, mode: valid ? 'autopilot' : chatFolders.length && workspace.mode === 'ask' ? 'custom' : workspace.mode,
       source: valid ? 'chat' : 'workspace', chatMode: valid ? 'autopilot' : null,
       chatRevision: run.chatPermissionRevision || null };
   }
@@ -94,6 +96,42 @@ export class PermissionStore {
       }
     }, expectedRevision);
   }
+  migrateWorkspaces(config) {
+    const value = this.get(); if (value.workspaceIdentityMigration) return;
+    const legacy = value.workspaces.filter(profile => !profile.workspaceId);
+    for (const workspace of config.workspaces) for (const source of legacy) {
+      if (![workspace.cwd, ...workspace.additionalDirectories].includes(source.cwd)) continue;
+      const context = { workspaceId: workspace.id, provider: source.provider, cwd: source.cwd, roots: source.roots, integrations: source.integrations };
+      value.workspaces.push({ ...structuredClone(source), ...context, id: hash(context), migratedFrom: source.id });
+    }
+    value.workspaceIdentityMigration = 1; delete value.file; delete value.revision; atomicJSON(this.file, value);
+  }
+  configureWorkspace(workspaceId, configuration, { replaceFolders = false, replaceRules = false } = {}) {
+    const value = this.get();
+    for (const profile of value.workspaces.filter(item => item.workspaceId === workspaceId)) {
+      profile.mode = configuration.mode;
+      profile.readOnlyTools = ['trusted','autopilot'].includes(configuration.mode);
+      const folders = replaceFolders ? [] : [...profile.folders];
+      for (const folder of configuration.folders || []) {
+        const existing = folders.find(item => item.path === folder.path);
+        if (existing) { if (folder.access === 'read-write') existing.access = folder.access; }
+        else folders.push(structuredClone(folder));
+      }
+      profile.folders = folders;
+      profile.rules = replaceRules ? [] : profile.rules;
+      for (const rule of configuration.rules || []) if (!profile.rules.some(item => hash(item) === hash(rule))) profile.rules.push(structuredClone(rule));
+      profile.updatedAt = new Date().toISOString();
+    }
+    delete value.file; delete value.revision; atomicJSON(this.file, value);
+  }
+  copyWorkspace(sourceId, targetId) {
+    const value = this.get();
+    for (const source of value.workspaces.filter(profile => profile.workspaceId === sourceId)) {
+      const context = { workspaceId: targetId, provider: source.provider, cwd: source.cwd, roots: source.roots, integrations: source.integrations };
+      value.workspaces.push({ ...structuredClone(source), ...context, id: hash(context), updatedAt: new Date().toISOString() });
+    }
+    delete value.file; delete value.revision; atomicJSON(this.file, value);
+  }
   revoke(id, expectedRevision) {
     const value = this.get();
     if (value.revision !== expectedRevision) throw new Error('Permissions changed outside the app. Reload before saving.');
@@ -112,6 +150,7 @@ export class PermissionStore {
     if (protectedRequest(request)) return [];
     const choices = [];
     const folder = this.folderOffer(schedule, request);
+    if (folder) choices.push({ value: 'trust-folder-chat', label: `Allow ${folder.access === 'read' ? 'reads' : 'reads and writes'} in ${folder.path} for this chat` });
     if (folder) choices.push({ value: 'trust-folder', label: `Always allow ${folder.access === 'read' ? 'reads' : 'reads and writes'} in ${folder.path}` });
     if (operationRule(request)) choices.push({ value: 'always-tool', label: `Always allow ${ruleLabel(operationRule(request))}` });
     // Whole-workspace modes must not silently approve a one-off outside path.

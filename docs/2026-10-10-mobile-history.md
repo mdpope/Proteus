@@ -1,0 +1,51 @@
+# Mobile long-chat follow-up — October 10, 2026
+
+The operator reported that opening a long update chat froze and crashed iPhone while iPad showed only part of the history. The paired iPhone crash reports identify a scene-update watchdog termination, with main-thread runtime/date formatting work in the sampled stack. Memory pressure may also contribute; the reports do not prove a unique cause or explain every phone/tablet difference.
+
+## Changes
+
+- Present the newest meaningful rows initially: native twelve rows / 48 KiB, desktop/web twenty-four rows / 128 KiB, with at most 100 events per reveal. A collapsed activity streak counts as one row; its hidden output does not consume the visible-text budget. Retain one oversized message completely. The transport still fetches compatible 100-event host pages; cached data is distinct from mounted rich renderers.
+- Keep the native viewport at the bottom until the human begins reading. Include the composer safe-area inset in the end position. Prefetch one older transport page within two viewport heights of the top when cached headroom becomes low; reveal at the nearer boundary, fill short viewports and preserve the visible message/inset when prepending. A gesture at an already stationary top still advances history. Never start draining older pages from an initial top-of-content geometry snapshot.
+- Build activity descendants only while their group is expanded. Desktop nested tool output is also deferred until its Details is opened. Fetch failures leave an explicit on-demand Retry; a failed background page is not repeatedly requested.
+- Stack Total AI runtime, Input tokens and Output tokens with labels above centered dark boxes in shared desktop/web details and expanded native Chat details. Unavailable usage remains unavailable; no inferred usage totals.
+- Release offscreen Markdown web views while retaining measured row height. Reuse timestamp parsers/formatters. Completed/offline runtime labels use a static view; only verified active work owns a periodic timer.
+- Replace nested compact composer menus with a small green disclosure panel. Each expander points right while collapsed and down while expanded; no duplicate submenu arrow.
+- Give desktop/web New chat attachments their own grid row, keeping attach, provider/model options and Start on the next row.
+- Compact completed remote-command receipts after the ten-minute clock-skew/replay window when the existing 10,000-record bound is reached. Preserve recent, pending and inflight claims. Old unknown request IDs still fail expiry checks; exhausted recent capacity reports a temporary busy state rather than an alleged daily allowance.
+
+## Verification and installation
+
+This section describes the earlier verification; subsequent rollout evidence follows below. The required Node suite passes 407 tests and `npm run check` passes. An actual Electron mixed-activity rehearsal reaches all 2,507 events in 25 reveal steps (the earlier twelve-event approach needed 225), verifies zero heavy descendants in collapsed groups, expands/collapses details and returns to the bottom. The installed host transport was separately checked against the operator's saved long chat: all 2,507 event roles/texts were reachable across 26 pages without printing private contents.
+
+Native baseline: 72 unit tests passed. The focused composer-inset, variable-height repeated paging and return-to-bottom tests passed; final tests additionally cover adaptive activity batches and usage labels. Phone/tablet heavy-history and green-expander rehearsals passed earlier. Full final UI outcomes and installations will be recorded below once completed. Desktop attachment rehearsals passed four synthetic PNGs at wide/narrow widths with all controls visible. A clean build is not acceptance of the operator's actual long chat.
+
+Build 2610.10.3 was installed in place on iPhone and iPad, retaining seven protected files each and pairing/destination identities. Residual history reports after that install prompted the current corrections; do not treat .3 as including them. That native candidate was 2610.10.4; the later .5 rollout is recorded below. Development-profile expiry remains October 10 at 17:29 MDT; no signing renewal is claimed.
+
+## Earlier verified rollout (.4)
+
+- Build Mac: 0.2.11, revision `ec8b213d382e+dirty.b58e52468abc`; original signing requirement and 181 runtime hashes verified. Twenty-five protected files remain byte-identical; only the normal scheduler poll timestamp changed. Pairing authority is unchanged and the runner restarted with zero active runs.
+- iPhone and iPad: 0.2.11 / 2610.10.4 installed in place and launched. Seven protected files each were byte-identical before launch; destination identities retained. Cold backups and receipts are outside the repository.
+- Web: release `20261010T191654Z`, 9,214 file checksums verified, 14 endpoint checks passed. Runtime configuration, schema and protected data are preserved. A centrally retained encrypted backup passed isolated restore verification. The log window contains the expected `.env` denial and previously known MariaDB column-statistics messages; no new Laravel error. Deployment receipts remain in the private website workspace.
+- Work Mac: the updated signed installer and source companions are on private artifact branch `codex/signed-proteus-history-20261010`, commit `34b978c`. The existing authorized HC installer chat was sent the exact revision/checksums and must retain the pending-run hold unless its current state is idle. Preparation/handoff is not installation.
+
+Final focused native tests passed: three unit regressions, iPhone variable-height prepend/repeated-page/return-to-bottom/usage checks, and iPad initial-bottom/bounded-rich-renderer/upward-loading rehearsal. The earlier 72-unit baseline passed; a full repeat stalled in an unrelated WebKit cookie test and was stopped, so no fresh full-native-suite pass is claimed. The final required Node suite and static checks pass (407 tests). The complete isolated web UI suite, Electron 2,507-event history test and wide/narrow composer checks passed. Native XCTest durations include automation overhead, not measured interaction latency.
+
+The requested approximately 40% runtime/token size reduction was withdrawn. The installed original hierarchy remains: larger runtime and smaller input/output values, labels above centered dark boxes. Mobile sizes are unchanged. A withdrawn local font candidate was never installed or deployed. The frozen Mac bundle matches all 181 working-source runtime hashes.
+
+Real-chat scroll performance still needs the operator's acceptance after this installation; no claim of universal smoothness or completed HC installation is made. Native signing remains a development profile expiring at 17:29 MDT today.
+
+## Mobile .5 and browser-error follow-up
+
+The operator reports desktop/web history preparation is working well, so their pagination is unchanged. Mobile .4 is more responsive but revealed older rows too late. Native .5 prepares rows 2.5 viewports before the top, fetches cache up to six viewports ahead, and uses 24 meaningful rows / 96 KiB for later batches. Initial rendering remains twelve rows / 48 KiB. Rich renderers warm 1.5 screens ahead and history loading can continue during upward gesture momentum. All history remains accessible.
+
+Four focused native unit tests and two phone history UI checks passed, including repeated variable-height prepends, anchor retention and the actual bottom. The iPad bounded-renderer/initial-bottom/upward-history rehearsal passed. Both physical devices were updated in place to 0.2.11 / 2610.10.5 and launch-verified: iPhone 19:42:57 UTC, iPad 19:43:04 UTC. Seven protected files per device were byte-identical before launch and destination identities retained. Private cold backups and installation receipts are outside this repository. Operator acceptance of the new preloading timing remains separate.
+
+Desktop browser load errors now use a 15-second shared notification with Reload and View logs instead of a permanent page strip. Sanitized warnings remain in Engine Room Logs; each failed navigation reports once, a new main-frame navigation clears the stale error, and intentional aborts/embedded-frame failures do not trigger a page notification. The actual Electron regression fixture passed; the required 407 Node tests and static checks passed. It does not remove error content generated by the website itself.
+
+The repeated Build Mac “Command limit reached” report remains unresolved. The live receipt log had 771 entries, zero pending, and recent cold backups had 749, below its 10,000 bound. No matching current-source wording, failed API or system-event record was found. The artificial receipt safeguard protects duplicate-action recovery; it is not an AI allowance. Safe expiry-aware compaction is implemented, but the recurrence is not proven to originate at that safeguard and is not claimed fixed.
+
+Latest installed follow-up: Build Mac 0.2.11 / `ec8b213d382e+dirty.530439a1cc28`, installed and ready at 19:48:24 UTC with original signing, 181 runtime hashes, 26 protected files byte-identical, unchanged pairing authority and zero active runs. Browser errors now use transient actionable notifications and sanitized Logs. Both physical native clients run 2610.10.5 with earlier history preparation. Desktop/web chat pagination and original usage sizes remain unchanged. HC installation remains separately held while pending runs exist.
+
+Work Mac handoff updated: private artifact commit `acc0f315d01e095c602c6b0883a4def04e286f24` supersedes `34b978c`. It contains signed revision `ec8b213d382e+dirty.530439a1cc28`, six archive chunks with assembled SHA-256 `2410ce3d5ec6d816fad5dc34119d909bc9cceeb96a7a35f5df7d99790d49e655`, corresponding source and notices. The authorized HC installer chat received exact verification instructions and retained its pending-run hold. New Ghostery/extension-store planning items are outside this rollout.
+
+HC installer acknowledgment: latest `530439a1cc28` is staged and verified on HC, including archive/source checksums, all 181 runtime hashes and original signing identity. It is not installed: one chat awaits input and three runs remain queued. Installed 0.2.9 and its data are unchanged; no chats were cancelled.

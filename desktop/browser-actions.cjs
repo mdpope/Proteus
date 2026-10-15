@@ -1,13 +1,19 @@
 const { app, Menu, shell, clipboard, dialog, nativeImage, WebContentsView } = require('electron');
 const path = require('node:path');
 const { safeHistoryURL } = require('./browser-history.cjs');
+const {BrowserDownloads}=require('./browser-downloads.cjs');
 
 class BrowserActions {
   constructor(browser) {
-    this.browser = browser; this.downloads = new Map();
+    this.browser = browser; this.downloads = new Map();this.downloadManager=browser.options?.home?new BrowserDownloads(browser):null;
     this.downloadHandler = (event, item, contents) => {
       const grant = this.downloads.get(contents?.id);
       const chain = item.getURLChain();
+      if(this.downloadManager){
+        if(!this.downloadManager.adopt(event,item,contents,grant))return;
+        if(grant){grant.claimed=true;clearTimeout(grant.timer);item.once('done',()=>this.disposeDownload(contents.id));}
+        return;
+      }
       if (!grant || grant.claimed || chain[0] !== grant.url || chain.some(url => !this.link(url))) { event.preventDefault(); return; }
       grant.claimed = true; clearTimeout(grant.timer); item.setSavePath(grant.file);
       item.once('done', (_event, state) => { this.disposeDownload(contents.id); if (state !== 'completed') this.send({type:'error',message:'The linked file could not be downloaded.'}); });
@@ -25,6 +31,8 @@ class BrowserActions {
   }
   menu(tab, params) {
     const url = this.link(params.linkURL);
+    // Capture ownership when the menu opens, before another surface can become active.
+    const source={profileId:tab.profileId,group:tab.group,parentId:tab.parentId||null};
     const run = action => () => { if (this.browser.shuttingDown || !this.browser.tabs.has(tab.id)) return; Promise.resolve().then(action).catch(error => this.send({type:'error',message:error.message})); };
     const items=[];
     if(params.isEditable){
@@ -32,6 +40,7 @@ class BrowserActions {
     } else if(params.selectionText){
       items.push({label:'Copy Selection',role:'copy'},{role:'selectAll'});
     }
+    if(tab.view?.webContents)items.push({label:'Inspect Element',click:run(()=>this.browser.command({action:'devtools',id:tab.id,x:params.x,y:params.y}))});
     if(!url){
       const wc=tab.view?.webContents;
       if(wc){
@@ -46,24 +55,24 @@ class BrowserActions {
     try { browserName = app.getApplicationNameForProtocol('https://') || browserName; } catch {}
     if(items.length)items.push({type:'separator'});
     return Menu.buildFromTemplate([...items,
-      {label:'Open Link in New Tab',...this.icon('NSAddTemplate'),click:run(async () => { const info = await this.browser.create(url,null,null,{group:tab.group}); this.send({type:'select-tab',info}); })},
+      {label:'Open Link in New Tab',...this.icon('NSAddTemplate'),click:run(async () => { const info = await this.browser.create(url,null,null,source); this.send({type:'select-tab',info,afterId:tab.id}); })},
       {label:`Open Link in ${browserName.replace(/[\r\n]/g,' ').replace(/&/g,'&&')}`, ...this.icon('NSFollowLinkFreestandingTemplate'), click:run(() => shell.openExternal(url))},
       {type:'separator'},
       {label:'Copy Link',...this.icon('NSLinkTemplate'),click:run(() => clipboard.writeText(url))},
-      {label:'Download Linked File As…',...this.icon('NSTouchBarDownloadTemplate'),click:run(() => this.download(url))},
+      {label:'Download Linked File As…',...this.icon('NSTouchBarDownloadTemplate'),click:run(() => this.download(url,tab.profileId))},
       {type:'separator'},
       {label:'Start New Chat with Link',...this.icon('NSTouchBarComposeTemplate'),click:run(() => this.send({type:'chat-link',url}))},
     ]);
   }
-  async download(url) {
+  async download(url,profileId='default') {
     let filename = 'download';
     try { filename = path.basename(decodeURIComponent(new URL(url).pathname)).replace(/[\x00-\x1f/\\:]/g,'_').slice(0,180) || filename; } catch {}
-    const result = await dialog.showSaveDialog(this.browser.window,{title:'Download Linked File As',defaultPath:filename,buttonLabel:'Download'});
+    const result = await dialog.showSaveDialog(this.browser.window,{title:'Save link as',defaultPath:path.join(this.downloadManager?.settings().directory||app.getPath('downloads'),filename),buttonLabel:'Save'});
     if (result.canceled || !result.filePath || this.browser.shuttingDown) return;
     // A page cannot consume this grant: only a new, never-navigated webContents may download.
-    const view = new WebContentsView({webPreferences:{session:this.browser.partition,nodeIntegration:false,contextIsolation:true,sandbox:true}});
+    const view = new WebContentsView({webPreferences:{session:this.browser.sessionFor(profileId),nodeIntegration:false,contextIsolation:true,sandbox:true}});
     const wc = view.webContents;
-    this.downloads.set(wc.id,{view,url,file:result.filePath,claimed:false,timer:setTimeout(() => this.disposeDownload(wc.id),60000)});
+    this.downloads.set(wc.id,{view,url,profileId,file:result.filePath,claimed:false,timer:setTimeout(() => this.disposeDownload(wc.id),60000)});
     try { wc.downloadURL(url); } catch (error) { this.disposeDownload(wc.id); throw error; }
   }
   disposeDownload(id) { const grant = this.downloads.get(id); if (!grant) return; this.downloads.delete(id); clearTimeout(grant.timer); if (!grant.view.webContents.isDestroyed()) grant.view.webContents.close(); }
@@ -78,6 +87,6 @@ class BrowserActions {
     }));
     return {tabs};
   }
-  dispose() { for (const id of this.downloads.keys()) this.disposeDownload(id); this.browser.partition.removeListener('will-download',this.downloadHandler); }
+  dispose() { this.downloadManager?.close();for (const id of this.downloads.keys()) this.disposeDownload(id); for(const partition of this.browser.sessions.values())partition.removeListener('will-download',this.downloadHandler); }
 }
 module.exports = { BrowserActions };

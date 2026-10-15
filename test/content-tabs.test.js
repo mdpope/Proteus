@@ -11,6 +11,20 @@ import {secret} from '../src/remote-crypto.js';
 import {atomicJSON} from '../src/files.js';
 function store(t){const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-tabs-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));return {home,tabs:new ContentTabs(home)};}
 const browser={id:'browser-a',type:'browser',title:'Synthetic page',url:'https://example.test/one'};
+test('legacy browser-only main registry imports newly managed saved surfaces once and retains closed-tab authority',t=>{
+ const {tabs,home}=store(t),session={tabs:[{id:'run-a',type:'run',label:'Saved chat'}, {...browser,label:'Stale browser title'}, {id:'term-view',type:'terminal',terminal:{id:'term-a'},label:'Saved terminal'}, {id:'viewer',type:'markdown',file:path.join(home,'fixture.md'),label:'Saved viewer'}, {id:'child-browser',type:'browser',parentId:'run-a',label:'Chat child',url:browser.url}]};
+ fs.writeFileSync(tabs.file,JSON.stringify({schemaVersion:1,extension:'retained',scopes:{'main:main':{revision:7,extension:'retained',tabs:[browser]}}}));
+ tabs.seedWorkspace(session);let main=tabs.get('main','main');assert.deepEqual(main.tabs.map(tab=>tab.type),['chat','browser','terminal','document']);assert.equal(main.tabs[1].title,browser.title);assert.equal(main.revision,8);assert.equal(tabs.get('chat','run-a').tabs[0].id,'child-browser');
+ let saved=JSON.parse(fs.readFileSync(tabs.file));assert.equal(saved.extension,'retained');assert.equal(saved.scopes['main:main'].extension,'retained');assert.equal(saved.scopes['main:main'].desktopSeedVersion,2);
+ const bytes=fs.readFileSync(tabs.file,'utf8');tabs.seedWorkspace(session);assert.equal(fs.readFileSync(tabs.file,'utf8'),bytes);
+ tabs.mutate({scope:'main',id:'main',expectedRevision:main.revision,operations:[{action:'close',id:'chat:run-a'},{action:'close',id:'terminal:term-a'}]});new ContentTabs(home).seedWorkspace(session);main=tabs.get('main','main');assert.deepEqual(main.tabs.map(tab=>tab.type),['browser','document']);
+ const other=store(t);fs.writeFileSync(other.tabs.file,JSON.stringify({schemaVersion:1,scopes:{'main:main':{revision:7,tabs:[]}}}));other.tabs.seedWorkspace(session);assert.equal(other.tabs.get('main','main').tabs.some(tab=>tab.type==='browser'),false);
+});
+test('legacy main import preserves canonical browser ordering and local imported-surface ordering',t=>{
+ const {tabs}=store(t),other={...browser,id:'browser-b'},session={tabs:[{id:'run-a',type:'run',label:'First chat'},browser,{id:'run-b',type:'run',label:'Second chat'},other]};
+ tabs.mutate({scope:'main',id:'main',expectedRevision:0,operations:[{action:'open',tab:other},{action:'open',tab:browser}]});tabs.seedWorkspace(session);
+ const rows=tabs.get('main','main').tabs;assert.deepEqual(rows.filter(tab=>tab.type==='browser').map(tab=>tab.id),['browser-b','browser-a']);assert.deepEqual(rows.filter(tab=>tab.type==='chat').map(tab=>tab.chatId),['run-a','run-b']);
+});
 test('tab descriptors converge with atomic revisions, duplicate prevention and local-state omission',t=>{
  const {tabs,home}=store(t),initial=tabs.get('chat','run-a');assert.equal(initial.revision,0);
  const first=tabs.mutate({scope:'chat',id:'run-a',expectedRevision:0,operations:[{action:'open',tab:{...browser,cookies:'secret',selected:true,scroll:99,content:'private'}}]});assert.equal(first.revision,1);assert.deepEqual(first.tabs,[browser]);
@@ -20,7 +34,7 @@ test('tab descriptors converge with atomic revisions, duplicate prevention and l
  tabs.mutate({scope:'chat',id:'run-a',expectedRevision:2,operations:[{action:'close',id:'browser-b'},{action:'close',id:'browser-a'}]});tabs.seedWorkspace({tabs:[{id:'run-a',type:'run'},{...browser,type:'browser',parentId:'run-a',label:'Stale restore'}]});assert.equal(tabs.get('chat','run-a').tabs.length,0);
 });
 test('sync sanitizes private URLs, separates scopes and never exports terminals or source paths',t=>{
- const {tabs}=store(t);for(const url of ['file:///etc/passwd','https://user:pass@example.test/','https://example.test/?access_token=secret','https://example.test/#pair=secret'])assert.throws(()=>contentTab({...browser,url}),/private|sensitive/);
+ const {tabs}=store(t);for(const url of ['file:///etc/passwd','https://user:pass@example.test/'])assert.throws(()=>contentTab({...browser,url}),/private|sensitive/);
  assert.throws(()=>contentTab({...browser,type:'terminal'}),/bounded/);
  const result=workspaceContentScopes({tabs:[{id:'run-a',type:'run'},{id:'runtime-a',contentTabId:'stable-a',type:'browser',parentId:'run-a',label:'Site',url:browser.url},{id:'md',type:'markdown',parentId:'run-a',file:'/tmp/synthetic.md',label:'Notes'},{id:'terminal',type:'terminal',parentId:'run-a',terminal:{command:'never'}}],team:{tabs:[{id:'team',type:'browser',title:'Team',url:browser.url}]}});
  assert.equal(result[0].tabs[0].id,'stable-a');assert.equal(result[0].tabs.length,2);assert.doesNotMatch(JSON.stringify(result),/\/tmp|command|never|terminal/);tabs.seedWorkspace({tabs:[]});assert.equal(tabs.get('team','team').revision,0);assert.throws(()=>tabs.get('other','run-a'),/explicit/);
@@ -35,8 +49,20 @@ test('paired synthetic clients reconcile descriptors and enforce current documen
  assert.ok((await first.request('sync')).state.capabilities.includes('content-tabs.v1'));
  const started=await first.request('chat.start',{prompt:'Synthetic descriptor fixture',provider:'rehearsal'}),id=started.runId;
  let state=await first.request('tabs.get',{scope:'chat',id});assert.equal(state.revision,0);
- state=await first.request('tabs.mutate',{scope:'chat',id,expectedRevision:0,operations:[{action:'open',tab:browser}]});assert.equal(state.revision,1);assert.deepEqual((await second.request('tabs.get',{scope:'chat',id})).tabs,[browser]);
+ state=await first.request('tabs.mutate',{scope:'chat',id,expectedRevision:0,operations:[{action:'open',tab:browser}]});assert.equal(state.revision,1);const mirrored=(await second.request('tabs.get',{scope:'chat',id})).tabs;assert.deepEqual(mirrored.map(({history,...tab})=>tab),[browser]);assert.equal(mirrored[0].history.entries[mirrored[0].history.index].url,browser.url);assert.ok(mirrored[0].history.currentEntryId);assert.equal(mirrored[0].history.revision,0);
  await assert.rejects(second.request('tabs.mutate',{scope:'chat',id,expectedRevision:0,operations:[{action:'close',id:browser.id}]}),/changed/);
+ const entryA=mirrored[0].history.currentEntryId,operationId='77777777-7777-4777-8777-777777777777',navArgs={scope:'chat',id,operations:[{action:'browser-navigate',tabId:browser.id,entryId:'entry-b',operationId,baseRevision:0,url:'https://example.test/two',visitedAt:'2026-10-12T12:00:00Z'}]};
+ let navigated=await first.request('tabs.mutate',navArgs);assert.equal(navigated.tabs[0].history.revision,1);assert.equal((await second.request('tabs.get',{scope:'chat',id})).tabs[0].url,'https://example.test/two');
+ await first.request('tabs.mutate',navArgs);assert.equal((await app.browserHistory.query()).total,1);
+ await second.request('tabs.mutate',{scope:'chat',id,operations:[{action:'browser-traverse',tabId:browser.id,entryId:entryA,operationId:'back-op',baseRevision:1,visitedAt:'2026-10-12T12:01:00Z'}]});
+ const back=(await first.request('tabs.get',{scope:'chat',id})).tabs[0].history;assert.equal(back.index,0);assert.equal(back.entries.length,2);assert.equal(back.entries[1].id,'entry-b');
+ await assert.rejects(first.request('tabs.mutate',{scope:'chat',id,operations:[{...navArgs.operations[0],operationId:'stale-op',entryId:'stale',baseRevision:1}]}),/Navigation changed/);
+ const navigationPage=await second.request('tabs.history',{scope:'chat',id,tabId:browser.id,start:true,limit:1});assert.equal(navigationPage.total,2);assert.equal(navigationPage.hasMore,true);
+ assert.ok((await first.request('sync')).state.capabilities.includes('browser.history.v1'));
+ const visitId='88888888-8888-4888-8888-888888888888',historyArgs={events:[{eventId:visitId,profileId:'11111111-1111-4111-8111-111111111111',url:'https://example.test/named',title:'Named profile',visitedAt:'2026-10-12T12:02:00Z'}]};
+ await first.request('browser.history.record',historyArgs);await second.request('browser.history.record',historyArgs);assert.equal((await second.request('browser.history.query',{profileId:historyArgs.events[0].profileId})).total,1);
+ await first.request('browser.history.delete',{eventIds:[visitId]});await second.request('browser.history.record',historyArgs);assert.equal((await first.request('browser.history.query',{profileId:historyArgs.events[0].profileId})).total,0);assert.ok((await second.request('browser.history.sync',{})).tombstones.some(row=>row.eventId===visitId));
+ await assert.rejects(first.request('browser.history.settings',{action:'set',peers:[{hostId:'unpaired',enabled:true,profileIds:['default'],backfill:'all'}]}),/already paired/);
  const doc={id:'document:'+'a'.repeat(64),type:'document',title:'Synthetic note',documentId:'a'.repeat(64),mediaType:'text/markdown'};app.contentTabs.mutate({scope:'chat',id,expectedRevision:1,operations:[{action:'open',tab:doc}]});
  assert.equal((await second.request('tabs.get',{scope:'chat',id})).tabs.length,1);
  await assert.rejects(second.request('tabs.mutate',{scope:'chat',id,expectedRevision:2,operations:[{action:'open',tab:doc}]}),/View chat documents/);
@@ -54,9 +80,9 @@ test('host-open document registry remains private and resolves only an open chat
  tabs.mutate({scope:'chat',id:'run-a',expectedRevision:1,operations:[{action:'close',id:descriptor.id}]});assert.throws(()=>tabs.documentSource('run-a',descriptor.documentId),/no longer open/);assert.equal(fs.statSync(tabs.sourcesFile).mode&0o777,0o600);
  fs.writeFileSync(tabs.sourcesFile,'corrupt');assert.throws(()=>tabs.seedWorkspace(session),/preserved/);assert.equal(fs.readFileSync(tabs.sourcesFile,'utf8'),'corrupt');
 });
-test('shared browser history keeps selected page, bounds and redacts sensitive entries',t=>{
+test('shared browser history keeps full redirect URLs and excludes engine page state',t=>{
  const {tabs}=store(t);const tab={...browser,history:{index:2,entries:[{url:'https://example.test/older',title:'Older'},{url:'https://example.test/callback?token=secret',title:'Login'},{url:browser.url,title:'Current',pageState:'secret'}]}};
  const result=tabs.mutate({scope:'chat',id:'history',expectedRevision:0,operations:[{action:'open',tab}]});
- assert.deepEqual(result.tabs[0].history,{index:1,entries:[{url:'https://example.test/older',title:'Older'},{url:browser.url,title:'Current'}]});
+ assert.deepEqual(result.tabs[0].history,{index:2,entries:[{url:'https://example.test/older',title:'Older'},{url:'https://example.test/callback?token=secret',title:'Login'},{url:browser.url,title:'Current'}]});
  assert.deepEqual(tabs.get('chat','history'),result);
 });

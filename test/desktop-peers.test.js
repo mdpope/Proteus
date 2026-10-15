@@ -3,6 +3,25 @@ import {DesktopPeers} from '../src/desktop-peers.js';import {startServer} from '
 const key=randomBytes(32);const safeStorage={isEncryptionAvailable:()=>true,encryptString:text=>{const iv=randomBytes(12),cipher=createCipheriv('aes-256-gcm',key,iv);return Buffer.concat([iv,cipher.update(text),cipher.final(),cipher.getAuthTag()]);},decryptString:box=>{const decipher=createDecipheriv('aes-256-gcm',key,box.subarray(0,12));decipher.setAuthTag(box.subarray(-16));return Buffer.concat([decipher.update(box.subarray(12,-16)),decipher.final()]).toString();}};
 const record={hostId:'11111111-1111-4111-8111-111111111111',deviceId:'22222222-2222-4222-8222-222222222222',relay:'wss://relay.example.test',key:'ab'.repeat(32),label:'Synthetic peer'};
 const pairingCode=()=>Buffer.from(JSON.stringify({version:1,hostId:record.hostId,relay:record.relay,key:record.key,expiresAt:new Date(Date.now()+60000).toISOString()})).toString('base64url');
+test('desktop workspace context inspection keeps the authenticated paired-host boundary',async t=>{
+ const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-peer-context-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+ const peers=new DesktopPeers(home,{safeStorage});peers.load();t.after(()=>peers.close());
+ await assert.rejects(peers.request(record.hostId,'context.get',{workspaceId:'synthetic'}),/not paired/);
+ peers.records.set(record.hostId,{...record,paused:true});await assert.rejects(peers.request(record.hostId,'context.get',{workspaceId:'synthetic'}),/paused/);
+ peers.records.set(record.hostId,{...record});let sent;peers.sessions.set(record.hostId,{ready:true,client:{status:'online',request:async(method,args)=>{sent={method,args};return {workspaces:[{id:'synthetic'}]};},close(){}}});
+ assert.deepEqual(await peers.request(record.hostId,'context.get',{workspaceId:'synthetic'}),{workspaces:[{id:'synthetic'}]});assert.deepEqual(sent,{method:'context.get',args:{workspaceId:'synthetic'}});
+ await assert.rejects(peers.request(record.hostId,'context.arbitrary-write',{}),/Unsupported/);
+});
+test('pause is durable and hides cached incoming chats without deleting pairing',async t=>{
+ const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-peer-pause-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+ fs.writeFileSync(path.join(home,'desktop-peers.enc'),safeStorage.encryptString(JSON.stringify([record])));
+ let connects=0;const peers=new DesktopPeers(home,{safeStorage,clientFactory:()=>{connects++;throw new Error('Must not connect while paused');}});
+ peers.load();peers.cache.set(record.hostId,{items:[{hostId:record.hostId,title:'Synthetic cached chat'}]});peers.saveCache();
+ await peers.pause(record.hostId,true);assert.equal(peers.records.size,1);assert.equal(peers.list()[0].status,'paused');
+ assert.deepEqual((await peers.index()).items,[]);await peers.indexPending;assert.deepEqual((await peers.index()).items,[]);
+ await assert.rejects(peers.request(record.hostId,'sync'),/paused/);await assert.rejects(peers.connect(record.hostId),/paused/);assert.equal(connects,0);
+ peers.close();const restored=new DesktopPeers(home,{safeStorage});assert.equal(restored.list()[0].paused,true);assert.equal(restored.cache.get(record.hostId).items.length,1);assert.deepEqual((await restored.index()).items,[]);await restored.indexPending;restored.close();
+});
 function forbiddenStorage(calls){return Object.fromEntries(['isEncryptionAvailable','getSelectedStorageBackend','encryptString','decryptString'].map(name=>[name,()=>{calls.push(name);throw new Error('Unexpected protected storage access');}]));}
 
 test('missing peer store lists and indexes repeatedly without protected storage or orphan cache access',async t=>{
@@ -133,11 +152,11 @@ test('pairing adopts the destination capsule name instead of a caller alias',asy
 test('two desktops isolate catalogs, runs and authorization across encrypted restart and revocation',async t=>{const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-peers-')),token=secret(),relay=await startRelay({port:0,token}),url=`ws://127.0.0.1:${relay.port}`,apps=[];let peers=new DesktopPeers(path.join(home,'client'),{safeStorage});t.after(async()=>{peers.close();for(const app of apps)await app.close();await relay.close();fs.rmSync(home,{recursive:true,force:true});});
 for(const name of ['Alpha','Beta']){const h=path.join(home,name),cwd=path.join(h,'workspace');fs.mkdirSync(cwd,{recursive:true});fs.writeFileSync(path.join(cwd,'AGENTS.md'),'# '+name+' instructions');atomicJSON(path.join(h,'settings.json'),{schemaVersion:1,provider:'rehearsal',model:'',timezone:'UTC',workspace:{cwd,additionalDirectories:[]},skillDirectories:[],mcpServers:{}});const app=await startServer({home:h,port:0,timers:false});apps.push(app);await app.remote.configure({enabled:true,mode:'external',label:name,relayURL:url,publicURL:url,relayToken:token});await until(()=>app.remote.status==='online');await peers.pair((await app.remote.pairing()).code,name);}
 const [a,b]=apps.map(app=>app.remote.config.hostId);assert.deepEqual(peers.list().map(p=>p.label),['Alpha','Beta']);const stored=fs.readFileSync(peers.file);assert.ok(!stored.includes(Buffer.from('Alpha')));assert.equal(fs.statSync(peers.file).mode&0o777,0o600);assert.ok(!JSON.stringify(peers.list()).includes('deviceId'));assert.ok(!JSON.stringify(peers.list()).includes('key'));
-await assert.rejects(peers.request(a,'chat.start',{prompt:'must not run'}),/Connect/);await peers.connect(a);await peers.connect(b);const sa=(await peers.request(a,'sync')).state,sb=(await peers.request(b,'sync')).state;assert.ok(sa.context.workspaces[0].cwd.includes('Alpha'));assert.ok(sb.context.workspaces[0].cwd.includes('Beta'));assert.ok(!JSON.stringify(sa.context).includes('/Beta/'));
+await assert.rejects(peers.request(a,'chat.start',{prompt:'must not run'}),/Reconnecting/);await peers.connect(a);await peers.connect(b);const sa=(await peers.request(a,'sync')).state,sb=(await peers.request(b,'sync')).state;assert.ok(sa.context.workspaces[0].cwd.includes('Alpha'));assert.ok(sb.context.workspaces[0].cwd.includes('Beta'));assert.ok(!JSON.stringify(sa.context).includes('/Beta/'));
 const {runId}=await peers.request(a,'chat.start',{prompt:'Synthetic Alpha only',provider:'rehearsal',workspaceId:sa.context.defaultWorkspaceId});await until(()=>apps[0].engine.getRun(runId).pending);assert.equal(apps[1].engine.listRuns().length,0);await assert.rejects(peers.request(b,'chat.get',{id:runId}),/not found|Unknown/);await assert.rejects(peers.request(a,'schedule.run',{id:'anything'}),/ENOENT|not found/);await assert.rejects(peers.request(a,'arbitrary.execute',{}),/Unsupported/);
 const run=await peers.request(a,'chat.get',{id:runId});await peers.request(a,'chat.reply',{id:runId,requestId:run.pending.id,answer:'Synthetic answer'});await until(()=>apps[0].engine.getRun(runId).status==='completed');
 await peers.index();await peers.indexPending;assert.ok((await peers.index()).items.some(item=>item.id===runId));const encryptedIndex=fs.readFileSync(peers.cacheFile);assert.ok(!encryptedIndex.includes(Buffer.from(runId)));assert.equal(fs.statSync(peers.cacheFile).mode&0o777,0o600);
-peers.close();peers=new DesktopPeers(path.join(home,'client'),{safeStorage});assert.equal(peers.list().length,2);assert.ok(peers.cache.get(a).items.some(item=>item.id===runId));assert.ok(peers.list().every(p=>p.status==='offline'));await peers.connect(a);assert.equal((await peers.request(a,'chat.get',{id:runId})).id,runId);await peers.connect(b);apps[0].remote.revoke(apps[0].remote.config.devices[0].id);await until(()=>peers.list().length===1);assert.equal(peers.list()[0].hostId,b);assert.equal(peers.cache.has(a),false);assert.equal(JSON.parse(safeStorage.decryptString(fs.readFileSync(peers.cacheFile)))[a],undefined);await assert.rejects(peers.request(a,'chat.resume',{id:runId,prompt:'not authorized'}),/Connect/);assert.equal((await peers.request(b,'sync')).state.runs.length,0);peers.remove(b);assert.equal(peers.list().length,0);assert.deepEqual(JSON.parse(safeStorage.decryptString(fs.readFileSync(peers.cacheFile))),{});assert.deepEqual(await peers.index(),{items:[],hosts:[],partial:false});
+peers.close();peers=new DesktopPeers(path.join(home,'client'),{safeStorage});assert.equal(peers.list().length,2);assert.ok(peers.cache.get(a).items.some(item=>item.id===runId));assert.ok(peers.list().every(p=>p.status==='offline'));await peers.connect(a);assert.equal((await peers.request(a,'chat.get',{id:runId})).id,runId);await peers.connect(b);apps[0].remote.revoke(apps[0].remote.config.devices[0].id);await until(()=>peers.list().length===1);assert.equal(peers.list()[0].hostId,b);assert.equal(peers.cache.has(a),false);assert.equal(JSON.parse(safeStorage.decryptString(fs.readFileSync(peers.cacheFile)))[a],undefined);await assert.rejects(peers.request(a,'chat.resume',{id:runId,prompt:'not authorized'}),/not paired/);assert.equal((await peers.request(b,'sync')).state.runs.length,0);peers.remove(b);assert.equal(peers.list().length,0);assert.deepEqual(JSON.parse(safeStorage.decryptString(fs.readFileSync(peers.cacheFile))),{});assert.deepEqual(await peers.index(),{items:[],hosts:[],partial:false});
 });
 
 test('remote tab descriptors retain only explicit destination/run identity, with no cached content',async()=>{const {normalizeSession}=await import('../desktop/workspace-session.cjs');const hostId='11111111-1111-4111-8111-111111111111',runId='22222222-2222-4222-8222-222222222222';const value=normalizeSession({tabs:[{id:'one',type:'remote-run',hostId,runId,label:'Synthetic remote chat',key:'must disappear',prompt:'private draft',events:['private content']},{id:'two',type:'remote-run',hostId,runId},{id:'bad',type:'remote-run',hostId:'invalid',runId}],active:'one'});assert.equal(value.tabs.length,2);assert.deepEqual(value.tabs[1],{id:'peer:'+hostId+':'+runId,type:'remote-run',label:'Synthetic remote chat',hostId,runId});assert.ok(!JSON.stringify(value).includes('private'));});
@@ -167,4 +186,32 @@ test('recovery retries one host independently, never replays mutations, and resp
   peers.sessions.get(record.hostId).client.close();peers.resumeConnections();assert.equal(peers.recovery.get(record.hostId).timer,null);
   assert.equal(peers.list().find(p=>p.hostId===record.hostId).status,'needs-action');
   peers.close();assert.equal(peers.recovery.size,0);
+});
+
+test('offline requests start recovery without replaying commands or defeating backoff',async t=>{
+  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-peer-demand-'));
+  fs.writeFileSync(path.join(home,'desktop-peers.enc'),safeStorage.encryptString(JSON.stringify([record])));
+  let available=false,clients=0;const requests=[];
+  class Client extends EventTarget{
+    constructor(host){super();this.host=host;this.status='offline';clients++;}
+    async connect(){if(!available)throw Error('Offline');this.status='online';}
+    async request(method){requests.push(method);return {state:{runs:[]}};}
+    close(){this.status='closed';this.dispatchEvent(new CustomEvent('status',{detail:'offline'}));}
+  }
+  const peers=new DesktopPeers(home,{safeStorage,clientFactory:h=>new Client(h),retryBaseMs:60000,heartbeatMs:0});
+  t.after(()=>{peers.close();fs.rmSync(home,{recursive:true,force:true});});
+  await assert.rejects(peers.request(record.hostId,'chat.send'),/Reconnecting/);
+  await until(()=>!!peers.recovery.get(record.hostId)?.timer);
+  const timer=peers.recovery.get(record.hostId).timer;
+  for(let i=0;i<5;i++){
+    await assert.rejects(peers.request(record.hostId,'tabs.get'),/Reconnecting/);
+    await assert.rejects(peers.connect(record.hostId,{automatic:true}),/Reconnecting/);
+    await peers.index();await peers.indexPending;
+  }
+  assert.equal(clients,1);assert.equal(peers.recovery.get(record.hostId).timer,timer);assert.deepEqual(requests,[]);
+  available=true;await peers.connect(record.hostId);await peers.request(record.hostId,'tabs.get');
+  assert.deepEqual(requests,['sync','tabs.get']);
+  peers.disconnect(record.hostId);await assert.rejects(peers.request(record.hostId,'tabs.get'),/disconnected/);assert.equal(clients,2);
+  await peers.connect(record.hostId);peers.sessions.get(record.hostId).client.dispatchEvent(new CustomEvent('recovery-blocked'));peers.sessions.get(record.hostId).client.close();
+  await assert.rejects(peers.request(record.hostId,'tabs.get'),/authentication/);assert.equal(clients,3);
 });

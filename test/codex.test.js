@@ -86,3 +86,13 @@ test('Codex document tool remains available on resumed chats and enforces approv
   await assert.rejects(fetch(env.PROTEUS_DOCUMENT_ENDPOINT));
  }}finally{await f.provider.close();}
 });
+
+test('chat-only folder grants reach Codex roots without granting the original cwd under Ask',async()=>{
+ const f=sandboxFixture();try{
+  const read={...f.store.describe(f.run.schedule),mode:'custom',chatFolders:[{path:f.outside,access:'read'}],folders:[{path:f.outside,access:'read'}]};
+  const limited=codexSandbox(f.run.schedule,read);assert.equal(limited.sandbox,'read-only');assert.ok(limited.runtimeWorkspaceRoots.includes(f.outside));
+  f.store.setMode(f.run.schedule,'trusted');const trusted=f.store.describe(f.run.schedule);trusted.chatFolders=[{path:f.outside,access:'read-write'}];trusted.folders.push(...trusted.chatFolders);
+  assert.ok(codexSandbox(f.run.schedule,trusted).policy.writableRoots.includes(f.outside));
+  trusted.chatFolders=[];trusted.folders=trusted.folders.filter(g=>g.path!==f.outside);assert.ok(!codexSandbox(f.run.schedule,trusted).policy.writableRoots.includes(f.outside));
+ }finally{await f.dispose();}
+});

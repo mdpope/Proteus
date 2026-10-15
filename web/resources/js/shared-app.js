@@ -1,3 +1,4 @@
+import {observeRunningChats} from './running-chats.js';
 import { BrowserDestinationStore, BrowserRemoteClient } from './remote-client.js';
 import { usageSidebar, usageDetails } from '../../../public/provider-usage-view.js';
 const account = document.body.dataset.browserAccount;
@@ -17,16 +18,10 @@ export function localDateTime(value){
     if(!value||!Number.isFinite(Date.parse(value)))return 'Time unavailable';
     return new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short'}).format(new Date(value));
 }
-export function recordBrowserVisit(url,title){
-    const key='proteus.browser-device.'+account;let deviceId;
-    try{deviceId=localStorage.getItem(key);if(!/^[a-f0-9-]{36}$/i.test(deviceId||'')){deviceId=crypto.randomUUID();localStorage.setItem(key,deviceId);}}catch{deviceId=crypto.randomUUID();}
-    const platform=navigator.userAgentData?.platform||navigator.platform||'';
-    const name=/iPhone|iPad|iPod/i.test(platform)?'iOS':/Mac/i.test(platform)?'macOS':/Win/i.test(platform)?'Windows':/Android/i.test(navigator.userAgent)?'Android':/Linux/i.test(platform)?'Linux':'this device';
-    return appRequest('/history','POST',{eventId:crypto.randomUUID(),url,title:String(title||'').slice(0,160),source:'web',visitedAt:new Date().toISOString(),deviceId,deviceName:'Browser on '+name});
-}
+export function recordBrowserVisit(url,title,hostId){const event={eventId:crypto.randomUUID(),url,title:String(title||'').slice(0,160),profileId:'default',visitedAt:new Date().toISOString()};return hostId?browserHistoryRequest(hostId,'record',event):defaultMacRequest('browser.history.record',event);}
 let usageClient, usageTimer, reconnectTimer, connectionGeneration=0, connectionAttempt=0, stopped=false;
 let preferences;
-let defaultState={status:'loading',message:'Loading saved Mac connections…',hostId:null,label:''};
+let defaultState={status:'loading',message:'Loading saved computer connections…',hostId:null,label:''};
 const destinationStore=account?new BrowserDestinationStore(account):null;
 export const defaultMacStatus=()=>({...defaultState});
 function connectionState(status,message,host={}){
@@ -37,14 +32,18 @@ export async function defaultMacRequest(method,args={}){
     if(usageClient?.status!=='online')throw new Error(defaultState.message);
     await destinationStore.verifySession();return usageClient.request(method,args);
 }
+export async function browserHistoryRequest(hostId,method,args={}){
+ await destinationStore.verifySession();const client=hostId===preferences?.defaultMacId?usageClient:badgeClients.get(hostId);if(client?.status==='online')return client.request('browser.history.'+method,args);
+ const credential=await destinationStore.credential(hostId),temporary=new BrowserRemoteClient(credential);try{await temporary.connect();await destinationStore.verifySession();return await temporary.request('browser.history.'+method,args);}finally{temporary.close();}
+}
 export async function updateDefaultMac(id){
     await appRequest('/preferences','PUT',{defaultMacId:id||null});
     preferences.defaultMacId=id||null;window.proteusPreferences=preferences;
-    await connectDefaultMac();
+    await connectDefaultMac();void connectBadgeClients();
 }
 function stopDefaultMac(){
     ++connectionGeneration;clearTimeout(reconnectTimer);clearInterval(usageTimer);reconnectTimer=null;
-    const old=usageClient;usageClient=null;old?.close();
+    const old=usageClient;usageClient=null;if(old)observeRunningChats(old.host?.hostId||defaultState.hostId,'default',null,false);old?.close();
 }
 async function connectDefaultMac({retry=false}={}){
     stopDefaultMac();if(stopped||globalThis.proteusSigningOut)return;
@@ -53,8 +52,8 @@ async function connectDefaultMac({retry=false}={}){
     const unavailable=message=>{if(!element)return;element.hidden=false;element.replaceChildren();const heading=document.createElement('strong');heading.textContent='AI Allowance';const note=document.createElement('p');note.textContent=message;element.append(heading,note);};
     const report=(status,message,host)=>{connectionState(status,message,host);unavailable(message);};
     const selected=preferences?.defaultMacId;
-    if(!selected){report('unselected','Choose a Default Mac in Engine Room.');return;}
-    report('connecting','Connecting to the Default Mac…');
+    if(!selected){report('unselected','Choose a Default computer in Engine Room.');return;}
+    report('connecting','Connecting to the Default computer…');
     const relevant=()=>generation===connectionGeneration&&!stopped&&!globalThis.proteusSigningOut;
     const retryLater=()=>{if(!relevant()||reconnectTimer||connectionAttempt>=5)return;const delay=Math.min(1000*2**connectionAttempt++,16000);reconnectTimer=setTimeout(()=>{reconnectTimer=null;void connectDefaultMac({retry:true});},delay);};
     try {
@@ -83,38 +82,54 @@ async function connectDefaultMac({retry=false}={}){
         };
         const refresh=async(force=false)=>{
             if(usageBusy)return;usageBusy=true;if(dialog.open)showDetails(dialog.dataset.provider);
-            try{await destinationStore.verifySession();if(!relevant())return;const value=await client.request('provider.usage',{force});if(!relevant())return;if(value.enabled===false){dialog.close();unavailable('Hidden by this Mac’s privacy setting.');}else render(value);}
+            try{await destinationStore.verifySession();if(!relevant())return;const value=await client.request('provider.usage',{force});if(!relevant())return;if(value.enabled===false){dialog.close();unavailable('Hidden by this computer’s privacy setting.');}else render(value);}
             catch(error){if(!relevant())return;if(error.sessionInvalid){stopDefaultMac();report('session','Sign in again before connecting.');}else if(client.status==='online'){latestUsage={providers:Object.fromEntries(['copilot','codex','claude'].map(id=>[id,{error:'Allowance unavailable. Refresh to retry.'}]))};render(latestUsage);}}
             finally{usageBusy=false;if(relevant()&&dialog.open)showDetails(dialog.dataset.provider);}
         };
         client.addEventListener('change',event=>{
             if(!relevant()||event.detail?.event!=='state')return;
-            const state=event.detail.data;
+            const state=event.detail.data;observeRunningChats(credential.hostId,'default',state);
             if(typeof state.hostName==='string'&&state.hostName.trim()&&state.hostName.length<=80&&!/[\x00-\x1f\x7f]/.test(state.hostName)){
                 const old={...credential};credential.label=state.hostName.trim();void destinationStore.rememberName(old,state.hostName).catch(()=>{});
                 connectionState('connected',credential.label+' · Connected',credential);
             }
-            if(state.appearance?.showProviderUsage===false){dialog.close();unavailable('Hidden by this Mac’s privacy setting.');}else render(state.providerUsage||{providers:{}});
+            if(state.appearance?.showProviderUsage===false){dialog.close();unavailable('Hidden by this computer’s privacy setting.');}else render(state.providerUsage||{providers:{}});
         });
-        client.addEventListener('rejected',()=>{if(!relevant())return;rejected=true;report('rejected','Connection rejected. Saved pairing is retained; review access on the Mac.',credential);});
-        client.addEventListener('revoked',event=>{if(!relevant()||event.detail?.authenticated!==true)return;rejected=true;report('revoked','The Mac revoked this connection. Pair again to restore access.',credential);});
-        client.addEventListener('status',()=>{if(!relevant())return;if(client.status==='closed'&&!rejected){report('unavailable',credential.label+' · connection unavailable. Retrying…',credential);retryLater();}});
+        client.addEventListener('rejected',()=>{if(!relevant())return;rejected=true;report('rejected','Connection rejected. Saved pairing is retained; review access on the computer.',credential);});
+        client.addEventListener('revoked',event=>{if(!relevant()||event.detail?.authenticated!==true)return;rejected=true;report('revoked','The computer revoked this connection. Pair again to restore access.',credential);});
+        client.addEventListener('status',()=>{if(!relevant())return;if(client.status!=='online')observeRunningChats(credential.hostId,'default',null,false);if(client.status==='closed'&&!rejected){report('unavailable',credential.label+' · connection unavailable. Retrying…',credential);retryLater();}});
         await client.connect();if(!relevant()){client.close();return;}connectionAttempt=0;
         connectionState('connected',credential.label+' · Connected',credential);
         document.dispatchEvent(new CustomEvent('proteus:default-connected'));
-        const result=await client.request('sync',{cursor:''});if(!relevant())return;
+        const result=await client.request('sync',{cursor:''});if(!relevant())return;observeRunningChats(credential.hostId,'default',result.state);
         if(result.state?.hostName){const old={...credential};await destinationStore.rememberName(old,result.state.hostName).catch(()=>{});credential.label=old.label;connectionState('connected',credential.label+' · Connected',credential);}
         await refresh();usageTimer=setInterval(()=>{if(!document.hidden)void refresh();},60_000);
     }catch(error){
         if(!relevant())return;
         if(['rejected','revoked'].includes(defaultState.status))return;
         if(error.sessionInvalid){stopDefaultMac();report('session','Sign in again before connecting.');}
-        else if(error.status===404){report('unpaired','The Default Mac is not paired with this account or browser. Choose a paired Mac in Connections.');}
+        else if(error.status===404){report('unpaired','The Default computer is not paired with this account or browser. Choose a paired computer in Connections.');}
         else if(error.status===409){report('changed','The saved pairing changed. Reload Connections before retrying.');}
-        else {report('unavailable','Default Mac connection unavailable. Check the Mac and relay, or retry in Connections.');retryLater();}
+        else {report('unavailable','Default computer connection unavailable. Check the computer and relay, or retry in Connections.');retryLater();}
     }
 }
 export function retryDefaultMac(){return connectDefaultMac();}
+const badgeClients=new Map();let badgeTimer;
+function stopBadgeClients(){clearTimeout(badgeTimer);for(const [id,client]of badgeClients){observeRunningChats(id,'shell',null,false);client.close();}badgeClients.clear();}
+async function connectBadgeClients(){
+ clearTimeout(badgeTimer);
+ if(stopped||globalThis.proteusSigningOut||document.querySelector('#remote-workspace'))return;
+ try{const hosts=await destinationStore.list();if(stopped)return;const ids=new Set(hosts.map(h=>h.hostId));for(const [id,client]of badgeClients)if(!ids.has(id)||id===preferences?.defaultMacId){client.close();badgeClients.delete(id);observeRunningChats(id,'shell',null,false);}
+ await Promise.allSettled(hosts.filter(h=>h.hostId!==preferences?.defaultMacId).map(async host=>{
+  if(badgeClients.get(host.hostId)?.status==='online')return;
+  badgeClients.get(host.hostId)?.close();const credential=await destinationStore.credential(host.hostId);if(stopped)return;
+  const client=new BrowserRemoteClient(credential);badgeClients.set(host.hostId,client);
+  const current=()=>!stopped&&badgeClients.get(host.hostId)===client;
+  client.addEventListener('change',event=>{if(current()&&event.detail?.event==='state')observeRunningChats(host.hostId,'shell',event.detail.data);});
+  client.addEventListener('status',()=>{if(current()&&client.status!=='online')observeRunningChats(host.hostId,'shell',null,false);});
+  try{await client.connect();await destinationStore.verifySession();if(!current()){client.close();return;}const result=await client.request('sync',{cursor:''});if(current())observeRunningChats(host.hostId,'shell',result.state);}catch{if(current())observeRunningChats(host.hostId,'shell',null,false);client.close();}
+ }));}catch{}finally{if(!stopped)badgeTimer=setTimeout(()=>void connectBadgeClients(),30000);}
+}
 async function initSharedShell(){
     if(!account)return;
     try{preferences=(await appRequest()).preferences;window.proteusPreferences=preferences;document.dispatchEvent(new CustomEvent('proteus:preferences',{detail:preferences}));}
@@ -123,7 +138,7 @@ async function initSharedShell(){
     const railToggle=document.querySelector('#shell-rail-toggle');
     const updateRail=()=>{if(railToggle){railToggle.textContent=preferences.sidebarCollapsed?'›':'‹';railToggle.setAttribute('aria-label',preferences.sidebarCollapsed?'Expand sidebar':'Collapse sidebar');}};updateRail();
     railToggle?.addEventListener('click',async()=>{preferences.sidebarCollapsed=!preferences.sidebarCollapsed;document.body.classList.toggle('rail-collapsed',preferences.sidebarCollapsed);updateRail();await appRequest('/preferences','PUT',{sidebarCollapsed:preferences.sidebarCollapsed}).catch(()=>{});});
-    await connectDefaultMac();
+    await connectDefaultMac();void connectBadgeClients();
 }
 // Ordinary external links always leave in an actual browser tab, preserving the app.
 document.addEventListener('click',event=>{
@@ -131,7 +146,7 @@ document.addEventListener('click',event=>{
     let url;try{url=new URL(link.href);}catch{return;}
     if(['http:','https:'].includes(url.protocol)&&url.origin!==location.origin){link.target='_blank';link.rel='noopener noreferrer';void recordBrowserVisit(url.href,link.textContent).catch(()=>{});}
 });
-window.addEventListener('pagehide',()=>{stopped=true;stopDefaultMac();destinationStore?.close();});
+window.addEventListener('pagehide',()=>{stopped=true;stopDefaultMac();stopBadgeClients();destinationStore?.close();});
 window.addEventListener('pageshow',event=>{if(event.persisted){stopped=false;void initSharedShell();}});
-if(account){const channel=new BroadcastChannel('proteus-remote-account');channel.onmessage=event=>{if(event.data?.type==='logout'&&event.data.account===account){stopped=true;stopDefaultMac();connectionState('session','Signed out. Sign in again before connecting.');}};}
+if(account){const channel=new BroadcastChannel('proteus-remote-account');channel.onmessage=event=>{if(event.data?.type==='logout'&&event.data.account===account){stopped=true;stopDefaultMac();stopBadgeClients();connectionState('session','Signed out. Sign in again before connecting.');}};}
 void initSharedShell();

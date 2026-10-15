@@ -6,6 +6,12 @@ test('browser rejects replayed host frames and handles revocation without exposi
 
 test('two browsers can use one account device with independent encrypted sessions',async t=>{const {connect}=await fixture(t),first=await connect(),second=await connect({...first.host});assert.equal((await first.request('sync')).state.context.defaultWorkspaceId,(await second.request('sync')).state.context.defaultWorkspaceId);first.close();assert.ok((await second.request('sync')).state);});
 
+test('browser metadata bursts preserve pairing within the production relay budget',async t=>{
+ const {connect}=await fixture(t),client=await connect();
+ const results=await Promise.all(Array.from({length:105},()=>client.request('runs.list',{offset:0})));
+ assert.equal(results.length,105);assert.equal(client.status,'online');assert.ok(results.every(Array.isArray));
+});
+
 
 test('host revocation closes every browser using the account device and rejects restoration',async t=>{
  const {app,connect}=await fixture(t),first=await connect(),saved={...first.host},second=await connect({...saved});

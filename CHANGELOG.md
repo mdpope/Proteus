@@ -1,4 +1,431 @@
+## 0.2.19 — Navigation, redirect history and scheduled conversations
+
+- Relocate the saved chat-tab descriptor from main navigation into its workspace in the owner store, independently of paused browser synchronization. Repeated Move converges duplicate placements while preserving other tabs, custom names, dates and metadata.
+- Keep the moved chat selected inside its destination workspace and bring both navigation tabs into view.
+- Identify the affected tab/page in browser conflict recovery and use plain saved-history/pending-page choices.
+- Remove redirect pausing and countdown banners. Desktop, web and native history preserve original URLs and every redirect destination, including query strings and fragments, without replaying engine state or POST bodies.
+- Open the existing tab from its Workspace Tabs title and reveal its navigation entry on desktop, web and mobile.
+- Allow explicit conversation-only approval for a schedule-started conversation using its exact waiting request and existing context/revision checks; future scheduled runs retain their own approvals.
+- Keep the 0.2.18 movement, membership/index, resizable columns, sidebar visibility and agent document placement corrections.
+
+## 0.2.18 — Respect workspace placement for agent-opened documents
+
+- Open an agent-created document beside its existing workspace chat instead of creating a duplicate top-level chat container. Reuse the viewer and retain original document ownership/access checks.
+- Include the tested 0.2.17 tab movement, membership, resizing and sidebar corrections; the 0.2.17 candidate was superseded before installation.
+
+## 0.2.17 — Tab movement and navigation follow-up
+
+- Separate navigation operation IDs from history entry IDs, acknowledge identical already-saved entries without new visits, and pause conflicting or closed-tab retries with visible recovery choices.
+- Move browser tabs through the owner service and retain complete Back/Forward stacks across placement changes, including revisiting an earlier destination.
+- Give Workspace Tabs titles 360 pixels by default; resize columns with pointer or keyboard and remember widths locally. URLs truncate within their column; narrow screens retain the card layout.
+- Enable Move chat to workspace from chat-tab menus, reconcile organizational membership immediately in Chats lists, and keep independent captured run/approval settings.
+- Make expanded compact navigation reserve layout space beside the native browser, keeping the page visible and loaded.
+
+## 0.2.16 — October 14, 2026
+
+- Import saved chats, terminals and viewers into older browser-only navigation registries before
+  synchronization can remove them. Preserve existing browser authority and ordering, and record
+  the completed import so intentional closes remain closed after restart.
+- Native clients remain on the tested 0.2.15 / 2610.14.1 build; the correction runs on the desktop owner.
+
+## 0.2.15 — October 14, 2026
+
+- Add required visible Proteus guidance/tool inventory and all-type tab management through the
+  owner service/local MCP; Workspace Tabs lists metadata and supports hide, order, move and close.
+- Move chats between workspaces while retaining captured run options and sessions. Delete a
+  workspace with chat preservation/rehome options and retryable resource closure.
+- Group recent Send destinations; persist browser tabs outside normal retention; keep the global
+  Needs attention count stable; show agent questions alongside their recorded answers.
+- Add desktop redirect decisions and native history reconciliation with requested-path provenance;
+  downloads with dates, cancellation, destinations, folder controls and Save As/export.
+- Integrate Playwright MCP and visual image/coordinate tools; optional scoped Chrome DevTools MCP
+  and human DevTools; explicit extension-profile agent access and compact, localized, dismissible
+  extension controls. SQLite workspace/chat metadata migration remains shelved.
+
+Current tests and per-target rollout status are recorded in
+[the release ledger](docs/2026-10-13-tab-management-release.md). Earlier queue-only notes below
+are historical; no new installation is claimed by this entry.
+
+## Future update intake — October 13, 2026 · queued only
+
+- Confirm agent sharing for extension-enabled tabs (BF-17); queue address-toolbar Extensions/
+  Install placement and localized extension names (BF-18), bounded/dismissible rendering popups
+  (BF-19) and missing-answer/feedback reconciliation (BF-20). Completed owner read-only audit:
+  native events/JSON/API agree; first explanation was not emitted, later explanation is preserved
+  in a feedback question. Queue readable question history; historical UI acceptance pending.
+  No application implementation/build, feedback sent or grant changes.
+- Record answered Copilot/Claude questions disappearing from visible history while user replies
+  remain. BF-20 reopens BF-2026-10-07-07 presentation acceptance: full linked question/answer
+  history, beyond durable system-event capture. Queued only; no runtime change.
+- Record chosen default Playwright and optional on-demand Chrome DevTools MCP, with built-in
+  human DevTools/Inspect and agent MCP package integration; BF-2026-10-13-16. Queue configurable
+  agent access for extension profiles instead of a blanket private block; BF-17. No build/grant changes.
+- Record operator authorization to use the previously linked Zoho Assist session for future
+  BF-2026-10-13-15 visual/input tests. Session details remain private; build hold stays in place.
+- Add visual control to the build list using existing Playwright: actual image tool responses,
+  viewport coordinate click/drag/scroll/keyboard and verification for Zoho Assist/canvas pages.
+  Preserve scoped tab/profile access and semantic tools; BF-2026-10-13-15. No implementation/build.
+- Queue Firefox-style browser downloads: normal-download handling, indicator/progress/date,
+  per-item cancellation, configurable owner-local Downloads folder, Open folder and right-click
+  Save As; BF-2026-10-13-14. Existing helper-grant path blocks ordinary page downloads. No build.
+- Queue Delete workspace with affected-tab closure and preserved chats becoming unhoused, or
+  bulk relocation to an existing/new workspace. Preserve conversations, run options, approvals,
+  active work and project files; BF-2026-10-13-13. No actual deletion or implementation/build.
+- Queue Workspace Tabs between Chats and Configuration, with typed inventory, flexible URL,
+  opened/interaction dates and hide/restore/reorder/close/move. Extend associations to terminals/
+  viewers as well as browsers; BF-2026-10-13-12. Add synthetic interactive design context only.
+- Queue all-tab inventory/filtering/metadata and movement/closing for internal/external agents,
+  with chat workspace/lifecycle management through a shared service boundary; BF-2026-10-13-11.
+  Review SafariSelector patterns and add project AGENTS guidance plus a discoverable tab-manager
+  agent profile. No management tools, runtime behavior or builds added.
+- Queue a consistent global Needs attention badge across view changes and chat-index refreshes.
+  Full renders include non-chat items; index callbacks currently overwrite it with chat-only
+  totals. BF-2026-10-13-10; code finding only, no implementation/build.
+- Shelve BF-2026-10-13-09 storage migration discussion in future ideas, outside the active batch.
+- Review JSON versus SQLite for workspace/chat metadata and tab state; recommend considering
+  a hybrid with editable JSON configuration and transactional app state, with one field authority
+  and a separate decision for transcript migration. BF-2026-10-13-09; review only, no build.
+- Queue Persist tab for browser tabs: prevent automatic unload and exclude persisted tabs from
+  the regular loaded/retained allowance while keeping actual resource totals accurate. Remember
+  the preference through restoration/moves; BF-2026-10-13-08. No implementation/build changes.
+- Queue labelled Workspaces/Chats sections in Send tab destinations, each most-recent first;
+  retain Application tabs/Team Tools and existing transfer behavior. BF-2026-10-13-07; no build.
+- Queue Move chat beside Archive/Delete, with a destination-workspace picker and actual membership/
+  navigation relocation on desktop, web and mobile. Preserve effective per-chat configuration,
+  drafts/session/children and owner identity; BF-2026-10-13-06. No runtime/build changes.
+- Queue redirect/replacement-aware browser history after reported ADO `view=results` Back/swipe
+  loops. Record code findings, established browser behavior and future acceptance; preserve
+  meaningful query parameters. Revised preference preserves original/login-redirect destinations
+  and pauses eligible redirects for a five-second Accept / Reject banner with automatic timeout
+  continuation and immediate Back cancellation. No runtime/build changes; BF-2026-10-13-05.
+  Revised platform split: iOS/iPadOS uses redirect/replacement-aware history reconciliation
+  without a banner, preserving original destinations as recoverable provenance. Electron desktop
+  keeps its banner proposal. No implementation or builds are authorized.
+- Queue required, visible Proteus feature awareness for chat agents, an accurate provider tool
+  inventory and review of on-demand feature guidance/tools within existing context/details views.
+  Record current built-in app guidance and partial tool coverage. No runtime behavior, builds
+  or installations change; see BF-2026-10-13-04 in docs/planned-updates.md.
+
+## Browser tab stability — October 13, 2026
+
+- Preserve saved titles while activating restored browser tabs, and update unloaded native snapshots when the owner publishes a new page title. Loading placeholders no longer enter shared metadata and resize tab labels.
+- Keep main and Team tab-strip nodes during unchanged state broadcasts and polling. Preserve scroll position, mounted page state and custom titles.
+- Recheck current order after asynchronous browser reconciliation, preserve user reorders made during a load, count overlapping scope application correctly, and detach captured navigation/baseline snapshots from mutable renderer history.
+- Correct the standalone browser Add tab popup's out-of-scope workspace reference. Validation/installation status: docs/2026-10-13-tab-stability.md.
+
 # Changes
+
+## 0.2.13 — Rotating logs and clicked browser links · October 13, 2026
+
+- Store full redacted computer diagnostics in a separate worker-owned SQLite database. Rotate
+  oldest records at 2,000 entries or the 64 MiB payload budget; preserve the original JSON during
+  migration and keep execution retry receipts independent.
+- Show compact log headers with Details expanders and 50-entry pages across desktop, web and
+  native clients. Fetch traces only on expansion and locate retained older entries from alerts.
+- Protect clicked-page navigation while loading so history polling cannot reload the old address
+  and abort the intended destination. Preserve redirects, private pages and Back/Forward history.
+- Tests and per-target acceptance/installation are tracked in docs/2026-10-13-logs-browser.md.
+
+## New release intake — October 13, 2026 · queued only
+
+- Start a fresh collection-only list under the operator's explicit build hold. Queue compact log
+  headers, expandable full messages/stack traces/diagnostic fields and bounded pagination.
+  Record current JSON storage/truncation and a proposed dedicated worker-owned SQLite store;
+  no application implementation, migration, build, installation or deployment.
+
+## Internet Search dialog layout — October 13, 2026
+
+- Let the search input fill the enlarged dialog instead of inheriting the chat composer’s 140px height cap. Keep the provider actions and Cancel below the input, and scroll long text within the input.
+
+## Team browser refresh correction — October 13, 2026
+
+- Keep the selected Team Tools browser mounted during unrelated background state and shared-title updates. Preserve page scroll, address edits and native surface visibility while refreshing application navigation. Account, selection, load/profile, layout and explicit refresh changes still rebuild the view.
+- Disposable renderer regression reproduces the former Preparing tab flashes and verifies the correction; installation status is separate.
+
+## Unified browser history and navigation — October 12, 2026
+
+- Store Default and named-profile visits in a worker-owned indexed SQLite database, with progressive search, optional paired-computer replication and a durable native upload outbox. Keep legacy history and existing command retry receipts. The account service retains profile definitions; new browsing history stays on the owning computers.
+- Synchronize stable per-tab navigation entries and the selected position, including Forward history. Atomic navigation/visit receipts prevent mirror and retry duplicates; conflicting offline changes remain recoverable. Local unload and private authentication pages cannot clear shared tabs.
+- Configure history recording, retention and replication using the owning computer’s paired computers and profiles. Preserve hidden peer preferences and unknown settings when saving across clients.
+- Add native navigation history lists, touchpad traversal, local tab previews, profile-aware history and bounded day-by-day older-history queries. Account refresh and browser profiles work independently of Life.
+- Add Copy chat link to desktop/web/native chat tab menus and organize infrequently used paths in Run files & folders below approvals. Workspace agent browsing defaults to its initiating workspace, supports explicit destinations, and remote chat indexes preserve workspace identity.
+- Preserve all restored local browser views when older sessions contain multiple views for one synchronized tab identity; ordering no longer leaves an undefined tab during startup or refresh.
+- Validation and per-target installation status are recorded in docs/2026-10-12-unified-browser.md; implementation does not itself establish live verification.
+
+## October 12 remote-state and interaction correction
+
+- Avoid rebuilding full chat prompts for integration health. Reuse scoped catalog projections only within a synchronous enumeration, compile exclusions once per operation, retain exact registry IDs and reread current configuration/source bytes.
+- Bound favicon resolution per navigation, coalesce in-flight resolution and ignore unrelated network completion so invalid HTML favicons cannot trigger a request loop.
+- Retain separate bounded long-stall diagnostics, with context/attention/integration, attachment cleanup and activity persistence timings.
+- Group tools, approvals and distinct system messages into contiguous Activity blocks using existing platform designs. Show recorded tool completion times, durations and related approval requests. Remote desktop Working follows owner state and clears when disconnected.
+- Insert new browser tabs immediately after their captured source in the same navigation container. View logs refreshes the destination and reveals the associated event, with a fallback for missing entries.
+- Restore native tab type icons, including workspace chat tabs. Preserve saved Back/Forward history across native navigation, refresh shared default-profile Recent sites with explicit loading/error states, enable compatible WebKit back/forward gestures, and add pinch-to-overview animation with Reduce Motion support.
+
+
+## New release intake — October 12, 2026 · queued only
+
+- Record alert-banner View logs doing nothing; queue opening Logs and revealing the associated
+  entry when available, with a Logs-page fallback. Collection only; no runtime changes.
+
+- Queue Open in new Proteus tab insertion immediately after its initiating tab in the same
+  navigation container, instead of appending to the end. Collection only; no runtime changes.
+
+- Queue remote desktop parity for the local Working spinner/message and queue/steer guidance,
+  driven by owner-host turn state. Reported omission; no runtime changes or builds.
+
+- Start a fresh collection-only batch under an explicit build hold. Queue consistent desktop,
+  iPad and iPhone activity/approval cards, original-request/tool-call association and per-tool
+  completion timestamps/durations. Combine intervening tools, approvals and darker system boxes
+  into one Activity group between user/model messages. Requested comparison is design only;
+  no application implementation, build, install or deployment.
+
+- Clarify this intake as message-detail/relationship parity using each platform's existing design,
+  including iPhone's different native layout. The comparison does not propose a full visual redesign.
+
+## Unreleased — October 12, 2026
+
+- Move periodic schedule reads, validation, cron calculation and durable checkpoint writes into a serialized worker. Preserve run claims before execution, current-file schedule changes, skip/coalesce behavior and checkpoint recovery.
+- Add bounded private event-loop and phase timing diagnostics for periodic hangs, distinguishing synchronous blocking from asynchronous waits; retain current and previous diagnostic snapshots locally.
+
+- Remote commands use incremental durable receipts in a worker instead of rewriting the whole journal on Electron's main thread. Preserve legacy data, replay protections and uncertain outcomes; add byte-aware admission and payload-free diagnostics. Suppress unchanged tab-sync mutations using shared descriptor semantics.
+- Process and persistent-terminal metrics poll asynchronously, cookie snapshots use ordered asynchronous disk operations, and browsing-history serialization/retention/writes run in a worker. Preserve browser state across shutdown and remove redundant workspace-session rereads after saves.
+
+- Missing supplemental workspace/source folders no longer block chat creation. Unavailable folders are skipped with a persisted chat warning while configuration is preserved; remote chat creation tolerates missing sibling folders too.
+
+- Native chat/workspace browsers retain their current page when tab synchronization echoes an empty new-tab placeholder; real remote navigation, close and profile changes remain authoritative.
+
+- Folder headers use their available width before wrapping; expanded sections retain row separators without an inner vertical border. Rename workspace-local discovery to Workspace sources.
+- Show each computer’s configured name consistently and count only currently running, unarchived chats from connected computers in the Chats badge.
+- Match workspace and main Add-tab menu order, icons and spacing across clients, preserving explicit owner-only capabilities on remote clients.
+
+- Pinned Workspace/Chat tabs use the shared single 2-pixel selected underline, removing a duplicate inset shadow.
+
+- Restore clearly expandable source-folder sections with disclosure arrows, folder headers and visually contained controls/items.
+
+- Separate folder paths from scan counts with a spaced dot. Keep source-type buttons above the full-width master filter on desktop and web.
+
+## 0.2.12 — Workspaces and browser fixes — October 11, 2026
+
+- Workspaces now own independent folders, source selections, defaults and approvals, and persistent named navigation with a pinned Workspace page for Chats and Configuration. Seven recent workspaces appear in the sidebar; master and workspace chat views share one conversation and draft.
+- Complete local workspace copies open Configuration after naming. Cross-computer copies map paths into an independent owner workspace and reset machine-specific trust. Remote configuration retains editable selections and approvals with owner-only folder picking.
+- Sources use alphabetical folder sections and items with a master filter, per-folder refresh, configurable exclusions and independent scan budgets. Folder trust can be granted and revoked for one chat.
+- Browser preferences and filter updates work from the menu; Chrome Web Store installation and managed update rollback are available. Tabs and links retain their navigation context; transfer exceptions are guarded; hover URLs use one line; history suggestions filter while typing.
+- Browser gesture handling preserves native scrolling. Chat composers dock and resize without collapsing the live editor; Internet Search gives its larger message box the added space.
+- Claude input totals include observed cache-read and cache-creation tokens. Older incomplete usage remains marked partial rather than estimated.
+- Desktop, web and native verification and rollout are tracked separately in docs/2026-10-11-workspaces-release.md. Workspaces supersedes the separate Projects concept.
+
+## Apple signing preflight — October 11, 2026
+
+- Install the validated .5 iPad app as a native Designed for iPad client on this Apple silicon Mac,
+  alongside desktop Proteus. Operator-confirmed launch and independent process checks passed after
+  macOS Security authorization. Existing certificate retained; no runtime changes.
+
+- Require Mac unlock before Apple account/signing checks, and repeat checks after unlock before
+  diagnosing missing setup. Preserve existing accounts, certificates and app data. Instructions
+  updated; the validated native .5 artifact was re-signed and installed in place on iPhone and iPad.
+  Launch, seven protected files per device and destination retention were verified. Renewed profiles
+  expire October 18; existing certificate shared with Omi retained. No runtime or Omi changes.
+
+## New issue / feature plan — October 10, 2026 · queued only
+
+- Revise Workspaces design after operator feedback: feature list without its own tab, seven recent
+  sidebar entries, pinned Workspace with Chats/Configuration pages, existing configuration labels
+  and all four modes retained. Master Chats opens main tabs; workspace chat views share identity
+  and Send to workspace deduplicates. One owning machine per workspace, per-folder refresh, no
+  feature switches. Replaces the initial separate configuration-tab preview; design only.
+
+- Design unified Workspaces as independent configurations and persistent chat/tab containers,
+  superseding the separate Projects proposal. Add an interactive preview of workspace list,
+  configuration, shared locked/global chat lists and named content tabs. Seven recent workspaces;
+  isolated source selections and approvals. Design only; no production implementation/build.
+- Start a separate planning batch under an explicit implementation/build/install/deployment hold.
+- Record acceptance of configurable discovery exclusions and independent root scanning, followed
+  by an explicit wait-to-build instruction. Replace the proposed Use in this chat action with
+  Set as starting folder in source-folder headers. Queued only; no implementation/build started.
+- Investigate the October 11 source-discovery warning: the global directory budget can be
+  exhausted by an earlier root and falsely implicate later small roots. Verify an isolated scan
+  succeeds and dependency/cache exclusions sharply reduce traversal. Queue accurate per-root
+  discovery, scan-cadence improvements and clearer chat-folder/source-library distinctions.
+  Installed/source comparison and read-only rehearsal only; no live configuration/runtime change.
+- Hold further Projects design for a separate discussion. Queue whole-folder trust scoped to
+  one chat, with recursive access, restart/continuation persistence and revocation. Current folder
+  trust is workspace-scoped; chat-only auto-approval grants no new folder access. No runtime change.
+- Propose Projects as persistent chat/browser containers with project-owned inherited setup,
+  reusing existing workspace context machinery and retaining Workspaces as presets. Add a synthetic
+  desktop/phone UI preview and document scoped agent edits, tab routing/transfers and cross-device
+  sync boundaries. Design review only; no project runtime or synchronization implementation.
+- Queue typed address-bar filtering of recent history, **Search with…** options for multiword
+  queries and Enter using the configured default search engine. No address-bar changes implemented.
+- Record the operator's selection of **Folder sections** for Instructions, Skills, Agents and MCPs,
+  with folders/items alphabetical and master filtering across all sections/folders. Keep the folder
+  sidebar as an unselected preview alternative. Synthetic browser rehearsal only; the operator
+  reaffirmed no build yet, and production implementation/build/install/deployment remain held.
+- Record rapid desktop history scroll jitter while typing; queue investigation of composer sizing
+  and transcript resize/scroll-following interactions, preserving reading position and draft/caret.
+- Confirm Claude Input tokens omits cache-read/cache-creation input. Queue complete accounting,
+  a retained breakdown and historical-scope reconciliation; no normalization change implemented.
+- Queue single-line browser link-hover status popups, using available width and an end ellipsis
+  for long addresses instead of wrapping over page content.
+- Record repeated main-process exceptions during browser-tab moves to an Internet Search chat.
+  Both reported request-handler traces match unsafe `webContents.id` lookups; lifecycle
+  reproduction and correction remain queued.
+- Queue an Internet Search dialog 30% wider and 40% taller, with the added usable space assigned
+  to the message box and existing control/font sizes retained.
+- Record the website chat composer failing to dock at the panel bottom, with a large unused gap
+  in the operator screenshot. Queue shared-layout investigation and visual acceptance checks.
+- Queue new-tab routing from menus and links to the source tab's navigation area: same chat,
+  top application navigation or Team as applicable, preserving placement through refresh/restart.
+- Record choppy browser scrolling and plan performance profiling, including the blocking gesture
+  wheel listener. Cause and thread scheduling concerns remain unconfirmed; no runtime change.
+- Record Ghostery Browser Preferences opening Resources and Update Ghostery filters appearing
+  to do nothing; causes and affected-install reproduction remain unconfirmed.
+- Plan Chrome Web Store installation and managed extension updates without manual folder handling.
+  Feasibility references and acceptance criteria are in `docs/planned-updates.md`; extension
+  compatibility remains unverified. This entry records planning, not application changes.
+
+## Mobile history and composer follow-up — October 10, 2026
+
+- Open at the latest message and progressively expose every older event. Prefetch into cache within two viewport heights of the top; preserve the visible message while prepending. Count collapsed activity as one meaningful row so tool-heavy history advances quickly.
+- Defer collapsed activity bodies and nested tool output until expansion; release offscreen native Markdown renderers and pause completed runtime timers. Include the composer safe-area inset when finding the bottom.
+- On mobile, prepare older messages 2.5 screens before the boundary, fetch transport pages up to six screens ahead, warm rich content 1.5 screens ahead and prepare twenty-four rows per later batch while retaining the twelve-row initial window. Continue preparing during upward scroll momentum.
+- Replace persistent desktop browser load-error bars with the existing fifteen-second notification, Reload/View logs actions and a sanitized retained Logs entry. Ignore aborted/subframe loads and avoid duplicate reports for one navigation attempt.
+- Use one green directional expander in compact native model options.
+- Give desktop/web New chat a taller dialog and keep attachment previews above the provider/model/action row.
+- Stack runtime, input tokens and output tokens vertically, with centered dark value boxes and labels above them; include the same information in expanded native Chat details.
+- Compact safely expired completed command receipts within the existing capacity bound, removing the misleading day-long command-limit message.
+- Verification/install status: `docs/2026-10-10-mobile-history.md`.
+
+## 0.2.11 — October 10, 2026 · full queued chat release
+
+- Apply the approved composer across desktop, remote desktop, web, iPhone and iPad: plain +,
+  circular green up-arrow Send, clock-badged Queue, circular Steer/Stop, labeled wide choices
+  and a compact options menu when space is limited. Keep desktop and web composer colors aligned.
+- Grow the message editor upward with its content until the composer reaches 60% of available
+  chat space. Center attachment hover highlights and enlarge model-option highlights.
+- Share the local desktop Run details format with remote and web chats: larger runtime, smaller
+  input/output token counts beneath it, collapsed explanations, visible/copyable paths and
+  disabled remote local-file Open buttons. Match Home, Workspaces and Internet Searches icons.
+- Fix native Choose photos presentation, place Working above the composer, inset Chats headings,
+  separate Live Browser from other tabs and add explicit touch-friendly tab reorder sheets.
+  Retain one desktop-origin tab during private login redirects and share persistent same-profile
+  website storage across native tabs. Website logins remain independent between devices.
+- Preserve isolated native draft editing and cache unchanged visible-event indices so text input
+  does not traverse a long conversation. Keep queue, steering, attachments and draft restoration.
+- Automatically bundle chat-linked localhost design HTML, CSS, JavaScript modules, images and
+  fonts on the owning Mac and deliver versioned snapshots through existing encrypted viewing
+  grants. Remote viewers update a stable preview tab; each revision resets script consent.
+  Static designs are supported; host APIs, WebSockets and HMR are not forwarded.
+- Correct native HTML preview blocker syntax and inherited CSP so approved interactive controls
+  and bundled images/fonts render while network, files and app actions remain blocked. Bound
+  snapshot caches and remote request bursts; coalesce website reconnects.
+
+Installation evidence is recorded separately in `docs/2026-10-10-full-chat-release.md`: Build Mac,
+iPhone, iPad and production web are verified on 0.2.11; HC installation awaits a pending-run decision.
+
+## 0.2.10 — October 10, 2026 · rollout authorized
+
+- The operator approved building/installing the completed combined update and the native typing
+  follow-up on Build Mac, Work Mac and available iPhone/iPad devices. The prior build hold is lifted.
+- This was the partial rollout. The operator reopened acceptance and required every queued
+  composer and automatic-preview change in the full 0.2.11 release above.
+
+## Native chat typing — October 9, 2026 · simulator verified, not installed
+
+- Isolate existing-chat text edits from conversation rendering and shared host-state notifications.
+  Preserve immediate scoped draft saving and attachment/external draft refreshes.
+- Move automatic encrypted history-cache encoding and writes off the UI thread; serialize writes
+  with lifecycle flushes/deletion to retain the latest draft and prevent forgotten-cache recreation.
+- Share an ephemeral store among bundled Markdown renderers, suppress idle Find notifications,
+  and replace per-edit Character differences with a linear single-Return check.
+- Verify long-chat typing/draft retention on iPhone and iPad, 33 native unit tests and keyboard Send
+  on iPhone, plus 402 Node tests/static checks. Final iPad run reuses existing binaries under the
+  build hold. No physical install; see `docs/2026-10-09-native-typing.md` for limits.
+
+## Queued issues — October 9, 2026
+
+- BF-2026-10-09-39: queue automatic, versioned localhost preview bundling/delivery through the
+  encrypted relay for locally and remotely originated chats; no agent packaging required.
+  Further builds are on hold until change intake/design review is complete, after finishing the
+  already-started native typing work.
+
+- Package desktop/web design HTML with inline styles and scripts for existing encrypted remote
+  document transport; link it and the standalone mobile review from `shared-previews.md`.
+  No HTTP proxy or application deployment; remote device acceptance remains unverified.
+
+- BF-2026-10-09-25: iPad **Choose photos** attachment action reportedly does nothing. Recorded
+  reproduction details, an unconfirmed native presentation lead and acceptance criteria in
+  `docs/planned-updates.md`; investigation and implementation remain queued.
+
+- BF-2026-10-09-26: move iPhone/iPad chat-level **Working** text and spinner to the bottom of
+  the conversation above the composer. Source placement confirmed; implementation remains queued.
+
+- BF-2026-10-09-27: align the iPhone/iPad attach icon with model selection and move it closer
+  to the composer corner to leave more space. Implementation remains queued.
+
+- BF-2026-10-09-28: selected an up-arrow Send icon in a circular button on all platforms,
+  keeping the current green color. Implementation remains queued.
+
+- Approve the interactive adaptive composer design for iPhone, wide iPad and narrow iPad,
+  with separate options when space permits, a plain + attachment icon and circular Steer,
+  Send/Queue and Stop buttons. Preserve existing text-box colors. Updated browser rehearsal
+  only; native changes remain queued.
+
+- BF-2026-10-09-29: adopt the adaptive composer layout for desktop/web. Add a full interactive
+  HTML model with visible selector labels, desktop-sized circular actions, the existing plain +
+  and local desktop's text-box colors shared by all three views. Browser rehearsal passes;
+  application integration remains queued.
+
+- BF-2026-10-09-30–31: extend the review page with identical local/remote/web Run details,
+  centered + hover, larger option highlights, Explanation expanders, promoted runtime and compact
+  tokens, visible/copyable paths, remote/web disabled local-file Open, and upward editor growth
+  capped at 60% of chat space. HTML rehearsal verified; application integration queued.
+- BF-2026-10-09-32–36: queue native heading insets, the Live Browser separator, tab reordering,
+  duplicate desktop-origin tabs after refresh and repeated website sign-ins. Causes/device
+  acceptance remain unverified; persistent profiles do not imply cross-device cookie sharing.
+
+- BF-2026-10-09-37: select the web Home, Workspaces and Internet Searches icons for desktop.
+  Exact SVGs added to the review page; application integration remains queued.
+
+## 0.2.10 — October 9, 2026 · staged, not deployed
+
+- Enable parallel independent provider chats while preserving one turn per session and showing queue reasons.
+- Add persistent browser profiles with opt-in account settings sync, Ghostery protection and an unpacked extension manager. Default retains existing browser data; cookies and vault secrets never sync.
+- Add shared actionable notification banners, Needs attention notification lists, site permission controls and direct document access for authorized devices.
+- Fix optional history write failures, clipboard staging before provider selection, duplicate models, schedule draft/reload races, stale-source recovery and Internet Search settings reloads.
+- Preserve tab positions, pinned Chat spacing, browser Find dismissal, visible agent pointers and directional device pauses. Automatically load older chat messages on every client.
+- Native browser stores now persist; profile isolation and the shared banner are checked in the iPad simulator. Bitwarden's official extension install/popup works in isolation; authenticated vault flows, native AutoFill and background website push remain acceptance boundaries.
+- See [the combined ledger](docs/2026-10-09-combined-update.md) for exact tests, limitations and build receipts. No deployment is implied.
+
+## 0.2.9 — October 9, 2026
+
+- Add content-edge swipe back to the native Chats list, including beside the iPad sidebar; browser swipes traverse back/forward history before leaving the chat at the first page.
+- Retain web new-chat setup expansion through background updates and provider changes, with desktop-style initial expansion, labels and spacing.
+- Add desktop trackpad back to close chat/browser tabs at the history root and forward to reopen swipe-closed tabs, with bounded descriptors and momentum protection.
+- Native swipe and web setup validation pass; desktop gestures are exercised with trusted wheel input. The operator approved the native design and authorized both Mac and physical iPhone/iPad updates.
+
+### Live browser and UI improvements
+
+- Pin Chat outside scrolling child tabs; retain pending-answer drafts separately from ordinary messages.
+- Add upper-right find for loaded desktop/web text, native chat/Markdown matches, and browser find with counts and previous/next navigation. Search coverage limits remain in the release ledger.
+- Show agent click/fill feedback at actual browser input coordinates.
+- Add chat-scoped Live Browser viewing on web/iPhone/iPad with separate device grants, bounded encrypted screenshots, follow/manual selection, zoom, point references, instructions and pending decisions.
+- Preview the native green palette and matching icon meanings, remove duplicate iPad branding, collapse activity by default, and prevent cached selection from reopening a chat when visiting the list.
+- Add categorized recents and running indicators. Web conversations use full workspace width; Queue/Stop share desktop styling and one row, with Stop absent for merely queued or completed runs.
+- Upgrade HC Claude through its supported updater while idle. Providers refresh now exposes the current 5.5 catalog; retain the existing explicit refresh workflow.
+
+Source checks and simulator previews are separate from installation. The authorized four-device rollout is tracked separately. See `docs/2026-10-08-live-browser-release.md` for exact verification and remaining gates.
+
+## 0.2.8 — October 8, 2026
+
+- Edit unprocessed queued messages in place across local/remote desktop, web and native clients, with stale-text checks and attachment/model retention. Existing queued-to-steering conversion remains available for eligible messages.
+- Dismiss the exact needed-input form after a successful Enter submission, including focused fields and immediate streaming; preserve unrelated composer drafts and failed-send input.
+- Restore every host-offered persistent approval choice in remote desktop/web prompts, alongside approve-once, deny and guarded chat-only auto-approval.
+- Replace Integration profiles with Accounts & Integrations: private consumer labels, generic resource contexts, separate runtime/authentication/access evidence, observation time, reported expiry and recovery history. Website profiles are read-only with owning-Mac checks and supported noninteractive recovery.
+- Check live MCP sessions in the background without cold-resuming idle chats. Serialize checks with the MCP dialog; bound automatic recovery and defer reconnects while tools are active. Copilot uses its runtime probe/restart capability, retaining runtime-owned credentials. Isolated multi-account switching, independent identity/resource verification and universal token renewal remain unsupported adapter work.
+- Recover saved peer connections on demand without replaying commands; retain backoff and explicit disconnect/authentication stops. Notices can be dismissed and expire despite repeated background failures.
+- Avoid unchanged native browser bounds, visibility and throttling writes. Synthetic page-state checks pass; the reported Jira-page flicker still needs live acceptance.
+
+Validation and deployment status: `docs/2026-10-08-account-chat-release.md`.
 
 ## 0.2.7 — October 7, 2026
 

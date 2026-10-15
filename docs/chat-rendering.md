@@ -1,4 +1,23 @@
+**October 14 question history:**
+
+Questions are first-class chronological messages outside collapsed Activity, with complete
+recorded context/choices and a linked reply. Required core guidance tells agents to explain before
+asking a dependent follow-up. The owner audit found the first reported explanation never existed
+as a finalized assistant reply; the interface does not fabricate missing provider output.
+
+See [release status](2026-10-13-tab-management-release.md).
+
 # Rich chat rendering
+
+**October 12 proposed change — queued only:** BF-2026-10-12-01 requests desktop's contained
+tool/approval entries, associated original-request disclosures, tool-call references and per-tool
+completion timestamps/durations on native iPad/iPhone. Desktop should adopt native's single
+contiguous Activity group for tools, approvals and system messages between user/model messages,
+retaining distinct darker system boxes inside that group. Timing availability is not yet verified.
+Preserve the existing platform-specific design, particularly iPhone's different native layout;
+this request covers message details/relationships, not a full visual redesign or identical styling.
+This new release batch is collection/design only under an explicit build hold; it does not change
+the implemented behavior described below. See [intake](planned-updates.md#bf-2026-10-12-01--shared-activity-approval-and-system-message-presentation).
 
 Chat text remains Markdown in the existing run JSON and encrypted mobile protocol. The Mac and
 native iPhone/iPad apps use the same bundled renderer: markdown-it for Markdown and highlight.js
@@ -150,3 +169,6 @@ Remote paging accepts an absolute `beforeEvent` boundary, with offset fallback f
 Web, visiting desktop and native clients retain loaded pages across live event windows and keep
 sparse segments separate until missing pages bridge them. Earlier messages is an actionable
 load/retry control. Native visible-row filtering precedes layout, avoiding empty Activity gaps.
+
+
+October 12 activity parity: contiguous system/tool/approval events share one Activity group between user/model messages, preserving darker system messages. Per-tool completion time and elapsed duration come from recorded tool lifecycle fields; missing values remain unavailable. Remote Working uses current owner state and is cleared for a disconnected view.

@@ -10,6 +10,7 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const gitHead=execFileSync('git',['rev-parse','--short=12','HEAD'],{cwd:root,encoding:'utf8'}).trim();
+const unsigned=process.env.PROTEUS_MAC_UNSIGNED==='1';
 const signingIdentity = process.env.PROTEUS_MAC_SIGN_IDENTITY || '-';
 if (process.platform !== 'darwin') throw new Error('Build the Mac application on macOS.');
 // These helpers access provider-owned Keychain items. Keep GitHub's designated
@@ -17,7 +18,7 @@ if (process.platform !== 'darwin') throw new Error('Build the Mac application on
 const vendorFiles = ['copilot-runtime', 'runtime.node'].map(name =>
   `node_modules/@github/copilot-sdk-darwin-${process.arch}/prebuilds/darwin-${process.arch}/${name}`);
 const vendorRequirement = '=anchor apple generic and certificate leaf[subject.OU] = "VEKTX9H2N7"';
-for (const relative of vendorFiles) execFileSync('codesign', ['--verify', '--strict', '-R', vendorRequirement, path.join(root, relative)], { stdio: 'pipe' });
+if(!unsigned)for (const relative of vendorFiles) execFileSync('codesign', ['--verify', '--strict', '-R', vendorRequirement, path.join(root, relative)], { stdio: 'pipe' });
 const source = path.join(root, 'ios/Proteus/Assets.xcassets/AppIcon.appiconset/AppIcon.png');
 const iconset = path.join(root, 'dist/Proteus.iconset'); fs.mkdirSync(iconset, { recursive: true });
 fs.copyFileSync(source, path.join(root, 'desktop/icon.png'));
@@ -29,6 +30,7 @@ execFileSync('iconutil', ['-c', 'icns', iconset, '-o', icon]);
 await import('./build-terminal.mjs');
 const digest=file=>createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const walk=relative=>fs.readdirSync(path.join(root,relative),{withFileTypes:true}).flatMap(entry=>{
+  if(entry.name==='.DS_Store')return [];
   const child=path.posix.join(relative,entry.name);
   if(entry.isDirectory())return walk(child);
   if(!entry.isFile())throw new Error('Runtime source contains a non-file: '+child);
@@ -64,7 +66,7 @@ const verifyCopied=buildPath=>{
   for(const [relative,hash] of Object.entries(runtimeFiles))if(digest(path.join(buildPath,relative))!==hash)throw new Error('Packaged runtime differs from source: '+relative);
 };
 verifySource();
-const bundles = await packager({ dir: root, out: path.join(root, 'dist'), overwrite: true,
+const bundles = await packager({ dir: root, out: process.env.PROTEUS_PACKAGE_OUTPUT || path.join(root, 'dist'), overwrite: true,
   name: 'Proteus', executableName: 'Proteus', appBundleId: 'org.proteusapp.proteus.desktop',
   platform: 'darwin', arch: process.arch, icon, asar: false,
   protocols: [{ name: 'Proteus Life sign-in', schemes: ['proteus'] }],
@@ -81,8 +83,8 @@ const bundles = await packager({ dir: root, out: path.join(root, 'dist'), overwr
     preparePty(buildPath);
   }],
   // Keep runtime files and dependencies; never ship tests, worktrees or local configuration.
-  ignore: [/^\/(?:web|ios|test|docs|scripts|extensions|dist|coverage|\.runtime|\.git|\.github)(?:\/|$)/, /^\/\.env/, /\.(?:log|xcresult)$/],
-  osxSign: { ignore: file => vendorFiles.some(relative => file.endsWith('/' + relative)), identity: signingIdentity, identityValidation: false, preAutoEntitlements: false, gatekeeperAssess: false, optionsForFile: () => ({ hardenedRuntime: false, signatureFlags: '0', timestamp: 'none' }) },
+  ignore: [/(?:^|\/)\.DS_Store$/, /^\/(?:web|ios|test|docs|scripts|extensions|dist|coverage|\.runtime|\.git|\.github)(?:\/|$)/, /^\/\.env/, /\.(?:log|xcresult)$/],
+  osxSign: unsigned?undefined:{ ignore: file => vendorFiles.some(relative => file.endsWith('/' + relative)), identity: signingIdentity, identityValidation: false, preAutoEntitlements: false, gatekeeperAssess: false, optionsForFile: () => ({ hardenedRuntime: false, signatureFlags: '0', timestamp: 'none' }) },
 });
 for (const directory of bundles) {
   const bundle = path.join(directory, 'Proteus.app');
@@ -92,13 +94,17 @@ for (const directory of bundles) {
   const packageMetadata=JSON.parse(fs.readFileSync(path.join(bundle,'Contents/Resources/app/package.json'),'utf8'));
   const sourceMetadata=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
   // Electron Packager removes development-only metadata after afterCopy.
-  const expectedMetadata=Object.fromEntries(Object.entries(sourceMetadata).filter(([key])=>!['private','scripts','devDependencies'].includes(key)));
+  const expectedMetadata=Object.fromEntries(Object.entries(sourceMetadata).filter(([key])=>!['private','scripts','devDependencies','overrides'].includes(key)));
   expectedMetadata.buildRevision=buildRevision;
   if(JSON.stringify(packageMetadata)!==JSON.stringify(expectedMetadata))throw new Error('Packaged version or build metadata differs from source snapshot.');
+  const storePackage=path.join(bundle,'Contents/Resources/app/node_modules/electron-chrome-web-store');
+  const {createRequire}=await import('node:module');
+  const storeRequire=createRequire(path.join(storePackage,'package.json'));
+  if(storeRequire('adm-zip/package.json').version!=='0.6.1')throw new Error('Packaged extension ZIP reader differs from pinned override.');
   for (const relative of vendorFiles) {
     const vendorPath = path.join(bundle, 'Contents/Resources/app', relative);
     if (!fs.readFileSync(vendorPath).equals(fs.readFileSync(path.join(root, relative)))) throw new Error('Packaging modified a vendor-signed Copilot binary: ' + relative);
-    execFileSync('codesign', ['--verify', '--strict', '-R', vendorRequirement, vendorPath], { stdio: 'pipe' });
+    if(!unsigned)execFileSync('codesign', ['--verify', '--strict', '-R', vendorRequirement, vendorPath], { stdio: 'pipe' });
   }
-  console.log(JSON.stringify({bundle,buildRevision,sourceFingerprint,dirty,runtimeFiles:Object.keys(runtimeFiles).length}));
+  console.log(JSON.stringify({signingStatus:unsigned?'unsigned staging; vendor bytes preserved, signatures unchecked':'signed',bundle,buildRevision,sourceFingerprint,dirty,runtimeFiles:Object.keys(runtimeFiles).length}));
 }

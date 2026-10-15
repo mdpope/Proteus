@@ -1,0 +1,13 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import {spawn} from 'node:child_process';import {createInterface} from 'node:readline';import {startServer} from '../src/server.js';
+test('external stdio MCP lists/filter tabs and applies revision-checked operations through the authenticated owner service',async t=>{
+ const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-mcp-test-'));const service=await startServer({home,port:0,timers:false,withSeed:false});t.after(async()=>{await service.close();fs.rmSync(home,{recursive:true,force:true});});
+ service.contentTabs.mutate({scope:'main',id:'main',expectedRevision:0,operations:[{action:'open',tab:{id:'fixture-browser',type:'browser',title:'Synthetic browser',url:'https://example.test/'}},{action:'open',tab:{id:'fixture-terminal',type:'terminal',terminalId:'fixture-terminal',title:'Synthetic terminal'}}]});
+ const child=spawn(process.execPath,[path.resolve('src/proteus-mcp.cjs')],{env:{...process.env,PROTEUS_HOME:home},stdio:['pipe','pipe','pipe']});t.after(()=>child.kill());let stderr='';child.stderr.on('data',data=>stderr+=data);const pending=new Map();let seq=0;createInterface({input:child.stdout}).on('line',line=>{const response=JSON.parse(line);pending.get(response.id)?.(response);pending.delete(response.id);});
+ const request=(method,params)=>new Promise((resolve,reject)=>{const id=++seq,timer=setTimeout(()=>reject(new Error('MCP protocol timed out: '+stderr)),10000);pending.set(id,value=>{clearTimeout(timer);resolve(value)});child.stdin.write(JSON.stringify({jsonrpc:'2.0',id,method,params})+'\n');});
+ assert.equal((await request('initialize',{protocolVersion:'2025-03-26'})).result.serverInfo.name,'Proteus tab service');assert.equal((await request('tools/list')).result.tools[0].name,'proteus_tabs');
+ const call=async args=>(await request('tools/call',{name:'proteus_tabs',arguments:args})).result;
+ const result=await call({action:'list',type:'browser'}),list=JSON.parse(result.content[0].text);assert.equal(list.tabs.length,1);assert.equal(list.tabs[0].title,'Synthetic browser');assert.equal(list.tabs[0].openedAt,undefined);
+ const row=list.tabs[0];await call({action:'hide',scope:row.scope,id:row.scopeId,tabId:row.id,expectedRevision:row.revision});assert.equal(service.contentTabs.get('main','main').tabs[0].hidden,true);
+ const stale=await call({action:'close',scope:row.scope,id:row.scopeId,tabId:row.id,expectedRevision:row.revision});assert.equal(stale.isError,true);assert.match(stale.content[0].text,/changed/);assert.equal(service.contentTabs.get('main','main').tabs.length,2);
+ assert.ok(!JSON.stringify(list).includes(service.token));child.stdin.end();
+});

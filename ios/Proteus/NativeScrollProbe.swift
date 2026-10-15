@@ -16,9 +16,10 @@ struct NativeScrollSnapshot {
     let viewportHeight: CGFloat
     let viewportWidth: CGFloat
     let viewportTop: CGFloat
+    var bottomInset: CGFloat = 0
 
-    var maxOffset: CGFloat { max(0, contentHeight - viewportHeight) }
-    var canScroll: Bool { viewportHeight > 0 && contentHeight > viewportHeight + 2 }
+    var maxOffset: CGFloat { max(0, contentHeight - viewportHeight + bottomInset) }
+    var canScroll: Bool { viewportHeight > 0 && maxOffset > 2 }
     var atEnd: Bool { canScroll && offset >= maxOffset - 24 }
 }
 
@@ -27,7 +28,9 @@ struct NativeScrollSnapshot {
 /// an early, short content layout cannot acknowledge a clamped offset.
 struct NativeScrollProbe: UIViewRepresentable {
     var command: NativeScrollCommand?
+    var followBottom = false
     var onSnapshot: (NativeScrollSnapshot) -> Void
+    var onInteraction: (Bool) -> Void = { _ in }
     var onApplied: (UUID, NativeScrollSnapshot) -> Void = { _, _ in }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -35,7 +38,9 @@ struct NativeScrollProbe: UIViewRepresentable {
 
     func updateUIView(_ view: UIView, context: Context) {
         let coordinator = context.coordinator
+        coordinator.followBottom = followBottom
         coordinator.onSnapshot = onSnapshot
+        coordinator.onInteraction = onInteraction
         coordinator.onApplied = onApplied
         coordinator.attach(from: view)
         coordinator.apply(command)
@@ -53,7 +58,9 @@ struct NativeScrollProbe: UIViewRepresentable {
 
     @MainActor final class Coordinator: NSObject {
         weak var scrollView: UIScrollView?
+        var followBottom = false
         var onSnapshot: (NativeScrollSnapshot) -> Void = { _ in }
+        var onInteraction: (Bool) -> Void = { _ in }
         var onApplied: (UUID, NativeScrollSnapshot) -> Void = { _, _ in }
 
         private var offsetObservation: NSKeyValueObservation?
@@ -72,11 +79,13 @@ struct NativeScrollProbe: UIViewRepresentable {
             offsetObservation = nil
             sizeObservation = nil
             boundsObservation = nil
+            scrollView?.panGestureRecognizer.removeTarget(self, action: #selector(handlePan(_:)))
             scrollView = nil
             pendingCommand = nil
             resolvedTarget = nil
             lastReported = nil
             onSnapshot = { _ in }
+            onInteraction = { _ in }
             onApplied = { _, _ in }
         }
 
@@ -88,6 +97,7 @@ struct NativeScrollProbe: UIViewRepresentable {
                     generation += 1
                     let attachedGeneration = generation
                     scrollView = scroll
+                    scroll.panGestureRecognizer.addTarget(self, action: #selector(handlePan(_:)))
                     offsetObservation = scroll.observe(\.contentOffset, options: [.new]) { [weak self] scroll, _ in
                         Task { @MainActor [weak self] in
                             guard let self, self.generation == attachedGeneration, self.scrollView === scroll else { return }
@@ -123,6 +133,21 @@ struct NativeScrollProbe: UIViewRepresentable {
             }
         }
 
+        @objc private func handlePan(_ recognizer: UIPanGestureRecognizer) {
+            switch recognizer.state {
+            case .began:
+                // Stop pinning synchronously. SwiftUI gestures inside a WebKit
+                // message do not reliably see the containing scroll view's pan.
+                followBottom = false
+                pendingCommand = nil; resolvedTarget = nil
+                onInteraction(true)
+            case .ended, .cancelled, .failed:
+                onInteraction(false)
+                if let scroll = scrollView { report(scroll) }
+            default: break
+            }
+        }
+
         func apply(_ command: NativeScrollCommand?) {
             guard active else { return }
             if pendingCommand?.id != command?.id {
@@ -138,7 +163,8 @@ struct NativeScrollProbe: UIViewRepresentable {
                                  contentHeight: scroll.contentSize.height,
                                  viewportHeight: scroll.bounds.height,
                                  viewportWidth: scroll.bounds.width,
-                                 viewportTop: scroll.convert(scroll.bounds, to: scroll.window).minY)
+                                 viewportTop: scroll.convert(scroll.bounds, to: scroll.window).minY,
+                                 bottomInset: scroll.adjustedContentInset.bottom)
         }
 
         private func report(_ scroll: UIScrollView) {
@@ -155,8 +181,13 @@ struct NativeScrollProbe: UIViewRepresentable {
         }
 
         private func applyPending() {
-            guard active, let command = pendingCommand, command.id != appliedCommand,
-                  let scroll = scrollView else { return }
+            guard active, let scroll = scrollView else { return }
+            if followBottom && pendingCommand == nil && !scroll.isTracking && !scroll.isDragging && !scroll.isDecelerating {
+                let bottom = snapshot(scroll).maxOffset
+                if abs(scroll.contentOffset.y - bottom) > 0.5 { scroll.setContentOffset(CGPoint(x: scroll.contentOffset.x, y: bottom), animated: false) }
+                return
+            }
+            guard let command = pendingCommand, command.id != appliedCommand else { return }
             let state = snapshot(scroll)
             guard state.viewportHeight > 0, state.contentHeight > 0 else { return }
             guard state.contentHeight + 2 >= command.minimumContentHeight else { return }

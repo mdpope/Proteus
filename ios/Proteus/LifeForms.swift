@@ -50,7 +50,7 @@ struct LifeForm:View {
         }
     }
     var body:some View {
-        Form {
+        NativeForm {
             if confirm {Section{Text(action=="meal.delete" ? "Delete this meal entry? The food and its version history remain." : action=="capture.accept" ? "Accept these saved details into history only after reviewing the original evidence and resolving uncertainties." : "Mark this maintenance task complete?")}}
             else {
                 Section{ForEach(fields){field in input(field)}}
@@ -69,7 +69,7 @@ struct LifeForm:View {
             if action=="capture.save"{Section{Text("Save details for review, then attach the original file. Saving does not automatically accept the record into history.").font(.footnote).foregroundStyle(.secondary)}}
             if let failure{Text(failure).foregroundStyle(.orange).accessibilityIdentifier("life-form-error")}
             if busy{ProgressView("Saving…")}
-        }.navigationTitle(title).navigationBarTitleDisplayMode(.inline)
+        }.background(NativeTheme.background).navigationTitle(title).navigationBarTitleDisplayMode(.inline)
             .toolbar{ToolbarItem(placement:.cancellationAction){Button("Cancel"){dismiss()}.disabled(busy)};ToolbarItem(placement:.confirmationAction){Button(confirm ? "Confirm":"Save"){Task{await submit()}}.disabled(busy || life.readOnly).accessibilityIdentifier("life-save-record")}}
             .interactiveDismissDisabled(busy)
             .onChange(of:values["kind"]){_,_ in if action=="capture.save"{rows=[]};key=UUID().uuidString}

@@ -1,5 +1,12 @@
 # Local terminals
 
+October 13 queued BF-2026-10-13-12 in [planned updates](planned-updates.md) requires terminal
+association/management parity with browsers/viewers. Workspace Tabs supports list/hide/restore/
+reorder/close and same-owner moves without restarting PTY/tmux sessions, changing directory/profile
+or replaying startup commands. Hide differs from detach/end; temporary Close versus persistent
+detach/end keeps explicit lifecycle. This does not enable remote shell access. Non-transferable
+behavior described below remains current until implementation is authorized.
+
 October 7 planning: BF-2026-10-07-15 and BF-2026-10-07-16 in
 [planned updates](planned-updates.md) queue terminal-tab navigation spacing fixes and an
 investigation of agent terminal integration/defaults. BF-13 covers move/copy semantics for

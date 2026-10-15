@@ -17,9 +17,13 @@ struct ProviderAllowance {
         guard let checked = Self.date(value["checkedAt"].string) else { return true }
         return Date().timeIntervalSince(checked) >= 300
     }
+    private static let dateLock = NSLock()
+    private static let fractionalDate: ISO8601DateFormatter = { let value = ISO8601DateFormatter(); value.formatOptions = [.withInternetDateTime, .withFractionalSeconds]; return value }()
+    private static let wholeDate = ISO8601DateFormatter()
     static func date(_ text: String) -> Date? {
-        let formatter = ISO8601DateFormatter(); formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.date(from: text) ?? ISO8601DateFormatter().date(from: text)
+        guard !text.isEmpty else { return nil }
+        dateLock.lock(); defer { dateLock.unlock() }
+        return fractionalDate.date(from: text) ?? wholeDate.date(from: text)
     }
     static let providers = [("copilot", "Copilot"), ("codex", "Codex"), ("claude", "Claude")]
 }
@@ -52,7 +56,7 @@ struct ProviderUsageStrip: View {
                         }
                     }
                 }
-            }.padding(.horizontal).padding(.vertical, 8).background(.bar).buttonStyle(.borderless)
+            }.padding(.horizontal).padding(.vertical, 8).background(NativeTheme.surface).buttonStyle(.borderless)
                 .sheet(isPresented: $details) { NavigationStack { ProviderUsageDetails(store: store) } }
                 .task(id: store.connected) {
                     while store.connected && !Task.isCancelled {

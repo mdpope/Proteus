@@ -1,4 +1,123 @@
+**October 14 implementation:**
+
+The current authorized batch implements persistent tabs, downloads, GET redirect decisions,
+visual Playwright tools, default Playwright MCP and optional Chrome DevTools MCP, human DevTools,
+extension profile grants, localized toolbar controls and bounded popups. Desktop GET redirects
+wait five seconds; Back cancels, Reject preserves the requested entry, and timeout accepts.
+Non-GET redirects preserve native request bodies; SPA replacement reconciles its existing entry.
+iOS uses history reconciliation and retains safe deep-link provenance, including login redirects.
+Downloads use the owner's OS Downloads folder; native uses Files and configurable folder access.
+Web pages use their browser's own download manager. Protected profile/tab/developer scopes remain
+independent. A human inspector releases agent debugging until it closes. See the current ledger
+for actual verification and installation; queue-only notes below describe the historical intake.
+
+See [release status](2026-10-13-tab-management-release.md).
+
 # Shared embedded browser
+
+**Queued extension fixes — October 13:** BF-17 agent access on extension-enabled tabs is now
+explicitly confirmed. BF-18 puts Extensions/actions between Go and Overview in the address toolbar,
+replaces the overlapping Install control and resolves manifest-localized names before review.
+BF-19 makes popups bounded, rendered or visibly failed, and dismissible through host-owned Close/
+Escape; options/onboarding requests retain appropriate presentation. Placement/localization source
+findings are confirmed; fullscreen/blank popup cause is not. See [scope](planned-updates.md).
+No implementation/build, live extension install or current profile changes.
+
+**Queued developer tools/profile access — October 13:** BF-16 selects Playwright as default and
+Chrome DevTools MCP as optional on-demand developer access. Add built-in human DevTools/Inspect
+for the selected embedded tab and integrate agent MCP packages via the owner service; test actual
+Electron/private-bridge compatibility, tool overlap and debugger coexistence. BF-17 proposes a
+saved profile option allowing shared/run-owned tabs with extensions, overriding the current
+blanket block. Normal tab sharing, developer grants and Live Browser scopes remain distinct.
+No packages installed, settings/grants changed, implementation or build; see [scope](planned-updates.md).
+
+**Queued visual Playwright control — October 13:** BF-2026-10-13-15 in
+[planned updates](planned-updates.md) extends the existing embedded-tab integration with image
+screenshots, coordinate click/double-click/right-click/drag/scroll and keyboard input. Intended
+for Zoho Assist and other pixel-only browser interfaces. Update provider/MCP image responses as
+well as capture; current snapshots are ARIA text and Codex tool results are text-only. Preserve
+semantic locators, tab permissions and single-WebContents scope. Scale/crop/resize/stale-image
+handling and live remote input require acceptance. No implementation, live verification or build.
+The operator authorized the Zoho session linked in this chat as the live test target once the
+feature is implemented; preserve that consent, keep its details private and use reversible tests.
+
+**Queued Downloads — October 13:** BF-2026-10-13-14 in [planned updates](planned-updates.md)
+adds a Firefox-style download indicator/panel, progress, actual download date, Cancel per item,
+OS Downloads default and folder configuration/Open folder under Engine Room → Browser Preferences.
+Right-click Save As selects a custom location for one download. Existing explicit linked-file Save
+As does not provide ordinary page-download handling or a manager: its helper-grant handler rejects
+unmatched ordinary requests. Extend it through one profile-bound lifecycle, with honest restart/
+failure/cancellation state and platform-specific native export behavior. No implementation/build.
+
+**Queued Workspace Tabs — October 13:** BF-2026-10-13-12 adds an open-tab manager between Chats/
+Configuration: favicon/title/flexible URL/opened/interaction/actions and hide/restore/reorder/
+close/move. These placement options extend to terminals/viewers. Hide and browser Persist are
+independent states. See [preview](design/2026-10-13/workspace-tabs-preview.html) and
+[queued scope](planned-updates.md). No application implementation/build.
+
+**Queued October 13 — agent tab management:** BF-2026-10-13-11 proposes an all-tab management
+service/MCP for internal and external agents: complete filtered inventories with identity, opened/
+touched dates, URL/favicon, placement and loaded/persisted metadata, plus real moves/close across
+chat/workspace/main/Team navigation. Current proteus_browser remains limited to shared/run-owned
+browser views. Management access is separate from page automation; moves preserve profile/history
+and do not grant page access. Project agent guidance exists; service implementation/build is held.
+See [future intake](planned-updates.md).
+
+**Queued October 13 — Persist tab:** BF-2026-10-13-08 proposes a reversible browser-tab
+persistence toggle, preventing automatic unload and excluding the tab from the ordinary retained
+allowance before quota ranking. Keep real loaded/process resource totals, restore/move the flag
+and respect profile access. Manual/native/owner-host lifecycle parity is part of the queued review;
+no runtime implementation or build is authorized. See [future intake](planned-updates.md).
+
+**October 13 queued redirect/history review:** BF-2026-10-13-05 now has platform-specific
+behavior. Electron desktops retain the five-second Accept/Reject redirect banner proposal.
+iOS/iPadOS (including the native iPad app on Mac) instead reconciles redirect/replacement URLs
+into the existing logical entry without phantom Back stops or a banner. Both preserve the
+original requested destination separately for recovery, including login deep links. Keep real
+query/filter/push navigation and Forward history; do not ignore query strings globally. Exact
+ADO behavior and native reconciliation need verification when implementation is authorized.
+See [future intake](planned-updates.md). No runtime change, build or installation is authorized.
+
+October 12 fresh intake: BF-2026-10-12-04 in [planned updates](planned-updates.md) records
+Proteus alert-banner **View logs** doing nothing. Open Logs and reveal the related entry when
+available, falling back to the Logs page otherwise. The report does not identify a specific alert
+type; browser-load alerts are one existing consumer, not a confirmed exclusive scope or cause.
+Collection only under the new release's explicit build hold.
+
+October 12 fresh intake: BF-2026-10-12-03 in [planned updates](planned-updates.md) requests
+**Open in new Proteus tab** insert immediately to the right of its initiating tab rather than
+at the navigation's end. Keep the same navigation container and existing profile/session,
+URL and selection behavior. Collection only under the new release's explicit build hold.
+
+October 10 new planning batch: BF-2026-10-10-01–05 in [planned updates](planned-updates.md)
+record the Ghostery menu opening Resources instead of Browser Preferences, a filter update
+with no apparent effect, a requested Chrome Web Store install button with managed updates,
+new tabs from menus and links retaining the source navigation area and exact chat parent where
+applicable, and reported choppy scrolling. Profile the blocking preload wheel listener and other
+browser workloads before assigning the scrolling cause; no performance diagnosis is confirmed.
+Store installation has a plausible Electron integration path, but compatibility remains unverified.
+These items are planning only; implementation/build/install/deployment await explicit authorization.
+
+BF-2026-10-10-08 adds repeated main-process exceptions during browser-tab moves to an Internet
+Search chat. Two screenshot traces point to `webContents.id` lookups in `onBeforeRequest` and
+`onHeadersReceived`. Both guard the view but not missing contents; investigate lifecycle and
+in-flight requests across the registry. This stability issue is queued under the same hold.
+
+BF-2026-10-10-09 queues a single-line link-hover status popup: long URLs can use the available
+browser width within edge margins, with end ellipsis instead of wrapping over page content.
+Presentation only; preserve the underlying link destination. No implementation under the hold.
+
+BF-2026-10-10-13 queues address-bar history filtering by typed title/URL text, search-engine
+options for multiword queries and Enter using the configured default search engine. Filter before
+the suggestion cap and preserve profile/container placement. Search chooser/default-setting
+integration remains planning only; the current recent-list input handler does not filter rows.
+
+October 9 staged implementation: [combined ledger](2026-10-09-combined-update.md). Browser Preferences
+owns persistent profiles, Ghostery settings, origin-scoped notification grants and extension management.
+Default retains the original partition. Extra profiles require account verification and opt-in; only
+definitions/settings sync. Device-encrypted session-cookie continuation preserves restart sign-ins.
+Extension-enabled profiles are private from all agent and Live Browser access. Official Bitwarden
+installation/popup was tested; authenticated vault/AutoFill flows and worker push delivery remain unverified.
 
 Queued visual regression: BF-2026-10-07-23 in [planned updates](planned-updates.md) requests
 restoring the separator before × close controls and the closing right border of the last chat
@@ -14,8 +133,16 @@ October 7 planning: BF-2026-10-07-08 through BF-2026-10-07-14 in
 pinch overview, standup ordering, tab insertion/transfers, and a movement audit. These are
 requested changes, not additions to the implemented behavior described below.
 
+Website notification support is queued as BF-2026-10-09-13, not implemented. Browser permissions
+currently default to deny. The proposal adds per-origin permission management in Browser Preferences,
+shared permission banners and website alert presentation; service-worker/background delivery needs
+separate validation. See `planned-updates.md` for scope and acceptance boundaries.
+
 Electron owns the visible WebContentsView tabs, their persistent sign-in session, page titles,
 address bar, navigation history, and lifecycle. Proteus supplies the tab strip and browser controls.
+BF-2026-10-09-19 tracks reported sign-in loss after full restart despite the persistent partition;
+restart authentication continuity is not verified for the affected sites. Session-only cookies and
+site-enforced expiry must be distinguished from storage failures or profile changes.
 Enter navigates; Command/Ctrl+L focuses the address; links opening new windows create new tabs.
 New browser tabs focus the address immediately on desktop, website and native clients. Focusing or
 clicking the address shows up to 20 distinct recent sites, newest visit first, with URL, date/time and
@@ -53,11 +180,12 @@ Human-created tabs start private. Enable **Agent access** on a tab to make it av
 A run can also open its own tab, which is available only to that run until explicitly shared.
 Turning Agent access off revokes ownership, disconnects Playwright, and cancels pending actions.
 The user can browse normally while a run works; for manual takeover, turn Agent access off first.
-Only one model turn runs at a time, but human interaction can still change the page mid-action.
+Only one turn runs per provider session; independent chats can execute concurrently. Human interaction can still change a page mid-action.
 
 Sign in through the website normally. Browser profiles stay in Electron user data, outside Git.
-Sites cannot load the privileged app origin. Downloads and device permissions are not enabled
-in this prototype. Persisted browser authentication is separate from other browsers; no cookies
+Sites cannot load the privileged app origin. Explicit Download Linked File As is supported; ordinary
+download handling and a full manager are queued in BF-2026-10-13-14 above. Notification permission
+requests use the shared approval framework. Other device permissions remain denied. Persisted browser authentication is separate from other browsers; no cookies
 or authentication are copied from Safari, Chrome, VS Code, or Codex. Open tabs and bounded URL navigation history persist across restarts; sign-in persists in the
 existing profile separately from the workspace record.
 
@@ -90,7 +218,7 @@ explicit renamed titles, addresses and order. Reconciliation preserves concurren
 client selection and scroll positions; it does not transfer cookies or page contents. Stable
 content-tab identifiers prevent duplicate views after local browser IDs change during restoration.
 Sensitive authentication addresses remain local. Synced documents still require the existing
-current-root checks, View chat documents grant and exact-version approval before remote viewing.
+current-root checks. View chat documents grants direct retrieval; without it, a current exact-version one-time approval is required.
 
 ## Desktop workspace and trackpad gestures
 
@@ -331,3 +459,156 @@ and ask for sharing when necessary instead of opening duplicate copies.
 Background throttling is enabled for inactive pages, with visible-page, active automation and
 audio exceptions. It does not unload pages. Overview highlights and reveals the current card.
 See the [follow-up ledger](2026-10-07-followup-release.md) for verification and rollout boundaries.
+
+## Stable refresh of native browser surfaces
+
+Ordinary renderer polling may request the same browser surface repeatedly. The desktop broker
+compares native bounds, visibility and background-throttling state before changing them.
+Unchanged refreshes therefore do not reapply native compositor settings; actual resize, tab
+selection, overlay and automation state changes keep their existing behavior. Synthetic Electron
+checks cover repeated unchanged refreshes, draft/focus/page identity, resize and automation
+throttling. This does not certify resolution of the operator’s reported Jira-page flicker;
+that live page remains an acceptance check.
+
+## October 8 source preview: find, agent cursor and Live Browser
+
+Chat stays outside the horizontally scrolling child tabs on desktop, web and native. Desktop
+and web loaded text has a sliding upper-right Find panel with immediate ranges, active count,
+previous/next navigation and keyboard shortcuts. Electron pages use native find results; native
+chat/Markdown use shared nonmutating ranges and native browser/HTML views use WebKit find.
+Closed activity, canvas terminals and isolated web HTML previews are not part of DOM find.
+
+Actual agent mouse coordinates and filled-field bounds drive an isolated, noninteractive page
+overlay. A short action pulse remains visible for capture and clears after activity, navigation,
+disconnect, unload or revocation. It does not move the operator's pointer. Synthetic Electron
+checks cover click/fill coordinates, native find navigation and loaded-page image capture.
+
+Web and native chat tabs can view their Mac's loaded browser pages through a separately granted
+Live Browser channel. Follow-agent/manual selection, zoom, frozen point annotations and pending
+decisions are implemented; direct remote mouse/keyboard control is deferred. See `remote.md`
+and the [release ledger](2026-10-08-live-browser-release.md) for protocol bounds, test receipts
+and remaining live acceptance. No deployment is implied by these source changes.
+
+## October 9 swipe follow-up
+
+Native content uses 56-point left/right edge regions, measured beside rather than underneath the
+iPad sidebar. Back returns chats/documents to the list. Browser history consumes back/forward
+first; at the first page, back returns a chat or main browser container to Chats. Gestures require
+80 horizontal points and reject mostly vertical or center-of-page movement. Native simulator
+checks pass on iPad and iPhone; iPhone also verifies a retained composer draft.
+
+Desktop pixel-wheel trackpad back closes a chat tab or a browser at its history root. Forward
+uses native browser history when possible and otherwise restores the last swipe-closed tab.
+Only presentation descriptors are retained (maximum 12, memory only); browser agent grants are
+not restored. Dialogs, inputs, terminals and scrollable horizontal content keep their own input.
+Verification and physical-trackpad acceptance are tracked in the release ledger.
+
+## Native follow-up reports — October 9, integrated in 0.2.11
+
+BF-2026-10-09-33–36 now include the separator after Live Browser and explicit reorder sheets on
+iPhone/iPad. Main, chat and Team ordering retain stable IDs and selection while preserving tabs
+outside the edited scope. Reconciliation deduplicates shared tab identities and retains a private
+login/redirect tab once instead of repeatedly reopening or navigating over it.
+
+Native keeps one persistent WKWebsiteDataStore object for each account/profile and reuses it
+across main/chat/Team tabs; Default uses the normal persistent store. Simulator checks passed
+same-profile cookie sharing, profile isolation, scoped ordering and private redirect retention.
+Affected physical devices still need installation and acceptance. iPhone/iPad each have their own
+website sessions; profile definition sync does not sync cookies or website sign-ins. See
+[the full release ledger](2026-10-10-full-chat-release.md).
+
+## Browser load errors
+
+Native shared-tab refreshes and mutation acknowledgements may contain an empty new-tab
+placeholder from another client. For the same profile, that placeholder must not erase an
+active local navigation or loaded page, including before SwiftUI constructs its web view.
+Keep the local URL, title and history; explicit custom names still apply. Nonempty remote
+navigation, profile changes, explicit unload and close retain their normal behavior.
+
+Desktop main-page navigation failures use the shared fifteen-second notification with Reload and View logs actions. Keep a sanitized `browser.load-failed` warning in Engine Room → Logs after dismissal; retain the failure in internal tab diagnostics without reserving a strip above the website. Each navigation attempt reports once; intentional aborts and embedded-frame failures do not generate whole-page notifications. A new main-page navigation clears the stale error state. Site-authored banners remain controlled by the site.
+
+
+### Background persistence and polling
+
+Browsing-history retention/size trimming, serialization and atomic replacement run in a dedicated worker. Visits are immediately visible and consecutive automatic writes coalesce; explicit deletion/clear/settings changes report success after persistence. A failed save retains prior disk bytes, surfaces the existing storage warning and retries optional visits. Shutdown drains ordered history writes and encrypted session-cookie snapshots. Cookie snapshot disk operations are asynchronous; OS encryption remains at the Electron safeStorage boundary. Resources and terminal status polling use coalesced asynchronous process inspection. Workspace-session saves reuse their normalized returned snapshot for content-tab seeding; explicit reads continue to observe current disk state.
+
+
+October 12 link actions capture their initiating tab before asynchronous work and insert new browser tabs immediately to its right in the same container. Browser failure View logs actions refresh and focus the recorded application event, falling back to Logs when the record is unavailable.
+
+
+## Native history and gestures — October 12 follow-up
+
+Recent sites for the Default browser profile belong to the signed-in app account, shared across
+workspaces and devices. Each device can contribute visits; the owner computer is not the sole
+history authority. Private profile visits remain outside this shared default history. Native
+Recent sites refreshes on account, scope/tab and browsing-home changes and distinguishes loading,
+failed refresh and an empty result. Local default-tab navigation may supply an explicitly labeled
+fallback without invented visit times. A failed account refresh does not silently look empty.
+
+Back/Forward uses each tab's saved navigation stack, separately from Recent sites. Native
+navigation commits must not consume the old page's KVO update as the destination of an in-flight
+traversal. Saved stacks remain usable after view recreation and app restart; same-document
+changes update the stack while preserving forward entries on traversal. WebKit back/forward
+gestures operate when its live stack matches the saved neighbor. Restored stacks use the
+existing fallback where necessary.
+
+Pinching inward at minimum page zoom opens the current container's tab overview with a spring
+transition; Reduce Motion uses a fade. This is Proteus's scoped overview, not a recreation of
+Safari's complete interactive tab animation. Simulator acceptance and physical trackpad/touch
+feel are separate verification claims in the current release ledger.
+
+**October 13 clicked-link correction (0.2.13):** Ordinary page links now claim their logical
+destination before background history polling can reload the previous address. Active loads
+preserve that destination until commit/redirect reconciliation. Slow links, hash links, redirects,
+new-tab targets and existing shared Back/Forward/private-redirect rehearsals pass. Installation
+and live acceptance are tracked separately in [the release ledger](2026-10-13-logs-browser.md).
+
+### Stable tab activation and synchronization
+
+Restored tabs retain their remembered page title while their native view loads. Owner title
+updates also update an unloaded native snapshot, so its next state broadcast cannot restore
+stale text. Browser loading status remains available separately in the toolbar. Custom tab names
+remain local/shared metadata and are not replaced by page titles on selection.
+
+Main and Team tab strips retain their nodes on unchanged polling/state events; labels, icons,
+selection, profile menus and deliberate order changes still update. Reconciliation takes detached
+navigation snapshots and checks the order again after native commands yield. A drag during an
+awaited page load is retained and sent on the next pass. Concurrent scopes suppress recursive
+synchronization until their apply operations have all completed.
+October 14 owner compatibility correction (0.2.16): legacy browser-only main/Team navigation is
+expanded once before synchronization to retain saved chats, terminals and viewers. Existing
+browser closes/order remain authoritative; the persisted import marker prevents later restart
+from resurrecting intentionally closed surfaces. Native clients remain at 0.2.15 / 2610.14.1.
+
+
+October 14 follow-up (0.2.17): browser moves use the owner tab-management service and retain the
+complete Back/Forward stack without extra visits. Navigation operation UUIDs are distinct from
+entry identities. Identical saved entries can acknowledge a pending sync; conflicts or closed-tab
+actions stop automatic retry and offer owner-history or explicit new-tab recovery. Expanded compact
+navigation temporarily reserves layout width; native browser bounds follow it while the page stays
+visible and loaded. Workspace Tabs defaults to a 360-pixel title column with pointer/keyboard
+resizing and local remembered widths. Move chat to workspace is available from chat-tab menus and
+updates membership/index together; Show in assigned workspace only opens its current association.
+
+
+October 14 document-placement correction (0.2.18) supersedes the uninstalled 0.2.17 candidate.
+Agent-opened documents resolve the existing workspace chat and appear beside it; they retain
+original chat/file authorization and reuse their descriptor on subsequent opens. Standalone chat
+subtabs remain supported. Future removal of that container concept is design review only.
+
+### October 14 canonical placement follow-up (0.2.19 candidate)
+
+Owner chat Move converges the saved main/workspace descriptor independently of browser retry
+queues. User Move selects the chat in its target workspace and reveals both navigation tabs.
+Recovery choices now say Keep saved history / Open pending page in new tab and show affected
+title/URL. The first clears the unsaved action and restores saved navigation; the second opens
+the pending URL in a new top-level browser tab first. Neither choice is taken automatically.
+602 Node tests/checks and actual overflow/hidden-workspace desktop UI pass; rollout pending.
+
+### October 14 redirect policy replacement
+
+0.2.19 / native 2610.14.2 removes the redirect countdown and iOS rewriting. Native redirects
+continue immediately; requested, intermediate, final and replacement URLs remain distinct in
+navigation and history logs, with full query/fragment retention across paired clients. No engine
+state, form contents or POST body is serialized. Synthetic Chromium GET/login/POST redirect
+checks pass; an authenticated Microsoft account flow is not newly verified. Rollout pending.

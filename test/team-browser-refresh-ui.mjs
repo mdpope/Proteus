@@ -1,0 +1,41 @@
+// Synthetic renderer regression: unrelated application updates must not remount a Team browser.
+import {_electron as electron} from 'playwright';
+import http from 'node:http';
+import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import assert from 'node:assert/strict';
+const home=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'proteus-team-refresh-')));
+fs.writeFileSync(path.join(home,'settings.json'),JSON.stringify({schemaVersion:1,provider:'rehearsal',model:'',timezone:'UTC',workspace:{cwd:home,additionalDirectories:[]},skillDirectories:[],mcpServers:{}}));
+const server=http.createServer((req,res)=>res.end('<title>Synthetic Team page</title><h1>Synthetic Team page</h1><div style="height:5000px">Scrollable fixture</div>'));await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+let app;let revision=0;let account='synthetic-team';
+try{
+ app=await electron.launch({...(process.env.PROTEUS_TEST_APP_PATH?{executablePath:process.env.PROTEUS_TEST_APP_PATH}:{}),args:[...(!process.env.PROTEUS_TEST_APP_PATH?['.']:[]),'--use-mock-keychain','--user-data-dir='+path.join(home,'electron')],env:{...process.env,PROTEUS_HOME:home,PORT:'0'},timeout:60000});
+ const page=await app.firstWindow();page.setDefaultTimeout(15000);
+ await page.route('**/api/team/lists',route=>route.fulfill({json:{identity:{accountId:account},teamLists:[]}}));
+ await page.route('**/api/state?*',async route=>{const response=await route.fetch();const data=await response.json();data.hostName='Synthetic host '+revision;data.life={...data.life,identity:{accountId:account}};await route.fulfill({response,json:data});});
+ await page.route('**/app.js',async route=>{const response=await route.fetch();const body=(await response.text()).replace('refresh().then(restoreWorkspace)','window.teamRefreshReady=refresh().then(restoreWorkspace)');await route.fulfill({response,body:body+'\nwindow.teamRefreshFixture={refresh,navigate,selectTeamBrowser,contentTabSync}; clearInterval(refreshInterval);\n'});});
+ await page.reload();await page.locator('#home-screen').waitFor();await page.evaluate(()=>window.teamRefreshReady);
+ const origin='http://127.0.0.1:'+server.address().port;
+ await page.evaluate(async url=>{const info=await window.desktop.browser({action:'create',group:'team',url});window.teamRefreshFixture.selectTeamBrowser(info);window.teamRefreshFixture.navigate('team');},origin+'/');
+ await page.locator('#team-browser-form').waitFor();await page.waitForTimeout(700);await page.evaluate(()=>window.teamRefreshFixture.contentTabSync.all());
+ await page.locator('#team-browser-url').fill('unfinished synthetic address');
+ await app.evaluate(async({app})=>{const b=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser();const t=[...b.tabs.values()].find(t=>t.group==='team');await t.view.webContents.executeJavaScript('window.scrollTo(0,450);window.syntheticPageMarker=123');global.teamSurfaceCalls=[];const command=b.command.bind(b);b.command=(v)=>{if(['hide','show'].includes(v.action))global.teamSurfaceCalls.push(v.action);return command(v);};});
+ await page.evaluate(()=>{window.teamRefreshEvidence={preparing:0,form:document.querySelector('#team-browser-form'),area:document.querySelector('#team-browser-area')};const observer=new MutationObserver(records=>{for(const r of records)for(const n of r.addedNodes)if(n.textContent?.includes('Preparing tab'))window.teamRefreshEvidence.preparing++;});observer.observe(document.querySelector('#main'),{childList:true,subtree:true});});
+ for(let i=0;i<4;i++){revision++;await page.evaluate(()=>window.teamRefreshFixture.refresh());await page.waitForTimeout(100);}
+ const result=await page.evaluate(()=>({preparing:window.teamRefreshEvidence.preparing,sameForm:window.teamRefreshEvidence.form===document.querySelector('#team-browser-form'),sameArea:window.teamRefreshEvidence.area===document.querySelector('#team-browser-area')}));
+ console.log(JSON.stringify({synthetic:true,unrelatedStateChanges:4,...result}));
+ assert.equal(result.preparing,0,'Unrelated state refresh must not display Preparing tab');assert.ok(result.sameForm&&result.sameArea,'Mounted browser surface and toolbar remain intact');
+ assert.equal(await page.locator('#team-browser-url').inputValue(),'unfinished synthetic address');
+ const native=await app.evaluate(async({app})=>{const b=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser();const t=[...b.tabs.values()].find(t=>t.group==='team');return {calls:global.teamSurfaceCalls,page:await t.view.webContents.executeJavaScript('({scroll:scrollY,marker:window.syntheticPageMarker})')};});assert.deepEqual(native.calls,[]);assert.deepEqual(native.page,{scroll:450,marker:123});console.log(JSON.stringify({nativeSurfaceCalls:native.calls,pageScroll:native.page.scroll,addressDraftRetained:true}));
+ await app.evaluate(async({app})=>{const s=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getService();const before=await s.contentTabs.getAsync('team','team');await s.contentTabs.mutateAsync({scope:'team',id:'team',expectedRevision:before.revision,operations:[{action:'open',tab:{...before.tabs[0],title:'Renamed synthetic page',customTitle:'Renamed synthetic page'}}]});});
+ await page.evaluate(()=>window.teamRefreshFixture.contentTabSync.all());await page.locator('[data-team-tab]').filter({hasText:'Renamed synthetic page'}).waitFor();
+ assert.equal(await page.evaluate(()=>window.teamRefreshEvidence.form===document.querySelector('#team-browser-form')),true,'Shared title update retains mounted surface');
+ assert.deepEqual(await app.evaluate(()=>global.teamSurfaceCalls),[],'Metadata synchronization must not hide/show the native page');
+ assert.ok(await page.locator('#main').evaluate(node=>node.classList.contains('team-main')));
+ await page.evaluate(async()=>{const tabs=await window.desktop.browser({action:'list'});await window.desktop.browser({action:'unload',id:tabs.find(t=>t.group==='team').id});});revision++;await page.evaluate(()=>window.teamRefreshFixture.refresh());await page.locator('#team-load-tab').waitFor();
+ await page.locator('#team-load-tab').click();await page.locator('#team-load-tab').waitFor({state:'detached'});
+ const preLayout=await page.locator('#team-browser-form').elementHandle();await page.locator('#sidebar-toggle').click();await page.locator('#team-browser-form').waitFor();assert.equal(await preLayout.evaluate(node=>node.isConnected),false,'Explicit layout changes remount and reposition the surface');
+ // Deliberate navigation still changes the view; returning restores browser controls.
+ await page.locator('[data-page="home"]').click();await page.locator('#home-screen').waitFor();await page.locator('[data-page="team"]').click();await page.locator('#team-browser-form').waitFor();
+ const before=await page.locator('#team-browser-form').elementHandle();await page.evaluate(()=>window.teamRefreshFixture.refresh(true));await page.locator('#team-browser-form').waitFor();assert.equal(await before.evaluate(node=>node.isConnected),false,'Explicit forced refresh remains effective');
+ account='other-synthetic-team';revision++;await page.evaluate(()=>window.teamRefreshFixture.refresh());await page.locator('#team-browser-form').waitFor({state:'detached'});
+ console.log(JSON.stringify({passed:true,navigationAndForcedRefresh:true,accountChangeResetsTeam:true}));
+}finally{if(app){const timer=setTimeout(()=>app.process().kill('SIGKILL'),5000);try{await app.close();}finally{clearTimeout(timer);}}server.closeAllConnections();server.close();fs.rmSync(home,{recursive:true,force:true});}

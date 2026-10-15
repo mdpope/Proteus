@@ -68,3 +68,68 @@
 .remote-message .message-action-button{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;min-width:30px;padding:5px;background:transparent;border-color:transparent;color:var(--muted)}.remote-message .message-action-button svg{width:18px;height:18px;min-width:18px;flex:none;display:block}.runtime-timer{text-transform:none;letter-spacing:normal;font-size:12px;font-variant-numeric:tabular-nums;color:var(--muted);margin-left:auto}.remote-message>.eyebrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.remote-message>.eyebrow .runtime-timer{order:2}
 .chat-type-tabs{display:flex;gap:6px;margin:16px 0;flex-wrap:wrap}.chat-type-tabs [aria-selected=true]{background:var(--accent);color:#182414}.chat-index-filters label{display:grid;gap:7px;font-size:12px}.chat-index-filters input,.chat-index-filters select{font-size:14px;min-height:40px}.tool-search-pattern{overflow-wrap:anywhere;font-size:12px;margin:6px 0}
 @media(max-width:600px){.remote-composer-primary>label:has([name=reasoningEffort]),.remote-composer-primary>label:has([name=contextTier]),.remote-composer-primary>label:has([name=serviceTier]){order:2}.remote-composer-actions{order:1}.remote-composer-primary>label:has([name=model]){max-width:calc(100% - 135px)}}
+
+/* A conversation uses the workspace width, including large desktop browsers. */
+body[data-browser-account] .main:has(.remote-chat-main){max-width:none;width:100%}
+body[data-browser-account] .remote-composer-actions{flex:none;flex-wrap:nowrap;align-self:center;gap:6px}
+body[data-browser-account] .remote-composer-actions button{height:34px;padding:6px 10px;font-size:12px;background:var(--proteus-control);color:var(--proteus-ink);border:1px solid var(--proteus-line)}
+body[data-browser-account] .remote-composer-actions button.primary{background:var(--proteus-accent);border-color:var(--proteus-accent);color:var(--proteus-accent-ink)}
+body[data-browser-account] .remote-composer-actions button.danger{color:#ffb3a4}
+body[data-browser-account] .remote-composer-actions button:hover:not(:disabled){filter:brightness(1.08)}
+
+/* Match desktop setup spacing; disclosure state belongs to the retained draft. */
+body[data-browser-account] .remote-new-chat{max-width:1240px;width:100%;margin:0 auto}
+body[data-browser-account] .remote-new-chat>h2{margin:0 0 18px;font-size:24px}
+body[data-browser-account] .remote-composer-setup{margin:0 0 18px}
+body[data-browser-account] .remote-composer-setup>summary{cursor:pointer;font-size:14px;font-weight:600;color:var(--proteus-ink)}
+body[data-browser-account] .remote-composer-setup[open]>summary{margin-bottom:16px}
+body[data-browser-account] .remote-new-chat .remote-fields{gap:20px}
+body[data-browser-account] .remote-new-chat .remote-fields label,body[data-browser-account] .remote-new-chat #remote-composer>.remote-chat-name{font-size:12px;gap:7px}
+body[data-browser-account] .remote-new-chat .remote-chat-name{margin-bottom:18px}
+
+/* Size the transcript around the actual composer; details never determine its bottom. */
+.remote-chat-main.docked-chat{height:var(--chat-available-height);min-height:0;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto minmax(80px,1fr) auto auto auto auto;align-items:stretch;overflow:hidden}
+.remote-chat-main.docked-chat>.remote-chat-title{grid-column:1;grid-row:1}
+.remote-chat-main.docked-chat>p[role=status]{grid-column:1;grid-row:2}
+.remote-chat-main.docked-chat>.remote-messages{grid-column:1;grid-row:3;height:auto;min-height:0;overflow:auto;overflow-anchor:none;margin:12px 0}
+.remote-chat-main.docked-chat>.remote-pending{grid-column:1;grid-row:4;max-height:25dvh;overflow:auto}
+.remote-chat-main.docked-chat>section.card{grid-column:1;grid-row:5;max-height:18dvh;overflow:auto;margin-bottom:8px}
+.remote-chat-main.docked-chat>#remote-composer{grid-column:1;grid-row:6;align-self:end;margin:0}
+.remote-chat-main.docked-chat>.remote-chat-details{grid-column:1;grid-row:7;position:static;max-height:160px;min-height:0;overflow:auto;margin-top:12px}
+@media(min-width:1100px){.remote-chat-main.docked-chat:has(.remote-chat-details){grid-template-columns:minmax(0,1fr) minmax(220px,260px);grid-template-rows:auto auto minmax(80px,1fr) auto auto auto;gap:0 18px;align-items:stretch}.remote-chat-main.docked-chat>.remote-chat-details{grid-column:2;grid-row:1 / 7;height:100%;max-height:none;margin:0;overflow:auto}}
+
+/* Shared workspace components retain the existing website palette and controls. */
+.workspace-list-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 0;border-bottom:1px solid var(--line)}
+.workspace-list-row:last-child{border-bottom:0}.workspace-list-row>.actions{margin-left:auto}.workspace-list-row>button{display:flex;align-items:center;gap:8px}
+.workspace-config-section{margin-bottom:18px}.workspace-config-section>summary{font-weight:600;cursor:pointer}.workspace-config-section[open]>summary{margin-bottom:16px}
+
+.workspace-config-section .context-table{overflow-x:auto}.workspace-config-section .filepath{overflow-wrap:anywhere}.workspace-config-section .folder-list{padding:0;list-style:none}.workspace-config-section .folder-list li{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:10px 0}
+.workspace-button-pages{margin:16px 0}.workspace-inner-tabs>button{display:flex;align-items:center;gap:8px;flex-shrink:0}.workspace-child{display:flex;flex-shrink:0;max-width:240px}.workspace-child>button:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.workspace-child.selected{border-bottom:2px solid var(--accent)}
+.workspace-config-section table{width:100%;border-collapse:collapse}.workspace-config-section td,.workspace-config-section th{padding:12px;text-align:left;border-bottom:1px solid var(--line)}
+
+.workspace-context-view>.heading{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin:20px 0}.workspace-context-view label{margin:12px 0}.workspace-context-view .heading .actions{flex-wrap:wrap}.workspace-context-view .count{margin-left:5px;border-radius:4px;background:var(--proteus-control-hover);padding:1px 5px;font-size:12px}
+.workspace-context-view button:not(.primary),.workspace-button-pages button:not(.primary),.workspace-list-row button{background:var(--proteus-control);color:var(--ink);border-color:var(--line)}.workspace-context-view button:not(.primary):hover,.workspace-button-pages button:not(.primary):hover,.workspace-list-row button:hover{background:var(--proteus-control-hover)}
+.workspace-context-view .folder-list small{display:block;margin-top:5px}.workspace-context-view .folder-list li>span:first-child{flex:1;min-width:220px}.workspace-context-view .context-table .note{color:var(--muted);font-size:12px}.workspace-context-view .context-table .filepath{color:var(--muted);font-size:12px}
+.workspace-inner-tabs .workspace-child button{border:0;background:transparent;color:var(--muted);border-radius:0;padding:10px;font-weight:400;font-size:13px}.workspace-inner-tabs .workspace-child.selected button{color:var(--ink)}
+
+.heading.workspace-source-controls{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+
+.workspace-source-folder{border:1px solid var(--line);border-radius:8px;margin:14px 0;padding:0;overflow:hidden}
+.workspace-source-folder>summary{display:flex;gap:10px;align-items:center;padding:12px 14px;background:var(--proteus-control);color:var(--ink);cursor:pointer;list-style:none;font-weight:600}
+.workspace-source-folder>summary::-webkit-details-marker{display:none}
+.workspace-source-folder>summary:hover{background:var(--proteus-control-hover)}
+.workspace-source-folder>summary:focus-visible{outline:2px solid var(--accent);outline-offset:-3px}
+.workspace-folder-chevron{display:inline-block;flex:0 0 auto;font-size:18px;line-height:1;color:var(--accent)}
+.workspace-source-folder[open]>summary .workspace-folder-chevron{transform:rotate(90deg)}
+.workspace-source-folder>summary>svg{flex:0 0 auto;color:var(--accent)}
+.workspace-folder-label{flex:1;min-width:0;overflow-wrap:anywhere}
+.workspace-folder-label>strong{margin-right:10px}
+.workspace-folder-label .filepath{display:inline;max-width:none;font-weight:400;font-size:12px;overflow-wrap:anywhere;color:var(--soft,var(--muted))}
+.workspace-source-folder>summary>.count{margin-left:auto;flex:0 0 auto}
+.workspace-folder-content{border-top:1px solid var(--line);padding:12px 14px 4px;min-width:0}
+.workspace-folder-content>.actions{margin-bottom:12px}
+@media(max-width:600px){.workspace-folder-content{padding:10px 8px 4px}}
+
+.remote-activity-items>.remote-message.system{margin:0;background:#17201c;border:1px dashed var(--line);border-left:3px solid #53675a;border-radius:8px;padding:10px 12px}
+.remote-permission-detail{border:1px solid #455947;border-left:3px solid #8aafa5;border-radius:8px}
+.remote-activity-item .tool-call-reference{overflow-wrap:anywhere}

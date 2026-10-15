@@ -96,7 +96,7 @@ function bindForm(id,extra={},transform=value=>value,onSuccess=()=>{}) {
 }
 export function renderLifeSetup(host) {
  if(typeof host==='string')host=document.querySelector(host);if(!host)return;
- const state=meta(),signature=JSON.stringify([state.enabled,state.configured,state.ready,state.identity,state.auth,state.websiteOrigin]);
+ const state=meta(),signature=JSON.stringify([state.enabled,state.configured,state.connected,state.ready,state.identity,state.auth,state.websiteOrigin]);
  if(host.dataset.lifeSignature===signature)return;
  const focused=host.contains(document.activeElement),draft=host.querySelector('#life-website')?.value;
  host.dataset.lifeSignature=signature;
@@ -106,7 +106,7 @@ export function renderLifeSetup(host) {
 
  const message=state.auth?.error||(state.auth?.pending?'Finish signing in in your system browser. You can cancel here.':state.auth?.notice||'');
  target.innerHTML=(state.legacyArchived?'<p class="note">The old database configuration is preserved privately for rollback. Desktop Life uses the website API.'+(state.configured?'':' Sign in to continue.')+'</p>':'')+
- (state.configured?'<div class="life-account-summary"><div class="life-account-details"><h3>'+esc(state.connection?.label||'Website account')+'</h3><p class="life-account-origin">'+esc(state.websiteOrigin)+'</p></div><span class="pill life-account-badge">'+(state.ready?'Connected':'Sign-in saved · reconnect required')+'</span><div class="actions life-account-actions"><button id="life-account-refresh">Refresh connection</button><button id="life-account-upgrade">Authorize shared features</button><button id="life-account-logout">Sign out</button></div></div>':
+ (state.configured?'<div class="life-account-summary"><div class="life-account-details"><h3>'+esc(state.connection?.label||'Website account')+'</h3><p class="life-account-origin">'+esc(state.websiteOrigin)+'</p></div><span class="pill life-account-badge">'+(state.connected||state.ready?'Connected'+(state.enabled?'':' · Life disabled'):'Sign-in saved · reconnect required')+'</span><div class="actions life-account-actions"><button id="life-account-refresh">Refresh connection</button><button id="life-account-upgrade">Authorize shared features</button><button id="life-account-logout">Sign out</button></div></div>':
  '<label>Website<input id="life-website" type="url" value="'+esc(focused&&draft?draft:state.websiteOrigin||'https://proteus.example')+'" autocomplete="off"></label><div class="actions"><button id="life-account-login">'+(state.auth?.pending?'Start sign-in again':'Sign in securely')+'</button>'+(state.auth?.pending?'<button id="life-account-cancel">Cancel sign-in</button>':'')+'</div><p class="note">Complete the website’s passkey or authenticator verification in your system browser. Proteus never asks for database credentials.</p>')+
  '<p id="life-account-status" class="note" role="status">'+esc(message)+'</p>';
  const operate=action=>act(async event=>{if(!window.desktop?.lifeAccount)throw new Error('Website sign-in is available in the Mac desktop app.');event.target.disabled=true;try{const result=await window.desktop.lifeAccount({action,websiteOrigin:target.querySelector('#life-website')?.value});ui.state.data.life=result;await ui.refresh?.(true);renderLifeSetup(host);if(document.querySelector('#life-page'))renderLife();}catch(error){target.querySelector('#life-account-status').textContent=error.message;throw error;}finally{event.target.disabled=false;}});

@@ -6,7 +6,7 @@ const { WebSocketServer } = require('ws');
 const { chromium } = require('playwright');
 const { acquireDebugger } = require('./debugger-session.cjs');
 
-async function connectPage(contents) {
+async function connectPage(contents, onInput = () => {}, {external=false}={}) {
   const lease = acquireDebugger(contents), debug = lease.debug;
   let targetInfo;
   try { ({ targetInfo } = await debug.sendCommand('Target.getTargetInfo')); }
@@ -35,7 +35,7 @@ async function connectPage(contents) {
   };
   let send = () => {};
   const forward = (_event, method, params, sessionId) => {
-    if (method === 'Target.attachedToTarget') childSessions.add(params.sessionId);
+    if (method === 'Target.attachedToTarget') {if(params.targetInfo?.type==='page'&&params.targetInfo.targetId!==info.targetId)return;childSessions.add(params.sessionId);}
     if (method === 'Target.detachedFromTarget') childSessions.delete(params.sessionId);
     send({ method, params, sessionId: sessionId || topSession });
   };
@@ -53,13 +53,20 @@ async function connectPage(contents) {
           if (method === 'Browser.getVersion') result = await debug.sendCommand(method);
           else if (method === 'Browser.setDownloadBehavior') result = {}; // Downloads remain governed by Electron.
           else if (method === 'Target.getTargetInfo') result = { targetInfo: info };
+          else if(method==='Target.getBrowserContexts')result={browserContextIds:['proteus-tab']};
+          else if(method==='Target.getTargets')result={targetInfos:[info]};
+          else if(method==='Target.setDiscoverTargets'){if(params.discover)send({method:'Target.targetCreated',params:{targetInfo:info}});result={};}
+          else if(method==='Target.attachToTarget'){if(params.targetId!==info.targetId)throw new Error('Target is outside this tab.');send({method:'Target.attachedToTarget',params:{sessionId:topSession,targetInfo:info,waitingForDebugger:false}});result={sessionId:topSession};}
+          else if(method==='Target.activateTarget'){if(params.targetId!==info.targetId)throw new Error('Target is outside this tab.');result={};}
+          else if(method==='Target.detachFromTarget'){if(params.sessionId!==topSession&&!childSessions.has(params.sessionId))throw new Error('Unknown page session.');result={};}
           else if (method === 'Target.setAutoAttach') {
             if (params.autoAttach) send({ method: 'Target.attachedToTarget', params: { sessionId: topSession, targetInfo: info, waitingForDebugger: false } });
             result = {};
           } else throw new Error(`Browser-wide command is unavailable: ${method}`);
         } else {
           if (sessionId !== topSession && !childSessions.has(sessionId)) throw new Error('Unknown page session.');
-          if (method.startsWith('Browser.') || ['Target.createTarget','Target.getTargets','Target.attachToTarget','Target.attachToBrowserTarget'].includes(method)) throw new Error('Command is outside this tab.');
+          if (method.startsWith('Browser.') || ['Target.createTarget','Target.getTargets','Target.attachToTarget','Target.attachToBrowserTarget','Network.getAllCookies','Network.getCookies','Storage.getCookies','Storage.getStorageKeyForFrame'].includes(method)) throw new Error('Command is outside this tab.');
+          if(method==='Input.dispatchMouseEvent')onInput(params);
           result = await debug.sendCommand(method, params, sessionId === topSession ? undefined : sessionId);
         }
         send({ id, result, ...(sessionId ? { sessionId } : {}) });
@@ -70,7 +77,9 @@ async function connectPage(contents) {
   });
   try {
     await new Promise((resolve,reject) => { server.once('error',reject); server.listen(0, '127.0.0.1', resolve); });
-    browser = await chromium.connectOverCDP(`ws://127.0.0.1:${server.address().port}/${secret}`, { timeout: 15000 });
+    const endpoint=`ws://127.0.0.1:${server.address().port}/${secret}`;
+    if(external)return {endpoint,get closed(){return disposed||!lease.active;},async close(){cleanup();}};
+    browser = await chromium.connectOverCDP(endpoint, { timeout: 15000 });
     const page = browser.contexts()[0].pages()[0];
     if (!page) throw new Error('Embedded page did not attach.');
     page.setDefaultTimeout(10000);

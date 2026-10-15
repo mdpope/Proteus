@@ -1,14 +1,31 @@
 import fs from 'node:fs';
 import { contextPlan } from '../public/context-plan.js';
 import path from 'node:path';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { Worker } from 'node:worker_threads';
 import { atomicJSON, readJSON, isWithin } from './files.js';
 import { revision } from './schedules.js';
 import { agentMetadata } from './agent-tools.js';
 
 const hash = value => createHash('sha256').update(value).digest('hex');
 const modes = new Set(['universal', 'workspace', 'available', 'disabled']);
-const skipped = new Set(['.git', 'node_modules', '.venv', 'venv', '__pycache__', '.next', 'bin', 'obj', 'dist', 'build', '.obsidian', '.trash']);
+export const discoveryExclusions = ['.git', 'node_modules', '.venv', 'venv', '__pycache__', '.next', 'bin', 'obj', 'dist', 'build', '.obsidian', '.trash', 'vendor', '.cache', '.build', 'DerivedData', '.swiftpm', 'Pods', 'Carthage'];
+const scopedKeys = ['libraryFolders', 'universalFolders', 'documents', 'modes', 'favorites', 'workspaceFiles', 'defaults', 'discovery', 'approvals'];
+// Compile this operation's current policy once, rather than constructing each
+// expression again for every source path. No matcher survives a settings read.
+const exclusionMatcher = (patterns, inclusions = []) => {
+  const expressions = patterns.map(pattern => {
+    const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g,'\\$&').replaceAll('**','\u0000').replaceAll('*','[^/]*').replaceAll('\u0000','.*');
+    return { relative: pattern.includes('/'), expression: new RegExp('^'+escaped+'$') };
+  });
+  return (file, root) => {
+    const relative = path.relative(root,file).split(path.sep).join('/');
+    if(inclusions.some(item => relative===item || relative.startsWith(item+'/') || item.startsWith(relative+'/')))return false;
+    const parts = relative.split('/');
+    return expressions.some(rule => rule.relative ? rule.expression.test(relative) : parts.some(part => rule.expression.test(part)));
+  };
+};
+const emptyScope = () => ({ libraryFolders: [], universalFolders: [], documents: [], modes: {}, favorites: [], workspaceFiles: [], defaults: {}, discovery: { exclusions: [...discoveryExclusions], inclusions: [], maxFolders: 60000 }, approvals: { mode: 'ask', folders: [], rules: [], readOnlyTools: false } });
 const unique = values => [...new Set(values)];
 export function parseJSONC(text) {
   // Remove comments and trailing commas without touching quoted strings/URLs.
@@ -40,51 +57,101 @@ function readDocument(file) {
   return fs.readFileSync(file, 'utf8');
 }
 export class ContextStore {
-  constructor(home, settings) {
+  constructor(home, settings, { skipRefresh = false } = {}) {
     this.home = home; this.settings = settings; this.file = path.join(home, 'context.json'); this.catalogFile = path.join(home, 'context-catalog.json'); this.catalog = readJSON(this.catalogFile, { entries: [] });
     if (!fs.existsSync(this.file)) {
       const defaults = settings.get();
       atomicJSON(this.file, { schemaVersion: 1, defaultWorkspaceId: 'default', workspaces: [{ id: 'default', name: defaults.workspaceImport?.name || 'Default workspace', ...defaults.workspace }], libraryFolders: [], universalFolders: [], documents: [], modes: {}, workspaceFiles: defaults.workspaceImport?.source ? [defaults.workspaceImport.source] : [] });
     }
-    this.refresh();
+    const data = readJSON(this.file);
+    if (!data.workspaceConfigurationVersion) {
+      if (!fs.existsSync(this.file + '.before-workspaces')) atomicJSON(this.file + '.before-workspaces', data);
+      for (const profile of data.workspaces) for (const key of scopedKeys) profile[key] ??= structuredClone(data[key] ?? emptyScope()[key]);
+      data.workspaceConfigurationVersion = 1; atomicJSON(this.file, data);
+    }
+    if (!skipRefresh) this.refresh();
   }
   config() {
     const data = readJSON(this.file);
     if (data.schemaVersion !== 1 || !Array.isArray(data.workspaces) || !data.workspaces.length || !data.modes || !Array.isArray(data.libraryFolders) || !Array.isArray(data.documents) || !Array.isArray(data.workspaceFiles)) throw new Error('Invalid context.json.');
     if (data.favorites !== undefined && (!Array.isArray(data.favorites) || data.favorites.some(id => typeof id !== 'string'))) throw new Error('Favorites must be source IDs.');
-    return { ...data, favorites: data.favorites || [], universalFolders: data.universalFolders || [], file: this.file, revision: revision(data) };
+    const profile = data.workspaces.find(w => w.id === data.defaultWorkspaceId);
+    return { ...data, ...Object.fromEntries(scopedKeys.map(key => [key, structuredClone(profile?.[key] ?? data[key] ?? emptyScope()[key])])), file: this.file, revision: revision(data) };
   }
-  roots(config = this.config()) { return unique([...config.workspaces.flatMap(w => [w.cwd, ...w.additionalDirectories]), ...config.libraryFolders, ...(config.universalFolders || [])]); }
-  get() {
-    const config = this.config();
-    return { ...config, ...this.catalog, entries: this.catalog.entries.map(entry => ({ ...entry, mode: config.modes[entry.id] || entry.defaultMode })) };
+  roots(config = this.config()) { return unique(config.workspaces.flatMap(w => [w.cwd, ...(w.additionalDirectories || []), ...(w.libraryFolders || []), ...(w.universalFolders || [])])); }
+  scope(workspaceId, config = this.config()) { const profile = config.workspaces.find(w => w.id === (workspaceId || config.defaultWorkspaceId)); if (!profile) throw new Error('Workspace not found.'); return profile; }
+  executionScope(workspaceId,config=this.config()){return config.workspaces.find(w=>w.id===(workspaceId||config.defaultWorkspaceId))||(config.archivedWorkspaces||[]).find(w=>w.id===workspaceId)||this.scope(workspaceId,config);}
+  scopedConfig(workspaceId,{execution=false}={}) { const config = this.config(), profile = execution?this.executionScope(workspaceId,config):this.scope(workspaceId, config); return { ...config, ...Object.fromEntries(scopedKeys.map(key => [key, structuredClone(profile[key] ?? emptyScope()[key])])), workspaceId: profile.id }; }
+  get(workspaceId,options={}) {
+    const config = this.scopedConfig(workspaceId,options);
+    const profile = options.execution?this.executionScope(workspaceId,config):this.scope(workspaceId,config), roots = [profile.cwd,...profile.additionalDirectories,...profile.libraryFolders,...profile.universalFolders];
+    const excluded = exclusionMatcher(profile.discovery.exclusions,profile.discovery.inclusions);
+    return { ...config, ...this.catalog, approvalProfiles: this.permissionStore?.get().workspaces.filter(item => item.workspaceId === profile.id) || [], entries: this.catalog.entries.filter(entry => config.documents.some(doc => doc.path === entry.path) || config.workspaceFiles.includes(entry.path) || entry.roots.some(root => roots.includes(root) && !excluded(entry.path,root)) || Object.hasOwn(config.modes,entry.id) || config.favorites.includes(entry.id) || (profile.defaults.selectedIds||[]).includes(entry.id)).map(entry => ({ ...entry, mode: config.modes[entry.id] || entry.defaultMode })) };
   }
   save(value, expectedRevision) {
     if (this.config().revision !== expectedRevision) throw new Error('Workspace settings changed. Refresh before saving.');
+    const previous = this.config();
     const config = structuredClone(value); delete config.file; delete config.revision;
+    const existingRoots = new Set(this.roots(previous));
+    const existingDocuments = new Set(previous.workspaces.flatMap(profile => profile.documents || []).map(doc => doc.path));
+    const validateFolder = folder => { try { return directory(folder); } catch (error) { if (existingRoots.has(folder)) return folder; throw error; } };
+    const defaultProfile = config.workspaces.find(w => w.id === config.defaultWorkspaceId);
+    // Legacy callers edit the top-level projection. Explicit scoped callers edit profiles.
+    for (const key of scopedKeys) if (revision(config[key]) !== revision(previous[key])) defaultProfile[key] = structuredClone(config[key]);
     if (config.schemaVersion !== 1 || !Array.isArray(config.workspaces) || !config.workspaces.length || !config.workspaces.some(w => w.id === config.defaultWorkspaceId)) throw new Error('Choose a default workspace.');
     const ids = new Set();
     for (const workspace of config.workspaces) {
       if (!/^[\w-]+$/.test(workspace.id) || ids.has(workspace.id) || !workspace.name?.trim()) throw new Error('Workspaces need unique IDs and names.');
-      ids.add(workspace.id); workspace.cwd = directory(workspace.cwd);
-      workspace.additionalDirectories = unique(workspace.additionalDirectories.map(directory)).filter(p => p !== workspace.cwd);
+      ids.add(workspace.id); workspace.cwd = validateFolder(workspace.cwd);
+      for (const key of scopedKeys) workspace[key] ??= structuredClone(emptyScope()[key]);
+      workspace.libraryFolders = unique(workspace.libraryFolders.map(validateFolder));
+      workspace.universalFolders = unique(workspace.universalFolders.map(validateFolder));
+      for (const mode of Object.values(workspace.modes)) if (!modes.has(mode)) throw new Error('Invalid context selection mode.');
+      if (!Array.isArray(workspace.discovery.exclusions) || workspace.discovery.exclusions.some(value => typeof value !== 'string' || !value.trim() || value.length > 300)) throw new Error('Exclusions must be folder names or relative path patterns.');
+      if (!Array.isArray(workspace.discovery.inclusions || []) || (workspace.discovery.inclusions || []).some(item => typeof item !== 'string' || !item || path.isAbsolute(item) || item.split('/').includes('..'))) throw new Error('Inclusions must be relative paths inside the source folder.');
+      if (!Number.isInteger(workspace.discovery.maxFolders) || workspace.discovery.maxFolders < 1 || workspace.discovery.maxFolders > 1000000) throw new Error('Invalid folder scan budget.');
+      if (!['ask','custom','trusted','autopilot'].includes(workspace.approvals.mode) || !Array.isArray(workspace.approvals.folders) || !Array.isArray(workspace.approvals.rules)) throw new Error('Invalid workspace approvals.');
+      for (const grant of workspace.approvals.folders) { grant.path = directory(grant.path); if (!['read','read-write'].includes(grant.access)) throw new Error('Invalid folder access.'); }
+      if (!Array.isArray(workspace.favorites) || workspace.favorites.some(id => typeof id !== 'string')) throw new Error('Favorites must be source IDs.');
+      if (workspace.defaults.includeDefaults !== undefined && typeof workspace.defaults.includeDefaults !== 'boolean' || workspace.defaults.selectedIds !== undefined && (!Array.isArray(workspace.defaults.selectedIds) || workspace.defaults.selectedIds.some(id => typeof id !== 'string'))) throw new Error('Invalid workspace chat defaults.');
+      for (const rule of workspace.approvals.rules) if (!['shell','mcp','custom-tool','url'].includes(rule.kind)) throw new Error('Invalid saved approval rule.');
+      for (const doc of workspace.documents) if (!path.isAbsolute(doc.path) || !['instruction', 'skill', 'agent'].includes(doc.kind) || !existingDocuments.has(doc.path) && !fs.statSync(doc.path).isFile()) throw new Error('Invalid source document.');
+      workspace.additionalDirectories = unique(workspace.additionalDirectories.map(validateFolder)).filter(p => p !== workspace.cwd);
     }
-    config.libraryFolders = unique(config.libraryFolders.map(directory));
-    config.universalFolders = unique((config.universalFolders || []).map(directory));
-    for (const doc of config.documents) if (!path.isAbsolute(doc.path) || !['instruction', 'skill', 'agent'].includes(doc.kind) || !fs.statSync(doc.path).isFile()) throw new Error('Choose an existing instruction, skill, or agent file.');
+    config.libraryFolders = unique(config.libraryFolders.map(validateFolder));
+    config.universalFolders = unique((config.universalFolders || []).map(validateFolder));
+    for (const doc of config.documents) if (!path.isAbsolute(doc.path) || !['instruction', 'skill', 'agent'].includes(doc.kind) || !existingDocuments.has(doc.path) && !fs.statSync(doc.path).isFile()) throw new Error('Choose an existing instruction, skill, or agent file.');
     for (const file of config.workspaceFiles) if (!path.isAbsolute(file) || !file.endsWith('.code-workspace')) throw new Error('Choose a VS Code workspace file.');
     for (const mode of Object.values(config.modes)) if (!modes.has(mode)) throw new Error('Invalid context selection mode.');
     if (!Array.isArray(config.favorites || []) || (config.favorites || []).some(id => typeof id !== 'string')) throw new Error('Favorites must be source IDs.');
     config.favorites = unique(config.favorites || []);
-    atomicJSON(this.file, config); this.refresh(); return this.get();
+    for (const key of scopedKeys) config[key] = structuredClone(defaultProfile[key]);
+    atomicJSON(this.file, config);
+    const scanShape = value => value.workspaces.map(w => [w.cwd, w.additionalDirectories, w.libraryFolders, w.universalFolders, w.documents, w.workspaceFiles, w.discovery]);
+    if (revision(scanShape(previous)) !== revision(scanShape(config))) { if (this.deferRefresh) this.scanPending = true; else this.refresh(); }
+    return this.get();
   }
-  favorite(id, enabled, expectedRevision) {
-    if (typeof enabled !== 'boolean' || !this.get().entries.some(e => e.id === id)) throw new Error('Choose an existing context source.');
+  deleteWorkspace(id,expectedRevision){
+    const config=this.config();if(config.revision!==expectedRevision)throw new Error('Workspace settings changed. Refresh before deleting.');
+    const profile=this.scope(id,config);
+    return this.mutate(value=>{
+      value.archivedWorkspaces??=[];
+      if(!value.archivedWorkspaces.some(item=>item.id===id))value.archivedWorkspaces.push({...structuredClone(profile),deletedAt:new Date().toISOString()});
+      value.workspaces=value.workspaces.filter(item=>item.id!==id);
+      if(!value.workspaces.length)value.workspaces.push({id:randomUUID(),name:'Default workspace',cwd:this.settings.get().workspace.cwd,additionalDirectories:[],...emptyScope()});
+      if(value.defaultWorkspaceId===id)value.defaultWorkspaceId=value.workspaces[0].id;
+      const next=value.workspaces.find(item=>item.id===value.defaultWorkspaceId);
+      for(const key of scopedKeys)value[key]=structuredClone(next[key]);
+    },expectedRevision);
+  }
+  favorite(id, enabled, expectedRevision, workspaceId) {
+    if (typeof enabled !== 'boolean' || !this.get(workspaceId).entries.some(e => e.id === id)) throw new Error('Choose an existing context source.');
     const config = this.config();
     if (config.revision !== expectedRevision) throw new Error('Workspace settings changed. Refresh before saving.');
-    config.favorites = config.favorites.filter(value => value !== id);
-    if (enabled) config.favorites.push(id);
-    delete config.file; delete config.revision; atomicJSON(this.file, config); return this.get();
+    const profile = this.scope(workspaceId, config);
+    profile.favorites = profile.favorites.filter(value => value !== id);
+    if (enabled) profile.favorites.push(id);
+    delete config.file; delete config.revision; atomicJSON(this.file, config); return this.get(workspaceId);
   }
   mutate(change, expectedRevision) {
     const config = this.config(); change(config); return this.save(config, expectedRevision);
@@ -100,12 +167,50 @@ export class ContextStore {
     return this.mutate(config => {
       const id = 'workspace-' + hash(file).slice(0, 12);
       config.workspaces = config.workspaces.filter(w => w.id !== id);
-      config.workspaces.push({ id, name: path.basename(file, '.code-workspace'), cwd: folders[0], additionalDirectories: unique(folders.slice(1)) });
+      config.workspaces.push({ id, name: path.basename(file, '.code-workspace'), cwd: folders[0], additionalDirectories: unique(folders.slice(1)), workspaceFiles:[file] });
       config.workspaceFiles = unique([...config.workspaceFiles, file]);
     }, expectedRevision);
   }
-  refresh() {
-    const config = this.config(); const roots = this.roots(config); const entries = new Map(); const errors = []; const visited = new Set(); let scanned = 0;
+  copyWorkspace(workspaceId, name, expectedRevision) {
+    if (!name?.trim()) throw new Error('Name the copied workspace.');
+    const id = 'workspace-' + randomUUID();
+    this.mutate(config => { const source = this.scope(workspaceId, config); config.workspaces.push({ ...structuredClone(source), id, name: name.trim(), copiedFrom: source.id, createdAt: new Date().toISOString() }); }, expectedRevision);
+    return { ...this.get(id), copiedWorkspaceId: id };
+  }
+  importConfiguration({ name, configuration, entries = [], pathMappings = [] }, expectedRevision) {
+    if (!name?.trim() || !configuration || !Array.isArray(pathMappings) || !Array.isArray(entries)) throw new Error('Choose a workspace configuration and target folder mappings.');
+    const mappings = pathMappings.map(item => { if (!path.isAbsolute(item.from || '')) throw new Error('Invalid source folder mapping.'); return { from: item.from, to: directory(item.to) }; }).sort((a,b) => b.from.length - a.from.length);
+    const mapPath = file => { const match = mappings.find(item => file === item.from || file.startsWith(item.from + path.sep)); if (!match) throw new Error('Map every source folder to an existing folder on the target computer: ' + file); return path.resolve(match.to, path.relative(match.from,file)); };
+    const id = 'workspace-' + randomUUID(), profile = { ...emptyScope(), id, name:name.trim(), cwd:mapPath(configuration.cwd), additionalDirectories:(configuration.additionalDirectories || []).map(mapPath) };
+    for (const key of ['libraryFolders','universalFolders','workspaceFiles']) profile[key] = (configuration[key] || []).map(mapPath);
+    profile.documents = (configuration.documents || []).map(doc => ({path:mapPath(doc.path),kind:doc.kind}));
+    profile.discovery = structuredClone(configuration.discovery || profile.discovery);
+    const ids = new Map(entries.map(entry => { const mapped = mapPath(entry.path); let canonical; try { canonical = fs.realpathSync(mapped); } catch { canonical = mapped; } return [entry.id,hash(canonical + (entry.kind === 'mcp' ? '#' + entry.key : ''))]; }));
+    for (const [source,mode] of Object.entries(configuration.modes || {})) { if (!ids.has(source)) throw new Error('Refresh the source catalog before copying its selections.'); profile.modes[ids.get(source)] = mode; }
+    profile.favorites = (configuration.favorites || []).map(source => ids.get(source)).filter(Boolean);
+    const defaults = configuration.defaults || {};
+    profile.defaults = { ...Object.fromEntries(['includeDefaults','provider','model','reasoningEffort','contextTier','serviceTier'].filter(key => Object.hasOwn(defaults,key)).map(key => [key,defaults[key]])), selectedIds:(defaults.selectedIds || []).map(source => ids.get(source)).filter(Boolean), agentId:ids.get(defaults.agentId) || null };
+    this.mutate(config => config.workspaces.push(profile), expectedRevision);
+    return { ...this.get(id), copiedWorkspaceId:id };
+  }
+  async refreshAsync(options = {}) {
+    if (this.refreshing) { await this.refreshing; return this.refreshAsync(options); }
+    this.refreshing = new Promise((resolve, reject) => {
+      const worker = new Worker(new URL('./context-worker.js', import.meta.url), { execArgv: [], workerData: { home: this.home, options } });
+      worker.once('message', message => message.error ? reject(new Error(message.error)) : resolve(message.catalog));
+      worker.once('error', reject); worker.once('exit', code => { if (code) reject(new Error('Folder discovery stopped unexpectedly.')); });
+    });
+    try { const catalog = await this.refreshing; this.catalog = catalog; return this.get(options.workspaceId); } finally { this.refreshing = null; }
+  }
+  refresh({ workspaceId, root: selectedRoot } = {}) {
+    const config = this.config();
+    const allRoots = workspaceId ? this.roots({ workspaces: [this.scope(workspaceId, config)] }) : this.roots(config);
+    if(selectedRoot)selectedRoot=directory(selectedRoot);
+    if (selectedRoot && !allRoots.includes(selectedRoot)) throw new Error('Choose a configured source folder.');
+    const roots = selectedRoot ? [selectedRoot] : allRoots;
+    const entries = new Map(); const errors = (this.catalog.errors || []).filter(error => !roots.some(root => error.path === root || error.path.startsWith(root + path.sep))); let visited = new Set(); let scanned = 0, policy, excluded;
+    const rootStatus = { ...(this.catalog.rootStatus || {}) };
+    for (const entry of this.catalog.entries || []) { const retained = (entry.roots || []).filter(root => !roots.includes(root)); if (retained.length) entries.set(entry.id, { ...entry, roots: retained }); }
     const addDocument = (file, root, explicitKind) => {
       try {
         const canonical = fs.realpathSync(file); const id = hash(canonical); const existing = entries.get(id);
@@ -122,25 +227,33 @@ export class ContextStore {
       } catch (error) { errors.push({ path: file, message: error.message }); }
     };
     const walk = (dir, root) => {
-      if (++scanned > 60_000) throw new Error('Workspace scan exceeded 60,000 folders. Add narrower source folders.');
       let real;
       try { real = fs.realpathSync(dir); } catch (error) { errors.push({ path: dir, message: error.message }); return; }
       if (!isWithin(real, roots) || visited.has(real)) return;
       visited.add(real);
+      if (++scanned > policy.maxFolders) throw new Error(`Folder scan reached its ${policy.maxFolders.toLocaleString('en-US')}-folder limit. Results for this folder are incomplete; other folders were scanned independently.`);
       let files;
       try { files = fs.readdirSync(dir, { withFileTypes: true }); } catch (error) { errors.push({ path: dir, message: error.message }); return; }
       for (const entry of files) {
         const file = path.join(dir, entry.name);
-        if (skipped.has(entry.name)) continue;
+        if (excluded(file,root)) continue;
         if (entry.isDirectory()) walk(file, root);
         else if (entry.isSymbolicLink()) {
           try { if (fs.statSync(file).isDirectory()) walk(file, root); else if (kindFor(file) && isWithin(file, roots)) addDocument(file, root); } catch { /* Broken aliases are not instruction sources. */ }
         } else if (entry.isFile() && kindFor(file)) addDocument(file, root);
       }
     };
-    for (const root of roots) { try { walk(root, root); } catch (error) { errors.push({ path: root, message: error.message }); } }
-    for (const doc of config.documents) addDocument(doc.path, path.dirname(doc.path), doc.kind);
-    const mcpFiles = [...config.workspaceFiles.map(file => ({ file, root: path.dirname(file), workspace: true })), ...roots.flatMap(root => ['.vscode/mcp.json', '.mcp.json', '.copilot/mcp.json', '.copilot/mcp-config.json'].map(rel => ({ file: path.join(root, rel), root })))];
+    for (const root of roots) {
+      visited = new Set(); scanned = 0;
+      const owners = config.workspaces.filter(w => [w.cwd, ...w.additionalDirectories, ...w.libraryFolders, ...w.universalFolders].includes(root));
+      policy = owners.length ? { exclusions: owners[0].discovery.exclusions.filter(pattern => owners.every(owner => owner.discovery.exclusions.includes(pattern))), inclusions: unique(owners.flatMap(owner => owner.discovery.inclusions || [])), maxFolders: Math.max(...owners.map(owner => owner.discovery.maxFolders)) } : emptyScope().discovery;
+      excluded = exclusionMatcher(policy.exclusions, policy.inclusions);
+      const before = errors.length;
+      try { walk(root, root); } catch (error) { errors.push({ path: root, message: error.message }); }
+      rootStatus[root] = { refreshedAt: new Date().toISOString(), scannedFolders: Math.min(scanned, policy.maxFolders), partial: errors.length > before, exclusions: policy.exclusions, inclusions:policy.inclusions || [] };
+    }
+    for (const doc of config.workspaces.flatMap(w => w.documents)) addDocument(doc.path, path.dirname(doc.path), doc.kind);
+    const mcpFiles = [...unique(config.workspaces.flatMap(w => w.workspaceFiles)).map(file => ({ file, root: path.dirname(file), workspace: true })), ...roots.flatMap(root => ['.vscode/mcp.json', '.mcp.json', '.copilot/mcp.json', '.copilot/mcp-config.json'].map(rel => ({ file: path.join(root, rel), root })))];
     for (const source of mcpFiles) {
       if (!fs.existsSync(source.file)) continue;
       try {
@@ -152,23 +265,43 @@ export class ContextStore {
       } catch (error) { errors.push({ path: source.file, message: error.message }); }
     }
     // Retain missing selected entries so disappearance cannot look like successful loading.
-    for (const previous of this.catalog?.entries || []) if (!entries.has(previous.id) && (config.modes[previous.id] || config.favorites.includes(previous.id))) entries.set(previous.id, { ...previous, missing: true });
-    this.catalog = { refreshedAt: new Date().toISOString(), entries: [...entries.values()].sort((a, b) => a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name)), errors };
+    for (const previous of this.catalog?.entries || []) if (!entries.has(previous.id) && (config.workspaces.some(w => w.modes[previous.id] || w.favorites.includes(previous.id)))) entries.set(previous.id, { ...previous, missing: true });
+    this.catalog = { refreshedAt: new Date().toISOString(), rootStatus, entries: [...entries.values()].sort((a, b) => a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name)), errors };
     atomicJSON(this.catalogFile, this.catalog);
     return this.get();
   }
-  capture({ workspaceId, workspace, selectedIds = [], agentId, includeDefaults = true } = {}) {
+  capture({ workspaceId, workspace, selectedIds, agentId, includeDefaults } = {}) {
+    const configured = this.scope(workspaceId).defaults || {};
+    const defaultOverrides = { selectedIds: selectedIds !== undefined && revision(Array.isArray(selectedIds) ? [...selectedIds].sort() : selectedIds) !== revision([...(configured.selectedIds || [])].sort()), agentId: agentId !== undefined && (agentId || null) !== (configured.agentId || null), includeDefaults: includeDefaults !== undefined && includeDefaults !== (configured.includeDefaults ?? true) };
+    selectedIds ??= configured.selectedIds || []; if (agentId === undefined) agentId = configured.agentId; includeDefaults ??= configured.includeDefaults ?? true;
     if (typeof includeDefaults !== 'boolean') throw new Error('Choose whether to include default context.');
     if (agentId != null && typeof agentId !== 'string') throw new Error('Main agent must be a source ID.');
-    const catalog = this.get(); const profile = workspaceId ? catalog.workspaces.find(w => w.id === workspaceId) : workspace ? null : catalog.workspaces.find(w => w.id === catalog.defaultWorkspaceId);
+    const catalog = this.get(workspaceId); const profile = workspaceId ? catalog.workspaces.find(w => w.id === workspaceId) : workspace ? null : catalog.workspaces.find(w => w.id === catalog.defaultWorkspaceId);
     if (!profile && !workspace) throw new Error('Workspace no longer exists.');
     const original = workspace || { cwd: profile.cwd, additionalDirectories: profile.additionalDirectories };
-    const cwd = directory(original.cwd); const roots = unique([cwd, ...original.additionalDirectories.map(directory), ...catalog.universalFolders.map(directory)]);
+    const cwd = directory(original.cwd), warnings = [], unavailableRoots = new Set();
+    const availableDirectory = root => {
+      try { return directory(root); }
+      catch (error) {
+        if (!['ENOENT', 'ENOTDIR'].includes(error.code)) throw error;
+        if (!unavailableRoots.has(root)) warnings.push({ path: root, code: error.code, message: `Folder unavailable; skipped its sources for this chat: ${root}` });
+        unavailableRoots.add(root); return null;
+      }
+    };
+    // Keep configured paths intact so a disconnected/restored folder remains configured.
+    // Only the captured execution context omits unavailable supplemental roots.
+    const roots = unique([cwd, ...original.additionalDirectories.map(availableDirectory), ...catalog.universalFolders.map(availableDirectory)].filter(Boolean));
     if (!Array.isArray(selectedIds) || selectedIds.some(id => !catalog.entries.some(e => e.id === id))) throw new Error('Refresh the context list before selecting sources.');
     if (!includeDefaults && selectedIds.some(id => catalog.entries.find(e => e.id === id)?.mode === 'disabled')) throw new Error('A selected source is disabled. Update this selection before running.');
     const chosen = contextPlan(catalog, { workspace: { cwd, additionalDirectories: original.additionalDirectories }, selectedIds, agentId, includeDefaults }).entries;
     const records = []; let total = 0;
     for (const entry of chosen) {
+      const availableRoots = entry.roots.map(availableDirectory).filter(Boolean);
+      const sourceFolderMissing = [...unavailableRoots].some(root => { const relative = path.relative(root, entry.path); return relative === '' || (!relative.startsWith('..' + path.sep) && relative !== '..' && !path.isAbsolute(relative)); });
+      if (entry.roots.length && (!availableRoots.length || sourceFolderMissing)) {
+        if (entry.id === agentId) throw new Error('The main agent folder is unavailable. Choose another main agent: ' + entry.name);
+        continue;
+      }
       if (entry.missing) throw new Error('Selected source is missing: ' + entry.path);
       if (entry.kind === 'agent' && entry.unsupportedAgentFields?.length) throw new Error('Agent is unavailable: ' + entry.name + '. ' + entry.unsupportedAgentFields.join('; '));
       const record = { ...entry }; delete record.defaultMode;
@@ -180,11 +313,11 @@ export class ContextStore {
         record.content = text;
       } else { record.canonicalSource=fs.realpathSync(entry.path);record.canonicalRoot=fs.realpathSync(entry.roots[0]);this.resolveMcp(record, false); }
       records.push(record);
-      for (const root of entry.roots) if (fs.existsSync(root) && !roots.includes(root)) roots.push(directory(root));
+      for (const root of availableRoots) if (!roots.includes(root)) roots.push(root);
     }
     if (agentId && records.find(e => e.id === agentId)?.agent?.userInvocable === false) throw new Error('This agent cannot be selected as the main agent.');
     if (agentId && !records.some(e => e.id === agentId && e.kind === 'agent')) throw new Error('Select the agent in this chat context first.');
-    return { schemaVersion: 1, baseWorkspace: { cwd, additionalDirectories: original.additionalDirectories }, followsWorkspace: !!profile && revision({ cwd, additionalDirectories: original.additionalDirectories }) === revision({ cwd: profile.cwd, additionalDirectories: profile.additionalDirectories }), workspaceId: profile?.id || null, workspaceName: profile?.name || path.basename(cwd), includeDefaults, selectedIds, agentId: agentId || null, capturedAt: new Date().toISOString(), workspace: { cwd, additionalDirectories: roots.filter(root => root !== cwd) }, entries: records };
+    return { schemaVersion: 1, baseWorkspace: { cwd, additionalDirectories: original.additionalDirectories }, followsWorkspace: !!profile && revision({ cwd, additionalDirectories: original.additionalDirectories }) === revision({ cwd: profile.cwd, additionalDirectories: profile.additionalDirectories }), workspaceId: profile?.id || null, workspaceName: profile?.name || path.basename(cwd), configurationRevision: profile ? revision(profile) : catalog.revision, defaultOverrides, includeDefaults, selectedIds, agentId: agentId || null, capturedAt: new Date().toISOString(), workspace: { cwd, additionalDirectories: roots.filter(root => root !== cwd) }, entries: records, warnings };
   }
   resolveMcp(record, resolveEnvironment = true) {
     if((record.canonicalSource&&fs.realpathSync(record.path)!==record.canonicalSource)||(record.canonicalRoot&&fs.realpathSync(record.roots[0])!==record.canonicalRoot))throw new Error('Selected MCP source or folder changed. Refresh this chat context: '+record.name);
@@ -210,9 +343,21 @@ export class ContextStore {
     else if (typeof resolved.command !== 'string' || !resolved.command.trim()) throw new Error('MCP command is missing.');
     return resolved;
   }
-  providerContext(snapshot) {
+  // A health enumeration is one synchronous read operation. Share its scoped
+  // catalog projection, then discard it before the next request. Provider turns
+  // and subsequent checks still read current disk settings and MCP source bytes.
+  withMcpSelectionBatch(callback) {
+    if (this.mcpSelectionBatch) return callback();
+    this.mcpSelectionBatch = new Map();
+    try { return callback(); } finally { this.mcpSelectionBatch = null; }
+  }
+  providerMcpContext(snapshot) { return this.providerContext(snapshot, { mcpOnly: true }); }
+  providerContext(snapshot, { mcpOnly = false } = {}) {
     const instructions = []; const customAgents = []; const mcpServers = {}; const fingerprints = new Map(); const mcpMappings = {};
-    const catalog = this.get();
+    if (!mcpOnly && snapshot.warnings?.length) instructions.push('## Unavailable context folders\nThe following configured folders were unavailable when this chat context was prepared. Their sources were not loaded; do not assume their contents are available.\n' + snapshot.warnings.map(warning => '- ' + warning.path).join('\n'));
+    const key = snapshot.workspaceId || '';
+    let catalog = this.mcpSelectionBatch?.get(key);
+    if (!catalog) { catalog = this.get(snapshot.workspaceId,{execution:true}); this.mcpSelectionBatch?.set(key, catalog); }
     for (const entry of snapshot.entries) {
       if (catalog.modes[entry.id] === 'disabled') throw new Error('A source was disabled. Refresh this chat context before continuing: ' + entry.name);
       if (entry.kind === 'mcp') {
@@ -225,10 +370,11 @@ export class ContextStore {
         // Parse the captured version on resume too; do not trust stale catalog metadata.
         const agent = agentMetadata(entry.content);
         if (agent.issues.length) throw new Error('Agent is unavailable: ' + entry.name + '. ' + agent.issues.join('; '));
-        customAgents.push({ name: 'agent-' + entry.id.slice(0, 16), displayName: entry.name, description: entry.description || entry.name, tools: agent.tools, prompt: `Source: ${entry.path}\nScope: ${entry.scope}\n\n${entry.content}`, infer: agent.infer });
+        if (!mcpOnly) customAgents.push({ name: 'agent-' + entry.id.slice(0, 16), displayName: entry.name, description: entry.description || entry.name, tools: agent.tools, prompt: `Source: ${entry.path}\nScope: ${entry.scope}\n\n${entry.content}`, infer: agent.infer });
       }
-      else instructions.push(`## ${entry.kind}: ${entry.name}\nSource: ${entry.path}\nApplies to: ${entry.mode === 'universal' ? 'Every chat; preserve task, domain, and file limits written in the source' : entry.scope}\nUse referenced relative paths from this source's directory. Preserve the source's domain and scope.\n\n${entry.content}`);
+      else if (!mcpOnly) instructions.push(`## ${entry.kind}: ${entry.name}\nSource: ${entry.path}\nApplies to: ${entry.mode === 'universal' ? 'Every chat; preserve task, domain, and file limits written in the source' : entry.scope}\nUse referenced relative paths from this source's directory. Preserve the source's domain and scope.\n\n${entry.content}`);
     }
+    if (mcpOnly) return { mcpServers, disabledLegacyMcp: catalog.entries.filter(e => e.kind === 'mcp' && catalog.modes[e.id] === 'disabled').map(e => e.name) };
     return { mcpServers, mcpMappings, customAgents, disabledSkills: catalog.entries.filter(e => e.kind === 'skill' && catalog.modes[e.id] === 'disabled').map(e => e.runtimeName), disabledLegacyMcp: catalog.entries.filter(e => e.kind === 'mcp' && catalog.modes[e.id] === 'disabled').map(e => e.name), agent: snapshot.agentId ? 'agent-' + snapshot.agentId.slice(0, 16) : undefined, instructionText: instructions.join('\n\n') };
   }
 }

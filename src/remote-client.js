@@ -91,7 +91,14 @@ export class BrowserRemoteClient extends EventTarget {
         return new Promise((resolve, reject) => {
             const timer = setTimeout(() => { this.waiting.delete(id); reject(new Error('Response timed out. Refresh the Mac state before retrying; the action may already have completed.')); }, Math.max(1000,Math.min(timeoutMs,60_000)));
             this.waiting.set(id, { resolve, reject, timer });
-            this.sendQueue = this.sendQueue.then(async () => { const seq = ++this.outgoing; this.raw({ type: 'data', seq, box: await seal(this.host.key, { id, method, args, issuedAt }, `${this.prefix}:client:${seq}`) }); }).catch(() => this.fail('Could not send the encrypted request. Reconnect before retrying.'));
+            this.sendQueue = this.sendQueue.then(async () => {
+                // Leave room for authentication within the relay's 100-packet/10-second budget.
+                this.sentAt ||= [];this.sentAt=this.sentAt.filter(at=>Date.now()-at<10_100);
+                if(this.sentAt.length>=80)await new Promise(resolve=>setTimeout(resolve,Math.max(1,10_100-(Date.now()-this.sentAt[0]))));
+                if(this.status!=='online'||!this.waiting.has(id))return;
+                this.sentAt=this.sentAt.filter(at=>Date.now()-at<10_100);this.sentAt.push(Date.now());
+                const seq = ++this.outgoing; this.raw({ type: 'data', seq, box: await seal(this.host.key, { id, method, args, issuedAt }, `${this.prefix}:client:${seq}`) });
+            }).catch(() => this.fail('Could not send the encrypted request. Reconnect before retrying.'));
         });
     }
     fail(message) {

@@ -36,19 +36,37 @@ export function validateContextSelection(value) {
 export const revision = value => crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
 export class ScheduleStore {
-  constructor(dir) { this.dir = dir; fs.mkdirSync(dir, { recursive: true, mode: 0o700 }); }
-  list() {
-    return jsonFiles(this.dir).map(file => {
+  constructor(dir) { this.dir = dir; this.cache = new Map(); fs.mkdirSync(dir, { recursive: true, mode: 0o700 }); }
+  readValidated(file) {
+    // Metadata alone cannot establish freshness: external editors can retain
+    // both size and mtime. Cache only after comparing the actual current bytes.
+    const source = fs.readFileSync(file, 'utf8');
+    let cached = this.cache.get(file);
+    if (cached?.source !== source) {
       try {
-        const schedule = validateSchedule(readJSON(file));
+        const schedule = validateSchedule(JSON.parse(source));
+        cached = { source, schedule, revision: revision(schedule) };
+      } catch (error) { cached = { source, error: error.message }; }
+      this.cache.set(file, cached);
+    }
+    if (cached.error) throw new Error(cached.error);
+    return cached;
+  }
+  list() {
+    const files = jsonFiles(this.dir), current = new Set(files), now = new Date(), minute = Math.floor(now.getTime() / 60000);
+    for (const file of this.cache.keys()) if (!current.has(file)) this.cache.delete(file);
+    return files.map(file => {
+      try {
+        const cached = this.readValidated(file), schedule = cached.schedule;
         if (path.basename(file) !== `${schedule.id}.json`) throw new Error('Filename must match schedule id.');
-        return { ...schedule, file, revision: revision(schedule), nextRuns: nextRuns(schedule.cron, schedule.timezone) };
+        if (cached.previewMinute !== minute) { cached.nextRuns = nextRuns(schedule.cron, schedule.timezone, now); cached.previewMinute = minute; }
+        return { ...structuredClone(schedule), file, revision: cached.revision, nextRuns: [...cached.nextRuns] };
       } catch (error) { return { id: path.basename(file, '.json'), file, error: error.message }; }
     });
   }
   get(id) {
     if (!/^[a-z0-9][a-z0-9-]{0,79}$/.test(id)) throw new Error('Invalid schedule id.');
-    return validateSchedule(readJSON(path.join(this.dir, `${id}.json`)));
+    return structuredClone(this.readValidated(path.join(this.dir, `${id}.json`)).schedule);
   }
   save(value, expectedRevision) {
     const schedule = validateSchedule(structuredClone(value));

@@ -6,9 +6,11 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { atomicJSON, jsonFiles, readJSON } from './files.js';
-import { ScheduleStore, lastDue, revision, validateSchedule } from './schedules.js';
+import { ScheduleStore, revision, validateSchedule } from './schedules.js';
+import { SchedulerWorker } from './scheduler-client.js';
 import { RehearsalProvider } from './rehearsal.js';
-import { PermissionStore, permissionContext } from './permissions.js';
+import { PermissionStore, permissionContext, canonicalPath } from './permissions.js';
+import {chatMembership} from '../public/chat-membership.js';
 
 import { chatModelOptions } from './model-catalog.js';
 import { agentName } from '../public/agent-name.js';
@@ -29,7 +31,7 @@ export class Engine extends EventEmitter {
     this.tombstoneFile = path.join(home, 'chat-tombstones.json');
     this.tombstones = readJSON(this.tombstoneFile, {});
     this.providers = { rehearsal: new RehearsalProvider(), ...providers };
-    this.queuedSteers = new Map(); this.pending = new Map(); this.questionQueues = new Map(); this.running = null; this.backgroundRuns = new Map(); this.executions = new Set(); this.stopping = false;
+    this.queuedSteers = new Map(); this.pending = new Map(); this.questionQueues = new Map(); this.running = new Map(); this.backgroundRuns = new Map(); this.executions = new Set(); this.stopping = false;
     fs.mkdirSync(this.runsDir, { recursive: true, mode: 0o700 });
     this.journal = readJSON(path.join(home, 'scheduler.json'), { lastPoll: clock().toISOString(), slots: {} });
     this.runs = new Map();
@@ -71,15 +73,48 @@ export class Engine extends EventEmitter {
   describePermissions(run) {
     return this.permissions.describeRun(run);
   }
-  setChatPermission(id, mode, expectedContextId, expectedChatRevision) {
+  moveWorkspace(id,{workspaceId,workspaceName='',expectedUpdatedAt}={}){
+    const run=this.getRun(id);
+    if(workspaceId!==null&&!/^[a-zA-Z0-9_-]{1,128}$/.test(workspaceId||''))throw new Error('Choose a workspace or Unhoused.');
+    if(expectedUpdatedAt!==undefined&&expectedUpdatedAt!==run.updatedAt)throw new Error('Chat changed. Refresh before moving it.');
+    const before=chatMembership(run);
+    if(before.workspaceId===workspaceId&&before.workspaceName===workspaceName)return run;
+    // Freeze future inherited source/default refresh, retaining the captured execution roots,
+    // session and permission-context identity. No active provider is restarted or reconfigured.
+    run.initialSchedule??=structuredClone(run.schedule);
+    if(run.schedule.context)run.schedule.context={...run.schedule.context,followsWorkspace:false};
+    run.workspaceId=workspaceId;run.workspaceName=workspaceId?String(workspaceName).slice(0,200):'';
+    run.workspaceMoves??=[];run.workspaceMoves.push({from:before.workspaceId,to:workspaceId,at:this.now()});
+    this.persist(run);this.emit('lifecycle',{id:run.id,...chatMembership(run),updatedAt:run.updatedAt,moved:true});
+    return run;
+  }
+  setChatPermission(id, mode, expectedContextId, expectedChatRevision, expectedRequestId) {
     const run = this.getRun(id), context = this.permissions.describe(run.schedule);
-    if (run.trigger !== 'chat') throw new Error('Chat-only approval requires a chat.');
+    if (run.trigger !== 'chat' && mode !== 'inherit' && (!['scheduled','manual'].includes(run.trigger) || run.status !== 'awaiting_input' || run.pending?.type !== 'permission' || typeof expectedRequestId !== 'string' || expectedRequestId !== run.pending.id)) throw new Error('Conversation-only approval requires the current waiting permission request.');
+    if (expectedRequestId !== undefined && (typeof expectedRequestId !== 'string' || !expectedRequestId || run.pending?.id !== expectedRequestId || run.pending?.type !== 'permission')) throw new Error('The approval request changed. Refresh before changing chat approval.');
     if (context.id !== expectedContextId) throw new Error('Workspace configuration changed. Review the permission context.');
     if (expectedChatRevision !== (run.chatPermissionRevision || null)) throw new Error('Chat approval changed. Refresh before saving.');
     if (!['autopilot', 'inherit'].includes(mode)) throw new Error('Choose chat auto-approval or inherit workspace settings.');
-    run.chatPermission = mode === 'autopilot' ? { mode, contextId: context.id, grantedAt: this.now() } : null;
+    const folders = run.chatPermission?.contextId === context.id ? run.chatPermission.folders || [] : [];
+    run.chatPermission = mode === 'autopilot' || folders.length ? { mode, folders, contextId: context.id, grantedAt: this.now() } : null;
     run.chatPermissionRevision = randomUUID(); this.persist(run); this.recheckPermissions();
     return this.describePermissions(run);
+  }
+  setChatFolder(id, folder, access, revoke, expectedContextId, expectedChatRevision, recheck = true) {
+    const run = this.getRun(id), context = this.permissions.describe(run.schedule);
+    if (run.trigger !== 'chat' && !revoke) {
+      const offer = run.status === 'awaiting_input' && run.pending?.type === 'permission' ? this.permissions.folderOffer(run.schedule, run.pending.details || {}) : null;
+      if (!['scheduled','manual'].includes(run.trigger) || !offer || canonicalPath(folder, context.cwd) !== offer.path || access !== offer.access) throw new Error('Conversation-only folder trust requires the folder offered by the current waiting request.');
+    }
+    if (context.id !== expectedContextId || expectedChatRevision !== (run.chatPermissionRevision || null)) throw new Error('Chat approval changed. Refresh before saving.');
+    const canonical = canonicalPath(folder, context.cwd);
+    if (!canonical || !path.isAbsolute(folder || '') || (!revoke && !fs.statSync(canonical).isDirectory())) throw new Error('Choose an existing absolute folder on the chat owner.');
+    if (!revoke && !['read', 'read-write'].includes(access)) throw new Error('Choose read or read-write folder access.');
+    const previous = run.chatPermission?.contextId === context.id ? run.chatPermission : { mode: 'inherit', contextId: context.id };
+    const folders = (previous.folders || []).filter(item => item.path !== canonical);
+    if (!revoke) folders.push({ path: canonical, access });
+    run.chatPermission = { ...previous, folders }; run.chatPermissionRevision = randomUUID();
+    this.persist(run); if (recheck) this.recheckPermissions(); return this.describePermissions(run);
   }
   decidePermission(run, request) {
     const profile = this.describePermissions(run);
@@ -97,7 +132,7 @@ export class Engine extends EventEmitter {
     const run = this.getRun(id);
     if (expectedUpdatedAt !== undefined && expectedUpdatedAt !== run.updatedAt) throw new Error('This chat changed. Refresh it before continuing.');
     if (expectedArchivedAt !== undefined && expectedArchivedAt !== (run.archivedAt || null)) throw new Error('This chat archive state changed. Refresh it before continuing.');
-    if (active.has(run.status) || run.deferredStart || run.queuedMessages?.length || this.running?.id===run.id || [...this.backgroundRuns.values()].some(slot=>slot.id===run.id) || this.pending.has(run.id)) throw new Error('Finish or cancel the active or queued chat work before archiving or deleting it.');
+    if (active.has(run.status) || run.deferredStart || run.queuedMessages?.length || this.running.has(run.id) || [...this.backgroundRuns.values()].some(slot=>slot.id===run.id) || this.pending.has(run.id)) throw new Error('Finish or cancel the active or queued chat work before archiving or deleting it.');
     if (action === 'archive' || action === 'unarchive') {
       run.archivedAt = action === 'archive' ? (run.archivedAt || this.now()) : null;
       atomicJSON(path.join(this.runsDir, `${run.id}.json`), run);
@@ -148,11 +183,19 @@ export class Engine extends EventEmitter {
       ...(trigger === 'chat' ? { titleKind: schedule.chatTitleManual ? 'manual' : 'generated', titleRevision: randomUUID() } : {}),
       chatType:trigger==='chat'&&schedule.chatType==='internet'?'internet':trigger==='chat'?'user':'scheduled',
       trigger, slot, status: 'queued', createdAt: this.now(), updatedAt: this.now(),
-      events: [{ role: 'user', text: schedule.prompt, at: this.now() }], pending: null,
+      events: [{ role: 'user', text: schedule.prompt, at: this.now() }, ...(schedule.context?.warnings || []).map(warning => ({ role: 'system', text: warning.message, at: this.now(), data: { contextWarning: warning } }))], pending: null,
       providerSessionId: null, usage: { inputTokens: 0, outputTokens: 0, observed: false },
       nextPrompt: schedule.prompt,...(deferStart?{deferredStart:true}:{})
     };
-    this.runs.set(run.id, run); this.persist(run);if(!deferStart)queueMicrotask(() => this.drain()); return run;
+    this.runs.set(run.id, run);
+    try { this.persist(run); }
+    catch (error) {
+      // No drain (including one queued by another run) may execute an
+      // undurable initial claim. Later persistence keeps its existing behavior.
+      this.runs.delete(run.id); this.historyCache.forget(run.id);
+      error.undurableRunClaim = true; throw error;
+    }
+    if(!deferStart)queueMicrotask(() => this.drain()); return run;
   }
   verifyAttachmentDispatch(run,dispatch){if(!(this.attachmentConsents instanceof ChatAttachmentConsents)||!dispatch||typeof dispatch.proofId!=='string')throw new Error('Attachment send authorization is unavailable.');return this.attachmentConsents.assertPrepared({...dispatch,chatId:run.id,providerId:run.schedule.provider});}
   startDeferredRun(id,dispatch){const run=this.getRun(id);if(run.trigger!=='chat'||run.status!=='queued'||run.deferredStart!==true)throw new Error('Chat draft changed.');if(dispatch){run.events[0].data={attachments:this.verifyAttachmentDispatch(run,dispatch),delivery:{id:dispatch.messageId,state:'delivered'}};run.nextAttachmentDispatch=dispatch;}delete run.deferredStart;this.persist(run);queueMicrotask(()=>this.drain());return run;}
@@ -189,7 +232,7 @@ export class Engine extends EventEmitter {
       this.event(run, 'user', prompt, { delivery: { id: messageId, state: 'queued' },...(attached.length?{attachments:attached}:{}) });
       return run;
     }
-    if (run.status !== 'running' || this.running?.id !== id) throw new Error('Steering is available during a running turn. Queue this message, or answer the pending request first.');
+    if (run.status !== 'running' || !this.running.has(id)) throw new Error('Steering is available during a running turn. Queue this message, or answer the pending request first.');
     const provider = this.providers[run.schedule.provider];
     if (!provider.steer) throw new Error('This provider does not support steering. Use Queue next.');
     this.event(run, 'user', prompt, { delivery: { id: messageId, state: 'sending' } });
@@ -211,13 +254,26 @@ export class Engine extends EventEmitter {
   async steerQueued(id,messageId) {
     const run=this.getRun(id),message=run.queuedMessages?.find(item=>item.id===messageId);
     if(!message){if(run.events.some(e=>e.data?.delivery?.id===messageId&&e.data.delivery.state==='steered'))return run;throw new Error('This queued message was already delivered or removed.');}
-    if(run.status!=='running'||this.running?.id!==id)throw new Error('Steering is available during a running turn.');
+    if(run.status!=='running'||!this.running.has(id))throw new Error('Steering is available during a running turn.');
     if(message.attachmentDispatch)throw new Error('Messages with attachments must stay queued.');
     const provider=this.providers[run.schedule.provider];if(!provider.steer)throw new Error('This provider does not support steering. The message remains queued.');
     if(this.queuedSteers.has(id))throw new Error('Wait for the current steering request.');
     const delivery=run.events.find(e=>e.data?.delivery?.id===messageId)?.data.delivery;
     const operation=(async()=>{try{await provider.steer(run,message.prompt);run.queuedMessages=run.queuedMessages.filter(item=>item.id!==messageId);if(delivery){delivery.state='steered';delete delivery.error;}}catch(error){if(delivery)delivery.error=error.message;throw error;}finally{this.persist(run);}})();
     this.queuedSteers.set(id,operation);try{await operation;return run;}finally{this.queuedSteers.delete(id);}
+  }
+  editQueued(id, messageId, prompt, expectedPrompt) {
+    if (this.queuedSteers.has(id)) throw new Error('Wait for the current steering request.');
+    const run = this.getRun(id), message = run.queuedMessages?.find(item => item.id === messageId);
+    if (!message) throw new Error('This message has already been delivered or removed.');
+    if (typeof expectedPrompt !== 'string' || message.prompt !== expectedPrompt) throw new Error('This queued message changed. Reopen it before editing.');
+    if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > 1_000_000) throw new Error('Write a message of at most 1,000,000 characters.');
+    const event = run.events.find(item => item.data?.delivery?.id === messageId);
+    if (!event || event.data.delivery.state !== 'queued') throw new Error('This message is no longer queued.');
+    message.prompt = prompt; message.editedAt = this.now();
+    event.text = prompt; event.data.delivery.editedAt = message.editedAt;
+    delete event.data.delivery.error;
+    this.persist(run); return run;
   }
   removeQueued(id, messageId) {
     if(this.queuedSteers.has(id))throw new Error('Wait for the current steering request.');
@@ -239,9 +295,10 @@ export class Engine extends EventEmitter {
         const offered = run.pending.permissionChoices?.find(choice => choice.value === answer);
         const current = this.permissions.choices(run.schedule, run.pending.details || {}).find(choice => choice.value === answer);
         if (!offered || offered.label !== current?.label) throw new Error('Permission scope changed. Review the workspace permissions before continuing.');
-        this.permissions.remember(run.schedule, run.pending.details, answer);
+        if (answer === 'trust-folder-chat') { const folder = this.permissions.folderOffer(run.schedule, run.pending.details); this.setChatFolder(run.id, folder.path, folder.access, false, this.permissions.describe(run.schedule).id, run.chatPermissionRevision || null, false); }
+        else this.permissions.remember(run.schedule, run.pending.details, answer);
       }
-      this.event(run, 'system', answer === 'deny' ? 'Permission denied.' : `Permission approved: ${answer}.`, { permission: { kind: run.pending.details?.kind, intention:displayText(run.pending.details?.intention||run.pending.question||'Tool permission',240), request:displayText(run.pending.details||{},12000), decision: answer, automatic: false } });
+      this.event(run, 'system', answer === 'deny' ? 'Permission denied.' : `Permission approved: ${answer}.`, { permission: { kind: run.pending.details?.kind, intention:displayText(run.pending.details?.intention||run.pending.question||'Tool permission',240), request:displayText(run.pending.details||{},12000), decision: answer, automatic: false, ...(typeof run.pending.details?.toolCallId === 'string' ? { toolCallId: run.pending.details.toolCallId.slice(0,128) } : {}) } });
     }
     this.pending.delete(id); run.pending = null; run.status = 'running';resumeTurn(run,this.now());
     if (!isPermission) this.event(run, 'user', answer, {questionReply:{requestId}}); else this.persist(run);
@@ -295,12 +352,19 @@ export class Engine extends EventEmitter {
   async drain() {
     if (this.stopping) return;
     for (const run of this.runs.values()) {
-      if (run.status !== 'queued'||run.deferredStart===true||this.providerAuthHold?.(run.schedule.provider)) continue;
+      if (run.status !== 'queued') continue;
       const lane = this.executionLane?.(run.schedule) || null;
-      if (lane ? this.backgroundRuns.has(lane) : this.running) continue;
+      const reason = run.deferredStart === true ? 'Waiting for attachment delivery to finish.'
+        : this.providerAuthHold?.(run.schedule.provider) ? 'Waiting for provider sign-in. Open Providers to check the connection.'
+        : lane && this.backgroundRuns.has(lane) ? 'Waiting for the active local media task.'
+        : this.running.has(run.id) ? 'Waiting for this chat’s current turn to finish.'
+        : run.providerSessionId && [...this.running.values()].some(slot => { const other = this.getRun(slot.id); return other.schedule.provider === run.schedule.provider && other.providerSessionId === run.providerSessionId; }) ? 'Waiting for the active turn in this same provider session.'
+        : this.providers[run.schedule.provider]?.queueReason?.(run);
+      if (reason) { if (run.queueReason !== reason) { run.queueReason = reason; this.persist(run); } continue; }
+      delete run.queueReason;
       const controller = new AbortController();
       const slot = { id: run.id, controller };
-      if (lane) this.backgroundRuns.set(lane, slot); else this.running = slot;
+      if (lane) this.backgroundRuns.set(lane, slot); else this.running.set(run.id, slot);
       const execution = this.execute(run, controller, lane);
       this.executions.add(execution);
       execution.finally(() => this.executions.delete(execution));
@@ -309,6 +373,7 @@ export class Engine extends EventEmitter {
   async execute(run, controller, lane) {
     run.status = 'running';startTurn(run,this.now()); const prompt = run.nextPrompt,dispatch=run.nextAttachmentDispatch; delete run.nextPrompt; this.persist(run);
     try {
+      await this.beforeTurn?.(run);
       await this.beforeRun?.(run.schedule);
       if (controller.signal.aborted) throw new Error('Cancelled');
       const provider = this.providers[run.schedule.provider]; if (!provider) throw new Error('Provider is not installed.');
@@ -341,42 +406,81 @@ export class Engine extends EventEmitter {
         const next = run.queuedMessages.shift(); if (next.modelOptions) this.applyModelOptions(run, next.modelOptions); run.nextPrompt = next.prompt;run.nextAttachmentDispatch=next.attachmentDispatch; run.status = 'queued';
         const event=run.events.find(e=>e.data?.delivery?.id===next.id);if(event)event.data.delivery.state='delivered';
       }
-      this.persist(run); if (lane) this.backgroundRuns.delete(lane); else this.running = null;
+      this.persist(run); if (lane) this.backgroundRuns.delete(lane); else this.running.delete(run.id);
       queueMicrotask(() => this.drain());
     }
   }
   cancel(id) {
     const run = this.getRun(id);
     if (!active.has(run.status)) throw new Error('This run is not active.');
-    const running = this.running?.id === id ? this.running : [...this.backgroundRuns.values()].find(slot => slot.id === id);
+    const running = this.running.get(id) || [...this.backgroundRuns.values()].find(slot => slot.id === id);
     if (running) running.controller.abort();
     else { run.status = 'cancelled'; delete run.nextPrompt;if(run.nextAttachmentDispatch)void this.attachmentConsents?.releaseProof(run.nextAttachmentDispatch.proofId).catch(()=>{});delete run.nextAttachmentDispatch;this.persist(run); }
   }
   tick() {
-    this.recheckPermissions();
-    const now = this.clock(); const after = new Date(this.journal.lastPoll);
-    if (now <= after) return;
-    for (const scheduleInfo of this.schedules.list()) {
-      if (scheduleInfo.error || !scheduleInfo.enabled) continue;
-      const schedule = this.schedules.get(scheduleInfo.id);
-      const due = lastDue(schedule, after, now);
-      if (!due || this.journal.slots[schedule.id] === due) continue;
-      // A persisted run is also a claim: a crash between run and journal writes cannot duplicate it.
-      const exists = [...this.runs.values()].some(run => run.schedule.id === schedule.id && run.slot === due);
-      if (!exists && (schedule.misfire === 'coalesce' || now - new Date(due) < 60000)) {
-        try { this.createRun(schedule, 'scheduled', due); }
-        catch (error) { this.emit('scheduler-error', { schedule: schedule.id, error: error.message, at: this.now() }); }
+    if (this.stopping) return Promise.resolve();
+    const now = this.clock().toISOString();
+    if (!this.pendingSchedulerTime || now > this.pendingSchedulerTime) this.pendingSchedulerTime = now;
+    // All overlapping callers await one drain. Only the newest queued poll is
+    // retained, so a slow disk cannot grow a timer backlog or race slot claims.
+    if (this.schedulerTick) return this.schedulerTick;
+    const operation = this.drainSchedulerTicks();
+    this.schedulerTick = operation;
+    operation.then(() => { this.schedulerTick = null; }, () => { this.schedulerTick = null; });
+    return operation;
+  }
+  async drainSchedulerTicks() {
+    while (this.pendingSchedulerTime && !this.stopping) {
+      const timestamp = this.pendingSchedulerTime; this.pendingSchedulerTime = null;
+      const recheck = () => this.recheckPermissions();
+      if (this.performanceDiagnostics) this.performanceDiagnostics.measureSync('scheduler.permissions', recheck); else recheck();
+      if (new Date(timestamp) <= new Date(this.journal.lastPoll)) continue;
+      this.schedulerWorker ??= new SchedulerWorker(this.home);
+      const plan = await this.schedulerWorker.scan(this.journal, timestamp);
+      if (this.stopping) break;
+      const currentErrors = new Map(plan.errors.map(error => [error.schedule, error.error]));
+      for (const error of plan.errors) if (this.schedulerScheduleErrors?.get(error.schedule) !== error.error) this.emit('scheduler-error', { ...error, at: this.now() });
+      this.schedulerScheduleErrors = currentErrors;
+      if (plan.due.length && !await this.schedulerWorker.verify(plan.due)) throw new Error('A schedule changed during polling. Retrying on the next tick.');
+      if (this.stopping) break;
+      const journal = { ...this.journal, slots: { ...this.journal.slots }, lastPoll: timestamp };
+      for (const { schedule, slot } of plan.due) {
+        // createRun synchronously persists before queuing provider work. This
+        // durable run remains a claim even if the subsequent checkpoint fails.
+        const exists = [...this.runs.values()].some(run => run.schedule.id === schedule.id && run.slot === slot);
+        if (!exists && (schedule.misfire === 'coalesce' || new Date(timestamp) - new Date(slot) < 60000)) {
+          try {
+            const claim = () => this.createRun(schedule, 'scheduled', slot);
+            if (this.performanceDiagnostics) this.performanceDiagnostics.measureSync('scheduler.claim', claim); else claim();
+          } catch (error) {
+            this.emit('scheduler-error', { schedule: schedule.id, error: error.message, at: this.now() });
+            if (error.undurableRunClaim) throw error;
+          }
+        }
+        journal.slots[schedule.id] = slot;
       }
-      this.journal.slots[schedule.id] = due;
+      await this.schedulerWorker.checkpoint(journal);
+      this.journal = journal;
     }
-    this.journal.lastPoll = now.toISOString(); atomicJSON(path.join(this.home, 'scheduler.json'), this.journal);
+    if (this.stopping) this.pendingSchedulerTime = null;
   }
   async close() {
+    if (this.closePromise) return this.closePromise;
     this.stopping = true;
-    if (this.running) this.running.controller.abort();
+    for (const slot of this.running.values()) slot.controller.abort();
     for (const slot of this.backgroundRuns.values()) slot.controller.abort();
+    this.closePromise = this.finishClose();
+    return this.closePromise;
+  }
+  async finishClose() {
+    // A started checkpoint must finish before the worker terminates. A scan
+    // interrupted by shutdown cannot advance the poll past an unclaimed slot.
+    let schedulerError;
+    try { await this.schedulerTick; } catch (error) { schedulerError = error; }
+    try { await this.schedulerWorker?.close(); } catch (error) { schedulerError ||= error; }
     for (const provider of Object.values(this.providers)) await provider.close?.();
     await Promise.allSettled([...this.executions]);
     for (const run of this.runs.values()) if (active.has(run.status)) { run.status = 'interrupted'; run.pending = null; this.persist(run); }
+    if (schedulerError) throw schedulerError;
   }
 }

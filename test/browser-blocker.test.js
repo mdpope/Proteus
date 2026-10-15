@@ -1,0 +1,8 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import {createRequire} from 'node:module';
+const require=createRequire(import.meta.url);const {BrowserBlocker}=require('../desktop/browser-blocker.cjs');const {ElectronBlocker}=require('@ghostery/adblocker-electron');
+test('filter refresh coalesces, activates only after atomic cache replacement, retains prior filters on failure',async()=>{
+ const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-filter-update-')),original=ElectronBlocker.fromPrebuiltAdsAndTracking;let release,calls=0;
+ const engine={serialize:()=>new Uint8Array([1,2,3]),onBeforeRequest(_details,callback){callback({cancel:true});}};
+ try{ElectronBlocker.fromPrebuiltAdsAndTracking=async()=>{calls++;await new Promise(resolve=>release=resolve);return engine;};const blocker=new BrowserBlocker(home),first=blocker.update(),second=blocker.update();assert.equal(calls,1);assert.equal(blocker.status().updating,true);release();await Promise.all([first,second]);assert.equal(blocker.engine,engine);assert.equal(blocker.status().updating,false);assert.ok(blocker.status().updatedAt);const saved=fs.readFileSync(blocker.file);let decision;blocker.before({},value=>decision=value);assert.deepEqual(decision,{cancel:true});ElectronBlocker.fromPrebuiltAdsAndTracking=async()=>{throw new Error('Synthetic offline');};await assert.rejects(blocker.update(),/offline/);assert.deepEqual(fs.readFileSync(blocker.file),saved);assert.equal(blocker.engine,engine);assert.equal(blocker.status().ready,true);assert.match(blocker.status().error,/offline/);
+ }finally{ElectronBlocker.fromPrebuiltAdsAndTracking=original;fs.rmSync(home,{recursive:true,force:true});}
+});

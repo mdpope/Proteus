@@ -1,0 +1,142 @@
+<div id="proteus-source-folders" class="viz-carousel" aria-label="Artifact folder organization designs">
+  <section data-variant="Folder sections" aria-label="Proteus with collapsible folder sections"></section>
+  <section data-variant="Folder sidebar" aria-label="Proteus with a folder sidebar" hidden></section>
+</div>
+<style>
+#proteus-source-folders{color-scheme:light dark}
+#proteus-source-folders .p-window{--p-bg:light-dark(#f5f7f3,#111816);--p-panel:light-dark(#fff,#1a231f);--p-text:light-dark(#1c2921,#eaf0eb);--p-muted:light-dark(#5b6d60,#a3b2a8);--p-line:light-dark(#d9e1d8,#334239);--p-field:light-dark(#f4f7f1,#101814);--p-accent:light-dark(#d7edc0,#c3e6a0);--p-accent-text:#203019;background:var(--p-bg);color:var(--p-text);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;border:1px solid var(--p-line);border-radius:12px;min-height:750px;overflow:clip}
+#proteus-source-folders .p-window *{box-sizing:border-box}
+#proteus-source-folders .p-window [hidden]{display:none!important}
+#proteus-source-folders .p-top{display:flex;align-items:center;gap:18px;padding:16px 22px;border-bottom:1px solid var(--p-line);padding-right:100px;flex-wrap:wrap}
+#proteus-source-folders .p-brand{font-weight:650;font-size:18px}
+#proteus-source-folders .p-crumb{color:var(--p-muted)}
+#proteus-source-folders .p-preview{font-size:12px;color:var(--p-muted);margin-left:auto}
+#proteus-source-folders .p-layout{display:grid;grid-template-columns:135px minmax(0,1fr)}
+#proteus-source-folders .p-appnav{padding:18px 10px;border-right:1px solid var(--p-line)}
+#proteus-source-folders .p-appnav span{display:block;padding:9px 10px;color:var(--p-muted);border-radius:6px;margin-bottom:4px}
+#proteus-source-folders .p-appnav .p-current{color:var(--p-accent);background:light-dark(#e9f1e4,#28372c)}
+#proteus-source-folders .p-main{min-width:0;padding:20px}
+#proteus-source-folders h2{font-size:20px;margin:0 0 16px;font-weight:650}
+#proteus-source-folders .p-window button,#proteus-source-folders .p-window input,#proteus-source-folders .p-window select{font:inherit;color:var(--p-text);border:1px solid var(--p-line);border-radius:6px;background:var(--p-field);min-height:35px;padding:7px 10px;max-width:100%}
+#proteus-source-folders .p-window button{display:inline-flex;gap:7px;align-items:center;justify-content:center}
+#proteus-source-folders .p-window button[aria-pressed=true]{background:var(--p-accent);color:var(--p-accent-text);border-color:var(--p-accent)}
+#proteus-source-folders .p-search{display:flex;gap:8px;align-items:center;background:var(--p-field);border:1px solid var(--p-line);border-radius:7px;padding:0 10px;margin-bottom:12px}
+#proteus-source-folders .p-search input{border:0;background:transparent;min-width:0;width:100%;padding:10px 0;min-height:42px}
+#proteus-source-folders .p-search button{border:0;min-height:32px;padding:4px}
+#proteus-source-folders .p-tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+#proteus-source-folders .p-count{font-size:12px;opacity:.8;white-space:nowrap}
+#proteus-source-folders .p-toolbar{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:14px;color:var(--p-muted);font-size:12px}
+#proteus-source-folders .p-sort{display:flex;align-items:center;gap:7px}
+#proteus-source-folders .p-sort select{font-size:12px;min-height:32px;padding:5px 8px}
+#proteus-source-folders .p-list{border-top:1px solid var(--p-line)}
+#proteus-source-folders .p-folder{border-bottom:1px solid var(--p-line)}
+#proteus-source-folders .p-folder-toggle{border:0;border-radius:0;background:var(--p-panel);width:100%;padding:11px 12px;justify-content:flex-start;text-align:left;font-weight:600}
+#proteus-source-folders .p-folder-toggle .p-folder-path{color:var(--p-muted);font-size:12px;font-weight:400;margin-left:4px;overflow-wrap:anywhere}
+#proteus-source-folders .p-folder-total{margin-left:auto;white-space:nowrap;color:var(--p-muted);font-size:12px;font-weight:400}
+#proteus-source-folders .p-row{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(115px,.9fr) minmax(155px,1fr);align-items:center;gap:14px;padding:14px 12px;border-top:1px solid var(--p-line)}
+#proteus-source-folders .p-window[data-density=Compact] .p-row{padding-top:9px;padding-bottom:9px}
+#proteus-source-folders .p-name{font-weight:600;overflow-wrap:anywhere}
+#proteus-source-folders .p-path{font-size:12px;color:var(--p-muted);overflow-wrap:anywhere;margin-top:3px}
+#proteus-source-folders .p-type{font-size:12px;display:inline-block;color:var(--p-muted);border:1px solid var(--p-line);padding:1px 6px;border-radius:5px}
+#proteus-source-folders .p-scope{font-size:12px;color:var(--p-muted);margin-top:3px}
+#proteus-source-folders .p-actions{display:flex;gap:7px;align-items:center;justify-content:flex-end}
+#proteus-source-folders .p-actions select{min-width:0;width:100%;font-size:12px}
+#proteus-source-folders .p-star{min-width:35px;padding:7px!important;flex-shrink:0}
+#proteus-source-folders .p-star[aria-pressed=true]{background:transparent;color:light-dark(#526f31,#c3e6a0);border-color:var(--p-line)}
+#proteus-source-folders .p-empty{padding:35px 12px;color:var(--p-muted);text-align:center}
+#proteus-source-folders .p-browser{display:grid;grid-template-columns:160px minmax(0,1fr);gap:16px}
+#proteus-source-folders .p-foldernav{display:flex;flex-direction:column;gap:4px;border-right:1px solid var(--p-line);padding-right:12px;align-self:start}
+#proteus-source-folders .p-foldernav[hidden]{display:none}
+#proteus-source-folders .p-foldernav button{justify-content:flex-start;background:transparent;border:0;text-align:left;overflow-wrap:anywhere}
+#proteus-source-folders .p-foldernav button[aria-pressed=true]{background:light-dark(#e3eedb,#2d402c);color:var(--p-text)}
+#proteus-source-folders .p-foldernav .p-count{margin-left:auto}
+#proteus-source-folders .p-side-label{font-size:12px;color:var(--p-muted);padding:8px 10px}
+#proteus-source-folders .p-subhead{display:flex;gap:8px;align-items:center;color:var(--p-muted);font-size:12px;padding:9px 12px;background:var(--p-panel)}
+#proteus-source-folders .p-footer{font-size:12px;color:var(--p-muted);margin-top:16px;display:flex;flex-wrap:wrap;gap:14px}
+#proteus-source-folders .p-status{font-size:12px;min-height:18px;color:var(--p-muted);margin-top:10px}
+@media(max-width:900px){#proteus-source-folders .p-layout{grid-template-columns:1fr}#proteus-source-folders .p-appnav{display:none}#proteus-source-folders .p-row{grid-template-columns:minmax(0,1fr) 115px 165px}}
+@media(max-width:650px){#proteus-source-folders .p-main{padding:14px}#proteus-source-folders .p-top{padding:12px;padding-right:90px;gap:8px}#proteus-source-folders .p-preview{margin-left:0}#proteus-source-folders .p-browser{grid-template-columns:1fr}#proteus-source-folders .p-foldernav{flex-direction:row;flex-wrap:wrap;border-right:0;border-bottom:1px solid var(--p-line);padding:0 0 10px}#proteus-source-folders .p-side-label{width:100%}#proteus-source-folders .p-row{grid-template-columns:minmax(0,1fr) 150px;gap:8px}#proteus-source-folders .p-source{grid-column:1/-1}#proteus-source-folders .p-folder-toggle{flex-wrap:wrap}#proteus-source-folders .p-folder-path{display:none}#proteus-source-folders .p-window{min-height:950px}}
+@media(pointer:coarse){#proteus-source-folders .p-window button,#proteus-source-folders .p-window select{min-height:44px}#proteus-source-folders .p-window input{font-size:16px}}
+</style>
+<script>
+(()=>{
+ const root=document.getElementById('proteus-source-folders');
+ const types=['Instructions','Skills','Agents','MCPs'];
+ const folders=[{id:'global',name:'Global',path:'library/global'},{id:'studio',name:'Studio',path:'workspaces/studio'},{id:'work',name:'Work',path:'workspaces/work'}];
+ const data=[
+  ['global','Instructions','General instructions','AGENTS.md','Every chat'],
+  ['global','Skills','Document editing','skills/documents/SKILL.md','Choose per chat'],
+  ['global','Skills','Image generation','skills/images/SKILL.md','Choose per chat'],
+  ['global','Agents','Research assistant','agents/research.md','Choose per chat'],
+  ['global','MCPs','calendar','mcp.json','Disabled'],
+  ['global','MCPs','notes','mcp.json','Disabled'],
+  ['studio','Instructions','Project instructions','AGENTS.md','With workspace'],
+  ['studio','Instructions','Writing conventions','docs/writing.md','Choose per chat'],
+  ['studio','Skills','Calendar planning','skills/calendar/SKILL.md','Choose per chat'],
+  ['studio','Skills','Website operations','skills/web/SKILL.md','Choose per chat'],
+  ['studio','Agents','Editor','agents/editor.md','Choose per chat'],
+  ['studio','MCPs','calendar','mcp.json','Disabled'],
+  ['studio','MCPs','calendar','.vscode/mcp.json','Disabled'],
+  ['studio','MCPs','files','mcp.json','Disabled'],
+  ['work','Instructions','Project instructions','AGENTS.md','With workspace'],
+  ['work','Instructions','Review conventions','docs/review.md','Choose per chat'],
+  ['work','Skills','Calendar planning','skills/calendar/SKILL.md','Choose per chat'],
+  ['work','Skills','Release checks','skills/release/SKILL.md','Choose per chat'],
+  ['work','Agents','Reviewer','agents/reviewer.md','Choose per chat'],
+  ['work','MCPs','calendar','.vscode/mcp.json','Disabled'],
+  ['work','MCPs','calendar','mcp.json','Disabled'],
+  ['work','MCPs','issues','mcp.json','Disabled'],
+  ['work','MCPs','issues','.vscode/mcp.json','Disabled']
+ ].map((d,i)=>({id:String(i),folder:d[0],type:d[1],name:d[2],relative:d[3],mode:d[4]}));
+ const escape=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const fullPath=row=>folders.find(f=>f.id===row.folder).path+'/'+row.relative;
+ const models=[];
+ const icons=()=>{if(globalThis.lucide)lucide.createIcons({attrs:{width:16,height:16}});};
+ const restored=window.openai?.widgetState?.privateContent?.views||[];
+ root.querySelectorAll('[data-variant]').forEach((variant,index)=>{
+  const saved=restored[index]||{};
+  const state={query:saved.query||'',type:types.includes(saved.type)||saved.type==='All'?saved.type:'MCPs',folder:saved.folder||'all',sort:saved.sort||'asc',collapsed:new Set(saved.collapsed||[]),favorites:new Set(saved.favorites||['5']),modes:saved.modes||{},density:'Comfortable',fullPaths:true};
+  variant.innerHTML=`<div class="p-window" data-density="Comfortable"><header class="p-top"><span class="p-brand">Proteus</span><span class="p-crumb">Workspaces / Sources</span><span class="p-preview">Design preview · sample sources</span></header><div class="p-layout"><aside class="p-appnav" aria-label="Application navigation"><span>Home</span><span>Schedules</span><span>Chats</span><span>Internet Searches</span><span>Team Tools</span><span class="p-current">Workspaces</span><span>Engine Room</span></aside><main class="p-main"><h2>Sources</h2><div class="p-search"><i data-lucide="search" aria-hidden="true"></i><input aria-label="Master filter across all folders and artifact types" placeholder="Filter all sources by name, path or folder…"><button class="cursor-interaction" data-clear aria-label="Clear master filter" hidden><i data-lucide="x" aria-hidden="true"></i></button></div><div class="p-tabs" role="group" aria-label="Artifact type"></div><div class="p-toolbar"><span data-summary aria-live="polite"></span><label class="p-sort">Items <select aria-label="Sort items"><option value="asc">Name A–Z</option><option value="desc">Name Z–A</option></select></label></div><div class="p-browser"><nav class="p-foldernav" aria-label="Source folders" ${index===0?'hidden':''}></nav><div class="p-results"></div></div><div class="p-status" aria-live="polite"></div><footer class="p-footer"><span>Folders A–Z · items sorted by name</span><span>Loading rules stay with each source</span></footer></main></div></div>`;
+  const windowEl=variant.querySelector('.p-window'),search=variant.querySelector('input'),results=variant.querySelector('.p-results'),nav=variant.querySelector('.p-foldernav'),tabs=variant.querySelector('.p-tabs'),summary=variant.querySelector('[data-summary]');
+  if(index===0)variant.querySelector('.p-browser').style.gridTemplateColumns='minmax(0,1fr)';
+  search.value=state.query;variant.querySelector('.p-sort select').value=state.sort;
+  const matching=()=>data.filter(row=>!state.query.trim()||[row.name,row.type,fullPath(row),folders.find(f=>f.id===row.folder).name].join(' ').toLowerCase().includes(state.query.trim().toLowerCase()));
+  const sorted=rows=>[...rows].sort((a,b)=>(state.sort==='asc'?1:-1)*a.name.localeCompare(b.name)||fullPath(a).localeCompare(fullPath(b))||a.id.localeCompare(b.id));
+  function rowHTML(row){const favorite=state.favorites.has(row.id),mode=state.modes[row.id]||row.mode;return `<div class="p-row" data-row="${row.id}"><div class="p-source"><div class="p-name">${escape(row.name)}</div><div class="p-path">${escape(state.fullPaths?fullPath(row):row.relative)}</div></div><div><span class="p-type">${escape(row.type)}</span><div class="p-scope">${escape(folders.find(f=>f.id===row.folder).name)}${row.type==='MCPs'?' · not checked':''}</div></div><div class="p-actions"><select data-mode="${row.id}" aria-label="Load ${escape(row.name)} from ${escape(fullPath(row))}">${['Every chat','With workspace','Choose per chat','Disabled'].map(v=>`<option ${v===mode?'selected':''}>${v}</option>`).join('')}</select><button class="p-star cursor-interaction" data-star="${row.id}" aria-pressed="${favorite}" aria-label="${favorite?'Remove':'Add'} ${escape(row.name)} ${favorite?'from':'to'} favorites"><i data-lucide="star" aria-hidden="true"></i></button></div></div>`;}
+  function groupHTML(id,name,path,rows){if(!rows.length)return '';const expanded=!!state.query.trim()||!state.collapsed.has(id);return `<section class="p-folder"><button class="p-folder-toggle cursor-interaction" data-folder="${id}" aria-expanded="${expanded}" ${state.query.trim()?'disabled':''}><i data-lucide="${expanded?'chevron-down':'chevron-right'}" aria-hidden="true"></i><i data-lucide="${id==='favorites'?'star':'folder'}" aria-hidden="true"></i><span>${escape(name)}</span><span class="p-folder-path">${escape(path)}</span><span class="p-folder-total">${rows.length}${state.query.trim()?' matches':''}</span></button><div ${expanded?'':'hidden'}>${sorted(rows).map(rowHTML).join('')}</div></section>`;}
+  function render(){
+   windowEl.dataset.density=state.density;
+   const matches=matching(),searching=!!state.query.trim(),typed=matches.filter(row=>state.type==='All'||row.type===state.type),visible=typed.filter(row=>index===0||searching||state.folder==='all'||state.folder==='favorites'&&state.favorites.has(row.id)||state.folder===row.folder);
+   tabs.innerHTML=['All',...types].map(type=>`<button class="cursor-interaction" data-type="${type}" aria-pressed="${state.type===type}">${type} <span class="p-count">${matches.filter(row=>type==='All'||row.type===type).length}</span></button>`).join('');
+   summary.textContent=searching?`${visible.length} matches · ${state.type==='All'?'all artifact types':state.type} · all folders`:`${visible.length} sources · ${state.type==='All'?'all artifact types':state.type}${index===1&&state.folder!=='all'?' · '+(state.folder==='favorites'?'Favorites':folders.find(f=>f.id===state.folder)?.name):' · all folders'}`;
+   variant.querySelector('[data-clear]').hidden=!state.query;
+   const favoriteRows=visible.filter(row=>state.favorites.has(row.id));
+   if(index===0){results.innerHTML='<div class="p-list">'+groupHTML('favorites','Favorites','',favoriteRows)+folders.map(folder=>groupHTML(folder.id,folder.name,folder.path,visible.filter(row=>row.folder===folder.id&&!state.favorites.has(row.id)))).join('')+'</div>';}
+   else{
+    nav.innerHTML='<span class="p-side-label">FOLDERS</span>'+[{id:'all',name:'All folders'},...folders,{id:'favorites',name:'Favorites'}].map(folder=>{const count=typed.filter(row=>folder.id==='all'||folder.id==='favorites'&&state.favorites.has(row.id)||row.folder===folder.id).length;return `<button class="cursor-interaction" data-scope="${folder.id}" aria-pressed="${searching?folder.id==='all':state.folder===folder.id}"><i data-lucide="${folder.id==='favorites'?'star':folder.id==='all'?'layers':'folder'}" aria-hidden="true"></i>${folder.name}<span class="p-count">${count}</span></button>`;}).join('');
+    results.innerHTML='<div class="p-list">'+folders.map(folder=>{const rows=visible.filter(row=>row.folder===folder.id);return rows.length?`<div class="p-subhead"><i data-lucide="folder" aria-hidden="true"></i>${escape(folder.name)} <span>${escape(folder.path)}</span></div>${sorted(rows).map(rowHTML).join('')}`:'';}).join('')+'</div>';
+   }
+   if(!visible.length)results.innerHTML='<div class="p-empty">No sources match this filter.</div>';
+   icons();
+  }
+  function snapshot(){return {query:state.query,type:state.type,folder:state.folder,sort:state.sort,collapsed:[...state.collapsed],favorites:[...state.favorites],modes:state.modes};}
+  function save(){window.openai?.setWidgetState({modelContent:{design:variant.dataset.variant,query:state.query,type:state.type,folder:state.folder,sort:state.sort},privateContent:{views:models.map(m=>m.snapshot())}})?.catch(()=>{});}
+  search.addEventListener('input',()=>{state.query=search.value;state.type='All';render();save();});
+  variant.querySelector('[data-clear]').onclick=()=>{state.query='';search.value='';render();search.focus();save();};
+  variant.querySelector('.p-sort select').onchange=event=>{state.sort=event.target.value;render();save();};
+  variant.addEventListener('click',event=>{
+   const type=event.target.closest('[data-type]'),folder=event.target.closest('[data-folder]'),scope=event.target.closest('[data-scope]'),star=event.target.closest('[data-star]');
+   if(type)state.type=type.dataset.type;
+   else if(folder){const id=folder.dataset.folder;state.collapsed.has(id)?state.collapsed.delete(id):state.collapsed.add(id);}
+   else if(scope){state.folder=scope.dataset.scope;state.query='';search.value='';}
+   else if(star){const id=star.dataset.star;state.favorites.has(id)?state.favorites.delete(id):state.favorites.add(id);}
+   else return;
+   render();save();
+  });
+  variant.addEventListener('change',event=>{if(!event.target.matches('[data-mode]'))return;state.modes[event.target.dataset.mode]=event.target.value;variant.querySelector('.p-status').textContent='Preview setting changed · no source files or loading rules were saved.';save();});
+  models.push({state,render,snapshot,search});render();
+  if(globalThis.Tweak){const tweak=new Tweak({container:windowEl,onChange:render});tweak.addSelect(state,'density',{label:'Row density',options:['Comfortable','Compact']});tweak.addToggle(state,'fullPaths',{label:'Show full source paths'});}
+ });
+ window.addEventListener('openai:set_globals',event=>{const views=event.detail?.globals?.widgetState?.privateContent?.views;if(!Array.isArray(views))return;models.forEach((m,i)=>{const s=views[i];if(!s)return;for(const key of ['query','type','folder','sort'])if(typeof s[key]==='string')m.state[key]=s[key];m.state.collapsed=new Set(s.collapsed||[]);m.state.favorites=new Set(s.favorites||[]);m.state.modes=s.modes||{};m.search.value=m.state.query;m.render();});});
+})();
+</script>

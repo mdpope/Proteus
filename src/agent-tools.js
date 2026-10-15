@@ -9,7 +9,7 @@ const groups = {
   agent: ['task', 'read_agent', 'list_agents', 'write_agent'], web: ['web_fetch', 'web_search']
 };
 const aliases = { notebookread: 'read', multiedit: 'edit', write: 'edit', notebookedit: 'edit', shell: 'execute', 'custom-agent': 'agent', websearch: 'web', webfetch: 'web' };
-const nativeTools = new Set([...Object.values(groups).flat(), 'bash', 'powershell', 'ask_user', 'skill', 'rg', 'proteus_browser','proteus_open_document']);
+const nativeTools = new Set([...Object.values(groups).flat(), 'bash', 'powershell', 'ask_user', 'skill', 'rg', 'proteus_browser','proteus_playwright','proteus_developer','proteus_tabs','proteus_open_document','proteus_integrations']);
 
 export function copilotAgentTools(declared) {
   if (declared === undefined || declared.includes('*')) return null;

@@ -68,3 +68,18 @@ test('a local index row refreshes held view state before deciding the chat is mi
  const opened=[],messages=[],state={data:{runs:[]},page:'runs',tab:'overview'};initChatsIndex({state,api:async path=>{assert.equal(path,'/api/state');return {runs:[{id:'new-local-chat',status:'completed'}]};},openLocal:run=>opened.push(run.id),toast:message=>messages.push(message)});await openIndexedChat({local:true,chatId:'new-local-chat'});assert.deepEqual(opened,['new-local-chat']);assert.deepEqual(messages,[]);
  await openIndexedChat({local:true,chatId:'deleted-local-chat'});assert.match(messages[0],/no longer available/);
 });
+
+
+test('current organizational membership overrides a stale index and the captured execution workspace',async()=>{
+ const run={id:'moved-chat',title:'Moved',status:'completed',workspaceId:'target',workspaceName:'Target',schedule:{context:{workspaceId:'execution-origin',workspaceName:'Origin'}}};
+ initChatsIndex({api:async()=>({items:[{hostId:'local',local:true,chatId:run.id,title:run.title,status:run.status,workspaceId:'old',workspaceName:'Old'}],hosts:[]})});await loadChatsIndex();assert.equal(recentChats([run])[0].workspaceId,'target');
+ reconcileIndexedChat({hostId:'local',local:true,chatId:run.id,workspaceId:'second',workspaceName:'Second'});assert.equal(recentChats()[0].workspaceId,'second');assert.equal(run.schedule.context.workspaceId,'execution-origin');
+});
+
+
+test('paired chat movement updates workspace cache without unarchiving and rejects older membership snapshots',()=>{
+ const peers=new DesktopPeers('/synthetic',{safeStorage:{}});peers.saveCache=()=>{};
+ const row={id:'moved-peer',chatId:'moved-peer',workspaceId:'old',workspaceName:'Old',updatedAt:'2026-10-14T12:00:00Z',archivedAt:'2026-10-13T12:00:00Z',archived:true};peers.cache.set('peer',{items:[row]});
+ peers.reconcileChat('peer',{id:row.id,moved:true,workspaceId:'target',workspaceName:'Target',updatedAt:'2026-10-14T12:01:00Z'});assert.equal(peers.cache.get('peer').items[0].workspaceId,'target');assert.equal(peers.cache.get('peer').items[0].archivedAt,row.archivedAt);assert.equal(peers.cache.get('peer').items[0].archived,true);
+ assert.equal(peers.membershipStatus('peer',row).workspaceId,'target');assert.equal(peers.membershipStatus('peer',{...row,workspaceId:'newer',updatedAt:'2026-10-14T12:02:00Z'}).workspaceId,'newer');
+});

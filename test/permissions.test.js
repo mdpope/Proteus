@@ -11,6 +11,12 @@ const temp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-permissions-')
 const schedule = cwd => ({ schemaVersion:1,id:'permissions',name:'Permissions fixture',enabled:false,cron:'0 9 * * 1-5',timezone:'America/Denver',provider:'copilot',model:'fixture',workspace:{cwd,additionalDirectories:[]},prompt:'Fixture',misfire:'skip' });
 const until = async predicate => { for(let i=0;i<100;i++){if(predicate())return;await new Promise(resolve=>setTimeout(resolve,10));}throw new Error('Condition timed out.'); };
 
+test('manual permission decisions preserve the recorded tool reference and original request',async()=>{
+ const home=temp();const engine=new Engine(home,{copilot:{run:async({ask})=>{await ask({type:'permission',details:{kind:'shell',toolCallId:'manual-call',fullCommandText:'synthetic validation'}});}}});
+ try{const run=engine.createRun(schedule(home));await until(()=>run.pending?.type==='permission');engine.reply(run.id,'deny',run.pending.id);await until(()=>run.status==='completed');const decision=run.events.find(event=>event.data?.permission)?.data.permission;assert.equal(decision.toolCallId,'manual-call');assert.equal(decision.automatic,false);assert.equal(decision.decision,'deny');assert.match(decision.request,/manual-call/);assert.equal(run.events.some(event=>event.data?.tool?.status==='completed'),false,'a permission decision cannot certify successful tool execution');}
+ finally{await engine.close();fs.rmSync(home,{recursive:true,force:true});}
+});
+
 test('folder trust survives restart and covers new files, not sibling or symlink escapes', () => {
   const home=temp();const root=path.join(home,'repo');const outside=path.join(home,'repo-other');fs.mkdirSync(root);fs.mkdirSync(outside);
   try {
@@ -111,7 +117,7 @@ test('trusting a workspace clears subsequent queued permissions and persists acr
     await engine.close();engine=new Engine(home,{copilot:provider});run=engine.createRun(schedule(home),'scheduled');await until(()=>run.status==='completed');assert.equal(run.automaticApprovals,3);
     engine.permissions.setMode(schedule(home),'ask');run=engine.createRun(schedule(home));await until(()=>run.pending);
     assert.throws(()=>engine.reply(run.id,'approve-auto',run.pending.id),/Permission scope changed/);
-  } finally {await engine.close();await until(()=>!engine.running);fs.rmSync(home,{recursive:true,force:true});}
+  } finally {await engine.close();await until(()=>!engine.running.size);fs.rmSync(home,{recursive:true,force:true});}
 });
 test('automatic approval records stable call, canonical target and matched trusted root without raw arguments',async()=>{
   const home=temp();const engine=new Engine(home,{copilot:{async run(){}}});
@@ -152,6 +158,7 @@ test('permission API enforces authentication, revision checks, scope selection, 
     const chat=app.engine.createRun(schedule(home),'chat',null,{deferStart:true});
     const chatContext=app.engine.permissions.describe(chat.schedule).id;
     const workspaceRevision=app.engine.permissions.get().revision;
+    assert.equal((await post({action:'set-chat-mode',runId:chat.id,mode:'autopilot',expectedContextId:chatContext,expectedChatRevision:null,expectedRequestId:'stale-request'})).status,400);
     const chatGrant=await post({action:'set-chat-mode',runId:chat.id,mode:'autopilot',expectedContextId:chatContext,expectedChatRevision:null});
     assert.equal(chatGrant.status,200);
     const granted=await chatGrant.json();assert.equal(granted.permissionContext.source,'chat');
@@ -163,4 +170,18 @@ test('permission API enforces authentication, revision checks, scope selection, 
     assert.equal((await post({action:'revoke',id:profile.id,expectedRevision:state.permissions.revision})).status,200);
     assert.equal(app.engine.permissions.get().workspaces.length,0);
   } finally {await app.close();fs.rmSync(home,{recursive:true,force:true});}
+});
+
+test('scheduled conversation approval requires its current request and cannot grant the next scheduled run',async()=>{
+ const home=temp(),engine=new Engine(home,{copilot:{run:async()=>{}}});
+ try{const spec=schedule(home),before=structuredClone(spec),run=engine.createRun(spec,'scheduled',null,{deferStart:true}),context=engine.describePermissions(run);
+ assert.throws(()=>engine.setChatPermission(run.id,'autopilot',context.id,null),/current waiting permission/);
+ run.status='awaiting_input';run.pending={id:'current-permission',type:'permission',details:{kind:'read',path:path.join(home,'request.txt')}};
+ assert.throws(()=>engine.setChatPermission(run.id,'autopilot',context.id,null,'stale-request'),/current waiting permission/);
+ assert.throws(()=>engine.setChatPermission(run.id,'autopilot','stale-context',null,run.pending.id),/Workspace configuration/);
+ engine.setChatFolder(run.id,home,'read',false,context.id,null,false);assert.equal(engine.describePermissions(run).chatFolders[0].path,fs.realpathSync(home));
+ const revision=run.chatPermissionRevision;engine.setChatPermission(run.id,'autopilot',context.id,revision,run.pending.id);assert.equal(engine.describePermissions(run).source,'chat');assert.equal(engine.describePermissions(run).mode,'autopilot');assert.throws(()=>engine.setChatPermission(run.id,'autopilot',context.id,revision,run.pending.id),/Chat approval changed/);
+ run.status='completed';run.pending=null;engine.persist(run);const future=engine.createRun(spec,'scheduled',null,{deferStart:true});assert.equal(engine.describePermissions(future).mode,'ask');assert.deepEqual(engine.describePermissions(future).chatFolders,[]);assert.deepEqual(spec,before);
+ engine.setChatPermission(run.id,'inherit',context.id,run.chatPermissionRevision);engine.setChatFolder(run.id,home,'read',true,context.id,run.chatPermissionRevision);assert.equal(engine.describePermissions(run).mode,'ask');
+ }finally{await engine.close();fs.rmSync(home,{recursive:true,force:true});}
 });

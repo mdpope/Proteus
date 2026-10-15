@@ -9,11 +9,14 @@ function normalizeTeam(value){
   if(!value||typeof value!=='object')return undefined;
   const tabs=[],seen=new Set();
   for(const item of Array.isArray(value.tabs)?value.tabs.slice(0,50):[]){
-    const id=text(item?.id,256),type=['browser','terminal','markdown'].includes(item?.type)?item.type:'browser',url=item?.url?safeHistoryURL(item.url):'';
+    const id=text(item?.id,256),type=['browser','terminal','markdown','remote-document','agent-terminal'].includes(item?.type)?item.type:'browser',url=item?.url?safeHistoryURL(item.url):'';
     if(!id||seen.has(id)||item?.url&&!url)continue;seen.add(id);
-    if(type==='markdown') {const file=text(item.file||item.markdown?.file);if(!path.isAbsolute(file))continue;tabs.push({id,type,file,label:text(item.label,200)||path.basename(file)});continue;}
-    if(type==='terminal'){if(!item.terminal?.id)continue;tabs.push({id,type,label:text(item.label,200)||'Terminal',terminal:Object.fromEntries(['id','profileId','rootId','directory','persistence','tmuxSessionId','tmuxSessionTag'].map(key=>[key,text(item.terminal[key])]))});continue;}
-    tabs.push({id,type,...(text(item.customTitle,200)?{customTitle:text(item.customTitle,200)}:{}),...(text(item.contentTabId,256)?{contentTabId:text(item.contentTabId,256)}:{}),...(safeFavicon(item.favicon)?{favicon:item.favicon}:{}),browserId:text(item.browserId,128),url,title:text(item.title,200),loaded:false,...(Number.isFinite(Date.parse(item.lastTouchedAt))?{lastTouchedAt:new Date(item.lastTouchedAt).toISOString()}:{})});
+    const common={...(item.hidden===true?{hidden:true}:{}),...(text(item.contentTabId,256)?{contentTabId:text(item.contentTabId,256)}:{}),...(text(item.customTitle,200)?{customTitle:text(item.customTitle,200)}:{}),...(text(item.associationChatId,256)?{associationChatId:text(item.associationChatId,256)}:{})};for(const field of ['openedAt','lastTouchedAt'])if(Number.isFinite(Date.parse(item[field])))common[field]=new Date(item[field]).toISOString();
+    if(type==='agent-terminal'){if(!/^[a-zA-Z0-9_-]{1,128}$/.test(item.runId||''))continue;tabs.push({id,type,...common,title:text(item.title||item.label,200),runId:item.runId});continue;}
+    if(type==='remote-document'){if(!/^[a-f0-9-]{36}$/i.test(item.hostId||'')||!/^[a-f0-9]{64}$/i.test(item.documentId||''))continue;tabs.push({id,type,...common,title:text(item.title||item.label,200),hostId:item.hostId,runId:text(item.runId,128),workspaceId:text(item.workspaceId,128),documentId:item.documentId,mediaType:item.mediaType==='text/html'?'text/html':'text/markdown',preview:item.preview===true});continue;}
+    if(type==='markdown') {const file=text(item.file||item.markdown?.file);if(!path.isAbsolute(file))continue;tabs.push({id,type,...common,file,label:text(item.label,200)||path.basename(file)});continue;}
+    if(type==='terminal'){if(!item.terminal?.id)continue;tabs.push({id,type,...common,label:text(item.label,200)||'Terminal',terminal:Object.fromEntries(['id','profileId','rootId','directory','persistence','tmuxSessionId','tmuxSessionTag'].map(key=>[key,text(item.terminal[key])]))});continue;}
+    tabs.push({id,type,...common,persist:item.persist===true,...(Number.isFinite(Date.parse(item.openedAt))?{openedAt:new Date(item.openedAt).toISOString()}:{}),profileId:/^[a-f0-9-]{36}$/i.test(item.profileId||'')?item.profileId:'default',...(text(item.customTitle,200)?{customTitle:text(item.customTitle,200)}:{}),...(text(item.contentTabId,256)?{contentTabId:text(item.contentTabId,256)}:{}),...(safeFavicon(item.favicon)?{favicon:item.favicon}:{}),browserId:text(item.browserId,128),url,title:text(item.title,200),loaded:false,...(Number.isFinite(Date.parse(item.lastTouchedAt))?{lastTouchedAt:new Date(item.lastTouchedAt).toISOString()}:{})});
   }
   const orders={};
   for(const [id,item]of Object.entries(value.orders||{}).slice(0,32)){
@@ -26,19 +29,37 @@ function normalizeTeam(value){
 function normalizeSession(value) {
   const tabs = [], seen = new Set();let historyBytes=0;
   for (const item of Array.isArray(value?.tabs) ? value.tabs.slice(0, 100) : []) {
-    if (!item || !['overview','schedule','run','markdown','browser','standup','omi','life','terminal','agent-terminal','remote-run','remote-document','team','engine','home'].includes(item.type)) continue;
+    if (!item || !['overview','schedule','run','markdown','browser','standup','omi','life','terminal','agent-terminal','remote-run','remote-document','team','engine','home','workspace'].includes(item.type)) continue;
     const tab = {id:text(item.id,256),type:item.type,label:text(item.label,200)};
+    if(/^[a-zA-Z0-9_:.\-]{1,256}$/.test(item.associationChatId||''))tab.associationChatId=item.associationChatId;
+    for(const field of ['openedAt','lastTouchedAt'])if(Number.isFinite(Date.parse(item[field])))tab[field]=new Date(item[field]).toISOString();
+    if(item.hidden===true)tab.hidden=true;
+    if(item.navigationClosed===true)tab.navigationClosed=true;
+    if(item.type==='browser')tab.persist=item.persist===true;
     if(text(item.customTitle,200))tab.customTitle=text(item.customTitle,200);
     if(text(item.contentTabId,256))tab.contentTabId=text(item.contentTabId,256);
-    if(['browser','markdown','terminal','agent-terminal','remote-document'].includes(tab.type)&&typeof item.parentId==='string')tab.parentId=text(item.parentId,256);
+    if(['browser','markdown','terminal','agent-terminal','remote-document','run','remote-run'].includes(tab.type)&&typeof item.parentId==='string')tab.parentId=text(item.parentId,256);
     if (!tab.id || seen.has(tab.id) || (tab.id==='overview') !== (tab.type==='overview')) continue;
-    if (tab.type === 'remote-run') { if(!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(item.hostId||'')||!/^[a-zA-Z0-9_-]{1,128}$/.test(item.runId||''))continue;tab.hostId=item.hostId;tab.runId=item.runId;tab.id='peer:'+tab.hostId+':'+tab.runId; }
+    if (tab.type === 'workspace') {
+      if(!/^[a-zA-Z0-9_-]{1,128}$/.test(item.workspaceId||''))continue;
+      if(item.hostId&&!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(item.hostId))continue;
+      tab.workspaceId=item.workspaceId;if(item.hostId)tab.hostId=item.hostId;if(item.hostName)tab.hostName=text(item.hostName,200);
+      tab.workspacePage=['configuration','tabs'].includes(item.workspacePage)?item.workspacePage:'chats';
+      if(item.hidden===true)tab.hidden=true;
+    if(item.navigationClosed===true)tab.navigationClosed=true;
+      if(Number.isFinite(Date.parse(item.lastTouchedAt)))tab.lastTouchedAt=new Date(item.lastTouchedAt).toISOString();
+    }
+    if (['run','agent-terminal'].includes(tab.type) && item.runId) { if(!/^[a-zA-Z0-9_-]{1,128}$/.test(item.runId))continue;tab.runId=item.runId; }
+    if (tab.type === 'remote-run') { if(!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(item.hostId||'')||!/^[a-zA-Z0-9_-]{1,128}$/.test(item.runId||''))continue;tab.hostId=item.hostId;tab.runId=item.runId;if(!tab.parentId)tab.id='peer:'+tab.hostId+':'+tab.runId; }
     if (tab.type === 'remote-document') {
-      if(!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(item.hostId||'')||!/^[a-zA-Z0-9_-]{1,128}$/.test(item.runId||'')||!/^[a-f0-9]{64}$/i.test(item.documentId||''))continue;
-      tab.hostId=item.hostId;tab.runId=item.runId;tab.documentId=item.documentId.toLowerCase();tab.parentId='peer:'+tab.hostId+':'+tab.runId;tab.id='document:'+tab.hostId+':'+tab.runId+':'+tab.documentId;tab.mediaType=item.mediaType==='text/html'?'text/html':'text/markdown';
+      if(!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(item.hostId||'')||(!/^[a-zA-Z0-9_-]{1,128}$/.test(item.runId||'')&&!/^[a-zA-Z0-9_-]{1,128}$/.test(item.workspaceId||''))||!/^[a-f0-9]{64}$/i.test(item.documentId||''))continue;
+      tab.hostId=item.hostId;tab.runId=item.runId||'';if(item.workspaceId)tab.workspaceId=text(item.workspaceId,128);tab.documentId=item.documentId.toLowerCase();tab.parentId=tab.parentId||'peer:'+tab.hostId+':'+tab.runId;tab.id='document:'+tab.hostId+':'+(tab.runId||tab.workspaceId)+':'+tab.documentId;tab.mediaType=item.mediaType==='text/html'?'text/html':'text/markdown';
+      if(item.preview===true){tab.preview=true;if(text(item.previewTabId,256))tab.previewTabId=text(item.previewTabId,256);}
     }
     if (tab.type === 'markdown') { tab.file=text(item.file); if (!path.isAbsolute(tab.file)) continue; }
     if (tab.type === 'browser') {
+      tab.profileId=/^[a-f0-9-]{36}$/i.test(item.profileId||'')?item.profileId:'default';
+      if(item.remotePreviewURL&&safeHistoryURL(item.remotePreviewURL))tab.remotePreviewURL=safeHistoryURL(item.remotePreviewURL);
       if(safeFavicon(item.favicon))tab.favicon=item.favicon;
       const history=normalizeHistory(item.history), url=history?.entries[history.index].url || safeHistoryURL(item.url);
       if(item.url&&!url)continue;
@@ -46,6 +67,7 @@ function normalizeSession(value) {
       if(history){const bytes=Buffer.byteLength(JSON.stringify(history));if(historyBytes+bytes<=MAX_TOTAL_HISTORY_BYTES){tab.history=history;historyBytes+=bytes;}}
     }
     if (tab.type === 'terminal') {
+      if(item.hostId){if(!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(item.hostId))continue;tab.hostId=item.hostId;}
       if (!item.terminal?.id) continue;
       tab.terminal=Object.fromEntries(['id','profileId','rootId','directory','persistence','tmuxSessionId','tmuxSessionTag'].map(key=>[key,text(item.terminal[key])]));
     }
@@ -55,10 +77,11 @@ function normalizeSession(value) {
   const overview=tabs.findIndex(tab=>tab.type==='overview');
   if(overview<0)tabs.unshift({id:'overview',type:'overview',label:'Schedules'});
   else if(overview>0)tabs.unshift(...tabs.splice(overview,1));
-  const validTabs=tabs.filter(tab=>!tab.parentId||tabs.some(parent=>parent.id===tab.parentId&&['run','remote-run'].includes(parent.type)));
-  const selectedChildren=Object.fromEntries(Object.entries(value?.selectedChildren&&typeof value.selectedChildren==='object'&&!Array.isArray(value.selectedChildren)?value.selectedChildren:{}).slice(0,100).filter(([parentId,childId])=>typeof parentId==='string'&&parentId.length<=256&&typeof childId==='string'&&childId.length<=256&&validTabs.some(parent=>parent.id===parentId&&['run','remote-run'].includes(parent.type))&&validTabs.some(child=>child.id===childId&&child.parentId===parentId)));
-  const pages=['schedules','runs','attention','context','credentials','providers','remote','settings','team','engine','home'];
-  return {schemaVersion:1,tabs:validTabs,selectedChildren,active:validTabs.some(tab=>tab.id===value?.active)?value.active:'overview',page:pages.includes(value?.page)?value.page:'home',...(normalizeTeam(value?.team)?{team:normalizeTeam(value.team)}:{}),...(engineSections.includes(value?.engineSection)?{engineSection:value.engineSection}:{})};
+  const validTabs=tabs.filter(tab=>!tab.parentId||tabs.some(parent=>parent.id===tab.parentId&&['run','remote-run','workspace'].includes(parent.type)));
+  const selectedChildren=Object.fromEntries(Object.entries(value?.selectedChildren&&typeof value.selectedChildren==='object'&&!Array.isArray(value.selectedChildren)?value.selectedChildren:{}).slice(0,100).filter(([parentId,childId])=>typeof parentId==='string'&&parentId.length<=256&&typeof childId==='string'&&childId.length<=256&&validTabs.some(parent=>parent.id===parentId&&['run','remote-run','workspace'].includes(parent.type))&&validTabs.some(child=>child.id===childId&&child.parentId===parentId)));
+  const pages=['schedules','runs','attention','context','credentials','providers','remote','settings','team','engine','home','workspaces'];
+  const chatDrafts={};let draftBytes=0;for(const [key,draftValue]of Object.entries(value?.chatDrafts&&typeof value.chatDrafts==='object'&&!Array.isArray(value.chatDrafts)?value.chatDrafts:{}).slice(-200)){if(!/^[a-zA-Z0-9_:.\-]{1,256}$/.test(key)||typeof draftValue!=='string')continue;const draft=draftValue.slice(0,100000),bytes=Buffer.byteLength(draft);if(draftBytes+bytes>500000)continue;chatDrafts[key]=draft;draftBytes+=bytes;}
+  return {schemaVersion:1,chatDrafts,tabs:validTabs,selectedChildren,active:validTabs.some(tab=>tab.id===value?.active&&!tab.hidden)?value.active:'overview',page:pages.includes(value?.page)?value.page:'home',...(normalizeTeam(value?.team)?{team:normalizeTeam(value.team)}:{}),...(engineSections.includes(value?.engineSection)?{engineSection:value.engineSection}:{})};
 }
 class WorkspaceSession {
   constructor(home) { this.file=path.join(home,'desktop-workspace.json'); this.last=''; }
@@ -66,8 +89,8 @@ class WorkspaceSession {
   save(value) {
     const clean=normalizeSession(value), json=JSON.stringify(clean,null,2)+'\n';
     if(Buffer.byteLength(json)>MAX_SESSION_BYTES)throw new Error('Workspace record exceeds size limit.');
-    if(json===this.last)return;
-    const temporary=this.file+'.tmp';fs.mkdirSync(path.dirname(this.file),{recursive:true});fs.writeFileSync(temporary,json,{mode:0o600});fs.chmodSync(temporary,0o600);fs.renameSync(temporary,this.file);this.last=json;
+    if(json===this.last)return clean;
+    const temporary=this.file+'.tmp';fs.mkdirSync(path.dirname(this.file),{recursive:true});fs.writeFileSync(temporary,json,{mode:0o600});fs.chmodSync(temporary,0o600);fs.renameSync(temporary,this.file);this.last=json;return clean;
   }
 }
 module.exports={WorkspaceSession,normalizeSession};

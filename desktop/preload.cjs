@@ -1,10 +1,15 @@
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('desktop', {
+  notice:value=>ipcRenderer.invoke('proteus:notice',value),
+  onNoticeAction:handler=>{const listener=(_event,value)=>handler(value);ipcRenderer.on('proteus:notice-action',listener);return()=>ipcRenderer.removeListener('proteus:notice-action',listener);},
   defaultBrowser:()=>ipcRenderer.invoke('proteus:default-browser'),
   openLink:value=>ipcRenderer.invoke('proteus:open-link',value),
   openExternal:value=>ipcRenderer.invoke('proteus:open-external',value),
   onCloseTool:handler=>{const listener=(_event,id)=>handler(id);ipcRenderer.on('proteus:close-tool',listener);return()=>ipcRenderer.removeListener('proteus:close-tool',listener);},
+  onTabManagement:handler=>{const listener=(_event,value)=>handler(value);ipcRenderer.on('proteus:tab-management',listener);return()=>ipcRenderer.removeListener('proteus:tab-management',listener);},
+  tabActionResult:value=>ipcRenderer.invoke('proteus:tab-action-result',value),
   onCloseCurrentTab:handler=>{const listener=()=>handler();ipcRenderer.on('proteus:close-current-tab',listener);return()=>ipcRenderer.removeListener('proteus:close-current-tab',listener);},
+  onOpenChatLink:handler=>{const listener=(_event,url)=>handler(url);ipcRenderer.on('proteus:open-chat-link',listener);return()=>ipcRenderer.removeListener('proteus:open-chat-link',listener);},
   onNotification:handler=>{const listener=(_event,item)=>handler(item);ipcRenderer.on('proteus:notification-open',listener);return()=>ipcRenderer.removeListener('proteus:notification-open',listener);},
   lifeAccount: value => ipcRenderer.invoke('proteus:life-account', value),
   peers: value => ipcRenderer.invoke('proteus:desktop-peers', value),

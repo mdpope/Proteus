@@ -68,7 +68,7 @@ test('desktop query requests actual API desktop contract and rejects disabled op
  let sent;const {store}=fixture(t,{vault:vault(credential()),fetch:async(url,options)=>{if(url.endsWith('/data'))sent=JSON.parse(options.body);return response({...profile,foods:[],foodPagination:{page:1,pageSize:25}});}});
  const s=store.get();store.save({schemaVersion:3,enabled:true},s.revision);await store.refresh();await store.data('nutrition',{tab:'foods',foodPage:2,search:'',from:''});assert.deepEqual(sent.query,{tab:'foods',foodPage:2,client:'desktop'});const identity=store.get().identity;store.save({schemaVersion:3,enabled:false},store.get().revision);await assert.rejects(store.action('food.save',{},'key',identity),/disabled/);
 });
-test('cancel/logout/disable and newer sign-in cannot resurrect a stale discovery or exchange',async t=>{
+test('cancel/logout and newer sign-in cannot resurrect a stale discovery or exchange',async t=>{
  const {home}=fixture(t);let release,entered,launched=0,url;const makeGate=()=>{let start;const ready=new Promise(r=>start=r),wait=new Promise(r=>release=r);entered=start;return {ready,wait};};
  let gate=makeGate(),pause='discovery';const fetcher=async(endpoint,options)=>{
   if(endpoint.endsWith('native-config')){if(pause==='discovery'){entered();await gate.wait;}return response({enabled:true,protocol:1,issuer:origin,clientId:'public',redirectUri:LIFE_CALLBACK,authorizationEndpoint:origin+'/oauth/authorize',tokenEndpoint:origin+'/oauth/token',apiBase:origin+'/api/v1/life'});}
@@ -77,7 +77,7 @@ test('cancel/logout/disable and newer sign-in cannot resurrect a stale discovery
  const store=new LifeStore(home,{vault:vault(),fetch:fetcher,openExternal:async value=>{launched++;url=new URL(value);}});
  store.save({schemaVersion:3,enabled:true},store.get().revision);
  const begin=store.auth('begin',{websiteOrigin:origin});await gate.ready;await store.auth('cancel');release();await assert.rejects(begin,/cancelled/);assert.equal(launched,0);assert.equal(store.settings().websiteOrigin,'https://proteus.example');
- gate=makeGate();const second=store.auth('begin',{websiteOrigin:origin});await gate.ready;store.save({schemaVersion:3,enabled:false},store.get().revision);release();await assert.rejects(second,/cancelled/);assert.equal(launched,0);
+ gate=makeGate();const second=store.auth('begin',{websiteOrigin:origin});await gate.ready;store.save({schemaVersion:3,enabled:false},store.get().revision);release();await second;assert.equal(launched,1);await store.auth('cancel');
  store.save({schemaVersion:3,enabled:true},store.get().revision);pause='';await store.auth('begin',{websiteOrigin:origin});
  pause='exchange';gate=makeGate();const complete=store.callback(LIFE_CALLBACK+'?state='+url.searchParams.get('state')+'&code=synthetic');await gate.ready;await store.auth('cancel');release();await assert.rejects(complete,/cancelled/);assert.equal(store.api.credential,null);
  pause='';await store.auth('begin',{websiteOrigin:origin});const a=url;
@@ -89,3 +89,7 @@ test('saved encrypted credential prevents website retargeting before lazy unlock
 });
 
 test('unreadable protected session can be explicitly forgotten without claiming remote revocation',async()=>{let cleared=false,called=false;const api=new LifeAPI({vault:{load(){throw new Error('Unreadable protected session');},clear(){cleared=true;}},fetch:async()=>{called=true;}});await api.logout();assert.equal(cleared,true);assert.equal(called,false);assert.equal(api.credential,null);assert.match(api.notice,/revocation could not be confirmed/);});
+
+test('account refresh stays connected with Life disabled while Life reads remain gated',async t=>{
+ const {store}=fixture(t,{vault:vault(credential()),fetch:async()=>response(profile)});await store.auth('refresh');assert.equal(store.get().enabled,false);assert.equal(store.get().ready,false);assert.equal(store.get().connected,true);await assert.rejects(store.data('nutrition'),/disabled/);store.save({schemaVersion:3,enabled:true},store.get().revision);store.save({schemaVersion:3,enabled:false},store.get().revision);assert.equal(store.get().connected,true);
+});

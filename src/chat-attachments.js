@@ -91,6 +91,9 @@ export class ChatAttachmentStore {
     }
   }
   cleanup() {
+    return this.performanceDiagnostics?this.performanceDiagnostics.measureSync('attachments.cleanup',()=>this.cleanupExpired()):this.cleanupExpired();
+  }
+  cleanupExpired() {
     if (this.closed) return;
     for (const record of this.records.values()) if (!record.accepted && this.clock() >= record.expiresAt) this.remove(record);
   }

@@ -1,0 +1,6 @@
+.page-find{position:fixed;z-index:90;right:18px;top:84px;display:flex;align-items:center;gap:8px;padding:9px 12px;max-width:calc(100vw - 24px);border:1px solid var(--proteus-line,#354639);border-radius:8px;background:var(--proteus-panel,#1a251e);color:var(--proteus-ink,#edf2ec);box-shadow:0 8px 24px #0006;animation:page-find-enter .14s ease-out}
+.page-find[hidden]{display:none}.page-find input{width:210px;min-width:70px;margin:0;padding:6px 8px;font-size:13px}.page-find span{white-space:nowrap;font-size:12px;font-variant-numeric:tabular-nums}
+body .page-find button{border:0;background:transparent;color:inherit;padding:4px;font-size:19px;line-height:1;min-width:24px;border-radius:0}.page-find button:hover{color:var(--proteus-accent,#c2e8a0)}
+::highlight(page-find-all){background:#66571b;color:#fff5ba}::highlight(page-find-current){background:#c2e8a0;color:#182414}
+@keyframes page-find-enter{from{opacity:0;transform:translate(18px,-8px)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.page-find{animation:none}}

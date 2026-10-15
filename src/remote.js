@@ -1,3 +1,4 @@
+import {countRunningChats} from '../public/computer-identity.js';
 import { chatDelta } from './chat-deltas.js';
 import fs from 'node:fs';
 import { toolPresentation } from '../public/tool-presentation.js';
@@ -14,19 +15,28 @@ import { startRelay } from '../relay/server.js';
 import { ChatDocumentApprovals } from './chat-documents.js';
 import { ChatAttachmentConsents } from './chat-attachment-consent.js';
 import { chatAttachmentLimits } from './chat-attachments.js';
+import { RemoteCommandJournal } from './remote-command-journal.js';
+import { browserHistorySettings } from './browser-history.js';
 
+const timedSync = (diagnostics, name, fn) => diagnostics ? diagnostics.measureSync(name, fn) : fn();
+import {chatMembership} from '../public/chat-membership.js';
+const timed = (diagnostics, name, fn) => diagnostics ? diagnostics.measure(name, fn) : fn();
 const pick = (value, keys) => Object.fromEntries(keys.filter(key => value?.[key] !== undefined).map(key => [key, value[key]]));
 const scheduleKeys = ['id', 'name', 'enabled', 'cron', 'timezone', 'provider', 'model', 'reasoningEffort', 'contextTier', 'serviceTier', 'workspace', 'misfire', 'prompt', 'revision', 'nextRuns', 'error', 'source', 'contextSelection', 'integration', 'notifications'];
-export const runSummary = r => ({...pick(r,['id','title','titleKind','titleRevision','trigger','chatType','status','createdAt','updatedAt','failureReviewedAt']),archivedAt:r.archivedAt||null,archived:!!r.archivedAt,failureEventAt:['failed','interrupted'].includes(r.status)?r.failureEventAt||r.updatedAt:null,attentionRequired:r.status==='awaiting_input'||(!r.archivedAt&&['failed','interrupted'].includes(r.status)&&!r.failureReviewedAt),provider:r.schedule.provider,workspaceName:r.schedule.context?.workspaceId||'',scheduleName:r.trigger==='chat'?'':r.schedule.name});
+const runContext = run => ({...run.context,...run.schedule?.context});
+const runWorkspace = run => chatMembership(run);
+export const runSummary = r => ({...pick(r,['id','title','titleKind','titleRevision','trigger','chatType','status','queueReason','createdAt','updatedAt','failureReviewedAt']),archivedAt:r.archivedAt||null,archived:!!r.archivedAt,failureEventAt:['failed','interrupted'].includes(r.status)?r.failureEventAt||r.updatedAt:null,attentionRequired:r.status==='awaiting_input'||(!r.archivedAt&&['failed','interrupted'].includes(r.status)&&!r.failureReviewedAt),provider:r.schedule.provider,...runWorkspace(r),scheduleName:r.trigger==='chat'?'':r.schedule.name});
 const entryKeys = ['id', 'name', 'description', 'kind', 'path', 'sources', 'roots', 'mode', 'scope', 'warnings', 'unsupportedAgentFields', 'error', 'missing', 'characters'];
 const remoteEntry = entry => ({ ...pick(entry, entryKeys), ...(entry.agent ? { userInvocable: entry.agent.userInvocable } : {}) });
-const mutationMethods = new Set(['tabs.mutate','chat.start', 'chat.reply', 'chat.resume', 'chat.cancel', 'chat.send', 'chat.steer-queued','chat.remove-queued', 'chat.review', 'chat.archive', 'chat.delete', 'chat.rename', 'chat.promote', 'chat.documents.request', 'chat.attachments.begin', 'chat.attachments.chunk', 'chat.attachments.finish', 'chat.attachments.authorize', 'schedule.run', 'schedule.save', 'context.mode', 'context.favorite', 'context.addFolders', 'chat.context', 'chat.permissions', 'mcp.login', 'notifications.read', 'resources.action', 'connection.revoke']);
+const mutationMethods = new Set(['browser.live.instruct','browser.history.record','browser.history.delete','browser.history.settings','tabs.mutate','tabs.manage','workspace.delete','chat.start', 'chat.reply', 'chat.resume', 'chat.cancel', 'chat.send', 'chat.steer-queued','chat.edit-queued','chat.remove-queued', 'chat.review', 'chat.archive', 'chat.move', 'chat.delete', 'chat.rename', 'chat.promote', 'chat.documents.request', 'chat.attachments.begin', 'chat.attachments.chunk', 'chat.attachments.finish', 'chat.attachments.authorize', 'schedule.run', 'schedule.save', 'context.update', 'context.refresh', 'context.mode', 'context.favorite', 'context.addFolders', 'chat.context', 'chat.permissions', 'mcp.login','integrations.check','integrations.recover', 'notifications.read', 'resources.action', 'connection.revoke']);
 const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
-export function remoteRun(run, offset = 0, permissions, beforeEvent) {
+export const ownerChatControls = (run,engine) => ({steering:typeof engine.providers[run.schedule.provider]?.steer==='function'});
+export function remoteRun(run, offset = 0, permissions, beforeEvent, chatControls) {
   const end = Number.isSafeInteger(beforeEvent) && beforeEvent >= 0 ? Math.min(run.events.length, beforeEvent) : Math.max(0, run.events.length - offset); const start = Math.max(0, end - 100);
-  return { observedAt:new Date().toISOString(), ...(permissions ? { permissionContext: permissions.describeRun?.(run) || permissions.describe(run.schedule), permissionRevision: permissions.get().revision } : {}), agentName: agentName(run), ...pick(run, ['turns','timingPartial','id', 'title', 'titleKind', 'titleRevision', 'trigger', 'chatType', 'status', 'createdAt', 'updatedAt', 'failureReviewedAt', 'pending', 'usage', 'contextUsage', 'providerSessionId', 'nativeSessionPath', 'automaticApprovals', 'modelCapabilities', 'nextModelOptions', 'modelHistory']),archivedAt:run.archivedAt||null,archived:!!run.archivedAt,queuedMessages:(run.queuedMessages||[]).map(message=>pick(message,['id','prompt','at','modelOptions'])),failureEventAt:['failed','interrupted'].includes(run.status)?run.failureEventAt||run.updatedAt:null,attentionRequired:run.status==='awaiting_input'||(!run.archivedAt&&['failed','interrupted'].includes(run.status)&&!run.failureReviewedAt),
+  const capturedContext=runContext(run);
+  return { ...runWorkspace(run),observedAt:new Date().toISOString(), ...(chatControls?{chatControls}:{}), ...(permissions ? { permissionContext: permissions.describeRun?.(run) || permissions.describe(run.schedule), permissionRevision: permissions.get().revision } : {}), agentName: agentName(run), ...pick(run, ['appCapabilities','turns','timingPartial','id', 'title', 'titleKind', 'titleRevision', 'trigger', 'chatType', 'status', 'queueReason', 'createdAt', 'updatedAt', 'failureReviewedAt', 'pending', 'usage', 'contextUsage', 'providerSessionId', 'nativeSessionPath', 'automaticApprovals', 'modelCapabilities', 'nextModelOptions', 'modelHistory']),archivedAt:run.archivedAt||null,archived:!!run.archivedAt,queuedMessages:(run.queuedMessages||[]).map(message=>({...pick(message,['id','prompt','at','modelOptions','editedAt']),hasAttachments:!!message.attachmentDispatch})),failureEventAt:['failed','interrupted'].includes(run.status)?run.failureEventAt||run.updatedAt:null,attentionRequired:run.status==='awaiting_input'||(!run.archivedAt&&['failed','interrupted'].includes(run.status)&&!run.failureReviewedAt),
     events: run.events.slice(start, end).map(e=>e.data?.tool ? {...e,data:{...e.data,tool:{...e.data.tool,presentation:toolPresentation(e.data.tool)}}}:e), eventStart: start, eventCount: run.events.length, earlier: start, schedule: pick(run.schedule, scheduleKeys),
-    context: { ...pick(run.schedule.context, ['workspaceId', 'selectedIds', 'agentId', 'includeDefaults', 'baseWorkspace', 'capturedAt']), entries: (run.schedule.context?.entries || []).map(remoteEntry) }, liveMessages: structuredClone(run.liveMessages || {}) };
+    context: { ...pick(capturedContext, ['workspaceId', 'workspaceName', 'selectedIds', 'agentId', 'includeDefaults', 'baseWorkspace', 'capturedAt']), entries: (capturedContext.entries || []).map(remoteEntry) }, liveMessages: structuredClone(run.liveMessages || {}) };
 }
 // Explicit projection: native clients receive allowance metadata, never adapter internals.
 export function remoteUsage(value) {
@@ -41,14 +51,20 @@ export function remoteUsage(value) {
   return {providers};
 }
 export function remoteState(service) {
-  const context = service.context.get(); const defaults = service.settings.get();
-  return { hostName: service.remote?.config.label || os.hostname(),
+  return timedSync(service.performanceDiagnostics, 'remote.state', () => {
+  const context = timedSync(service.performanceDiagnostics,'remote.state.context',()=>service.context.get()); const defaults = service.settings.get();
+  const runs = timedSync(service.performanceDiagnostics,'remote.state.runs',()=>service.engine.listRuns());
+  const visibleRuns = runs.filter(run=>!run.archivedAt);
+  const schedules = timedSync(service.performanceDiagnostics,'remote.state.schedules',()=>service.engine.schedules.list().map(s => pick(s, scheduleKeys)));
+  return { attention:timedSync(service.performanceDiagnostics,'remote.state.attention',()=>service.attention?.()||[]),hostName: service.remote?.config.label || os.hostname(),
     appearance: {showProviderUsage:defaults.appearance?.showProviderUsage!==false,providerUsageCollapsed:defaults.appearance?.providerUsageCollapsed===true},
-    ...(defaults.appearance?.showProviderUsage!==false?{providerUsage:remoteUsage({providers:service.usage?.providers})}:{}), schedules: service.engine.schedules.list().map(s => pick(s, scheduleKeys)),
-    runs: service.engine.visibleRuns().slice(0, 100).map(runSummary), runCount: service.engine.visibleRuns().length, runCountIncludingArchived: service.engine.listRuns().length,
-    attentionCount: service.engine.visibleRuns().filter(run=>run.status==='awaiting_input'||(['failed','interrupted'].includes(run.status)&&!run.failureReviewedAt)).length,
-    context: { ...pick(context, ['revision', 'refreshedAt', 'defaultWorkspaceId', 'workspaces', 'universalFolders', 'libraryFolders', 'favorites', 'errors']), entries: context.entries.map(remoteEntry) },
-    defaults: pick(defaults, ['provider', 'model', 'reasoningEffort', 'contextTier', 'serviceTier', 'timezone', 'internetSearches']), providerStatus: service.catalog?.value || null, providerStatuses: Object.fromEntries(Object.entries(service.catalogs || {}).map(([id, catalog]) => [id, catalog.value])),attachmentMediaTypes:Object.fromEntries(['copilot','codex','claude'].map(id=>[id,service.engine.providers[id]?.acceptedMediaTypes||[]])),mcpStatusProviders:['copilot','codex','claude'].filter(id=>typeof service.engine.providers[id]?.mcpStatus==='function'),mcpLoginProviders:['copilot','codex','claude'].filter(id=>typeof service.engine.providers[id]?.mcpLogin==='function'),capabilities:['content-tabs.v1','chat.index.v1','chat.review.v1','chat.lifecycle.v1','chat.rename.v1','chat.internet.v1','chat.permissions.chat.v1','chat.documents.v1','chat.attachments.v1','notifications.v1','authenticated-revocation.v1','connection-self-revoke.v1',...(service.resources?['resources.v1']:[])],protocol: 1 };
+    ...(defaults.appearance?.showProviderUsage!==false?{providerUsage:remoteUsage({providers:service.usage?.providers})}:{}), schedules,
+    runs: visibleRuns.slice(0, 100).map(runSummary), runCount: visibleRuns.length, runCountIncludingArchived: runs.length,
+    runningChatCount: countRunningChats(visibleRuns),
+    attentionCount: visibleRuns.filter(run=>run.status==='awaiting_input'||(['failed','interrupted'].includes(run.status)&&!run.failureReviewedAt)).length,
+    context: { ...pick(context, ['revision', 'refreshedAt', 'rootStatus', 'defaultWorkspaceId', 'workspaces', 'universalFolders', 'libraryFolders', 'documents','modes','favorites', 'errors']), entries: context.entries.map(remoteEntry) },
+    defaults: pick(defaults, ['provider', 'model', 'reasoningEffort', 'contextTier', 'serviceTier', 'timezone', 'internetSearches']), providerStatus: service.catalog?.value || null, providerStatuses: Object.fromEntries(Object.entries(service.catalogs || {}).map(([id, catalog]) => [id, catalog.value])),attachmentMediaTypes:Object.fromEntries(['copilot','codex','claude'].map(id=>[id,service.engine.providers[id]?.acceptedMediaTypes||[]])),mcpStatusProviders:['copilot','codex','claude'].filter(id=>typeof service.engine.providers[id]?.mcpStatus==='function'),mcpLoginProviders:['copilot','codex','claude'].filter(id=>typeof service.engine.providers[id]?.mcpLogin==='function'),capabilities:['chat.paths.v1','chat.export.v1','chat.previews.v1','content-tabs.v1','chat.index.v1','chat.queue-edit.v1','integrations.health.v1','chat.review.v1','chat.lifecycle.v1','chat.rename.v1','chat.internet.v1','workspaces.v1','chat.permissions.folders.v1','chat.permissions.chat.v1','chat.permissions.pending.v1','chat.documents.v1','chat.attachments.v1','notifications.v1','authenticated-revocation.v1','connection-self-revoke.v1',...(service.browserHistory?['browser.history.v1','browser.navigation.v1']:[]),...(service.liveBrowser?['browser.live.v1']:[]),...(service.resources?['resources.v1']:[])],protocol: 1 };
+  });
 }
 function validateRelayURL(value) {
   const url = new URL(value);
@@ -60,10 +76,11 @@ export class RemoteHost {
   constructor(service) {
     this.service = service; this.file = path.join(service.home, 'remote.json');
     this.config = readJSON(this.file, { version: 1, enabled: false, mode: 'local', port: 4318, hostId: randomUUID(), relayToken: secret(), devices: [] });
-    this.peers = new Map(); this.journal = []; this.epoch = randomUUID(); this.sequence = 0; this.closed = false; this.status = 'disabled'; this.inflight = new Map();this.documents=new ChatDocumentApprovals({documentSource:(chatId,documentId)=>service.contentTabs.documentSource(chatId,documentId),currentRoots:run=>{const catalog=service.context.get(),id=run.schedule?.context?.workspaceId;const workspace=id?catalog.workspaces.find(item=>item.id===id):null;return workspace?[workspace.cwd,...(workspace.additionalDirectories||[]),...(catalog.universalFolders||[])]:[];}});this.attachmentConsents=new ChatAttachmentConsents(service.attachments);service.engine.attachmentConsents=this.attachmentConsents;
-    this.ledgerFile = path.join(service.home, 'remote-commands.json'); this.ledger = readJSON(this.ledgerFile, {});
+    this.peers = new Map(); this.journal = []; this.epoch = randomUUID(); this.sequence = 0; this.closed = false; this.status = 'disabled'; this.inflight = new Map();this.documents=new ChatDocumentApprovals({documentSource:(chatId,documentId)=>service.contentTabs.documentSource(chatId,documentId),currentRoots:run=>{const catalog=service.context.get(),id=run.schedule?.context?.workspaceId;const workspace=id?catalog.workspaces.find(item=>item.id===id):null;return workspace?[workspace.cwd,...(workspace.additionalDirectories||[]),...(workspace.universalFolders||[])]:[];}});this.attachmentConsents=new ChatAttachmentConsents(service.attachments);service.engine.attachmentConsents=this.attachmentConsents;
+    this.commandJournal = new RemoteCommandJournal(service.home);
     this.changed = () => { if (!this.changeTimer) this.changeTimer = setTimeout(() => { this.changeTimer = null; this.publish(); }, 150); };
     service.engine.on('change', this.changed);
+    this.historyChanged=()=>this.broadcast('browser.history.changed',{});service.browserHistory?.on('changed',this.historyChanged);
     this.lifecycleChanged = result => { if (result.deleted) { for (const peer of this.peers.values()) if (peer.runId === result.id) peer.runId = null; this.documents.revokeChat?.(result.id); service.contentTabs?.removeChat(result.id); this.attachmentConsents.revokeChat(result.id); void service.attachments?.revokeChat?.(result.id); } this.broadcast('chat.lifecycle', result); this.changed(); };
     service.engine.on('lifecycle', this.lifecycleChanged);
     // Also detect editor/AI changes to plain files; no filesystem secrets leave the projection.
@@ -75,7 +92,7 @@ export class RemoteHost {
   }
   info() { return { enabled: this.config.enabled, mode: this.config.mode, status: this.status, error: this.error || null, hostId: this.config.hostId, label: this.config.label || os.hostname(),
     relayURL: this.config.relayURL || '', publicURL: this.config.publicURL || '', addresses: this.addresses(), port: this.config.port,
-    devices: this.config.devices.map(d => ({ id: d.id, name: d.name, pairedAt: d.pairedAt, resourceAccess: d.resourceAccess === true, documentAccess:d.documentAccess===true, online: [...this.peers.values()].some(p => p.device?.id === d.id) })),documentRequests:this.documents.list() }; }
+    devices: this.config.devices.map(d => ({ id: d.id, name: d.name, pairedAt: d.pairedAt, resourceAccess: d.resourceAccess === true, documentAccess:d.documentAccess===true,browserAccess:d.browserAccess===true, online: [...this.peers.values()].some(p => p.device?.id === d.id) })),documentRequests:this.documents.list() }; }
   deviceStatus(id){const checkedAt=new Date().toISOString(),device=this.info().devices.find(device=>device.id===id);if(!device)throw new Error('Unknown paired device.');return {device:{...device,checkedAt},checkedAt};}
   async configure(value) {
     if (typeof value.enabled !== 'boolean') throw new Error('Choose whether remote access is enabled.');
@@ -147,6 +164,17 @@ export class RemoteHost {
     try { this.save(); } catch (error) { this.config.devices = previous; throw error; }
     return this.info();
   }
+  setBrowserAccess(id, enabled) {
+    if(typeof enabled!=='boolean'||!this.config.devices.some(device=>device.id===id))throw new Error('Choose a paired device and browser viewing permission.');
+    const previous=this.config.devices;this.config.devices=previous.map(device=>device.id===id?{...device,browserAccess:enabled}:device);
+    try{this.save();}catch(error){this.config.devices=previous;throw error;}
+    if(!enabled)this.service.liveBrowser?.clear();
+    return this.info();
+  }
+  requireBrowserAccess(peer) {
+    if(this.config.devices.find(device=>device.id===peer.device?.id)?.browserAccess!==true)throw new Error('Enable View live chat browsers for this device in Connections on the Mac.');
+    if(!this.service.liveBrowser)throw new Error('This host does not support live browser viewing.');
+  }
   setDocumentAccess(id,enabled){
     if(typeof enabled!=='boolean')throw new Error('Choose whether document viewing is enabled.');
     if(!this.config.devices.some(device=>device.id===id))throw new Error('Paired device not found.');
@@ -186,51 +214,104 @@ export class RemoteHost {
     try { const result = await this.command(peer, message); if (this.peers.get(peer.id) === peer) this.send(peer, { type: 'result', id: message.id, result }); }
     catch (error) { if (this.peers.get(peer.id) === peer) this.send(peer, { type: 'result', id: message.id, error: error.message }); }
   }
+  requireCommandGrants(peer, method, args) {
+    if (!this.config.devices.some(device => device.id === peer.device?.id)) throw new Error('Unknown paired device.');
+    if (method === 'resources.list' || method === 'resources.action') this.requireResourceAccess(peer);
+    if (method.startsWith('browser.live.')) this.requireBrowserAccess(peer);
+    if (method === 'tabs.mutate' && (args.operations || []).some(op => op.tab?.type === 'document' || String(op.id || '').startsWith('document:') || Array.isArray(op.ids) && op.ids.some(id => String(id).startsWith('document:')))) this.requireDocumentAccess(peer);
+  }
+  async commandDiagnostics() { return { ...await this.commandJournal.diagnostics(), activeCommands: this.inflight.size, methods: { ...this.commandCounts } }; }
   async command(peer, message) {
     const { method, args = {} } = message;
-    // Apply the current grant before replaying a previously successful command's snapshot.
-    if (method === 'resources.list' || method === 'resources.action') this.requireResourceAccess(peer);
-    if (method?.startsWith('chat.documents.')) this.requireDocumentAccess(peer);
-    if(method==='tabs.mutate'&&(args.operations||[]).some(op=>op.tab?.type==='document'||String(op.id||'').startsWith('document:')||Array.isArray(op.ids)&&op.ids.some(id=>String(id).startsWith('document:'))))this.requireDocumentAccess(peer);
+    this.requireCommandGrants(peer, method, args);
     if (!mutationMethods.has(method)) return this.execute(peer, method, args);
+    if (this.closed) throw new Error('Remote host is closing.');
+    this.commandCounts ??= {}; this.commandCounts[method] = (this.commandCounts[method] || 0) + 1;
+    const finish = result => {
+      if (method !== 'connection.revoke') this.requireCommandGrants(peer, method, args);
+      if (method === 'tabs.mutate') return { ...result, tabs: (result?.tabs || []).filter(tab => tab.type !== 'document' || this.config.devices.find(device => device.id === peer.device.id)?.documentAccess === true) };
+      return result;
+    };
     const key = `${peer.device.id}:${message.id}`; const digest = createHash('sha256').update(JSON.stringify(canonical([method, args]))).digest('hex');
-    const previous = this.ledger[key];
-    if (previous) {
-      if (previous.digest !== digest) throw new Error('Request ID was already used for another command.');
-      if (this.inflight.has(key)) return this.inflight.get(key);
-      if (previous.error) throw new Error(previous.error);
-      if (previous.pending) throw new Error('The previous command outcome is uncertain. Refresh before trying a new action.');
-      if(method==='tabs.mutate')return {...previous.result,tabs:(previous.result?.tabs||[]).filter(tab=>tab.type!=='document'||this.config.devices.find(device=>device.id===peer.device.id)?.documentAccess===true)};
-      return previous.result;
+    const active = this.inflight.get(key);
+    if (active) {
+      if (active.digest !== digest) throw new Error('Request ID was already used for another command.');
+      return finish(await active.task);
     }
-    if (!Number.isFinite(Date.parse(message.issuedAt)) || Math.abs(Date.now() - Date.parse(message.issuedAt)) > 300_000) throw new Error('Command expired. Refresh before trying again.');
-    // Write the claim before any effect. An interrupted command is never silently replayed.
-    this.ledger = Object.fromEntries(Object.entries(this.ledger).filter(([, record]) => Date.now() - record.at < 24 * 3600_000));
-    if (Object.keys(this.ledger).length >= 10_000) throw new Error('Command limit reached. Try again tomorrow.');
-    this.ledger[key] = { digest, pending: true, at: Date.now() }; atomicJSON(this.ledgerFile, this.ledger);
-    const task = (async () => {
-      try { const result = await this.execute(peer, method, args); this.ledger[key] = { digest, result, at: Date.now() }; atomicJSON(this.ledgerFile, this.ledger); return result; }
-      catch (error) { this.ledger[key] = { digest, error: error.message, at: Date.now() }; atomicJSON(this.ledgerFile, this.ledger); throw error; }
-      finally { this.inflight.delete(key); this.changed(); }
-    })();
-    this.inflight.set(key, task); return task;
+    if (this.inflight.size >= 32) throw new Error('Remote commands are busy. Retry shortly.');
+    // Install the task before asynchronous lookup/claim so concurrent retries coalesce.
+    const task = Promise.resolve().then(async () => {
+      const { previous } = await this.commandJournal.claim(key, digest, message.issuedAt);
+      this.requireCommandGrants(peer, method, args);
+      if (previous) {
+        if (previous.error) throw new Error(previous.error);
+        if (previous.pending) throw new Error('The previous command outcome is uncertain. Refresh before trying a new action.');
+        if (method === 'tabs.mutate') return { ...previous.result, tabs: (previous.result?.tabs || []).filter(tab => tab.type !== 'document' || this.config.devices.find(device => device.id === peer.device.id)?.documentAccess === true) };
+        return previous.result;
+      }
+      if (this.closed) throw new Error('Remote host is closing; the command outcome is uncertain. Refresh before trying a new action.');
+      let result, executionError, executionFailed = false;
+      try { result = await this.execute(peer, method, args); } catch (error) { executionError = error; executionFailed = true; }
+      try {
+        await this.commandJournal.complete(key, digest, executionFailed ? { error: executionError?.message || String(executionError) } : { result });
+      } catch (error) {
+        this.service.activity?.log('error', 'remote.command-journal', 'A remote command receipt could not be saved. Its outcome is uncertain.');
+        throw new Error('The command outcome is uncertain because its receipt could not be saved. Refresh before trying a new action.', { cause: error });
+      }
+      if (executionFailed) throw executionError;
+      return result;
+    }).finally(() => { this.inflight.delete(key); this.changed(); });
+    this.inflight.set(key, { digest, task }); return finish(await task);
   }
+
   async api(route, value) {
     const response = await fetch(this.service.origin + route, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.service.token}` }, body: JSON.stringify(value), signal: AbortSignal.timeout(60_000) });
     const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Host request failed.'); return data;
   }
   async execute(peer, method, args) {
     const engine = this.service.engine;
+    if(method.startsWith('browser.history.')){
+      const history=this.service.browserHistory;if(!history)throw new Error('Browser history is unavailable on this computer.');
+      const action=method.slice('browser.history.'.length);
+      if(action==='query')return history.query(args);
+      if(action==='record')return history.record(args);
+      if(action==='delete')return history.delete(args);
+      if(action==='status')return history.status();
+      if(action==='sync')return history.sync(args);
+      if(action==='settings'){
+        return browserHistorySettings(this.service,args);
+      }
+      throw new Error('Unsupported history command.');
+    }
+    if(method.startsWith('browser.live.')){
+      this.requireBrowserAccess(peer);engine.getRun(args.id);
+      const live=this.service.liveBrowser;
+      if(method==='browser.live.list')return {tabs:live.list(args.id)};
+      if(method==='browser.live.frame'){const frame=await live.frame(args.id,args.tabId);this.requireBrowserAccess(peer);peer.liveFrames??=new Set();peer.liveFrames.add(frame.id);while(peer.liveFrames.size>40)peer.liveFrames.delete(peer.liveFrames.values().next().value);const {key,at,...result}=frame;return result;}
+      if(method==='browser.live.instruct'){
+        if(!peer.liveFrames?.has(args.frameId))throw new Error('View this browser frame before referring to it.');
+        if(typeof args.text!=='string'||!args.text.trim()||args.text.length>100000)throw new Error('Enter an instruction.');
+        const prompt=args.text+live.reference(args.id,args.frameId,args.point);this.requireBrowserAccess(peer);
+        if(args.mode==='answer'){const run=engine.getRun(args.id);if(run.pending?.type!=='question')throw new Error('There is no pending question to answer.');await this.api(`/api/runs/${args.id}/reply`,{requestId:args.requestId,answer:prompt});}
+        else {if(!['queue','steer'].includes(args.mode))throw new Error('Choose Queue, Steer or Answer.');await this.api(`/api/runs/${args.id}/send`,{prompt,mode:args.mode,messageId:args.messageId});}
+        return {runId:args.id};
+      }
+      throw new Error('Unsupported live browser command.');
+    }
+
     if (method === 'sync') {
+      return timed(this.service.performanceDiagnostics, 'remote.sync', () => {
       const index = this.journal.findIndex(event => event.cursor === args.cursor);
       if (index >= 0) for (const event of this.journal.slice(index + 1)) if (!event.runId || event.runId === peer.runId) this.send(peer, event);
       return { state: remoteState(this.service), cursor: `${this.epoch}:${this.sequence}` };
+      });
     }
     if (method === 'runs.list') { const offset = Math.max(0, Math.floor(Number(args.offset) || 0)); return engine.visibleRuns(args.includeArchived===true).slice(offset, offset + 100).map(runSummary); }
     if(method==='connection.revoke'){if(args.deviceId&&args.deviceId!==peer.device.id)throw new Error('Only this connection can be revoked here.');this.revoke(peer.device.id);return {ok:true};}
     if(method==='notifications.list')return this.service.activity?.notifications()||{items:[],preferences:{}};
-    if(method==='notifications.read')return this.service.activity.read(args.id);
-    if(method==='logs.list')return this.service.activity?.logs(args.limit)||{items:[]};
+    if(method==='notifications.read'){const result=this.service.activity.read(args.id);this.service.notify();this.changed();return result;}
+    if(method==='logs.list')return this.service.activity?.logs(args)||{items:[]};
+    if(method==='logs.get')return this.service.activity.logDetail(args.id);
     if (method === 'resources.list' || method === 'resources.action') {
       this.requireResourceAccess(peer);
       if (method === 'resources.action' && !this.service.resources) throw new Error('Resource controls are unavailable.');
@@ -238,8 +319,12 @@ export class RemoteHost {
       this.requireResourceAccess(peer);
       return result;
     }
-    if(method==='tabs.get'||method==='tabs.mutate'){
+    if(method==='workspace.delete'){this.requireResourceAccess(peer);return this.service.tabManagement.handle({action:'delete-workspace',...args});}
+    if(method==='tabs.list'||method==='tabs.manage'){if(method==='tabs.manage')this.requireResourceAccess(peer);const result=await this.service.tabManagement.handle(method==='tabs.list'?{...args,action:'list'}:args);return result;}
+    if(method==='tabs.get'||method==='tabs.mutate'||method==='tabs.history'){
       if(args.scope==='chat')engine.getRun(args.id);
+      if(args.scope==='workspace'){this.service.context.scope(args.id);for(const op of args.operations||[])if(op.action==='open'&&op.tab?.type==='chat'&&chatMembership(engine.getRun(op.tab.chatId)).workspaceId!==args.id)throw new Error('This chat belongs to another workspace.');}
+      if(method==='tabs.history')return this.service.contentTabs.history(args);
       const canDocuments=this.config.devices.find(device=>device.id===peer.device.id)?.documentAccess===true;
       let result;
       if(method==='tabs.mutate'){
@@ -251,28 +336,42 @@ export class RemoteHost {
             if(operation.action==='open'){const existing=projected.findIndex(tab=>tab.id===operation.tab?.id);if(existing<0)projected.push(operation.tab);else projected[existing]=operation.tab;}
             else if(operation.action==='close')projected=projected.filter(tab=>tab.id!==operation.id);
             else if(operation.action==='reorder'){
-              const visible=projected.filter(tab=>tab.type==='browser');
+              const visible=projected.filter(tab=>tab.type!=='document');
               if(!Array.isArray(operation.ids)||new Set(operation.ids).size!==visible.length||operation.ids.length!==visible.length||operation.ids.some(id=>!visible.some(tab=>tab.id===id)))throw new Error('Reorder must contain each visible browser tab exactly once.');
-              const ordered=operation.ids.map(id=>visible.find(tab=>tab.id===id));let index=0;projected=projected.map(tab=>tab.type==='browser'?ordered[index++]:tab);
+              const ordered=operation.ids.map(id=>visible.find(tab=>tab.id===id));let index=0;projected=projected.map(tab=>tab.type!=='document'?ordered[index++]:tab);
               return {...operation,ids:projected.map(tab=>tab.id)};
             }
             return operation;
           });value={...args,operations};
         }
-        result=this.service.contentTabs.mutate(value);
-      }else result=this.service.contentTabs.get(args.scope,args.id);
+        if((value.operations||[]).some(op=>op.action==='close'&&this.service.contentTabs.get(value.scope,value.id).tabs.some(tab=>tab.id===op.id&&tab.type==='terminal')))this.requireResourceAccess(peer);
+        result=await this.service.mutateContentTabs(value);
+      }else result=await this.service.contentTabs.getAsync(args.scope,args.id);
       return {...result,tabs:result.tabs.filter(tab=>tab.type!=='document'||canDocuments)};
     }
-    if (method === 'chat.get') { const run = engine.getRun(args.id); peer.runId = run.id;peer.summaryOnly=args.watch==='summary'; const view=remoteRun(run, Math.max(0, Math.floor(Number(args.offset) || 0)), engine.permissions, args.beforeEvent);return args.historyCursor?chatDelta(run,view,args.historyCursor):{...view,...(!args.offset&&args.beforeEvent===undefined?chatDelta(run,view):{})}; }
+    if (method === 'chat.get') { const run = engine.getRun(args.id); peer.runId = run.id;peer.summaryOnly=args.watch==='summary'; const view=remoteRun(run, Math.max(0, Math.floor(Number(args.offset) || 0)), engine.permissions, args.beforeEvent,ownerChatControls(run,engine));return args.historyCursor?chatDelta(run,view,args.historyCursor):{...view,...(!args.offset&&args.beforeEvent===undefined?chatDelta(run,view):{})}; }
+    if(method==='chat.previews.list'||method==='chat.previews.read'){
+      this.requireDocumentAccess(peer);const run=engine.getRun(args.id);
+      const result=await(method.endsWith('.list')?this.service.previews.list(run):this.service.previews.read(run,args.documentId));
+      this.requireDocumentAccess(peer);return result;
+    }
+    if(method==='chat.paths'){const run=engine.getRun(args.id);return (await import('./transcripts.js')).storagePaths(this.service.home,run);}
+    if(method==='chat.export'){
+      const run=engine.getRun(args.id),format=args.format;if(!['markdown','json'].includes(format))throw Error('Choose Markdown or JSON.');
+      const {exportTranscript}=await import('./transcripts.js'),{file}=exportTranscript(this.service.home,run,format);
+      if(fs.statSync(file).size>4*1024*1024)throw Error('Export exceeds 4 MiB.');
+      return {name:run.id+(format==='json'?'.json':'.md'),content:fs.readFileSync(file,'utf8'),mediaType:format==='json'?'application/json':'text/markdown'};
+    }
     if (method === 'chat.promote') return engine.promoteChat(args.id,args.expectedUpdatedAt);
     if (method === 'chat.rename') return this.api('/api/chat-title', pick(args, ['id', 'title', 'expectedTitleRevision']));
+    if (method === 'chat.move') return this.api('/api/chat-workspace',pick(args,['id','workspaceId','expectedUpdatedAt']));
     if (method === 'chat.review') return engine.reviewFailure(args.id,args.expectedFailureEventAt);
     if (method === 'chat.archive') {if(typeof args.archived!=='boolean')throw new Error('Choose Archive or Unarchive.');return engine.lifecycle(args.id,args.archived?'archive':'unarchive',pick(args,['expectedUpdatedAt','expectedArchivedAt']));}
     if (method === 'chat.delete') return engine.lifecycle(args.id,'delete',pick(args,['expectedUpdatedAt','expectedArchivedAt']));
-    if (method === 'chat.documents.request') {this.requireDocumentAccess(peer);const result=this.documents.request(engine.getRun(args.id),peer.device,args.source,args.documentId,args.fromRequestId,args.relativePath);this.service.activity?.add('review.required',{chatId:args.id});return result;}
-    if (method === 'chat.documents.status') {this.requireDocumentAccess(peer);return this.documents.status(args.requestId,peer.device.id);}
-    if (method === 'chat.documents.read') {this.requireDocumentAccess(peer);return this.documents.read(args.requestId,peer.device.id,engine);}
-    if (method === 'chat.documents.asset') {this.requireDocumentAccess(peer);return this.documents.asset(args.requestId,args.assetId,peer.device.id,engine);}
+    if (method === 'chat.documents.request') {const device=this.config.devices.find(item=>item.id===peer.device.id);if(!device)throw new Error('Device is no longer paired.');const result=this.documents.request(engine.getRun(args.id),device,args.source,args.documentId,args.fromRequestId,args.relativePath,{direct:device.documentAccess===true});if(result.status==='pending'){this.service.activity?.add('review.required',{chatId:args.id});this.service.notify?.();}return result;}
+    if (method === 'chat.documents.status') {return this.documents.status(args.requestId,peer.device.id);}
+    if (method === 'chat.documents.read') {return this.documents.read(args.requestId,peer.device.id,engine);}
+    if (method === 'chat.documents.asset') {return this.documents.asset(args.requestId,args.assetId,peer.device.id,engine);}
     if (method === 'chat.attachments.begin') {
       const run=args.id?engine.getRun(args.id):null,providerId=run?.schedule.provider||args.providerId,accepted=engine.providers[providerId]?.acceptedMediaTypes||[];
       if(!accepted.includes(args.mediaType))throw new Error(`${providerId} cannot receive ${args.mediaType} attachments. Choose a supported file type or provider.`);
@@ -288,6 +387,8 @@ export class RemoteHost {
       return this.attachmentConsents.authorize({...(run?{chatId:run.id}:{draftId:args.draftId}),deviceId:peer.device.id,messageId:args.messageId,providerId,attachments:args.attachments,acceptedMediaTypes:engine.providers[providerId]?.acceptedMediaTypes||[]});
     }
     if (method === 'chat.image') return this.api('/api/chat-image', pick(args, ['id', 'source']));
+    if(method==='integrations.list')return this.service.integrations.snapshot();
+    if(method==='integrations.check'||method==='integrations.recover')return this.service.integrations.check(args.id,{recover:method==='integrations.recover'});
     if (method === 'mcp.status' || method === 'mcp.login') return this.api('/api/mcp', {runId:args.id,action:method === 'mcp.login' ? 'login' : 'status',server:args.server,openOnMac:method === 'mcp.login'});
     if (method === 'provider.usage') {
       if (this.service.settings.get().appearance?.showProviderUsage === false) return {enabled:false,providers:{}};
@@ -296,11 +397,23 @@ export class RemoteHost {
       this.changed(); return {enabled:true,...remoteUsage(value)};
     }
     if (method === 'provider.status') return this.api('/api/provider', pick(args, ['force', 'provider']));
-    if (method === 'context.refresh') { this.service.context.refresh(); this.changed(); return remoteState(this.service).context; }
+    if (method === 'context.get') return this.service.context.get(args.workspaceId);
+    if (method === 'context.update') { const result = await this.api('/api/context', args); this.changed(); return result; }
+    if (method === 'context.refresh') { const result = await this.service.context.refreshAsync({workspaceId:args.workspaceId,root:args.root}); this.changed(); return result; }
     if (method === 'schedule.preview') return this.api('/api/preview', pick(args, ['cron', 'timezone']));
     if (method === 'chat.start') {
       const startArgs=pick(args,['chatType','name','prompt','provider','model','reasoningEffort','contextTier','serviceTier','workspaceId','selectedIds','agentId','includeDefaults']);
-      if(args.commandFolder){const catalog=this.service.context.get(),profile=catalog.workspaces.find(w=>w.id===(args.workspaceId||catalog.defaultWorkspaceId));if(!profile)throw new Error('Choose a configured workspace.');const roots=[profile.cwd,...profile.additionalDirectories],cwd=fs.realpathSync(args.commandFolder);if(!roots.some(root=>fs.realpathSync(root)===cwd))throw new Error('Choose a configured starting folder on this Mac.');startArgs.workspace={cwd,additionalDirectories:roots.filter(root=>fs.realpathSync(root)!==cwd)};}
+      if(args.commandFolder){
+        const catalog=this.service.context.get(),profile=catalog.workspaces.find(w=>w.id===(args.workspaceId||catalog.defaultWorkspaceId));
+        if(!profile)throw new Error('Choose a configured workspace.');
+        const cwd=fs.realpathSync(args.commandFolder);
+        if(!fs.statSync(cwd).isDirectory())throw new Error('Choose an existing starting folder on this computer.');
+        // Only the selected folder must resolve here. Preserve unavailable siblings so
+        // context capture can explain their omission without changing saved configuration.
+        const roots=[profile.cwd,...profile.additionalDirectories].map(root=>{let canonical=null;try{canonical=fs.realpathSync(root);}catch{}return {root,canonical};});
+        if(!roots.some(root=>root.canonical===cwd))throw new Error('Choose a configured starting folder on this computer.');
+        startArgs.workspace={cwd,additionalDirectories:roots.filter(root=>root.canonical!==cwd).map(root=>root.root)};
+      }
       const files=Array.isArray(args.attachments)?args.attachments:[];
       if(!files.length){const run=await this.api('/api/chat',startArgs);peer.runId=run.id;return {runId:run.id};}
       if(!args.consentId||!args.draftId||!args.messageId||files.length>chatAttachmentLimits.maxBatchFiles||args.providerId!==args.provider)throw new Error('Review the exact first-message files and named provider before sending.');
@@ -318,18 +431,18 @@ export class RemoteHost {
       try{await engine.send(run.id,args.prompt,'queue',args.messageId,args.modelOptions,{proofId:prepared.proofId,attachmentIds:files});peer.runId=run.id;return {runId:run.id};}
       catch(error){await this.attachmentConsents.releaseProof(prepared.proofId).catch(()=>{});throw error;}
     }
-    if (['chat.reply', 'chat.resume', 'chat.cancel', 'chat.send', 'chat.steer-queued','chat.remove-queued'].includes(method)) {
+    if (['chat.reply', 'chat.resume', 'chat.cancel', 'chat.send', 'chat.steer-queued','chat.edit-queued','chat.remove-queued'].includes(method)) {
       engine.getRun(args.id); const action = method.split('.')[1];
-      await this.api(`/api/runs/${args.id}/${action}`, pick(args, ['answer', 'requestId', 'prompt', 'mode', 'messageId', 'modelOptions'])); return { runId: args.id };
+      await this.api(`/api/runs/${args.id}/${action}`, pick(args, ['answer', 'requestId', 'prompt', 'mode', 'messageId', 'modelOptions', 'expectedPrompt'])); return { runId: args.id };
     }
     if (method === 'chat.permissions') {
-      await this.api('/api/permissions', { action: args.scope === 'chat' ? 'set-chat-mode' : 'set-mode', runId: args.id, ...pick(args, ['mode', 'expectedContextId', 'expectedRevision', 'expectedChatRevision']) });
-      this.changed(); return remoteRun(engine.getRun(args.id), 0, engine.permissions);
+      await this.api('/api/permissions', { action: ['grant-chat-folder','revoke-chat-folder'].includes(args.action) ? args.action : args.scope === 'chat' ? 'set-chat-mode' : 'set-mode', runId: args.id, ...pick(args, ['mode','folder','access', 'expectedContextId', 'expectedRevision', 'expectedChatRevision', 'expectedRequestId']) });
+      this.changed(); return remoteRun(engine.getRun(args.id), 0, engine.permissions,undefined,ownerChatControls(engine.getRun(args.id),engine));
     }
     if (method === 'chat.context') { await this.api('/api/run-context', { runId: args.id, ...pick(args, ['selectedIds', 'agentId', 'includeDefaults']) }); return { runId: args.id }; }
     if (method === 'context.preview') return this.api('/api/context/preview', pick(args, ['workspace', 'workspaceId', 'selectedIds', 'agentId', 'includeDefaults']));
-    if (method === 'context.favorite') { await this.api('/api/context', { action: 'favorite', ...pick(args, ['id', 'enabled', 'expectedRevision']) }); return { ok: true }; }
-    if (method === 'context.mode') { await this.api('/api/context', { action: 'mode', ...pick(args, ['id', 'mode', 'expectedRevision']) }); return { ok: true }; }
+    if (method === 'context.favorite') { await this.api('/api/context', { action: 'favorite', ...pick(args, ['id', 'enabled', 'workspaceId','expectedRevision']) }); return { ok: true }; }
+    if (method === 'context.mode') { await this.api('/api/context', { action: 'mode', ...pick(args, ['id', 'mode', 'workspaceId','expectedRevision']) }); return { ok: true }; }
     if (method === 'context.addFolders') { await this.api('/api/context', { action: 'add-folders', ...pick(args, ['workspaceId', 'folders', 'expectedRevision']) }); return { ok: true }; }
     if (method === 'schedule.save') {
       const original = engine.schedules.get(args.id);
@@ -341,16 +454,18 @@ export class RemoteHost {
   }
   publish() {
     if (!this.config.enabled) return;
-    const state = remoteState(this.service); const signature = JSON.stringify(state);
+    return timedSync(this.service.performanceDiagnostics, 'remote.publish', () => {
+    const state = remoteState(this.service); const signature = timedSync(this.service.performanceDiagnostics, 'remote.publish.serialize', () => JSON.stringify(state));
     if (signature !== this.signature) { this.signature = signature; this.broadcast('state', state); }
     const watched = new Set([...this.peers.values()].filter(p => p.device).map(p => p.runId).filter(Boolean));
     for(const id of this.runSignatures?.keys()||[])if(!watched.has(id))this.runSignatures.delete(id);
     for (const id of watched) {
       if (!this.service.engine.runs.has(id)) continue;
-      const run = remoteRun(this.service.engine.getRun(id), 0, this.service.engine.permissions); const hash = createHash('sha256').update(JSON.stringify({...run,observedAt:undefined})).digest('hex');
+      const run = timedSync(this.service.performanceDiagnostics, 'remote.run.assemble', () => remoteRun(this.service.engine.getRun(id), 0, this.service.engine.permissions,undefined,ownerChatControls(this.service.engine.getRun(id),this.service.engine))); const hash = timedSync(this.service.performanceDiagnostics, 'remote.run.serialize', () => createHash('sha256').update(JSON.stringify({...run,observedAt:undefined})).digest('hex'));
       if (this.runSignatures?.get(id) === hash) continue;
       this.runSignatures ??= new Map(); this.runSignatures.set(id, hash);const summaryOnly=[...this.peers.values()].filter(peer=>peer.device&&peer.runId===id).every(peer=>peer.summaryOnly);this.broadcast(summaryOnly?'run.changed':'run',summaryOnly?{id,status:run.status,updatedAt:run.updatedAt}:run,id);
     }
+    });
   }
   broadcast(event, data, runId) {
     const value = { type: 'event', event, data, ...(runId ? { runId } : {}), cursor: `${this.epoch}:${++this.sequence}` };
@@ -363,5 +478,5 @@ export class RemoteHost {
     if (this.relay) { await this.relay.close(); this.relay = null; }
     this.status = 'disabled';
   }
-  async close() { this.closed = true; clearInterval(this.scan); clearTimeout(this.changeTimer); this.service.engine.off('change', this.changed); this.service.engine.off('lifecycle',this.lifecycleChanged); await this.stop(); }
+  async close() { this.closed = true; clearInterval(this.scan); clearTimeout(this.changeTimer); this.service.engine.off('change', this.changed); this.service.engine.off('lifecycle',this.lifecycleChanged); this.service.browserHistory?.off('changed',this.historyChanged); await this.stop(); await Promise.allSettled([...this.inflight.values()].map(entry => entry.task)); clearTimeout(this.changeTimer); await this.commandJournal.close(); }
 }

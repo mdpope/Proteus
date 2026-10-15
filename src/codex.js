@@ -1,3 +1,4 @@
+import {integrationTools} from './integration-tools.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -6,6 +7,8 @@ import { EventEmitter } from 'node:events';
 import { createInterface } from 'node:readline';
 import {appInstructions,documentBridge} from './document-tools.js';
 import { browserTools } from './browser-tools.js';
+import {codexToolContent} from './tool-results.js';
+import {captureAppCapabilities} from './app-capabilities.js';
 import { displayText, toolSummary } from './tool-activity.js';
 import { canonicalPath, effectivePermissionMode } from './permissions.js';
 import { validateModelOptions } from './model-catalog.js';
@@ -19,7 +22,7 @@ export function codexModel(model) {
 // Filesystem grants never imply approval of a shell command. Keep native untrusted
 // approval routing; the engine applies the user's separate saved operation rules.
 export function codexSandbox(schedule, profile) {
- const roots=[schedule.workspace.cwd,...(schedule.workspace.additionalDirectories||[])];
+ const roots=[...new Set([schedule.workspace.cwd,...(schedule.workspace.additionalDirectories||[]),...(profile?.chatFolders||[]).map(folder=>folder.path)])];
  const readOnly={cwd:schedule.workspace.cwd,sandbox:'read-only',runtimeWorkspaceRoots:roots,policy:{type:'readOnly',networkAccess:false},config:{}};
  if(!['trusted','autopilot'].includes(effectivePermissionMode(profile)))return readOnly;
  const cwd=canonicalPath(schedule.workspace.cwd,schedule.workspace.cwd);
@@ -93,7 +96,8 @@ export class CodexProvider {
   }
   const roots=[run.schedule.workspace.cwd,...run.schedule.workspace.additionalDirectories];
   const sandbox=codexSandbox(run.schedule,permissionProfile?.());
-  const browser=browserTools(this.browser,run.id);const items=new Map();const calls=new Map();
+  const browser=[...browserTools(this.browser,run.id),...integrationTools(this.integrations,run.id)];const items=new Map();const calls=new Map();
+  captureAppCapabilities(run,browser,update);
   let resolveTurn,rejectTurn,settled=false,abortTimer;const completed=new Promise((resolve,reject)=>{resolveTurn=resolve;rejectTurn=reject;});completed.catch(()=>{});
   const active={run,client,turnId:null};this.active=active;
   active.recheckPermissions=()=>{
@@ -130,7 +134,7 @@ export class CodexProvider {
      const tool=browser.find(t=>t.name===p.tool);if(!tool)throw new Error('Unknown Proteus tool.');
      const answer=await ask({type:'permission',question:'Allow Proteus app action?',details:{kind:'custom-tool',toolCallId:p.callId,toolName:p.tool,args:p.arguments,intention:p.tool==='proteus_open_document'?`Open Markdown tab: ${p.arguments?.path||''}`:`Browser ${p.arguments?.action||'action'}`}});
      const result=['approve','approve-auto'].includes(answer)?await tool.handler(p.arguments):{resultType:'failure',textResultForLlm:'User declined.'};
-     client.respond(msg.id,{success:result?.resultType!=='failure',contentItems:[{type:'inputText',text:typeof result==='string'?result:result.textResultForLlm||JSON.stringify(result)}]});
+     client.respond(msg.id,{success:result?.resultType!=='failure',contentItems:codexToolContent(result)});
    }else if(msg.method==='item/commandExecution/requestApproval'){
      const answer=await ask({type:'permission',question:p.reason||'Allow this command?',details:{kind:'shell',toolCallId:p.itemId,fullCommandText:p.command,reason:p.reason,requestSandboxBypass:!!p.additionalPermissions,managedApprovalRequired:!!p.networkApprovalContext}});client.respond(msg.id,{decision:['approve','approve-auto'].includes(answer)?'accept':'decline'});
    }else if(msg.method==='item/fileChange/requestApproval'){
@@ -145,14 +149,14 @@ export class CodexProvider {
   const closed=e=>rejectTurn(e);client.on('notification',onNotification);client.on('request',onRequest);client.on('closed',closed);
   const abort=()=>{if(abortTimer)return;if(active.turnId)void client.request('turn/interrupt',{threadId:run.providerSessionId,turnId:active.turnId}).catch(()=>client.close());abortTimer=setTimeout(()=>{client.close();rejectTurn(new Error('Codex did not confirm interruption; its Proteus runtime was stopped.'));},5000);};signal.addEventListener('abort',abort,{once:true});
   try{
-   if(this.browser?.openDocument){
+   if(this.browser?.openDocument||this.integrations){
     if(selected.proteus_app)throw new Error('The MCP name proteus_app is reserved for Proteus app tools.');
     appBridge=await documentBridge({openDocument:async(args,id)=>{
       if(active.recheckPermissions())throw new Error('Workspace permissions changed.');
       const answer=await ask({type:'permission',question:'Open this Markdown document in the chat?',details:{kind:'custom-tool',toolName:'proteus_open_document',args,intention:`Open Markdown tab: ${args.path||''}`}});
       if(!['approve','approve-auto'].includes(answer))throw new Error('Document opening was declined.');
       return this.browser.openDocument(args,id);
-    }},run.id);
+    }},run.id,integrationTools(this.integrations,run.id));
     mcp.proteus_app={enabled:true,...appBridge.config};
    }
    const instructions=`${appInstructions}\nYou are working inside Proteus. Use only the selected sources below. Workspace folders:\n${roots.join('\n')}\n${managed?.instructionText||''}\n${(managed?.customAgents||[]).map(a=>`Agent: ${a.displayName}${a.name===managed.agent?' (main identity)':''}\n${a.prompt}`).join('\n\n')}\nEditor context: ${JSON.stringify(run.schedule.editorContext||null)}`;

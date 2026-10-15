@@ -16,7 +16,7 @@ export function restoreSentAttachments(key,messageId){
   document.querySelectorAll('.chat-attachment-picker').forEach(host=>{if(host.dataset.attachmentKey===key)host.dispatchEvent(new Event('attachments-restored'));});return files.length;
 }
 export function mountAttachmentPicker({key,host,textarea,provider,mediaTypes={},notify,onChange=()=>{}}){
-  const accepted=()=>mediaTypes[provider()]||[];
+  const accepted=()=>provider()?(mediaTypes[provider()]||[]):[...new Set(Object.values(mediaTypes).flat())];
   host.classList.add('chat-attachment-picker');host.dataset.attachmentKey=key;
   const render=()=>{const items=selectedAttachments(key);host.innerHTML=`<div class="attachment-controls"><button type="button" class="subtle attachment-add" data-attach-add aria-label="Attach files" title="Attach files" ${accepted().length?'':'disabled'}><span aria-hidden="true">＋</span></button><input type="file" multiple hidden></div><div class="attachment-strip">${items.map((item,index)=>`<div class="attachment-chip"><button type="button" data-attach-preview="${index}" ${item.url?'':'disabled'}>${item.url?`<img src="${item.url}" alt="">`:'▤'} <span>${escape(item.file.name)}<small>${sizeLabel(item.file.size)}</small></span></button><button type="button" data-attach-remove="${index}" aria-label="Remove ${escape(item.file.name)}">×</button></div>`).join('')}</div>`;
     const input=host.querySelector('input[type=file]');input.accept=accepted().join(',');host.querySelector('[data-attach-add]').onclick=()=>input.click();input.onchange=()=>{add([...input.files]);input.value='';};

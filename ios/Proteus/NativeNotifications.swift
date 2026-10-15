@@ -8,6 +8,13 @@ import Security
     @Published var status = "Notifications are off"
     @Published var deviceToken: String?
     @Published var route: NotificationRoute?
+    struct Banner: Identifiable { let id = UUID(); let message: String; let destination: NotificationRoute }
+    @Published var banner: Banner?
+    private var bannerQueue: [Banner] = []
+    private var bannerTask: Task<Void, Never>?
+    func presentBanner(_ message: String, destination: NotificationRoute) { let value = Banner(message: message, destination: destination); if banner != nil { if bannerQueue.count < 30 { bannerQueue.append(value) }; return }; banner = value; bannerTask?.cancel(); bannerTask = Task { try? await Task.sleep(for: .seconds(15)); if !Task.isCancelled && banner?.id == value.id { dismissBanner() } } }
+    func dismissBanner() { bannerTask?.cancel(); banner = nil; if !bannerQueue.isEmpty { let next = bannerQueue.removeFirst(); presentBanner(next.message, destination: next.destination) } }
+
     @AppStorage("notificationsEnabled") var enabled = false
     @AppStorage("notificationDeviceID") var deviceID = UUID().uuidString.lowercased()
     private var delivered = Set<String>()
@@ -60,7 +67,9 @@ import Security
         let first = baselineHosts.insert(hostID).inserted
         for item in items {
             let id = hostID + ":" + item["id"].string
-            guard delivered.insert(id).inserted, !first, enabled, item["readAt"] == .null else { continue }
+            guard delivered.insert(id).inserted, !first, item["readAt"] == .null else { continue }
+            if UIApplication.shared.applicationState == .active { presentBanner(Self.safeBody(item["type"].string), destination: NotificationRoute(hostID: hostID, chatID: item["chatId"].string, scheduleID: item["scheduleId"].string, type: item["type"].string)); continue }
+            guard enabled else { continue }
             let content = UNMutableNotificationContent(); content.title = "Proteus"; content.body = Self.safeBody(item["type"].string); content.sound = .default
             content.userInfo = ["hostId": hostID, "chatId": item["chatId"].string,
                                 "scheduleId": item["scheduleId"].string, "type": item["type"].string]
@@ -73,18 +82,27 @@ import Security
     }
     func receivedTap(_ payload: [AnyHashable: Any]) { route = NotificationRoute.from(payload) }
     #if DEBUG
+    @Published var fixtureStatus = "Not scheduled"
     func scheduleFixtureTap() async throws {
+        fixtureStatus = "Requesting permission"
         let center = UNUserNotificationCenter.current()
-        guard try await center.requestAuthorization(options: [.alert, .sound]) else { throw RemoteError(message: "Simulator notification permission was denied.") }
+        guard try await center.requestAuthorization(options: [.alert, .sound]) else { fixtureStatus = "Permission denied"; throw RemoteError(message: "Simulator notification permission was denied.") }
         let content = UNMutableNotificationContent()
         content.title = "Proteus route fixture"
         content.body = "Tap to open the fixture chat."
         content.userInfo = ["hostId": "10000000-0000-4000-8000-000000000001", "chatId": "notification-chat", "type": "chat.completed"]
         try await center.add(UNNotificationRequest(identifier: "proteus-simulator-route-fixture", content: content, trigger: UNTimeIntervalNotificationTrigger(timeInterval: 4, repeats: false)))
+        fixtureStatus = "Scheduled"
     }
     #endif
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-        DispatchQueue.main.async { completionHandler([.banner, .sound, .list]) }
+        let payload = notification.request.content.userInfo
+        let host = payload["hostId"] as? String ?? "", chat = payload["chatId"] as? String ?? "", schedule = payload["scheduleId"] as? String ?? "", type = payload["type"] as? String ?? ""
+        DispatchQueue.main.async {
+            #if DEBUG
+            self.fixtureStatus = "Foreground delivered"
+            #endif
+            self.presentBanner(Self.safeBody(type), destination: NotificationRoute.from(["hostId": host, "chatId": chat, "scheduleId": schedule, "type": type])); completionHandler([]) }
     }
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
         let payload = response.notification.request.content.userInfo
@@ -112,3 +130,24 @@ final class ProteusAppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) { Task { @MainActor in NativeNotifications.shared.registered(deviceToken) } }
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) { Task { @MainActor in NativeNotifications.shared.registrationFailed() } }
 }
+
+
+struct NativeNoticeBanner: View {
+    @ObservedObject private var notices = NativeNotifications.shared
+    var body: some View {
+        if let banner = notices.banner {
+            HStack(alignment: .top, spacing: 12) {
+                Text(banner.message).font(.subheadline).frame(maxWidth: .infinity, alignment: .leading)
+                Button("Open") { notices.route = banner.destination; notices.dismissBanner() }.fontWeight(.semibold).accessibilityLabel("Open notification")
+                Button { notices.dismissBanner() } label: { Image(systemName: "xmark") }.accessibilityLabel("Dismiss notification")
+            }.padding(16).frame(maxWidth: 640).foregroundStyle(NativeTheme.background).background(NativeTheme.accent, in: RoundedRectangle(cornerRadius: 14)).shadow(color: .black.opacity(0.2), radius: 12, y: 5).padding(.horizontal, 12).transition(.move(edge: .top).combined(with: .opacity))
+        }
+    }
+}
+
+#if DEBUG
+struct NativeNotificationProbe: View {
+ @ObservedObject private var notices = NativeNotifications.shared
+ var body: some View { Text(notices.fixtureStatus).accessibilityIdentifier("notification-fixture-status") }
+}
+#endif

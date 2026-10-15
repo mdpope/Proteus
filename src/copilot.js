@@ -1,6 +1,9 @@
+import { uniqueModels } from '../public/model-choices.js';
+import {integrationTools} from './integration-tools.js';
 import { safeToolError } from '../public/tool-presentation.js';
 import { CopilotClient } from '@github/copilot-sdk';
 import {appInstructions} from './document-tools.js';
+import {captureAppCapabilities} from './app-capabilities.js';
 import { browserTools } from './browser-tools.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -69,7 +72,7 @@ export class CopilotProvider {
     // listModels() retains its first result until disconnect. Use the public RPC
     // to refresh without tearing down a client that owns an active conversation.
     const result = client.rpc?.models?.list ? (await client.rpc.models.list({})).models : await client.listModels();
-    return result.map(copilotModel);
+    return uniqueModels(result.map(copilotModel));
   }
   async status() {
     try {
@@ -90,9 +93,10 @@ export class CopilotProvider {
   }
   selectedMcp(run) {
     const snapshot = run.schedule.context;
-    const managed = snapshot && this.context ? this.context.providerContext(snapshot) : null;
+    const managed = snapshot && this.context ? (this.context.providerMcpContext?.(snapshot) || this.context.providerContext(snapshot)) : null;
     return managed ? { ...Object.fromEntries(Object.entries(snapshot.includeDefaults !== false ? run.schedule.mcpServers || {} : {}).filter(([name]) => !managed.disabledLegacyMcp.includes(name))), ...managed.mcpServers } : run.schedule.mcpServers || {};
   }
+  withMcpSelectionBatch(callback) { return this.context?.withMcpSelectionBatch ? this.context.withMcpSelectionBatch(callback) : callback(); }
   async mcpSession(run) {
     const active = this.sessions.get(run.id) || this.authSessions.get(run.id);
     if (active) return active;
@@ -118,6 +122,33 @@ export class CopilotProvider {
       const error = item?.error || value.host?.failedServers?.[name]?.message;
       return {name, status: value.host?.needsAuthServers?.[name] ? 'needs-auth' : item?.status || 'not-connected', scope: this.sessions.has(run.id)?'active-chat':'resumed-chat', observedAt:new Date().toISOString(), remote: ['http','sse'].includes(config.type), ...(error ? {error:displayText(error,1000)} : {})}; }) };
   }
+  hasMcpSession(run) { return this.sessions.has(run.id)||this.authSessions.has(run.id); }
+  async mcpHealth(run,name) {
+    const result=await this.mcpStatus(run),row=result.servers.find(s=>s.name===name);
+    if(!row)throw new Error('Choose a selected MCP server.');
+    const session=this.sessions.get(run.id)||this.authSessions.get(run.id);
+    if(row.remote&&typeof session?.rpc.mcp.oauth?.probe==='function') {
+      const entry=(await session.rpc.mcp.list()).servers.find(s=>s.name===name);
+      try {
+        const probe=await session.rpc.mcp.oauth.probe({serverName:name,...(entry?.owned?.installationId?{expectedInstallationId:entry.owned.installationId}:{})});
+        row.authentication=probe.status==='authenticated'?'token-accepted':probe.status==='needs-auth'?'needs-auth':probe.status==='no-auth-required'?'not-required':'unverified';
+        if(probe.status==='needs-auth')row.status='needs-auth';
+      } catch { row.authentication='unverified'; }
+    }
+    return {servers:[row]};
+  }
+  async mcpRecover(run,name) {
+    if(this.sessions.size)throw new Error('Wait for active tools to finish before reconnecting.');
+    const before=await this.mcpHealth(run,name),row=before.servers[0];
+    const session=this.authSessions.get(run.id);
+    // Never start interactive OAuth or clear shared tokens here. Runtime restart uses its
+    // own credential cache/refresh behavior; it does not establish downstream access.
+    if(row.authentication==='needs-auth')return before;
+    if(!['connected','failed','not-connected'].includes(row.status))return before;
+    if(typeof session?.rpc.mcp.restartServer!=='function')throw new Error('This runtime does not support individual connection recovery.');
+    await session.rpc.mcp.restartServer({serverName:name});
+    return this.mcpHealth(run,name);
+  }
   async mcpLogin(run, name) {
     const config = this.selectedMcp(run)[name];
     if (!config || !['http','sse'].includes(config.type)) throw new Error('Choose a selected remote MCP server.');
@@ -140,7 +171,7 @@ export class CopilotProvider {
     if (!session) throw new Error('Copilot is still starting. Queue this message or try steering again.');
     await session.send({ prompt, mode: 'immediate' });
   }
-  async run({ run, prompt, attachments=[], emit, ask, update, signal, stream }) {
+  async run({ run, prompt, attachments=[], emit, ask, update, signal, stream, permissionProfile }) {
     const nativeAttachments=attachments.map(item=>{
       if(!this.acceptedMediaTypes.includes(item.mediaType)||!Buffer.isBuffer(item.bytes))throw new Error('Copilot cannot receive this attachment type. Choose a supported image, PDF, or plain text file.');
       return {type:'blob',data:item.bytes.toString('base64'),mimeType:item.mediaType,displayName:item.name};
@@ -162,7 +193,8 @@ export class CopilotProvider {
     };
     const snapshot = run.schedule.context;
     const managed = snapshot && this.context ? this.context.providerContext(snapshot) : null;
-    const fingerprint = revision({ context: snapshot || null, mcp: run.schedule.mcpServers || {} });
+    const additionalDirectories=[...new Set([...run.schedule.workspace.additionalDirectories,...(permissionProfile?.().chatFolders||[]).map(folder=>folder.path)])];
+    const fingerprint = revision({ context: snapshot || null, mcp: run.schedule.mcpServers || {}, additionalDirectories });
     // Cold resume is required for removed MCP servers and changed context to take effect.
     if (this.configurationFingerprint && this.configurationFingerprint !== fingerprint) await this.close();
     this.configurationFingerprint = fingerprint;
@@ -174,17 +206,18 @@ export class CopilotProvider {
     validateModelOptions(run.schedule, model);
     run.modelCapabilities = { capturedAt: new Date().toISOString(), id: model.id, controls: model.controls };
     const includeLegacy = snapshot?.includeDefaults !== false;
+    const appTools=[...browserTools(this.browser,run.id),...integrationTools(this.integrations,run.id)];captureAppCapabilities(run,appTools,update,managed?selectedAgentToolScope(managed):null);
     const config = {
       model: run.schedule.model, streaming: true,
       ...((run.schedule.reasoningEffort || model.controls.defaultReasoningEffort) ? { reasoningEffort: run.schedule.reasoningEffort || model.controls.defaultReasoningEffort } : {}),
       ...(run.schedule.contextTier ? { contextTier: run.schedule.contextTier } : {}),
       workingDirectory: run.schedule.workspace.cwd,
-      additionalDirectories: run.schedule.workspace.additionalDirectories,
+      additionalDirectories,
       skillDirectories: includeLegacy ? run.schedule.skillDirectories || [] : [],
       mcpServers: managed ? { ...Object.fromEntries(Object.entries(includeLegacy ? run.schedule.mcpServers || {} : {}).filter(([name]) => !managed.disabledLegacyMcp.includes(name))), ...managed.mcpServers } : run.schedule.mcpServers || {},
       ...(managed ? { skipCustomInstructions: true, enableConfigDiscovery: false, enableOnDemandInstructionDiscovery: false, enableSkills: includeLegacy && !!run.schedule.skillDirectories?.length, disabledSkills: managed.disabledSkills, enableFileHooks: false, customAgents: managed.customAgents, agent: managed.agent, availableTools: selectedAgentToolScope(managed) } : {}),
-      tools: browserTools(this.browser, run.id),
-      systemMessage: { mode: 'append', content: `${appInstructions}\nProteus workspace roots (${managed ? 'use the explicitly selected context below; do not automatically load other instruction/skill/agent files' : 'read relevant AGENTS.md and .github/copilot-instructions.md before work'}):\n${[run.schedule.workspace.cwd, ...run.schedule.workspace.additionalDirectories].join('\n')}\n${this.browser ? 'Embedded browser access is available through proteus_browser. Use it for visible authenticated website reads. The user can interact with those same tabs; ask for sign-in if needed.' : 'Embedded browser access is unavailable in this server-only session.'}\nEditor context supplied by the user: ${JSON.stringify(run.schedule.editorContext || null)}\n${managed?.instructionText || ''}` },
+      tools: appTools,
+      systemMessage: { mode: 'append', content: `${appInstructions}\nProteus workspace roots (${managed ? 'use the explicitly selected context below; do not automatically load other instruction/skill/agent files' : 'read relevant AGENTS.md and .github/copilot-instructions.md before work'}):\n${[run.schedule.workspace.cwd, ...additionalDirectories].join('\n')}\n${this.browser ? 'Embedded browser access is available through proteus_browser. Use it for visible authenticated website reads. The user can interact with those same tabs; ask for sign-in if needed.' : 'Embedded browser access is unavailable in this server-only session.'}\nEditor context supplied by the user: ${JSON.stringify(run.schedule.editorContext || null)}\n${managed?.instructionText || ''}` },
       onPermissionRequest: permission,
       onUserInputRequest: async request => ({ answer: await askUser({ type: 'question', question: request.question, choices: request.choices }), wasFreeform: true })
     };
@@ -213,7 +246,7 @@ export class CopilotProvider {
       activity(event);
       if (event.type === 'tool.execution_complete') for (const [key, value] of decisions) if (value.toolCallId === event.data.toolCallId) decisions.delete(key);
       if (event.type === 'session.mcp_server_status_changed') {
-        const d = event.data; run.mcpConnections ??= {}; run.mcpConnections[d.serverName || d.name] = {status:d.status,error:displayText(d.error || '',1000)};
+        const d = event.data; run.mcpConnections ??= {}; run.mcpConnections[d.serverName || d.name] = {status:d.status,observedAt:new Date().toISOString(),error:displayText(d.error || '',1000)};
         if (d.status === 'needs-auth' || d.status === 'failed') emit('system', `MCP ${d.serverName || d.name}: ${d.status}. Open MCP connections in chat details to sign in or inspect the error.`); else update();
       }
       if (event.type === 'session.warning') emit('system', displayText(event.data.message || 'Provider warning'));

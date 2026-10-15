@@ -25,6 +25,10 @@ run per schedule. Already-active schedules skip overlapping occurrences.
 Module map: [agent handoff](handoff.md). Rationale: [design decisions](decisions.md).
 Remaining work: [backlog](planned-updates.md). Live capabilities: [providers](providers.md).
 
+General computer diagnostics use an independent worker-owned rotating SQLite log store with
+summary cursor pages and on-demand redacted details. Notifications/preferences/account outbox
+remain separate; diagnostic retention cannot expire execution receipts. See [logs](logs.md).
+
 The initial app deliberately owns its generic schemas, templates, and client implementation.
 Operating-system repositories own their own schedules, workflow policy, and durable knowledge.
 Neither side imports the other's private operational content into its source repository.

@@ -1,4 +1,90 @@
+**October 14 follow-up candidate:** Native **0.2.19 / 2610.14.2** preserves original and full
+redirect/replacement URLs, selects existing tabs from Workspace Tabs titles and reveals selected
+navigation. Scheduled conversation approval sends the exact current waiting request. All 113 unit
+checks and the actual phone SPA-history and title/navigation UI workflows pass. Final signing and
+installation remain pending; previous installed status below is historical. Native history no longer
+rewrites login destinations. No real Microsoft authentication or physical gesture acceptance is
+claimed by the synthetic checks.
+
+**October 14 tab-management batch:** Native Mac **0.2.15 / 2610.14.1** is installed and
+launch-verified with the existing certificate, profile and entitlements. Its running executable
+matches the installed tested build; LaunchServices registration was refreshed after an initial
+launch failure. Container/Keychain data was not edited, and native AX UI inspection was unavailable.
+66 native unit checks and four actual simulator UI workflows passed, including WKDownload and
+SPA history. Physical iPhone and iPad are now installed/launch-verified on the same build with
+saved destinations retained. iPhone's 1,931 file contents matched (four OS snapshot paths renamed);
+iPad's 3,565 accessible files matched, with only 12 unreadable OS snapshot-cache files excluded.
+Complete durable preservation/verification receipts are private. Physical gestures/UI acceptance
+remain separate from these version, launch and file checks. Desktop-owner0.2.16 is a separate
+compatibility correction and does not require recompiling this native build;
+see [the current release ledger](2026-10-13-tab-management-release.md).
+
+**October 12 native parity rollout:** Both physical devices and Proteus iPad on the primary
+computer now run **0.2.12 / 2610.12.3**. Physical installation was in place using the existing
+per-device profiles and shared certificate. Each installed version, launch and continued process
+was verified; seven protected files per device matched byte-for-byte before launch, and both
+saved destinations plus their selection were retained afterward. Exact tested executable sections
+and resources match. Foreground acceptance on the primary computer verifies HC chat connection,
+website/link loading, Back/Forward, tab retention and history after unloading/reloading the web
+view. Physical UI/gesture acceptance and signed-in cross-device recent history remain separate;
+no physical input surface is available through current automation. Durable receipts are private.
+
+**October 12 physical Workspaces rollout:** Both physical iPad and iPhone updated in place to
+**0.2.12 / 2610.11.1**, retaining the existing certificate and each device's renewed profile.
+All seven protected files per device were byte-identical before launch; installed versions,
+independent running processes and retained saved destinations verified afterward. Durable backups
+and receipts remain private. iPad profile expires October 18 at 16:24 MDT; iPhone profile expires
+October 18 at 00:47 MDT. Initial iPhone connectivity was unavailable and USB enumeration absent;
+it recovered after operator reconnection and retry. No uninstall, pairing reset or certificate
+change was needed. Connection unavailability must not be treated as a signing failure.
+
+**October 12 Workspaces release:** Proteus iPad **0.2.12 / 2610.11.1** is installed in place
+and launch-verified on this Mac. Existing wrapper, certificate, entitlements and Mac-compatible
+profile were retained; no shared certificate was replaced or revoked. A stale translocated launch
+was corrected by refreshing LaunchServices registration, then the operator completed macOS's
+verification prompt. Native Workspaces and existing tabs were visibly confirmed. The protected
+container was not edited; direct container hash comparison was unavailable due to OS privacy.
+Physical devices remain on their previously installed release. See the
+[Workspaces release ledger](2026-10-11-workspaces-release.md).
+
+**October 10 history follow-up:** Physical iPhone and iPad now have 0.2.11 / 2610.10.5, installed in place and launched at 19:42:57 and 19:43:04 UTC. Seven protected files each were byte-identical before launch; original signing/destinations retained. Four focused native unit tests, two phone history UI checks and the tablet bounded-renderer/history rehearsal passed. Older-row preparation begins 2.5 viewports ahead, with transport cache preparation six viewports ahead; initial rendering remains bounded. Development-profile expiry remains 17:29 MDT October 10; no renewal is claimed. See [follow-up ledger](2026-10-10-mobile-history.md).
+
 # Apple build and simulator validation
+
+**October 11 native iPad app on Mac:** The validated 0.2.11 / 2610.10.5 iPad artifact is
+installed alongside desktop Proteus as **Proteus iPad** using the standard `Wrapper`/`WrappedBundle`
+Mac layout. Xcode's Designed for iPad destination supplied a profile for this Apple silicon Mac;
+it expires **October 18 at 16:38 MDT** and uses the existing certificate shared with Omi.
+Executable sections, resources and entitlements remain identical to the validated mobile release.
+The operator authorized first launch in macOS Security settings and confirmed the visible app;
+native and desktop processes were independently observed running together. No desktop bundle,
+phone/tablet installation or certificate was replaced. Pairing/account workflow acceptance is
+separate. Private signing/install receipts remain outside Git.
+
+**October 11 iPad signing recovery:** Proteus 0.2.11 / 2610.10.5 was re-signed with an
+iPad-compatible profile and installed in place on the operator's iPad. Launch and independent
+process inventory passed; all seven protected files were byte-identical before launch and the
+destination index remained identical afterward. Executable sections, resources and entitlements
+match the validated .5 release. This profile expires **October 18, 2026 at 16:24 MDT** and uses
+the same existing certificate as Omi and the renewed iPhone installation. No certificate was
+created, revoked or deleted; Omi and the iPhone installation were unchanged. Private preservation
+copies and receipts remain outside Git. Live relay workflow acceptance is separate.
+
+**October 11 iPhone signing recovery:** Proteus 0.2.11 / 2610.10.5 was re-signed and installed
+in place, then launched and independently confirmed running. Seven protected files were
+byte-identical before launch; the destination index remained identical after launch. Executable
+sections, bundled resources and entitlements match the validated .5 artifact. The renewed Proteus
+profile expires **October 18, 2026 at 00:47 MDT**. It uses the same existing valid certificate as
+the recent Omi deployment; no certificate was created, revoked or deleted, and Omi was not changed.
+iPad renewal was outside the initial iPhone request and is recorded above. Private backups and signing/install receipts remain outside
+Git. This verifies installation and startup; live relay workflow acceptance is separate.
+
+October 10 full release: [current installation ledger](2026-10-10-full-chat-release.md).
+0.2.11 / 2610.10.2 is signed and ready with 69 passing unit tests and iPhone/iPad composer,
+long-history and preview acceptance checks. Both physical devices are installed and launched;
+a fresh device inventory confirms 0.2.11 / 2610.10.2 on each, with protected data and destinations
+retained. The earlier partial 0.2.10 installations are historical receipts. The
+development profile was reused, not renewed; it expires October 10 at 17:29 MDT.
 
 This Mac is the designated Proteus iPhone/iPad build and installation machine. The native app
 remains a remote client of the desktop host. Pendant Bluetooth capture and iCloud recording
@@ -35,6 +121,21 @@ Optional npm mappings are `ios:doctor`, `ios:build` and `ios:test` to the matchi
 Use `npm run ios:test -- --device SIMULATOR_UUID` when those scripts are configured.
 
 ## Physical-device release
+
+Verify that the **Mac is unlocked before checking Apple accounts or signing availability**.
+If computer access reports a locked screen, ask the operator to unlock it and repeat the checks
+after unlock. A locked Mac can produce misleading “No Accounts” or missing-profile errors;
+those results do not establish that Xcode needs to be set up again. Inspect the existing account,
+team and certificates in Xcode before treating a repeated error as a real configuration problem.
+Keep Mac unlock and the iPhone/iPad's lock state as separate preflight checks. Do not create or
+replace accounts/certificates, reset signing, or uninstall an app to resolve a locked-screen result.
+If the command-line tools still report “No Accounts” after unlock, inspect the existing account
+in Xcode and select the connected physical device before concluding that provisioning is missing.
+An already signed-in Xcode session can renew the app's profile when the CLI cannot see the account.
+Use a disposable signing project if a local team selection is needed, preserving repository signing
+settings. Confirm the renewed profile covers the exact bundle ID/device and existing certificate
+before re-signing. Preserve certificates/profiles used by other apps; never revoke a shared
+certificate to repair Proteus.
 
 Simulator verification proves compilation and the synthetic remote-client workflows. It does not
 prove device installation, real provider execution, live Omi processing or production pairing.

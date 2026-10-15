@@ -1,0 +1,34 @@
+Proteus browser integrations — October 9, 2026
+
+electron-chrome-extensions 4.9.0
+Copyright Samuel Maddock and contributors.
+Selected license: GNU General Public License version 3 (GPL-3.0).
+The complete terms are retained in node_modules/electron-chrome-extensions/LICENSE-GPL
+and its license selection notice in LICENSE.md in that directory.
+Upstream source: https://github.com/samuelmaddock/electron-browser-shell
+Release commit: 927ac340c3c6cc462f636a50ccd9991df0cd2e12
+The matching upstream source archive and Proteus source companion accompany the local
+build under dist/combined-update-source. Preserve these notices and provide the
+corresponding source under the selected terms with any later distribution.
+
+@ghostery/adblocker-electron 2.20.1 and its dependencies
+Copyright Ghostery and contributors. Retain each package's LICENSE file under
+node_modules. Source: https://github.com/ghostery/adblocker
+
+Other dependencies retain their own notices and license terms in node_modules.
+esbuild 0.28.2
+Copyright Evan Wallace and contributors. MIT license retained in node_modules/esbuild/LICENSE.md.
+Source: https://github.com/evanw/esbuild
+Included at runtime for bounded static design dependency bundling.
+Bitwarden is not bundled, signed, or supplied by Proteus. Its official extension
+can be installed by its owner into a browser profile. Its own terms apply.
+This local build is not a claim of notarization or distribution readiness.
+
+@playwright/mcp 0.0.83 and Playwright 1.64.0
+Copyright Microsoft Corporation and contributors. Apache-2.0 license and notices
+retained in the corresponding node_modules packages. Embedded page automation only.
+Source: https://github.com/microsoft/playwright-mcp
+chrome-devtools-mcp 1.10.1
+Copyright Google LLC and contributors. Apache-2.0 license and bundled third-party
+notices retained in node_modules/chrome-devtools-mcp. Starts only for developer mode.
+Source: https://github.com/ChromeDevTools/chrome-devtools-mcp
