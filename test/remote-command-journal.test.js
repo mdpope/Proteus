@@ -10,12 +10,22 @@ import { RemoteCommandJournal } from '../src/remote-command-journal.js';
 import { RemoteHost } from '../src/remote.js';
 
 const now = () => new Date().toISOString();
-function home(t) { const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-journal-')); t.after(() => fs.rmSync(dir, { recursive: true, force: true })); return dir; }
+const homeCleanups = new Map();
+function home(t) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-journal-')), closers = [];
+  homeCleanups.set(dir, closers);
+  t.after(async () => { for (const close of closers) await close(); fs.rmSync(dir, { recursive: true, force: true }); homeCleanups.delete(dir); });
+  return dir;
+}
+function closeBeforeRemove(dir, close) { homeCleanups.get(dir).push(close); }
+function trackedJournal(dir) {
+  const journal = new RemoteCommandJournal(dir); closeBeforeRemove(dir, () => journal.close()); return journal;
+}
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
 function host(t, dir) {
   const engine = new EventEmitter(); const remote = new RemoteHost({ home: dir, engine, attachments: { base: dir } });
   const device = { id: 'synthetic-device', resourceAccess: true, documentAccess: true }; remote.config.devices.push(device);
-  const peer = { device }; t.after(() => remote.close());
+  const peer = { device }; closeBeforeRemove(dir, () => remote.close());
   return { remote, peer, message: { id: randomUUID(), method: 'context.mode', args: { mode: 'manual' }, issuedAt: now() } };
 }
 
@@ -23,11 +33,11 @@ test('legacy migration is atomic, preserves bytes/unknown fields and never reimp
   const dir = home(t), file = path.join(dir, 'remote-commands.json'), at = Date.now();
   const legacy = { old: { digest: 'd', result: { text: 'synthetic' }, at, extension: { version: 2 } }, uncertain: { digest: 'u', pending: true, at: at - 48 * 3600_000 } };
   const bytes = JSON.stringify(legacy, null, 2); fs.writeFileSync(file, bytes);
-  let journal = new RemoteCommandJournal(dir); await journal.ready;
+  let journal = trackedJournal(dir); await journal.ready;
   assert.deepEqual((await journal.claim('old', 'd', 'expired')).previous, legacy.old);
   await journal.claim('new', 'n', now()); await journal.complete('new', 'n', { result: { ok: true } }); await journal.close();
   assert.equal(fs.readFileSync(file, 'utf8'), bytes);
-  journal = new RemoteCommandJournal(dir); await journal.ready;
+  journal = trackedJournal(dir); await journal.ready;
   assert.deepEqual((await journal.claim('new', 'n', 'expired')).previous.result, { ok: true });
   assert.equal((await journal.claim('uncertain', 'u', 'expired')).previous.pending, true);
   assert.equal((await journal.diagnostics()).records, 3);
@@ -44,7 +54,7 @@ test('invalid migration rolls back all entries and can retry safely after legacy
 });
 
 test('byte and count admission preserve full 24h retry results and indefinitely uncertain claims', t => {
-  const dir = home(t), store = new RemoteCommandStore(dir, { maxRecords: 3, maxBytes: 1024 }); t.after(() => store.close());
+  const dir = home(t), store = new RemoteCommandStore(dir, { maxRecords: 3, maxBytes: 1024 }); closeBeforeRemove(dir, () => store.close());
   const at = Date.now(); store.claim('pending', 'p', new Date(at).toISOString(), at);
   store.claim('large', 'l', new Date(at).toISOString(), at); store.complete('large', 'l', { result: 'x'.repeat(2048) }, at);
   assert.ok(store.diagnostics().bytes > 1024);
@@ -60,7 +70,7 @@ test('byte and count admission preserve full 24h retry results and indefinitely 
 });
 
 test('count budget refuses protected receipts instead of compacting them after ten minutes', t => {
-  const dir = home(t), store = new RemoteCommandStore(dir, { maxRecords: 1 }); t.after(() => store.close());
+  const dir = home(t), store = new RemoteCommandStore(dir, { maxRecords: 1 }); closeBeforeRemove(dir, () => store.close());
   const at = Date.now(); store.claim('k', 'd', new Date(at).toISOString(), at); store.complete('k', 'd', { result: 1 }, at);
   const later = at + 660000;
   assert.throws(() => store.claim('n', 'd', new Date(later).toISOString(), later), /history is busy/);
@@ -72,7 +82,7 @@ test('transaction write failure retains the durable claim and rolls back counter
   store.db.exec("CREATE TRIGGER synthetic_failure BEFORE UPDATE ON receipts BEGIN SELECT RAISE(ABORT,'synthetic disk failure'); END;");
   assert.throws(() => store.complete('k', 'd', { result: 2 }), /synthetic disk/);
   assert.equal(store.diagnostics().pending, 1); store.close();
-  const restarted = new RemoteCommandStore(dir); t.after(() => restarted.close());
+  const restarted = new RemoteCommandStore(dir); closeBeforeRemove(dir, () => restarted.close());
   assert.equal(restarted.claim('k', 'd', 'expired').previous.pending, true);
 });
 
@@ -142,12 +152,12 @@ test('graceful close drains an active completion before closing worker and rejec
   const task = remote.command(peer, message); await entered.promise; const closing = remote.close();
   await assert.rejects(remote.command(peer, { ...message, id: randomUUID() }), /closing/);
   gate.resolve(); await task; await closing;
-  const restarted = new RemoteCommandJournal(dir); assert.deepEqual((await restarted.claim(`${peer.device.id}:${message.id}`, (await import('node:crypto')).createHash('sha256').update(JSON.stringify(['context.mode', { mode: 'manual' }])).digest('hex'), 'expired')).previous.result, { ok: true }); await restarted.close();
+  const restarted = trackedJournal(dir); assert.deepEqual((await restarted.claim(`${peer.device.id}:${message.id}`, (await import('node:crypto')).createHash('sha256').update(JSON.stringify(['context.mode', { mode: 'manual' }])).digest('hex'), 'expired')).previous.result, { ok: true }); await restarted.close();
 });
 
 test('committed write counters distinguish incremental updates from migration/replay and failed writes', t => {
   const dir = home(t); fs.writeFileSync(path.join(dir, 'remote-commands.json'), JSON.stringify({ migrated: { digest: 'm', result: 'x'.repeat(1024 * 1024), at: Date.now() } }));
-  const store = new RemoteCommandStore(dir); t.after(() => store.close());
+  const store = new RemoteCommandStore(dir); closeBeforeRemove(dir, () => store.close());
   store.claim('migrated', 'm', 'expired'); store.claim('new', 'n', now()); store.complete('new', 'n', { result: { ok: true } });
   store.claim('new', 'n', 'expired');
   const metrics = store.diagnostics(); assert.equal(metrics.migrationRecords, 1); assert.ok(metrics.migrationBytes > 1024 * 1024);
@@ -179,7 +189,7 @@ test('failed claim write prevents external effects', async t => {
 test('interrupted streaming migration rolls back and reimports every receipt exactly once', async t => {
   const dir = home(t), count = 2500, payload = 'synthetic'.repeat(512), at = Date.now();
   fs.writeFileSync(path.join(dir, 'remote-commands.json'), JSON.stringify(Object.fromEntries(Array.from({ length: count }, (_, i) => ['legacy:' + i, { digest: 'd', at, result: payload }]))));
-  const first = new RemoteCommandJournal(dir); let finished = false; first.ready.then(() => { finished = true; }, () => {});
+  const first = trackedJournal(dir); let finished = false; first.ready.then(() => { finished = true; }, () => {});
   const wal = path.join(dir, 'remote-commands.sqlite-wal'), deadline = Date.now() + 10000;
   let spilled = false;
   while (Date.now() < deadline && !finished) {
@@ -188,7 +198,7 @@ test('interrupted streaming migration rolls back and reimports every receipt exa
   }
   assert.equal(spilled, true, 'migration must spill an uncommitted transaction before interruption');
   await first.worker.terminate(); await assert.rejects(first.ready); await first.close();
-  const restarted = new RemoteCommandJournal(dir); await restarted.ready;
+  const restarted = trackedJournal(dir); await restarted.ready;
   assert.equal((await restarted.diagnostics()).records, count);
   assert.equal((await restarted.claim('legacy:' + (count - 1), 'd', 'expired')).previous.result, payload);
   await restarted.close();

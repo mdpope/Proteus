@@ -13,12 +13,12 @@ import {RemoteClient,until} from './remote-client.mjs';
 const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLytQAAAABJRU5ErkJggg==','base64');
 const sha256=createHash('sha256').update(png).digest('hex');
 test('explicit first-message and follow-up consent deliver only exact synthetic bytes to named provider',async t=>{
-  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-attachment-remote-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-attachment-remote-'));
   atomicJSON(path.join(home,'settings.json'),{schemaVersion:1,provider:'copilot',model:'fixture',timezone:'UTC',workspace:{cwd:home,additionalDirectories:[]},skillDirectories:[],mcpServers:{}});
   const calls=[];
   const provider={acceptedMediaTypes:['image/png'],async run({attachments,prompt}){calls.push({attachments,prompt});},async status(){return {available:true,models:[{id:'fixture',name:'Fixture'}]};}};
   const token=secret(),relay=await startRelay({port:0,token}),app=await startServer({home,port:0,timers:false,providers:{copilot:provider}});
-  const clients=[];t.after(async()=>{clients.forEach(client=>client.close());await app.close();await relay.close();});
+  const clients=[];t.after(async()=>{clients.forEach(client=>client.close());await app.close();await relay.close();fs.rmSync(home,{recursive:true,force:true});});
   const relayURL=`ws://127.0.0.1:${relay.port}`;await app.remote.configure({enabled:true,mode:'external',relayURL,publicURL:relayURL,relayToken:token});await until(()=>app.remote.status==='online');
   const client=new RemoteClient(RemoteClient.capsule((await app.remote.pairing()).code));clients.push(client);await client.connect();
   const upload=async owner=>{const begun=await client.request('chat.attachments.begin',{...owner,name:'synthetic.png',mediaType:'image/png',size:png.length,sha256});await client.request('chat.attachments.chunk',{uploadId:begun.uploadId,index:0,dataBase64:png.toString('base64')});return client.request('chat.attachments.finish',{uploadId:begun.uploadId});};

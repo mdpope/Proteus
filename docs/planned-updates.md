@@ -6,14 +6,20 @@ Imported the exact accepted Mac source from `codex/signed-proteus-0220-20261015`
 Native version is 0.2.20 / 2610.14.3. Preserve both the upstream native-menu/tab-retry changes and
 the Linux/Mac host metadata, legacy identities, protected credentials and shared package checks.
 
-Merged-source **623 Node checks and static checks passed**. Fresh web/Linux package/UI and
-hosted native acceptance remain gates; earlier 619-check / 0.2.19 staging receipts do not certify
-this import. Hosted iOS job 116268129325 / run 38688298486 failed during 0.2.19 compilation on
-a `TeamBrowserView` type-check timeout; no native tests ran. The same expression exists in the
-import. Its browser/lifecycle builders and equivalent task identities are now separated locally;
-the integrated source needs a hosted recompile/rerun. No local installed app changed; real iPhone/iPad-to-Linux relay, Mac signing and
-live credential/provider acceptance stay separate. The earlier upstream candidate/queue notes
-below are preserved as dated history. Source lineage is recorded in `linux-app.md`.
+Merged-source **625 Node checks and static checks pass**. The exact Linux package
+`linux.fda4ae896542` passes inventory/provenance/UI/PTY/restart and live Codex approvals,
+files, cancellation, continuation and disposable encrypted relay acceptance. It is installed
+on this laptop with Codex ready, existing chat/configuration hashes retained and two verified
+recovery generations. Full two-host website UI passes. Hosted Mac tests/unsigned package/UI
+and web assets/PHP pass; corrected Linux fixture teardown needs CI rerun. Native compilation
+now succeeds after the view decomposition. Hosted UI exposed a real-notification fixture race;
+its scheduling acknowledgement/background timing is corrected without skipping OS delivery or
+tap-routing assertions. Native units and all UI tests will rerun across isolated shards.
+
+Keep PR #20 in draft until the outstanding checks and coordination gates are resolved. Production
+Linux relay registration, actual iPhone/iPad-to-Linux pairing and production signed Mac acceptance
+remain separate; no existing Mac/iOS installation, website or relay was replaced. Source lineage
+and exact validation are recorded in `linux-app.md`. Earlier notes below describe dated history.
 
 ## Earlier October 14 cross-platform checkpoint — 0.2.19
 

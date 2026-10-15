@@ -6,12 +6,25 @@ Current source integrates the accepted Mac **0.2.20** companion from transfer **
 Native link/selection menus, source-workspace link drafts, convergent tab metadata and durable
 retry identities/owner backoff are retained alongside the Linux/Mac compatibility changes.
 Native version is **0.2.20 / 2610.14.3**, with upstream app/signing identity unchanged.
-Merged-source **623 Node checks and static checks passed**; fresh web/Linux packaging/UI
-acceptance remains pending. The earlier 0.2.19 results below are historical; no current artifact
-or installation is certified by those checks. Hosted iOS job **116268129325**, run
-**38688298486**, failed before tests while compiling the 0.2.19 `TeamBrowserView` task expression.
-The same expression remains upstream; a local view/task-identity decomposition now needs a fresh
-hosted recompile/rerun. Real mobile-to-Linux relay and signed Mac acceptance remain separate gates.
+Merged-source **625 Node checks and static checks pass**. Linux package
+`linux.fda4ae896542` (`fda4ae896542b11d4775b111970df57e571db83c2093e351197e27d51d97244d`)
+passes all 231 runtime hashes, exact metadata/provenance/private-file checks, isolated desktop
+UI, synthetic feedback, native PTY keyboard input and restart persistence. Live packaged Codex
+acceptance passes approvals, file execution, cancellation, same-session continuation, encrypted
+local mobile-compatible pairing, minimized continuation, reconnect and revocation. These use
+disposable data. The exact package is now installed/running on this laptop; Codex is ready.
+Existing chat files and protected configuration match the verified cold recovery snapshot; two
+recovery generations are retained outside source. Mac/iOS installations were not replaced.
+
+Hosted run [38688832212](https://github.com/mdpope/Proteus/actions/runs/38688832212) passes Mac
+Node/static checks, unsigned packaging and actual packaged UI/native terminal/restart checks;
+web production assets and PHP tests also pass. Linux CI still has a test failure under review;
+iOS compilation/simulator acceptance is running after splitting the earlier Swift expression
+that timed out during type checking. Signed production Mac identity acceptance and actual
+mobile-to-Linux/shared-production-relay pairing remain separate gates. The existing public relay
+requires a distinct Linux host registration through its private operations workflow; no Mac token
+or pairing identity has been copied. Main's connection guide is merged; no private provisioning
+route is available from it. See the draft cross-platform PR for current checks.
 
 ## Earlier October 14 compatibility checkpoint — 0.2.19
 

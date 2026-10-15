@@ -198,10 +198,10 @@ test('agent tool controls cannot be silently discarded by the host adapter', t =
 });
 
 test('default workspace authorization uses the same shared context as a new chat', async t => {
-  const f = fixture(t); const { startServer } = await import('../src/server.js');
+  let service;
+  const f = fixture(t, () => service?.close()); const { startServer } = await import('../src/server.js');
   f.context.mutate(config => { config.universalFolders.push(f.library); }, f.context.config().revision);
-  const service = await startServer({ home: path.join(f.home, 'app'), port: 0, timers: false, withSeed: false, providers: { rehearsal: { async run() {} } } });
-  t.after(() => service.close());
+  service = await startServer({ home: path.join(f.home, 'app'), port: 0, timers: false, withSeed: false, providers: { rehearsal: { async run() {} } } });
   const request = async (route, value) => {
     const response = await fetch(service.origin + route, { headers: { authorization: 'Bearer ' + service.token, 'content-type': 'application/json' }, ...(value ? { method: 'POST', body: JSON.stringify(value) } : {}) });
     assert.equal(response.status, 200); return response.json();

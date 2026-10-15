@@ -684,18 +684,30 @@ final class RemoteUITests: XCTestCase {
     }
     @MainActor func testActualSimulatorLocalNotificationTapRoutesThroughSpringBoard() {
         let app = XCUIApplication()
-        app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-notification-fixtures", "--synthetic-notification-controls"]
+        app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-notification-fixtures", "--synthetic-notification-controls", "--synthetic-background-notification"]
         app.launch()
         let button = app.buttons["Schedule iOS notification fixture"]
         for _ in 0..<4 where !button.exists { app.swipeUp() }
         XCTAssertTrue(button.waitForExistence(timeout: 12))
         button.tap()
-        let permission = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.firstMatch
-        if permission.waitForExistence(timeout: 3) { permission.buttons["Allow"].tap() }
-        XCUIDevice.shared.press(.home)
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let permission = springboard.alerts.firstMatch
+        let status = app.staticTexts["notification-fixture-status"]
+        let deadline = Date().addingTimeInterval(15)
+        // Handle first-run consent, but do not spend the delivery window waiting for
+        // a permission alert when the preceding foreground test already allowed it.
+        while Date() < deadline {
+            if status.exists && status.label == "Scheduled" { break }
+            if permission.exists && permission.buttons["Allow"].exists { permission.buttons["Allow"].tap() }
+            Thread.sleep(forTimeInterval: 0.1)
+        }
+        guard status.exists && status.label == "Scheduled" else {
+            XCTFail("The real notification must be scheduled before backgrounding: " + (status.exists ? status.label : "missing fixture status"))
+            return
+        }
+        XCUIDevice.shared.press(.home)
         let banner = springboard.staticTexts["Proteus route fixture"]
-        XCTAssertTrue(banner.waitForExistence(timeout: 15), "iOS must deliver a real local notification through SpringBoard")
+        XCTAssertTrue(banner.waitForExistence(timeout: 25), "iOS must deliver a real local notification through SpringBoard")
         banner.tap()
         XCTAssertTrue(app.staticTexts["Notification destination loaded"].waitForExistence(timeout: 15), "Tapping the OS notification should open the routed chat")
     }

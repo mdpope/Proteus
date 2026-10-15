@@ -7,17 +7,25 @@ were verified before the three-way import. The accepted Mac fingerprint is
 `3f2196de3586915fc72f8d0cdebb645c109992306c3735514d0786b0acaf4985`; Linux retains its own
 runtime fingerprint. See `linux-upstream-source.json` and `linux-app.md`.
 
-The import carries native link/selection menus, source-workspace link drafts, convergent tab
-metadata and persistent retry identities with owner backoff. Cross-platform host metadata,
-neutral labels, protected storage and package verification remain. Native project version is
-**0.2.20 / 2610.14.3** with upstream bundle/signing identities unchanged. Earlier 0.2.19 tests,
-staging and installed receipts below describe earlier source. The merged 0.2.20 source passed
-**623 Node checks and static checks**; fresh web/Linux package/UI and hosted native acceptance
-remain. Hosted iOS job **116268129325**, run **38688298486**, failed before tests on its 0.2.19
-checkpoint: Swift timed out type-checking `TeamBrowserView`'s chained task expression. Upstream
-0.2.20 retains that expression. The local fix separates browser content/lifecycle builders and
-precomputes equivalent task identities; a hosted recompile/rerun is pending. No new local
-installation, signed Mac acceptance or actual iPhone-to-Linux relay session is claimed here.
+The import retains native link/selection menus, source-workspace link drafts, convergent tab
+metadata and persistent retry identities with owner backoff. Native project version is
+**0.2.20 / 2610.14.3**; original bundle/signing identities are unchanged. Platform metadata,
+neutral labels, protected storage and shared package verification remain additive.
+
+Linux `linux.fda4ae896542` passes exact 231-file inventory, metadata/provenance/private-file
+checks, isolated UI/native PTY/restart, and live Codex approvals/files/cancellation/continuation/
+local encrypted relay acceptance. All **625 Node tests and static checks** pass. The exact
+package is installed/running on this laptop; Codex is ready and the existing chat files and
+protected configuration match its verified cold recovery snapshot. Two recovery generations
+are retained outside source. No Mac/iOS installation was replaced.
+
+Hosted run [38688832212](https://github.com/mdpope/Proteus/actions/runs/38688832212) passes Mac
+tests/unsigned package/UI and web assets/PHP. Linux CI fixture teardown races are corrected for
+rerun; iOS acceptance is pending after decomposition of a Swift expression that timed out during
+type checking. Full disposable two-host website UI passes, including responsive attachments,
+authentication, permissions, documents, recovery and revocation. See [Linux validation](linux-app.md).
+The production Linux relay remains disabled pending its private distinct-host registration.
+No actual iPhone-to-Linux session or signed production Mac acceptance is claimed.
 
 ## Earlier October 14 cross-platform compatibility checkpoint — 0.2.19
 

@@ -91,7 +91,10 @@ import Security
         content.title = "Proteus route fixture"
         content.body = "Tap to open the fixture chat."
         content.userInfo = ["hostId": "10000000-0000-4000-8000-000000000001", "chatId": "notification-chat", "type": "chat.completed"]
-        try await center.add(UNNotificationRequest(identifier: "proteus-simulator-route-fixture", content: content, trigger: UNTimeIntervalNotificationTrigger(timeInterval: 4, repeats: false)))
+        // Give XCTest time to background the app after the scheduling acknowledgement.
+        // Foreground fixtures keep their original timing and delivery path.
+        let delay: TimeInterval = ProcessInfo.processInfo.arguments.contains("--synthetic-background-notification") ? 10 : 4
+        try await center.add(UNNotificationRequest(identifier: "proteus-simulator-route-fixture", content: content, trigger: UNTimeIntervalNotificationTrigger(timeInterval: delay, repeats: false)))
         fixtureStatus = "Scheduled"
     }
     #endif
