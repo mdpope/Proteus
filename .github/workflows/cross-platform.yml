@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: cross-platform-${{ github.workflow }}-${{ github.ref }}
+  group: cross-platform-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
