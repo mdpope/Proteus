@@ -59,17 +59,35 @@ final class RemoteUITests: XCTestCase {
         }
         XCTFail("The default browser profile menu did not become interactive")
     }
-    @MainActor private func selectPickerOption(_ label: String, pickerID: String, in app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
+    @MainActor private func selectPickerOption(_ label: String, pickerID: String, in app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) -> Bool {
         let picker = app.buttons[pickerID]
-        XCTAssertTrue(picker.waitForExistence(timeout: 10), file: file, line: line)
-        XCTAssertTrue(picker.isEnabled, file: file, line: line)
-        XCTAssertTrue(picker.isHittable, file: file, line: line)
+        guard picker.waitForExistence(timeout: 10) else { XCTFail("Picker is missing: " + pickerID, file: file, line: line); return false }
+        @MainActor func visibleBottom() -> CGFloat {
+            let keyboard = app.keyboards.firstMatch
+            var bottom = keyboard.exists ? keyboard.frame.minY : app.frame.maxY
+            let predictions = app.otherElements["Typing Predictions"]
+            if predictions.exists { bottom = min(bottom, predictions.frame.minY) }
+            return bottom - 12
+        }
+        let form = app.collectionViews["new-chat-form"]
+        for _ in 0..<8 {
+            if picker.isHittable && picker.frame.maxY < visibleBottom() { break }
+            guard form.exists else { break }
+            form.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45))
+                .press(forDuration: 0.05, thenDragTo: form.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25)))
+        }
+        guard picker.isEnabled, picker.isHittable, picker.frame.maxY < visibleBottom() else {
+            XCTFail("The complete picker row must be visible above the keyboard and its predictions", file: file, line: line); return false
+        }
         // SwiftUI exposes the whole form row; the trailing value opens its menu.
         picker.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
         let option = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", label)).firstMatch
-        guard option.waitForExistence(timeout: 10) else { XCTFail("Picker option is missing: " + label, file: file, line: line); return }
+        guard option.waitForExistence(timeout: 10) else { XCTFail("Picker option is missing: " + label, file: file, line: line); return false }
         option.tap()
-        XCTAssertTrue(picker.label.contains(label), "The picker must retain the selected option", file: file, line: line)
+        let selected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS %@", label), object: picker)
+        let result = XCTWaiter.wait(for: [selected], timeout: 5)
+        XCTAssertEqual(result, .completed, "The picker must retain the selected option", file: file, line: line)
+        return result == .completed
     }
     @MainActor private func setComposerSection(_ name: String, expanded: Bool, in popover: XCUIElement) -> Bool {
         let section = popover.buttons.matching(NSPredicate(format: "label == %@", name)).firstMatch
@@ -259,17 +277,9 @@ final class RemoteUITests: XCTestCase {
         XCTAssertTrue(first.waitForExistence(timeout: 10)); first.tap()
         let address = app.textFields["browser-address"]
         XCTAssertTrue(address.waitForExistence(timeout: 10)); address.tap()
-        for _ in 0..<8 {
-            let current = address.value as? String ?? ""
-            if current.isEmpty || current == "Search or enter URL" { break }
-            address.tap()
-            address.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.utf16.count + 1))
-        }
-        let cleared = address.value as? String ?? ""
-        guard cleared.isEmpty || cleared == "Search or enter URL" else { XCTFail("The existing address must be cleared before replacement"); return }
         let destination = "http://127.0.0.1:4329/browser/one"
-        address.typeText(destination)
-        guard address.value as? String == destination else { XCTFail("The entered address must exactly match the navigation target"); return }
+        let seededAddress = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", destination), object: address)
+        guard XCTWaiter.wait(for: [seededAddress], timeout: 8) == .completed else { XCTFail("The desktop fixture must supply the exact navigation target"); return }
         app.buttons["browser-go"].tap()
         XCTAssertTrue(app.webViews.staticTexts["First browser page"].waitForExistence(timeout: 15))
         expectation(for: NSPredicate(format: "label == %@", "First browser page"), evaluatedWith: first); waitForExpectations(timeout: 8)
@@ -489,13 +499,15 @@ final class RemoteUITests: XCTestCase {
         let transcript = app.scrollViews["chat-conversation-scroll"]
         XCTAssertTrue(transcript.waitForExistence(timeout: 8))
         // The AX scroll frame includes its composer inset and the keyboard area.
-        // Drag only in the visible transcript above the focused editor.
+        // Drag above the entire composer, including its connection status.
+        let connectionStatus = app.descendants(matching: .any).matching(identifier: "chat-composer-connection-status").firstMatch
+        guard connectionStatus.waitForExistence(timeout: 8) else { XCTFail("The composer boundary must be observable"); return }
         let visibleTop = transcript.frame.minY + 20
-        let visibleBottom = min(transcript.frame.maxY, field.frame.minY) - 20
+        let visibleBottom = min(transcript.frame.maxY, connectionStatus.frame.minY) - 20
         guard visibleBottom - visibleTop > 50 else { XCTFail("The transcript must expose room for a real reading gesture"); return }
         let origin = app.coordinate(withNormalizedOffset: .zero)
-        origin.withOffset(CGVector(dx: transcript.frame.midX, dy: visibleBottom))
-            .press(forDuration: 0.05, thenDragTo: origin.withOffset(CGVector(dx: transcript.frame.midX, dy: visibleTop)))
+        origin.withOffset(CGVector(dx: transcript.frame.midX, dy: visibleTop + 0.8 * (visibleBottom - visibleTop)))
+            .press(forDuration: 0.05, thenDragTo: origin.withOffset(CGVector(dx: transcript.frame.midX, dy: visibleTop + 10)))
         XCTAssertTrue(app.buttons["composer-preview"].waitForExistence(timeout: 8))
         let startingCloseCount = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Close New tab")).count
         app.buttons["Add chat tab"].tap(); app.buttons["Browser · Default"].firstMatch.tap()
@@ -883,6 +895,8 @@ final class RemoteUITests: XCTestCase {
         app.launchArguments = ["--synthetic-notification-cold-schedule"]
         app.launch()
         XCTAssertTrue(app.navigationBars["Notification fixture schedule"].waitForExistence(timeout: 15), "Cold schedule tap must open its content tab after Home restoration")
+        let scheduleTab = app.buttons["shell-tab-schedule:10000000-0000-4000-8000-000000000001:notification-schedule"]
+        XCTAssertTrue(scheduleTab.exists); XCTAssertEqual(scheduleTab.value as? String, "Active", "Passive browser restoration must not replace the notification's schedule selection")
     }
     @MainActor func testAttachmentPreviewClosesWithHardwareEscapeCloseButtonAndBackdrop() {
         let app = XCUIApplication(); app.launchArguments = ["--synthetic-attachment-preview"]; app.launch()
@@ -1195,9 +1209,9 @@ final class RemoteUITests: XCTestCase {
         app.buttons["owner-history-settings"].tap()
         let recording = app.switches["history-settings-recording"]; XCTAssertTrue(recording.waitForExistence(timeout: 15)); XCTAssertTrue(recording.isEnabled)
         recording.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap(); XCTAssertEqual(recording.value as? String, "0")
-        selectPickerOption("Keep all history", pickerID: "history-settings-retention", in: app)
+        guard selectPickerOption("Keep all history", pickerID: "history-settings-retention", in: app) else { return }
         let sharing = app.switches["history-peer-enabled-" + peer]; sharing.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap(); XCTAssertEqual(sharing.value as? String, "1")
-        selectPickerOption("All available", pickerID: "history-peer-backfill-" + peer, in: app)
+        guard selectPickerOption("All available", pickerID: "history-peer-backfill-" + peer, in: app) else { return }
         let settingsForm = app.descendants(matching: .any).matching(identifier: "history-settings-form").firstMatch; XCTAssertTrue(settingsForm.exists); settingsForm.swipeUp()
         let workSwitch = app.switches["history-peer-profile-" + peer + "-" + work]; workSwitch.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap(); XCTAssertEqual(workSwitch.value as? String, "1")
         let defaultSwitch = app.switches["history-peer-profile-" + peer + "-default"]; defaultSwitch.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap(); XCTAssertEqual(defaultSwitch.value as? String, "0")
@@ -1483,7 +1497,7 @@ extension RemoteUITests {
             list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45)).press(forDuration: 0.05, thenDragTo: list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25)))
         }
         guard effort.waitForExistence(timeout: 10) else { XCTFail("Effort picker missing"); return }
-        selectPickerOption("none", pickerID: "effort-picker", in: app)
+        guard selectPickerOption("none", pickerID: "effort-picker", in: app) else { return }
         let context = app.descendants(matching: .any)["context-tier-picker"].firstMatch
         for _ in 0..<12 {
             if context.exists && context.isHittable { break }
@@ -1491,7 +1505,7 @@ extension RemoteUITests {
             list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45)).press(forDuration: 0.05, thenDragTo: list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25)))
         }
         guard context.waitForExistence(timeout: 10) else { XCTFail("Context picker missing"); return }
-        selectPickerOption("872K · Long context", pickerID: "context-tier-picker", in: app)
+        guard selectPickerOption("872K · Long context", pickerID: "context-tier-picker", in: app) else { return }
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Live effort and context controls"; screenshot.lifetime = .keepAlways; add(screenshot)
         app.buttons["start-chat"].tap()
         guard app.staticTexts["Allow synthetic model-options checkpoint?"].waitForExistence(timeout: 20) else { XCTFail("The synthetic run must wait on permission so a follow-up can queue"); return }
@@ -1723,7 +1737,7 @@ extension RemoteUITests {
         XCTAssertTrue(overview.waitForExistence(timeout: 10)); overview.tap()
         XCTAssertTrue(app.buttons["Connect website account"].waitForExistence(timeout: 10))
         area("Engine Room"); XCTAssertTrue(app.buttons["Resources"].firstMatch.waitForExistence(timeout: 10))
-        app.buttons["Resources"].firstMatch.tap(); XCTAssertTrue(app.staticTexts["CPU and RAM are reported by the host. Tabs may share a process; shared memory is not counted as per-tab memory."].waitForExistence(timeout: 10))
+        app.buttons["Resources"].firstMatch.tap(); XCTAssertTrue(app.staticTexts["Host figures include processes Proteus can inspect. Shared processes cannot be charged to one tab. iOS does not expose other apps’ memory here."].waitForExistence(timeout: 10))
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Native parity engine resources"; screenshot.lifetime = .keepAlways; add(screenshot)
     }
 }

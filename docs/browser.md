@@ -1,4 +1,4 @@
-## October 15 native content-edge correction — implemented; validation pending
+## October 15 native content-edge correction
 
 Native browsers use Proteus’s single content-relative gesture handler: a drag starts within
 56 points of the content edge and travels at least 80 points, predominantly horizontally.
@@ -8,7 +8,9 @@ matches, that service still traverses the existing WebKit item and preserves pag
 WebKit’s separate interactive navigation recognizer is disabled to prevent it from suppressing
 or duplicating the app handler. Its interactive swipe preview/cancel animation is consequently
 unavailable. Restored-history fallback, zoom, owner scope and tab placement remain unchanged.
-Three-page edge coverage and native page-instance/history-state checks require hosted validation.
+Hosted run 38696071427 passes the three-page edge workflow and all 122 native units, including
+native page-instance/history-state checks. Full-suite and physical acceptance are tracked in
+[PR #20](https://github.com/mdpope/Proteus/pull/20).
 
 ## 0.2.20 native link menu candidate
 

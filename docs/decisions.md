@@ -1060,3 +1060,13 @@ reliably distinguish WebKit cancellation from a late interactive commit and coul
 This ownership correction deliberately removes WebKit’s interactive swipe preview/cancel animation,
 while preserving semantic navigation, zoom, two-finger handling and owner/history safeguards.
 Validate a single swipe across three pages to detect skipped entries as well as missed actions.
+
+## October 15: browser activation is explicit and transient
+
+Keep the remembered main-browser ID separate from a transient activation request carrying a
+fresh UUID and target tab ID. A user selection, including reselecting the same browser, emits
+the request. Passive browser-view appearance, cache/account hydration, remote metadata and close
+fallback do not. Shell reconciliation imports/removes descriptors independently and processes an
+activation only after its target exists. No request is persisted. This prevents deferred SwiftUI
+observations of restored browser state from overriding a cold notification’s explicit schedule/chat
+target, without timers, reseeded caches or changes to owner permissions and saved tab identities.

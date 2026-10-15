@@ -15,6 +15,10 @@ struct NativeChatScrollLocation {
     var viewportWidth: CGFloat = 0
     var eventRevision: String = ""
 }
+struct MainBrowserSelectionRequest: Equatable {
+    let token = UUID()
+    let tabID: String
+}
 
 /// Account-scoped app data uses its own explicit OAuth consent, never a host's credentials.
 @MainActor final class SharedAppStore: ObservableObject {
@@ -34,6 +38,7 @@ struct NativeChatScrollLocation {
     @Published private(set) var currentTeamOwner: String?
     @Published var selectedBrowser: String?
     @Published var selectedMainBrowser: String?
+    @Published private(set) var mainBrowserSelectionRequest: MainBrowserSelectionRequest?
     @Published var scopedSelection: [String: String] = [:]
     @Published private(set) var workspaceContentDescriptors: [String: [JSON]] = [:]
     @Published private(set) var documentTabs: [NativeDocumentDescriptor] = []
@@ -402,6 +407,7 @@ struct NativeChatScrollLocation {
     var lists: [JSON] { snapshot["teamLists"].array }
     func reset(for identity: String) {
         guard account != identity else { return }
+        mainBrowserSelectionRequest = nil
         saveBrowsers(); for download in Array(downloads.values) { download.cancel() }; exportFile?.cleanup(); exportFile = nil; linkChatDraft = nil; restoring = true; contentSync = [:]; contentRequests = [:]; contentBackoff = [:]; workspaceContentDescriptors = [:]; account = identity; snapshot = .null; accountConnected = false; error = nil; browserPreviews = [:]; browserFavicons = [:]; faviconAttempts = [:]; unloadBrowsers(); browserTabs = []; unloadedBrowsers = []; selectedBrowser = nil; selectedMainBrowser = nil; scopedSelection = [:]; browserTouched = [:]; standupOrders = [:]; standupCompleted = [:]; documentContents = [:]; documentSessions = [:]; previewVersions = [:]; profileStores = [:]; draftAttachments = [:]; chatScrollLocations = [:]; draftMessageIDs = [:]; draftSessionIDs = [:]
         if let cacheURL, let key = BrowserCacheKeychain.key(), let data = try? Data(contentsOf: cacheURL), let payload = try? RemoteCrypto.open(String(decoding: data, as: UTF8.self), key: key, aad: account), let decoded = try? JSONDecoder().decode([BrowserDescriptor].self, from: JSONEncoder().encode(payload["tabs"] == .null ? payload : payload["tabs"])) {
             browserTabs = decoded.compactMap(Self.retainedDescriptor); snapshot = payload["accountSnapshot"]; profilesVerified = snapshot["browserProfiles"] != .null
@@ -786,7 +792,7 @@ struct NativeChatScrollLocation {
     }
     func selected(in scope: String) -> String? { scope == "main" ? selectedMainBrowser : scope == "team" ? selectedBrowser : scopedSelection[scope] }
     func selectChatChild(_ id: String, in scope: String) { guard scope.hasPrefix("chat:") && (id == "chat" || tabs(in: scope).contains(where: { $0.id == id })) else { return }; scopedSelection[scope] = id; saveBrowsers() }
-    func select(_ id: String, in scope: String) { guard browserTabs.contains(where: { $0.id == id && $0.scope == scope }) else { return }; if scope == "main" { selectedMainBrowser = id } else if scope == "team" { selectedBrowser = id; if let host = currentTeamOwner { scopedSelection["team:" + host] = id } } else { scopedSelection[scope] = id }; reload(id); touch(id); saveBrowsers() }
+    func select(_ id: String, in scope: String, activateMainBrowser: Bool = true) { guard browserTabs.contains(where: { $0.id == id && $0.scope == scope }) else { return }; if scope == "main" { selectedMainBrowser = id; if activateMainBrowser { mainBrowserSelectionRequest = MainBrowserSelectionRequest(tabID: id) } } else if scope == "team" { selectedBrowser = id; if let host = currentTeamOwner { scopedSelection["team:" + host] = id } } else { scopedSelection[scope] = id }; reload(id); touch(id); saveBrowsers() }
     func touch(_ id: String) { browserTouched[id] = Date(); if let index = browserTabs.firstIndex(where: { $0.id == id }) { browserTabs[index].lastTouchedAt = ISO8601DateFormatter().string(from: Date()) }; pruneBrowsers() }
     func persistBrowser(_ id: String, enabled: Bool) { guard let index = browserTabs.firstIndex(where: { $0.id == id }) else { return }; browserTabs[index].persist = enabled; if enabled { reload(id) }; saveBrowsers() }
     func pruneBrowsers(now: Date = Date()) {

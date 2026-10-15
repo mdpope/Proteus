@@ -1658,6 +1658,40 @@ final class NativeParityTests: XCTestCase {
         let unsafe = ["https://user:password@example.test/", "javascript:alert(1)", "https://example.test/oauth/callback?code=secret", "https://example.test/page?access_token=secret", "https://example.test/signin", "https://example.test/page?apiKey=secret", "https://example.test/remote#pair=" + capsule, "https://example.test/remote#%70air=" + capsule, "https://example.test/remote?pairing=" + capsule, "https://example.test/remote?data=" + capsule, "https://example.test/remote#" + capsule, "https://example.test/page#route?session=secret", "https://example.test/page#auth=secret", "https://example.test/page#code=secret", "https://example.test/page?next=proteus%3A%2F%2Fpair%3Fdata%3D" + capsule]
         for input in unsafe { XCTAssertNil(SharedAppStore.safeURL(input), input); if input.hasPrefix("javascript:") || input.contains("user:password@") { XCTAssertNil(SharedAppStore.historyURL(input), input) } else { XCTAssertEqual(SharedAppStore.historyURL(input)?.absoluteString, input) } }
     }
+    @MainActor func testMainBrowserActivationIsExplicitAndNeverRestoredFromCache() throws {
+        let identity = "synthetic-main-selection-" + UUID().uuidString
+        let digest = SHA256.hash(data: Data(identity.utf8)).map { String(format: "%02x", $0) }.joined()
+        let cache = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Proteus/browsers/" + digest + ".enc")
+        defer { try? FileManager.default.removeItem(at: cache) }
+        let store = SharedAppStore(); store.reset(for: identity)
+        XCTAssertNil(store.mainBrowserSelectionRequest)
+        let first = try XCTUnwrap(store.open(nil, scope: "main"))
+        XCTAssertEqual(store.mainBrowserSelectionRequest?.tabID, first)
+        let firstRequest = try XCTUnwrap(store.mainBrowserSelectionRequest)
+        let second = try XCTUnwrap(store.open(nil, scope: "main"))
+        XCTAssertEqual(store.mainBrowserSelectionRequest?.tabID, second)
+        XCTAssertNotEqual(store.mainBrowserSelectionRequest?.token, firstRequest.token, "Opening inside content mutation still represents an explicit selection")
+
+        let restored = SharedAppStore(); restored.reset(for: identity)
+        XCTAssertEqual(restored.tabs(in: "main").map(\.id), [first, second])
+        XCTAssertEqual(restored.selectedMainBrowser, second)
+        XCTAssertNil(restored.mainBrowserSelectionRequest, "Remembered browser selection must not override a cold notification route")
+        restored.select(second, in: "main", activateMainBrowser: false)
+        XCTAssertNil(restored.mainBrowserSelectionRequest, "Displaying an already selected browser is not a new navigation request")
+        restored.select(second, in: "main")
+        let selection = try XCTUnwrap(restored.mainBrowserSelectionRequest)
+        XCTAssertEqual(selection.tabID, second)
+        restored.select(second, in: "main")
+        let reselection = try XCTUnwrap(restored.mainBrowserSelectionRequest)
+        XCTAssertNotEqual(reselection.token, selection.token, "Explicitly selecting the same browser is still a fresh request")
+        _ = restored.open(nil, scope: "team")
+        restored.renameBrowser(second, title: "Updated metadata")
+        restored.close(first)
+        XCTAssertEqual(restored.mainBrowserSelectionRequest, reselection, "Non-main actions, metadata and background closure must not activate a main browser")
+        restored.reset(for: identity + "-other")
+        XCTAssertNil(restored.mainBrowserSelectionRequest)
+        store.unloadBrowsers(); restored.unloadBrowsers()
+    }
     @MainActor func testEncryptedBrowserRestartPreservesExactFullURLs() throws {
         let identity = "synthetic-browser-" + UUID().uuidString
         let digest = SHA256.hash(data: Data(identity.utf8)).map { String(format: "%02x", $0) }.joined()

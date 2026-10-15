@@ -1,8 +1,9 @@
 ## Native Favorites and complete simulator coverage — October 15, 2026
 
+- Preserve a cold-launch notification’s selected schedule or chat while browser tabs restore. Only an explicit browser selection activates a browser; cached selection remains remembered without taking focus.
 - Keep the chat Favorites section and star actions scoped to the current owning-host workspace, including captured chat profiles without an ID; reflect explicit favorite removal while source sections are offscreen.
-- Route native browser edge swipes through one handler so the documented content-edge gesture consistently traverses one saved history entry. Matching native history still preserves page instances; WebKit’s separate interactive swipe animation is disabled. Hosted verification is pending.
-- Validate native UI on actual iPhone and iPad simulator families with exhaustive, disjoint test selection. Correct stale UI interactions while retaining backend ownership, selection, draft and metadata assertions. Hosted rerun remains pending.
+- Route native browser edge swipes through one handler so the documented content-edge gesture consistently traverses one saved history entry. Matching native history still preserves page instances; WebKit’s separate interactive swipe animation is disabled.
+- Validate native UI on actual iPhone and iPad simulator families with exhaustive, disjoint test selection. Correct stale UI interactions while retaining backend ownership, selection, draft and metadata assertions.
 
 ## 0.2.20 source integration — cross-platform acceptance pending
 

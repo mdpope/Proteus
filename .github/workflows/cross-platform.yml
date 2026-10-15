@@ -95,6 +95,8 @@ jobs:
             label: iPad UI tests
     runs-on: macos-26
     timeout-minutes: 60
+    env:
+      PROTEUS_IOS_TEST_TIMEOUTS: '1'
     steps:
       - uses: actions/checkout@v7
         with:
@@ -109,6 +111,7 @@ jobs:
         run: npm run ios:doctor
       - name: All native unit tests with disposable host fixture
         if: matrix.suite == 'unit'
+        timeout-minutes: 35
         # The existing helper chooses an available iPhone, starts its own local
         # synthetic host, and stops it. Physical signing/settings are unchanged.
         run: npm run ios:test -- --only ProteusTests
@@ -116,11 +119,13 @@ jobs:
           TMPDIR: ${{ runner.temp }}
       - name: Native UI shard with disposable host fixture
         if: matrix.suite == 'ui'
+        timeout-minutes: 45
         run: node test/apple-ui-shard.mjs --device-family ${{ matrix.family }} --shard ${{ matrix.shard }} --shards ${{ matrix.shards }}
         env:
           TMPDIR: ${{ runner.temp }}
       - name: Preserve synthetic iOS failure diagnostics
-        if: failure()
+        if: failure() || cancelled()
+        timeout-minutes: 5
         uses: actions/upload-artifact@v7
         with:
           name: ios-${{ matrix.suite }}-${{ matrix.family }}-${{ matrix.shard }}-failure-${{ github.run_attempt }}

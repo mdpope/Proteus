@@ -1,3 +1,14 @@
+## Cold notification and restored browser priority — October 15
+
+An incoming notification selects its paired host and requested chat or schedule, using the current
+saved connection/cache rules. Restored main-browser metadata no longer activates a browser over
+that target. Browser activation uses a fresh transient request only for an explicit selection or
+open action; merely displaying/restoring a browser does not create one. Tab IDs, order, cached
+history, device keys and owner access remain intact. The existing real-iPad cold-schedule UI case
+and focused activation unit coverage cover this correction; hosted execution must confirm it.
+Current acceptance is tracked in
+[PR #20](https://github.com/mdpope/Proteus/pull/20).
+
 # Mobile computer destinations
 
 ## October 14 portability candidate

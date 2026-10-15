@@ -1,3 +1,16 @@
+## October 15 cold notification follow-up — implemented; hosted verification pending
+
+The real-iPad run reaches its cold schedule route with the correct cached descriptor, then a
+passive restored-browser callback takes focus. Separate explicit transient browser activation from
+remembered selection and make metadata reconciliation passive. Preserve cold-cache/host ownership
+and verify same-ID user reselection, passive hydration, new-tab activation and the existing cold
+schedule route. The transcript/picker UI corrections use measured whole-composer and keyboard
+prediction boundaries. Do not weaken their draft/model-option or notification assertions.
+
+Current cross-platform acceptance is recorded in [PR #20](https://github.com/mdpope/Proteus/pull/20).
+The dated/source-specific checkpoints below retain their original verification scope; later
+workflow results supersede their pending/failure status without changing the recorded artifacts.
+
 ## October 15 remaining native acceptance corrections — in progress
 
 Run 38693169853 passes 626 Node tests/static checks on Linux and Mac, both packaged desktop UI
@@ -6612,3 +6625,13 @@ remains the acceptance contract. Project transfer destinations are deferred by t
 Read-only provider-command output is the supported terminal integration; interactive provider PTY
 attachment is not exposed by the adapters. Integration profile mechanisms that cannot isolate
 credentials are explicitly listed in the ledger rather than marked connected from configuration.
+
+## October 15 bounded native CI follow-up
+
+Run 38696071427 passes Linux/Mac desktop and web checks plus all 122 native units. Completed
+native jobs record 42 passes and four failures across 46 cases. The remaining 21-case phone
+shard failed its redundant address-replacement setup, then stopped reporting progress during
+held-history navigation for over 20 minutes; it was canceled and remains partially unverified.
+The next candidate retains all 67 UI cases, adds the 123rd native activation regression and
+bounds XCTest/step execution while reserving failure/cancellation diagnostics. No timeout,
+cancellation or incomplete result counts as successful workflow acceptance.

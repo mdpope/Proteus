@@ -1078,7 +1078,7 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
     }
     private var composerContent: some View {
         VStack(spacing: 8) {
-            ConnectionStatus()
+            ConnectionStatus().accessibilityIdentifier("chat-composer-connection-status")
             ForEach(run["queuedMessages"].array, id: \.self) { message in
                 HStack { Text(message["prompt"].string).lineLimit(1).font(.caption); Spacer(); if run["status"].string == "running" && !message["hasAttachments"].bool { Button("Steer now") { act("chat.steer-queued", ["messageId":message["id"]]) }.font(.caption) }; if store.state["capabilities"].array.contains(.string("chat.queue-edit.v1")) { Button("Edit") { queuedEdit = message; showQueuedEdit = true }.font(.caption) }; Button("Remove") { act("chat.remove-queued", ["messageId":message["id"]]) }.font(.caption) }
             }

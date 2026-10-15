@@ -1,3 +1,7 @@
+Current cross-platform acceptance is recorded in [PR #20](https://github.com/mdpope/Proteus/pull/20).
+The dated/source-specific checkpoints below retain their original verification scope; later
+workflow results supersede their pending/failure status without changing the recorded artifacts.
+
 ## October 15 checkpoint — source `b73c655`
 
 All 626 local Node tests/static checks and hosted Linux/Mac desktop and web gates pass. Hosted
@@ -13,7 +17,7 @@ Linux relay registration remains blocked pending private distinct-host provision
 ## Complete phone and tablet UI validation
 
 The hosted workflow runs every native unit and UI case on its required device family: all
-122 unit tests, 62 phone UI tests across three isolated iPhone runners, and five tablet UI tests
+123 unit tests, 62 phone UI tests across three isolated iPhone runners, and five tablet UI tests
 on an actual iPad simulator. Inventory is read from the Swift source; helper checks require a
 disjoint, exhaustive split and reject unavailable or mismatched simulator families. Tablet tests
 assert their device requirement rather than silently returning on a phone.
@@ -405,3 +409,12 @@ Verified October 4, 2026 on Electron 44.5.1: a disposable copy of the current pa
 re-signed ad hoc while the installed app stayed running, passed all package checks and
 synthetic cookie flush/read without a Keychain handoff; the catalog returned 19 models.
 This result uses mock storage and does not validate the Work Mac Keychain or installed update.
+
+## Bounded hosted XCTest execution
+
+CI opts into `PROTEUS_IOS_TEST_TIMEOUTS=1`: XCTest enables per-test timeouts with a 300-second
+default and 600-second maximum. The UI step is capped at 45 minutes inside the 60-minute job,
+leaving room for a bounded diagnostic upload on failure or cancellation. A stuck test remains
+failed/unverified, never a pass; runner loss or forced termination can still prevent diagnostics.
+Manual Apple commands retain their existing defaults unless the opt-in variable is set. Cleanup
+terminates only the helper’s own spawned processes and escalates a stuck child after eight seconds.

@@ -1,3 +1,7 @@
+Current cross-platform acceptance is recorded in [PR #20](https://github.com/mdpope/Proteus/pull/20).
+The dated/source-specific checkpoints below retain their original verification scope; later
+workflow results supersede their pending/failure status without changing the recorded artifacts.
+
 # Linux build of the current Mac source
 
 ## October 15 checkpoint — source `b73c655`

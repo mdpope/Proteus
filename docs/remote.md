@@ -1,3 +1,7 @@
+Current cross-platform acceptance is recorded in [PR #20](https://github.com/mdpope/Proteus/pull/20).
+The dated/source-specific checkpoints below retain their original verification scope; later
+workflow results supersede their pending/failure status without changing the recorded artifacts.
+
 ## 0.2.20 receipt-capacity correction
 
 At source `b73c655`, all 626 local Node tests/static checks and hosted Linux/Mac desktop and web
