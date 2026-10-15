@@ -1,6 +1,7 @@
 ## Native Favorites and complete simulator coverage — October 15, 2026
 
 - Keep the chat Favorites section and star actions scoped to the current owning-host workspace, including captured chat profiles without an ID; reflect explicit favorite removal while source sections are offscreen.
+- Route native browser edge swipes through one handler so the documented content-edge gesture consistently traverses one saved history entry. Matching native history still preserves page instances; WebKit’s separate interactive swipe animation is disabled. Hosted verification is pending.
 - Validate native UI on actual iPhone and iPad simulator families with exhaustive, disjoint test selection. Correct stale UI interactions while retaining backend ownership, selection, draft and metadata assertions. Hosted rerun remains pending.
 
 ## 0.2.20 source integration — cross-platform acceptance pending
@@ -35,7 +36,7 @@
 
 - Limit recovery to two full verified generations per installation/device, avoid duplicate rollback and before/after/retry copies, and compact completed migration evidence. This is an operator/update workflow rule, not a new app feature.
 
-## Planned next release — not implemented
+## Historical October 14 intake — not implemented at that checkpoint
 
 - BF-2026-10-14-01: Add appropriate native browser link/selection menus for iPad/iPhone and native Mac: new tab, copy link, start chat, download and native selection actions.
 - BF-2026-10-14-02: Investigate receipt-capacity exhaustion and excessive background tab-sync traffic; fix redundant writes/retries and identify the owner/limit in the warning while preserving retry safety.

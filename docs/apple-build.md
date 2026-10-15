@@ -1,3 +1,15 @@
+## October 15 checkpoint — source `b73c655`
+
+All 626 local Node tests/static checks and hosted Linux/Mac desktop and web gates pass. Hosted
+run [38693169853](https://github.com/mdpope/Proteus/actions/runs/38693169853) passes all 122 native
+units; its 67 UI cases finish with 58 passes and nine failures on the correct phone/tablet
+families. The follow-up corrects the diagnosed interactions and browser gesture ownership; a
+complete rerun is required. Production signing and physical/live iPhone-to-Linux acceptance
+remain separate.
+Installed Linux `linux.fda4ae896542` retains its live-Codex acceptance; notes-only candidate
+`linux.10e75103c337` has separate isolated UI/PTY/restart checks and is not installed. Production
+Linux relay registration remains blocked pending private distinct-host provisioning.
+
 ## Complete phone and tablet UI validation
 
 The hosted workflow runs every native unit and UI case on its required device family: all
@@ -21,7 +33,7 @@ simulator; it cannot establish both phone and tablet UI acceptance in that invoc
 commands use disposable hosts and simulator data and do not install onto physical devices or
 change Apple accounts, provisioning profiles or production credentials.
 
-**Accepted 0.2.20 integration checkpoint:** The Linux branch imports the verified Mac source
+**Historical initial 0.2.20 integration checkpoint (superseded by the status above):** The Linux branch imports the verified Mac source
 companion from transfer `418a083`, including native link/selection menus and durable tab retry
 identity/backoff. The checked-in project and reproducible definition both select **0.2.20 /
 2610.14.3** and retain upstream bundle IDs/signing settings. Platform-neutral host metadata,

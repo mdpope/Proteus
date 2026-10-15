@@ -223,6 +223,7 @@ final class RemoteTests: XCTestCase {
         shared.browserTabs = [BrowserDescriptor(id: id, title: "SPA", url: base + "?step=1")]
         let view = shared.webView(shared.browserTabs[0], allowLocalNavigation: true)
         defer { shared.unloadBrowsers() }
+        XCTAssertFalse(view.allowsBackForwardNavigationGestures, "The content-edge handler exclusively owns browser gestures")
         for _ in 0..<200 { if !view.isLoading, shared.browserTabs[0].history?.entries.count == 1 { break }; try await Task.sleep(for: .milliseconds(50)) }
         XCTAssertEqual(shared.browserTabs[0].history?.entries.count, 1)
         _ = try await view.evaluateJavaScript("history.replaceState({visit:0}, '', '?step=1')")
@@ -231,7 +232,8 @@ final class RemoteTests: XCTestCase {
             for _ in 0..<100 { if shared.browserTabs[0].history?.entries.count == index + 2 { break }; try await Task.sleep(for: .milliseconds(25)) }
         }
         XCTAssertEqual(shared.browserTabs[0].history?.entries.count, 4)
-        XCTAssertTrue(view.allowsBackForwardNavigationGestures, "An aligned native stack keeps WebKit's navigation gestures enabled after pushState")
+        XCTAssertFalse(view.allowsBackForwardNavigationGestures, "Navigation observations must not reenable a competing WebKit gesture")
+        let entryIDs = shared.browserTabs[0].history?.entries.map(\.id)
         let oldest = try XCTUnwrap(shared.browserHistory(id, back: true).last)
         shared.goBrowserHistory(oldest, in: id)
         var visit: Int?
@@ -239,6 +241,8 @@ final class RemoteTests: XCTestCase {
         XCTAssertEqual(visit, 0, "The oldest repeated URL must select its original native page instance")
         XCTAssertEqual(shared.browserTabs[0].history?.index, 0)
         XCTAssertEqual(shared.browserTabs[0].history?.entries.count, 4)
+        XCTAssertEqual(shared.browserTabs[0].history?.entries.map(\.id), entryIDs, "Traversal preserves every saved page identity and forward entry")
+        XCTAssertFalse(view.allowsBackForwardNavigationGestures)
     }
     @MainActor func testSupersededBrowserCancellationKeepsNewerHistoryTraversal() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

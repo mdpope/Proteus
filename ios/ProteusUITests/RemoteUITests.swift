@@ -71,6 +71,19 @@ final class RemoteUITests: XCTestCase {
         option.tap()
         XCTAssertTrue(picker.label.contains(label), "The picker must retain the selected option", file: file, line: line)
     }
+    @MainActor private func setComposerSection(_ name: String, expanded: Bool, in popover: XCUIElement) -> Bool {
+        let section = popover.buttons.matching(NSPredicate(format: "label == %@", name)).firstMatch
+        guard section.waitForExistence(timeout: 10) else { XCTFail("Composer section is missing: " + name); return false }
+        let desired = expanded ? "Expanded" : "Collapsed"
+        if section.value as? String != desired {
+            // Expanded DisclosureGroups include their choices in the AX frame.
+            section.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: section.frame.width / 2, dy: min(9, section.frame.height / 2))).tap()
+        }
+        let state = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", desired), object: section)
+        let result = XCTWaiter.wait(for: [state], timeout: 5)
+        XCTAssertEqual(result, .completed, "Composer section must become " + desired)
+        return result == .completed
+    }
     @MainActor func testWorkspaceListCopyOpensIndependentConfiguration() async throws {
         let (data, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/pair")!)
         let fixture = try JSONSerialization.jsonObject(with: data) as! [String: Any]
@@ -246,10 +259,18 @@ final class RemoteUITests: XCTestCase {
         XCTAssertTrue(first.waitForExistence(timeout: 10)); first.tap()
         let address = app.textFields["browser-address"]
         XCTAssertTrue(address.waitForExistence(timeout: 10)); address.tap()
-        address.press(forDuration: 1.2)
-        if app.menuItems["Select All"].waitForExistence(timeout: 2) { app.menuItems["Select All"].tap() }
-        else { address.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: (address.value as? String ?? "").count)) }
-        address.typeText("http://127.0.0.1:4329/browser/one"); app.buttons["browser-go"].tap()
+        for _ in 0..<8 {
+            let current = address.value as? String ?? ""
+            if current.isEmpty || current == "Search or enter URL" { break }
+            address.tap()
+            address.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.utf16.count + 1))
+        }
+        let cleared = address.value as? String ?? ""
+        guard cleared.isEmpty || cleared == "Search or enter URL" else { XCTFail("The existing address must be cleared before replacement"); return }
+        let destination = "http://127.0.0.1:4329/browser/one"
+        address.typeText(destination)
+        guard address.value as? String == destination else { XCTFail("The entered address must exactly match the navigation target"); return }
+        app.buttons["browser-go"].tap()
         XCTAssertTrue(app.webViews.staticTexts["First browser page"].waitForExistence(timeout: 15))
         expectation(for: NSPredicate(format: "label == %@", "First browser page"), evaluatedWith: first); waitForExpectations(timeout: 8)
         let load = app.webViews.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Load ")).firstMatch
@@ -467,8 +488,14 @@ final class RemoteUITests: XCTestCase {
         app.staticTexts["chat-header-title"].tap()
         let transcript = app.scrollViews["chat-conversation-scroll"]
         XCTAssertTrue(transcript.waitForExistence(timeout: 8))
-        // Read the conversation, rather than swiping the keyboard or expanded editor.
-        transcript.swipeUp()
+        // The AX scroll frame includes its composer inset and the keyboard area.
+        // Drag only in the visible transcript above the focused editor.
+        let visibleTop = transcript.frame.minY + 20
+        let visibleBottom = min(transcript.frame.maxY, field.frame.minY) - 20
+        guard visibleBottom - visibleTop > 50 else { XCTFail("The transcript must expose room for a real reading gesture"); return }
+        let origin = app.coordinate(withNormalizedOffset: .zero)
+        origin.withOffset(CGVector(dx: transcript.frame.midX, dy: visibleBottom))
+            .press(forDuration: 0.05, thenDragTo: origin.withOffset(CGVector(dx: transcript.frame.midX, dy: visibleTop)))
         XCTAssertTrue(app.buttons["composer-preview"].waitForExistence(timeout: 8))
         let startingCloseCount = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Close New tab")).count
         app.buttons["Add chat tab"].tap(); app.buttons["Browser · Default"].firstMatch.tap()
@@ -533,7 +560,9 @@ final class RemoteUITests: XCTestCase {
             for name in ["Home", "Chats", "Life", "Team", "Engine Room"] { XCTAssertTrue(tabBar.buttons[name].exists) }
             XCTAssertEqual(tabBar.buttons.count, 5, "Counts must not change the established iPhone navigation")
             tabBar.buttons["Home"].tap()
-            XCTAssertTrue(app.staticTexts["Schedules · 2"].waitForExistence(timeout: 8))
+            let schedules = app.staticTexts["Schedules · 2"]
+            for _ in 0..<6 where !schedules.exists { app.swipeUp() }
+            XCTAssertTrue(schedules.waitForExistence(timeout: 8))
             let attention = app.staticTexts["Needs attention · 9"]
             for _ in 0..<4 where !attention.exists { app.swipeUp() }
             XCTAssertTrue(attention.exists)
@@ -673,6 +702,8 @@ final class RemoteUITests: XCTestCase {
         app.tabBars.buttons["Chats"].tap()
         let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Long fixture")).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 8)); row.tap()
+        let conversation = app.buttons["chat-conversation-tab"]
+        XCTAssertTrue(conversation.waitForExistence(timeout: 8)); conversation.tap()
         let scroll = app.scrollViews["chat-conversation-scroll"]
         XCTAssertTrue(scroll.waitForExistence(timeout: 8))
         app.buttons["read-long-message-fixture"].tap()
@@ -835,12 +866,16 @@ final class RemoteUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-notification-fixtures", "--synthetic-notification-controls"]
         app.launch()
+        let home = app.buttons["sidebar-Home"]
+        XCTAssertTrue(home.waitForExistence(timeout: 12)); home.tap()
+        XCTAssertEqual(home.value as? String, "Active")
         for _ in 0..<4 where !app.buttons["Tap chat notification"].exists { app.swipeUp() }
         XCTAssertTrue(app.buttons["Tap chat notification"].waitForExistence(timeout: 12))
         app.buttons["Tap chat notification"].tap()
         XCTAssertTrue(app.staticTexts["Notification destination loaded"].waitForExistence(timeout: 12))
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "shell-tab-10000000-0000-4000-8000-000000000001:notification-chat")).firstMatch.exists)
-        app.buttons["Home"].firstMatch.tap()
+        XCTAssertTrue(home.waitForExistence(timeout: 12)); home.tap()
+        XCTAssertEqual(home.value as? String, "Active")
         for _ in 0..<4 where !app.buttons["Tap schedule notification"].exists { app.swipeUp() }
         app.buttons["Tap schedule notification"].tap()
         XCTAssertTrue(app.navigationBars["Notification fixture schedule"].waitForExistence(timeout: 12))
@@ -948,9 +983,13 @@ final class RemoteUITests: XCTestCase {
         selected.tap()
         XCTAssertEqual(app.buttons[tabID].value as? String, "Active")
         XCTAssertEqual(app.buttons[tabID].frame.minX, before, accuracy: 2, "Selecting a tab must not scroll the strip")
-        app.buttons["Home"].firstMatch.tap()
+        let home = app.buttons["sidebar-Home"]
+        XCTAssertTrue(home.waitForExistence(timeout: 10)); home.tap()
+        XCTAssertEqual(home.value as? String, "Active")
         XCTAssertEqual(app.buttons[tabID].frame.minX, before, accuracy: 2, "Left navigation must not reset the tab strip")
-        app.buttons["Chats"].firstMatch.tap()
+        let chats = app.buttons["sidebar-Chats"]
+        XCTAssertTrue(chats.waitForExistence(timeout: 10)); chats.tap()
+        XCTAssertEqual(chats.value as? String, "Active")
         XCTAssertEqual(app.buttons[tabID].frame.minX, before, accuracy: 2, "A second left navigation must preserve the same offset")
     }
     @MainActor func testNewBrowserFocusAndTwentyRecentSites() {
@@ -1128,10 +1167,14 @@ final class RemoteUITests: XCTestCase {
         let web = app.webViews.firstMatch
         XCTAssertTrue(web.staticTexts["First browser page"].waitForExistence(timeout: 15))
         web.links["Next browser page"].tap(); XCTAssertTrue(web.staticTexts["Second browser page"].waitForExistence(timeout: 15))
+        web.links["Next browser page"].tap(); XCTAssertTrue(web.staticTexts["Third browser page"].waitForExistence(timeout: 15))
         let edge = web.frame.minX + 24, browserY = web.frame.midY
         drag(CGPoint(x: edge, y: browserY), CGPoint(x: edge + 180, y: browserY))
-        XCTAssertTrue(web.staticTexts["First browser page"].waitForExistence(timeout: 10)); XCTAssertTrue(chatTab.exists)
+        XCTAssertTrue(web.staticTexts["Second browser page"].waitForExistence(timeout: 10), "One edge gesture must move exactly one saved history entry")
+        XCTAssertFalse(web.staticTexts["First browser page"].exists); XCTAssertTrue(chatTab.exists)
         drag(CGPoint(x: web.frame.maxX - 24, y: browserY), CGPoint(x: web.frame.maxX - 204, y: browserY))
+        XCTAssertTrue(web.staticTexts["Third browser page"].waitForExistence(timeout: 10), "Back must preserve the forward entry")
+        drag(CGPoint(x: edge, y: browserY), CGPoint(x: edge + 180, y: browserY))
         XCTAssertTrue(web.staticTexts["Second browser page"].waitForExistence(timeout: 10))
         drag(CGPoint(x: edge, y: browserY), CGPoint(x: edge + 180, y: browserY))
         XCTAssertTrue(web.staticTexts["First browser page"].waitForExistence(timeout: 10))
@@ -1450,7 +1493,9 @@ extension RemoteUITests {
         guard context.waitForExistence(timeout: 10) else { XCTFail("Context picker missing"); return }
         selectPickerOption("872K · Long context", pickerID: "context-tier-picker", in: app)
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Live effort and context controls"; screenshot.lifetime = .keepAlways; add(screenshot)
-        app.buttons["start-chat"].tap(); XCTAssertTrue(app.staticTexts["Your input is needed"].waitForExistence(timeout: 20))
+        app.buttons["start-chat"].tap()
+        guard app.staticTexts["Allow synthetic model-options checkpoint?"].waitForExistence(timeout: 20) else { XCTFail("The synthetic run must wait on permission so a follow-up can queue"); return }
+        XCTAssertEqual(app.buttons["send-message"].label, "Queue message")
         let (latest, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/latest")!)
         let value = try JSONSerialization.jsonObject(with: latest) as! [String: Any]
         XCTAssertEqual(value["reasoningEffort"] as? String, "none"); XCTAssertEqual(value["contextTier"] as? String, "long_context")
@@ -1459,26 +1504,29 @@ extension RemoteUITests {
         XCTAssertTrue(app.buttons["stop-turn"].exists)
         let options = app.buttons["composer-options"]
         XCTAssertTrue(options.waitForExistence(timeout: 10)); options.tap()
-        let modelSection = app.buttons.matching(NSPredicate(format: "label == %@", "Model")).firstMatch
+        let popover = app.popovers.firstMatch
+        guard popover.waitForExistence(timeout: 10) else { XCTFail("Compact composer options must open"); return }
+        let modelSection = popover.buttons.matching(NSPredicate(format: "label == %@", "Model")).firstMatch
         XCTAssertTrue(modelSection.waitForExistence(timeout: 10))
-        let contextSection = app.buttons.matching(NSPredicate(format: "label == %@", "Context")).firstMatch
-        XCTAssertTrue(contextSection.waitForExistence(timeout: 10)); contextSection.tap()
-        let longContext = app.buttons["composer-choice-Context-long_context"]
-        XCTAssertTrue(longContext.waitForExistence(timeout: 10)); XCTAssertTrue(longContext.label.contains("872K")); longContext.tap()
-        contextSection.tap()
-        let effortSection = app.buttons.matching(NSPredicate(format: "label == %@", "Level")).firstMatch
-        XCTAssertTrue(effortSection.waitForExistence(timeout: 10)); effortSection.tap()
-        let highEffort = app.buttons["composer-choice-Level-high"]
-        XCTAssertTrue(highEffort.waitForExistence(timeout: 10)); highEffort.tap()
-        effortSection.tap(); app.buttons["Done"].tap()
+        guard setComposerSection("Context", expanded: true, in: popover) else { return }
+        let longContext = popover.buttons.matching(NSPredicate(format: "label == %@", "872K · Long context")).firstMatch
+        guard longContext.waitForExistence(timeout: 10) else { XCTFail("The fixture's advertised long context option must exist"); return }
+        XCTAssertTrue(longContext.isSelected); longContext.tap()
+        guard setComposerSection("Context", expanded: false, in: popover),
+              setComposerSection("Level", expanded: true, in: popover) else { return }
+        let highEffort = popover.buttons.matching(NSPredicate(format: "label == %@", "High")).firstMatch
+        guard highEffort.waitForExistence(timeout: 10) else { XCTFail("The fixture's advertised high effort option must exist"); return }
+        highEffort.tap()
+        guard setComposerSection("Level", expanded: false, in: popover) else { return }
+        popover.buttons["Done"].tap()
         if app.buttons["composer-preview"].waitForExistence(timeout: 8) { app.buttons["composer-preview"].tap() }
         let reply = app.textFields["reply-text"]; reply.tap(); reply.typeText("Queued with new effort")
         app.buttons["send-message"].tap()
-        XCTAssertTrue(app.buttons["Remove"].waitForExistence(timeout: 10))
+        guard app.buttons["Remove"].waitForExistence(timeout: 10) else { XCTFail("The message must remain queued on the owner"); return }
         let (queued, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/latest")!)
         let queuedValue = try JSONSerialization.jsonObject(with: queued) as! [String: Any]
         XCTAssertEqual(queuedValue["reasoningEffort"] as? String, "none")
-        let messages = queuedValue["queuedMessages"] as! [[String: Any]]
+        let messages = try XCTUnwrap(queuedValue["queuedMessages"] as? [[String: Any]], "The owner must return the queued message with its turn options")
         XCTAssertEqual((messages.first?["modelOptions"] as? [String: Any])?["reasoningEffort"] as? String, "high")
         XCTAssertEqual((messages.first?["modelOptions"] as? [String: Any])?["contextTier"] as? String, "long_context")
         let composerShot = XCTAttachment(screenshot: app.screenshot()); composerShot.name = "Compact composer menus and separate actions"; composerShot.lifetime = .keepAlways; add(composerShot)
@@ -1492,7 +1540,7 @@ extension RemoteUITests {
         await fulfillment(of: [disappeared], timeout: 10)
         let (edited, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/latest")!)
         let editedValue = try JSONSerialization.jsonObject(with: edited) as! [String: Any]
-        let editedMessages = editedValue["queuedMessages"] as! [[String: Any]]
+        let editedMessages = try XCTUnwrap(editedValue["queuedMessages"] as? [[String: Any]], "Editing must retain the queued message and turn options")
         XCTAssertEqual(editedMessages.first?["prompt"] as? String, editedText)
         XCTAssertEqual((editedMessages.first?["modelOptions"] as? [String: Any])?["reasoningEffort"] as? String, "high")
         app.buttons["Remove"].tap()
@@ -1673,7 +1721,7 @@ extension RemoteUITests {
         area("Team")
         let overview = app.buttons["team-section-overview"]
         XCTAssertTrue(overview.waitForExistence(timeout: 10)); overview.tap()
-        XCTAssertTrue(app.buttons["Connect shared Team tools"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Connect website account"].waitForExistence(timeout: 10))
         area("Engine Room"); XCTAssertTrue(app.buttons["Resources"].firstMatch.waitForExistence(timeout: 10))
         app.buttons["Resources"].firstMatch.tap(); XCTAssertTrue(app.staticTexts["CPU and RAM are reported by the host. Tabs may share a process; shared memory is not counted as per-tab memory."].waitForExistence(timeout: 10))
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Native parity engine resources"; screenshot.lifetime = .keepAlways; add(screenshot)

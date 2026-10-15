@@ -1109,7 +1109,10 @@ struct NativeChatScrollLocation {
         if profileStores[storeKey] == nil { profileStores[storeKey] = tab.profileId == "default" ? .default() : WKWebsiteDataStore(forIdentifier: Self.persistentProfileStoreID(account: account, id: tab.profileId)) }
         configuration.websiteDataStore = profileStores[storeKey]!
         let view = NativeLinkWebView(frame: .zero, configuration: configuration)
-        view.allowsBackForwardNavigationGestures = true; view.isFindInteractionEnabled = true
+        // Proteus owns the full content-relative edge gesture. Native gesture
+        // recognition has different thresholds and must not race that handler.
+        // goBrowserHistory still reuses matching native page instances via go(to:).
+        view.allowsBackForwardNavigationGestures = false; view.isFindInteractionEnabled = true
         browserViews[tab.id] = view
         browserObservations[tab.id] = [observeBrowser(view, id: tab.id, keyPath: \.canGoBack), observeBrowser(view, id: tab.id, keyPath: \.canGoForward), observeBrowser(view, id: tab.id, keyPath: \.isLoading), observeBrowser(view, id: tab.id, keyPath: \.url), observeBrowser(view, id: tab.id, keyPath: \.title)]
         if let text = tab.url, let url = URL(string: text) { mirroredBrowserLoads.insert(tab.id); pendingBrowserLoads[tab.id] = url.absoluteString; view.load(URLRequest(url: url)) }
@@ -1120,20 +1123,12 @@ struct NativeChatScrollLocation {
             Task { @MainActor [weak self, weak view] in
                 guard let self, let view, self.browserViews[id] === view,
                       let index = self.browserTabs.firstIndex(where: { $0.id == id }) else { return }
-                // Commit a settled same-document URL before comparing native and
-                // saved neighbors, so an aligned stack keeps native gestures enabled.
+                // Commit settled same-document navigation into the saved stack.
                 if !view.isLoading, let url = view.url, (self.pendingBrowserLoads[id] == url.absoluteString || self.pendingBrowserLoads[id] == nil && self.browserTabs[index].url != url.absoluteString) {
                     self.completeBrowserNavigation(url, title: view.title ?? url.host ?? "Browser", in: id, nativePosition: view.backForwardList.backList.count, sameDocumentObservation: true)
                 }
                 let history = self.browserTabs[index].history
-                let savedBack = history.flatMap { $0.index > 0 ? $0.entries[$0.index - 1].url : nil }
-                let savedForward = history.flatMap { $0.index + 1 < $0.entries.count ? $0.entries[$0.index + 1].url : nil }
-                let nativeBack = view.canGoBack && (history == nil || view.backForwardList.backList.last?.url.absoluteString == savedBack)
-                let nativeForward = view.canGoForward && (history == nil || view.backForwardList.forwardList.first?.url.absoluteString == savedForward)
-                // A restored saved stack can exceed WebKit's newly created stack. Do
-                // not send native gestures to a mismatched neighbor after a fallback load.
-                view.allowsBackForwardNavigationGestures = (!view.canGoBack || nativeBack) && (!view.canGoForward || nativeForward)
-                let state = BrowserNavigationState(url: view.url?.absoluteString ?? "", title: view.title ?? "", canGoBack: history.map { $0.index > 0 } ?? view.canGoBack, canGoForward: history.map { $0.index + 1 < $0.entries.count } ?? view.canGoForward, isLoading: view.isLoading, nativeCanGoBack: view.allowsBackForwardNavigationGestures && nativeBack, nativeCanGoForward: view.allowsBackForwardNavigationGestures && nativeForward)
+                let state = BrowserNavigationState(url: view.url?.absoluteString ?? "", title: view.title ?? "", canGoBack: history.map { $0.index > 0 } ?? view.canGoBack, canGoForward: history.map { $0.index + 1 < $0.entries.count } ?? view.canGoForward, isLoading: view.isLoading)
                 if self.browserNavigation[id] != state { self.browserNavigation[id] = state }
                 // Late KVO can describe the old page while a requested traversal begins.
                 // Commit only a settled requested target or an unblocked same-document URL.
@@ -1153,8 +1148,6 @@ struct BrowserNavigationState: Equatable {
     var canGoBack = false
     var canGoForward = false
     var isLoading = false
-    var nativeCanGoBack = false
-    var nativeCanGoForward = false
 }
 struct BrowserHistoryEntry: Codable, Equatable {
     var id: String = UUID().uuidString; var url: String; var title: String; var requestedURL: String? = nil

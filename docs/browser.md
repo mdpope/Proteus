@@ -1,3 +1,15 @@
+## October 15 native content-edge correction — implemented; validation pending
+
+Native browsers use Proteus’s single content-relative gesture handler: a drag starts within
+56 points of the content edge and travels at least 80 points, predominantly horizontally.
+Center, short, vertical and two-finger gestures retain their existing behavior. Back/Forward
+use the same saved-history service as toolbar actions; when the complete native history path
+matches, that service still traverses the existing WebKit item and preserves page instances.
+WebKit’s separate interactive navigation recognizer is disabled to prevent it from suppressing
+or duplicating the app handler. Its interactive swipe preview/cancel animation is consequently
+unavailable. Restored-history fallback, zoom, owner scope and tab placement remain unchanged.
+Three-page edge coverage and native page-instance/history-state checks require hosted validation.
+
 ## 0.2.20 native link menu candidate
 
 Native WebKit views observe actual pressed anchors in an isolated content world, including
@@ -7,13 +19,13 @@ A connected source owner additionally offers a link chat draft; source workspace
 and adjacent tab placement are retained. View lookup and shared-state application do not update
 interaction timestamps. Simulator and installation acceptance are tracked in the handoff.
 
-**Queued October 14 — BF-2026-10-14-01:** Native iPad/iPhone long-press and pointer link menus,
+**Historical October 14 queue-only intake — BF-2026-10-14-01:** Native iPad/iPhone long-press and pointer link menus,
 including the native app on Mac, should provide Open in new tab, Copy link, Start chat with link,
 Download and appropriate native selection actions. Keep placement/download/access rules and
 omit unsupported desktop actions. See [next release queue](planned-updates.md). No build or
 implementation is authorized for this queued item yet.
 
-**October 14 implementation:**
+**Historical October 14 implementation checkpoint (later release behavior supersedes it):**
 
 The current authorized batch implements persistent tabs, downloads, GET redirect decisions,
 visual Playwright tools, default Playwright MCP and optional Chrome DevTools MCP, human DevTools,

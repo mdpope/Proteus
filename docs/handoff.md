@@ -1,15 +1,24 @@
-## October 15 validation follow-up
+## October 15 validation follow-up — source `b73c655`
 
-Run 38690148311 passes Linux/Mac desktop package/UI, website and 121 native unit tests.
+All 626 local Node tests and static checks pass; hosted Linux/Mac desktop and web gates are green.
+Hosted run [38693169853](https://github.com/mdpope/Proteus/actions/runs/38693169853) passes all
+122 native units. Its complete 67-case UI inventory finishes with 58 passes and nine failures
+on the correct families: 62 phone cases and five actual-iPad cases. The next candidate fixes
+the observed interactions and browser gesture ownership; complete native revalidation is required.
+
+Installed `linux.fda4ae896542` retains its verified live-Codex checkpoint. Notes-only candidate
+`linux.10e75103c337` passes separate isolated UI, native PTY and restart checks; it is not installed
+and does not replace that live acceptance. Production Linux relay registration remains blocked
+pending private distinct-host provisioning; existing website-to-Mac connectivity is not Linux proof.
+
+Earlier run 38690148311 passes Linux/Mac desktop package/UI, website and 121 native unit tests.
 Native UI records 55 passes and 12 failures across 67 cases. The prepared correction fixes
 current-workspace Favorites, updates observed interactions and partitions all 67 UI cases into
 62 phone cases and five actual-iPad cases. One new regression raises native units to 122.
-All 626 Node tests and static checks pass; hosted native rerun is required. See
-apple-build.md and planned-updates.md. The installed Linux
-linux.fda4ae896542 remains a verified checkpoint, distinct from a candidate rebuilt after
-these release-note changes. Production Linux relay remains disabled pending private provisioning.
+See apple-build.md and planned-updates.md. The pending/failure statements in the older checkpoints
+below apply to their recorded revisions, not the current gates above.
 
-## Accepted 0.2.20 source refresh — cross-platform acceptance pending
+## Historical initial 0.2.20 source refresh — acceptance pending at that checkpoint
 
 The Linux branch now integrates the accepted Mac **0.2.20** source companion from
 `codex/signed-proteus-0220-20261015`, transfer commit `418a083`. All **879** source manifest
@@ -74,7 +83,7 @@ the copied PTY for Electron, and records its own runtime fingerprint. The earlie
 from `main` is historical and retained separately. Do not use that old source for current work.
 
 
-## October 14 authorized next-release build — in progress
+## Historical October 14 authorized next-release build — in progress at that checkpoint
 
 The operator authorized implementing the native link-menu and retry-ledger queue, building and
 installing the updates, and explicitly released the website/second-desktop deployment hold.
@@ -98,7 +107,7 @@ Focused ledger/synchronization tests and desktop tab-stability UI pass. Full reg
 menu acceptance, final signed packaging and installations remain in progress. Follow the two-full-
 generation recovery policy for each target; keep receipts instead of duplicate validation copies.
 
-## October 14 next-release intake — queue only
+## Historical October 14 next-release intake — queue only at that checkpoint
 
 BF-2026-10-14-01 queues native browser link/selection menu parity on iPad/iPhone and native Mac.
 BF-2026-10-14-02 queues the remote-command receipt-capacity investigation/fix, preserving retry

@@ -1048,3 +1048,15 @@ mutation/revision checks. Test-only picker interactions target the displayed val
 the resulting selection and backend state. Native CI partitions all UI cases by required hardware
 family, rejects mismatched/unavailable simulators and runs tablet assertions on an actual iPad.
 A phone run or a silent device guard cannot establish tablet acceptance.
+
+## October 15: one native browser navigation gesture owner
+
+Honor the October 9 content-relative 56-point edge/80-point movement contract through the
+existing app handler. Disable WebKit’s independent interactive recognizer and remove the
+native-adjacency suppression of that handler. The October 12 full-path check in goBrowserHistory
+still selects an existing WKBackForwardList item when safe, preserving DOM/page instances and
+history.state; restored or mismatched stacks retain saved-URL loading. A delayed fallback cannot
+reliably distinguish WebKit cancellation from a late interactive commit and could navigate twice.
+This ownership correction deliberately removes WebKit’s interactive swipe preview/cancel animation,
+while preserving semantic navigation, zoom, two-finger handling and owner/history safeguards.
+Validate a single swipe across three pages to detect skipped entries as well as missed actions.

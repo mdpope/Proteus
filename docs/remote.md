@@ -1,5 +1,14 @@
 ## 0.2.20 receipt-capacity correction
 
+At source `b73c655`, all 626 local Node tests/static checks and hosted Linux/Mac desktop and web
+gates pass. Hosted run [38693169853](https://github.com/mdpope/Proteus/actions/runs/38693169853)
+passes 122 native units; the 67 UI cases finish with 58 passes and nine failures on the correct
+phone/tablet families. The diagnosed interaction and gesture corrections require full revalidation.
+Installed Linux `linux.fda4ae896542` remains the live-Codex checkpoint; notes-only candidate
+`linux.10e75103c337` passes separate isolated UI/PTY/restart checks and is not installed. Production
+Linux relay registration remains blocked pending private distinct-host provisioning. Existing
+website-to-Mac connectivity does not certify a production Linux route or an actual phone pairing.
+
 Capacity refusal includes owner identity, record/byte/pending counters and retry delay. Tab
 synchronization merges monotonic metadata, sends at most 100 metadata operations per batch,
 retains an exact request envelope for uncertain transport retries, and backs off capacity errors
@@ -7,12 +16,12 @@ per host with at most one notice per minute. The 10,000-record/256 MiB defaults 
 retry windows are unchanged. A full protected ledger can remain unavailable until settled
 receipts naturally expire; this is reported separately from a successful build/install.
 
-**Queued October 14 — BF-2026-10-14-02:** Investigate and fix journal-capacity warnings during
+**Historical queue-only intake, October 14 — BF-2026-10-14-02:** Investigate and fix journal-capacity warnings during
 background tab synchronization. Establish the affected owner/counter, reduce redundant mutations,
 batch and back off retries, and name the owner in a deduplicated warning while preserving
 idempotent replay and unresolved receipts. Current limits remain 10,000 receipts/256 MiB per
-owner and 24-hour settled retention. See [next release queue](planned-updates.md). Queued only;
-no journal behavior, limits, data or deployment changed.
+owner and 24-hour settled retention. See [next release queue](planned-updates.md). At that intake,
+no journal behavior, limits, data or deployment had changed; the correction above supersedes it.
 
 # Remote clients
 

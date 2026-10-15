@@ -4,7 +4,8 @@ section is offscreen. An explicit captured chat workspace ID also scopes star mu
 the captured folder profile omits its ID. Explicit empty favorites clear stale selections;
 legacy hosts without workspace favorites retain the scoped-catalog fallback. Host ownership,
 revision checks and source activation/trust rules remain unchanged. Unit and UI regression
-coverage is added; hosted native execution is pending.
+coverage passes in hosted run 38693169853: the new unit regression and actual Favorites UI
+workflow succeed. Broader native UI acceptance is tracked separately.
 
 **October 14 required app guidance:**
 

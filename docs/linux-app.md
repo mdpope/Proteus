@@ -1,6 +1,19 @@
 # Linux build of the current Mac source
 
-## Accepted 0.2.20 refresh
+## October 15 checkpoint — source `b73c655`
+
+All 626 local Node tests and static checks pass. Hosted Linux/Mac desktop and web gates are
+green; run [38693169853](https://github.com/mdpope/Proteus/actions/runs/38693169853) also passes
+all 122 native units. Its 67 native UI cases finish with 58 passes and nine failures on the
+correct families: 62 phone cases and five actual-iPad cases. The diagnosed interaction and
+browser gesture corrections require complete native revalidation.
+
+Installed `linux.fda4ae896542` remains the verified live-Codex checkpoint. The separate notes-only
+candidate `linux.10e75103c337` passes isolated UI, native PTY and restart checks; it is not installed
+and does not replace that live acceptance. Production Linux relay registration remains blocked
+pending private distinct-host provisioning; website-to-Mac connectivity does not verify Linux.
+
+## Historical accepted 0.2.20 integration checkpoint
 
 Current source integrates the accepted Mac **0.2.20** companion from transfer **418a083**.
 Native link/selection menus, source-workspace link drafts, convergent tab metadata and durable

@@ -1,3 +1,15 @@
+## October 15 remaining native acceptance corrections — in progress
+
+Run 38693169853 passes 626 Node tests/static checks on Linux and Mac, both packaged desktop UI
+workflows, web assets/PHP and all 122 native units. Actual Favorites, owner history settings and
+three of five actual-iPad workflows pass. The complete UI inventory records 58 passes and nine failures. Their corrections are based on
+screenshots, accessibility hierarchies and actual fixture/production state contracts. Preserve every backend/count/selection/history assertion;
+correct visible transcript coordinates, native menu/disclosure interactions and explicit restored
+navigation setup. The browser edge investigation identifies a real handler ownership gap; use a
+single app recognizer while retaining matched native-history traversal. See browser.md and the
+October 15 design decision, including the interactive-preview tradeoff. Full rerun remains required.
+The private production relay provisioning route remains unavailable; keep Linux access disabled.
+
 ## October 15 native validation follow-up — implemented; rerun pending
 
 Hosted run 38690148311 passes Linux and Mac desktop tests/package/UI, web assets/PHP and all

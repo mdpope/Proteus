@@ -208,7 +208,7 @@ struct TeamBrowserView: View {
             Group {
                 if let tab = selectedTab, !shared.profileAvailable(tab.profileId) { ContentUnavailableView("Profile unavailable", systemImage: "person.crop.circle.badge.exclamationmark", description: Text("Sign in and refresh browser profiles in Preferences to resume this tab.")) } else if let tab = selectedTab, tab.url != nil { if shared.unloadedBrowsers.contains(tab.id) { ContentUnavailableView { Label("Page unloaded", systemImage: "pause.circle") } actions: { Button("Reload page") { shared.reload(tab.id); shared.touch(tab.id) } } } else { NativeBrowser(tab: tab, onOverview: { showOverview() }).id(tab.id) } }
                 else { home.simultaneousGesture(MagnificationGesture().onEnded { scale in if scale < 0.75 { showOverview() } }) }
-            }.modifier(NativePageSwipe(blockBack: navigation.nativeCanGoBack, blockForward: navigation.nativeCanGoForward, back: {
+            }.modifier(NativePageSwipe(back: {
                 if let id = selectedID, shared.isTwoFingerNavigation(id) { return }
                 if let id = selectedID, !shared.browserHistory(id, back: true).isEmpty { shared.goBack(id) }
                 else { onBackToList?() }
