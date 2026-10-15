@@ -1,3 +1,14 @@
+**October 14 platform-neutral native candidate:** Pairing defaults, host connection/provider/file
+messages and optional authenticated Linux/macOS platform metadata are implemented in source.
+Five added unit cases and a local mixed-host UI fixture preserve the existing destination index,
+Keychain accounts, bundle/team/signing identity, caches, drafts and retry behavior. Static review
+and plist checks passed on Linux; native compilation and simulator/UI execution have not run for
+these changes. `.github/workflows/cross-platform.yml` adds an iPhone simulator job with the
+disposable local host, alongside unsigned Mac desktop checks; hosted execution remains pending.
+CI performs no production signing, Apple account checks or physical installation. A real
+iPhone/iPad-to-Linux relay session remains unverified. Earlier native/device receipts below apply
+to their recorded revisions, not this source candidate.
+
 **October 14 follow-up candidate:** Native **0.2.19 / 2610.14.2** preserves original and full
 redirect/replacement URLs, selects existing tabs from Workspace Tabs titles and reveals selected
 navigation. Scheduled conversation approval sends the exact current waiting request. All 113 unit

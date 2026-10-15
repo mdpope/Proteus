@@ -122,13 +122,13 @@ class RemoteDestinationController extends Controller
             'label' => ['required', 'string', 'max:80', 'regex:/\\A[^\\x00-\\x1f\\x7f]+\\z/u'],
         ]);
         if ($validator->fails() || trim((string) $request->input('label')) === '') {
-            return $this->response(['message' => 'Provide a valid Mac name and current device ID.'], 422);
+            return $this->response(['message' => 'Provide a valid computer name and current device ID.'], 422);
         }
         $destination = DB::transaction(function () use ($request, $hostId, $validator) {
             User::whereKey($request->user()->getAuthIdentifier())->lockForUpdate()->firstOrFail();
             $destination = $this->destination($request, $hostId);
             $value = $validator->validated();
-            abort_unless(hash_equals($destination->device_id, strtolower($value['deviceId'])), 409, 'This Mac was paired again. Refresh before updating its name.');
+            abort_unless(hash_equals($destination->device_id, strtolower($value['deviceId'])), 409, 'This computer was paired again. Refresh before updating its name.');
             $destination->label = trim($value['label']);
             $destination->save();
 
@@ -149,7 +149,7 @@ class RemoteDestinationController extends Controller
             $userId = $request->user()->getAuthIdentifier();
             User::whereKey($userId)->lockForUpdate()->firstOrFail();
             $destination = RemoteDestination::where('user_id', $userId)->where('host_id', strtolower($hostId))->lockForUpdate()->firstOrFail();
-            abort_unless(hash_equals($destination->device_id, strtolower($validator->validated()['deviceId'])), 409, 'This Mac was paired again. Refresh before removing its replacement credential.');
+            abort_unless(hash_equals($destination->device_id, strtolower($validator->validated()['deviceId'])), 409, 'This computer was paired again. Refresh before removing its replacement credential.');
             $destination->delete();
         });
 

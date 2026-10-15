@@ -165,7 +165,7 @@ struct MarkdownView: UIViewRepresentable {
             case "link":
                 if let value = body["url"] as? String, let url = URL(string: value) {
                     if ["localhost", "127.0.0.1", "::1"].contains(url.host ?? ""), ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
-                        if let onDocumentLink = parent.onDocumentLink { onDocumentLink(value) } else { parent.store.error = "This preview runs on your Mac. Open it from its chat's shared preview tab." }
+                        if let onDocumentLink = parent.onDocumentLink { onDocumentLink(value) } else { parent.store.error = "This preview runs on \(parent.store.displayName). Open it from its chat's shared preview tab." }
                         return
                     }
                     if ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
@@ -173,8 +173,8 @@ struct MarkdownView: UIViewRepresentable {
                         parent.shared.open(url, title: url.host ?? "Link", scope: scope)
                         Task { await parent.shared.record(url, title: url.host ?? "Link", life: parent.life) }
                     } else if url.scheme?.lowercased() == "mailto" { UIApplication.shared.open(url) }
-                    else if ["md", "html", "htm"].contains(url.pathExtension.lowercased()) || ["md", "html", "htm"].contains((value as NSString).pathExtension.lowercased()) { if let onDocumentLink = parent.onDocumentLink { onDocumentLink(value) } else { UIPasteboard.general.string = value; parent.store.error = "This Mac file path was copied. Open it on your Mac." } }
-                    else { UIPasteboard.general.string = value.removingPercentEncoding ?? value; parent.store.error = "Mac file path copied. Open it on your Mac: \(value.removingPercentEncoding ?? value)" }
+                    else if ["md", "html", "htm"].contains(url.pathExtension.lowercased()) || ["md", "html", "htm"].contains((value as NSString).pathExtension.lowercased()) { if let onDocumentLink = parent.onDocumentLink { onDocumentLink(value) } else { UIPasteboard.general.string = value; parent.store.error = "This file path was copied. Open it on \(parent.store.displayName)." } }
+                    else { UIPasteboard.general.string = value.removingPercentEncoding ?? value; parent.store.error = "File path copied. Open it on \(parent.store.displayName): \(value.removingPercentEncoding ?? value)" }
                 }
             case "image":
                 guard let source = body["source"] as? String, let id = body["id"] as? String else { return }

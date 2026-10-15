@@ -12,6 +12,7 @@ import { startRelay } from '../relay/server.js';
 import { atomicJSON } from '../src/files.js';
 import { seal, unseal, secret } from '../src/remote-crypto.js';
 import { RemoteClient, until } from './remote-client.mjs';
+import { hostPlatformMetadata } from '../src/host-platform.js';
 
 async function fixture(t, providers) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-remote-')); const workspace = path.join(home, 'workspace'); fs.mkdirSync(workspace);
@@ -34,6 +35,18 @@ test('AES-GCM authenticates the payload and routing context', () => {
   assert.throws(() => unseal(key, box, 'connection:host:1'));
   assert.throws(() => unseal(secret(), box, 'connection:client:1'));
   const corrupt = Buffer.from(box, 'base64'); corrupt[14] ^= 1; assert.throws(() => unseal(key, corrupt.toString('base64'), 'connection:client:1'));
+});
+test('protocol v1 mobile peers discover this host platform, reconnect and retain device grants',async t=>{
+  const {app,connect}=await fixture(t);const invitation=RemoteClient.capsule((await app.remote.pairing()).code),first=await connect(invitation);
+  const state=(await first.request('sync')).state,metadata=hostPlatformMetadata();
+  assert.equal(state.protocol,1);assert.ok(state.capabilities.includes('host.platform.v1'));
+  for(const [key,value]of Object.entries(metadata)){assert.equal(state[key],value);assert.equal(app.remote.info()[key],value);}
+  await assert.rejects(first.request('browser.live.list',{id:'synthetic'}),/Enable View live chat browsers/);
+  app.remote.setBrowserAccess(first.device.id,true);app.remote.setDocumentAccess(first.device.id,true);
+  first.close();const reconnected=await connect(invitation,first.device);assert.equal((await reconnected.request('sync')).state.hostPlatform,metadata.hostPlatform);
+  assert.equal(app.remote.info().devices[0].browserAccess,true);assert.equal(app.remote.info().devices[0].documentAccess,true);
+  app.remote.setBrowserAccess(first.device.id,false);await assert.rejects(reconnected.request('browser.live.list',{id:'synthetic'}),/Enable View live chat browsers/);
+  app.remote.revoke(first.device.id);await until(()=>reconnected.failure==='revoked');await assert.rejects(connect(invitation,first.device),/rejected/);
 });
 test('logs expose bounded summary pages and complete redacted details through local and paired APIs',async t=>{
   const {app,connect}=await fixture(t),viewer=await connect();let target;

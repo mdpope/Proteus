@@ -6,33 +6,16 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { createDesktopSnapshot, verifyDesktopMetadata, fileDigest as digest, desktopPackageIgnore } from './desktop-build.mjs';
 
 if (process.platform !== 'linux') throw new Error('Build the Linux application on Linux.');
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 await import('./build-terminal.mjs');
 const metadata = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-const roots = ['desktop', 'public', 'src', 'schemas', 'templates', 'relay'];
-const walk = base => fs.readdirSync(path.join(root, base), { withFileTypes: true }).flatMap(entry => {
-  if (entry.name === '.DS_Store' || entry.name.startsWith('._')) return [];
-  const name = path.posix.join(base, entry.name);
-  if (entry.isDirectory()) return walk(name);
-  if (!entry.isFile()) throw new Error('Unexpected runtime source: ' + name);
-  return [name];
-});
-const digest = file => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
-const runtimeFiles = Object.fromEntries([...roots.flatMap(walk), 'AGENTS.md', 'README.md', 'CHANGELOG.md', '.gitignore'].sort().map(name => [name, digest(path.join(root, name))]));
-const buildInputs = Object.fromEntries(['package.json', 'package-lock.json', 'scripts/package-linux.mjs', 'scripts/build-terminal.mjs', 'scripts/prepare-pty.mjs', 'docs/linux-upstream-source.json'].map(name => [name, digest(path.join(root, name))]));
-const sourceFingerprint = createHash('sha256').update(JSON.stringify({ runtimeFiles, buildInputs })).digest('hex');
+const { runtimeFiles, buildInputs, sourceFingerprint, verifySource, verifyCopied } = createDesktopSnapshot(root, ['package.json', 'package-lock.json', 'scripts/package-linux.mjs', 'scripts/desktop-build.mjs', 'scripts/build-terminal.mjs', 'scripts/prepare-pty.mjs', 'docs/linux-upstream-source.json']);
 const buildRevision = `linux.${sourceFingerprint.slice(0, 12)}`;
 const upstream = JSON.parse(fs.readFileSync(path.join(root, 'docs/linux-upstream-source.json'), 'utf8'));
 const provenance = { schemaVersion: 1, version: metadata.version, buildRevision, sourceFingerprint, upstream, runtimeFiles, buildInputs };
-const verifySource = () => {
-  for (const [name, hash] of Object.entries({ ...runtimeFiles, ...buildInputs })) if (digest(path.join(root, name)) !== hash) throw new Error('Source changed during Linux packaging: ' + name);
-};
-const verifyCopied = base => {
-  for (const [name, hash] of Object.entries(runtimeFiles)) if (digest(path.join(base, name)) !== hash) throw new Error('Packaged runtime differs: ' + name);
-};
 const out = process.env.PROTEUS_PACKAGE_OUTPUT || path.join(root, 'dist');
 const bundles = await packager({
   dir: root, out, overwrite: true, name: 'Proteus', executableName: 'proteus',
@@ -40,6 +23,7 @@ const bundles = await packager({
   afterCopy: [async ({ buildPath, electronVersion, arch }) => {
     verifySource(); verifyCopied(buildPath);
     const file = path.join(buildPath, 'package.json');
+    if (digest(file) !== buildInputs['package.json']) throw new Error('Copied package metadata differs from source snapshot.');
     const copied = JSON.parse(fs.readFileSync(file, 'utf8')); copied.buildRevision = buildRevision;
     fs.writeFileSync(file, JSON.stringify(copied, null, 2) + '\n');
     fs.writeFileSync(path.join(buildPath, 'build-source.json'), JSON.stringify(provenance, null, 2) + '\n');
@@ -47,10 +31,11 @@ const bundles = await packager({
     await rebuild({ buildPath, electronVersion, arch, onlyModules: ['node-pty'], force: true });
     preparePty(buildPath);
   }],
-  ignore: [/(?:^|\/)\.DS_Store$/, /(?:^|\/)\._[^/]*$/, /^\/(?:web|ios|test|docs|scripts|extensions|dist|coverage|\.runtime|\.git|\.github|\.agents|\.codex|\.aws)(?:\/|$)/, /^\/\.env/, /\.(?:log|xcresult)$/]
+  ignore: desktopPackageIgnore
 });
 for (const bundle of bundles) {
   verifySource(); verifyCopied(path.join(bundle, 'resources', 'app'));
+  verifyDesktopMetadata(path.join(bundle, 'resources', 'app'), metadata, provenance);
   fs.copyFileSync(path.join(root, 'desktop/icon.png'), path.join(bundle, 'proteus.png'));
   fs.writeFileSync(path.join(bundle, 'proteus.desktop'), '[Desktop Entry]\nType=Application\nName=Proteus\nComment=Scheduled AI work and resumable conversations\nExec=proteus\nTryExec=proteus\nIcon=proteus\nTerminal=false\nCategories=Development;Utility;\nStartupWMClass=Proteus\n');
   const archive = path.join(out, `Proteus-${metadata.version}-linux-${process.arch}.tar.gz`);

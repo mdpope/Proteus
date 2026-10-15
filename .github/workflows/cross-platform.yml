@@ -1,0 +1,135 @@
+name: Cross-platform validation
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cross-platform-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  desktop:
+    name: Desktop / ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux
+          - os: macos-26
+            platform: mac
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    env:
+      PROTEUS_PACKAGE_OUTPUT: ${{ runner.temp }}/proteus-packages
+      # CI does not check Apple accounts, provision, notarize or install an app.
+      PROTEUS_MAC_UNSIGNED: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install locked desktop dependencies
+        run: npm ci
+      - name: Unit and integration tests
+        run: npm test
+      - name: Static checks
+        run: npm run check
+      - name: Install Linux Electron display dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libgtk-3-0t64 libnss3 libasound2t64 libgbm1 libxss1 libsecret-1-0
+      - name: Package Linux desktop
+        if: runner.os == 'Linux'
+        run: npm run package:linux
+      - name: Package unsigned Mac desktop candidate
+        if: runner.os == 'macOS'
+        run: npm run package:mac
+      - name: Synthetic Linux package UI and native terminal
+        if: runner.os == 'Linux'
+        run: xvfb-run -a node test/desktop-package-ui.mjs "$PROTEUS_PACKAGE_OUTPUT/Proteus-linux-$(node -p process.arch)/proteus"
+      - name: Synthetic Mac package UI and native terminal
+        if: runner.os == 'macOS'
+        run: node test/desktop-package-ui.mjs "$PROTEUS_PACKAGE_OUTPUT/Proteus-darwin-$(node -p process.arch)/Proteus.app/Contents/MacOS/Proteus"
+
+  ios-simulator:
+    name: iOS simulator / synthetic host
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install locked synthetic host dependencies
+        run: npm ci
+      - name: Inspect selected Xcode and available simulators
+        run: npm run ios:doctor
+      - name: Native units and UI with disposable host fixture
+        # The existing helper chooses an available iPhone, starts its own local
+        # synthetic host, and stops it. Physical signing/settings are unchanged.
+        run: npm run ios:test
+        env:
+          TMPDIR: ${{ runner.temp }}
+      - name: Preserve synthetic iOS failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-simulator-failure-${{ github.run_attempt }}
+          # Only the synthetic fixture logs and test result bundle; exclude
+          # DerivedData, simulator app containers and runner configuration.
+          path: |
+            ${{ runner.temp }}/proteus-apple-*/fixture.log
+            ${{ runner.temp }}/proteus-apple-*/xcodebuild.log
+            ${{ runner.temp }}/proteus-apple-*/Tests.xcresult/**
+          if-no-files-found: ignore
+          retention-days: 7
+
+  web:
+    name: Web / PHP 8.3 and locked assets
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, dom, fileinfo, pdo_sqlite, sqlite3, xml, xmlwriter, sodium
+          tools: composer:v2
+          coverage: none
+      - name: Create disposable CI configuration
+        run: php -r "file_exists('.env') || copy('.env.example', '.env');"
+      - name: Install locked PHP dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Generate disposable application key
+        run: |
+          php artisan key:generate --ansi
+          php artisan passport:keys --no-interaction
+      - name: Install locked asset dependencies
+        run: npm ci --ignore-scripts
+      - name: Build production web assets
+        run: npm run build
+      - name: PHP feature and unit tests
+        run: composer test

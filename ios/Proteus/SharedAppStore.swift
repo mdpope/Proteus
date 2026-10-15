@@ -16,7 +16,7 @@ struct NativeChatScrollLocation {
     var eventRevision: String = ""
 }
 
-/// Account-scoped app data uses its own explicit OAuth consent, never a Mac's credentials.
+/// Account-scoped app data uses its own explicit OAuth consent, never a host's credentials.
 @MainActor final class SharedAppStore: ObservableObject {
     @Published var snapshot: JSON = .null
     @Published var error: String?

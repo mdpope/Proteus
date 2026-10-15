@@ -68,7 +68,7 @@ export function mount(element, text, options = {}) {
     options.resize?.();
   }
   for (const holder of element.querySelectorAll('[data-image]')) {
-    // External URLs load only after a tap; workspace images stay on the authorized Mac/relay path.
+    // External URLs load only after a tap; workspace images stay on the authorized computer/relay path.
     if (linkKind(holder.dataset.image) === 'file' || element._images.has(holder.dataset.image)) void loadImage(holder);
   }
   options.resize?.();

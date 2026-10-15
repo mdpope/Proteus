@@ -334,7 +334,7 @@ struct MCPConnectionsView: View {
         } catch { message = "Could not check connections: " + error.localizedDescription }
     }
     private func connect(_ server: String) {
-        busy = true; pollingGeneration += 1; message = "Starting \(server) sign-in. Watch for a browser or macOS Keychain prompt on \(store.displayName)."
+        busy = true; pollingGeneration += 1; message = "Starting \(server) sign-in. Watch for \(store.hostInfo.signInPrompt) on \(store.displayName)."
         Task {
             do { let value = try await store.request("mcp.login", ["id":.string(runID),"server":.string(server)])
                 waiting = value["status"].string == "connected" ? nil : server

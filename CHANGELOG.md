@@ -1,3 +1,11 @@
+## Cross-platform host compatibility — October 14, 2026
+
+- Use the selected computer's name across desktop, website and native connection, provider, permission, usage and file messages. Authenticated platform metadata identifies Linux or macOS when available; older protocol-1 hosts keep neutral labels.
+- Keep independently paired Linux PCs and Macs behind the same encrypted relay, preserving host IDs, device keys, caches, drafts, approvals and retry receipts. Retain legacy wire/account preference keys and native Keychain identities.
+- Resolve explicit legacy database credential references through Linux Secret Service or the existing Mac Keychain. Desktop token stores continue to reject plaintext fallback; normal Life clients still use the website API.
+- Share Mac/Linux packaging inventory, source hashes and complete package metadata/provenance checks. Rebuild only the copied PTY; retain Mac bundle identity and Copilot vendor signing checks.
+- Add hosted Linux/Mac desktop, web and iOS simulator validation. Native CI, signed Mac acceptance and a real iPhone-to-Linux relay session remain pending; see [current validation](docs/linux-app.md).
+
 ## Linux adaptation of accepted 0.2.19
 
 - Build from the verified canonical 0.2.19 Mac source companion, retaining current workspace/tab/browser behavior. Add separate Linux packaging with source provenance and Electron PTY rebuild, XDG storage, user executable discovery, Linux tray/minimize/Quit controls and user-shell defaults. Preserve Mac packaging/signatures, native clients, protocol and pinned dependencies.

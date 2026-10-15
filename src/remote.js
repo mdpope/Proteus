@@ -17,6 +17,7 @@ import { ChatAttachmentConsents } from './chat-attachment-consent.js';
 import { chatAttachmentLimits } from './chat-attachments.js';
 import { RemoteCommandJournal } from './remote-command-journal.js';
 import { browserHistorySettings } from './browser-history.js';
+import { hostPlatformMetadata } from './host-platform.js';
 
 const timedSync = (diagnostics, name, fn) => diagnostics ? diagnostics.measureSync(name, fn) : fn();
 import {chatMembership} from '../public/chat-membership.js';
@@ -45,7 +46,7 @@ export function remoteUsage(value) {
     const entry = value?.providers?.[id]; if (!entry) continue;
     providers[id] = { ...pick(entry, ['provider', 'available', 'checkedAt', 'observedAt', 'stale']),
       source: {copilot:'GitHub Copilot account allowance',codex:'Codex account allowance',claude:'Claude account allowance'}[id],
-      error: entry.error ? 'Account usage could not be refreshed on this Mac. Check its provider connection.' : null,
+      error: entry.error ? 'Account usage could not be refreshed on this computer. Check its provider connection.' : null,
       windows: (entry.windows || []).slice(0, 20).map(window => pick(window, ['id', 'label', 'remainingPercent', 'unlimited', 'resetAt', 'reportedResetAt', 'resetSource', 'windowDurationMins', 'resetNote', 'billingNote', 'expired'])) };
   }
   return {providers};
@@ -56,14 +57,14 @@ export function remoteState(service) {
   const runs = timedSync(service.performanceDiagnostics,'remote.state.runs',()=>service.engine.listRuns());
   const visibleRuns = runs.filter(run=>!run.archivedAt);
   const schedules = timedSync(service.performanceDiagnostics,'remote.state.schedules',()=>service.engine.schedules.list().map(s => pick(s, scheduleKeys)));
-  return { attention:timedSync(service.performanceDiagnostics,'remote.state.attention',()=>service.attention?.()||[]),hostName: service.remote?.config.label || os.hostname(),
+  return { attention:timedSync(service.performanceDiagnostics,'remote.state.attention',()=>service.attention?.()||[]),hostName: service.remote?.config.label || os.hostname(), ...hostPlatformMetadata(),
     appearance: {showProviderUsage:defaults.appearance?.showProviderUsage!==false,providerUsageCollapsed:defaults.appearance?.providerUsageCollapsed===true},
     ...(defaults.appearance?.showProviderUsage!==false?{providerUsage:remoteUsage({providers:service.usage?.providers})}:{}), schedules,
     runs: visibleRuns.slice(0, 100).map(runSummary), runCount: visibleRuns.length, runCountIncludingArchived: runs.length,
     runningChatCount: countRunningChats(visibleRuns),
     attentionCount: visibleRuns.filter(run=>run.status==='awaiting_input'||(['failed','interrupted'].includes(run.status)&&!run.failureReviewedAt)).length,
     context: { ...pick(context, ['revision', 'refreshedAt', 'rootStatus', 'defaultWorkspaceId', 'workspaces', 'universalFolders', 'libraryFolders', 'documents','modes','favorites', 'errors']), entries: context.entries.map(remoteEntry) },
-    defaults: pick(defaults, ['provider', 'model', 'reasoningEffort', 'contextTier', 'serviceTier', 'timezone', 'internetSearches']), providerStatus: service.catalog?.value || null, providerStatuses: Object.fromEntries(Object.entries(service.catalogs || {}).map(([id, catalog]) => [id, catalog.value])),attachmentMediaTypes:Object.fromEntries(['copilot','codex','claude'].map(id=>[id,service.engine.providers[id]?.acceptedMediaTypes||[]])),mcpStatusProviders:['copilot','codex','claude'].filter(id=>typeof service.engine.providers[id]?.mcpStatus==='function'),mcpLoginProviders:['copilot','codex','claude'].filter(id=>typeof service.engine.providers[id]?.mcpLogin==='function'),capabilities:['chat.paths.v1','chat.export.v1','chat.previews.v1','content-tabs.v1','chat.index.v1','chat.queue-edit.v1','integrations.health.v1','chat.review.v1','chat.lifecycle.v1','chat.rename.v1','chat.internet.v1','workspaces.v1','chat.permissions.folders.v1','chat.permissions.chat.v1','chat.permissions.pending.v1','chat.documents.v1','chat.attachments.v1','notifications.v1','authenticated-revocation.v1','connection-self-revoke.v1',...(service.browserHistory?['browser.history.v1','browser.navigation.v1']:[]),...(service.liveBrowser?['browser.live.v1']:[]),...(service.resources?['resources.v1']:[])],protocol: 1 };
+    defaults: pick(defaults, ['provider', 'model', 'reasoningEffort', 'contextTier', 'serviceTier', 'timezone', 'internetSearches']), providerStatus: service.catalog?.value || null, providerStatuses: Object.fromEntries(Object.entries(service.catalogs || {}).map(([id, catalog]) => [id, catalog.value])),attachmentMediaTypes:Object.fromEntries(['copilot','codex','claude'].map(id=>[id,service.engine.providers[id]?.acceptedMediaTypes||[]])),mcpStatusProviders:['copilot','codex','claude'].filter(id=>typeof service.engine.providers[id]?.mcpStatus==='function'),mcpLoginProviders:['copilot','codex','claude'].filter(id=>typeof service.engine.providers[id]?.mcpLogin==='function'),capabilities:['host.platform.v1','chat.paths.v1','chat.export.v1','chat.previews.v1','content-tabs.v1','chat.index.v1','chat.queue-edit.v1','integrations.health.v1','chat.review.v1','chat.lifecycle.v1','chat.rename.v1','chat.internet.v1','workspaces.v1','chat.permissions.folders.v1','chat.permissions.chat.v1','chat.permissions.pending.v1','chat.documents.v1','chat.attachments.v1','notifications.v1','authenticated-revocation.v1','connection-self-revoke.v1',...(service.browserHistory?['browser.history.v1','browser.navigation.v1']:[]),...(service.liveBrowser?['browser.live.v1']:[]),...(service.resources?['resources.v1']:[])],protocol: 1 };
   });
 }
 function validateRelayURL(value) {
@@ -90,7 +91,7 @@ export class RemoteHost {
   addresses() {
     return Object.values(os.networkInterfaces()).flat().filter(i => i.family === 'IPv4' && !i.internal && /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(i.address)).map(i => `ws://${i.address}:${this.config.port}`);
   }
-  info() { return { enabled: this.config.enabled, mode: this.config.mode, status: this.status, error: this.error || null, hostId: this.config.hostId, label: this.config.label || os.hostname(),
+  info() { return { enabled: this.config.enabled, mode: this.config.mode, status: this.status, error: this.error || null, hostId: this.config.hostId, label: this.config.label || os.hostname(), ...hostPlatformMetadata(),
     relayURL: this.config.relayURL || '', publicURL: this.config.publicURL || '', addresses: this.addresses(), port: this.config.port,
     devices: this.config.devices.map(d => ({ id: d.id, name: d.name, pairedAt: d.pairedAt, resourceAccess: d.resourceAccess === true, documentAccess:d.documentAccess===true,browserAccess:d.browserAccess===true, online: [...this.peers.values()].some(p => p.device?.id === d.id) })),documentRequests:this.documents.list() }; }
   deviceStatus(id){const checkedAt=new Date().toISOString(),device=this.info().devices.find(device=>device.id===id);if(!device)throw new Error('Unknown paired device.');return {device:{...device,checkedAt},checkedAt};}
@@ -98,7 +99,7 @@ export class RemoteHost {
     if (typeof value.enabled !== 'boolean') throw new Error('Choose whether remote access is enabled.');
     if (!['local', 'external'].includes(value.mode || this.config.mode)) throw new Error('Choose local or external relay.');
     const next = { ...this.config, enabled: value.enabled, mode: value.mode || this.config.mode };
-    if (value.label !== undefined) { if (typeof value.label !== 'string' || !value.label.trim() || value.label.trim().length > 80 || /[\x00-\x1f]/.test(value.label)) throw new Error('Enter a Mac name between 1 and 80 characters.'); next.label = value.label.trim(); }
+    if (value.label !== undefined) { if (typeof value.label !== 'string' || !value.label.trim() || value.label.trim().length > 80 || /[\x00-\x1f]/.test(value.label)) throw new Error('Enter a computer name between 1 and 80 characters.'); next.label = value.label.trim(); }
     if (value.port !== undefined) { if (!Number.isInteger(value.port) || value.port < 1024 || value.port > 65535) throw new Error('Choose a port between 1024 and 65535.'); next.port = value.port; }
     if (next.mode === 'external') {
       next.relayURL = validateRelayURL(value.relayURL || next.relayURL);
@@ -172,7 +173,7 @@ export class RemoteHost {
     return this.info();
   }
   requireBrowserAccess(peer) {
-    if(this.config.devices.find(device=>device.id===peer.device?.id)?.browserAccess!==true)throw new Error('Enable View live chat browsers for this device in Connections on the Mac.');
+    if(this.config.devices.find(device=>device.id===peer.device?.id)?.browserAccess!==true)throw new Error('Enable View live chat browsers for this device in Connections on the computer.');
     if(!this.service.liveBrowser)throw new Error('This host does not support live browser viewing.');
   }
   setDocumentAccess(id,enabled){
@@ -183,7 +184,7 @@ export class RemoteHost {
     if(!enabled)this.documents.revokeDevice(id);
     return this.info();
   }
-  requireDocumentAccess(peer){const device=this.config.devices.find(device=>device.id===peer.device?.id);if(device?.documentAccess!==true)throw new Error('View chat documents is not enabled for this device on the Mac.');}
+  requireDocumentAccess(peer){const device=this.config.devices.find(device=>device.id===peer.device?.id);if(device?.documentAccess!==true)throw new Error('View chat documents is not enabled for this device on the computer.');}
   reviewDocument(requestId,approved){return this.documents.review(requestId,approved,this.service.engine);}
   requireResourceAccess(peer) {
     // A connected peer may hold an older device object after a local permission change.
@@ -446,7 +447,7 @@ export class RemoteHost {
     if (method === 'context.addFolders') { await this.api('/api/context', { action: 'add-folders', ...pick(args, ['workspaceId', 'folders', 'expectedRevision']) }); return { ok: true }; }
     if (method === 'schedule.save') {
       const original = engine.schedules.get(args.id);
-      if (original.source?.manifest) throw new Error('This schedule is repository-owned. Update its source manifest and reconcile it on the Mac.');
+      if (original.source?.manifest) throw new Error('This schedule is repository-owned. Update its source manifest and reconcile it on the owning computer.');
       if (revision(original) !== args.expectedRevision) throw new Error('Schedule changed. Refresh before saving.');
       await this.api('/api/schedules', { schedule: { ...original, ...pick(args.changes, ['name', 'enabled', 'cron', 'timezone', 'provider', 'model', 'reasoningEffort', 'contextTier', 'serviceTier', 'prompt', 'misfire', 'contextSelection', 'notifications']) }, expectedRevision: args.expectedRevision }); return { ok: true };
     }

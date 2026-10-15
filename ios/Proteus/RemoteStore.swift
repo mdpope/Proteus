@@ -1,6 +1,34 @@
 import Foundation
 import Combine
 
+/// Optional metadata from the authenticated host state. Older protocol-1 hosts need no upgrade.
+struct RemoteHostInfo: Equatable {
+    enum Platform: String {
+        case darwin, linux, win32, unknown
+        var label: String {
+            switch self { case .darwin: "macOS"; case .linux: "Linux"; case .win32: "Windows"; case .unknown: "Computer" }
+        }
+    }
+    let displayName: String
+    let platform: Platform
+    let architecture: String
+    init(state: JSON) {
+        let name = state["hostName"].string.trimmingCharacters(in: .whitespacesAndNewlines)
+        displayName = Self.validLabel(name) ? name : "Connected computer"
+        platform = Platform(rawValue: state["hostPlatform"].string) ?? .unknown
+        let arch = state["hostArchitecture"].string
+        architecture = !arch.isEmpty && arch.count <= 40 && arch.unicodeScalars.allSatisfy { CharacterSet.alphanumerics.contains($0) || "_-".unicodeScalars.contains($0) } ? arch : ""
+    }
+    var platformDescription: String? {
+        guard platform != .unknown else { return nil }
+        return platform.label + (architecture.isEmpty ? "" : " · " + architecture)
+    }
+    var signInPrompt: String { platform == .darwin ? "a browser or macOS Keychain prompt" : "a browser or system authorization prompt" }
+    static func validLabel(_ value: String) -> Bool {
+        !value.isEmpty && value.count <= 80 && !value.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) })
+    }
+}
+
 @MainActor final class RemoteStore: ObservableObject {
     @Published var state: JSON = .null
     @Published var chats: [String: JSON] = [:]
@@ -26,7 +54,8 @@ import Combine
     private let legacyCredentials: Bool
     private(set) var connection: DeviceConnection?
     private var invite: JSON?
-    var displayName: String { let name = state["hostName"].string.trimmingCharacters(in: .whitespacesAndNewlines); return name.isEmpty ? "Connected computer" : name }
+    var hostInfo: RemoteHostInfo { RemoteHostInfo(state: state) }
+    var displayName: String { hostInfo.displayName }
     var pairingLabel: String { invite?["label"].string ?? "" }
     private var challenge = ""
     private var prefix = ""
@@ -81,7 +110,7 @@ import Combine
         var normalized = value.object; normalized["relay"] = .string(relay)
         invite = .object(normalized); active = true; connect()
     }
-    /// Same origin-only transport policy as the Mac: plaintext is restricted to local networks.
+    /// Same origin-only transport policy as the host: plaintext is restricted to local networks.
     static func validatedRelay(_ value: String) throws -> String {
         let text = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard var url = URLComponents(string: text), let host = url.host?.lowercased(), !host.isEmpty,
@@ -387,7 +416,7 @@ import Combine
     }
     func disconnect() { generation = UUID(); readTask?.cancel(); retryTask?.cancel(); socket?.cancel(with: .goingAway, reason: nil); socket = nil; connected = false; status = paired ? "Offline · cached history" : "Not paired" }
     func forget() { active = false; suspend(); if legacyCredentials { DeviceKeychain.clear() }; connection = nil; invite = nil; paired = false; state = .null; chats = [:]; allRuns = []; allRunOffset = 0; drafts = [:]; selectedChat = nil; cursor = ""; cacheTimer?.cancel(); removeCache(); for c in waiting.values { c.resume(throwing: RemoteError(message: "Device forgotten.")) }; waiting.removeAll(); pendingCommands.removeAll(); timeouts.values.forEach { $0.cancel() }; timeouts.removeAll() }
-    // A host switch never leaves a retry behind. Commands already accepted by the Mac continue there.
+    // A host switch never leaves a retry behind. Commands already accepted by the host continue there.
     func suspend(reason: String = "Computer selection changed. An unconfirmed action may have reached that computer; refresh its history before retrying.") {
         flushCache(); active = false; disconnect(); sendTask?.cancel(); sendTask = nil
         for continuation in waiting.values { continuation.resume(throwing: RemoteError(message: reason)) }
@@ -426,9 +455,16 @@ import Combine
     }
 }
 
-struct MacDestination: Codable, Identifiable, Equatable {
+struct HostDestination: Codable, Identifiable, Equatable {
     var id: String
     var label: String
+    // Recognize the old defaults without rewriting saved names or Keychain account identifiers.
+    static func pairingName(requested: String, suggested: String, existing: String?) -> String {
+        guard ["My computer", "New computer", "My Mac", "New Mac"].contains(requested) else { return requested }
+        if let existing { return existing }
+        let name = suggested.trimmingCharacters(in: .whitespacesAndNewlines)
+        return RemoteHostInfo.validLabel(name) ? name : requested
+    }
 }
 struct ChatDeletionEvent: Equatable {
     let token = UUID()
@@ -438,12 +474,12 @@ struct ChatDeletionEvent: Equatable {
 private struct DestinationIndex: Codable {
     var version = 1
     var selectedID: String?
-    var destinations: [MacDestination] = []
+    var destinations: [HostDestination] = []
 }
 
-/// Credentials and cached records are independent even when every Mac uses the same relay.
+/// Credentials and cached records are independent even when every computer uses the same relay.
 @MainActor final class DestinationStore: ObservableObject {
-    @Published private(set) var destinations: [MacDestination] = []
+    @Published private(set) var destinations: [HostDestination] = []
     @Published private(set) var selectedID: String?
     @Published private(set) var selected: RemoteStore?
     @Published var pairing: RemoteStore?
@@ -473,7 +509,7 @@ private struct DestinationIndex: Codable {
                     let new = folder.appendingPathComponent("cache.enc")
                     if !FileManager.default.fileExists(atPath: new.path) { try FileManager.default.copyItem(at: old, to: new) }
                 }
-                destinations = [MacDestination(id: legacy.hostId, label: "My Mac")]; selectedID = legacy.hostId
+                destinations = [HostDestination(id: legacy.hostId, label: "My computer")]; selectedID = legacy.hostId
                 try persist(); DeviceKeychain.clear(service: service); try? FileManager.default.removeItem(at: old)
             }
             if let id = selectedID ?? destinations.first?.id { try select(id, connect: false) }
@@ -539,16 +575,15 @@ private struct DestinationIndex: Codable {
         do { try persist() } catch { destinations = previous; throw error }
     }
     func add(_ code: String, label: String) throws {
-        // Pair independently; a failed/expired invite never removes an existing Mac.
+        // Pair independently; a failed/expired invite never removes an existing computer.
         let name = label.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty, name.count <= 80 else { throw RemoteError(message: "Enter a name for this computer (up to 80 characters).") }
         let candidate = RemoteStore(connection: nil, cacheRoot: root.appendingPathComponent("pending-pair"), legacyCredentials: false)
         candidate.onPaired = { [weak self, weak candidate] connection in
             guard let self, let candidate else { throw RemoteError(message: "Pairing was cancelled.") }
-            let suggested = candidate.pairingLabel.trimmingCharacters(in: .whitespacesAndNewlines)
-            let chosen = ["My Mac", "New Mac"].contains(name) && !suggested.isEmpty && suggested.count <= 80 && !suggested.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) ? suggested : name
             let existingLabel = self.destinations.first { $0.id == connection.hostId }?.label
-            try self.register(connection, label: ["My Mac", "New Mac"].contains(name) ? existingLabel ?? chosen : chosen, history: candidate)
+            let chosen = HostDestination.pairingName(requested: name, suggested: candidate.pairingLabel, existing: existingLabel)
+            try self.register(connection, label: chosen, history: candidate)
         }
         try candidate.pair(code); pairing?.suspend(); pairing = candidate
     }
@@ -562,7 +597,7 @@ private struct DestinationIndex: Codable {
         let oldHistory = stores[id] ?? oldCredential.map { RemoteStore(connection: $0, cacheRoot: cacheRoot(id), legacyCredentials: false) }
         try DeviceKeychain.save(connection, hostID: id, service: service)
         if let index = destinations.firstIndex(where: { $0.id == id }) { destinations[index].label = label }
-        else { destinations.append(MacDestination(id: id, label: label)) }
+        else { destinations.append(HostDestination(id: id, label: label)) }
         selectedID = id
         do { try persist() } catch {
             destinations = previous; selectedID = previousID

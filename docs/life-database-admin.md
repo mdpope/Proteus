@@ -6,6 +6,22 @@ Current client behavior is in [Life](life.md). `src/life-admin.js` is explicit a
 code; production schema upgrades belong to the website deployment workflow. Existing private
 profiles and credentials are retained for recovery, without automatic connections or migrations.
 
+## October 14 credential portability — explicit administrator code only
+
+Legacy MariaDB profiles keep `{ "service": "…", "account": "…" }` references. The optional
+`store` is `auto` (default), `keychain` on macOS, or `secret-service` on Linux; incompatible
+explicit choices fail before launching a command. macOS keeps the existing
+`/usr/bin/security find-generic-password -s <service> -a <account> -w` lookup and Keychain entry.
+Linux reads the existing Secret Service item with `secret-tool lookup -- service <service>
+account <account>`. Install the utility and provide an unlocked Secret Service in the execution
+user's graphical session. The `--` protects values beginning with a dash from option parsing.
+No password enters profile JSON, command arguments, logs or client responses; command output
+and errors remain bounded and secret-bearing error details are suppressed. Existing entries are
+not created, exported or moved between computers. Synthetic resolver tests passed; no real
+database, keyring or production profile was used to verify this portability change.
+
+The material below preserves historical setup/upgrade behavior. Normal Life remains API-only.
+
 # Life: native personal records
 
 Life is an optional Proteus feature. It is off by default and absent from the main navigation

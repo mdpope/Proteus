@@ -78,7 +78,7 @@ import Security
         if delivered.count > 2000 { delivered = Set(delivered.suffix(1000)) }
     }
     static func safeBody(_ type: String) -> String {
-        switch type { case "chat.completed": "A chat finished."; case "review.required", "approval.required": "A chat needs your review."; case "schedule.completed": "A schedule finished."; case "device.added": "A device was added."; case "device.reconnected": "A Mac reconnected."; default: "New activity is available." }
+        switch type { case "chat.completed": "A chat finished."; case "review.required", "approval.required": "A chat needs your review."; case "schedule.completed": "A schedule finished."; case "device.added": "A device was added."; case "device.reconnected": "A computer reconnected."; default: "New activity is available." }
     }
     func receivedTap(_ payload: [AnyHashable: Any]) { route = NotificationRoute.from(payload) }
     #if DEBUG

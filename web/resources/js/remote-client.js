@@ -6,7 +6,7 @@ export class PairingStore {
     constructor(account) { if (!/^[a-f0-9]{64}$/.test(account)) throw new Error('Sign in again to use remote workspaces.'); this.account = account; }
     async open() {
         if (this.database) return this.database;
-        this.database = await new Promise((resolve, reject) => { const request = indexedDB.open(`proteus-remote-v1-${this.account}`, 1); request.onupgradeneeded = () => request.result.createObjectStore('hosts', { keyPath: 'hostId' }); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(new Error('Browser storage is unavailable. Enable private site storage to pair a Mac.')); });
+        this.database = await new Promise((resolve, reject) => { const request = indexedDB.open(`proteus-remote-v1-${this.account}`, 1); request.onupgradeneeded = () => request.result.createObjectStore('hosts', { keyPath: 'hostId' }); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(new Error('Browser storage is unavailable. Enable private site storage to pair a computer.')); });
         return this.database;
     }
     async operation(mode, callback) {
@@ -35,7 +35,7 @@ function destination(value, key = false) {
     if (!value || !uuid.test(value.hostId || '') || !uuid.test(value.deviceId || '') || typeof value.label !== 'string' || !value.label.trim() || value.label.length > 80) throw new Error('The saved destination is invalid. Review it in your account.');
     const relay = new URL(value.relay), local = ['localhost', '127.0.0.1', '[::1]'].includes(relay.hostname);
     if (relay.origin !== value.relay || relay.username || relay.password || !(relay.protocol === 'wss:' || relay.protocol === 'ws:' && local)) throw new Error('The saved relay address is invalid.');
-    if (key && !/^[a-f0-9]{64}$/i.test(value.key || '')) throw new Error('The saved destination credential is invalid. Pair this Mac again.');
+    if (key && !/^[a-f0-9]{64}$/i.test(value.key || '')) throw new Error('The saved destination credential is invalid. Pair this computer again.');
     return {hostId:value.hostId, relay:value.relay, label:value.label, deviceId:value.deviceId, pairedAt:value.pairedAt, source:'account', ...(key ? {key:value.key} : {})};
 }
 // Only the selected destination credential is fetched. Raw keys never enter browser storage.
@@ -87,7 +87,7 @@ export class BrowserDestinationStore {
     }
     async credential(hostId){
         const hosts=await this.list(),host=hosts.find(value=>value.hostId===hostId);
-        if(!host){const error=new Error('This Mac is not paired with this account or browser. Pair it in Connections.');error.status=404;throw error;}
+        if(!host){const error=new Error('This computer is not paired with this account or browser. Pair it in Connections.');error.status=404;throw error;}
         if(host.source==='account')return this.accountStore.credential(hostId);
         const legacy=(await this.legacyStore.list()).find(value=>value.hostId===hostId);
         if(!legacy)throw new Error('This browser pairing was removed. Reload Connections.');

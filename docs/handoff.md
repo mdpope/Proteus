@@ -1,3 +1,30 @@
+## October 14 cross-platform compatibility — source candidate
+
+Desktop, website and iOS source now treat Linux PCs and Macs as independent execution hosts.
+Authenticated state adds `hostPlatform`, canonical `hostPlatformLabel`, `hostArchitecture` and
+`host.platform.v1`; protocol 1, `hostName`, host/device IDs, keys, approvals, caches and retry
+receipts remain compatible. Keep legacy `defaultMacId`, `paired-mac` and native app identities.
+Shared relays require distinct registrations for independent hosts; names/platforms grant no access.
+
+Linux Secret Service lookup supports explicit legacy administrator database profiles while Mac
+Keychain lookup stays unchanged. Normal Life remains website-API-only; desktop safeStorage
+rejects `basic_text`. Shared packaging checks exact source/copied runtime names and hashes,
+copied package metadata and complete final metadata/provenance. Mac signing/vendor identity
+checks remain in the Mac entry point; unsigned CI is not signing acceptance.
+
+619 Node checks and static checks passed; PHP
+81 tests / 724 assertions, Pint and Vite passed. Actual disposable Linux UI checks cover
+attachments, responsive chat/composer, slow MCP sign-in/retry and 2,507-event history paging.
+The pre-documentation-freeze Linux stage `6f16217c6a6f` passed 231 runtime hashes, complete
+metadata/provenance and private-file exclusion, isolated startup/platform checks, synthetic
+feedback with unobserved usage, actual PTY keyboard input and restart history. It is separate
+from the live app, which was not replaced. Rebuild after final source/docs freeze; this earlier
+stage is not the final current-source artifact. Hosted cross-platform/native CI has not run. Native portability units/UI fixtures are
+added and statically reviewed, but Xcode execution, a signed Mac package and real iPhone-to-Linux
+pairing remain pending. Existing website-to-Mac connectivity does not verify the Linux path.
+See `linux-app.md`, `mobile-destinations.md` and `.github/workflows/cross-platform.yml`.
+Earlier release and installation receipts below describe their own tested revisions.
+
 ## Linux port of accepted October 14 source
 
 The local Linux branch imports the exact accepted 0.2.19 source companion from transfer commit

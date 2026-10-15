@@ -780,7 +780,7 @@ final class RemoteUITests: XCTestCase {
         for _ in 0..<4 where !app.buttons["Tap unavailable notification"].exists { app.swipeUp() }
         app.buttons["Tap unavailable notification"].tap()
         XCTAssertTrue(app.alerts["Proteus"].waitForExistence(timeout: 12), "An unavailable target should fail gracefully")
-        XCTAssertTrue(app.alerts.staticTexts["This chat is not cached on this device. Reconnect the Mac and open it from Chats."].exists)
+        XCTAssertTrue(app.alerts.staticTexts["This chat is not cached on this device. Reconnect Alpha Mac and open it from Chats."].exists)
         app.alerts.buttons["OK"].tap()
         XCTAssertTrue(app.staticTexts["Notifications"].waitForExistence(timeout: 10))
 
@@ -1450,7 +1450,7 @@ extension RemoteUITests {
         for _ in 0..<5 { if details.isHittable { break }; app.swipeUp() }; details.tap()
         let mcp = app.buttons["MCP connections"]
         for _ in 0..<8 { if mcp.exists && mcp.isHittable { break }; app.swipeUp() }; XCTAssertTrue(mcp.waitForExistence(timeout: 10)); mcp.tap()
-        let login = app.buttons["Sign in on Mac"]
+        let login = app.buttons["Sign in on Build Mac"]
         XCTAssertTrue(login.waitForExistence(timeout: 10))
         // XCTest can report a control as hittable while the bottom composer covers it.
         for _ in 0..<5 { if login.isHittable && login.frame.maxY < app.frame.height * 0.7 { break }; app.swipeUp() }
@@ -1458,13 +1458,31 @@ extension RemoteUITests {
         let status = app.staticTexts["mcp-status-message"]
         let connected = NSPredicate(format: "label CONTAINS %@", "Connected to synthetic-integration")
         let completed = expectation(for: connected, evaluatedWith: status); await fulfillment(of: [completed], timeout: 20)
-        XCTAssertFalse(app.buttons["Sign in on Mac"].exists)
+        XCTAssertFalse(app.buttons["Sign in on Build Mac"].exists)
         let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Automatic MCP connection refresh"; shot.lifetime = .keepAlways; add(shot)
         app.buttons["stop-turn"].tap()
     }
 }
 
 extension RemoteUITests {
+    @MainActor func testLinuxAndMacComputerMetadataSurvivesSelectionAndRestart() {
+        let app = XCUIApplication(); app.launchArguments = ["--synthetic-destinations", "--synthetic-linux-host"]; app.launch()
+        let picker = app.buttons["destination-picker"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 20)); XCTAssertTrue(picker.label.contains("Alpha Linux"))
+        picker.tap(); app.buttons["Manage computers"].tap()
+        XCTAssertTrue(app.staticTexts["Linux · x64"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["macOS · arm64"].exists)
+        app.buttons["Done"].tap(); picker.tap(); app.buttons["Beta Mac"].tap()
+        XCTAssertTrue(picker.label.contains("Beta Mac"))
+        picker.tap(); app.buttons["Alpha Linux"].tap()
+        XCTAssertTrue(picker.label.contains("Alpha Linux"))
+        app.terminate(); app.launchArguments = []; app.launch()
+        XCTAssertTrue(picker.waitForExistence(timeout: 20)); XCTAssertTrue(picker.label.contains("Alpha Linux"))
+        picker.tap(); app.buttons["Manage computers"].tap()
+        XCTAssertTrue(app.staticTexts["Linux · x64"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["macOS · arm64"].exists)
+    }
+
     @MainActor func testMacDestinationPickerRenameAndIndependentForget() throws {
         let app = XCUIApplication(); app.launchArguments = ["--synthetic-destinations"]; app.launch()
         if app.buttons["sidebar-Home"].waitForExistence(timeout: 3) { app.buttons["sidebar-Home"].tap() }
@@ -1587,7 +1605,7 @@ extension RemoteUITests {
         XCTAssertFalse(app.buttons["provider-usage-details"].exists)
         toggle.tap(); XCTAssertTrue(app.buttons["usage-codex"].exists)
         func area(_ name: String) { if app.tabBars.buttons[name].exists { app.tabBars.buttons[name].tap() } else { app.buttons[name].firstMatch.tap() } }
-        area("Chats"); XCTAssertTrue(app.staticTexts["New chats execute on Alpha Mac. Viewing another Mac’s history does not change that destination."].waitForExistence(timeout: 10))
+        area("Chats"); XCTAssertTrue(app.staticTexts["New chats execute on Alpha Mac. Viewing another computer’s history does not change that destination."].waitForExistence(timeout: 10))
         if app.tabBars.firstMatch.exists { XCTAssertFalse(app.buttons["toggle-provider-usage"].exists) }
         area("Team"); XCTAssertTrue(app.buttons["Connect shared Team tools"].waitForExistence(timeout: 10))
         area("Engine Room"); XCTAssertTrue(app.buttons["Resources"].firstMatch.waitForExistence(timeout: 10))

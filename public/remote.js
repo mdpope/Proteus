@@ -7,7 +7,7 @@ export async function renderRemote({ api, escape: esc, toast }) {
   try {
     const data = await api('/api/remote'); if (!document.querySelector('#remote-screen')) return;
     main.innerHTML = `<div id="remote-screen"><div class="heading"><div><div class="eyebrow">Your computers. All your devices.</div><h1>Connections</h1><p class="muted">Each computer runs its own work. Select the destination in Proteus on iPhone, iPad or the web.</p></div><span class="pill">${esc(data.status)}</span></div>
-      <div class="grid"><section class="card"><h2>Connection</h2><p class="note">Closing the window leaves Proteus in the menu bar. Quit Proteus stops the host. Keep this computer awake for scheduled and remote work.</p>
+      <div class="grid"><section class="card"><h2>Connection</h2><p class="note">Closing the window leaves Proteus running in the background. Quit Proteus stops the host. Keep this computer awake for scheduled and remote work.</p>
       <label>Computer name<input id="remote-label" maxlength="80" value="${esc(data.label)}" placeholder="Name this computer"></label><label>Relay<select id="remote-mode"><option value="local" ${data.mode === 'local' ? 'selected' : ''}>Built-in local relay</option><option value="external" ${data.mode === 'external' ? 'selected' : ''}>Shared internet relay</option></select></label>
       <label>Local port<input id="remote-port" type="number" value="${data.port}"></label>
       <label>Host relay address<input id="remote-url" placeholder="ws://127.0.0.1:4318" value="${esc(data.relayURL)}"></label>

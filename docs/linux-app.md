@@ -1,5 +1,37 @@
 # Linux build of the current Mac source
 
+## October 14 compatibility candidate
+
+Linux/macOS desktop, website and iOS source now share platform-neutral host controls. Optional
+authenticated `hostPlatform` (`linux`, `darwin`, `win32` or `unknown`), canonical
+`hostPlatformLabel` and `hostArchitecture` accompany `hostName` and `host.platform.v1`.
+Protocol 1 and existing host/device IDs, keys, pairing files, approvals and retry receipts stay
+unchanged. Clients show neutral defaults for older hosts; platform fields never authorize actions.
+Legacy website `defaultMacId` and native `paired-mac` storage keys remain for compatibility.
+Linux and Mac execution hosts register independently with distinct host IDs/tokens and are paired
+separately; a shared relay does not share provider credentials or conversations.
+
+Local validation passed 619 Node checks and static checks,
+plus website 81 PHP tests / 724 assertions, Pint and Vite. Disposable actual Linux UI checks
+cover responsive attachments (1440/850), chat design (1200/580), composer (1440/390), slow MCP
+sign-in with bounded retry/no overlapping login, and 2,507 events over 25 history pages. Linux
+stage `6f16217c6a6f` passed all 231 runtime hashes, complete metadata/provenance and private-file
+checks, isolated startup/platform metadata, synthetic rehearsal/feedback with unobserved usage,
+actual PTY keyboard input through the canvas and restart history. It predates these bundled
+documentation edits, so final current-source rebuilding/acceptance remains pending. No installed
+app was replaced.
+
+The added hosted workflow targets Linux/Mac desktop tests and package UI/native terminals,
+website tests/assets and an iPhone simulator with a disposable host. It has not executed yet.
+Mac desktop CI is unsigned; no production signing, certificates, device installs or Apple account
+checks occur there. Native compilation/simulator checks, signed Mac acceptance and a real
+iPhone/iPad-to-Linux relay session remain pending. A local mixed-host native fixture verifies
+metadata/cache behavior only when run on a Mac; it is not a remote Linux execution test.
+Other provider authentication, live Life/Secret Service access, ARM64 and wider distributions
+remain separate acceptance. Earlier Linux/Codex package results describe their tested snapshot.
+
+## Source lineage
+
 The Linux branch starts from the exact accepted Mac 0.2.19 source companion on
 `codex/signed-proteus-tabs-canonical-20261014`, transfer commit `82cd923`, rather than the old
 `main` branch. The source archive's SHA-256 and all 877 file hashes were verified before import.
@@ -18,12 +50,17 @@ npm run package:linux
 ./dist/Proteus-linux-x64/proteus
 ```
 
-The independent Linux script builds the terminal renderer and rebuilds only the copied node-pty
+The Linux entry point builds the terminal renderer and rebuilds only the copied node-pty
 module for Electron, leaving the source checkout's Node ABI intact. It produces a runnable
 directory, a versioned `Proteus-0.2.19-linux-x64.tar.gz` archive, checksum and bundled
 `build-source.json`. The latter fingerprints the Linux runtime/build inputs and names the
-accepted Mac source; this is a Linux adaptation, not the signed Mac binary. macOS packaging,
-vendor-signature checks, iOS files and the release's pinned dependencies are retained.
+accepted Mac source. Both desktop entry points use `scripts/desktop-build.mjs` to freeze exact
+runtime file names and SHA-256 hashes, reject added/removed/changed source and unexpected copied
+runtime files, verify copied `package.json` before adding the revision, then compare complete
+final package metadata and `build-source.json` provenance. Private configuration and source-only
+trees stay excluded. Mac signing and vendor-signature/byte checks remain in its own entry point;
+the Linux artifact has its own fingerprint and is not the signed Mac binary. Native app identity
+and pinned dependencies remain unchanged.
 
 Select Codex and a model from its current catalog in New Chat. Other provider implementations
 remain present; Linux authentication for those providers has not been accepted in this work.
@@ -41,10 +78,14 @@ menu includes explicit Quit / Ctrl+Q. macOS retains its existing hide/template-i
 The default Linux terminal uses the user's shell or bash; Mac still defaults to zsh. Sleep,
 logout and shutdown stop the host; no daemon/startup integration is installed.
 
-Protected desktop pairing and Life tokens still require Electron secure storage; plaintext
-fallback remains rejected. The Life database's Keychain credential resolver is Mac-only and
-has not been ported. No live Life account, other-provider authentication, physical iOS pairing,
-ARM64, or broader distribution coverage is claimed.
+Protected desktop pairing and Life tokens require Electron secure storage; `basic_text` plaintext
+fallback remains rejected. Explicit legacy database-administration profiles can now resolve a
+`service`/`account` reference through Linux Secret Service (`secret-tool`) or the unchanged Mac
+Keychain command. Linux needs the `secret-tool` utility and an unlocked, available Secret Service.
+The resolver reads an existing entry, never puts the password in arguments, and suppresses
+secret-bearing process errors. Normal Life still uses the authenticated website API and never
+opens legacy SQL profiles automatically. No live keyring, database or Life sign-in is verified
+by synthetic resolver tests; see [administrator scope](life-database-admin.md).
 
 ## Validation and updates
 
@@ -54,13 +95,17 @@ npm run check
 PROTEUS_TEST_EXECUTABLE="$PWD/dist/Proteus-linux-x64/proteus" node test/tab-followup-ui.mjs
 PROTEUS_TEST_APP="$PWD/dist/Proteus-linux-x64/proteus" node test/terminals-ui.mjs
 node test/linux-current.mjs dist/Proteus-linux-x64/proteus
+node test/desktop-package-ui.mjs /absolute/path/to/staged/proteus
 ```
 
-The last test consumes real Codex allowance with synthetic prompts, temporary files and isolated
+`linux-current.mjs` consumes real Codex allowance with synthetic prompts, temporary files and isolated
 profiles. It covers the actual New Chat UI, shell/file approvals, native terminal input/output,
 restart/session retention, cancellation/continuation, built-in encrypted relay pairing,
 continuation while minimized, reconnect and revocation. It does not pair or alter a real phone.
 The tab acceptance test exercises the current canonical placement/move/history/sidebar behavior.
+`desktop-package-ui.mjs` uses a synthetic provider with disposable data and browser profiles to
+check package identity/provenance, host UI, protected-state isolation and native terminal I/O.
+It consumes no provider allowance and does not replace the installed application.
 
 Before replacing an existing local installation, follow `desktop-updates.md`: inspect active work,
 back up app/data/browser state outside the repository, then launch and verify exact version/build

@@ -1,4 +1,5 @@
 import {observeRunningChats} from './running-chats.js';
+import {authenticatedComputerMetadata} from '../../../public/computer-identity.js';
 import { BrowserDestinationStore, BrowserRemoteClient } from './remote-client.js';
 import { usageSidebar, usageDetails } from '../../../public/provider-usage-view.js';
 const account = document.body.dataset.browserAccount;
@@ -25,7 +26,7 @@ let defaultState={status:'loading',message:'Loading saved computer connections鈥
 const destinationStore=account?new BrowserDestinationStore(account):null;
 export const defaultMacStatus=()=>({...defaultState});
 function connectionState(status,message,host={}){
-    defaultState={status,message,hostId:host.hostId||preferences?.defaultMacId||null,label:host.label||''};
+    defaultState={status,message,hostId:host.hostId||preferences?.defaultMacId||null,label:host.label||'',...authenticatedComputerMetadata(host)};
     document.dispatchEvent(new CustomEvent('proteus:default-status',{detail:defaultMacStatus()}));
 }
 export async function defaultMacRequest(method,args={}){
@@ -89,6 +90,7 @@ async function connectDefaultMac({retry=false}={}){
         client.addEventListener('change',event=>{
             if(!relevant()||event.detail?.event!=='state')return;
             const state=event.detail.data;observeRunningChats(credential.hostId,'default',state);
+            Object.assign(credential,authenticatedComputerMetadata(state));
             if(typeof state.hostName==='string'&&state.hostName.trim()&&state.hostName.length<=80&&!/[\x00-\x1f\x7f]/.test(state.hostName)){
                 const old={...credential};credential.label=state.hostName.trim();void destinationStore.rememberName(old,state.hostName).catch(()=>{});
                 connectionState('connected',credential.label+' 路 Connected',credential);
@@ -102,7 +104,9 @@ async function connectDefaultMac({retry=false}={}){
         connectionState('connected',credential.label+' 路 Connected',credential);
         document.dispatchEvent(new CustomEvent('proteus:default-connected'));
         const result=await client.request('sync',{cursor:''});if(!relevant())return;observeRunningChats(credential.hostId,'default',result.state);
-        if(result.state?.hostName){const old={...credential};await destinationStore.rememberName(old,result.state.hostName).catch(()=>{});credential.label=old.label;connectionState('connected',credential.label+' 路 Connected',credential);}
+        Object.assign(credential,authenticatedComputerMetadata(result.state));
+        if(result.state?.hostName){const old={...credential};await destinationStore.rememberName(old,result.state.hostName).catch(()=>{});credential.label=old.label;}
+        connectionState('connected',credential.label+' 路 Connected',credential);
         await refresh();usageTimer=setInterval(()=>{if(!document.hidden)void refresh();},60_000);
     }catch(error){
         if(!relevant())return;

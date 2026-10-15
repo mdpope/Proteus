@@ -105,7 +105,7 @@ class AppApiController extends Controller
         if ($kind === 'notifications') {
             $value['read'] = false;
             $value['title'] = match ($value['type']) {
-                'chat.completed' => 'Chat completed', 'approval.required' => 'Approval required', 'review.required' => 'Review required', 'schedule.completed' => 'Schedule completed', 'device.added' => 'Device added', 'device.reconnected' => 'Mac reconnected',
+                'chat.completed' => 'Chat completed', 'approval.required' => 'Approval required', 'review.required' => 'Review required', 'schedule.completed' => 'Schedule completed', 'device.added' => 'Device added', 'device.reconnected' => 'Computer reconnected',
             };
         }
         if ($kind === 'logs') {

@@ -61,9 +61,9 @@ export async function startRelay({ port = 4318, bind = '127.0.0.1', token = proc
           }
           catch { ws.close(1008, 'Invalid message'); }
         });
-        ws.on('close', () => { if (hosts.get(hostId) === ws) hosts.delete(hostId); for (const client of clients.values()) if (client.hostId === hostId) client.ws.close(1012, 'Mac disconnected'); });
+        ws.on('close', () => { if (hosts.get(hostId) === ws) hosts.delete(hostId); for (const client of clients.values()) if (client.hostId === hostId) client.ws.close(1012, 'Host disconnected'); });
       } else {
-        const host = hosts.get(hostId); if (!host) { ws.close(1013, 'Mac offline'); return; }
+        const host = hosts.get(hostId); if (!host) { ws.close(1013, 'Host offline'); return; }
         const clientId = randomUUID(); const authenticationTimer = setTimeout(() => ws.close(1008, 'Pairing timed out'), 60_000);
         clients.set(clientId, { ws, hostId, authenticationTimer });
         send(host, { type: 'connect', clientId }); let budget = 0;

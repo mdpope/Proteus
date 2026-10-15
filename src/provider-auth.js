@@ -32,9 +32,9 @@ export class ProviderAuthManager {
     if(!providers.has(providerId)||!this.adapters[providerId])throw new Error('Choose an available provider.');
     if(this.activeTurn(providerId)||this.adapters[providerId].active||this.adapters[providerId].sessions?.size)throw new Error('Wait for active provider work to finish before signing in.');
     const old=this.records.get(providerId);if(old&&!terminal.has(old.state))return this.snapshot(old);if(old&&this.isActive(providerId))throw new Error('The previous sign-in is still closing. Retry shortly.');
-    const record={providerId,state:'starting',message:'Starting sign-in on this Mac…',url:null,startedAt:new Date(this.now()).toISOString(),expiresAt:new Date(this.now()+this.timeoutMs).toISOString(),stopped:false,workSettled:false,flowId:null,loginId:null,resourceRevision:0,cleanedRevision:-1};this.records.set(providerId,record);
-    record.timer=setTimeout(()=>{if(!record.stopped){record.state='timed-out';record.message='Sign-in timed out. Retry on this Mac.';record.url=null;record.stopped=true;void this.cleanup(record).then(()=>this.notifyTerminal(record));}},this.timeoutMs);record.timer.unref?.();
-    record.work=(async()=>{try{if(providerId==='copilot')await this.copilot(record);else if(providerId==='codex')await this.codex(record);else await this.claude(record);}catch{if(!record.stopped){record.state='failed';record.message='Sign-in did not complete. Retry or use the provider CLI on this Mac.';record.url=null;record.accountLabel=null;record.stopped=true;}}finally{if(record.stopped)await this.cleanup(record);record.workSettled=true;this.notifyTerminal(record);}})();
+    const record={providerId,state:'starting',message:'Starting sign-in on this computer…',url:null,startedAt:new Date(this.now()).toISOString(),expiresAt:new Date(this.now()+this.timeoutMs).toISOString(),stopped:false,workSettled:false,flowId:null,loginId:null,resourceRevision:0,cleanedRevision:-1};this.records.set(providerId,record);
+    record.timer=setTimeout(()=>{if(!record.stopped){record.state='timed-out';record.message='Sign-in timed out. Retry on this computer.';record.url=null;record.stopped=true;void this.cleanup(record).then(()=>this.notifyTerminal(record));}},this.timeoutMs);record.timer.unref?.();
+    record.work=(async()=>{try{if(providerId==='copilot')await this.copilot(record);else if(providerId==='codex')await this.codex(record);else await this.claude(record);}catch{if(!record.stopped){record.state='failed';record.message='Sign-in did not complete. Retry or use the provider CLI on this computer.';record.url=null;record.accountLabel=null;record.stopped=true;}}finally{if(record.stopped)await this.cleanup(record);record.workSettled=true;this.notifyTerminal(record);}})();
     return this.snapshot(record);
   }
   notifyTerminal(record){if(record.notified||this.isActive(record.providerId))return;record.notified=true;this.onTerminal(record.providerId);}
@@ -56,9 +56,9 @@ export class ProviderAuthManager {
     while(!record.stopped){
       if(step.kind==='completed'){if(step.result?.status!=='completed')throw new Error('The provider did not complete sign-in.');record.accountLabel=accountLabel(step.result.login)||null;await this.verify(record);return;}
       if(step.kind==='error'||step.kind==='input-required')throw new Error('Unsupported sign-in step.');
-      if(step.kind==='open-url'){record.url=authURL(step.url);record.message='Complete Copilot sign-in in the browser on this Mac.';}
-      else if(step.kind==='needs-interaction')record.message='Complete Copilot sign-in in the browser or system prompt on this Mac.';
-      else if(step.kind==='awaiting')record.message='Waiting for Copilot authorization on this Mac…';
+      if(step.kind==='open-url'){record.url=authURL(step.url);record.message='Complete Copilot sign-in in the browser on this computer.';}
+      else if(step.kind==='needs-interaction')record.message='Complete Copilot sign-in in the browser or system prompt on this computer.';
+      else if(step.kind==='awaiting')record.message='Waiting for Copilot authorization on this computer…';
       else throw new Error('Unsupported sign-in step.');
       record.state='waiting';await wait(this.pollMs);if(record.stopped)return;step=await session.rpc.accounts.login.advance({flowId:record.flowId});
     }
@@ -71,7 +71,7 @@ export class ProviderAuthManager {
     client.on('notification',changed);client.on('closed',onClosed);
     record.stopListening=()=>{client.off('notification',changed);client.off('closed',onClosed);wake?.();};
     const result=await client.request('account/login/start',{type:'chatgpt'});if(!result?.loginId||!result?.authUrl)throw new Error('Codex did not start browser sign-in.');
-    record.loginId=result.loginId;record.resourceRevision++;if(record.stopped)return;record.url=authURL(result.authUrl);record.state='waiting';record.message='Complete Codex sign-in in the browser on this Mac.';
+    record.loginId=result.loginId;record.resourceRevision++;if(record.stopped)return;record.url=authURL(result.authUrl);record.state='waiting';record.message='Complete Codex sign-in in the browser on this computer.';
     let completion=null;
     while(!record.stopped&&!closed){completion=completed.find(item=>item?.loginId===record.loginId);if(completion)break;await new Promise(resolve=>{wake=resolve;});wake=null;}
     record.stopListening();record.stopListening=null;
@@ -82,7 +82,7 @@ export class ProviderAuthManager {
   }
   async claude(record){
     const adapter=this.adapters.claude,command=adapter.options?.command||claudeExecutable(),env={...process.env,...adapter.options?.env};
-    const child=this.spawnProcess(command,['auth','login','--claudeai'],{cwd:os.tmpdir(),env,stdio:'ignore',detached:process.platform!=='win32'});record.child=child;record.resourceRevision++;if(record.stopped)return;record.state='waiting';record.message='Complete Claude sign-in in the browser opened on this Mac.';
+    const child=this.spawnProcess(command,['auth','login','--claudeai'],{cwd:os.tmpdir(),env,stdio:'ignore',detached:process.platform!=='win32'});record.child=child;record.resourceRevision++;if(record.stopped)return;record.state='waiting';record.message='Complete Claude sign-in in the browser opened on this computer.';
     const code=await new Promise((resolve,reject)=>{child.once('exit',resolve);child.once('error',reject);record.stopListening=()=>resolve(null);});
     if(record.stopped)return;if(code!==0)throw new Error('Claude sign-in failed.');await this.verify(record);
   }

@@ -1,5 +1,22 @@
 # Remote clients
 
+## Linux and Mac hosts — October 14 source candidate
+
+The owning computer can be a Linux PC or Mac. Provider authentication, workspaces, browser
+sessions and execution stay on that host; mobile/website clients use its existing encrypted
+protocol-1 boundary. Authenticated state may add `hostPlatform`, canonical `hostPlatformLabel`,
+`hostArchitecture` and `host.platform.v1`, alongside the unchanged `hostName`. Missing/unknown
+fields have neutral fallbacks. Descriptive metadata grants no capability and is not taken from
+an invitation; legacy host/device IDs, keys, approvals, cursors and command retry receipts stay
+unchanged. Pair each host separately and use distinct registration tokens on a shared relay.
+
+Desktop-to-desktop pairing accepts private-network `ws://` origins, matching native validation;
+internet relays require `wss://`. Website invitation policy remains its configured relay with
+exact browser-origin checks. Local Docker setup forwards the explicit allowed-origin list; it
+does not authorize every website origin. Existing Mac connectivity and synthetic two-host tests
+are not evidence of an actual iPhone-to-Linux session. That live acceptance, native simulator
+checks and signed Mac package acceptance remain pending for this candidate.
+
 ## Automatic local design previews — 0.2.11
 
 The owning Mac discovers localhost HTML links in assistant messages and ordinary chat browser
@@ -21,11 +38,15 @@ Browser transports bound command bursts below the existing relay budget; website
 requests for one destination. The [full release ledger](2026-10-10-full-chat-release.md) separates
 implementation, verification and deployment.
 
-Proteus for iPhone/iPad and the website can select among independently paired Macs. Each Mac is the only
+Proteus for iPhone/iPad and the website can select among independently paired computers. Each computer is the only
 scheduler and provider execution host. The relay routes encrypted messages; it never runs agents,
 receives provider credentials, or reads workspace files. Mobile clients do not need a Copilot login.
 
-## Mac lifecycle
+## Desktop lifecycle
+
+On Linux, closing the window minimizes it by default; explicit Quit stops the host.
+`PROTEUS_CLOSE_TO_TRAY=1` opts into hiding. See [Linux setup](linux-app.md) for lifecycle and
+packaging details. The following menu-bar/Dock behavior applies to macOS.
 
 Directional Pause/Resume is queued in BF-2026-10-09-16. Pausing an outgoing peer will hide that host's
 content on the pausing Mac and suppress outgoing recovery until resumed, preserving incoming access,
@@ -49,26 +70,27 @@ The Electron user session must remain running for embedded browser functionality
 
 ## Local setup
 
-1. Run `npm ci` and `npm run desktop` on the execution Mac.
+1. Run `npm ci` and `npm run desktop` on the execution Linux PC or Mac.
 2. Open **Remote access**. For the simplest local connection, select **Built-in local relay** and
    **Enable access**. Refresh status after it connects. This runs exactly the same relay module
    used in the container. The local relay listens on the chosen port (4318 by default).
 3. For a Docker relay instead, start Docker (or `colima start --profile proteus --cpu 2 --memory 2`),
    then run `PROTEUS_DOCKER_CONTEXT=colima-proteus npm run relay:local`. Omit the environment variable
-   for the default Docker context. The script builds the image, publishes port 4318 on the Mac’s network interfaces, and configures the running host. `PROTEUS_RELAY_ADDRESS` selects a particular
-   private IPv4 address. A changed DHCP address requires rerunning this setup and re-pairing devices.
+   for the default Docker context. The script builds the image, publishes port 4318 on the computer’s network interfaces, and configures the running host. `PROTEUS_RELAY_ADDRESS` selects a particular
+   private IPv4 address. After an address change, existing mobile pairings can use **Edit relay**
+   with the new origin without replacing their host identity or keys.
 4. The container's host token lives in the app data directory's `relay.env` (0600), outside Git.
    The setup script only replaces a container carrying Proteus's own management label. It verifies
    the chosen LAN address before connecting the host.
 5. In **Remote access**, check that the device-facing address is reachable from the phone, then
    choose **Create pairing code**. Scan the QR code in the iOS app or copy/paste its pairing link.
    Each invite expires after five minutes and can pair one device. Create another for an iPad.
-6. Allow local network access on the iPhone/iPad and incoming local connections on the Mac if
-   macOS asks. Devices must be on a network that permits peer-to-peer connections. Guest Wi-Fi,
+6. Allow local network access on the iPhone/iPad and incoming local connections on the host's
+   firewall; approve macOS prompts on a Mac. Devices must be on a network that permits peer-to-peer connections. Guest Wi-Fi,
    VPN routing, or firewall rules can prevent connection.
 
 The Docker relay persists no conversations or keys. It can restart independently; clients reconnect.
-Disabling remote access disconnects the Mac from an external relay but does not stop its container.
+Disabling remote access disconnects the execution host from an external relay but does not stop its container.
 Use `docker --context colima-proteus stop proteus-relay` to stop a local container, and
 `colima stop --profile proteus` to stop the optional VM. No public router port-forwarding is needed
 for local testing.

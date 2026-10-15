@@ -5,6 +5,7 @@ services:
       - "${PROTEUS_RELAY_BIND:-127.0.0.1}:4318:4318"
     environment:
       PROTEUS_RELAY_TOKEN: ${PROTEUS_RELAY_TOKEN:?Set a 64-character random hex token}
+      PROTEUS_RELAY_ALLOWED_CLIENT_ORIGINS: ${PROTEUS_RELAY_ALLOWED_CLIENT_ORIGINS:-}
     restart: unless-stopped
     read_only: true
     cap_drop: [ALL]

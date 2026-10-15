@@ -534,6 +534,45 @@ final class RemoteTests: XCTestCase {
         remote.state = .object(["hostName": .string("Studio workstation")])
         XCTAssertEqual(remote.displayName, "Studio workstation")
     }
+    func testHostMetadataSupportsLinuxAndMacWithoutChangingProtocolRequirements() {
+        for (platform, label, arch) in [("linux", "Linux", "x64"), ("darwin", "macOS", "arm64"), ("win32", "Windows", "x64")] {
+            let info = RemoteHostInfo(state: .object(["hostName": .string("  Studio workstation  "), "hostPlatform": .string(platform), "hostPlatformLabel": .string(label), "hostArchitecture": .string(arch)]))
+            XCTAssertEqual(info.displayName, "Studio workstation")
+            XCTAssertEqual(info.platform.label, label)
+            XCTAssertEqual(info.platformDescription, label + " · " + arch)
+            XCTAssertEqual(info.signInPrompt.contains("Keychain"), platform == "darwin")
+        }
+    }
+    func testLegacyAndUnknownHostMetadataHaveNeutralFallbacks() {
+        let legacy = RemoteHostInfo(state: .object(["hostName": .string("Existing Mac")]))
+        XCTAssertEqual(legacy.displayName, "Existing Mac")
+        XCTAssertEqual(legacy.platform, .unknown)
+        XCTAssertNil(legacy.platformDescription)
+        XCTAssertFalse(legacy.signInPrompt.contains("Keychain"), "Host names must not imply an operating system")
+        let future = RemoteHostInfo(state: .object(["hostPlatform": .string("future-os"), "hostPlatformLabel": .string("macOS"), "hostArchitecture": .string("arch\nspoof")]))
+        XCTAssertEqual(future.displayName, "Connected computer")
+        XCTAssertEqual(future.platform, .unknown)
+        XCTAssertEqual(future.architecture, "")
+        XCTAssertNil(future.platformDescription)
+        XCTAssertEqual(RemoteHostInfo(state: .object(["hostName": .string("\n\t")])).displayName, "Connected computer")
+        XCTAssertEqual(RemoteHostInfo(state: .object(["hostName": .string("Injected\nname")])).displayName, "Connected computer")
+    }
+    func testNewAndLegacyPairingDefaultsAdoptComputerNameWithoutReplacingExistingLabels() {
+        for placeholder in ["My computer", "New computer", "My Mac", "New Mac"] {
+            XCTAssertEqual(HostDestination.pairingName(requested: placeholder, suggested: "Linux tower", existing: nil), "Linux tower")
+            XCTAssertEqual(HostDestination.pairingName(requested: placeholder, suggested: "Linux tower", existing: "Saved destination"), "Saved destination")
+            XCTAssertEqual(HostDestination.pairingName(requested: placeholder, suggested: "Invalid\nname", existing: nil), placeholder)
+        }
+        XCTAssertEqual(HostDestination.pairingName(requested: "Chosen label", suggested: "Linux tower", existing: "Previous label"), "Chosen label")
+    }
+    func testHostDestinationRetainsLegacyIndexShape() throws {
+        let data = Data(#"{"id":"10000000-0000-4000-8000-000000000001","label":"Existing Mac"}"#.utf8)
+        let destination = try JSONDecoder().decode(HostDestination.self, from: data)
+        XCTAssertEqual(destination.label, "Existing Mac")
+        let encoded = try JSONDecoder().decode(JSON.self, from: JSONEncoder().encode(destination))
+        XCTAssertEqual(encoded.object.keys.sorted(), ["id", "label"])
+        XCTAssertEqual(encoded["id"].string, destination.id)
+    }
     func testAttentionCountUsesCompleteLegacyHostSummariesOnly() {
         let awaiting: JSON = .object(["id": .string("a"), "status": .string("awaiting_input"), "attentionRequired": .bool(true)])
         let reviewed: JSON = .object(["id": .string("b"), "status": .string("failed"), "failureReviewedAt": .string("2026-10-05T21:00:00Z"), "attentionRequired": .bool(false)])
@@ -957,6 +996,29 @@ final class DestinationTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: root.appendingPathComponent("cache.enc").path))
         let restored = DestinationStore(root: root, keychainService: service)
         XCTAssertEqual(restored.selected?.state["hostName"].string, "Original Mac")
+    }
+    @MainActor func testMixedPlatformDestinationsRestoreMetadataAndLegacyCredentialsIndependently() throws {
+        let (root, service) = try fixture(); let destinations = DestinationStore(root: root, keychainService: service)
+        defer { destinations.resetForTesting(); try? FileManager.default.removeItem(at: root) }
+        let linux = credential(UUID().uuidString), mac = credential(UUID().uuidString)
+        for (connection, label, platform) in [(linux, "Linux workstation", "linux"), (mac, "Existing Mac", "darwin")] {
+            try destinations.register(connection, label: label)
+            let remote = try XCTUnwrap(destinations.selected)
+            remote.state = .object(["hostName": .string(label), "hostPlatform": .string(platform), "hostArchitecture": .string("arm64")])
+            remote.setDraft("reply:same-chat", .string(label + " draft")); remote.flushCache()
+        }
+        try destinations.select(linux.hostId, connect: false)
+        let restored = DestinationStore(root: root, keychainService: service)
+        defer { restored.activity(false) }
+        XCTAssertEqual(restored.selectedID, linux.hostId)
+        XCTAssertEqual(restored.selected?.hostInfo.platform, .linux)
+        XCTAssertEqual(restored.selected?.draft("reply:same-chat").string, "Linux workstation draft")
+        XCTAssertEqual(restored.remote(for: mac.hostId)?.hostInfo.platform, .darwin)
+        XCTAssertEqual(restored.remote(for: mac.hostId)?.draft("reply:same-chat").string, "Existing Mac draft")
+        XCTAssertEqual(DeviceKeychain.load(hostID: linux.hostId, service: service)?.key, linux.key)
+        XCTAssertEqual(DeviceKeychain.load(hostID: mac.hostId, service: service)?.key, mac.key)
+        XCTAssertEqual(restored.destinations.map(\.label), ["Linux workstation", "Existing Mac"])
+        XCTAssertNil(DeviceKeychain.load(service: service))
     }
     @MainActor func testHostKeysCachesDraftsAndForgetRemainIndependentOnSharedRelay() async throws {
         let (root, service) = try fixture(); let destinations = DestinationStore(root: root, keychainService: service)

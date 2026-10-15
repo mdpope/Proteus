@@ -1,3 +1,24 @@
+## October 14 cross-platform compatibility — implemented; acceptance incomplete
+
+Implemented: platform-neutral desktop/web/native host controls, optional authenticated platform
+metadata, Linux legacy Secret Service resolution with unchanged Mac Keychain behavior, and shared
+packaging inventory/metadata verification. Legacy wire/storage keys, pairings, host ownership,
+approvals, drafts and retry receipts stay intact. Independent computers retain distinct relay
+registrations. Native source adds five unit cases and a local mixed Linux/Mac UI fixture.
+
+Verified: 619 Node checks, static checks, PHP 81 tests / 724
+assertions, Pint/Vite, and disposable Linux UI at desktop/phone widths for attachments, chat
+design, composer, bounded MCP retries and long-history pagination. Linux stage `6f16217c6a6f`
+passed all 231 runtime hashes, metadata/provenance/private-file checks, isolated startup,
+synthetic feedback, native PTY keyboard input and restart history before this documentation
+freeze; final current-source rebuilding remains pending and no live installation changed.
+The new hosted workflow covers Linux/Mac desktop packages,
+web and an iPhone simulator, but has not executed. Remaining acceptance: finish source/package
+checks after freeze, exercise the staged Linux package, run hosted/Mac/native tests, verify signed
+Mac identity and existing data, then separately test actual iPhone/iPad-to-Linux and mixed-host
+relay operation. Provider sign-in and live Life/Secret Service access require their own evidence.
+No physical update or production relay/website deployment is implied. See `linux-app.md`.
+
 ## Local Linux adaptation of current 0.2.19
 
 The Linux branch imports the verified accepted canonical Mac source (`82cd923`, fingerprint

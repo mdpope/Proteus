@@ -20,18 +20,26 @@ export async function unseal(key, box, aad) {
     const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: bytes.subarray(0, 12), additionalData: encoder.encode(aad), tagLength: 128 }, key, bytes.subarray(12));
     return JSON.parse(decoder.decode(plaintext));
 }
-export function parsePairing(code) {
+export function pairingRelayOrigin(value, { allowLocalNetwork = false } = {}) {
+    const relay = new URL(value);
+    const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(relay.hostname);
+    const octets = relay.hostname.split('.');
+    const ipv4 = octets.length === 4 && octets.every(value => /^\d{1,3}$/.test(value) && Number(value) <= 255);
+    const [a, b] = octets.map(Number);
+    const privateNetwork = ipv4 && (a === 10 || a === 192 && b === 168 || a === 172 && b >= 16 && b <= 31) || relay.hostname.endsWith('.local');
+    if (relay.origin !== value || relay.username || relay.password || (relay.protocol !== 'wss:' && !(relay.protocol === 'ws:' && (loopback || allowLocalNetwork && privateNetwork)))) throw new Error(allowLocalNetwork ? 'Desktop pairing requires a secure relay or a private local network relay.' : 'Browser pairing requires a secure relay, or loopback for local testing.');
+    return relay.origin;
+}
+export function parsePairing(code, options) {
     let capsule;
-    if (typeof code !== 'string' || code.length > 10_000) throw new Error('Paste a fresh pairing code from the Mac.');
+    if (typeof code !== 'string' || code.length > 10_000) throw new Error('Paste a fresh pairing code from the computer.');
     try {
         const trimmed = code.trim();
         const encoded = trimmed.startsWith('proteus://') ? new URL(trimmed).searchParams.get('data') : trimmed.replace(/^#?pair=/, '');
         capsule = JSON.parse(decoder.decode(bytes64(encoded.replace(/-/g, '+').replace(/_/g, '/'))));
     } catch { throw new Error('This is not a Proteus pairing code.'); }
-    const relay = new URL(capsule.relay);
-    const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(relay.hostname);
-    if (capsule.version !== 1 || !uuid.test(capsule.hostId || '') || !/^[a-f0-9]{64}$/i.test(capsule.key || '') || !Number.isFinite(Date.parse(capsule.expiresAt)) || Date.parse(capsule.expiresAt) <= Date.now()) throw new Error('Pairing expired or is invalid. Generate a fresh code on the Mac.');
-    if (relay.origin !== capsule.relay || relay.username || relay.password || (relay.protocol !== 'wss:' && !(relay.protocol === 'ws:' && loopback))) throw new Error('Browser pairing requires a secure relay, or loopback for local testing.');
+    if (capsule.version !== 1 || !uuid.test(capsule.hostId || '') || !/^[a-f0-9]{64}$/i.test(capsule.key || '') || !Number.isFinite(Date.parse(capsule.expiresAt)) || Date.parse(capsule.expiresAt) <= Date.now()) throw new Error('Pairing expired or is invalid. Generate a fresh code on the computer.');
+    pairingRelayOrigin(capsule.relay, options);
     return capsule;
 }
 export class BrowserRemoteClient extends EventTarget {
@@ -43,20 +51,20 @@ export class BrowserRemoteClient extends EventTarget {
     async connect() {
         if (this.socket) throw new Error('This connection already started.');
         this.status = 'connecting'; this.event('status', this.status);
-        if (this.host.inviteKey) {if(this.host.expiresAt&&Date.parse(this.host.expiresAt)<=Date.now())throw new Error('Invitation expired before connection. Generate a fresh code on the Mac.');this.inviteKey = await importKey(this.host.inviteKey);}
+        if (this.host.inviteKey) {if(this.host.expiresAt&&Date.parse(this.host.expiresAt)<=Date.now())throw new Error('Invitation expired before connection. Generate a fresh code on the computer.');this.inviteKey = await importKey(this.host.inviteKey);}
         this.progress('relay','Connecting to the relay…');
         return new Promise((resolve, reject) => {
             this.connected = { resolve, reject };
-            this.timer = setTimeout(() => this.fail(this.stage==='account-save'?'Account save did not finish. Check website sign-in and retry; the Mac may have consumed the invitation.':this.stage==='pairing'?'Pairing did not finish. Check the Mac’s Connections page and create a fresh invitation.':'Mac authentication did not finish. Check that the Mac is online and retry.'), this.timeoutMs);
+            this.timer = setTimeout(() => this.fail(this.stage==='account-save'?'Account save did not finish. Check website sign-in and retry; the computer may have consumed the invitation.':this.stage==='pairing'?'Pairing did not finish. Check the computer’s Connections page and create a fresh invitation.':'Computer authentication did not finish. Check that the computer is online and retry.'), this.timeoutMs);
             this.socket = this.socketFactory(`${this.host.relay}/socket?role=client&host=${encodeURIComponent(this.host.hostId)}`);
             this.socket.addEventListener('message', event => { this.receiveQueue = this.receiveQueue.then(() => this.receive(JSON.parse(event.data))).catch(() => {this.event('recovery-blocked',{reason:'verification'});this.fail('Encrypted verification failed during '+this.stage+'. Reconnect or generate a fresh invitation.');}); });
-            this.socket.addEventListener('error', () => this.fail('Could not reach the relay. Check the Mac connection and relay origin settings.'));
-            this.socket.addEventListener('close', event => {if(event.code===1008)this.event('recovery-blocked',{reason:'authentication'});this.fail(event.code === 1013 ? 'Mac is offline or the relay is busy. Connect the Mac to the relay, then retry.' : event.code === 1012 ? 'Mac disconnected during '+this.stage+'. Reconnect when it is online.' : event.code === 1008 ? 'Relay refused the connection during '+this.stage+'. Check Mac access and use a fresh invitation for pairing.' : 'Connection interrupted during '+this.stage+' (close '+event.code+'). Reconnect; pairing may require a fresh invitation.');});
+            this.socket.addEventListener('error', () => this.fail('Could not reach the relay. Check the computer connection and relay origin settings.'));
+            this.socket.addEventListener('close', event => {if(event.code===1008)this.event('recovery-blocked',{reason:'authentication'});this.fail(event.code === 1013 ? 'Computer is offline or the relay is busy. Connect the computer to the relay, then retry.' : event.code === 1012 ? 'Computer disconnected during '+this.stage+'. Reconnect when it is online.' : event.code === 1008 ? 'Relay refused the connection during '+this.stage+'. Check computer access and use a fresh invitation for pairing.' : 'Connection interrupted during '+this.stage+' (close '+event.code+'). Reconnect; pairing may require a fresh invitation.');});
         });
     }
-    raw(packet) { if (this.socket?.readyState !== 1) throw new Error('Mac is not connected.'); this.socket.send(JSON.stringify(packet)); }
+    raw(packet) { if (this.socket?.readyState !== 1) throw new Error('Computer is not connected.'); this.socket.send(JSON.stringify(packet)); }
     async authenticate() {
-        if(this.status==='closed')return;this.progress('authentication','Authenticating this browser with the Mac…');
+        if(this.status==='closed')return;this.progress('authentication','Authenticating this browser with the computer…');
         const bytes = crypto.getRandomValues(new Uint8Array(32)); const nonce = Array.from(bytes, value => value.toString(16).padStart(2, '0')).join(''); this.prefix = `${this.challenge}:${nonce}`;
         this.raw({ type: 'auth', deviceId: this.host.deviceId, box: await seal(this.host.key, { nonce }, `${this.challenge}:auth`) });
     }
@@ -65,7 +73,7 @@ export class BrowserRemoteClient extends EventTarget {
         if (packet.type === 'challenge') {
             if (this.challenge || !/^[a-f0-9]{64}$/.test(packet.challenge || '')) throw new Error('Invalid challenge.'); this.challenge = packet.challenge;
             if (this.host.key) await this.authenticate();
-            else {this.progress('pairing','Mac reached. Verifying the invitation…');this.raw({ type: 'pair', box: await seal(this.inviteKey, { name: this.name }, `${this.challenge}:pair`) });}
+            else {this.progress('pairing','Computer reached. Verifying the invitation…');this.raw({ type: 'pair', box: await seal(this.inviteKey, { name: this.name }, `${this.challenge}:pair`) });}
         } else if (packet.type === 'paired') {
             if (!this.inviteKey || this.host.key) throw new Error('Unexpected pairing.');
             const device = await unseal(this.inviteKey, packet.box, `${this.challenge}:paired`);
@@ -74,22 +82,22 @@ export class BrowserRemoteClient extends EventTarget {
         } else if (packet.type === 'ready') {
             if (this.status !== 'connecting' || !this.prefix) throw new Error('Unexpected ready message.');
             const value = await unseal(this.host.key, packet.box, `${this.prefix}:ready`); if (value.protocol !== 1) throw new Error('Unsupported protocol.');
-            clearTimeout(this.timer);this.progress('connected',this.credentialSaved?'Destination saved and authenticated. Connected to the Mac.':'Authenticated. Connected to the Mac.'); this.status = 'online'; this.connected.resolve(this); this.connected = null; this.event('status', this.status);
+            clearTimeout(this.timer);this.progress('connected',this.credentialSaved?'Destination saved and authenticated. Connected to the computer.':'Authenticated. Connected to the computer.'); this.status = 'online'; this.connected.resolve(this); this.connected = null; this.event('status', this.status);
         } else if (packet.type === 'data') {
             if (this.status !== 'online' || packet.seq !== this.incoming + 1) throw new Error('Invalid sequence.');
             const value = await unseal(this.host.key, packet.box, `${this.prefix}:host:${packet.seq}`); this.incoming = packet.seq;
             if (value.type === 'result') { const pending = this.waiting.get(value.id); if (pending) { clearTimeout(pending.timer); this.waiting.delete(value.id); value.error ? pending.reject(new Error(value.error)) : pending.resolve(value.result); } }
-            else if(value.type === 'revoked' && value.deviceId === this.host.deviceId){this.event('revoked',{authenticated:true,deviceId:value.deviceId});this.fail('This device was revoked by the Mac.');}
+            else if(value.type === 'revoked' && value.deviceId === this.host.deviceId){this.event('revoked',{authenticated:true,deviceId:value.deviceId});this.fail('This device was revoked by the computer.');}
             else if (value.type === 'event') this.event('change', value);
             else throw new Error('Invalid message.');
-        } else if (packet.type === 'revoked' || packet.type === 'rejected') { this.event('recovery-blocked',{reason:'authentication'}); this.event('rejected', {authenticated:false,type:packet.type}); this.fail(this.stage==='pairing'?'Mac rejected the invitation. It may be expired or already consumed. Create a fresh invitation.':'Mac rejected authentication. Saved pairing was preserved; review Connections on the Mac.'); }
+        } else if (packet.type === 'revoked' || packet.type === 'rejected') { this.event('recovery-blocked',{reason:'authentication'}); this.event('rejected', {authenticated:false,type:packet.type}); this.fail(this.stage==='pairing'?'Computer rejected the invitation. It may be expired or already consumed. Create a fresh invitation.':'Computer rejected authentication. Saved pairing was preserved; review Connections on the computer.'); }
         else throw new Error('Unexpected message.');
     }
     request(method, args = {}, { id = crypto.randomUUID(), issuedAt = new Date().toISOString(), timeoutMs = 60_000 } = {}) {
-        if (this.status !== 'online') return Promise.reject(new Error('Connect this Mac first.'));
+        if (this.status !== 'online') return Promise.reject(new Error('Connect this computer first.'));
         if (this.waiting.has(id)) return Promise.reject(new Error('This action is already waiting for a response.'));
         return new Promise((resolve, reject) => {
-            const timer = setTimeout(() => { this.waiting.delete(id); reject(new Error('Response timed out. Refresh the Mac state before retrying; the action may already have completed.')); }, Math.max(1000,Math.min(timeoutMs,60_000)));
+            const timer = setTimeout(() => { this.waiting.delete(id); reject(new Error('Response timed out. Refresh the computer state before retrying; the action may already have completed.')); }, Math.max(1000,Math.min(timeoutMs,60_000)));
             this.waiting.set(id, { resolve, reject, timer });
             this.sendQueue = this.sendQueue.then(async () => {
                 // Leave room for authentication within the relay's 100-packet/10-second budget.

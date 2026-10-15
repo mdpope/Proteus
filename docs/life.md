@@ -4,7 +4,7 @@ Life is optional and hidden until enabled in Setup. Corporate installations need
 Once enabled, the Life tab persists even while signed out and offers account setup.
 Desktop, iPhone and iPad use the authenticated Proteus website API. Only the website service
 accesses its database. Native app screens remain native; no website iframe supplies their records.
-Life is independent of the selected execution Mac and remains available when those Macs sleep.
+Life is independent of the selected execution computer and remains available when that host sleeps.
 
 ## Connect an account
 
@@ -14,8 +14,9 @@ same public native client as mobile, PKCE S256 and the fixed `proteus://life-oau
 The app verifies discovery origin/endpoints, pending state and authorization attempt. Cancel,
 logout or a newer attempt prevents an old callback from saving a session.
 
-Desktop tokens remain in the main process, encrypted with macOS-backed Electron safeStorage in
-an owner-only atomic file. Insecure/plaintext storage is refused. Tokens never enter renderer
+Desktop tokens remain in the main process, encrypted with protected Electron safeStorage in
+an owner-only atomic file. macOS uses its existing Keychain-backed path; Linux requires an
+available desktop keyring/Secret Service. Insecure `basic_text` fallback is refused. Tokens never enter renderer
 state, localStorage or relay responses. Mobile tokens remain in Keychain. Website redirects are
 not followed for API/token requests, and responses and evidence downloads are bounded.
 
@@ -36,6 +37,9 @@ Database setup/upgrade/backup endpoints are retired from the desktop runtime. Ne
 install and upgrade the service with its versioned Laravel migrations and a verified recovery
 point. Downloading a desktop or mobile update cannot migrate the database. Explicit legacy admin
 code and historical validation remain documented in [database administration](life-database-admin.md).
+That explicit legacy adapter now supports Linux Secret Service references as well as unchanged
+Mac Keychain lookup; it does not change this API-only runtime or open old profiles automatically.
+Synthetic storage tests do not establish live website sign-in or Linux keyring access.
 
 ## Included native workflows
 

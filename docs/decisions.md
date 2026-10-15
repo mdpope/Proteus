@@ -2,6 +2,25 @@
 
 These decisions describe implemented behavior. Proposed work belongs in `planned-updates.md`.
 
+- **Execution ownership is platform-neutral.** Linux PCs and Macs use the same scheduler/provider
+  and encrypted remote boundaries. Host UUIDs own execution, authorization and retry receipts;
+  display names and optional authenticated platform metadata are descriptive. Protocol 1 and
+  legacy storage/wire keys remain stable; missing metadata never implies macOS or grants access.
+- **Shared package verification, separate platform signing.** Mac/Linux use one runtime inventory
+  and verify its exact names/hashes, copied package input and complete final metadata/provenance.
+  Only the copied PTY is rebuilt for Electron. Mac bundle identity, vendor bytes and signing
+  requirements remain separate from unsigned CI and Linux artifacts; no artifact is installed
+  merely because packaging or a synthetic check passed.
+- **Protected credentials follow the execution host.** Desktop tokens require protected Electron
+  safeStorage and refuse plaintext fallback. Explicit legacy administrator profiles resolve
+  service/account references using existing Mac Keychain commands or Linux Secret Service;
+  secrets stay outside profiles, process arguments, logs and client responses. This does not
+  restore direct database access to normal Life clients or migrate credentials between computers.
+- **Hosted tests have bounded claims.** CI exercises disposable Linux/Mac packages, website tests
+  and an iPhone simulator without production credentials, Apple account changes or installations.
+  Synthetic metadata/UI checks do not establish signed package continuity, provider authentication
+  or real mobile relay operation.
+
 - **Independent rotating diagnostics.** A dedicated worker owns `logs.sqlite`, keeping up to
   2,000 entries under a separate byte budget. Log retention cannot remove browser history or
   execution retry receipts. Lists expose compact summaries/cursors; individual redacted diagnostic
@@ -30,8 +49,8 @@ These decisions describe implemented behavior. Proposed work belongs in `planned
 - **Native device-zone chats.** Mobile chat timestamps follow the viewing device’s time zone,
   including DST and live zone changes. Shared account defaults cannot force UTC on native chats.
 
-- **Mac execution with remote clients.** Provider credentials, tools and browser sessions remain
-  on the Mac. iOS sends authenticated encrypted commands through an opaque relay. This preserves
+- **Desktop execution with remote clients.** Provider credentials, tools and browser sessions remain
+  on the owning Linux PC or Mac. iOS sends authenticated encrypted commands through an opaque relay. This preserves
   access to local workspaces and avoids replicating execution environments on mobile devices.
 - **Independent app and workflow repositories.** Proteus owns generic formats and UI. organization workflows and
   other operating systems own their schedules, workflow instructions and validators. Source-owned
@@ -67,8 +86,8 @@ These decisions describe implemented behavior. Proposed work belongs in `planned
   provider are refused rather than silently widened.
 - **Queue versus steer.** A queued message is durable future work and runs only after success;
   steering targets one active native turn. Delivery acknowledgments are distinct from completion.
-- **Mac-owned OAuth.** Connection recovery invokes the provider's OAuth client. Corporate sign-in
-  opens on the Mac even when requested from iOS, keeping loopback callbacks and tokens on the host.
+- **Host-owned OAuth.** Connection recovery invokes the provider's OAuth client. Corporate sign-in
+  opens on the execution computer even when requested from iOS, keeping loopback callbacks and tokens on the host.
 
 - **Message-scoped model choices.** The composer captures settings on submission. Queued messages
   retain independent choices, applied only when their turn starts. A steering request never mutates

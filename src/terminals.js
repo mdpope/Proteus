@@ -62,7 +62,7 @@ export class TerminalStore extends EventEmitter {
   const spawn=this.spawnPty||(await import('node-pty')).spawn;
   if(this.closing)throw new Error('Terminals are shutting down.');if([...this.sessions.values()].filter(s=>s.status==='running').length>=MAX_SESSIONS)throw new Error('Close an active terminal before opening another.');
   if(persistence==='tmux'){
-    const current=this.tmux.sessions();if(!current.available)throw new Error('tmux is not available on this Mac.');
+    const current=this.tmux.sessions();if(!current.available)throw new Error('tmux is not available on this computer.');
     if(tmuxSessionId){this.tmux.validate(tmuxSessionId);const selectedSession=current.managedSessions.find(item=>item.id===tmuxSessionId&&item.tag===tmuxSessionTag);if(!selectedSession)throw new Error('This Proteus tmux session identity changed or is unavailable.');if(selectedSession.attached||[...this.sessions.values()].some(item=>item.status==='running'&&item.tmuxSessionId===tmuxSessionId))throw new Error('This tmux session already has an attached viewer.');}
     else{tmuxSessionId='proteus-'+randomUUID();tmuxSessionTag=this.tmux.create({id:tmuxSessionId,cwd:selected.resolved,shell:profile.shell,args}).tag;}
   }

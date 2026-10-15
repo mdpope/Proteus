@@ -28,7 +28,8 @@
 .adaptive-composer .attachment-add>span::before,.adaptive-composer .remote-attach-button::before{content:"";position:absolute;width:34px;height:34px;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--proteus-control-hover,#ffffff0d);border-radius:7px;opacity:0;pointer-events:none;z-index:-1}
 .adaptive-composer .attachment-add:hover>span::before,.adaptive-composer .attachment-add:focus-visible>span::before,.adaptive-composer .remote-attach-button:hover::before,.adaptive-composer .remote-attach-button:focus-visible::before{opacity:1}
 .adaptive-composer .attachment-controls{flex:none}
-.adaptive-composer .attachment-strip{width:100%}
+.adaptive-composer .attachment-strip{width:100%;min-width:0;max-width:100%}
+.adaptive-composer>.composer-footer:has(.attachment-strip:not(:empty)),.adaptive-composer .remote-composer-primary:has(.attachment-strip:not(:empty)){flex-wrap:wrap!important}
 .adaptive-composer .queued-message{max-height:60px;overflow:auto}
 .chat-details .runtime-stat,.remote-chat-details .runtime-stat{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center}
 .runtime-stat>span,.token-stats>div>span{font-size:11px;color:var(--soft,var(--muted))}

@@ -37,9 +37,9 @@
 		<true/>
 	</dict>
 	<key>NSCameraUsageDescription</key>
-	<string>Scan the one-time pairing code displayed by Proteus on your Mac.</string>
+	<string>Scan the one-time pairing code displayed by Proteus on your computer.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Connect to your paired Proteus Mac to view schedules and run conversations.</string>
+	<string>Connect to your paired Proteus computer to view schedules and run conversations.</string>
 	<key>ProteusAPNSEnvironment</key>
 	<string>sandbox</string>
 	<key>UIApplicationSceneManifest</key>

@@ -120,6 +120,28 @@ test('authenticated host names update labels without changing pairing identity a
   const current={...peers.records.get(record.hostId)};delete current.label;assert.deepEqual(current,identity);assert.equal(peers.cache.get(record.hostId).items[0].destinationName,'Renamed through state');
   assert.ok(!fs.readFileSync(peers.file).includes(Buffer.from('Renamed through state')));const restarted=new DesktopPeers(f.home,{safeStorage});assert.equal(restarted.list()[0].label,'Renamed through state');assert.equal(restarted.cache.get(record.hostId).items[0].destinationName,'Renamed through state');restarted.close();
 });
+test('authenticated Mac and Linux metadata refreshes without changing protected pairing records',async t=>{
+  const f=namingFixture(t),{peers}=f;
+  assert.equal(peers.list()[0].hostPlatform,'unknown');
+  await peers.connect(record.hostId);
+  for(const [hostPlatform,hostPlatformLabel,hostArchitecture] of [['linux','Linux','x64'],['darwin','macOS','arm64']]){
+    f.client.emit('change',{event:'state',data:{hostName:'Host-owned name',hostPlatform,hostPlatformLabel:'Untrusted label',hostArchitecture,runs:[]}});
+    const current=peers.list()[0];assert.equal(current.hostPlatform,hostPlatform);assert.equal(current.hostPlatformLabel,hostPlatformLabel);assert.equal(current.hostArchitecture,hostArchitecture);
+    await peers.index();await peers.indexPending;assert.equal((await peers.index()).hosts[0].hostPlatform,hostPlatform);
+  }
+  const saved=JSON.parse(safeStorage.decryptString(fs.readFileSync(peers.file)))[0];assert.equal(Object.hasOwn(saved,'hostPlatform'),false);assert.equal(saved.key,record.key);
+  f.client.status='offline';f.client.emit('change',{event:'state',data:{hostPlatform:'linux'}});assert.equal(peers.list()[0].hostPlatform,'darwin');
+  f.client.status='online';f.client.emit('change',{event:'state',data:{runs:[]}});assert.equal(peers.list()[0].hostPlatform,'unknown');
+  const replaced=f.client;await peers.disconnect(record.hostId);await peers.connect(record.hostId);replaced.emit('change',{event:'state',data:{hostPlatform:'linux'}});assert.equal(peers.list()[0].hostPlatform,'unknown');
+});
+
+test('private LAN desktop records reload with encrypted custody and no browser-policy relaxation',async t=>{
+  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-peer-lan-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+  const lan={...record,relay:'ws://192.168.1.25:4318'},code=Buffer.from(JSON.stringify({version:1,hostId:lan.hostId,relay:lan.relay,key:lan.key,expiresAt:new Date(Date.now()+60000).toISOString()})).toString('base64url');
+  const peers=new DesktopPeers(home,{safeStorage,clientFactory:(host,options)=>({connect:()=>options.onCredential({...lan,label:host.label}),close(){}})});
+  await peers.pair(code,'Synthetic LAN');peers.close();
+  const restored=new DesktopPeers(home,{safeStorage});assert.equal(restored.list()[0].hostId,lan.hostId);assert.equal(restored.records.get(lan.hostId).relay,lan.relay);assert.ok(!fs.readFileSync(restored.file).includes(Buffer.from(lan.key)));restored.close();
+});
 test('invalid, offline and superseded sessions cannot rename a saved desktop',async t=>{
   const f=namingFixture(t),{peers}=f;await peers.connect(record.hostId);const session=peers.sessions.get(record.hostId),original=fs.readFileSync(peers.file);
   for(const name of [null,42,{},'', '   ','x'.repeat(81),'bad\u0000name','bad\nname','bad\u007fname']){f.client.emit('change',{event:'state',data:{hostName:name}});assert.equal(peers.list()[0].label,'Host-owned name');}

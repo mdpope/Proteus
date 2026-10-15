@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { createDesktopSnapshot, verifyDesktopMetadata, fileDigest as digest, desktopPackageIgnore } from './desktop-build.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const gitHead=execFileSync('git',['rev-parse','--short=12','HEAD'],{cwd:root,encoding:'utf8'}).trim();
 const unsigned=process.env.PROTEUS_MAC_UNSIGNED==='1';
@@ -28,43 +29,12 @@ for (const size of [16, 32, 128, 256, 512]) for (const scale of [1, 2]) {
 const icon = path.join(root, 'dist/Proteus.icns');
 execFileSync('iconutil', ['-c', 'icns', iconset, '-o', icon]);
 await import('./build-terminal.mjs');
-const digest=file=>createHash('sha256').update(fs.readFileSync(file)).digest('hex');
-const walk=relative=>fs.readdirSync(path.join(root,relative),{withFileTypes:true}).flatMap(entry=>{
-  if(entry.name==='.DS_Store')return [];
-  const child=path.posix.join(relative,entry.name);
-  if(entry.isDirectory())return walk(child);
-  if(!entry.isFile())throw new Error('Runtime source contains a non-file: '+child);
-  return [child];
-});
-const shippedRoots=['desktop','public','src','schemas','templates','relay'];
-const shippedTopLevel=['.gitignore','AGENTS.md','CHANGELOG.md','README.md'];
-const runtimeFiles=Object.fromEntries([...shippedRoots.flatMap(walk),...shippedTopLevel].sort().map(relative=>[relative,digest(path.join(root,relative))]));
-const buildInputPaths=['package.json','package-lock.json','scripts/package-mac.mjs','scripts/build-terminal.mjs','scripts/prepare-pty.mjs','ios/Proteus/Assets.xcassets/AppIcon.appiconset/AppIcon.png'];
-const buildInputs=Object.fromEntries(buildInputPaths.map(relative=>[relative,digest(path.join(root,relative))]));
+const buildInputPaths=['package.json','package-lock.json','scripts/package-mac.mjs','scripts/desktop-build.mjs','scripts/build-terminal.mjs','scripts/prepare-pty.mjs','ios/Proteus/Assets.xcassets/AppIcon.appiconset/AppIcon.png'];
+const {runtimeFiles,buildInputs,verifySource,verifyCopied}=createDesktopSnapshot(root,buildInputPaths);
 const dirty=Boolean(execFileSync('git',['status','--porcelain','--',...Object.keys(runtimeFiles),...buildInputPaths],{cwd:root,encoding:'utf8'}).trim());
 const sourceFingerprint=createHash('sha256').update(JSON.stringify({runtimeFiles,buildInputs,gitHead,dirty})).digest('hex');
 const buildRevision=`${gitHead}+${dirty?'dirty.':'src.'}${sourceFingerprint.slice(0,12)}`;
 const provenance={schemaVersion:1,gitHead,dirty,sourceFingerprint,buildRevision,runtimeFiles,buildInputs};
-const verifySource=()=>{
-  for(const [relative,hash] of Object.entries({...runtimeFiles,...buildInputs}))if(digest(path.join(root,relative))!==hash)throw new Error('Source changed during packaging: '+relative);
-};
-const verifyCopied=buildPath=>{
-  const topDirectories=fs.readdirSync(buildPath,{withFileTypes:true}).filter(entry=>entry.isDirectory()).map(entry=>entry.name).sort();
-  if(JSON.stringify(topDirectories)!==JSON.stringify([...shippedRoots,'node_modules'].sort()))throw new Error('Packaged runtime directory set differs from source snapshot.');
-  const copied=[...shippedRoots.flatMap(relative=>{
-    if(!fs.existsSync(path.join(buildPath,relative)))throw new Error('Packaged runtime directory missing: '+relative);
-    const collect=directory=>fs.readdirSync(path.join(buildPath,directory),{withFileTypes:true}).flatMap(entry=>{
-      const child=path.posix.join(directory,entry.name);
-      if(entry.isDirectory())return collect(child);
-      if(!entry.isFile())throw new Error('Packaged runtime contains a non-file: '+child);
-      return [child];
-    });
-    return collect(relative);
-  }),...fs.readdirSync(buildPath,{withFileTypes:true}).filter(entry=>entry.isFile()&&!['package.json','build-source.json'].includes(entry.name)).map(entry=>entry.name)].sort();
-  const expected=Object.keys(runtimeFiles).sort();
-  if(JSON.stringify(copied)!==JSON.stringify(expected))throw new Error('Packaged runtime file-name set differs from source snapshot.');
-  for(const [relative,hash] of Object.entries(runtimeFiles))if(digest(path.join(buildPath,relative))!==hash)throw new Error('Packaged runtime differs from source: '+relative);
-};
 verifySource();
 const bundles = await packager({ dir: root, out: process.env.PROTEUS_PACKAGE_OUTPUT || path.join(root, 'dist'), overwrite: true,
   name: 'Proteus', executableName: 'Proteus', appBundleId: 'org.proteusapp.proteus.desktop',
@@ -83,20 +53,13 @@ const bundles = await packager({ dir: root, out: process.env.PROTEUS_PACKAGE_OUT
     preparePty(buildPath);
   }],
   // Keep runtime files and dependencies; never ship tests, worktrees or local configuration.
-  ignore: [/(?:^|\/)\.DS_Store$/, /^\/(?:web|ios|test|docs|scripts|extensions|dist|coverage|\.runtime|\.git|\.github)(?:\/|$)/, /^\/\.env/, /\.(?:log|xcresult)$/],
+  ignore: desktopPackageIgnore,
   osxSign: unsigned?undefined:{ ignore: file => vendorFiles.some(relative => file.endsWith('/' + relative)), identity: signingIdentity, identityValidation: false, preAutoEntitlements: false, gatekeeperAssess: false, optionsForFile: () => ({ hardenedRuntime: false, signatureFlags: '0', timestamp: 'none' }) },
 });
 for (const directory of bundles) {
   const bundle = path.join(directory, 'Proteus.app');
   verifySource();verifyCopied(path.join(bundle,'Contents/Resources/app'));
-  const embedded=JSON.parse(fs.readFileSync(path.join(bundle,'Contents/Resources/app/build-source.json'),'utf8'));
-  if(embedded.sourceFingerprint!==sourceFingerprint||embedded.buildRevision!==buildRevision)throw new Error('Packaged source provenance differs from build snapshot.');
-  const packageMetadata=JSON.parse(fs.readFileSync(path.join(bundle,'Contents/Resources/app/package.json'),'utf8'));
-  const sourceMetadata=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
-  // Electron Packager removes development-only metadata after afterCopy.
-  const expectedMetadata=Object.fromEntries(Object.entries(sourceMetadata).filter(([key])=>!['private','scripts','devDependencies','overrides'].includes(key)));
-  expectedMetadata.buildRevision=buildRevision;
-  if(JSON.stringify(packageMetadata)!==JSON.stringify(expectedMetadata))throw new Error('Packaged version or build metadata differs from source snapshot.');
+  verifyDesktopMetadata(path.join(bundle,'Contents/Resources/app'),JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8')),provenance);
   const storePackage=path.join(bundle,'Contents/Resources/app/node_modules/electron-chrome-web-store');
   const {createRequire}=await import('node:module');
   const storeRequire=createRequire(path.join(storePackage,'package.json'));
