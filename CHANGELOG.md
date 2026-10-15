@@ -1,3 +1,9 @@
+## 0.2.20 source integration — cross-platform acceptance pending
+
+- Integrate the accepted Mac source companion from `418a083`, preserving native link/selection menus, source-workspace drafts and durable tab-sync retry/backoff behavior alongside the cross-platform host changes.
+- Verify all 879 source hashes and archive digest; retain separate Mac source and Linux runtime fingerprints. Native project version advances with upstream to 0.2.20 / 2610.14.3, preserving app/signing identity.
+- Require fresh checks and package acceptance for this integration. Earlier 0.2.19 receipts and in-progress hosted runs apply only to their tested checkpoints; no new local installation or live iPhone-to-Linux verification is claimed.
+
 ## Cross-platform host compatibility — October 14, 2026
 
 - Use the selected computer's name across desktop, website and native connection, provider, permission, usage and file messages. Authenticated platform metadata identifies Linux or macOS when available; older protocol-1 hosts keep neutral labels.
@@ -9,6 +15,30 @@
 ## Linux adaptation of accepted 0.2.19
 
 - Build from the verified canonical 0.2.19 Mac source companion, retaining current workspace/tab/browser behavior. Add separate Linux packaging with source provenance and Electron PTY rebuild, XDG storage, user executable discovery, Linux tray/minimize/Quit controls and user-shell defaults. Preserve Mac packaging/signatures, native clients, protocol and pinned dependencies.
+
+
+## 0.2.20 — candidate, validation/install in progress
+
+- Native browser link actions also appear through the editing-menu path, resolve the pressed
+  anchor, retain source placement and reuse downloads/native selection.
+- Prevent stale tab metadata and shared-state application from generating repeated mutations.
+  Persist retry identity, batch metadata, back off by owner and identify receipt-capacity limits.
+- Carry forward the tested attachment-composer layout to the other authorized targets.
+- Preserve receipt limits, retry protection and existing data; installation acceptance is pending.
+
+## Update workflow instructions
+
+- Limit recovery to two full verified generations per installation/device, avoid duplicate rollback and before/after/retry copies, and compact completed migration evidence. This is an operator/update workflow rule, not a new app feature.
+
+## Planned next release — not implemented
+
+- BF-2026-10-14-01: Add appropriate native browser link/selection menus for iPad/iPhone and native Mac: new tab, copy link, start chat, download and native selection actions.
+- BF-2026-10-14-02: Investigate receipt-capacity exhaustion and excessive background tab-sync traffic; fix redundant writes/retries and identify the owner/limit in the warning while preserving retry safety.
+
+## Unreleased — Keep attachment controls visible
+
+- Give attachments a bounded, scrollable section between the message editor and the fixed controls row in local desktop, visiting desktop and web chats. Keep +, model options and Send/Queue/Steer/Stop accessible for large batches and long drafts.
+- Remeasure replaced attachment strips and account for waiting questions when sizing the editor. Match attachment chips, file sizes, thumbnails and controls across desktop and web.
 
 ## 0.2.19 — Navigation, redirect history and scheduled conversations
 

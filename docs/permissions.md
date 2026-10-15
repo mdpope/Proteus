@@ -14,6 +14,11 @@ workspace. Read-only grants cannot approve writes. Paths and revision/context ID
 before saving; provider/resource-context changes invalidate the old override. A chat folder exception
 under Ask does not reactivate suspended workspace grants or saved commands.
 
+Schedule-started and manually launched schedule conversations also support these run-only controls.
+New auto-approval requires the exact current waiting permission request; new folder trust must
+match the folder/access offered by that request. The grant persists through that conversation's
+continuations, while future independent schedule runs retain their own workspace approval policy.
+
 Proteus owns persistent tool approvals in `<app data>/permissions.json`. Workflow repositories
 continue to own their business rules and schedules. Importing a schedule does not grant trust or
 enable it.

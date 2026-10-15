@@ -8,5 +8,5 @@ if (store) parentPort.on('message', ({ id, method, args }) => {
     const result = store[method](...args);
     parentPort.postMessage({ id, result });
     if (method === 'close') parentPort.close();
-  } catch (error) { parentPort.postMessage({ id, error: error.message, code: error.code }); }
+  } catch (error) { parentPort.postMessage({ id, error: error.message, code: error.code, details: error.details }); }
 });

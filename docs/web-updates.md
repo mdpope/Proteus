@@ -1,3 +1,14 @@
+**Latest October 14 closure:** Website **0.2.19** is deployed/verified. Fresh central recovery
+and isolated restore, all 9,214 file hashes, 14 endpoints and eight served assets pass; schema,
+runtime configuration and nutrition remain unchanged. Deployment-window Apache events are expected
+protected-environment probe denials, with known database column-statistics messages and no new
+Laravel/relay errors. Ordinary central backups keep current plus two previous generations after
+accepted-release audit; unique migration pins remain and the budget stays 15 GiB. Initial ordinary
+cleanup reclaimed 7.71 GiB; exactly four separately confirmed expired server copies reclaimed
+2.20 GiB. Other server sets/restore evidence were untouched. Failed disk-headroom receipts remain.
+Production authenticated UI remains distinct from local two-owner UI acceptance. Private deployment
+receipts/access details stay in the website workspace. Earlier budget/staging holds are historical.
+
 October 14 follow-up: shared Workspace Tabs column resizing and current release metadata for
 0.2.18 pass 81 PHP tests / 724 assertions, Vite production build and the disposable two-owner UI.
 Release `20261014T171221Z` is staged; the restricted deployment client stopped at local recovery

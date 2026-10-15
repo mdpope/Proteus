@@ -1,5 +1,21 @@
 # Native parity — October 4, 2026
 
+## Accepted 0.2.20 import and hosted compile failure
+
+The accepted source companion from transfer `418a083` is integrated with platform-neutral host
+metadata and pairing behavior retained. Both project definitions now select **0.2.20 /
+2610.14.3**; bundle/team/signing configuration and Keychain identities match upstream. Native
+link/selection actions, source-workspace link drafts and persisted retry identities/owner backoff
+are preserved alongside the five portability unit cases and mixed-host UI fixture.
+
+Hosted iOS job **116268129325**, run **38688298486**, failed before tests on its pushed 0.2.19
+checkpoint. Xcode reported a type-check timeout for the chained task expression in
+`TeamToolsView.swift` (`TeamBrowserView`); upstream 0.2.20 has the same expression. The local
+correction separates the browser content builder from lifecycle modifiers and precomputes
+equivalent task-identity strings, retaining refresh triggers and state behavior. Static review
+does not prove compilation. A new hosted build and simulator run are required; no native unit/UI
+pass or real iPhone-to-Linux session is claimed for the integrated source.
+
 ## October 14 host portability source — native verification pending
 
 Pairing, connection, permission/sign-in, file-path, usage and notification messages now refer to

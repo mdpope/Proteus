@@ -1675,6 +1675,46 @@ final class NativeParityTests: XCTestCase {
         XCTAssertFalse(store.prepareLinkDraft(try XCTUnwrap(URL(string: "https://example.test/#pair=secret")), remote: remote, hostID: connection.hostId, hostName: "Chosen Mac"))
         XCTAssertEqual(remote.draft("new-chat"), draft)
     }
+    @MainActor func testBrowserViewLookupIsNotAnInteractionAndLinkTargetsKeepExactAddresses() throws {
+        let shared = SharedAppStore()
+        var descriptor = BrowserDescriptor(id: "synthetic-idle", title: "Idle tab", url: nil, scope: "team")
+        descriptor.openedAt = "2026-10-01T00:00:00Z"; descriptor.lastTouchedAt = "2026-10-02T00:00:00Z"
+        shared.browserTabs = [descriptor]
+        let first = shared.webView(descriptor)
+        XCTAssertTrue(first is NativeLinkWebView)
+        XCTAssertTrue(first === shared.webView(descriptor))
+        XCTAssertEqual(shared.browserTabs[0].lastTouchedAt, descriptor.lastTouchedAt)
+        let link = try XCTUnwrap(first as? NativeLinkWebView)
+        let address = "https://example.test/relative/document?view=results&item=42#section"
+        link.rememberLink(address); XCTAssertEqual(link.currentLink?.absoluteString, address)
+        link.rememberLink(""); XCTAssertNil(link.currentLink, "Pressing non-link text clears the earlier target")
+        for value in ["javascript:alert(1)", "file:///private/test", "https://user:secret@example.test/", "data:text/plain,test"] { XCTAssertNil(NativeLinkWebView.linkURL(value)) }
+        shared.unloadBrowsers()
+    }
+    @MainActor func testPressedImageLinkResolvesRelativeURLAndClearsOnNonLink() async throws {
+        let web = NativeLinkWebView(frame: .zero, configuration: WKWebViewConfiguration())
+        web.loadHTMLString("<a href='/document?view=results&amp;item=42#section'><img id='linked' alt='Linked image'></a><p id='plain'>Plain text</p>", baseURL: URL(string: "https://example.test/folder/"))
+        for _ in 0..<100 { if !web.isLoading { break }; try await Task.sleep(for: .milliseconds(50)) }
+        _ = try await web.evaluateJavaScript("document.getElementById('linked').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,composed:true})); true")
+        for _ in 0..<100 { if web.currentLink != nil { break }; try await Task.sleep(for: .milliseconds(20)) }
+        XCTAssertEqual(web.currentLink?.absoluteString, "https://example.test/document?view=results&item=42#section")
+        _ = try await web.evaluateJavaScript("document.getElementById('plain').dispatchEvent(new MouseEvent('pointerdown',{bubbles:true,composed:true})); true")
+        for _ in 0..<100 { if web.currentLink == nil { break }; try await Task.sleep(for: .milliseconds(20)) }
+        XCTAssertNil(web.currentLink, "Non-link selection must not reuse the last link")
+        web.stopLoading()
+    }
+    @MainActor func testLinkDraftUsesSourceWorkspaceWithoutReplacingAnExistingDraft() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let connection = DeviceConnection(relay: "wss://relay.example.test", hostId: UUID().uuidString, deviceId: UUID().uuidString, key: RemoteCrypto.random())
+        let remote = RemoteStore(connection: connection, cacheRoot: root, legacyCredentials: false), shared = SharedAppStore()
+        let address = try XCTUnwrap(URL(string: "https://example.test/item?view=results"))
+        XCTAssertTrue(shared.prepareLinkDraft(address, remote: remote, hostID: connection.hostId, hostName: "Source Mac", workspaceID: "source-workspace"))
+        XCTAssertEqual(remote.draft("new-chat")["workspace"].string, "source-workspace")
+        XCTAssertTrue(shared.prepareLinkDraft(address, remote: remote, hostID: connection.hostId, hostName: "Source Mac", workspaceID: "another-workspace"))
+        XCTAssertEqual(remote.draft("new-chat")["workspace"].string, "source-workspace", "An existing draft keeps its chosen configuration")
+        XCTAssertEqual(remote.pendingCommandCount, 0, "Preparing a draft does not start a chat")
+    }
     @MainActor func testWebKitDownloadProducesExportableFileAndAccountChangeCleansIt() async throws {
         let shared = SharedAppStore()
         let webView = WKWebView(frame: .zero)

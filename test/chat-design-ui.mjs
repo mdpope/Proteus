@@ -1,4 +1,5 @@
 import {_electron as electron} from 'playwright';
+import {exerciseComposerAttachments} from './composer-attachment-layout.mjs';
 import fs from 'node:fs';import path from 'node:path';import os from 'node:os';import assert from 'node:assert/strict';
 const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-chat-design-'));let app;
 try{
@@ -14,6 +15,7 @@ try{
  const layout=await box.evaluate(node=>({editor:node.clientHeight,composer:node.closest('.composer').getBoundingClientRect().height,pane:node.closest('.chat-pane').clientHeight,bottom:node.closest('.composer').getBoundingClientRect().bottom}));
  assert.ok(layout.editor>short.height);assert.ok(layout.composer<=layout.pane*.6+3,JSON.stringify(layout));
  await box.fill('Shrunk');await page.waitForFunction(()=>document.querySelector('#followup').clientHeight<80);
+ await exerciseComposerAttachments(page,{input:'#run-attachments input[type=file]',textarea:'#followup',composer:'.chat-pane>.composer'});
  const stats=page.locator('.runtime-stat');assert.ok(await stats.count());assert.equal(await stats.locator('strong').evaluate(node=>getComputedStyle(node).fontSize),'28px');
  assert.ok(await page.locator('.token-stats').count());assert.ok(await page.locator('.chat-details .explanation:not([open])').count());
  const usage=await page.locator('.runtime-stat,.token-stats>div').evaluateAll(nodes=>nodes.map(node=>{const label=node.querySelector('span').getBoundingClientRect(),value=node.querySelector('strong'),box=value.getBoundingClientRect();return {labelAbove:label.bottom<=box.top,background:getComputedStyle(value).backgroundColor,center:getComputedStyle(value).textAlign,top:box.top,bottom:box.bottom};}));

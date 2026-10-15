@@ -167,8 +167,11 @@ struct TeamBrowserView: View {
         guard let remote = historyRemote, let host = remote.connection?.hostId else { return "Choose a computer for owner history. Saved navigation remains on this device." }
         return shared.historyStatus[host] ?? (remote.connected ? "History from " + remote.displayName + ". Each tab keeps its own navigation list." : "Offline · cached last 30 days and saved navigation only")
     }
+    private var historySearchIdentity: String { [selectedID ?? "", text, String(addressFocused)].joined(separator: "|") }
+    private var accountRefreshIdentity: String { [scope, selectedID ?? "", life.accountIdentity, String(addressFocused)].joined(separator: ":") }
 
-    var body: some View {
+    // Bound SwiftUI inference separately from the asynchronous lifecycle modifiers.
+    private var browserContent: some View {
         VStack(spacing: 0) {
             if showTabs { HStack(spacing: 0) { NativeTabStrip(ids: tabs.map(\.id), selection: selectedID) { HStack(spacing: 0) {
                 ForEach(tabs) { tab in
@@ -221,11 +224,14 @@ struct TeamBrowserView: View {
         .sheet(isPresented: Binding(get: { historyDirection != nil }, set: { if !$0 { historyDirection = nil } })) {
             navigationHistorySheet
         }
+    }
+    var body: some View {
+        browserContent
         .task(id: selectedID) {
             if let id = selectedID { shared.assignBrowserOwner(id, host: destinations.selected?.connection?.hostId) }
             if let remote = historyRemote { await shared.flushHistory(remote) }
         }
-        .task(id: (selectedID ?? "") + "|" + text + "|" + String(addressFocused)) {
+        .task(id: historySearchIdentity) {
             ownerHistoryResults = nil
             guard addressFocused || selectedTab?.url == nil, let remote = historyRemote else { return }
             do { try await Task.sleep(for: .milliseconds(200)) } catch { return }
@@ -236,7 +242,7 @@ struct TeamBrowserView: View {
         }
         .onAppear { if tabs.isEmpty && showTabs { shared.open(nil, scope: scope) }; text = selectedTab?.url ?? ""; engine = ["google": "Google", "duckduckgo": "DuckDuckGo", "bing": "Bing"][shared.snapshot["preferences"]["searchEngine"].string] ?? "Google"; addressFocused = selectedTab?.url == nil }
         .onChange(of: selectedID) { _, _ in text = selectedTab?.url ?? ""; addressFocused = selectedTab?.url == nil }
-        .task(id: scope + ":" + (selectedID ?? "") + ":" + life.accountIdentity + ":" + String(addressFocused)) { if addressFocused || selectedTab?.url == nil { await shared.refresh(life) } }
+        .task(id: accountRefreshIdentity) { if addressFocused || selectedTab?.url == nil { await shared.refresh(life) } }
         .onChange(of: navigation.url) { _, url in if !addressFocused && !url.isEmpty { text = url } }
     }
     private var navigationHistorySheet: some View {
@@ -379,6 +385,47 @@ struct BrowserHistoryFixture: View {
 }
 #endif
 
+// WebKit's element menu and UIKit's selected-text edit menu are different paths.
+// Observe the actual pressed anchor in an isolated script world so either menu
+// can offer the same link actions, including linked images and iframe links.
+@MainActor final class NativeLinkWebView: WKWebView {
+    var linkActions: ((URL) -> [UIMenuElement])?
+    private(set) var pressedLink: URL?
+    private var pressedAt = Date.distantPast
+    private final class TargetHandler: NSObject, WKScriptMessageHandler {
+        weak var view: NativeLinkWebView?
+        init(_ view: NativeLinkWebView) { self.view = view }
+        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+            guard let view, message.webView === view, let body = message.body as? [String: String] else { return }
+            view.rememberLink(body["url"] ?? "")
+        }
+    }
+    static func linkURL(_ value: String) -> URL? { SharedAppStore.historyURL(value) }
+    func rememberLink(_ value: String) { pressedLink = Self.linkURL(value); pressedAt = Date() }
+    var currentLink: URL? { Date().timeIntervalSince(pressedAt) < 15 ? pressedLink : nil }
+    override init(frame: CGRect, configuration: WKWebViewConfiguration) {
+        super.init(frame: frame, configuration: configuration)
+        let source = """
+        (() => {
+          const capture = event => {
+            const path = event.composedPath ? event.composedPath() : [event.target];
+            const anchor = path.find(node => node instanceof Element && node.matches('a[href],area[href]')) || (event.target instanceof Element ? event.target.closest('a[href],area[href]') : null);
+            window.webkit.messageHandlers.proteusLinkTarget.postMessage({url:anchor ? anchor.href : ''});
+          };
+          for (const name of ['pointerdown','touchstart','contextmenu']) addEventListener(name,capture,true);
+        })();
+        """
+        configuration.userContentController.add(TargetHandler(self), contentWorld: .defaultClient, name: "proteusLinkTarget")
+        configuration.userContentController.addUserScript(WKUserScript(source: source, injectionTime: .atDocumentStart, forMainFrameOnly: false, in: .defaultClient))
+    }
+    required init?(coder: NSCoder) { fatalError("NativeLinkWebView is created with a profile configuration") }
+    override func buildMenu(with builder: UIMenuBuilder) {
+        super.buildMenu(with: builder)
+        guard let url = currentLink, let actions = linkActions?(url), !actions.isEmpty else { return }
+        builder.insertChild(UIMenu(title: "", identifier: UIMenu.Identifier("proteus.link-actions"), options: .displayInline, children: actions), atStartOfMenu: .root)
+    }
+}
+
 struct NativeBrowser: UIViewRepresentable {
     @EnvironmentObject var shared: SharedAppStore
     @EnvironmentObject var life: LifeStore
@@ -386,7 +433,7 @@ struct NativeBrowser: UIViewRepresentable {
     let tab: BrowserDescriptor
     var onOverview: () -> Void = {}
     func makeCoordinator() -> Coordinator { Coordinator(shared: shared, life: life, destinations: destinations, id: tab.id, onOverview: onOverview) }
-    func makeUIView(context: Context) -> WKWebView { let view = shared.webView(tab); view.navigationDelegate = context.coordinator; view.uiDelegate = context.coordinator; context.coordinator.attachPinch(to: view); return view }
+    func makeUIView(context: Context) -> WKWebView { let view = shared.webView(tab); view.navigationDelegate = context.coordinator; view.uiDelegate = context.coordinator; context.coordinator.attachPinch(to: view); if let linkView = view as? NativeLinkWebView { linkView.linkActions = { [weak coordinator = context.coordinator, weak view] url in guard let coordinator, let view else { return [] }; return coordinator.linkMenuActions(url, in: view) } }; return view }
     func updateUIView(_ view: WKWebView, context: Context) { context.coordinator.onOverview = onOverview }
     static func dismantleUIView(_ view: WKWebView, coordinator: Coordinator) {
         if view.navigationDelegate === coordinator { view.navigationDelegate = nil }
@@ -426,25 +473,39 @@ struct NativeBrowser: UIViewRepresentable {
             if [.ended, .cancelled, .failed].contains(gesture.state) { beganAtMinimumZoom = false }
         }
         func webView(_ webView: WKWebView, contextMenuConfigurationForElement elementInfo: WKContextMenuElementInfo, completionHandler: @escaping (UIContextMenuConfiguration?) -> Void) {
-            guard let url = elementInfo.linkURL, ["http", "https"].contains(url.scheme), url.user == nil, url.password == nil else { completionHandler(nil); return }
-            let hostID = destinations.selectedID
-            let hostName = destinations.selectedLabel
+            guard let url = elementInfo.linkURL.flatMap({ NativeLinkWebView.linkURL($0.absoluteString) }) ?? (webView as? NativeLinkWebView)?.currentLink else { completionHandler(nil); return }
+            completionHandler(UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { suggested in
+                UIMenu(children: [UIMenu(title: "", options: .displayInline, children: self.linkMenuActions(url, in: webView))] + suggested)
+            })
+        }
+        func linkMenuActions(_ url: URL, in webView: WKWebView) -> [UIMenuElement] {
+            guard shared.isCurrentBrowserView(webView, id: id), NativeLinkWebView.linkURL(url.absoluteString) != nil else { return [] }
             let source = shared.browserTabs.first { $0.id == id }
+            let hostID = source?.ownerHostId ?? destinations.selectedID
+            let hostName = hostID.flatMap { destinations.remote(for: $0)?.displayName } ?? destinations.selectedLabel
             let sourceScope = source?.scope ?? "team", sourceProfile = source?.profileId ?? "default", sourceID = id
-            completionHandler(UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { _ in
                 var actions: [UIMenuElement] = [
-                    UIAction(title: "Open in new Proteus tab", image: UIImage(systemName: "plus.square")) { _ in self.shared.open(url, title: url.host ?? "Browser", scope: sourceScope, profileId: sourceProfile, afterSourceID: sourceID) },
+                    UIAction(title: "Open in New Tab", image: UIImage(systemName: "plus.square")) { _ in if let created = self.shared.open(url, title: url.host ?? "Browser", scope: sourceScope, profileId: sourceProfile, afterSourceID: sourceID), let hostID { self.shared.assignBrowserOwner(created, host: hostID) } },
                     UIAction(title: "Open in default browser", image: UIImage(systemName: "arrow.up.right.square")) { _ in UIApplication.shared.open(url); if sourceProfile == "default" { Task { await self.shared.record(url, title: url.host ?? "Browser", life: self.life) } } },
                     UIAction(title: "Copy Link", image: UIImage(systemName: "doc.on.doc")) { _ in UIPasteboard.general.url = url },
-                    UIAction(title: "Download Linked File As…", image: UIImage(systemName: "arrow.down.doc")) { _ in self.shared.download(url, in: webView) }
+                    UIAction(title: "Download Linked File", image: UIImage(systemName: "arrow.down.doc")) { _ in self.shared.download(url, in: webView, saveAs: false) },
+                    UIAction(title: "Download Linked File As…", image: UIImage(systemName: "arrow.down.doc")) { _ in self.shared.download(url, in: webView) },
+                    UIAction(title: "Share Link…", image: UIImage(systemName: "square.and.arrow.up")) { _ in
+                        let controller = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+                        controller.popoverPresentationController?.sourceView = webView
+                        controller.popoverPresentationController?.sourceRect = CGRect(x: webView.bounds.midX, y: webView.bounds.midY, width: 1, height: 1)
+                        var presenter = webView.window?.rootViewController
+                        while let next = presenter?.presentedViewController { presenter = next }
+                        presenter?.present(controller, animated: true)
+                    }
                 ]
                 if let hostID, let remote = self.destinations.remote(for: hostID), SharedAppStore.safeURL(url.absoluteString) != nil {
                     actions.append(UIAction(title: "New chat with link on " + hostName, image: UIImage(systemName: "bubble.left.and.bubble.right")) { _ in
-                        _ = self.shared.prepareLinkDraft(url, remote: remote, hostID: hostID, hostName: hostName)
+                        let prefix = "workspace:" + hostID + ":"
+                        _ = self.shared.prepareLinkDraft(url, remote: remote, hostID: hostID, hostName: hostName, workspaceID: sourceScope.hasPrefix(prefix) ? String(sourceScope.dropFirst(prefix.count)) : nil)
                     })
                 }
-                return UIMenu(children: actions)
-            })
+                return actions
         }
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) { guard shared.isCurrentBrowserView(webView, id: id) else { return }; activeNavigation = navigation }
         func webView(_ webView: WKWebView, didReceiveServerRedirectForProvisionalNavigation navigation: WKNavigation!) { guard shared.isCurrentBrowserView(webView, id: id) else { return }; shared.markBrowserRedirect(id, url: webView.url) }

@@ -1046,7 +1046,12 @@ final class RemoteUITests: XCTestCase {
         let source = tabs.matching(NSPredicate(format: "value == %@", "Active")).firstMatch.identifier
         openDefaultTeamBrowser(app); app.buttons[source].tap()
         XCTAssertTrue(app.webViews.links["Next browser page"].waitForExistence(timeout: 10)); app.webViews.links["Next browser page"].press(forDuration: 1)
-        let action = app.buttons["Open in new Proteus tab"]; XCTAssertTrue(action.waitForExistence(timeout: 10)); action.tap()
+        let action = app.buttons["Open in New Tab"]; XCTAssertTrue(action.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Copy Link"].exists)
+        XCTAssertTrue(app.buttons["Download Linked File"].exists)
+        XCTAssertTrue(app.buttons["Download Linked File As…"].exists)
+        XCTAssertTrue(app.buttons["Share Link…"].exists)
+        action.tap()
         XCTAssertTrue(app.webViews.staticTexts["Second browser page"].waitForExistence(timeout: 15))
         let created = tabs.matching(NSPredicate(format: "value == %@", "Active")).firstMatch.identifier
         let ids = tabs.allElementsBoundByIndex.map(\.identifier)

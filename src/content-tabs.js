@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import {safeContentTabURL as safeHistoryURL,normalizeContentTabHistory as normalizeHistory,contentTabTitle as title,sameContentTabs,contentTabMetadata} from '../public/content-tab-descriptor.js';
+import {safeContentTabURL as safeHistoryURL,normalizeContentTabHistory as normalizeHistory,contentTabTitle as title,sameContentTabs,contentTabMetadata,mergeContentTabMetadata} from '../public/content-tab-descriptor.js';
 const ID=/^[a-zA-Z0-9_:.\-]{1,256}$/;
 export function contentTab(value){
   if(!value||!ID.test(value.id||'')||!['browser','document','chat','terminal'].includes(value.type))throw new Error('Choose a bounded browser or document tab.');
@@ -105,7 +105,7 @@ export class ContentTabs {
     if(!Number.isSafeInteger(expectedRevision)||expectedRevision!==current.revision)throw new Error('Content tabs changed. Refresh before retrying this action.');
     if(!Array.isArray(operations)||operations.length>100)throw new Error('Choose at most 100 tab changes.');
     let tabs=current.tabs.map(contentTab);
-    for(const op of operations){if(op.action==='open'){const tab=contentTab(op.tab);if(tab.type==='chat'&&!['workspace','main'].includes(scope))throw new Error('Chats can appear in workspace or main navigation.');const existing=tabs.findIndex(item=>item.id===tab.id);if(existing<0)tabs.push(tab);else tabs[existing]=tab;}
+    for(const op of operations){if(op.action==='open'){const tab=contentTab(op.tab);if(tab.type==='chat'&&!['workspace','main'].includes(scope))throw new Error('Chats can appear in workspace or main navigation.');const existing=tabs.findIndex(item=>item.id===tab.id);if(existing<0)tabs.push(tab);else tabs[existing]=mergeContentTabMetadata(tabs[existing],tab);}
       else if(op.action==='close')tabs=tabs.filter(tab=>tab.id!==op.id);
       else if(op.action==='rename'){const tab=tabs.find(tab=>tab.id===op.id);if(!tab)throw new Error('Tab is no longer open.');tab.title=title(op.title)||'New tab';tab.customTitle=tab.title;}
       else if(op.action==='visibility'){const tab=tabs.find(tab=>tab.id===op.id);if(!tab||typeof op.hidden!=='boolean')throw new Error('Choose an open tab and visibility.');if(op.hidden)tab.hidden=true;else delete tab.hidden;}

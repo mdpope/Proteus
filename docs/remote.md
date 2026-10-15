@@ -1,3 +1,19 @@
+## 0.2.20 receipt-capacity correction
+
+Capacity refusal includes owner identity, record/byte/pending counters and retry delay. Tab
+synchronization merges monotonic metadata, sends at most 100 metadata operations per batch,
+retains an exact request envelope for uncertain transport retries, and backs off capacity errors
+per host with at most one notice per minute. The 10,000-record/256 MiB defaults and protected
+retry windows are unchanged. A full protected ledger can remain unavailable until settled
+receipts naturally expire; this is reported separately from a successful build/install.
+
+**Queued October 14 — BF-2026-10-14-02:** Investigate and fix journal-capacity warnings during
+background tab synchronization. Establish the affected owner/counter, reduce redundant mutations,
+batch and back off retries, and name the owner in a deduplicated warning while preserving
+idempotent replay and unresolved receipts. Current limits remain 10,000 receipts/256 MiB per
+owner and 24-hour settled retention. See [next release queue](planned-updates.md). Queued only;
+no journal behavior, limits, data or deployment changed.
+
 # Remote clients
 
 ## Linux and Mac hosts — October 14 source candidate

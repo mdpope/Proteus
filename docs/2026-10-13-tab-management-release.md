@@ -1,3 +1,75 @@
+## October 14 final 0.2.19 acceptance — all authorized installation targets complete
+
+Both desktop hosts have the exact signed **0.2.19 / eb9548dbcce9** installed and live-verified.
+604 Node tests/static checks, exact signed Move/title/document placement UI, immediate full-URL
+redirect/download UI and bundle/vendor checks pass. The unchanged signed history-log rehearsal
+passed on retry after its first polling timeout. Primary preserves 84 logical tabs/drafts/order/
+profiles, 45,757 cold data files and 3,892 protected retry receipts; all three SQLite integrity checks
+pass, providers and relay are healthy, and no new startup warning/error was logged. Restored UI
+and the operator's current draft were visibly observed without editing them; compact/modal UI hid
+its footer. The second host visibly verifies 0.2.19, 66 tabs, all 171 run files and both dormant
+messages retained, healthy providers/two relay hosts, no new warning/error. Normal Move of the
+identified affected chat converges to one destination-workspace descriptor with no main alias and
+stays selected across 12 sync samples; Workspace Tabs title activation selects the existing view.
+
+Native Mac, physical iPhone and physical iPad **0.2.19 / 2610.14.2** are installed/launch-verified.
+113 native units and two actual history/title UI workflows pass. Existing certificates/profiles/
+entitlements remain. The Mac's running executable matches the tested build; its protected container
+was not edited and direct hash/AX inspection is unavailable. iPhone retains all 1,933 file contents
+(four OS launch-snapshot paths renamed); iPad retains all 3,887 accessible file contents (only 12
+unreadable OS launch-snapshot cache files excluded). Both saved destination indexes remain exact.
+Device backups/installations were guarded by fresh unlock checks, with prior partial attempts kept.
+Physical gestures and real authenticated Microsoft login remain separate from these checks.
+
+Website **0.2.19** is deployed through the existing private route after fresh verified central recovery
+and a successful isolated restore. All 9,214 deployable file hashes, 14 endpoints and eight served
+assets match; schema, runtime configuration and nutrition remain unchanged. Its current deployment
+window has no new Laravel/relay errors; Apache events are expected protected-environment probe
+refusals and database events are known column-statistics messages. 81 PHP tests/724 assertions,
+two-owner UI, 14 private deployment/retry/retention tests and project structure validation pass.
+Central retention keeps current plus two prior ordinary generations and seven unique migration
+sets, with a 15 GiB budget. Initial cleanup reclaimed 7.71 GiB, accepted-release rotation removed
+one further expired generation, and separately confirmed deletion of exactly four verified expired
+server raw/archive copies reclaimed 2.20 GiB. Other server sets and restore evidence were untouched.
+The initial failed disk-headroom capture receipt remains; no guard or recovery gate was bypassed.
+
+The scheduled-conversation controls were a functional trigger-classification bug. New run-only
+approval now requires its exact current waiting request, and folder trust matches its offered
+folder/access; future independent schedule runs keep their own policy. No real approval or
+browser-conflict recovery choice was applied. Full standalone-chat subtab retirement stays review
+only and SQLite metadata migration stays shelved. Private artifacts, data and receipts remain
+outside the application repository.
+
+**Latest October 14 acceptance:** Both desktop hosts run the exact signed **0.2.19 /
+eb9548dbcce9**; startup/provider/relay/data checks pass. The second host verified the affected chat
+through normal owner Move: one destination-workspace descriptor, no main alias, selected across
+12 sync samples, visible navigation and Workspace Tabs title activation. All original run files
+and dormant messages remain. Native Mac and physical iPad **2610.14.2** are installed/launch-verified;
+iPad retains 3,887 accessible files and saved destinations (12 unreadable OS cache files excluded).
+Phone remains staged awaiting fresh unlock after its backup timed out. Website remains staged
+pending confirmed cleanup of four verified expired server backups; production is still 0.2.15.
+
+## October 14 0.2.19 rollout checkpoint
+
+Primary desktop **0.2.19 / eb9548dbcce9** is installed. The exact signed package passed Move/title/
+document UI, immediate redirect/full URL history/download UI and package/vendor signature checks.
+The first signed history-log poll timed out; the unchanged exact artifact passed its repeated full
+workflow. All 604 Node/static checks, 81 PHP tests/724 assertions, two-owner web UI, 113 native unit
+checks and two actual native history/title UI workflows pass. Cold backup preserved 45,757 files,
+3,892 protected retry receipts and three healthy SQLite databases. Twelve post-startup samples retain
+84 logical tabs/order/ownership/profiles and drafts; all providers and relay are healthy with no new
+warning/error logs. Installed AX inspection currently returns only the shell window, so its visible
+footer is not newly verified; exact signed UI rehearsals are separate evidence.
+
+Native Mac **0.2.19 / 2610.14.2** is installed/launch-verified and its running executable matches the
+validated build. Container data was not edited; protected-container hash/AX acceptance remains
+unavailable. Both physical-device packages are signed with existing profiles/certificate and backups
+are running. Second-desktop exact verified installation is underway. Website 0.2.19 is tested/staged;
+production remains 0.2.15 because the server recovery capture stopped for insufficient disk space.
+Four verified expired ordinary server backup copies are proposed for operator-confirmed deletion;
+current plus two previous generations, unique migrations, incomplete sets and restore evidence stay.
+Central ordinary cleanup already reclaimed 7.71 GiB; its 15 GiB budget remains unchanged.
+
 ## October 14 final follow-up scope — 0.2.19 / native 2610.14.2 candidate
 
 The operator withdrew redirect pausing after Microsoft sign-in failures and explicitly requests full

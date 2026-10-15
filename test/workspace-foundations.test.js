@@ -9,9 +9,9 @@ import { PermissionStore, permissionContext } from '../src/permissions.js';
 import { Engine } from '../src/engine.js';
 import { ContentTabs } from '../src/content-tabs.js';
 
-function setup(t) {
+function setup(t, beforeRemove) {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'proteus-workspaces-')));
-  t.after(() => fs.rmSync(root,{recursive:true,force:true}));
+  t.after(async () => { await beforeRemove?.(); fs.rmSync(root,{recursive:true,force:true}); });
   const home = path.join(root,'app'), one = path.join(root,'one'), two = path.join(root,'two');
   fs.mkdirSync(one);fs.mkdirSync(two);
   fs.writeFileSync(path.join(one,'AGENTS.md'),'# Workspace instruction');
@@ -97,8 +97,8 @@ test('chat folder exception does not reactivate paused workspace grants or comma
 });
 
 test('scoped API mode changes, defaults, copy and chat index keep one owner and stable workspace identity',async t=>{
- const f=setup(t),{startServer}=await import('../src/server.js');
- const app=await startServer({home:f.home,port:0,timers:false,withSeed:false,providers:{copilot:{async run(){}}}});t.after(()=>app.close());
+ let app;const f=setup(t,()=>app?.close()),{startServer}=await import('../src/server.js');
+ app=await startServer({home:f.home,port:0,timers:false,withSeed:false,providers:{copilot:{async run(){}}}});
  const request=async(route,body)=>{const response=await fetch(app.origin+route,{method:body?'POST':'GET',headers:{Authorization:'Bearer '+app.token,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});const value=await response.json();assert.equal(response.status,200,JSON.stringify(value));return value;};
  let state=await request('/api/context');const entry=state.entries[0];
  const copied=await request('/api/context',{action:'copy-workspace',workspaceId:'default',name:'Independent',expectedRevision:state.revision});
@@ -118,7 +118,7 @@ test('inclusion paths traverse excluded parents while sibling dependencies remai
 });
 
 test('workspace approval mode changes preserve fingerprint-specific rules and trusted grants',async t=>{
- const f=setup(t),{startServer}=await import('../src/server.js'),app=await startServer({home:f.home,port:0,timers:false,withSeed:false,providers:{copilot:{async run(){}}}});t.after(()=>app.close());
+ let app;const f=setup(t,()=>app?.close()),{startServer}=await import('../src/server.js');app=await startServer({home:f.home,port:0,timers:false,withSeed:false,providers:{copilot:{async run(){}}}});
  const s=f.schedule();app.engine.permissions.remember(s,{kind:'shell',fullCommandText:'npm test'},'always-tool');
  app.engine.permissions.remember(s,{kind:'read',path:f.two},'trust-folder');
  const response=await fetch(app.origin+'/api/context',{method:'POST',headers:{Authorization:'Bearer '+app.token,'Content-Type':'application/json'},body:JSON.stringify({action:'save-workspace',workspaceId:'default',expectedRevision:app.context.config().revision,configuration:{approvals:{mode:'trusted',readOnlyTools:false,folders:[],rules:[]}}})});

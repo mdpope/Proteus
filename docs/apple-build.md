@@ -1,4 +1,17 @@
-**October 14 platform-neutral native candidate:** Pairing defaults, host connection/provider/file
+**Accepted 0.2.20 integration checkpoint:** The Linux branch imports the verified Mac source
+companion from transfer `418a083`, including native link/selection menus and durable tab retry
+identity/backoff. The checked-in project and reproducible definition both select **0.2.20 /
+2610.14.3** and retain upstream bundle IDs/signing settings. Platform-neutral host metadata,
+pairing defaults and compatibility tests remain merged. No Xcode compile/simulator result for
+this integrated source is claimed. Hosted iOS job **116268129325** / run **38688298486** failed
+before tests on its 0.2.19 checkpoint: Swift could not type-check `TeamBrowserView`'s chained
+task expression in reasonable time. Upstream 0.2.20 retains the expression. The local correction
+separates browser content from lifecycle modifiers and precomputes equivalent task identities;
+it still requires hosted compilation and simulator tests. Signed/physical acceptance and actual
+iPhone/iPad-to-Linux relay use remain separate. Earlier installation records below describe
+their own revisions and do not imply this candidate was installed locally.
+
+**Earlier October 14 platform-neutral native checkpoint:** Pairing defaults, host connection/provider/file
 messages and optional authenticated Linux/macOS platform metadata are implemented in source.
 Five added unit cases and a local mixed-host UI fixture preserve the existing destination index,
 Keychain accounts, bundle/team/signing identity, caches, drafts and retry behavior. Static review
@@ -8,6 +21,25 @@ disposable local host, alongside unsigned Mac desktop checks; hosted execution r
 CI performs no production signing, Apple account checks or physical installation. A real
 iPhone/iPad-to-Linux relay session remains unverified. Earlier native/device receipts below apply
 to their recorded revisions, not this source candidate.
+
+
+**Latest October 14 closure:** Native Mac, physical iPhone and iPad **0.2.19 / 2610.14.2**
+are installed/launch-verified with existing signing identities/profiles/entitlements. The iPhone
+retains all 1,933 file contents and destinations (four OS snapshot paths renamed); iPad retains
+3,887 accessible file contents and destinations (12 unreadable OS cache files excluded). The Mac
+running executable matches the tested build; protected-container hash/AX inspection is unavailable
+and data was not edited. All 113 native units plus actual SPA-history and Workspace Tabs title UI
+pass. Prior partial backups are preserved. Physical gesture/authenticated login acceptance remains
+separate. Earlier staged/locked/pending checkpoints below are historical.
+
+**October 14 latest installed follow-up:** Native Mac and physical iPad **0.2.19 / 2610.14.2**
+are installed/launch-verified. Existing signing certificates/profiles/entitlements remain. The Mac
+running executable matches the tested build; protected-container hash/AX inspection is unavailable,
+and its data was not edited. The iPad retains all 3,887 accessible file bytes and saved destinations;
+only 12 unreadable OS snapshot-cache files were excluded, with no other path changes. The iPhone
+remains staged on 0.2.15 because it relocked during backup before replacement. Its partial copy is
+preserved for review; fresh unlock and smaller-folder backup retry are pending. All 113 units and
+two actual native history/title UI workflows passed before final Release signing.
 
 **October 14 follow-up candidate:** Native **0.2.19 / 2610.14.2** preserves original and full
 redirect/replacement URLs, selects existing tabs from Workspace Tabs titles and reveals selected
@@ -132,6 +164,13 @@ Optional npm mappings are `ios:doctor`, `ios:build` and `ios:test` to the matchi
 Use `npm run ios:test -- --device SIMULATOR_UUID` when those scripts are configured.
 
 ## Physical-device release
+
+Apply the [two-generation retention policy](desktop-updates.md#two-generation-backup-retention)
+per physical device/native installation. One verified pre-update snapshot is the recovery copy;
+after-install/launch preservation should retain hash/coverage receipts rather than another full
+container. Resume a partial copy after unlock and verify coverage, instead of creating new full
+before/after trees for each lock/retry. Failed-attempt metadata can remain small; retain at most
+two accepted full recovery generations and resolve any temporary in-flight exception promptly.
 
 Verify that the **Mac is unlocked before checking Apple accounts or signing availability**.
 If computer access reports a locked screen, ask the operator to unlock it and repeat the checks

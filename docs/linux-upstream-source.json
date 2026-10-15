@@ -1,11 +1,11 @@
 {
-  "version": "0.2.19",
-  "transferBranch": "codex/signed-proteus-tabs-canonical-20261014",
-  "transferCommit": "82cd923",
+  "version": "0.2.20",
+  "transferBranch": "codex/signed-proteus-0220-20261015",
+  "transferCommit": "418a083",
   "upstreamGitHead": "ec8b213d382e",
-  "acceptedMacBuildRevision": "ec8b213d382e+dirty.eb9548dbcce9",
-  "acceptedMacSourceFingerprint": "eb9548dbcce97f7481abcdc0c6ae4b55e61b9f3a874e2e05ccc315eb4faf5a4b",
-  "sourceArchive": "source/Proteus-0.2.19-source.tar.gz",
-  "sourceArchiveSha256": "f5b96611edcd3bd0b6988ec2fca2cbe2b7a18b6ab8039c424dea76a6c34c2419",
-  "verifiedSourceFiles": 877
+  "acceptedMacBuildRevision": "ec8b213d382e+dirty.3f2196de3586",
+  "acceptedMacSourceFingerprint": "3f2196de3586915fc72f8d0cdebb645c109992306c3735514d0786b0acaf4985",
+  "sourceArchive": "source/Proteus-0.2.20-source.tar.gz",
+  "sourceArchiveSha256": "beb273dca6e161cb52bf8d6b6d55eb692fcb31e679c25ac9269cea90adae07e5",
+  "verifiedSourceFiles": 879
 }

@@ -15,7 +15,7 @@ export class RemoteCommandJournal {
       const request = this.requests.get(message.id); if (!request) return;
       this.requests.delete(message.id); this.metrics.operations++;
       this.metrics.lastDurationMs = performance.now() - request.started; this.metrics.maxDurationMs = Math.max(this.metrics.maxDurationMs, this.metrics.lastDurationMs);
-      if (message.error) { this.metrics.failures++; request.reject(Object.assign(new Error(message.error), { code: message.code })); } else request.resolve(message.result);
+      if (message.error) { this.metrics.failures++; request.reject(Object.assign(new Error(message.error), { code: message.code, details: message.details })); } else request.resolve(message.result);
       if (!this.requests.size) this.worker.unref();
     });
     this.worker.on('error', error => this.fail(error));

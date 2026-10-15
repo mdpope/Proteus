@@ -29,7 +29,7 @@ try {
   await page.locator('#topbar-home').waitFor();
   const status = await app.evaluate(async ({ app }) => process.mainModule.require(app.getAppPath() + '/desktop/main.cjs').getService().catalogs.codex.get());
   assert.ok(status.available, status.error);
-  assert.equal(await app.evaluate(({ app }) => app.getVersion()), '0.2.19');
+  assert.equal(await app.evaluate(({ app }) => app.getVersion()), JSON.parse(fs.readFileSync(new URL('../package.json',import.meta.url),'utf8')).version);
   const model = status.models.find(m => m.controls.reasoningEfforts.includes('low')) || status.models.find(m => m.isDefault) || status.models[0];
   assert.ok(model); checks.push('desktop startup and live Codex model catalog');
   if (executablePath) {

@@ -1,3 +1,12 @@
+## October 14: converge tab metadata without spending retry receipts
+
+Shared-state application and view lookup are observations, not user interactions. Keep the
+first known opened timestamp, accept only newer interactions and retain a known favicon when a
+client omits it. Preserve authoritative navigation titles while applying owner state. Repeated
+no-op observations must converge without mutation receipts. Retry envelopes persist alongside
+pending operations; capacity refusal backs off the whole owner, with independent hosts remaining
+available. Do not increase limits or erase protected receipts to conceal saturation.
+
 # Design decisions
 
 These decisions describe implemented behavior. Proposed work belongs in `planned-updates.md`.
@@ -998,9 +1007,33 @@ connection alert for that cache read. History reconstruction rejects the privile
 in both native and logical restoration; normal agent tab listings omit complete backstacks.
 # Linux source and build ownership
 
-The current Linux build uses the verified accepted 0.2.19 source archive from transfer commit
-`82cd923`, not the older `main` checkout or an independently reconstructed Mac artifact. Record
+The current Linux build uses the verified accepted 0.2.20 source archive from transfer commit
+`418a083` on `codex/signed-proteus-0220-20261015`; all 879 source hashes and archive digest
+were verified before import. Its accepted Mac fingerprint is
+`3f2196de3586915fc72f8d0cdebb645c109992306c3735514d0786b0acaf4985`.
+The earlier 0.2.19 import (`82cd923`) remains historical. Do not use an older `main` checkout or
+an independently reconstructed Mac artifact as the current source. Record
 the upstream source identity separately from the Linux runtime fingerprint. Linux packaging
 rebuilds only its copied PTY, retains pinned dependencies and leaves Mac signing/iOS files alone.
 Platform data paths and desktop lifecycle changes stay conditional; secure-storage requirements,
 provider approvals and relay protocol remain intact. Keep private prelaunch backups outside Git.
+
+
+## October 14, 2026 — Attachments do not share the controls lane
+
+Use the existing shared composer grid for all desktop chats, with attachments in a bounded full
+row preceding the controls; web retains its separate strip with the same styling and bounds.
+Observe picker hosts rather than replaceable strips. Keep the controls docked while editor and
+attachment content scroll, including when a waiting question occupies space. Preserve attachment
+delivery/consent, draft state and model metadata; this correction does not redesign chat ownership.
+Build/test first and hold website/Work Mac deployment as requested.
+
+## October 14, 2026 — Bound app update recovery to two full generations
+
+The operator rejected release-by-release backup sprawl. Limit full recovery to two accepted
+generations per installation/data home or physical device, count nested before/after/retry copies
+individually, and resolve temporary in-flight exceptions. Use one verified pre-update snapshot,
+resume device copies, retain post-install verification as receipts, and keep one app bundle per
+generation. Compact completed migration evidence to targeted state/helper/receipts. Extra full
+exceptions require explicit reason, budget, deletion condition and operator approval. This changes
+agent/update instructions; it does not implement a new scheduler or deploy app code.

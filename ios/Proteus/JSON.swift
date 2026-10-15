@@ -30,4 +30,4 @@ enum JSON: Codable, Hashable, Sendable {
     var object: [String: JSON] { if case .object(let v) = self { return v }; return [:] }
     var pretty: String { let e = JSONEncoder(); e.outputFormatting = [.prettyPrinted, .sortedKeys]; return (try? String(data: e.encode(self), encoding: .utf8)) ?? "" }
 }
-struct RemoteError: LocalizedError { var message: String; var errorDescription: String? { message } }
+struct RemoteError: LocalizedError { var message: String; var code: String? = nil; var details: JSON = .null; var errorDescription: String? { message } }

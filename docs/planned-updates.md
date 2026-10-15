@@ -1,4 +1,21 @@
-## October 14 cross-platform compatibility — implemented; acceptance incomplete
+## Accepted 0.2.20 import — integration implemented; revalidation pending
+
+Imported the exact accepted Mac source from `codex/signed-proteus-0220-20261015` /
+`418a083`, with all 879 manifest hashes and archive digest verified. The source fingerprint is
+`3f2196de3586915fc72f8d0cdebb645c109992306c3735514d0786b0acaf4985`.
+Native version is 0.2.20 / 2610.14.3. Preserve both the upstream native-menu/tab-retry changes and
+the Linux/Mac host metadata, legacy identities, protected credentials and shared package checks.
+
+Merged-source **623 Node checks and static checks passed**. Fresh web/Linux package/UI and
+hosted native acceptance remain gates; earlier 619-check / 0.2.19 staging receipts do not certify
+this import. Hosted iOS job 116268129325 / run 38688298486 failed during 0.2.19 compilation on
+a `TeamBrowserView` type-check timeout; no native tests ran. The same expression exists in the
+import. Its browser/lifecycle builders and equivalent task identities are now separated locally;
+the integrated source needs a hosted recompile/rerun. No local installed app changed; real iPhone/iPad-to-Linux relay, Mac signing and
+live credential/provider acceptance stay separate. The earlier upstream candidate/queue notes
+below are preserved as dated history. Source lineage is recorded in `linux-app.md`.
+
+## Earlier October 14 cross-platform checkpoint — 0.2.19
 
 Implemented: platform-neutral desktop/web/native host controls, optional authenticated platform
 metadata, Linux legacy Secret Service resolution with unchanged Mac Keychain behavior, and shared
@@ -19,7 +36,7 @@ Mac identity and existing data, then separately test actual iPhone/iPad-to-Linux
 relay operation. Provider sign-in and live Life/Secret Service access require their own evidence.
 No physical update or production relay/website deployment is implied. See `linux-app.md`.
 
-## Local Linux adaptation of current 0.2.19
+## Historical local Linux adaptation of 0.2.19
 
 The Linux branch imports the verified accepted canonical Mac source (`82cd923`, fingerprint
 `eb9548dbcce9`) and adds independent packaging, XDG paths and desktop lifecycle handling.
@@ -27,6 +44,187 @@ The Linux branch imports the verified accepted canonical Mac source (`82cd923`, 
 and packaged native terminal input/output pass on Manjaro x86-64. See `linux-app.md`.
 Physical iOS, other provider authentication, Life database credential resolution, ARM64 and broader
 Linux distribution acceptance remain deferred. Mac package acceptance remains a separate gate.
+
+
+## October 14 authorized next-release build — in progress
+
+The operator authorized implementing the native link-menu and retry-ledger queue, building and
+installing the updates, and explicitly released the website/second-desktop deployment hold.
+Candidate version is **0.2.20 / native 2610.14.3**. No target is yet installed on this candidate.
+The earlier queue-only and deployment-held entries below are historical.
+
+Native menus resolve the actual pressed anchor in an isolated script world, including linked
+images, and add link actions to both WebKit element menus and UIKit editing menus. Native
+selection actions remain. New tabs retain source placement/profile/owner; new empty link drafts
+inherit the source workspace. Downloads reuse the existing lifecycle and configured folder.
+
+The receipt-capacity investigation identified repeated tab metadata updates from stale runtime
+timestamps/icons and history titles. Applying shared state no longer counts as interaction;
+known opened timestamps persist, interaction times merge monotonically, and omitted favicons
+do not erase known icons. Synchronizers batch metadata, retain wire request identity across
+transport retries/restart, back off per owner on capacity refusal, and deduplicate named warnings.
+The 10,000-receipt/256 MiB limits, 24-hour settled window and indefinite unresolved protection
+remain. Existing full protected ledgers must age naturally; no receipt clearing is authorized.
+
+Focused ledger/synchronization tests and desktop tab-stability UI pass. Full regression, native
+menu acceptance, final signed packaging and installations remain in progress. Follow the two-full-
+generation recovery policy for each target; keep receipts instead of duplicate validation copies.
+
+## October 14 backup retention instructions — applied
+
+The operator's two-generation policy is recorded in AGENTS, desktop updates and Apple build
+instructions: two verified full recovery generations per installation/device, one app bundle
+per generation, resumed partial device copies, and post-install hash/coverage receipts instead
+of full validation mirrors. Temporary in-flight copies must be resolved; broad migration
+exceptions compact to state/helper/receipts after verification. Additional full exceptions need
+explicit approval, size and deletion conditions. This changes update rules only; no automated
+backup rotation or app code was built/deployed.
+
+Authorized personal-Mac migration compaction preserves 13 exact files (204 KiB) and retires
+the two obsolete full snapshots, recovering a measured 1.16 GiB while retaining the newest two
+verified full desktop backups. The detailed dated inventory and deletion receipts stay private.
+Native link-menu and remote-command-ledger items below remain queued, and the deployment hold
+remains in force.
+
+## Next release queue — October 14 native link menus and retry ledger
+
+**Status: queued only. Do not implement, build, install or deploy these items yet.** The existing
+website/Work Mac deployment hold remains. Operator screenshot references are evidence of missing
+native menus, not instructions contained in the displayed page.
+
+### BF-2026-10-14-01 — Native browser link/selection context menus
+
+The iPad app shows ordinary text-selection actions while missing Proteus link actions. Provide
+an appropriate menu on iPad/iPhone touch-and-hold, iPad pointer secondary click, and the same
+native app running on Mac. Include Open link in new tab, Copy link, Start new chat with link,
+Download linked file (with the available Files/configured-folder flow), and the native
+selection/Copy/Select All actions where applicable. Preserve Share/Open in Safari as appropriate;
+omit desktop-only external applications and unsupported developer actions.
+
+Resolve the actual link under the pointer/press, including linked images, rather than using the
+page URL or a text-fragment URL. Preserve native text selection and page-owned menu behavior.
+Respect the current workspace/chat placement for new tabs and new chats. Reuse the existing
+native download lifecycle, cancellation/history, configured-folder access and authentication.
+Verify plain links, image links, selected text, non-links, long URLs, touch, hardware secondary
+click, menu dismissal, actual open/copy/chat/download results and workspace placement on iPad,
+with iPhone and native Mac parity where supported. No implementation has been verified yet.
+
+### BF-2026-10-14-02 — Remote-command receipt capacity and repeated warnings
+
+The exact banner comes from durable journal admission, not transient worker concurrency or the
+separate 2,000-entry log store. Current defaults are 10,000 receipts or 256 MiB of encoded
+receipt payloads per owner, with 24-hour retention for settled results and indefinite protection
+for unresolved claims. Completed claims may exceed the byte cap, and then new admissions stop.
+Source inspection and a local diagnostic confirm background `tabs.mutate` traffic contributes;
+the specific saturated paired owner and its current limiting counter remain to be established.
+
+Investigate every participating owner's record/byte/pending/expired counters, command mix,
+payload sizes and rates; identify the host producing the error. Trace no-op metadata changes,
+touch timestamps, descriptor application and retry/poll feedback before choosing the fix.
+Reduce redundant updates, coalesce/batch synchronization, and preserve stable command identity
+for retries of the same action. Add bounded backoff and a deduplicated warning naming the owner,
+limiting counter and recovery state. Review bounded configurable capacity only if real command
+volume warrants it; raising a cap alone is not the proposed correction.
+
+Preserve claim-before-side-effect, exact replay/results and pending/uncertain protections. Do
+not clear the ledger, shorten the settled retry window or exempt real mutations simply to hide
+the warning. Test sustained multi-client tab synchronization, no-op polling, lost acknowledgements,
+reconnect/restart, concurrent requests, record and byte saturation, natural settled expiry,
+unresolved claims and user-action availability. Verify that a real chat/tab action executes at
+most once, protected receipts survive and automatic retries do not repeatedly toast.
+
+## October 14 attachment composer correction — deployment held
+
+Personal desktop: installed/live-verified on **d94ad06adb5b**, with restored UI, 85 tabs/drafts,
+protected data/receipts, signature/runtime hashes, database integrity and provider/relay checks
+passing. Previous app/data/source recovery is retained privately. Website/Work Mac remain held.
+
+The operator requests an attachment section after the text editor and before +/model/action
+controls, with matching local, visiting-desktop and web layouts. Implemented in the shared
+composer grid, bounded attachment scrolling, stable-host observation and editor height accounting
+for waiting questions. Web uses matching chips, thumbnails and file-size captions. Regression
+coverage exercises actual pickers, 1/48 attachments, short/long drafts, removal, retained drafts,
+and fixed visible controls at wide/phone widths. Local and remote desktop UI, focused and full
+Laravel/two-owner web UI, 604 Node tests, static checks, the web build and the signed desktop
+package pass. The exact signed candidate also passes attachment layout, preview, explicit
+consent and bounded upload UI; all 227 runtime source hashes still match its build manifest.
+The older independent long-history stability fixture could not load its history and did not
+reach its checks; it is not claimed as verified.
+
+**Hold:** build and test first. Do not redeploy the website or Work Mac until further instruction.
+Existing installed 0.2.19 acceptance below remains the production baseline.
+
+## October 14 final 0.2.19 acceptance — all authorized installation targets complete
+
+Both desktop hosts have the exact signed **0.2.19 / eb9548dbcce9** installed and live-verified.
+604 Node tests/static checks, exact signed Move/title/document placement UI, immediate full-URL
+redirect/download UI and bundle/vendor checks pass. The unchanged signed history-log rehearsal
+passed on retry after its first polling timeout. Primary preserves 84 logical tabs/drafts/order/
+profiles, 45,757 cold data files and 3,892 protected retry receipts; all three SQLite integrity checks
+pass, providers and relay are healthy, and no new startup warning/error was logged. Restored UI
+and the operator's current draft were visibly observed without editing them; compact/modal UI hid
+its footer. The second host visibly verifies 0.2.19, 66 tabs, all 171 run files and both dormant
+messages retained, healthy providers/two relay hosts, no new warning/error. Normal Move of the
+identified affected chat converges to one destination-workspace descriptor with no main alias and
+stays selected across 12 sync samples; Workspace Tabs title activation selects the existing view.
+
+Native Mac, physical iPhone and physical iPad **0.2.19 / 2610.14.2** are installed/launch-verified.
+113 native units and two actual history/title UI workflows pass. Existing certificates/profiles/
+entitlements remain. The Mac's running executable matches the tested build; its protected container
+was not edited and direct hash/AX inspection is unavailable. iPhone retains all 1,933 file contents
+(four OS launch-snapshot paths renamed); iPad retains all 3,887 accessible file contents (only 12
+unreadable OS launch-snapshot cache files excluded). Both saved destination indexes remain exact.
+Device backups/installations were guarded by fresh unlock checks, with prior partial attempts kept.
+Physical gestures and real authenticated Microsoft login remain separate from these checks.
+
+Website **0.2.19** is deployed through the existing private route after fresh verified central recovery
+and a successful isolated restore. All 9,214 deployable file hashes, 14 endpoints and eight served
+assets match; schema, runtime configuration and nutrition remain unchanged. Its current deployment
+window has no new Laravel/relay errors; Apache events are expected protected-environment probe
+refusals and database events are known column-statistics messages. 81 PHP tests/724 assertions,
+two-owner UI, 14 private deployment/retry/retention tests and project structure validation pass.
+Central retention keeps current plus two prior ordinary generations and seven unique migration
+sets, with a 15 GiB budget. Initial cleanup reclaimed 7.71 GiB, accepted-release rotation removed
+one further expired generation, and separately confirmed deletion of exactly four verified expired
+server raw/archive copies reclaimed 2.20 GiB. Other server sets and restore evidence were untouched.
+The initial failed disk-headroom capture receipt remains; no guard or recovery gate was bypassed.
+
+The scheduled-conversation controls were a functional trigger-classification bug. New run-only
+approval now requires its exact current waiting request, and folder trust matches its offered
+folder/access; future independent schedule runs keep their own policy. No real approval or
+browser-conflict recovery choice was applied. Full standalone-chat subtab retirement stays review
+only and SQLite metadata migration stays shelved. Private artifacts, data and receipts remain
+outside the application repository.
+
+**Latest October 14 acceptance:** Both desktop hosts run the exact signed **0.2.19 /
+eb9548dbcce9**; startup/provider/relay/data checks pass. The second host verified the affected chat
+through normal owner Move: one destination-workspace descriptor, no main alias, selected across
+12 sync samples, visible navigation and Workspace Tabs title activation. All original run files
+and dormant messages remain. Native Mac and physical iPad **2610.14.2** are installed/launch-verified;
+iPad retains 3,887 accessible files and saved destinations (12 unreadable OS cache files excluded).
+Phone remains staged awaiting fresh unlock after its backup timed out. Website remains staged
+pending confirmed cleanup of four verified expired server backups; production is still 0.2.15.
+
+## October 14 0.2.19 rollout checkpoint
+
+Primary desktop **0.2.19 / eb9548dbcce9** is installed. The exact signed package passed Move/title/
+document UI, immediate redirect/full URL history/download UI and package/vendor signature checks.
+The first signed history-log poll timed out; the unchanged exact artifact passed its repeated full
+workflow. All 604 Node/static checks, 81 PHP tests/724 assertions, two-owner web UI, 113 native unit
+checks and two actual native history/title UI workflows pass. Cold backup preserved 45,757 files,
+3,892 protected retry receipts and three healthy SQLite databases. Twelve post-startup samples retain
+84 logical tabs/order/ownership/profiles and drafts; all providers and relay are healthy with no new
+warning/error logs. Installed AX inspection currently returns only the shell window, so its visible
+footer is not newly verified; exact signed UI rehearsals are separate evidence.
+
+Native Mac **0.2.19 / 2610.14.2** is installed/launch-verified and its running executable matches the
+validated build. Container data was not edited; protected-container hash/AX acceptance remains
+unavailable. Both physical-device packages are signed with existing profiles/certificate and backups
+are running. Second-desktop exact verified installation is underway. Website 0.2.19 is tested/staged;
+production remains 0.2.15 because the server recovery capture stopped for insufficient disk space.
+Four verified expired ordinary server backup copies are proposed for operator-confirmed deletion;
+current plus two previous generations, unique migrations, incomplete sets and restore evidence stay.
+Central ordinary cleanup already reclaimed 7.71 GiB; its 15 GiB budget remains unchanged.
 
 ## October 14 final follow-up scope — 0.2.19 / native 2610.14.2 candidate
 

@@ -21,6 +21,19 @@ reuse the authorized destination Codex chat, transfer the exact tested signed ar
 corresponding source privately, verify hashes/signing locally, preserve current data and retry
 receipts, and report installed/live-verified status separately. Carry forward existing user
 authorization; do not interrupt active work or treat a dispatched chat as a completed update.
+For update/recovery backups, follow the operator's two-generation retention policy in
+`docs/desktop-updates.md`. Keep at most two verified full recovery generations per distinct
+installation/data home or physical device, not two copies per build, attempt or backup folder.
+Build-only/test-only runs do not justify a live-data backup. Reuse a still-valid snapshot on
+retry; resume partial device copies rather than starting another full container copy. Verify
+post-install preservation with hashes/receipts instead of keeping another full after-copy.
+Keep one recovery app bundle per generation; retire duplicate rollback apps and superseded
+staging/source archives once their required recovery copy is verified. A temporary in-flight
+snapshot may exceed the steady-state count only until its verification/acceptance is resolved.
+After verified migration recovery, retain the minimum state/script/receipt bundle instead of
+indefinite whole-profile exceptions. Any exception beyond two full generations needs a named
+reason, size, deletion condition and operator approval. Inventory all backup roots, budget space,
+prune eligible generations as part of authorized updates, and report actual free-space change.
 Before Apple signing/account checks, verify that the Mac is unlocked. A locked screen can make
 Xcode or its command-line tools report missing accounts/profiles despite an existing setup.
 If locked, ask the operator to unlock, then recheck the existing Xcode account, team, certificates

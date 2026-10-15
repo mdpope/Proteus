@@ -93,3 +93,55 @@ newer retry protections. Do not restore an old data snapshot over subsequent use
 
 Keep machine-specific transfer/install receipts private. Update the release ledger and handoff
 with verified status and limits; do not put runtime data or private paths into project docs.
+
+## Two generation backup retention
+
+The operator requires only a couple of full recovery backups at one time. This policy applies
+to Proteus updates on each distinct installation/data home and each physical device. Desktop
+Electron, native Mac, iPhone and iPad have different data; do not replace one target's recovery
+with another's. A release directory containing several before/after/retry copies is not one
+backup for counting purposes: inventory the actual complete snapshots inside it.
+
+- Keep at most **two verified full recovery generations per target** in steady state. Include
+  their corresponding previous app/source identity and compact validation receipts. A newer
+  generation becomes eligible after its backup and installation/preservation acceptance pass;
+  retire the oldest eligible generation in that same authorized update workflow.
+- A single temporary in-flight snapshot may exceed that count while acceptance is unresolved.
+  Do not leave an unbounded chain of exceptions after success or failure. Report the hold and
+  its exact recovery condition; do not delete the only verified recovery copy to meet a count.
+- Build, signing, packaging, simulator and disposable UI tests do not require copying live app
+  data. Keep one frozen tested artifact for the release; do not produce another staging/app copy
+  for each check. Remove superseded disposable staging artifacts after acceptance.
+- Take one consistent pre-update app/data snapshot. Reuse it on retry only while it still matches
+  the required current state. Resume partial physical-device copies and retain per-file progress;
+  do not restart whole-container backup into a new attempt directory. If state changed, replace
+  the snapshot through a verified generation transition, not by silently using stale data.
+- Post-install verification should keep hashes, coverage/mismatch results and receipts, not a
+  second full after-install/after-launch container. Existing validation mirrors and failed-attempt
+  duplicates can retire after the accepted snapshot/receipt proves their necessary files covered.
+- Keep **one app bundle per recovery generation**. Once its exact bytes/signing are retained
+  inside the recovery set, a duplicate rollback app under Applications is eligible immediately,
+  provided no process is using it. Signed staging is not an additional long-term recovery tier.
+- Full backups protect durable chats/settings/approvals, profiles/session state, keys/pairings,
+  and databases with their consistent WAL/SHM state. Do not omit durable profile files to make a
+  size target. Reproducible-cache exclusions need an explicit allowlist and restoration validation.
+- After a one-time repair is verified, replace a broad migration exception with the smallest
+  original state, exact helper and recovery/acceptance receipts needed to explain or repeat it.
+  Record dependencies on retained run/database state. Do not automatically replay old navigation.
+  An extra full migration backup needs an operator-approved reason, size budget and deletion
+  condition; the word "unique" is not a permanent exemption. Retire compact evidence when the
+  related versions/data format and investigation no longer need it.
+- Before capture, inventory the configured backup root, legacy roots, Applications rollback
+  bundles and device subfolders. Estimate space for retained recovery plus one in-flight artifact
+  and small audit metadata. Prune eligible old generations before accumulating another release;
+  stop for real headroom/recovery blockers instead of enlarging a budget or copying elsewhere.
+- Preserve small private audit receipts and a deletion inventory; compress large historical hash
+  manifests/logs where useful. Do not retain whole profiles merely to keep an audit trail. Report
+  creation time, contents, logical/listed size, retention role and actual free-space change.
+  APFS copies can share extents, so summed directory sizes are not unique physical usage.
+
+This operator policy authorizes routine retirement of redundant/expired Proteus update backups
+within the above bounds as part of an authorized update or cleanup. It does not authorize deleting
+live data, deleting the only verified recovery generation, changing other projects' backup policy,
+exporting private data elsewhere, or scheduling recurring deletion. Carry forward that authorization
+rather than asking again for the same routine retention action.

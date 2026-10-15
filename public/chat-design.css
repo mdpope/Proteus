@@ -29,7 +29,6 @@
 .adaptive-composer .attachment-add:hover>span::before,.adaptive-composer .attachment-add:focus-visible>span::before,.adaptive-composer .remote-attach-button:hover::before,.adaptive-composer .remote-attach-button:focus-visible::before{opacity:1}
 .adaptive-composer .attachment-controls{flex:none}
 .adaptive-composer .attachment-strip{width:100%;min-width:0;max-width:100%}
-.adaptive-composer>.composer-footer:has(.attachment-strip:not(:empty)),.adaptive-composer .remote-composer-primary:has(.attachment-strip:not(:empty)){flex-wrap:wrap!important}
 .adaptive-composer .queued-message{max-height:60px;overflow:auto}
 .chat-details .runtime-stat,.remote-chat-details .runtime-stat{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center}
 .runtime-stat>span,.token-stats>div>span{font-size:11px;color:var(--soft,var(--muted))}
@@ -59,12 +58,21 @@
 [hidden]{display:none!important}
 
 /* Attachments own a full row; they cannot consume the controls' horizontal lane. */
-.new-chat-composer.adaptive-composer .composer-footer{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px}
-.new-chat-composer .chat-attachment-picker{display:contents}
-.new-chat-composer .attachment-strip{grid-column:1 / -1;grid-row:1;min-width:0;max-height:120px;overflow:auto;flex-wrap:wrap}
-.new-chat-composer .attachment-controls{grid-column:1;grid-row:2}
-.new-chat-composer .composer-models,.new-chat-composer .model-options{grid-column:2;grid-row:2;min-width:0}
-.new-chat-composer .composer-actions{grid-column:3;grid-row:2}
+.adaptive-composer .composer-footer{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px}
+.adaptive-composer .chat-attachment-picker{display:contents}
+.adaptive-composer .attachment-strip,.adaptive-composer .remote-attachment-strip{min-width:0;max-height:min(100px,18dvh);overflow:auto;overscroll-behavior:contain;display:flex;flex-wrap:wrap;gap:7px;margin:0;padding:3px 0}
+.adaptive-composer .attachment-strip{grid-column:1 / -1;grid-row:1}
+.adaptive-composer .attachment-strip:empty,.adaptive-composer .remote-attachment-strip:empty{display:none}
+.adaptive-composer .attachment-controls,.adaptive-composer .remote-attach-button{grid-column:1;grid-row:2}
+.adaptive-composer .composer-models,.adaptive-composer .model-options{grid-column:2;grid-row:2;min-width:0}
+.adaptive-composer .composer-actions{grid-column:3;grid-row:2}
+.adaptive-composer .attachment-add,.adaptive-composer .remote-attach-button{display:grid;place-items:center;width:32px;height:32px;min-width:32px;padding:0;color:var(--soft,var(--muted));font-size:20px;line-height:1}
+.adaptive-composer .attachment-chip,.adaptive-composer .remote-attachment-tag{display:flex;align-items:center;gap:4px;max-width:min(100%,300px);padding:4px 7px;border:1px solid var(--line);border-radius:8px;background:rgba(127,151,133,.08);font-size:12px;line-height:1.3}
+.adaptive-composer .attachment-chip>button:first-child,.adaptive-composer .remote-attachment-tag>button:first-child{display:flex;align-items:center;gap:6px;min-width:0;padding:0;border:0;background:transparent;text-align:left;color:inherit;opacity:1}
+.adaptive-composer .attachment-chip span,.adaptive-composer .remote-attachment-tag span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.adaptive-composer .attachment-chip small,.adaptive-composer .remote-attachment-tag small{display:block;color:var(--soft,var(--muted));font-size:10px}
+.adaptive-composer .attachment-chip img,.adaptive-composer .remote-attachment-tag img{width:34px;height:34px;object-fit:cover;border-radius:4px;flex:none}
+.adaptive-composer .attachment-chip>button:last-child,.adaptive-composer .remote-attachment-tag>button:last-child{flex:none;border:0;background:transparent;color:inherit;padding:2px 4px}
 .new-chat-dialog{max-height:calc(100dvh - 48px);overflow-y:auto}
 
 #dialog.new-chat-dialog[open]{display:flex;flex-direction:column;min-height:min(820px,calc(100dvh - 48px))}
@@ -73,9 +81,6 @@
 .remote-new-chat{min-height:min(820px,calc(100dvh - 110px));display:flex;flex-direction:column}
 .remote-new-chat>#remote-composer{flex:1;display:flex;flex-direction:column}
 .remote-new-chat .new-chat-composer{margin-top:auto}
-.new-chat-composer .remote-attach-button{grid-column:1;grid-row:2}
-.new-chat-composer .remote-composer-actions{grid-column:3;grid-row:2}
-.new-chat-composer .remote-attachment-strip{max-height:120px;overflow:auto}
 
 /* The search dialog's extra area belongs to the message, with viewport bounds. */
 #dialog.internet-search-dialog[open]{width:min(1170px,calc(100vw - 48px));max-width:calc(100vw - 48px);height:min(690px,calc(100dvh - 48px));max-height:calc(100dvh - 48px);display:flex;flex-direction:column}

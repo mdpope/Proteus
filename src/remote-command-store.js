@@ -78,7 +78,11 @@ export class RemoteCommandStore {
       const record = { digest, pending: true, at: now, issuedAt };
       const { payload, bytes } = this.encode(key, record); const totals = this.total.get();
       if (totals.records >= this.limits.maxRecords || totals.bytes + bytes > this.limits.maxBytes) {
-        const error = new Error('Remote command history is busy. Retry later; recent and uncertain actions are protected.'); error.code = 'JOURNAL_BUSY'; throw error;
+        const error = new Error('Remote command history is busy. Retry later; recent and uncertain actions are protected.');
+        error.code = 'JOURNAL_BUSY';
+        error.details = { records: totals.records, bytes: totals.bytes, pending: totals.pending, maxRecords: this.limits.maxRecords, maxBytes: this.limits.maxBytes,
+          limitingCounter: totals.records >= this.limits.maxRecords ? 'records' : 'bytes', retryAfterMs: 60_000 };
+        throw error;
       }
       this.insert.run(key, digest, 1, now, payload, bytes);
       return { claimed: true, bytesWritten: bytes };

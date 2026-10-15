@@ -53,3 +53,14 @@ export function contentTabMetadata(value){
 }
 export const sameContentTab=(left,right)=>JSON.stringify(normalizeContentTabDescriptor(left))===JSON.stringify(normalizeContentTabDescriptor(right));
 export const sameContentTabs=(left,right)=>left.length===right.length&&left.every((tab,index)=>sameContentTab(tab,right[index]));
+
+// Observing a mirrored view is not a new interaction. Older cached timestamps and
+// absent icon fields must not undo metadata received from another client.
+export function mergeContentTabMetadata(previous,incoming){
+ if(!previous)return incoming;
+ const tab={...incoming};
+ if(previous.openedAt)tab.openedAt=previous.openedAt;
+ if(previous.lastTouchedAt&&!(Date.parse(incoming.lastTouchedAt)>Date.parse(previous.lastTouchedAt)))tab.lastTouchedAt=previous.lastTouchedAt;
+ if(previous.favicon&&!incoming.favicon)tab.favicon=previous.favicon;
+ return tab;
+}

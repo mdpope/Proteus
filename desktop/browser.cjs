@@ -299,7 +299,7 @@ class BrowserTabs {
   address(value) { const url = normalizeURL(value); if (new URL(url).origin === this.appOrigin) throw new Error('The application is not a browser target.'); return url; }
   async navigate(id, url) {
     this.transition?.cancel();
-    let tab = this.get(id);this.sessionFor(tab.profileId);this.touch(tab);if(!tab.view){await this.reload(id,false);tab=this.get(id);} const wc = tab.view.webContents;
+    let tab = this.get(id);this.sessionFor(tab.profileId);if(!tab.applyingShared)this.touch(tab);if(!tab.view){await this.reload(id,false);tab=this.get(id);} const wc = tab.view.webContents;
     if(this.profile(tab.profileId).settings?.blockingEnabled!==false)await this.blocker?.ensure(url).catch(()=>this.actions.send({type:'error',message:'Ghostery filters could not update. Open Browser Preferences to retry.'}));
     if(!this.profileAvailable(tab))throw new Error('This browser profile is unavailable.');
     const entry=commitNavigation(tab,this.address(url),'',{force:true});if(entry)tab.inflightEntryId=entry.id;
@@ -535,6 +535,14 @@ class BrowserTabs {
       return this.state(this.get(info.id),true);
     }
     if(action==='persist'){const tab=this.get(id);if(typeof value.enabled!=='boolean')throw new Error('Choose whether to persist this tab.');tab.persist=value.enabled;if(tab.persist&&!tab.view)await this.reload(tab.id);this.changed();return this.state(tab,true);}
+    if(action==='sync-metadata'){
+      const tab=this.get(id);let changed=false;
+      if(!tab.openedAt&&Number.isFinite(Date.parse(value.openedAt))){tab.openedAt=Date.parse(value.openedAt);changed=true;}
+      if(Number.isFinite(Date.parse(value.lastTouchedAt))&&Date.parse(value.lastTouchedAt)>(tab.lastTouchedAt||0)){tab.lastTouchedAt=Date.parse(value.lastTouchedAt);changed=true;}
+      const favicon=safeFavicon(value.favicon);
+      if(favicon&&favicon!==(tab.view?tab.favicon:tab.snapshot?.favicon)){if(tab.view)tab.favicon=favicon;else tab.snapshot.favicon=favicon;changed=true;}
+      if(changed)this.changed();return this.state(tab,true);
+    }
     if(action==='transfer'){
       const tab=this.get(id);if(tab.agentActions)throw new Error('Wait for the active browser operation to finish.');
       await this.disconnect(tab);tab.shared=false;tab.developerShared=false;tab.owner=null;tab.parentId=typeof value.parentId==='string'?value.parentId.slice(0,256):null;tab.resumeOwner=null;tab.group=value.group==='team'?'team':'main';this.changed();return this.state(tab,true);
@@ -556,7 +564,6 @@ class BrowserTabs {
       tab.logicalHistory=history;tab.navigationPending=false;
       if(!tab.view){tab.snapshot={...tab.snapshot,url:address,title:String(value.title||history?.entries[history.index]?.title||tab.snapshot.title).slice(0,200),history,canGoBack:(history?.index||0)>0,canGoForward:!!history&&history.index<history.entries.length-1};return this.state(tab,true);}
       const wc=tab.view.webContents;
-      if(!wc.isLoading()&&wc.getURL()===address&&history?.entries[history.index])history.entries[history.index].title=String(wc.getTitle()||history.entries[history.index].title).slice(0,200);
       if(wc.getURL()!==address&&tab.navigationURL!==address){tab.applyingShared=true;try{await this.navigate(id,address);}finally{tab.applyingShared=false;}}
       this.changed();return this.state(tab,true);
     }

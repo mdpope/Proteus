@@ -69,7 +69,20 @@ export function mountChatComposer(composer,{textarea,models,actions,active=false
     if(docked){const top=pane.getBoundingClientRect().top;const height=Math.max(280,(window.visualViewport?.height||innerHeight)-top-20);const value=Math.round(height)+'px';if(pane.style.getPropertyValue('--chat-available-height')!==value)pane.style.setProperty('--chat-available-height',value);}
     const available=pane?.clientHeight||Math.max(160,innerHeight-composer.getBoundingClientRect().top+composer.clientHeight);
     const chrome=composer.getBoundingClientRect().height-textarea.getBoundingClientRect().height;
-    const cap=Math.max(40,available*.6-chrome);
+    let editorSpace=available*.6-chrome;
+    if(pane?.matches('.chat-pane')&&composer.parentElement===pane){
+      // Waiting questions and narrow-screen headings also consume chat space.
+      // Leave the transcript a small reading area and keep the footer inside the
+      // pane even when a long draft and a pending question are both present.
+      const style=getComputedStyle(pane),composerStyle=getComputedStyle(composer);
+      let occupied=(parseFloat(style.paddingTop)||0)+(parseFloat(style.paddingBottom)||0)+(parseFloat(composerStyle.marginTop)||0)+(parseFloat(composerStyle.marginBottom)||0);
+      for(const sibling of pane.children){
+        if(sibling===composer||sibling.matches('#conversation-host,#peer-conversation,.conversation-shell')||getComputedStyle(sibling).display==='none')continue;
+        const style=getComputedStyle(sibling);occupied+=sibling.getBoundingClientRect().height+(parseFloat(style.marginTop)||0)+(parseFloat(style.marginBottom)||0);
+      }
+      editorSpace=Math.min(editorSpace,available-occupied-chrome-80);
+    }
+    const cap=Math.max(40,editorSpace);
     const oldScroll=textarea.scrollTop;
     const computed=getComputedStyle(textarea);
     measure.style.cssText='position:absolute!important;left:0!important;top:0!important;visibility:hidden!important;pointer-events:none!important;height:0!important;min-height:0!important;max-height:none!important;overflow:hidden!important;resize:none!important;';
@@ -98,7 +111,9 @@ export function mountChatComposer(composer,{textarea,models,actions,active=false
   const sizes=new ResizeObserver(entries=>{if(entries.some(e=>e.target===pane||e.target===footer))schedule();});
   if(pane)sizes.observe(pane);sizes.observe(footer);
   textarea.addEventListener('input',schedule);composer.addEventListener('change',updateSummary);window.addEventListener('resize',schedule);
-  const attachments=new MutationObserver(schedule);for(const strip of composer.querySelectorAll('.attachment-strip,.remote-attachment-strip'))attachments.observe(strip,{childList:true,subtree:true});
+  // Desktop pickers replace their strip when selections change. Observe the stable
+  // host so adding, removing and restoring files always remeasures the editor.
+  const attachments=new MutationObserver(schedule);for(const host of composer.querySelectorAll('.chat-attachment-picker,.remote-attachment-strip'))attachments.observe(host,{childList:true,subtree:true});
   decorate();cancelAnimationFrame(frame);resize();
   const dispose=()=>{observer.disconnect();sizes.disconnect();attachments.disconnect();cancelAnimationFrame(frame);measure.remove();compact.remove();textarea.removeEventListener('input',schedule);composer.removeEventListener('change',updateSummary);composer.removeEventListener('keydown',dismiss);document.removeEventListener('pointerdown',dismiss);window.removeEventListener('resize',schedule);mounts.delete(composer);live.delete(composer);};
   mounts.set(composer,dispose);live.set(composer,dispose);

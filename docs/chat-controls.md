@@ -41,6 +41,18 @@ BF-2026-10-10-11 queues desktop history jitter while typing. Composer input sizi
 resize/scroll restoration are investigation leads; preserve steady bottom following and older-message
 reading position during draft edits. No cause confirmed or runtime change authorized under the hold.
 
+## Attachment section and fixed controls
+
+Local and visiting desktop chats, and the website, keep selected files in their own section
+between the message editor and +/model/action row. The list wraps within its available width,
+then scrolls vertically within 100px or 18dvh; it cannot consume the controls' horizontal lane.
+Thumbnails, filename/size captions, removal and the + button share the same presentation.
+The stable picker host is observed because desktop selection updates replace its strip node.
+Editor sizing includes waiting-question/status space while preserving transcript space and draft
+text. Wide composers keep labeled model choices; compact composers retain their options menu.
+Sending/upload consent and owner routing remain unchanged. Test and stage this correction before
+any website or Work Mac redeployment; the operator explicitly holds those deployments.
+
 ## Full queued composer release — 0.2.11
 
 Desktop, visiting desktop and website composers share `chat-composer.js`, `chat-design.css`

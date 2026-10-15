@@ -1,6 +1,19 @@
 # Linux build of the current Mac source
 
-## October 14 compatibility candidate
+## Accepted 0.2.20 refresh
+
+Current source integrates the accepted Mac **0.2.20** companion from transfer **418a083**.
+Native link/selection menus, source-workspace link drafts, convergent tab metadata and durable
+retry identities/owner backoff are retained alongside the Linux/Mac compatibility changes.
+Native version is **0.2.20 / 2610.14.3**, with upstream app/signing identity unchanged.
+Merged-source **623 Node checks and static checks passed**; fresh web/Linux packaging/UI
+acceptance remains pending. The earlier 0.2.19 results below are historical; no current artifact
+or installation is certified by those checks. Hosted iOS job **116268129325**, run
+**38688298486**, failed before tests while compiling the 0.2.19 `TeamBrowserView` task expression.
+The same expression remains upstream; a local view/task-identity decomposition now needs a fresh
+hosted recompile/rerun. Real mobile-to-Linux relay and signed Mac acceptance remain separate gates.
+
+## Earlier October 14 compatibility checkpoint — 0.2.19
 
 Linux/macOS desktop, website and iOS source now share platform-neutral host controls. Optional
 authenticated `hostPlatform` (`linux`, `darwin`, `win32` or `unknown`), canonical
@@ -32,11 +45,15 @@ remain separate acceptance. Earlier Linux/Codex package results describe their t
 
 ## Source lineage
 
-The Linux branch starts from the exact accepted Mac 0.2.19 source companion on
-`codex/signed-proteus-tabs-canonical-20261014`, transfer commit `82cd923`, rather than the old
-`main` branch. The source archive's SHA-256 and all 877 file hashes were verified before import.
-`linux-upstream-source.json` records the immutable source identity. The previous initial Linux
-port is retained on `linux-initial-build`.
+The Linux branch now uses the exact accepted Mac **0.2.20** source companion on
+`codex/signed-proteus-0220-20261015`, transfer commit `418a083`, verified against all **879**
+source manifest hashes. Archive SHA-256:
+`beb273dca6e161cb52bf8d6b6d55eb692fcb31e679c25ac9269cea90adae07e5`.
+Accepted Mac fingerprint:
+`3f2196de3586915fc72f8d0cdebb645c109992306c3735514d0786b0acaf4985`.
+`linux-upstream-source.json` records this immutable identity separately from the Linux runtime
+fingerprint. The previous 0.2.19 import (`82cd923`, 877 files) and the initial Linux port on
+`linux-initial-build` remain historical; neither is the current accepted source.
 
 ## Build and run
 
@@ -52,7 +69,7 @@ npm run package:linux
 
 The Linux entry point builds the terminal renderer and rebuilds only the copied node-pty
 module for Electron, leaving the source checkout's Node ABI intact. It produces a runnable
-directory, a versioned `Proteus-0.2.19-linux-x64.tar.gz` archive, checksum and bundled
+directory, a versioned `Proteus-0.2.20-linux-x64.tar.gz` archive, checksum and bundled
 `build-source.json`. The latter fingerprints the Linux runtime/build inputs and names the
 accepted Mac source. Both desktop entry points use `scripts/desktop-build.mjs` to freeze exact
 runtime file names and SHA-256 hashes, reject added/removed/changed source and unexpected copied

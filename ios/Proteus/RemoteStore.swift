@@ -208,7 +208,7 @@ struct RemoteHostInfo: Equatable {
                 pendingCommands.removeValue(forKey: id)
                 if let continuation = waiting.removeValue(forKey: id) {
                     if value["error"].string.isEmpty { continuation.resume(returning: value["result"]) }
-                    else { continuation.resume(throwing: RemoteError(message: value["error"].string)) }
+                    else { continuation.resume(throwing: RemoteError(message: value["error"].string, code: value["code"].string, details: value["details"])) }
                 }
             } else if value["type"].string == "event" {
                 cursor = value["cursor"].string
@@ -235,11 +235,12 @@ struct RemoteHostInfo: Equatable {
         }
         sendTask = task; try await task.value
     }
-    func request(_ method: String, _ args: [String: JSON] = [:]) async throws -> JSON {
+    func request(_ method: String, _ args: [String: JSON] = [:], requestID: String? = nil, issuedAt: String? = nil) async throws -> JSON {
         guard active, connected else { throw RemoteError(message: "\(displayName) is offline. Your draft is preserved; reconnect before sending.") }
-        let id = UUID().uuidString.lowercased()
+        let id = requestID ?? UUID().uuidString.lowercased()
+        guard UUID(uuidString: id) != nil, waiting[id] == nil else { throw RemoteError(message: "This action is already awaiting confirmation.") }
         let formatter = ISO8601DateFormatter(); formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let command: JSON = .object(["id": .string(id), "method": .string(method), "args": .object(args), "issuedAt": .string(formatter.string(from: Date()))])
+        let command: JSON = .object(["id": .string(id), "method": .string(method), "args": .object(args), "issuedAt": .string(issuedAt ?? formatter.string(from: Date()))])
         return try await withCheckedThrowingContinuation { continuation in
             waiting[id] = continuation; pendingCommands[id] = command
             timeouts[id] = Task {

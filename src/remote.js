@@ -213,7 +213,7 @@ export class RemoteHost {
     const message = unseal(peer.device.key, packet.box, `${peer.prefix}:client:${packet.seq}`); peer.incoming = packet.seq;
     if (typeof message.id !== 'string' || !/^[a-f0-9-]{36}$/i.test(message.id)) throw new Error('Invalid request ID.');
     try { const result = await this.command(peer, message); if (this.peers.get(peer.id) === peer) this.send(peer, { type: 'result', id: message.id, result }); }
-    catch (error) { if (this.peers.get(peer.id) === peer) this.send(peer, { type: 'result', id: message.id, error: error.message }); }
+    catch (error) { if (this.peers.get(peer.id) === peer) this.send(peer, { type: 'result', id: message.id, error: error.message, ...(error.code === 'JOURNAL_BUSY' ? {code:error.code,details:error.details} : {}) }); }
   }
   requireCommandGrants(peer, method, args) {
     if (!this.config.devices.some(device => device.id === peer.device?.id)) throw new Error('Unknown paired device.');
@@ -242,7 +242,17 @@ export class RemoteHost {
     if (this.inflight.size >= 32) throw new Error('Remote commands are busy. Retry shortly.');
     // Install the task before asynchronous lookup/claim so concurrent retries coalesce.
     const task = Promise.resolve().then(async () => {
-      const { previous } = await this.commandJournal.claim(key, digest, message.issuedAt);
+      let claimed;
+      try { claimed = await this.commandJournal.claim(key, digest, message.issuedAt); }
+      catch(error) {
+        if(error.code==='JOURNAL_BUSY'){
+          const d=error.details||{},name=this.config.label||os.hostname();
+          error.details={...d,hostId:this.config.hostId,hostName:name};
+          error.message=`Remote command history is busy on ${name}: ${d.limitingCounter==='bytes'?`${d.bytes} / ${d.maxBytes} bytes`:`${d.records} / ${d.maxRecords} receipts`}; ${d.pending} unresolved. Background tab sync will retry with backoff. Recent and uncertain actions remain protected.`;
+        }
+        throw error;
+      }
+      const {previous}=claimed;
       this.requireCommandGrants(peer, method, args);
       if (previous) {
         if (previous.error) throw new Error(previous.error);

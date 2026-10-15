@@ -1,11 +1,11 @@
 // Revision-aware descriptor reconciliation. Cookies, selection and page contents stay local.
-import {safeContentTabURL,sameContentTab} from './content-tab-descriptor.js';
+import {safeContentTabURL,sameContentTab,mergeContentTabMetadata} from './content-tab-descriptor.js';
 export function syncableTabURL(value){return value?safeContentTabURL(value):'';}
 export function tabChanges(before,after,{navigation=false,seed=false}={}){
   const prior=new Map(before.map(tab=>[tab.id,tab])),next=new Map(after.map(tab=>[tab.id,tab])),operations=[];
   for(const tab of before)if(!next.has(tab.id))operations.push({action:'close',id:tab.id});
-  for(const tab of after){
-    const previous=prior.get(tab.id);
+  for(const observed of after){
+    const previous=prior.get(observed.id),tab=mergeContentTabMetadata(previous,observed);
     if(sameContentTab(previous,tab))continue;
     if(!previous&&navigation&&(!seed||tab.navigationPending)&&tab.type==='browser'&&tab.url){
       operations.push({action:'open',tab:{...tab,url:'',history:undefined}});
@@ -44,6 +44,7 @@ export function rebaseTabChanges(operations,current){
     if(op.action==='close'){if(!live.has(op.id))continue;live.delete(op.id);}
     else if(op.action==='open'){
       const prior=live.get(op.tab.id);
+      op={...op,tab:mergeContentTabMetadata(prior,op.tab)};
       if(prior?.type==='browser'&&op.tab.type==='browser'&&op.tab.url===''&&!op.tab.history)op={...op,tab:{...op.tab,url:prior.url,history:prior.history}};
       if(sameContentTab(prior,op.tab))continue;live.set(op.tab.id,op.tab);
     }
@@ -54,8 +55,9 @@ export function rebaseTabChanges(operations,current){
   if(order){const ids=order.ids.filter(id=>live.has(id));for(const tab of current)if(live.has(tab.id)&&!ids.includes(tab.id))ids.push(tab.id);for(const id of live.keys())if(!ids.includes(id))ids.push(id);if(ids.join('\0')!==[...live.keys()].join('\0'))changes.push({action:'reorder',ids});}
   return changes;
 }
-export function createTabSynchronizer({scopes,readLocal,apply,request,onError=()=>{},navigation=false,pendingStorage}){
-  const records=new Map(),navigationCache=new Map();
+export function createTabSynchronizer({scopes,readLocal,apply,request,onError=()=>{},navigation=false,pendingStorage,now=Date.now}){
+  const records=new Map(),navigationCache=new Map(),backoff=new Map();
+  const hostKey=scope=>scope.hostId||'local';
   const key=scope=>JSON.stringify([scope.hostId||'',scope.scope,scope.id]);
   async function hydrate(scope,remote){
     if(!navigation||!remote?.tabs)return remote;
@@ -85,34 +87,58 @@ export function createTabSynchronizer({scopes,readLocal,apply,request,onError=()
     return {...remote,tabs};
   }
   async function sync(scope){
+    if((backoff.get(hostKey(scope))?.until||0)>now())return;
     const id=key(scope);let record=records.get(id);
     if(record?.busy){record.again=true;return record.busy;}
     if(record?.conflict)return;
     if(!record){record={baseline:null,revision:0};records.set(id,record);}
     const work=async()=>{
+      let wrote=false;
       const local=structuredClone(await readLocal(scope));
       let remote=await hydrate(scope,await request(scope,'get'));
       if(records.get(id)!==record)return;
       // An existing revision is authoritative at first connection. A brand-new scope
       // can adopt locally opened descriptors without resurrecting remotely closed tabs.
       const storageKey='proteus.navigation.pending:'+id;
+      const requestKey='proteus.navigation.request:'+id;
       if(!record.pending&&pendingStorage)try{record.pending=JSON.parse(pendingStorage.getItem(storageKey)||'null');}catch{}
       const initial=remote.revision===0?tabChanges([],local,{navigation,seed:true}):tabChanges(remote.tabs,[...remote.tabs.map(tab=>local.find(item=>item.id===tab.id&&item.navigationPending)||tab),...local.filter(tab=>tab.navigationPending&&!remote.tabs.some(item=>item.id===tab.id))],{navigation});
       const operations=record.pending||(record.baseline===null?initial:tabChanges(record.baseline,local,{navigation}));
       if(operations.length){
         record.pending=operations;if(pendingStorage)pendingStorage.setItem(storageKey,JSON.stringify(operations));
         let rebased=rebaseTabChanges(operations,remote.tabs);
-        const submit=async changes=>{let metadata=[];const flush=async()=>{if(metadata.length){remote=await hydrate(scope,await request(scope,'mutate',{expectedRevision:remote.revision,operations:metadata}));metadata=[];}};for(const op of changes){if(op.action.startsWith('browser-')){await flush();remote=await hydrate(scope,await request(scope,'mutate',{expectedRevision:remote.revision,operations:[op]}));}else metadata.push(op);}await flush();};
+        const send=async changes=>{
+          const args={expectedRevision:remote.revision,operations:changes},signature=JSON.stringify(args);
+          if(!record.request&&pendingStorage)try{record.request=JSON.parse(pendingStorage.getItem(requestKey)||'null');}catch{}
+          if(record.request?.signature!==signature)record.request={signature,id:crypto.randomUUID(),issuedAt:new Date().toISOString()};
+          if(pendingStorage)pendingStorage.setItem(requestKey,JSON.stringify(record.request));
+          remote=await hydrate(scope,await request(scope,'mutate',args,{id:record.request.id,issuedAt:record.request.issuedAt}));
+          wrote=true;
+          record.request=null;pendingStorage?.removeItem(requestKey);
+        };
+        const submit=async changes=>{let metadata=[];const flush=async()=>{while(metadata.length)await send(metadata.splice(0,100));};for(const op of changes){if(op.action.startsWith('browser-')){await flush();await send([op]);}else metadata.push(op);}await flush();};
         try{await submit(rebased);}
         catch(error){if(!/Content tabs changed/.test(error.message))throw error;remote=await hydrate(scope,await request(scope,'get'));if(records.get(id)!==record)return;rebased=rebaseTabChanges(operations,remote.tabs);await submit(rebased);}
-        record.pending=null;pendingStorage?.removeItem(storageKey);
+        record.pending=null;record.request=null;pendingStorage?.removeItem(storageKey);pendingStorage?.removeItem(requestKey);
       }
       // apply receives the captured snapshot, so it preserves additions made during I/O.
       if(records.get(id)!==record)return;
       await apply(scope,remote.tabs,local);
-      record.baseline=structuredClone(remote.tabs);record.revision=remote.revision;
+      record.baseline=structuredClone(remote.tabs);record.revision=remote.revision;if(wrote)backoff.delete(hostKey(scope));
     };
-    record.busy=work().catch(error=>{if(error.code==='NAVIGATION_CONFLICT'||error.code==='NAVIGATION_OPERATION_CONFLICT'||error.code==='NAVIGATION_TAB_CLOSED'||/Navigation changed on the owning computer|Navigation operation ID was already used|This browser tab is no longer open/i.test(error.message))record.conflict=true;onError(error,scope,record.baseline!==null,record.pending||[]);}).finally(()=>{record.busy=null;if(record.again&&records.get(id)===record){record.again=false;void sync(scope);}});
+    record.busy=work().catch(error=>{
+      if(error.code==='JOURNAL_BUSY'||/Remote command history is busy/i.test(error.message)){
+        const owner=hostKey(scope),old=backoff.get(owner),attempt=(old?.attempt||0)+1;
+        const delay=Math.min(60_000,Math.max(1000*2**Math.min(attempt-1,6),error.details?.retryAfterMs||0));
+        const notify=old?.notifiedAt===undefined||now()-old.notifiedAt>=60_000;
+        backoff.set(owner,{attempt,until:now()+delay,notifiedAt:notify?now():old.notifiedAt});
+        // A definite admission refusal has no effects or receipt. A later attempt
+        // may get a fresh issue time; transport/uncertain failures retain theirs.
+        record.request=null;pendingStorage?.removeItem('proteus.navigation.request:'+id);
+        if(notify)onError(error,scope,record.baseline!==null,record.pending||[]);return;
+      }
+      if(error.code==='NAVIGATION_CONFLICT'||error.code==='NAVIGATION_OPERATION_CONFLICT'||error.code==='NAVIGATION_TAB_CLOSED'||/Navigation changed on the owning computer|Navigation operation ID was already used|This browser tab is no longer open/i.test(error.message))record.conflict=true;onError(error,scope,record.baseline!==null,record.pending||[]);
+    }).finally(()=>{record.busy=null;if(record.again&&records.get(id)===record){record.again=false;void sync(scope);}});
     return record.busy;
   }
   async function resolve(scope,{preserve}={}){
@@ -129,7 +155,7 @@ export function createTabSynchronizer({scopes,readLocal,apply,request,onError=()
     await apply(scope,remote.tabs,local,{discardPendingNavigation:true});
     if(records.get(id)!==record)return;
     record.pending=null;record.conflict=false;record.again=false;record.baseline=structuredClone(remote.tabs);record.revision=remote.revision;
-    pendingStorage?.removeItem('proteus.navigation.pending:'+id);
+    record.request=null;pendingStorage?.removeItem('proteus.navigation.pending:'+id);pendingStorage?.removeItem('proteus.navigation.request:'+id);
   }
-  return {sync,resolve,forget(scope){records.delete(key(scope));},forgetHost(hostId){for(const id of records.keys())if(JSON.parse(id)[0]===hostId)records.delete(id);},async all(){await Promise.all(scopes().map(sync));}};
+  return {sync,resolve,forget(scope){records.delete(key(scope));},forgetHost(hostId){backoff.delete(hostId);for(const id of records.keys())if(JSON.parse(id)[0]===hostId)records.delete(id);},async all(){const groups=new Map();for(const scope of scopes()){const owner=hostKey(scope);if(!groups.has(owner))groups.set(owner,[]);groups.get(owner).push(scope);}await Promise.all([...groups.values()].map(async group=>{for(const scope of group)await sync(scope);}));}};
 }

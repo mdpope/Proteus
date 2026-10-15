@@ -86,7 +86,7 @@ export class BrowserRemoteClient extends EventTarget {
         } else if (packet.type === 'data') {
             if (this.status !== 'online' || packet.seq !== this.incoming + 1) throw new Error('Invalid sequence.');
             const value = await unseal(this.host.key, packet.box, `${this.prefix}:host:${packet.seq}`); this.incoming = packet.seq;
-            if (value.type === 'result') { const pending = this.waiting.get(value.id); if (pending) { clearTimeout(pending.timer); this.waiting.delete(value.id); value.error ? pending.reject(new Error(value.error)) : pending.resolve(value.result); } }
+            if (value.type === 'result') { const pending = this.waiting.get(value.id); if (pending) { clearTimeout(pending.timer); this.waiting.delete(value.id); value.error ? pending.reject(Object.assign(new Error(value.error),value.code==='JOURNAL_BUSY'?{code:value.code,details:value.details}:{})) : pending.resolve(value.result); } }
             else if(value.type === 'revoked' && value.deviceId === this.host.deviceId){this.event('revoked',{authenticated:true,deviceId:value.deviceId});this.fail('This device was revoked by the computer.');}
             else if (value.type === 'event') this.event('change', value);
             else throw new Error('Invalid message.');

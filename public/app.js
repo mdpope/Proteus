@@ -664,7 +664,7 @@ async function descriptorFor(tab,parent){
 const contentTabSync=createTabSynchronizer({navigation:true,pendingStorage:localStorage,
   scopes:()=>window.desktop?[...state.tabs.filter(tab=>!tab.connectionPaused&&(tab.type==='workspace'||!tab.parentId&&['run','remote-run'].includes(tab.type))).map(tab=>({scope:tab.type==='workspace'?'workspace':'chat',id:tab.type==='workspace'?tab.workspaceId:tab.runId||tab.id,...(tab.hostId?{hostId:tab.hostId}:{})})),{scope:'team',id:'team'},{scope:'main',id:'main'}]:[],
   readLocal:async scope=>{if(scope.scope==='team')return (await Promise.all(teamState().tabs.map(tab=>descriptorFor(tab,{type:'team',id:null})))).filter(Boolean);const parent=scopeParent(scope);if(!parent)return [];return (await Promise.all(state.tabs.filter(tab=>tab.parentId===parent.id).map(tab=>descriptorFor(tab,parent)))).filter(Boolean);},
-  request:(scope,action,args={})=>scope.hostId?window.desktop.peers({action:'request',hostId:scope.hostId,method:action==='get'?'tabs.get':action==='history'?'tabs.history':'tabs.mutate',args:{scope:scope.scope,id:scope.id,...args}}):api('/api/content-tabs',{action,scope:scope.scope,id:scope.id,...args}),
+  request:(scope,action,args={},options)=>scope.hostId?window.desktop.peers({action:'request',hostId:scope.hostId,method:action==='get'?'tabs.get':action==='history'?'tabs.history':'tabs.mutate',args:{scope:scope.scope,id:scope.id,...args},options}):api('/api/content-tabs',{action,scope:scope.scope,id:scope.id,...args}),
   apply:async(scope,descriptors,captured,{discardPendingNavigation=false}={})=>{
     const parent=scopeParent(scope);if(scope.scope!=='team'&&(!parent||parent.connectionPaused))return;
     applyingContentTabs++;let changed=false;
@@ -687,6 +687,13 @@ const contentTabSync=createTabSynchronizer({navigation:true,pendingStorage:local
         const current=await descriptorFor(tab,parent);
         const initial=captured.find(item=>item.id===descriptor.id);
         if(initial&&JSON.stringify(current)!==JSON.stringify(initial))continue;
+        if(descriptor.type==='browser'){
+          const info=tab.info||tab;
+          if(!info.openedAt&&descriptor.openedAt||Date.parse(descriptor.lastTouchedAt)>Date.parse(info.lastTouchedAt||'1970-01-01')||descriptor.favicon&&descriptor.favicon!==info.favicon){
+            const updated=await window.desktop.browser({action:'sync-metadata',id:tab.browserId||tab.id,openedAt:descriptor.openedAt,lastTouchedAt:descriptor.lastTouchedAt,favicon:descriptor.favicon});
+            if(tab.info)tab.info=updated;else Object.assign(tab,{openedAt:updated.openedAt,lastTouchedAt:updated.lastTouchedAt,favicon:updated.favicon});
+          }
+        }
         if(tab.hidden!==!!descriptor.hidden){tab.hidden=!!descriptor.hidden;changed=true;}
         for(const field of ['openedAt','lastTouchedAt'])if(descriptor[field]&&tab[field]!==descriptor[field]){tab[field]=descriptor[field];changed=true;}
         if(descriptor.type==='browser'&&!!(tab.info?.persist||tab.persist)!==!!descriptor.persist){const info=await window.desktop.browser({action:'persist',id:tab.browserId||tab.id,enabled:!!descriptor.persist});if(tab.info)tab.info=info;else tab.persist=!!descriptor.persist;changed=true;}
@@ -719,7 +726,7 @@ const contentTabSync=createTabSynchronizer({navigation:true,pendingStorage:local
       for(const [label,preserve]of [['Keep saved history',false],['Open pending page in new tab',true]]){const button=document.createElement('button');button.textContent=label;button.onclick=async()=>{panel.querySelectorAll('button').forEach(button=>button.disabled=true);try{await resolve(preserve);panel.remove();await window.desktop?.browser({action:'overlay',token:'navigation-conflicts',visible:!!document.querySelector('[data-navigation-conflict]')});}catch(error){toast(error.message);}finally{panel.querySelectorAll('button').forEach(button=>button.disabled=false);}};panel.append(button);}
       document.body.append(panel);void window.desktop?.browser({action:'overlay',token:'navigation-conflicts',visible:true});return;
     }
-    if(initialized&&!/offline|closed|not paired|unavailable|not connected|reconnecting|connect the selected computer|disconnected|authentication in Connections/i.test(error.message))toast(error.message);
+    if((initialized||error.code==='JOURNAL_BUSY'||/Remote command history is busy/i.test(error.message))&&!/offline|closed|not paired|unavailable|not connected|reconnecting|connect the selected computer|disconnected|authentication in Connections/i.test(error.message))toast(error.message);
   }
 });
 function selectedChatParent(){

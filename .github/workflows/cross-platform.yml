@@ -113,7 +113,9 @@ jobs:
         with:
           node-version: '24'
           cache: npm
-          cache-dependency-path: web/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
@@ -130,6 +132,9 @@ jobs:
           php artisan passport:keys --no-interaction
       - name: Install locked asset dependencies
         run: npm ci --ignore-scripts
+      - name: Install locked shared renderer dependencies
+        working-directory: .
+        run: npm ci --ignore-scripts --omit=dev
       - name: Build production web assets
         run: npm run build
       - name: PHP feature and unit tests
