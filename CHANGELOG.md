@@ -1,3 +1,8 @@
+## Native Favorites and complete simulator coverage — October 15, 2026
+
+- Keep the chat Favorites section and star actions scoped to the current owning-host workspace, including captured chat profiles without an ID; reflect explicit favorite removal while source sections are offscreen.
+- Validate native UI on actual iPhone and iPad simulator families with exhaustive, disjoint test selection. Correct stale UI interactions while retaining backend ownership, selection, draft and metadata assertions. Hosted rerun remains pending.
+
 ## 0.2.20 source integration — cross-platform acceptance pending
 
 - Integrate the accepted Mac source companion from `418a083`, preserving native link/selection menus, source-workspace drafts and durable tab-sync retry/backoff behavior alongside the cross-platform host changes.

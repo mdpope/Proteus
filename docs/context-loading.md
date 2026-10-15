@@ -1,3 +1,11 @@
+**Native workspace Favorites correction — October 15:** Chat source selection reads current
+favorites from the authenticated owning host’s workspace profile, even while its scoped source
+section is offscreen. An explicit captured chat workspace ID also scopes star mutations when
+the captured folder profile omits its ID. Explicit empty favorites clear stale selections;
+legacy hosts without workspace favorites retain the scoped-catalog fallback. Host ownership,
+revision checks and source activation/trust rules remain unchanged. Unit and UI regression
+coverage is added; hosted native execution is pending.
+
 **October 14 required app guidance:**
 
 Proteus core guidance is provider-injected independently of optional source selections and

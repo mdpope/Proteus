@@ -1,3 +1,14 @@
+## October 15 validation follow-up
+
+Run 38690148311 passes Linux/Mac desktop package/UI, website and 121 native unit tests.
+Native UI records 55 passes and 12 failures across 67 cases. The prepared correction fixes
+current-workspace Favorites, updates observed interactions and partitions all 67 UI cases into
+62 phone cases and five actual-iPad cases. One new regression raises native units to 122.
+All 626 Node tests and static checks pass; hosted native rerun is required. See
+apple-build.md and planned-updates.md. The installed Linux
+linux.fda4ae896542 remains a verified checkpoint, distinct from a candidate rebuilt after
+these release-note changes. Production Linux relay remains disabled pending private provisioning.
+
 ## Accepted 0.2.20 source refresh — cross-platform acceptance pending
 
 The Linux branch now integrates the accepted Mac **0.2.20** source companion from

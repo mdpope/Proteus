@@ -66,20 +66,33 @@ jobs:
     name: iOS simulator / ${{ matrix.label }}
     strategy:
       fail-fast: false
+      max-parallel: 4
       matrix:
         include:
           - suite: unit
             shard: 0
+            family: unit
             label: all unit tests
           - suite: ui
             shard: 1
-            label: UI shard 1 of 3
+            shards: 3
+            family: phone
+            label: iPhone UI shard 1 of 3
           - suite: ui
             shard: 2
-            label: UI shard 2 of 3
+            shards: 3
+            family: phone
+            label: iPhone UI shard 2 of 3
           - suite: ui
             shard: 3
-            label: UI shard 3 of 3
+            shards: 3
+            family: phone
+            label: iPhone UI shard 3 of 3
+          - suite: ui
+            shard: 1
+            shards: 1
+            family: tablet
+            label: iPad UI tests
     runs-on: macos-26
     timeout-minutes: 60
     steps:
@@ -103,14 +116,14 @@ jobs:
           TMPDIR: ${{ runner.temp }}
       - name: Native UI shard with disposable host fixture
         if: matrix.suite == 'ui'
-        run: node test/apple-ui-shard.mjs --shard ${{ matrix.shard }} --shards 3
+        run: node test/apple-ui-shard.mjs --device-family ${{ matrix.family }} --shard ${{ matrix.shard }} --shards ${{ matrix.shards }}
         env:
           TMPDIR: ${{ runner.temp }}
       - name: Preserve synthetic iOS failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: ios-${{ matrix.suite }}-${{ matrix.shard }}-failure-${{ github.run_attempt }}
+          name: ios-${{ matrix.suite }}-${{ matrix.family }}-${{ matrix.shard }}-failure-${{ github.run_attempt }}
           # Only the synthetic fixture logs and test result bundle; exclude
           # DerivedData, simulator app containers and runner configuration.
           path: |

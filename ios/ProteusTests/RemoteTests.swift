@@ -13,6 +13,22 @@ private actor PreviewRequestCounter {
 }
 
 final class RemoteTests: XCTestCase {
+    @MainActor func testContextSelectionUsesCurrentWorkspaceFavoritesBeforeScopedCatalogReloads() {
+        let scoped: JSON = .object(["favorites": .array([.string("old-skill")])])
+        let host: JSON = .object(["workspaces": .array([
+            .object(["id": .string("selected"), "favorites": .array([.string("new-skill")])]),
+            .object(["id": .string("empty"), "favorites": .array([])])
+        ])])
+        XCTAssertEqual(ContextSelection.favoriteIDs(hostCatalog: host, scopedCatalog: scoped, workspaceID: "selected"), ["new-skill"])
+        XCTAssertEqual(ContextSelection.favoriteIDs(hostCatalog: host, scopedCatalog: scoped, workspaceID: "empty"), [])
+        XCTAssertEqual(ContextSelection.favoriteIDs(hostCatalog: host, scopedCatalog: scoped, workspaceID: "legacy"), ["old-skill"])
+        // Captured chat workspaces contain paths, while their stable identity is separate.
+        let captured: JSON = .object(["cwd": .string("/synthetic/nondefault"), "additionalDirectories": .array([])])
+        let explicitID = ContextSelection.selectionWorkspaceID("selected", profile: captured)
+        XCTAssertEqual(explicitID, "selected")
+        XCTAssertEqual(ContextSelection.favoriteIDs(hostCatalog: host, scopedCatalog: scoped, workspaceID: explicitID), ["new-skill"])
+        XCTAssertEqual(ContextSelection.selectionWorkspaceID("", profile: .object(["id": .string("empty")])), "empty")
+    }
     @MainActor func testMirroredRedirectDoesNotCreateAVisitOrReplaceLogicalForwardList() {
         let shared = SharedAppStore(), host = UUID().uuidString
         let entries = ["one", "two", "three"].map { BrowserHistoryEntry(id: $0, url: "http://127.0.0.1:4329/browser/" + $0, title: $0) }

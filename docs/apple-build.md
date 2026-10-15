@@ -1,3 +1,26 @@
+## Complete phone and tablet UI validation
+
+The hosted workflow runs every native unit and UI case on its required device family: all
+122 unit tests, 62 phone UI tests across three isolated iPhone runners, and five tablet UI tests
+on an actual iPad simulator. Inventory is read from the Swift source; helper checks require a
+disjoint, exhaustive split and reject unavailable or mismatched simulator families. Tablet tests
+assert their device requirement rather than silently returning on a phone.
+
+For the same complete coverage on one Mac, run these commands sequentially because each helper
+owns the synthetic fixture's loopback ports:
+
+```sh
+npm run ios:test -- --only ProteusTests
+node test/apple-ui-shard.mjs --device-family phone --shard 1 --shards 1
+node test/apple-ui-shard.mjs --device-family tablet --shard 1 --shards 1
+```
+
+`--list` prints a shard's selectors without launching Apple tools. `ios:doctor` lists the
+available simulators. The lower-level full-project `ios:test` command still uses one selected
+simulator; it cannot establish both phone and tablet UI acceptance in that invocation. These
+commands use disposable hosts and simulator data and do not install onto physical devices or
+change Apple accounts, provisioning profiles or production credentials.
+
 **Accepted 0.2.20 integration checkpoint:** The Linux branch imports the verified Mac source
 companion from transfer `418a083`, including native link/selection menus and durable tab retry
 identity/backoff. The checked-in project and reproducible definition both select **0.2.20 /

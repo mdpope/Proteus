@@ -1037,3 +1037,14 @@ resume device copies, retain post-install verification as receipts, and keep one
 generation. Compact completed migration evidence to targeted state/helper/receipts. Extra full
 exceptions require explicit reason, budget, deletion condition and operator approval. This changes
 agent/update instructions; it does not implement a new scheduler or deploy app code.
+
+## October 15: authenticated workspace favorites and simulator family coverage
+
+Native chat source favorites use the current authenticated host workspace profile. A captured
+chat's explicit workspace ID takes precedence over an ID omitted by its folder profile; an
+explicit empty favorite list is authoritative. Legacy missing lists fall back to scoped discovery.
+This avoids stale offscreen SwiftUI section tasks without broadening trust or changing owner
+mutation/revision checks. Test-only picker interactions target the displayed value and verify
+the resulting selection and backend state. Native CI partitions all UI cases by required hardware
+family, rejects mismatched/unavailable simulators and runs tablet assertions on an actual iPad.
+A phone run or a silent device guard cannot establish tablet acceptance.

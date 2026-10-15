@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
 
 // Keep braces and declarations, masking Swift comments and string contents so
 // fixture HTML, commented examples and nested helpers cannot become test names.
@@ -65,24 +65,46 @@ export function selectAppleUIShard(names, shard, total) {
   return [...names].sort().filter((_name, index) => index % total === shard - 1);
 }
 
+export function appleUITestFamilies(names) {
+  return {
+    phone: names.filter(name => !/^test(?:IPad|Tablet)/.test(name)),
+    tablet: names.filter(name => /^test(?:IPad|Tablet)/.test(name))
+  };
+}
+
+export function selectAppleUISimulator(inventory, family) {
+  if (!['phone', 'tablet'].includes(family)) throw new Error('Choose phone or tablet for the UI test device family.');
+  const prefix = family === 'tablet' ? 'iPad' : 'iPhone';
+  const candidates = Object.entries(inventory.devices || {}).filter(([runtime]) => runtime.includes('.iOS-')).flatMap(([runtime, devices]) => devices.map(device => ({ ...device, runtime }))).filter(device => {
+    const model = device.deviceTypeIdentifier?.split('.').at(-1) || device.name || '';
+    return device.isAvailable !== false && model.startsWith(prefix) && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(device.udid || '');
+  }).sort((a, b) => Number(b.state === 'Booted') - Number(a.state === 'Booted') || a.name.localeCompare(b.name) || a.udid.localeCompare(b.udid));
+  if (!candidates.length) throw new Error('No available ' + prefix + ' simulator. UI tests cannot fall back to a different device family.');
+  return candidates[0];
+}
+
 async function main() {
   const arguments_ = process.argv.slice(2), options = {};
   while (arguments_.length) {
     const flag = arguments_.shift();
     if (flag === '--list' && !options.list) { options.list = true; continue; }
-    if (!['--shard', '--shards'].includes(flag) || options[flag] !== undefined || !/^\d+$/.test(arguments_[0] || '')) throw new Error('Usage: node test/apple-ui-shard.mjs --shard 1 --shards 3 [--list]');
+    if (flag === '--device-family' && !options.family && ['phone', 'tablet'].includes(arguments_[0])) { options.family = arguments_.shift(); continue; }
+    if (!['--shard', '--shards'].includes(flag) || options[flag] !== undefined || !/^\d+$/.test(arguments_[0] || '')) throw new Error('Usage: node test/apple-ui-shard.mjs --device-family phone|tablet --shard 1 --shards 3 [--list]');
     options[flag] = Number(arguments_.shift());
   }
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
   const folder = path.join(root, 'ios/ProteusUITests');
   const source = fs.readdirSync(folder).filter(name => name.endsWith('.swift')).sort().map(name => fs.readFileSync(path.join(folder, name), 'utf8')).join('\n');
-  const names = discoverRemoteUITests(source), selected = selectAppleUIShard(names, options['--shard'], options['--shards']);
+  if (!options.family) throw new Error('An explicit --device-family phone|tablet is required.');
+  const names = discoverRemoteUITests(source), familyNames = appleUITestFamilies(names)[options.family], selected = selectAppleUIShard(familyNames, options['--shard'], options['--shards']);
   const selectors = selected.map(name => 'ProteusUITests/RemoteUITests/' + name);
-  console.log(JSON.stringify({ suite: 'ProteusUITests/RemoteUITests', shard: options['--shard'], shards: options['--shards'], selected: selectors.length, total: names.length, selectors }));
+  console.log(JSON.stringify({ suite: 'ProteusUITests/RemoteUITests', deviceFamily: options.family, shard: options['--shard'], shards: options['--shards'], selected: selectors.length, familyTests: familyNames.length, total: names.length, selectors }));
   if (options.list) return;
   // Reuse the existing isolated simulator/fixture lifecycle unchanged. Each CI
   // shard is a separate runner; it owns its own app homes and loopback ports.
-  const child = spawn(process.execPath, [path.join(root, 'scripts/apple-build.mjs'), 'test', ...selectors.flatMap(selector => ['--only', selector])], { cwd: root, env: process.env, stdio: 'inherit' });
+  const simulator = selectAppleUISimulator(JSON.parse(execFileSync('xcrun', ['simctl', 'list', 'devices', 'available', '--json'], { encoding: 'utf8' })), options.family);
+  console.log(JSON.stringify({ deviceFamily: options.family, simulator: simulator.name, device: simulator.udid }));
+  const child = spawn(process.execPath, [path.join(root, 'scripts/apple-build.mjs'), 'test', '--device', simulator.udid, ...selectors.flatMap(selector => ['--only', selector])], { cwd: root, env: process.env, stdio: 'inherit' });
   const interrupt = signal => child.kill(signal);
   const term = () => interrupt('SIGTERM'), int = () => interrupt('SIGINT');
   process.once('SIGTERM', term); process.once('SIGINT', int);

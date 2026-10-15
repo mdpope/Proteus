@@ -1,3 +1,15 @@
+## October 15 native validation follow-up — implemented; rerun pending
+
+Hosted run 38690148311 passes Linux and Mac desktop tests/package/UI, web assets/PHP and all
+121 native units. Its 67 UI cases produce 55 passes and 12 failures. The follow-up fixes a real
+stale Favorites/workspace identity inconsistency, updates observed picker/navigation gestures,
+and routes 62 phone cases and five tablet cases to their actual simulator families. No tests
+are removed or silently skipped. The next run requires 122 units and all 67 UI cases.
+All 626 Node tests and static checks pass after the follow-up. The installed verified
+Linux 0.2.20 / linux.fda4ae896542 remains its own acceptance checkpoint; release-note changes
+require a separately fingerprinted candidate. Production relay registration and physical-device/
+signed Mac acceptance remain outstanding; PR #20 stays draft.
+
 ## Accepted 0.2.20 import — integration implemented; revalidation pending
 
 Imported the exact accepted Mac source from `codex/signed-proteus-0220-20261015` /
