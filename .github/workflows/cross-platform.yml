@@ -26,7 +26,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     env:
-      PROTEUS_PACKAGE_OUTPUT: ${{ runner.temp }}/proteus-packages
       # CI does not check Apple accounts, provision, notarize or install an app.
       PROTEUS_MAC_UNSIGNED: '1'
     steps:
@@ -37,6 +36,8 @@ jobs:
         with:
           node-version: '24'
           cache: npm
+      - name: Select disposable package output
+        run: echo "PROTEUS_PACKAGE_OUTPUT=$RUNNER_TEMP/proteus-packages" >> "$GITHUB_ENV"
       - name: Install locked desktop dependencies
         run: npm ci
       - name: Unit and integration tests
