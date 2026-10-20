@@ -16,6 +16,13 @@ real Codex session once, preserving prior events, complete history and operation
 first 0.2.26 installation uses the external procedure because installed 0.2.25 lacks this protocol.
 See the [current rollout](2026-10-19-next-release.md); this document does not authorize unrelated updates.
 
+The final October 20 signed follow-up explicitly disconnects/unrefs the temporary readiness IPC
+before host shutdown. Actual signed successful update and injected-health-failure compatible
+rollback both pass with a real Codex session automatically continuing once, original event prefixes
+and complete navigation/operation receipts intact. The portable harness retires disposable app/data
+payloads after success and retains compact acceptance/journal/log evidence. This acceptance does
+not authorize interrupting unrelated work on an installed host.
+
 ### Original baseline behavior and target
 
 In the original 0.2.25 baseline, the Electron host owns the service lifecycle. Its quit handler closes the service;

@@ -11,39 +11,45 @@ signing identities. Use exact tested artifacts and the two-generation recovery p
 
 BF-2026-10-20-32–38 extends the freeze with native spacing, headings, footer, scroll recovery,
 ordered address swipes, off-main-thread thumbnail work and shared sidebar color. Native build
-2610.20.1 is in preparation; 136 unit cases, phone and iPad follow-up UI pass. Three simulator
+2610.20.1 is signed, installed and launched on both physical devices; 136 unit cases, phone and iPad follow-up UI pass. Three simulator
 scrolling samples collect CPU/memory/duration without a prior baseline or physical hitch claim.
-All 817 runtime checks and static checks pass. Final signed-package/device acceptance remains outstanding. Installed builds in the table below
-are unchanged. The intermediate 64a777 desktop packet is superseded before installation.
+All 817 runtime checks and static checks pass. Exact signed desktop package, native early-input
+and real Codex successful-update/forced-rollback continuation pass. Personal installation and
+second restart preserve current tab state, all original history rows and 163 protected receipts;
+all current navigation rows are byte-exact across restart. Earlier user tab activity is verified
+against preserved pre-install owner receipts rather than mistaken for update data loss.
+Physical phone/tablet preservation verifies all 81/86 protected files. Physical frame smoothness
+and gestures remain separate from simulator acceptance. The intermediate 64a777 desktop packet
+was never installed; redundant intermediate/test payloads are retired.
 
 ## Current rollout — October 20
 
 The implementation scope is complete except shelved Widevine and the unproven black-rectangle
-symptom. **816 runtime tests, static checks, 135 native units and focused desktop/web/native UI
-acceptance pass.** The corrected exact signed desktop is `359c75fc3217+src.bf58ce118fbd`.
+symptom. **817 runtime tests, static checks, 136 native units and focused desktop/web/native UI
+acceptance pass.** The final exact signed desktop is `e350395cd6a8+src.5fc302d30ae5`.
 Its actual signed helper update and forced compatible rollback resume the original real Codex
 session automatically once, retaining previous events and complete navigation/operation receipts.
 
 | Target | Actual status |
 | --- | --- |
-| Personal desktop | Corrected artifact installed; second restart, original selection, all original data/history/receipts, native typing after the field is ready, Command-N and all three production provider choices verified. |
-| HC desktop | Corrected artifact installed and twice launched; all three providers, retained chats/history/retry receipts, native Find and stable document scrolling verified. Its early first-key report is fixed in source and awaits the final signed update. |
+| Personal desktop | Final signed follow-up installed and twice launched; current tab/history/receipt continuity, native new-tab focus/typing, restored X with Ghostery enabled and all three production providers verified. |
+| HC desktop | Final exact signed follow-up installed; immediate full URL/Enter and first-character checks pass. Final preservation/second-restart/recovery acceptance is finishing. |
 | Website | 0.2.26 deployed; 9,214 file hashes, ordinary isolated restore, 14 endpoints and existing authenticated session pass. Approved desktop OAuth provisioning is complete; desktop discovery is enabled with its separate desktop callback and unchanged mobile client. |
-| iPhone/iPad | Paid 0.2.26 / 2610.19.1 installed in place and launched; all 69/72 protected files respectively match recovery hashes. Physical gesture testing is unavailable through current automation; simulator acceptance is separate. |
+| iPhone/iPad | Paid 0.2.26 / 2610.20.1 installed in place and launched; all 81/86 protected files respectively match recovery hashes. Two verified full generations per device; physical gesture testing is unavailable through current automation and simulator acceptance is separate. |
 | Native Mac client | Installed with unchanged identity; running executable matches. Visible launch awaits the macOS security prompt, explicitly deferred by the operator. |
-| Linux | Main `9114970` installed as `linux.34d37e887ee5`; 815 tests/static, exact-package UI/PTY/focus, actual UI, real synthetic Codex, second restart and protected history/receipts pass. Two verified recovery generations/policy retained. Native Wayland Cua control remains unavailable; existing relay access remains disabled. [Acceptance](2026-10-19-linux-026-install.md). |
+| Linux | Prior `linux.34d37e887ee5` remains installed. Final `linux.8e2611e6ef29` passes 817 tests/static and exact-package UI/PTY/early-input/update/rollback checks. Terminal-interruption approval must be verified locally; operator reports answering that local request. Installation is not yet confirmed. Native Wayland Cua control remains unavailable and relay access remains disabled. [Follow-up acceptance](2026-10-19-linux-followup-e350395.md). |
 
-The first desktop packet is superseded. Private final transfer commit `37da6fa3e360b5243f557021f17994888234041f`
-is on `codex/signed-proteus-0226-focus-20261020`; its transfer-list SHA-256 is
-`4ea52188035e5fce7930faf5387c49b5e0ad0f6ea5d0c582221c79807acad089`.
+Earlier desktop packets are superseded. Private final transfer commit `39f90a3c9471aa47e7625f33ee67948f50d05606`
+is on `codex/signed-proteus-0226-followup-20261020`; its transfer-list SHA-256 is
+`4072e78d119b3a62096a31f34411af78f4a499e5f611b34c33ce7358f026288b`.
 Corresponding source and exact artifact hashes remain in its manifest. Detailed deployment,
 device, recovery and live-data receipts stay outside this repository.
 
-The early first-key follow-up passes all 816 runtime tests and a foreground native regression:
+The early first-key follow-up passes all 817 runtime tests and a foreground native regression:
 tab creation is deliberately delayed while a complete URL and Enter arrive through real native
 input before the final address field exists. The requested new tab receives the exact URL; its
-temporary editing control is removed. The final source is awaiting exact signed package acceptance.
-This desktop-only repair does not change the accepted native Swift build.
+temporary editing control is removed. The exact signed final artifact repeats that acceptance.
+The companion native build includes the subsequent spacing/gesture/performance changes above.
 
 ## Source implementation and release acceptance checklist
 

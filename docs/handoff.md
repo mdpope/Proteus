@@ -1,14 +1,20 @@
-## October 20 — latest follow-up is still being accepted
+## October 20 — latest signed follow-up accepted; remote rollout finishing
 
 All 817 runtime checks and static checks pass. The operator subsequently adds native strip spacing/dividers, independent plain headings/sidebar
 buttons, compact phone footer, reliable hide/reveal, ordered address swipes, browser performance
 and matching sidebar backgrounds. See BF-2026-10-20-32–38 and the release ledger. Native 136 units,
 phone labels/ordered swipes/footer/scroll recovery, iPad strip spacing and simulator scrolling
-CPU/memory measurements pass. Physical smoothness is not inferred from simulator metrics. New
-signed 2610.20.1/device and desktop packages remain pending. The 64a777 early-input artifact is accepted for package/focus and
-real successful Codex continuation, but is superseded by the new color scope; its forced rollback
-fixture timed out waiting for the old process to exit. Diagnose and reaccept the final signed
-artifact before any further desktop installation. Neither installed desktop has been stopped.
+CPU/memory measurements pass. Physical smoothness is not inferred from simulator metrics.
+Final signed desktop `e350395cd6a8+src.5fc302d30ae5` passes package/signature/provider-byte checks,
+native early typing and actual Codex same-session continuation after both successful update and
+forced compatible rollback. The helper readiness IPC is detached. Personal is installed, twice
+launched and live-verified with all three providers; original history rows and current owner
+receipts survive, and the complete current navigation database is exact across the second restart.
+Paid iPhone/iPad 2610.20.1 are installed and launched, with 81/86 protected files hash-verified and
+two verified full recovery generations per device. HC's same exact packet is installed and finishing
+acceptance. Linux's tested follow-up awaits its separately verified local interruption approval;
+do not claim that installation complete. The native Mac security confirmation remains explicitly
+deferred. The intermediate 64a777 package was never installed and its redundant payloads are retired.
 
 ## October 20 — corrected 0.2.26 installed; remaining rollout gates
 

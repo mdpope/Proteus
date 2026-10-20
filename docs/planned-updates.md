@@ -12,7 +12,11 @@ Thumbnail resizing/JPEG encoding/writes/retention move to a utility serial queue
 coalesce; inactive scopes and active drag/deceleration/zoom do not request screenshots. Native 136
 unit cases, phone label/swipe/footer/scroll UI and iPad spacing pass. Three simulator scrolling
 samples collect duration, CPU and memory (about 74 MB peak); no pre-change baseline or physical
-frame-hitch result is claimed. Final signed packages and updated installations remain pending. Target native build is 2610.20.1.
+frame-hitch result is claimed. Final signed desktop package/native early-input and actual Codex
+successful-update/forced-rollback continuation pass. Personal is installed and twice launched;
+all three providers and the restored browser are verified. Paid phone/tablet 2610.20.1 are installed
+and launched with 81/86 protected files exact. Two full device recovery generations remain.
+HC/Linux final rollout status and the deferred native Mac confirmation are tracked in the ledger.
 
 ## October 19 — combined release implementation and acceptance
 
@@ -20,7 +24,7 @@ The operator lifted the intake hold and authorized the combined release. BF-04�
 implemented, except BF-15 Widevine, explicitly shelved. Historical queue-only statuses below record
 intake; the [release ledger](2026-10-19-next-release.md) distinguishes actual fixture/live-provider
 acceptance from pending signed-helper, website authentication and device installation acceptance.
-The latest checks include 816 runtime cases, real durable reading-position/bulk-action UI, iPad
+The latest checks include 817 runtime cases, real durable reading-position/bulk-action UI, iPad
 status/cache/rotation/reactivation and a real Codex image-only desktop observation through MCP.
 Actual signed helper update and forced compatible rollback both automatically resume the original
 real Codex session once, preserving full history and operation receipts. Personal's first 0.2.26
@@ -29,8 +33,9 @@ The corrected foreground-only focus handoff passes a real native-focus regressio
 conflict/DevTools/context-menu UI checks. Both desktop installations, physical phone/tablet and website are accepted at the previous signed
 checkpoint. HC then exposed typing before asynchronous tab creation completes: native keyboard
 handoff plus temporary window-local text editing preserves the complete URL and Enter through
-that delay. Source/native regression passes; final signed package acceptance and desktop updates
-remain. Approved desktop OAuth provisioning is verified with the separate callback and unchanged
+that delay. The final signed package and early-input checks now pass, as do successful-update and
+forced-rollback original-chat continuation. Per-target installed status remains in the ledger.
+Approved desktop OAuth provisioning is verified with the separate callback and unchanged
 mobile client. Native Mac visible launch and Linux availability remain separate; see the ledger.
 
 ## October 19 — Linux implementation checkpoint validation

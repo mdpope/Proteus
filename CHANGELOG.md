@@ -33,7 +33,8 @@
 - Move native thumbnail encoding/persistence/retention off the main thread, coalesce capture tasks,
   and avoid snapshots during scrolling, deceleration or zoom.
 - Detach the helper readiness IPC before host shutdown while preserving the independent helper
-  and durable journal.
+  and durable journal. The exact signed follow-up passes actual Codex same-session continuation
+  after update and forced rollback; Personal and paid phone/tablet follow-up installations are verified.
 - Widevine remains shelved under the operator's no-paid-signing instruction.
 
 ## October 19 — Linux release preparation startup repair
