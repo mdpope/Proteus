@@ -16,10 +16,11 @@
 - Reserve a black iPad system-status area above clipped app content and remove ordinary
   inactive-scene privacy blanking; future private browsing can define its own masking behavior.
 - Add desktop OAuth callback/client separation and preferred-browser routing; website deployment
-  and client provisioning remain required for live acceptance.
+  passes and separate production client provisioning awaits approval.
 - Add lazy Cua/Peekaboo desktop-control adapters and an independent supervised update protocol
   with a durable same-chat continuation, compatible rollback and inventoried recovery retention.
-  Signed-supervisor and all device installation acceptance remain pending.
+  Actual signed update/rollback automatically resume the same real Codex session once. Personal
+  desktop and physical phone/tablet are installed; remaining target gates are in the release ledger.
 - Verify Build Mac native control and real Codex screenshot delivery through MCP; handle its
   native tool-approval request with one exact permission and discover backends from Finder launches.
 - Verify durable document positions, bulk partial-failure retry/source access/close, and iPad

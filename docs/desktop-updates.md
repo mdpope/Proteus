@@ -6,19 +6,22 @@ October 12 performance rollout verified it on both desktop installations; see th
 preservation and acceptance checks without the transfer step. This is a repeatable operating
 procedure, not a new automatic updater.
 
-## Queued self-update and chat continuation — BF-2026-10-19-21
+## Supervised self-update and chat continuation — BF-2026-10-19-21
 
 The operator selected this helper-and-handoff approach for the next release, with automatic
 same-chat continuation after successful restart **or rollback**, without clicking Continue.
-This remains queued: it is not an installed updater, an implemented tool surface or permission
-to build/restart Proteus during the release intake.
+The operator subsequently lifted the intake hold. Protocol 1 is implemented in 0.2.26 and its
+exact signed successful update and compatible rollback both automatically resume the original
+real Codex session once, preserving prior events, complete history and operation receipts. The
+first 0.2.26 installation uses the external procedure because installed 0.2.25 lacks this protocol.
+See the [current rollout](2026-10-19-next-release.md); this document does not authorize unrelated updates.
 
-### Current behavior and target
+### Original baseline behavior and target
 
-The Electron host currently owns the service lifecycle. Its quit handler closes the service;
+In the original 0.2.25 baseline, the Electron host owns the service lifecycle. Its quit handler closes the service;
 `Engine.close()` aborts active turns, and engine startup marks unfinished work interrupted without
 silently replaying it. `SchedulerWorker` is a worker thread and cannot supervise a dead host.
-Thus an updating chat cannot keep running after its own app quits today. Existing persisted
+Thus an updating chat cannot keep running after that baseline app quits. Existing persisted
 provider sessions, durable state and retry receipts can support a future deliberate continuation.
 
 The target experience is one visible chat: prepare changes and test a candidate, hand off an update,

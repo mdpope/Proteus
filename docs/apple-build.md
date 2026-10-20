@@ -1,3 +1,17 @@
+## October 20 — 0.2.26 physical update and native Mac launch gate
+
+Paid iPhone and iPad are updated in place to **0.2.26 / 2610.19.1** with the same paid bundle,
+certificate and provisioning profile. All 69 phone and 72 tablet protected files match their
+verified recovery hashes before launch; both processes launch successfully. Native 135-unit and
+targeted simulator UI acceptance are separate from unavailable automated physical gesture tests.
+Each physical device retains two verified full recovery generations; only the oldest obsolete
+data/app payloads were retired after both successors verified. No credentials or profiles reset.
+
+The native Mac wrapper is also updated with its original identity/entitlements and its running
+executable matches the new bundle. **Visible launch is pending:** macOS is awaiting its security
+confirmation, and the operator explicitly chose to handle it later. Do not bypass the prompt,
+diagnose a SwiftUI hang from this suspended process, or claim the native window is verified.
+
 ## October 19 — separate functional iPhone preview installed
 
 `npm run ios:preview:phone -- --device SIMULATOR_UUID` prepares the selected phone layout using

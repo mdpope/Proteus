@@ -7,29 +7,54 @@ are intake records, superseded by this authorization. Preserve active work and c
 installation authorization does not authorize cancelling unrelated turns or changing shared
 signing identities. Use exact tested artifacts and the two-generation recovery policy.
 
-## Implementation and acceptance checklist
+## Current rollout — October 20
 
-- [ ] BF-04/05: Inspect Element ordering and aborted replacement navigation.
-- [ ] BF-06/07: persistent sidebar state/name expansion and startup readiness.
-- [ ] BF-08/09/10: workspace-wide ordered overview, persistent browser/chat thumbnails and icon.
-- [ ] BF-11: multiple desktop windows, shortcuts and complete quit restoration.
-- [ ] BF-12: direct new-tab page and combined address/history entry, desktop and iOS.
-- [ ] BF-13/14: connected profile controls/guidance and correct auth browser/callback app.
+The implementation scope is complete except shelved Widevine and the unproven black-rectangle
+symptom. **815 runtime tests, static checks, 135 native units and focused desktop/web/native UI
+acceptance pass.** The corrected exact signed desktop is `359c75fc3217+src.bf58ce118fbd`.
+Its actual signed helper update and forced compatible rollback resume the original real Codex
+session automatically once, retaining previous events and complete navigation/operation receipts.
+
+| Target | Actual status |
+| --- | --- |
+| Personal desktop | Corrected artifact installed; second restart, original selection, all original data/history/receipts, native instant typing, Command-N and all three production provider choices verified. |
+| HC desktop | Corrected exact packet dispatched to its authorized chat; awaiting-input work must finish before installation. |
+| Website | 0.2.26 deployed; 9,214 file hashes, ordinary isolated restore, 14 endpoints and existing authenticated session pass. Separate desktop OAuth provisioning awaits explicit approval after automatic review rejected its production submission. |
+| iPhone/iPad | Paid 0.2.26 / 2610.19.1 installed in place and launched; all 69/72 protected files respectively match recovery hashes. Physical gesture testing is unavailable through current automation; simulator acceptance is separate. |
+| Native Mac client | Installed with unchanged identity; running executable matches. Visible launch awaits the macOS security prompt, explicitly deferred by the operator. |
+| Linux | Branch incorporated and earlier package/UI checks pass; latest checkpoint dispatched to the authorized Linux chat, whose host is unavailable. No new Linux installation claimed. |
+
+The first desktop packet is superseded. Private final transfer commit `37da6fa3e360b5243f557021f17994888234041f`
+is on `codex/signed-proteus-0226-focus-20261020`; its transfer-list SHA-256 is
+`4ea52188035e5fce7930faf5387c49b5e0ad0f6ea5d0c582221c79807acad089`.
+Corresponding source and exact artifact hashes remain in its manifest. Detailed deployment,
+device, recovery and live-data receipts stay outside this repository.
+
+## Source implementation and release acceptance checklist
+
+Checked implementation items do not assert acceptance on every target; the table above is authoritative.
+
+- [x] BF-04/05: Inspect Element ordering and aborted replacement navigation.
+- [x] BF-06/07: persistent sidebar state/name expansion and startup readiness.
+- [x] BF-08/09/10: workspace-wide ordered overview, persistent browser/chat thumbnails and icon.
+- [x] BF-11: multiple desktop windows, shortcuts and complete quit restoration.
+- [x] BF-12: direct new-tab page and combined address/history entry, desktop and iOS.
+- [x] BF-13/14: connected profile controls/guidance and correct auth browser/callback app; production client provisioning remains pending above.
 - [ ] BF-15: **Shelved by operator**: no paid Widevine vendor-signing account or runtime migration in this release.
-- [ ] BF-16/17/18: workspace ordering, hierarchical move destinations and bulk tab actions.
-- [ ] BF-19/20: durable document positions and circled More icon.
-- [ ] BF-21: independent update helper, health/recovery and automatic original-chat continuation.
-- [ ] BF-22: Cua primary/Peekaboo fallback, lazy tools and honest platform/backend state.
-- [ ] BF-23/24/25: empty history revisions/resolution and non-modal scoped conflicts.
+- [x] BF-16/17/18: workspace ordering, hierarchical move destinations and bulk tab actions.
+- [x] BF-19/20: durable document positions and circled More icon.
+- [x] BF-21: independent update helper, health/recovery and automatic original-chat continuation.
+- [x] BF-22: Cua primary/Peekaboo fallback, lazy tools and honest platform/backend state.
+- [x] BF-23/24/25: empty history revisions/resolution and non-modal scoped conflicts.
 - [ ] BF-26: independent investigation if black text rectangles reproduce.
-- [ ] BF-27/28/29: Ghostery recursion, Developer tools action and production provider picker.
-- [ ] Audit other preview-only policy leaks; record findings and actual isolation boundaries.
-- [ ] Promote accepted iPhone/iPad navigation/composer design without fixture-service leakage.
-- [ ] Apply current-workspace project grouping/visibility/order and cached overview images to iOS.
-- [ ] Runtime/static/UI/native regression acceptance, then exact signed artifact acceptance.
+- [x] BF-27/28/29: Ghostery recursion, Developer tools action and production provider picker.
+- [x] Audit other preview-only policy leaks; record findings and actual isolation boundaries.
+- [x] Promote accepted iPhone/iPad navigation/composer design without fixture-service leakage.
+- [x] Apply current-workspace project grouping/visibility/order and cached overview images to iOS.
+- [x] Runtime/static/UI/native regression acceptance, then exact signed artifact acceptance.
 - [ ] Existing desktop and native installations: stage, preserve, install, independently verify.
 
-## Current evidence
+## Initial evidence — historical checkpoint
 
 Implementation has started; no new artifact is installed. The native design chat is idle and its
 accepted changes are promoted in this shared checkout, with separate simulator-only fixture flags.

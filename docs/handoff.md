@@ -1,3 +1,28 @@
+## October 20 — corrected 0.2.26 installed; remaining rollout gates
+
+Use the [current target table and acceptance ledger](2026-10-19-next-release.md), rather than the
+historical intake holds below. Corrected signed desktop `359c75fc3217+src.bf58ce118fbd` passes
+815 runtime cases, static checks, exact package/native focus and actual signed helper update plus
+forced rollback, each resuming the same original real Codex session once with complete history
+and operation receipts. Personal installation, second restart, original X selection/login form
+with Ghostery enabled, all three provider choices/readiness and relay are live-verified. Recovery
+is two verified full generations; the updater's all-root inventory is initialized. Protected data
+is retained; only bounded website-title/Chat-placeholder hydration differs from the original snapshot.
+
+Paid phone/tablet 0.2.26 /2610.19.1 are installed and launched with 69/72 protected files exact;
+two verified full generations remain per physical device. Native 135-unit/simulator acceptance
+is separate from unavailable automated physical gestures. Native Mac is installed but its security
+confirmation holds visible launch; the operator explicitly deferred approving it until later.
+
+Website 0.2.26 is deployed with 9,214 file hashes, ordinary restore, 14 endpoints and an existing
+authenticated session verified. Automatic approval review rejected creating its separate public
+desktop OAuth client/changing production configuration; the concrete setup awaits operator approval.
+The two specifically approved obsolete encrypted transports are retired, freeing 469,741,568 bytes.
+HC's corrected exact packet is locally staged/verified, but an existing chat still awaits the
+operator's permission decision. Preserve its current owner state. Linux's latest-checkpoint request
+is dispatched to the authorized chat; its host is unavailable,
+so no new Linux installation is claimed. Widevine stays shelved. Private receipts stay outside Git.
+
 ## October 19 — Combined release implementation and installation authorized
 
 The operator explicitly lifts this chat's build hold: implement its queued changes, audit other
