@@ -34,7 +34,8 @@
   and avoid snapshots during scrolling, deceleration or zoom.
 - Detach the helper readiness IPC before host shutdown while preserving the independent helper
   and durable journal. The exact signed follow-up passes actual Codex same-session continuation
-  after update and forced rollback; Personal and paid phone/tablet follow-up installations are verified.
+  after update and forced rollback; both Electron desktops, Linux and paid phone/tablet follow-up
+  installations are verified. The separate native Mac confirmation remains operator-deferred.
 - Widevine remains shelved under the operator's no-paid-signing instruction.
 
 ## October 19 — Linux release preparation startup repair

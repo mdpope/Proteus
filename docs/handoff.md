@@ -1,4 +1,16 @@
-## October 20 — latest signed follow-up accepted; remote rollout finishing
+## October 20 — Linux follow-up installed and live-verified
+
+Exact `e350395` / `linux.8e2611e6ef29` is installed after the operator closed its blocking terminal.
+817 runtime/static checks, exact-package isolated X11/PTY/early typing and independent helper
+update/rollback acceptance pass. Actual renderer and second normal launch restore protected
+state; a manual no-tools continuation preserves the existing native Codex session and prior events.
+Configuration/history/receipts/cookies and ended-terminal history are retained with no replay.
+Two verified full recovery generations remain. Native Wayland control stays unverified and
+existing remote access stays disabled. Mac/web/iOS installations are untouched by this Linux
+update. See [exact acceptance and limitations](2026-10-19-linux-followup-e350395.md).
+
+## October 20 — latest signed follow-up installed and accepted
+
 
 All 817 runtime checks and static checks pass. The operator subsequently adds native strip spacing/dividers, independent plain headings/sidebar
 buttons, compact phone footer, reliable hide/reveal, ordered address swipes, browser performance
@@ -11,10 +23,11 @@ forced compatible rollback. The helper readiness IPC is detached. Personal is in
 launched and live-verified with all three providers; original history rows and current owner
 receipts survive, and the complete current navigation database is exact across the second restart.
 Paid iPhone/iPad 2610.20.1 are installed and launched, with 81/86 protected files hash-verified and
-two verified full recovery generations per device. HC's same exact packet is installed and finishing
-acceptance. Linux's tested follow-up awaits its separately verified local interruption approval;
-do not claim that installation complete. The native Mac security confirmation remains explicitly
-deferred. The intermediate 64a777 package was never installed and its redundant payloads are retired.
+two verified full recovery generations per device. HC's same exact packet is installed, twice
+launched and live-verified with immediate URL/Enter/first-character input, all providers, native
+Find/scroll stability and preserved chats/views/history/receipts. Linux's exact tested follow-up
+is installed and independently accepted above. The native Mac security confirmation and further
+native follow-up remain explicitly deferred. The intermediate 64a777 package was never installed and its redundant payloads are retired.
 
 ## October 20 — corrected 0.2.26 installed; remaining rollout gates
 

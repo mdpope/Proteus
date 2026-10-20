@@ -33,17 +33,19 @@ session automatically once, retaining previous events and complete navigation/op
 | Target | Actual status |
 | --- | --- |
 | Personal desktop | Final signed follow-up installed and twice launched; current tab/history/receipt continuity, native new-tab focus/typing, restored X with Ghostery enabled and all three production providers verified. |
-| HC desktop | Final exact signed follow-up installed; immediate full URL/Enter and first-character checks pass. Final preservation/second-restart/recovery acceptance is finishing. |
+| HC desktop | Final exact signed follow-up installed, twice launched and live-verified; immediate full URL/Enter and first-character checks, all three providers, Find/scroll stability, saved chats/views/history/receipts and two verified recovery generations pass. |
 | Website | 0.2.26 deployed; 9,214 file hashes, ordinary isolated restore, 14 endpoints and existing authenticated session pass. Approved desktop OAuth provisioning is complete; desktop discovery is enabled with its separate desktop callback and unchanged mobile client. |
 | iPhone/iPad | Paid 0.2.26 / 2610.20.1 installed in place and launched; all 81/86 protected files respectively match recovery hashes. Two verified full generations per device; physical gesture testing is unavailable through current automation and simulator acceptance is separate. |
-| Native Mac client | Installed with unchanged identity; running executable matches. Visible launch awaits the macOS security prompt, explicitly deferred by the operator. |
-| Linux | Prior `linux.34d37e887ee5` remains installed. Final `linux.8e2611e6ef29` passes 817 tests/static and exact-package UI/PTY/early-input/update/rollback checks. Terminal-interruption approval must be verified locally; operator reports answering that local request. Installation is not yet confirmed. Native Wayland Cua control remains unavailable and relay access remains disabled. [Follow-up acceptance](2026-10-19-linux-followup-e350395.md). |
+| Native Mac client | Prior 2610.19.1 remains installed with unchanged identity; running executable matches. Visible launch and further native follow-up await the macOS security confirmation, explicitly deferred by the operator. |
+| Linux | Follow-up main `e350395` installed as `linux.8e2611e6ef29` after operator-closed terminal; 817 tests/static, exact-package isolated X11 early typing/PTY/restart and disposable helper update/rollback pass. Actual UI, manual same-session synthetic Codex, second normal launch and protected state/history/receipts/cookies pass. Two verified recoveries retained; native Wayland control remains unverified and existing relay access stays disabled. [Acceptance](2026-10-19-linux-followup-e350395.md). |
+
 
 Earlier desktop packets are superseded. Private final transfer commit `39f90a3c9471aa47e7625f33ee67948f50d05606`
 is on `codex/signed-proteus-0226-followup-20261020`; its transfer-list SHA-256 is
 `4072e78d119b3a62096a31f34411af78f4a499e5f611b34c33ce7358f026288b`.
-Corresponding source and exact artifact hashes remain in its manifest. Detailed deployment,
-device, recovery and live-data receipts stay outside this repository.
+Corresponding source is pinned to `e350395cd6a8a97016123ff74d23570829c3764f`; exact artifact
+hashes remain in its manifest. Subsequent commits record acceptance documentation. Detailed
+deployment, device, recovery and live-data receipts stay outside this repository.
 
 The early first-key follow-up passes all 817 runtime tests and a foreground native regression:
 tab creation is deliberately delayed while a complete URL and Enter arrive through real native
@@ -73,7 +75,8 @@ Checked implementation items do not assert acceptance on every target; the table
 - [x] Promote accepted iPhone/iPad navigation/composer design without fixture-service leakage.
 - [x] Apply current-workspace project grouping/visibility/order and cached overview images to iOS.
 - [x] Runtime/static/UI/native regression acceptance, then exact signed artifact acceptance.
-- [ ] Existing desktop and native installations: stage, preserve, install, independently verify.
+- [x] Personal/HC/Linux desktops and physical phone/tablet: stage, preserve, install and independently verify.
+- [ ] Native Mac client: operator-deferred security confirmation and subsequent native acceptance.
 
 ## Initial evidence — historical checkpoint
 

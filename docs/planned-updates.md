@@ -16,7 +16,8 @@ frame-hitch result is claimed. Final signed desktop package/native early-input a
 successful-update/forced-rollback continuation pass. Personal is installed and twice launched;
 all three providers and the restored browser are verified. Paid phone/tablet 2610.20.1 are installed
 and launched with 81/86 protected files exact. Two full device recovery generations remain.
-HC/Linux final rollout status and the deferred native Mac confirmation are tracked in the ledger.
+HC and Linux follow-ups are installed and independently accepted; the native Mac confirmation
+remains explicitly deferred. Exact evidence and limitations are in the ledger.
 
 ## October 19 — combined release implementation and acceptance
 
@@ -36,7 +37,8 @@ handoff plus temporary window-local text editing preserves the complete URL and 
 that delay. The final signed package and early-input checks now pass, as do successful-update and
 forced-rollback original-chat continuation. Per-target installed status remains in the ledger.
 Approved desktop OAuth provisioning is verified with the separate callback and unchanged
-mobile client. Native Mac visible launch and Linux availability remain separate; see the ledger.
+mobile client. Linux follow-up installation is accepted; native Mac visible launch remains
+operator-deferred. See the ledger.
 
 ## October 19 — Linux implementation checkpoint validation
 
@@ -8610,13 +8612,14 @@ future supervised updates. Official user-local Cua is discoverable, with honest 
 limitations and no Peekaboo fallback. Existing remote access stays disabled. Full receipts stay
 private; [installation acceptance](2026-10-19-linux-026-install.md) records hashes and scope.
 
-## Linux early-input/color/IPC follow-up acceptance
+## Linux early-input/color/IPC follow-up acceptance — installed October 20
 
-Main `e350395` candidate `linux.8e2611e6ef29` passes 817 runtime/static checks, exact-package
-early keyboard/PTY/restart, Team native early URL/Enter and sidebar color on private X11. Real
-disposable independent update and forced compatible rollback preserve original rehearsal history
-and resume once. No runtime patch is needed. Production installation remains held for a live
-non-tmux terminal; keep the existing owner/state and remote preference. The previous recovery
-snapshot is not current after intervening chats/browser activity; use one required current capture
-under the verified two-generation policy after the idle gate. See the
-[Linux follow-up ledger](2026-10-19-linux-followup-e350395.md).
+Main `e350395` candidate `linux.8e2611e6ef29` is installed after the operator closed the blocking
+terminal and authorized continuing. All 817 runtime/static checks, exact-package early keyboard/
+PTY/restart, Team native early URL/Enter and sidebar color pass on private X11. Disposable independent
+update and forced compatible rollback preserve original rehearsal history and resume once. Actual
+idle installation, renderer and second normal launch pass; manual real Codex continuation retains
+the same native session and original events without tools. Configuration/history/receipts/cookies,
+tabs/drafts and ended-terminal history are preserved. Two verified full recoveries remain after
+eligible retirement. Native Wayland Cua control and unchanged disabled remote access are distinct
+from these passes. See the [Linux follow-up ledger](2026-10-19-linux-followup-e350395.md).
