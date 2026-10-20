@@ -321,11 +321,15 @@ access stays disabled. See the [installation acceptance](2026-10-19-linux-026-in
 artifact hashes, actual free-space change and evidence/limits. Earlier hold/preparation sections
 above are historical checkpoints.
 
-## Early-input/IPC follow-up `e350395` — tested, restart held
+## Early-input/IPC follow-up `e350395` — installed October 20
 
-The [follow-up ledger](2026-10-19-linux-followup-e350395.md) records exact candidate
+The [follow-up ledger](2026-10-19-linux-followup-e350395.md) records installed exact candidate
 `linux.8e2611e6ef29`, 817 tests/static, private-X11 native early URL/Enter (main and Team), sidebar
-color, package UI/PTY/restart and independent helper update/rollback acceptance. Current installed
-`linux.34d37e887ee5` stays running because a non-tmux terminal is active. Preserve that work; a
-passing candidate is not a completed installation. Recovery reuse/current-state requirements and
-the separate host-session canvas timeout remain explicit in the ledger.
+color, package UI/PTY/restart and independent helper update/rollback acceptance. After the operator
+closed the blocking terminal, idle graceful replacement and two actual launches pass. A manual
+synthetic no-tools continuation retains the existing native Codex session and prior events; it
+is separate from automatic rehearsal helper continuation. Original configuration/history/receipts,
+cookies, tab selection/drafts and saved terminal history are preserved with no terminal replay.
+Two verified recovery generations remain. Cua discovery passes; native Wayland control remains
+unverified and existing remote access stays disabled. The earlier host-session canvas timeout
+remains explicit in the ledger.

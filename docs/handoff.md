@@ -1,3 +1,14 @@
+## October 20 — Linux follow-up installed and live-verified
+
+Exact `e350395` / `linux.8e2611e6ef29` is installed after the operator closed its blocking terminal.
+817 runtime/static checks, exact-package isolated X11/PTY/early typing and independent helper
+update/rollback acceptance pass. Actual renderer and second normal launch restore protected
+state; a manual no-tools continuation preserves the existing native Codex session and prior events.
+Configuration/history/receipts/cookies and ended-terminal history are retained with no replay.
+Two verified full recovery generations remain. Native Wayland control stays unverified and
+existing remote access stays disabled. Mac/web/iOS installations are untouched by this Linux
+update. See [exact acceptance and limitations](2026-10-19-linux-followup-e350395.md).
+
 ## October 20 — latest follow-up is still being accepted
 
 All 817 runtime checks and static checks pass. The operator subsequently adds native strip spacing/dividers, independent plain headings/sidebar

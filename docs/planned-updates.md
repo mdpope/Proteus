@@ -8605,13 +8605,14 @@ future supervised updates. Official user-local Cua is discoverable, with honest 
 limitations and no Peekaboo fallback. Existing remote access stays disabled. Full receipts stay
 private; [installation acceptance](2026-10-19-linux-026-install.md) records hashes and scope.
 
-## Linux early-input/color/IPC follow-up acceptance
+## Linux early-input/color/IPC follow-up acceptance — installed October 20
 
-Main `e350395` candidate `linux.8e2611e6ef29` passes 817 runtime/static checks, exact-package
-early keyboard/PTY/restart, Team native early URL/Enter and sidebar color on private X11. Real
-disposable independent update and forced compatible rollback preserve original rehearsal history
-and resume once. No runtime patch is needed. Production installation remains held for a live
-non-tmux terminal; keep the existing owner/state and remote preference. The previous recovery
-snapshot is not current after intervening chats/browser activity; use one required current capture
-under the verified two-generation policy after the idle gate. See the
-[Linux follow-up ledger](2026-10-19-linux-followup-e350395.md).
+Main `e350395` candidate `linux.8e2611e6ef29` is installed after the operator closed the blocking
+terminal and authorized continuing. All 817 runtime/static checks, exact-package early keyboard/
+PTY/restart, Team native early URL/Enter and sidebar color pass on private X11. Disposable independent
+update and forced compatible rollback preserve original rehearsal history and resume once. Actual
+idle installation, renderer and second normal launch pass; manual real Codex continuation retains
+the same native session and original events without tools. Configuration/history/receipts/cookies,
+tabs/drafts and ended-terminal history are preserved. Two verified full recoveries remain after
+eligible retirement. Native Wayland Cua control and unchanged disabled remote access are distinct
+from these passes. See the [Linux follow-up ledger](2026-10-19-linux-followup-e350395.md).
