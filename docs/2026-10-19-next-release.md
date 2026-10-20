@@ -121,3 +121,30 @@ Build Mac installation/grants/input; other hosts and real-provider image deliver
 - Linux package metadata declares desktop/chat protocol handlers; initial/second-instance callback
   arguments use the same strict desktop callback route as Mac. Actual registration, launch,
   packaged helper and final Linux reruns remain owned by the authorized Linux chat.
+
+## Later acceptance and candidate preparation
+
+- Full runtime checks pass **812/812** before the subsequent Codex MCP approval regression;
+  static checks pass. Real document UI retains reading position through switching, selected
+  refresh, another feature's refresh and app restart. Bulk UI preserves a failed item's selection,
+  retries its fresh owner revision, opens the moved document at its original authorized source,
+  and closes selected browser/document views without loading hidden pages or deleting files.
+- iPad status/cache/pinch/rotation/reactivation acceptance passes after explicitly binding the
+  generated test runner to its actual disposable fixture ports. Arbitrary test-runner environment
+  forwarding had let a prior run use the wrong fixture origin; the helper now builds for testing
+  and sets each generated target's environment before execution. Physical-device acceptance remains.
+- Finder-style desktop-control discovery now checks standard user and platform installation
+  directories even without a shell PATH; explicit executable overrides remain authoritative.
+- **Real Codex image delivery passes** with the refreshed default model: Cua observes only a
+  disposable window, the real provider reads a random token drawn solely in its canvas, and
+  Proteus records actual provider usage. The installed Codex runtime accepted dynamic image result
+  fields but its model reported no screenshot. Native desktop tools therefore use fresh MCP image
+  blocks on new as well as resumed Codex chats. Its native MCP tool-approval elicitation now routes
+  through Proteus's exact existing permission check, consumed once by the host wrapper. Denial,
+  replay and turn-end cleanup are covered. Other provider/platform results remain separate.
+- A helper-capable **test baseline** is signed privately for disposable supervisor acceptance;
+  it is not an installation artifact. Production installations are unchanged. Version metadata is
+  advancing to 0.2.26 / native 2610.19.1; freeze/sign/install acceptance remains pending.
+- Website desktop-client provisioning needs the existing signed-in administration tab. Automatic
+  review rejected creation of a new hidden admin tab; no administration action ran. The operator
+  was asked to expose the existing session. The restricted deployment route remains separate.

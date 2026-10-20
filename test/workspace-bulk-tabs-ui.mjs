@@ -18,12 +18,26 @@ try{
  await until(async()=>{const saved=await session();return ids.every(id=>saved.tabs.find(tab=>tab.id===id)?.hidden);},'both typed tabs hidden');
  assert.equal(fixture.requests.some(url=>url==='/favicon-tab'),false,'bulk hide never loads the browser');
  for(const id of ids)await page.locator('[data-select-tab="'+id+'"]').check();
+ const beforeMove=await session(),documentContentId=beforeMove.tabs.find(tab=>tab.id===ids[1]).contentTabId||ids[1];let injected=false;
+ await page.route('**/api/tabs/manage',route=>{const value=route.request().postDataJSON();if(value?.action==='move'&&value.tabId===documentContentId&&!injected){injected=true;return route.fulfill({status:409,json:{error:'Synthetic stale revision: refresh this item before retrying.'}});}return route.continue();});
  await page.locator('[data-bulk-action="move"]').click();await page.locator('#bulk-tab-destination').waitFor();
  const labels=await page.locator('#bulk-tab-destination optgroup').evaluateAll(groups=>groups.map(group=>group.label));assert.ok(labels.includes(fixture.studio.name));assert.ok(labels.includes(fixture.personal.name));assert.ok(!labels.includes('Projects'));
  const target=fixture.projects.find(project=>project.workspaceId===fixture.personal.id&&project.name==='Research');
  await page.locator('#bulk-tab-destination').selectOption('project:local:'+target.id);await page.locator('#dialog-submit').click();
- await until(async()=>{const saved=await session();return ids.every(id=>saved.tabs.find(tab=>tab.id===id)?.parentId==='project:local:'+target.id);},'both existing resources moved');
+ await until(async()=>{const saved=await session();return injected&&saved.tabs.find(tab=>tab.id===ids[0])?.parentId==='project:local:'+target.id&&saved.tabs.find(tab=>tab.id===ids[1])?.parentId===fixture.parentId;},'only successful item moved');
+ assert.equal(injected,true);await page.waitForFunction(()=>document.querySelectorAll('[data-select-tab]:checked').length===1);assert.equal(await page.locator('[data-select-tab]:checked').getAttribute('data-select-tab'),ids[1]);
+ await page.unroute('**/api/tabs/manage');await page.locator('[data-bulk-action="move"]').click();await page.locator('#bulk-tab-destination').selectOption('project:local:'+target.id);await page.locator('#dialog-submit').click();
+ await until(async()=>{const saved=await session();return ids.every(id=>saved.tabs.find(tab=>tab.id===id)?.parentId==='project:local:'+target.id);},'failed item retried with fresh owner revision');
  const moved=await session();assert.equal(moved.tabs.filter(tab=>ids.includes(tab.id)).length,2);assert.ok(moved.tabs.filter(tab=>ids.includes(tab.id)).every(tab=>tab.hidden));assert.equal(moved.tabs.find(tab=>tab.id===ids[1]).file,fixture.document);
  assert.equal(fixture.requests.some(url=>url==='/favicon-tab'),false,'moving hidden resources does not load them');
- assert.deepEqual(errors,[]);console.log('PASS Command-click selection, checkbox column, top-right bulk actions, typed hide/move, workspace/project hierarchy, identity/source preservation and no hidden browser loads');
+ await page.locator('[data-preview-workspace-expand="'+fixture.personal.id+'"]').click();await page.locator('[data-preview-project="'+target.id+'"]').first().click();await page.locator('[data-preview-project-page="tabs"]').click();
+ const movedDocument=page.locator('[data-managed-tab="'+ids[1]+'"]');await movedDocument.waitFor();
+ // Hidden viewers remain authorized at their original source after a cross-workspace move.
+ await movedDocument.locator('[data-action="restore"]').click();
+ await page.locator('[data-preview-resource]').filter({hasText:'Synthetic sidebar document'}).first().click();await page.locator('#main .markdown-preview h1').waitFor();assert.match(await page.locator('#main .markdown-preview').innerText(),/Stable document view/);
+ await page.locator('[data-preview-project="'+target.id+'"]').first().click();await page.locator('[data-preview-project-page="tabs"]').click();await page.locator('[data-bulk-select]').click();for(const id of ids)await page.locator('[data-select-tab="'+id+'"]').check();await page.locator('[data-bulk-action="close"]').click();
+ await until(async()=>{const saved=await session();return ids.every(id=>!saved.tabs.some(tab=>tab.id===id));},'both typed resources closed');
+ assert.equal((await import('node:fs')).default.existsSync(fixture.document),true,'close never deletes the source document');
+ assert.equal(fixture.requests.some(url=>url==='/favicon-tab'),false,'close never loads the hidden browser');
+ assert.deepEqual(errors,[]);console.log('PASS partial move failure/retry, retained selection, source authorization after a cross-workspace move, bulk hide/move/close and no hidden browser loads');
 }catch(error){console.error(error);if(page)console.error(JSON.stringify({session:await page.evaluate(()=>window.desktop.workspaceSession({action:'get'})).then(saved=>saved.tabs.map(({id,parentId,contentTabId,hidden})=>({id,parentId,contentTabId,hidden}))),notices:await Promise.all(app.windows().filter(page=>page.url().includes('notice.html')).map(page=>page.locator('body').innerText())),dialog:await page.locator('#dialog').innerText()}));throw error;}finally{await app?.close();await fixture.cleanup();}

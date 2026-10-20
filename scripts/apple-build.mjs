@@ -63,13 +63,12 @@ else:
   console.log('Temporary clang probe pipe workaround enabled; normal compilation uses the original compiler.');
 }
 if (action === 'test') {
-  buildArgs.push('-resultBundlePath', resultPath);
   if (process.env.PROTEUS_IOS_TEST_TIMEOUTS === '1') {
     buildArgs.push('-test-timeouts-enabled', 'YES', '-default-test-execution-time-allowance', '300', '-maximum-test-execution-time-allowance', '600');
   }
 }
 for (const target of options['--only'] || []) buildArgs.push(`-only-testing:${target}`);
-buildArgs.push(action);
+buildArgs.push(action === 'test' ? 'build-for-testing' : action);
 console.log(`${action}: ${device.name}; logs and results: ${output}`);
 let fixture, child;
 const stop = async childProcess => {
@@ -111,12 +110,36 @@ try {
       fixture.once('exit', onExit); fixture.stdout.on('data', onData);
     });
   }
-  const log = fs.createWriteStream(path.join(output, 'xcodebuild.log'));
-  child = spawn('xcodebuild', buildArgs, {cwd:root, env, stdio:['ignore','pipe','pipe']});
-  child.stdout.pipe(log); child.stderr.pipe(log);
-  child.stdout.on('data', data => {for (const line of String(data).split('\n')) if (/Test (Suite|Case)|Executed |\*\* (TEST|BUILD)|error:|warning:/.test(line)) console.log(line);});
-  child.stderr.on('data', data => process.stderr.write(data));
-  const code = await new Promise((resolve, reject) => {child.once('error', reject); child.once('exit', resolve);});
-  if (code !== 0) throw new Error(`xcodebuild failed (${code}). Inspect ${path.join(output, 'xcodebuild.log')}`);
+  const runBuild = async (arguments_, name) => {
+    const log = fs.createWriteStream(path.join(output, name));
+    child = spawn('xcodebuild', arguments_, {cwd:root, env, stdio:['ignore','pipe','pipe']});
+    child.stdout.pipe(log); child.stderr.pipe(log);
+    child.stdout.on('data', data => {for (const line of String(data).split('\n')) if (/Test (Suite|Case)|Executed |\*\* (TEST|BUILD)|error:|warning:/.test(line)) console.log(line);});
+    child.stderr.on('data', data => process.stderr.write(data));
+    const code = await new Promise((resolve, reject) => {child.once('error', reject); child.once('exit', resolve);});
+    if (code !== 0) throw new Error(`xcodebuild failed (${code}). Inspect ${path.join(output, name)}`);
+  };
+  await runBuild(buildArgs, 'xcodebuild.log');
+  if (action === 'test') {
+    // xcodebuild does not reliably forward arbitrary TEST_RUNNER_ variables to
+    // UI runners. Bind each generated test target to this run's actual ports.
+    const products=path.join(output,'DerivedData/Build/Products');
+    const runs=fs.readdirSync(products).filter(name=>name.endsWith('.xctestrun'));
+    if(runs.length!==1)throw Error('Expected one generated native test run.');
+    const file=path.join(products,runs[0]);
+    const configuration=JSON.parse(exec('/usr/bin/plutil',['-convert','json','-o','-',file]));
+    let targets=0;
+    const bind=value=>{
+      if(!value||typeof value!=='object')return;
+      if(value.TestBundlePath){targets++;value.EnvironmentVariables={...value.EnvironmentVariables,PROTEUS_TEST_HTTP_ORIGIN:env.TEST_RUNNER_PROTEUS_TEST_HTTP_ORIGIN,PROTEUS_TEST_RELAY_ORIGIN:env.TEST_RUNNER_PROTEUS_TEST_RELAY_ORIGIN};}
+      for(const item of Object.values(value))if(item&&typeof item==='object')bind(item);
+    };
+    bind(configuration);if(!targets)throw Error('No native test targets were found.');
+    fs.writeFileSync(file,JSON.stringify(configuration));exec('/usr/bin/plutil',['-convert','xml1',file]);
+    const testing=['test-without-building','-xctestrun',file,'-destination',`platform=iOS Simulator,id=${device.udid}`,'-parallel-testing-enabled','NO','-resultBundlePath',resultPath];
+    for(const target of options['--only']||[])testing.push('-only-testing:'+target);
+    if(process.env.PROTEUS_IOS_TEST_TIMEOUTS==='1')testing.push('-test-timeouts-enabled','YES','-default-test-execution-time-allowance','300','-maximum-test-execution-time-allowance','600');
+    await runBuild(testing,'test-without-building.log');
+  }
   console.log(`Verified ${action} on ${device.name}. Artifacts: ${output}`);
 } finally { await stop(fixture); }

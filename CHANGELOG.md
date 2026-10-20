@@ -16,7 +16,11 @@
   and client provisioning remain required for live acceptance.
 - Add lazy Cua/Peekaboo desktop-control adapters and an independent supervised update protocol
   with a durable same-chat continuation, compatible rollback and inventoried recovery retention.
-  Signed-package, provider-delivery, OS-control and all device installation acceptance are pending.
+  Signed-supervisor and all device installation acceptance remain pending.
+- Verify Build Mac native control and real Codex screenshot delivery through MCP; handle its
+  native tool-approval request with one exact permission and discover backends from Finder launches.
+- Verify durable document positions, bulk partial-failure retry/source access/close, and iPad
+  status-area geometry/cache/reactivation with explicit per-run simulator fixture environments.
 - Widevine remains shelved under the operator's no-paid-signing instruction.
 
 ## October 19 — Linux release preparation startup repair

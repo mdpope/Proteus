@@ -1,3 +1,12 @@
+## October 19 — verify desktop image delivery at the real provider boundary
+
+Keep Cua/Peekaboo host ownership and permission checks independent of provider transport. The
+installed Codex runtime accepts dynamic image response fields but the real model reports no
+screenshot; use native MCP image blocks for desktop observations on new and resumed chats. A real
+canvas-only challenge verifies delivery. Route native proteus_app tool-approval elicitations into
+the existing exact Proteus permission decision, consumed once by its protected host bridge. Unknown
+elicitation forms/servers remain declined; never infer a persistent grant from the native prompt.
+
 ## October 19 — empty history still has authority; conflicts retain scope — queued P1 decisions
 
 BF-2026-10-19-23/24/25 record the operator's installed-0.2.25 failure report. Treat an empty saved

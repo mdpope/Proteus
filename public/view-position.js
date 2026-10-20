@@ -15,12 +15,12 @@ function observe(root,key){
   for(const record of liveViews)if(!record.root.isConnected)record.dispose();
   const previous=observed.get(root);if(previous?.key===key)return;
   previous?.dispose();let timer;
-  const save=()=>{clearTimeout(timer);timer=setTimeout(()=>{if(root.isConnected)rememberView(root,key);},250);};
+  const save=()=>{clearTimeout(timer);timer=setTimeout(()=>{if(root.isConnected&&(!root.dataset.viewKey||root.dataset.viewKey===key))rememberView(root,key);},250);};
   root.addEventListener('scroll',save,true);
   const record={root,key,dispose(){clearTimeout(timer);root.removeEventListener('scroll',save,true);liveViews.delete(record);observed.delete(root);}};
   observed.set(root,record);liveViews.add(record);
 }
-globalThis.window?.addEventListener('pagehide',()=>{for(const {root,key} of liveViews)if(root.isConnected)rememberView(root,key);});
+globalThis.window?.addEventListener('pagehide',()=>{for(const {root,key} of liveViews)if(root.isConnected&&(!root.dataset.viewKey||root.dataset.viewKey===key))rememberView(root,key);});
 const candidates = '[data-key], [data-chat-index], .message, .resource-row, .card, h2, h3';
 function scrollables(root) {
   return [root,...root.querySelectorAll('*')].filter(node => node.scrollHeight > node.clientHeight + 2 && node.clientHeight > 0 && getComputedStyle(node).overflowY !== 'hidden');

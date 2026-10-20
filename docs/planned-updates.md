@@ -1,3 +1,13 @@
+## October 19 — combined release implementation and acceptance
+
+The operator lifted the intake hold and authorized the combined release. BF-04–31 source work is
+implemented, except BF-15 Widevine, explicitly shelved. Historical queue-only statuses below record
+intake; the [release ledger](2026-10-19-next-release.md) distinguishes actual fixture/live-provider
+acceptance from pending signed-helper, website authentication and device installation acceptance.
+The latest checks include 812 runtime cases, real durable reading-position/bulk-action UI, iPad
+status/cache/rotation/reactivation and a real Codex image-only desktop observation through MCP.
+No production installation or website-client provisioning follows merely from those checks.
+
 ## October 19 — Linux release preparation follow-up
 
 Isolated checkpoint `0a5a2f6` passes 783 runtime tests and static checks, and produces a Linux

@@ -122,6 +122,7 @@ export class CodexProvider {
   const roots=[run.schedule.workspace.cwd,...run.schedule.workspace.additionalDirectories];
   const sandbox=codexSandbox(run.schedule,permissionProfile?.(),{permissionControls:(this.options.permissionControls===true||this.options.desktopPreview===true)});
   const currentBrowserTools=browserTools(this.browser,run.id),currentIntegrationTools=integrationTools(this.integrations,run.id);const browser=[...currentBrowserTools,...currentIntegrationTools];const items=new Map();const calls=new Map();
+  const approvedBridgeCalls=new Map();
   captureAppCapabilities(run,browser,update);
   let resolveTurn,rejectTurn,settled=false,abortTimer;const completed=new Promise((resolve,reject)=>{resolveTurn=resolve;rejectTurn=reject;});completed.catch(()=>{});
   const active={run,client,turnId:null};this.active=active;
@@ -136,7 +137,8 @@ export class CodexProvider {
   const invokeAppTool=async(tool,args,callId)=>{
    assertAppToolActive();
    if(active.recheckPermissions())throw new Error('Workspace permissions changed; this tool request was cancelled.');
-   const answer=await ask({type:'permission',question:'Allow Proteus app action?',details:{kind:'custom-tool',toolCallId:callId,toolName:tool.name,args,intention:tool.name==='proteus_open_document'?`Open Markdown tab: ${args?.path||''}`:`Browser ${args?.action||'action'}`}});
+   const key=JSON.stringify([tool.name,args]),approved=approvedBridgeCalls.get(key);approvedBridgeCalls.delete(key);
+   const answer=approved&&approved.expires>Date.now()?'approve':await ask({type:'permission',question:'Allow Proteus app action?',details:{kind:'custom-tool',toolCallId:callId,toolName:tool.name,args,intention:tool.name==='proteus_open_document'?`Open Markdown tab: ${args?.path||''}`:`Browser ${args?.action||'action'}`}});
    assertPendingApprovalCurrent();assertAppToolActive();
    return ['approve','approve-auto'].includes(answer)?await tool.handler(args):{resultType:'failure',textResultForLlm:'User declined.'};
   };
@@ -162,7 +164,7 @@ export class CodexProvider {
    if(method==='item/commandExecution/outputDelta'){const tool=calls.get(p.itemId);if(tool){tool.output=displayText((tool.output||'')+p.delta);update();}}
    if(method==='turn/completed'){settled=true;clearTimeout(abortTimer);if(active.permissionRevoked)rejectTurn(new Error((this.options.permissionControls===true||this.options.desktopPreview===true)?'Permissions changed and this turn was stopped. Choose Continue to resume this chat with the current permissions. No actions were automatically retried.':'Workspace permissions changed during the Codex turn. Its tools were interrupted; continue with the current permissions.'));else if(p.turn.status==='completed')resolveTurn();else rejectTurn(new Error(p.turn.error?.message||'Codex turn '+p.turn.status));}
   };
-  const onRequest=async msg=>{const p=msg.params||{};if(p.threadId&&p.threadId!==run.providerSessionId)return client.respond(msg.id,{decision:'decline'});try{
+  const onRequest=async msg=>{const p=msg.params||{};if(p.threadId&&p.threadId!==run.providerSessionId||p.turnId&&active.turnId&&p.turnId!==active.turnId)return client.respond(msg.id,msg.method==='mcpServer/elicitation/request'?{action:'decline',content:null}:{decision:'decline'});try{
    if(active.recheckPermissions())throw new Error('Workspace permissions changed; this tool request was cancelled.');
    if(msg.method==='item/tool/call'){
      const tool=browser.find(t=>t.name===p.tool);if(!tool)throw new Error('Unknown Proteus tool.');
@@ -176,7 +178,15 @@ export class CodexProvider {
      client.respond(msg.id,{decision:allowed?'accept':'decline'});
    }else if(msg.method==='item/tool/requestUserInput'){
      const answers={};for(const q of p.questions||[])answers[q.id]={answers:[await ask({type:'question',question:q.question,choices:q.options?.map(x=>x.label),optionDetails:q.options?.map(x=>({label:x.label,description:x.description||''})),providerQuestionId:q.id})]};client.respond(msg.id,{answers});
-   }else if(msg.method==='mcpServer/elicitation/request')client.respond(msg.id,{action:'decline',content:null});
+   }else if(msg.method==='mcpServer/elicitation/request'){
+     const meta=p._meta,name=p.message?.match(/tool "([^"\n]+)"\?$/)?.[1],tool=browser.find(tool=>tool.name===name);
+     if(p.serverName==='proteus_app'&&p.mode==='form'&&meta?.codex_approval_kind==='mcp_tool_call'&&tool&&meta.tool_params&&typeof meta.tool_params==='object'&&!Array.isArray(meta.tool_params)&&Object.keys(p.requestedSchema?.properties||{}).length===0){
+       const args=meta.tool_params,answer=await ask({type:'permission',question:'Allow Proteus app action?',details:{kind:'custom-tool',toolCallId:p.turnId,toolName:name,args,intention:`Proteus ${name} ${args.action||''}`}});
+       assertPendingApprovalCurrent();assertAppToolActive();const allowed=['approve','approve-auto'].includes(answer);
+       if(allowed){if(approvedBridgeCalls.size>=16)approvedBridgeCalls.clear();approvedBridgeCalls.set(JSON.stringify([name,args]),{expires:Date.now()+15000});}
+       client.respond(msg.id,{action:allowed?'accept':'decline',content:allowed?{}:null});
+     }else client.respond(msg.id,{action:'decline',content:null});
+   }
    else client.write({id:msg.id,error:{code:-32601,message:'Unsupported approval or tool request: '+msg.method}});
   }catch(e){client.write({id:msg.id,error:{code:-32000,message:e.message}});}};
   const closed=e=>rejectTurn(e);client.on('notification',onNotification);client.on('request',onRequest);client.on('closed',closed);
@@ -184,7 +194,10 @@ export class CodexProvider {
   try{
    // Native dynamic tool schemas are persisted by Codex and cannot be replaced on resume.
    // A fresh per-turn MCP catalog supplies current browser/tab schemas to older chats.
-   const resumedBrowserTools=run.providerSessionId?currentBrowserTools.filter(tool=>tool.name!=='proteus_open_document').map(tool=>({...tool,handler:args=>invokeAppTool(tool,args)})):[];
+   // Desktop screenshots must reach the model as native MCP image blocks.
+   // The installed runtime accepts dynamic inputImage results but drops their
+   // images before model delivery. Keep the fresh MCP path on new chats too.
+   const resumedBrowserTools=currentBrowserTools.filter(tool=>tool.name!=='proteus_open_document'&&(run.providerSessionId||tool.name==='proteus_desktop')).map(tool=>({...tool,handler:args=>invokeAppTool(tool,args)}));
    if(this.browser?.openDocument||this.integrations||resumedBrowserTools.length){
     if(selected.proteus_app)throw new Error('The MCP name proteus_app is reserved for Proteus app tools.');
     appBridge=await documentBridge({openDocument:async(args,id)=>{
@@ -196,10 +209,10 @@ export class CodexProvider {
     }},run.id,[...currentIntegrationTools,...resumedBrowserTools]);
     mcp.proteus_app={enabled:true,...appBridge.config};
    }
-   const instructions=`${appInstructions}${resumedBrowserTools.length?'\nFor current browser and tab operations in this resumed chat, use the fresh tools published by the proteus_app MCP server. Older unprefixed dynamic tool descriptions and input schemas may be stale. The fresh catalog supports hidden/unloaded lifecycle actions and every available profile; normal workflow approvals still apply.':''}\nYou are working inside Proteus. Use only the selected sources below. Workspace folders:\n${roots.join('\n')}\n${managed?.instructionText||''}\n${(managed?.customAgents||[]).map(a=>`Agent: ${a.displayName}${a.name===managed.agent?' (main identity)':''}\n${a.prompt}`).join('\n\n')}\nEditor context: ${JSON.stringify(run.schedule.editorContext||null)}`;
+   const instructions=`${appInstructions}${resumedBrowserTools.length?'\nUse the fresh tools published by the proteus_app MCP server. Native desktop control uses its proteus_desktop tool so screenshots arrive as images. For browser and tab operations in resumed chats, also prefer that fresh catalog: older unprefixed dynamic schemas may be stale. The fresh catalog supports hidden/unloaded lifecycle actions and every available profile; normal workflow approvals still apply.':''}\nYou are working inside Proteus. Use only the selected sources below. Workspace folders:\n${roots.join('\n')}\n${managed?.instructionText||''}\n${(managed?.customAgents||[]).map(a=>`Agent: ${a.displayName}${a.name===managed.agent?' (main identity)':''}\n${a.prompt}`).join('\n\n')}\nEditor context: ${JSON.stringify(run.schedule.editorContext||null)}`;
    const config={...sandbox.config,project_doc_max_bytes:0,developer_instructions:instructions,mcp_servers:mcp,features:{skip_host_skill_discovery:true,skill_mcp_dependency_install:false,enable_mcp_apps:false,multi_agent:false},plugins:Object.fromEntries(Object.keys(plugins).map(name=>[name,{enabled:false}])),apps:{_default:{enabled:false}},web_search:'disabled'};
    const params={model:run.schedule.model,cwd:sandbox.cwd,runtimeWorkspaceRoots:sandbox.runtimeWorkspaceRoots,approvalPolicy:'untrusted',approvalsReviewer:'user',sandbox:sandbox.sandbox,developerInstructions:instructions,config};
-   const thread=run.providerSessionId?await client.request('thread/resume',{...params,threadId:run.providerSessionId}):await client.request('thread/start',{...params,dynamicTools:browser.filter(t=>t.name!=='proteus_open_document').map(t=>({type:'function',name:t.name,description:t.description,inputSchema:t.parameters}))});
+   const thread=run.providerSessionId?await client.request('thread/resume',{...params,threadId:run.providerSessionId}):await client.request('thread/start',{...params,dynamicTools:browser.filter(t=>!['proteus_open_document','proteus_desktop'].includes(t.name)).map(t=>({type:'function',name:t.name,description:t.description,inputSchema:t.parameters}))});
    verifyCodexSandbox(thread,sandbox,sandbox.cwd);
    run.providerSessionId=thread.thread.id;run.providerHome=this.options.env?.CODEX_HOME||process.env.CODEX_HOME||path.join(os.homedir(),'.codex');run.nativeSessionPath=thread.thread.path||null;run.modelCapabilities={id:model.id,controls:model.controls,capturedAt:new Date().toISOString()};run.explicitProviderContext={mcpNames:Object.keys(selected),skillDirectories:[],disabledSkills:managed?.disabledSkills||[]};if(snapshot){snapshot.suppliedAt=new Date().toISOString();snapshot.delivery='Codex thread configuration accepted';}update();
    if(signal.aborted)throw new Error('Cancelled');

@@ -1,15 +1,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import {spawn} from 'node:child_process';
 import {randomUUID,createHash} from 'node:crypto';
 import {modelToolResult} from './tool-results.js';
 
 const reads=new Set(['list_apps','list_windows','get_window_state','check_permissions','get_accessibility_tree','get_agent_cursor_state','verify_state','see','permissions']);
 const allowed=new Set([...reads,'click','double_click','right_click','type_text','press_key','hotkey','scroll','drag','set_value','set_window_frame','invoke_menu','type','press','action','app','window','launch_app']);
-function executable(name,env=process.env){
+export function desktopExecutable(name,env=process.env,{platform=process.platform,home=os.homedir()}={}){
  const override=env[name==='cua'?'PROTEUS_CUA_DRIVER_PATH':'PROTEUS_PEEKABOO_PATH'];
  const command=name==='cua'?'cua-driver':'peekaboo';
- const candidates=override?[override]:(env.PATH||'').split(path.delimiter).map(dir=>path.join(dir,command+(process.platform==='win32'?'.exe':'')));
+ const directories=[...(env.PATH||'').split(path.delimiter).filter(Boolean),path.join(home,'.local','bin'),...(platform==='darwin'?['/opt/homebrew/bin','/usr/local/bin']:platform==='linux'?['/usr/local/bin','/usr/bin']:[])];
+ const candidates=override?[override]:[...new Set(directories)].map(dir=>path.join(dir,command+(platform==='win32'?'.exe':'')));
  return candidates.find(file=>{try{fs.accessSync(file,fs.constants.X_OK);return true;}catch{return false;}})||null;
 }
 // One private stdio lease per backend, started only when a catalog/action is requested.
@@ -47,7 +49,7 @@ function deniedPermission(result){
 }
 const sessionLabel=owner=>'proteus-'+createHash('sha256').update(owner).digest('hex').slice(0,12);
 export class DesktopControl {
- constructor({platform=process.platform,locate=executable,connect=async(command,args)=>new DesktopMCPClient(command,args).connect(),now=Date.now,idleMs=120000,active=()=>true}={}){
+ constructor({platform=process.platform,locate=desktopExecutable,connect=async(command,args)=>new DesktopMCPClient(command,args).connect(),now=Date.now,idleMs=120000,active=()=>true}={}){
   Object.assign(this,{platform,locate,connect,now,idleMs,active});this.clients=new Map();this.cuaSessions=new Set();this.observations=new Map();this.failure=new Map();this.serial=Promise.resolve();this.epoch=0;this.sessionNonce=randomUUID().slice(0,8);this.lastUsed=now();
   this.timer=setInterval(()=>{if(this.clients.size&&this.now()-this.lastUsed>this.idleMs)void this.stop();},10000);this.timer.unref?.();
  }

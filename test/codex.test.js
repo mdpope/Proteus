@@ -122,6 +122,24 @@ test('resumed Codex chats receive current browser/tab schemas through a turn-bou
   const third=f.provider.run(f.args);await until(()=>f.rpc.turn===3);const next=f.rpc.calls.findLast(c=>c.method==='thread/resume').params.config.mcp_servers.proteus_app.env;assert.notEqual(next.PROTEUS_DOCUMENT_CAPABILITY,env.PROTEUS_DOCUMENT_CAPABILITY);assert.ok((await bridge(next,{action:'list'})).value.some(t=>t.name==='proteus_tabs'));f.rpc.notice('turn/completed',{turn:{status:'completed'}});await third;
  }finally{await f.provider.close();}
 });
+
+test('new Codex desktop observations use MCP images and one exact native approval without approving a replay',async()=>{
+ const f=fixture(),approvals=[],calls=[];let answer='approve';
+ f.provider.browser={desktopControl:{handle:async args=>{calls.push(args);return {content:[{type:'text',text:'Synthetic window pixels'},{type:'image',mimeType:'image/png',data:'aGVsbG8='}]};}}};
+ f.args.ask=async request=>{approvals.push(request);return answer;};
+ try{
+  const task=f.provider.run(f.args);await until(()=>f.rpc.turn===1);const params=f.rpc.calls.find(call=>call.method==='thread/start').params;
+  assert.ok(!params.dynamicTools.some(tool=>tool.name==='proteus_desktop'));const env=params.config.mcp_servers.proteus_app.env;
+  const args={action:'call',tool:'get_window_state',arguments:{pid:10,window_id:20}};
+  const elicitation={method:'mcpServer/elicitation/request',id:91,params:{threadId:'thread',turnId:'turn-1',serverName:'proteus_app',mode:'form',_meta:{codex_approval_kind:'mcp_tool_call',tool_params:args},message:'Allow the proteus_app MCP server to run tool "proteus_desktop"?',requestedSchema:{type:'object',properties:{}}}};
+  f.rpc.emit('request',elicitation);await until(()=>f.rpc.responses.some(row=>row.id===91));assert.equal(f.rpc.responses.find(row=>row.id===91).result.action,'accept');
+  const invoke=async value=>{const response=await fetch(env.PROTEUS_DOCUMENT_ENDPOINT,{method:'POST',headers:{authorization:env.PROTEUS_DOCUMENT_CAPABILITY},body:JSON.stringify({action:'call',name:'proteus_desktop',arguments:value})});return response.json();};
+  const result=await invoke(args);assert.equal(result.binaryResultsForLlm[0].data,'aGVsbG8=');assert.equal(approvals.length,1);assert.deepEqual(calls,[args]);
+  answer='deny';const denied=await invoke(args);assert.equal(denied.resultType,'failure');assert.equal(approvals.length,2);assert.equal(calls.length,1,'consumed native approval never authorizes a second action');
+  f.rpc.emit('request',{...elicitation,id:92,params:{...elicitation.params,serverName:'unselected'}});await until(()=>f.rpc.responses.some(row=>row.id===92));assert.equal(f.rpc.responses.find(row=>row.id===92).result.action,'decline');assert.equal(approvals.length,2);
+  f.rpc.notice('turn/completed',{turn:{status:'completed'}});await task;await assert.rejects(invoke(args));
+ }finally{await f.provider.close();}
+});
 test('resumed browser approval cannot perform an action after its turn ends',async()=>{
  const f=fixture();let approve,calls=0;f.run.providerSessionId='thread';f.provider.browser={agent:async()=>{calls++;return {};}};f.args.ask=()=>new Promise(resolve=>{approve=resolve;});
  try{

@@ -1,5 +1,13 @@
 # Local Mac application
 
+October 19 combined-release source implements the multiwindow, supervised-update and Cua/Peekaboo
+features described in the historical queue below. See the [release acceptance ledger](2026-10-19-next-release.md)
+for actual verified scope and remaining signed-helper/install gates. Build Mac's signed control
+hosts pass exact-window screenshots/clicks. A real Codex round trip reads image-only canvas content
+through MCP; dynamic screenshot responses were accepted by the runtime but absent to the model.
+The native MCP approval uses one exact Proteus permission, with no replay authorization. Finder
+launches discover standard Cua/Homebrew locations without requiring a shell PATH.
+
 ## Queued native desktop control
 
 BF-2026-10-19-22 in [planned updates](planned-updates.md) selects **Cua Driver primary, Peekaboo
