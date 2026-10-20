@@ -115,6 +115,49 @@ final class RemoteUITests: XCTestCase {
         }
         XCTFail("The default browser profile menu did not become interactive")
     }
+    @MainActor private func selectPickerOption(_ label: String, pickerID: String, in app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) -> Bool {
+        let picker = app.buttons[pickerID]
+        guard picker.waitForExistence(timeout: 10) else { XCTFail("Picker is missing: " + pickerID, file: file, line: line); return false }
+        @MainActor func visibleBottom() -> CGFloat {
+            let keyboard = app.keyboards.firstMatch
+            var bottom = keyboard.exists ? keyboard.frame.minY : app.frame.maxY
+            let predictions = app.otherElements["Typing Predictions"]
+            if predictions.exists { bottom = min(bottom, predictions.frame.minY) }
+            return bottom - 12
+        }
+        let form = app.collectionViews["new-chat-form"]
+        for _ in 0..<8 {
+            if picker.isHittable && picker.frame.maxY < visibleBottom() { break }
+            guard form.exists else { break }
+            form.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45))
+                .press(forDuration: 0.05, thenDragTo: form.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25)))
+        }
+        guard picker.isEnabled, picker.isHittable, picker.frame.maxY < visibleBottom() else {
+            XCTFail("The complete picker row must be visible above the keyboard and its predictions", file: file, line: line); return false
+        }
+        // SwiftUI exposes the whole form row; the trailing value opens its menu.
+        picker.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+        let option = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", label)).firstMatch
+        guard option.waitForExistence(timeout: 10) else { XCTFail("Picker option is missing: " + label, file: file, line: line); return false }
+        option.tap()
+        let selected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS %@", label), object: picker)
+        let result = XCTWaiter.wait(for: [selected], timeout: 5)
+        XCTAssertEqual(result, .completed, "The picker must retain the selected option", file: file, line: line)
+        return result == .completed
+    }
+    @MainActor private func setComposerSection(_ name: String, expanded: Bool, in popover: XCUIElement) -> Bool {
+        let section = popover.buttons.matching(NSPredicate(format: "label == %@", name)).firstMatch
+        guard section.waitForExistence(timeout: 10) else { XCTFail("Composer section is missing: " + name); return false }
+        let desired = expanded ? "Expanded" : "Collapsed"
+        if section.value as? String != desired {
+            // Expanded DisclosureGroups include their choices in the AX frame.
+            section.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: section.frame.width / 2, dy: min(9, section.frame.height / 2))).tap()
+        }
+        let state = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", desired), object: section)
+        let result = XCTWaiter.wait(for: [state], timeout: 5)
+        XCTAssertEqual(result, .completed, "Composer section must become " + desired)
+        return result == .completed
+    }
     @MainActor func testWorkspaceListCopyOpensIndependentConfiguration() async throws {
         let (data, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/pair")!)
         let fixture = try JSONSerialization.jsonObject(with: data) as! [String: Any]
@@ -290,10 +333,10 @@ final class RemoteUITests: XCTestCase {
         XCTAssertTrue(first.waitForExistence(timeout: 10)); first.tap()
         let address = app.textFields["browser-address"]
         XCTAssertTrue(address.waitForExistence(timeout: 10)); address.tap()
-        address.press(forDuration: 1.2)
-        if app.menuItems["Select All"].waitForExistence(timeout: 2) { app.menuItems["Select All"].tap() }
-        else { address.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: (address.value as? String ?? "").count)) }
-        address.typeText("http://127.0.0.1:4329/browser/one"); app.buttons["browser-go"].tap()
+        let destination = "http://127.0.0.1:4329/browser/one"
+        let seededAddress = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", destination), object: address)
+        guard XCTWaiter.wait(for: [seededAddress], timeout: 8) == .completed else { XCTFail("The desktop fixture must supply the exact navigation target"); return }
+        app.buttons["browser-go"].tap()
         XCTAssertTrue(app.webViews.staticTexts["First browser page"].waitForExistence(timeout: 15))
         expectation(for: NSPredicate(format: "label == %@", "First browser page"), evaluatedWith: first); waitForExpectations(timeout: 8)
         let load = app.webViews.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Load ")).firstMatch
@@ -319,6 +362,7 @@ final class RemoteUITests: XCTestCase {
         let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Stable desktop-origin chat tabs"; shot.lifetime = .keepAlways; add(shot)
     }
     @MainActor func testIPadSidebarHeadingAndNewTabsReveal() {
+        XCTAssertEqual(UIDevice.current.userInterfaceIdiom, .pad, "This tablet layout test requires an actual iPad simulator")
         let app = XCUIApplication(); app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-long-chat", "--synthetic-browser-workspace"]; app.launch()
         let home = app.buttons["sidebar-Home"]
         XCTAssertTrue(home.waitForExistence(timeout: 12)); home.tap()
@@ -331,7 +375,7 @@ final class RemoteUITests: XCTestCase {
         XCTAssertGreaterThan(heading.frame.minX, home.frame.maxX + 15, "Home heading has a normal inset from the content edge")
         let homeShot = XCTAttachment(screenshot: app.screenshot()); homeShot.name = "iPad Home inset and selected sidebar"; homeShot.lifetime = .keepAlways; add(homeShot)
         for _ in 0..<12 {
-            plus.tap(); app.buttons["Browser - Default"].firstMatch.tap()
+            plus.tap(); app.buttons["Browser · Default"].firstMatch.tap()
             let active = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND value == %@", "shell-tab-", "Active")).firstMatch
             XCTAssertTrue(active.waitForExistence(timeout: 5)); XCTAssertTrue(active.isHittable, "New main tab scrolls into view")
         }
@@ -341,7 +385,7 @@ final class RemoteUITests: XCTestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 8)); row.tap()
         XCTAssertEqual(app.buttons["sidebar-Chats"].value as? String, "Active", "A selected chat still highlights Chats")
         for _ in 0..<10 {
-            app.buttons["Add chat tab"].tap(); app.buttons["Browser - Default"].firstMatch.tap()
+            app.buttons["Add chat tab"].tap(); app.buttons["Browser · Default"].firstMatch.tap()
             let child = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND value == %@", "chat-browser-tab-", "Active")).firstMatch
             XCTAssertTrue(child.waitForExistence(timeout: 5)); XCTAssertTrue(child.isHittable, "New child tab scrolls into view")
         }
@@ -432,6 +476,7 @@ final class RemoteUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Completion time unavailable"].exists)
     }
     @MainActor func testTabletUsesOnlyTopChatActions() {
+        XCTAssertEqual(UIDevice.current.userInterfaceIdiom, .pad, "This tablet layout test requires an actual iPad simulator")
         let app = XCUIApplication()
         app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-long-chat"]
         app.launch()
@@ -443,7 +488,7 @@ final class RemoteUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["chat-header-title"].exists)
         XCTAssertFalse(app.buttons["chat-back"].exists)
         XCTAssertEqual(app.buttons.matching(identifier: "Chat actions").count, 1)
-        app.buttons["Add chat tab"].tap(); app.buttons["Browser - Default"].firstMatch.tap()
+        app.buttons["Add chat tab"].tap(); app.buttons["Browser · Default"].firstMatch.tap()
         XCTAssertTrue(app.textFields["browser-address"].waitForExistence(timeout: 8))
         XCTAssertFalse(app.staticTexts["chat-header-title"].exists)
         XCTAssertFalse(app.buttons["chat-back"].exists)
@@ -511,14 +556,25 @@ final class RemoteUITests: XCTestCase {
         let field = app.textFields["reply-text"]
         XCTAssertTrue(field.waitForExistence(timeout: 8)); field.tap(); field.typeText("Draft preserved")
         app.staticTexts["chat-header-title"].tap()
-        app.swipeUp()
+        let transcript = app.scrollViews["chat-conversation-scroll"]
+        XCTAssertTrue(transcript.waitForExistence(timeout: 8))
+        // The AX scroll frame includes its composer inset and the keyboard area.
+        // Drag above the entire composer, including its connection status.
+        let connectionStatus = app.descendants(matching: .any).matching(identifier: "chat-composer-connection-status").firstMatch
+        guard connectionStatus.waitForExistence(timeout: 8) else { XCTFail("The composer boundary must be observable"); return }
+        let visibleTop = transcript.frame.minY + 20
+        let visibleBottom = min(transcript.frame.maxY, connectionStatus.frame.minY) - 20
+        guard visibleBottom - visibleTop > 50 else { XCTFail("The transcript must expose room for a real reading gesture"); return }
+        let origin = app.coordinate(withNormalizedOffset: .zero)
+        origin.withOffset(CGVector(dx: transcript.frame.midX, dy: visibleTop + 0.8 * (visibleBottom - visibleTop)))
+            .press(forDuration: 0.05, thenDragTo: origin.withOffset(CGVector(dx: transcript.frame.midX, dy: visibleTop + 10)))
         XCTAssertTrue(app.buttons["composer-preview"].waitForExistence(timeout: 8))
         let startingCloseCount = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Close New tab")).count
-        app.buttons["Add chat tab"].tap(); app.buttons["Browser - Default"].firstMatch.tap()
+        app.buttons["Add chat tab"].tap(); app.buttons["Browser · Default"].firstMatch.tap()
         XCTAssertTrue(app.textFields["browser-address"].waitForExistence(timeout: 8))
         XCTAssertTrue(app.staticTexts["chat-header-title"].exists)
         XCTAssertTrue(app.buttons["chat-actions"].exists)
-        app.buttons["Add chat tab"].tap(); app.buttons["Browser - Default"].firstMatch.tap()
+        app.buttons["Add chat tab"].tap(); app.buttons["Browser · Default"].firstMatch.tap()
         let closeButtons = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Close New tab"))
         XCTAssertEqual(closeButtons.count, startingCloseCount + 2)
         let firstNewClose = closeButtons.element(boundBy: startingCloseCount)
@@ -575,7 +631,10 @@ final class RemoteUITests: XCTestCase {
             let tabBar = app.tabBars.firstMatch
             for name in ["Home", "Chats", "Life", "Team", "Engine Room"] { XCTAssertTrue(tabBar.buttons[name].exists) }
             XCTAssertEqual(tabBar.buttons.count, 5, "Counts must not change the established iPhone navigation")
-            XCTAssertTrue(app.staticTexts["Schedules · 2"].waitForExistence(timeout: 8))
+            tabBar.buttons["Home"].tap()
+            let schedules = app.staticTexts["Schedules · 2"]
+            for _ in 0..<6 where !schedules.exists { app.swipeUp() }
+            XCTAssertTrue(schedules.waitForExistence(timeout: 8))
             let attention = app.staticTexts["Needs attention · 9"]
             for _ in 0..<4 where !attention.exists { app.swipeUp() }
             XCTAssertTrue(attention.exists)
@@ -715,6 +774,8 @@ final class RemoteUITests: XCTestCase {
         app.tabBars.buttons["Chats"].tap()
         let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Long fixture")).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 8)); row.tap()
+        let conversation = app.buttons["chat-conversation-tab"]
+        XCTAssertTrue(conversation.waitForExistence(timeout: 8)); conversation.tap()
         let scroll = app.scrollViews["chat-conversation-scroll"]
         XCTAssertTrue(scroll.waitForExistence(timeout: 8))
         app.buttons["read-long-message-fixture"].tap()
@@ -744,18 +805,30 @@ final class RemoteUITests: XCTestCase {
     }
     @MainActor func testActualSimulatorLocalNotificationTapRoutesThroughSpringBoard() {
         let app = XCUIApplication()
-        app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-notification-fixtures", "--synthetic-notification-controls"]
+        app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-notification-fixtures", "--synthetic-notification-controls", "--synthetic-background-notification"]
         app.launch()
         let button = app.buttons["Schedule iOS notification fixture"]
         for _ in 0..<4 where !button.exists { app.swipeUp() }
         XCTAssertTrue(button.waitForExistence(timeout: 12))
         button.tap()
-        let permission = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.firstMatch
-        if permission.waitForExistence(timeout: 3) { permission.buttons["Allow"].tap() }
-        XCUIDevice.shared.press(.home)
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let permission = springboard.alerts.firstMatch
+        let status = app.staticTexts["notification-fixture-status"]
+        let deadline = Date().addingTimeInterval(15)
+        // Handle first-run consent, but do not spend the delivery window waiting for
+        // a permission alert when the preceding foreground test already allowed it.
+        while Date() < deadline {
+            if status.exists && status.label == "Scheduled" { break }
+            if permission.exists && permission.buttons["Allow"].exists { permission.buttons["Allow"].tap() }
+            Thread.sleep(forTimeInterval: 0.1)
+        }
+        guard status.exists && status.label == "Scheduled" else {
+            XCTFail("The real notification must be scheduled before backgrounding: " + (status.exists ? status.label : "missing fixture status"))
+            return
+        }
+        XCUIDevice.shared.press(.home)
         let banner = springboard.staticTexts["Proteus route fixture"]
-        XCTAssertTrue(banner.waitForExistence(timeout: 15), "iOS must deliver a real local notification through SpringBoard")
+        XCTAssertTrue(banner.waitForExistence(timeout: 25), "iOS must deliver a real local notification through SpringBoard")
         banner.tap()
         XCTAssertTrue(app.staticTexts["Notification destination loaded"].waitForExistence(timeout: 15), "Tapping the OS notification should open the routed chat")
     }
@@ -840,7 +913,7 @@ final class RemoteUITests: XCTestCase {
         for _ in 0..<4 where !app.buttons["Tap unavailable notification"].exists { app.swipeUp() }
         app.buttons["Tap unavailable notification"].tap()
         XCTAssertTrue(app.alerts["Proteus"].waitForExistence(timeout: 12), "An unavailable target should fail gracefully")
-        XCTAssertTrue(app.alerts.staticTexts["This chat is not cached on this device. Reconnect the Mac and open it from Chats."].exists)
+        XCTAssertTrue(app.alerts.staticTexts["This chat is not cached on this device. Reconnect Alpha Mac and open it from Chats."].exists)
         app.alerts.buttons["OK"].tap()
         XCTAssertTrue(app.staticTexts["Notifications"].waitForExistence(timeout: 10))
 
@@ -861,15 +934,20 @@ final class RemoteUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Notification destination loaded"].waitForExistence(timeout: 15), "Background tap must route after activation")
     }
     @MainActor func testIPadNotificationTapOpensHostContentTabsAndColdSchedule() {
+        XCTAssertEqual(UIDevice.current.userInterfaceIdiom, .pad, "This tablet layout test requires an actual iPad simulator")
         let app = XCUIApplication()
         app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-notification-fixtures", "--synthetic-notification-controls"]
         app.launch()
+        let home = app.buttons["sidebar-Home"]
+        XCTAssertTrue(home.waitForExistence(timeout: 12)); home.tap()
+        XCTAssertEqual(home.value as? String, "Active")
         for _ in 0..<4 where !app.buttons["Tap chat notification"].exists { app.swipeUp() }
         XCTAssertTrue(app.buttons["Tap chat notification"].waitForExistence(timeout: 12))
         app.buttons["Tap chat notification"].tap()
         XCTAssertTrue(app.staticTexts["Notification destination loaded"].waitForExistence(timeout: 12))
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "shell-tab-10000000-0000-4000-8000-000000000001:notification-chat")).firstMatch.exists)
-        app.buttons["Home"].firstMatch.tap()
+        XCTAssertTrue(home.waitForExistence(timeout: 12)); home.tap()
+        XCTAssertEqual(home.value as? String, "Active")
         for _ in 0..<4 where !app.buttons["Tap schedule notification"].exists { app.swipeUp() }
         app.buttons["Tap schedule notification"].tap()
         XCTAssertTrue(app.navigationBars["Notification fixture schedule"].waitForExistence(timeout: 12))
@@ -877,6 +955,8 @@ final class RemoteUITests: XCTestCase {
         app.launchArguments = ["--synthetic-notification-cold-schedule"]
         app.launch()
         XCTAssertTrue(app.navigationBars["Notification fixture schedule"].waitForExistence(timeout: 15), "Cold schedule tap must open its content tab after Home restoration")
+        let scheduleTab = app.buttons["shell-tab-schedule:10000000-0000-4000-8000-000000000001:notification-schedule"]
+        XCTAssertTrue(scheduleTab.exists); XCTAssertEqual(scheduleTab.value as? String, "Active", "Passive browser restoration must not replace the notification's schedule selection")
     }
     @MainActor func testAttachmentPreviewClosesWithHardwareEscapeCloseButtonAndBackdrop() {
         let app = XCUIApplication(); app.launchArguments = ["--synthetic-attachment-preview"]; app.launch()
@@ -935,10 +1015,11 @@ final class RemoteUITests: XCTestCase {
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Gamma configuration")).firstMatch.waitForExistence(timeout: 10))
     }
     @MainActor func testIPadMainAndTeamBrowserTabsRestoreSeparately() {
+        XCTAssertEqual(UIDevice.current.userInterfaceIdiom, .pad, "This tablet layout test requires an actual iPad simulator")
         let app = XCUIApplication(); app.launchArguments = ["--synthetic-destinations", "--synthetic-browser-workspace"]; app.launch()
         let mainAdd = app.buttons["new-main-browser-tab"]
-        guard mainAdd.waitForExistence(timeout: 8) else { return } // iPhone uses its bottom navigation.
-        mainAdd.tap(); app.buttons["Browser - Default"].firstMatch.tap()
+        XCTAssertTrue(mainAdd.waitForExistence(timeout: 8), "The iPad must expose its main tab controls")
+        mainAdd.tap(); app.buttons["Browser · Default"].firstMatch.tap()
         let mainTabs = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "shell-tab-"))
         XCTAssertTrue(mainTabs.firstMatch.waitForExistence(timeout: 10))
         let mainID = mainTabs.element(boundBy: mainTabs.count - 1).identifier
@@ -953,10 +1034,11 @@ final class RemoteUITests: XCTestCase {
         XCTAssertTrue(app.textFields["browser-address"].waitForExistence(timeout: 10))
     }
     @MainActor func testIPadMainTabStripKeepsExactScrollPositionAcrossTabAndSidebarSelection() {
+        XCTAssertEqual(UIDevice.current.userInterfaceIdiom, .pad, "This tablet layout test requires an actual iPad simulator")
         let app = XCUIApplication(); app.launchArguments = ["--synthetic-destinations", "--synthetic-browser-workspace"]; app.launch()
         let plus = app.buttons["new-main-browser-tab"]
         XCTAssertTrue(plus.waitForExistence(timeout: 12))
-        for _ in 0..<12 { plus.tap(); app.buttons["Browser - Default"].firstMatch.tap() }
+        for _ in 0..<12 { plus.tap(); app.buttons["Browser · Default"].firstMatch.tap() }
         let tabs = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "shell-tab-"))
         XCTAssertGreaterThanOrEqual(tabs.count, 12)
         let first = tabs.element(boundBy: 0)
@@ -975,9 +1057,13 @@ final class RemoteUITests: XCTestCase {
         selected.tap()
         XCTAssertEqual(app.buttons[tabID].value as? String, "Active")
         XCTAssertEqual(app.buttons[tabID].frame.minX, before, accuracy: 2, "Selecting a tab must not scroll the strip")
-        app.buttons["Home"].firstMatch.tap()
+        let home = app.buttons["sidebar-Home"]
+        XCTAssertTrue(home.waitForExistence(timeout: 10)); home.tap()
+        XCTAssertEqual(home.value as? String, "Active")
         XCTAssertEqual(app.buttons[tabID].frame.minX, before, accuracy: 2, "Left navigation must not reset the tab strip")
-        app.buttons["Chats"].firstMatch.tap()
+        let chats = app.buttons["sidebar-Chats"]
+        XCTAssertTrue(chats.waitForExistence(timeout: 10)); chats.tap()
+        XCTAssertEqual(chats.value as? String, "Active")
         XCTAssertEqual(app.buttons[tabID].frame.minX, before, accuracy: 2, "A second left navigation must preserve the same offset")
     }
     @MainActor func testNewBrowserFocusAndTwentyRecentSites() {
@@ -1149,16 +1235,20 @@ final class RemoteUITests: XCTestCase {
         row.tap()
         if app.buttons["composer-preview"].exists { app.buttons["composer-preview"].tap() }
         XCTAssertEqual(reply.value as? String, "Retained through swipe navigation")
-        app.buttons["Add chat tab"].tap(); app.buttons["Browser - Default"].firstMatch.tap()
+        app.buttons["Add chat tab"].tap(); app.buttons["Browser · Default"].firstMatch.tap()
         let address = app.textFields["browser-address"]
         XCTAssertTrue(address.waitForExistence(timeout: 10)); address.tap(); address.typeText("http://127.0.0.1:4329/browser/one"); app.buttons["browser-go"].tap()
         let web = app.webViews.firstMatch
         XCTAssertTrue(web.staticTexts["First browser page"].waitForExistence(timeout: 15))
         web.links["Next browser page"].tap(); XCTAssertTrue(web.staticTexts["Second browser page"].waitForExistence(timeout: 15))
+        web.links["Next browser page"].tap(); XCTAssertTrue(web.staticTexts["Third browser page"].waitForExistence(timeout: 15))
         let edge = web.frame.minX + 24, browserY = web.frame.midY
         drag(CGPoint(x: edge, y: browserY), CGPoint(x: edge + 180, y: browserY))
-        XCTAssertTrue(web.staticTexts["First browser page"].waitForExistence(timeout: 10)); XCTAssertTrue(chatTab.exists)
+        XCTAssertTrue(web.staticTexts["Second browser page"].waitForExistence(timeout: 10), "One edge gesture must move exactly one saved history entry")
+        XCTAssertFalse(web.staticTexts["First browser page"].exists); XCTAssertTrue(chatTab.exists)
         drag(CGPoint(x: web.frame.maxX - 24, y: browserY), CGPoint(x: web.frame.maxX - 204, y: browserY))
+        XCTAssertTrue(web.staticTexts["Third browser page"].waitForExistence(timeout: 10), "Back must preserve the forward entry")
+        drag(CGPoint(x: edge, y: browserY), CGPoint(x: edge + 180, y: browserY))
         XCTAssertTrue(web.staticTexts["Second browser page"].waitForExistence(timeout: 10))
         drag(CGPoint(x: edge, y: browserY), CGPoint(x: edge + 180, y: browserY))
         XCTAssertTrue(web.staticTexts["First browser page"].waitForExistence(timeout: 10))
@@ -1179,9 +1269,9 @@ final class RemoteUITests: XCTestCase {
         app.buttons["owner-history-settings"].tap()
         let recording = app.switches["history-settings-recording"]; XCTAssertTrue(recording.waitForExistence(timeout: 15)); XCTAssertTrue(recording.isEnabled)
         recording.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap(); XCTAssertEqual(recording.value as? String, "0")
-        app.buttons["history-settings-retention"].tap(); app.buttons["Keep all history"].tap()
+        guard selectPickerOption("Keep all history", pickerID: "history-settings-retention", in: app) else { return }
         let sharing = app.switches["history-peer-enabled-" + peer]; sharing.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap(); XCTAssertEqual(sharing.value as? String, "1")
-        app.buttons["history-peer-backfill-" + peer].tap(); app.buttons["All available"].tap()
+        guard selectPickerOption("All available", pickerID: "history-peer-backfill-" + peer, in: app) else { return }
         let settingsForm = app.descendants(matching: .any).matching(identifier: "history-settings-form").firstMatch; XCTAssertTrue(settingsForm.exists); settingsForm.swipeUp()
         let workSwitch = app.switches["history-peer-profile-" + peer + "-" + work]; workSwitch.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap(); XCTAssertEqual(workSwitch.value as? String, "1")
         let defaultSwitch = app.switches["history-peer-profile-" + peer + "-default"]; defaultSwitch.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap(); XCTAssertEqual(defaultSwitch.value as? String, "0")
@@ -1421,6 +1511,10 @@ extension RemoteUITests {
         }
         guard favorite.waitForExistence(timeout: 10) else { XCTFail("Favorite action is missing"); return }
         favorite.tap()
+        let savedFavorite = app.buttons["Remove from favorites: Synthetic skill"]
+        XCTAssertTrue(savedFavorite.waitForExistence(timeout: 10))
+        let favoriteSaved = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: savedFavorite)
+        await fulfillment(of: [favoriteSaved], timeout: 10)
         let check = app.buttons["Check all favorites"]
         for _ in 0..<12 {
             if check.exists && check.isHittable { break }
@@ -1428,8 +1522,16 @@ extension RemoteUITests {
             list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2)).press(forDuration: 0.05, thenDragTo: list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45)))
         }
         guard check.waitForExistence(timeout: 10) else { XCTFail("Check all favorites is missing"); return }
+        // The scoped catalog refresh follows the favorite mutation and host-state refresh.
+        let emptyFavorites = app.staticTexts["Use the star beside a source to keep it here."]
+        let favoritesLoaded = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: emptyFavorites)
+        await fulfillment(of: [favoritesLoaded], timeout: 10)
         check.tap()
-        XCTAssertTrue(app.buttons["Remove from favorites: Synthetic skill"].exists)
+        let selectedSkill = app.switches.matching(NSPredicate(format: "label CONTAINS %@", "Synthetic skill")).firstMatch
+        XCTAssertTrue(selectedSkill.waitForExistence(timeout: 10))
+        let skillSelected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "1"), object: selectedSkill)
+        await fulfillment(of: [skillSelected], timeout: 10)
+        XCTAssertTrue(savedFavorite.exists)
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Mobile favorites and selected sources"; screenshot.lifetime = .keepAlways; add(screenshot)
         app.buttons["start-chat"].tap(); guard app.staticTexts["Your input is needed"].waitForExistence(timeout: 20) else { XCTFail("Chat did not start"); return }
         let (latest, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/latest")!)
@@ -1454,7 +1556,8 @@ extension RemoteUITests {
             let list = app.collectionViews["new-chat-form"]
             list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45)).press(forDuration: 0.05, thenDragTo: list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25)))
         }
-        guard effort.waitForExistence(timeout: 10) else { XCTFail("Effort picker missing"); return }; effort.tap(); app.buttons["none"].tap()
+        guard effort.waitForExistence(timeout: 10) else { XCTFail("Effort picker missing"); return }
+        guard selectPickerOption("none", pickerID: "effort-picker", in: app) else { return }
         let context = app.descendants(matching: .any)["context-tier-picker"].firstMatch
         for _ in 0..<12 {
             if context.exists && context.isHittable { break }
@@ -1462,27 +1565,44 @@ extension RemoteUITests {
             list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45)).press(forDuration: 0.05, thenDragTo: list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25)))
         }
         guard context.waitForExistence(timeout: 10) else { XCTFail("Context picker missing"); return }
-        context.tap(); app.buttons["872K · Long context"].tap()
+        guard selectPickerOption("872K · Long context", pickerID: "context-tier-picker", in: app) else { return }
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Live effort and context controls"; screenshot.lifetime = .keepAlways; add(screenshot)
-        app.buttons["start-chat"].tap(); XCTAssertTrue(app.staticTexts["Your input is needed"].waitForExistence(timeout: 20))
+        app.buttons["start-chat"].tap()
+        guard app.staticTexts["Allow synthetic model-options checkpoint?"].waitForExistence(timeout: 20) else { XCTFail("The synthetic run must wait on permission so a follow-up can queue"); return }
+        XCTAssertEqual(app.buttons["send-message"].label, "Queue message")
         let (latest, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/latest")!)
         let value = try JSONSerialization.jsonObject(with: latest) as! [String: Any]
         XCTAssertEqual(value["reasoningEffort"] as? String, "none"); XCTAssertEqual(value["contextTier"] as? String, "long_context")
         if app.buttons["composer-preview"].waitForExistence(timeout: 3) { app.buttons["composer-preview"].tap() }
-        XCTAssertTrue(app.buttons["composer-model"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.buttons["composer-context"].exists)
         XCTAssertTrue(app.buttons["steer-message"].exists); XCTAssertFalse(app.buttons["steer-message"].isEnabled)
         XCTAssertTrue(app.buttons["stop-turn"].exists)
-        app.buttons["composer-effort"].tap(); app.buttons["high"].tap()
+        let options = app.buttons["composer-options"]
+        XCTAssertTrue(options.waitForExistence(timeout: 10)); options.tap()
+        let popover = app.popovers.firstMatch
+        guard popover.waitForExistence(timeout: 10) else { XCTFail("Compact composer options must open"); return }
+        let modelSection = popover.buttons.matching(NSPredicate(format: "label == %@", "Model")).firstMatch
+        XCTAssertTrue(modelSection.waitForExistence(timeout: 10))
+        guard setComposerSection("Context", expanded: true, in: popover) else { return }
+        let longContext = popover.buttons.matching(NSPredicate(format: "label == %@", "872K · Long context")).firstMatch
+        guard longContext.waitForExistence(timeout: 10) else { XCTFail("The fixture's advertised long context option must exist"); return }
+        XCTAssertTrue(longContext.isSelected); longContext.tap()
+        guard setComposerSection("Context", expanded: false, in: popover),
+              setComposerSection("Level", expanded: true, in: popover) else { return }
+        let highEffort = popover.buttons.matching(NSPredicate(format: "label == %@", "High")).firstMatch
+        guard highEffort.waitForExistence(timeout: 10) else { XCTFail("The fixture's advertised high effort option must exist"); return }
+        highEffort.tap()
+        guard setComposerSection("Level", expanded: false, in: popover) else { return }
+        popover.buttons["Done"].tap()
         if app.buttons["composer-preview"].waitForExistence(timeout: 8) { app.buttons["composer-preview"].tap() }
         let reply = app.textFields["reply-text"]; reply.tap(); reply.typeText("Queued with new effort")
         app.buttons["send-message"].tap()
-        XCTAssertTrue(app.buttons["Remove"].waitForExistence(timeout: 10))
+        guard app.buttons["Remove"].waitForExistence(timeout: 10) else { XCTFail("The message must remain queued on the owner"); return }
         let (queued, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/latest")!)
         let queuedValue = try JSONSerialization.jsonObject(with: queued) as! [String: Any]
         XCTAssertEqual(queuedValue["reasoningEffort"] as? String, "none")
-        let messages = queuedValue["queuedMessages"] as! [[String: Any]]
+        let messages = try XCTUnwrap(queuedValue["queuedMessages"] as? [[String: Any]], "The owner must return the queued message with its turn options")
         XCTAssertEqual((messages.first?["modelOptions"] as? [String: Any])?["reasoningEffort"] as? String, "high")
+        XCTAssertEqual((messages.first?["modelOptions"] as? [String: Any])?["contextTier"] as? String, "long_context")
         let composerShot = XCTAttachment(screenshot: app.screenshot()); composerShot.name = "Compact composer menus and separate actions"; composerShot.lifetime = .keepAlways; add(composerShot)
         app.buttons["Edit"].tap()
         let queuedEditor = app.textViews["queued-message-editor"]
@@ -1494,7 +1614,7 @@ extension RemoteUITests {
         await fulfillment(of: [disappeared], timeout: 10)
         let (edited, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/latest")!)
         let editedValue = try JSONSerialization.jsonObject(with: edited) as! [String: Any]
-        let editedMessages = editedValue["queuedMessages"] as! [[String: Any]]
+        let editedMessages = try XCTUnwrap(editedValue["queuedMessages"] as? [[String: Any]], "Editing must retain the queued message and turn options")
         XCTAssertEqual(editedMessages.first?["prompt"] as? String, editedText)
         XCTAssertEqual((editedMessages.first?["modelOptions"] as? [String: Any])?["reasoningEffort"] as? String, "high")
         app.buttons["Remove"].tap()
@@ -1515,7 +1635,7 @@ extension RemoteUITests {
         for _ in 0..<5 { if details.isHittable { break }; app.swipeUp() }; details.tap()
         let mcp = app.buttons["MCP connections"]
         for _ in 0..<8 { if mcp.exists && mcp.isHittable { break }; app.swipeUp() }; XCTAssertTrue(mcp.waitForExistence(timeout: 10)); mcp.tap()
-        let login = app.buttons["Sign in on Mac"]
+        let login = app.buttons["Sign in on Build Mac"]
         XCTAssertTrue(login.waitForExistence(timeout: 10))
         // XCTest can report a control as hittable while the bottom composer covers it.
         for _ in 0..<5 { if login.isHittable && login.frame.maxY < app.frame.height * 0.7 { break }; app.swipeUp() }
@@ -1523,13 +1643,31 @@ extension RemoteUITests {
         let status = app.staticTexts["mcp-status-message"]
         let connected = NSPredicate(format: "label CONTAINS %@", "Connected to synthetic-integration")
         let completed = expectation(for: connected, evaluatedWith: status); await fulfillment(of: [completed], timeout: 20)
-        XCTAssertFalse(app.buttons["Sign in on Mac"].exists)
+        XCTAssertFalse(app.buttons["Sign in on Build Mac"].exists)
         let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Automatic MCP connection refresh"; shot.lifetime = .keepAlways; add(shot)
         app.buttons["stop-turn"].tap()
     }
 }
 
 extension RemoteUITests {
+    @MainActor func testLinuxAndMacComputerMetadataSurvivesSelectionAndRestart() {
+        let app = XCUIApplication(); app.launchArguments = ["--synthetic-destinations", "--synthetic-linux-host"]; app.launch()
+        let picker = app.buttons["destination-picker"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 20)); XCTAssertTrue(picker.label.contains("Alpha Linux"))
+        picker.tap(); app.buttons["Manage computers"].tap()
+        XCTAssertTrue(app.staticTexts["Linux · x64"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["macOS · arm64"].exists)
+        app.buttons["Done"].tap(); picker.tap(); app.buttons["Beta Mac"].tap()
+        XCTAssertTrue(picker.label.contains("Beta Mac"))
+        picker.tap(); app.buttons["Alpha Linux"].tap()
+        XCTAssertTrue(picker.label.contains("Alpha Linux"))
+        app.terminate(); app.launchArguments = []; app.launch()
+        XCTAssertTrue(picker.waitForExistence(timeout: 20)); XCTAssertTrue(picker.label.contains("Alpha Linux"))
+        picker.tap(); app.buttons["Manage computers"].tap()
+        XCTAssertTrue(app.staticTexts["Linux · x64"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["macOS · arm64"].exists)
+    }
+
     @MainActor func testMacDestinationPickerRenameAndIndependentForget() throws {
         let app = XCUIApplication(); app.launchArguments = ["--synthetic-destinations"]; app.launch()
         if app.buttons["sidebar-Home"].waitForExistence(timeout: 3) { app.buttons["sidebar-Home"].tap() }
@@ -1652,11 +1790,14 @@ extension RemoteUITests {
         XCTAssertFalse(app.buttons["provider-usage-details"].exists)
         toggle.tap(); XCTAssertTrue(app.buttons["usage-codex"].exists)
         func area(_ name: String) { if app.tabBars.buttons[name].exists { app.tabBars.buttons[name].tap() } else { app.buttons[name].firstMatch.tap() } }
-        area("Chats"); XCTAssertTrue(app.staticTexts["New chats execute on Alpha Mac. Viewing another Mac’s history does not change that destination."].waitForExistence(timeout: 10))
+        area("Chats"); XCTAssertTrue(app.staticTexts["New chats execute on Alpha Mac. Viewing another computer’s history does not change that destination."].waitForExistence(timeout: 10))
         if app.tabBars.firstMatch.exists { XCTAssertFalse(app.buttons["toggle-provider-usage"].exists) }
-        area("Team"); XCTAssertTrue(app.buttons["Connect shared Team tools"].waitForExistence(timeout: 10))
+        area("Team")
+        let overview = app.buttons["team-section-overview"]
+        XCTAssertTrue(overview.waitForExistence(timeout: 10)); overview.tap()
+        XCTAssertTrue(app.buttons["Connect website account"].waitForExistence(timeout: 10))
         area("Engine Room"); XCTAssertTrue(app.buttons["Resources"].firstMatch.waitForExistence(timeout: 10))
-        app.buttons["Resources"].firstMatch.tap(); XCTAssertTrue(app.staticTexts["CPU and RAM are reported by the host. Tabs may share a process; shared memory is not counted as per-tab memory."].waitForExistence(timeout: 10))
+        app.buttons["Resources"].firstMatch.tap(); XCTAssertTrue(app.staticTexts["Host figures include processes Proteus can inspect. Shared processes cannot be charged to one tab. iOS does not expose other apps’ memory here."].waitForExistence(timeout: 10))
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Native parity engine resources"; screenshot.lifetime = .keepAlways; add(screenshot)
     }
 }
@@ -1695,7 +1836,8 @@ extension RemoteUITests {
         let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Completed message copy and paused reading position"; shot.lifetime = .keepAlways; add(shot)
         read.tap(); XCTAssertEqual(read.label, "Read aloud"); XCTAssertFalse(position.exists)
         read.tap(); XCTAssertEqual(read.label, "Stop reading aloud")
-        app.navigationBars.buttons.firstMatch.tap()
+        let back = app.buttons["chat-back"]
+        XCTAssertTrue(back.waitForExistence(timeout: 10)); back.tap()
         let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@", "Reading controls test", "Turn complete")).firstMatch
         guard row.waitForExistence(timeout: 10) else { XCTFail("Completed chat row missing"); return }; row.tap()
         XCTAssertTrue(app.buttons["read-aloud"].firstMatch.waitForExistence(timeout: 10))
@@ -1748,7 +1890,7 @@ extension RemoteUITests {
 final class PhoneDesignPreviewUITests: XCTestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
     @MainActor private func preview() -> XCUIApplication {
-        let app = XCUIApplication(bundleIdentifier: "org.proteusapp.review.proteus.iphone-preview")
+        let app = XCUIApplication()
         app.launchArguments = ["--iphone-design-preview", "--phone-preview-fixture", "--synthetic-browser-workspace", "--native-app-fixture"]
         app.launch()
         XCTAssertTrue(app.buttons["phone-app-navigation"].waitForExistence(timeout: 20))
@@ -1861,7 +2003,7 @@ final class PhoneDesignPreviewUITests: XCTestCase {
 final class TabletDesignPreviewUITests: XCTestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
     @MainActor func testTabletBrowserPinchAndPersistentMainNavigation() {
-        let app = XCUIApplication(bundleIdentifier: "org.proteusapp.review.proteus.ipad-preview")
+        let app = XCUIApplication()
         app.launchArguments = ["--native-design-preview", "--phone-preview-fixture", "--synthetic-browser-workspace", "--native-app-fixture"]
         app.launch()
         let addTab = app.buttons["new-main-browser-tab"]
@@ -1886,7 +2028,7 @@ final class TabletDesignPreviewUITests: XCTestCase {
         XCTAssertTrue(app.buttons["sidebar-Chats"].exists)
     }
     @MainActor func testTabletHeadersTeamToolsAndServiceLinks() {
-        let app = XCUIApplication(bundleIdentifier: "org.proteusapp.review.proteus.ipad-preview")
+        let app = XCUIApplication()
         app.launchArguments = ["--native-design-preview", "--phone-preview-fixture", "--synthetic-browser-workspace", "--native-app-fixture"]
         app.launch()
         XCTAssertTrue(app.buttons["sidebar-Chats"].waitForExistence(timeout: 20)); app.buttons["sidebar-Chats"].tap()
@@ -1958,7 +2100,7 @@ final class TabletDesignPreviewUITests: XCTestCase {
 final class PhoneFeaturePreviewUITests: XCTestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
     @MainActor func testPhoneFeatureHeaderAndLongPressServiceLink() {
-        let app = XCUIApplication(bundleIdentifier: "org.proteusapp.review.proteus.iphone-preview")
+        let app = XCUIApplication()
         app.launchArguments = ["--native-design-preview", "--phone-preview-fixture", "--synthetic-browser-workspace", "--native-app-fixture"]
         app.launch()
         XCTAssertTrue(app.buttons["phone-app-navigation"].waitForExistence(timeout: 20)); app.buttons["phone-app-navigation"].tap(); app.buttons["phone-nav-Chats"].tap()
@@ -1999,7 +2141,7 @@ final class PhoneFeaturePreviewUITests: XCTestCase {
 final class PhoneSidebarPreviewUITests: XCTestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
     @MainActor func testProjectItemFromMainBrowserRetainsOwnerAndSelection() {
-        let app = XCUIApplication(bundleIdentifier: "org.proteusapp.review.proteus.iphone-preview")
+        let app = XCUIApplication()
         app.launchArguments = ["--native-design-preview", "--phone-preview-fixture", "--synthetic-browser-workspace", "--native-app-fixture"]
         app.launch()
         XCTAssertTrue(app.buttons["phone-new-tab"].waitForExistence(timeout: 20)); app.buttons["phone-new-tab"].tap(); app.buttons["Browser · Default"].tap()

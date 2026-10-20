@@ -1,26 +1,41 @@
 # Website remote workspaces
 
-The authenticated `/remote` page connects the Proteus website to explicitly paired Macs through
+The authenticated `/remote` page connects the Proteus website to explicitly paired Linux PCs and Macs through
 the existing end-to-end encrypted relay protocol. Laravel serves the UI and verifies the website
 session and stores account-owned destination credentials encrypted at rest. It has no remote-command endpoint and does not receive chat text, tool arguments,
 workspace records, schedule prompts or approval answers. Existing Life pages, authentication,
 nutrition tables and legacy APIs remain unchanged.
 
+## October 14 host compatibility candidate
+
+Connections, default destination, provider/file/approval messages and host descriptions now use
+computer names. Authenticated state adds optional platform/architecture metadata; client labels
+come from canonical platform values, never an invitation's claimed platform. Old hosts remain
+compatible. UI wording is **Default computer**; the persisted `defaultMacId` preference, account
+destination records, encryption format, host IDs, device keys and retry semantics stay unchanged.
+No database migration, automatic re-pairing, credential copying or default-host fallback is added.
+
+Each Linux/Mac host has its own relay registration and device pairing; use distinct host tokens
+in the existing protected registration map. Website access still requires its exact configured
+relay and allowed origin. Node/web checks and responsive synthetic UI passed; existing live
+website-to-Mac connectivity does not establish Linux or physical-mobile acceptance. Hosted CI,
+native simulator tests and a real iPhone-to-Linux relay workflow remain separate pending gates.
+
 ## User flow
 
 1. Sign in to the website with its existing password plus authenticator, or passkey.
-2. Enable the external relay on the intended Mac. Generate a fresh pairing invitation there.
-3. Open **Engine Room → Connections → Manage and pair Macs** (`/remote?view=connections`)
-   and paste the code. The invitation supplies the Mac name; authenticated host metadata refreshes
+2. Enable the external relay on the intended computer. Generate a fresh pairing invitation there.
+3. Open **Engine Room → Connections → Manage and pair computers** (`/remote?view=connections`)
+   and paste the code. The invitation supplies the computer name; authenticated host metadata refreshes
    it afterward. Any authorized host ID/name is supported; there are no fixed personal/work roles.
    Alternatively open `/remote#pair=<capsule>` while signed in. This opens Connections, and the fragment is immediately removed
    from browser history and is never part of an HTTP request. Invitations expire after five minutes
    and are single-use. Do not put an invitation in a URL query, access log or server-side API.
 4. A successful new pairing saves the destination to the signed-in website account. Future strong
-   sessions in another browser restore it without another invitation. Each Mac is paired separately;
-   the account's browsers share that Mac device authorization. The destination label remains visible
+   sessions in another browser restore it without another invitation. Each computer is paired separately;
+   the account's browsers share that computer's device authorization. The destination label remains visible
    for chats, schedule actions and approvals.
-5. Forget removes the account's saved destination. Revoke on the Mac removes that device's authority
+5. Forget removes the account's saved destination. Revoke on the computer removes that device's authority
    for all browsers using it. Signing out closes active connections and clears browser-held keys and
    UI state, but retains the account record for the next login. Removing a saved record or signing out
    cannot invalidate a key already copied elsewhere; host revocation is authoritative.
@@ -33,7 +48,7 @@ destination lookup, with existing browser-only pairings as a local fallback only
 record exists. A failed account credential must not fall back to an older local authorization.
 Browser-only keys stay nonextractable and are never uploaded by name or preference updates.
 
-Choose the **Default Mac** explicitly in Engine Room. Its account preference stores only a host UUID,
+Choose the **Default computer** explicitly in Engine Room. Its account preference stores only a host UUID,
 which grants no access and can refer to an authorized native/browser-only pairing. A browser without
 that host credential reports **not paired**, rather than offline. No default, connecting, connection
 unavailable, rejected and revoked states are distinct. Saving a default reconnects immediately;
@@ -44,7 +59,7 @@ removal, cancellation, pending questions and one-time permission approval/denial
 safe shared Markdown/code/table rendering, tool details and authorized workspace images;
 schedule listing, revision-checked edits, timing preview and run-once; workspace/agent selection,
 context preview and favorites. Repository-owned and local-process schedule definitions are not
-editable through this page. They retain their source/Mac ownership. New schedule creation and
+editable through this page. They retain their source/host ownership. New schedule creation and
 OS-level folder picking remain desktop responsibilities.
 
 ## Encryption and host isolation

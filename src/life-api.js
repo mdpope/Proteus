@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { requireProtectedStorage } from './credential-storage.js';
 import path from 'node:path';
 import { randomBytes, createHash, randomUUID } from 'node:crypto';
 export const LIFE_CALLBACK = 'proteus://life-oauth/callback';
@@ -9,7 +10,7 @@ export function lifeOrigin(value) {
 }
 export class LifeTokenVault {
  constructor(home,safeStorage){this.file=path.join(home,'life','website-session.enc');this.safeStorage=safeStorage;}
- available(){if(!this.safeStorage?.isEncryptionAvailable?.()||this.safeStorage.getSelectedStorageBackend?.()==='basic_text')throw new Error('Unlock protected macOS credential storage to sign in to Life.');}
+ available(){requireProtectedStorage(this.safeStorage, 'sign in to Life');}
  exists(){return fs.existsSync(this.file);}
  load(){this.available();try{if(fs.statSync(this.file).size>64000)throw new Error();return JSON.parse(this.safeStorage.decryptString(fs.readFileSync(this.file)));}catch(e){if(e.code==='ENOENT')return null;throw new Error('Life sign-in could not be read securely. Its protected file was preserved.');}}
  save(value){this.available();fs.mkdirSync(path.dirname(this.file),{recursive:true,mode:0o700});const temp=this.file+'.'+randomUUID()+'.tmp';try{fs.writeFileSync(temp,this.safeStorage.encryptString(JSON.stringify(value)),{flag:'wx',mode:0o600});fs.renameSync(temp,this.file);}finally{fs.rmSync(temp,{force:true});}}
@@ -43,7 +44,7 @@ export class LifeAPI {
   origin=lifeOrigin(origin);const discovery=await this.raw(origin,'/api/v1/native-config');
   if(attempt!==this.authAttempt||epoch!==this.generation||this.closing||(this.credential&&!extend))throw new Error('Life sign-in was cancelled or the account changed.');
   if(!discovery.enabled||discovery.protocol!==1||discovery.issuer!==origin||discovery.redirectUri!==LIFE_CALLBACK||!discovery.clientId||discovery.authorizationEndpoint!==origin+'/oauth/authorize'||discovery.tokenEndpoint!==origin+'/oauth/token'||discovery.apiBase!==origin+'/api/v1/life')throw new Error('Native Life sign-in is not configured correctly on this website.');
-  if(!this.openExternal)throw new Error('Open Life sign-in in the Mac desktop app.');
+  if(!this.openExternal)throw new Error('Open Life sign-in in the desktop app.');
   const verifier=randomBytes(48).toString('base64url'),state=randomBytes(32).toString('base64url'),challenge=createHash('sha256').update(verifier).digest('base64url');
   const scopes = ['brain:read','brain:write', ...(discovery.appApiBase === origin+'/api/v1/app' && Array.isArray(discovery.appScopes) ? discovery.appScopes.filter(s => ['app:read','app:write'].includes(s)) : [])];
   const pending={origin,clientId:discovery.clientId,scopes,expectedAccountId:extend?this.credential?.accountId:null,verifier,state,expires:Date.now()+10*60*1000,generation:this.generation,attempt};this.pending=pending;this.error=null;this.notice=null;

@@ -78,7 +78,7 @@ import Security
         if delivered.count > 2000 { delivered = Set(delivered.suffix(1000)) }
     }
     static func safeBody(_ type: String) -> String {
-        switch type { case "chat.completed": "A chat finished."; case "review.required", "approval.required": "A chat needs your review."; case "schedule.completed": "A schedule finished."; case "device.added": "A device was added."; case "device.reconnected": "A Mac reconnected."; default: "New activity is available." }
+        switch type { case "chat.completed": "A chat finished."; case "review.required", "approval.required": "A chat needs your review."; case "schedule.completed": "A schedule finished."; case "device.added": "A device was added."; case "device.reconnected": "A computer reconnected."; default: "New activity is available." }
     }
     func receivedTap(_ payload: [AnyHashable: Any]) { route = NotificationRoute.from(payload) }
     #if DEBUG
@@ -91,7 +91,10 @@ import Security
         content.title = "Proteus route fixture"
         content.body = "Tap to open the fixture chat."
         content.userInfo = ["hostId": "10000000-0000-4000-8000-000000000001", "chatId": "notification-chat", "type": "chat.completed"]
-        try await center.add(UNNotificationRequest(identifier: "proteus-simulator-route-fixture", content: content, trigger: UNTimeIntervalNotificationTrigger(timeInterval: 4, repeats: false)))
+        // Give XCTest time to background the app after the scheduling acknowledgement.
+        // Foreground fixtures keep their original timing and delivery path.
+        let delay: TimeInterval = ProcessInfo.processInfo.arguments.contains("--synthetic-background-notification") ? 10 : 4
+        try await center.add(UNNotificationRequest(identifier: "proteus-simulator-route-fixture", content: content, trigger: UNTimeIntervalNotificationTrigger(timeInterval: delay, repeats: false)))
         fixtureStatus = "Scheduled"
     }
     #endif

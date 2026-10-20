@@ -61,7 +61,7 @@ private final class LifeRedirectGuard:NSObject,URLSessionTaskDelegate,@unchecked
 }
 struct LifeHTTPError:Error{let status:Int;let message:String}
 
-/// Life belongs to the authenticated website account, never the currently selected Mac.
+/// Life belongs to the authenticated website account, never the currently selected computer.
 /// Health records and form drafts stay in memory; only OAuth credentials are persisted in Keychain.
 @MainActor final class LifeStore:NSObject,ObservableObject,ASWebAuthenticationPresentationContextProviding{
     @Published private(set) var profile:JSON = .null

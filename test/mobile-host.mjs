@@ -31,7 +31,15 @@ const app = await startServer({ home, port: 0, timers: false, providers: { copil
   quota: syntheticQuota(73),
   mcpStatus: async () => ({servers:[{name:'synthetic-integration',status:authConnected?'connected':'needs-auth',remote:true}]}),
   mcpLogin: async () => { setTimeout(()=>{authConnected=true;},1200); return {server:'synthetic-integration',status:'sign-in-required'}; },
-  status: async () => ({available:true,models:[copilotModel({id:"synthetic-mobile",name:"Synthetic mobile",supportedReasoningEfforts:["none","high"],capabilities:{supports:{reasoningEffort:true},limits:{max_output_tokens:128000}},billing:{tokenPrices:{maxPromptTokens:272000,longContext:{maxPromptTokens:872000}}}})]}), run: args => rehearsal.run(args) }, rehearsal: {
+  status: async () => ({available:true,models:[copilotModel({id:"synthetic-mobile",name:"Synthetic mobile",supportedReasoningEfforts:["none","high"],capabilities:{supports:{reasoningEffort:true},limits:{max_output_tokens:128000}},billing:{tokenPrices:{maxPromptTokens:272000,longContext:{maxPromptTokens:872000}}}})]}),
+  async run(args) {
+    if (args.prompt === 'Model options rehearsal') {
+      args.emit('assistant', 'Local model-options rehearsal — no AI provider or tool was called.');
+      await args.ask({type:'permission',question:'Allow synthetic model-options checkpoint?',details:{kind:'shell',fullCommandText:'synthetic model-options checkpoint; no process is executed'}});
+      return;
+    }
+    return rehearsal.run(args);
+  } }, rehearsal: {
   async run(args) {
     args.emit('tool', 'Read synthetic notes', { tool: { callId: 'synthetic-read', name: 'view', summary: 'Read synthetic notes', status: 'completed', arguments: '{"path":"fixture.md"}', output: 'Expanded synthetic tool result', durationMs: 120 } });
     if (args.prompt.includes('Permission rehearsal')) await args.ask({ type: 'permission', question: 'Allow synthetic command?', details: { kind: 'shell', fullCommandText: 'synthetic command; no process is executed' } });

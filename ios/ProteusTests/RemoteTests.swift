@@ -143,6 +143,22 @@ final class RemoteTests: XCTestCase {
         let restored = SharedAppStore(); defer { shared.revokeContentHost(host); restored.revokeContentHost(host) }
         XCTAssertEqual(restored.contentPending[source], [pending]); XCTAssertNotNil(restored.workspaceContentDescriptors[source])
     }
+    @MainActor func testContextSelectionUsesCurrentWorkspaceFavoritesBeforeScopedCatalogReloads() {
+        let scoped: JSON = .object(["favorites": .array([.string("old-skill")])])
+        let host: JSON = .object(["workspaces": .array([
+            .object(["id": .string("selected"), "favorites": .array([.string("new-skill")])]),
+            .object(["id": .string("empty"), "favorites": .array([])])
+        ])])
+        XCTAssertEqual(ContextSelection.favoriteIDs(hostCatalog: host, scopedCatalog: scoped, workspaceID: "selected"), ["new-skill"])
+        XCTAssertEqual(ContextSelection.favoriteIDs(hostCatalog: host, scopedCatalog: scoped, workspaceID: "empty"), [])
+        XCTAssertEqual(ContextSelection.favoriteIDs(hostCatalog: host, scopedCatalog: scoped, workspaceID: "legacy"), ["old-skill"])
+        // Captured chat workspaces contain paths, while their stable identity is separate.
+        let captured: JSON = .object(["cwd": .string("/synthetic/nondefault"), "additionalDirectories": .array([])])
+        let explicitID = ContextSelection.selectionWorkspaceID("selected", profile: captured)
+        XCTAssertEqual(explicitID, "selected")
+        XCTAssertEqual(ContextSelection.favoriteIDs(hostCatalog: host, scopedCatalog: scoped, workspaceID: explicitID), ["new-skill"])
+        XCTAssertEqual(ContextSelection.selectionWorkspaceID("", profile: .object(["id": .string("empty")])), "empty")
+    }
     @MainActor func testMirroredRedirectDoesNotCreateAVisitOrReplaceLogicalForwardList() {
         let shared = SharedAppStore(), host = UUID().uuidString
         let entries = ["one", "two", "three"].map { BrowserHistoryEntry(id: $0, url: "http://127.0.0.1:4329/browser/" + $0, title: $0) }
@@ -337,6 +353,7 @@ final class RemoteTests: XCTestCase {
         shared.browserTabs = [BrowserDescriptor(id: id, title: "SPA", url: base + "?step=1")]
         let view = shared.webView(shared.browserTabs[0], allowLocalNavigation: true)
         defer { shared.unloadBrowsers() }
+        XCTAssertFalse(view.allowsBackForwardNavigationGestures, "The content-edge handler exclusively owns browser gestures")
         for _ in 0..<200 { if !view.isLoading, shared.browserTabs[0].history?.entries.count == 1 { break }; try await Task.sleep(for: .milliseconds(50)) }
         XCTAssertEqual(shared.browserTabs[0].history?.entries.count, 1)
         _ = try await view.evaluateJavaScript("history.replaceState({visit:0}, '', '?step=1')")
@@ -345,7 +362,8 @@ final class RemoteTests: XCTestCase {
             for _ in 0..<100 { if shared.browserTabs[0].history?.entries.count == index + 2 { break }; try await Task.sleep(for: .milliseconds(25)) }
         }
         XCTAssertEqual(shared.browserTabs[0].history?.entries.count, 4)
-        XCTAssertTrue(view.allowsBackForwardNavigationGestures, "An aligned native stack keeps WebKit's navigation gestures enabled after pushState")
+        XCTAssertFalse(view.allowsBackForwardNavigationGestures, "Navigation observations must not reenable a competing WebKit gesture")
+        let entryIDs = shared.browserTabs[0].history?.entries.map(\.id)
         let oldest = try XCTUnwrap(shared.browserHistory(id, back: true).last)
         shared.goBrowserHistory(oldest, in: id)
         var visit: Int?
@@ -353,6 +371,8 @@ final class RemoteTests: XCTestCase {
         XCTAssertEqual(visit, 0, "The oldest repeated URL must select its original native page instance")
         XCTAssertEqual(shared.browserTabs[0].history?.index, 0)
         XCTAssertEqual(shared.browserTabs[0].history?.entries.count, 4)
+        XCTAssertEqual(shared.browserTabs[0].history?.entries.map(\.id), entryIDs, "Traversal preserves every saved page identity and forward entry")
+        XCTAssertFalse(view.allowsBackForwardNavigationGestures)
     }
     @MainActor func testSupersededBrowserCancellationKeepsNewerHistoryTraversal() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -692,6 +712,45 @@ final class RemoteTests: XCTestCase {
         XCTAssertEqual(remote.displayName, "Connected computer")
         remote.state = .object(["hostName": .string("Studio workstation")])
         XCTAssertEqual(remote.displayName, "Studio workstation")
+    }
+    func testHostMetadataSupportsLinuxAndMacWithoutChangingProtocolRequirements() {
+        for (platform, label, arch) in [("linux", "Linux", "x64"), ("darwin", "macOS", "arm64"), ("win32", "Windows", "x64")] {
+            let info = RemoteHostInfo(state: .object(["hostName": .string("  Studio workstation  "), "hostPlatform": .string(platform), "hostPlatformLabel": .string(label), "hostArchitecture": .string(arch)]))
+            XCTAssertEqual(info.displayName, "Studio workstation")
+            XCTAssertEqual(info.platform.label, label)
+            XCTAssertEqual(info.platformDescription, label + " · " + arch)
+            XCTAssertEqual(info.signInPrompt.contains("Keychain"), platform == "darwin")
+        }
+    }
+    func testLegacyAndUnknownHostMetadataHaveNeutralFallbacks() {
+        let legacy = RemoteHostInfo(state: .object(["hostName": .string("Existing Mac")]))
+        XCTAssertEqual(legacy.displayName, "Existing Mac")
+        XCTAssertEqual(legacy.platform, .unknown)
+        XCTAssertNil(legacy.platformDescription)
+        XCTAssertFalse(legacy.signInPrompt.contains("Keychain"), "Host names must not imply an operating system")
+        let future = RemoteHostInfo(state: .object(["hostPlatform": .string("future-os"), "hostPlatformLabel": .string("macOS"), "hostArchitecture": .string("arch\nspoof")]))
+        XCTAssertEqual(future.displayName, "Connected computer")
+        XCTAssertEqual(future.platform, .unknown)
+        XCTAssertEqual(future.architecture, "")
+        XCTAssertNil(future.platformDescription)
+        XCTAssertEqual(RemoteHostInfo(state: .object(["hostName": .string("\n\t")])).displayName, "Connected computer")
+        XCTAssertEqual(RemoteHostInfo(state: .object(["hostName": .string("Injected\nname")])).displayName, "Connected computer")
+    }
+    func testNewAndLegacyPairingDefaultsAdoptComputerNameWithoutReplacingExistingLabels() {
+        for placeholder in ["My computer", "New computer", "My Mac", "New Mac"] {
+            XCTAssertEqual(HostDestination.pairingName(requested: placeholder, suggested: "Linux tower", existing: nil), "Linux tower")
+            XCTAssertEqual(HostDestination.pairingName(requested: placeholder, suggested: "Linux tower", existing: "Saved destination"), "Saved destination")
+            XCTAssertEqual(HostDestination.pairingName(requested: placeholder, suggested: "Invalid\nname", existing: nil), placeholder)
+        }
+        XCTAssertEqual(HostDestination.pairingName(requested: "Chosen label", suggested: "Linux tower", existing: "Previous label"), "Chosen label")
+    }
+    func testHostDestinationRetainsLegacyIndexShape() throws {
+        let data = Data(#"{"id":"10000000-0000-4000-8000-000000000001","label":"Existing Mac"}"#.utf8)
+        let destination = try JSONDecoder().decode(HostDestination.self, from: data)
+        XCTAssertEqual(destination.label, "Existing Mac")
+        let encoded = try JSONDecoder().decode(JSON.self, from: JSONEncoder().encode(destination))
+        XCTAssertEqual(encoded.object.keys.sorted(), ["id", "label"])
+        XCTAssertEqual(encoded["id"].string, destination.id)
     }
     func testAttentionCountUsesCompleteLegacyHostSummariesOnly() {
         let awaiting: JSON = .object(["id": .string("a"), "status": .string("awaiting_input"), "attentionRequired": .bool(true)])
@@ -1116,6 +1175,29 @@ final class DestinationTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: root.appendingPathComponent("cache.enc").path))
         let restored = DestinationStore(root: root, keychainService: service)
         XCTAssertEqual(restored.selected?.state["hostName"].string, "Original Mac")
+    }
+    @MainActor func testMixedPlatformDestinationsRestoreMetadataAndLegacyCredentialsIndependently() throws {
+        let (root, service) = try fixture(); let destinations = DestinationStore(root: root, keychainService: service)
+        defer { destinations.resetForTesting(); try? FileManager.default.removeItem(at: root) }
+        let linux = credential(UUID().uuidString), mac = credential(UUID().uuidString)
+        for (connection, label, platform) in [(linux, "Linux workstation", "linux"), (mac, "Existing Mac", "darwin")] {
+            try destinations.register(connection, label: label)
+            let remote = try XCTUnwrap(destinations.selected)
+            remote.state = .object(["hostName": .string(label), "hostPlatform": .string(platform), "hostArchitecture": .string("arm64")])
+            remote.setDraft("reply:same-chat", .string(label + " draft")); remote.flushCache()
+        }
+        try destinations.select(linux.hostId, connect: false)
+        let restored = DestinationStore(root: root, keychainService: service)
+        defer { restored.activity(false) }
+        XCTAssertEqual(restored.selectedID, linux.hostId)
+        XCTAssertEqual(restored.selected?.hostInfo.platform, .linux)
+        XCTAssertEqual(restored.selected?.draft("reply:same-chat").string, "Linux workstation draft")
+        XCTAssertEqual(restored.remote(for: mac.hostId)?.hostInfo.platform, .darwin)
+        XCTAssertEqual(restored.remote(for: mac.hostId)?.draft("reply:same-chat").string, "Existing Mac draft")
+        XCTAssertEqual(DeviceKeychain.load(hostID: linux.hostId, service: service)?.key, linux.key)
+        XCTAssertEqual(DeviceKeychain.load(hostID: mac.hostId, service: service)?.key, mac.key)
+        XCTAssertEqual(restored.destinations.map(\.label), ["Linux workstation", "Existing Mac"])
+        XCTAssertNil(DeviceKeychain.load(service: service))
     }
     @MainActor func testHostKeysCachesDraftsAndForgetRemainIndependentOnSharedRelay() async throws {
         let (root, service) = try fixture(); let destinations = DestinationStore(root: root, keychainService: service)
@@ -1734,6 +1816,40 @@ final class NativeParityTests: XCTestCase {
         let capsule = try JSONSerialization.data(withJSONObject: ["version": 1, "hostId": "synthetic-host", "relay": "wss://example.test", "key": "synthetic-key", "expiresAt": "2099-01-01T00:00:00Z"]).base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
         let unsafe = ["https://user:password@example.test/", "javascript:alert(1)", "https://example.test/oauth/callback?code=secret", "https://example.test/page?access_token=secret", "https://example.test/signin", "https://example.test/page?apiKey=secret", "https://example.test/remote#pair=" + capsule, "https://example.test/remote#%70air=" + capsule, "https://example.test/remote?pairing=" + capsule, "https://example.test/remote?data=" + capsule, "https://example.test/remote#" + capsule, "https://example.test/page#route?session=secret", "https://example.test/page#auth=secret", "https://example.test/page#code=secret", "https://example.test/page?next=proteus%3A%2F%2Fpair%3Fdata%3D" + capsule]
         for input in unsafe { XCTAssertNil(SharedAppStore.safeURL(input), input); if input.hasPrefix("javascript:") || input.contains("user:password@") { XCTAssertNil(SharedAppStore.historyURL(input), input) } else { XCTAssertEqual(SharedAppStore.historyURL(input)?.absoluteString, input) } }
+    }
+    @MainActor func testMainBrowserActivationIsExplicitAndNeverRestoredFromCache() throws {
+        let identity = "synthetic-main-selection-" + UUID().uuidString
+        let digest = SHA256.hash(data: Data(identity.utf8)).map { String(format: "%02x", $0) }.joined()
+        let cache = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Proteus/browsers/" + digest + ".enc")
+        defer { try? FileManager.default.removeItem(at: cache) }
+        let store = SharedAppStore(); store.reset(for: identity)
+        XCTAssertNil(store.mainBrowserSelectionRequest)
+        let first = try XCTUnwrap(store.open(nil, scope: "main"))
+        XCTAssertEqual(store.mainBrowserSelectionRequest?.tabID, first)
+        let firstRequest = try XCTUnwrap(store.mainBrowserSelectionRequest)
+        let second = try XCTUnwrap(store.open(nil, scope: "main"))
+        XCTAssertEqual(store.mainBrowserSelectionRequest?.tabID, second)
+        XCTAssertNotEqual(store.mainBrowserSelectionRequest?.token, firstRequest.token, "Opening inside content mutation still represents an explicit selection")
+
+        let restored = SharedAppStore(); restored.reset(for: identity)
+        XCTAssertEqual(restored.tabs(in: "main").map(\.id), [first, second])
+        XCTAssertEqual(restored.selectedMainBrowser, second)
+        XCTAssertNil(restored.mainBrowserSelectionRequest, "Remembered browser selection must not override a cold notification route")
+        restored.select(second, in: "main", activateMainBrowser: false)
+        XCTAssertNil(restored.mainBrowserSelectionRequest, "Displaying an already selected browser is not a new navigation request")
+        restored.select(second, in: "main")
+        let selection = try XCTUnwrap(restored.mainBrowserSelectionRequest)
+        XCTAssertEqual(selection.tabID, second)
+        restored.select(second, in: "main")
+        let reselection = try XCTUnwrap(restored.mainBrowserSelectionRequest)
+        XCTAssertNotEqual(reselection.token, selection.token, "Explicitly selecting the same browser is still a fresh request")
+        _ = restored.open(nil, scope: "team")
+        restored.renameBrowser(second, title: "Updated metadata")
+        restored.close(first)
+        XCTAssertEqual(restored.mainBrowserSelectionRequest, reselection, "Non-main actions, metadata and background closure must not activate a main browser")
+        restored.reset(for: identity + "-other")
+        XCTAssertNil(restored.mainBrowserSelectionRequest)
+        store.unloadBrowsers(); restored.unloadBrowsers()
     }
     @MainActor func testEncryptedBrowserRestartPreservesExactFullURLs() throws {
         let identity = "synthetic-browser-" + UUID().uuidString

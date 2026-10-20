@@ -1849,6 +1849,97 @@ production remains0.2.19. Resume the existing durable request rather than recapt
 receipts. No certificate/account reset or server access-policy change is authorized or needed.
 See [release validation and remaining work](2026-10-14-retry-menu-release.md).
 
+## October 15 cold notification follow-up — implemented; hosted verification pending
+
+The real-iPad run reaches its cold schedule route with the correct cached descriptor, then a
+passive restored-browser callback takes focus. Separate explicit transient browser activation from
+remembered selection and make metadata reconciliation passive. Preserve cold-cache/host ownership
+and verify same-ID user reselection, passive hydration, new-tab activation and the existing cold
+schedule route. The transcript/picker UI corrections use measured whole-composer and keyboard
+prediction boundaries. Do not weaken their draft/model-option or notification assertions.
+
+Current cross-platform acceptance is recorded in [PR #20](https://github.com/mdpope/Proteus/pull/20).
+The dated/source-specific checkpoints below retain their original verification scope; later
+workflow results supersede their pending/failure status without changing the recorded artifacts.
+
+## October 15 remaining native acceptance corrections — in progress
+
+Run 38693169853 passes 626 Node tests/static checks on Linux and Mac, both packaged desktop UI
+workflows, web assets/PHP and all 122 native units. Actual Favorites, owner history settings and
+three of five actual-iPad workflows pass. The complete UI inventory records 58 passes and nine failures. Their corrections are based on
+screenshots, accessibility hierarchies and actual fixture/production state contracts. Preserve every backend/count/selection/history assertion;
+correct visible transcript coordinates, native menu/disclosure interactions and explicit restored
+navigation setup. The browser edge investigation identifies a real handler ownership gap; use a
+single app recognizer while retaining matched native-history traversal. See browser.md and the
+October 15 design decision, including the interactive-preview tradeoff. Full rerun remains required.
+The private production relay provisioning route remains unavailable; keep Linux access disabled.
+
+## October 15 native validation follow-up — implemented; rerun pending
+
+Hosted run 38690148311 passes Linux and Mac desktop tests/package/UI, web assets/PHP and all
+121 native units. Its 67 UI cases produce 55 passes and 12 failures. The follow-up fixes a real
+stale Favorites/workspace identity inconsistency, updates observed picker/navigation gestures,
+and routes 62 phone cases and five tablet cases to their actual simulator families. No tests
+are removed or silently skipped. The next run requires 122 units and all 67 UI cases.
+All 626 Node tests and static checks pass after the follow-up. The installed verified
+Linux 0.2.20 / linux.fda4ae896542 remains its own acceptance checkpoint; release-note changes
+require a separately fingerprinted candidate. Production relay registration and physical-device/
+signed Mac acceptance remain outstanding; PR #20 stays draft.
+
+## Accepted 0.2.20 import — integration implemented; revalidation pending
+
+Imported the exact accepted Mac source from `codex/signed-proteus-0220-20261015` /
+`418a083`, with all 879 manifest hashes and archive digest verified. The source fingerprint is
+`3f2196de3586915fc72f8d0cdebb645c109992306c3735514d0786b0acaf4985`.
+Native version is 0.2.20 / 2610.14.3. Preserve both the upstream native-menu/tab-retry changes and
+the Linux/Mac host metadata, legacy identities, protected credentials and shared package checks.
+
+Merged-source **625 Node checks and static checks pass**. The exact Linux package
+`linux.fda4ae896542` passes inventory/provenance/UI/PTY/restart and live Codex approvals,
+files, cancellation, continuation and disposable encrypted relay acceptance. It is installed
+on this laptop with Codex ready, existing chat/configuration hashes retained and two verified
+recovery generations. Full two-host website UI passes. Hosted Mac tests/unsigned package/UI
+and web assets/PHP pass; corrected Linux fixture teardown needs CI rerun. Native compilation
+now succeeds after the view decomposition. Hosted UI exposed a real-notification fixture race;
+its scheduling acknowledgement/background timing is corrected without skipping OS delivery or
+tap-routing assertions. Native units and all UI tests will rerun across isolated shards.
+
+Keep PR #20 in draft until the outstanding checks and coordination gates are resolved. Production
+Linux relay registration, actual iPhone/iPad-to-Linux pairing and production signed Mac acceptance
+remain separate; no existing Mac/iOS installation, website or relay was replaced. Source lineage
+and exact validation are recorded in `linux-app.md`. Earlier notes below describe dated history.
+
+## Earlier October 14 cross-platform checkpoint — 0.2.19
+
+Implemented: platform-neutral desktop/web/native host controls, optional authenticated platform
+metadata, Linux legacy Secret Service resolution with unchanged Mac Keychain behavior, and shared
+packaging inventory/metadata verification. Legacy wire/storage keys, pairings, host ownership,
+approvals, drafts and retry receipts stay intact. Independent computers retain distinct relay
+registrations. Native source adds five unit cases and a local mixed Linux/Mac UI fixture.
+
+Verified: 619 Node checks, static checks, PHP 81 tests / 724
+assertions, Pint/Vite, and disposable Linux UI at desktop/phone widths for attachments, chat
+design, composer, bounded MCP retries and long-history pagination. Linux stage `6f16217c6a6f`
+passed all 231 runtime hashes, metadata/provenance/private-file checks, isolated startup,
+synthetic feedback, native PTY keyboard input and restart history before this documentation
+freeze; final current-source rebuilding remains pending and no live installation changed.
+The new hosted workflow covers Linux/Mac desktop packages,
+web and an iPhone simulator, but has not executed. Remaining acceptance: finish source/package
+checks after freeze, exercise the staged Linux package, run hosted/Mac/native tests, verify signed
+Mac identity and existing data, then separately test actual iPhone/iPad-to-Linux and mixed-host
+relay operation. Provider sign-in and live Life/Secret Service access require their own evidence.
+No physical update or production relay/website deployment is implied. See `linux-app.md`.
+
+## Historical local Linux adaptation of 0.2.19
+
+The Linux branch imports the verified accepted canonical Mac source (`82cd923`, fingerprint
+`eb9548dbcce9`) and adds independent packaging, XDG paths and desktop lifecycle handling.
+607 Node checks, current tab UI acceptance, live packaged Codex approvals/restart/cancel/relay
+and packaged native terminal input/output pass on Manjaro x86-64. See `linux-app.md`.
+Physical iOS, other provider authentication, Life database credential resolution, ARM64 and broader
+Linux distribution acceptance remain deferred. Mac package acceptance remains a separate gate.
+
+
 ## October 14 authorized next-release build — in progress
 
 The operator authorized implementing the native link-menu and retry-ledger queue, building and
@@ -8395,3 +8486,13 @@ October 18 browser-agent access acceptance: 0.2.22 removes extension/profile-sha
 October 19 continuation correction: 0.2.23 uses the existing per-turn app MCP bridge for current browser/tab schemas on resumed Codex chats. Preserve native sessions and approvals. See the browser-agent acceptance ledger; build/live verification is tracked separately.
 
 October 19 correction status: 0.2.23 current-tool catalogs for resumed Codex chats pass the final guard, full 740-test suite, static checks, desktop/web normal/narrow UI and exact signed-package gates. Build Mac is installed/live-verified after a second restart; web passes recovery/restore, 14 endpoints and authenticated Source Library inspection. HC has verified the immutable transfer but remains on 0.2.22 pending local unlock and installation acceptance. See the handoff and browser-agent ledger.
+
+## October 15 bounded native CI follow-up
+
+Run 38696071427 passes Linux/Mac desktop and web checks plus all 122 native units. Completed
+native jobs record 42 passes and four failures across 46 cases. The remaining 21-case phone
+shard failed its redundant address-replacement setup, then stopped reporting progress during
+held-history navigation for over 20 minutes; it was canceled and remains partially unverified.
+The next candidate retains all 67 UI cases, adds the 123rd native activation regression and
+bounds XCTest/step execution while reserving failure/cancellation diagnostics. No timeout,
+cancellation or incomplete result counts as successful workflow acceptance.

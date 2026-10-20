@@ -157,6 +157,70 @@ tablet menu/open-adjacent UI passed. iPad stays staged because its fresh check r
 Old accepted generations/duplicate after-copies retired under the two-generation rule; receipts
 remain private. Physical gesture/authenticated workflow acceptance remains separate.
 
+Current cross-platform acceptance is recorded in [PR #20](https://github.com/mdpope/Proteus/pull/20).
+The dated/source-specific checkpoints below retain their original verification scope; later
+workflow results supersede their pending/failure status without changing the recorded artifacts.
+
+## October 15 checkpoint — source `b73c655`
+
+All 626 local Node tests/static checks and hosted Linux/Mac desktop and web gates pass. Hosted
+run [38693169853](https://github.com/mdpope/Proteus/actions/runs/38693169853) passes all 122 native
+units; its 67 UI cases finish with 58 passes and nine failures on the correct phone/tablet
+families. The follow-up corrects the diagnosed interactions and browser gesture ownership; a
+complete rerun is required. Production signing and physical/live iPhone-to-Linux acceptance
+remain separate.
+Installed Linux `linux.fda4ae896542` retains its live-Codex acceptance; notes-only candidate
+`linux.10e75103c337` has separate isolated UI/PTY/restart checks and is not installed. Production
+Linux relay registration remains blocked pending private distinct-host provisioning.
+
+## Complete phone and tablet UI validation
+
+The hosted workflow runs every native unit and UI case on its required device family: all
+123 unit tests, 62 phone UI tests across three isolated iPhone runners, and five tablet UI tests
+on an actual iPad simulator. Inventory is read from the Swift source; helper checks require a
+disjoint, exhaustive split and reject unavailable or mismatched simulator families. Tablet tests
+assert their device requirement rather than silently returning on a phone.
+
+For the same complete coverage on one Mac, run these commands sequentially because each helper
+owns the synthetic fixture's loopback ports:
+
+```sh
+npm run ios:test -- --only ProteusTests
+node test/apple-ui-shard.mjs --device-family phone --shard 1 --shards 1
+node test/apple-ui-shard.mjs --device-family tablet --shard 1 --shards 1
+```
+
+`--list` prints a shard's selectors without launching Apple tools. `ios:doctor` lists the
+available simulators. The lower-level full-project `ios:test` command still uses one selected
+simulator; it cannot establish both phone and tablet UI acceptance in that invocation. These
+commands use disposable hosts and simulator data and do not install onto physical devices or
+change Apple accounts, provisioning profiles or production credentials.
+
+**Historical initial 0.2.20 integration checkpoint (superseded by the status above):** The Linux branch imports the verified Mac source
+companion from transfer `418a083`, including native link/selection menus and durable tab retry
+identity/backoff. The checked-in project and reproducible definition both select **0.2.20 /
+2610.14.3** and retain upstream bundle IDs/signing settings. Platform-neutral host metadata,
+pairing defaults and compatibility tests remain merged. No Xcode compile/simulator result for
+this integrated source is claimed. Hosted iOS job **116268129325** / run **38688298486** failed
+before tests on its 0.2.19 checkpoint: Swift could not type-check `TeamBrowserView`'s chained
+task expression in reasonable time. Upstream 0.2.20 retains the expression. The local correction
+separates browser content from lifecycle modifiers and precomputes equivalent task identities;
+it still requires hosted compilation and simulator tests. Signed/physical acceptance and actual
+iPhone/iPad-to-Linux relay use remain separate. Earlier installation records below describe
+their own revisions and do not imply this candidate was installed locally.
+
+**Earlier October 14 platform-neutral native checkpoint:** Pairing defaults, host connection/provider/file
+messages and optional authenticated Linux/macOS platform metadata are implemented in source.
+Five added unit cases and a local mixed-host UI fixture preserve the existing destination index,
+Keychain accounts, bundle/team/signing identity, caches, drafts and retry behavior. Static review
+and plist checks passed on Linux; native compilation and simulator/UI execution have not run for
+these changes. `.github/workflows/cross-platform.yml` adds an iPhone simulator job with the
+disposable local host, alongside unsigned Mac desktop checks; hosted execution remains pending.
+CI performs no production signing, Apple account checks or physical installation. A real
+iPhone/iPad-to-Linux relay session remains unverified. Earlier native/device receipts below apply
+to their recorded revisions, not this source candidate.
+
+
 **Latest October 14 closure:** Native Mac, physical iPhone and iPad **0.2.19 / 2610.14.2**
 are installed/launch-verified with existing signing identities/profiles/entitlements. The iPhone
 retains all 1,933 file contents and destinations (four OS snapshot paths renamed); iPad retains
@@ -504,3 +568,12 @@ Verified October 4, 2026 on Electron 44.5.1: a disposable copy of the current pa
 re-signed ad hoc while the installed app stayed running, passed all package checks and
 synthetic cookie flush/read without a Keychain handoff; the catalog returned 19 models.
 This result uses mock storage and does not validate the Work Mac Keychain or installed update.
+
+## Bounded hosted XCTest execution
+
+CI opts into `PROTEUS_IOS_TEST_TIMEOUTS=1`: XCTest enables per-test timeouts with a 300-second
+default and 600-second maximum. The UI step is capped at 45 minutes inside the 60-minute job,
+leaving room for a bounded diagnostic upload on failure or cancellation. A stuck test remains
+failed/unverified, never a pass; runner loss or forced termination can still prevent diagnostics.
+Manual Apple commands retain their existing defaults unless the opt-in variable is set. Cleanup
+terminates only the helper’s own spawned processes and escalates a stuck child after eight seconds.

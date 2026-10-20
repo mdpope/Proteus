@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, shell, dialog, clipboard, Tray, Menu, nativeImage, screen, safeStorage, Notification, powerMonitor } = require('electron');
 const path = require('node:path');
 const { BrowserTabs } = require('./browser.cjs');
+const { launchPath, closeToTray } = require('./platform.cjs');
 const { WorkspaceSession } = require('./workspace-session.cjs');
 const {HistoryService}=require('./history-service.cjs');
 const { createProcessSampler, trackedChildren, trackedPids, resourceTotals } = require('./resource-metrics.cjs');
@@ -10,8 +11,8 @@ const desktopPreview=configureDesktopPreview(app);
 let service, window, browser, preview, credentials, terminals, peers, tray, standupWindow, closing = false;
 const showWindow = () => { if (window) { if (window.isMinimized()) window.restore(); window.show(); window.focus(); } };
 if(!desktopPreview)app.setName('Proteus');
-// Finder launches lack the interactive shell PATH; match the repository launcher.
-if (process.platform === 'darwin') process.env.PATH = [...new Set(['/opt/homebrew/bin', '/usr/local/bin', ...(process.env.PATH || '/usr/bin:/bin:/usr/sbin:/sbin').split(':')])].join(':');
+if (process.platform === 'linux') app.setDesktopName('proteus.desktop');
+process.env.PATH = launchPath(process.platform, require('node:os').homedir(), process.env.PATH);
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   // CLI-driven updates and service stops use the same graceful shutdown as Quit.
@@ -265,17 +266,26 @@ else {
     ipcMain.handle('proteus:standup-current', event => { trustedStandup(event); return service.standup.get().current; });
     ipcMain.handle('proteus:standup-close', event => { trustedStandup(event); standupWindow.close(); });
     window.on('resize', () => window.webContents.send('proteus:browser-resize'));
-    window.on('close', event => { if (!closing) { event.preventDefault(); window.hide(); } });
-    const icon = nativeImage.createFromPath(path.join(__dirname, 'trayTemplate.png')).resize({ width: 18, height: 18 }); icon.setTemplateImage(true);
-    tray = new Tray(icon); tray.setToolTip(desktopPreview?'Proteus Design Preview — synthetic data':'Proteus — schedules and chats');
-    tray.setContextMenu(Menu.buildFromTemplate([
+    window.on('close', event => { if (!closing) { event.preventDefault(); if (closeToTray(process.platform)) window.hide(); else window.minimize(); } });
+    const mac = process.platform === 'darwin';
+    const icon = nativeImage.createFromPath(path.join(__dirname, mac ? 'trayTemplate.png' : 'icon.png')).resize({ width: mac ? 18 : 24, height: mac ? 18 : 24 });
+    if (mac) icon.setTemplateImage(true);
+    const hostMenu = [
       { label: 'Open '+(desktopPreview?.name||'Proteus'), click: showWindow },
       { label: 'Connections…', click: () => { showWindow(); window.webContents.send('proteus:remote'); } },
       { type: 'separator' },
-      { label: 'Closing the window keeps the host running', enabled: false },
-      { label: 'Quit '+(desktopPreview?.name||'Proteus')+' and stop runs', click: () => app.quit() }
+      { label: closeToTray(process.platform) ? 'Closing the window keeps the host running' : 'Closing the window minimizes; the host keeps running', enabled: false },
+      { label: 'Quit Proteus and stop runs', click: () => app.quit() }
+    ];
+    try {
+      tray = new Tray(icon); tray.setToolTip(desktopPreview?'Proteus Design Preview — synthetic data':'Proteus — schedules and chats');
+      tray.setContextMenu(Menu.buildFromTemplate(hostMenu));
+      tray.on(process.platform === 'linux' ? 'click' : 'double-click', showWindow);
+    } catch (error) { if (process.platform !== 'linux') throw error; console.warn('System tray unavailable:', error.message); }
+    if (process.platform === 'linux') Menu.setApplicationMenu(Menu.buildFromTemplate([
+      { label: 'File', submenu: [...hostMenu.slice(0, 2), { type: 'separator' }, { label: 'Quit Proteus and stop runs', accelerator: 'Control+Q', click: () => app.quit() }] },
+      { role: 'editMenu' }, { role: 'viewMenu' }
     ]));
-    tray.on('double-click', showWindow);
     await window.loadURL(service.url).catch(error=>{if(error.code!=='ERR_ABORTED'&&error.errno!==-3)throw error;});
   }).catch(error => { console.error(error.message); app.quit(); });
   app.on('window-all-closed', () => {});

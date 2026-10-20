@@ -157,6 +157,43 @@ under `proteus-0221-native-release` in the temporary directory; no live data was
 
 # Native parity — October 4, 2026
 
+## Accepted 0.2.20 import and hosted compile failure
+
+The accepted source companion from transfer `418a083` is integrated with platform-neutral host
+metadata and pairing behavior retained. Both project definitions now select **0.2.20 /
+2610.14.3**; bundle/team/signing configuration and Keychain identities match upstream. Native
+link/selection actions, source-workspace link drafts and persisted retry identities/owner backoff
+are preserved alongside the five portability unit cases and mixed-host UI fixture.
+
+Hosted iOS job **116268129325**, run **38688298486**, failed before tests on its pushed 0.2.19
+checkpoint. Xcode reported a type-check timeout for the chained task expression in
+`TeamToolsView.swift` (`TeamBrowserView`); upstream 0.2.20 has the same expression. The local
+correction separates the browser content builder from lifecycle modifiers and precomputes
+equivalent task-identity strings, retaining refresh triggers and state behavior. Static review
+does not prove compilation. A new hosted build and simulator run are required; no native unit/UI
+pass or real iPhone-to-Linux session is claimed for the integrated source.
+
+## October 14 host portability source — native verification pending
+
+Pairing, connection, permission/sign-in, file-path, usage and notification messages now refer to
+the selected computer. New pairing labels use **My computer** / **New computer**. Authenticated
+state may add `hostPlatform` and `hostArchitecture`; saved-computer details display Linux/macOS
+and architecture when known. Old protocol-1 hosts remain usable without platform fields, and
+names never imply an operating system. Mac Keychain guidance appears only for explicit `darwin`
+metadata. No platform metadata from a QR invitation changes these host details or grants access.
+
+`HostDestination` retains the existing version-1 index shape (`id`, `label`); Keychain service and
+legacy `paired-mac` / `paired-mac:<hostID>` accounts, host IDs, encrypted caches, drafts, auth and
+retry behavior are unchanged. Existing saved names are retained. Five added native unit cases
+cover optional/unknown metadata, neutral and legacy pairing defaults, index compatibility and
+mixed-host cache/credential restoration; one UI case covers Linux/Mac selection and restart.
+These cases require the existing Mac simulator workflow. This Linux source workspace has no
+Swift/Xcode toolchain, so native compilation, simulator/UI execution and a real iPhone-to-Linux
+relay session remain unverified. Static diff and property-list checks do not establish those
+workflows. No target membership, bundle/signing identity or installed app changed.
+
+## Earlier acceptance records
+
 The native source implements Home / Chats / Life / Team / Engine Room phone navigation and an iPad sidebar with group tabs, close/unload controls, contextual children, a touch/keyboard expander and delayed pointer-edge hover. Allowance is confined to phone Home or the iPad sidebar, with a persistent label-only collapsed state. The existing optional Life preference controls its content. The pairing screen no longer contains the tagline.
 
 Chats read independent encrypted caches across all saved Macs and provide a host filter. Opening history does not select a new execution destination. Selecting a cached conversation can reconnect that conversation's own host; new chat execution remains explicit. Sidebar history is ordered across hosts. Message timestamps include the configured account timezone, with the device timezone as fallback. Unauthenticated relay refusal/revocation notices preserve keys, indexes, drafts and caches. Authenticated revocation is verified inside the encrypted, sequenced protocol before access is suspended; cached history remains available.

@@ -109,7 +109,7 @@ export class IntegrationHealth {
     if([...this.engine.running.values()].some(slot=>slot.id!==run.id&&this.engine.getRun(slot.id).schedule.provider===run.schedule.provider)&&!provider.sessions)throw new Error('Connection check deferred until this provider’s active chats finish.');
     if(recover&&this.engine.running.has(run.id))throw new Error('Recovery waits until the active turn finishes; its tools will not be interrupted.');
     if(background&&!provider?.hasMcpSession?.(run))return {deferred:true};
-    if(recover&&!provider?.mcpRecover)throw new Error('Automatic recovery is unavailable for this adapter. Sign in on the owning Mac.');
+    if(recover&&!provider?.mcpRecover)throw new Error('Automatic recovery is unavailable for this adapter. Sign in on the owning computer.');
     return this.withProvider(row.provider,async()=>{
       const result=recover?await provider.mcpRecover(run,row.server):provider.mcpHealth?await provider.mcpHealth(run,row.server):await provider.mcpStatus(run);
       if(!this.consumers(run.id).some(r=>r.id===id))throw new Error('Connection changed during verification. Refresh it.');

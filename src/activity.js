@@ -68,7 +68,7 @@ export class ActivityStore extends EventEmitter {
   }
   add(type, detail = {}) {
     if (!types.has(type)) throw new Error('Unknown notification type.');
-    const title = { 'chat.completed': 'Chat completed', 'review.required': 'Review required', 'schedule.completed': 'Schedule completed', 'device.added': 'New device connected', 'device.reconnected': 'Mac reconnected' }[type];
+    const title = { 'chat.completed': 'Chat completed', 'review.required': 'Review required', 'schedule.completed': 'Schedule completed', 'device.added': 'New device connected', 'device.reconnected': 'Computer reconnected' }[type];
     const offlineSeconds = Math.max(0, Math.floor(Number(detail.offlineSeconds) || 0));
     const body = type === 'device.reconnected' ? `Connected to the relay after approximately ${offlineSeconds < 60 ? offlineSeconds + ' seconds' : Math.round(offlineSeconds / 60) + ' minutes'} offline.` : 'Open Proteus to view the details.';
     const item = { id: randomUUID(), type, title, body, createdAt: this.clock().toISOString(), ...Object.fromEntries(['hostId', 'chatId', 'scheduleId', 'deviceId'].filter(key => typeof detail[key] === 'string').map(key => [key, detail[key].slice(0, 128)])), ...(type === 'device.reconnected' ? { offlineSeconds } : {}) };

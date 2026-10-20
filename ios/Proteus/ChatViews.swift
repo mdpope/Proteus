@@ -270,7 +270,7 @@ struct ChatsView: View {
                 }
                 if store.state["runs"].array.count < store.state["runCount"].int { Button("Load older chats") { Task { await store.loadMoreRuns() } }.disabled(!store.connected) }
             }.background(NativeTheme.background).navigationTitle("Chats").searchable(text: $query)
-                .safeAreaInset(edge: .bottom) { ConnectionStatus().padding().background(NativeTheme.surface) }
+                .safeAreaInset(edge: .bottom) { ConnectionStatus().accessibilityIdentifier("chat-composer-connection-status").padding().background(NativeTheme.surface) }
                 .refreshable { await store.refresh() }
                 .toolbar { Button("New chat", systemImage: "square.and.pencil") { newChat = true }.disabled(!store.connected).accessibilityIdentifier("new-chat") }
                 .navigationDestination(for: String.self) { ChatView(id: $0) }
@@ -1316,7 +1316,7 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
     }
     private var composerContent: some View {
         VStack(spacing: 8) {
-            ConnectionStatus()
+            ConnectionStatus().accessibilityIdentifier("chat-composer-connection-status")
             ForEach(run["queuedMessages"].array, id: \.self) { message in
                 HStack { Text(message["prompt"].string).lineLimit(1).font(.caption); Spacer(); if run["status"].string == "running" && !message["hasAttachments"].bool { Button("Steer now") { act("chat.steer-queued", ["messageId":message["id"]]) }.font(.caption) }; if store.state["capabilities"].array.contains(.string("chat.queue-edit.v1")) { Button("Edit") { queuedEdit = message; showQueuedEdit = true }.font(.caption) }; Button("Remove") { act("chat.remove-queued", ["messageId":message["id"]]) }.font(.caption) }
             }

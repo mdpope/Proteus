@@ -65,7 +65,7 @@ function logs(host) {
 }
 function drawLog() {
   const host = $('#omi-log-output'); if (!host) return;
-  host.innerHTML = !logResult ? '<p class="muted">Choose a job and read its metadata.</p>' : `<p>${logResult.available ? `${esc(logResult.records.length)} metadata records · ${esc(logResult.withheld)} lines withheld · ${esc(stamp(logResult.modifiedAt))}` : 'No readable native log available.'}</p>${window.desktop?.openPath && logResult.localPath ? '<button id="omi-open-log">Open native log on this Mac</button><p class="note">Opens the original private diagnostic file locally. Its contents are not sent through the API.</p>' : ''}<pre class="omi-metadata">${esc(logResult.records.map(value => JSON.stringify(value)).join('\n') || 'No permitted metadata in this sample.')}</pre>`;
+  host.innerHTML = !logResult ? '<p class="muted">Choose a job and read its metadata.</p>' : `<p>${logResult.available ? `${esc(logResult.records.length)} metadata records · ${esc(logResult.withheld)} lines withheld · ${esc(stamp(logResult.modifiedAt))}` : 'No readable native log available.'}</p>${window.desktop?.openPath && logResult.localPath ? '<button id="omi-open-log">Open native log on this computer</button><p class="note">Opens the original private diagnostic file locally. Its contents are not sent through the API.</p>' : ''}<pre class="omi-metadata">${esc(logResult.records.map(value => JSON.stringify(value)).join('\n') || 'No permitted metadata in this sample.')}</pre>`;
   if ($('#omi-open-log')) $('#omi-open-log').onclick = act(() => window.desktop.openPath(logResult.localPath));
 }
 function settings(host) {

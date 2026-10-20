@@ -48,7 +48,7 @@ try {
   assert.equal(await page.evaluate(() => window.calls.filter(action => action === 'cancel').length), 1);
   await page.evaluate(() => { window.unsafe = true; });
   await page.getByRole('button', { name: 'Retry sign-in' }).click();
-  await page.getByText('Finish GitHub Copilot sign-in on this Mac. Checking automatically…').waitFor();
+  await page.getByText('Finish GitHub Copilot sign-in on this computer. Checking automatically…').waitFor();
   assert.equal(await page.getByRole('button', { name: 'Open sign-in page' }).count(), 0, 'Lookalike host must not open');
   assert.deepEqual(await page.evaluate(() => window.opened), ['https://github.com/login/device']);
   assert.deepEqual(errors, []);

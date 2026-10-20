@@ -15,8 +15,12 @@ struct NativeChatScrollLocation {
     var viewportWidth: CGFloat = 0
     var eventRevision: String = ""
 }
+struct MainBrowserSelectionRequest: Equatable {
+    let token = UUID()
+    let tabID: String
+}
 
-/// Account-scoped app data uses its own explicit OAuth consent, never a Mac's credentials.
+/// Account-scoped app data uses its own explicit OAuth consent, never a host's credentials.
 @MainActor final class SharedAppStore: ObservableObject {
     @Published var snapshot: JSON = .null
     @Published var error: String?
@@ -34,6 +38,7 @@ struct NativeChatScrollLocation {
     @Published private(set) var currentTeamOwner: String?
     @Published var selectedBrowser: String?
     @Published var selectedMainBrowser: String?
+    @Published private(set) var mainBrowserSelectionRequest: MainBrowserSelectionRequest?
     @Published var scopedSelection: [String: String] = [:]
     @Published private(set) var workspaceContentDescriptors: [String: [JSON]] = [:]
     @Published private(set) var documentTabs: [NativeDocumentDescriptor] = []
@@ -492,6 +497,7 @@ struct NativeChatScrollLocation {
     var lists: [JSON] { snapshot["teamLists"].array }
     func reset(for identity: String) {
         guard account != identity else { return }
+        mainBrowserSelectionRequest = nil
         saveBrowsers(); for download in Array(downloads.values) { download.cancel() }; exportFile?.cleanup(); exportFile = nil; linkChatDraft = nil; restoring = true; contentSync = [:]; contentRequests = [:]; contentBackoff = [:]; workspaceContentDescriptors = contentSnapshots.filter { Self.isOrganizationalScope($0.key) }.mapValues { $0["tabs"].array }; account = identity; snapshot = .null; accountConnected = false; error = nil; browserPreviews = [:]; browserFavicons = [:]; faviconAttempts = [:]; unloadBrowsers(); browserTabs = []; unloadedBrowsers = []; selectedBrowser = nil; selectedMainBrowser = nil; scopedSelection = [:]; browserTouched = [:]; standupOrders = [:]; standupCompleted = [:]; documentContents = [:]; documentSessions = [:]; previewVersions = [:]; profileStores = [:]; draftAttachments = [:]; chatScrollLocations = [:]; draftMessageIDs = [:]; draftSessionIDs = [:]
         if let cacheURL, let key = BrowserCacheKeychain.key(), let data = try? Data(contentsOf: cacheURL), let payload = try? RemoteCrypto.open(String(decoding: data, as: UTF8.self), key: key, aad: account), let decoded = try? JSONDecoder().decode([BrowserDescriptor].self, from: JSONEncoder().encode(payload["tabs"] == .null ? payload : payload["tabs"])) {
             browserTabs = decoded.compactMap(Self.retainedDescriptor); snapshot = payload["accountSnapshot"]; profilesVerified = snapshot["browserProfiles"] != .null
@@ -895,7 +901,7 @@ struct NativeChatScrollLocation {
     }
     func selected(in scope: String) -> String? { scope == "main" ? selectedMainBrowser : scope == "team" ? selectedBrowser : scopedSelection[scope] }
     func selectChatChild(_ id: String, in scope: String) { guard scope.hasPrefix("chat:") && (id == "chat" || tabs(in: scope).contains(where: { $0.id == id })) else { return }; scopedSelection[scope] = id; saveBrowsers() }
-    func select(_ id: String, in scope: String) { guard browserTabs.contains(where: { $0.id == id && $0.scope == scope }) else { return }; if scope == "main" { selectedMainBrowser = id } else if scope == "team" { selectedBrowser = id; if let host = currentTeamOwner { scopedSelection["team:" + host] = id } } else { scopedSelection[scope] = id }; reload(id); touch(id); saveBrowsers() }
+    func select(_ id: String, in scope: String, activateMainBrowser: Bool = true) { guard browserTabs.contains(where: { $0.id == id && $0.scope == scope }) else { return }; if scope == "main" { selectedMainBrowser = id; if activateMainBrowser { mainBrowserSelectionRequest = MainBrowserSelectionRequest(tabID: id) } } else if scope == "team" { selectedBrowser = id; if let host = currentTeamOwner { scopedSelection["team:" + host] = id } } else { scopedSelection[scope] = id }; reload(id); touch(id); saveBrowsers() }
     func touch(_ id: String) { browserTouched[id] = Date(); if let index = browserTabs.firstIndex(where: { $0.id == id }) { browserTabs[index].lastTouchedAt = ISO8601DateFormatter().string(from: Date()) }; pruneBrowsers() }
     func persistBrowser(_ id: String, enabled: Bool) { guard let index = browserTabs.firstIndex(where: { $0.id == id }) else { return }; browserTabs[index].persist = enabled; if enabled { reload(id) }; saveBrowsers() }
     func pruneBrowsers(now: Date = Date()) {
@@ -1218,7 +1224,10 @@ struct NativeChatScrollLocation {
         if profileStores[storeKey] == nil { profileStores[storeKey] = tab.profileId == "default" ? .default() : WKWebsiteDataStore(forIdentifier: Self.persistentProfileStoreID(account: account, id: tab.profileId)) }
         configuration.websiteDataStore = profileStores[storeKey]!
         let view = NativeLinkWebView(frame: .zero, configuration: configuration)
-        view.allowsBackForwardNavigationGestures = true; view.isFindInteractionEnabled = true
+        // Proteus owns the full content-relative edge gesture. Native gesture
+        // recognition has different thresholds and must not race that handler.
+        // goBrowserHistory still reuses matching native page instances via go(to:).
+        view.allowsBackForwardNavigationGestures = false; view.isFindInteractionEnabled = true
         browserViews[tab.id] = view
         browserObservations[tab.id] = [observeBrowser(view, id: tab.id, keyPath: \.canGoBack), observeBrowser(view, id: tab.id, keyPath: \.canGoForward), observeBrowser(view, id: tab.id, keyPath: \.isLoading), observeBrowser(view, id: tab.id, keyPath: \.url), observeBrowser(view, id: tab.id, keyPath: \.title)]
         if let text = tab.url, let url = URL(string: text) { mirroredBrowserLoads.insert(tab.id); pendingBrowserLoads[tab.id] = url.absoluteString; view.load(URLRequest(url: url)) }
@@ -1229,20 +1238,12 @@ struct NativeChatScrollLocation {
             Task { @MainActor [weak self, weak view] in
                 guard let self, let view, self.browserViews[id] === view,
                       let index = self.browserTabs.firstIndex(where: { $0.id == id }) else { return }
-                // Commit a settled same-document URL before comparing native and
-                // saved neighbors, so an aligned stack keeps native gestures enabled.
+                // Commit settled same-document navigation into the saved stack.
                 if !view.isLoading, let url = view.url, (self.pendingBrowserLoads[id] == url.absoluteString || self.pendingBrowserLoads[id] == nil && self.browserTabs[index].url != url.absoluteString) {
                     self.completeBrowserNavigation(url, title: view.title ?? url.host ?? "Browser", in: id, nativePosition: view.backForwardList.backList.count, sameDocumentObservation: true)
                 }
                 let history = self.browserTabs[index].history
-                let savedBack = history.flatMap { $0.index > 0 ? $0.entries[$0.index - 1].url : nil }
-                let savedForward = history.flatMap { $0.index + 1 < $0.entries.count ? $0.entries[$0.index + 1].url : nil }
-                let nativeBack = view.canGoBack && (history == nil || view.backForwardList.backList.last?.url.absoluteString == savedBack)
-                let nativeForward = view.canGoForward && (history == nil || view.backForwardList.forwardList.first?.url.absoluteString == savedForward)
-                // A restored saved stack can exceed WebKit's newly created stack. Do
-                // not send native gestures to a mismatched neighbor after a fallback load.
-                view.allowsBackForwardNavigationGestures = (!view.canGoBack || nativeBack) && (!view.canGoForward || nativeForward)
-                let state = BrowserNavigationState(url: view.url?.absoluteString ?? "", title: view.title ?? "", canGoBack: history.map { $0.index > 0 } ?? view.canGoBack, canGoForward: history.map { $0.index + 1 < $0.entries.count } ?? view.canGoForward, isLoading: view.isLoading, nativeCanGoBack: view.allowsBackForwardNavigationGestures && nativeBack, nativeCanGoForward: view.allowsBackForwardNavigationGestures && nativeForward)
+                let state = BrowserNavigationState(url: view.url?.absoluteString ?? "", title: view.title ?? "", canGoBack: history.map { $0.index > 0 } ?? view.canGoBack, canGoForward: history.map { $0.index + 1 < $0.entries.count } ?? view.canGoForward, isLoading: view.isLoading)
                 if self.browserNavigation[id] != state { self.browserNavigation[id] = state }
                 // Late KVO can describe the old page while a requested traversal begins.
                 // Commit only a settled requested target or an unblocked same-document URL.
@@ -1262,8 +1263,6 @@ struct BrowserNavigationState: Equatable {
     var canGoBack = false
     var canGoForward = false
     var isLoading = false
-    var nativeCanGoBack = false
-    var nativeCanGoForward = false
 }
 struct BrowserHistoryEntry: Codable, Equatable {
     var id: String = UUID().uuidString; var url: String; var title: String; var requestedURL: String? = nil

@@ -20,7 +20,7 @@ try{
  assert.ok(await page.locator('.token-stats').count());assert.ok(await page.locator('.chat-details .explanation:not([open])').count());
  const usage=await page.locator('.runtime-stat,.token-stats>div').evaluateAll(nodes=>nodes.map(node=>{const label=node.querySelector('span').getBoundingClientRect(),value=node.querySelector('strong'),box=value.getBoundingClientRect();return {labelAbove:label.bottom<=box.top,background:getComputedStyle(value).backgroundColor,center:getComputedStyle(value).textAlign,top:box.top,bottom:box.bottom};}));
  assert.equal(usage.length,3);assert.ok(usage.every(row=>row.labelAbove&&row.background==='rgb(15, 23, 19)'&&row.center==='center'));assert.ok(usage[0].bottom<usage[1].top&&usage[1].bottom<usage[2].top);
- await page.locator('.chat-details').screenshot({path:'/private/tmp/proteus-final-usage-details.png'});
+ await page.locator('.chat-details').screenshot({path:path.join(home,'proteus-final-usage-details.png')});
  for(const section of ['home','internet','context'])assert.ok(await page.locator(`[data-page=${section}] .nav-icon svg`).count());
  await page.screenshot({path:path.join(home,'desktop-wide.png')});
  await page.setViewportSize({width:580,height:850});await page.locator('.model-options').click();assert.equal(await page.locator('.model-options').getAttribute('aria-expanded'),'true');await page.keyboard.press('Escape');assert.equal(await page.locator('.model-options').getAttribute('aria-expanded'),'false');
@@ -40,6 +40,6 @@ try{
   });
   assert.deepEqual(placement,{overflow:false,sendInside:true,sameRow:true,stripAbove:true});
  }
- await page.screenshot({path:'/private/tmp/proteus-newchat-attachments.png'});await page.locator('#close-dialog').click();
+ await page.screenshot({path:path.join(home,'proteus-newchat-attachments.png')});await page.locator('#close-dialog').click();
  assert.deepEqual(errors,[]);console.log('PASS production composer circles, queue delivery, labeled models, compact menu, editor growth/cap/shrink, details hierarchy and navigation SVGs');
 }finally{await app?.close();fs.rmSync(home,{recursive:true,force:true});}

@@ -9,11 +9,11 @@ const home=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'proteus-attachm
 const workspace=path.join(home,'workspace');fs.mkdirSync(workspace);
 fs.writeFileSync(path.join(home,'settings.json'),JSON.stringify({schemaVersion:1,provider:'rehearsal',model:'',timezone:'UTC',workspace:{cwd:workspace,additionalDirectories:[]},skillDirectories:[],mcpServers:{}}));
 const image=Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154789c636000020000050001a5f645400000000049454e44ae426082','hex');
-const messages=[],errors=[];let app;
+const messages=[],errors=[];let app,page;
 try{
   app=await electron.launch({...(process.env.PROTEUS_TEST_EXECUTABLE?{executablePath:process.env.PROTEUS_TEST_EXECUTABLE}:{}),args:[...(process.env.PROTEUS_TEST_EXECUTABLE?[]:['.']),'--use-mock-keychain','--user-data-dir='+path.join(home,'electron')],env:{...process.env,PROTEUS_HOME:home,PORT:'0'},timeout:60000});
-  const page=await app.firstWindow();page.setDefaultTimeout(15000);page.on('pageerror',error=>errors.push(error.message));
-  await page.route('**/api/state*',async route=>{const response=await route.fetch(),data=await response.json();data.attachmentMediaTypes={...data.attachmentMediaTypes,rehearsal:['image/png'],copilot:['image/png']};await route.fulfill({json:data});});
+  page=await app.firstWindow();page.setDefaultTimeout(15000);page.on('pageerror',error=>errors.push(error.message));
+  await page.route('**/api/state*',async route=>{const response=await route.fetch(),data=await response.json();data.hostName='Synthetic Attachment Workstation';data.attachmentMediaTypes={...data.attachmentMediaTypes,rehearsal:['image/png'],copilot:['image/png']};await route.fulfill({json:data});});
   // Attachment UI is synthetic; do not depend on a live provider catalog.
   await page.route('**/api/provider',route=>route.fulfill({json:{provider:'copilot',available:true,models:[{id:'synthetic-attachment',name:'Synthetic attachment model',controls:{reasoningEfforts:[],contextTiers:[],serviceTiers:[]}}]}}));
   await page.route('**/api/attachments',async route=>{const value=route.request().postDataJSON();messages.push(value);const result=value.action==='begin'?{uploadId:'synthetic-upload'}:value.action==='finish'?{attachmentId:'synthetic-attachment',name:'tiny.png',mediaType:'image/png',size:image.length,sha256:'synthetic'}:value.action==='authorize'?{consentId:'synthetic-consent'}:{};await route.fulfill({json:result});});
@@ -26,11 +26,15 @@ try{
   const followup=messages.find(item=>item.followup)?.followup;assert.equal(followup?.providerId,'rehearsal');assert.equal(followup?.mode,'queue');assert.deepEqual(followup?.attachments,['synthetic-attachment']);assert.equal(followup?.consentId,'synthetic-consent');
   await page.locator('#run-attachments input[type=file]').setInputFiles(Array.from({length:12},(_,index)=>({name:`batch-${index}.png`,mimeType:'image/png',buffer:image})));
   assert.equal(await page.locator('#run-attachments .attachment-chip').count(),12);
+  for(const width of [1440,850]){
+    await page.setViewportSize({width,height:960});
   const layout=await page.evaluate(()=>{const strip=document.querySelector('#run-attachments .attachment-strip').getBoundingClientRect(),control=document.querySelector('#run-attachments .attachment-controls').getBoundingClientRect(),send=document.querySelector('#continue').getBoundingClientRect();return {stripBottom:strip.bottom,stripHeight:strip.height,controlTop:control.top,controlCenter:control.top+control.height/2,sendCenter:send.top+send.height/2,footerWidth:document.querySelector('.composer-footer').clientWidth,footerScrollWidth:document.querySelector('.composer-footer').scrollWidth};});
   assert.ok(layout.stripBottom<=layout.controlTop+3,JSON.stringify(layout));
   assert.ok(layout.stripHeight<=115,JSON.stringify(layout));
   assert.ok(Math.abs(layout.controlCenter-layout.sendCenter)<20,JSON.stringify(layout));
   assert.ok(layout.footerScrollWidth<=layout.footerWidth+3,JSON.stringify(layout));
+  }
+  await page.setViewportSize({width:1440,height:960});
   await page.locator('#run-attachments [data-attach-preview]').first().click();await page.locator('#attachment-image-preview').waitFor();
   await page.mouse.click(3,3);await page.locator('#attachment-image-preview').waitFor({state:'detached'});
   await page.locator('#run-attachments').evaluate(host=>{while(host.querySelector('[data-attach-remove]'))host.querySelector('[data-attach-remove]').click();});
@@ -45,11 +49,11 @@ try{
   const newChatLayout=await page.evaluate(()=>{const control=document.querySelector('#chat-attachments .attachment-controls').getBoundingClientRect(),send=document.querySelector('#dialog-submit').getBoundingClientRect();return {controlCenter:control.top+control.height/2,sendCenter:send.top+send.height/2};});
   assert.ok(Math.abs(newChatLayout.controlCenter-newChatLayout.sendCenter)<20,JSON.stringify(newChatLayout));
   await page.locator('#chat-attachments [data-attach-preview]').click();await page.locator('#attachment-image-preview').waitFor();await page.keyboard.press('Escape');await page.locator('#attachment-image-preview').waitFor({state:'detached'});
-  await page.locator('#dialog-submit').click();await page.getByRole('heading',{name:'Send these files?'}).waitFor();assert.match(await page.locator('.attachment-confirm').innerText(),/Destination: [^\n]+ · new chat[\s\S]*Copilot[\s\S]*tiny.png/);
+  await page.locator('#dialog-submit').click();await page.getByRole('heading',{name:'Send these files?'}).waitFor();assert.match(await page.locator('.attachment-confirm').innerText(),/Synthetic Attachment Workstation · new chat[\s\S]*Copilot[\s\S]*tiny.png/);
   await page.getByRole('button',{name:'Confirm Send'}).click();
   for(let i=0;i<50&&!messages.some(item=>item.chat);i++)await new Promise(resolve=>setTimeout(resolve,50));
   assert.deepEqual(messages.filter(item=>item.action).map(item=>item.action),['begin','chunk','finish','authorize','begin','chunk','finish','authorize']);
   assert.deepEqual(messages.find(item=>item.chat)?.chat.attachments,['synthetic-attachment']);assert.equal(messages.find(item=>item.chat)?.chat.providerId,'copilot');
   assert.deepEqual(errors,[]);console.log('Desktop local new-chat and follow-up file picker, preview, explicit consent and bounded upload passed.');
 }
-}finally{await app?.close();fs.rmSync(home,{recursive:true,force:true});}
+}finally{if(page)await page.unrouteAll({behavior:'wait'}).catch(()=>{});await app?.close();fs.rmSync(home,{recursive:true,force:true});}

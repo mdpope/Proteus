@@ -1,3 +1,5 @@
+import path from 'node:path';
+import os from 'node:os';
 // Browser-only fakes keep synthetic conversation text out of OS clipboard/audio services.
 import assert from 'node:assert/strict';
 async function selectHost(page,id){await page.locator('#remote-host').evaluate((select,id)=>{select.value=id;select.dispatchEvent(new Event('change',{bubbles:true}));},id);}
@@ -50,12 +52,12 @@ export async function exerciseMessageActions(page, app, run) {
   assert.equal(spoken.local,true);assert.match(spoken.text,/Local summary/);assert.match(spoken.text,/completed reply/);assert.doesNotMatch(spoken.text,/\*\*|```|Copy code/);
   await first.locator('.message-playback').scrollIntoViewIfNeeded();
   await page.evaluate(()=>document.activeElement?.blur());
-  await page.screenshot({path:'/private/tmp/proteus-web-message-actions-desktop.png',fullPage:true});
+  await page.screenshot({path:path.join(os.tmpdir(),'proteus-web-message-actions-desktop.png'),fullPage:true});
   const viewport=page.viewportSize();await page.setViewportSize({width:390,height:844});
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   await first.locator('.message-playback').scrollIntoViewIfNeeded();
-  await page.screenshot({path:'/private/tmp/proteus-web-message-actions-mobile.png',fullPage:true});
-  await first.locator('.message-actions').screenshot({path:'/private/tmp/proteus-web-message-playback-mobile.png'});
+  await page.screenshot({path:path.join(os.tmpdir(),'proteus-web-message-actions-mobile.png'),fullPage:true});
+  await first.locator('.message-actions').screenshot({path:path.join(os.tmpdir(),'proteus-web-message-playback-mobile.png')});
   await page.setViewportSize(viewport);
   const cancellations=await page.evaluate(()=>messageActionTest.cancellations);
   await first.evaluate(element=>element.dataset.beforeRefresh='yes');app.engine.persist(run);

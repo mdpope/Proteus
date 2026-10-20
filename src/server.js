@@ -1,5 +1,6 @@
 import { DesktopPreview, desktopPreviewCodexHome } from './desktop-preview.js';
 import { WorkspaceProjects } from './workspace-projects.js';
+import { hostPlatformMetadata } from './host-platform.js';
 import {TabManagement} from './tab-management.js';
 import { PerformanceDiagnostics } from './performance-diagnostics.js';
 import {BrowserHistory,browserHistorySettings} from './browser-history.js';
@@ -257,7 +258,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         const hostId=value.hostId||remote.info().hostId;
         if(hostId===remote.info().hostId&&value.action==='promote')return json(200,engine.promoteChat(value.id,value.expectedUpdatedAt));
         if(hostId===remote.info().hostId)return json(200,engine.lifecycle(value.id,value.action,{expectedUpdatedAt:value.expectedUpdatedAt,expectedArchivedAt:value.expectedArchivedAt}));
-        if(!service.peers)throw new Error('The paired Mac is unavailable.');
+        if(!service.peers)throw new Error('The paired computer is unavailable.');
         const result=await service.peers.request(hostId,value.action==='promote'?'chat.promote':value.action==='delete'?'chat.delete':'chat.archive',{id:value.id,...(value.action==='delete'?{}:{archived:value.action==='archive'}),expectedUpdatedAt:value.expectedUpdatedAt,expectedArchivedAt:value.expectedArchivedAt});
         service.peers.reconcileChat(hostId,result);
         return json(200,result);
@@ -291,8 +292,8 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
           ...engine.schedules.list().filter(schedule => !schedule.error).map(schedule => ({ ...schedule, ref: { scheduleId: schedule.id } })),
           ...engine.listRuns().map(run => ({ ...run.schedule, ref: { runId: run.id } }))
         ].map(schedule=>permissionSchedule(schedule,contextCatalog)).filter(Boolean),permissionSnapshot),
-        home, life: life.get(), settings: settings.get(), context: contextCatalog, standup: standup.get(), browserAvailable: !!browser, schedulerErrors, recoveryErrors: engine.recoveryErrors || [], version: readJSON(path.join(root,'package.json')).version,
-        scheduler: { running: true, background, message: background ? 'The menu bar host keeps running when its window is closed. Quit Proteus stops execution. The Mac must be awake.' : 'Schedules run while this host process is running.' }
+        home, life: life.get(), settings: settings.get(), context: contextCatalog, standup: standup.get(), browserAvailable: !!browser, schedulerErrors, recoveryErrors: engine.recoveryErrors || [], ...hostPlatformMetadata(), version: readJSON(path.join(root,'package.json')).version,
+        scheduler: { running: true, background, message: background ? 'The desktop host keeps running when its window is closed. Quit Proteus stops execution. The computer must be awake.' : 'Schedules run while this host process is running.' }
       };
         });
         return json(200,state);
@@ -492,7 +493,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         if (action === 'reply') return json(200, engine.reply(id, value.answer, value.requestId));
         if (action === 'send' && typeof value.prompt === 'string' && /^\/mcp\s+auth(?:\s|$)/i.test(value.prompt.trim())) {
           const run = engine.getRun(id); const provider = engine.providers[run.schedule.provider];
-          if (!provider?.mcpLogin) throw new Error('This provider does not support MCP sign-in through Proteus. Sign in on the owning Mac, then refresh connections.');
+          if (!provider?.mcpLogin) throw new Error('This provider does not support MCP sign-in through Proteus. Sign in on the owning computer, then refresh connections.');
           if (!openExternal) throw new Error('Use MCP connections in chat details to open the sign-in link.');
           if ([...engine.running.values()].some(slot=>slot.id!==id&&engine.getRun(slot.id).schedule.provider===run.schedule.provider)&&!provider.sessions) throw new Error('Wait for this provider’s active chats before signing in.');
           const name = value.prompt.trim().replace(/^\/mcp\s+auth\s*/i, '').trim();
@@ -505,7 +506,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
           engine.event(run, 'user', value.prompt, {delivery:{id:value.messageId,state:'delivered'}});
           try { const result = await provider.mcpLogin(run, matches[0]);
             if (result.authorizationUrl) await openExternal(result.authorizationUrl);
-            engine.event(run,'system',result.authorizationUrl ? 'MCP sign-in opened in the Mac browser. Finish signing in, refresh MCP connections, then continue or steer this chat to retry.' : 'MCP connection restored. Continue or steer this chat to retry.');
+            engine.event(run,'system',result.authorizationUrl ? 'MCP sign-in opened in the host browser. Finish signing in, refresh MCP connections, then continue or steer this chat to retry.' : 'MCP connection restored. Continue or steer this chat to retry.');
           } catch(error) { engine.event(run,'system','MCP sign-in failed: '+error.message); throw error; }
           return json(200, run);
         }
@@ -561,10 +562,10 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         if(integrations.pending.has(run.schedule.provider))throw new Error('A connection check is already in progress for this provider.');
         return await integrations.withProvider(run.schedule.provider,async()=>{
         if (value.action === 'login') {
-          if(typeof provider.mcpLogin!=='function')throw new Error('This provider does not support MCP sign-in through Proteus. Sign in on the owning Mac, then refresh connections.');
+          if(typeof provider.mcpLogin!=='function')throw new Error('This provider does not support MCP sign-in through Proteus. Sign in on the owning computer, then refresh connections.');
           const result = await provider.mcpLogin(run, value.server);
           if (result.authorizationUrl && value.openOnMac) {
-            if (!openExternal) throw new Error('Open Proteus on the Mac to finish browser sign-in.');
+            if (!openExternal) throw new Error('Open Proteus on the host computer to finish browser sign-in.');
             await openExternal(result.authorizationUrl); return json(200, {server:result.server,status:result.status,openedOnMac:true});
           }
           return json(200, result);

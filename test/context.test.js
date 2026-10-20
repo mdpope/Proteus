@@ -11,9 +11,9 @@ import { StandupStore } from '../src/standup.js';
 import { CredentialBroker, BitwardenCLI } from '../src/credentials.js';
 import { exportTranscript } from '../src/transcripts.js';
 
-function fixture(t) {
+function fixture(t, beforeRemove) {
   const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-context-test-')));
-  t.after(() => fs.rmSync(home, { recursive: true, force: true }));
+  t.after(async () => { await beforeRemove?.(); fs.rmSync(home, { recursive: true, force: true }); });
   const repo = path.join(home, 'project'); const library = path.join(home, 'library');
   fs.mkdirSync(repo); fs.mkdirSync(library);
   const write = (file, text) => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, text); };
@@ -198,10 +198,10 @@ test('agent tool controls cannot be silently discarded by the host adapter', t =
 });
 
 test('default workspace authorization uses the same shared context as a new chat', async t => {
-  const f = fixture(t); const { startServer } = await import('../src/server.js');
+  let service;
+  const f = fixture(t, () => service?.close()); const { startServer } = await import('../src/server.js');
   f.context.mutate(config => { config.universalFolders.push(f.library); }, f.context.config().revision);
-  const service = await startServer({ home: path.join(f.home, 'app'), port: 0, timers: false, withSeed: false, providers: { rehearsal: { async run() {} } } });
-  t.after(() => service.close());
+  service = await startServer({ home: path.join(f.home, 'app'), port: 0, timers: false, withSeed: false, providers: { rehearsal: { async run() {} } } });
   const request = async (route, value) => {
     const response = await fetch(service.origin + route, { headers: { authorization: 'Bearer ' + service.token, 'content-type': 'application/json' }, ...(value ? { method: 'POST', body: JSON.stringify(value) } : {}) });
     assert.equal(response.status, 200); return response.json();
@@ -243,9 +243,10 @@ test('only selected sources skips workspace/universal documents while preserving
   f.mode(skill, 'disabled'); assert.throws(() => f.context.capture({ includeDefaults: false, selectedIds: [skill.id] }), /disabled/);
 });
 test('schedule selections are validated, persist in plain JSON and capture only selected sources on each run', async t => {
-  const f = fixture(t); f.write(path.join(f.repo, 'AGENTS.md'), '# Automatic source'); f.write(path.join(f.repo, 'skills/check/SKILL.md'), '# Schedule skill\nVersion one.');
+  let app;
+  const f = fixture(t, () => app?.close()); f.write(path.join(f.repo, 'AGENTS.md'), '# Automatic source'); f.write(path.join(f.repo, 'skills/check/SKILL.md'), '# Schedule skill\nVersion one.');
   const { startServer } = await import('../src/server.js'); const { revision } = await import('../src/schedules.js');
-  const app = await startServer({ home: path.join(f.home, 'app'), port: 0, timers: false }); t.after(() => app.close()); app.engine.drain = async () => {};
+  app = await startServer({ home: path.join(f.home, 'app'), port: 0, timers: false }); app.engine.drain = async () => {};
   const skill = app.context.get().entries.find(e => e.kind === 'skill');
   const schedule = app.engine.schedules.get('workspace-pulse'); schedule.workspace = { cwd: f.repo, additionalDirectories: [] };
   const selection = { includeDefaults: false, selectedIds: [skill.id], agentId: null, extension: 'retained' };

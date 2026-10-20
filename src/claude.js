@@ -154,10 +154,10 @@ export class ClaudeProvider {
   withMcpSelectionBatch(callback){return this.context?.withMcpSelectionBatch?this.context.withMcpSelectionBatch(callback):callback();}
   async mcpState(client,names,timeout=10000,selected={}){
     let raw;
-    try{raw=await client.request({subtype:'mcp_status'},timeout);}catch{throw new Error('Claude MCP connection status is unavailable. Check the selected server on this Mac and retry.');}
+    try{raw=await client.request({subtype:'mcp_status'},timeout);}catch{throw new Error('Claude MCP connection status is unavailable. Check the selected server on this computer and retry.');}
     const list=raw?.mcpServers||raw?.mcp_servers||raw?.servers;
-    if(!Array.isArray(list))throw new Error('Claude did not return MCP connection status. Update Claude Code on this Mac.');
-    return names.map(name=>{const item=list.find(value=>value?.name===name),status=['connected','pending','failed','needs-auth','disabled'].includes(item?.status)?item.status:'not-connected';return {name,status,scope:'selected-chat',observedAt:new Date().toISOString(),remote:['http','sse'].includes(selected[name]?.type),...(status==='failed'?{error:'Claude could not connect to this selected server. Check its Mac configuration and credentials.'}:status==='needs-auth'?{error:'This server needs sign-in in Claude Code on the owning Mac.'}:{})};});
+    if(!Array.isArray(list))throw new Error('Claude did not return MCP connection status. Update Claude Code on this computer.');
+    return names.map(name=>{const item=list.find(value=>value?.name===name),status=['connected','pending','failed','needs-auth','disabled'].includes(item?.status)?item.status:'not-connected';return {name,status,scope:'selected-chat',observedAt:new Date().toISOString(),remote:['http','sse'].includes(selected[name]?.type),...(status==='failed'?{error:'Claude could not connect to this selected server. Check its computer configuration and credentials.'}:status==='needs-auth'?{error:'This server needs sign-in in Claude Code on the owning computer.'}:{})};});
   }
   hasMcpSession(run){return !!this.active&&this.activeRunId===run.id;}
   async mcpStatus(run,{signal}={}){
@@ -189,7 +189,7 @@ export class ClaudeProvider {
       }while(true);
       result={servers};
     }
-    catch(error){failure=signal?.aborted?cancelled():error.message?.startsWith('Claude did not return MCP')?error:new Error('Claude MCP connection status is unavailable. Check the selected server on this Mac and retry.');}
+    catch(error){failure=signal?.aborted?cancelled():error.message?.startsWith('Claude did not return MCP')?error:new Error('Claude MCP connection status is unavailable. Check the selected server on this computer and retry.');}
     finally{if(client)try{await client.close();}catch(error){this.cleanupClients.add(client);this.cleanupError=error;cleanupError=error;}if(!cleanupError&&this.mcpProbe===client)this.mcpProbe=null;config.dispose();}
     if(cleanupError)throw cleanupError;
     if(failure)throw failure;
@@ -210,7 +210,7 @@ export class ClaudeProvider {
     try{
       const result=await client.initialize();const account=result.account||{};
       const available=claudeAccountAvailable(account);
-      status={provider:'claude',authenticationCommand,available,models:(result.models||[]).map(m=>claudeModel(m,result)),error:available?null:'Sign in to Claude Code on this Mac with claude auth login. The Claude app account is separate.',capabilities:{steering:false,context:'Selected instructions and skills; native Claude sessions; tool approvals through Proteus.'}};
+      status={provider:'claude',authenticationCommand,available,models:(result.models||[]).map(m=>claudeModel(m,result)),error:available?null:'Sign in to Claude Code on this computer with claude auth login. The Claude app account is separate.',capabilities:{steering:false,context:'Selected instructions and skills; native Claude sessions; tool approvals through Proteus.'}};
     }catch(error){status={provider:'claude',authenticationCommand,available:false,models:[],error:error.message};}
     try{await client.close();}catch(error){this.cleanupClients.add(client);this.cleanupError=error;status={...status,available:false,error:error.message};}
     if(this.cleanupError)status={...status,available:false,error:this.cleanupError.message};
@@ -310,7 +310,7 @@ export class ClaudeProvider {
     client.on('message',message);client.on('request',request);client.on('closed',closed);signal.addEventListener('abort',abort,{once:true});
     try {let result;
       try{result=await client.initialize({PreToolUse:[{matcher:'.*',hookCallbackIds:['proteus_permission']}]});}
-      catch(error){if(Object.keys(selected).length)throw new Error('Claude could not initialize the selected MCP connections on this Mac. Check their configuration and retry.');throw error;}
+      catch(error){if(Object.keys(selected).length)throw new Error('Claude could not initialize the selected MCP connections on this computer. Check their configuration and retry.');throw error;}
       if(result.hooks_applied!==true)throw new Error('Claude did not confirm the Proteus permission hooks. Update Claude Code before running this chat.');
       if(Object.keys(selected).length){
         const names=Object.keys(selected),deadline=Date.now()+30_000;let states=[];
@@ -318,11 +318,11 @@ export class ClaudeProvider {
           states=await this.mcpState(client,names,Math.max(1000,Math.min(5000,deadline-Date.now())),selected);
           run.mcpConnections=Object.fromEntries(states.map(item=>[item.name,{status:item.status,observedAt:new Date().toISOString(),...(item.error?{error:item.error}:{})}]));update();
           const unavailable=states.find(item=>['failed','needs-auth','disabled','not-connected'].includes(item.status));
-          if(unavailable)throw new Error(`Claude MCP ${unavailable.name}: ${unavailable.status}. ${unavailable.error||'Check the selected server on this Mac.'}`);
+          if(unavailable)throw new Error(`Claude MCP ${unavailable.name}: ${unavailable.status}. ${unavailable.error||'Check the selected server on this computer.'}`);
           if(states.every(item=>item.status==='connected'))break;
           await new Promise(resolve=>setTimeout(resolve,250));
         }while(Date.now()<deadline);
-        if(states.some(item=>item.status!=='connected'))throw new Error('Claude MCP connection is still pending. Check the selected server on this Mac and retry.');
+        if(states.some(item=>item.status!=='connected'))throw new Error('Claude MCP connection is still pending. Check the selected server on this computer and retry.');
       }
       const model=(result.models||[]).map(m=>claudeModel(m,result)).find(m=>m.id===run.schedule.model);if(!model)throw new Error('Choose an available Claude model from the provider catalog.');validateModelOptions(run.schedule,model);
       // Fast mode requires both model support and runtime opt-in. Do not silently ignore a selection.

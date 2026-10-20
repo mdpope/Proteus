@@ -1,10 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {computerName,countRunningChats,hostRunningChatCount} from '../public/computer-identity.js';
+import {computerName,computerPlatformLabel,computerDescription,authenticatedComputerMetadata,countRunningChats,hostRunningChatCount} from '../public/computer-identity.js';
 test('configured name wins over stale host metadata without altering actual configured Mac names',()=>{
  assert.equal(computerName('Build Mac','workstation.example.test'),'Build Mac');
  assert.equal(computerName('',null,'  Office PC  '),'Office PC');
  assert.equal(computerName('bad\nname'),'Computer');
+});
+test('authenticated platform descriptions preserve host identity and tolerate older hosts',()=>{
+ assert.equal(computerDescription({hostName:'Office desktop',hostPlatform:'linux'}),'Office desktop · Linux');
+ assert.equal(computerDescription({label:'Build Mac',hostPlatform:'darwin'}),'Build Mac · macOS');
+ assert.equal(computerDescription({label:'Windows workstation',hostPlatform:'win32'}),'Windows workstation · Windows');
+ assert.equal(computerDescription({label:'Legacy destination'}),'Legacy destination');
+ assert.equal(computerDescription({hostName:'<Desktop>',hostPlatform:'linux'}),'<Desktop> · Linux');
+ assert.equal(computerPlatformLabel({hostPlatform:'__proto__',hostPlatformLabel:'macOS'}),'Computer');
+ assert.deepEqual(authenticatedComputerMetadata({hostPlatform:'linux',hostPlatformLabel:'Wrong',hostArchitecture:'x64'}),{hostPlatform:'linux',hostPlatformLabel:'Linux',hostArchitecture:'x64'});
+ assert.deepEqual(authenticatedComputerMetadata({hostPlatform:'future-system',hostArchitecture:'<script>'}),{hostPlatform:'unknown',hostPlatformLabel:'Computer',hostArchitecture:'unknown'});
+ assert.deepEqual(authenticatedComputerMetadata(null),{hostPlatform:'unknown',hostPlatformLabel:'Computer',hostArchitecture:'unknown'});
+ assert.equal(computerPlatformLabel({hostPlatform:{toString:null}}),'Computer');
 });
 test('running count deduplicates actual chats across views and excludes inactive or cached states',()=>{
  const rows=[{id:'one',hostId:'a',status:'running'},{id:'view',runId:'one',hostId:'a',status:'running'},

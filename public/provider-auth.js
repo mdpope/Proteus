@@ -28,9 +28,9 @@ export function renderProviderAuth(container, providerId, { api, openExternal, o
   const dispose = () => { generation++; stopPolling(); if (active.get(container)?.dispose === dispose) active.delete(container); };
   const make = (tag, label, className) => { const node = document.createElement(tag); node.textContent = label; if (className) node.className = className; return node; };
   const labels = {
-    checking: `Checking ${provider.name} sign-in…`, idle: `Connect ${provider.name} on this Mac.`,
-    starting: `Starting ${provider.name} sign-in on this Mac…`, waiting: `Finish ${provider.name} sign-in on this Mac. Checking automatically…`,
-    connected: `${provider.name} is connected.`, failed: `${provider.name} sign-in did not complete. Retry here or finish sign-in on this Mac.`,
+    checking: `Checking ${provider.name} sign-in…`, idle: `Connect ${provider.name} on this computer.`,
+    starting: `Starting ${provider.name} sign-in on this computer…`, waiting: `Finish ${provider.name} sign-in on this computer. Checking automatically…`,
+    connected: `${provider.name} is connected.`, failed: `${provider.name} sign-in did not complete. Retry here or finish sign-in on this computer.`,
     cancelled: `${provider.name} sign-in was cancelled.`, 'timed-out': `${provider.name} sign-in timed out. Start again when ready.`,
   };
   function draw() {

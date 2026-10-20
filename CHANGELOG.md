@@ -329,6 +329,32 @@ Validation and staged/installed/deployed status: [release runbook](docs/2026-10-
 - BF-10–12 are authorized for the separate desktop preview above. Other items remain queued;
   production installation/deployment and live-data migration remain held.
 
+## Native Favorites and complete simulator coverage — October 15, 2026
+
+- Preserve a cold-launch notification’s selected schedule or chat while browser tabs restore. Only an explicit browser selection activates a browser; cached selection remains remembered without taking focus.
+- Keep the chat Favorites section and star actions scoped to the current owning-host workspace, including captured chat profiles without an ID; reflect explicit favorite removal while source sections are offscreen.
+- Route native browser edge swipes through one handler so the documented content-edge gesture consistently traverses one saved history entry. Matching native history still preserves page instances; WebKit’s separate interactive swipe animation is disabled.
+- Validate native UI on actual iPhone and iPad simulator families with exhaustive, disjoint test selection. Correct stale UI interactions while retaining backend ownership, selection, draft and metadata assertions.
+
+## 0.2.20 source integration — cross-platform acceptance pending
+
+- Integrate the accepted Mac source companion from `418a083`, preserving native link/selection menus, source-workspace drafts and durable tab-sync retry/backoff behavior alongside the cross-platform host changes.
+- Verify all 879 source hashes and archive digest; retain separate Mac source and Linux runtime fingerprints. Native project version advances with upstream to 0.2.20 / 2610.14.3, preserving app/signing identity.
+- Require fresh checks and package acceptance for this integration. Earlier 0.2.19 receipts and in-progress hosted runs apply only to their tested checkpoints; no new local installation or live iPhone-to-Linux verification is claimed.
+
+## Cross-platform host compatibility — October 14, 2026
+
+- Use the selected computer's name across desktop, website and native connection, provider, permission, usage and file messages. Authenticated platform metadata identifies Linux or macOS when available; older protocol-1 hosts keep neutral labels.
+- Keep independently paired Linux PCs and Macs behind the same encrypted relay, preserving host IDs, device keys, caches, drafts, approvals and retry receipts. Retain legacy wire/account preference keys and native Keychain identities.
+- Resolve explicit legacy database credential references through Linux Secret Service or the existing Mac Keychain. Desktop token stores continue to reject plaintext fallback; normal Life clients still use the website API.
+- Share Mac/Linux packaging inventory, source hashes and complete package metadata/provenance checks. Rebuild only the copied PTY; retain Mac bundle identity and Copilot vendor signing checks.
+- Add hosted Linux/Mac desktop, web and iOS simulator validation. Native CI, signed Mac acceptance and a real iPhone-to-Linux relay session remain pending; see [current validation](docs/linux-app.md).
+
+## Linux adaptation of accepted 0.2.19
+
+- Build from the verified canonical 0.2.19 Mac source companion, retaining current workspace/tab/browser behavior. Add separate Linux packaging with source provenance and Electron PTY rebuild, XDG storage, user executable discovery, Linux tray/minimize/Quit controls and user-shell defaults. Preserve Mac packaging/signatures, native clients, protocol and pinned dependencies.
+
+
 ## 0.2.20 — candidate, validation/install in progress
 
 - Native browser link actions also appear through the editing-menu path, resolve the pressed
@@ -342,7 +368,7 @@ Validation and staged/installed/deployed status: [release runbook](docs/2026-10-
 
 - Limit recovery to two full verified generations per installation/device, avoid duplicate rollback and before/after/retry copies, and compact completed migration evidence. This is an operator/update workflow rule, not a new app feature.
 
-## Planned next release — not implemented
+## Historical October 14 intake — not implemented at that checkpoint
 
 - BF-2026-10-14-01: Add appropriate native browser link/selection menus for iPad/iPhone and native Mac: new tab, copy link, start chat, download and native selection actions.
 - BF-2026-10-14-02: Investigate receipt-capacity exhaustion and excessive background tab-sync traffic; fix redundant writes/retries and identify the owner/limit in the warning while preserving retry safety.

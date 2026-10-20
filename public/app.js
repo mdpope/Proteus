@@ -457,7 +457,7 @@ async function renderHome() {
   const main=$('#main');main.innerHTML='<p class="note">Loading Home…</p>';
   try {
     const value=await api('/api/home');if(state.page!=='home'||state.tab!=='overview')return;
-    mountHome(main,value,{desktop:true,markdown:(target,source)=>ProteusMarkdown.mount(target,source,{allowExternalImages:false,link:source=>{if(ProteusMarkdown.linkKind(source)==='web')window.desktop?.openExternal(source).catch(error=>toast(error.message));},copy:text=>window.desktop?.copyText(text)}),navigate:page=>navigate(page==='chats'?'runs':page==='schedules'?'overview':page)});
+    mountHome(main,value,{desktop:true,host:state.data,markdown:(target,source)=>ProteusMarkdown.mount(target,source,{allowExternalImages:false,link:source=>{if(ProteusMarkdown.linkKind(source)==='web')window.desktop?.openExternal(source).catch(error=>toast(error.message));},copy:text=>window.desktop?.copyText(text)}),navigate:page=>navigate(page==='chats'?'runs':page==='schedules'?'overview':page)});
   } catch(error){if(state.page==='home'&&state.tab==='overview')main.innerHTML=`<p class="banner">${escape(error.message)}</p>`;}
 }
 function renderOverview() {
@@ -640,11 +640,20 @@ async function manageMcp(run) {
   showDialog(`<h2>MCP connections</h2>${canLogin?'':'<p class="note">Connection status only. Complete sign-in in the provider on this computer, then refresh here.</p>'}<p class="note" id="mcp-status" role="status">Checking connections…</p><div id="mcp-list"></div><div class="actions"><button id="close-dialog">Close</button><button id="dialog-submit">Refresh connections</button></div>`,()=>{});
   const dialog=$('#dialog'),list=$('#mcp-list'),status=$('#mcp-status');
   const alive=()=>dialog.open && $('#mcp-list')===list;
-  let busy=false,checking=false,version=0,timer,waiting=null,listSignature='',end=Date.now()+600_000;
+  let busy=false,checking=false,checkPromise=null,version=0,timer,waiting=null,listSignature='',end=Date.now()+600_000;
   const connect=async button=>{
     if(busy)return; busy=true;version++;end=Date.now()+600_000;button.disabled=true;button.textContent='Opening sign-in…';
-    status.textContent='Starting '+button.dataset.connectMcp+' sign-in. Watch for a browser or macOS Keychain prompt.';
+    status.textContent='Starting '+button.dataset.connectMcp+' sign-in. Watch for a browser or system credential prompt.';
     try {
+      if(checkPromise){
+        button.textContent='Waiting for check…';status.textContent='Waiting for the current connection check before sign-in…';let waitTimer;
+        const ready=await Promise.race([checkPromise.then(()=>true,()=>true),new Promise(resolve=>{waitTimer=setTimeout(()=>resolve(false),3000);})]);clearTimeout(waitTimer);
+        if(!alive())return;
+        if(!ready)throw new Error('A connection check is still running. Wait for it to finish, then retry sign-in.');
+      }
+      if(!alive())return;
+      button.textContent='Opening sign-in…';
+      status.textContent='Starting '+button.dataset.connectMcp+' sign-in. Watch for a browser or system credential prompt.';
       const result=await api('/api/mcp',{runId:run.id,action:'login',server:button.dataset.connectMcp,openOnMac:!!window.desktop});
       if(!alive())return;
       if(result.authorizationUrl)window.open(result.authorizationUrl,'_blank','noopener,noreferrer');
@@ -654,9 +663,9 @@ async function manageMcp(run) {
     finally{busy=false;if(alive()){button.disabled=false;button.textContent=waiting?'Restart sign-in':'Connect / sign in';await load();clearTimeout(timer);timer=setTimeout(poll,5000);}}
   };
   const load=async()=>{
-    if(busy || checking || !alive())return;checking=true;const current=version;
+    if(busy || checking || !alive())return;checking=true;const current=version;let check;
     try {
-      const value=await api('/api/mcp',{runId:run.id,action:'status'});if(!alive() || current!==version)return;
+      check=checkPromise=api('/api/mcp',{runId:run.id,action:'status'});const value=await check;if(!alive() || current!==version)return;
       const signature=JSON.stringify([value.servers.map(({observedAt,...server})=>server),waiting]);
       if(signature!==listSignature){listSignature=signature;list.innerHTML=value.servers.map(s=>`<section class="card"><strong>${escape(s.name)}</strong> ${badge(s.status)}<p class="note">Runtime connection only · ${escape(s.scope||'runtime')} · <span data-mcp-observed="${escape(s.name)}">${escape(s.observedAt?time(s.observedAt):'Check time unavailable')}</span>. Account identity and resource access are not verified.</p>${s.error?`<p class="note">${escape(s.error)}</p>`:''}${canLogin&&s.remote&&s.status!=='connected'?`<button data-connect-mcp="${escape(s.name)}">${waiting===s.name?'Restart sign-in':'Connect / sign in'}</button>`:''}</section>`).join('') || '<p>No selected MCP servers.</p>';
       list.querySelectorAll('[data-connect-mcp]').forEach(button=>button.onclick=()=>connect(button));}
@@ -664,7 +673,7 @@ async function manageMcp(run) {
       if(waiting&&value.servers.some(s=>s.name===waiting&&s.status==='connected')){status.textContent='Connected to '+waiting+'. Continue or steer the chat to retry its work.';waiting=null;}
       else if(status.textContent==='Checking connections…')status.textContent=canLogin?'Connections update automatically while this window is open. Supported sign-in opens on this computer.':'Selected connection status updates while this window is open. Sign in through the provider on this computer if needed.';
     }catch(e){if(alive() && current===version)status.textContent='Could not check connections: '+e.message;}
-    finally{checking=false;}
+    finally{checking=false;if(checkPromise===check)checkPromise=null;}
   };
   const poll=async()=>{if(!alive())return;await load();if(!alive())return;if(Date.now()<end)timer=setTimeout(poll,5000);else if(waiting)status.textContent='Still not connected. The sign-in may have timed out; use Restart sign-in or Refresh connections.';};
   dialog.addEventListener('close',()=>clearTimeout(timer),{once:true});
@@ -974,7 +983,7 @@ function renderTabs() {
   $('#tabs').dataset.signature=signature;
   const menuWasOpen=$('#tab-add-menu')?.open===true;
   cleanupMainEdges?.();tabScrollLeft=$('#tabs .tab-list')?.scrollLeft??tabScrollLeft;
-  $('#tabs').innerHTML='<button id="topbar-home" aria-label="Proteus Home" title="Proteus Home"><span class="brandmark" aria-hidden="true">⤨</span><strong>Proteus</strong></button><div class="tab-list">'+state.tabs.filter(tab=>!tab.hidden&&!tab.navigationClosed&&!tab.connectionPaused&&!tab.parentId&&!(previewEnabled(state)&&tab.projectId)&&!['overview','omi','life','team','engine','home','standup'].includes(tab.type)).map(tab=>`<div data-tab-container="${escape(tab.id)}" class="tabitem ${state.tab===tab.id||(previewEnabled(state)?previewTopId(state.tabs.find(active=>active.id===state.tab),state):state.tabs.find(active=>active.id===state.tab)?.parentId)===tab.id?'selected':''}"><button data-tab="${escape(tab.id)}" title="${escape(tab.info?.url || tab.label)}">${navigationIcon(tab.type==='workspace'?workspaceIcon:tab.type==='browser' ? browserTabIcon(tab.info,escape) : (['run','remote-run'].includes(tab.type)||(tab.type==='overview'&&state.page==='runs'))?pairedBubbles:tab.type==='team'?'☷':tab.type==='engine'||(tab.type==='overview'&&state.page==='engine')?'⚙':tab.type==='markdown'?'▤':tab.type==='life'?'♡':tab.type==='terminal'?'⌘':'◷')} &nbsp;${escape(tab.label || 'New tab')}</button>${`<button class="tabclose" aria-label="Close ${escape(tab.label || 'tab')}" data-close="${escape(tab.id)}">×</button>`}</div>`).join('')+'</div><div class="tab-actions"><button id="all-tabs-overview" class="tab-create" aria-label="Tab overview" title="Tab overview · ⌘⇧\\">'+tabOverviewIcon+'</button><details id="tab-add-menu" class="tab-add-menu"><summary class="tab-create" aria-label="Add tab" title="Add tab">＋</summary><div class="tab-add-options">'+addTabMenuItems('main')+'</div></details></div>';
+  $('#tabs').innerHTML='<button id="topbar-home" aria-label="Proteus Home" title="Proteus Home"><span class="brandmark" aria-hidden="true">⤨</span><strong>Proteus</strong></button><div class="tab-list">'+state.tabs.filter(tab=>!tab.hidden&&!tab.navigationClosed&&!tab.connectionPaused&&!tab.parentId&&!(previewEnabled(state)&&tab.projectId)&&!['overview','omi','life','team','engine','home','standup'].includes(tab.type)).map(tab=>`<div data-tab-container="${escape(tab.id)}" class="tabitem ${state.tab===tab.id||(previewEnabled(state)?previewTopId(state.tabs.find(active=>active.id===state.tab),state):state.tabs.find(active=>active.id===state.tab)?.parentId)===tab.id?'selected':''}"><button data-tab="${escape(tab.id)}" title="${escape(tab.info?.url || tab.label)}">${navigationIcon(tab.type==='workspace'?workspaceIcon:tab.type==='browser' ? browserTabIcon(tab.info,escape) : (['run','remote-run'].includes(tab.type)||(tab.type==='overview'&&state.page==='runs'))?pairedBubbles:tab.type==='team'?'☷':tab.type==='engine'||(tab.type==='overview'&&state.page==='engine')?'⚙':tab.type==='markdown'?'▤':tab.type==='life'?'♡':tab.type==='terminal'?'⌘':'◷')} &nbsp;${escape(tab.label || 'New tab')}</button>${`<button class="tabclose" aria-label="Close ${escape(tab.label || 'tab')}" data-close="${escape(tab.id)}">×</button>`}</div>`).join('')+'</div><div class="tab-actions"><button id="all-tabs-overview" class="tab-create" aria-label="Tab overview" title="Tab overview · Ctrl/Cmd+Shift+\\">'+tabOverviewIcon+'</button><details id="tab-add-menu" class="tab-add-menu"><summary class="tab-create" aria-label="Add tab" title="Add tab">＋</summary><div class="tab-add-options">'+addTabMenuItems('main')+'</div></details></div>';
   if(state.data.desktopPreview?.enabled)$('#topbar-home strong').textContent='Proteus Preview';
   $('#topbar-home').onclick=()=>navigate('home');$('#all-tabs-overview').onclick=()=>void showBrowserOverview('main');
   const list=$('#tabs .tab-list');if(list){list.scrollLeft=tabScrollLeft;list.onscroll=()=>{tabScrollLeft=list.scrollLeft;};cleanupMainEdges=bindTabEdges(list);bindTabReorder(list,'.tabitem',node=>node.dataset.tabContainer,(source,target,after)=>reorderVisibleTabs(source,target,after));}
@@ -1030,7 +1039,7 @@ function renderBrowser() {
   $('#main').innerHTML='<form class="browserbar" id="browser-form"><button type="button" id="browser-back" aria-label="Back">←</button><button type="button" id="browser-forward" aria-label="Forward">→</button><button type="button" id="browser-reload" aria-label="Reload or stop">↻</button>'+browserAddress('browser','Browser address')+'<button class="browser-go" type="submit" id="browser-go" aria-label="Load address" title="Load address">↵</button><button type="button" id="browser-fill-login" title="Fill login" aria-label="Fill login">⚿</button></form><div id="browser-area" class="browserarea"></div>';
   const command=async(action,extra={})=>{try{await window.desktop.browser({action,id:state.tab,...extra});}catch(e){toast(e.message);}};
   $('#browser-fill-login').onclick=()=>fillBrowserLogin(state.tab);
-  $('#browser-fill-login').insertAdjacentHTML('afterend','<button type="button" id="browser-overview" aria-label="Show all browser tabs" title="Tab overview · ⌘⇧\\">'+tabOverviewIcon+'</button>');
+  $('#browser-fill-login').insertAdjacentHTML('afterend','<button type="button" id="browser-overview" aria-label="Show all browser tabs" title="Tab overview · Ctrl/Cmd+Shift+\\">'+tabOverviewIcon+'</button>');
   $('#browser-overview').onclick=()=>void showBrowserOverview(selectedChatParent()?.id||'main');
   bindBrowserAddressMenu($('#browser-url'),state.tab,{showDialog,toast});
   const navigateBrowser=async raw=>{try{const url=browserTarget(raw);await command('navigate',{url});const tab=state.tabs.find(t=>t.id===state.tab);if(tab){tab.info={...tab.info,url,loaded:true};renderBrowser();}}catch(error){toast(error.message);}};

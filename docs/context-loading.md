@@ -81,6 +81,15 @@ no new grants or tools are claimed. See the [design](2026-10-15-workspaces-proje
 [permission review](design/2026-10-15/permissions-review.md). Documentation/synthetic rehearsal only;
 [prototype UI rehearsal](design/2026-10-15/prototype-validation.md) passed, with application implementation/build/deployment held.
 
+**Native workspace Favorites correction — October 15:** Chat source selection reads current
+favorites from the authenticated owning host’s workspace profile, even while its scoped source
+section is offscreen. An explicit captured chat workspace ID also scopes star mutations when
+the captured folder profile omits its ID. Explicit empty favorites clear stale selections;
+legacy hosts without workspace favorites retain the scoped-catalog fallback. Host ownership,
+revision checks and source activation/trust rules remain unchanged. Unit and UI regression
+coverage passes in hosted run 38693169853: the new unit regression and actual Favorites UI
+workflow succeed. Broader native UI acceptance is tracked separately.
+
 **October 14 required app guidance:**
 
 Proteus core guidance is provider-injected independently of optional source selections and

@@ -1,6 +1,7 @@
 import {recentItemMarkup} from './navigation-icons.js';
 import {bindWebChatPermissions} from './chat-permissions.js';
 import {chatLink} from '../../../public/chat-links.js';
+import {authenticatedComputerMetadata,computerDescription} from '../../../public/computer-identity.js';
 import {observeRunningChats} from './running-chats.js';
 import {createWebWorkspaces} from './workspaces.js';
 import {refreshChatPreviews,isLoopbackPreview,verifyPreview} from '../../../public/chat-previews.js';
@@ -122,14 +123,16 @@ function connectionLabel(hostId) {
     return current?.client?.status==='closed'?'Connection unavailable':'Paired · not connected';
 }
 function rememberHostName(current,state){
+    const platform=authenticatedComputerMetadata(state);Object.assign(current.host,platform);const metadata=hosts.get(current.host.hostId);if(metadata)Object.assign(metadata,platform);
     const name=state?.hostName;if(typeof name!=='string'||!name.trim()||name.length>80||/[\x00-\x1f\x7f]/.test(name))return;
-    const previousHost={...current.host};current.host.label=name.trim();const metadata=hosts.get(current.host.hostId);if(metadata)metadata.label=name.trim();
+    const previousHost={...current.host};current.host.label=name.trim();if(metadata)metadata.label=name.trim();
     void destinationStore.rememberName(previousHost,name).catch(()=>{});
 }
 function destinationOptions() {
     $('remote-forget').textContent=hosts.get(active)?.source==='account'?'Forget from account':'Forget from this browser';
-    $('remote-host').innerHTML = '<option value="">Choose a paired computer</option>' + [...hosts.values()].map(host => `<option value="${escape(host.hostId)}" ${host.hostId === active ? 'selected' : ''}>${escape(host.label)}${host.source==='legacy'?' · browser only':''} · ${connectionLabel(host.hostId)}</option>`).join('');
+    $('remote-host').innerHTML = '<option value="">Choose a paired computer</option>' + [...hosts.values()].map(host => `<option value="${escape(host.hostId)}" ${host.hostId === active ? 'selected' : ''}>${escape(computerDescription(host))}${host.source==='legacy'?' · browser only':''} · ${connectionLabel(host.hostId)}</option>`).join('');
     $('remote-status').textContent = active ? `${hosts.get(active)?.label || 'computer'} · ${connectionLabel(active)}` : 'Choose a destination';
+    $('remote-status').title=active?computerDescription(hosts.get(active)):'';
 }
 async function command(method, args, commandOptions) {
     const target = active, current = session(); if (!current?.client) throw new Error('Connect the selected computer first.');

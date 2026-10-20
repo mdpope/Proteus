@@ -70,7 +70,7 @@ export class ChatDocumentApprovals {
   clear(){this.requests.clear();}
   prune(){for(const [id,item] of this.requests)if(item.expiresAt<=Date.now())this.requests.delete(id);}
   request(run,device,source,documentId,fromRequestId,relativePath,{direct=false}={}){
-    this.prune();if(this.requests.size>=50)throw new Error('Too many document requests. Review pending requests on the Mac.');
+    this.prune();if(this.requests.size>=50)throw new Error('Too many document requests. Review pending requests on the host computer.');
     if([source!==undefined,documentId!==undefined,fromRequestId!==undefined].filter(Boolean).length!==1)throw new Error('Choose one linked source, document ID or approved parent request.');
     let doc,verifiedLink=false;
     if(fromRequestId!==undefined){
@@ -103,14 +103,14 @@ export class ChatDocumentApprovals {
   }
   status(requestId,deviceId){this.prune();const item=this.requests.get(requestId);if(!item||item.deviceId!==deviceId)throw new Error('Document request expired or unavailable.');return {requestId,status:item.approvedAt?'approved':'pending',expiresAt:new Date(item.expiresAt).toISOString()};}
   read(requestId,deviceId,engine){
-    this.prune();const item=this.requests.get(requestId);if(!item||item.deviceId!==deviceId||!item.approvedAt)throw new Error('This document has not been approved on the Mac.');
+    this.prune();const item=this.requests.get(requestId);if(!item||item.deviceId!==deviceId||!item.approvedAt)throw new Error('This document has not been approved on the host computer.');
     const run=engine.getRun(item.chatId),current=snapshot(run,item.source,this.currentRoots,item.verifiedLink);
-    if(current.file!==item.file||current.documentId!==item.documentId||current.version!==item.version)throw new Error('This document changed. Ask the Mac to approve the new version.');
+    if(current.file!==item.file||current.documentId!==item.documentId||current.version!==item.version)throw new Error('This document changed. Ask the host to approve the new version.');
     return {requestId,documentId:item.documentId,title:item.title,version:item.version,size:item.size,mediaType:item.mediaType,content:current.content,assets:publicAssets(current.assets),links:current.links,readAt:new Date().toISOString()};
   }
   asset(requestId,assetId,deviceId,engine){
     this.prune();const item=this.requests.get(requestId);
-    if(!item||item.deviceId!==deviceId||!item.approvedAt)throw new Error('This document asset has not been approved on the Mac.');
+    if(!item||item.deviceId!==deviceId||!item.approvedAt)throw new Error('This document asset has not been approved on the host computer.');
     if(typeof assetId!=='string'||!/^[0-9a-f]{64}$/.test(assetId))throw new Error('Invalid document asset ID.');
     const run=engine.getRun(item.chatId),current=snapshot(run,item.source,this.currentRoots,item.verifiedLink);
     if(current.file!==item.file||current.version!==item.version)throw new Error('The document or an approved image changed. Request a new approval.');

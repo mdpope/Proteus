@@ -195,8 +195,11 @@ struct TeamBrowserView: View {
         guard let remote = historyRemote, let host = remote.connection?.hostId else { return "Choose a computer for owner history. Saved navigation remains on this device." }
         return shared.historyStatus[host] ?? (remote.connected ? "History from " + remote.displayName + ". Each tab keeps its own navigation list." : "Offline · cached last 30 days and saved navigation only")
     }
+    private var historySearchIdentity: String { [selectedID ?? "", text, String(addressFocused)].joined(separator: "|") }
+    private var accountRefreshIdentity: String { [scope, selectedID ?? "", life.accountIdentity, String(addressFocused)].joined(separator: ":") }
 
-    var body: some View {
+    // Bound SwiftUI inference separately from the asynchronous lifecycle modifiers.
+    private var browserContent: some View {
         VStack(spacing: 0) {
             if showTabs && (!NativePhonePreview.enabled || !phoneChrome.controlsHidden) { HStack(spacing: 0) { NativeTabStrip(ids: tabs.map(\.id), selection: selectedID) { HStack(spacing: 0) {
                 ForEach(tabs) { tab in
@@ -252,6 +255,9 @@ struct TeamBrowserView: View {
         .sheet(isPresented: Binding(get: { historyDirection != nil }, set: { if !$0 { historyDirection = nil } })) {
             navigationHistorySheet
         }
+    }
+    var body: some View {
+        browserContent
         .task(id: selectedID) {
             if let id = selectedID {
                 shared.assignBrowserOwner(id, host: destinations.selected?.connection?.hostId)
@@ -259,7 +265,7 @@ struct TeamBrowserView: View {
             }
             if let remote = historyRemote { await shared.flushHistory(remote) }
         }
-        .task(id: (selectedID ?? "") + "|" + text + "|" + String(addressFocused)) {
+        .task(id: historySearchIdentity) {
             ownerHistoryResults = nil
             guard addressFocused || selectedTab?.url == nil, let remote = historyRemote else { return }
             do { try await Task.sleep(for: .milliseconds(200)) } catch { return }
@@ -270,7 +276,7 @@ struct TeamBrowserView: View {
         }
         .onAppear { if tabs.isEmpty && showTabs { shared.open(nil, scope: scope) }; text = selectedTab?.url ?? ""; engine = ["google": "Google", "duckduckgo": "DuckDuckGo", "bing": "Bing"][shared.snapshot["preferences"]["searchEngine"].string] ?? "Google"; if NativePhonePreview.enabled { editingAddress = selectedTab?.url == nil } else { addressFocused = selectedTab?.url == nil } }
         .onChange(of: selectedID) { _, _ in text = selectedTab?.url ?? ""; if NativePhonePreview.enabled { editingAddress = selectedTab?.url == nil } else { addressFocused = selectedTab?.url == nil } }
-        .task(id: scope + ":" + (selectedID ?? "") + ":" + life.accountIdentity + ":" + String(addressFocused)) { if addressFocused || selectedTab?.url == nil { await shared.refresh(life) } }
+        .task(id: accountRefreshIdentity) { if addressFocused || selectedTab?.url == nil { await shared.refresh(life) } }
         .onChange(of: addressFocused) { _, focused in if NativePhonePreview.enabled && !focused { editingAddress = false } }
         .onChange(of: navigation.url) { _, url in if !addressFocused && !url.isEmpty { text = url }; if NativePhonePreview.enabled && phoneAreaActive { phoneChrome.browserOwnsBack = navigation.canGoBack } }
         .onChange(of: navigation.canGoBack) { _, value in if NativePhonePreview.enabled && phoneAreaActive { phoneChrome.browserOwnsBack = value } }

@@ -92,8 +92,8 @@ struct ProviderUsageDetails: View {
     var body: some View {
         List {
             Section {
-                Text(store.state["hostName"].string).font(.headline)
-                Text(store.connected ? "Account allowances reported by this Mac’s providers." : "Mac offline. Displaying its cached account allowances.").foregroundStyle(.secondary)
+                Text(store.displayName).font(.headline)
+                Text(store.connected ? "Account allowances reported by \(store.displayName)’s providers." : "\(store.displayName) is offline. Displaying its cached account allowances.").foregroundStyle(.secondary)
                 if !store.state["providerUsage"]["error"].string.isEmpty { Text(store.state["providerUsage"]["error"].string).foregroundStyle(.orange) }
             }
             ForEach(ProviderAllowance.providers, id: \.0) { id, label in

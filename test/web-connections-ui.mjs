@@ -1,3 +1,4 @@
+import os from 'node:os';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -33,7 +34,7 @@ export async function exerciseConnections(page,app,root,origin){
  await page.waitForFunction(()=>document.querySelector('#default-mac-status')?.textContent.includes('unavailable'));
  await app.remote.configure({enabled:true});
  await page.waitForFunction(()=>document.querySelector('#default-mac-status')?.textContent==='Renamed workstation · Connected');
- await page.screenshot({path:'/private/tmp/proteus-web-connections-dynamic.png',fullPage:true});
+ await page.screenshot({path:path.join(os.tmpdir(),'proteus-web-connections-dynamic.png'),fullPage:true});
  // The IndexedDB name update is atomic and may neither resurrect a removed pairing nor replace a newer device.
  const race=await page.evaluate(async moduleURL=>{
   const {PairingStore}=await import(moduleURL),store=new PairingStore(document.body.dataset.browserAccount);
@@ -45,7 +46,7 @@ export async function exerciseConnections(page,app,root,origin){
   await store.remove(id);const removed=await store.renameIfCurrent(replacement,'Resurrected');const absent=!(await store.list()).some(row=>row.hostId===id);store.close();return{updated,stale,retained,removed,absent};
  },moduleURL);assert.deepEqual(race,{updated:true,stale:false,retained:'Replacement',removed:false,absent:true});
  // Prominent bidirectional navigation works by keyboard at wide and narrow widths.
- for(const width of [1440,390]){await page.setViewportSize({width,height:width===390?844:1000});const pairLink=page.getByRole('link',{name:'Pair or manage computers →',exact:true});await pairLink.focus();await pairLink.press('Enter');await page.waitForURL('**/remote?view=connections');await page.getByRole('heading',{name:'Pair, choose a default, connect'}).waitFor();await page.waitForFunction(()=>document.querySelector('#remote-default-label')?.textContent.includes('Account Default computer: Renamed workstation'));const defaultLink=page.getByRole('link',{name:'Choose or change Default computer →',exact:true});await defaultLink.focus();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));await page.screenshot({path:`/private/tmp/proteus-oct6-web-connections-${width}.png`,fullPage:true});await defaultLink.press('Enter');await page.waitForURL('**/engine-room?tab=connections');await page.locator('#default-mac-form').waitFor();assert.equal(await page.locator('#default-mac-form select').inputValue(),hostId);}
+ for(const width of [1440,390]){await page.setViewportSize({width,height:width===390?844:1000});const pairLink=page.getByRole('link',{name:'Pair or manage computers →',exact:true});await pairLink.focus();await pairLink.press('Enter');await page.waitForURL('**/remote?view=connections');await page.getByRole('heading',{name:'Pair, choose a default, connect'}).waitFor();await page.waitForFunction(()=>document.querySelector('#remote-default-label')?.textContent.includes('Account Default computer: Renamed workstation'));const defaultLink=page.getByRole('link',{name:'Choose or change Default computer →',exact:true});await defaultLink.focus();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));await page.screenshot({path:path.join(os.tmpdir(),`proteus-oct6-web-connections-${width}.png`),fullPage:true});await defaultLink.press('Enter');await page.waitForURL('**/engine-room?tab=connections');await page.locator('#default-mac-form').waitFor();assert.equal(await page.locator('#default-mac-form select').inputValue(),hostId);}
  await page.setViewportSize({width:1440,height:1000});
  // Same account preference in a new browser has no local key: show unpaired, never offline or discovered.
  const context=await page.context().browser().newContext({storageState:await page.context().storageState()});const fresh=await context.newPage();

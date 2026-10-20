@@ -48,6 +48,18 @@ primary window, hides it on Close and does not establish this multiwindow restor
 
 ## Current application
 
+## October 14 shared packaging candidate
+
+`scripts/package-mac.mjs` and `scripts/package-linux.mjs` now share `scripts/desktop-build.mjs`.
+It checks exact source/copied runtime file sets and hashes, detects files added during packaging,
+verifies the copied package input and compares complete final package metadata/provenance.
+Only the copied PTY is rebuilt; source Node ABI and Copilot vendor bytes/signature requirements
+remain protected. Bundle ID, executable name, signing defaults and existing Mac data locations
+are unchanged. Hosted CI uses `PROTEUS_MAC_UNSIGNED=1` to stage an unsigned candidate without
+Apple account/signing checks; that mode checks vendor bytes but not signatures. New Mac CI and
+signed-package/live-host acceptance have not run for this source candidate. Linux package/UI
+results do not establish Mac signing or credential continuity.
+
 The Mac and iOS use the same artwork from
 `ios/Proteus/Assets.xcassets/AppIcon.appiconset/AppIcon.png`. `desktop/icon.png` is its runtime
 copy. The package script converts that artwork into all required ICNS sizes without changing the

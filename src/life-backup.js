@@ -79,7 +79,7 @@ export async function validateBackupReceipt(db, home, { now = Date.now(), receip
     try { receipt = JSON.parse(fs.readFileSync(receiptFile, 'utf8')); } catch { throw new Error('The backup verification receipt is invalid.'); }
     const { proof, ...payload } = receipt;
     const expected = sign(signingKey(home, false), payload);
-    if (!/^[a-f0-9]{64}$/.test(proof || '') || !timingSafeEqual(Buffer.from(proof), Buffer.from(expected))) throw new Error('The backup receipt was not created by this Mac’s restore verifier.');
+    if (!/^[a-f0-9]{64}$/.test(proof || '') || !timingSafeEqual(Buffer.from(proof), Buffer.from(expected))) throw new Error('The backup receipt was not created by this computer’s restore verifier.');
     const verified = Date.parse(payload.verifiedAt), expires = Date.parse(payload.expiresAt);
     if (payload.version !== 1 || !Number.isFinite(verified) || !Number.isFinite(expires) || verified > now || expires < now || expires - verified > MAX_AGE) throw new Error('The backup verification expired. Verify a fresh restored backup before upgrading.');
     if (await databaseIdentity(db) !== payload.sourceIdentity) throw new Error('This backup belongs to a different source database.');

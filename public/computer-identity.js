@@ -1,7 +1,17 @@
+import {readHostPlatformMetadata} from './host-platform.js';
 // Configured connection names are authoritative; platform terms are never identity.
 export function computerName(...values) {
   return values.find(value=>typeof value==='string'&&value.trim()&&value.length<=80&&!/[\x00-\x1f\x7f]/.test(value))?.trim() || 'Computer';
 }
+// Read platform metadata from authenticated host state, never a pairing invitation.
+export function computerPlatformLabel(host = {}) {
+  return readHostPlatformMetadata(host).hostPlatformLabel;
+}
+export function computerDescription(host = {}) {
+  const platform=computerPlatformLabel(host);
+  return computerName(host.hostName,host.label)+(platform==='Computer'?'':' · '+platform);
+}
+export const authenticatedComputerMetadata = readHostPlatformMetadata;
 export function countRunningChats(rows=[],localHostId='local') {
   const latest=new Map();
   for(const row of rows){const id=row.chatId||row.runId||row.id;if(!id)continue;const host=row.local||!row.hostId||row.hostId==='local'?localHostId:row.hostId;const key=host+':'+id,old=latest.get(key);if(!old||String(row.updatedAt||'')>=String(old.updatedAt||''))latest.set(key,row);}

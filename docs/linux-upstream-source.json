@@ -1,0 +1,11 @@
+{
+  "version": "0.2.20",
+  "transferBranch": "codex/signed-proteus-0220-20261015",
+  "transferCommit": "418a083",
+  "upstreamGitHead": "ec8b213d382e",
+  "acceptedMacBuildRevision": "ec8b213d382e+dirty.3f2196de3586",
+  "acceptedMacSourceFingerprint": "3f2196de3586915fc72f8d0cdebb645c109992306c3735514d0786b0acaf4985",
+  "sourceArchive": "source/Proteus-0.2.20-source.tar.gz",
+  "sourceArchiveSha256": "beb273dca6e161cb52bf8d6b6d55eb692fcb31e679c25ac9269cea90adae07e5",
+  "verifiedSourceFiles": 879
+}

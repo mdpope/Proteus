@@ -756,6 +756,97 @@ See [release validation and remaining work](2026-10-14-retry-menu-release.md).
 
 ## October 14 authorized next-release build — in progress
 
+Current cross-platform acceptance is recorded in [PR #20](https://github.com/mdpope/Proteus/pull/20).
+The dated/source-specific checkpoints below retain their original verification scope; later
+workflow results supersede their pending/failure status without changing the recorded artifacts.
+
+## October 15 validation follow-up — source `b73c655`
+
+All 626 local Node tests and static checks pass; hosted Linux/Mac desktop and web gates are green.
+Hosted run [38693169853](https://github.com/mdpope/Proteus/actions/runs/38693169853) passes all
+122 native units. Its complete 67-case UI inventory finishes with 58 passes and nine failures
+on the correct families: 62 phone cases and five actual-iPad cases. The next candidate fixes
+the observed interactions and browser gesture ownership; complete native revalidation is required.
+
+Installed `linux.fda4ae896542` retains its verified live-Codex checkpoint. Notes-only candidate
+`linux.10e75103c337` passes separate isolated UI, native PTY and restart checks; it is not installed
+and does not replace that live acceptance. Production Linux relay registration remains blocked
+pending private distinct-host provisioning; existing website-to-Mac connectivity is not Linux proof.
+
+Earlier run 38690148311 passes Linux/Mac desktop package/UI, website and 121 native unit tests.
+Native UI records 55 passes and 12 failures across 67 cases. The prepared correction fixes
+current-workspace Favorites, updates observed interactions and partitions all 67 UI cases into
+62 phone cases and five actual-iPad cases. One new regression raises native units to 122.
+See apple-build.md and planned-updates.md. The pending/failure statements in the older checkpoints
+below apply to their recorded revisions, not the current gates above.
+
+## Historical initial 0.2.20 source refresh — acceptance pending at that checkpoint
+
+The Linux branch now integrates the accepted Mac **0.2.20** source companion from
+`codex/signed-proteus-0220-20261015`, transfer commit `418a083`. All **879** source manifest
+hashes and archive SHA-256 `beb273dca6e161cb52bf8d6b6d55eb692fcb31e679c25ac9269cea90adae07e5`
+were verified before the three-way import. The accepted Mac fingerprint is
+`3f2196de3586915fc72f8d0cdebb645c109992306c3735514d0786b0acaf4985`; Linux retains its own
+runtime fingerprint. See `linux-upstream-source.json` and `linux-app.md`.
+
+The import retains native link/selection menus, source-workspace link drafts, convergent tab
+metadata and persistent retry identities with owner backoff. Native project version is
+**0.2.20 / 2610.14.3**; original bundle/signing identities are unchanged. Platform metadata,
+neutral labels, protected storage and shared package verification remain additive.
+
+Linux `linux.fda4ae896542` passes exact 231-file inventory, metadata/provenance/private-file
+checks, isolated UI/native PTY/restart, and live Codex approvals/files/cancellation/continuation/
+local encrypted relay acceptance. All **625 Node tests and static checks** pass. The exact
+package is installed/running on this laptop; Codex is ready and the existing chat files and
+protected configuration match its verified cold recovery snapshot. Two recovery generations
+are retained outside source. No Mac/iOS installation was replaced.
+
+Hosted run [38688832212](https://github.com/mdpope/Proteus/actions/runs/38688832212) passes Mac
+tests/unsigned package/UI and web assets/PHP. Linux CI fixture teardown races are corrected for
+rerun; iOS acceptance is pending after decomposition of a Swift expression that timed out during
+type checking. Full disposable two-host website UI passes, including responsive attachments,
+authentication, permissions, documents, recovery and revocation. See [Linux validation](linux-app.md).
+The production Linux relay remains disabled pending its private distinct-host registration.
+No actual iPhone-to-Linux session or signed production Mac acceptance is claimed.
+
+## Earlier October 14 cross-platform compatibility checkpoint — 0.2.19
+
+Desktop, website and iOS source now treat Linux PCs and Macs as independent execution hosts.
+Authenticated state adds `hostPlatform`, canonical `hostPlatformLabel`, `hostArchitecture` and
+`host.platform.v1`; protocol 1, `hostName`, host/device IDs, keys, approvals, caches and retry
+receipts remain compatible. Keep legacy `defaultMacId`, `paired-mac` and native app identities.
+Shared relays require distinct registrations for independent hosts; names/platforms grant no access.
+
+Linux Secret Service lookup supports explicit legacy administrator database profiles while Mac
+Keychain lookup stays unchanged. Normal Life remains website-API-only; desktop safeStorage
+rejects `basic_text`. Shared packaging checks exact source/copied runtime names and hashes,
+copied package metadata and complete final metadata/provenance. Mac signing/vendor identity
+checks remain in the Mac entry point; unsigned CI is not signing acceptance.
+
+619 Node checks and static checks passed; PHP
+81 tests / 724 assertions, Pint and Vite passed. Actual disposable Linux UI checks cover
+attachments, responsive chat/composer, slow MCP sign-in/retry and 2,507-event history paging.
+The pre-documentation-freeze Linux stage `6f16217c6a6f` passed 231 runtime hashes, complete
+metadata/provenance and private-file exclusion, isolated startup/platform checks, synthetic
+feedback with unobserved usage, actual PTY keyboard input and restart history. It is separate
+from the live app, which was not replaced. Rebuild after final source/docs freeze; this earlier
+stage is not the final current-source artifact. Hosted cross-platform/native CI has not run. Native portability units/UI fixtures are
+added and statically reviewed, but Xcode execution, a signed Mac package and real iPhone-to-Linux
+pairing remain pending. Existing website-to-Mac connectivity does not verify the Linux path.
+See `linux-app.md`, `mobile-destinations.md` and `.github/workflows/cross-platform.yml`.
+Earlier release and installation receipts below describe their own tested revisions.
+
+## Historical Linux port of accepted 0.2.19 source
+
+The local Linux branch imports the exact accepted 0.2.19 source companion from transfer commit
+`82cd923`, verified against all 877 archive manifest hashes. See `linux-app.md` and
+`linux-upstream-source.json`. Linux packaging is separate from Mac signing/iOS builds, rebuilds
+the copied PTY for Electron, and records its own runtime fingerprint. The earlier Linux build
+from `main` is historical and retained separately. Do not use that old source for current work.
+
+
+## Historical October 14 authorized next-release build — in progress at that checkpoint
+
 The operator authorized implementing the native link-menu and retry-ledger queue, building and
 installing the updates, and explicitly released the website/second-desktop deployment hold.
 Candidate version is **0.2.20 / native 2610.14.3**. No target is yet installed on this candidate.
@@ -778,7 +869,7 @@ Focused ledger/synchronization tests and desktop tab-stability UI pass. Full reg
 menu acceptance, final signed packaging and installations remain in progress. Follow the two-full-
 generation recovery policy for each target; keep receipts instead of duplicate validation copies.
 
-## October 14 next-release intake — queue only
+## Historical October 14 next-release intake — queue only at that checkpoint
 
 BF-2026-10-14-01 queues native browser link/selection menu parity on iPad/iPhone and native Mac.
 BF-2026-10-14-02 queues the remote-command receipt-capacity investigation/fix, preserving retry

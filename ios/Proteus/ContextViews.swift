@@ -180,9 +180,20 @@ struct ContextSelection: View {
     @State private var preview: JSON = .null
     @State private var previewError = ""
     private var catalog: JSON { scopedCatalog == .null ? store.state["context"] : scopedCatalog }
-    private var favorites: Set<String> { Set(catalog["favorites"].array.map(\.string)) }
+    static func selectionWorkspaceID(_ explicitID: String, profile: JSON) -> String {
+        explicitID.isEmpty ? profile["id"].string : explicitID
+    }
+    static func favoriteIDs(hostCatalog: JSON, scopedCatalog: JSON, workspaceID: String) -> Set<String> {
+        // A Section's scoped-catalog task can be suspended while it is offscreen.
+        // The host snapshot already carries the current favorites for each workspace.
+        let profile = hostCatalog["workspaces"].array.first { $0["id"].string == workspaceID }
+        let value = profile?["favorites"] ?? .null
+        return Set((value == .null ? scopedCatalog["favorites"] : value).array.map(\.string))
+    }
+    private var favorites: Set<String> { Self.favoriteIDs(hostCatalog: store.state["context"], scopedCatalog: catalog, workspaceID: resolvedWorkspaceID) }
     private var entries: [JSON] { catalog["entries"].array.filter { $0["mode"].string != "disabled" || favorites.contains($0["id"].string) } }
     private var profile: JSON { workspace != .null ? workspace : catalog["workspaces"].array.first { $0["id"].string == (workspaceID.isEmpty ? catalog["defaultWorkspaceId"].string : workspaceID) } ?? .null }
+    private var resolvedWorkspaceID: String { Self.selectionWorkspaceID(workspaceID, profile: profile) }
     private var roots: Set<String> { Set([profile["cwd"].string] + profile["additionalDirectories"].array.map(\.string) + catalog["universalFolders"].array.map(\.string)) }
     private var previewKey: String { "\(includeDefaults):\(selected.sorted()):\(agent):\(profile.pretty):\(catalog["refreshedAt"].string):\(catalog["revision"].string)" }
     private func automatic(_ entry: JSON) -> Bool { includeDefaults && (entry["mode"].string == "universal" || (entry["mode"].string == "workspace" && entry["roots"].array.contains { roots.contains($0.string) })) }
@@ -230,7 +241,7 @@ struct ContextSelection: View {
             Toggle(isOn: Binding(get: { entry["mode"].string != "disabled" && (automatic(entry) || selected.contains(id) || agent == id) }, set: { if $0 { selected.insert(id) } else { selected.remove(id) } })) {
                 VStack(alignment: .leading) { Text(entry["name"].string); Text("\(entry["kind"].string) · \(contextModes.first { $0.0 == entry["mode"].string }?.1 ?? "")").font(.caption).foregroundStyle(.secondary); Text(entry["path"].string).font(.caption2.monospaced()).foregroundStyle(.secondary) }
             }.disabled(automatic(entry) || agent == id || !usable(entry))
-            ContextFavoriteButton(entry: entry, workspaceID: profile["id"].string)
+            ContextFavoriteButton(entry: entry, workspaceID: resolvedWorkspaceID)
         }
     }
 }

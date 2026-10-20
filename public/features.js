@@ -153,7 +153,7 @@ function updateModelControls(id, providerId) {
   $('#' + id + '-capabilities').textContent = local ? 'Local rehearsal uses no model.' : [
     !select.value ? 'Choose a model.' : !model ? 'Selected model is unavailable or the catalog has not loaded.' : !efforts.length ? (controls?.reasoningSupported === false ? 'This model does not support thinking effort.' : 'Thinking effort choices are not reported.') : '',
     controls?.maxOutputTokens ? 'Maximum output: ' + tokenSize(controls.maxOutputTokens) + ' tokens. Context size is the prompt budget; output is separate.' : 'Context capacity is not advertised by this catalog; actual usage appears during a run.',
-    provider === 'codex' ? 'Uses the Mac’s Codex sign-in. Selected instructions and skills are supplied; editor-specific agent tool filters are not supported. MCP servers require a grant for all their selected tools.' : '',
+    provider === 'codex' ? 'Uses this computer’s Codex sign-in. Selected instructions and skills are supplied; editor-specific agent tool filters are not supported. MCP servers require a grant for all their selected tools.' : '',
     data?.checkedAt ? 'Catalog checked ' + new Date(data.checkedAt).toLocaleTimeString() + '. Refreshes every five minutes.' : 'Catalog has not been checked.',
     data?.stale ? 'Using last known choices. Refresh failed: ' + data.error : ''
   ].filter(Boolean).join(' ');

@@ -62,14 +62,23 @@ else:
   buildArgs.push(`CC=${wrapper}`);
   console.log('Temporary clang probe pipe workaround enabled; normal compilation uses the original compiler.');
 }
-if (action === 'test') buildArgs.push('-resultBundlePath', resultPath);
+if (action === 'test') {
+  buildArgs.push('-resultBundlePath', resultPath);
+  if (process.env.PROTEUS_IOS_TEST_TIMEOUTS === '1') {
+    buildArgs.push('-test-timeouts-enabled', 'YES', '-default-test-execution-time-allowance', '300', '-maximum-test-execution-time-allowance', '600');
+  }
+}
 for (const target of options['--only'] || []) buildArgs.push(`-only-testing:${target}`);
 buildArgs.push(action);
 console.log(`${action}: ${device.name}; logs and results: ${output}`);
 let fixture, child;
-const stop = async process => {
-  if (!process?.pid || process.exitCode !== null || process.signalCode !== null) return;
-  await new Promise(resolve => { process.once('exit', resolve); process.kill('SIGTERM'); });
+const stop = async childProcess => {
+  if (!childProcess?.pid || childProcess.exitCode !== null || childProcess.signalCode !== null) return;
+  await new Promise(resolve => {
+    const timeout = setTimeout(() => childProcess.kill('SIGKILL'), 8_000);
+    childProcess.once('exit', () => { clearTimeout(timeout); resolve(); });
+    childProcess.kill('SIGTERM');
+  });
 };
 for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, async () => { await stop(child); await stop(fixture); process.exit(130); });
 async function requireFreePort(port) {

@@ -1,37 +1,59 @@
-# Mobile Mac destinations
+## Cold notification and restored browser priority — October 15
 
-Proteus on iPhone and iPad can keep multiple independent Mac pairings. The destination menu above
-all host pages names the selected Mac and shows its current connection status. Add each Mac using
-its own one-time link or QR code from Proteus **Remote access**; the desktop supplies its name from **Connections → Mac name**. The Macs may share `wss://relay.proteus.example`, while
+An incoming notification selects its paired host and requested chat or schedule, using the current
+saved connection/cache rules. Restored main-browser metadata no longer activates a browser over
+that target. Browser activation uses a fresh transient request only for an explicit selection or
+open action; merely displaying/restoring a browser does not create one. Tab IDs, order, cached
+history, device keys and owner access remain intact. The existing real-iPad cold-schedule UI case
+and focused activation unit coverage cover this correction; hosted execution must confirm it.
+Current acceptance is tracked in
+[PR #20](https://github.com/mdpope/Proteus/pull/20).
+
+# Mobile computer destinations
+
+## October 14 portability candidate
+
+Native source now supports neutral pairing labels and messages for Linux PCs and Macs. Optional
+authenticated platform/architecture fields appear in saved-computer details; older hosts remain
+usable without them. Mac Keychain sign-in guidance requires explicit `darwin` metadata. Five
+new unit cases and a local mixed-host UI fixture cover metadata, index/default compatibility and
+independent encrypted caches. These new native cases have not run here: Linux has no Xcode.
+Hosted simulator execution and actual iPhone/iPad-to-Linux pairing remain pending. Existing app,
+team/signing identity, version-1 destination index and legacy Keychain accounts are unchanged.
+The earlier simulator/device receipts below do not validate this source candidate.
+
+Proteus on iPhone and iPad can keep multiple independent computer pairings. The destination menu above
+all host pages names the selected computer and shows its current connection status. Add each computer using
+its own one-time link or QR code from Proteus **Connections**; the desktop supplies its configured computer name. Computers may share `wss://relay.example.com`, while
 retaining separate host IDs, device authorizations and encryption keys. The phone does not need
 provider credentials.
 
-**Manage Macs** offers selection, rename, **Edit relay**, and independent forgetting. A saved Mac that is not
-selected is not continuously polled; its row shows saved/offline status rather than claiming
-current reachability. The next authenticated state refresh adopts the desktop’s current name; client labels do not
-change host identity or authorization. Forgetting removes that Mac's
+**Manage computers** offers selection, rename, **Edit relay**, and independent forgetting.
+Foreground aggregate refresh can connect authorized destinations independently; cached/offline
+rows do not establish current reachability. The next authenticated state refresh adopts the desktop’s current name; client labels do not
+change host identity or authorization. Forgetting removes that computer's
 local Keychain entry, encrypted history and drafts. It does not delete server records or revoke
-another device. Revoke the phone from the relevant Mac to remove its server-side authorization.
+another device. Revoke the phone from the relevant computer to remove its server-side authorization.
 
 ## Change a relay without pairing again
 
-After moving a Mac to a different relay, open the destination menu on each iPhone/iPad,
-choose **Manage Macs**, then **Edit relay** on that Mac's row. Enter the new relay origin
-(for example `wss://relay.example.com`) and choose **Save**. Configure the Mac's remote host
+After moving a computer to a different relay, open the destination menu on each iPhone/iPad,
+choose **Manage computers**, then **Edit relay** on that computer's row. Enter the new relay origin
+(for example `wss://relay.example.com`) and choose **Save**. Configure that remote host
 first, retaining its existing host identity and device authorizations. No fresh invitation,
 forgetting, reinstall, or device-key replacement is needed. To undo an unreachable address,
 open the same editor and restore the previous address; cached history remains available.
 
 Saving changes only that destination's relay field in its existing Keychain record. The host ID,
-device ID, encryption key, label, cached history, cursor and drafts are retained. The selected Mac
-reconnects when the app is active; editing another saved Mac leaves it offline until selected.
+device ID, encryption key, label, cached history, cursor and drafts are retained. The selected computer
+reconnects when the app is active; editing another saved computer does not select it.
 A failed validation or Keychain update leaves the previous endpoint and transport unchanged.
-Changing transport cancels pending local retries: work already accepted by the Mac can continue,
+Changing transport cancels pending local retries: work already accepted by the host can continue,
 so inspect its refreshed history before resubmitting an unconfirmed action.
 
 External endpoints require `wss://`; `ws://` is allowed for loopback, private IPv4 and `.local`
 hosts. Addresses cannot include credentials, a path, query, or fragment. Trailing `/` is removed.
-The editor cannot change host identity or redirect a command to a different saved Mac. Its
+The editor cannot change host identity or redirect a command to a different saved computer. Its
 end-to-end device authentication is unchanged. An unreachable relay stays a connection error,
 not evidence that the pairing was lost.
 
@@ -43,10 +65,10 @@ between host objects. Foreground aggregate chat refresh can connect every author
 connection and state. Switching
 recreates host-bound navigation and sheets, disconnects the previous client and cancels its local
 unconfirmed command retries. A late task still refers to the old client and cannot transmit to
-the newly selected Mac. Work already accepted on the Mac continues there. When an action was
-unconfirmed at the switch, inspect that Mac's refreshed history before retrying it.
+the newly selected computer. Work already accepted on the host continues there. When an action was
+unconfirmed at the switch, inspect that computer's refreshed history before retrying it.
 
-New-chat drafts, schedule edit drafts (including their expected revision), and conversation reply text are saved with the owning Mac's encrypted cache.
+New-chat drafts, schedule edit drafts (including their expected revision), and conversation reply text are saved with the owning computer's encrypted cache.
 They are not executed automatically after reconnect. The app never copies personal context into
 a work host or vice versa. Life remains the shared website database; this feature introduces no
 separate Life database and no Omi Bluetooth/recording collector.
@@ -62,14 +84,14 @@ New Keychain accounts are `paired-mac:<host UUID>` under the existing app servic
 `WhenUnlockedThisDeviceOnly` accessibility. Each encrypted cache lives in
 `Proteus/hosts/<host UUID>/cache.enc`, using that destination's key. The protected destination index
 contains only labels, host IDs and the selected host ID. It contains no key, device credential,
-chat text or draft. Re-pairing an existing Mac preserves its cached history/drafts and encrypts
+chat text or draft. Re-pairing an existing computer preserves its cached history/drafts and encrypts
 them with the replacement key. Saved destinations share neither encryption keys nor cache files.
 
 The existing Xcode project, bundle ID, team and signing configuration are unchanged. Simulator
-testing uses synthetic host data. Physical installation and pairing with actual personal/work
-Macs require separate validation; builds alone do not establish those connections.
+testing uses synthetic host data. Physical installation and pairing with actual Linux/Mac
+hosts require separate validation; builds alone do not establish those connections.
 
-## Validation
+## Historical validation
 
 - iPhone 17 Pro simulator build passed on this Mac with Xcode 26.6 / iOS 26.5.
 - Migration, cache/key isolation, host switching, repairing and native UI tests are recorded in

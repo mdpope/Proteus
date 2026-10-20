@@ -3,13 +3,12 @@ import path from 'node:path';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
-import { spawn, execFile } from 'node:child_process';
-import { promisify } from 'node:util';
+import { spawn } from 'node:child_process';
 import { DatabaseSync, backup } from 'node:sqlite';
 import { validateBackupReceipt } from './life-backup.js';
 import { atomicJSON } from './files.js';
 import { validateEvidenceProfile } from './life-evidence.js';
-const runFile = promisify(execFile);
+import { resolveSystemCredential, validateCredentialReference } from './credential-storage.js';
 export const LIFE_SCHEMA = JSON.parse(fs.readFileSync(fileURLToPath(new URL('./life-schema.json', import.meta.url)), 'utf8'));
 export const LIFE_VERSION = 2;
 export const digest = value => createHash('sha256').update(typeof value === 'string' ? value : JSON.stringify(value)).digest('hex');
@@ -27,21 +26,18 @@ export function readLifeProfile(file) {
   const p = JSON.parse(fs.readFileSync(file,'utf8'));
   if (!['sqlite','mysql'].includes(p.driver)) throw new Error('Choose SQLite or MariaDB/MySQL.');
   if (!Number.isSafeInteger(p.userId) || p.userId < 1 || !Number.isSafeInteger(p.workspaceId) || p.workspaceId < 1) throw new Error('The private profile must bind one existing user and workspace.');
-  if (p.password || p.url) throw new Error('Use a Keychain credential reference, never a password or connection URL in the profile.');
+  if (p.password || p.url) throw new Error('Use a system credential reference, never a password or connection URL in the profile.');
   if (p.driver === 'sqlite' && (!path.isAbsolute(p.database || '') || !fs.existsSync(p.database))) throw new Error('The selected existing database is unavailable.');
   if (p.driver === 'mysql') {
     if (p.port !== undefined && (!Number.isInteger(p.port) || p.port < 1 || p.port > 65535)) throw new Error('Choose a valid database port.');
     if (!p.host || !p.database || !p.username || !p.credential?.service || !p.credential?.account) throw new Error('The private database profile is incomplete.');
+    validateCredentialReference(p.credential);
     if (!p.ssh && !p.tls) throw new Error('Remote database profiles require TLS or an authenticated SSH tunnel.');
     if (p.ssh && (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/.test(p.ssh.alias || '') || p.host !== '127.0.0.1')) throw new Error('SSH profiles must use a saved SSH alias and the database loopback host.');
   }
   validateEvidenceProfile(p);
   p.readOnly = p.readOnly !== false;
   return p;
-}
-async function keychainSecret(ref) {
-  if (process.platform !== 'darwin') throw new Error('Configure a supported OS credential resolver for this host.');
-  try { const {stdout}=await runFile('/usr/bin/security',['find-generic-password','-s',ref.service,'-a',ref.account,'-w'],{maxBuffer:64_000,timeout:15_000}); return stdout.replace(/\r?\n$/,''); } catch { const error = new Error('Unlock the login Keychain and approve the Proteus credential prompt, then retry.'); error.keychainLocked = true; throw error; }
 }
 async function sshTunnel(p) {
   const port=await new Promise((resolve,reject)=>{const s=net.createServer();s.once('error',reject);s.listen(0,'127.0.0.1',()=>{const port=s.address().port;s.close(()=>resolve(port));});});
@@ -55,7 +51,7 @@ async function sshTunnel(p) {
   }
   child.kill('SIGTERM');throw new Error('Database tunnel timed out.');
 }
-export async function openLifeDatabase(profile,{resolveSecret=keychainSecret,createConnection,evidenceOptions}={}) {
+export async function openLifeDatabase(profile,{resolveSecret=resolveSystemCredential,createConnection,evidenceOptions}={}) {
   if(profile.driver==='sqlite') {
     const db=new DatabaseSync(profile.database,{readOnly:profile.readOnly===true});
     db.exec('PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;');
@@ -84,10 +80,10 @@ export async function openLifeDatabase(profile,{resolveSecret=keychainSecret,cre
       exec:async(sql)=>{writable();return connection.query({sql,timeout:15_000});},beginSnapshot:()=>connection.query({sql:'START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY',timeout:15_000}),begin:()=>connection.beginTransaction(),commit:()=>connection.commit(),rollback:()=>connection.rollback(),
       columns:async(table)=>{const [rows]=await connection.query({sql:'SHOW COLUMNS FROM '+ident(table),timeout:15_000});return rows.map(x=>x.Field);},
       tables:async()=>{const [rows]=await connection.query({sql:'SHOW TABLES',timeout:15_000});return rows.map(x=>Object.values(x)[0]);},
-      backup:async(file,{verificationHome}={})=>{if(!verificationHome)throw new Error('Verify a restored server backup on this Mac before applying the upgrade.');const checked=await validateBackupReceipt(adapter,verificationHome);atomicJSON(file,{...checked,receipt:JSON.parse(fs.readFileSync(profile.backupReceipt,'utf8'))});},
+      backup:async(file,{verificationHome}={})=>{if(!verificationHome)throw new Error('Verify a restored server backup on this computer before applying the upgrade.');const checked=await validateBackupReceipt(adapter,verificationHome);atomicJSON(file,{...checked,receipt:JSON.parse(fs.readFileSync(profile.backupReceipt,'utf8'))});},
       close:async()=>{try{await connection.end();}finally{tunnel?.close();}}};
     return adapter;
-  } catch (error) {await connection?.end().catch(()=>{});tunnel?.close();if(error.keychainLocked)throw error;throw new Error('Database connection failed. Check the private profile, Keychain credential, TLS or SSH access.');}
+  } catch (error) {await connection?.end().catch(()=>{});tunnel?.close();if(error.keychainLocked)throw error;throw new Error('Database connection failed. Check the private profile, system credential, TLS or SSH access.');}
 }
 export async function nutritionFingerprint(db) {
   const tables=await db.tables(); const rows={};

@@ -1,0 +1,29 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { applicationHome } from '../src/files.js';
+import platform from '../desktop/platform.cjs';
+
+test('Linux data follows absolute XDG paths, with explicit override and unchanged Mac storage', () => {
+  const options = { home: '/synthetic/user', platform: 'linux', env: {} };
+  assert.equal(applicationHome(options), '/synthetic/user/.local/share/proteus');
+  assert.equal(applicationHome({ ...options, env: { XDG_DATA_HOME: '/synthetic/data' } }), '/synthetic/data/proteus');
+  assert.equal(applicationHome({ ...options, env: { XDG_DATA_HOME: 'relative' } }), '/synthetic/user/.local/share/proteus');
+  assert.equal(applicationHome({ ...options, env: { PROTEUS_HOME: '/synthetic/override', XDG_DATA_HOME: '/synthetic/data' } }), '/synthetic/override');
+  assert.equal(applicationHome({ ...options, platform: 'darwin', env: { XDG_DATA_HOME: '/synthetic/data' } }), '/synthetic/user/Library/Application Support/Proteus');
+});
+
+test('desktop launch finds user-installed Linux tools and retains the Mac PATH order', () => {
+  const linux = platform.launchPath('linux', '/synthetic/user', '/custom/bin:/usr/bin').split(':');
+  assert.equal(linux[0], '/synthetic/user/.local/bin');
+  assert.ok(linux.includes('/custom/bin'));
+  assert.ok(linux.includes('/usr/local/bin'));
+  assert.equal(linux.filter(p => p === '/usr/bin').length, 1);
+  assert.equal(platform.launchPath('darwin', '/synthetic/user', '/usr/bin:/opt/homebrew/bin'), '/opt/homebrew/bin:/usr/local/bin:/usr/bin');
+  assert.equal(platform.launchPath('darwin', '/synthetic/user', ''), '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin');
+});
+
+test('Linux minimizes on close unless tray hiding is explicitly selected; Mac still hides', () => {
+  assert.equal(platform.closeToTray('linux', {}), false);
+  assert.equal(platform.closeToTray('linux', { PROTEUS_CLOSE_TO_TRAY: '1' }), true);
+  assert.equal(platform.closeToTray('darwin', {}), true);
+});

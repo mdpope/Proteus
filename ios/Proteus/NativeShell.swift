@@ -430,17 +430,13 @@ struct NativeShell: View {
             }
         }
         .onChange(of: area) { _, value in MessageSpeech.shared.stop(); selectedTab = nil; if NativePhonePreview.enabled { phoneVisited.insert(value); phoneChrome.controlsHidden = false } }
-        .onChange(of: shared.selectedMainBrowser) { _, id in if navigationReady, let id, opened.contains(where: { $0.id == id }) { selectedTab = id } }
-        .sheet(isPresented: $reorderMainTabs) { NativeTabReorderSheet(items: opened.map { (id: $0.id, title: title(for: $0)) }) { ids in let current = opened; opened = ids.compactMap { id in current.first { $0.id == id } } + current.filter { !ids.contains($0.id) } } }
-        .onChange(of: shared.browserTabs) { _, tabs in
-            for tab in tabs where tab.scope == "main" && !opened.contains(where: { $0.id == tab.id }) {
-                let item = NativeContentTab(id: tab.id, title: tab.title, kind: "browser", hostID: nil)
-                if let source = shared.takeBrowserInsertionOrigin(tab.id), let index = opened.firstIndex(where: { $0.id == source && $0.kind == "browser" }) { opened.insert(item, at: index + 1) }
-                else { opened.append(item) }
-                if navigationReady && shared.selectedMainBrowser == tab.id { selectedTab = tab.id }
-            }
-            opened.removeAll { item in item.kind == "browser" && !tabs.contains(where: { $0.id == item.id && $0.scope == "main" }) }; if let selectedTab, !opened.contains(where: { $0.id == selectedTab }) { self.selectedTab = nil }
+        .onChange(of: shared.mainBrowserSelectionRequest) { _, request in
+            guard navigationReady, let request, request == shared.mainBrowserSelectionRequest else { return }
+            reconcileMainBrowserTabs(shared.browserTabs)
+            if opened.contains(where: { $0.id == request.tabID && $0.kind == "browser" }) { selectedTab = request.tabID }
         }
+        .sheet(isPresented: $reorderMainTabs) { NativeTabReorderSheet(items: opened.map { (id: $0.id, title: title(for: $0)) }) { ids in let current = opened; opened = ids.compactMap { id in current.first { $0.id == id } } + current.filter { !ids.contains($0.id) } } }
+        .onChange(of: shared.browserTabs) { _, tabs in reconcileMainBrowserTabs(tabs) }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ProteusPhoneSelectChat"))) { notification in
             guard NativeDesignPreview.enabled, let host = notification.userInfo?["hostID"] as? String, let chat = notification.userInfo?["chatID"] as? String else { return }
             if NativePadPreview.enabled, let remote = destinations.remote(for: host) { openChat(AggregateChat(hostID: host, hostName: remote.displayName, run: remote.chats[chat] ?? remote.state["runs"].array.first { $0["id"].string == chat } ?? .object(["id": .string(chat)]))) }
@@ -777,6 +773,15 @@ struct NativeShell: View {
         selectedTab = nil
         restoringTabs = false
     }
+    private func reconcileMainBrowserTabs(_ tabs: [BrowserDescriptor]) {
+        for tab in tabs where tab.scope == "main" && !opened.contains(where: { $0.id == tab.id }) {
+            let item = NativeContentTab(id: tab.id, title: tab.title, kind: "browser", hostID: nil)
+            if let source = shared.takeBrowserInsertionOrigin(tab.id), let index = opened.firstIndex(where: { $0.id == source && $0.kind == "browser" }) { opened.insert(item, at: index + 1) }
+            else { opened.append(item) }
+        }
+        opened.removeAll { item in item.kind == "browser" && !tabs.contains(where: { $0.id == item.id && $0.scope == "main" }) }
+        if let selectedTab, !opened.contains(where: { $0.id == selectedTab }) { self.selectedTab = nil }
+    }
     private func selectContent(_ tab: NativeContentTab) { if NativePhonePreview.enabled && tab.kind == "chat", let host = tab.hostID { choosePhoneArea(.chats); notificationChatRequest = NotificationChatRequest(hostID: host, chatID: String(tab.id.dropFirst(host.count + 1))); return }; selectedTab = tab.id; if tab.kind == "browser" { shared.select(tab.id, in: "main") } }
     private func openWorkspace(_ entry: NativeWorkspaceIdentity) {
         if NativePhonePreview.enabled { phoneVisited.insert(.workspaces); area = .workspaces; selectedTab = nil; phoneWorkspace = entry; phoneChrome.browserOwnsBack = false; phoneChrome.controlsHidden = false; phoneChrome.drawer = false; return }
@@ -811,7 +816,7 @@ struct NativeShell: View {
         else { _ = moveContent(opened[index + offset].id, before: id) }
     }
     @ViewBuilder private func contentTab(_ tab: NativeContentTab) -> some View {
-        if tab.kind == "browser" { TeamBrowserView(scope: "main", showTabs: false, onBackToList: { selectedTab = nil; area = .chats }).onAppear { shared.select(tab.id, in: "main") } }
+        if tab.kind == "browser" { TeamBrowserView(scope: "main", showTabs: false, onBackToList: { selectedTab = nil; area = .chats }).onAppear { shared.select(tab.id, in: "main", activateMainBrowser: false) } }
         else if let hostID = tab.hostID, let remote = destinations.remote(for: hostID) {
             if tab.kind == "workspace" {
                 NativeWorkspaceView(workspaceID: String(tab.id.dropFirst("workspace:\(hostID):".count)), onOpenMain: openChat).environmentObject(remote).id(tab.id)

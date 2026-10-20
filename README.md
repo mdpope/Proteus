@@ -4,6 +4,12 @@ A local control room for scheduled AI work: set the cadence, watch each run, and
 conversation when it needs you. Provider-independent scheduling and storage, with GitHub Copilot,
 Codex and Claude adapters, native Omi processing schedules, and optional native Life records.
 
+The desktop host runs on Linux and macOS. The website, iPhone and iPad connect to independently
+paired computers through the same encrypted protocol; provider credentials and execution stay
+on the selected host. See [Linux setup](docs/linux-app.md), [Mac setup](docs/mac-app.md) and
+[mobile destinations](docs/mobile-destinations.md). Native portability changes are source-only
+until Mac/simulator and live-device acceptance; no new installation is implied.
+
 ## Omi, Life and Apple builds
 
 The **Omi** section observes the installed recording pipeline and prepares disabled replacement
@@ -23,7 +29,7 @@ on the designated build Mac without replacing signing settings. See [Apple build
 
 ## Run the desktop prototype
 
-Requires Node.js 22.16+ and npm. The desktop prototype targets macOS.
+Requires Node.js 22.16+, npm and a graphical Linux or macOS session.
 
 ```sh
 npm ci
@@ -44,12 +50,12 @@ selects an available port. `PROTEUS_HOME` overrides the application-data directo
   continuation. Explicit context refresh retains the previous versions. Interrupted runs require explicit continuation after restart.
 - GitHub Copilot SDK adapter, explicit model selection, compact account allowance rows with reset
   details for all providers, and observed per-run token usage. Copilot authentication uses the official runtime's existing sign-in.
-- Codex native app-server adapter using the Mac’s existing sign-in, with separate live model, effort,
+- Codex native app-server adapter using the execution computer’s existing sign-in, with separate live model, effort,
   and speed controls. See [provider compatibility](docs/providers.md).
 - Claude native runtime adapter with dynamic model/effort/supported-speed controls and explicit
   sign-in, quota and integration limits. See [provider compatibility](docs/providers.md).
 - Queue next and supported-provider Steer now during active chats; readable tool cards and complete Markdown responses
-  on Mac, iPhone and iPad. See [chat controls](docs/chat-controls.md).
+  on desktop, iPhone and iPad. See [chat controls](docs/chat-controls.md).
 - Copilot MCP connection status and browser OAuth recovery, including `/mcp auth <server>`.
   See [MCP sign-in](docs/mcp-auth.md).
 - Local rehearsal provider for trying the feedback flow without an AI call.
@@ -63,7 +69,9 @@ selects an available port. `PROTEUS_HOME` overrides the application-data directo
 The scheduler runs while the desktop app or server is open. Background service installation,
 automatic distribution/notarization and independent concurrent AI workspaces remain future work.
 Notification preferences and history are available; browser delivery requires notification permission.
-A locally signed, branded Mac bundle is available; closing its window keeps the menu bar host running.
+A locally signed, branded Mac bundle and separate Linux package are available. Closing the Mac
+window keeps its menu-bar host running; Linux minimizes by default. Sleep, logout or quitting the
+host stops execution. No automatic background-service installation is provided.
 AI turns use one execution queue; a run waiting for feedback holds that
 queue until answered or stopped. Each managed Omi native job uses its own serial lane and native locks. Missed occurrences of an already-active schedule are skipped.
 
@@ -82,7 +90,9 @@ is not implemented. Persistent workspace and tool approvals support unattended e
 
 ## Schedule files
 
-Default app data: `~/Library/Application Support/Proteus/`. It contains `schedules/*.json`,
+Default app data: `~/Library/Application Support/Proteus/` on macOS; `$XDG_DATA_HOME/proteus`
+on Linux, falling back to `~/.local/share/proteus` when XDG_DATA_HOME is missing or relative.
+`PROTEUS_HOME` overrides either location. It contains `schedules/*.json`,
 `runs/*.json`, scheduler state, and a private local connection file. Do not commit this directory.
 The provider's session storage and Electron browser profile are separate runtime-owned stores.
 
@@ -129,6 +139,13 @@ rehearsal provider. The core suite covers DST behavior, unsafe paths, external e
 schedule occurrences, recovery, paused imports, and loopback authentication.
 
 See [architecture](docs/architecture.md) and [provider interface](docs/providers.md).
+
+The [cross-platform workflow](.github/workflows/cross-platform.yml) adds Linux/Mac Node and
+package checks, disposable package UI/terminal checks, website PHP/assets tests and an iPhone
+simulator suite. Mac desktop CI stages unsigned candidates; it does not check Apple accounts,
+sign/notarize production builds, install apps or verify a real phone-to-host connection.
+Hosted execution of the new workflow remains pending; current local evidence and limits are in
+[Linux validation](docs/linux-app.md) and [native validation](ios/PARITY-VALIDATION.md).
 
 ## Settings and workspace context
 

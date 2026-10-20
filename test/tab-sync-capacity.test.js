@@ -9,7 +9,7 @@ import {RemoteCommandStore} from '../src/remote-command-store.js';
 
 const scope={hostId:'synthetic-owner',scope:'workspace',id:'workspace'};
 const tab={id:'browser',type:'browser',title:'Synthetic page',url:'https://example.test/',openedAt:'2026-10-01T00:00:00.000Z',lastTouchedAt:'2026-10-14T12:00:00.000Z',favicon:'data:image/png;base64,YQ=='};
-function home(t){const p=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-sync-capacity-'));t.after(()=>fs.rmSync(p,{recursive:true,force:true}));return p;}
+function home(t,beforeRemove){const p=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-sync-capacity-'));t.after(async()=>{await beforeRemove?.();fs.rmSync(p,{recursive:true,force:true});});return p;}
 function storage(){const values=new Map();return {values,getItem:k=>values.get(k),setItem:(k,v)=>values.set(k,v),removeItem:k=>values.delete(k)};}
 
 test('two clients with stale runtime metadata do not accumulate mutations or regress owner timestamps',async t=>{
@@ -52,9 +52,9 @@ test('capacity failures back off per owner and deduplicate warnings across scope
 });
 
 test('capacity diagnostics identify record and byte limits and do not evict protected or uncertain receipts',t=>{
- const store=new RemoteCommandStore(home(t),{maxRecords:2,maxBytes:100000});t.after(()=>store.close());const at=new Date().toISOString();
+ let store,bytes;store=new RemoteCommandStore(home(t,()=>store?.close()),{maxRecords:2,maxBytes:100000});const at=new Date().toISOString();
  store.claim('first','a',at);store.complete('first','a',{result:{ok:true}});store.claim('uncertain','b',at);
  assert.throws(()=>store.claim('third','c',at),error=>error.code==='JOURNAL_BUSY'&&error.details.limitingCounter==='records'&&error.details.records===2&&error.details.pending===1);
  assert.deepEqual(store.claim('first','a','expired').previous.result,{ok:true});assert.equal(store.claim('uncertain','b','expired').previous.pending,true);
- const bytes=new RemoteCommandStore(home(t),{maxRecords:10,maxBytes:1});t.after(()=>bytes.close());assert.throws(()=>bytes.claim('x','y',at),error=>error.code==='JOURNAL_BUSY'&&error.details.limitingCounter==='bytes');
+ bytes=new RemoteCommandStore(home(t,()=>bytes?.close()),{maxRecords:10,maxBytes:1});assert.throws(()=>bytes.claim('x','y',at),error=>error.code==='JOURNAL_BUSY'&&error.details.limitingCounter==='bytes');
 });

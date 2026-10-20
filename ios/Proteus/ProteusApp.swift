@@ -33,7 +33,7 @@ struct ProteusRoot: View {
     @Environment(\.scenePhase) private var phase
     var body: some View {
             NativeShell().overlay { if phase != .active { Color.black.ignoresSafeArea().overlay { Label("Proteus",systemImage:"lock.shield").font(.title2).foregroundStyle(.secondary) } } }.tint(NativeTheme.accent).preferredColorScheme(.dark)
-                .onOpenURL { url in if url.scheme == "proteus" && url.host == "pair" { area = "macs"; do { try destinations.add(url.absoluteString, label: "New Mac") } catch { destinations.error = error.localizedDescription } } }
+                .onOpenURL { url in if url.scheme == "proteus" && url.host == "pair" { area = "macs"; do { try destinations.add(url.absoluteString, label: "New computer") } catch { destinations.error = error.localizedDescription } } }
                 .task {
                     #if DEBUG
                     if ProcessInfo.processInfo.arguments.contains("--reset-pairing") { destinations.resetForTesting() }
@@ -50,8 +50,11 @@ struct ProteusRoot: View {
                         destinations.resetForTesting()
                         // Keep synthetic count and long-message fixtures isolated from relay reconnects.
                         if ProcessInfo.processInfo.arguments.contains("--synthetic-nav-counts") || ProcessInfo.processInfo.arguments.contains("--synthetic-long-chat") || ProcessInfo.processInfo.arguments.contains("--synthetic-many-chat") || ProcessInfo.processInfo.arguments.contains("--synthetic-heavy-chat") { destinations.activity(false) }
-                        for (id, label) in [("10000000-0000-4000-8000-000000000001", "Alpha Mac"), ("10000000-0000-4000-8000-000000000002", "Beta Mac")] {
+                        let linuxHost = ProcessInfo.processInfo.arguments.contains("--synthetic-linux-host")
+                        for (id, label, platform, arch) in [("10000000-0000-4000-8000-000000000001", linuxHost ? "Alpha Linux" : "Alpha Mac", linuxHost ? "linux" : "darwin", "x64"), ("10000000-0000-4000-8000-000000000002", "Beta Mac", "darwin", "arm64")] {
                             try? destinations.register(DeviceConnection(relay: "ws://127.0.0.1:1", hostId: id, deviceId: UUID().uuidString, key: RemoteCrypto.random()), label: label)
+                            destinations.selected?.state = .object(["hostName": .string(label), "hostPlatform": .string(platform), "hostArchitecture": .string(arch)])
+                            destinations.selected?.flushCache()
                         }
                         try? destinations.select("10000000-0000-4000-8000-000000000001", connect: false)
                     }
@@ -230,14 +233,14 @@ struct ConnectionStatus: View {
 struct PairView: View {
     @EnvironmentObject var destinations: DestinationStore
     @State private var code = ""
-    @State private var label = "My Mac"
+    @State private var label = "My computer"
     @State private var scan = false
     var body: some View {
         Form {
             Section {
                 Image(systemName: "point.3.connected.trianglepath.dotted").font(.system(size: 52)).foregroundStyle(.tint).frame(maxWidth: .infinity).padding()
                 Text("Add your computer").font(.title2.bold())
-                Text("Open Connections in Proteus on the computer you want to add, then create a one-time pairing code. Each computer keeps its own chats, schedules and workspace context.").foregroundStyle(.secondary)
+                Text("Open Connections in Proteus on your Linux PC or Mac, then create a one-time pairing code. Each computer keeps its own chats, schedules and workspace context.").foregroundStyle(.secondary)
             }
             Section("Add a computer") {
                 TextField("Computer name", text: $label).accessibilityIdentifier("destination-name")
@@ -256,15 +259,15 @@ struct PairView: View {
 }
 struct PairingStatus: View {
     @ObservedObject var remote: RemoteStore
-    var body: some View { VStack(alignment: .leading) { Text(remote.status).font(.caption).foregroundStyle(.secondary); if let error = remote.error { Text(error).foregroundStyle(.orange) } } }
+    var body: some View { VStack(alignment: .leading) { Text(remote.status).font(.caption).foregroundStyle(.secondary); if let platform = remote.hostInfo.platformDescription { Text(platform).font(.caption).foregroundStyle(.secondary) }; if let error = remote.error { Text(error).foregroundStyle(.orange) } } }
 }
 struct DestinationsView: View {
     @EnvironmentObject var destinations: DestinationStore
-    var addMac: () -> Void
+    var addComputer: () -> Void
     @State private var renameID: String?
     @State private var renameLabel = ""
     @State private var forgetID: String?
-    @State private var editingRelay: MacDestination?
+    @State private var editingRelay: HostDestination?
     var body: some View {
         List {
             Section("Saved computers") {
@@ -282,7 +285,7 @@ struct DestinationsView: View {
                     }.padding(.vertical, 5)
                 }
             }
-            Section { Button("Add computer", systemImage: "plus", action: addMac); Text("Switching stops local retries to the previous computer. Work already accepted by that computer continues there. Unconfirmed actions should be checked in that computer’s history before retrying.").font(.footnote).foregroundStyle(.secondary) }
+            Section { Button("Add computer", systemImage: "plus", action: addComputer); Text("Switching stops local retries to the previous computer. Work already accepted by that computer continues there. Unconfirmed actions should be checked in that computer’s history before retrying.").font(.footnote).foregroundStyle(.secondary) }
         }.navigationTitle("Computers")
             .sheet(item: $editingRelay) { destination in NavigationStack { RelayEditor(destination: destination, address: destinations.relayAddress(for: destination.id) ?? "") } }
             .alert("Rename computer", isPresented: Binding(get: { renameID != nil }, set: { if !$0 { renameID = nil } })) { TextField("Computer name", text: $renameLabel); Button("Cancel", role: .cancel) { renameID = nil }; Button("Save") { if let id = renameID { do { try destinations.rename(id, label: renameLabel) } catch { destinations.error = error.localizedDescription } }; renameID = nil } }
@@ -292,7 +295,7 @@ struct DestinationsView: View {
 struct RelayEditor: View {
     @EnvironmentObject var destinations: DestinationStore
     @Environment(\.dismiss) private var dismiss
-    let destination: MacDestination
+    let destination: HostDestination
     @State var address: String
     @State private var failure: String?
     var body: some View {

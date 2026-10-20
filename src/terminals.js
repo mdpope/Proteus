@@ -9,7 +9,7 @@ import {ProteusTmux} from './terminal-tmux.js';
 const MAX_BUFFER=512*1024,MAX_INPUT=64*1024,MAX_SESSIONS=12;
 const colors=['black','red','green','yellow','blue','magenta','cyan','white','brightBlack','brightRed','brightGreen','brightYellow','brightBlue','brightMagenta','brightCyan','brightWhite'];
 const themeKeys=new Set(['background','foreground','cursor','cursorAccent','selectionBackground','selectionForeground',...colors]);
-const defaultProfile=()=>({id:'default',name:'Default shell',shell:process.platform==='win32'?'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe':'/bin/zsh',command:'',workingDirectory:'',fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace',fontSize:14,scrollback:5000,theme:{background:'#111716',foreground:'#edf2ec',cursor:'#c2e8a0'}});
+const defaultProfile=()=>({id:'default',name:'Default shell',shell:process.platform==='win32'?'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe':process.platform==='darwin'?'/bin/zsh':process.env.SHELL||'/bin/bash',command:'',workingDirectory:'',fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace',fontSize:14,scrollback:5000,theme:{background:'#111716',foreground:'#edf2ec',cursor:'#c2e8a0'}});
 function text(value,max,label){if(typeof value!=='string'||value.length>max||value.includes('\0'))throw new Error('Invalid '+label+'.');return value;}
 function dimensions(cols=80,rows=24){if(!Number.isInteger(cols)||cols<2||cols>500||!Number.isInteger(rows)||rows<1||rows>300)throw new Error('Terminal size must be 2–500 columns and 1–300 rows.');return {cols,rows};}
 function validateProfile(input){
@@ -62,7 +62,7 @@ export class TerminalStore extends EventEmitter {
   const spawn=this.spawnPty||(await import('node-pty')).spawn;
   if(this.closing)throw new Error('Terminals are shutting down.');if([...this.sessions.values()].filter(s=>s.status==='running').length>=MAX_SESSIONS)throw new Error('Close an active terminal before opening another.');
   if(persistence==='tmux'){
-    const current=this.tmux.sessions();if(!current.available)throw new Error('tmux is not available on this Mac.');
+    const current=this.tmux.sessions();if(!current.available)throw new Error('tmux is not available on this computer.');
     if(tmuxSessionId){this.tmux.validate(tmuxSessionId);const selectedSession=current.managedSessions.find(item=>item.id===tmuxSessionId&&item.tag===tmuxSessionTag);if(!selectedSession)throw new Error('This Proteus tmux session identity changed or is unavailable.');if(selectedSession.attached||[...this.sessions.values()].some(item=>item.status==='running'&&item.tmuxSessionId===tmuxSessionId))throw new Error('This tmux session already has an attached viewer.');}
     else{tmuxSessionId='proteus-'+randomUUID();tmuxSessionTag=this.tmux.create({id:tmuxSessionId,cwd:selected.resolved,shell:profile.shell,args}).tag;}
   }
