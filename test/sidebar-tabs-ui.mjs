@@ -46,7 +46,7 @@ try{
  // Real isolated application restart; never touch the operator's installed application.
  await app.close();app=null;await launch();await page.locator('[data-page="engine"]').click();await page.locator('[data-engine-section="setup"]').click();
  assert.equal(await page.locator('#settings-show-usage').isChecked(),true);await page.getByRole('button',{name:'Expand AI allowance',exact:true}).waitFor();
- await page.screenshot({path:'/private/tmp/proteus-sidebar-collapsed.png'});
+ await page.screenshot({path:path.join(os.tmpdir(),'proteus-sidebar-collapsed.png')});
  await page.getByRole('button',{name:'Expand AI allowance',exact:true}).click();await until(()=>saved().appearance.providerUsageCollapsed===false);
  await page.locator('[data-usage-provider="codex"]').click();await page.getByText('71% remaining',{exact:true}).waitFor();await page.locator('#usage-close').click();
  const tabs=[{id:'overview',type:'overview',label:'Schedules'},...['First','Second'].map(name=>({id:'markdown:'+path.join(workspace,name+'.md'),type:'markdown',file:path.join(workspace,name+'.md'),label:name+'.md'}))];
@@ -62,11 +62,17 @@ try{
  assert.equal(session().active,tabs[1].id);assert.equal(await page.locator('.tabitem.selected [data-tab]').getAttribute('data-tab'),tabs[1].id);
  const selections=await page.evaluate(()=>window.__tabSelections);assert.ok(selections.length>0);assert.ok(!selections.includes(tabs[2].id));
  await page.locator('[data-page="home"]').click();await page.locator('[data-page="home"].active').waitFor();
- await page.screenshot({path:'/private/tmp/proteus-sidebar-tabs-fixed.png'});
+ await page.screenshot({path:path.join(os.tmpdir(),'proteus-sidebar-tabs-fixed.png')});
  await page.locator('#sidebar-toggle').click();await page.mouse.move(700,150);
  assert.equal(await page.locator('body').evaluate(node=>node.classList.contains('sidebar-minimized')),true);
+ const collapsedFocus=await page.locator('#sidebar').evaluate(node=>({width:node.getBoundingClientRect().width,focusWithin:node.matches(':focus-within'),focused:document.activeElement?.id,classes:document.body.className}));
+ console.log('Collapsed sidebar before moving focus',JSON.stringify(collapsedFocus));
+ // Keyboard focus intentionally expands the minimized sidebar. Observe its idle
+ // compact rail after moving focus to the visible main toolbar.
+ if(collapsedFocus.focusWithin)await page.locator('#topbar-home').focus();
+ await until(async()=>(await page.locator('#sidebar').boundingBox()).width<=60);
  assert.ok((await page.locator('#sidebar').boundingBox()).width<=60,'Collapsed sidebar remains a compact icon rail');
  assert.equal(await page.locator('#sidebar [data-page="home"] .nav-icon').isVisible(),true);
- await page.screenshot({path:'/private/tmp/proteus-icon-rail.png'});
- assert.deepEqual(errors,[]);console.log(JSON.stringify({passed:true,checks:13,screenshots:['/private/tmp/proteus-sidebar-collapsed.png','/private/tmp/proteus-sidebar-tabs-fixed.png','/private/tmp/proteus-icon-rail.png']}));
+ await page.screenshot({path:path.join(os.tmpdir(),'proteus-icon-rail.png')});
+ assert.deepEqual(errors,[]);console.log(JSON.stringify({passed:true,checks:13,screenshots:[path.join(os.tmpdir(),'proteus-sidebar-collapsed.png'),path.join(os.tmpdir(),'proteus-sidebar-tabs-fixed.png'),path.join(os.tmpdir(),'proteus-icon-rail.png')]}));
 }finally{if(app)await app.close();fs.rmSync(home,{recursive:true,force:true});}

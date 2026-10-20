@@ -100,7 +100,8 @@ if (process.argv.includes('--structure-only')) {
       profiles[0] = { ...profiles[0], name: 'Synthetic native PTY', shell: '/bin/sh', command: 'printf "PACKAGE_PTY_READY\\n"; read answer; printf "PACKAGE_PTY_INPUT:%s\\n" "$answer"; read finish' };
       await window.desktop.terminal({ action: 'save-profiles', profiles, expectedRevision: state.profiles.revision });
     });
-    await page.locator('#tab-add-menu summary').click(); await page.locator('#terminal').click();
+    await page.locator('#tab-add-menu summary').click();
+    await page.locator('#browser-area .new-tab-actions').getByRole('button', { name: 'Terminal', exact: true }).click();
     await page.locator('#terminal-session').selectOption('process'); await page.getByRole('button', { name: 'Open terminal', exact: true }).last().click();
     await page.locator('.terminal-canvas canvas').waitFor();
     const terminal = (await page.evaluate(() => window.desktop.terminal({ action: 'state' }))).sessions[0]; assert.ok(terminal?.id);

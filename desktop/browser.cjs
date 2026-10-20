@@ -54,8 +54,9 @@ class BrowserTabs {
     this.siteSettings=new BrowserSiteSettings(options.home);this.siteData=new BrowserSiteData(this);
     this.window = window; this.appOrigin = appOrigin; this.tabs = new Map(); this.reloading = new Map(); this.active = null; this.bounds = null; this.overlays = new Set();
     this.rendererEpoch = null; this.rendererStartedAt = -Infinity; this.selectionRevision = -1; this.selectionId = null;
+    if(options.windowRegistry)this.installWindowContexts(options.windowRegistry,window);
     this.thumbnails=options.thumbnails||(options.home?new (require('./thumbnail-cache.cjs').ThumbnailCache)(options.home):null);
-    this.thumbnailTimer=setInterval(()=>{const tab=this.tabs.get(this.active);if(tab)this.scheduleThumbnail(tab);},20000);this.thumbnailTimer.unref?.();
+    this.thumbnailTimer=setInterval(()=>{if(this.windowRegistry){for(const ctx of this.windowRegistry.contexts.values())this.windowRegistry.run(ctx.id,()=>{const tab=this.tabs.get(this.active);if(tab)this.scheduleThumbnail(tab);});}else{const tab=this.tabs.get(this.active);if(tab)this.scheduleThumbnail(tab);}},20000);this.thumbnailTimer.unref?.();
     this.retentionTimer = setInterval(() => { void this.sweepRetention(); }, 60_000);
     this.retentionTimer.unref?.();this.profileTimer=setInterval(()=>this.options.diagnostics?this.options.diagnostics.measureSync('browser.profiles.reconcile',()=>this.reconcileProfiles()):this.reconcileProfiles(),1000);this.profileTimer.unref?.();
     this.gestureHandler = (event, direction) => {
@@ -73,11 +74,12 @@ class BrowserTabs {
       const transition=this.transition=new PageSlide(this.window,tab.view.webContents,tab.view.getBounds());
       void transition.play(direction,()=>{void this.command({action:direction,id:tab.id,gesture:true}).catch(()=>{});},()=>!this.shuttingDown&&this.active===tab.id&&!!tab.view?.webContents&&!tab.view.webContents.isDestroyed()).finally(()=>{if(this.transition===transition)this.transition=null;});
     };
+    const gesture=this.gestureHandler;this.gestureHandler=(event,...args)=>this.withSenderWindow(event,()=>gesture(event,...args));
     ipcMain.on('proteus:browser-gesture',this.gestureHandler);
     this.navigationIntentHandler=event=>{const tab=[...this.tabs.values()].find(tab=>tab.view?.webContents===event.sender);if(tab&&event.senderFrame===event.sender.mainFrame){tab.navigationIntentUntil=Date.now()+1200;this.touch(tab);this.changed();}};
     this.interactionHandler=event=>{const tab=[...this.tabs.values()].find(tab=>tab.view?.webContents===event.sender);if(tab&&event.senderFrame===event.sender.mainFrame){this.touch(tab);this.changed();}};ipcMain.on('proteus:browser-interaction',this.interactionHandler);ipcMain.on('proteus:navigation-intent',this.navigationIntentHandler);
     this.partition = session.fromPartition('persist:proteus-browser');
-    this.actions = new BrowserActions(this);this.permissions=new BrowserPermissions(this);this.siteNotificationHandler=(event,value)=>this.permissions.receive(event,value);ipcMain.on('proteus:site-notification',this.siteNotificationHandler);
+    this.actions = new BrowserActions(this);this.permissions=new BrowserPermissions(this);this.siteNotificationHandler=(event,value)=>this.withSenderWindow(event,()=>this.permissions.receive(event,value));ipcMain.on('proteus:site-notification',this.siteNotificationHandler);
     this.configureSession(this.partition,'default');
     this.extensions=options.home?new BrowserExtensions(this,options.home):null;
     if(this.blocker){
@@ -86,6 +88,22 @@ class BrowserTabs {
       ipcMain.handle('@ghostery/adblocker/is-mutation-observer-enabled',event=>trusted(event,event.sender.getURL())&&!!this.blocker.engine?.config.enableMutationObserver);
     }
   }
+  installWindowContexts(registry,window){
+    this.windowRegistry=registry;
+    const fields=['active','bounds','overlays','rendererEpoch','rendererStartedAt','selectionRevision','selectionId','selection','transition','overviewOpen','swipeCooldown','swipeReopen'];
+    this.windowDefaults=Object.fromEntries(fields.map(field=>[field,this[field]]));
+    this.addWindow(window,registry.current()?.id||'main');
+    for(const field of fields)Object.defineProperty(this,field,{configurable:true,get:()=>registry.current()?.browserFields?.[field]??this.windowDefaults[field],set:value=>{const ctx=registry.current();if(ctx)ctx.browserFields[field]=value;else this.windowDefaults[field]=value;}});
+    Object.defineProperty(this,'window',{configurable:true,get:()=>registry.current()?.window||window});
+  }
+  addWindow(window,id){const ctx=this.windowRegistry.contexts.get(id);if(!ctx)throw Error('App window is unavailable.');ctx.browserFields={...this.windowDefaults,active:null,bounds:null,overlays:new Set(),selectionRevision:-1,selectionId:null,rendererEpoch:null,rendererStartedAt:-Infinity,transition:null,overviewOpen:false};return ctx;}
+  windowId(){return this.windowRegistry?.current()?.id||'main';}
+  ownsWindow(tab){return !this.windowRegistry||(tab.windowId||'main')===this.windowId();}
+  windowTabs(){return [...this.tabs.values()].filter(tab=>this.ownsWindow(tab));}
+  withTabWindow(tab,action){const id=tab?.windowId;if(this.windowRegistry&&id)return this.windowRegistry.run(id,action);return action();}
+  withSenderWindow(event,action){return this.withTabWindow([...this.tabs.values()].find(tab=>tab.view?.webContents===event.sender),action);}
+  sendAction(value){const tab=this.tabs.get(value.info?.id||value.id);return this.withTabWindow(tab,()=>{if(!this.shuttingDown&&!this.window.isDestroyed())this.window.webContents.send('proteus:browser-action',value);});}
+  async closeWindow(id){const ctx=this.windowRegistry?.contexts.get(id);if(!ctx)return;await this.windowRegistry.run(id,async()=>{this.transition?.cancel();for(const tab of this.windowTabs())await this.close(tab.id,{preserveCache:true});});}
   configureSession(partition,profileId){
     if(this.sessions.has(profileId))return partition;
     this.sessions.set(profileId,partition);this.sessionNames.set(profileId,this.options.profiles?.partition(profileId)||'persist:proteus-browser');if(this.options.home)this.cookieStores.set(profileId,new BrowserCookieStore(this.options.home,partition,error=>this.actions.send({type:'error',message:'Browser sign-in persistence: '+error.message}),this.options.diagnostics));
@@ -159,11 +177,12 @@ class BrowserTabs {
     this.selectionRevision = revision; this.selectionId = id;
     return true;
   }
-  prepareShutdown() { this.shuttingDown = true;this.siteSettings.flush();this.transition?.cancel();for(const tab of this.tabs.values())tab.faviconResolver?.close(); }
+  prepareShutdown() { this.shuttingDown = true;this.siteSettings.flush();if(this.windowRegistry){for(const ctx of this.windowRegistry.contexts.values())ctx.browserFields?.transition?.cancel();}else this.transition?.cancel();for(const tab of this.tabs.values())tab.faviconResolver?.close(); }
   updateThrottling() {
     for (const tab of this.tabs.values()) {
       const wc=tab.view?.webContents;if(!wc||wc.isDestroyed())continue;
-      const visible=tab.id===this.active&&!!this.bounds&&!this.overlays.size&&!this.overviewOpen;
+      const ctx=this.windowRegistry?.contexts.get(tab.windowId)?.browserFields;
+      const visible=ctx?tab.id===ctx.active&&!!ctx.bounds&&!ctx.overlays.size&&!ctx.overviewOpen:tab.id===this.active&&!!this.bounds&&!this.overlays.size&&!this.overviewOpen;
       const throttled=!(visible||tab.agentActions>0||wc.isCurrentlyAudible());
       if(wc.getBackgroundThrottling()!==throttled)wc.setBackgroundThrottling(throttled);
     }
@@ -176,7 +195,7 @@ class BrowserTabs {
     }
     this.changed();
   }
-  changed() { this.updateThrottling(); if (!this.shuttingDown && !this.window.isDestroyed()) this.window.webContents.send('proteus:browser-state', this.list(true)); }
+  changed() { this.updateThrottling();if(this.shuttingDown)return;if(this.windowRegistry){for(const ctx of this.windowRegistry.contexts.values())if(!ctx.window.isDestroyed())ctx.window.webContents.send('proteus:browser-state',this.list(true).filter(tab=>this.tabs.get(tab.id)?.windowId===ctx.id));}else if(!this.window.isDestroyed())this.window.webContents.send('proteus:browser-state',this.list(true)); }
   get(id) { const tab = this.tabs.get(id); if (!tab) throw new Error('Browser tab is closed or unavailable.'); return tab; }
   previewState(tab) {
     return this.options.projects ? {hidden:tab.hidden===true,destination:tab.destination,lastActivityAt:tab.lastActivityAt?new Date(tab.lastActivityAt).toISOString():null} : {};
@@ -218,6 +237,7 @@ class BrowserTabs {
     tab.thumbnailTimer=setTimeout(()=>{tab.thumbnailTimer=null;void this.captureThumbnail(tab);},Math.max(650,5000-(Date.now()-(tab.thumbnailAt||0))));tab.thumbnailTimer.unref?.();
   }
   async captureThumbnail(tab){
+    if(this.windowRegistry&&tab.windowId!==this.windowId())return this.windowRegistry.run(tab.windowId,()=>this.captureThumbnail(tab));
     const wc=tab.view?.webContents;if(!this.thumbnails||this.active!==tab.id||this.overviewOpen||this.overlays?.size||this.shuttingDown||this.tabs.get(tab.id)!==tab||!wc||wc.isDestroyed()||wc.isLoading()||!this.profileAvailable(tab)||!safeHistoryURL(wc.getURL(),this.appOrigin)||isAuthenticationURL(wc.getURL()))return;
     const revision=tab.captureRevision||0,key=this.thumbnailKey(tab);tab.thumbnailAt=Date.now();
     try{const image=await wc.capturePage();if(image.isEmpty()||this.tabs.get(tab.id)!==tab||tab.view?.webContents!==wc||revision!==(tab.captureRevision||0)||this.overviewOpen||this.overlays.size)return;this.thumbnails.set(key,image.resize({width:360}).toJPEG(65));}catch{/* Keep the last good thumbnail. */}
@@ -257,14 +277,14 @@ class BrowserTabs {
       const history=restoreNavigation(savedHistory,this.appOrigin)||normalizeHistory(savedHistory,this.appOrigin), address=history?.entries[history.index]?.url||safeHistoryURL(url,this.appOrigin)||'';
       const tab={...(this.options.projects?{hidden:descriptor.hidden===true,destination:descriptor.destination,workspaceName:descriptor.workspaceName,lastActivityAt:Date.parse(descriptor.lastActivityAt)||Date.parse(descriptor.openedAt)||(descriptor.restore||descriptor.recreating?null:Date.now())}:{}),associationChatId:descriptor.associationChatId||owner||null,resumeOwner:owner||descriptor.resumeOwner||null,persist:descriptor.persist===true,openedAt:Date.parse(descriptor.openedAt)||(descriptor.restore||descriptor.recreating?null:Date.now()),profileId,parentId:typeof descriptor.parentId==='string'?descriptor.parentId.slice(0,256):null,id:descriptor.id||randomUUID(),group:descriptor.group==='team'?'team':'main',shared:false,owner:null,view:null,lastTouchedAt:Date.parse(descriptor.lastTouchedAt)||(descriptor.restore||descriptor.recreating?null:Date.now()),snapshot:{favicon:safeFavicon(descriptor.favicon),url:address,title:descriptor.title|| (address?new URL(address).hostname:'New tab'),history,canGoBack:(history?.index||0)>0,canGoForward:!!history&&history.index<history.entries.length-1,error:null}};
       const placement=this.previewPlacement(tab);if(placement)Object.assign(tab,placement);
-      tab.thumbnailId=descriptor.contentTabId||descriptor.thumbnailId||tab.id;this.tabs.set(tab.id,tab);this.changed();return this.state(tab,true);
+      tab.windowId=this.windowId();tab.thumbnailId=descriptor.contentTabId||descriptor.thumbnailId||tab.id;this.tabs.set(tab.id,tab);this.changed();return this.state(tab,true);
     }
     if(this.profile(profileId).settings?.blockingEnabled!==false)await this.blocker?.ensure(url).catch(()=>this.actions.send({type:'error',message:'Ghostery filters could not update. Open Browser Preferences to retry.'}));
     if(partition!==this.sessionFor(profileId))throw new Error('The browser profile changed.');
     const tab = { ...(this.options.projects?{hidden:descriptor.hidden===true,lastActivityAt:Date.parse(descriptor.lastActivityAt)||Date.parse(descriptor.openedAt)||(descriptor.restore||descriptor.recreating?null:Date.now())}:{}),associationChatId:descriptor.associationChatId||owner||null,persist:descriptor.persist===true,openedAt:Date.parse(descriptor.openedAt)||(descriptor.restore||descriptor.recreating?null:Date.now()),profileId,parentId:typeof descriptor.parentId==='string'?descriptor.parentId.slice(0,256):descriptor.explicitParent?null:owner,destination:descriptor.destination,workspaceName:descriptor.workspaceName,id: descriptor.id||randomUUID(), group:descriptor.group==='team'?'team':'main', favicon:safeFavicon(descriptor.favicon), agentActions:owner?1:0, shared: false, owner, lastTouchedAt:Date.parse(descriptor.lastTouchedAt)||(descriptor.restore||descriptor.recreating?null:Date.now()), view: new WebContentsView({ webPreferences: {
       preload: require('node:path').join(__dirname,'browser-preload.cjs'), session: partition, nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true, backgroundThrottling: true
     } }) };
-    tab.retainedTitle=descriptor.title;tab.logicalHistory=restoreNavigation(savedHistory,this.appOrigin);tab.applyingShared=!!tab.logicalHistory||!!(this.options.projects&&(descriptor.restore||descriptor.recreating));
+    tab.windowId=this.windowId();tab.retainedTitle=descriptor.title;tab.logicalHistory=restoreNavigation(savedHistory,this.appOrigin);tab.applyingShared=!!tab.logicalHistory||!!(this.options.projects&&(descriptor.restore||descriptor.recreating));
     const placement=this.previewPlacement(tab);if(placement)Object.assign(tab,placement);
     this.tabs.set(tab.id, tab); this.window.contentView.addChildView(tab.view);
     // Agent-created tabs may never have been selected. Give them a real viewport
@@ -274,7 +294,7 @@ class BrowserTabs {
     tab.view.setVisible(false);
     for(const event of ['media-started-playing','media-paused'])tab.view.webContents.on(event,()=>this.updateThrottling());
     tab.thumbnailId=descriptor.contentTabId||descriptor.thumbnailId||tab.thumbnailId||tab.id;
-    const wc = tab.view.webContents;wc.on('did-start-navigation',details=>{if(details.isMainFrame&&!details.isSameDocument)tab.blockedCount=0;});this.extensions?.addTab(profileId,wc);
+    const wc = tab.view.webContents;const bind=callback=>this.windowRegistry?this.windowRegistry.bind(tab.windowId,callback):callback;const on=(name,callback)=>wc.on(name,bind(callback));on('did-start-navigation',details=>{if(details.isMainFrame&&!details.isSameDocument)tab.blockedCount=0;});this.extensions?.addTab(profileId,wc);
     wc.setZoomMode('isolated');
     await this.applySiteMode(tab,this.address(url||'https://example.invalid'),false);
     // Chromium only exposes the current TLS chain while its navigation is in flight.
@@ -308,10 +328,11 @@ class BrowserTabs {
     } catch { /* Certificate details remain unavailable for this page. */ }};
     void wc.setVisualZoomLevelLimits(1, 3).catch(() => {});
     const sendHistory=()=>{if(!wc.isDestroyed())wc.send('proteus:browser-history',{back:this.state(tab).canGoBack,forward:this.state(tab).canGoForward,reopen:this.swipeReopen===true});};
-    for(const event of ['dom-ready','did-navigate','did-navigate-in-page','did-stop-loading'])wc.on(event,sendHistory);
+    for(const event of ['dom-ready','did-navigate','did-navigate-in-page','did-stop-loading'])on(event,sendHistory);
     // Only a new top-level document restarts Find, never unrelated shell/title/usage updates.
-    wc.on('dom-ready',()=>{tab.findRevision=(tab.findRevision||0)+1;this.changed();});
-    wc.on('before-input-event', (event, input) => {
+    on('dom-ready',()=>{tab.findRevision=(tab.findRevision||0)+1;this.changed();});
+    on('before-input-event', (event, input) => {
+      if(input.type==='keyDown'&&(input.meta||input.control)&&!input.shift&&!input.alt&&['n','t'].includes(String(input.key).toLowerCase())){event.preventDefault();if(String(input.key).toLowerCase()==='n')this.options.newWindow?.();else this.window.webContents.send('proteus:new-tab');return;}
       if(input.type==='keyDown'&&((input.meta||input.control)&&String(input.key).toLowerCase()==='r'||input.key==='F5')){event.preventDefault();void this.command({action:'reload',id:tab.id}).catch(error=>this.actions.send({type:'error',message:error.message}));return;}
       if(input.type==='keyDown'&&(input.meta||input.control)&&String(input.key).toLowerCase()==='f'){event.preventDefault();this.window.webContents.focus();this.actions.send({type:'find',tabId:tab.id});return;}
       if(this.active===tab.id&&event.senderFrame===wc.mainFrame&&['keyDown','mouseDown'].includes(input.type))this.touch(tab,input.type==='keyDown'&&((input.meta||input.control)&&String(input.key).toLowerCase()==='r'||input.key==='F5'));
@@ -321,21 +342,22 @@ class BrowserTabs {
         event.preventDefault(); this.window.webContents.focus(); this.window.webContents.send('proteus:focus-address');
       }
     });
-    wc.on('context-menu', (_event, params) => this.actions.menu(tab,params)?.popup({window:this.window}));
-    wc.on('update-target-url',(_event,url)=>{if(!wc.isDestroyed())wc.send('proteus:link-hover',this.active===tab.id?String(url||''):'');});
-    for(const event of ['did-start-navigation','did-navigate','did-navigate-in-page'])wc.on(event,()=>{tab.overviewGate=null;if(!wc.isDestroyed()){wc.send('proteus:link-hover','');wc.send('proteus:gesture-reset');}});
-    wc.on('did-start-navigation',(_event,_url,_inPlace,isMainFrame)=>{if(isMainFrame===false)return;tab.certificate=null;tab.certificateDetails=null;tab.favicon=this.siteSettings.get(this.sessionNames.get(profileId),wc.getURL()).favicon||'';tab.faviconResolver?.reset();tab.iconURLs=null;tab.iconResponses=new Map();this.sessionIcons?.clear();observeCertificate();});
-    wc.on('dom-ready',()=>{const origin=siteOrigin(wc.getURL());if(origin){this.siteSettings.remember(this.sessionNames.get(profileId),origin);if(!tab.favicon)tab.favicon=this.siteSettings.get(this.sessionNames.get(profileId),origin).favicon||'';void wc.executeJavaScript("[...document.querySelectorAll('link[rel~=icon]')].map(link=>link.href).slice(0,5)").then(icons=>this.resolveFavicon(tab,icons.length?icons:[origin+'/favicon.ico'])).catch(()=>{});}});
-    wc.on('page-favicon-updated',(_event,icons)=>{tab.iconURLs=icons.slice(0,5);void this.resolveFavicon(tab,tab.iconURLs);});
-    wc.on('zoom-changed',(_event,direction)=>wc.send('proteus:pinch-update',{direction,zoom:wc.getZoomFactor()}));
-    wc.on('input-event',(_event,input)=>{if(['gesturePinchBegin','gesturePinchEnd'].includes(input.type))wc.send('proteus:pinch-boundary',{type:input.type,zoom:wc.getZoomFactor()});});
-    wc.setWindowOpenHandler(({ url: next }) => {
-      try { const address = this.address(next); void this.create(address, tab.owner,null,{profileId:tab.profileId,group:tab.group,parentId:tab.parentId}).then(info=>this.actions.send({type:'select-tab',info,afterId:tab.id})).catch(error=>this.actions.send({type:'error',message:error.message})); } catch { /* Unsupported schemes remain blocked. */ }
+    on('context-menu', (_event, params) => this.actions.menu(tab,params)?.popup({window:this.window}));
+    on('update-target-url',(_event,url)=>{if(!wc.isDestroyed())wc.send('proteus:link-hover',this.active===tab.id?String(url||''):'');});
+    for(const event of ['did-start-navigation','did-navigate','did-navigate-in-page'])on(event,()=>{tab.overviewGate=null;if(!wc.isDestroyed()){wc.send('proteus:link-hover','');wc.send('proteus:gesture-reset');}});
+    on('did-start-navigation',(_event,_url,_inPlace,isMainFrame)=>{if(isMainFrame===false)return;tab.certificate=null;tab.certificateDetails=null;tab.favicon=this.siteSettings.get(this.sessionNames.get(profileId),wc.getURL()).favicon||'';tab.faviconResolver?.reset();tab.iconURLs=null;tab.iconResponses=new Map();this.sessionIcons?.clear();observeCertificate();});
+    on('dom-ready',()=>{const origin=siteOrigin(wc.getURL());if(origin){this.siteSettings.remember(this.sessionNames.get(profileId),origin);if(!tab.favicon)tab.favicon=this.siteSettings.get(this.sessionNames.get(profileId),origin).favicon||'';void wc.executeJavaScript("[...document.querySelectorAll('link[rel~=icon]')].map(link=>link.href).slice(0,5)").then(icons=>this.resolveFavicon(tab,icons.length?icons:[origin+'/favicon.ico'])).catch(()=>{});}});
+    on('page-favicon-updated',(_event,icons)=>{tab.iconURLs=icons.slice(0,5);void this.resolveFavicon(tab,tab.iconURLs);});
+    on('zoom-changed',(_event,direction)=>wc.send('proteus:pinch-update',{direction,zoom:wc.getZoomFactor()}));
+    on('input-event',(_event,input)=>{if(['gesturePinchBegin','gesturePinchEnd'].includes(input.type))wc.send('proteus:pinch-boundary',{type:input.type,zoom:wc.getZoomFactor()});});
+    wc.setWindowOpenHandler(bind(({ url: next }) => {
+      try { if(this.options.handleCallback?.(next))return {action:'deny'};const address = this.address(next); void this.create(address, tab.owner,null,{profileId:tab.profileId,group:tab.group,parentId:tab.parentId}).then(info=>this.actions.send({type:'select-tab',info,afterId:tab.id})).catch(error=>this.actions.send({type:'error',message:error.message})); } catch { /* Unsupported schemes remain blocked. */ }
       return { action: 'deny' };
-    });
-    wc.on('will-redirect',(event,next,_same,isMainFrame)=>{if((event.isMainFrame??isMainFrame)===false)return;const address=safeHistoryURL(event.url||next,this.appOrigin);if(address){void this.applySiteMode(tab,address,false);commitNavigation(tab,address,'',{redirect:true});this.changed();}});
-    wc.on('will-navigate', (event, next) => {
+    }));
+    on('will-redirect',(event,next,_same,isMainFrame)=>{if((event.isMainFrame??isMainFrame)===false)return;if(this.options.handleCallback?.(event.url||next)){event.preventDefault();return;}const address=safeHistoryURL(event.url||next,this.appOrigin);if(address){void this.applySiteMode(tab,address,false);commitNavigation(tab,address,'',{redirect:true});this.changed();}});
+    on('will-navigate', (event, next) => {
       try {
+        if(this.options.handleCallback?.(event.url||next)){event.preventDefault();return;}
         const address=this.address(event.url||next);
         void this.applySiteMode(tab,address,false);
         // A real page click must claim its destination before descriptor polling
@@ -345,14 +367,14 @@ class BrowserTabs {
         tab.pageNavigationURL=address;if(this.options.projects&&Date.now()<(tab.navigationIntentUntil||0))this.touch(tab,true);this.changed();
       } catch { event.preventDefault(); }
     });
-    wc.on('did-start-navigation',details=>{if(details.isMainFrame){tab.error=null;tab.reportedLoadError=false;if(!details.isSameDocument)tab.pageNavigationURL=details.url;}tab.captureRevision=(tab.captureRevision||0)+1;clearTimeout(tab.pointerTimer);tab.pointerTimer=null;tab.agentPointer=null;wc.send('proteus:agent-pointer',null);});
-    for (const name of ['page-title-updated','did-navigate','did-navigate-in-page','did-start-loading','did-stop-loading']) wc.on(name, () => this.changed());
-    wc.on('did-navigate-in-page',(_event,url,isMainFrame)=>{if(isMainFrame){if(this.options.projects&&!tab.applyingShared&&Date.now()<(tab.navigationIntentUntil||0))this.touch(tab,true);const index=wc.navigationHistory.getActiveIndex();commitNavigation(tab,url,wc.getTitle(),{redirect:index===tab.nativeHistoryIndex});tab.nativeHistoryIndex=index;this.changed();}});
-    wc.on('did-navigate',(event,url)=>{tab.nativeHistoryIndex=wc.navigationHistory.getActiveIndex();commitNavigation(tab,event.url||url,wc.getTitle(),{redirect:!!tab.inflightEntryId});this.changed();});
-    wc.on('page-title-updated',()=>{if(!wc.isDestroyed()&&!wc.isLoading()){commitNavigation(tab,wc.getURL(),wc.getTitle());this.changed();}});
-    wc.on('did-stop-loading',()=>{if(tab.iconURLs)void this.resolveFavicon(tab,tab.iconURLs);if(!wc.isDestroyed()){{commitNavigation(tab,wc.getURL(),wc.getTitle(),{redirect:!!tab.inflightEntryId});tab.pageNavigationURL=null;tab.inflightEntryId=null;}this.changed();}});
-    wc.on('did-fail-load', (_e, code, description, url, isMainFrame) => { if (isMainFrame && code !== -3) { this.reportLoadError(tab,description,url); this.changed(); } });
-    wc.on('did-finish-load',()=>{tab.error=null;tab.reportedLoadError=false;this.scheduleThumbnail(tab);this.changed();});
+    on('did-start-navigation',details=>{if(details.isMainFrame){tab.error=null;tab.reportedLoadError=false;if(!details.isSameDocument)tab.pageNavigationURL=details.url;}tab.captureRevision=(tab.captureRevision||0)+1;clearTimeout(tab.pointerTimer);tab.pointerTimer=null;tab.agentPointer=null;wc.send('proteus:agent-pointer',null);});
+    for (const name of ['page-title-updated','did-navigate','did-navigate-in-page','did-start-loading','did-stop-loading']) on(name, () => this.changed());
+    on('did-navigate-in-page',(_event,url,isMainFrame)=>{if(isMainFrame){if(this.options.projects&&!tab.applyingShared&&Date.now()<(tab.navigationIntentUntil||0))this.touch(tab,true);const index=wc.navigationHistory.getActiveIndex();commitNavigation(tab,url,wc.getTitle(),{redirect:index===tab.nativeHistoryIndex});tab.nativeHistoryIndex=index;this.changed();}});
+    on('did-navigate',(event,url)=>{tab.nativeHistoryIndex=wc.navigationHistory.getActiveIndex();commitNavigation(tab,event.url||url,wc.getTitle(),{redirect:!!tab.inflightEntryId});this.changed();});
+    on('page-title-updated',()=>{if(!wc.isDestroyed()&&!wc.isLoading()){commitNavigation(tab,wc.getURL(),wc.getTitle());this.changed();}});
+    on('did-stop-loading',()=>{if(tab.iconURLs)void this.resolveFavicon(tab,tab.iconURLs);if(!wc.isDestroyed()){{commitNavigation(tab,wc.getURL(),wc.getTitle(),{redirect:!!tab.inflightEntryId});tab.pageNavigationURL=null;tab.inflightEntryId=null;}this.changed();}});
+    on('did-fail-load', (_e, code, description, url, isMainFrame) => { if (isMainFrame && code !== -3) { this.reportLoadError(tab,description,url); this.changed(); } });
+    on('did-finish-load',()=>{tab.error=null;tab.reportedLoadError=false;this.scheduleThumbnail(tab);this.changed();});
     this.changed();
     const history=normalizeHistory(savedHistory,this.appOrigin);
     if(!history&&url&&(this.siteSettings?.get(this.sessionNames.get(tab.profileId),url).mode||'default')!=='default'){await wc.loadURL('about:blank');await this.applySiteMode(tab,url);}
@@ -372,6 +394,7 @@ class BrowserTabs {
   }
   address(value) { const url = normalizeURL(value); if (new URL(url).origin === this.appOrigin) throw new Error('The application is not a browser target.'); return url; }
   async navigate(id, url) {
+    const owner=this.tabs.get(id)?.windowId;if(this.windowRegistry&&owner&&owner!==this.windowId())return this.windowRegistry.run(owner,()=>this.navigate(id,url));
     this.transition?.cancel();
     let tab = this.get(id);this.sessionFor(tab.profileId);if(!tab.applyingShared)this.touch(tab,true);if(!tab.view){await this.reload(id,false,{background:true});tab=this.get(id);} const wc = tab.view.webContents;
     if(this.profile(tab.profileId).settings?.blockingEnabled!==false)await this.blocker?.ensure(url).catch(()=>this.actions.send({type:'error',message:'Ghostery filters could not update. Open Browser Preferences to retry.'}));
@@ -388,7 +411,7 @@ class BrowserTabs {
     this.changed(); return this.state(tab);
   }
   show(id, bounds) {
-    if(id&&((this.options.projects&&this.get(id).hidden)||!this.profileAvailable(this.get(id)))){for(const tab of this.tabs.values())tab.view?.setVisible(false);this.active=null;return;}
+    if(id&&((this.options.projects&&this.get(id).hidden)||!this.profileAvailable(this.get(id)))){for(const tab of this.windowTabs())tab.view?.setVisible(false);this.active=null;return;}
     const previousActive=this.active;
     if(id!==this.active || (bounds&&this.bounds&&['x','y','width','height'].some(key=>Math.round(bounds[key])!==this.bounds[key])))this.transition?.cancel();
     if (bounds) {
@@ -396,13 +419,13 @@ class BrowserTabs {
       this.bounds = Object.fromEntries(Object.entries(bounds).map(([key, value]) => [key, Math.round(value)]));
     }
     const selection=this.selection=Symbol();
-    if((this.overviewOpen||this.overlays.size)&&id){this.active=id;for(const tab of this.tabs.values())tab.view?.setVisible(false);return;}
-    if(id&&!this.get(id).view){this.active=id;this.touch(this.get(id));for(const tab of this.tabs.values())tab.view?.setVisible(false);void this.reload(id).then(()=>{if(this.selection===selection&&this.active===id&&!this.shuttingDown&&this.tabs.has(id))this.show(id,this.bounds);}).catch(()=>{});return;}
+    if((this.overviewOpen||this.overlays.size)&&id){this.active=id;for(const tab of this.windowTabs())tab.view?.setVisible(false);return;}
+    if(id&&!this.get(id).view){this.active=id;this.touch(this.get(id));for(const tab of this.windowTabs())tab.view?.setVisible(false);void this.reload(id).then(()=>{if(this.selection===selection&&this.active===id&&!this.shuttingDown&&this.tabs.has(id))this.show(id,this.bounds);}).catch(()=>{});return;}
     this.active = id;if(id){const selected=this.get(id);if(selected.view)this.extensions?.selectTab(selected.profileId,selected.view.webContents);}
     if(previousActive&&previousActive!==id){const priorTab=this.tabs.get(previousActive);if(priorTab){priorTab.overviewGate=null;const prior=priorTab.view?.webContents;if(prior&&!prior.isDestroyed())prior.send('proteus:gesture-reset');}}
     if(previousActive&&previousActive!==id){const prior=this.tabs.get(previousActive)?.view?.webContents;if(prior&&!prior.isDestroyed())prior.send('proteus:link-hover','');}
     if(id&&id!==previousActive)this.touch(this.get(id));
-    for (const tab of this.tabs.values()) {
+    for (const tab of this.windowTabs()) {
       if(!tab.view)continue;
       if(tab.id===id&&this.bounds){const current=tab.view.getBounds();if(['x','y','width','height'].some(key=>current[key]!==this.bounds[key]))tab.view.setBounds(this.bounds);}
       const visible=tab.id===id&&!!this.bounds&&!!tab.view.webContents.getURL();
@@ -410,17 +433,19 @@ class BrowserTabs {
     }
     this.updateThrottling();
   }
-  async close(id) {
+  async close(id,{preserveCache=false}={}) {
+    const owner=this.tabs.get(id)?.windowId;if(this.windowRegistry&&owner&&owner!==this.windowId())return this.windowRegistry.run(owner,()=>this.close(id,{preserveCache}));
     const tab=this.tabs.get(id);if(!tab)return;
     if(tab.closePromise)return tab.closePromise;
     tab.closePromise=(async()=>{
       if(id===this.active)this.transition?.cancel();
-      tab.shared=false;tab.owner=null;tab.resumeOwner=null;tab.faviconResolver?.close();clearTimeout(tab.thumbnailTimer);if(!this.shuttingDown)this.thumbnails?.delete(this.thumbnailKey(tab));
+      tab.shared=false;tab.owner=null;tab.resumeOwner=null;tab.faviconResolver?.close();clearTimeout(tab.thumbnailTimer);if(!this.shuttingDown&&!preserveCache)this.thumbnails?.delete(this.thumbnailKey(tab));
       if(tab.view){const wc=tab.view.webContents;cancelNavigation(wc,'Browser tab closed during navigation.');await this.disconnect(tab);if(!wc.isDestroyed()){this.window.contentView.removeChildView(tab.view);wc.close();}}
       this.tabs.delete(id);if(this.active===id)this.active=null;this.changed();
     })();return tab.closePromise;
   }
   async unload(id, {hiding=false}={}) {
+    const owner=this.tabs.get(id)?.windowId;if(this.windowRegistry&&owner&&owner!==this.windowId())return this.windowRegistry.run(owner,()=>this.unload(id,{hiding}));
     // A restored view exists before its history/navigation promise completes.
     // Wait for that exact restore before taking a snapshot or closing the view.
     await this.reloading.get(id);
@@ -434,6 +459,7 @@ class BrowserTabs {
     try{this.window.contentView.removeChildView(tab.view);}catch{}tab.view=null;tab.shared=false;tab.owner=null;this.changed();return this.state(tab,true);
   }
   async reload(id, restore=true, {background=false}={}) {
+    const owner=this.tabs.get(id)?.windowId;if(this.windowRegistry&&owner&&owner!==this.windowId())return this.windowRegistry.run(owner,()=>this.reload(id,restore,{background}));
     if(this.reloading.has(id))return this.reloading.get(id);
     const tab=this.get(id);if(this.options.projects&&tab.hidden&&!background)throw new Error('Restore this hidden browser tab before selecting it.');if(tab.view)return this.state(tab,true);
     const pending=this.create(restore?tab.snapshot.url:'',null,restore?tab.snapshot.history:null,{id:tab.id,recreating:true,contentTabId:tab.thumbnailId,background,hidden:tab.hidden,lastActivityAt:tab.lastActivityAt?new Date(tab.lastActivityAt).toISOString():undefined,associationChatId:tab.associationChatId,persist:tab.persist,openedAt:tab.openedAt?new Date(tab.openedAt).toISOString():undefined,profileId:tab.profileId,group:tab.group,parentId:tab.parentId,destination:tab.destination,workspaceName:tab.workspaceName,title:tab.snapshot.title,favicon:tab.snapshot.favicon,lastTouchedAt:tab.lastTouchedAt?new Date(tab.lastTouchedAt).toISOString():undefined});
@@ -443,7 +469,7 @@ class BrowserTabs {
   setOverlay(token, visible) {
     if(visible)this.overlays.add(token);else this.overlays.delete(token);
     this.transition?.cancel();
-    for(const tab of this.tabs.values())tab.view?.setVisible(!this.overlays.size&&!this.overviewOpen&&tab.id===this.active&&!!this.bounds&&!!tab.view.webContents.getURL());
+    for(const tab of this.windowTabs())tab.view?.setVisible(!this.overlays.size&&!this.overviewOpen&&tab.id===this.active&&!!this.bounds&&!!tab.view.webContents.getURL());
     this.updateThrottling();
     if(visible)this.window.webContents.focus();
     else if(!this.overlays.size&&!this.overviewOpen&&this.active)this.show(this.active,this.bounds);
@@ -516,6 +542,7 @@ class BrowserTabs {
   }
   async command(value) {
     const { action, id } = value;
+    if(this.windowRegistry&&id&&this.tabs.has(id)&&!this.ownsWindow(this.tabs.get(id)))throw Error('This browser tab belongs to another app window.');
     if(action.startsWith('site-data-'))return this.siteData.command(value);
     if(action==='create-unloaded-link'){const info=await this.create(value.url,null,null,{group:value.group,profileId:value.profileId,parentId:value.parentId,hidden:true,unloaded:true});this.actions.send({type:'unloaded-tab',info});return info;}
     if(action==='site-mode'){const tab=this.get(id),url=this.state(tab).url,origin=siteOrigin(url);if(!origin||!['default','desktop','mobile'].includes(value.mode))throw new Error('Choose a website and site mode.');const partition=this.sessionNames.get(tab.profileId);this.siteSettings.remember(partition,url,{mode:value.mode});const next=presentationURL(url,value.mode);this.siteSettings.remember(partition,next,{mode:value.mode});if(tab.view){await this.applySiteMode(tab,next);if(next!==url)await tab.view.webContents.loadURL(next);else await this.navigate(id,next);}else{tab.snapshot.url=next;}this.changed();return this.state(tab,true);}
@@ -613,7 +640,7 @@ class BrowserTabs {
     }
     if(action==='swipe-reopen'){this.swipeReopen=value.enabled===true;for(const tab of this.tabs.values()){const wc=tab.view?.webContents;if(wc&&!wc.isDestroyed())wc.send('proteus:swipe-reopen',this.swipeReopen);}return;}
     if(action==='overview')return this.actions.overview(value.group);
-    if(action==='overview-end'){this.overviewOpen=false;for(const tab of this.tabs.values()){tab.overviewGate=null;const wc=tab.view?.webContents;if(wc&&!wc.isDestroyed())wc.send('proteus:gesture-reset');}return;}
+    if(action==='overview-end'){this.overviewOpen=false;for(const tab of this.windowTabs()){tab.overviewGate=null;const wc=tab.view?.webContents;if(wc&&!wc.isDestroyed())wc.send('proteus:gesture-reset');}return;}
     if(action==='history')return this.history?.list(value)||{items:[],total:0,page:1,pageSize:50};
     if(['history-clear','history-delete','history-settings'].includes(action))return this.history.update(value);
     if(action==='visibility')return this.visibility(id,value.hidden);
@@ -621,9 +648,9 @@ class BrowserTabs {
     if(action==='activate'){if(this.options.projects&&this.get(id).hidden)throw new Error('Restore this hidden browser tab before selecting it.');this.touch(this.get(id));if(this.reloading.has(id)||!this.get(id).view)await this.reload(id);return this.state(this.get(id),true);}
     if(action==='unload-group'){await this.sweepRetention();return this.list(true);}
     if(!value.gesture&&['back','forward','reload','stop'].includes(action))this.transition?.cancel();
-    if (action === 'list') return this.list(true);
+    if (action === 'list') return this.list(true).filter(info=>this.ownsWindow(this.tabs.get(info.id)));
     if (action === 'create') {
-      const info=await this.create(value.restore===true?safeHistoryURL(value.url,this.appOrigin):value.url,null,value.restore===true?value.history:null,{hidden:value.restore===true&&value.hidden===true,lastActivityAt:value.restore===true?value.lastActivityAt:undefined,associationChatId:value.restore===true?value.associationChatId:undefined,persist:value.persist===true,openedAt:value.restore===true?value.openedAt:undefined,restore:value.restore===true,profileId:value.profileId,group:value.group,parentId:value.parentId,unloaded:value.restore===true&&value.unloaded===true,title:String(value.title||'').slice(0,200),favicon:value.restore===true?value.favicon:undefined,lastTouchedAt:value.restore===true?value.lastTouchedAt:undefined});
+      const info=await this.create(value.restore===true?safeHistoryURL(value.url,this.appOrigin):value.url,null,value.restore===true?value.history:null,{contentTabId:value.contentTabId,hidden:value.restore===true&&value.hidden===true,lastActivityAt:value.restore===true?value.lastActivityAt:undefined,associationChatId:value.restore===true?value.associationChatId:undefined,persist:value.persist===true,openedAt:value.restore===true?value.openedAt:undefined,restore:value.restore===true,profileId:value.profileId,group:value.group,parentId:value.parentId,unloaded:value.restore===true&&value.unloaded===true,title:String(value.title||'').slice(0,200),favicon:value.restore===true?value.favicon:undefined,lastTouchedAt:value.restore===true?value.lastTouchedAt:undefined});
       return this.state(this.get(info.id),true);
     }
     if(action==='persist'){const tab=this.get(id);if(typeof value.enabled!=='boolean')throw new Error('Choose whether to persist this tab.');tab.persist=value.enabled;if(tab.persist&&!tab.view&&!(this.options.projects&&tab.hidden))await this.reload(tab.id);this.changed();return this.state(tab,true);}
@@ -638,7 +665,7 @@ class BrowserTabs {
     }
     if(action==='transfer'){
       const tab=this.get(id);if(tab.agentActions)throw new Error('Wait for the active browser operation to finish.');
-      await this.disconnect(tab);tab.shared=false;tab.developerShared=false;tab.owner=null;tab.parentId=typeof value.parentId==='string'?value.parentId.slice(0,256):null;tab.resumeOwner=null;tab.group=value.group==='team'?'team':'main';this.changed();return this.state(tab,true);
+      await this.disconnect(tab);tab.shared=false;tab.developerShared=false;tab.owner=null;tab.parentId=typeof value.parentId==='string'?value.parentId.slice(0,256):null;tab.resumeOwner=null;tab.group=value.group==='team'?'team':'main';tab.destination=tab.group==='team'?undefined:tab.parentId?.startsWith('project:local:')?{type:'project',id:tab.parentId.slice('project:local:'.length)}:tab.parentId?.startsWith('workspace:local:')?{type:'workspace',id:tab.parentId.slice('workspace:local:'.length)}:tab.parentId?{type:'chat',id:tab.parentId}:{type:'application'};this.changed();return this.state(tab,true);
     }
     if (action === 'show') { if(this.acceptRendererSelection(value,id))this.show(id, value.bounds); return; }
     if (action === 'hide') { if(this.acceptRendererSelection(value,null))this.show(null); return; }
@@ -695,7 +722,7 @@ class BrowserTabs {
   }
   agent(value,runId){
     this.agentQueues??=new Map();const key=value.tabId||'open:'+runId,previous=this.agentQueues.get(key)||Promise.resolve();
-    const task=previous.catch(()=>{}).then(()=>this.performAgent(value,runId));this.agentQueues.set(key,task);
+    const task=previous.catch(()=>{}).then(()=>this.withTabWindow(this.tabs.get(value.tabId),()=>this.performAgent(value,runId)));this.agentQueues.set(key,task);
     void task.finally(()=>{if(this.agentQueues.get(key)===task)this.agentQueues.delete(key);}).catch(()=>{});return task;
   }
   async performAgent(value, runId) {

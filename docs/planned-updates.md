@@ -1,3 +1,18 @@
+## October 19 — Linux release preparation follow-up
+
+Isolated checkpoint `0a5a2f6` passes 783 runtime tests and static checks, and produces a Linux
+package. Actual packaged UI startup exposes eager Life-session loading during browser-profile
+discovery: missing credentials still trigger a protected-storage probe and terminate startup
+without a Linux keyring. A separate validation branch repairs only the missing-file path and
+adds regressions for signed-out profile discovery and preserved protected sessions. Preliminary
+package/UI revalidation passes all 785 Node cases, static checks and exact-package startup,
+synthetic chat, native PTY keyboard input and restart. Correct the package harness's obsolete
+terminal-menu selector and use portable screenshot paths/readiness in focused UI checks. Two
+broader tab/history fixture-contract failures remain explicitly unverified. No release installation
+or live workflow claim follows from this source fix. See [Linux acceptance](linux-app.md) for exact
+artifact identities and remaining checks. Coordinator implementation and frozen-candidate acceptance
+remain separate.
+
 ## October 19 — Next-release intake — queue only
 
 ### BF-2026-10-19-04 — Put Inspect Element last in the browser link menu
@@ -8496,3 +8511,26 @@ held-history navigation for over 20 minutes; it was canceled and remains partial
 The next candidate retains all 67 UI cases, adds the 123rd native activation regression and
 bounds XCTest/step execution while reserving failure/cancellation diagnostics. No timeout,
 cancellation or incomplete result counts as successful workflow acceptance.
+
+## October 19 combined release — implementation in progress
+
+The operator lifted this chat's build hold. Branch `codex/next-release-0.2.26` incorporates
+`linux-current-mac` at `7c7bc54` through merge `0a5a2f6`, plus the Linux `9439f24` startup repair.
+BF-2026-10-19-04–14 and 16–25, 27–29 have source changes in progress; this statement does not mark
+their live acceptance complete. BF-15 Widevine is explicitly shelved. BF-26's black text rectangles
+remain an independent observed symptom without an established cause or reproduced current fixture.
+The accepted native navigation/composer design is promoted with isolated fixture flags retained.
+See the checked evidence and remaining gates in `2026-10-19-next-release.md`, browser/workspaces,
+providers and desktop-updates documentation. No new production artifact is installed.
+## October 19 — Native status area and ordinary app switching
+
+BF-2026-10-19-30: the operator reports iPad sidebar content overlapping the system time.
+Reserve the actual top safe area behind a black background and clip the application content
+below it, including the sidebar and tab strips. Do not hardcode a device/status-bar height;
+check portrait, landscape and window resizing in the authorized iOS release acceptance.
+
+BF-2026-10-19-31: remove the inactive-scene black privacy overlay during ordinary app/screen
+switching on iPhone/iPad. Keep normal scene activity, connection and state persistence handling.
+Reconsider privacy masking with a future explicit private-browsing feature. Both changes are
+included in the currently authorized iOS release work; source is updated, UI/device verification
+and installation remain pending.

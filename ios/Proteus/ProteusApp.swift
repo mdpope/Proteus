@@ -31,8 +31,19 @@ struct ProteusRoot: View {
         return lifeEnabled
     }
     @Environment(\.scenePhase) private var phase
+    @ViewBuilder private var applicationContent: some View {
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            GeometryReader { geometry in
+                NativeShell().frame(width: geometry.size.width, height: geometry.size.height).clipped()
+                    .background(alignment: .top) {
+                        Color.black.frame(height: geometry.safeAreaInsets.top).offset(y: -geometry.safeAreaInsets.top)
+                            .accessibilityIdentifier("ipad-system-status-background").allowsHitTesting(false)
+                    }
+            }.background(Color.black.ignoresSafeArea(.container, edges: .top))
+        } else { NativeShell() }
+    }
     var body: some View {
-            NativeShell().overlay { if phase != .active { Color.black.ignoresSafeArea().overlay { Label("Proteus",systemImage:"lock.shield").font(.title2).foregroundStyle(.secondary) } } }.tint(NativeTheme.accent).preferredColorScheme(.dark)
+            applicationContent.tint(NativeTheme.accent).preferredColorScheme(.dark)
                 .onOpenURL { url in if url.scheme == "proteus" && url.host == "pair" { area = "macs"; do { try destinations.add(url.absoluteString, label: "New computer") } catch { destinations.error = error.localizedDescription } } }
                 .task {
                     #if DEBUG
@@ -40,7 +51,7 @@ struct ProteusRoot: View {
                     if NativeDesignPreview.enabled && ProcessInfo.processInfo.arguments.contains("--phone-preview-fixture") && destinations.destinations.isEmpty {
                         do {
                             // Pairing invitations are one-use: never reuse URLSession's cached response.
-                            let request = URLRequest(url: URL(string: "http://127.0.0.1:4329/pair?projects=1")!, cachePolicy: .reloadIgnoringLocalCacheData)
+                            let request = URLRequest(url: URL(string: "\(nativeFixtureHTTPOrigin)/pair?projects=1")!, cachePolicy: .reloadIgnoringLocalCacheData)
                             let (data, _) = try await URLSession.shared.data(for: request)
                             let fixture = try JSONDecoder().decode(JSON.self, from: data)
                             try destinations.add(fixture["code"].string, label: "Preview Mac")
@@ -132,6 +143,7 @@ struct ProteusRoot: View {
                     destinations.activity(true)
                 }
                 .onChange(of: phase) { _, value in
+                    if value != .active { shared.flushDocumentScrollPositions() }
                     #if DEBUG
                     if ProcessInfo.processInfo.arguments.contains("--synthetic-nav-counts") || ProcessInfo.processInfo.arguments.contains("--synthetic-long-chat") || ProcessInfo.processInfo.arguments.contains("--synthetic-many-chat") || ProcessInfo.processInfo.arguments.contains("--synthetic-heavy-chat") { return }
                     #endif

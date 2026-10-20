@@ -1,5 +1,8 @@
 const { contextBridge, ipcRenderer } = require('electron');
+const windowId=process.argv.find(value=>value.startsWith('--proteus-window-id='))?.slice(20)||'main';
 contextBridge.exposeInMainWorld('desktop', {
+  windowId,
+  onNewTab:handler=>{const listener=()=>handler();ipcRenderer.on('proteus:new-tab',listener);return()=>ipcRenderer.removeListener('proteus:new-tab',listener);},
   notice:value=>ipcRenderer.invoke('proteus:notice',value),
   onNoticeAction:handler=>{const listener=(_event,value)=>handler(value);ipcRenderer.on('proteus:notice-action',listener);return()=>ipcRenderer.removeListener('proteus:notice-action',listener);},
   defaultBrowser:()=>ipcRenderer.invoke('proteus:default-browser'),

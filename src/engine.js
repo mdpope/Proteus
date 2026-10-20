@@ -23,8 +23,8 @@ export function suggestedChatTitle(prompt) {
   return (sentence.split(' ').filter(Boolean).slice(0, 9).join(' ') || 'New chat').slice(0, 90);
 }
 export class Engine extends EventEmitter {
-  constructor(home, providers = {}, clock = () => new Date(), { desktopPreview = false, permissionControls = desktopPreview } = {}) {
-    super();this.historyCache=new RunHistoryCache(id=>path.join(home,'runs',id+'.json')); this.home = home; this.clock = clock;
+  constructor(home, providers = {}, clock = () => new Date(), { desktopPreview = false, permissionControls = desktopPreview, recoveryBarrier=false } = {}) {
+    super();this.updateBarrier=recoveryBarrier;this.historyCache=new RunHistoryCache(id=>path.join(home,'runs',id+'.json')); this.home = home; this.clock = clock;
     this.schedules = new ScheduleStore(path.join(home, 'schedules'));
     this.permissions = new PermissionStore(home, {preserveInheritedDefaults:permissionControls===true});
     this.runsDir = path.join(home, 'runs');
@@ -43,7 +43,7 @@ export class Engine extends EventEmitter {
           run.titleRevision ||= randomUUID(); run.titleKind ||= 'legacy';
           atomicJSON(file, run);
         }
-        if (active.has(run.status)) {
+        if (active.has(run.status)&&!(recoveryBarrier&&run.status==='queued')) {
           interruptTiming(run);
           for(const event of run.events)if(event.data?.question?.status==='pending')event.data.question.status='interrupted';
           run.status = 'interrupted'; run.pending = null; delete run.liveMessages;
@@ -195,6 +195,7 @@ export class Engine extends EventEmitter {
     return {id:run.id,failureEventAt:run.failureEventAt,failureReviewedAt:run.failureReviewedAt,attentionRequired:false};
   }
   createRun(schedule, trigger = 'manual', slot = null, {deferStart=false} = {}) {
+    if(trigger!=='scheduled')this.updateGuard?.();
     schedule = this.prepareSchedule ? this.prepareSchedule(schedule, trigger) : schedule;
     validateSchedule(schedule);
     if (this.stopping) throw new Error('Runner is stopping.');
@@ -224,6 +225,7 @@ export class Engine extends EventEmitter {
   startDeferredRun(id,dispatch){const run=this.getRun(id);if(run.trigger!=='chat'||run.status!=='queued'||run.deferredStart!==true)throw new Error('Chat draft changed.');if(dispatch){run.events[0].data={attachments:this.verifyAttachmentDispatch(run,dispatch),delivery:{id:dispatch.messageId,state:'delivered'}};run.nextAttachmentDispatch=dispatch;}delete run.deferredStart;this.persist(run);queueMicrotask(()=>this.drain());return run;}
   discardDeferredRun(id){const run=this.getRun(id);if(run.trigger!=='chat'||run.status!=='queued'||run.deferredStart!==true)throw new Error('Chat draft changed.');this.runs.delete(id);this.historyCache.forget(id);fs.rmSync(path.join(this.runsDir,`${id}.json`),{force:true});this.emit('change',run);}
   resume(id, prompt) {
+    this.updateGuard?.();
     const run = this.getRun(id);
     if (active.has(run.status)) throw new Error('Reply to the pending question, or wait for the active turn.');
     if (typeof prompt !== 'string' || !prompt.trim()) throw new Error('A follow-up message is required.');
@@ -238,6 +240,7 @@ export class Engine extends EventEmitter {
     if (typeof messageId !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(messageId)) throw new Error('Invalid message identifier.');
     if (run.events.some(e => e.data?.delivery?.id === messageId)) return run;
     if (this.stopping) throw new Error('Runner is stopping.');
+    this.updateGuard?.();
     if (mode === 'steer' && modelOptions) throw new Error('Steering keeps the current turn’s model. Queue a message to change model settings.');
     if(dispatch&&mode!=='queue')throw new Error('Attachments require a queued turn.');
     const attached=dispatch?this.verifyAttachmentDispatch(run,dispatch):[];
@@ -380,7 +383,7 @@ export class Engine extends EventEmitter {
     }
   }
   async drain() {
-    if (this.stopping) return;
+    if (this.stopping||this.updateBarrier) return;
     for (const run of this.runs.values()) {
       if (run.status !== 'queued') continue;
       const lane = this.executionLane?.(run.schedule) || null;
@@ -448,7 +451,7 @@ export class Engine extends EventEmitter {
     else { run.status = 'cancelled'; delete run.nextPrompt;if(run.nextAttachmentDispatch)void this.attachmentConsents?.releaseProof(run.nextAttachmentDispatch.proofId).catch(()=>{});delete run.nextAttachmentDispatch;this.persist(run); }
   }
   tick() {
-    if (this.stopping) return Promise.resolve();
+    if (this.stopping||this.updateBarrier) return Promise.resolve();
     const now = this.clock().toISOString();
     if (!this.pendingSchedulerTime || now > this.pendingSchedulerTime) this.pendingSchedulerTime = now;
     // All overlapping callers await one drain. Only the newest queued poll is
@@ -460,19 +463,19 @@ export class Engine extends EventEmitter {
     return operation;
   }
   async drainSchedulerTicks() {
-    while (this.pendingSchedulerTime && !this.stopping) {
+    while (this.pendingSchedulerTime && !this.stopping&&!this.updateBarrier) {
       const timestamp = this.pendingSchedulerTime; this.pendingSchedulerTime = null;
       const recheck = () => this.recheckPermissions();
       if (this.performanceDiagnostics) this.performanceDiagnostics.measureSync('scheduler.permissions', recheck); else recheck();
       if (new Date(timestamp) <= new Date(this.journal.lastPoll)) continue;
       this.schedulerWorker ??= new SchedulerWorker(this.home);
       const plan = await this.schedulerWorker.scan(this.journal, timestamp);
-      if (this.stopping) break;
+      if (this.stopping||this.updateBarrier) break;
       const currentErrors = new Map(plan.errors.map(error => [error.schedule, error.error]));
       for (const error of plan.errors) if (this.schedulerScheduleErrors?.get(error.schedule) !== error.error) this.emit('scheduler-error', { ...error, at: this.now() });
       this.schedulerScheduleErrors = currentErrors;
       if (plan.due.length && !await this.schedulerWorker.verify(plan.due)) throw new Error('A schedule changed during polling. Retrying on the next tick.');
-      if (this.stopping) break;
+      if (this.stopping||this.updateBarrier) break;
       const journal = { ...this.journal, slots: { ...this.journal.slots }, lastPoll: timestamp };
       for (const { schedule, slot } of plan.due) {
         // createRun synchronously persists before queuing provider work. This
@@ -510,7 +513,7 @@ export class Engine extends EventEmitter {
     try { await this.schedulerWorker?.close(); } catch (error) { schedulerError ||= error; }
     for (const provider of Object.values(this.providers)) await provider.close?.();
     await Promise.allSettled([...this.executions]);
-    for (const run of this.runs.values()) if (active.has(run.status)) { run.status = 'interrupted'; run.pending = null; this.persist(run); }
+    for (const run of this.runs.values()) if (active.has(run.status)&&!(this.updateBarrier&&run.status==='queued')) { run.status = 'interrupted'; run.pending = null; this.persist(run); }
     if (schedulerError) throw schedulerError;
   }
 }

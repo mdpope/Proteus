@@ -37,7 +37,7 @@ for (const bundle of bundles) {
   verifySource(); verifyCopied(path.join(bundle, 'resources', 'app'));
   verifyDesktopMetadata(path.join(bundle, 'resources', 'app'), metadata, provenance);
   fs.copyFileSync(path.join(root, 'desktop/icon.png'), path.join(bundle, 'proteus.png'));
-  fs.writeFileSync(path.join(bundle, 'proteus.desktop'), '[Desktop Entry]\nType=Application\nName=Proteus\nComment=Scheduled AI work and resumable conversations\nExec=proteus\nTryExec=proteus\nIcon=proteus\nTerminal=false\nCategories=Development;Utility;\nStartupWMClass=Proteus\n');
+  fs.writeFileSync(path.join(bundle, 'proteus.desktop'), '[Desktop Entry]\nType=Application\nName=Proteus\nComment=Scheduled AI work and resumable conversations\nExec=proteus %U\nTryExec=proteus\nIcon=proteus\nTerminal=false\nCategories=Development;Utility;\nStartupWMClass=Proteus\nMimeType=x-scheme-handler/proteus;x-scheme-handler/proteus-desktop;\n');
   const archive = path.join(out, `Proteus-${metadata.version}-linux-${process.arch}.tar.gz`);
   execFileSync('tar', ['-czf', archive, '-C', out, path.basename(bundle)], { stdio: 'inherit' });
   fs.writeFileSync(archive + '.sha256', digest(archive) + '  ' + path.basename(archive) + '\n');

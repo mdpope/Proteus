@@ -5,6 +5,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { createHash } from 'node:crypto';
 import { LifeStore } from '../src/life.js';
+import { BrowserProfiles } from '../src/browser-profiles.js';
 import { LifeAPI, LifeTokenVault, LIFE_CALLBACK, lifeOrigin } from '../src/life-api.js';
 const origin='https://life.example.test',accountId='a'.repeat(64),profile={accountId,workspaceId:'1',displayName:'Synthetic account',readOnly:false,capabilities:['nutrition.read','nutrition.add'],sections:['nutrition']};
 const credential=()=>({origin,clientId:'public',accessToken:'first-access',refreshToken:'first-refresh',expiresAt:Date.now()+3600000,accountId,workspaceId:'1'});
@@ -23,6 +24,24 @@ test('protected vault fails closed and never writes plaintext tokens',t=>{
  const {home}=fixture(t);assert.throws(()=>new LifeTokenVault(home,{}).save(credential()),/protected/);
  const crypto={isEncryptionAvailable:()=>true,encryptString:s=>Buffer.from(s).map(b=>b^123),decryptString:b=>Buffer.from(b).map(v=>v^123).toString()};
  const store=new LifeTokenVault(home,crypto);store.save(credential());assert.ok(!fs.readFileSync(store.file).includes(Buffer.from('first-access')));assert.equal(store.load().accountId,accountId);store.clear();assert.equal(store.exists(),false);
+});
+test('missing Life session permits signed-out profile discovery without probing protected storage',async t=>{
+ const {home}=fixture(t);let probes=0,requests=0;
+ const storage={isEncryptionAvailable(){probes++;return false;}};
+ const saved=new LifeTokenVault(home,storage),api=new LifeAPI({vault:saved,fetch:async()=>{requests++;throw new Error('No request expected.');}});
+ const profiles=new BrowserProfiles(home,{life:{api}});
+ assert.equal(saved.load(),null);assert.equal(profiles.list().authenticated,false);assert.equal(profiles.get().id,'default');assert.equal(probes,0);
+ await assert.rejects(api.begin(origin),{code:'PROTECTED_STORAGE_UNAVAILABLE'});assert.equal(requests,0);
+ assert.throws(()=>saved.save(credential()),{code:'PROTECTED_STORAGE_UNAVAILABLE'});assert.equal(saved.exists(),false);
+});
+test('existing Life sessions still require protected storage and preserve encrypted bytes',t=>{
+ const {home}=fixture(t),encrypted=Buffer.from('synthetic encrypted session');let decrypts=0;
+ for(const storage of [{isEncryptionAvailable:()=>false},{isEncryptionAvailable:()=>true,getSelectedStorageBackend:()=> 'basic_text'}]){
+  const saved=new LifeTokenVault(home,{...storage,decryptString(){decrypts++;return JSON.stringify(credential());}});
+  fs.mkdirSync(path.dirname(saved.file),{recursive:true});fs.writeFileSync(saved.file,encrypted,{mode:0o600});
+  assert.throws(()=>saved.load(),{code:'PROTECTED_STORAGE_UNAVAILABLE'});assert.deepEqual(fs.readFileSync(saved.file),encrypted);
+ }
+ assert.equal(decrypts,0);
 });
 test('PKCE discovery exact endpoints, one-use state and callback origin are enforced',async()=>{
  let launched,verifier;const storage=vault();const api=new LifeAPI({vault:storage,openExternal:async url=>{launched=new URL(url);},fetch:async(url,options)=>{

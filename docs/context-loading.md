@@ -259,3 +259,11 @@ The native `testContextFavoritesSelection` UI test requires the synthetic mobile
 Chat creation skips supplemental workspace and every-chat folders that no longer exist, including cached instruction, skill and MCP entries rooted there. The captured context and provider folder list exclude these paths; a system message in the chat and provider context identify the skipped folders. Saved workspace paths and selections remain intact, allowing a refreshed context to use a restored folder. Local and remote chat creation share this behavior.
 
 The selected starting folder must still exist, and an explicitly selected main agent cannot silently be replaced. Missing individual source files in otherwise available folders, changed instruction content and changed MCP definitions retain their existing refresh checks.
+
+## October 19 desktop-control implementation checkpoint
+
+The authorized implementation registers `proteus_desktop` with on-demand catalogs and two-minute
+owned-connection cleanup. Both signed Mac backends pass native input/image adapter acceptance
+on a disposable app with explicit OS grants. A fresh backend process/window receipt and single-use
+observation bind every input; Stop rotates Cua lifecycle names and cleans both backend connections.
+Actual provider image delivery and Linux runtime acceptance remain separate gates.

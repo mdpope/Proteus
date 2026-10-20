@@ -1,170 +1,38 @@
+// Current unified history API, disposable desktop home, no account/provider credentials.
 import {_electron as electron} from 'playwright';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {createServer} from 'node:http';
-
-const home=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'proteus-browser-home-')));
-const workspace=path.join(home,'workspace');
-fs.mkdirSync(workspace);
-fs.writeFileSync(path.join(home,'settings.json'),JSON.stringify({
-  schemaVersion:1,provider:'rehearsal',model:'',timezone:'UTC',
-  workspace:{cwd:workspace,additionalDirectories:[]},skillDirectories:[],mcpServers:{}
-}));
-const long='unbroken-title-and-address-segment-'.repeat(18);
-const local=Array.from({length:77},(_,i)=>({
-  id:'local-'+i,url:'https://example.test/'+long+i,
-  title:'Local '+String(i).padStart(2,'0')+' '+long,
-  visitedAt:new Date(Date.now()-i*1000).toISOString(),source:'desktop',
-  ...(i%3?{deviceName:'Synthetic Local Mac',hostId:'11111111-1111-4111-8111-111111111111'}:{})
-}));
-fs.writeFileSync(path.join(home,'browsing-history.json'),JSON.stringify({
-  version:1,enabled:true,retentionDays:90,items:local
-}));
-const shared=Array.from({length:73},(_,i)=>({
-  id:'shared-'+i,url:'https://shared.example.test/'+long+i,
-  title:'Shared '+String(i).padStart(2,'0')+' '+long,
-  source:'mobile',...(i%2?{}:{deviceName:'Synthetic iPad'}),
-  visitedAt:'2026-11-01T07:30:00Z',createdAt:'2026-11-01T09:30:00Z',updatedAt:'2026-12-01T09:30:00Z'
-}));
-const account={identity:{accountId:'synthetic',workspaceId:'synthetic'},teamLists:[{
-  id:'11111111-1111-4111-8111-111111111111',name:'Synthetic team',members:[],
-  random:[],fixed:[],timezone:'UTC',instructions:'Synthetic',links:[],revision:1
-}],links:[
-  {id:'link-1',title:long,url:'https://example.test/'+long,revision:1}
-],history:shared};
-let app;
-const fixture=createServer((_req,res)=>{res.writeHead(200,{'Content-Type':'text/html'});res.end('<title>Synthetic visit metadata</title><p>Disposable visit</p>');});await new Promise(resolve=>fixture.listen(0,'127.0.0.1',resolve));const fixtureURL='http://127.0.0.1:'+fixture.address().port;
+const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-browser-home-')),workspace=path.join(home,'workspace');fs.mkdirSync(workspace);
+fs.writeFileSync(path.join(home,'settings.json'),JSON.stringify({schemaVersion:1,provider:'rehearsal',model:'',timezone:'UTC',workspace:{cwd:workspace,additionalDirectories:[]},skillDirectories:[],mcpServers:{}}));
+const requests=[],fixture=createServer((req,res)=>{requests.push(req.url);res.writeHead(200,{'Content-Type':'text/html'});res.end('<title>Synthetic visit</title><h1>Disposable visit</h1>');});await new Promise(resolve=>fixture.listen(0,'127.0.0.1',resolve));
+const origin='http://127.0.0.1:'+fixture.address().port,account={identity:{accountId:'synthetic',workspaceId:'synthetic'},teamLists:[{id:'synthetic-team',name:'Synthetic team',members:[],random:[],fixed:[],timezone:'UTC',instructions:'Synthetic',links:[],revision:1}],links:[{id:'shared-link',title:'Synthetic shared link',url:origin+'/shared',revision:1}]};
+const visits=Array.from({length:53},(_,i)=>({eventId:'home-'+i,url:'https://example.test/'+i,title:'Local '+String(i).padStart(2,'0')+' '+('long-title-'.repeat(15)),visitedAt:new Date(Date.now()-i*1000).toISOString(),profileId:'default',sourceHostId:'synthetic-owner'}));
+let app,page;const historyRequests=[];
 try{
-  app=await electron.launch({args:['.','--use-mock-keychain','--user-data-dir='+path.join(home,'electron')],env:{
-    ...process.env,PROTEUS_HOME:home,COPILOT_HOME:path.join(home,'copilot'),PORT:'0'
-  },timeout:60000});
-  const page=await app.firstWindow();
-  page.setDefaultTimeout(15000);
-  const errors=[];
-  page.on('pageerror',error=>errors.push(error.message));
-  await page.route('**/api/app',route=>route.fulfill({json:account}));
-  await page.route('**/api/team/lists',route=>route.fulfill({json:account}));
-  await page.locator('#new-chat').waitFor();
-
-  const checkLayout=async areaSelector=>{
-    const metrics=await page.locator(areaSelector).evaluate(area=>{
-      area.scrollTop=0;
-      const search=area.querySelector('#browser-home-query');
-      const box=area.getBoundingClientRect(),input=search.getBoundingClientRect();
-      return {top:box.top,inputTop:input.top,inputBottom:input.bottom,bottom:box.bottom,
-        overflow:area.scrollWidth-area.clientWidth,innerOverflow:area.firstElementChild.scrollWidth-area.firstElementChild.clientWidth};
-    });
-    assert.ok(metrics.inputTop>=metrics.top && metrics.inputBottom<=metrics.bottom,JSON.stringify(metrics));
-    assert.ok(metrics.overflow<=1 && metrics.innerOverflow<=1,JSON.stringify(metrics));
-    assert.equal(await page.locator(areaSelector+' #browser-shared-history .browser-history-row').count(),25);
-    assert.equal(await page.locator(areaSelector+' #browser-home-history .browser-history-row').count(),25);
-    assert.equal(await page.locator(areaSelector+' #browser-shared-more').isVisible(),true);
-    assert.equal(await page.locator(areaSelector+' #browser-history-more').isVisible(),true);
-  };
-  const checkMetadata=async areaSelector=>{
-    const rows=await page.locator(areaSelector).evaluate((area,fixtures)=>{
-      const formatter=new Intl.DateTimeFormat(undefined,{year:'numeric',month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short'});
-      return [...area.querySelectorAll('#browser-home-history .browser-history-row,#browser-shared-history .browser-history-row')].map(row=>{
-        const url=row.dataset.historyUrl||row.dataset.sharedHistoryUrl,item=fixtures.find(item=>item.url===url);
-        return {device:row.querySelector('small')?.textContent,time:row.querySelector('time')?.textContent,expectedDevice:item.deviceName||'Unknown device',expectedTime:formatter.format(new Date(item.visitedAt)),url};
-      });
-    },[...local,...shared]);
-    assert.ok(rows.length>=50);
-    for(const row of rows){assert.equal(row.device,row.expectedDevice);assert.equal(row.time,row.expectedTime);}
-    assert.ok(rows.some(row=>row.device==='Unknown device'));assert.ok(rows.some(row=>row.device==='Synthetic Local Mac'));assert.ok(rows.some(row=>row.device==='Synthetic iPad'));
-  };
-  const waitForRows=async(selector,count)=>page.waitForFunction(
-    ({selector,count})=>document.querySelectorAll(selector+' .browser-history-row').length===count,
-    {selector,count}
-  );
-
-  await page.locator('#browser').click();
-  await page.locator('#browser-area #browser-home-query').waitFor();
-  await checkLayout('#browser-area');await checkMetadata('#browser-area');
-  await page.locator('#browser-area #browser-shared-more').click();
-  assert.equal(await page.locator('#browser-area #browser-shared-history .browser-history-row').count(),50);
-  await page.locator('#browser-area #browser-history-more').click();
-  await waitForRows('#browser-area #browser-home-history',50);
-  await page.locator('#browser-area #browser-shared-more').click();
-  assert.equal(await page.locator('#browser-area #browser-shared-history .browser-history-row').count(),73);
-  assert.equal(await page.locator('#browser-area #browser-shared-more').isVisible(),false);
-  await page.locator('#browser-area #browser-history-more').click();
-  await page.locator('#browser-area #browser-history-more').click();
-  await waitForRows('#browser-area #browser-home-history',77);await checkMetadata('#browser-area');
-  assert.equal(await page.locator('#browser-area #browser-history-more').isVisible(),false);
-  await page.locator('#browser-area #browser-history-filter').fill('Local 76');
-  await waitForRows('#browser-area #browser-home-history',1);
-  assert.equal(await page.locator('#browser-area #browser-history-more').isVisible(),false);
-  await page.locator('#browser-area #browser-history-filter').fill('');
-  await waitForRows('#browser-area #browser-home-history',25);
-  await page.locator('#browser-area').evaluate(area=>{area.scrollTop=0;});
-  await page.screenshot({path:'/private/tmp/proteus-browser-home-main.png'});
-
-  await page.locator('[data-page="team"]').click();
-  await page.locator('[data-team-tab="standup"]').click();
-  await page.locator('#team-standup-dock').click();
-  await page.locator('#team-new-browser').click();
-  await page.locator('#team-browser-area #browser-home-query').waitFor();
-  await page.setViewportSize({width:850,height:700});
-  await checkLayout('#team-browser-area');await checkMetadata('#team-browser-area');
-  await page.locator('#team-browser-area #browser-shared-more').click();await page.locator('#team-browser-area #browser-history-more').click();await waitForRows('#team-browser-area #browser-home-history',50);assert.equal(await page.locator('#team-browser-area #browser-shared-history .browser-history-row').count(),50);await checkMetadata('#team-browser-area');
-  await page.screenshot({path:'/private/tmp/proteus-browser-home-team-docked.png'});
-
-  // Use the production renderer with an injected failing page request to verify
-  // that retries do not advance the cursor or duplicate earlier rows.
-  await page.evaluate(async()=>{
-    const {renderBrowserHome}=await import('/browser-home.js');
-    const area=document.createElement('div');
-    area.id='browser-home-fixture';
-    area.className='browserarea';
-    area.style.cssText='position:fixed;top:100px;left:100px;width:500px;height:500px;z-index:9999;overflow:auto';
-    document.body.append(area);
-    const items=Array.from({length:53},(_,i)=>({
-      id:'retry-'+i,url:'https://example.test/retry/'+i,title:'Retry '+i,visitedAt:new Date().toISOString()
-    }));
-    window.__homeRequests=[];
-    window.__failMore=true;
-    await renderBrowserHome(area,{
-      escape:value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char])),
-      time:value=>String(value||''),toast:()=>{},navigate:()=>{},
-      api:async()=>({identity:{},links:[],history:[]}),
-      browser:async request=>{
-        window.__homeRequests.push(request);
-        if(request.action!=='history')throw new Error('Unexpected operation');
-        if(request.page===2 && window.__failMore){window.__failMore=false;throw new Error('Synthetic page failure');}
-        const filtered=items.filter(item=>!request.query||item.title.includes(request.query));
-        const start=(request.page-1)*request.pageSize;
-        return {items:filtered.slice(start,start+request.pageSize),total:filtered.length,
-          page:request.page,pageSize:request.pageSize,enabled:true,retentionDays:90};
-      }
-    });
-  });
-  await page.locator('#browser-home-fixture #browser-history-more').click();
-  await page.locator('#browser-home-fixture #browser-history-error').getByText('Synthetic page failure').waitFor();
-  assert.equal(await page.locator('#browser-home-fixture #browser-home-history .browser-history-row').count(),25);
-  await page.locator('#browser-home-fixture #browser-history-more').click();
-  await waitForRows('#browser-home-fixture #browser-home-history',50);
-  assert.deepEqual(await page.locator('#browser-home-fixture #browser-home-history [data-history-url]').evaluateAll(nodes=>nodes.map(n=>n.dataset.historyUrl)),Array.from({length:50},(_,i)=>'https://example.test/retry/'+i));
-  await page.locator('#browser-home-fixture #browser-history-filter').fill('Retry 52');
-  await waitForRows('#browser-home-fixture #browser-home-history',1);
-  assert.deepEqual(await page.evaluate(()=>window.__homeRequests.map(r=>[r.page,r.pageSize])),[[1,25],[2,25],[2,25],[1,25]]);
-  // Exercise the actual main-process device callback, with local synthetic pages only.
-  const hostId=await app.evaluate(async({app})=>{const service=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getService();await service.remote.configure({enabled:false,label:'Synthetic visit Mac'});return service.remote.info().hostId;});
-  for(const group of ['main','team']){
-    const url=fixtureURL+'/'+group;
-    const tab=await page.evaluate(({url,group})=>window.desktop.browser({action:'create',url,group}),{url,group});
-    for(let attempt=0;attempt<100;attempt++){if(JSON.parse(fs.readFileSync(path.join(home,'browsing-history.json'))).items.some(item=>item.url===url))break;await new Promise(resolve=>setTimeout(resolve,50));}
-    const visit=JSON.parse(fs.readFileSync(path.join(home,'browsing-history.json'))).items.find(item=>item.url===url);assert.ok(visit);assert.equal(visit.deviceName,'Synthetic visit Mac');assert.equal(visit.hostId,hostId);assert.equal(visit.deviceId,hostId);assert.ok(Number.isFinite(Date.parse(visit.visitedAt)));
-    await page.evaluate(id=>window.desktop.browser({action:'close',id}),tab.id);
-  }
-  assert.deepEqual(errors,[]);
-  console.log(JSON.stringify({passed:true,checks:22,screenshots:[
-    '/private/tmp/proteus-browser-home-main.png','/private/tmp/proteus-browser-home-team-docked.png'
-  ]}));
-}finally{
-  if(app)await app.close();
-  await new Promise(resolve=>fixture.close(resolve));
-  fs.rmSync(home,{recursive:true,force:true});
-}
+ app=await electron.launch({args:['.','--use-mock-keychain','--user-data-dir='+path.join(home,'browser')],env:{...process.env,PROTEUS_HOME:home,COPILOT_HOME:path.join(home,'copilot'),PORT:'0'},timeout:60000});
+ page=await app.firstWindow();const errors=[];page.on('request',request=>{if(request.url().endsWith('/api/browser-history'))historyRequests.push(request.postDataJSON());});page.setDefaultTimeout(15000);page.on('pageerror',error=>errors.push(error.message));
+ await page.route('**/api/app',route=>route.fulfill({json:account}));await page.route('**/api/team/lists',route=>route.fulfill({json:account}));await page.locator('#topbar-home').waitFor();
+ await page.evaluate(async visits=>{const response=await fetch('/api/browser-history',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'record',events:visits})});if(!response.ok)throw Error(await response.text());},visits);
+ const rows=area=>page.locator(area+' #browser-home-history .browser-history-row');
+ const count=async(area,n)=>page.waitForFunction(({area,n})=>document.querySelectorAll(area+' #browser-home-history .browser-history-row').length===n,{area,n});
+ const layout=async area=>{const metrics=await page.locator(area).evaluate(node=>({overflow:node.scrollWidth-node.clientWidth,inner:node.firstElementChild.scrollWidth-node.firstElementChild.clientWidth}));assert.ok(metrics.overflow<=1&&metrics.inner<=1,JSON.stringify(metrics));};
+ await page.locator('#tab-add-menu summary').click();await count('#browser-area',25);
+ assert.equal(await page.locator('#browser-home-url').evaluate(node=>document.activeElement===node),true);assert.equal(await page.locator('#browser-home-url').getAttribute('placeholder'),'https://example.com');assert.equal(await page.locator('#browser-history-filter').count(),0);assert.ok(await page.locator('[data-new-tab-action]').count()>2);await layout('#browser-area');
+ await page.locator('#browser-history-more').click();await count('#browser-area',50);await page.locator('#browser-history-more').click();await count('#browser-area',53);assert.equal(await page.locator('#browser-history-more').isVisible(),false);
+ await page.locator('#browser-home-url').fill('Local 52');await count('#browser-area',1);assert.match(await rows('#browser-area').innerText(),/Local 52/);
+ await page.locator('#browser-home-url').fill(origin+'/typed');await page.locator('#browser-home-url').press('Enter');await page.waitForFunction(url=>document.querySelector('#browser-url')?.value===url,origin+'/typed');
+ for(let i=0;i<100&&!requests.includes('/typed');i++)await new Promise(resolve=>setTimeout(resolve,50));assert.ok(requests.includes('/typed'));
+ await page.locator('[data-page="team"]').click();await page.locator('[data-team-tab="standup"]').click();await page.locator('#team-standup-dock').click();await page.locator('.team-tab-add summary').click();await count('#team-browser-area',25);await page.setViewportSize({width:850,height:700});await layout('#team-browser-area');
+ await page.locator('#team-browser-area #browser-home-url').fill('Local 52');await count('#team-browser-area',1);await page.locator('#team-browser-area #browser-home-url').fill('');await count('#team-browser-area',25);
+ await page.evaluate(async()=>{
+  const {renderBrowserHome}=await import('/browser-home.js');const area=document.createElement('div');area.id='browser-home-fixture';area.className='browserarea';area.style.cssText='position:fixed;top:100px;left:100px;width:500px;height:500px;z-index:9999;overflow:auto';document.body.append(area);window.homeRequests=[];let fail=true;
+  const items=Array.from({length:53},(_,i)=>({eventId:'retry-'+i,url:'https://example.test/retry/'+i,title:'Retry '+i,visitedAt:new Date().toISOString()}));
+  await renderBrowserHome(area,{escape:value=>String(value??''),toast:()=>{},navigate:()=>{},api:async(route,value)=>{if(route==='/api/app')return {identity:{},links:[]};if(route!=='/api/browser-history'||value.action!=='query')throw Error('Unexpected synthetic operation');window.homeRequests.push(value.cursor||'0');if(value.cursor==='25'&&fail){fail=false;throw Error('Synthetic page failure');}const start=Number(value.cursor||0);return {items:items.slice(start,start+25),nextCursor:String(start+25),hasMore:start+25<items.length,enabled:true,retentionDays:90};}});
+ });
+ await page.locator('#browser-home-fixture #browser-history-more').click();await page.locator('#browser-home-fixture #browser-history-error').getByText('Synthetic page failure').waitFor();assert.equal(await rows('#browser-home-fixture').count(),25);
+ await page.locator('#browser-home-fixture #browser-history-more').click();await count('#browser-home-fixture',50);assert.deepEqual(await page.evaluate(()=>window.homeRequests),['0','25','25']);assert.equal(await rows('#browser-home-fixture').evaluateAll(nodes=>new Set(nodes.map(node=>node.dataset.historyUrl)).size),50);
+ assert.deepEqual(errors,[]);console.log('PASS actual desktop +, focused combined address/history filtering, Enter navigation, creation blocks, Team dock layout and cursor-safe pagination retry');
+}catch(error){console.error('HISTORY REQUESTS',JSON.stringify(historyRequests.filter(row=>row.action==='query')));if(page)console.error('STATE',await rows('#team-browser-area').count(),await page.locator('#team-browser-area #browser-home-url').inputValue({timeout:1000}).catch(()=>null));console.error(error);throw error;}finally{await app?.close();await new Promise(resolve=>fixture.close(resolve));fs.rmSync(home,{recursive:true,force:true,maxRetries:10,retryDelay:100});}

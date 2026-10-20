@@ -61,3 +61,18 @@ export function restoreView(root,key){
     node.dispatchEvent(new Event('proteus:view-restored'));
   }
 }
+const documentRestorations=new WeakMap();
+export function restoreDocumentView(root,key){
+  if(!root||!key)return;
+  documentRestorations.get(root)?.();
+  const saved=positions.get(key);let cancelled=false,frame,timer;
+  const events=['pointerdown','wheel','keydown'];
+  const stop=()=>{if(cancelled)return;cancelled=true;cancelAnimationFrame(frame);clearTimeout(timer);observer?.disconnect();for(const type of events)root.removeEventListener(type,interact,true);documentRestorations.delete(root);};
+  const interact=()=>{stop();rememberView(root,key);};
+  const restore=()=>{if(cancelled||!root.isConnected||root.dataset.viewKey!==key){stop();return;}if(saved)positions.set(key,saved);restoreView(root,key);};
+  const observer=typeof ResizeObserver==='function'?new ResizeObserver(()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(restore);}):null;
+  documentRestorations.set(root,stop);for(const type of events)root.addEventListener(type,interact,true);
+  observer?.observe(root);for(const child of root.children)observer?.observe(child);
+  root.querySelectorAll('img').forEach(image=>image.addEventListener('load',restore,{once:true}));
+  restore();frame=requestAnimationFrame(restore);timer=setTimeout(()=>{stop();if(root.isConnected&&root.dataset.viewKey===key)rememberView(root,key);},5000);
+}

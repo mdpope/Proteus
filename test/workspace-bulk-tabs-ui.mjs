@@ -1,0 +1,29 @@
+import {_electron as electron} from 'playwright';
+import assert from 'node:assert/strict';
+import {sidebarFixture} from './preview-sidebar-fixture.mjs';
+const fixture=await sidebarFixture();let app,page;
+const until=async(fn,label)=>{for(let n=0;n<150;n++){if(await fn())return;await new Promise(resolve=>setTimeout(resolve,100));}throw Error('Timed out: '+label);};
+try{
+ app=await electron.launch({args:['.','--use-mock-keychain','--user-data-dir='+fixture.locations.userData],env:{...process.env,PROTEUS_DESKTOP_PREVIEW:'1',PROTEUS_PREVIEW_HOME:fixture.locations.root,PROTEUS_HOME:fixture.locations.home,CODEX_HOME:fixture.auth,PORT:'0'}});
+ page=await app.firstWindow();const errors=[];page.on('pageerror',error=>errors.push(error.message));await page.locator('#topbar-home').waitFor();
+ await page.locator('[data-preview-workspace-expand="'+fixture.studio.id+'"]').click();await page.locator('[data-preview-project="'+fixture.project.id+'"]').first().click();
+ await page.locator('[data-preview-project-page="tabs"]').click();await page.locator('[data-managed-tab]').first().waitFor();
+ const browser=page.locator('[data-managed-tab]').filter({hasText:'Synthetic favicon browser'}),document=page.locator('[data-managed-tab]').filter({hasText:'Synthetic sidebar document'});
+ const ids=await Promise.all([browser,document].map(row=>row.getAttribute('data-managed-tab')));
+ await browser.locator('.workspace-tab-title').click({modifiers:['Meta']});assert.equal(await page.locator('[data-select-tab]:checked').count(),1);
+ await document.locator('[data-select-tab]').check();assert.equal(await page.locator('[data-select-tab]:checked').count(),2);
+ assert.equal(await page.locator('.preview-project-pages [data-bulk-action="move"]').count(),1);
+ await page.locator('[data-bulk-action="hide"]').click();
+ const session=()=>page.evaluate(()=>window.desktop.workspaceSession({action:'get'}));
+ await until(async()=>{const saved=await session();return ids.every(id=>saved.tabs.find(tab=>tab.id===id)?.hidden);},'both typed tabs hidden');
+ assert.equal(fixture.requests.some(url=>url==='/favicon-tab'),false,'bulk hide never loads the browser');
+ for(const id of ids)await page.locator('[data-select-tab="'+id+'"]').check();
+ await page.locator('[data-bulk-action="move"]').click();await page.locator('#bulk-tab-destination').waitFor();
+ const labels=await page.locator('#bulk-tab-destination optgroup').evaluateAll(groups=>groups.map(group=>group.label));assert.ok(labels.includes(fixture.studio.name));assert.ok(labels.includes(fixture.personal.name));assert.ok(!labels.includes('Projects'));
+ const target=fixture.projects.find(project=>project.workspaceId===fixture.personal.id&&project.name==='Research');
+ await page.locator('#bulk-tab-destination').selectOption('project:local:'+target.id);await page.locator('#dialog-submit').click();
+ await until(async()=>{const saved=await session();return ids.every(id=>saved.tabs.find(tab=>tab.id===id)?.parentId==='project:local:'+target.id);},'both existing resources moved');
+ const moved=await session();assert.equal(moved.tabs.filter(tab=>ids.includes(tab.id)).length,2);assert.ok(moved.tabs.filter(tab=>ids.includes(tab.id)).every(tab=>tab.hidden));assert.equal(moved.tabs.find(tab=>tab.id===ids[1]).file,fixture.document);
+ assert.equal(fixture.requests.some(url=>url==='/favicon-tab'),false,'moving hidden resources does not load them');
+ assert.deepEqual(errors,[]);console.log('PASS Command-click selection, checkbox column, top-right bulk actions, typed hide/move, workspace/project hierarchy, identity/source preservation and no hidden browser loads');
+}catch(error){console.error(error);if(page)console.error(JSON.stringify({session:await page.evaluate(()=>window.desktop.workspaceSession({action:'get'})).then(saved=>saved.tabs.map(({id,parentId,contentTabId,hidden})=>({id,parentId,contentTabId,hidden}))),notices:await Promise.all(app.windows().filter(page=>page.url().includes('notice.html')).map(page=>page.locator('body').innerText())),dialog:await page.locator('#dialog').innerText()}));throw error;}finally{await app?.close();await fixture.cleanup();}

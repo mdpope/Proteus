@@ -22,7 +22,9 @@ paid team `TEAMID0000`, existing paid certificate `54BE22510FBADFF2AD71848A58E05
 Both devices now run 0.2.21 / 2610.18.2 with profile `a51d4e44-45e7-526f-8659-21d0c09bb398`,
 expiring October 16, 2027 at 22:03:20 UTC. Data/credential transfer, production launch, restart
 and saved destination checks passed on both. The iPhone's existing Build Mac pairing reconnected.
-The original apps remain closed as Proteus Legacy for recovery; future mobile updates target the paid identifier.
+Future mobile updates target the paid identifier. On October 19, the operator requested removal
+of Proteus Legacy from the iPad; that removal is verified, while its private recovery copy remains.
+The original iPhone installation remains Proteus Legacy.
 Keep the original native Mac and desktop identities unchanged. No shared certificate was revoked.
 See [paid migration](native-paid-account.md) for the secure transfer workflow, exact exclusions,
 physical acceptance limits and two-generation recovery evidence. Earlier Personal Team notes below

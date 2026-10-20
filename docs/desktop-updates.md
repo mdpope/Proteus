@@ -286,3 +286,37 @@ within the above bounds as part of an authorized update or cleanup. It does not 
 live data, deleting the only verified recovery generation, changing other projects' backup policy,
 exporting private data elsewhere, or scheduling recurring deletion. Carry forward that authorization
 rather than asking again for the same routine retention action.
+
+## October 19 helper implementation checkpoint (not deployed)
+
+`src/updates.js` and the independent `desktop/update-helper.cjs` implement protocol-1 preparation,
+isolated candidate UI smoke acceptance, a turn/terminal/download idle barrier and helper-readiness
+acknowledgement before graceful Quit. The signed staged Electron runtime survives target replacement;
+source checkouts report unavailable rather than restarting a source process as an installed update.
+Compatible baselines preserve signer, source/package hashes and data protocol. Interrupted backup,
+replacement, verification and rollback phases reconcile from the private journal. Recovery input
+queues durably; the original chat continuation uses one deduplicated message ID and automatically
+waits for provider availability. The Updates panel and original-chat card report real phases/errors.
+
+The installation workflow must initialize `<per-installation update root>/recovery-policy.json` after
+inventorying **all** existing recovery roots. Its schema-1 record binds canonical home/installation,
+audit time and verified generation directory/receipt hash/date/eligibility entries. Handoff refuses
+an absent/mismatched inventory. The helper counts imported generations as well as its own; it verifies
+receipts, refuses deletion while an app is in use and retires eligible oldest generations before
+another full snapshot. Partial copies resume in the same generation. No generic backup folder is
+silently exempt. Private paths, prompts, journals and receipts stay outside this repository.
+
+Eight synthetic protocol/supervisor regressions pass, including waiting for the initiating turn,
+new input ordering, one same-chat continuation after rollback, permission/session changes, readiness
+failure, retained post-update data and interrupted atomic replacement. Real signed candidate smoke,
+crash/rollback packaging, live-provider continuation, imported recovery inventory and device installs
+remain acceptance gates. Existing installed 0.2.25 is not a helper-capable rollback baseline; initial
+0.2.26 deployment still follows the authorized external exact-artifact procedure above.
+
+Later synthetic acceptance also verifies every pre-restart chat's event-prefix/configuration
+receipt, permits appended queued input, budgets each distinct staging/installation/recovery volume,
+and uses Linux's actual lowercase `proteus` executable. An attention state offers **Resume ordinary
+work** only after current package/UI identity verification; it preserves the failed update receipt
+and never replays its ambiguous continuation. This is separate from the automatic healthy restart
+or compatible-rollback continuation. Twelve synthetic updater cases pass; signed supervisor and
+real-provider acceptance remain pending.

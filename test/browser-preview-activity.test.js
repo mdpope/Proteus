@@ -153,3 +153,19 @@ test('overlay retains latest desired selection and bounds and reconciles before 
  assert.equal(b.get(a.id).view.getVisible(),false);assert.equal(b.get(c.id).view.getVisible(),false);
  b.setOverlay('synthetic-modal',false);assert.equal(b.get(a.id).view.getVisible(),false);assert.equal(b.get(c.id).view.getVisible(),true);assert.equal(b.get(c.id).view.getBounds().width,600);
 });
+
+test('one browser owner isolates simultaneous window selection, overlays and close without recreating the other page',async()=>{
+ const {AsyncLocalStorage}=require('node:async_hooks'),scope=new AsyncLocalStorage(),f=fixture(),b=f.browser,first=b.window,second={...first,contentView:{addChildView(){},removeChildView(){}}};
+ const registry={contexts:new Map([['main',{id:'main',window:first}],['22222222-2222-4222-8222-222222222222',{id:'22222222-2222-4222-8222-222222222222',window:second}]]),current(){return this.contexts.get(scope.getStore()||'main');},run(id,callback){return scope.run(id,callback);},bind(id,callback){return (...args)=>this.run(id,()=>callback(...args));}};
+ first.webContents.focus=()=>{};b.installWindowContexts(registry,first);b.addWindow(second,'22222222-2222-4222-8222-222222222222');
+ const firstInfo=await registry.run('main',()=>b.create('https://example.test/first'));
+ const secondInfo=await registry.run('22222222-2222-4222-8222-222222222222',()=>b.create('https://example.test/second'));
+ const one=b.get(firstInfo.id),two=b.get(secondInfo.id),original=two.view.webContents;
+ registry.run('main',()=>b.show(one.id,{x:1,y:2,width:700,height:500}));
+ registry.run('22222222-2222-4222-8222-222222222222',()=>b.show(two.id,{x:30,y:40,width:600,height:400}));
+ assert.equal(one.view.getVisible(),true);assert.equal(two.view.getVisible(),true);
+ registry.run('main',()=>b.setOverlay('dialog',true));assert.equal(one.view.getVisible(),false);assert.equal(two.view.getVisible(),true);
+ await assert.rejects(registry.run('main',()=>b.command({action:'show',id:two.id})),/another app window/);
+ const firstList=await registry.run('main',()=>b.command({action:'list'}));assert.deepEqual(Array.from(firstList,row=>row.id),[one.id]);
+ await b.closeWindow('main');assert.equal(b.tabs.has(one.id),false);assert.equal(b.get(two.id).view.webContents,original);assert.equal(original.isDestroyed(),false);
+});

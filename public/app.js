@@ -1,3 +1,4 @@
+import {renderUpdateCard} from './updates.js';
 import {createPreviewSidebarLayout} from './preview-sidebar-layout.js';
 import {remapPreviewProjectSession,remapPreviewBrowserPlacement} from './preview-project-placement.js';
 import {reorderWorkspaceTabSiblings} from './workspace-tabs.js';
@@ -40,7 +41,7 @@ import { browserTarget, renderBrowserHome } from './browser-home.js';
 import { browserAddress, updateAgentAccess, bindBrowserHistoryButton, browserSurfaceIdentity, browserSurfaceRevision, selectBrowserSurface } from './browser-toolbar.js';
 import { bindBrowserAddressMenu } from './browser-address-menu.js';
 import { bindTabEdges, bindTabReorder, reorderById } from './tab-interactions.js';
-import { initializeViewPositions, rememberView, restoreView } from './view-position.js';
+import { initializeViewPositions, rememberView, restoreView, restoreDocumentView } from './view-position.js';
 import { showContextMenu, copyContextText } from './context-menu.js';
 import { requestPresentation, mountStructured } from './tool-presentation.js';
 import { placeTabAfter,destinationSections } from './tab-placement.js';
@@ -65,6 +66,7 @@ const pageFind=installPageFind({scope:()=>document.querySelector('#main'),native
 const pairedBubbles = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">${chatIconPaths}</svg>`;
 const $ = selector => document.querySelector(selector);
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+const desktopWindowId=window.desktop?.windowId||'main',windowScopeId=kind=>desktopWindowId==='main'?kind:'window:'+desktopWindowId;
 const state = { data: null, page: 'home', engineSection:'resources', selected: null, tab: 'overview', tabs: [{ id: 'overview', label: 'Schedules', type: 'overview' }], draft: null, dirty: false, signature: '', markdown: null };
 const navigationIcon = markup => previewEnabled(state)?`<span class="preview-tab-icon">${markup}</span>`:markup;
 const friendly = value => ({ awaiting_input:'Needs feedback', completed:'Turn complete', queued:'Queued', running:'Running', cancelled:'Cancelled', interrupted:'Interrupted', failed:'Failed' }[value] || value);
@@ -107,7 +109,7 @@ function saveWorkspace() {
   reconcilePreviewProjects();
   if(!applyingContentTabs){clearTimeout(contentSyncTimer);contentSyncTimer=setTimeout(()=>void contentTabSync.all(),100);}
   const team=teamState();
-  const session={schemaVersion:1,active:state.tab,page:state.page,engineSection:state.engineSection,chatDrafts:state.chatDrafts||{},selectedChildren:Object.fromEntries(selectedChildren),team:{...team,tabs:team.tabs.map(tab=>({id:tab.id,type:tab.type||'browser',contentTabId:tab.contentTabId,customTitle:tab.customTitle,...contentTabMetadata(tab),...(tab.browserId?{browserId:tab.browserId,profileId:tab.profileId||'default',url:tab.url||'',title:tab.title||'',favicon:tab.favicon,lastTouchedAt:tab.lastTouchedAt,lastActivityAt:tab.lastActivityAt,openedAt:tab.openedAt,persist:tab.persist===true}:{}),...(tab.type==='terminal'?{label:tab.label,terminal:tab.terminal}:{}),...(tab.type==='markdown'?{label:tab.label,file:tab.file||tab.markdown?.file}:{}),...(['agent-terminal','remote-document'].includes(tab.type)?{runId:tab.runId,hostId:tab.hostId,documentId:tab.documentId,workspaceId:tab.workspaceId,projectId:tab.projectId,mediaType:tab.mediaType,preview:tab.preview}:{})}))},tabs:state.tabs.map(tab=>({id:tab.id,type:tab.type,label:tab.label,contentTabId:tab.contentTabId,customTitle:tab.customTitle,hidden:tab.hidden,navigationClosed:tab.navigationClosed,openedAt:tab.openedAt,lastTouchedAt:tab.lastTouchedAt,lastActivityAt:tab.lastActivityAt,...(tab.parentId?{parentId:tab.parentId}:{}),...(tab.type==='browser'?{associationChatId:tab.info?.associationChatId||tab.associationChatId,remotePreviewURL:tab.remotePreviewURL,profileId:tab.info?.profileId||tab.profileId||'default',url:tab.info?.url||'',history:tab.info?.history,unloaded:tab.info?.loaded===false,favicon:tab.info?.favicon,lastTouchedAt:tab.info?.lastTouchedAt,lastActivityAt:tab.info?.lastActivityAt||tab.lastActivityAt,openedAt:tab.info?.openedAt,persist:tab.info?.persist===true}:{}),...(tab.type==='markdown'?{file:tab.markdown?.file}:{}),...(tab.type==='terminal'?{terminal:tab.terminal,hostId:tab.hostId}:{}),...(['run','agent-terminal'].includes(tab.type)&&tab.runId?{runId:tab.runId}:{}),...(tab.type==='workspace'?{workspaceId:tab.workspaceId,hostId:tab.hostId,hostName:tab.hostName,workspacePage:tab.workspacePage,projectId:tab.projectId,workspaceName:tab.workspaceName,hidden:tab.hidden}:{}),...(['remote-run','remote-document'].includes(tab.type)?{hostId:tab.hostId,runId:tab.runId}:{}),...(tab.type==='remote-document'?{documentId:tab.documentId,workspaceId:tab.workspaceId,projectId:tab.projectId,mediaType:tab.mediaType,preview:tab.preview===true,previewTabId:tab.previewTabId}:{})}))};
+  const session={schemaVersion:1,windowId:desktopWindowId,active:state.tab,page:state.page,engineSection:state.engineSection,chatDrafts:state.chatDrafts||{},selectedChildren:Object.fromEntries(selectedChildren),team:{...team,tabs:team.tabs.map(tab=>({id:tab.id,type:tab.type||'browser',contentTabId:tab.contentTabId,customTitle:tab.customTitle,...contentTabMetadata(tab),...(tab.browserId?{browserId:tab.browserId,profileId:tab.profileId||'default',url:tab.url||'',title:tab.title||'',favicon:tab.favicon,lastTouchedAt:tab.lastTouchedAt,lastActivityAt:tab.lastActivityAt,openedAt:tab.openedAt,persist:tab.persist===true}:{}),...(tab.type==='terminal'?{label:tab.label,terminal:tab.terminal}:{}),...(tab.type==='markdown'?{label:tab.label,file:tab.file||tab.markdown?.file}:{}),...(['agent-terminal','remote-document'].includes(tab.type)?{runId:tab.runId,hostId:tab.hostId,documentId:tab.documentId,workspaceId:tab.workspaceId,projectId:tab.projectId,mediaType:tab.mediaType,preview:tab.preview}:{})}))},tabs:state.tabs.map(tab=>({id:tab.id,type:tab.type,label:tab.label,contentTabId:tab.contentTabId,customTitle:tab.customTitle,hidden:tab.hidden,navigationClosed:tab.navigationClosed,openedAt:tab.openedAt,lastTouchedAt:tab.lastTouchedAt,lastActivityAt:tab.lastActivityAt,...(tab.parentId?{parentId:tab.parentId}:{}),...(tab.type==='browser'?{associationChatId:tab.info?.associationChatId||tab.associationChatId,remotePreviewURL:tab.remotePreviewURL,profileId:tab.info?.profileId||tab.profileId||'default',url:tab.info?.url||'',history:tab.info?.history,unloaded:tab.info?.loaded===false,favicon:tab.info?.favicon,lastTouchedAt:tab.info?.lastTouchedAt,lastActivityAt:tab.info?.lastActivityAt||tab.lastActivityAt,openedAt:tab.info?.openedAt,persist:tab.info?.persist===true}:{}),...(tab.type==='markdown'?{file:tab.markdown?.file}:{}),...(tab.type==='terminal'?{terminal:tab.terminal,hostId:tab.hostId}:{}),...(['run','agent-terminal'].includes(tab.type)&&tab.runId?{runId:tab.runId}:{}),...(tab.type==='workspace'?{workspaceId:tab.workspaceId,hostId:tab.hostId,hostName:tab.hostName,workspacePage:tab.workspacePage,projectId:tab.projectId,workspaceName:tab.workspaceName,hidden:tab.hidden}:{}),...(['remote-run','remote-document'].includes(tab.type)?{hostId:tab.hostId,runId:tab.runId}:{}),...(tab.type==='remote-document'?{documentId:tab.documentId,workspaceId:tab.workspaceId,projectId:tab.projectId,mediaType:tab.mediaType,preview:tab.preview===true,previewTabId:tab.previewTabId}:{})}))};
   const json=JSON.stringify(session);if(json===lastWorkspace)return workspaceSaving;lastWorkspace=json;
   if(window.desktop?.workspaceSession){workspaceSaving=window.desktop.workspaceSession({action:'save',session}).catch(error=>{lastWorkspace='';toast(error.message);return {failed:true,error:error.message};});return workspaceSaving;}
   else try{localStorage.setItem('proteus.workspace',json);}catch{}
@@ -553,7 +555,7 @@ function renderRun(id) {
   const interacting=!pendingChanged&&main.contains(document.activeElement)&&document.activeElement.matches('input,select,textarea')&&document.activeElement.id!=='followup';
   if(main.dataset.runId===id && $('#conversation-host') && (main.dataset.controlSignature===controlSignature || interacting)) {
     if(main.dataset.controlSignature!==controlSignature)main.dataset.deferredControls='true';else delete main.dataset.deferredControls;
-    updateConversation(run);
+    updateConversation(run);renderUpdateCard(main,state.data.updates,run.id,escape,()=>{state.engineSection='updates';openFeatureTab('engine');});
     reviewLocalFailure(run);
     const input=$('[data-usage-input]'),output=$('[data-usage-output]'),approvals=$('[data-auto-approvals]');
     if(input)input.textContent=Number.isFinite(run.usage?.inputTokens)?run.usage.inputTokens.toLocaleString():'—';
@@ -573,7 +575,7 @@ function renderRun(id) {
   replaceChatContent(`<div class="heading"><div>${previewChatBreadcrumb(run)}<div class="eyebrow">${escape(run.schedule.provider)} / ${run.id.slice(0,8)}</div><div class="chat-title-line"><h1>${escape(run.title)}</h1><button id="chat-rename" class="chat-rename" type="button" aria-label="Rename chat" title="Rename chat">✎</button></div><div class="muted">${time(run.createdAt)} · ${escape(run.schedule.model || (run.schedule.provider==='rehearsal'?'Local rehearsal, no AI calls':'Provider default model'))}</div></div><div class="actions"><button id="toggle-chat-details">${state.showChatDetails?'Chat':'Details'}</button>${run.chatType==='internet'?'<button id="chat-promote" class="chat-secondary-action">Promote to User Chat</button>':''}<button id="chat-move" class="chat-secondary-action">Move</button><button id="chat-archive" class="chat-secondary-action">${run.archivedAt?'Unarchive':'Archive'}</button><button id="chat-delete" class="chat-secondary-action danger">Delete</button>${badge(run.status)}</div></div><div class="grid chat-grid"><section class="card chat-pane"><div id="conversation-host"></div>${pending?`<div class="pending">${previewEnabled(state)&&pending.type==='permission'?'':`<div class="eyebrow">Your input is needed</div><p>${escape(pending.question)}</p>`}${pending.details&&!(previewEnabled(state)&&pending.type==='permission')?`<div id="request-summary"></div><details class="raw-details"><summary>Raw request</summary><pre>${escape(JSON.stringify(pending.details,null,2))}</pre></details>`:''}${pending.type==='permission'?(previewEnabled(state)?permissionChoices(pending,run):'<div class="actions"><button id="deny">Deny</button><button class="primary" id="approve">Approve once</button></div>'+permissionChoices(pending,run)):`<textarea id="answer" placeholder="Add your feedback…" rows="2">${escape(state.chatAnswerDrafts[answerKey]||'')}</textarea><div class="actions"><button class="primary" id="reply">Send feedback</button></div>`}</div>`:run.status==='running'?'<p class="note" role="status"><span class="spinner" aria-hidden="true"></span>Working… you can queue a message or steer this turn.</p>':''}${run.status==='queued'?`<p class="note" role="status">${escape(run.queueReason||'Preparing this chat…')}</p>`:''}<div class="composer"><textarea id="followup" placeholder="${active?'Add an update while this runs…':'Continue this conversation…'}" rows="2">${escape(state.chatDrafts[id]||'')}</textarea><div class="composer-footer"><div id="run-attachments"></div><div class="composer-models" ${run.schedule.provider==='rehearsal'?'hidden':''}><input type="hidden" id="run-provider" value="${escape(run.schedule.provider)}">${modelPicker('run-model',modelDraft.model,run.schedule.provider)}${modelControls('run-model',modelDraft,true)}<button class="subtle" id="run-model-refresh" aria-label="Refresh model choices" title="Refresh model choices">↻</button></div><div class="composer-actions">${active?`<button id="steer" title="Send into the running turn using its current model settings" ${run.status!=='running'?'disabled':''}>Steer</button>`:''}<button class="primary" id="continue" title="${active?'Send after the current turn finishes':'Send message'}">${active?'Queue':'Send ↑'}</button>${['running','awaiting_input'].includes(run.status)?'<button class="danger" id="cancel" title="Stop the running turn">Stop</button>':''}</div></div>${run.queuedMessages?.length?`<p class="note">${run.queuedMessages.length} message(s) queued for after this turn.</p>${run.queuedMessages.map(m=>`<div class="queued-message"><span>${escape(m.prompt.slice(0,120))}</span>${run.status==='running'&&!m.attachmentDispatch?`<button data-steer-queued="${escape(m.id)}" title="Send now using the current turn’s model">Steer now</button>`:''}<button data-edit-queued="${escape(m.id)}">Edit</button><button data-remove-message="${escape(m.id)}" aria-label="Remove queued message">×</button></div>`).join('')}`:''}</div></section><div class="stack chat-details">${renderRunDetails(run,{desktopPreview:previewEnabled(state),permissionHTML:permissionControls(run.permissionContext,{runId:run.id}),mcp:state.data.mcpStatusProviders?.includes(run.schedule.provider)})}</div></div>`);
   bindChatFolderTrust(main,{run,request:payload=>api('/api/permissions',payload),pick:()=>window.desktop.choosePaths({kind:'folder'}),refresh:async()=>{await loadRunView(id);renderRun(id);},notify:toast});
   renderChatSubtabs();
-  updateConversation(run);
+  updateConversation(run);renderUpdateCard(main,state.data.updates,run.id,escape,()=>{state.engineSection='updates';openFeatureTab('engine');});
   reviewLocalFailure(run);
   main.querySelectorAll('.chat-details details').forEach(d=>{if(expanded.has(d.querySelector('summary')?.textContent))d.open=true;});
   const details = $('.chat-details'); details.dataset.runId = id; details.scrollTop = state.detailScroll[id] || 0;
@@ -726,7 +728,7 @@ async function chatDialog(onCreated=null,guard=()=>{},draft={}) {
   // preview restricts execution to its staged Codex authentication.
   if(state.data?.desktopPreview?.enabled){for(const option of [...$('#chat-provider').options])if(option.value!=='codex'&&option.value!=='rehearsal')option.remove();$('#chat-provider').value='codex';void $('#chat-provider').onchange();}
   if(draft.lockWorkspace)$('#chat-workspace').disabled=true;
-  else void attachChatDestinations(draft=>chatDialog(onCreated,guard,draft)).then(()=>{if(alive()){$('#dialog .new-chat-grid').prepend($('#dialog .peer-destination'));}});
+  else void attachChatDestinations(draft=>chatDialog(onCreated,guard,draft),'',{beforeStart:guard,...(onCreated?{onCreated:(id,title,hostId)=>onCreated({id:'peer:'+hostId+':'+id,type:'remote-run',hostId,runId:id,label:title||'Chat'})}:{})}).then(()=>{if(alive()){$('#dialog .new-chat-grid').prepend($('#dialog .peer-destination'));}});
 }
 
 function newSchedule() {
@@ -747,10 +749,7 @@ function renderMarkdown() {
     link: source => openMessageLink(source, markdown.file.slice(0, markdown.file.lastIndexOf('/'))),
     image: async source => (await api('/api/markdown', { file: markdown.file, image: source })).dataURL
   });
-  restoreView($('#main'),$('#main').dataset.viewKey);
-  const main=$('#main'),key=main.dataset.viewKey;
-  requestAnimationFrame(()=>{if(main.dataset.viewKey===key)restoreView(main,key);});
-  main.querySelectorAll('img').forEach(image=>image.addEventListener('load',()=>{if(main.dataset.viewKey===key)restoreView(main,key);},{once:true}));
+  restoreDocumentView($('#main'),$('#main').dataset.viewKey);
 }
 async function openMessageLink(source, cwd, originId=selectedChatParent()?.id) {
   const origin=state.tabs.find(tab=>tab.id===originId);
@@ -790,9 +789,9 @@ async function descriptorFor(tab,parent){
   if(tab.type==='markdown'&&['run','workspace','main','team'].includes(parent?.type)){const file=tab.markdown?.file||tab.file;if(!file)return null;const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode((parent.type==='workspace'?(parent.projectId?'project:'+parent.projectId:'workspace:'+parent.workspaceId):parent.type==='main'?'main':parent.type==='team'?'team':parent.runId||parent.id)+'\0'+file));const documentId=tab.contentTabId?.startsWith('document:')?tab.contentTabId.slice(9):[...new Uint8Array(digest)].map(byte=>byte.toString(16).padStart(2,'0')).join('');tab.contentTabId='document:'+documentId;return {id:'document:'+documentId,type:'document',title,...named,documentId,...(tab.associationChatId?{chatId:tab.associationChatId}:{}),mediaType:/\.html?$/i.test(file)?'text/html':'text/markdown'};}
   return null;
 }
-const contentTabSync=createTabSynchronizer({navigation:true,pendingStorage:localStorage,
+const contentTabSync=createTabSynchronizer({navigation:true,pendingStorage:desktopWindowId==='main'?localStorage:{getItem:key=>localStorage.getItem('window:'+desktopWindowId+':'+key),setItem:(key,value)=>localStorage.setItem('window:'+desktopWindowId+':'+key,value),removeItem:key=>localStorage.removeItem('window:'+desktopWindowId+':'+key)},
   preserveUntracked:(scope,tab)=>!!scope.hostId&&tab.type==='chat',
-  scopes:()=>window.desktop?[...state.tabs.filter(tab=>!tab.connectionPaused&&(tab.type==='workspace'&&(!tab.projectId||state.data.workspaceProjects)||!tab.parentId&&['run','remote-run'].includes(tab.type)&&!(previewEnabled(state)&&tab.type==='run'&&previewProjectForChat(state.data.runs.find(run=>run.id===(tab.runId||tab.id))||{})))).map(tab=>({scope:tab.type==='workspace'?(tab.projectId?'project':'workspace'):'chat',id:tab.type==='workspace'?(tab.projectId||tab.workspaceId):tab.runId||tab.id,...(tab.hostId?{hostId:tab.hostId}:{})})),{scope:'team',id:'team'},{scope:'main',id:'main'}]:[],
+  scopes:()=>window.desktop?[...state.tabs.filter(tab=>!tab.connectionPaused&&(tab.type==='workspace'&&(!tab.projectId||state.data.workspaceProjects)||!tab.parentId&&['run','remote-run'].includes(tab.type)&&!(previewEnabled(state)&&tab.type==='run'&&previewProjectForChat(state.data.runs.find(run=>run.id===(tab.runId||tab.id))||{})))).map(tab=>({scope:tab.type==='workspace'?(tab.projectId?'project':'workspace'):'chat',id:tab.type==='workspace'?(tab.projectId||tab.workspaceId):tab.runId||tab.id,...(tab.hostId?{hostId:tab.hostId}:{})})),{scope:'team',id:windowScopeId('team')},{scope:'main',id:windowScopeId('main')}]:[],
   readLocal:async scope=>{if(scope.scope==='team')return (await Promise.all(teamState().tabs.map(tab=>descriptorFor(tab,{type:'team',id:null})))).filter(Boolean);const parent=scopeParent(scope);if(!parent)return [];return (await Promise.all(state.tabs.filter(tab=>tab.parentId===parent.id).map(tab=>descriptorFor(tab,parent)))).filter(Boolean);},
   request:async(scope,action,args={},options)=>{
     if(!scope.hostId)return api('/api/content-tabs',{action,scope:scope.scope,id:scope.id,...args});
@@ -880,7 +879,7 @@ function selectedChatParent(){
 async function newWorkspaceChat(parent,internet=false,prompt=''){
  if(parent.hostId)return openWorkspaceChatDialog(parent.hostId,parent.workspaceId,(id,title)=>openWorkspaceChat(parent,{id,title}),{chatType:internet?'internet':'chat',projectId:parent.projectId,prompt});
  state.data.context=await api('/api/context?workspaceId='+encodeURIComponent(parent.workspaceId));
- if(internet)return internetSearchDialog({state,api,escape,toast,showDialog,workspaceId:parent.workspaceId,open:run=>openWorkspaceChat(parent,run),refresh});
+ if(internet)return internetSearchDialog({state,api,escape,toast,showDialog,workspaceId:parent.workspaceId,projectId:parent.projectId,open:run=>openWorkspaceChat(parent,run),refresh});
  chatDialog(tab=>openWorkspaceChat(parent,tab),()=>{if(!state.tabs.includes(parent))throw Error('Workspace is no longer open.');},{workspaceId:parent.workspaceId,projectId:parent.projectId||workspaceProjectsCatalog(state)?.defaultProjectIds?.[parent.workspaceId],lockWorkspace:true,prompt});
 }
 
@@ -1027,10 +1026,13 @@ function newTabAction(blank,action){
   if(action.id==='terminal')return openTerminalDialog(parent?.id,replace,guard);
   if(action.id==='agent-terminal'){guard();if(parent?.type!=='run')throw Error('Agent output is available on the executing computer.');return replace({id:'agent-terminal:'+(parent.runId||parent.id),type:'agent-terminal',runId:parent.runId||parent.id,label:'Agent terminal output'});}
   if(action.id==='new-chat'){
-    if(parent?.hostId)return openWorkspaceChatDialog(parent.hostId,parent.workspaceId,(id,title)=>replace({id:parent.id+':chat:'+id,type:'remote-run',hostId:parent.hostId,runId:id,label:title}),{projectId:parent.projectId});
+    if(parent?.hostId)return openWorkspaceChatDialog(parent.hostId,parent.workspaceId,(id,title)=>replace({id:parent.id+':chat:'+id,type:'remote-run',hostId:parent.hostId,runId:id,label:title}),{projectId:parent.projectId,beforeStart:guard});
     return chatDialog(replace,guard,parent?{workspaceId:parent.workspaceId,projectId:parent.projectId,lockWorkspace:true}:{});
   }
-  if(['internet','internet-search'].includes(action.id))return internetSearchDialog({state,api,escape,toast,showDialog,refresh,workspaceId:parent?.workspaceId,open:run=>replace({id:run.id,type:'run',label:run.title})});
+  if(['internet','internet-search'].includes(action.id)){
+    if(parent?.hostId)return openWorkspaceChatDialog(parent.hostId,parent.workspaceId,(id,title)=>replace({id:parent.id+':chat:'+id,type:'remote-run',hostId:parent.hostId,runId:id,label:title}),{projectId:parent.projectId,chatType:'internet',beforeStart:guard});
+    return internetSearchDialog({state,api,escape,toast,showDialog,refresh,workspaceId:parent?.workspaceId,projectId:parent?.projectId,beforeStart:guard,open:run=>replace({id:run.id,type:'run',label:run.title})});
+  }
 }
 function renderBrowser() {
   const tab=state.tabs.find(t=>t.id===state.tab);
@@ -1189,16 +1191,16 @@ function transferTabDialog(tab,copy=false,teamSource=null){
   if(!copy&&['run','remote-run'].includes(tab.type))return void moveChatToWorkspace({...tab,chatId:tab.runId||tab.id,local:tab.type==='run'}).catch(error=>toast(error.message));
   if(copy&&tab.type!=='browser')throw new Error('Only browser tabs can be copied. Move a terminal or viewer to preserve its existing session.');
   const groups=destinationSections(state.data.workspaceProjects?state.tabs:previewEnabled(state)?state.tabs.filter(item=>!item.projectId):state.tabs,{excludeId:tab.parentId,runs:state.data.runs,catalog:workspaceProjectsCatalog(state),workspaces:state.data.context.workspaces}),destinations=groups.flatMap(group=>group.tabs);
-  showDialog(`<h2>${copy?'Send a tab copy':'Send tab'}</h2><label>Destination<select id="tab-destination"><option value="main">Application tabs</option><option value="team">Team Tools</option>${groups.map(group=>`<optgroup label="${group.label}">${group.tabs.map(t=>`<option value="${escape(t.id)}">${escape(t.label)}</option>`).join('')}</optgroup>`).join('')}</select></label><p class="note">Browser tabs stay on this computer. Copies are independent, unloaded pages. Moving preserves the current page and revokes its old agent access. Workspace and chat destinations keep this browser on the current computer. Live terminals and protected documents retain their owner.</p><div class="actions"><button id="close-dialog">Cancel</button><button id="dialog-submit">${copy?'Copy tab':'Move tab'}</button></div>`,async()=>{
+  showDialog(`<h2>${copy?'Send a tab copy':'Send tab'}</h2><label>Destination<select id="tab-destination"><option value="main">Application tabs</option><option value="team">Team Tools</option>${groups.map(group=>`<optgroup label="${escape(group.label)}">${group.tabs.map(t=>`<option value="${escape(t.id)}">${escape(t.label)}</option>`).join('')}</optgroup>`).join('')}</select></label><p class="note">Browser tabs stay on this computer. Copies are independent, unloaded pages. Moving preserves the current page and revokes its old agent access. Workspace and chat destinations keep this browser on the current computer. Live terminals and protected documents retain their owner.</p><div class="actions"><button id="close-dialog">Cancel</button><button id="dialog-submit">${copy?'Copy tab':'Move tab'}</button></div>`,async()=>{
     if(teamSource?!teamState().tabs.includes(teamSource):!state.tabs.includes(tab))throw new Error('The source tab was closed.');const target=$('#tab-destination').value;let parent=destinations.find(t=>t.id===target);
     if(parent?.projectId&&!parent.hostId&&!state.tabs.includes(parent)){const fresh=await api('/api/workspace-projects'),project=fresh.projects.find(project=>project.id===parent.projectId);if(!project)throw Error('The destination project changed. Refresh before moving.');parent=ensurePreviewProject(project);}
     if(!['main','team'].includes(target)&&(!parent||!state.tabs.includes(parent)))throw new Error('The destination chat was closed.');
     if(tab.type!=='browser'||!copy){if(['run','remote-run'].includes(tab.type)){if(parent?.type!=='workspace')throw new Error('Choose a workspace for a chat.');await moveChatToWorkspace({...tab,chatId:tab.runId||tab.id,local:tab.type==='run'});return;}const actual=teamSource||tab;
-      if(tab.type==='remote-document'||tab.type==='agent-terminal'){const source=await findManagedTab(row=>row.runtimeId===actual.id,{scope:'shell'});if(!source)throw new Error('Refresh this tab’s inventory before moving it.');const destination=['main','team'].includes(target)?{scope:target,id:target,expectedRevision:0}:{scope:'shell',id:parent.id,expectedRevision:source.revision};await api('/api/tabs/manage',{action:'move',scope:'shell',id:'shell',tabId:source.id,expectedRevision:source.revision,destination});return;}if(tab.hostId||parent?.hostId)throw new Error('Move this host-owned resource using its owning computer’s Tabs page.');
+      if(tab.type==='remote-document'||tab.type==='agent-terminal'){const source=await findManagedTab(row=>row.runtimeId===actual.id&&(!row.windowId||row.windowId===desktopWindowId),{scope:'shell'});if(!source)throw new Error('Refresh this tab’s inventory before moving it.');const destination=['main','team'].includes(target)?{scope:target,id:target,expectedRevision:0}:{scope:'shell',id:parent.id,expectedRevision:source.revision};await api('/api/tabs/manage',{action:'move',scope:'shell',id:'shell',tabId:source.id,expectedRevision:source.revision,destination});return;}if(tab.hostId||parent?.hostId)throw new Error('Move this host-owned resource using its owning computer’s Tabs page.');
       await saveWorkspace();await contentTabSync.all();
       const descriptor=await descriptorFor(actual,teamSource?{type:'team'}:state.tabs.find(item=>item.id===tab.parentId)||{type:'main'}),source=await findManagedTab(item=>item.id===descriptor?.id);
       if(!source)throw new Error('The tab has not synchronized yet. Refresh and retry.');
-      const destination=target==='team'?{scope:'team',id:'team'}:target==='main'?{scope:'main',id:'main'}:parent.type==='workspace'?{scope:parent.projectId?'project':'workspace',id:parent.projectId||parent.workspaceId}:{scope:'chat',id:parent.runId||parent.id};
+      const destination=target==='team'?{scope:'team',id:windowScopeId('team')}:target==='main'?{scope:'main',id:windowScopeId('main')}:parent.type==='workspace'?{scope:parent.projectId?'project':'workspace',id:parent.projectId||parent.workspaceId}:{scope:'chat',id:parent.runId||parent.id};
       const snapshot=await api('/api/content-tabs',{action:'get',...destination});
       await api('/api/tabs/manage',{action:'move',scope:source.scope,id:source.scopeId,tabId:source.id,expectedRevision:source.revision,destination:{...destination,expectedRevision:snapshot.revision}});return;}
 
@@ -1218,13 +1220,71 @@ function transferTabDialog(tab,copy=false,teamSource=null){
     }finally{transferringTab=false;}
   });
 }
+async function moveManagedWorkspaceTab(tab,target,parent){
+ if(!state.tabs.includes(tab))throw Error('The source tab was closed.');
+ if(parent?.projectId&&!parent.hostId&&!state.tabs.includes(parent)){
+  const catalog=await api('/api/workspace-projects'),project=catalog.projects.find(item=>item.id===parent.projectId&&item.workspaceId===parent.workspaceId);
+  if(!project)throw Error('The destination project changed. Refresh before moving.');parent=ensurePreviewProject(project);
+ }
+ if(!['main','team'].includes(target)&&(!parent||!state.tabs.includes(parent)))throw Error('The destination was closed.');
+ if(['run','remote-run'].includes(tab.type)){
+  if(tab.hostId)throw Error('Move this chat from its owning computer’s Tabs page.');
+  if(parent?.type!=='workspace')throw Error('Choose a project or workspace for chats.');
+  const catalog=await api('/api/workspace-projects'),run=await api('/api/chat-view?id='+encodeURIComponent(tab.runId||tab.id));
+  await api('/api/tabs/manage',{action:'move-chat',chatId:run.id,workspaceId:parent.workspaceId,projectId:parent.projectId||catalog.defaultProjectIds?.[parent.workspaceId],expectedProjectRevision:catalog.revision,expectedUpdatedAt:run.updatedAt});return;
+ }
+ if(tab.type==='remote-document'||tab.type==='agent-terminal'){
+  const source=await findManagedTab(row=>row.runtimeId===tab.id&&(!row.windowId||row.windowId===desktopWindowId),{scope:'shell'});if(!source)throw Error('Refresh the tab inventory before moving.');
+  const destination=['main','team'].includes(target)?{scope:target,id:target,expectedRevision:0}:{scope:'shell',id:parent.id,expectedRevision:source.revision};
+  await api('/api/tabs/manage',{action:'move',scope:'shell',id:'shell',tabId:source.id,expectedRevision:source.revision,destination});return;
+ }
+ if(tab.hostId||parent?.hostId)throw Error('Move this resource from its owning computer’s Tabs page.');
+ await saveWorkspace();await contentTabSync.all();
+ const descriptor=await descriptorFor(tab,state.tabs.find(item=>item.id===tab.parentId)||{type:'main'}),source=await findManagedTab(item=>item.id===descriptor?.id);
+ if(!source)throw Error('The tab has not synchronized yet. Refresh and retry.');
+ const destination=target==='team'?{scope:'team',id:windowScopeId('team')}:target==='main'?{scope:'main',id:windowScopeId('main')}:parent.type==='workspace'?{scope:parent.projectId?'project':'workspace',id:parent.projectId||parent.workspaceId}:{scope:'chat',id:parent.runId||parent.id};
+ const snapshot=await api('/api/content-tabs',{action:'get',...destination});
+ await api('/api/tabs/manage',{action:'move',scope:source.scope,id:source.scopeId,tabId:source.id,expectedRevision:source.revision,destination:{...destination,expectedRevision:snapshot.revision}});
+}
+async function manageWorkspaceTabs(action,rows){
+ const ids=[...new Set(rows.map(row=>row.id))];
+ if(action==='close'&&ids.some(id=>state.tabs.find(tab=>tab.id===id)?.type==='terminal')&&!window.confirm('Close the selected tabs? Persistent tmux work remains available; ordinary shell processes stop.'))return {cancelled:true};
+ const perform=async(target,parent)=>{
+  const completed=[],failures=[];
+  for(const id of ids){
+   try{
+    const tab=state.tabs.find(item=>item.id===id);if(!tab)throw Error('The tab was closed or moved. Refresh the inventory.');
+    if(action==='move')await moveManagedWorkspaceTab(tab,target,parent);
+    else if(action==='close'){if(tab.parentId)await closeChildTab(tab);else await closeTopTab(id);}
+    else await manageWorkspaceTab(action,id);
+    completed.push(id);
+   }catch(error){failures.push({id,error:error.message});}
+  }
+  await refresh(true);return {completed,failures};
+ };
+ if(action!=='move')return perform();
+ const groups=destinationSections(state.tabs,{runs:state.data.runs,catalog:workspaceProjectsCatalog(state),workspaces:state.data.context.workspaces}),destinations=groups.flatMap(group=>group.tabs);
+ return new Promise(resolve=>{
+  let settled=false;const finish=result=>{if(!settled){settled=true;resolve(result);}};
+  showDialog(`<h2>Move ${ids.length} tabs</h2><label>Destination<select id="bulk-tab-destination"><option value="main">Application tabs</option><option value="team">Team Tools</option>${groups.map(group=>`<optgroup label="${escape(group.label)}">${group.tabs.map(tab=>`<option value="${escape(tab.id)}">${escape(tab.label)}</option>`).join('')}</optgroup>`).join('')}</select></label><p class="note">Chats move to a project. Existing browser, terminal and document sessions keep their identity and permissions. Failed items stay selected for review.</p><div class="actions"><button id="close-dialog">Cancel</button><button id="dialog-submit">Move tabs</button></div>`,async()=>{
+   const target=$('#bulk-tab-destination').value,button=$('#dialog-submit');button.disabled=true;
+   try{finish(await perform(target,destinations.find(tab=>tab.id===target)));}finally{button.disabled=false;}
+  });
+  $('#dialog').addEventListener('close',()=>finish({cancelled:true}),{once:true});
+ });
+}
 async function manageWorkspaceTab(action,id,placement){const tab=state.tabs.find(tab=>tab.id===id);if(!tab)throw new Error('Tab is no longer open.');if(action==='open'){if(tab.hidden||tab.info?.hidden)await setTabVisibility(tab,false);if(tab.type==='browser')return selectBrowserTab(tab.info);return openTab({...tab,hidden:false});}if(action==='reorder'){
  if(!previewEnabled(state))throw new Error('Drag reordering is unavailable for this host.');
  if(!workspaceReady||workspaceRestoring||workspaceClosing)throw new Error('The desktop session is not ready to save tab order. Try again shortly.');
  state.tabs=reorderWorkspaceTabSiblings(state.tabs,{id,...placement});
  const saved=await saveWorkspace();if(saved?.failed)throw new Error('Could not save tab order: '+saved.error);
  renderTabs();renderChatSubtabs();return;
-}if(action==='move')return transferTabDialog(tab);if(action==='close'){if(tab.type==='terminal'&&!window.confirm('Close this terminal tab? Persistent tmux work remains available; ordinary shell processes stop.'))return;return closeChildTab(tab);}if(['hide','restore'].includes(action)){await setTabVisibility(tab,action==='hide');}else if(['up','down'].includes(action)){const siblings=state.tabs.filter(item=>item.parentId===tab.parentId),index=siblings.indexOf(tab),other=siblings[index+(action==='up'?-1:1)];if(other){const a=state.tabs.indexOf(tab),b=state.tabs.indexOf(other);[state.tabs[a],state.tabs[b]]=[state.tabs[b],state.tabs[a]];}}saveWorkspace();renderTabs();renderChatSubtabs();}
+}if(action==='move')return transferTabDialog(tab);if(action==='close'){if(tab.type==='terminal'&&!window.confirm('Close this terminal tab? Persistent tmux work remains available; ordinary shell processes stop.'))return;return closeChildTab(tab);}if(['hide','restore'].includes(action)){
+ if(!tab.hostId&&!['remote-document','agent-terminal'].includes(tab.type)){
+  await saveWorkspace();await contentTabSync.all();const descriptor=await descriptorFor(tab,state.tabs.find(item=>item.id===tab.parentId)||{type:'main'}),source=await findManagedTab(row=>row.id===descriptor?.id);if(!source)throw Error('Refresh this tab’s owner inventory before changing visibility.');
+  await api('/api/tabs/manage',{action,scope:source.scope,id:source.scopeId,tabId:source.id,expectedRevision:source.revision});
+ }else await setTabVisibility(tab,action==='hide');
+}else if(['up','down'].includes(action)){const siblings=state.tabs.filter(item=>item.parentId===tab.parentId),index=siblings.indexOf(tab),other=siblings[index+(action==='up'?-1:1)];if(other){const a=state.tabs.indexOf(tab),b=state.tabs.indexOf(other);[state.tabs[a],state.tabs[b]]=[state.tabs[b],state.tabs[a]];}}saveWorkspace();renderTabs();renderChatSubtabs();}
 function selectedText(){return window.getSelection()?.toString()||'';}
 function selectContents(node){const range=document.createRange();range.selectNodeContents(node);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);}
 async function openContextLink(href,external=false,origin={}){if(parseChatLink(href))return openChatLink(href);const url=new URL(href,location.href);if(!['https:','http:'].includes(url.protocol))throw new Error('Only HTTP and HTTPS links can open as browser tabs.');if(external){await window.desktop.openLink(url.href);return;}const {parentId,afterId,group,profileId}=origin;const info=await window.desktop.browser({action:'create',url:url.href,parentId,group,profileId});if(group==='team'){selectTeamBrowser(info,afterId);openFeatureTab('team');}else openTab({id:info.id,type:'browser',label:info.title||url.host,info,...(parentId?{parentId}:{})},afterId);}
@@ -1352,6 +1412,11 @@ function selectBrowserTab(info, afterId=null) {
     }
   }
 }
+window.desktop?.onNewTab?.(()=>{
+ const parent=selectedChatParent(),team=previousFeature==='team';
+ const button=team?document.querySelector('[data-team-add="browser"]'):parent?document.querySelector('[data-chat-add="browser"]'):document.querySelector('#browser');
+ if(button)button.click();else document.querySelector('#browser')?.click();
+});
 window.desktop?.onBrowserAction?.(value=>{
   if(value.type==='downloads'){downloadsChanged();return;}
   if(value.type==='tab-swipe')void swipeTab(value.direction,value.id);
@@ -1406,8 +1471,8 @@ initChatsIndex({moveChat:moveChatToWorkspace,copyLink:copyChatLink,sendToWorkspa
 initTeamTools({state,api,escape,toast,time,lines,showDialog,browserTarget,fillBrowserLogin,timezone:()=>state.data.settings.timezone,onChange:saveWorkspace,transferTeamTab:(tab,copy)=>transferTabDialog({...tab,id:tab.browserId||tab.id,type:tab.browserId?'browser':tab.type,label:tab.title,customTitle:tab.customTitle,info:{url:tab.url,agentControlling:tab.agentControlling}},copy,tab),openTeamTerminal:(callback,guard)=>openTerminalDialog(null,callback,guard),renderTeamRemoteDocument:(tab,container)=>renderRemoteDocument(tab,{container,active:()=>container.isConnected&&teamState().active===tab.id}),renderTeamAgentTerminal:async(tab,container)=>{await loadRunView(tab.runId);if(container.isConnected&&teamState().active===tab.id)renderAgentTerminal(container,localHistories.get(tab.runId));},renderTeamTerminal:renderTerminal,disposeTeamTerminal:disposeTerminalUi,openTeamMarkdown:(callback,guard)=>openMarkdownPicker('open',null,callback,guard),openTeamLink:async(source,cwd)=>{try{const kind=ProteusMarkdown.linkKind(source);if(kind==='web'){const info=await window.desktop.browser({action:'create',url:source,group:'team'});selectTeamBrowser(info);renderTeamTools();}else if(kind==='file'){const file=decodeURIComponent(new URL(source,'file://'+cwd.replace(/\/$/,'')+'/').pathname);if(file.endsWith('.md')){const markdown=await api('/api/markdown',{file});const tab={id:'markdown:'+file,type:'markdown',label:file.split('/').pop(),file,markdown};const current=teamState();const old=current.tabs.find(item=>item.id===tab.id);if(old)Object.assign(old,tab);else current.tabs.push(tab);current.active=tab.id;saveWorkspace();renderTeamTools();}else await window.desktop.openPath(file);}else if(kind==='mail'){await navigator.clipboard.writeText(source.slice(7));toast('Email address copied.');}}catch(error){toast(error.message);}}});
 initEngineRoom({openBrowser:info=>openTab({id:info.id,type:'browser',label:info.title||'Browser',info}),state,api,escape,toast,time,manageMcp,providers:renderProviders,connections:()=>renderRemote({api,escape,toast}),setup:renderSettings,resourceChanged:(action,id)=>{if(action==='close')state.tabs=state.tabs.filter(tab=>tab.id!==id);saveWorkspace();},openAccount:()=>window.desktop?.openExternal(new URL('/security',state.data.life?.websiteOrigin||'https://proteus.example').href)});
 initTerminals({state,escape,toast,showDialog,openTab,onInput:tab=>recordPreviewActivity(tab)});
-initDesktopPreview({workspaceOwners,refreshWorkspaceOwners,loadWorkspaceOwnerTabs,openRemoteProject,openWorkspaceChat,syncContentTabs:scope=>contentTabSync.sync(scope),state,api,escape,toast,refresh,openTab,render,showDialog,openWorkspace,renderChats:renderChatsIndex,newChat:newWorkspaceChat,createWorkspace,deleteWorkspace,manageWorkspaceTab});
-initWorkspaces({syncContentTabs:scope=>contentTabSync.sync(scope),reconcileRemoteProjectPlacement,revealSelectedTab,manageWorkspaceTab, state,api,escape,toast,loadPeers,openTab,render,renderTabs,showDialog,renderChats:renderChatsIndex,newChat:newWorkspaceChat});
+initDesktopPreview({workspaceOwners,refreshWorkspaceOwners,loadWorkspaceOwnerTabs,openRemoteProject,openWorkspaceChat,syncContentTabs:scope=>contentTabSync.sync(scope),state,api,escape,toast,refresh,openTab,render,showDialog,openWorkspace,renderChats:renderChatsIndex,newChat:newWorkspaceChat,createWorkspace,deleteWorkspace,manageWorkspaceTab,manageWorkspaceTabs});
+initWorkspaces({syncContentTabs:scope=>contentTabSync.sync(scope),reconcileRemoteProjectPlacement,revealSelectedTab,manageWorkspaceTab,manageWorkspaceTabs, state,api,escape,toast,loadPeers,openTab,render,renderTabs,showDialog,renderChats:renderChatsIndex,newChat:newWorkspaceChat});
 initFeatures({renderWorkspaces,state,escape,api,toast,refresh,openTab,showDialog,lines,restoreBrowser:()=>requestAnimationFrame(browserBounds)});
 initOmi({state,escape,api,toast,refresh,openSchedule:schedule,openRun:id=>{const run=state.data.runs.find(item=>item.id===id);if(run)runTab(run);}});
 initLife({state,escape,api,toast,refresh,openTab,showDialog,openSettings:()=>{navigate('engine','setup');}});

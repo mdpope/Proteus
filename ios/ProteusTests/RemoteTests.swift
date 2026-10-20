@@ -13,6 +13,29 @@ private actor PreviewRequestCounter {
 }
 
 final class RemoteTests: XCTestCase {
+    @MainActor func testPrivateThumbnailCacheSurvivesMemoryLossAndSeparatesScopes() {
+        let key = "synthetic-cache:" + UUID().uuidString, other = key + ":other-account"
+        defer { NativeThumbnailCache.remove(key); NativeThumbnailCache.remove(other) }
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 32, height: 24)).image { context in UIColor.green.setFill(); context.fill(CGRect(x: 0, y: 0, width: 32, height: 24)) }
+        NativeThumbnailCache.save(image, key: key)
+        XCTAssertNotNil(NativeThumbnailCache.load(key))
+        XCTAssertNil(NativeThumbnailCache.load(other))
+        NativeThumbnailCache.remove(key)
+        XCTAssertNil(NativeThumbnailCache.load(key))
+    }
+    @MainActor func testDocumentReadingPositionSurvivesNewStoreAndSeparatesAccounts() throws {
+        let account = "synthetic-reading-" + UUID().uuidString, other = UUID().uuidString, key = "document:synthetic"
+        let defaultsKey = "proteus.document-positions." + SHA256.hash(data: Data(account.utf8)).map { String(format: "%02x", $0) }.joined()
+        defer { UserDefaults.standard.removeObject(forKey: defaultsKey) }
+        let first = SharedAppStore(); first.reset(for: account)
+        first.rememberDocumentScrollOffset(820, for: key); first.flushDocumentScrollPositions()
+        let restored = SharedAppStore(); restored.reset(for: account)
+        XCTAssertEqual(restored.documentScrollOffset(for: key), 820)
+        restored.reset(for: other); XCTAssertNil(restored.documentScrollOffset(for: key))
+        restored.reset(for: account); restored.rememberDocumentScrollOffset(.infinity, for: key); restored.flushDocumentScrollPositions()
+        XCTAssertEqual(restored.documentScrollOffset(for: key), 820)
+    }
+
     private func projectFixture() throws -> JSON {
         try JSONDecoder().decode(JSON.self, from: Data("""
         {"schemaVersion":1,"revision":"catalog-revision","projects":[
@@ -161,7 +184,7 @@ final class RemoteTests: XCTestCase {
     }
     @MainActor func testMirroredRedirectDoesNotCreateAVisitOrReplaceLogicalForwardList() {
         let shared = SharedAppStore(), host = UUID().uuidString
-        let entries = ["one", "two", "three"].map { BrowserHistoryEntry(id: $0, url: "http://127.0.0.1:4329/browser/" + $0, title: $0) }
+        let entries = ["one", "two", "three"].map { BrowserHistoryEntry(id: $0, url: "\(nativeFixtureHTTPOrigin)/browser/" + $0, title: $0) }
         shared.browserTabs = [BrowserDescriptor(id: "mirror", title: "two", url: entries[1].url, scope: "main", history: BrowserTabHistory(entries: entries, index: 1, currentEntryId: "two", revision: 6))]
         shared.assignBrowserOwner("mirror", host: host)
         _ = shared.webView(shared.browserTabs[0], allowLocalNavigation: true); defer { shared.unloadBrowsers() }
@@ -349,7 +372,7 @@ final class RemoteTests: XCTestCase {
     }
     @MainActor func testBrowserHistoryMenuSelectsOlderDuplicatePageInstance() async throws {
         let shared = SharedAppStore(), id = "duplicate-navigation"
-        let base = "http://127.0.0.1:4329/browser/spa"
+        let base = "\(nativeFixtureHTTPOrigin)/browser/spa"
         shared.browserTabs = [BrowserDescriptor(id: id, title: "SPA", url: base + "?step=1")]
         let view = shared.webView(shared.browserTabs[0], allowLocalNavigation: true)
         defer { shared.unloadBrowsers() }
@@ -502,7 +525,7 @@ final class RemoteTests: XCTestCase {
     }
 
     @MainActor func testWorkspaceCopyIsolationAndMixedContentSynchronization() async throws {
-        let (data, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/pair")!)
+        let (data, _) = try await URLSession.shared.data(from: URL(string: "\(nativeFixtureHTTPOrigin)/pair")!)
         let fixture = try JSONDecoder().decode(JSON.self, from: data)
         let remote = RemoteStore(); remote.forget(); try remote.pair(fixture["code"].string)
         let shared = SharedAppStore(); defer { shared.unloadBrowsers(); remote.forget() }
@@ -530,7 +553,7 @@ final class RemoteTests: XCTestCase {
         XCTAssertEqual(result["tabs"].array.filter { $0["type"].string == "browser" }.count, 2)
         _ = try await remote.request("chat.cancel", ["id": .string(chatID)])
 
-        let (secondData, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/pair?host=second")!)
+        let (secondData, _) = try await URLSession.shared.data(from: URL(string: "\(nativeFixtureHTTPOrigin)/pair?host=second")!)
         let secondFixture = try JSONDecoder().decode(JSON.self, from: secondData)
         let second = RemoteStore(connection: nil, legacyCredentials: false); try second.pair(secondFixture["code"].string); defer { second.forget() }
         for _ in 0..<100 { if second.connected { break }; try await Task.sleep(for: .milliseconds(100)) }
@@ -979,7 +1002,7 @@ final class RemoteTests: XCTestCase {
         XCTAssertEqual(received, 0, "Neither static nor interactive preview may reach a local or external network destination")
     }
     @MainActor func testContentTabsReconcileConcurrentChangesWithoutSharingSelectionOrPageState() async throws {
-        let (data, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/pair")!)
+        let (data, _) = try await URLSession.shared.data(from: URL(string: "\(nativeFixtureHTTPOrigin)/pair")!)
         let fixture = try JSONDecoder().decode(JSON.self, from: data)
         let remote = RemoteStore(); remote.forget(); try remote.pair(fixture["code"].string)
         defer { remote.forget() }
@@ -1027,7 +1050,7 @@ final class RemoteTests: XCTestCase {
         XCTAssertTrue(shared.tabs(in: scope).isEmpty)
     }
     @MainActor func testNativeEncryptedRoundTripAndContinuation() async throws {
-        let (data, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/pair")!)
+        let (data, _) = try await URLSession.shared.data(from: URL(string: "\(nativeFixtureHTTPOrigin)/pair")!)
         let fixture = try JSONDecoder().decode(JSON.self, from: data)
         let decoded = try RemoteCrypto.open(fixture["box"].string, key: fixture["key"].string, aad: fixture["aad"].string)
         XCTAssertEqual(decoded["test"].string, "CryptoKit ↔ Node")
@@ -1129,7 +1152,7 @@ final class RemoteTests: XCTestCase {
         XCTAssertEqual(store.chats["synthetic"]?["earlier"].int, 0)
     }
     @MainActor func testQueueWhileWaitingRunsAfterReply() async throws {
-        let (data, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/pair")!)
+        let (data, _) = try await URLSession.shared.data(from: URL(string: "\(nativeFixtureHTTPOrigin)/pair")!)
         let fixture = try JSONDecoder().decode(JSON.self, from: data)
         let store = RemoteStore(); store.forget(); try store.pair(fixture["code"].string)
         defer { store.forget() }
@@ -1262,7 +1285,7 @@ extension DestinationTests {
         defer { destinations.resetForTesting(); try? FileManager.default.removeItem(at: root) }
         destinations.activity(true)
         func invitation(_ suffix: String = "") async throws -> String {
-            let (data, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/pair" + suffix)!)
+            let (data, _) = try await URLSession.shared.data(from: URL(string: "\(nativeFixtureHTTPOrigin)/pair" + suffix)!)
             return try JSONDecoder().decode(JSON.self, from: data)["code"].string
         }
         try destinations.add(await invitation(), label: "Build Mac")
@@ -1295,7 +1318,7 @@ extension DestinationTests {
         for value in ["https://relay.example.test", "ws://relay.example.test", "ws://10.nope.1.2.3", "ws://10.+1.2.3", "ws://10..1.2.3", "wss://user:password@relay.example.test", "wss://relay.example.test/socket", "wss://relay.example.test?host=other", "wss://relay.example.test#fragment", "wss://", "ws://172.32.0.1", "wss://relay.example.test:70000"] {
             XCTAssertThrowsError(try RemoteStore.validatedRelay(value), value)
         }
-        for value in ["ws://localhost:4328", "ws://127.0.0.1:4328", "ws://192.168.1.2", "ws://172.16.0.1", "ws://10.2.3.4", "ws://mac.local", "wss://relay.example.test"] { XCTAssertEqual(try RemoteStore.validatedRelay(value), value) }
+        for value in [nativeFixtureRelayOrigin.replacingOccurrences(of: "127.0.0.1", with: "localhost"), "\(nativeFixtureRelayOrigin)", "ws://192.168.1.2", "ws://172.16.0.1", "ws://10.2.3.4", "ws://mac.local", "wss://relay.example.test"] { XCTAssertEqual(try RemoteStore.validatedRelay(value), value) }
         XCTAssertEqual(try RemoteStore.validatedRelay("  wss://relay.example.test/\n"), "wss://relay.example.test")
     }
     @MainActor func testEditRelayPreservesCredentialCacheDraftsAndOtherHostAndCancelsPending() async throws {
@@ -1332,17 +1355,17 @@ extension DestinationTests {
     @MainActor func testLiveRelayEditReconnectsSameHostWithSameKey() async throws {
         let (root, service) = try fixture(); let destinations = DestinationStore(root: root, keychainService: service)
         defer { destinations.resetForTesting(); try? FileManager.default.removeItem(at: root) }
-        let (data, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/pair")!)
+        let (data, _) = try await URLSession.shared.data(from: URL(string: "\(nativeFixtureHTTPOrigin)/pair")!)
         destinations.activity(true); try destinations.add(try JSONDecoder().decode(JSON.self, from: data)["code"].string, label: "Personal")
         try await destinationWait { destinations.selected?.connected == true }
         let remote = try XCTUnwrap(destinations.selected), original = try XCTUnwrap(remote.connection)
         remote.setDraft("new-chat", .string("Keep live draft"))
         // Same fixture relay, different valid address: requires replacing the WebSocket transport.
-        try destinations.editRelay(original.hostId, address: "ws://localhost:4328")
+        try destinations.editRelay(original.hostId, address: nativeFixtureRelayOrigin.replacingOccurrences(of: "127.0.0.1", with: "localhost"))
         XCTAssertFalse(remote.connected); XCTAssertEqual(remote.status, "Connecting…")
         try await destinationWait { remote.connected }
         await remote.refresh()
-        XCTAssertTrue(destinations.selected === remote); XCTAssertEqual(remote.connection?.relay, "ws://localhost:4328")
+        XCTAssertTrue(destinations.selected === remote); XCTAssertEqual(remote.connection?.relay, nativeFixtureRelayOrigin.replacingOccurrences(of: "127.0.0.1", with: "localhost"))
         XCTAssertEqual(remote.connection?.key, original.key); XCTAssertEqual(remote.connection?.deviceId, original.deviceId); XCTAssertEqual(remote.connection?.hostId, original.hostId)
         XCTAssertEqual(remote.state["hostName"].string, "Build Mac"); XCTAssertEqual(remote.draft("new-chat").string, "Keep live draft")
     }
@@ -1570,7 +1593,7 @@ final class NativeParityTests: XCTestCase {
     }
     @MainActor func testDesktopChatTabsKeepLiveTitlesThroughRemoteRefresh() async throws {
         let data: Data
-        do { (data, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/pair")!) } catch { throw RemoteError(message: "Pair fixture HTTP: " + error.localizedDescription) }
+        do { (data, _) = try await URLSession.shared.data(from: URL(string: "\(nativeFixtureHTTPOrigin)/pair")!) } catch { throw RemoteError(message: "Pair fixture HTTP: " + error.localizedDescription) }
         let fixture = try JSONDecoder().decode(JSON.self, from: data)
         let cache = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString); let remote = RemoteStore(connection: nil, cacheRoot: cache, legacyCredentials: false); try remote.pair(fixture["code"].string)
         func checkedRequest(_ method: String, _ args: [String: JSON]) async throws -> JSON {
@@ -1598,7 +1621,7 @@ final class NativeParityTests: XCTestCase {
         let created = try await checkedRequest("chat.start", ["prompt": .string("Desktop browser title rehearsal"), "provider": .string("rehearsal")])
         let run = created["runId"].string, host = try XCTUnwrap(remote.connection?.hostId)
         let scope = "chat:\(host):\(run)"
-        let url = "http://127.0.0.1:4329/browser/one"
+        let url = "\(nativeFixtureHTTPOrigin)/browser/one"
         let desktop: JSON = .object(["id": .string("desktop-browser"), "type": .string("browser"), "title": .string("New tab"), "url": .string(url)])
         _ = try await checkedRequest("tabs.mutate", ["scope": .string("chat"), "id": .string(run), "expectedRevision": .number(0), "operations": .array([.object(["action": .string("open"), "tab": desktop])])])
         await shared.refreshContentTabs(scope: scope, remote: remote, kind: "chat", id: run)
@@ -1622,13 +1645,13 @@ final class NativeParityTests: XCTestCase {
         _ = try await checkedRequest("tabs.mutate", ["scope": .string("chat"), "id": .string(run), "expectedRevision": renameBase["revision"], "operations": .array([.object(["action": .string("rename"), "id": .string("desktop-browser"), "title": .string("Pinned desktop name")])])])
         await shared.refreshContentTabs(scope: scope, remote: remote, kind: "chat", id: run)
         XCTAssertEqual(shared.tabs(in: scope).first?.title, "Pinned desktop name", "An explicit desktop rename still takes priority")
-        XCTAssertTrue(shared.navigate(URL(string: "http://127.0.0.1:4329/browser/two")!, in: initial.id))
+        XCTAssertTrue(shared.navigate(URL(string: "\(nativeFixtureHTTPOrigin)/browser/two")!, in: initial.id))
         for _ in 0..<100 { if web.title == "Second browser page" && !web.isLoading { break }; try await Task.sleep(for: .milliseconds(100)) }
         XCTAssertEqual(web.title, "Second browser page")
         XCTAssertEqual(shared.tabs(in: scope).first?.title, "Pinned desktop name")
         for _ in 0..<8 { await shared.refreshContentTabs(scope: scope, remote: remote, kind: "chat", id: run); try await Task.sleep(for: .milliseconds(100)) }
         let navigationBase = try await checkedRequest("tabs.get", ["scope": .string("chat"), "id": .string(run)])
-        var changed: JSON = .object(["action": .string("browser-navigate"), "tabId": .string("desktop-browser"), "operationId": .string(UUID().uuidString), "entryId": .string(UUID().uuidString), "baseRevision": navigationBase["tabs"].array.first?["history"]["revision"] ?? .number(0), "title": .string("New tab"), "url": .string("http://127.0.0.1:4329/browser/three")])
+        var changed: JSON = .object(["action": .string("browser-navigate"), "tabId": .string("desktop-browser"), "operationId": .string(UUID().uuidString), "entryId": .string(UUID().uuidString), "baseRevision": navigationBase["tabs"].array.first?["history"]["revision"] ?? .number(0), "title": .string("New tab"), "url": .string("\(nativeFixtureHTTPOrigin)/browser/three")])
         var navigationRevision = navigationBase["revision"], applied = false
         for _ in 0..<5 {
             do { _ = try await checkedRequest("tabs.mutate", ["scope": .string("chat"), "id": .string(run), "expectedRevision": navigationRevision, "operations": .array([changed])]); applied = true; break }
@@ -1696,7 +1719,7 @@ final class NativeParityTests: XCTestCase {
     @MainActor func testBlankSharedBrowserResponsePreservesLivePageButHonorsRemoteChanges() async throws {
         for scope in ["chat:synthetic-host:" + UUID().uuidString, "workspace:synthetic-host:" + UUID().uuidString] {
             let shared = SharedAppStore(); defer { shared.unloadBrowsers() }
-            let address = "http://127.0.0.1:4329/browser/one"
+            let address = "\(nativeFixtureHTTPOrigin)/browser/one"
             shared.open(URL(string: address)!, scope: scope)
             let tab = try XCTUnwrap(shared.tabs(in: scope).first), web = shared.webView(tab)
             for _ in 0..<100 { if web.title == "First browser page" && !web.isLoading { break }; try await Task.sleep(for: .milliseconds(50)) }
@@ -1717,7 +1740,7 @@ final class NativeParityTests: XCTestCase {
             shared.applyContentTabs(response(3, customTitle: "Explicit shared name"), scope: scope)
             XCTAssertEqual(shared.tabs(in: scope).first?.title, "Explicit shared name")
             XCTAssertEqual(shared.tabs(in: scope).first?.url, address)
-            let changed = "http://127.0.0.1:4329/browser/two"
+            let changed = "\(nativeFixtureHTTPOrigin)/browser/two"
             shared.applyContentTabs(response(4, url: changed), scope: scope)
             for _ in 0..<100 { if web.title == "Second browser page" && !web.isLoading { break }; try await Task.sleep(for: .milliseconds(50)) }
             XCTAssertEqual(web.title, "Second browser page"); XCTAssertEqual(shared.tabs(in: scope).first?.url, changed)
@@ -1733,12 +1756,12 @@ final class NativeParityTests: XCTestCase {
         let shared = SharedAppStore(); shared.open(nil)
         let tab = try XCTUnwrap(shared.browserTabs.first), id = tab.id
         let original = shared.webView(tab)
-        XCTAssertTrue(shared.navigate(try XCTUnwrap(URL(string: "http://127.0.0.1:4329/browser/one")), in: id))
+        XCTAssertTrue(shared.navigate(try XCTUnwrap(URL(string: "\(nativeFixtureHTTPOrigin)/browser/one")), in: id))
         XCTAssertEqual(shared.browserTabs.count, 1); XCTAssertEqual(shared.selectedBrowser, id)
         XCTAssertTrue(shared.webView(try XCTUnwrap(shared.browserTabs.first)) === original)
         for _ in 0..<100 { if shared.browserNavigation[id]?.title == "First browser page" && shared.browserNavigation[id]?.isLoading == false { break }; try await Task.sleep(for: .milliseconds(100)) }
         XCTAssertEqual(shared.browserNavigation[id]?.title, "First browser page")
-        XCTAssertTrue(shared.navigate(try XCTUnwrap(URL(string: "http://127.0.0.1:4329/browser/two")), in: id))
+        XCTAssertTrue(shared.navigate(try XCTUnwrap(URL(string: "\(nativeFixtureHTTPOrigin)/browser/two")), in: id))
         for _ in 0..<100 { if shared.browserNavigation[id]?.canGoBack == true && shared.browserNavigation[id]?.title == "Second browser page" { break }; try await Task.sleep(for: .milliseconds(100)) }
         XCTAssertTrue(shared.browserNavigation[id]?.canGoBack == true)
         XCTAssertTrue(shared.webView(try XCTUnwrap(shared.browserTabs.first)) === original)
@@ -1931,7 +1954,7 @@ final class NativeParityTests: XCTestCase {
     @MainActor func testWebKitDownloadProducesExportableFileAndAccountChangeCleansIt() async throws {
         let shared = SharedAppStore()
         let webView = WKWebView(frame: .zero)
-        shared.download(try XCTUnwrap(URL(string: "http://127.0.0.1:4329/latest")), in: webView)
+        shared.download(try XCTUnwrap(URL(string: "\(nativeFixtureHTTPOrigin)/latest")), in: webView)
         let deadline = Date().addingTimeInterval(15)
         while shared.exportFile == nil && shared.downloadError == nil && Date() < deadline { try await Task.sleep(for: .milliseconds(100)) }
         XCTAssertNil(shared.downloadError)

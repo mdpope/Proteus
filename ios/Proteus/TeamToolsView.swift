@@ -49,7 +49,7 @@ struct TeamToolsView: View {
                         }
                     }.buttonStyle(.plain).background(NativeTabClipProbe { teamTabsClipped = $0 }.frame(width: 1, height: 1).opacity(0)) }.scrollIndicators(.hidden)
                         .mask { LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: teamTabsClipped ? 0.9 : 1), .init(color: teamTabsClipped ? .clear : .black, location: 1)], startPoint: .leading, endPoint: .trailing) }
-                        Menu { ForEach(shared.browserProfiles, id: \.self) { profile in Button("Browser - " + profile["name"].string, systemImage: "globe") { shared.open(nil, scope: "team", profileId: profile["id"].string); section = shared.selectedBrowser ?? "Overview" } }; Button("Standup", systemImage: "person.3") { section = "Standup" } } label: { Image(systemName: "plus") }.padding(12).accessibilityLabel("Add Team tab").accessibilityIdentifier("team-new-browser-tab")
+                        Button { shared.open(nil, scope: "team"); section = shared.selectedBrowser ?? "Overview" } label: { Image(systemName: "plus") }.padding(12).accessibilityLabel("Add Team tab").accessibilityIdentifier("team-new-browser-tab")
                         Button { reorderTabs = true } label: { Image(systemName: "arrow.left.arrow.right").frame(width: 44, height: 44) }.accessibilityLabel("Reorder Team tabs").disabled(shared.tabs(in: "team").count < 2)
                         if sizeClass == .regular { Button(docked ? "Undock standup" : "Dock standup", systemImage: "sidebar.left") { docked.toggle() }.padding(8) }
 
@@ -162,6 +162,13 @@ struct StandupView: View {
         }
     }
 }
+struct NativeNewTabAction {
+    var title: String
+    var symbol: String
+    var enabled = true
+    var replacesBlank = true
+    var run: () -> Void
+}
 struct TeamBrowserView: View {
     @EnvironmentObject var destinations: DestinationStore
     @EnvironmentObject var life: LifeStore
@@ -178,6 +185,8 @@ struct TeamBrowserView: View {
     var scope = "team"
     var showTabs = true
     var onBackToList: (() -> Void)? = nil
+    var newTabOptions: [NativeNewTabAction] = []
+    @FocusState private var homeAddressFocused: Bool
     @FocusState private var addressFocused: Bool
     @State private var editingAddress = false
     private var tabs: [BrowserDescriptor] { shared.tabs(in: scope) }
@@ -198,11 +207,16 @@ struct TeamBrowserView: View {
     private var historySearchIdentity: String { [selectedID ?? "", text, String(addressFocused)].joined(separator: "|") }
     private var accountRefreshIdentity: String { [scope, selectedID ?? "", life.accountIdentity, String(addressFocused)].joined(separator: ":") }
 
-    // Bound SwiftUI inference separately from the asynchronous lifecycle modifiers.
-    private var browserContent: some View {
-        VStack(spacing: 0) {
-            if showTabs && (!NativePhonePreview.enabled || !phoneChrome.controlsHidden) { HStack(spacing: 0) { NativeTabStrip(ids: tabs.map(\.id), selection: selectedID) { HStack(spacing: 0) {
-                ForEach(tabs) { tab in
+    @ViewBuilder private func browserTabMenu(_ tab: BrowserDescriptor) -> some View {
+                            Button("Move left", systemImage: "arrow.left") { shared.shiftBrowser(tab.id, by: -1) }.disabled(tabs.first?.id == tab.id)
+                            Button("Move right", systemImage: "arrow.right") { shared.shiftBrowser(tab.id, by: 1) }.disabled(tabs.last?.id == tab.id)
+                            Button(tab.persist ? "Do not persist tab" : "Persist tab", systemImage: "pin") { shared.persistBrowser(tab.id, enabled: !tab.persist) }
+                            Button("Unload") { shared.unload(tab.id) }
+                            Button("Close") { shared.close(tab.id) }
+                            Button("Close other tabs") { for other in tabs where other.id != tab.id { shared.close(other.id) } }.disabled(tabs.count < 2)
+                            Button("Close tabs to the right") { if let index = tabs.firstIndex(where: { $0.id == tab.id }) { for other in tabs.dropFirst(index + 1) { shared.close(other.id) } } }.disabled(tabs.last?.id == tab.id)
+                            }
+    private func browserTabChip(_ tab: BrowserDescriptor) -> some View {
                     HStack(spacing: 8) {
                         Button { shared.select(tab.id, in: scope) } label: { NativeContentTabLabel(title: tab.title.isEmpty ? "New tab" : tab.title, symbol: "globe") }
                             .lineLimit(1).accessibilityIdentifier("browser-tab-select-" + tab.id).accessibilityLabel(tab.title.isEmpty ? "New tab" : tab.title)
@@ -212,22 +226,24 @@ struct TeamBrowserView: View {
                     }.id(tab.id).padding(12).background(selectedID == tab.id ? NativeTheme.accent.opacity(0.08) : .clear)
                         .overlay(alignment: .bottom) { Rectangle().fill(selectedID == tab.id ? NativeTheme.accent : .clear).frame(height: 2) }
                         .draggable(tab.id).dropDestination(for: String.self) { ids, _ in guard let source = ids.first, tabs.contains(where: { $0.id == source }) else { return false }; shared.moveBrowser(source, before: tab.id); return true }
-                        .contextMenu {
-                            Button("Move left", systemImage: "arrow.left") { shared.shiftBrowser(tab.id, by: -1) }.disabled(tabs.first?.id == tab.id)
-                            Button("Move right", systemImage: "arrow.right") { shared.shiftBrowser(tab.id, by: 1) }.disabled(tabs.last?.id == tab.id)
-                            Button(tab.persist ? "Do not persist tab" : "Persist tab", systemImage: "pin") { shared.persistBrowser(tab.id, enabled: !tab.persist) }
-                            Button("Unload") { shared.unload(tab.id) }
-                            Button("Close") { shared.close(tab.id) }
-                            Button("Close other tabs") { for other in tabs where other.id != tab.id { shared.close(other.id) } }.disabled(tabs.count < 2)
-                            Button("Close tabs to the right") { if let index = tabs.firstIndex(where: { $0.id == tab.id }) { for other in tabs.dropFirst(index + 1) { shared.close(other.id) } } }.disabled(tabs.last?.id == tab.id)
-                        }
+.contextMenu { browserTabMenu(tab) }
+    }
+    @ViewBuilder private var browserTabStrip: some View {
+            if showTabs && (!NativePhonePreview.enabled || !phoneChrome.controlsHidden) { HStack(spacing: 0) { NativeTabStrip(ids: tabs.map(\.id), selection: selectedID) { HStack(spacing: 0) {
+                ForEach(tabs) { tab in
+                    browserTabChip(tab)
                     Divider().frame(height: 24)
                 }
             }.buttonStyle(.plain) }.scrollIndicators(.hidden)
                 .mask { LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.9), .init(color: .clear, location: 1)], startPoint: .leading, endPoint: .trailing) }
-                Menu { ForEach(shared.browserProfiles, id: \.self) { profile in Button("Browser - " + profile["name"].string, systemImage: "globe") { shared.open(nil, scope: scope, profileId: profile["id"].string) } } } label: { Image(systemName: "plus") }.padding(12).accessibilityLabel("Add tab").accessibilityIdentifier("browser-new-tab")
+                Button { shared.open(nil, scope: scope) } label: { Image(systemName: "plus") }.padding(12).accessibilityLabel("Add tab").accessibilityIdentifier("browser-new-tab")
             }.nativeTabBar()
             }
+    }
+    // Bound SwiftUI inference separately from the asynchronous lifecycle modifiers.
+    private var browserContent: some View {
+        VStack(spacing: 0) {
+            browserTabStrip
             if !NativePhonePreview.enabled || !phoneChrome.controlsHidden {
                 Divider()
                 if NativePhonePreview.enabled { phoneAddress } else { toolbar }
@@ -238,7 +254,7 @@ struct TeamBrowserView: View {
             Group {
                 if let tab = selectedTab, !shared.profileAvailable(tab.profileId) { ContentUnavailableView("Profile unavailable", systemImage: "person.crop.circle.badge.exclamationmark", description: Text("Sign in and refresh browser profiles in Preferences to resume this tab.")) } else if let tab = selectedTab, tab.url != nil { if shared.unloadedBrowsers.contains(tab.id) { ContentUnavailableView { Label("Page unloaded", systemImage: "pause.circle") } actions: { Button("Reload page") { shared.reload(tab.id); shared.touch(tab.id) } } } else { NativeBrowser(tab: tab, onOverview: { showOverview() }, onChromeToggle: NativePhonePreview.enabled ? { addressFocused = false; phoneChrome.toggleControls() } : nil, onPinchChanged: NativeDesignPreview.enabled ? { phoneChrome.pinch($0) } : nil, onPinchEnded: NativeDesignPreview.enabled ? { phoneChrome.finishPinch(committed: $0) } : nil).id(tab.id) } }
                 else { home.simultaneousGesture(MagnificationGesture().onEnded { scale in if scale < 0.75 { showOverview() } }) }
-            }.modifier(NativePageSwipe(enabled: !NativePhonePreview.enabled, blockBack: navigation.nativeCanGoBack, blockForward: navigation.nativeCanGoForward, back: {
+            }.modifier(NativePageSwipe(enabled: !NativePhonePreview.enabled, back: {
                 if let id = selectedID, shared.isTwoFingerNavigation(id) { return }
                 if let id = selectedID, !shared.browserHistory(id, back: true).isEmpty { shared.goBack(id) }
                 else { onBackToList?() }
@@ -274,13 +290,15 @@ struct TeamBrowserView: View {
             guard !Task.isCancelled else { return }
             if result != .null { ownerHistoryResults = result["items"].array }
         }
-        .onAppear { if tabs.isEmpty && showTabs { shared.open(nil, scope: scope) }; text = selectedTab?.url ?? ""; engine = ["google": "Google", "duckduckgo": "DuckDuckGo", "bing": "Bing"][shared.snapshot["preferences"]["searchEngine"].string] ?? "Google"; if NativePhonePreview.enabled { editingAddress = selectedTab?.url == nil } else { addressFocused = selectedTab?.url == nil } }
-        .onChange(of: selectedID) { _, _ in text = selectedTab?.url ?? ""; if NativePhonePreview.enabled { editingAddress = selectedTab?.url == nil } else { addressFocused = selectedTab?.url == nil } }
+        .onAppear { if tabs.isEmpty && showTabs { shared.open(nil, scope: scope) }; text = selectedTab?.url ?? ""; engine = ["google": "Google", "duckduckgo": "DuckDuckGo", "bing": "Bing"][shared.snapshot["preferences"]["searchEngine"].string] ?? "Google"; if NativePhonePreview.enabled { editingAddress = false } else { addressFocused = false } }
+        .onChange(of: selectedID) { _, _ in text = selectedTab?.url ?? ""; if NativePhonePreview.enabled { editingAddress = false } else { addressFocused = false } }
         .task(id: accountRefreshIdentity) { if addressFocused || selectedTab?.url == nil { await shared.refresh(life) } }
         .onChange(of: addressFocused) { _, focused in if NativePhonePreview.enabled && !focused { editingAddress = false } }
         .onChange(of: navigation.url) { _, url in if !addressFocused && !url.isEmpty { text = url }; if NativePhonePreview.enabled && phoneAreaActive { phoneChrome.browserOwnsBack = navigation.canGoBack } }
         .onChange(of: navigation.canGoBack) { _, value in if NativePhonePreview.enabled && phoneAreaActive { phoneChrome.browserOwnsBack = value } }
         .onChange(of: phoneAreaActive) { _, active in if NativePhonePreview.enabled && active { phoneChrome.currentID = selectedID.map { "browser:" + $0 } ?? ""; phoneChrome.browserOwnsBack = navigation.canGoBack } }
+        .task(id: selectedID) { while !Task.isCancelled { try? await Task.sleep(for: .seconds(20)); guard !Task.isCancelled else { return }; if let selectedID { shared.scheduleBrowserPreview(selectedID) } } }
+        .simultaneousGesture(DragGesture(minimumDistance: 1).onEnded { _ in if let selectedID { shared.scheduleBrowserPreview(selectedID) } })
         .onDisappear { if NativeDesignPreview.enabled { if let selectedID { shared.captureBrowserPreview(selectedID) }; phoneChrome.browserOwnsBack = false } }
     }
     private var navigationHistorySheet: some View {
@@ -297,7 +315,7 @@ struct TeamBrowserView: View {
             }
     }
     private func showOverview() {
-        if NativeDesignPreview.enabled { if let selectedID { shared.captureBrowserPreview(selectedID); phoneChrome.currentID = "browser:" + selectedID }; phoneChrome.showTabs?(); return }
+        if NativeDesignPreview.enabled { if let selectedID { phoneChrome.currentID = "browser:" + selectedID }; phoneChrome.showTabs?(); return }
         withAnimation(reduceMotion ? .easeOut(duration: 0.12) : .spring(response: 0.32, dampingFraction: 0.86)) { overview = true }
     }
     @State private var showDownloads = false
@@ -401,22 +419,37 @@ struct TeamBrowserView: View {
             }
         }.frame(maxHeight: 240).background(NativeTheme.surface).accessibilityIdentifier("browser-recent-sites")
     }
-    private var home: some View {
-        NativeList {
-            Section("Browsing home") {
-                Picker("Search engine", selection: $engine) { ForEach(["Google", "DuckDuckGo", "Bing"], id: \.self) { Text($0).tag($0) } }
-                Button("Save shared link") { if let url = SharedAppStore.safeURL(text) { Task { _ = await shared.mutate(life, path: "/links", body: .object(["url": .string(url.absoluteString), "title": .string(url.host ?? "Link")])) } } }.disabled(SharedAppStore.safeURL(text) == nil).buttonStyle(.bordered)
-            }
-            Section("Shared links") { linkRows(shared.snapshot["links"].array) }
-            Section("Recent sites") {
-                Text(historyAvailability).font(.caption).foregroundStyle(.secondary)
-                BrowserHistoryRows(items: availableHistory) { link in
-                    if let url = SharedAppStore.safeURL(link["url"].string) { shared.open(url, title: link["title"].string, scope: scope) }
-                }
-                if shared.recentHistory.isEmpty, shared.snapshot != .null, life.credential?.appAuthorized == true, shared.error == nil, !shared.busy { Text("No recorded sites yet.").font(.caption).foregroundStyle(.secondary) }
-            }
-            if let error = shared.error { Text(error).foregroundStyle(.orange) }
+    private var homeActions: [NativeNewTabAction] {
+        let profiles = shared.browserProfiles.map { profile in
+            let id = profile["id"].string, current = selectedTab?.profileId == id
+            return NativeNewTabAction(title: "Browser · " + profile["name"].string, symbol: "globe", replacesBlank: !current, run: { if current { homeAddressFocused = true } else { shared.open(nil, scope: scope, profileId: id) } })
         }
+        let unsupported = [NativeNewTabAction(title: "Markdown file", symbol: "doc.text", enabled: false, run: {}), NativeNewTabAction(title: "Terminal on host", symbol: "terminal", enabled: false, run: {})]
+        if scope == "main" { return profiles + unsupported + [NativeNewTabAction(title: "New chat", symbol: "bubble.left.and.bubble.right", enabled: destinations.selected?.connected == true, run: { phoneChrome.newMainChat?(false) }), NativeNewTabAction(title: "Internet Search", symbol: "magnifyingglass", enabled: destinations.selected?.connected == true, run: { phoneChrome.newMainChat?(true) })] }
+        return profiles + unsupported + newTabOptions
+    }
+    private var home: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                Text("New tab").font(.largeTitle.bold())
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 130))], spacing: 12) {
+                    ForEach(Array(homeActions.enumerated()), id: \.offset) { _, action in
+                        Button { let old = selectedID; if action.replacesBlank, let old { shared.close(old) }; action.run() } label: { VStack(alignment: .leading, spacing: 10) { Image(systemName: action.symbol).font(.title2); Text(action.title).font(.subheadline.weight(.semibold)) }.frame(maxWidth: .infinity, minHeight: 70, alignment: .leading).padding(14).background(NativeTheme.surface, in: RoundedRectangle(cornerRadius: 12)) }.buttonStyle(.plain).disabled(!action.enabled)
+                    }
+                }
+                HStack {
+                    TextField("https://example.com", text: $text).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL).submitLabel(.go).focused($homeAddressFocused).onSubmit { navigate() }.accessibilityLabel("Website address or filter history").accessibilityIdentifier("new-tab-address")
+                    Button { navigate() } label: { Image(systemName: "arrow.turn.down.right").frame(width: 44, height: 44) }.disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty).accessibilityLabel("Open address")
+                }.padding(.leading, 14).background(NativeTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+                Picker("Search engine", selection: $engine) { ForEach(["Google", "DuckDuckGo", "Bing"], id: \.self) { Text($0).tag($0) } }.pickerStyle(.segmented)
+                if !text.isEmpty { Button("Search with " + engine) { navigate(searchEngine: engine) } }
+                if !shared.snapshot["links"].array.isEmpty { Text("Shared links").font(.headline); linkRows(shared.snapshot["links"].array) }
+                Text("Recent sites").font(.headline)
+                Text(historyAvailability).font(.caption).foregroundStyle(.secondary)
+                BrowserHistoryRows(items: availableHistory.filter { text.isEmpty || ($0["title"].string + " " + $0["url"].string).localizedCaseInsensitiveContains(text) }) { link in text = link["url"].string; navigate() }
+                if let error = shared.error { Text(error).foregroundStyle(.orange) }
+            }.padding(20)
+        }.task(id: selectedID) { try? await Task.sleep(for: .milliseconds(150)); if selectedTab?.url == nil { homeAddressFocused = true } }
     }
     private func linkRows(_ items: [JSON]) -> some View { ForEach(items, id: \.self) { link in Button(link["title"].string.isEmpty ? link["url"].string : link["title"].string) { if let url = SharedAppStore.safeURL(link["url"].string) { shared.open(url, title: link["title"].string, scope: scope) } } } }
     private func navigate(searchEngine: String? = nil) {
@@ -426,7 +459,7 @@ struct TeamBrowserView: View {
         var target = URL(string: input.contains("://") ? input : input.contains(".") && !input.contains(" ") ? "https://" + input : "")
         if target?.host == nil || searchEngine != nil { var components = URLComponents(string: selectedEngine == "Bing" ? "https://www.bing.com/search" : selectedEngine == "DuckDuckGo" ? "https://duckduckgo.com/" : "https://www.google.com/search")!; components.queryItems = [URLQueryItem(name: "q", value: input)]; target = components.url }
         guard let target, ["https", "http"].contains(target.scheme), target.user == nil, target.password == nil else { return }
-        addressFocused = false
+        addressFocused = false; homeAddressFocused = false
         if let id = selectedID { _ = shared.navigate(target, in: id) }
         else { shared.open(target, title: target.host ?? "Browser", scope: scope) }
         text = target.absoluteString
@@ -640,7 +673,7 @@ struct BrowserTabOverview: View {
                         VStack(alignment: .leading, spacing: 12) {
                             Button { shared.select(tab.id, in: scope); close() } label: {
                                 VStack(alignment: .leading, spacing: 12) {
-                                    Group { if let preview = shared.browserPreviews[tab.id] { Image(uiImage: preview).resizable().scaledToFill() } else { Group { if let icon = shared.browserFavicon(tab.id) { Image(uiImage: icon).resizable().scaledToFit().frame(width: 32, height: 32) } else { Image(systemName: tab.url == nil ? "house" : "globe").font(.largeTitle) } } } }.frame(maxWidth: .infinity).frame(height: 110).clipped().background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+                                    Group { if let preview = shared.browserPreview(tab.id) { Image(uiImage: preview).resizable().scaledToFill() } else { Group { if let icon = shared.browserFavicon(tab.id) { Image(uiImage: icon).resizable().scaledToFit().frame(width: 32, height: 32) } else { Image(systemName: tab.url == nil ? "house" : "globe").font(.largeTitle) } } } }.frame(maxWidth: .infinity).frame(height: 110).clipped().background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
                                     Text(tab.title.isEmpty ? "New tab" : tab.title).font(.headline).lineLimit(2)
                                     Text(tab.url.flatMap { SharedAppStore.safeURL($0)?.absoluteString } ?? (tab.url == nil ? "Browsing home" : "Private page · not saved")).font(.caption).foregroundStyle(.secondary).lineLimit(2)
                                 }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
@@ -838,7 +871,7 @@ private struct NativeTeamDesignView: View {
                     Divider().frame(height: 24)
                 }
             } }.scrollIndicators(.hidden)
-            if NativePadPreview.enabled { Menu { ForEach(shared.browserProfiles, id: \.self) { profile in Button("Browser · " + profile["name"].string) { shared.open(nil, scope: "team", profileId: profile["id"].string); section = shared.selectedBrowser ?? "Overview" } }; Button("Reorder tabs") { reorderTabs = true } } label: { Image(systemName: "plus").frame(width: 44, height: 46) }.accessibilityLabel("Add Team tab") }
+            if NativePadPreview.enabled { Button { shared.open(nil, scope: "team"); section = shared.selectedBrowser ?? "Overview" } label: { Image(systemName: "plus").frame(width: 44, height: 46) }.accessibilityLabel("Add Team tab") }
         }.buttonStyle(.plain).nativeTabBar().overlay(alignment: .bottom) { Divider() }.accessibilityIdentifier("team-navigation-tabs")
     }
     private var listPicker: some View {

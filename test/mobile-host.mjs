@@ -13,6 +13,8 @@ import { RehearsalProvider } from '../src/rehearsal.js';
 import { startRelay } from '../relay/server.js';
 import { copilotModel } from '../src/model-catalog.js';
 import { until } from './remote-client.mjs';
+const fixtureRelayPort=Number(process.env.PROTEUS_TEST_RELAY_PORT||4328),fixtureHTTPPort=Number(process.env.PROTEUS_TEST_HTTP_PORT||4329);
+const fixtureHTTPOrigin='http://127.0.0.1:'+fixtureHTTPPort,fixtureRelayOrigin='ws://127.0.0.1:'+fixtureRelayPort;
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-mobile-test-'));
 const workspace = path.join(home, 'workspace'); fs.mkdirSync(workspace);
 fs.writeFileSync(path.join(workspace, 'AGENTS.md'), '# Synthetic workspace instructions\nValidate the evidence.');
@@ -21,9 +23,9 @@ atomicJSON(path.join(home, 'settings.json'), { schemaVersion: 1, provider: 'rehe
 const token = secret(); let relay;
 if (process.env.PROTEUS_TEST_CONTAINER === '1') {
   const envFile = path.join(home, 'relay.env'); fs.writeFileSync(envFile, `PROTEUS_RELAY_TOKEN=${token}\n`, { mode: 0o600 });
-  execFileSync('docker', ['--context', 'colima-proteus', 'run', '--detach', '--rm', '--name', 'proteus-relay-test', '--read-only', '--cap-drop=ALL', '--security-opt=no-new-privileges', '--env-file', envFile, '-p', '127.0.0.1:4328:4318', 'proteus-relay:local'], { stdio: 'ignore' });
-  relay = { port: 4328, close: async () => execFileSync('docker', ['--context', 'colima-proteus', 'stop', 'proteus-relay-test'], { stdio: 'ignore' }) };
-} else relay = await startRelay({ port: 4328, token });
+  execFileSync('docker', ['--context', 'colima-proteus', 'run', '--detach', '--rm', '--name', 'proteus-relay-test', '--read-only', '--cap-drop=ALL', '--security-opt=no-new-privileges', '--env-file', envFile, '-p', '127.0.0.1:'+fixtureRelayPort+':4318', 'proteus-relay:local'], { stdio: 'ignore' });
+  relay = { port: fixtureRelayPort, close: async () => execFileSync('docker', ['--context', 'colima-proteus', 'stop', 'proteus-relay-test'], { stdio: 'ignore' }) };
+} else relay = await startRelay({ port: fixtureRelayPort, token });
 const rehearsal = new RehearsalProvider();
 let authConnected = false;
 const syntheticQuota = remaining => async () => ({available:true,windows:[{id:"synthetic",label:"Synthetic account allowance",remainingPercent:remaining,resetAt:"2099-10-05T12:00:00Z"}]});
@@ -48,7 +50,7 @@ const app = await startServer({ home, port: 0, timers: false, providers: { copil
 }, codex:{status:async()=>({available:false,models:[]}),quota:syntheticQuota(41)},claude:{status:async()=>({available:false,models:[]}),quota:syntheticQuota(88)} } });
 app.liveBrowser=new LiveBrowser({list:()=>[{id:'fixture-live-tab',title:'Synthetic desktop browser',agentControlling:true}],current:()=>true,capture:async()=>({revision:1,width:800,height:600,image:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII='})});
 const schedule = app.engine.schedules.list()[0]; app.engine.schedules.save({ ...app.engine.schedules.get(schedule.id), workspace: { cwd: workspace, additionalDirectories: [] } }, schedule.revision);
-await app.remote.configure({ label: 'Build Mac', enabled: true, mode: 'external', relayURL: 'ws://127.0.0.1:4328', publicURL: 'ws://127.0.0.1:4328', relayToken: token });
+await app.remote.configure({ label: 'Build Mac', enabled: true, mode: 'external', relayURL: fixtureRelayOrigin, publicURL: fixtureRelayOrigin, relayToken: token });
 await until(() => app.remote.status === 'online', 20_000);
 const receive = app.remote.receive.bind(app.remote);
 app.remote.receive = async (...args) => { try { return await receive(...args); } catch (error) { console.log('Synthetic protocol rejection: ' + error.message); throw error; } };
@@ -63,7 +65,7 @@ fs.writeFileSync(path.join(secondWorkspace, 'AGENTS.md'), '# Synthetic second ho
 atomicJSON(path.join(secondHome, 'settings.json'), { schemaVersion: 1, provider: 'rehearsal', model: '', timezone: 'UTC', workspace: { cwd: secondWorkspace, additionalDirectories: [] }, skillDirectories: [], mcpServers: {} });
 const unavailable = { status: async () => ({available:false,models:[],error:'Synthetic host'}) };
 const second = await startServer({home: secondHome, port: 0, timers: false, providers: {rehearsal: new RehearsalProvider(), copilot: unavailable, codex: unavailable, claude: unavailable}});
-await second.remote.configure({label:'Work Mac',enabled:true,mode:'external',relayURL:'ws://127.0.0.1:4328',publicURL:'ws://127.0.0.1:4328',relayToken:token});
+await second.remote.configure({label:'Work Mac',enabled:true,mode:'external',relayURL:fixtureRelayOrigin,publicURL:fixtureRelayOrigin,relayToken:token});
 await until(() => second.remote.status === 'online', 20_000);
 const browserVisits = new Map();
 let previewRevision = 1;
@@ -92,16 +94,16 @@ async function seedProjectFixture() {
   }
   const initial = app.contentTabs.get('project', project.id);
   app.contentTabs.mutate({scope:'project', id:project.id, expectedRevision:initial.revision, operations:[
-    {action:'open', tab:{id:'native-project-browser', type:'browser', title:'Synthetic project browser', url:'http://127.0.0.1:4329/browser/one'}},
+    {action:'open', tab:{id:'native-project-browser', type:'browser', title:'Synthetic project browser', url:fixtureHTTPOrigin+'/browser/one'}},
     {action:'open', tab:{id:'terminal:native-project-terminal', type:'terminal', terminalId:'native-project-terminal', title:'Synthetic terminal descriptor'}},
     {action:'open', tab:{id:'chat:'+chatIds[0], type:'chat', chatId:chatIds[0], title:'Review desktop navigation refinements'}}
   ]});
-  app.contentTabs.mutate({scope:'workspace', id:workspaceId, expectedRevision:0, operations:[{action:'open', tab:{id:'native-direct-browser', type:'browser', title:'Direct workspace browser', url:'http://127.0.0.1:4329/browser/two'}}]});
+  app.contentTabs.mutate({scope:'workspace', id:workspaceId, expectedRevision:0, operations:[{action:'open', tab:{id:'native-direct-browser', type:'browser', title:'Direct workspace browser', url:fixtureHTTPOrigin+'/browser/two'}}]});
   projectFixture = {workspaceId, otherWorkspaceId, projectId:project.id, defaultProjectId:catalog.defaultProjectIds[workspaceId], chatIds};
   return projectFixture;
 }
 // Website-service rehearsal shared by both simulator previews; never reads a live account.
-let previewTeamLists = [{id:'preview-team', revision:'1', name:'Platform Services Team', timezone:'America/Denver', instructions:'Review yesterday, today and any blockers.', members:[{id:'p1',name:'Alex',mode:'random'},{id:'p2',name:'Morgan',mode:'fixed'},{id:'p3',name:'Sam',mode:'random'}], links:[{id:'l1',title:'On Call — Operations',url:'http://127.0.0.1:4329/browser/phone-preview?section=on-call'},{id:'l2',title:'Operational Health',url:'http://127.0.0.1:4329/browser/one'},{id:'l3',title:'Team Queue',url:'http://127.0.0.1:4329/browser/two'}]}, {id:'preview-review', revision:'1', name:'Design review', timezone:'UTC', instructions:'Review the current design.', members:[{id:'r1',name:'Taylor',mode:'fixed'}], links:[{id:'r-link',title:'Design notes',url:'http://127.0.0.1:4329/browser/phone-preview?section=design-notes'}]}];
+let previewTeamLists = [{id:'preview-team', revision:'1', name:'Platform Services Team', timezone:'America/Denver', instructions:'Review yesterday, today and any blockers.', members:[{id:'p1',name:'Alex',mode:'random'},{id:'p2',name:'Morgan',mode:'fixed'},{id:'p3',name:'Sam',mode:'random'}], links:[{id:'l1',title:'On Call — Operations',url:fixtureHTTPOrigin+'/browser/phone-preview?section=on-call'},{id:'l2',title:'Operational Health',url:fixtureHTTPOrigin+'/browser/one'},{id:'l3',title:'Team Queue',url:fixtureHTTPOrigin+'/browser/two'}]}, {id:'preview-review', revision:'1', name:'Design review', timezone:'UTC', instructions:'Review the current design.', members:[{id:'r1',name:'Taylor',mode:'fixed'}], links:[{id:'r-link',title:'Design notes',url:fixtureHTTPOrigin+'/browser/phone-preview?section=design-notes'}]}];
 const fixture = http.createServer(async (req, res) => {
   if(req.url.startsWith('/native-app')) {
     res.setHeader('Content-Type','application/json');
@@ -180,10 +182,10 @@ const fixture = http.createServer(async (req, res) => {
     const schedule=await target.buildChatSchedule({name:'Automatic preview rehearsal',prompt:'Synthetic preview',provider:'rehearsal'});
     const run=target.engine.createRun(schedule,'chat',null,{deferStart:true});
     previewRunId=run.id;
-    target.contentTabs.mutate({scope:'chat',id:run.id,expectedRevision:0,operations:[{action:'open',tab:{id:'preview-desktop-browser',type:'browser',title:'Design from desktop',url:'http://127.0.0.1:4329/design/index.html'}}]});
+    target.contentTabs.mutate({scope:'chat',id:run.id,expectedRevision:0,operations:[{action:'open',tab:{id:'preview-desktop-browser',type:'browser',title:'Design from desktop',url:fixtureHTTPOrigin+'/design/index.html'}}]});
   }
   res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ code: invite.code, hostId:target.remote.config.hostId,runId:previewRunId,...projectIDs,key, aad, box: seal(key, { test: 'CryptoKit ↔ Node' }, aad) }));
 });
-await new Promise(resolve => fixture.listen(4329, '127.0.0.1', resolve));
+await new Promise(resolve => fixture.listen(fixtureHTTPPort, '127.0.0.1', resolve));
 console.log('Synthetic mobile test host ready. Relay: ' + (process.env.PROTEUS_TEST_CONTAINER === '1' ? 'Docker container' : 'Node process'));
 for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, async () => { await new Promise(resolve => fixture.close(resolve)); await app.close(); await second.close(); await relay.close(); fs.rmSync(home, { recursive: true, force: true }); process.exit(0); });

@@ -16,7 +16,7 @@ export class LifeStore {
    let origin='https://proteus.example';try{origin=lifeOrigin(old.websiteOrigin||old.websiteUrl||origin);}catch{}
    atomicJSON(this.file,{schemaVersion:3,enabled:old.enabled===true,websiteOrigin:origin,legacyArchived:true});
   }
-  this.api=new LifeAPI({vault:options.vault||new LifeTokenVault(home,options.safeStorage),fetch:options.fetch,openExternal:options.openExternal,onChange:()=>options.onChange?.(),timeout:options.timeout});
+  this.api=new LifeAPI({vault:options.vault||new LifeTokenVault(home,options.safeStorage),fetch:options.fetch,openExternal:options.openExternal,callbackURL:options.callbackURL,client:options.client,onChange:()=>options.onChange?.(),timeout:options.timeout});
  }
  settings(){return readJSON(this.file,{schemaVersion:3,enabled:false,websiteOrigin:'https://proteus.example'});}
  get(){const s=this.settings(),p=this.api.profile,identity=this.api.identity(),connected=!!p&&!this.api.error,ready=s.enabled===true&&connected;return {schemaVersion:3,enabled:s.enabled===true,configured:!!this.api.credential||!!this.api.vault?.exists?.(),connected,ready,revision:revision(s),websiteOrigin:this.api.credential?.origin||s.websiteOrigin,identity,legacyArchived:s.legacyArchived===true,auth:{pending:!!this.api.pending,error:this.api.error,notice:this.api.notice},connection:{label:p?.displayName||'Website account',mode:'website-api',readOnly:!connected||p?.readOnly!==false},capabilities:p?.capabilities||[],sections:lifeSections.filter(section=>!p?.sections||p.sections.includes(section.id))};}

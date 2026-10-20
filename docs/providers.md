@@ -391,3 +391,17 @@ Codex uses the current permission profile for native sandbox/root validation, in
 Ask/Custom retains read-only sandbox and per-operation approval routing. See
 [permissions](permissions.md) for the distinction between native roots, recursive folder trust,
 and command approval. Provider option choices still come from refreshed model metadata.
+
+## October 19 production/preview audit
+
+New Chat's production project UI had reused the isolated-preview predicate to prune Copilot/Claude.
+It now gates that policy on actual `desktopPreview.enabled`, preserving the owning host's refreshed
+catalogs, defaults and draft choices. A source scan checks the other provider/model preview guards:
+server adapter selection, staged Codex authentication and preview-default initialization remain tied
+to the explicit isolated-runtime option. No additional production provider pruning was identified.
+Native attachment-unavailable wording now distinguishes the actual isolated fixture from normal
+provider capability. HC real-provider picker/execution acceptance remains pending.
+
+The supervised updater and native desktop controller use the existing provider custom-tool and
+image-result boundary. Tool discovery is lazy; a catalog does not establish OS permission, page/app
+control or actual provider image delivery. These acceptance outcomes are tracked separately.

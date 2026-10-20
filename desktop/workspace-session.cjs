@@ -4,7 +4,7 @@ const {normalizeHistory,safeHistoryURL,MAX_ENTRIES}=require('./browser-history.c
 const MAX_SESSION_BYTES=16*1024*1024, MAX_TOTAL_HISTORY_BYTES=8*1024*1024, MAX_SESSION_TABS=1000;
 const safeFavicon=value=>typeof value==='string'&&value.length<=96*1024&&/^data:image\/png;base64,[A-Za-z0-9+/]+=*$/.test(value)?value:undefined;
 const text = (value, max = 4096) => typeof value === 'string' ? value.slice(0, max) : '';
-const engineSections=['resources','providers','connections','security','account','settings','setup','preferences','integrations','usage','notifications','logs','source-library'];
+const engineSections=['desktop-control','updates','resources','providers','connections','security','account','settings','setup','preferences','integrations','usage','notifications','logs','source-library'];
 function normalizeTeam(value){
   if(!value||typeof value!=='object')return undefined;
   const tabs=[],seen=new Set();
@@ -27,6 +27,7 @@ function normalizeTeam(value){
   return {active:['overview','standup',...tabs.map(t=>t.id)].includes(value.active)?value.active:'overview',listId:text(value.listId,128),accountId:text(value.accountId,64),dock:value.dock===true,tabs,orders};
 }
 function sessionHistory(value, {preview=false,projects=false}={}) {
+  if((preview||projects)&&Array.isArray(value?.entries)&&value.entries.length===0&&value.index===-1&&Number.isSafeInteger(value.revision)&&value.revision>=0)return {entries:[],index:-1,currentEntryId:null,revision:value.revision};
   const history=normalizeHistory(value);
   if(!(preview||projects)||!history)return history;
   // Chromium restoration deliberately accepts URL/title only. The preview's
@@ -81,7 +82,7 @@ function normalizeSession(value, options={}) {
       tab.profileId=/^[a-f0-9-]{36}$/i.test(item.profileId||'')?item.profileId:'default';
       if(item.remotePreviewURL&&safeHistoryURL(item.remotePreviewURL))tab.remotePreviewURL=safeHistoryURL(item.remotePreviewURL);
       if(safeFavicon(item.favicon))tab.favicon=item.favicon;
-      const history=sessionHistory(item.history,options), url=history?.entries[history.index].url || safeHistoryURL(item.url);
+      const history=sessionHistory(item.history,options), url=history?.entries[history.index]?.url || safeHistoryURL(item.url);
       if(item.url&&!url)continue;
       tab.url=url||'';tab.group=item.group==='team'?'team':'main';tab.unloaded=item.unloaded===true||item.loaded===false;if(Number.isFinite(Date.parse(item.lastTouchedAt)))tab.lastTouchedAt=new Date(item.lastTouchedAt).toISOString();
       if(history){const bytes=Buffer.byteLength(JSON.stringify(history));if(historyBytes+bytes<=MAX_TOTAL_HISTORY_BYTES){tab.history=history;historyBytes+=bytes;}}
@@ -103,10 +104,10 @@ function normalizeSession(value, options={}) {
   const selectedChildren=Object.fromEntries(Object.entries(value?.selectedChildren&&typeof value.selectedChildren==='object'&&!Array.isArray(value.selectedChildren)?value.selectedChildren:{}).slice(0,MAX_SESSION_TABS).filter(([parentId,childId])=>typeof parentId==='string'&&parentId.length<=256&&typeof childId==='string'&&childId.length<=256&&validTabs.some(parent=>parent.id===parentId&&['run','remote-run','workspace'].includes(parent.type)&&validTabs.some(child=>child.id===childId&&(child.parentId===parentId||parent.type==='workspace'&&!parent.projectId&&child.type==='workspace'&&child.projectId&&child.workspaceId===parent.workspaceId&&(child.hostId||'')===(parent.hostId||''))))));
   const pages=['schedules','runs','attention','context','credentials','providers','remote','settings','team','engine','home','workspaces'];
   const chatDrafts={};let draftBytes=0;for(const [key,draftValue]of Object.entries(value?.chatDrafts&&typeof value.chatDrafts==='object'&&!Array.isArray(value.chatDrafts)?value.chatDrafts:{}).slice(-200)){if(!/^[a-zA-Z0-9_:.\-]{1,256}$/.test(key)||typeof draftValue!=='string')continue;const draft=draftValue.slice(0,100000),bytes=Buffer.byteLength(draft);if(draftBytes+bytes>500000)continue;chatDrafts[key]=draft;draftBytes+=bytes;}
-  return {schemaVersion:1,chatDrafts,tabs:validTabs,selectedChildren,active:validTabs.some(tab=>tab.id===value?.active&&!tab.hidden)?value.active:'overview',page:pages.includes(value?.page)?value.page:'home',...(normalizeTeam(value?.team)?{team:normalizeTeam(value.team)}:{}),...(engineSections.includes(value?.engineSection)?{engineSection:value.engineSection}:{})};
+  return {schemaVersion:1,...(options.windowId?{windowId:options.windowId}:{}),chatDrafts,tabs:validTabs,selectedChildren,active:validTabs.some(tab=>tab.id===value?.active&&!tab.hidden)?value.active:'overview',page:pages.includes(value?.page)?value.page:'home',...(normalizeTeam(value?.team)?{team:normalizeTeam(value.team)}:{}),...(engineSections.includes(value?.engineSection)?{engineSection:value.engineSection}:{})};
 }
 class WorkspaceSession {
-  constructor(home,options={}) { this.options=options;this.file=path.join(home,'desktop-workspace.json'); this.last=''; }
+  constructor(home,options={}) { this.options=options;this.file=options.windowId&&options.windowId!=='main'?path.join(home,'window-sessions',options.windowId+'.json'):path.join(home,'desktop-workspace.json'); this.last=''; }
   normalize(value) { return normalizeSession((this.options.projects||this.options.preview)&&this.options.remap?this.options.remap(value):value,this.options); }
   get() { try { if(fs.statSync(this.file).size>MAX_SESSION_BYTES)throw new Error('Workspace record exceeds size limit');return this.normalize(JSON.parse(fs.readFileSync(this.file,'utf8'))); } catch(error) { if(error.code==='ENOENT')return null; throw new Error('Saved desktop workspace could not be read. The original file was preserved.'); } }
   save(value) {

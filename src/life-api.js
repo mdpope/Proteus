@@ -3,6 +3,7 @@ import { requireProtectedStorage } from './credential-storage.js';
 import path from 'node:path';
 import { randomBytes, createHash, randomUUID } from 'node:crypto';
 export const LIFE_CALLBACK = 'proteus://life-oauth/callback';
+export const DESKTOP_LIFE_CALLBACK = 'proteus-desktop://life-oauth/callback';
 export function lifeOrigin(value) {
  const url=new URL(String(value||'').trim());
  if(url.protocol!=='https:'||url.username||url.password||url.search||url.hash||!['','/'].includes(url.pathname))throw new Error('Enter an HTTPS website origin without a path or account details.');
@@ -12,13 +13,21 @@ export class LifeTokenVault {
  constructor(home,safeStorage){this.file=path.join(home,'life','website-session.enc');this.safeStorage=safeStorage;}
  available(){requireProtectedStorage(this.safeStorage, 'sign in to Life');}
  exists(){return fs.existsSync(this.file);}
- load(){this.available();try{if(fs.statSync(this.file).size>64000)throw new Error();return JSON.parse(this.safeStorage.decryptString(fs.readFileSync(this.file)));}catch(e){if(e.code==='ENOENT')return null;throw new Error('Life sign-in could not be read securely. Its protected file was preserved.');}}
+ load(){
+  // Signed-out startup must not unlock the credential store just to discover
+  // that no session exists. Existing encrypted files still fail closed.
+  try{if(fs.statSync(this.file).size>64000)throw new Error();}
+  catch(e){if(e.code==='ENOENT')return null;throw new Error('Life sign-in could not be read securely. Its protected file was preserved.');}
+  this.available();
+  try{return JSON.parse(this.safeStorage.decryptString(fs.readFileSync(this.file)));}
+  catch(e){if(e.code==='ENOENT')return null;throw new Error('Life sign-in could not be read securely. Its protected file was preserved.');}
+ }
  save(value){this.available();fs.mkdirSync(path.dirname(this.file),{recursive:true,mode:0o700});const temp=this.file+'.'+randomUUID()+'.tmp';try{fs.writeFileSync(temp,this.safeStorage.encryptString(JSON.stringify(value)),{flag:'wx',mode:0o600});fs.renameSync(temp,this.file);}finally{fs.rmSync(temp,{force:true});}}
  clear(){fs.rmSync(this.file,{force:true});}
 }
 class LifeHTTPError extends Error {constructor(status,message){super(message);this.status=status;}}
 export class LifeAPI {
- constructor({vault,fetch:fetcher=globalThis.fetch,openExternal,onChange=()=>{},timeout=20000}={}){this.vault=vault;this.fetch=fetcher;this.openExternal=openExternal;this.onChange=onChange;this.timeout=timeout;this.credential=null;this.profile=null;this.loaded=false;this.generation=0;this.authAttempt=0;this.pending=null;this.refreshing=null;this.closing=false;this.controllers=new Set();this.error=null;this.notice=null;}
+ constructor({vault,fetch:fetcher=globalThis.fetch,openExternal,callbackURL=LIFE_CALLBACK,client,onChange=()=>{},timeout=20000}={}){this.callbackURL=callbackURL;this.client=client;this.vault=vault;this.fetch=fetcher;this.openExternal=openExternal;this.onChange=onChange;this.timeout=timeout;this.credential=null;this.profile=null;this.loaded=false;this.generation=0;this.authAttempt=0;this.pending=null;this.refreshing=null;this.closing=false;this.controllers=new Set();this.error=null;this.notice=null;}
  load(){if(this.loaded)return;const c=this.vault?.load();if(c){if(lifeOrigin(c.origin)!==c.origin||!c.clientId||!c.accessToken||!c.refreshToken||!/^[a-f0-9]{64}$/.test(c.accountId)||!c.workspaceId||!Number.isFinite(c.expiresAt))throw new Error('Saved Life sign-in is invalid. Sign out before trying again.');this.credential=c;}this.loaded=true;}
  identity(){const c=this.credential;return c?{accountId:c.accountId,workspaceId:c.workspaceId,origin:c.origin,sessionId:String(this.generation)}:null;}
  changed(){this.onChange();}
@@ -41,24 +50,24 @@ export class LifeAPI {
  async begin(origin,{extend=false}={}){
   if(this.closing)throw new Error('Life is closing.');this.load();this.vault.available();if(this.credential&&!extend)throw new Error('Sign out of the current Life account before changing accounts.');if(extend&&this.credential&&lifeOrigin(origin)!==this.credential.origin)throw new Error('Keep the current website account when extending permissions.');
   const attempt=++this.authAttempt,epoch=this.generation;this.pending=null;
-  origin=lifeOrigin(origin);const discovery=await this.raw(origin,'/api/v1/native-config');
+  origin=lifeOrigin(origin);const discovery=await this.raw(origin,'/api/v1/native-config'+(this.client?'?client='+encodeURIComponent(this.client):''));
   if(attempt!==this.authAttempt||epoch!==this.generation||this.closing||(this.credential&&!extend))throw new Error('Life sign-in was cancelled or the account changed.');
-  if(!discovery.enabled||discovery.protocol!==1||discovery.issuer!==origin||discovery.redirectUri!==LIFE_CALLBACK||!discovery.clientId||discovery.authorizationEndpoint!==origin+'/oauth/authorize'||discovery.tokenEndpoint!==origin+'/oauth/token'||discovery.apiBase!==origin+'/api/v1/life')throw new Error('Native Life sign-in is not configured correctly on this website.');
+  if(!discovery.enabled||discovery.protocol!==1||discovery.issuer!==origin||discovery.redirectUri!==this.callbackURL||!discovery.clientId||discovery.authorizationEndpoint!==origin+'/oauth/authorize'||discovery.tokenEndpoint!==origin+'/oauth/token'||discovery.apiBase!==origin+'/api/v1/life')throw new Error('Native Life sign-in is not configured correctly on this website.');
   if(!this.openExternal)throw new Error('Open Life sign-in in the desktop app.');
   const verifier=randomBytes(48).toString('base64url'),state=randomBytes(32).toString('base64url'),challenge=createHash('sha256').update(verifier).digest('base64url');
   const scopes = ['brain:read','brain:write', ...(discovery.appApiBase === origin+'/api/v1/app' && Array.isArray(discovery.appScopes) ? discovery.appScopes.filter(s => ['app:read','app:write'].includes(s)) : [])];
   const pending={origin,clientId:discovery.clientId,scopes,expectedAccountId:extend?this.credential?.accountId:null,verifier,state,expires:Date.now()+10*60*1000,generation:this.generation,attempt};this.pending=pending;this.error=null;this.notice=null;
-  const url=new URL(origin+'/oauth/authorize');url.search=new URLSearchParams({response_type:'code',client_id:discovery.clientId,redirect_uri:LIFE_CALLBACK,scope:scopes.join(' '),state,code_challenge:challenge,code_challenge_method:'S256'}).toString();
-  try{await this.openExternal(url.href);}catch{if(this.pending===pending)this.pending=null;throw new Error('Could not open the system sign-in browser.');}if(attempt!==this.authAttempt||epoch!==this.generation||this.pending!==pending)throw new Error('Life sign-in was cancelled.');this.changed();
+  const url=new URL(origin+'/oauth/authorize');url.search=new URLSearchParams({response_type:'code',client_id:discovery.clientId,redirect_uri:this.callbackURL,scope:scopes.join(' '),state,code_challenge:challenge,code_challenge_method:'S256'}).toString();
+  try{await this.openExternal(url.href);}catch{if(this.pending===pending)this.pending=null;throw new Error('Could not open the preferred sign-in browser.');}if(attempt!==this.authAttempt||epoch!==this.generation||this.pending!==pending)throw new Error('Life sign-in was cancelled.');this.changed();
  }
  async callback(value){
   const pending=this.pending;
   try{
    const url=new URL(value),q=url.searchParams;
-   if(url.protocol!=='proteus:'||url.hostname!=='life-oauth'||url.pathname!=='/callback'||url.username||url.password||url.port||url.hash||!pending||pending.expires<Date.now()||pending.generation!==this.generation||pending.attempt!==this.authAttempt||q.getAll('state').length!==1||q.get('state')!==pending.state)throw new Error('Life sign-in callback did not match the pending request. Start again.');
+   if(url.protocol!==new URL(this.callbackURL).protocol||url.hostname!==new URL(this.callbackURL).hostname||url.pathname!==new URL(this.callbackURL).pathname||url.username||url.password||url.port||url.hash||!pending||pending.expires<Date.now()||pending.generation!==this.generation||pending.attempt!==this.authAttempt||q.getAll('state').length!==1||q.get('state')!==pending.state)throw new Error('Life sign-in callback did not match the pending request. Start again.');
    this.pending=null;
    if(q.has('error')||q.getAll('code').length!==1||!q.get('code'))throw new Error('Life sign-in was not authorized.');
-   const token=await this.raw(pending.origin,'/oauth/token',{method:'POST',form:{grant_type:'authorization_code',client_id:pending.clientId,redirect_uri:LIFE_CALLBACK,code_verifier:pending.verifier,code:q.get('code')}});
+   const token=await this.raw(pending.origin,'/oauth/token',{method:'POST',form:{grant_type:'authorization_code',client_id:pending.clientId,redirect_uri:this.callbackURL,code_verifier:pending.verifier,code:q.get('code')}});
    if(pending.generation!==this.generation||pending.attempt!==this.authAttempt||this.closing)throw new Error('Life sign-in was cancelled.');
    const next=this.token(pending,token),profile=await this.raw(pending.origin,'/api/v1/life',{token:next.accessToken});
    if(pending.generation!==this.generation||pending.attempt!==this.authAttempt||this.closing)throw new Error('Life account changed during sign-in.');

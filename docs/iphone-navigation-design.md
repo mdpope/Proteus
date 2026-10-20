@@ -263,3 +263,24 @@ They do not verify native WebKit, iOS navigation transitions, actual tab screens
 provider work or a physical phone/tablet. No app runtime, signing settings, device installation
 or live application data changed. Production runtime suites were not run for this documentation
 and standalone design-preview change.
+
+## October 19 promotion in the combined release — not installed
+
+The operator authorized promotion of this accepted design with the queued desktop/native changes.
+`NativeDesignPreview.enabled` now selects the shared released layout; simulator fixture identity and
+service shortcuts remain behind the separate isolated flags. Main/scoped/chat + opens the new-tab
+page; its creation blocks, profile choices and focused address/history field retain scope. Team's
+remaining tablet + menu is replaced by the same direct page. Workspace overview orders actual
+project sections, excludes hidden/closed descriptors, and reads persistent last-good browser/chat
+images; periodic capture runs only on the active visible page, with icons as fallback. Document
+positions use bounded account-scoped metadata and survive a fresh store. The 134-unit simulator suite
+passes; final phone/tablet UI and physical installation acceptance remain pending.
+# October 19 status-area and scene-switching follow-up
+
+The authorized release now reserves the iPad's measured top safe area with a black background
+and clips the shell below it so sidebar/tab content cannot cover the clock or system icons.
+Ordinary phone/tablet scene changes no longer show the black lock-shield overlay; normal
+activity/persistence callbacks remain. Private-browsing masking is deferred to that future feature.
+The iPad simulator passes tab/status-area geometry in portrait and landscape, app reactivation
+with the original page, and cached page pixels in overview. Phone browser/chat navigation tests
+and 135 native units pass. Physical window/app-switcher acceptance remains pending.

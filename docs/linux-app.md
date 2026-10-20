@@ -4,6 +4,65 @@ workflow results supersede their pending/failure status without changing the rec
 
 # Linux build of the current Mac source
 
+## October 19 preliminary combined-release validation
+
+The release coordinator's unfrozen checkpoint `0a5a2f6` on
+`codex/next-release-0.2.26` still declares package version **0.2.25**. It is not a frozen
+0.2.26 installation candidate. A separate `linux/next-release-0226-validation` branch contains
+only the startup correction and acceptance-harness follow-ups described below.
+
+**Source tested:** `npm ci` succeeds; the checkpoint passes all 783 Node tests and static checks.
+Actual source and packaged UI startup then fail without a Linux keyring: browser-profile identity
+loading probes protected storage even though no Life session exists. The added regression fails
+before the correction. After guarding the missing session before the protected-storage probe,
+all **785 Node tests** and static checks pass. Existing encrypted sessions and new sign-in/writes
+still require protected storage and reject `basic_text`; saved bytes are preserved on failure.
+No protected-store reset or credential migration is part of this repair.
+
+**Packaged:** the original checkpoint builds as `linux.8e4687d52125`, but fails actual startup.
+The repaired package is **0.2.25 / `linux.593738b6cae6`**, with **247 runtime files**:
+
+- Source fingerprint: `593738b6cae60d05065f0ba9fd3f0e215614059fd64fe84d4e026d197a6e46c1`.
+- Linux x64 archive SHA-256: `309029f5c199ffe5f41733b44b912f03fe1950e0fb25176c7d6e4427eda79ff2`.
+- `test/desktop-package-ui.mjs` passes against these exact repaired bytes: version/build identity,
+  every runtime hash and manifest inventory, private-data exclusions, isolated startup and host
+  platform metadata, unavailable real-provider catalogs, explicit synthetic rehearsal/feedback,
+  actual packaged native PTY output and keyboard input through its canvas, and retained rehearsal
+  history after a full app restart. No real model is called or provider usage invented.
+- The acceptance harness now opens Terminal through the visible **New tab** action page after +,
+  retaining every PTY/restart assertion. Its previous hidden-menu selector is obsolete.
+- Current runtime/build-input hashes and the archive digest are rechecked after acceptance.
+  The embedded `upstream` 0.2.20 receipt identifies the historical accepted Mac import base;
+  it does not identify the current payload. Use the current fingerprint and checkpoint above.
+
+Additional disposable Electron UI checks pass browser link navigation and tab placement across
+main/chat/workspace/Team, including asynchronous origin capture, profile preservation, native
+context menus and favicon fallbacks. Project overview passes after awaiting its ordinary active-page
+thumbnail cache before opening the overlay; it retains real-image, selection, hidden-page, grouping,
+reorder, close and top-level-scope assertions. Overview and sidebar screenshot outputs now use the
+platform temporary directory instead of `/private/tmp`.
+Sidebar's 13 checks also pass after moving keyboard focus out of the intentionally expanded
+focused sidebar before asserting the compact idle rail. Settings/conflict handling, full app
+restart, Markdown tab activation, background close and the visible rail icons remain asserted.
+All four additional UI harnesses use disposable data and credentials; none runs a real provider.
+
+Two broader harnesses remain **unverified/failing**: `browser-tab-stability-ui.mjs` cannot find its
+restored beta browser in the main tab strip after synchronization; `workspace-child-selection-ui.mjs`
+compares legacy history objects exactly and fails on added stable entry IDs/current-entry identity
+although URL/title/index values match. These failures are not waived or evidence of a passing full
+UI suite. Their fixture/contract relationship needs release-coordinator follow-up.
+
+**Installed:** no new candidate is installed. Existing **0.2.20 / `linux.fda4ae896542`** remains healthy
+with its existing completed chat and no scheduler/recovery errors. No live application data,
+profiles, grants, receipts or installation files are replaced; no full live-data backup is created
+for these build-only tests.
+
+**Live verified:** no new real-provider, production-relay, phone-to-Linux, Mac-to-Linux or native
+Apple acceptance is claimed. Existing historical live receipts do not transfer to this checkpoint.
+Remaining release features belong to coordinator implementation; installation and final device
+acceptance wait for its exact frozen identity. Widevine is shelved under the operator's later
+instruction and is not a prerequisite for these Linux preparation checks.
+
 ## October 15 checkpoint — source `b73c655`
 
 All 626 local Node tests and static checks pass. Hosted Linux/Mac desktop and web gates are
@@ -158,3 +217,12 @@ Before replacing an existing local installation, follow `desktop-updates.md`: in
 back up app/data/browser state outside the repository, then launch and verify exact version/build
 and continuity. Leave current Mac/iOS installations untouched. Shared changes still require Mac
 regression/package acceptance before merging upstream.
+
+## October 19 combined-release portability follow-up
+
+The coordinator fixes supervised package lookup to use the shipped lowercase `proteus` executable.
+The desktop entry declares `proteus` and `proteus-desktop` scheme handlers and passes `%U` through
+its launch command. Initial and second-instance URLs use the strict shared callback parser;
+desktop OAuth never accepts the mobile callback scheme. Final Linux installation must verify its
+desktop entry/handler registration and actual callback delivery. Mac-side unit checks are source
+evidence; package/desktop/live validation remains on the authorized Linux chat and machine.

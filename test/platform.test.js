@@ -18,12 +18,18 @@ test('desktop launch finds user-installed Linux tools and retains the Mac PATH o
   assert.ok(linux.includes('/custom/bin'));
   assert.ok(linux.includes('/usr/local/bin'));
   assert.equal(linux.filter(p => p === '/usr/bin').length, 1);
-  assert.equal(platform.launchPath('darwin', '/synthetic/user', '/usr/bin:/opt/homebrew/bin'), '/opt/homebrew/bin:/usr/local/bin:/usr/bin');
-  assert.equal(platform.launchPath('darwin', '/synthetic/user', ''), '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin');
+  assert.equal(platform.launchPath('darwin', '/synthetic/user', '/usr/bin:/opt/homebrew/bin'), '/synthetic/user/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin');
+  assert.equal(platform.launchPath('darwin', '/synthetic/user', ''), '/synthetic/user/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin');
 });
 
 test('Linux minimizes on close unless tray hiding is explicitly selected; Mac still hides', () => {
   assert.equal(platform.closeToTray('linux', {}), false);
   assert.equal(platform.closeToTray('linux', { PROTEUS_CLOSE_TO_TRAY: '1' }), true);
   assert.equal(platform.closeToTray('darwin', {}), true);
+});
+test('desktop protocol launch arguments select only the desktop callback or validated chat scheme',()=>{
+ const callback='proteus-desktop://life-oauth/callback?state=synthetic&code=synthetic';
+ assert.equal(platform.protocolURL(['/synthetic/proteus','--flag',callback]),callback);
+ assert.equal(platform.protocolURL(['proteus://chat/synthetic']), 'proteus://chat/synthetic');
+ for(const value of ['proteus://life-oauth/callback','https://example.test/callback','proteus-desktop://life-oauth/other','proteus-desktop://user:secret@life-oauth/callback'])assert.equal(platform.protocolURL([value]),undefined);
 });

@@ -90,7 +90,11 @@ async function requireFreePort(port) {
 }
 try {
   if (action === 'test') {
-    await requireFreePort(4328); await requireFreePort(4329);
+    const freePort=()=>new Promise((resolve,reject)=>{const server=net.createServer();server.once('error',reject);server.listen(0,'127.0.0.1',()=>{const port=server.address().port;server.close(()=>resolve(port));});});
+    const relayPort=await freePort(),httpPort=await freePort();
+    env.PROTEUS_TEST_RELAY_PORT=String(relayPort);env.PROTEUS_TEST_HTTP_PORT=String(httpPort);
+    env.TEST_RUNNER_PROTEUS_TEST_HTTP_ORIGIN='http://127.0.0.1:'+httpPort;
+    env.TEST_RUNNER_PROTEUS_TEST_RELAY_ORIGIN='ws://127.0.0.1:'+relayPort;
     child = spawn('xcrun', ['simctl', 'bootstatus', device.udid, '-b'], {cwd:root, env, stdio:'inherit'});
     const bootCode = await new Promise((resolve, reject) => {child.once('error', reject); child.once('exit', resolve);});
     if (bootCode !== 0) throw new Error('Simulator did not finish booting. No fixture or test was started.');

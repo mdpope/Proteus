@@ -41,7 +41,7 @@ verifySource();
 const bundles = await packager({ dir: root, out: process.env.PROTEUS_PACKAGE_OUTPUT || path.join(root, 'dist',...(desktopPreview?['design-preview']:[])), overwrite: true,
   name: appName, executableName: appName, appBundleId: desktopPreview?'org.proteusapp.proteus.design-preview':'org.proteusapp.proteus.desktop',
   platform: 'darwin', arch: process.arch, icon, asar: false,
-  protocols: desktopPreview?[]:[{ name: 'Proteus Life sign-in', schemes: ['proteus'] }],
+  protocols: desktopPreview?[]:[{ name: 'Proteus Life sign-in', schemes: ['proteus','proteus-desktop'] }],
   // Rebuild only our PTY in the copied app. Preserve source Node ABI and vendor signatures.
   afterCopy: [async ({buildPath, electronVersion, arch}) => {
     verifySource();verifyCopied(buildPath);

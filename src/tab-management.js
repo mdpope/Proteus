@@ -10,7 +10,7 @@ export class TabManagement {
   if(value.action==='list'){
    const persisted=contentTabs.list({...value,type:['workspace','viewer'].includes(value.type)?undefined:value.type,scope:value.scope==='shell'?undefined:value.scope});
    const runtime=this.service.tabInventory?.()||[];
-   const tabs=[...persisted.map(tab=>{const live=runtime.find(item=>item.id===tab.id);return {...live,...tab,url:tab.url||live?.url||null};}),...runtime.filter(tab=>!persisted.some(existing=>existing.id===tab.id))].filter(tab=>(!value.scope||tab.scope===value.scope||tab.location?.scope===value.scope)&&(!value.id||(tab.scopeId||tab.id)===value.id||tab.location?.id===value.id)&&(!value.type||tab.type===value.type));
+   const tabs=[...persisted.map(tab=>{const views=runtime.filter(item=>(item.logicalId||item.id)===tab.id),live=views[0];return {...live,...tab,url:tab.url||live?.url||null,...(views.length?{views:views.map(({id,windowId,runtimeId})=>({id,windowId,runtimeId}))}:{})};}),...runtime.filter(tab=>value.scope==='shell'||!persisted.some(existing=>existing.id===(tab.logicalId||tab.id)))].filter(tab=>(!value.scope||tab.scope===value.scope||tab.location?.scope===value.scope)&&(!value.id||(tab.scopeId||tab.id)===value.id||tab.location?.id===value.id)&&(!value.type||tab.type===value.type));
    const offset=Math.max(0,Math.floor(Number(value.offset)||0)),limit=Math.max(1,Math.min(200,Math.floor(Number(value.limit)||100)));
    return {tabs:tabs.slice(offset,offset+limit),total:tabs.length,offset,limit,nextOffset:offset+limit<tabs.length?offset+limit:null,workspaces:context.get().workspaces.map(({id,name})=>({id,name})),observedAt:new Date().toISOString()};
   }
@@ -18,7 +18,7 @@ export class TabManagement {
    const tabs=this.service.tabInventory?.()||[],tab=tabs.find(tab=>tab.id===value.tabId);
    if(!tab)throw new Error('Tab is no longer open.');if(tab.manageable===false)throw new Error('This permanent application surface stays open.');if(value.expectedRevision!==tab.revision)throw new Error('Navigation changed. Refresh before managing this tab.');
    if(!['close','hide','restore','reorder','move','load','unload'].includes(value.action))throw new Error('Choose a supported navigation operation.');
-   if(value.action==='move'){if(['workspace','chat'].includes(tab.type))throw new Error('Use workspace/chat membership operations for this tab.');if(value.destination.scope==='shell'){const parent=tabs.find(row=>row.id===value.destination.id||row.runtimeId===value.destination.id);if(!parent||!['workspace','chat'].includes(parent.type)||parent.revision!==value.destination.expectedRevision)throw new Error('Destination navigation changed. Refresh before moving.');}else this.scope(value.destination);}
+   if(value.action==='move'){if(['workspace','chat'].includes(tab.type))throw new Error('Use workspace/chat membership operations for this tab.');if(value.destination.scope==='shell'){const parent=tabs.find(row=>(row.id===value.destination.id||row.runtimeId===value.destination.id)&&(!row.windowId||row.windowId===tab.windowId));if(!parent||!['workspace','chat'].includes(parent.type)||parent.revision!==value.destination.expectedRevision)throw new Error('Destination navigation changed. Refresh before moving.');}else this.scope(value.destination);}
    return this.service.tabRuntime({action:'shell-action',operation:value.action,tab,ids:value.ids,destination:value.destination,expectedRevision:value.expectedRevision});
   }
   if(['archive','unarchive','move-chat','delete-workspace'].includes(value.action)){

@@ -5,6 +5,13 @@ import WebKit
 import CryptoKit
 import Security
 import ImageIO
+#if DEBUG
+let nativeFixtureHTTPOrigin = ProcessInfo.processInfo.environment["PROTEUS_TEST_HTTP_ORIGIN"] ?? ProcessInfo.processInfo.environment["TEST_RUNNER_PROTEUS_TEST_HTTP_ORIGIN"] ?? "http://127.0.0.1:4329"
+let nativeFixtureRelayOrigin = ProcessInfo.processInfo.environment["PROTEUS_TEST_RELAY_ORIGIN"] ?? ProcessInfo.processInfo.environment["TEST_RUNNER_PROTEUS_TEST_RELAY_ORIGIN"] ?? "ws://127.0.0.1:4328"
+#else
+let nativeFixtureHTTPOrigin = ""
+let nativeFixtureRelayOrigin = ""
+#endif
 struct NativeChatScrollLocation {
     var anchor: Int?
     var inset: CGFloat
@@ -47,6 +54,36 @@ struct MainBrowserSelectionRequest: Equatable {
     @Published var draftAttachments: [String: [NativeDraftAttachment]] = [:]
     var chatScrollLocations: [String: NativeChatScrollLocation] = [:]
     var documentScrollOffsets: [String: CGFloat] = [:]
+    private var documentPositionKey: String { "proteus.document-positions." + SHA256.hash(data: Data(account.utf8)).map { String(format: "%02x", $0) }.joined() }
+    private var pendingDocumentPositions: [String: [String: Double]] = [:]
+    private var documentPositionTask: Task<Void, Never>?
+    private func documentPositionID(_ key: String) -> String { SHA256.hash(data: Data(key.utf8)).map { String(format: "%02x", $0) }.joined() }
+    func documentScrollOffset(for key: String) -> CGFloat? {
+        if let cached = documentScrollOffsets[key] { return cached }
+        let entries = UserDefaults.standard.dictionary(forKey: documentPositionKey)?["entries"] as? [String: [String: Double]]
+        guard let value = entries?[documentPositionID(key)]?["offset"], value.isFinite, value >= 0, value <= 50_000_000 else { return nil }
+        return CGFloat(value)
+    }
+    func rememberDocumentScrollOffset(_ offset: CGFloat, for key: String) {
+        guard offset.isFinite, offset >= 0, offset <= 50_000_000 else { return }
+        documentScrollOffsets[key] = offset
+        if documentScrollOffsets.count > 200 { for old in documentScrollOffsets.keys.sorted().filter({ $0 != key }).prefix(documentScrollOffsets.count - 200) { documentScrollOffsets.removeValue(forKey: old) } }
+        pendingDocumentPositions[documentPositionID(key)] = ["offset": Double(offset), "at": Date().timeIntervalSince1970]
+        documentPositionTask?.cancel()
+        documentPositionTask = Task { [weak self] in
+            do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
+            self?.flushDocumentScrollPositions()
+        }
+    }
+    func flushDocumentScrollPositions() {
+        documentPositionTask?.cancel(); documentPositionTask = nil
+        guard !pendingDocumentPositions.isEmpty else { return }
+        var saved = UserDefaults.standard.dictionary(forKey: documentPositionKey) ?? ["schemaVersion": 1]
+        var entries = saved["entries"] as? [String: [String: Double]] ?? [:]
+        entries.merge(pendingDocumentPositions) { _, current in current }; pendingDocumentPositions = [:]
+        if entries.count > 200 { for old in entries.sorted(by: { ($0.value["at"] ?? 0) < ($1.value["at"] ?? 0) }).prefix(entries.count - 200) { entries.removeValue(forKey: old.key) } }
+        saved["entries"] = entries; UserDefaults.standard.set(saved, forKey: documentPositionKey)
+    }
     var draftMessageIDs: [String: String] = [:]
     var draftSessionIDs: [String: String] = [:]
     private var documentContents: [String: String] = [:]
@@ -230,7 +267,7 @@ struct MainBrowserSelectionRequest: Equatable {
             let id = "desktop-fixture-\(index)"
             let local = existing.first { $0.contentTabId == id }
             // Reproduce the owner's blank placeholder echo only after the local page loads.
-            let address = local.map { isBrowserLoaded($0.id) } == true ? "" : local?.url ?? "http://127.0.0.1:4329/browser/\(page)"
+            let address = local.map { isBrowserLoaded($0.id) } == true ? "" : local?.url ?? "\(nativeFixtureHTTPOrigin)/browser/\(page)"
             return .object(["id": .string(id), "type": .string("browser"), "title": .string("New tab"), "url": .string(address)])
         }
         applyContentTabs(.object(["revision": .number(Double((contentSnapshots[scope]?["revision"].int ?? 0) + 1)), "tabs": .array(tabs)]), scope: scope)
@@ -498,7 +535,8 @@ struct MainBrowserSelectionRequest: Equatable {
     func reset(for identity: String) {
         guard account != identity else { return }
         mainBrowserSelectionRequest = nil
-        saveBrowsers(); for download in Array(downloads.values) { download.cancel() }; exportFile?.cleanup(); exportFile = nil; linkChatDraft = nil; restoring = true; contentSync = [:]; contentRequests = [:]; contentBackoff = [:]; workspaceContentDescriptors = contentSnapshots.filter { Self.isOrganizationalScope($0.key) }.mapValues { $0["tabs"].array }; account = identity; snapshot = .null; accountConnected = false; error = nil; browserPreviews = [:]; browserFavicons = [:]; faviconAttempts = [:]; unloadBrowsers(); browserTabs = []; unloadedBrowsers = []; selectedBrowser = nil; selectedMainBrowser = nil; scopedSelection = [:]; browserTouched = [:]; standupOrders = [:]; standupCompleted = [:]; documentContents = [:]; documentSessions = [:]; previewVersions = [:]; profileStores = [:]; draftAttachments = [:]; chatScrollLocations = [:]; draftMessageIDs = [:]; draftSessionIDs = [:]
+        flushDocumentScrollPositions()
+        saveBrowsers(); for download in Array(downloads.values) { download.cancel() }; exportFile?.cleanup(); exportFile = nil; linkChatDraft = nil; restoring = true; contentSync = [:]; contentRequests = [:]; contentBackoff = [:]; workspaceContentDescriptors = contentSnapshots.filter { Self.isOrganizationalScope($0.key) }.mapValues { $0["tabs"].array }; account = identity; snapshot = .null; accountConnected = false; error = nil; browserPreviews = [:]; browserFavicons = [:]; faviconAttempts = [:]; unloadBrowsers(); browserTabs = []; unloadedBrowsers = []; selectedBrowser = nil; selectedMainBrowser = nil; scopedSelection = [:]; browserTouched = [:]; standupOrders = [:]; standupCompleted = [:]; documentContents = [:]; documentSessions = [:]; previewVersions = [:]; profileStores = [:]; draftAttachments = [:]; chatScrollLocations = [:]; documentScrollOffsets = [:]; draftMessageIDs = [:]; draftSessionIDs = [:]
         if let cacheURL, let key = BrowserCacheKeychain.key(), let data = try? Data(contentsOf: cacheURL), let payload = try? RemoteCrypto.open(String(decoding: data, as: UTF8.self), key: key, aad: account), let decoded = try? JSONDecoder().decode([BrowserDescriptor].self, from: JSONEncoder().encode(payload["tabs"] == .null ? payload : payload["tabs"])) {
             browserTabs = decoded.compactMap(Self.retainedDescriptor); snapshot = payload["accountSnapshot"]; profilesVerified = snapshot["browserProfiles"] != .null
             let savedSelections = payload["selections"].object
@@ -559,6 +597,10 @@ struct MainBrowserSelectionRequest: Equatable {
         let conflicts = (try? JSONDecoder().decode(JSON.self, from: JSONEncoder().encode(browserConflicts))) ?? .array([])
         let payload: JSON = .object(["browserConflicts": conflicts, "contentSnapshots": .object(contentSnapshots), "contentPending": .object(contentPending.mapValues(JSON.array)), "contentRequests": .object(contentRequests), "contentHosts": .object(contentHosts.mapValues(JSON.string)), "tabs": tabs, "selected": .object(chatSelectedChildren.mapValues(JSON.string)), "order": .object(chatChildOrder.mapValues { .array($0.map(JSON.string)) })])
         do { let sealed = try RemoteCrypto.seal(payload, key: key, aad: "proteus-mobile-document-tabs-v1"); try FileManager.default.createDirectory(at: documentCacheURL.deletingLastPathComponent(), withIntermediateDirectories: true); try Data(sealed.utf8).write(to: documentCacheURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication]) } catch { /* Read-only tab metadata cannot affect the paired host. */ }
+    }
+    func contentDescriptorVisible(_ id: String, in scope: String) -> Bool {
+        guard let snapshot = contentSnapshots[scope] else { return true }
+        return snapshot["tabs"].array.contains { $0["id"].string == id && !$0["hidden"].bool && !$0["navigationClosed"].bool }
     }
     func documents(in chatKey: String) -> [NativeDocumentDescriptor] { documentTabs.filter { $0.chatKey == chatKey } }
     func orderedChatChildren(in chatKey: String, documentIDs: [String]) -> [String] {
@@ -655,7 +697,7 @@ struct MainBrowserSelectionRequest: Equatable {
         }
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--synthetic-address-recents") {
-            snapshot = .object(["history": .array((0..<25).map { number in .object(["id": .string("v\(number)"), "title": .string("Visited \(number)"), "url": .string("http://127.0.0.1:4329/browser/one#visit=\(number)"), "visitedAt": .string(String(format: "2026-10-07T00:%02d:00Z", number)), "deviceName": .string("Fixture iPad")]) })]); return
+            snapshot = .object(["history": .array((0..<25).map { number in .object(["id": .string("v\(number)"), "title": .string("Visited \(number)"), "url": .string("\(nativeFixtureHTTPOrigin)/browser/one#visit=\(number)"), "visitedAt": .string(String(format: "2026-10-07T00:%02d:00Z", number)), "deviceName": .string("Fixture iPad")]) })]); return
         }
         if ProcessInfo.processInfo.arguments.contains("--synthetic-team-lists") {
             snapshot = .object(["teamLists": .array([
@@ -693,7 +735,7 @@ struct MainBrowserSelectionRequest: Equatable {
     }
     /// Debug simulator rehearsal of the existing website API. Never routes real account records.
     private func fixtureAppRequest(_ path: String = "", method: String = "GET", body: JSON? = nil) async throws -> JSON {
-        guard NativeDesignPreview.fixtureService, let url = URL(string: "http://127.0.0.1:4329/native-app" + path) else { throw URLError(.unsupportedURL) }
+        guard NativeDesignPreview.fixtureService, let url = URL(string: "\(nativeFixtureHTTPOrigin)/native-app" + path) else { throw URLError(.unsupportedURL) }
         var request = URLRequest(url: url); request.httpMethod = method; request.timeoutInterval = 15
         if let body { request.httpBody = try JSONEncoder().encode(body); request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -902,7 +944,7 @@ struct MainBrowserSelectionRequest: Equatable {
     func selected(in scope: String) -> String? { scope == "main" ? selectedMainBrowser : scope == "team" ? selectedBrowser : scopedSelection[scope] }
     func selectChatChild(_ id: String, in scope: String) { guard scope.hasPrefix("chat:") && (id == "chat" || tabs(in: scope).contains(where: { $0.id == id })) else { return }; scopedSelection[scope] = id; saveBrowsers() }
     func select(_ id: String, in scope: String, activateMainBrowser: Bool = true) { guard browserTabs.contains(where: { $0.id == id && $0.scope == scope }) else { return }; if scope == "main" { selectedMainBrowser = id; if activateMainBrowser { mainBrowserSelectionRequest = MainBrowserSelectionRequest(tabID: id) } } else if scope == "team" { selectedBrowser = id; if let host = currentTeamOwner { scopedSelection["team:" + host] = id } } else { scopedSelection[scope] = id }; reload(id); touch(id); saveBrowsers() }
-    func touch(_ id: String) { browserTouched[id] = Date(); if let index = browserTabs.firstIndex(where: { $0.id == id }) { browserTabs[index].lastTouchedAt = ISO8601DateFormatter().string(from: Date()) }; pruneBrowsers() }
+    func touch(_ id: String) { scheduleBrowserPreview(id); browserTouched[id] = Date(); if let index = browserTabs.firstIndex(where: { $0.id == id }) { browserTabs[index].lastTouchedAt = ISO8601DateFormatter().string(from: Date()) }; pruneBrowsers() }
     func persistBrowser(_ id: String, enabled: Bool) { guard let index = browserTabs.firstIndex(where: { $0.id == id }) else { return }; browserTabs[index].persist = enabled; if enabled { reload(id) }; saveBrowsers() }
     func pruneBrowsers(now: Date = Date()) {
         let recent = Set(browserTouched.filter { item in browserTabs.first(where: { $0.id == item.key })?.persist != true }.sorted { $0.value > $1.value }.prefix(6).map(\.key))
@@ -1050,14 +1092,28 @@ struct MainBrowserSelectionRequest: Equatable {
             let keep = Set(browserTouched.sorted { $0.value > $1.value }.prefix(100).map(\.key) + [id]); browserFavicons = browserFavicons.filter { keep.contains($0.key) }
         } catch { /* The local globe remains the accessible fallback. */ }
     }
+    private func thumbnailKey(_ tab: BrowserDescriptor) -> String { "browser:" + account + ":" + tab.profileId + ":" + (tab.ownerHostId ?? "local") + ":" + (tab.contentTabId ?? tab.id) }
+    func browserPreview(_ id: String) -> UIImage? {
+        if let cached = browserPreviews[id] { return cached }
+        guard let tab = browserTabs.first(where: { $0.id == id }), profileAvailable(tab.profileId) else { return nil }
+        return NativeThumbnailCache.load(thumbnailKey(tab))
+    }
+    private var previewCaptureTimes: [String: Date] = [:]
+    func scheduleBrowserPreview(_ id: String) {
+        guard Date().timeIntervalSince(previewCaptureTimes[id] ?? .distantPast) > 5 else { return }
+        Task { @MainActor in try? await Task.sleep(for: .milliseconds(700)); if let tab = browserTabs.first(where: { $0.id == id }), selected(in: tab.scope) == id { captureBrowserPreview(id) } }
+    }
     func captureBrowserPreview(_ id: String) {
-        guard let view = browserViews[id], !view.isLoading, let url = view.url, Self.safeURL(url.absoluteString) != nil else { return }
+        guard UIApplication.shared.applicationState == .active, Date().timeIntervalSince(previewCaptureTimes[id] ?? .distantPast) >= 5, let tab = browserTabs.first(where: { $0.id == id }), profileAvailable(tab.profileId), let view = browserViews[id], view.window != nil, !view.isLoading, let url = view.url, Self.safeURL(url.absoluteString) != nil else { return }
+        previewCaptureTimes[id] = Date()
+        let key = thumbnailKey(tab), identity = account
         let config = WKSnapshotConfiguration(); config.snapshotWidth = 320
         view.takeSnapshot(with: config) { [weak self, weak view] image, _ in
             Task { @MainActor in
-                guard let self, let view, self.browserViews[id] === view, view.url == url, let image else { return }
-                self.browserPreviews[id] = image
-                let keep = Set(self.browserTouched.sorted { $0.value > $1.value }.prefix(12).map(\.key) + [id])
+                guard let self, let view, self.account == identity, self.browserViews[id] === view, view.url == url, let image else { return }
+                self.previewCaptureTimes[id] = Date(); self.browserPreviews[id] = image
+                NativeThumbnailCache.save(image, key: key)
+                let keep = Set(self.browserTouched.sorted { $0.value > $1.value }.prefix(32).map(\.key) + [id])
                 self.browserPreviews = self.browserPreviews.filter { keep.contains($0.key) }
             }
         }
@@ -1195,7 +1251,7 @@ struct MainBrowserSelectionRequest: Equatable {
     func refreshBrowser(_ id: String) { if let view = browserViews[id] { view.reload() } else { reload(id) } }
     func stopBrowser(_ id: String) { if let view = browserViews[id] { failBrowserNavigation(id, currentURL: view.url); view.stopLoading() } }
     func renameBrowser(_ id: String, title: String) { guard let index = browserTabs.firstIndex(where: { $0.id == id }) else { return }; browserTabs[index].title = String(title.prefix(200)); browserTabs[index].customTitle = String(title.prefix(200)) }
-    func close(_ id: String) { let scope = browserTabs.first(where: { $0.id == id })?.scope ?? "team"; unload(id); unloadedBrowsers.remove(id); browserTouched.removeValue(forKey: id); browserTabs.removeAll { $0.id == id }; browserPreviews[id] = nil; browserFavicons[id] = nil; faviconAttempts[id] = nil; if selected(in: scope) == id { if scope == "main" { selectedMainBrowser = tabs(in: scope).last?.id } else if scope == "team" { selectedBrowser = tabs(in: scope).last?.id } else { scopedSelection[scope] = tabs(in: scope).last?.id } } }
+    func close(_ id: String) { if let tab = browserTabs.first(where: { $0.id == id }) { NativeThumbnailCache.remove(thumbnailKey(tab)) }; let scope = browserTabs.first(where: { $0.id == id })?.scope ?? "team"; unload(id); unloadedBrowsers.remove(id); browserTouched.removeValue(forKey: id); browserTabs.removeAll { $0.id == id }; browserPreviews[id] = nil; browserFavicons[id] = nil; faviconAttempts[id] = nil; if selected(in: scope) == id { if scope == "main" { selectedMainBrowser = tabs(in: scope).last?.id } else if scope == "team" { selectedBrowser = tabs(in: scope).last?.id } else { scopedSelection[scope] = tabs(in: scope).last?.id } } }
     func unload(_ id: String) {
         historyNavigation.removeValue(forKey: id)
         mirroredBrowserLoads.remove(id)

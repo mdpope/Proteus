@@ -1693,3 +1693,34 @@ fallback do not. Shell reconciliation imports/removes descriptors independently 
 activation only after its target exists. No request is persisted. This prevents deferred SwiftUI
 observations of restored browser state from overriding a cold notification’s explicit schedule/chat
 target, without timers, reseeded caches or changes to owner permissions and saved tab identities.
+
+## October 19: one host across windows, independent update supervision
+
+A WindowRegistry assigns every desktop window a durable ID and private session/reading namespace.
+Top-frame IPC and asynchronous native callbacks retain that ID; a closed context cannot resolve to
+another focused window. Browser profiles, permissions, extensions, downloads, provider sessions and
+terminals remain in one host-owned service. Inventory exposes per-window views alongside stable
+logical IDs; canonical operations reconcile every matching view without recreating sessions.
+
+The update supervisor runs from the immutable signed staged candidate's Electron runtime, outside
+its replacement target. This avoids a dependency on a separately installed Node interpreter and
+reuses the exact verified signed resources. The tradeoff is transient staging disk space; the old
+application belongs to one verified recovery generation, and completed helper staging is retired
+only after its process exits. Both candidate and rollback baseline must implement update protocol 1
+and data-compatibility 1. The first helper-capable release is installed through the existing external
+procedure; an older 0.2.25 app is not claimed to support this new automatic rollback contract.
+
+A private journal outside the app-data snapshot retains authorization, checkpoint, source/package
+identity, helper readiness, phase and one continuation ID. The host waits for settled turns and
+attached nonpersistent terminals/downloads, then takes a dispatch barrier; new input before handoff
+invalidates the checkpoint, while recovery input stays durably queued before the continuation.
+Atomic-replacement phases reconcile after helper restart. Compatible rollback does not restore an
+old data snapshot over newer records. Delivery retries reuse the same ID; ambiguous delivery or
+changed permissions/sessions require inspection instead of replay. The installer initializes the
+per-target recovery inventory, including existing backup roots, before unattended restart is enabled.
+
+Cua is the primary native-control backend. Peekaboo's actual snapshot-only inputs are adapted to
+an exact PID/window receipt instead of guessed Cua parameters. Catalogs/processes start on demand;
+only Proteus-owned transports and sessions are stopped. Stop retains uncertain input effects until
+the same target is observed again. Permission refusals remain host-wide across chat/backend changes.
+No foreground/global-pointer or nested agent/shell/browser control is exposed through this surface.

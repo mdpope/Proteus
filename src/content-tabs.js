@@ -31,8 +31,8 @@ export function workspaceContentScopes(session){
   const make=(scope,id,children,owner)=>({scope,id,tabs:children.flatMap(child=>{try{const tab=descriptor(child,owner);return tab?[tab]:[];}catch{return [];}})});
   const scopes=[];
   for(const parent of session?.tabs||[])if(!parent.hostId&&['run','workspace'].includes(parent.type))scopes.push(make(parent.type==='workspace'?(parent.projectId?'project':'workspace'):'chat',parent.projectId||parent.workspaceId||parent.runId||parent.id,session.tabs.filter(child=>child.parentId===parent.id),parent.type==='workspace'?(parent.projectId?'project:'+parent.projectId:'workspace:'+parent.workspaceId):parent.runId||parent.id));
-  scopes.push(make('main','main',(session?.tabs||[]).filter(tab=>!tab.parentId&&!['workspace'].includes(tab.type)),'main'));
-  scopes.push(make('team','team',session?.team?.tabs||[],'team'));
+  scopes.push(make('main',session?.windowId&&session.windowId!=='main'?'window:'+session.windowId:'main',(session?.tabs||[]).filter(tab=>!tab.parentId&&!['workspace'].includes(tab.type)),'main'));
+  scopes.push(make('team',session?.windowId&&session.windowId!=='main'?'window:'+session.windowId:'team',session?.team?.tabs||[],'team'));
   return scopes;
 }
 /** Host-owned descriptors only. Selection, page state and document approval never enter this store. */
@@ -80,7 +80,7 @@ export class ContentTabs {
     });this.asyncTail=work.catch(()=>{});return work;
   }
   read(){try{if(fs.statSync(this.file).size>16_000_000)throw new Error();const data=JSON.parse(fs.readFileSync(this.file,'utf8'));if(data.schemaVersion!==1||typeof data.scopes!=='object'||!data.scopes)throw new Error();if(Object.keys(data.scopes).length>1000)throw new Error();for(const [key,row]of Object.entries(data.scopes)){const [scope,...id]=key.split(':');this.key(scope,id.join(':'));if(!/^(chat|team|workspace|project|main):/.test(key)||!row||!Number.isSafeInteger(row.revision)||row.revision<0||!Array.isArray(row.tabs)||row.tabs.length>1000||new Set(row.tabs.map(tab=>contentTab(tab).id)).size!==row.tabs.length)throw new Error();}return data;}catch(error){if(error.code==='ENOENT')return {schemaVersion:1,scopes:{}};throw new Error('Saved content tabs could not be read. The original file was preserved.');}}
-  key(scope,id){if(!['chat','team','workspace','project','main'].includes(scope)||!ID.test(id||'')||(scope==='team'&&id!=='team')||(scope==='main'&&id!=='main'))throw new Error('Choose an explicit chat or Team tab scope.');return scope+':'+id;}
+  key(scope,id){if(!['chat','team','workspace','project','main'].includes(scope)||!ID.test(id||'')||(scope==='team'&&id!=='team'&&!/^window:[a-f0-9-]{36}$/i.test(id))||(scope==='main'&&id!=='main'&&!/^window:[a-f0-9-]{36}$/i.test(id)))throw new Error('Choose an explicit chat or Team tab scope.');return scope+':'+id;}
   get(scope,id){const key=this.key(scope,id),row=this.read().scopes[key];return {scope,id,revision:row?.revision||0,tabs:(row?.tabs||[]).map(contentTab)};}
   list({scope,id,type}={}){
     if(scope&&!['chat','workspace','project','main','team'].includes(scope))throw new Error('Choose a tab scope.');

@@ -781,7 +781,7 @@ struct ChatView: View {
             if selectedChild == "chat" { conversation }
             else if selectedChild == "live" { LiveBrowserView(chatID: id).environmentObject(store) }
             else if let tab = shared.browserTabs.first(where: { $0.id == selectedChild && $0.scope == chatBrowserScope }) {
-                TeamBrowserView(scope: chatBrowserScope, showTabs: false, onBackToList: returnToChats).onAppear { shared.select(tab.id, in: chatBrowserScope) }
+                TeamBrowserView(scope: chatBrowserScope, showTabs: false, onBackToList: returnToChats, newTabOptions: [NativeNewTabAction(title: "Live Browser", symbol: "rectangle.on.rectangle", enabled: store.state["capabilities"].array.contains(.string("browser.live.v1")), run: { phoneLiveOpened = true; selectedChild = "live"; shared.selectChatChild("live", for: chatBrowserScope) })]).onAppear { shared.select(tab.id, in: chatBrowserScope) }
             } else if let document = documents.first(where: { $0.id == selectedChild }) {
                 ChatDocumentReader(document: document, store: store, runID: id, requestLatest: {
                     if document.requestID.hasPrefix("preview:") {
@@ -946,14 +946,7 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
             if NativePhonePreview.enabled && !shared.tabs(in: chatBrowserScope).contains(where: { $0.id == selectedChild }) {
                 Button { phoneChrome.showTabs?() } label: { NativeTabOverviewIcon().frame(width: 44, height: 44) }.accessibilityLabel("Tab overview").accessibilityIdentifier("chat-tab-overview")
             }
-            Menu {
-                if NativePhonePreview.enabled && store.state["capabilities"].array.contains(.string("browser.live.v1")) { Button("Live Browser", systemImage: "rectangle.on.rectangle") { phoneLiveOpened = true; selectedChild = "live"; shared.selectChatChild("live", for: chatBrowserScope) } }
-                Button("Markdown file · grant required", systemImage: "doc.text") {}.disabled(true)
-                ForEach(shared.browserProfiles, id: \.self) { profile in Button("Browser · " + profile["name"].string, systemImage: "globe") { shared.open(nil, scope: NativePhonePreview.enabled ? chatBrowserScope : (workspaceBrowserScope ?? chatBrowserScope), profileId: profile["id"].string); selectedChild = shared.selected(in: chatBrowserScope) ?? "chat"; shared.selectChatChild(selectedChild, for: chatBrowserScope) } }
-                Button("Terminal · on " + store.displayName, systemImage: "terminal") {}.disabled(true)
-                Divider()
-                Button("Reorder tabs", systemImage: "arrow.left.arrow.right") { reorderTabs = true }.disabled(shared.orderedChatChildren(in: chatBrowserScope, documentIDs: documents.map(\.id)).count < 2)
-            } label: { Image(systemName: "plus") }.padding(12).accessibilityLabel("Add chat tab")
+            Button { shared.open(nil, scope: chatBrowserScope); selectedChild = shared.selected(in: chatBrowserScope) ?? "chat"; shared.selectChatChild(selectedChild, for: chatBrowserScope) } label: { Image(systemName: "plus") }.padding(12).accessibilityLabel("Add chat tab")
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--show-scroll-fixture-controls") {
                 Text(String(Int(conversationOffset))).font(.caption2.monospacedDigit()).frame(width: 54).accessibilityIdentifier("chat-scroll-offset")
@@ -1629,14 +1622,18 @@ private struct ChatDocumentReader: View {
                     Button("Return to chat", action: showChat)
                 }
             }.padding().background(NativeScrollProbe(command: scrollCommand, onSnapshot: { snapshot in
-                if !restoringOffset, snapshot.offset.isFinite, snapshot.canScroll { shared.documentScrollOffsets[scrollKey] = max(0, snapshot.offset) }
+                if !restoringOffset, snapshot.offset.isFinite, snapshot.canScroll { shared.rememberDocumentScrollOffset(max(0, snapshot.offset), for: scrollKey) }
+            }, onInteraction: { active in
+                if active { restoringOffset = false; scrollCommand = nil }
             }, onApplied: { commandID, _ in
                 if scrollCommand?.id == commandID { restoringOffset = false }
             }).frame(width: 1, height: 1).opacity(0))
         }.background(NativeTheme.background).navigationTitle(document.title)
             .safeAreaInset(edge: .top) { HStack { Spacer(); if pageSearch.visible { NativePageFindBar(search: pageSearch) } else { Button { pageSearch.visible = true } label: { Image(systemName: "magnifyingglass") }.accessibilityLabel("Find in document").keyboardShortcut("f", modifiers: .command) } }.padding(8).background(NativeTheme.background) }
-            .onAppear {
-                guard let offset = shared.documentScrollOffsets[scrollKey] else { restoringOffset = false; return }
+            .onDisappear { shared.flushDocumentScrollPositions() }
+            .task(id: scrollKey + ":" + document.version) {
+                restoringOffset = true
+                guard let offset = shared.documentScrollOffset(for: scrollKey) else { restoringOffset = false; return }
                 scrollCommand = NativeScrollCommand(id: UUID(), y: offset)
             }
     }

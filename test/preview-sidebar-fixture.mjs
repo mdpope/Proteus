@@ -32,5 +32,5 @@ export async function sidebarFixture(){
   {id:'synthetic-browser-hidden',type:'browser',label:'Synthetic hidden browser',url:origin+'/hidden-tab',parentId,hidden:true,unloaded:true,lastActivityAt:at(2),openedAt:at(90)},
   {id:'markdown:'+document,type:'markdown',file:document,label:'Synthetic sidebar document',parentId,lastActivityAt:at(3),openedAt:at(90)}];
  new WorkspaceSession(locations.home).save({schemaVersion:1,active:workspaceId,page:'context',tabs});
- return {temporary,locations,auth,studio,personal,project,parentId,workspaceId,user,title,document,origin,requests,projectChatCount:15,projectTotal:18,projects:catalog.projects,cleanup:async()=>{await new Promise(resolve=>server.close(resolve));fs.rmSync(temporary,{recursive:true,force:true});}};
+ return {temporary,locations,auth,studio,personal,project,parentId,workspaceId,user,title,document,origin,requests,projectChatCount:15,projectTotal:18,projects:catalog.projects,cleanup:async()=>{await new Promise(resolve=>server.close(resolve));fs.rmSync(temporary,{recursive:true,force:true,maxRetries:10,retryDelay:100});}};
 }

@@ -23,7 +23,7 @@ class BrowserActions {
   link(value) {
     try { const url = new URL(value); return ['http:','https:'].includes(url.protocol) && !url.username && !url.password && url.origin !== this.browser.appOrigin ? url.href : null; } catch { return null; }
   }
-  send(value) { if (!this.browser.shuttingDown && !this.browser.window.isDestroyed()) this.browser.window.webContents.send('proteus:browser-action',value); }
+  send(value) { if(this.browser.sendAction)return this.browser.sendAction(value);if (!this.browser.shuttingDown && !this.browser.window.isDestroyed()) this.browser.window.webContents.send('proteus:browser-action',value); }
   icon(name) {
     if (process.platform !== 'darwin') return {};
     try { const image = nativeImage.createFromNamedImage(name).resize({width:16,height:16}); if (!image.isEmpty()) { image.setTemplateImage(true); return {icon:image}; } } catch {}

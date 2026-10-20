@@ -502,3 +502,19 @@ The phone preview now passes the owner through that push, fixing the reproduced 
 crash. Opening a workspace selects its content without closing an existing main browser tab.
 A native regression opens a project chat from a main browser and verifies its selected tree item.
 This acceptance uses the private synthetic fixture; physical mobile rollout remains held.
+
+## October 19 combined release implementation checkpoint
+
+The new release implements direct expansion/navigation on workspace/project names while retaining
+other branches across feature changes. Workspace-card pointer/keyboard reorder saves the same owner
+order used by the sidebar. Tabs exposes Command/Ctrl-click or Select, a checkbox column and top-right
+Hide/Move/Close. Move pickers use workspace headings and real project/default-project choices,
+including unopened projects. Each item uses fresh owner revisions; failures stay selected and
+successful items are cleared. Existing native sessions and document origins survive moves.
+
+The disposable Electron bulk harness verifies selection, typed hide, cross-workspace project moves,
+unchanged IDs/files/hidden state, and no hidden-page loads. Project source registration now uses the
+actual project-aware session in isolated and production modes. Visibility actions commit through
+the owner management boundary to avoid a first-sync race reverting local Hide before Move.
+Multiple-window broker/unit and real Electron restart/close tests pass. This is source/fixture
+acceptance; no new production installation or physical native workflow is claimed.

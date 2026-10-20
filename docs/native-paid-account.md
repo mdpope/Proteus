@@ -136,6 +136,16 @@ logical bytes; measured free space increased by 378,376,192 bytes during those r
 sharing and concurrent work explain the difference. Private receipts retain the exact source,
 artifact identity, exclusions, manifests, operation IDs and acceptance evidence. Temporary transfer
 copies and superseded device recovery generations were retired after acceptance.
+
+## October 19 iPad legacy removal
+
+At the operator's explicit request, the original `org.proteusapp.proteus.mobile` installation
+(`Proteus Legacy`, 0.2.21 / 2610.18.1) was uninstalled from the physical iPad. A fresh installed-app
+inventory confirms only the paid `org.proteusapp.review.proteus` app (0.2.21 / 2610.18.2) remains. A read-only
+listing verifies the paid app's Application Support directory remains accessible; this is not
+a new byte-for-byte preservation check. The previously verified migration/recovery files and original app
+bundle remain in private recovery storage; no additional full backup was created. The iPhone,
+native Mac, certificates and paid app installation were not changed by this removal.
 Retiring the completed helper packages/compiler intermediates separately removed another
 53,979,298 logical bytes and increased measured free space by 52,420,608 bytes. Combined measured
 cleanup reclaimed 430,796,800 bytes; the signed paid release and frozen source remain available.

@@ -1,3 +1,4 @@
+import {renderUpdates} from './updates.js';
 import {previewEnabled} from './desktop-preview.js';
 import {mountBrowserHistory} from './browser-history-panel.js';
 import {mountLogPanel,pagedAccountLogs} from './log-panel.js';
@@ -8,7 +9,7 @@ import {renderIntegrations} from './integrations.js';
 import {renderInternetDefaults} from './internet-search.js';
 let ui;
 const $ = selector => document.querySelector(selector);
-const sections = [['resources','Resources'],['providers','Providers'],['connections','Computer Connections'],['integrations','Accounts & Integrations'],['account','Proteus Account & Security'],['internet-searches','Internet Searches'],['preferences','Browser Preferences'],['website-data','Website data'],['history','Browser history'],['setup','App Setup'],['usage','Usage'],['notifications','Notifications'],['logs','Logs']];
+const sections = [['resources','Resources'],['providers','Providers'],['connections','Computer Connections'],['integrations','Accounts & Integrations'],['account','Proteus Account & Security'],['internet-searches','Internet Searches'],['updates','Updates'],['desktop-control','Desktop Control'],['preferences','Browser Preferences'],['website-data','Website data'],['history','Browser history'],['setup','App Setup'],['usage','Usage'],['notifications','Notifications'],['logs','Logs']];
 export function initEngineRoom(options){ui=options;}
 async function activity(kind){const local=await ui.api('/api/'+kind);if(!ui.state.data.life?.identity)return local;try{const account=await ui.api('/api/app'),merged=new Map((local.items||[]).map(item=>[item.id,{...item,localId:item.id}]));for(const item of account[kind]||[]){const key=item.eventId||item.id,previous=merged.get(key);merged.set(key,{...previous,...item,localId:previous?.localId,shared:true,identity:account.identity});}return {...local,items:[...merged.values()].sort((a,b)=>Date.parse(b.createdAt||b.at)-Date.parse(a.createdAt||a.at))};}catch{return {...local,sharedUnavailable:true};}}
 
@@ -25,7 +26,9 @@ export function renderEngineRoom(section='resources',force=false){
   const active=()=>ui.state.page==='engine'&&ui.state.engineSection===section&&$('#engine-content')===mounted;
   const render=async()=>{
     try{
-      if(section==='history'){const peers=await window.desktop?.peers({action:'list'})||[];const profiles=await ui.api('/api/browser-profiles');if(!active())return;await mountBrowserHistory(mounted,{hosts:[{hostId:ui.state.data.hostId,label:ui.state.data.hostName||'This computer'},...(Array.isArray(peers)?peers:peers.items||peers.peers||[]).filter(peer=>!peer.paused)],profiles:profiles.items,defaultHostId:ui.state.data.hostId,timezone:ui.state.data.settings.timezone,active,notify:ui.toast,request:(host,action,args)=>host===ui.state.data.hostId?ui.api('/api/browser-history',{...args,action}):window.desktop.peers({action:'request',hostId:host,method:'browser.history.'+action,args}),open:async(item)=>{const info=await window.desktop.browser({action:'create',url:item.url,profileId:item.profileId||'default'});ui.openBrowser?.(info);}});
+      if(section==='updates'){await renderUpdates(mounted,ui,active);
+      } else if(section==='desktop-control'){await renderDesktopControl(mounted,active);
+      } else if(section==='history'){const peers=await window.desktop?.peers({action:'list'})||[];const profiles=await ui.api('/api/browser-profiles');if(!active())return;await mountBrowserHistory(mounted,{hosts:[{hostId:ui.state.data.hostId,label:ui.state.data.hostName||'This computer'},...(Array.isArray(peers)?peers:peers.items||peers.peers||[]).filter(peer=>!peer.paused)],profiles:profiles.items,defaultHostId:ui.state.data.hostId,timezone:ui.state.data.settings.timezone,active,notify:ui.toast,request:(host,action,args)=>host===ui.state.data.hostId?ui.api('/api/browser-history',{...args,action}):window.desktop.peers({action:'request',hostId:host,method:'browser.history.'+action,args}),open:async(item)=>{const info=await window.desktop.browser({action:'create',url:item.url,profileId:item.profileId||'default'});ui.openBrowser?.(info);}});
       } else if(section==='internet-searches'){await renderInternetDefaults(ui,$('#engine-content'),active);
       } else if(section==='integrations'){
         const panel=document.createElement('div');$('#engine-content').replaceChildren(panel);await renderIntegrations(panel,{request:(action,args)=>action==='list'?ui.api('/api/integrations'):ui.api('/api/integrations',{action,...args}),notify:ui.toast,signIn:row=>{const run=ui.state.data.runs.find(r=>r.id===row.runId);if(run)ui.manageMcp(run);}});
@@ -63,4 +66,13 @@ export function renderEngineRoom(section='resources',force=false){
     }catch(error){if(active())$('#engine-content').innerHTML=`<p class="banner">${ui.escape(error.message)}</p>`;}
   };
   void render();
+}
+
+async function renderDesktopControl(container,active){
+ const status=await ui.api('/api/desktop-control');if(!active())return;
+ container.innerHTML=`<section class="card"><h2>Desktop Control</h2><p>Cua Driver is primary. Peekaboo is an on-demand Mac backup. Your current chat remains the planner; tools start when requested and Proteus-owned connections stop after two idle minutes.</p>${status.backends.map(backend=>`<div class="resource-row"><div><strong>${ui.escape(backend.id==='cua'?'Cua Driver':'Peekaboo')}</strong><p>${backend.installed?'Installed':'Not installed'} · ${backend.running?'Connected':'Idle'}</p><a href="${ui.escape(backend.setup)}" data-desktop-setup="${backend.id}">Installation and OS permission instructions ↗</a></div></div>`).join('')}<p class="note">macOS requires Accessibility and Screen Recording for the signed driver. Linux requires its supported graphical session/accessibility service. A backend permission refusal cannot be bypassed by choosing the backup.</p><p>${status.lease?'Active target: '+ui.escape(status.lease.owner)+' · process '+ui.escape(status.lease.pid||'discovery')+' · window '+ui.escape(status.lease.windowId||'pending')+(status.lease.uncertain?' · Observe before retrying input.':''):'No active desktop control.'}</p><div class="actions"><button data-desktop-test>Test discovery</button><button data-desktop-stop>Stop / revoke control</button><button data-desktop-refresh>Refresh</button></div><pre data-desktop-result role="status"></pre></section>`;
+ container.querySelector('[data-desktop-refresh]').onclick=()=>void renderDesktopControl(container,active).catch(error=>ui.toast(error.message));
+ container.querySelector('[data-desktop-stop]').onclick=async()=>{await ui.api('/api/desktop-control',{action:'stop'});await renderDesktopControl(container,active);};
+ container.querySelector('[data-desktop-test]').onclick=async event=>{const output=container.querySelector('[data-desktop-result]');event.target.disabled=true;try{const value=await ui.api('/api/desktop-control',{action:'test'});output.textContent='Cua Driver catalog: '+value.tools+' tools. Permission report: '+JSON.stringify(value.permissionResult)+'. Desktop input and provider image delivery still need a real task check.';}catch(error){output.textContent=error.message;}finally{event.target.disabled=false;}};
+ container.querySelectorAll('[data-desktop-setup]').forEach(link=>link.onclick=event=>{if(window.desktop){event.preventDefault();void window.desktop.openExternal(link.href).catch(error=>ui.toast(error.message));}});
 }

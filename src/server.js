@@ -1,3 +1,4 @@
+import {DesktopControl} from './desktop-control.js';
 import { DesktopPreview, desktopPreviewCodexHome } from './desktop-preview.js';
 import { WorkspaceProjects } from './workspace-projects.js';
 import { hostPlatformMetadata } from './host-platform.js';
@@ -71,7 +72,7 @@ async function body(req, maxBytes = 2_000_000) {
   return bytes ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {};
 }
 
-export async function startServer({ home = defaultHome(), port = 4317, providers, browser, openExternal, timers = true, withSeed = true, background = false, lifeOptions = {}, desktopPreview = false } = {}) {
+export async function startServer({ home = defaultHome(), port = 4317, providers, browser, openExternal, timers = true, withSeed = true, background = false, lifeOptions = {}, desktopPreview = false, updateRecovery=false } = {}) {
   const previewCodexHome = desktopPreview ? desktopPreviewCodexHome(home, desktopPreview.codexHome) : null;
   const unlock = lock(home);
   if (withSeed && !desktopPreview) seed(home);
@@ -86,14 +87,16 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   if (desktopPreview) codex.options = codex.metadata.options;
   const claude = new SessionProvider(() => new ClaudeProvider({}, { browser, context }));
   const omi = new OmiIntegration(home);
-  const life = new LifeStore(home, {...lifeOptions, openExternal, onChange: () => queueMicrotask(() => notify())});
+  const life = new LifeStore(home, {...lifeOptions, openExternal:lifeOptions.openExternal||openExternal, onChange: () => queueMicrotask(() => notify())});
   const account = new AppAccount(life);
   const browserProfiles=new BrowserProfiles(home,account);
   const activity = new ActivityStore(home, { identity: () => life.api.identity(), publish: (item, identity, kind='notifications') => account.request({ path:'/'+kind, method:'POST', body:item, identity }) });
   const workspaceFiles = new WorkspaceFiles(() => context.config());
   const attachments = new ChatAttachmentStore(home);
   const adapters = { ...(providers || (desktopPreview ? { codex } : { copilot, codex, claude })), ...(!desktopPreview ? {'local-process': omi.provider()} : {}) };
-  const engine = new Engine(home, adapters, undefined, {permissionControls:true});
+  const engine = new Engine(home, adapters, undefined, {permissionControls:true,recoveryBarrier:updateRecovery});
+  const desktopControl=desktopPreview?null:new DesktopControl({active:owner=>owner==='operator'||['running','awaiting_input'].includes(engine.getRun(owner)?.status)});
+  if(browser)browser.desktopControl=desktopControl;
   const performanceDiagnostics = new PerformanceDiagnostics({home});
   engine.performanceDiagnostics = performanceDiagnostics;
   activity.performanceDiagnostics=performanceDiagnostics;attachments.performanceDiagnostics=performanceDiagnostics;
@@ -223,6 +226,9 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (url.pathname === '/api/team/lists' && req.method === 'GET') return json(200, await account.lists());
       if (url.pathname === '/api/team/lists' && req.method === 'POST') return json(200, await account.team(await body(req)));
       if(url.pathname==='/api/browser-history'){const value=req.method==='GET'?{action:'query',...Object.fromEntries(url.searchParams)}:await body(req);const action=value.action||'query';if(!['query','record','delete','settings','sync','status'].includes(action))throw new Error('Unknown browser history action.');return json(200,action==='sync'?await service.peers?.syncHistory()||{synced:false}:action==='settings'?await browserHistorySettings(service,value):await service.browserHistory[action](value));}
+      if(url.pathname==='/api/updates/recovery'&&req.method==='POST'){if(!service.updates)throw Error('Supervised desktop updates are unavailable.');return json(200,await service.updates.recovery(await body(req)));}
+      if(url.pathname==='/api/updates'){if(!service.updates)return json(200,{identity:{packaged:false,capabilities:{prepare:false}},job:null});return json(200,await service.updates.handle(req.method==='GET'?{action:'status'}:await body(req)));}
+      if(url.pathname==='/api/desktop-control'){if(!desktopControl)throw Error('Native desktop control is unavailable in this isolated preview.');return json(200,await desktopControl.handle(req.method==='GET'?{action:'status'}:await body(req)));}
       if(url.pathname==='/api/browser-profiles'){const result=await browserProfiles.handle(req.method==='GET'?{action:'list'}:await body(req));notify();return json(200,result);}
       if(url.pathname==='/api/attention'&&req.method==='GET')return json(200,{items:service.desktopAttention()});
       if (url.pathname === '/api/notifications' && req.method === 'GET') return json(200, activity.notifications());
@@ -233,7 +239,8 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         const root=new URL('../',import.meta.url);
         const read=name=>fs.readFileSync(new URL(name,root),'utf8').slice(0,200_000);
         const metadata=JSON.parse(read('package.json'));
-        return json(200,{version:metadata.version,buildRevision:metadata.buildRevision||'source',readme:read('README.md'),changelog:read('CHANGELOG.md'),update:{available:false,supported:false,message:'Automatic updates are not configured for this build.'}});
+        const supervised=service.updates?.identity().capabilities.prepare===true;
+        return json(200,{version:metadata.version,buildRevision:metadata.buildRevision||'source',readme:read('README.md'),changelog:read('CHANGELOG.md'),update:{available:false,supported:supervised,message:supervised?'Test and stage an exact packaged candidate in Engine Room → Updates.':'Supervised updates require an installed helper-capable desktop package.'}});
       }
       if (url.pathname === '/api/resources' && req.method === 'GET') return json(200, service.resources ? await service.resources.list() : {supported:false,processes:[],tabs:[],observedAt:new Date().toISOString()});
       if (url.pathname === '/api/resources' && req.method === 'POST') {if(!service.resources)throw new Error('Resource controls require the desktop app.');return json(200,await service.resources.action(await body(req)));}
@@ -285,7 +292,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         hostName:remote.info().label,hostId:remote.info().hostId,
         workspaceProjects,
         ...(desktopPreview?{desktopPreview:workspaceProjects}:{}),
-        attention:service.desktopAttention(),
+        attention:service.desktopAttention(),updates:service.updates?.status()||null,
         schedules: engine.schedules.list(), runs: engine.listRuns().map(run => url.searchParams.has('summaries') ? {...runSummary(run),...workspaceProjects.memberships[run.id],trigger:run.trigger,usage:run.usage,schedule:{id:run.schedule.id,name:run.schedule.name,provider:run.schedule.provider,model:run.schedule.model,workspace:run.schedule.workspace},permissionContext:engine.permissions.describeRun(run,permissionSnapshot)} : ({ ...run, ...workspaceProjects.memberships[run.id], storage: storagePaths(home, run), permissionContext: engine.permissions.describeRun(run,permissionSnapshot) })), providerStatus: catalog.value, providerStatuses: providerStatuses(),attachmentMediaTypes:Object.fromEntries(['copilot','codex','claude'].map(id=>[id,adapters[id]?.acceptedMediaTypes||[]])),mcpStatusProviders:['copilot','codex','claude'].filter(id=>typeof adapters[id]?.mcpStatus==='function'),mcpLoginProviders:['copilot','codex','claude'].filter(id=>typeof adapters[id]?.mcpLogin==='function'),
         permissions: permissionSnapshot.value, permissionWorkspaces: engine.permissions.describeMany([
           { ...settings.get(), name: 'Default workspace', ref: { defaults: true } },
@@ -607,7 +614,8 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   origin = `http://127.0.0.1:${server.address().port}`;
   atomicJSON(path.join(home, 'connection.json'), { origin, token, pid: process.pid });
   const timer = timers ? setInterval(() => { void performanceDiagnostics.measure('scheduler.tick', () => engine.tick()).catch(error => engine.emit('scheduler-error', { error: error.message, at: new Date().toISOString() })); }, 1000) : null;
-  const service = { workspaceProjects:preview, desktopPreview:desktopPreview?preview:null, performanceDiagnostics, notify, desktopAttention:()=>[...(service.browserAttention?.()||[]),...remote.documents.list().filter(item=>!item.approvedAt).map(item=>({id:'document:'+item.requestId,kind:'document',title:item.deviceName+' requests '+item.title,requestId:item.requestId,path:item.path,at:new Date(Date.parse(item.expiresAt)-600000).toISOString()})),...service.attention()], attention:()=>[...integrations.consumers().filter(item=>['needs-auth','failed'].includes(item.connection)).map(item=>({id:'integration:'+item.id,kind:'connection',title:(item.profile.label||item.server)+' needs attention',section:'integrations',at:item.checkedAt})),...activity.notifications().items.filter(item=>!item.readAt).map(item=>({id:'notification:'+item.id,notificationId:item.id,kind:'notification',title:item.title,body:item.body,chatId:item.chatId,at:item.createdAt}))], browserProfiles, integrations, engine, settings, context, standup, omi, life, account, activity, workspaceFiles, attachments, buildChatSchedule, usage, catalog, catalogs, origin, token, home, url: `${origin}/?token=${token}`, async close() {
+  const service = { desktopControl,workspaceProjects:preview, desktopPreview:desktopPreview?preview:null, performanceDiagnostics, notify, desktopAttention:()=>[...(service.browserAttention?.()||[]),...remote.documents.list().filter(item=>!item.approvedAt).map(item=>({id:'document:'+item.requestId,kind:'document',title:item.deviceName+' requests '+item.title,requestId:item.requestId,path:item.path,at:new Date(Date.parse(item.expiresAt)-600000).toISOString()})),...service.attention()], attention:()=>[...integrations.consumers().filter(item=>['needs-auth','failed'].includes(item.connection)).map(item=>({id:'integration:'+item.id,kind:'connection',title:(item.profile.label||item.server)+' needs attention',section:'integrations',at:item.checkedAt})),...activity.notifications().items.filter(item=>!item.readAt).map(item=>({id:'notification:'+item.id,notificationId:item.id,kind:'notification',title:item.title,body:item.body,chatId:item.chatId,at:item.createdAt}))], browserProfiles, integrations, engine, settings, context, standup, omi, life, account, activity, workspaceFiles, attachments, buildChatSchedule, usage, catalog, catalogs, origin, token, home, url: `${origin}/?token=${token}`, async close() {
+    service.updates?.close();await desktopControl?.close();
     activity.log('info','app.stopping','Proteus is shutting down.');clearInterval(integrationTimer);await integrations.close(); if(activityTimer)clearInterval(activityTimer); if (timer) clearInterval(timer); if (catalogTimer) clearInterval(catalogTimer); await Promise.all(Object.values(catalogs).map(c => c.pending)); await providerAuth.close(); await remote.close(); let engineCloseError; try { await engine.close(); } catch (error) { engineCloseError=error; } await attachments.close(); await copilot.close(); await codex.close(); await claude.close(); await life.close?.(); await service.browserHistory?.close(); let activityCloseError; try { await activity.close(); } catch (error) { activityCloseError=error; }
     for (const client of eventClients) client.end(); eventClients.clear();
     await new Promise(resolve => {

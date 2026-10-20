@@ -9,21 +9,23 @@ use Laravel\Passport\RefreshToken;
 
 class NativeClientController extends Controller
 {
-    public function discovery(): JsonResponse
+    public function discovery(Request $request): JsonResponse
     {
         $origin = rtrim(config('app.url'), '/');
-        $id = config('native.client_id');
+        $desktop = $request->query('client') === 'desktop';
+        $id = config($desktop ? 'native.desktop_client_id' : 'native.client_id');
+        $redirect = config($desktop ? 'native.desktop_redirect_uri' : 'native.redirect_uri');
         $client = $id ? Passport::client()->newQuery()->whereKey($id)->where('revoked', false)->first() : null;
         $enabled = parse_url($origin, PHP_URL_SCHEME) === 'https'
             && $client && ! $client->confidential()
-            && $client->redirect_uris === [config('native.redirect_uri')]
+            && $client->redirect_uris === [$redirect]
             && $client->hasGrantType('authorization_code') && $client->hasGrantType('refresh_token');
 
         return response()->json($enabled ? [
             'enabled' => true, 'protocol' => 1, 'issuer' => $origin,
             'clientId' => (string) $client->id,
             'authorizationEndpoint' => $origin.'/oauth/authorize', 'tokenEndpoint' => $origin.'/oauth/token',
-            'redirectUri' => config('native.redirect_uri'), 'scopes' => ['brain:read', 'brain:write'],
+            'redirectUri' => $redirect, 'scopes' => ['brain:read', 'brain:write'],
             'apiBase' => $origin.'/api/v1/life', 'appApiBase' => $origin.'/api/v1/app', 'appScopes' => ['app:read', 'app:write'],
         ] : ['enabled' => false, 'protocol' => 1, 'message' => 'Native Life sign-in is not configured on this website.'])->header('Cache-Control', 'no-store');
     }
@@ -31,7 +33,7 @@ class NativeClientController extends Controller
     public function logout(Request $request): JsonResponse
     {
         $token = $request->user('api')->token();
-        abort_unless($token && (string) $token->client_id === (string) config('native.client_id'), 403);
+        abort_unless($token && in_array((string) $token->client_id, array_filter([(string) config('native.client_id'), (string) config('native.desktop_client_id')]), true), 403);
         $token->forceFill(['revoked' => true])->save();
         RefreshToken::where('access_token_id', $token->id)->update(['revoked' => true]);
 

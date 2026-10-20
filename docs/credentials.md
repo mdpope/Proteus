@@ -67,3 +67,12 @@ HC had none of the Life session, outgoing peer credential or chat-index encrypte
 new unconditional startup index was nevertheless probing Safe Storage and encrypting an empty
 cache. Its core API subsequently resumed with all providers and incoming relay pairings intact.
 Fixing that unnecessary access does not claim to repair the existing Keychain item's ACL.
+
+## Missing Life sessions during desktop startup
+
+A missing `life/website-session.enc` means the account is signed out. Browser-profile discovery
+may load account state even when Life is disabled, so this empty-state read must return before
+probing protected storage. A fresh Linux profile can start without a keyring; this does not
+allow sign-in or credential writes through Electron's `basic_text` backend. Existing encrypted
+sessions still require protected storage and fail closed without deleting or rewriting their
+bytes. File-access and decoding errors remain explicit rather than becoming an empty session.

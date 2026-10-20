@@ -20,8 +20,10 @@ export function internetSearchDialog(ui){
     if(!data.settings.internetSearches?.[selected]?.model){dialog.querySelector('#search-status').textContent='Choose defaults for '+providerLabel(selected)+' in Engine Room → Internet Searches first.';return;}
     busy=true;dialog.querySelectorAll('[data-search-provider]').forEach(b=>b.disabled=true);
     try{
+      ui.beforeStart?.();
       const delivery=await prepareLocalAttachments({key:'internet-search',providerId:selected,destination:computerName(data.hostName)+' · Internet Search',draftId:crypto.randomUUID(),messageId:crypto.randomUUID(),mediaTypes:data.attachmentMediaTypes||{},post:api});
-      const run=await api('/api/chat',{chatType:'internet',provider:selected,workspaceId:dialog.querySelector('#search-workspace').value,prompt:prompt.value,...(delivery||{})});
+      ui.beforeStart?.();
+      const run=await api('/api/chat',{chatType:'internet',provider:selected,workspaceId:dialog.querySelector('#search-workspace').value,...(ui.projectId?{projectId:ui.projectId}:{}),prompt:prompt.value,...(delivery||{})});
       clearAttachments('internet-search');dialog.close();await ui.refresh();ui.open(run);
     }catch(error){toast(error.message);}finally{busy=false;dialog.querySelectorAll('[data-search-provider]').forEach(b=>b.disabled=false);}
   });prompt.focus();

@@ -899,3 +899,36 @@ project first; main overview mirrors only main navigation. Same-owner reorder an
 preserve sessions/history. A zoomed gesture must end at 100% before a separate pinch enters
 overview. Refresh confirms POST resubmission and uses Chromium's current-document request;
 Enter opens the address with a fresh GET. Form bodies never enter portable tab history.
+
+## October 19 combined release implementation checkpoint
+
+Inspect Element is last in link context menus. The Page menu uses the circled horizontal ellipsis;
+its awaited native popup dispatch no longer requires the replaced DOM button to remain attached.
+Replacement-navigation ERR_ABORTED is ignored consistently and successful main-frame load clears
+stale errors. Real HC Slack/X login acceptance remains pending.
+
+Overview reads cached last-good browser/chat captures rather than taking screenshots while opening.
+Captures follow interaction and periodic visible-page viewing, persist privately through unload and
+restart, and use profile/content identity; failed captures keep icons/last-good images. Hidden and
+navigation-closed tabs are excluded. The current workspace includes current project first, then
+other projects by name. Native sections use project identity and cached chat/document images too.
++ and New Tab open the browser home with creation blocks and focused combined Website address /
+history filtering; choosing another resource replaces the blank. Team uses the same page. Browser
+history/full Back/Forward stacks, optimistic revisions and recovered pending intent remain separate.
+
+Source and disposable desktop acceptance pass overview/grouping/native cache, cross-project bulk
+moves, main/chat/Team restart selection, and two-window ownership/geometry. Native 134-unit acceptance
+passes before the final overview refinement. Signed/live/device and native UI acceptance remain
+pending; no new package is installed. Cua 0.36.0 and Peekaboo 4.9.5 are installed on Build Mac and
+both real MCP catalogs work through Proteus. OS grants, actual input/cursor and provider image
+acceptance are not inferred from catalog discovery.
+
+Later Personal acceptance grants Accessibility/Screen Recording to both signed vendor hosts and
+passes their exact-window screenshot/native-click/fresh-observation flows in a disposable counter
+app. An uncertain Peekaboo dispatch is observed before any further input. The actual image result
+adapter retains image bytes; real-provider delivery and visible cursor animation remain separate.
+Private Cua lifecycle names rotate after Stop and all owned sessions end even after fallback.
+Fresh input observations require matching backend process/window receipts. Cua 0.36.0's structured
+diff can fail typed-output validation; use a fresh full read without replaying input. Run the opt-in
+`test/desktop-control-live-ui.mjs` only with installed/granted hosts. Team's new-tab address/filter
+survives resize/polling and uses the shared outlined overview icon.

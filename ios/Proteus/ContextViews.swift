@@ -550,15 +550,7 @@ struct NativeWorkspaceContentView: View {
                     HStack(spacing: 0) { ForEach(orderedChildren, id: \.self) { child in workspaceChild(child) } }
                 }.scrollIndicators(.hidden)
                 } else if projectID != nil { Spacer(minLength: 0) }
-                Menu {
-                    Button("Markdown file · open through a chat", systemImage: "doc.text") {}.disabled(true)
-                    ForEach(shared.browserProfiles, id: \.self) { item in Button("Browser · " + item["name"].string, systemImage: "globe") { shared.open(nil, scope: scope, profileId: item["id"].string); selected = shared.selected(in: scope) ?? "workspace" } }
-                    Button("Terminal · on " + store.displayName, systemImage: "terminal") {}.disabled(true)
-                    Button("New chat", systemImage: "bubble.left.and.bubble.right") { internet = false; newChat = true }.disabled(!store.connected).accessibilityIdentifier("workspace-new-chat")
-                    Button("Internet Search", systemImage: "magnifyingglass") { internet = true; newChat = true }.disabled(!store.connected).accessibilityIdentifier("workspace-new-search")
-                    Divider()
-                    if projectID != nil || !store.supportsProjects { Button("Reorder tabs", systemImage: "arrow.left.arrow.right") { reorder = true }.disabled(orderedChildren.count < 2) }
-                } label: { Image(systemName: "plus").padding(12) }.accessibilityLabel("New workspace tab")
+                Button { shared.open(nil, scope: scope); selected = shared.selected(in: scope) ?? "workspace" } label: { Image(systemName: "plus").padding(12) }.accessibilityLabel("New workspace tab")
             }.buttonStyle(.plain).nativeTabBar()
             Divider() }
             if selected == "workspace" || (NativePhonePreview.enabled && selected.hasPrefix("chat:")) {
@@ -570,7 +562,7 @@ struct NativeWorkspaceContentView: View {
             } else if selected.hasPrefix("chat:") { ChatView(id: String(selected.dropFirst(5)), onBack: { selected = "workspace" }, workspaceBrowserScope: scope).environmentObject(store).id(selected) }
             else if selected.hasPrefix("remote:") {
                 ContentUnavailableView("Available on \(store.displayName)", systemImage: "desktopcomputer", description: Text("This saved terminal or host document tab remains on \(store.displayName). Open it there to reconnect to the terminal; chat documents can be requested through their chat’s approved document controls.")).frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else { TeamBrowserView(scope: scope, showTabs: false, onBackToList: { selected = "workspace" }) }
+            } else { TeamBrowserView(scope: scope, showTabs: false, onBackToList: { selected = "workspace" }, newTabOptions: [NativeNewTabAction(title: "New chat", symbol: "bubble.left.and.bubble.right", enabled: store.connected, run: { internet = false; newChat = true }), NativeNewTabAction(title: "Internet Search", symbol: "magnifyingglass", enabled: store.connected, run: { internet = true; newChat = true })]) }
         }.background(NativeTheme.background).navigationTitle(profile["name"].string).navigationBarTitleDisplayMode(.inline)
             .toolbar(NativePhonePreview.enabled && phoneChrome.controlsHidden ? .hidden : .automatic, for: .navigationBar)
             .nativeFeaturePage(projectID.flatMap { store.projectCatalog.project(id: $0, workspaceID: workspaceID)?["name"].string } ?? profile["name"].string)

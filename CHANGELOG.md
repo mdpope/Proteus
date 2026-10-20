@@ -1,3 +1,33 @@
+## 0.2.26 — in development, not installed
+
+- Incorporate the Linux branch and its verified signed-out secure-storage startup repair.
+- Restore production provider choices; retain sidebar expansion; fix startup readiness, browser
+  abort alerts, Inspect ordering and the Page-menu DevTools guard.
+- Preserve empty navigation revisions, recoverable pending intent and scoped conflict handling.
+- Add independent desktop windows, native view/IPC ownership, shortcuts, geometry/session and
+  reading-position restoration; keep one host, browser/profile broker and terminal store.
+- Add cached browser/chat overview images, ordered workspace project sections, direct new-tab
+  creation blocks/address-history entry, workspace ordering and hierarchical bulk tab actions.
+- Promote accepted phone/tablet navigation/composer design; add native overview/cache/new-tab
+  parity and durable account-scoped document positions.
+- Reserve a black iPad system-status area above clipped app content and remove ordinary
+  inactive-scene privacy blanking; future private browsing can define its own masking behavior.
+- Add desktop OAuth callback/client separation and preferred-browser routing; website deployment
+  and client provisioning remain required for live acceptance.
+- Add lazy Cua/Peekaboo desktop-control adapters and an independent supervised update protocol
+  with a durable same-chat continuation, compatible rollback and inventoried recovery retention.
+  Signed-package, provider-delivery, OS-control and all device installation acceptance are pending.
+- Widevine remains shelved under the operator's no-paid-signing instruction.
+
+## October 19 — Linux release preparation startup repair
+
+- Let signed-out desktop startup and browser-profile discovery run without accessing protected
+  credential storage when no Life session file exists. Existing saved sessions, sign-in and
+  token writes still require protected storage; Linux plaintext fallback remains rejected.
+- Add regressions for fresh profile discovery and preservation of existing encrypted sessions
+  with unavailable storage or a plaintext backend. This is preparation on a separate branch;
+  installation and live workflow acceptance wait for the frozen release candidate.
+
 ## October 19 — final native design preview
 
 - Brighten sidebar text/icons, use desktop Home/Schedules/Team Tools marks, tighten project/item

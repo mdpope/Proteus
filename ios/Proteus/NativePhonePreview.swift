@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import CryptoKit
 
 /// Reviewed navigation is shared with release builds. Synthetic service access
 /// still requires a separate Debug simulator identity/explicit rehearsal launch.
@@ -98,11 +99,7 @@ struct NativeMainTabAdd: View {
     @EnvironmentObject private var shared: SharedAppStore
     @EnvironmentObject private var chrome: NativePhoneChrome
     var body: some View {
-        Menu {
-            ForEach(shared.browserProfiles, id: \.self) { profile in Button("Browser · " + profile["name"].string, systemImage: "globe") { shared.open(nil, scope: "main", profileId: profile["id"].string) } }
-            Button("New chat", systemImage: "square.and.pencil") { chrome.newMainChat?(false) }
-            Button("Internet Search", systemImage: "magnifyingglass") { chrome.newMainChat?(true) }
-        } label: { Image(systemName: "plus").frame(width: 44, height: 44) }.accessibilityLabel("New main tab").accessibilityIdentifier("phone-new-tab")
+        Button { shared.open(nil, scope: "main") } label: { Image(systemName: "plus").frame(width: 44, height: 44) }.accessibilityLabel("New main tab").accessibilityIdentifier("phone-new-tab")
     }
 }
 private struct NativeFeaturePage: ViewModifier {
@@ -142,6 +139,8 @@ struct NativePhoneTab: Identifiable {
     var title: String
     var symbol: String
     var detail: String
+    var section: String = ""
+    var sectionID: String = ""
     var preview: UIImage?
     var select: () -> Void
     var close: (() -> Void)? = nil
@@ -156,33 +155,61 @@ struct NativePhoneTab: Identifiable {
     @Published var visited: [NativePhoneTab] = []
     @Published var recent: [NativePhoneTab] = []
     var interactedAt: [String: Date] = [:]
+    var cacheNamespace = "anonymous"
+    private var lastCapture: [String: Date] = [:]
+    private var captureTask: Task<Void, Never>?
+    private var delayedCapture: Task<Void, Never>?
+    private var delayedCaptureID = ""
     var browserOwnsBack = false
     var snapshot: (() -> UIImage?)?
     var showTabs: (() -> Void)?
     var activateArea: ((String) -> Void)?
     var newMainChat: ((Bool) -> Void)?
 
-    func reset() { visited = []; recent = []; interactedAt = [:]; currentID = ""; snapshot = nil; overview = false; overviewProgress = 0; controlsHidden = false; drawer = false; browserOwnsBack = false }
+    func reset() { captureTask?.cancel(); captureTask = nil; delayedCapture?.cancel(); delayedCapture = nil; delayedCaptureID = ""; lastCapture = [:]; visited = []; recent = []; interactedAt = [:]; currentID = ""; snapshot = nil; overview = false; overviewProgress = 0; controlsHidden = false; drawer = false; browserOwnsBack = false }
     func register(_ item: NativePhoneTab) {
+        if captureTask == nil {
+            captureTask = Task { @MainActor [weak self] in
+                while !Task.isCancelled {
+                    do { try await Task.sleep(for: .seconds(20)) } catch { return }
+                    guard let self else { return }; self.captureCurrent()
+                }
+            }
+        }
         if let index = visited.firstIndex(where: { $0.id == item.id }) {
             var updated = item
-            updated.preview = item.preview ?? visited[index].preview
+            updated.preview = item.preview ?? visited[index].preview ?? NativeThumbnailCache.load(cacheNamespace + ":" + item.id)
             visited[index] = updated
-        } else { visited.append(item); if visited.count > 24 { visited.removeFirst(visited.count - 24) } }
+        } else { var cached = item; cached.preview = item.preview ?? NativeThumbnailCache.load(cacheNamespace + ":" + item.id); visited.append(cached); if visited.count > 24 { visited.removeFirst(visited.count - 24) } }
         if currentID != item.id { record(item) }
         currentID = item.id
+        scheduleCapture()
     }
     func record(_ item: NativePhoneTab) { interactedAt[item.id] = Date(); recent.removeAll { $0.id == item.id }; recent.insert(item, at: 0); if recent.count > 50 { recent.removeLast(recent.count - 50) } }
     func captureCurrent() {
-        guard let index = visited.firstIndex(where: { $0.id == currentID }), let image = snapshot?() else { return }
+        guard UIApplication.shared.applicationState == .active, currentID.hasPrefix("chat:") || currentID.hasPrefix("document:"), !overview, !drawer, Date().timeIntervalSince(lastCapture[currentID] ?? .distantPast) >= 5, let index = visited.firstIndex(where: { $0.id == currentID }), let image = snapshot?() else { return }
         visited[index].preview = image
+        NativeThumbnailCache.save(image, key: cacheNamespace + ":" + currentID)
+        lastCapture[currentID] = Date()
+    }
+    func scheduleCapture() {
+        let expected = currentID
+        guard expected.hasPrefix("chat:") || expected.hasPrefix("document:") else { return }
+        guard Date().timeIntervalSince(lastCapture[expected] ?? .distantPast) > 5 else { return }
+        if delayedCapture != nil && delayedCaptureID == expected { return }
+        delayedCapture?.cancel(); delayedCaptureID = expected
+        delayedCapture = Task { @MainActor [weak self] in
+            do { try await Task.sleep(for: .milliseconds(700)) } catch { return }
+            guard let self else { return }; delayedCapture = nil; delayedCaptureID = ""
+            if currentID == expected { captureCurrent() }
+        }
     }
     func toggleControls() {
         withAnimation(UIAccessibility.isReduceMotionEnabled ? nil : .easeInOut(duration: 0.24)) { controlsHidden.toggle() }
     }
     func beginOverview() {
         guard !overview else { return }
-        captureCurrent(); overview = true; overviewProgress = 0
+        overview = true; overviewProgress = 0
     }
     func pinch(_ scale: CGFloat) {
         beginOverview()
@@ -199,11 +226,14 @@ struct NativePhoneTab: Identifiable {
     }
 }
 
-/// A weak capture hook for the actual rendered SwiftUI surface. No disk snapshots or page loads.
+/// A weak capture hook for the visible surface; cached captures never load another page.
 struct NativePhoneSurface: UIViewRepresentable {
     let chrome: NativePhoneChrome
+    func makeCoordinator() -> InteractionObserver { InteractionObserver() }
     func makeUIView(context: Context) -> UIView { let view = UIView(); view.isUserInteractionEnabled = false; return view }
     func updateUIView(_ view: UIView, context: Context) {
+        context.coordinator.chrome = chrome; context.coordinator.surface = view
+        DispatchQueue.main.async { [weak observer = context.coordinator] in observer?.install() }
         chrome.snapshot = { [weak view] in
             guard let view, let window = view.window, view.bounds.width > 20, view.bounds.height > 20 else { return nil }
             let rect = view.convert(view.bounds, to: window)
@@ -212,6 +242,26 @@ struct NativePhoneSurface: UIViewRepresentable {
                 window.drawHierarchy(in: CGRect(x: -rect.minX, y: -rect.minY, width: window.bounds.width, height: window.bounds.height), afterScreenUpdates: false)
             }
         }
+        chrome.scheduleCapture()
+    }
+    static func dismantleUIView(_ view: UIView, coordinator: InteractionObserver) { coordinator.remove() }
+    final class InteractionObserver: NSObject, UIGestureRecognizerDelegate {
+        weak var chrome: NativePhoneChrome?
+        weak var surface: UIView?
+        private weak var host: UIWindow?
+        private var gestures: [UIGestureRecognizer] = []
+        func install() {
+            guard let window = surface?.window, host !== window else { return }
+            remove(); host = window
+            let tap = UITapGestureRecognizer(target: self, action: #selector(interacted(_:)))
+            let pan = UIPanGestureRecognizer(target: self, action: #selector(interacted(_:)))
+            gestures = [tap, pan]
+            for gesture in gestures { gesture.cancelsTouchesInView = false; gesture.delaysTouchesBegan = false; gesture.delaysTouchesEnded = false; gesture.delegate = self; window.addGestureRecognizer(gesture) }
+        }
+        func remove() { for gesture in gestures { host?.removeGestureRecognizer(gesture) }; gestures = []; host = nil }
+        @objc private func interacted(_ gesture: UIGestureRecognizer) { if gesture.state == .ended { chrome?.scheduleCapture() } }
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool { guard let surface else { return false }; return surface.bounds.contains(touch.location(in: surface)) }
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool { true }
     }
 }
 
@@ -270,6 +320,11 @@ struct NativePhoneOverview: View {
     let items: [NativePhoneTab]
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var targets: [String: CGRect] = [:]
+    private var sections: [(id: String, title: String, items: [NativePhoneTab])] {
+        var result: [(id: String, title: String, items: [NativePhoneTab])] = []
+        for item in items { let id = item.sectionID.isEmpty ? item.section : item.sectionID; if let index = result.indices.last, result[index].id == id { result[index].items.append(item) } else { result.append((id, item.section, [item])) } }
+        return result
+    }
     private var current: NativePhoneTab? { items.first { $0.id == chrome.currentID } }
     var body: some View {
         GeometryReader { geometry in
@@ -281,8 +336,11 @@ struct NativePhoneOverview: View {
                         Button("Done") { chrome.closeOverview() }.frame(minWidth: 44, minHeight: 44)
                     }.padding(.horizontal, 20)
                     ScrollView {
+                        VStack(alignment: .leading, spacing: 16) {
+                        ForEach(Array(sections.enumerated()), id: \.offset) { _, section in
+                        if !section.title.isEmpty { Text(section.title).font(.headline).padding(.horizontal, 18) }
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .top), count: NativePadPreview.enabled ? 3 : 2), spacing: 18) {
-                            ForEach(items) { item in
+                            ForEach(section.items) { item in
                                 Button { chrome.closeOverview(select: item) } label: {
                                     VStack(alignment: .leading, spacing: 7) {
                                         Group {
@@ -297,6 +355,8 @@ struct NativePhoneOverview: View {
                                 }.buttonStyle(.plain).accessibilityIdentifier("phone-tab-" + item.id)
                             }
                         }.padding(18)
+                        }
+                        }
                     }
                 }.background(NativeTheme.background).opacity(reduceMotion ? p : max(0, (p - 0.12) / 0.88))
                 if !reduceMotion, p < 0.999, let image = current?.preview {
@@ -327,4 +387,30 @@ extension EnvironmentValues {
         get { self[NativePhoneAreaActiveKey.self] }
         set { self[NativePhoneAreaActiveKey.self] = newValue }
     }
+}
+
+/// Private, bounded last-good images. This cache never loads an unloaded page.
+@MainActor enum NativeThumbnailCache {
+    private static var directory: URL { URL.applicationSupportDirectory.appending(path: "tab-thumbnails", directoryHint: .isDirectory) }
+    private static func file(_ key: String) -> URL { directory.appending(path: SHA256.hash(data: Data(key.utf8)).map { String(format: "%02x", $0) }.joined() + ".jpg") }
+    static func load(_ key: String) -> UIImage? {
+        let url = file(key)
+        guard let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize, size <= 262144, let data = try? Data(contentsOf: url) else { return nil }
+        return UIImage(data: data)
+    }
+    static func save(_ image: UIImage, key: String) {
+        let width = min(360, image.size.width), height = image.size.height * width / max(1, image.size.width)
+        guard width > 0, height > 0, height < 4096 else { return }
+        let format = UIGraphicsImageRendererFormat(); format.scale = 1
+        let resized = UIGraphicsImageRenderer(size: CGSize(width: width, height: height), format: format).image { _ in image.draw(in: CGRect(x: 0, y: 0, width: width, height: height)) }
+        guard let data = resized.jpegData(compressionQuality: 0.65), data.count <= 262144 else { return }
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            try data.write(to: file(key), options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey]).filter { $0.pathExtension == "jpg" }.sorted { ((try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast) > ((try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast) }
+            var bytes = 0
+            for (index, url) in files.enumerated() { bytes += (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0; if index >= 200 || bytes > 24 * 1024 * 1024 { try? FileManager.default.removeItem(at: url) } }
+        } catch { /* Keep the previous good preview and the icon fallback. */ }
+    }
+    static func remove(_ key: String) { try? FileManager.default.removeItem(at: file(key)) }
 }
