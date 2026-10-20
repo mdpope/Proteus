@@ -1,6 +1,12 @@
+import {workspaceCatalog} from './workspace-ui.js';
 // Shared by the host and desktop preview. Folder access is independent of loaded sources.
-export function contextPlan(catalog, { workspace, workspaceId, selectedIds = [], agentId = null, includeDefaults = true } = {}) {
+export function contextPlan(catalog, { workspace, workspaceId, selectedIds, agentId, includeDefaults } = {}) {
+  workspaceId ||= workspace?.id || catalog.workspaceId;
+  catalog=workspaceCatalog(catalog,workspaceId||catalog.defaultWorkspaceId);
   const profile = catalog.workspaces.find(w => w.id === (workspaceId || catalog.defaultWorkspaceId));
+  selectedIds ??= profile?.defaults?.selectedIds || [];
+  if(agentId===undefined)agentId=profile?.defaults?.agentId||null;
+  includeDefaults ??= profile?.defaults?.includeDefaults!==false;
   const base = workspace || profile || { cwd: '', additionalDirectories: [] };
   const roots = [...new Set([base.cwd, ...(base.additionalDirectories || []), ...(catalog.universalFolders || [])])];
   const entries = catalog.entries.flatMap(entry => {

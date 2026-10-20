@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mergeChatHistory } from '../public/chat-history.js';
+import { mergeChatHistory, chatHistoryWindowStart } from '../public/chat-history.js';
 import { remoteRun } from '../src/remote.js';
 const page=(first,last,count=last+1)=>({id:'chat',eventStart:first,eventCount:count,earlier:first,events:Array.from({length:last-first+1},(_,i)=>({text:String(first+i)}))});
 test('history survives live refresh, sparse reconnect and stable prepend without duplicates',()=>{
@@ -14,4 +14,18 @@ test('absolute history cursor cannot skip messages when new events arrive',()=>{
  const run={id:'chat',schedule:{},events:page(0,349).events};
  const result=remoteRun(run,150,undefined,100);
  assert.equal(result.eventStart,0);assert.equal(result.events.at(-1).text,'99');assert.equal(result.eventCount,350);
+});
+
+test('initial rendering stays small and every cached event remains reachable in older chunks',()=>{
+ const events=Array.from({length:1000},(_,i)=>({text:'Message '+i}));let start=chatHistoryWindowStart(events);assert.equal(start,976);let count=events.length-start;
+ while(start>0){const next=chatHistoryWindowStart(events,start);assert.ok(next<start);assert.ok(start-next<=100);count+=start-next;start=next;}
+ assert.equal(count,1000);assert.equal(chatHistoryWindowStart(Array.from({length:20},()=>({text:'x'.repeat(20000)}))),14);
+ assert.equal(chatHistoryWindowStart([{text:'x'.repeat(100000)}]),0);
+});
+
+test('collapsed tool-heavy pages advance in full transport batches without mounting output',()=>{
+ const events=Array.from({length:2507},(_,i)=>({role:'tool',text:'Tool '+i,data:{tool:{output:'x'.repeat(20000)}}}));
+ let first=chatHistoryWindowStart(events);assert.equal(first,2407);let pages=1;
+ while(first>0){first=chatHistoryWindowStart(events,first);pages++;}
+ assert.equal(pages,26);
 });

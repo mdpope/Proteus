@@ -1,0 +1,167 @@
+/* Isolated desktop preview: the feature list and workspace tree share one scroll region. */
+.desktop-preview #sidebar{overflow:hidden}
+.desktop-preview #sidebar>.brand{flex-shrink:0}
+.desktop-preview #sidebar nav.preview-sidebar-scroll{flex:1;min-height:0;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
+.desktop-preview #sidebar>.sidebottom{flex-shrink:0;margin-top:0}
+.desktop-preview .preview-workspace-divider{border:0;border-top:1px solid var(--line);margin:9px 0}
+.desktop-preview .preview-workspace-tree{margin:7px 0}
+.desktop-preview .preview-workspace-header{display:flex;align-items:center;border-radius:6px;background:transparent}
+.desktop-preview #sidebar .preview-workspace-link,.desktop-preview #sidebar .preview-project-link{display:flex;align-items:center;gap:7px;min-width:0;flex:1;width:auto;padding:8px 7px;margin:0}
+.desktop-preview .preview-workspace-link{font-weight:600}
+.desktop-preview .preview-workspace-link span,.desktop-preview .preview-project-link span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.desktop-preview .preview-project-branches{margin-left:8px;padding:4px 0 0}
+.desktop-preview .preview-project-branch{display:flex;align-items:center;min-width:0}
+.desktop-preview .preview-expand{flex:0 0 28px;width:28px;min-height:30px;border:0;background:transparent;padding:4px;color:inherit;font-size:18px;line-height:1;border-radius:4px}
+.desktop-preview .preview-expand:hover{background:color-mix(in srgb,var(--ink) 10%,transparent)}
+.desktop-preview .preview-expand:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.desktop-preview .preview-recent-chats{margin-left:8px;font-size:12px}
+.desktop-preview .preview-empty-project{margin:5px 6px 8px;font-size:12px;color:var(--soft)}
+.desktop-preview .preview-project-link svg,.desktop-preview .preview-workspace-link svg{flex-shrink:0;width:18px;height:18px}
+.desktop-preview.sidebar-minimized #sidebar:hover,.desktop-preview.sidebar-minimized #sidebar:focus-within{overflow:hidden}
+body.desktop-preview.sidebar-minimized:not(.preview-sidebar-overlay-open) #sidebar .preview-workspace-list,body.desktop-preview.sidebar-minimized:not(.preview-sidebar-overlay-open) #sidebar .preview-workspace-divider,body.desktop-preview.sidebar-minimized:not(.preview-sidebar-overlay-open) #sidebar .preview-collapse-all{display:none}
+.desktop-preview .preview-workspace-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}.desktop-preview .preview-card-title{display:flex;gap:10px;align-items:center;border:0;background:transparent;color:inherit;padding:0}.desktop-preview .preview-card-title h2{margin:0}.desktop-preview .preview-project-row{display:flex;justify-content:space-between;align-items:center;gap:12px;border-bottom:1px solid var(--line,#ddd);padding:16px 4px}.desktop-preview .preview-project-title{border:0;background:transparent;display:flex;align-items:center;gap:12px;flex:1;text-align:left;color:inherit}.desktop-preview .preview-project-title small{display:block;color:var(--muted,#777);margin-top:5px}.desktop-preview .preview-project-title svg{width:22px;height:22px}.desktop-preview .preview-breadcrumb{display:flex;align-items:center;gap:6px;margin-bottom:8px}.desktop-preview .preview-project-pages{padding-bottom:16px}.desktop-preview .workspace-page-switch{display:none}.desktop-preview #chat-subtabs>.preview-fixed-tabs{display:flex;gap:0;flex-shrink:0}.desktop-preview #chat-subtabs>.preview-fixed-tabs>button{white-space:nowrap;border-right:1px solid var(--line)}.desktop-preview #chat-subtabs>.preview-fixed-tabs+.chat-subtab-list>.chat-subtab:first-child{border-left:0}.desktop-preview .preview-project-root{min-width:120px}.desktop-preview .preview-chat-location{padding:0;margin-bottom:7px;font-size:12px}.desktop-preview .brand-text{font-size:16px}.desktop-preview #sidebar .navchildren:empty{display:none}.desktop-preview .chat-index-project-label{font-size:11px;color:var(--muted,#777)}
+
+
+/* Preview navigation contrast and shared fixed-tab icon treatment. */
+.desktop-preview{--preview-nav-ink:#b9c5bd;--preview-selected-tab-ink:#fff;
+ --preview-chat-assistant-bg:#202a24;--preview-chat-user-bg:#283426;
+ --preview-sidebar-bg:#121512;--preview-sidebar-inactive:#121512;--preview-sidebar-group:#181d19;--preview-sidebar-button:#1d231e;
+ --preview-sidebar-project:#1d231e;--preview-sidebar-project-inactive:transparent;--preview-sidebar-selected:#31392c;
+ --preview-sidebar-ink:#a8b1a8;--preview-sidebar-muted:#6e786f;--preview-sidebar-strong:#eaefe8;
+ --preview-sidebar-project-title:#eaefe8;--preview-sidebar-selected-ink:#d4e7b6;--preview-sidebar-accent:#bedc93;
+ --preview-sidebar-border:#252b26;--preview-sidebar-active-border:#313a32;--preview-sidebar-project-border:#252b26;
+ --preview-sidebar-count:#6e786f;--preview-sidebar-workspace-count:#d4e7b6;--preview-sidebar-selected-age:#d4e7b6}
+/* Chat message surfaces stay independent of the sampled navigation palette. */
+.desktop-preview .message.assistant{background:var(--preview-chat-assistant-bg)}
+.desktop-preview .message.user{background:var(--preview-chat-user-bg)}
+.desktop-preview #sidebar{background:var(--preview-sidebar-bg);color:var(--preview-sidebar-ink);border-right-color:var(--preview-sidebar-border)}
+.desktop-preview #sidebar .navitem,.desktop-preview #sidebar .navchild{color:var(--preview-sidebar-ink)}
+.desktop-preview #sidebar .navitem{border:1px solid transparent;border-radius:8px;padding:8px 12px}
+.desktop-preview #sidebar .navitem:hover,.desktop-preview #sidebar .navchild:hover{background:var(--preview-sidebar-project);color:var(--preview-sidebar-project-title)}
+.desktop-preview #sidebar .navitem.active{background:var(--preview-sidebar-button);border-color:var(--preview-sidebar-active-border);color:var(--preview-sidebar-strong)}
+.desktop-preview #sidebar .navchild.active{background:var(--preview-sidebar-selected);color:var(--preview-sidebar-selected-ink)}
+.desktop-preview #sidebar .preview-expand{color:var(--preview-sidebar-count)}
+.desktop-preview #sidebar .count{background:transparent;border:0;color:var(--preview-sidebar-count);font-variant-numeric:tabular-nums}
+.desktop-preview #sidebar .navitem.active .count{color:var(--preview-sidebar-accent)}
+.desktop-preview #sidebar .navchildren{background:transparent;border:0;padding:3px;margin-left:4px;margin-right:4px}
+.desktop-preview #sidebar .sidebottom,.desktop-preview .preview-workspace-divider,.desktop-preview .preview-engine-divider{border-color:var(--preview-sidebar-border)}
+.desktop-preview #sidebar .sidebottom{color:var(--preview-sidebar-muted)}
+.desktop-preview #sidebar .sidebottom>.subtle,.desktop-preview #sidebar #sidebar-toggle{color:var(--preview-sidebar-muted)}
+.desktop-preview #tabs .tabitem>[data-tab],.desktop-preview #chat-subtabs [data-chat-subtab],.desktop-preview #chat-subtabs [data-preview-page],.desktop-preview #team-subtabs [data-team-tab]{color:var(--preview-nav-ink)}
+.desktop-preview #tabs .tabitem.selected>[data-tab],.desktop-preview #chat-subtabs .selected>[data-chat-subtab],.desktop-preview #chat-subtabs [data-chat-subtab].selected,.desktop-preview #chat-subtabs [data-preview-page].selected,.desktop-preview #team-subtabs .selected>[data-team-tab],.desktop-preview #team-subtabs [data-team-tab].selected{color:var(--preview-selected-tab-ink)}
+.desktop-preview :is(.tab-add-options,.chat-tab-add-options) button:not(.active){color:var(--preview-nav-ink)}
+.desktop-preview #chat-subtabs>.preview-fixed-tabs>button{display:inline-flex;align-items:center;gap:7px}
+.desktop-preview .preview-fixed-tab-icon{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;flex:0 0 18px;font-size:18px;line-height:1}
+.desktop-preview .preview-project-branch.active{background:transparent;border-radius:7px}
+.desktop-preview #sidebar .preview-project-branch.active>.preview-project-link{background:transparent}
+.desktop-preview #sidebar .preview-project-branch.active>.preview-expand{color:var(--accent)}
+/* Preview Open tabs: dragging changes order only within an existing owner. */
+.desktop-preview .workspace-tab-reorder [data-managed-tab]{position:relative;cursor:grab;touch-action:pan-y}
+.desktop-preview .workspace-tab-reorder .workspace-tab-title{cursor:grab}
+.desktop-preview .workspace-tab-reorder .workspace-tab-dragging{opacity:.6;cursor:grabbing;user-select:none}
+.desktop-preview .workspace-tab-reorder .workspace-tab-drop-before::before,.desktop-preview .workspace-tab-reorder .workspace-tab-drop-after::after{content:"";position:absolute;left:0;right:0;height:3px;background:var(--accent,#b8df91);box-shadow:0 0 0 1px var(--panel,#19231d);pointer-events:none;z-index:2}
+.desktop-preview .workspace-tab-reorder .workspace-tab-drop-before::before{top:-2px}
+.desktop-preview .workspace-tab-reorder .workspace-tab-drop-after::after{bottom:-2px}
+.desktop-preview .workspace-tab-drop-invalid,.desktop-preview .workspace-tab-drop-invalid *{cursor:not-allowed!important}
+.desktop-preview .workspace-tab-icon svg{display:block}
+
+/* Selected grouped-sidebar treatment, contained within the existing navigation palette. */
+.desktop-preview .preview-workspace-tree{background:var(--preview-sidebar-inactive);border:1px solid var(--preview-sidebar-border);border-radius:13px;padding:3px;margin:8px 0;overflow:hidden}
+.desktop-preview .preview-workspace-tree.active{background:var(--preview-sidebar-group);border-color:var(--preview-sidebar-active-border)}
+.desktop-preview .preview-feature-group{background:var(--preview-sidebar-project);border:1px solid var(--preview-sidebar-project-border);border-radius:10px;padding:0;margin:8px 0;overflow:hidden}
+.desktop-preview .preview-workspace-header{background:transparent;min-width:0}
+.desktop-preview .preview-project-branches{margin:0;padding-top:0;border:0}
+.desktop-preview .preview-project-group{margin:3px 0;background:var(--preview-sidebar-project-inactive);border:1px solid transparent;border-radius:10px;overflow:hidden}
+.desktop-preview .preview-project-group.active.expanded{background:var(--preview-sidebar-project);border-color:var(--preview-sidebar-project-border)}
+.desktop-preview .preview-project-branch{background:transparent;border-radius:6px}
+.desktop-preview .preview-project-branch.active{background:transparent}
+.desktop-preview #sidebar .preview-project-link{background:transparent}
+.desktop-preview #sidebar .preview-project-branch.active>.preview-project-link{color:var(--preview-sidebar-project-title)}
+.desktop-preview #sidebar .preview-project-branch.active>.preview-project-link svg{color:var(--preview-sidebar-accent)}
+.desktop-preview .preview-recent-chats{margin:2px 2px 5px;border:0}
+.desktop-preview .preview-feature-group>.navitem{margin:0;width:100%;border-radius:8px}
+.desktop-preview #sidebar .preview-feature-group>.navitem.active{background:transparent;border-color:transparent}
+.desktop-preview #sidebar .preview-feature-group>.navchildren{margin:2px 2px 5px;padding:0}
+.desktop-preview #sidebar .preview-tree-item{display:grid;grid-template-columns:18px minmax(0,1fr) auto;align-items:start;column-gap:6px;width:100%;padding:7px 9px;margin:2px 0;border:1px solid transparent;border-left-width:2px;border-radius:8px;text-align:left;white-space:normal;color:var(--preview-sidebar-ink)}
+.desktop-preview #sidebar .preview-tree-item>.preview-tree-icon{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:18px;height:18px;margin-top:1px;overflow:visible;white-space:normal;color:var(--preview-sidebar-muted)}
+.desktop-preview .preview-tree-icon svg,.desktop-preview .preview-tree-icon img{width:16px;height:16px;object-fit:contain;flex-shrink:0}
+.desktop-preview #sidebar .preview-tree-item>.preview-tree-copy{display:block;min-width:0;overflow:hidden;white-space:normal}
+.desktop-preview #sidebar .preview-tree-title{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:normal;overflow-wrap:anywhere;line-height:1.4}
+.desktop-preview #sidebar .preview-tree-computer{font-size:10px;line-height:1.4;color:var(--preview-sidebar-muted);font-weight:400;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.desktop-preview .preview-tree-copy>.preview-tree-computer{display:block;margin-top:2px}
+.desktop-preview #sidebar .preview-tree-age{display:block;white-space:nowrap;font-size:10px;line-height:1.7;color:var(--preview-sidebar-count);padding-left:2px}
+.desktop-preview #sidebar .preview-tree-item.active{background:var(--preview-sidebar-selected);border-color:transparent;border-left-color:var(--preview-sidebar-accent);color:var(--preview-sidebar-selected-ink)}
+.desktop-preview #sidebar .preview-tree-item.active .preview-tree-title{color:var(--preview-sidebar-selected-ink)}
+.desktop-preview #sidebar .preview-tree-item.active .preview-tree-icon{color:var(--preview-sidebar-accent)}
+.desktop-preview #sidebar .preview-tree-item.active .preview-tree-age{color:var(--preview-sidebar-selected-age);font-weight:600}
+.desktop-preview #sidebar .preview-tree-more{font-size:11px;color:var(--preview-sidebar-muted);padding:5px 7px;background:transparent}
+.desktop-preview #sidebar .preview-tree-more:hover{color:var(--preview-sidebar-project-title);background:var(--preview-sidebar-group)}
+.desktop-preview .preview-tree-count{font-size:10px;line-height:1.5;color:var(--preview-sidebar-count);border:0;background:transparent;padding:0 4px;flex-shrink:0;font-variant-numeric:tabular-nums}
+.desktop-preview .preview-workspace-tree.active>.preview-workspace-header>.preview-tree-count{color:var(--preview-sidebar-workspace-count)}
+.desktop-preview .preview-project-branch.active>.preview-tree-count{color:var(--preview-sidebar-workspace-count);font-weight:600}
+.desktop-preview #sidebar .preview-workspace-tree.active>.preview-workspace-header>.preview-workspace-link{color:var(--preview-sidebar-strong)}
+.desktop-preview #sidebar .preview-workspace-link>.preview-tree-title{flex:0 1 auto;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.desktop-preview #sidebar .preview-workspace-link>.preview-tree-computer{flex:1 1 35px;max-width:85px}
+body.desktop-preview.sidebar-minimized:not(.preview-sidebar-overlay-open) #sidebar .preview-feature-group{padding:0;border:0;background:transparent}
+body.desktop-preview.sidebar-minimized:not(.preview-sidebar-overlay-open) #sidebar .preview-feature-group>.navchildren{display:none}
+.desktop-preview .preview-workspace-header:has(.preview-workspace-link.active){background:transparent}
+.desktop-preview #sidebar .preview-workspace-link.active{background:transparent}
+.desktop-preview .preview-workspace-header:has(.preview-workspace-link.active)>.preview-expand{color:var(--preview-sidebar-muted)}
+
+/* Workspace headers inherit the panel; feature buttons retain their own active fill. */
+.desktop-preview #sidebar .preview-workspace-link:hover{background:transparent;border-color:transparent}
+.desktop-preview #sidebar .preview-project-branch.active>.preview-expand{color:var(--preview-sidebar-muted)}
+
+/* The saved width is shared by the pinned sidebar and its collapsed overlay. */
+body.desktop-preview #sidebar{width:var(--preview-sidebar-width,230px)}
+body.desktop-preview:not(.sidebar-minimized) #workspace{left:var(--preview-sidebar-width,230px)}
+body.desktop-preview.sidebar-minimized #workspace,body.desktop-preview.sidebar-minimized:has(#sidebar:hover) #workspace,body.desktop-preview.sidebar-minimized:has(#sidebar:focus-within) #workspace{left:56px}
+body.desktop-preview.sidebar-minimized:not(.preview-sidebar-overlay-open) #sidebar{width:56px;padding:4px 5px 10px;box-shadow:none;overflow:hidden}
+body.desktop-preview.sidebar-minimized.preview-sidebar-overlay-open #sidebar{width:var(--preview-sidebar-width,230px);padding:4px 10px 12px;box-shadow:8px 0 25px #0006;overflow:hidden;z-index:20}
+body.desktop-preview.sidebar-minimized:not(.preview-sidebar-overlay-open) #sidebar .brandmark,body.desktop-preview.sidebar-minimized:not(.preview-sidebar-overlay-open) #sidebar .brand-text,body.desktop-preview.sidebar-minimized:not(.preview-sidebar-overlay-open) #sidebar .sidebottom,body.desktop-preview.sidebar-minimized:not(.preview-sidebar-overlay-open) #sidebar .navlabel,body.desktop-preview.sidebar-minimized:not(.preview-sidebar-overlay-open) #sidebar .count,body.desktop-preview.sidebar-minimized:not(.preview-sidebar-overlay-open) #sidebar .navchildren{display:none}
+body.desktop-preview.sidebar-minimized:not(.preview-sidebar-overlay-open) #sidebar .navitem{justify-content:center;padding:7px 4px}
+body.desktop-preview.sidebar-minimized:not(.preview-sidebar-overlay-open) #sidebar .nav-icon{font-size:20px;width:28px}
+body.desktop-preview.sidebar-minimized.preview-sidebar-overlay-open #sidebar .brandmark,body.desktop-preview.sidebar-minimized.preview-sidebar-overlay-open #sidebar .brand-text,body.desktop-preview.sidebar-minimized.preview-sidebar-overlay-open #sidebar .sidebottom,body.desktop-preview.sidebar-minimized.preview-sidebar-overlay-open #sidebar .navlabel,body.desktop-preview.sidebar-minimized.preview-sidebar-overlay-open #sidebar .count,body.desktop-preview.sidebar-minimized.preview-sidebar-overlay-open #sidebar .navchildren:not(:empty){display:block}
+body.desktop-preview.sidebar-minimized.preview-sidebar-overlay-open #sidebar .navitem{justify-content:space-between;padding:7px 8px}
+body.desktop-preview.sidebar-minimized.preview-sidebar-overlay-open #sidebar .nav-icon{font-size:17px}
+body.desktop-preview.sidebar-minimized.preview-sidebar-overlay-open #sidebar .brand{padding:0;gap:9px}
+body.desktop-preview #preview-sidebar-resizer{position:absolute;top:0;bottom:0;right:0;width:7px;cursor:col-resize;touch-action:none;z-index:60;outline:0;background:transparent}
+body.desktop-preview #preview-sidebar-resizer::after{content:"";position:absolute;top:0;bottom:0;right:0;width:2px;background:transparent}
+body.desktop-preview #preview-sidebar-resizer:hover::after,body.desktop-preview #preview-sidebar-resizer:focus-visible::after,body.desktop-preview.preview-sidebar-resizing #preview-sidebar-resizer::after{background:var(--accent)}
+body.desktop-preview.sidebar-minimized:not(.preview-sidebar-overlay-open) #preview-sidebar-resizer{display:none}
+body.desktop-preview.preview-sidebar-resizing,body.desktop-preview.preview-sidebar-resizing *{cursor:col-resize!important;user-select:none!important}
+
+/* Reference navigation: quiet icons, compact panels and a rounded selected-item edge. */
+.desktop-preview .preview-workspace-divider{border:0;border-top:1px solid var(--preview-sidebar-border);margin:10px 0}
+.desktop-preview #sidebar .preview-workspace-link{padding:12px 10px}
+.desktop-preview #sidebar .preview-project-link{padding:10px}
+.desktop-preview #sidebar .navlabel,.desktop-preview #sidebar .preview-workspace-link>.preview-tree-title,.desktop-preview #sidebar .preview-project-link>.preview-tree-title{font-size:14px}
+.desktop-preview #sidebar .preview-workspace-link svg,.desktop-preview #sidebar .preview-project-link svg,.desktop-preview #sidebar .nav-icon{color:var(--preview-sidebar-muted)}
+.desktop-preview #sidebar .navitem.active .nav-icon,.desktop-preview #sidebar .preview-workspace-tree.active>.preview-workspace-header svg,.desktop-preview #sidebar .preview-project-branch.active>.preview-project-link svg{color:var(--preview-sidebar-accent)}
+.desktop-preview .preview-project-branch.active>.preview-project-link{font-weight:600}
+.desktop-preview #sidebar .preview-tree-item:focus-visible{outline:2px solid var(--preview-sidebar-accent);outline-offset:-2px}
+.desktop-preview #sidebar .count.preview-attention-count{color:var(--preview-sidebar-bg);background:var(--preview-sidebar-accent);border-radius:6px}
+.desktop-preview .preview-tab-icon{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;width:18px;height:18px;flex:0 0 18px;color:var(--preview-sidebar-muted)}
+.desktop-preview .preview-fixed-tab-icon{color:var(--preview-sidebar-muted)}
+.desktop-preview #tabs .selected>[data-tab]>.preview-tab-icon,.desktop-preview #chat-subtabs .selected>[data-chat-subtab]>.preview-tab-icon,.desktop-preview #chat-subtabs [data-chat-subtab].selected>.preview-tab-icon,.desktop-preview #chat-subtabs [data-preview-page].selected>.preview-fixed-tab-icon,.desktop-preview #team-subtabs .selected>[data-team-tab]>.preview-tab-icon,.desktop-preview #team-subtabs [data-team-tab].selected>.preview-tab-icon{color:var(--preview-sidebar-accent)}
+
+/* Engine Room follows the workspace tree in the shared scroll region. */
+.desktop-preview .preview-engine-divider{border:0;border-top:1px solid var(--preview-sidebar-border);margin:10px 0}
+.desktop-preview #sidebar>.sidebottom{border-top:1px solid var(--preview-sidebar-border);padding-top:12px}
+.desktop-preview .preview-workspaces-control{display:flex;align-items:center;gap:0;border:1px solid transparent;border-radius:8px;margin:2px 0;padding-right:7px}
+.desktop-preview .preview-workspaces-control.active{background:var(--preview-sidebar-button);border-color:var(--preview-sidebar-active-border)}
+.desktop-preview #sidebar .preview-workspaces-control>.navitem{flex:1;min-width:0;width:auto;border:0;background:transparent;margin:0;padding-right:5px}
+.desktop-preview #sidebar .preview-workspaces-control:hover{background:var(--preview-sidebar-project)}
+.desktop-preview #sidebar .preview-workspaces-control.active:hover{background:var(--preview-sidebar-button)}
+.desktop-preview .preview-collapse-all{display:flex;align-items:center;justify-content:center;flex:0 0 28px;width:28px;min-height:28px;padding:4px;border:0;border-radius:5px;background:transparent;color:var(--preview-sidebar-muted)}
+.desktop-preview .preview-collapse-all:hover{color:var(--preview-sidebar-accent);background:var(--preview-sidebar-selected)}
+.desktop-preview .preview-collapse-all:focus-visible{outline:2px solid var(--preview-sidebar-accent);outline-offset:-2px}
+body.desktop-preview.sidebar-minimized:not(.preview-sidebar-overlay-open) #sidebar .preview-workspaces-control{padding:0;border:0;background:transparent}
+
+/* Remote owners retain independent tree state beneath the local workspaces. */
+.desktop-preview .preview-computer-heading{display:flex;align-items:center;justify-content:space-between;gap:7px;min-width:0;padding:5px 7px;color:var(--preview-sidebar-strong);font-size:14px;font-weight:600}
+.desktop-preview .preview-computer-heading>span{min-width:0;flex:1}
+.desktop-preview .preview-computer-group{margin:5px 0 10px}
+.desktop-preview .preview-other-computers>.preview-computer-heading{color:var(--preview-sidebar-ink)}
+.desktop-preview .preview-computer-group>.preview-workspace-tree{margin-left:4px}
+body.desktop-preview.sidebar-minimized:not(.preview-sidebar-overlay-open) #sidebar .preview-other-computers{display:none}

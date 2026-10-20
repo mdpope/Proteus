@@ -17,3 +17,19 @@ test('tagged persistent tmux PIDs are measured without counting unrelated sessio
   assert.equal(persistent[0].sessionId,'managed');
   assert.deepEqual(resourceTotals(persistent),{memoryBytes:2048*1024,cpuPercent:2,processCount:1});
 });
+
+test('process sampling is asynchronous, coalesces overlap and retries after failure',async()=>{
+  const {createProcessSampler}=require('../desktop/resource-metrics.cjs');
+  const calls=[];
+  const sample=createProcessSampler({platform:'darwin',run:(file,args,options,callback)=>calls.push({file,args,options,callback})});
+  const first=sample(),second=sample();assert.equal(first,second);assert.equal(calls.length,1);
+  let settled=false;first.then(()=>{settled=true;});await new Promise(resolve=>setImmediate(resolve));assert.equal(settled,false);
+  assert.equal(calls[0].options.timeout,2000);assert.equal(calls[0].options.maxBuffer,2_000_000);
+  calls[0].callback(null,'100 1 1024 1.0 Proteus');assert.equal(await first,'100 1 1024 1.0 Proteus');
+  const third=sample();assert.equal(calls.length,2);calls[1].callback(new Error('timed out'),'partial');assert.equal(await third,'');
+  const fourth=sample();calls[2].callback(null,'fresh');assert.equal(await fourth,'fresh');
+});
+
+test('process parsing never launches a subprocess when no sample is available',()=>{
+  assert.deepEqual(trackedChildren(1),[]);assert.deepEqual(trackedPids([{pid:2}]),[]);
+});

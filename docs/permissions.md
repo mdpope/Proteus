@@ -1,10 +1,105 @@
+## Production permission controls — October 18 candidate
+
+The tested independent chat mode/read-only/folder/action controls now run in the production host.
+The general `permissionControls` option selects this behavior; `desktopPreview` retains only preview
+runtime isolation compatibility. Promotion does not rewrite saved permission files or chat exceptions.
+Workspace defaults and remembered chat grants remain tied to their captured execution origin when
+project or workspace organization changes. Read-only approval is independent of the selected mode.
+Saved permissions may select native Codex workspace-write only when an explicit canonical starting
+folder write grant exists. A running narrower sandbox does not widen on additive permission changes;
+reductions stop it and require explicit continuation. No implicit network or temporary-folder grants
+are added. Production installation and native live-provider acceptance are reported separately.
+
+Status polling displays a saved run's captured permission context, including scheduled runs that
+retain selections for future executions. It does not recapture current instructions or change the
+chat's permission origin. Repeated path resolutions are shared only within a synchronous display
+snapshot; authorization, grants, revocation and subsequent requests resolve current paths afresh.
+
 # Workspace permissions
+
+## October 18 isolated desktop preview
+
+The chat side panel exposes **Use workspace**, **Ask**, **Saved permissions** and
+**Auto-approve tools** inline. Use workspace follows the chat's original permission workspace;
+organizational moves do not change that origin. Ask suspends saved approvals without deleting
+them. Saved permissions reuses eligible saved folder/action grants; other requests still ask.
+Auto-approve tools retains its broad existing meaning, not bounded Autopilot.
+
+**Auto-approve read-only tools** is independent of the mode and can return to the workspace
+setting. Ask pauses it. It accepts provider-marked read-only requests and supported browser
+reads; it does not infer shell-command safety or approve an entire connection or writes.
+Working folders offer **Ask**, **Read** and **Read and write** without enabling their sources or
+authorizing arbitrary execution. The panel distinguishes inherited access and chat exceptions.
+Remembered actions can target this chat and its continuations or the matching workspace
+configuration. Removal affects that scope; resetting a chat override exposes workspace defaults.
+An exact command rule can still execute a script whose contents later change; a tool/action rule
+does not necessarily constrain every argument or recipient.
+
+In preview Codex Saved permissions, an explicit read/write grant covering the canonical starting
+folder permits workspace-write on the next explicit turn, with only eligible granted writable
+roots. An external-folder grant alone cannot make the starting folder writable. Ask remains
+read-only. Native policy validation retains untrusted approvals, no implicit network access and
+no implicit temporary-directory writes. Protected sandbox/enterprise requests and actual user
+questions still pause. Access additions leave a running narrower turn intact; reductions or
+unknown/mixed changes stop it and require explicit Continue, without replay. Revocation cannot
+undo an operation already underway.
+
+Codex selection of an MCP server makes its available tools usable for that turn; Proteus does not
+receive individual-call approval control for that server. Providers may also perform native reads
+without issuing a request. These controls describe supported adapter decisions, not identical
+OS containment across providers. This iteration remains preview-only; new real-Codex and exact-
+package acceptance are recorded separately in [desktop preview](desktop-preview.md).
+
+**October 16 preview revision:** Permission management lives in the existing side panel, with
+concise mode/folder/action controls and a separate Help dialog. Workspace settings are edited in
+Configuration; the redundant composer Permissions button is removed. Per-request Remember
+exposes only scopes actually offered by the host. Adding
+Codex access in the isolated preview no longer interrupts a narrower running native sandbox.
+Removing access still stops the current turn with an explicit Continue instruction and no replay.
+Additive remembered rules preserve inherited grants. Profile removal says Reset to workspace
+defaults; it is not a deny operation. See [desktop preview](desktop-preview.md) for scope and checks.
+
+**October 15 historical preview (composer control and mode wording superseded above):** Chat Details and the composer Permissions action expose
+the existing permission owner APIs with action/target/reason and explicit request/chat/workspace
+scope. The UI calls broad mode “Unrestricted tool approval” and marks bounded Autopilot unavailable.
+Ask suspends saved workspace grants; adding a working/source folder does not silently authorize
+commands or connected-service changes. Moving a chat keeps its captured permission origin. These
+are preview presentation changes, not a new containment policy. See [desktop preview](desktop-preview.md).
+
+**October 15 design proposal — BF-2026-10-15-12:** The [workspace/project design](2026-10-15-workspaces-projects-design.md)
+and [permissions review](design/2026-10-15/permissions-review.md) separate working-folder access,
+source loading/helper reads and automation. The clickable rehearsal shows scoped once/chat/workspace
+decisions, reuse/revocation of grants, retained settings after moves and unavailable command containment.
+Requests sit above the chat composer; Details → Permissions and the composer mode button share
+controls for captured defaults, chat-only changes, folder access and remembered grants. Approval
+scope explains its future effect; decisions preserve the draft and leave readable receipts.
+Bounded Autopilot needs real provider/host enforcement; it is not a relabeling of current broad
+Auto-approve tools. This is a prototype only. Current implemented behavior remains described below.
+
+**October 11 implementation — BF-15/17:** Workspace approvals are isolated by stable workspace
+ID plus provider and canonical resource/integration identity. Configuration exposes its approval
+mode, editable folder grants and saved exact-operation rules. Existing fingerprint-specific grants
+remain visible and survive ordinary template edits. Replacing their grants/rules requires the
+explicit replacement control. Local workspace Copy clones these profiles independently; copying to
+another computer resets grants to Ask for review on that owner.
+
+Chat details and eligible pending file requests offer **Trust folder for this chat**, with recursive
+read or read/write scope, an exact owner-host path, and revocation. The grant covers current and
+future descendants, persists through continuation/restart, and does not affect sibling chats or the
+workspace. Read-only grants cannot approve writes. Paths and revision/context IDs are validated
+before saving; provider/resource-context changes invalidate the old override. A chat folder exception
+under Ask does not reactivate suspended workspace grants or saved commands.
+
+Schedule-started and manually launched schedule conversations also support these run-only controls.
+New auto-approval requires the exact current waiting permission request; new folder trust must
+match the folder/access offered by that request. The grant persists through that conversation's
+continuations, while future independent schedule runs retain their own workspace approval policy.
 
 Proteus owns persistent tool approvals in `<app data>/permissions.json`. Workflow repositories
 continue to own their business rules and schedules. Importing a schedule does not grant trust or
 enable it.
 
-Choose a mode under **Settings → Workspace permissions**, or in a run's **Tool approvals** panel:
+Choose a mode in **Workspace → Configuration → Workspace tool approvals**, the existing Settings permissions panel, or a run's **Tool approvals** panel:
 
 | Mode | Behavior |
 | --- | --- |
@@ -30,7 +125,7 @@ command exactly. MCP/custom-tool rules match the tool plus its `action` when one
 allowing a multiplexed tool's `get` action does not allow `update` or `delete`. URL rules match the
 origin. An individual saved rule does not implicitly trust other tools or folders.
 
-Authorizations are scoped to the provider, canonical working directory, complete set of workspace
+Authorizations are scoped to the owner-local workspace ID, provider, canonical working directory, complete set of workspace
 roots, skills, and MCP configuration. Renaming a schedule or changing its prompt does not erase
 trust. Adding a repository or changing a server configuration creates a fresh permission context.
 Symbolic links and new-file ancestors are resolved before checking file access.
@@ -73,3 +168,30 @@ Legacy partial grants previously labeled Trusted workspace now display as Saved 
 authorizations are broadened during migration. Duplicate SDK checks for the identical active tool
 call share its one-time decision; the decision expires when the tool completes. Approval waits do
 not consume the provider turn's active execution timeout.
+
+## Enable chat approval from a pending request
+
+A chat’s permission prompt offers **Auto-approve this chat and future continuations** beside
+Approve once and Deny. It uses the same chat-scoped override as the details panel. It rechecks
+the pending request using existing grants, leaves workspace settings and other chats unchanged,
+and preserves any request that still requires approval with its reason visible. Questions do
+not offer this action. An already enabled chat choice is disabled at the prompt.
+
+Prompt actions bind the exact pending request ID as well as the permission context and chat
+revision. A changed/resolved request rejects the action without creating a grant. Remote clients
+show this shortcut only when the host advertises `chat.permissions.pending.v1`; older hosts
+retain their existing details-panel controls until updated. Native behavior is covered by the October 11 simulator suite.
+
+
+## Provider folder scope
+
+Chat-only grants reach Claude and Copilot native additional directories on subsequent turns;
+Copilot reconnects when that set changes. The stored workspace configuration is not broadened.
+Codex exposes granted chat folders as runtime roots and includes eligible external write folders
+in an already trusted native sandbox. Outside the isolated preview, Ask/Saved rules mode retains
+the native read-only sandbox and existing write-approval routing. The October 18 preview exception
+above requires an explicit starting-folder read/write grant for Saved permissions; adding an
+external folder alone cannot implicitly trust the starting folder. Folder trust never approves arbitrary shell/MCP operations or protected sandbox expansion.
+Outside the preview, active Codex policy changes trigger the existing interruption/revalidation
+path; preview additions/reductions follow the next-turn rules above. No adapter claims
+that granting a folder restricts all provider reads at the OS level.

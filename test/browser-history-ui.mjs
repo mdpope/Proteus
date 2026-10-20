@@ -11,17 +11,17 @@ const inspect=(id,expr)=>app.evaluate(({app},{id,expr})=>process.mainModule.requ
 let id;
 try{
  await launch();await page.locator('#tab-add-menu summary').click();await page.locator('#browser').click();id=await page.locator('.tabitem.selected [data-tab]').getAttribute('data-tab');
- for(const suffix of ['/A','/B','/redirect'])await command('navigate',id,{url:site+suffix});
+ for(const suffix of ['/A','/B','/C']){await command('navigate',id,{url:site+suffix});await until(()=>app.evaluate(({app},{id,title})=>{const tab=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser().get(id);return tab.logicalHistory?.entries[tab.logicalHistory.index].title===title;},{id,title:'History '+suffix}));}
  // Intercept only the native popup in this disposable test to inspect real menu items.
  await app.evaluate(({Menu})=>{process.__historyMenus=[];const original=Menu.prototype.popup;process.__restoreHistoryPopup=()=>{Menu.prototype.popup=original;};Menu.prototype.popup=function(){process.__historyMenus.push(this);};});
  await until(()=>page.locator('#browser-back').isEnabled());
  const backBounds=await page.locator('#browser-back').boundingBox();await page.mouse.move(backBounds.x+backBounds.width/2,backBounds.y+backBounds.height/2);await page.mouse.down();
  await until(()=>app.evaluate(()=>process.__historyMenus.length===1));await page.mouse.up();
  assert.equal(await inspect(id,'location.pathname'),'/C');
- assert.deepEqual(await app.evaluate(()=>process.__historyMenus[0].items.map(item=>item.label)),['History /B','History /A']);
+ assert.deepEqual(await app.evaluate(()=>process.__historyMenus[0].items.map(item=>item.toolTip)),[site+'/B',site+'/A']);
  await app.evaluate(()=>process.__historyMenus[0].items[1].click());await until(async()=>await inspect(id,'location.pathname')==='/A');
  await page.locator('#browser-forward').focus();await page.keyboard.press('ArrowDown');await until(()=>app.evaluate(()=>process.__historyMenus.length===2));
- assert.deepEqual(await app.evaluate(()=>process.__historyMenus[1].items.map(item=>item.label)),['History /B','History /C']);
+ assert.deepEqual(await app.evaluate(()=>process.__historyMenus[1].items.map(item=>item.toolTip)),[site+'/B',site+'/C']);
  await app.evaluate(()=>process.__historyMenus[1].items[1].click());await until(async()=>await inspect(id,'location.pathname')==='/C');
  // A short click is ordinary Back; right-click exposes history without navigating.
  await page.locator('#browser-back').click();await until(async()=>await inspect(id,'location.pathname')==='/B');

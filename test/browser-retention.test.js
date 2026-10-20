@@ -20,3 +20,9 @@ test('active, audible, shared, agent-owned, downloading and recently used tabs s
   tabs[11].lastTouchedAt=now-RECENT_MS+1;
   assert.deepEqual(retirementCandidates(tabs,now,'tab-6').map(item=>item.id),['tab-5']);
 });
+test('persisted tabs do not consume any of the six normal retained slots',()=>{
+ const now=1_000_000_000,view={webContents:{isCurrentlyAudible:()=>false}};
+ const tabs=Array.from({length:9},(_,i)=>({id:'normal-'+i,view,lastTouchedAt:now-RECENT_MS-1000-i}));
+ for(let i=0;i<8;i++)tabs.unshift({id:'persist-'+i,view,persist:true,lastTouchedAt:now-i});
+ assert.deepEqual(retirementCandidates(tabs,now,null).map(t=>t.id),['normal-6','normal-7','normal-8']);
+});

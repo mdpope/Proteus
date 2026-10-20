@@ -1,9 +1,1570 @@
+## October 19 — Combined release implementation and installation authorized
+
+The operator explicitly lifts this chat's build hold: implement its queued changes, audit other
+preview-only restrictions, incorporate the accepted native navigation/composer design and tab
+overview parity, then build/install on all existing devices. See the live
+[release checklist](2026-10-19-next-release.md). The queue-only statuses below are historical intake,
+not a current implementation hold. Preserve unrelated active work and current installation data;
+follow exact-artifact signing/transfer and two-generation recovery rules.
+
+## October 19 — Next release collected in this chat — original intake
+
+BF-2026-10-19-29 adds the Work Mac New Chat provider-list report. Source and isolated fixtures using
+checkout/installed Personal code reproduce Codex/rehearsal only even when all three providers are
+available: the shared project UI's `previewEnabled()` triggers leftover preview-only pruning and
+forces Codex. Separate project UI from isolated execution policy; restore production provider choices
+from the destination owner's real catalogs while preserving defaults/drafts and truthful errors.
+HC live state/execution remains uninspected; no provider reset, runtime edit, build or installation.
+See [providers](providers.md) and [planned updates](planned-updates.md).
+
+BF-2026-10-19-27 records live X login diagnosis in installed 0.2.25: a stack overflow repeatedly
+enters an anonymous function proxy matching cached Ghostery scriptlet code. With operator approval,
+pause only x.com and reload: entry form loads without the recursion. Resume and reload: the same
+recursion returns. Protection is restored; no credentials submitted, cookies cleared, filters
+updated, app restarted or runtime source changed. Precise injection repair and full account login
+remain unverified. Existing Ghostery toolbar menu has per-origin/profile Pause/Resume protection.
+BF-28 records Page-menu Developer tools doing nothing while right-click Inspect Element works.
+Detached DevTools is intended; the disconnected-control guard after an awaited popup is only a
+source candidate. Queue both repairs/regressions and preserve the build hold. See [browser](browser.md).
+
+BF-2026-10-19-23/24/25 add three P1s from the operator-supplied installed-0.2.25 failure report:
+empty relocated navigation loses its owner revision and conflicts; empty-history resolution loops;
+a background conflict globally hides browsers and drops newer selection/bounds. Preserve pending
+intent/receipts, full history and optimistic concurrency; scope conflict UI and reconcile the latest
+surface. Reported installed-module reproductions are not rerun/verified by this intake. Personal
+regressions/UI/exact-signed-package preparation are future acceptance under the build hold; do not
+interrupt active HC work, repair live history or install an unapproved artifact. BF-26 records black
+rectangles behind UI text separately, with no proven causal link. Original report delivery was
+unconfirmed; this records it here without outbound messaging. See [planned updates](planned-updates.md).
+
+BF-2026-10-19-17 queues workspace-header/project-option hierarchy in tab destination pickers,
+including each real default project, replacing the ambiguous flat project-name list. Keep other
+supported destination groups and stable/revision-checked project targets; no source/UI build yet.
+BF-2026-10-19-18 queues Tabs-page multi-select: Command-click or Select exposes a checkbox column;
+place Select/Hide/Move/Close on the top right after Workspace configuration. Bulk Move uses BF-17;
+preserve typed lifetimes, stable selection and per-item conflict/failure/retry reporting. Queue only.
+BF-2026-10-19-19 queues retaining each document's reading position across tab switches, document
+refresh, renderer/web-page reload and app restart, including a still-selected document. Source
+inspection finds outgoing capture but no local Markdown restore call and only in-memory position
+storage. Queue durable per-document/viewer metadata, delayed-layout-safe restore and independent
+positions; live/persistence acceptance remains pending. Coordinate with BF-2026-10-15-01/02 source
+refresh and BF-11 window restoration without making the single-window fix depend on multiwindow.
+BF-2026-10-19-20 queues replacing desktop/web browser Page/More menu slashes with the reference's
+thin outlined circle and three horizontal dots, consistent with iOS. Keep actions, placement and
+accessibility; BF-10's overview icon remains separate. No implementation, native change or build.
+BF-2026-10-19-21 selects the supervised helper-and-handoff approach: fresh runtime/source identity,
+an independent helper/verifier and a durable checkpoint that resumes the original updating chat
+after exact-artifact installation and verified restart. Current quit aborts turns; the scheduler
+worker is not independent. Use a final dispatch/idle barrier, deduplicated continuation receipts,
+unchanged permissions and bounded data-compatible recovery under the two-generation policy.
+Engine Room Updates and a persistent in-chat card expose real stage/blocker/health/resume status.
+See [desktop updates](desktop-updates.md). Design only; no helper, runtime change, build or restart.
+The same chat must resume automatically after both healthy restart and successful compatible
+rollback without Continue. Keep handoff/delivery claims outside restored data, test the older
+recovery build/adapter, automatically recover temporary provider outages and avoid repeated effects
+or failed-build reinstall loops. Ordinary unrelated crash recovery remains unchanged.
+BF-2026-10-19-22 now selects Cua Driver primary and Peekaboo backup on Mac, superseding the earlier
+unselected shortlist. Include the Linux branch in Cua integration/validation, gate other platform
+capabilities and keep Peekaboo's community ports out of baseline fallback. Add required compact
+tool-purpose/order guidance, lazy catalog/backend startup and idle cleanup under one host arbiter;
+keep the existing chat/provider as planner. Switch through fresh same-target observations and
+reconcile uncertain effects instead of repeating an action or bypassing permission. Existing browser
+list/call wrappers are a pattern, not desktop implementation. Providers differ in schema/reconnect
+behavior; unloading a process cannot erase prior model context. Add Engine Room primary/backup,
+permission/setup/Test/Stop/resource state. Cursor visibility and universal app/platform behavior
+need acceptance. No packages, OS grants, runtime implementation, desktop actions or build yet.
+
+The operator requests future updates/fixes in this chat for the next release and explicitly says
+not to build yet. BF-2026-10-19-04 queues moving Inspect Element from the top to the bottom of the
+browser right-click link menu. Source ordering is confirmed; implementation and desktop UI
+acceptance remain pending. BF-2026-10-19-05 investigates Work Mac's Slack `ERR_ABORTED (-3)` alert
+despite a usable page. An unchanged-source, isolated Electron rehearsal reproduces the same false
+failure after a page-initiated document replacement; HTTP redirect and same-document controls
+stay clear. The promise catch bypasses the event handler's abort filter and can retain a stale
+tab error after successful replacement. HC's exact live event sequence remains unverified.
+BF-2026-10-19-06 queues retaining workspace/project folder expansion while visiting Engine Room
+or other sidebar features, so an exposed project browser tab stays directly clickable. Keep
+selection separate from expansion and retain manual collapse controls and the same browser tab.
+BF-06's follow-up makes a sidebar workspace/project-name click navigate to its page **and expand**
+that branch (never toggle it closed), retaining all other workspace/project and nested/paging state. Switching to other
+features must still preserve expansion; chevrons/Collapse all remain explicit manual controls.
+BF-2026-10-19-07 confirms the startup/renderer-refresh `desktopPreview` null-state toast:
+profiles can arrive before initial application state and call `renderTabs()` with null data.
+The exact error/stack reproduces in isolated Electron; state-first control has no matching error
+and both eventually reach Home. Queue readiness-safe rendering and preserve early profile data.
+BF-2026-10-19-08 clarifies overview scope: all projects in the current workspace, current project
+first then others alphabetically by name. Each contributes its unhidden tabs in navigation order;
+the reported current project has one chat and three browsers, four cards in that section rather
+than a global cap. Inactive projects remain included; hidden entries and fixed navigation-page
+cards do not. Synthetic fixtures reproduce duplicate General section identities and legacy
+descendant visibility gaps. BF-09 reproduces the first-30-global-descriptors capture limit skipping
+loaded browsers behind sleeping tabs. BF-09 now queues cached browser **and chat** thumbnails:
+update soon after interaction and periodically while viewed, persist the last good image through
+unload/restart, and open overview immediately from cache with type icons as fallback. Do not wake
+sleeping pages for capture; cached images do not reveal hidden entries. Live inventory/image causes remain
+separate from synthetic source evidence. These fixes are queued; no runtime source change,
+build or installation occurred in this intake. BF-2026-10-19-10 adds the delegated desktop/web
+overview icon follow-up: two overlapping rounded rectangles with a thin outline, matching the
+reviewed reference. Replace overview grid glyphs consistently without changing behavior. Native
+iPhone/iPad work stays owned by its existing chat; no iOS files or app builds in this intake.
+BF-2026-10-19-11 queues multiple desktop windows: Command+N creates a window, Command+T creates
+a tab in the focused window. Individual Close discards that window's restore placement; app Quit
+restores all still-open windows with geometry, selected items and reading positions. Preserve one
+host/runner and correct per-window resource/IPC ownership. BF-12 queues direct + new-tab pages
+with current option blocks across the top on desktop and iPhone/iPad, matching existing web
+surfaces. Combine page address/history filtering, focus that field, and use the URL-bar angled
+arrow/Enter to open typed input. Existing search/link/history actions and scope/profile rules
+remain. BF-2026-10-19-13 records disabled additional-profile guidance and a synthetic saved-account
+loading gap with Life off. The operator clarifies Life/Team already work: do not assume unsigned
+state or ask for sign-in again; investigate current profile API versus stale mounted control state.
+BF-14 queues preferred in-app/system auth browser and return to the originating app/window.
+Source forces system browser and shares the mobile-labelled OAuth client/callback scheme; an
+iPad consent label is not proof of actual wrong-bundle callback delivery. Preserve working sessions.
+BF-15 records Widevine feasibility: a native CDM-capable Electron runtime such as CastLabs ECS
+needs compatibility/CDM/production-signing/playback validation; no Web Store extension supplies it.
+No live account, OS protocol registration, vendor setup or runtime was changed. No native source
+or preview changes are authorized by this intake. BF-2026-10-19-16 queues dragging workspace
+cards on the Workspaces collection to set one persistent same-owner manual order shared with
+the sidebar. Preserve selection, expansion/paging, defaults and resource identity; do not reorder
+other owners or alter BF-08's project overview ordering. No drag implementation/build yet. See
+[planned updates](planned-updates.md).
+
+## October 19 — 0.2.25 installed and live-verified on both desktops
+
+The operator approved installing the frozen signed 0.2.25 artifact on both Macs. Personal now runs
+build ec8b213d382e+dirty.8dbb06075488 with the same signing identity and all 240 runtime/source
+hashes verified. A second graceful restart restores the original selection and preserves 25 chats,
+136 saved views, all original content descriptors, seven project defaults, settings/permissions,
+profile definitions, original browser history and 28 protected retry receipts. Provider catalogs
+are ready and the relay is online. Read-only cookie review distinguishes two naturally expired
+cookies and the selected website refreshing its own tokens/icon from a profile reset.
+
+Live Personal acceptance passes the page menu, actual connection certificate, current-site data
+filtering and removal of only disposable cookie/local-storage fixtures. Find retains match 3 of
+40 and manual scroll for 16.252 seconds while polling continues; Next/Previous work. An unloaded
+link makes no request. Test tabs are closed and original navigation restored. The overview contains
+only the current workspace; a legacy workspace-root group repeats the current project's caption.
+Queue that minor naming correction separately; do not mutate/re-sign the installed artifact.
+
+HC now runs the same exact artifact after local direct approval to stop the blocking turn.
+Its second restart and final preservation pass for 267 current chat records, 89 saved views,
+46 browser descriptors, original histories, profile definitions, settings/approvals and 50 protected
+retry receipts. Inactive browsers restore sleeping while the original chat remains selected.
+The authorized chat cancellation preserves earlier events and its completed turn; the exact
+reviewed run-file change is pinned privately. No production records were manually rewritten.
+All three providers and the relay are ready, with complete local/Personal peer indexes. HC live
+Find retains match 2 of 40 and manual scroll for 31 seconds; explicit input/Next, reload,
+navigation and close pass. Page-menu filtering and the 18-tab main overview pass. Destructive
+site clearing and workspace reordering were not repeated on real user data.
+
+Both Macs retain two verified full recovery generations and one previous app/source per generation.
+Personal retirement recorded free-space gains of 57,851,904 and 251,273,216 bytes; HC cleanup freed
+1,866,870,784 bytes. HC's bounded idle whole-process RSS was 1,087,815,680–1,117,863,936 bytes with
+native browser pages sleeping; this is an observed idle sample, not a peak-memory promise.
+The coordinator read HC's completed local receipt; no outbound report message was required.
+Keep detailed receipts private and preserve the independent native simulator previews and reusable
+desktop preview setup. The original forwarded-stop review failure remains recorded; subsequent
+direct user approval in the destination resolved it.
+
+Exact signed acceptance passed 756 runtime cases, nine focused cases, static checks, native site
+data/profile isolation, overview/previews/order/close, working-chat spinner, native pinch, Find and
+146-view restart. The private transfer is pinned in the [feature ledger](2026-10-19-site-controls.md).
+
+## October 19 — native reply editor and indentation correction
+
+The operator's latest design request supersedes the prior three-line editor minimum. Both native
+preview editors start at one line, grow for explicit newlines and scroll wrapped/overflow text;
+the composer card reserves space for controls/attachments within half the app window height.
+iPhone Return adds a newline without submitting; iPad Return submits and Shift+Return adds a
+newline. Pasted text remains text. iPad controls stay visible, while iPhone retains touch-to-expand.
+Preview attachment + is visible with disabled choices when its synthetic provider has no upload
+capability. Items receive nine points after the project indentation, between the last six- and
+twelve-point steps; project nesting stays at six. Final composer/sidebar native cases, two native
+unit cases, all 756 runtime cases and static checks pass. Native GUI captures iPad Shift+Return
+then Return saving an exact two-line synthetic reply; XCTest's hardware Return injection is
+unreliable on this runtime. Deferred keyboard resignation fixes a reproduced iPad main-thread
+hang during reading taps; the final dismissal case passes. The editor also respects keyboard
+space and does not use text-selection taps to hide phone chrome. Keep the existing paired
+simulator identities/fixture and the production/physical build hold.
+
+## October 19 — native preview follow-up verified
+
+Latest source follows the operator's Standup and browser revisions: numbered order, editable
+roster/settings, links only on Team Tools, no phone dock/pop-out and an iPad order-only dock
+closed with X. Phone controls are Back/Forward/Refresh/Find/More/Overview; tablet Downloads and
+History move into More beside overview. Native overview uses the supplied overlapping tab mark,
+Team browsers have active underlines, and the sidebar matches desktop palette/icon geometry with
+12-point nesting. The phone drawer is constrained to the viewport and preserves expanded state
+while hidden; the tablet dock uses a compact scroll stack. Existing service ownership, saved tab
+identities and feature actions remain. Desktop/web icon work was delegated to the named release
+chat and is queued under BF-2026-10-19-10, with its desktop build hold preserved.
+
+Both separate ad-hoc-signed simulator artifacts build/install/launch. All six focused native UI
+cases pass, including final drawer and portrait dock bounds, flexible search, service saves,
+Home continuation and browser/chat gestures. The shuffle/zoom unit cases, 756 runtime tests and
+static checks pass. Final images are inspected; installed executable hashes/signatures are
+checked against build output. Logs, screenshots and the refinement receipt remain private.
+A manual project-item check found a missing RemoteStore on a lifted phone project destination.
+The destination now carries its existing owner explicitly; opening a workspace clears the main
+selection without closing/recreating its browser. The new sixth UI case opens a project chat from
+a main browser and verifies its selected sidebar item, covering the reproduced crash.
+
+Six oldest disposable fixture pairings were retired via its existing authenticated owner API
+after it hit 20 devices; no fixture/service restart or direct app-data edit. Native checks now
+reuse their existing pairings, and new preview invitations bypass HTTP caches. Production and
+physical mobile rollout remains held. Private artifacts/receipts stay outside the checkout.
+
+## October 19 — iPhone and iPad design previews ready
+
+The operator's latest requests supersede the prior iPad exclusion and removal of the phone “+”.
+Separate Debug simulator apps retain phone main tabs under labelled Open tabs in the drawer and
+add Home Open tabs on both devices. Phone keeps “+” beside feature actions; iPad keeps main tabs
+above its child tabs and removes sidebar recents/main-tab duplication. Root feature headers use
+phone bottom search and iPad inline actions/search. URL display is one constrained fading line,
+with multiline editing and one submit icon. Home Recents/Needs Attention page seven at a time.
+Team Tools retains website-service ownership, desktop icons and list/link choices, with mobile
+link context editing/reordering and in-page Standup settings/docking. No source migration.
+
+Both separate ad-hoc-signed previews build/install/launch on the existing iPhone 17 Pro and iPad
+Pro 13-inch (M5), OS 26.5 simulators. Five native UI cases and the zoom arbitration unit case pass;
+all 747 runtime tests and static checks pass. Final acceptance covers title visibility, URL bounds,
+browser/chat gestures, iPad navigation, independent row buttons and a service link edited on iPad
+then read/long-pressed on phone. Pairing setup is serialized because the fixture has one pending
+invite. App/test identities and private receipts keep this independent of the desktop rollout.
+The shared synthetic owner remains available for review; real-account and physical acceptance
+are separate. No dramatic recovery, certificate/account change, live-data backup or physical
+installation occurred. See [design and commands](iphone-navigation-design.md), BF-2026-10-19-02
+and [native parity status](../ios/PARITY-VALIDATION.md). Production mobile rollout remains queued.
+
+## October 19 — 0.2.24 installed and live-verified on both desktops
+
+The operator authorized installing the exact signed Find follow-up on Personal and HC. Both run
+build ec8b213d382e+dirty.249b452ed344, with unchanged signing identity and matching runtime/source
+hashes. Both pass a second graceful restart, original chat/tab/settings/profile/history and
+protected-receipt preservation, provider readiness and live Find. Personal preserves 25 chats,
+137 views and 82 content descriptors; HC preserves 264 chats and 88 views. No active work was
+interrupted. Live long-page observations retain match 2 of 40 with manual scroll for 10 seconds
+on Personal and over 69 seconds on HC. Explicit input/arrows, reload, navigation and close pass;
+only test-owned tabs were closed, and original navigation was restored.
+
+Reviewed differences are ordinary selected-page visibility/title metadata, an authorized peer
+history title update, website cookie refresh and source scan metadata; production records were
+not rewritten to satisfy comparisons. HC's four nonpersistent Team descriptors/histories remain
+saved with lazy native process creation while Team Tools is inactive. Each Mac retains two
+verified full recovery generations and one previous app per generation; preview setup is intact.
+Retirement steps recorded 56,635,392 plus 251,158,528 bytes of additional free space on Personal,
+and 1,732,431,872 bytes on HC. Private receipts retain coverage, exact differences and limits.
+The coordinator read HC's local completion receipt; no outbound cross-chat report was needed.
+
+## October 19 — 0.2.24 native Find signed-package acceptance
+
+The operator authorized a signed follow-up for native browser Find jumping to its first result
+when unrelated shell updates arrive. The unchanged passive-query guard precedes the request epoch;
+current native documents have an ephemeral revision so actual reload/navigation still searches.
+Seven focused unit cases pass, covering in-flight results, stale replies, target/close ownership,
+explicit arrows/input and passive renderer ranges. All 747 runtime tests and static checks pass.
+Real long-page Electron acceptance passes seven
+actual polling cycles with no extra find/stop calls, a stable second match and 12,000px manual
+scroll. The exact signed package passes five polling cycles with the same result, explicit
+input/arrows, same-URL reload, navigation, tab switch and close. Signatures, retained vendor bytes,
+launch and a 146-view migration/restart pass. The rehearsal readiness check now waits for saved
+IDs to match current native IDs before its deliberate renderer reload; the former count-only
+check could reload during startup. No runtime change or second signing was needed for that test
+correction. Build ec8b213d382e+dirty.249b452ed344 is frozen and privately transferred at immutable
+commit d59bf4d0b79c92b72d7bf6cb9743fd2106896049 on codex/signed-proteus-0224-20261019-find.
+TRANSFER-SHA256.json pin: 5d081423b21cbb7599fa76a1af96a098673a2e5f94f9ef2865795822e8a970de.
+The remote pin and retained archive/source verified at build delivery. Installation remained
+separate in that build task; the subsequently authorized live acceptance is recorded above. Preserve current data and the preview workflow; use fresh destination unlock
+and idle checks before any replacement. See BF-2026-10-19-01 and [browser behavior](browser.md).
+
+## October 19 — 0.2.23 signed acceptance and rollout
+
+Normal approval review is working again. The focused Codex suite (14 cases), full runtime suite
+(740 cases), static checks and complete synthetic web Projects/Source Library UI pass. Desktop
+Source Library UI passes at 1440/850px and web at 1440/390px. Cards have 18px gaps and 22px padding
+without overflow. The earlier desktop resize diagnosis was incorrect: the fixture resized the
+hidden notice window. It now targets the actual page's BrowserWindow; final acceptance exits
+cleanly without manual intervention. The unlock requirement for Apple signing still applies.
+
+The exact retained-identity signed package passes launch/vendor checks, all-profile browser
+lifecycle acceptance and the 146-view production migration/restart rehearsal. Build Mac is
+installed and live-verified on 0.2.23 after a second graceful restart: original chats, 137 views,
+82 content descriptors, 31 protected retry receipts and 4,686 history events remain. Provider
+catalogs are ready and the relay is online. Browser visibility time and same-URL history metadata
+enrichment were reviewed separately from unchanged meaningful activity and original visit fields.
+Default-profile history sync retains its 90-day policy and reports recent successful synchronization
+without error. The paired computer is online; a background chat-index snapshot remained marked
+loading, so final HC acceptance remains separate. Two verified full desktop recovery generations
+remain, one app per generation. The web
+release passed fresh capture, verified central recovery, ordinary isolated restore and all 14
+deployment endpoint checks. Authenticated Source Library inspection confirms 18px gaps, 22px
+padding, current owner data and no horizontal overflow. Initial SSH/capture failures remain in
+their original receipts; no keys or recovery gates were reset. Exact duplicate server recovery
+copies retired only after central verification. After acceptance, expired transport duplicates
+retired against their verified central recoveries; the newest encrypted server transport remains.
+Server capture headroom is restored. Private receipts record actual free-space changes.
+
+The private immutable HC packet is transferred and its authorized destination chat has started
+staging. HC's fresh console check is locked; installation waits for its local unlock/signing and
+idle checks. Do not equate dispatch/staging with installation. Keep the independent preview
+workflow, current source companion and two verified full recovery generations per installation.
+
+## October 19 — selected iPhone preview installed and native checks pass
+
+The operator selected Button drawer and authorized a functional iPhone simulator preview of the
+current app: remove bottom app-section buttons; full URL at top; Back/Forward/Find/History/one Tabs
+button below; circle “…” for existing extras; double-tap page content to toggle top controls.
+No new Share/Home redesign, physical installation or iPad navigation change. Phone-only gates
+are simulator/Debug scoped; `scripts/iphone-design-preview.mjs` prepares a separate app identity
+and synthetic owner. See [phone design](iphone-navigation-design.md) and BF-2026-10-18-02.
+
+The unlocked retry installed and launched the signed preview on the existing iPhone 17 Pro/iOS
+26.5 emulator. Both focused native UI cases and the page-zoom arbitration unit case pass; all 740
+runtime tests and static checks pass. Native tests exercise full URLs, bottom touch targets and
+Back/Forward/History, double-tap chrome, one overview control, real content thumbnails, browser/chat
+pinch and native chat edge-back. Fixed masked accessibility identifiers, drawer/control hit areas,
+card alignment and a competing legacy SwiftUI drag. UIKit now owns phone app Back; the existing
+UIKit scroll observer preserves reading behavior. The final app was relaunched for review.
+
+The operator requested no dramatic recovery. No simulator/service reset, erasure, Apple account/
+certificate change, physical installation or iPad navigation change occurred. The launcher uses
+simulator ad-hoc signing for Keychain and opens Device Hub when Simulator.app is absent. Private
+artifact, test-runner manifest, receipts/screenshots and the disposable fixture remain available.
+XcodeGen is absent; the checked-in project has the matching source reference. Physical/iPad and
+agent-triggered Live Browser acceptance remain separate. Earlier HTML checks do not validate Swift.
+
+## October 18 — Source Library changes incorporated into pending 0.2.23
+
+The operator authorized the two items from “Queue source spacing fix” (BF-2026-10-18-03/04).
+Desktop/web source restores 18px gaps between registered folders and clearer shared availability,
+workspace loading, one-time bulk controls and “Configured in” wording. File/tool permissions and
+registration/scanning behavior are unchanged. 740 runtime tests and static checks pass.
+Synthetic desktop and web normal/narrow UI verify spacing, wrapping and loading help. Exact
+signed-package checks pass; the current rollout status is recorded above.
+Do not infer authorization for the separate queued mobile design changes from this source intake.
+
+## October 18 — iPhone design preview authorized
+
+BF-2026-10-18-02 records removal of phone bottom app navigation, browser controls in their own
+bottom toolbar, no redundant app-page back link, interactive previous-page reveal, better tab
+thumbnails and pinch-to-overview motion (also on iPad). The operator requested a local emulated
+phone design preview and selected all three app-navigation ideas: Button drawer, Right-edge drawer
+and Upper-left pull, each with a Home section hub. Final navigation is undecided. See
+[phone navigation design](iphone-navigation-design.md) for the synthetic preview and verification
+limits. Production native implementation/build/install are separate from this design authorization.
+
+## October 18 — iOS interface corrections queued
+
+BF-2026-10-18-01 in [planned updates](planned-updates.md) records the operator's screenshot review:
+desktop sidebar order/colors, thin horizontal separators, collapse inside Workspaces, two iPad
+tab layers without “‹ Workspace”, restored vertical tab dividers, and Live Browser in tab “+”
+instead of Chat tools, including an authorized agent loading path. Queue only; no implementation
+or build in that intake. BF-02 now tracks the phone exploration; final navigation remains undecided.
+
+## October 18 — browser agent policy correction
+
+The operator authorized unrestricted ordinary website-tab access across configured browser profiles,
+including extensions, plus explicit hidden/unloaded lifecycle tools and consistent Engine Room spacing.
+Source and isolated Electron acceptance pass; production rollout is pending. See
+[browser agent access](2026-10-18-browser-agent-access.md). This supersedes the earlier queued BF-08
+profile-gate notes and per-tab browser opt-in guidance.
+
+## October 18 — paid phone/tablet migration accepted
+
+iPhone and iPad now run the paid 0.2.21 / 2610.18.2 build (`org.proteusapp.review.proteus`, team TEAMID0000),
+with provisioning through October 16, 2027. Exact durable data, allowlisted Keychain records,
+encrypted cache counts, saved destinations and second launch pass on both devices; the iPhone
+also reconnected to Build Mac with its original pairing. Original apps remain closed as Proteus Legacy recovery
+copies, and two verified backup generations remain per device. The temporary transfer helper is
+not part of the product. Use [paid migration](native-paid-account.md) and `ios/PaidAccount.xcconfig`
+for future physical mobile builds. Native Mac, Electron desktop and web were unchanged in this pass.
+The iPad's live HC reconnection and website-session continuity were not independently observed;
+retain that distinction from verified credential/data preservation. See the native parity ledger.
+
+## October 18 — computer grouping and responsiveness follow-up
+
+The latest signed desktop follow-up `ec8b213d382e+dirty.56031cdd7c35` passes 737 tests, source checks
+and exact-package 146-view restoration/restart. Personal installation, live navigation and a second
+live restart are accepted: 25 chats, 113 logical views, 59 content tabs, 4,642 history events and
+13 protected receipts remain. All providers are available, the relay is online and the paired chat
+index is complete. Five summary requests have a median of 16.90 ms on Personal; this is not an HC
+measurement. HC installed the same exact artifact and passed preservation, second launch, visible
+navigation and bounded performance checks: median summary latency is 70.34 ms (original 1,703 ms;
+first follow-up 504 ms), with idle main-process CPU approximately 9% instead of 34%. No new
+main-loop lag above 100 ms appeared during approximately 55 seconds of idle/navigation sampling.
+Its 248 chats, 86 views, history, drafts and 349 retry receipts remain. All 45 browser views were
+already unloaded; no bulk unloading was used to improve results. Whole-process RSS remained about
+1.1 GB. This bounded result does not establish a limit for every future website or workload.
+
+Saved-run display now reuses its captured context. Bounded synchronous MCP/path projection caches,
+request-local project/permission snapshots, debounced scroll persistence and per-scope retry backoff
+avoid redundant work while preserving fresh mutation/authorization checks. Never clear the receipt
+journal to make diagnostics quiet. Final Personal recovery rotation and superseded staging cleanup
+are complete: two verified full generations remain, with current artifact/source and preview intact.
+Retirement removed 5,091,637,200 logical bytes; observed free space increased by 1,084,067,840 bytes.
+Native/device recovery and live data were outside this cleanup.
+HC also retains two verified recovery generations after retiring redundant recovery payloads;
+observed free space increased by 3,113,492,480 bytes. Existing uncertain tab-sync requests remain
+intact with backoff; their underlying rejection remains unresolved. Both owners are online, the
+273-chat index is complete and authorized Default-profile history sync is healthy.
+
+Web Other Computers grouping and left-aligned project headers are deployed and live-verified.
+Native workspace/project parity and focused phone/tablet UI checks pass, including cached offline
+workspace navigation. Native Mac 0.2.21 / 2610.18.1 is installed and launch-verified with the existing
+certificate and a renewed profile. iPhone is installed and launch-verified after operator developer
+trust, with 1,675 original file contents and saved destinations retained. iPad is installed with
+3,987 accessible file contents retained; its on-device security/trust check and launch acceptance
+subsequently passed. That predecessor used the original Personal Team identity, with an October 25
+profile. The separate paid phone/tablet migration above now supersedes that signing status.
+Native Mac container hashing was unavailable under TCC; do not claim file-level preservation proof
+there. See the native parity ledger for exact signing, testing and physical acceptance status.
+See the projects release runbook for the latest
+preservation evidence and remaining acceptance work. Keep the independent preview workflow.
+
+## October 18 — production projects rollout accepted (0.2.21)
+
+The operator has authorized the reviewed workspace/projects, source-library and permission design
+for production desktop and web. Keep the isolated preview workflow and its retained permission
+experiment. The corrected signed desktop build passes 717 tests, source checks and the exact
+146-view migration/restart rehearsal. Local installation is accepted: all 97 original views retain
+identity, order and selections; original chats, schedules, drafts and browser history are preserved
+through restart. All three providers are available after the operator renewed the existing Codex
+login. Work Mac has installed the exact accepted artifact, passed preservation and restart checks,
+and exercised projects, sources, the document viewer, an existing chat and a restored browser.
+Reciprocal Default-profile history synchronization passes matching event-ID counts and hashes.
+Both installations retain two verified recovery generations after cleanup; private receipts
+record exact preservation, restored browser state and observed free-space changes.
+
+Web's additional desktop-parity release is deployed. Backend, bounded logs and authenticated
+production UI checks pass, including grouped navigation on Engine Room, fixed workspace tabs,
+existing chat history and permission controls, and sidebar width/expansion persistence. Paired
+project propagation and the refreshed 273-chat index pass. See
+[release and migration runbook](2026-10-18-projects-release.md).
+
+Production uses `src/workspace-projects.js`; synthetic setup remains in `src/desktop-preview.js`
+and `desktop/preview-runtime.cjs`. The catalog is additive: default projects and global source
+registration are separate from unchanged chat context, permissions, schedules and provider
+sessions. Tab synchronization uses separate host/project scopes. Existing direct workspace
+resources stay direct, while legacy workspace chat views move to their default project.
+Main quick-reference views must remain main aliases. Paired desktops must forward the same
+project/source/membership commands as web through the established owner boundary.
+
+The original rehearsal missed mixed saved registries, duplicate aliases, whole-view order and
+inactive selection chains. Those cases are now covered and passed by the final signed package.
+Older preview-only status below records its own historical acceptance.
+
+## October 18 — preview source discovery, navigation and permissions
+
+Current source implements Source library scanning on registration, Rescan and per-root result
+feedback. Registered entries appear in every workspace Configuration without adding execution
+roots or grants; nested library MCP definitions remain Off by default. Folder Load in → Apply to
+all writes a one-time mode for every current item in the folder, regardless of search/type filters.
+It preserves individual editability, favorites, unrelated settings and revision checks. Future
+sources do not inherit this bulk choice. See context-loading.md for discovery details.
+
+Engine Room now scrolls after the workspace tree with separators; only AI allowance stays fixed.
+Collapse all clears workspace/project expansion and extra paging without closing resources.
+Open data folder lives in Engine Room → App settings. Chat permissions directly expose Use
+workspace, Ask, Saved permissions and Auto-approve tools, an independent read-only checkbox,
+working-folder Ask/Read/Read and write choices, and scoped remembered-action removal.
+
+Preview Codex Saved permissions can use workspace-write only when the starting folder has an
+explicit read/write grant; additions affect the next explicit turn and do not widen the running
+sandbox. Ask remains read-only, protected requests still pause, and choosing an MCP server enables
+its available tools for the turn rather than individual-call review. Read-only auto-approval
+requires provider metadata; it does not classify arbitrary shell commands as safe. See
+permissions.md and desktop-preview.md for scope and acceptance evidence.
+
+Verified and open: `dist/design-preview-controls`, revision `ec8b213d382e+dirty.bc584feea48b`.
+689 runtime tests, the additional presentation check, source checks, source/permission/navigation
+Electron workflows, exact-package acceptance and retained-data checks passed. Real Codex acceptance
+created three Permission lab chats and verified Allow once, chat-only remember, workspace remember,
+subsequent no-prompt writes, native sandbox transitions and retained drafts. Existing workspace
+permissions were unchanged. Current preview contains four workspaces, eight projects/eight chats
+and seven browsers, including the new lab. Source matches all 235 runtime files/build inputs.
+Keep the controls and prior project-delete bundles; obsolete activity staging was retired.
+Production, web and mobile remain held. See desktop-preview.md for full evidence and retention.
+
+## October 17 — project deletion in the desktop preview
+
+Nondefault projects now expose Delete on the workspace Projects page. The review names the
+receiving default; all chats and resource tabs move there. Set default is reflected immediately,
+so the former General can be deleted. Defaults are protected by stable identity. Deletion uses
+an atomic catalog redirect, preserving active run files, approvals, drafts, history and activity.
+Session reads/saves, native browser creation/reparenting and renderer reconciliation recover
+late placement writes. Document creation resolves placement after awaited persistence while
+keeping its originating chat authorization. Do not use browser transfer for this organizational
+operation: grants, session views and terminal processes must remain intact. Shared helper:
+`public/preview-project-placement.js`. See desktop-preview.md for validation/package status.
+Prior open preview: `dist/design-preview-project-delete`, revision
+`ec8b213d382e+dirty.1732b450b708`. 678 tests, source checks, deletion/restart Electron acceptance
+and exact-package/live retained-data verification passed. Production, web and mobile remain held.
+
+## October 17 — activity ordering and tab lifecycle in the desktop preview
+
+Selection, focus and scrolling no longer advance recent-item age or order. Preview activity uses
+`lastActivityAt`, separate from browser retention's `lastTouchedAt`: new resources, accepted chat
+messages, explicit browser navigation/refresh and successful terminal input advance it. Reading,
+provider output, title changes and restoration do not. Chat summary/index/view projections expose
+accepted-user activity with creation fallback; legacy focus timestamps are not treated as activity.
+Projects keep an explicit workspace-local order, edited by title/row drag or Alt+Shift+Up/Down on
+the workspace Projects page. The sidebar follows that order. Workspace aggregate Tabs cannot be
+reordered; project Tabs retain sibling reorder. Lists validate workspace, project and owning host.
+
+Closing workspace navigation survives passive reconciliation and returns from active descendants.
+Closing the final chat view evicts history/render caches, including late fetch results, while
+preserving history, drafts, permissions and execution. Browser Hide now unloads in the preview;
+Restore reveals without loading; selection loads. Persist/shared status alone does not prevent
+Hide, but actual in-flight work/unsaved page state still reports a blocker. Hidden persisted tabs
+stay unloaded through restart, with portable navigation identity preserved. Native hide succeeds
+before visibility is committed, with conflict checks and rollback on persistence failure.
+Production, web and mobile remain held. Prior open preview was `dist/design-preview-activity`,
+revision `ec8b213d382e+dirty.6b8a11aaa04a`; 664 tests, source checks, disposable Electron workflows,
+exact-package acceptance and retained-data verification passed. See desktop-preview.md for evidence.
+
+## October 17 — sidebar width, overlay and group color refinement
+
+The next isolated desktop preview iteration makes the sidebar resizable, storing width in
+application appearance settings for restarts and the collapsed popover. The popover overlays
+content without shifting it; native browser panels are temporarily hidden through the existing
+overlay mechanism, preserving live page/session state. This is an interim compositing workaround.
+The latest supplied reference now controls navigation: sidebar `#121512`, active workspace
+`#181d19`, active feature/project `#1d231e`, selected item `#31392c`, accent icons/rounded
+selection edge `#bedc93`. Inactive projects blend into their workspace. Preserve icon shapes and
+website favicons; selected tab icons use the accent while their titles remain white. Use shallow,
+balanced insets and rounded panels. Active feature recents share one panel around heading and items, without a nested list box.
+Restore the horizontal divider below Workspaces. Counts stay plain
+except for the filled nonzero Needs attention badge. Recent activity below an hour uses minutes (`<1m`, then
+`1m`–`59m`). Production, web and mobile remain held; preserve the
+private preview's existing experiments. See desktop-preview.md for current validation status.
+
+The operator selected Project panels; do not add vertical hierarchy lines or separate header bands.
+Sidebar feature, workspace and project labels now use 14px type; individual chat/resource item
+titles, counts and computer metadata retain their existing sizes.
+
+## October 16 — desktop preview iteration
+
+Historical record: October 17 activity rules and October 18 scrolling Engine Room/inline permission
+controls supersede the corresponding descriptions below.
+
+The current request adds workspace tab separators, removes collection-level duplicate Chats,
+and simplifies permission controls into the existing chat side panel with separate Help. The
+operator selected grouped sidebar rows: right-side expanders, two-line chat titles, workspace
+groups below a separator after Workspaces, one scrolling feature/tree region above AI allowance,
+and Engine Room pinned beneath it. Workspaces start collapsed. Keep expansion and More counts
+when changing features; collapsing a project resets its seven-chat list. Preview-only
+Codex trust increases no longer abort the current narrower turn; real reductions still stop with
+explicit Continue and no replay. Additive remembered rules preserve inherited folders. See
+[desktop-preview.md](desktop-preview.md) for verification and limitations. Production, web and
+mobile remain held. The private synthetic preview profile and existing experiments must survive
+repackaging; check active turns before restarting it.
+
+The latest polish adds shared feature/chat icons, brighter navigation and consistent white
+selected tab titles, including browser tabs. Project selection fills the expander background.
+Remove the composer Permissions shortcut; retain the existing sidebar. Open tabs supports
+title/row drag and Alt+Shift+Up/Down in place of preview arrow buttons, constrained to siblings
+under one workspace/project. The operator then selected Workspace panel: existing-color shaded
+groups, project headers and brighter selected items, with icons instead of hierarchy lines.
+Project recents combine unique chats and all resource types, sort by recorded access, show age
+at right and full item counts. Workspace headers show computer beside the name and project count.
+Active recent Schedules/Chats/Internet Searches/Needs attention get matching groups without header
+expanders. Keep seven initial items; More adds four. Feature departure resets extra paging,
+superseding the earlier persistence of loaded counts; expansion remains. Project collapse resets
+items and workspace collapse resets project paging. Verify this revision in the isolated preview.
+
+## October 16 — capture-app migration evidence
+
+Operator chose a new paid capture-app bundle ID because the Personal Team prefix could
+not be replaced. `org.proteusapp.review.mnemosyne.capture` 0.5.14 (25) is installed and launched
+alongside the original on iPad; all 812 migrated durable files verified byte-identical.
+Its development profiles expire October 16, 2027, 22:03:20 UTC. The new-bundle
+TestFlight route is now verified on iPad; phone/Watch build 27 migration completed
+with preserved originals, verified archive/delta copies, new live capture and iCloud
+delivery. The original capture app remains installed and paused. This route is not a blanket authorization
+to change Proteus identifiers; preserve its running apps and saved data. Shared paid
+identity and device registration are ready, but Proteus profiles/builds remain unchanged.
+
+## October 16 — paid team active; shared signing prepared
+
+WTB Tech Services LLC membership is active (renewal October 16, 2027). Xcode is
+signed in. Paid Team ID **TEAMID0000** differs from old Personal Team TEAMID0000.
+The existing Mac Keychain now has Apple Development: Proteus Contributor (SIGNER0000),
+SHA-1 `54BE22510FBADFF2AD71848A58E05257F6E176B3`, paid team TEAMID0000,
+valid through October 16, 2027, 21:29:35 UTC. Old shared identities were preserved.
+Use this paid identity for new paid-team builds; private keys stay on this Mac.
+No certificate/private-key export to Proteus or receiving devices is needed.
+
+The iPhone, iPad and Watch are registered under the paid team. The capture app successfully archived and uploaded to internal TestFlight using
+its original bundle ID,
+with paid development profiles expiring October 16, 2027. This proves the shared
+account/signing workflow, **not** new Proteus profiles or a Proteus deployment.
+Proteus still needs its own matching App ID/profiles for `org.proteusapp.proteus.mobile`.
+Preserve the desktop identifier, signing settings and current release holds.
+
+**Migration issue verified on the capture app's backed-up iPad:** directly installing
+a paid-team development build over the old Personal Team build is rejected with
+MismatchedApplicationIdentifierEntitlement. Same bundle ID alone does not preserve
+upgrade eligibility across team prefixes. Do not uninstall Proteus or revoke its
+old certificate to force migration. Validate a preservation-backed distribution
+migration before replacing any running Proteus app; its installed seven-day profiles
+are not extended by the new membership. TestFlight builds last 90 days.
+
+Terms of Service PDF and acceptance record are saved in the private notes WTB Apple
+Developer Program record. This section supersedes the activation-pending preflight
+below. No Proteus build, install, app-data or project/signing mutation was made.
+
+## October 16 — shared paid signing preparation, activation pending
+
+Operator requested paid Apple Developer signing preparation for Proteus alongside the
+separate pendant capture app. Operator confirms membership payment already made;
+the authenticated Apple account still reports organization Pending and a purchase
+prompt, with a processing notice of up to 48 hours. Do not pay again from this
+presentation. Xcode's cached account showed Personal Team and requested sign-in;
+browser sign-in completed, while the separate Xcode password prompt remains pending.
+Paid-team ID/prefix, new profiles and distribution access remain unverified.
+
+The designated signing Mac has the current development identity
+`0000000000000000000000000000000000000000`, team `TEAMID0000`, valid until
+October 2, 2027, 15:17:11 UTC. Freshly decoded capture-app/Watch/widget and Proteus
+mobile cached profiles all reference it. The installed Proteus iPad-on-Mac profile
+also references it and expires October 18, 2026, 16:38:12 MDT, matching the cached
+mobile profile. This does not establish the profiles currently installed on the
+physical phone/iPad. Seven-day profiles still need replacement after paid-team
+activation; certificate lifetime alone does not extend installations.
+
+Keep native `org.proteusapp.proteus.mobile` and desktop `org.proteusapp.proteus.desktop`.
+Use the existing build Mac's Keychain; Proteus and receiving devices do not need
+private-key exports. Each app needs its own profile even with a shared certificate.
+Refresh the existing Xcode account after activation, compare paid Team ID/prefix
+with existing installations, and preserve old identities if a separate paid team
+needs a new identity. Never revoke/delete shared certificates as a repair. Another
+build Mac would require its own authorized identity or a deliberately encrypted
+Xcode identity export outside Git; no transfer is currently needed or performed.
+Developer ID/notarization for the desktop remains a separate migration with
+Keychain/signature continuity checks. TestFlight builds remain limited to 90 days;
+paid development/ad hoc profile expiry must be measured on actual generated assets.
+
+Preparation and documentation only: no build, install, signing/project change,
+profile/certificate creation, key export, account removal or revocation. Capture-app
+build/install is explicitly held until Operator chooses its new display name; Proteus
+release holds and its running apps/data are unchanged.
+
+## October 15 isolated desktop preview — current authorization
+
+The operator authorized building and opening a separate desktop version with synthetic workspaces,
+projects and sources, connected to existing Codex sign-in for real chat/approval experiments.
+Production replacement, real-data migration and web/mobile implementation remain held. Start with
+[desktop-preview.md](desktop-preview.md) for launch/package paths, isolation boundaries, tested
+behavior and deferred operations. Preview flags gate the UI/API; never seed production app data.
+The earlier design/rehearsal records below are superseded only for this isolated desktop scope.
+
+## October 15 Projects/source/permissions design — original prototype
+
+BF-2026-10-15-10–12 add the [consolidated design](2026-10-15-workspaces-projects-design.md),
+[clickable synthetic prototype](design/2026-10-15/projects-workspaces.html) and
+[permissions review](design/2026-10-15/permissions-review.md). Engine Room owns a discovery-only
+source library; workspaces retain configuration/access; organizational Projects own flat content
+tabs. The workspace name appears in top-level app navigation; local Projects/Chats/Tabs/Configuration
+are fixed left, followed by optional direct browser/terminal/viewer tabs. No generic Workspace tab.
+The Workspaces collection has Workspaces/Chats tabs. Use existing four-box/panel icons for the
+collection/workspace and folders for projects nested in the sidebar. Tabs aggregates direct and
+project resources. Chat lists retain existing controls with scoped Workspace/Project locks.
+Default-project routing applies to new chats. The prototype now opens on inline chat permissions;
+Details and composer mode share controls for automation, folders and remembered grants.
+Global Chats retains top-level quick views without membership changes. Preserve captured chat
+settings on moves and all legacy main/Team/Unhoused/hidden/unloaded/archived resources, schedules,
+history, drafts, sessions, grants and retry receipts in any future migration. Proposed bounded
+Autopilot requires actual provider enforcement and must not silently replace existing modes.
+Documentation and rehearsal only; [prototype UI rehearsal](design/2026-10-15/prototype-validation.md) passed. No application build,
+deployment, real-data migration, source import or permission change is authorized by this design.
+
+## October 15 next-release intake — Markdown refresh, alerts and response links, queue only
+
+The operator started a new release bug and feature list and explicitly said not to build yet.
+BF-2026-10-15-01 checks the original Markdown source on disk when returning to its tab and
+refreshes changed content. BF-2026-10-15-02 adds Refresh to that tab's right-click menu.
+Both refresh paths must preserve the user's scroll position without jumping back to the top.
+BF-2026-10-15-03 reduces pop-up alert auto-dismissal from 15 seconds to 5 seconds, preserving
+pending actions and independent authorization expiry. This is queued only.
+BF-2026-10-15-04 makes full paths/URLs in agent responses clickable without hiding their
+destinations: folders open Finder, Markdown opens the in-app editor, websites open browser tabs,
+and other supported resources use their existing viewer. Activity blocks are outside the required
+scope. Preserve owner/source access and user-click opening; this is also queued only.
+BF-2026-10-15-05 queues Enter in the new workspace name field submitting the same creation
+action as Continue, with existing validation and no duplicate submissions.
+BF-2026-10-15-06 queues clear changed-source alert wording and a direct Refresh sources action
+that awaits the owning host's refresh, retains the full new-chat draft/selections and leaves
+submission to the user after review. Keep version checks and handle stale/failed refreshes.
+BF-2026-10-15-07 queues adding/importing browser tabs into a workspace unloaded and/or hidden,
+including agent-assisted external browser-tab-group imports. Keep load/visibility independent,
+use verified source URLs and owner service operations, retain discoverability and retry safety,
+and do not load pages merely to register them. Screenshot connector failures are separate from
+the requested Proteus capability; no real import or external authentication repair was performed.
+BF-2026-10-15-08 queues removing extension/private profile barriers to authorized agent
+creation/loading/reading/control across all profiles, superseding BF-17's extra opt-in. Current
+source still has legacy gates; no live settings or tabs were changed.
+BF-2026-10-15-09 queues investigating intermittent Claude double-send behavior. The screenshot shows
+two delivered queue entries before the next response; it does not establish dropped input or root
+cause. Trace message IDs through engine/provider/UI, retaining serialized turns and retry safety.
+No live messages or background workflows were altered.
+Preserve source/host authorization, version approvals and the existing tab identity. See the
+new list at the top of `planned-updates.md`. No implementation, build, installation or deployment
+is authorized for this batch; earlier release rollout status below is separate.
+
+## October 15 0.2.20 acceptance — website, personal desktop and phone
+
+Website **0.2.20** is deployed and verified: 9,217 deployed hashes, eight served assets and
+14 endpoints pass. Verified central recovery and the fixed capture-state restore gate pass;
+the ordinary restore/live-state comparison did not pass and is not claimed. Schema, runtime
+configuration and nutrition remain unchanged. The bounded deployment log window has no new
+Laravel/relay errors; Apache events are expected environment-file denials and database events
+are known column-statistics messages. Detailed private receipts remain in the deployment project.
+The SSH failure was the existing key's locked Keychain access; unlocking resolved it without
+credential or server-policy changes, and the same release/capture request was resumed.
+
+Personal Electron **0.2.20 /3f2196de3586** is installed/live-verified, including visibly restored
+navigation/browser chrome. Native Mac **0.2.20 /2610.14.3** is installed/launch-verified and its
+running executable matches; native accessibility inspection remains unavailable and its protected
+container was not edited. Physical iPhone has the same native release installed/launched, retaining
+all 1,675 accessible original file bytes and saved destinations; four OS snapshot paths renamed.
+Backup verification used temporary folder scratch plus hash receipts, with no full after-copy.
+
+The three oldest accepted local Electron/native/phone generations and three byte-identical mobile
+after-copies are retired, retaining two full recovery generations per local target and compact
+receipts. Redundant native rollback app bytes also match the retained durable copy and are retired.
+Measured free-space change during that rotation was -0.03 GiB (concurrent use/APFS sharing); no
+positive reclaimed-space claim is made. Website's separately approved current-plus-two-prior
+ordinary policy rotated one eligible generation after acceptance; unique pins remain unchanged.
+
+Work Mac and physical iPad remain staged because fresh checks still report locked. The identified
+HC waiting-chat interruption remains explicitly authorized; no interruption/replacement occurred
+while locked. Do not treat that authorization or a dispatched chat as installation completion.
+
+## October 14 0.2.20 rollout checkpoint — unlock/transport pending
+
+Personal Electron **0.2.20 /3f2196de3586** is installed with backend/preservation verified; visible
+restored-UI acceptance awaits Mac unlock. 47,218 cold files, 8,731 protected retry receipts,
+90 tab identities/order/ownership/profiles and drafts remain; three SQLite checks and provider/
+relay health pass, with no new warning/error logs. Native115 units plus linked-image target
+capture and iPhone/iPad menu/open-adjacent UI pass; native2610.14.3 is signed/staged. HC exact
+artifact/source transfer is verified, and waiting-chat interruption is expressly authorized;
+destination signing/install waits for unlock. Physical device installations also wait for unlock.
+Website recovery capture completed but export verification/SSH authentication stopped activation;
+production remains0.2.19. Resume the existing durable request rather than recapturing or clearing
+receipts. No certificate/account reset or server access-policy change is authorized or needed.
+See [release validation and remaining work](2026-10-14-retry-menu-release.md).
+
+## October 14 authorized next-release build — in progress
+
+The operator authorized implementing the native link-menu and retry-ledger queue, building and
+installing the updates, and explicitly released the website/second-desktop deployment hold.
+Candidate version is **0.2.20 / native 2610.14.3**. No target is yet installed on this candidate.
+The earlier queue-only and deployment-held entries below are historical.
+
+Native menus resolve the actual pressed anchor in an isolated script world, including linked
+images, and add link actions to both WebKit element menus and UIKit editing menus. Native
+selection actions remain. New tabs retain source placement/profile/owner; new empty link drafts
+inherit the source workspace. Downloads reuse the existing lifecycle and configured folder.
+
+The receipt-capacity investigation identified repeated tab metadata updates from stale runtime
+timestamps/icons and history titles. Applying shared state no longer counts as interaction;
+known opened timestamps persist, interaction times merge monotonically, and omitted favicons
+do not erase known icons. Synchronizers batch metadata, retain wire request identity across
+transport retries/restart, back off per owner on capacity refusal, and deduplicate named warnings.
+The 10,000-receipt/256 MiB limits, 24-hour settled window and indefinite unresolved protection
+remain. Existing full protected ledgers must age naturally; no receipt clearing is authorized.
+
+Focused ledger/synchronization tests and desktop tab-stability UI pass. Full regression, native
+menu acceptance, final signed packaging and installations remain in progress. Follow the two-full-
+generation recovery policy for each target; keep receipts instead of duplicate validation copies.
+
+## October 14 next-release intake — queue only
+
+BF-2026-10-14-01 queues native browser link/selection menu parity on iPad/iPhone and native Mac.
+BF-2026-10-14-02 queues the remote-command receipt-capacity investigation/fix, preserving retry
+safety while addressing tab-sync churn and repeated host-ambiguous warnings. Neither is implemented;
+do not build/deploy from this intake. Website/Work Mac remain held.
+
+The personal Mac's two unique migration snapshots are now compacted under explicit operator
+authorization. The verified bundle retains baseline/pre-repair tab-state JSON, the exact helper
+and repair/install acceptance receipts: 13 copied files totaling 204 KiB. The repair restored
+20 entries (7 chats, 12 browsers, 1 terminal); its old full app/profile snapshots are retired,
+with two newer verified full desktop recovery generations retained. Measured free-space gain
+from this compaction was 1.16 GiB. Private inventory, recovery dependencies and deletion receipts
+remain outside the checkout; never automatically replay the historical navigation state.
+
+The update instructions now enforce at most two full verified recovery generations per distinct
+installation/data home or physical device. Count nested snapshots, not release directories;
+avoid duplicate rollback apps, retry snapshots and full post-install validation mirrors. Resume
+partial device copies and keep verification receipts. Temporary in-flight exceptions must be
+resolved, and extra full migration exceptions need explicit approval and deletion conditions.
+Read `desktop-updates.md` and `apple-build.md` before the next authorized update. This is a
+workflow instruction change, not an app feature or automated retention implementation.
+
+## October 14 authorized local backup cleanup
+
+Removed 40 expired Proteus backup/rollback directories after validating the retained desktop
+recovery sets and confirming no retired app was running. Actual free-space gain was **8.99 GiB**,
+with **10.36 GiB free** afterward; APFS sharing makes nominal backup sizes larger than reclaimed
+space. Keep the newest two accepted desktop recovery generations and newest two native/mobile
+recovery generations; the former navigation exception is now compact evidence as recorded above.
+558 compact audit files and the exact deletion/free-space receipt remain private. Installed
+**d94ad06adb5b** remains ready; live app data, current installations and held website/Work Mac
+updates were untouched. The disk is still below 1% free, so the capacity display rounds to 100%.
+
+## October 14 attachment composer follow-up — build/test, hold deployment
+
+Personal Electron desktop installation is now **installed and live-verified** on the exact
+**0.2.19 / d94ad06adb5b** candidate. The same signing identity and all 227 runtime files match;
+85 logical tabs retain order and ownership, drafts and 38 protected configuration/run files
+are unchanged, all 45,766 cold data files and 3,842 protected retry receipts are retained, and
+all three SQLite checks pass. The restored current chat and composer were visibly observed
+without editing or sending anything. All three providers and relay are ready; startup has no
+new warning/error. Durable previous-app/data/source backups and private receipts are retained.
+Initial installation attempts stopped safely for recovery headroom; only a byte-identical
+superseded temporary app duplicate and downloaded test-browser cache were removed. No user
+records or durable recovery copies were deleted. **Website and Work Mac remain held.**
+
+The shared desktop/web composer now separates attachments from its bottom controls. Attachment
+lists scroll within 100px (or 18% of viewport height), and picker replacement remeasures the
+editor. Waiting questions are included in desktop editor sizing so long drafts cannot crowd the
+controls below the chat pane. Local, remote desktop and web share attachment chip styling.
+Local and remote desktop attachment UI and focused/full built-web UI pass, as do 604 Node tests,
+static checks, web compilation and signed packaging. The exact signed candidate
+**d94ad06adb5b** passes attachment layout/preview/consent/upload UI, signature verification and
+all 227 runtime hash comparisons. An older independent long-history stability fixture could not
+load its test history; do not claim that fixture passed.
+The website and Work Mac must not be redeployed until the operator
+releases this hold. Existing 0.2.19 installation acceptance below describes production.
+
+## October 14 final 0.2.19 acceptance — all authorized installation targets complete
+
+Both desktop hosts have the exact signed **0.2.19 / eb9548dbcce9** installed and live-verified.
+604 Node tests/static checks, exact signed Move/title/document placement UI, immediate full-URL
+redirect/download UI and bundle/vendor checks pass. The unchanged signed history-log rehearsal
+passed on retry after its first polling timeout. Primary preserves 84 logical tabs/drafts/order/
+profiles, 45,757 cold data files and 3,892 protected retry receipts; all three SQLite integrity checks
+pass, providers and relay are healthy, and no new startup warning/error was logged. Restored UI
+and the operator's current draft were visibly observed without editing them; compact/modal UI hid
+its footer. The second host visibly verifies 0.2.19, 66 tabs, all 171 run files and both dormant
+messages retained, healthy providers/two relay hosts, no new warning/error. Normal Move of the
+identified affected chat converges to one destination-workspace descriptor with no main alias and
+stays selected across 12 sync samples; Workspace Tabs title activation selects the existing view.
+
+Native Mac, physical iPhone and physical iPad **0.2.19 / 2610.14.2** are installed/launch-verified.
+113 native units and two actual history/title UI workflows pass. Existing certificates/profiles/
+entitlements remain. The Mac's running executable matches the tested build; its protected container
+was not edited and direct hash/AX inspection is unavailable. iPhone retains all 1,933 file contents
+(four OS launch-snapshot paths renamed); iPad retains all 3,887 accessible file contents (only 12
+unreadable OS launch-snapshot cache files excluded). Both saved destination indexes remain exact.
+Device backups/installations were guarded by fresh unlock checks, with prior partial attempts kept.
+Physical gestures and real authenticated Microsoft login remain separate from these checks.
+
+Website **0.2.19** is deployed through the existing private route after fresh verified central recovery
+and a successful isolated restore. All 9,214 deployable file hashes, 14 endpoints and eight served
+assets match; schema, runtime configuration and nutrition remain unchanged. Its current deployment
+window has no new Laravel/relay errors; Apache events are expected protected-environment probe
+refusals and database events are known column-statistics messages. 81 PHP tests/724 assertions,
+two-owner UI, 14 private deployment/retry/retention tests and project structure validation pass.
+Central retention keeps current plus two prior ordinary generations and seven unique migration
+sets, with a 15 GiB budget. Initial cleanup reclaimed 7.71 GiB, accepted-release rotation removed
+one further expired generation, and separately confirmed deletion of exactly four verified expired
+server raw/archive copies reclaimed 2.20 GiB. Other server sets and restore evidence were untouched.
+The initial failed disk-headroom capture receipt remains; no guard or recovery gate was bypassed.
+
+The scheduled-conversation controls were a functional trigger-classification bug. New run-only
+approval now requires its exact current waiting request, and folder trust matches its offered
+folder/access; future independent schedule runs keep their own policy. No real approval or
+browser-conflict recovery choice was applied. Full standalone-chat subtab retirement stays review
+only and SQLite metadata migration stays shelved. Private artifacts, data and receipts remain
+outside the application repository.
+
+**Latest October 14 acceptance:** Both desktop hosts run the exact signed **0.2.19 /
+eb9548dbcce9**; startup/provider/relay/data checks pass. The second host verified the affected chat
+through normal owner Move: one destination-workspace descriptor, no main alias, selected across
+12 sync samples, visible navigation and Workspace Tabs title activation. All original run files
+and dormant messages remain. Native Mac and physical iPad **2610.14.2** are installed/launch-verified;
+iPad retains 3,887 accessible files and saved destinations (12 unreadable OS cache files excluded).
+Phone remains staged awaiting fresh unlock after its backup timed out. Website remains staged
+pending confirmed cleanup of four verified expired server backups; production is still 0.2.15.
+
+## October 14 0.2.19 rollout checkpoint
+
+Primary desktop **0.2.19 / eb9548dbcce9** is installed. The exact signed package passed Move/title/
+document UI, immediate redirect/full URL history/download UI and package/vendor signature checks.
+The first signed history-log poll timed out; the unchanged exact artifact passed its repeated full
+workflow. All 604 Node/static checks, 81 PHP tests/724 assertions, two-owner web UI, 113 native unit
+checks and two actual native history/title UI workflows pass. Cold backup preserved 45,757 files,
+3,892 protected retry receipts and three healthy SQLite databases. Twelve post-startup samples retain
+84 logical tabs/order/ownership/profiles and drafts; all providers and relay are healthy with no new
+warning/error logs. Installed AX inspection currently returns only the shell window, so its visible
+footer is not newly verified; exact signed UI rehearsals are separate evidence.
+
+Native Mac **0.2.19 / 2610.14.2** is installed/launch-verified and its running executable matches the
+validated build. Container data was not edited; protected-container hash/AX acceptance remains
+unavailable. Both physical-device packages are signed with existing profiles/certificate and backups
+are running. Second-desktop exact verified installation is underway. Website 0.2.19 is tested/staged;
+production remains 0.2.15 because the server recovery capture stopped for insufficient disk space.
+Four verified expired ordinary server backup copies are proposed for operator-confirmed deletion;
+current plus two previous generations, unique migrations, incomplete sets and restore evidence stay.
+Central ordinary cleanup already reclaimed 7.71 GiB; its 15 GiB budget remains unchanged.
+
+## October 14 final follow-up scope — 0.2.19 / native 2610.14.2 candidate
+
+The operator withdrew redirect pausing after Microsoft sign-in failures and explicitly requests full
+URL chains on every platform in both navigation and history logs. Remove all countdown/interception
+behavior and append each original/redirect/replacement URL, including queries/fragments, rather than
+rewriting the selected entry. Native request bodies remain with the browser engine; restart/history
+loads never replay POST bodies or serialized page state. The operator's complete-URL retention
+choice supersedes earlier login/query redaction for browser history; explicit bookmark validation,
+private profile settings and agent/tab sharing grants remain separate. Existing saved records are
+preserved; missing historical redirect links cannot be reconstructed.
+
+Workspace Tabs titles now select the existing chat/browser/terminal/viewer, restore hidden
+navigation and reveal the selected tab. User Move also selects its destination workspace/chat and
+reveals both navigation levels. Scheduled conversations accept only an explicit matching waiting
+permission request for new conversation-only auto-approval; new folder trust is limited to the
+currently offered folder. Context/revision checks and run-only storage remain, with no grants for
+future schedule runs. Broader unrestricted guard removal was rejected by automatic approval review;
+the narrower current-request implementation was accepted. No actual operator approval was changed.
+
+604 Node checks, static checks, source desktop navigation/redirect/download rehearsals, 81 PHP
+tests (724 assertions) and two-owner web UI pass. All 113 native unit checks plus the actual
+SPA-history and Workspace Tabs title/navigation UI workflows pass. Final rebuilt signing and
+installation are in progress. Earlier 0.2.19 fingerprint 1760b42c473f was
+an uninstalled candidate before these additional requests; never install or transfer it as final.
+Website cleanup verified/deleted 21 expired ordinary release sets (7.71 GiB), retains current plus
+two previous generations and seven unique migration pins, leaves unknown files intact and preserves
+the 15 GiB budget. Automatic expiry occurs only after a new release passes audit. Website deployment
+remains pending final source freeze and fresh verified recovery/restore.
+
+## October 14 canonical Move follow-up — 0.2.19 acceptance underway
+
+The second desktop exposed a main-navigation chat descriptor that stayed outside its destination
+workspace when browser synchronization was paused. Move now updates canonical owner placement
+across main/workspace scopes, converges duplicate chat placements and preserves unrelated tabs and
+metadata. A top-level Move selects the destination chat and reveals both workspace/root navigation
+and chat/child navigation even when the root bar overflows or the workspace was hidden. Browser
+conflict recovery now names the affected tab/URL and uses plain saved-history/pending-page labels.
+602 Node tests, static checks and actual desktop UI pass. Signing and per-host installation remain
+pending; do not confuse candidate checks with installed acceptance. The operator authorizes retaining
+current plus two previous ordinary website recovery generations instead of increasing its 15 GiB
+budget. Unique migration pins and unknown/failed files remain protected. The full standalone-chat
+subtab retirement and SQLite metadata migration are still review/deferred work.
+
+**October 14 latest acceptance:** Primary desktop 0.2.18 `93697aff6338` installed/live-verified:
+601 tests/checks and exact signed UI/package acceptance pass, 76 logical tabs/drafts/order retained,
+providers/relay healthy, no new startup warning/error. Second-desktop exact transfer/acceptance is
+in progress. Website 0.2.18 is tested/staged but blocked before deployment by the existing protected
+15 GiB recovery budget; operator decision requested, no protected backups removed. Native Mac,
+iPhone/iPad retain verified 0.2.15 / 2610.14.1. Standalone subtab retirement is review only.
+See release ledger; earlier candidate/paused/locked paragraphs are historical.
+
+**October 14 agent-document follow-up:** The operator expects agent-opened viewers next to the
+existing workspace chat, not a duplicate top-level chat container. 0.2.18 supersedes the uninstalled
+0.2.17 candidate and adds workspace-aware document routing/reuse/authorization retention. Its
+checks and rollout are in progress. Retiring standalone chat subtabs is review only.
+
+**October 14 follow-up:** The operator reports tab-move operation-ID errors, narrow Workspace
+Tabs titles, disabled chat Move menu, stale workspace chat membership and compact sidebar hidden
+behind native browser content. 0.2.17 implementation/verification is underway; do not claim it
+installed before per-target acceptance. Earlier 0.2.16 release is verified on both desktops.
+
+**October 14 latest:** Primary desktop 0.2.16 `ea61a6f51465` is installed/live-verified with
+legacy navigation recovered; second desktop is also installed/live-verified on the exact artifact.
+Its 31 recovered entries and 41 existing entries retained stable order through 60 sync samples.
+Native Mac, iPhone and iPad 0.2.15 / 2610.14.1 are installed/launch-verified with saved data and
+destinations retained (iPad backup excludes only 12 unreadable OS launch-snapshot cache files).
+Website 0.2.15 remains deployed/verified. The earlier paused/locked checkpoints below are historical.
+See the [release ledger](2026-10-13-tab-management-release.md) for evidence and limitations.
+
+**October 14 rollout:** Signed 0.2.15 `535c75672ffd` is installed/live-verified on the primary
+desktop; native Mac 2610.14.1 is installed/launch-verified. The website is deployed with central
+recovery, isolated restore, all 9,214 file hashes, 14 endpoint checks and eight served assets verified.
+The second desktop has verified exact signed staging but its operator explicitly paused stopping
+Proteus in the destination chat; 0.2.14 and both waiting chats remain untouched. Physical devices
+remain staged until a fresh unlocked/reachable check passes; no physical replacement is claimed.
+Follow the [release ledger](2026-10-13-tab-management-release.md) for target status and limits.
+The earlier locked candidate checkpoint below is historical; SQLite metadata migration stays shelved.
+
+**October 14 candidate ready; signing/install held by lock:** BF-04–20 excluding shelved BF-09
+is implemented in 0.2.15 / native 2610.14.1. 592 Node checks, 81 PHP tests, web owner rehearsal,
+66 native units and four native UI workflows pass. Unsigned desktop candidate `535c75672ffd`
+contains 227 validated runtime files; bundle rehearsals run with disposable homes/mock Keychain.
+The coordinator Mac is confirmed locked. Operator unlock is pending before Apple checks/signing
+and installation; no production application/data was replaced. The destination chat is doing
+read-only preparation, without interruption/rebuild/install. Follow the current
+[release ledger](2026-10-13-tab-management-release.md); all older queue-only statements below
+are historical. Keep SQLite metadata migration shelved and private evidence outside source.
+
+**October 13 full intake implementation/build/install authorized:** The operator now authorizes
+the active October 13 batch BF-04–20, excluding shelved BF-09 storage migration. The queue-only
+notes below are historical. Implementation and validation are in progress; no new release is
+installed yet. See [current release ledger](2026-10-13-tab-management-release.md). Preserve all
+existing edits, private app data and active work; source checks alone do not establish UI acceptance.
+
+**October 13 extension/response intake — historical queue scope:** BF-17 is now explicitly confirmed:
+agents can be enabled on extension tabs. BF-18 moves extension controls into the address toolbar
+between Go/Overview, replaces overlapping Install UI and resolves raw localization placeholders.
+BF-19 fixes blank/fullscreen/undismissable popups with bounded host-owned dismissal/error handling.
+BF-20 owner read-only diagnosis is complete: native Copilot events, saved JSON and API agree; the
+first explanation was never emitted as a finalized reply, and the later explanation is preserved
+inside the feedback question. Queue readable historical question context instead of collapsed
+Activity and guidance to explain before dependent follow-up questions. Actual historical UI
+rendering remains unverified; the affected chat was not selected. Evidence stays private. No
+implementation/build, profile changes, feedback sent or running-chat interruption.
+The operator also reports answered Copilot/Claude questions disappear while their replies remain.
+BF-20 reopens BF-2026-10-07-07 visible-history acceptance: show complete question/context/choices
+with its linked answer; durable system-event capture alone is insufficient. Queue only.
+
+**October 13 developer integrations/profile policy — queued only:** BF-16 records the operator's
+choice of default Playwright, optional on-demand Chrome DevTools MCP, and human built-in DevTools/
+Inspect on the selected embedded browser tab. Reuse packages through one owner service boundary;
+test Electron/private-bridge compatibility and debugger coexistence. BF-17 proposes a configurable
+override of the current all-extension-profiles-private rule, retaining per-tab sharing and distinct
+developer/Live Browser scopes. No packages installed, settings/grants changed or app build started.
+See [build-list scope](planned-updates.md).
+
+**October 13 visual Playwright control — build-list intake only:** BF-2026-10-13-15 extends
+existing embedded-tab Playwright with model-visible screenshots and coordinate mouse/drag/keyboard
+input for Zoho Assist/canvas interfaces. Text ARIA snapshots cannot expose drawn desktop controls;
+browserTools and Codex tool results currently return text, so image transport is part of the change.
+Reuse profile/tab permissions and scoped CDP; verify scale/crops/resize, stale observations and
+actual remote input. No private session URL/contents recorded, live acceptance or app build.
+The operator now authorizes the Zoho session already linked in this chat for future BF-15 tests;
+reuse it for reversible visual/input checks and carry this consent forward. Keep session details
+private, restore prior state and report expiry if encountered. This does not lift the build hold.
+See [queued scope](planned-updates.md).
+
+**October 13 browser downloads — queued only:** BF-2026-10-13-14 requests a Firefox-style
+indicator/panel, progress/history/date, per-item Cancel, OS Downloads default, configurable folder
+and Open folder in Engine Room Browser Preferences, plus right-click Save As. Existing helper-view
+grants support explicit linked-file Save As but reject ordinary page downloads; extend the shared
+lifecycle without losing request/profile protections. Native currently uses temporary-file export.
+No implementation/build/install or live workflow verification; see [queued scope](planned-updates.md).
+
+**October 13 Delete workspace intake — queued only:** BF-2026-10-13-13 deletes workspace
+configuration/navigation and closes all affected tabs, while preserving chats as unhoused or
+bulk-moving them to an existing/new same-owner workspace. Include archived/non-open chats;
+preserve active turns, effective configuration/approvals and files. Default/final workspace and
+schedule dependencies need explicit handling; current context requires a nonempty/default profile.
+This is scope intake, not permission to delete data or build. See [queued scope](planned-updates.md).
+
+**October 13 Workspace Tabs design — queued only:** BF-2026-10-13-12 adds Tabs between Chats/
+Configuration: every open workspace-nav tab, icon/title/flexible URL/opened/interaction/actions,
+hide/restore/reorder/close/move. Browser, terminal and viewer placement must share associations;
+preserve PTY/session and document authorization origins independently of display parent. Existing
+transfer dialog explicitly rejects non-browser types. Synthetic interactive context is saved in
+docs/design/2026-10-13/workspace-tabs.html and workspace-tabs-preview.html. Preview-only actions;
+no app implementation/build. See [queued scope](planned-updates.md).
+
+**October 13 agent tab/chat management — queued only:** BF-2026-10-13-11 requests internal/
+external agent inventory, filtering, metadata, close/move across chat/workspace/main/Team scopes,
+plus chat move/close/archive/unarchive. SafariSelector MCP/report patterns reviewed locally.
+Use one host service boundary, durable identities, honest timestamps, real nav moves and separate
+management/content grants. AGENTS.md and .github/agents/proteus-tab-manager.agent.md now provide
+project guidance; this does not register new tools. BF-04 covers future mandatory runtime guidance.
+No runtime implementation/build/install; SQLite remains shelved. See [queued scope](planned-updates.md).
+
+**October 13 attention badge intake — queued fix only:** BF-2026-10-13-10 records 103 versus 5
+when switching workspace Configuration/Chats and reported Needs attention navigation. Code shows
+full render counts combined chat/non-chat attention, but chat-index callbacks overwrite the badge
+with chat-only totals. Unify the global calculation; navigation must not acknowledge/narrow it.
+No live item breakdown, implementation or build; see [queued fix](planned-updates.md).
+
+**October 13 storage options — shelved future idea:** BF-2026-10-13-09 compares current JSON
+workspace/chat/tab persistence with SQLite. Recommend considering a hybrid: editable configuration/
+schedules/export stay JSON; mutable organizational metadata and tab placement may use a separate
+worker-owned app-state database. Define field authority and captured execution/approval boundaries
+before claiming atomic Move chat; a database transaction cannot atomically update run JSON too.
+Full transcript migration is a separate option. The operator shelved this outside the active
+update batch. No benchmark, migration decision, implementation or build is authorized.
+See [future ideas](planned-updates.md#future-ideas--shelved-outside-the-active-update-batch).
+
+**October 13 Persist browser tab intake — queue only:** BF-2026-10-13-08 requests a Persist tab
+toggle: prevent automatic unloading and exclude those tabs before normal retained-set/quota
+selection. Desktop currently protects six newest records plus active/agent/audio/download work
+and retires older eligible views after an hour. Remember persistence through restore/move,
+retain truthful loaded-resource totals and review manual/native/owner-host lifecycle scope.
+See [queued scope](planned-updates.md). No implementation/build/rollout authorized.
+
+**October 13 Send tab picker intake — queue only:** BF-2026-10-13-07 requests labelled Workspaces
+and Chats sections in the destination picker, each most-recent first, while retaining Application
+tabs/Team Tools choices and existing transfer rules. The screenshot/current implementation use
+a mixed flat list in tab order. Do not reorder actual tabs or confuse this presentation change
+with Move chat membership. See [queued scope](planned-updates.md). No build/runtime changes.
+
+**October 13 Move chat intake — queue only:** BF-2026-10-13-06 requests a Move button immediately
+left of Archive, styled like existing lifecycle buttons, with a workspace picker and real chat
+membership/tab relocation into the target workspace nav. Desktop/web/mobile parity is required.
+Keep effective per-chat run options/configuration; current workspace inheritance and approval
+identity mean this is not a tab-parent/ID-only change. Existing Send to workspace only opens the
+current workspace. Same-owner destinations by default; no silent execution-host transfer or turn
+interruption. See [queued scope](planned-updates.md). No implementation/build/rollout authorized.
+
+**October 13 redirect-history intake — queue only:** BF-2026-10-13-05 records Back/swipe returning
+to the same page after ADO adds `view=results`. Current direction is platform-specific: Electron
+desktops use the proposed five-second Accept/Reject redirect banner (timeout follows; Back
+cancels), while iOS/iPadOS uses history reconciliation without a banner. Native redirects and
+replaceState update their existing entry/final URL; real push/filter navigations stay traversable.
+Both retain original requested destinations as recoverable provenance, including login deep links.
+The old identical native-banner proposal is superseded, not an implementation requirement.
+Exact ADO behavior remains unverified. Scope/references/acceptance are in [future intake](planned-updates.md).
+No runtime/build/rollout is authorized.
+
+**October 13 future-update intake — queue only:** BF-2026-10-13-04 proposes required, visible
+Proteus feature awareness for chat agents, with a compact core/capability index and optional
+on-demand feature/tool loading. Review options within the existing context/details interface;
+no full redesign or runtime implementation/build/rollout is authorized. Read-only inspection
+confirms provider-injected app guidance and partial browser/document/integration tools already
+exist independently of workspace files, with provider/runtime differences. The full requested
+chat/workspace/approval/log/notification surface is not yet supplied. See [queued scope](planned-updates.md).
+
+**October 13 browser tab stability authorized:** The operator reports title/size flicker,
+flashing tab strips and changing order on both Mac desktops. 0.2.14 preserves restored titles,
+reconciles unloaded title snapshots, avoids unchanged strip reconstruction and protects a user
+reorder during awaited navigation. Mutable navigation snapshots are detached and overlapping
+scope applications remain guarded. See [current ledger](2026-10-13-tab-stability.md) for tests
+and per-Mac status; both desktops are installed/live-verified on signed `dfad6e187477`. The second Mac’s single
+waiting chat was interrupted only after explicit operator approval, with history retained. 580 tests,
+checks and signed tab/Team/package acceptance pass. Current data/order/retry receipts survive.
+
+**October 13 logs/browser correction authorized:** The operator approved building the fresh list
+with a separate rotating log database and added broken browsing/link clicks. Implemented in
+0.2.13: worker-owned SQLite logs (up to 2,000 entries), expandable details/cursor pages and
+protection of page-initiated navigation from stale history polling. Primary desktop signed
+`61555b94efec` is installed/live-verified, retaining all 17 run files and 5,933 protected retry
+receipts with private consistent backups. 579 Node tests/checks, 81 isolated PHP tests, 108 native
+unit tests and both native log UI rehearsals pass; final signed log/link/package acceptance passes.
+Second desktop rollout completed with 0.2.14; production web and physical-device rollout remain pending. See [current ledger](2026-10-13-logs-browser.md).
+
+**Historical October 13 fresh intake — superseded by approval above:** The operator started a new bug fix / feature list
+and instructed **do not build until told to do so**. BF-2026-10-13-01 queues compact log headers,
+expandable full diagnostic details and storage/API/UI pagination. Read-only inspection confirms
+local activity is currently bounded JSON with 1,000-character messages; a dedicated worker-owned
+SQLite activity/log store is proposed, not implemented or approved. See [planned updates](planned-updates.md).
+Historical release authorizations below do not authorize implementation/build/rollout of this batch.
+
+**Latest popup correction:** Local desktop `68095bceb17e` includes the Internet Search input-fill fix and prior Team/startup corrections. Signed-package and three-size popup UI checks pass; current data and retry receipts are preserved. HC newest exact transfer dispatched for staging; its work is idle, but destination resume confirmation remains pending after cross-chat evidence lookup failed. See [release ledger](2026-10-12-unified-browser.md).
+
+**October 12 unified browser release — installed acceptance in progress:** The approved design and queued fixes are implemented. Corrected local desktop `88eb46f0db39` is installed and restored-chat UI verified, including the duplicate restored-browser-view startup correction and Team Tools browser preservation. Web release `20261013T063152Z` is live with recovery and parity checks. Physical iPad/iPhone 2610.12.4 are installed and launched; computer-native launch and live owner-history controls are verified. The user resumed HC installation after investigating Team Tools browser flashing on its current build; the old-build observation is saved and final `88eb46f0db39` is fully staged/hash/signature verified there. HC replacement waits on a live Copilot permission turn and destination confirmation after cross-chat authorization lookup failed. Preserve all data and retry protections. The corrected signed desktop/source pair is retained privately; do not install superseded `d2eacd78cf87`. See the [release ledger](2026-10-12-unified-browser.md) for tests and per-target limits. This supersedes historical design holds below.
+
+**Historical October 12 direction — superseded by approval above:** Further fixes, builds and deployments are paused
+pending the [unified browser synchronization proposal](browser-sync-design.md). New cross-device
+history/unload, physical gesture and account/profile failures are recorded there. The subsequent
+website-account-connected reply resolves an earlier sign-in question only; it neither lifts the
+hold nor verifies history. Historical authorizations below do not override this direction.
+
+**Historical chat interface intake — now implemented; rollout below:** Add Copy chat link to desktop/web tab
+context menus and native long-press menus. Introduce a separate Run files & folders box below
+authorization, ordered run record, provider session folder, starting folder, additional folders;
+preserve actions and platform parity. See [planned updates](planned-updates.md). Included in the approved unified browser release.
+
+**Historical agent browser placement intake — now implemented:** Workspace chats should open agent-created
+browser tabs in their workspace automatically, with discoverable explicit application/workspace/
+chat destination support. Inspection confirms the tool has no destination argument and desktop
+agent creation defaults to the run ID without workspace resolution. Workspace placement and explicit application placement now pass live Chromium rehearsal. Details and acceptance are in planned updates.
+
+**Historical workspace evidence — corrected in the unified browser release:** Read-only inspection of the operator-specified private
+run accounts for four unexpected top-level research tabs; browser results use a run parent ID
+despite saved workspace association. Accessibility snapshots read live pages. Separate confirmed
+code defect: desktop peer index drops workspaceId required by the workspace chat-list filter,
+explaining empty remote lists while workspace tabs synchronize. Preserve these as two linked
+issues in planned updates; the approval above authorizes their implementation and rollout.
+
+**October 12 assembly/UI correction — desktops installed:** The user authorized remote-state optimization,
+BF-2026-10-12-01–04 and updates on both desktops. The collection-only queue hold is lifted.
+Native tab icons plus browser history/gesture follow-up are included. Both desktops are live-verified
+on signed `dcb5e9040a88`, with data/retry continuity preserved. HC mean remote-state assembly
+improved from 121 to 16 ms; no >1-second stalls appeared in its 140-second sample. Native
+2610.12.3 passed 92 unit cases plus focused UI acceptance and is installed on the primary
+computer with launch, restored tabs and view navigation verified after operator confirmation.
+Foreground acceptance now verifies HC chat connectivity, website navigation, Back/Forward and
+unload/reload history. Both physical devices are installed/launch/preservation-verified on .3.
+Shared history awaits website-account sign-in; physical gesture acceptance remains with the operator.
+Production web is verified on `0.2.12-20261012T210124Z`. The restricted SSH update route is
+installed and live read-only/retry/refusal checks pass; use [web updates](web-updates.md). Source changes, tests and rollout status
+are tracked in [current ledger](2026-10-12-state-assembly.md). The full periodic
+spinning-cursor pause is not yet causally resolved; retain that limitation.
+
+**Scheduler correction installed on both desktops:** Signed 0.2.12 `ec8b213d382e+dirty.b1dd22a19b42` is installed/live-verified on both computers after Codex reconnect restored HC delivery. 502 tests, static checks and signed-package acceptance pass; data/retry continuity and online relay/peers are verified. Scheduler worker failures were zero. Timing instrumentation exposed remaining HC remote-state assembly stalls (~121 ms average slow phase; event-loop delay up to 381 ms during active work), so responsiveness is not declared fully resolved. See [scheduler ledger](2026-10-12-scheduler-performance.md). Separate feature intake remains held.
+
+**Performance follow-up under investigation:** The operator reports periodic spinning-cursor hangs and choppy scrolling on the second desktop despite the journal correction. Read-only tracing found main-process load and subsecond delays, without capturing the full hang. See the [follow-up](2026-10-12-remote-performance.md#follow-up-periodic-desktop-stall-remains-under-investigation); earlier acceptance does not mean all stalls are resolved.
+
+**Desktop update procedure:** Follow [desktop-updates.md](desktop-updates.md) for authorized updates through an existing destination Codex chat: exact signed artifact/source, private transfer, fresh local preflight, durable backups and verified completion.
+
+**October 12 performance correction installed and verified:** Both desktop computers run signed 0.2.12 `ec8b213d382e+dirty.ef08cda12e87`. Worker-owned incremental SQLite receipts retain retry protections and original JSON; normalized tab sync suppresses redundant mutations. History persistence and process polling no longer block the main loop. All 482 Node tests, static checks, desktop/web integration and signed-package migration/restart acceptance pass. Both restored interfaces/relays and saved data passed checks; each idle sample recorded zero journal writes. See [performance ledger](2026-10-12-remote-performance.md) for evidence and recovery boundaries. The separate activity-card design hold is unchanged.
+
+**October 12 missing-folder chat correction:** Missing supplemental folders no longer abort context capture/chat creation; omissions appear as system warnings and configured paths remain intact. Remote starting-folder validation also tolerates missing siblings. 442 Node tests/check, isolated desktop missing-folder rehearsal and signed-package smoke pass. Both computers installed/connected on **bbf0630ac8a7**, with app data and current workspace mappings preserved. See [missing-folder ledger](2026-10-12-missing-folders.md). Web/mobile benefit through the owner host. Starting folder and explicit main-agent checks remain strict.
+
+**October 12 native browser correction:** Build **2610.12.2** is installed on the primary computer. Empty shared-tab placeholders no longer erase local navigation. Both simulators pass 80 native tests and the browser UI regression; 440 Node tests and static checks pass. Installed launch/version and chat browsing verified after macOS approval. Live-host sync acceptance remains limited by a host-confirmation timeout; repeated empty-response sync is covered by simulator UI tests. Desktop/web rollout below remains current. See the [browser correction ledger](2026-10-12-native-browser-sync.md).
+
+**October 12 interface polish — latest desktop/web rollout:** Both computers now run signed
+0.2.12 `ec8b213d382e+dirty.f03d25e4cdc1`, with live folder/menu/name/count checks and preserved
+configuration, chat data, tabs and pairings. Production web is updated to
+`0.2.12-20261012T071849Z`: recovery/restore verified, 14 endpoint checks passed and served assets
+match the tested release. Tests: 440 Node, 80 Laravel, 78 native tests on each simulator plus
+focused desktop/web/native UI tests. Proteus iPad on the primary computer is installed and
+responsive-launch verified on 0.2.12 / 2610.12.1 after restarting a suspended first launch.
+Physical devices retain 2610.11.1. Full status is tracked in the
+[interface polish ledger](2026-10-12-interface-polish.md). Earlier status notes below are historical.
+
+**October 12 rollout follow-up:** Build Mac now has the corrected 0.2.12 build
+`ec8b213d382e+dirty.b0a14294e2c1`: clear expandable folder groups, category buttons above the filter,
+scan-count separator and shared 2px navigation underline. Signed package and live UI verified;
+65,480 app-data files preserved through replacement. Physical iPad and iPhone **0.2.12 /
+2610.11.1** are installed/launch-verified; seven protected files and saved destinations retained
+on each device. iPhone connectivity recovered on retry without resetting pairing.
+HC upgraded through the existing Codex chat to the same verified build after explicit private-GitHub
+transfer approval: both workspaces, 53 tabs, five pairings and approval rules retained; relay online. See the [release ledger](2026-10-11-workspaces-release.md) for current status.
+
+**0.2.12 installed and verified on this Mac (October 12):** The approved Workspaces/backlog
+batch is implemented. Proteus iPad was updated first, then desktop Proteus; both are launch-verified.
+Node 435, Laravel 80 and native 76 tests per simulator passed, along with UI and signed-package
+checks. This initial acceptance preceded the physical-device rollout recorded above; production
+web remains unchanged. See the
+[current release ledger](2026-10-11-workspaces-release.md) for evidence and limits. Historical
+queued/held statements below describe earlier planning and are superseded for this batch.
+
+**October 11 full batch authorized:** The operator approved implementation and tests for the entire
+BF-2026-10-10-01–17 backlog, with Workspaces superseding Projects. Preserve existing styling/features.
+Add fully configured local workspace Copy and consistent Starting folder labels. Test this Mac,
+web and mobile simulators; update Proteus iPad on this Mac first. Physical iPad/iPhone updates
+wait for the next instruction. [Current release ledger](2026-10-11-workspaces-release.md) supersedes
+historical design/build holds below; distinguish implementation, verification and installation.
+
 # Agent handoff
+
+**October 12 intake item 04 — queued only:** BF-2026-10-12-04 records Proteus alert-banner
+**View logs** doing nothing. Expected: open the appropriate Logs page and reveal the related
+entry when available; fall back to the page if no exact entry exists. Alert type/client coverage
+and cause are unverified. The fresh-release collection-only/build hold remains active.
+
+**October 12 intake item 03 — queued only:** BF-2026-10-12-03 requests **Open in new Proteus
+tab** insert the browser tab immediately to the right of its initiating tab, in that tab's
+navigation container, instead of at the end. Preserve other tabs' order and existing routing,
+profile/session and selection behavior. New-release collection-only/build hold remains active.
+
+**October 12 intake item 02 — queued only:** Remote desktop chats reportedly omit the local
+Working spinner/message despite recognizing active work. BF-2026-10-12-02 requests matching
+status and queue/steer guidance driven by owner-host turn state, with existing action availability.
+Screenshot confirms the local reference; remote reproduction/cause remain unverified. The new
+release's collection-only/build hold continues; no application changes.
+
+**October 12 fresh release intake — hold:** The operator started a new bug/feature list and
+explicitly withheld builds until further instruction. BF-2026-10-12-01 queues shared desktop/
+iPad/iPhone activity presentation: desktop's contained tool/approval entries, linked original
+requests, tool-call references and per-tool completion timestamps/durations; native's contiguous
+tools/system/approvals grouping between user/model messages, with distinct darker system boxes.
+Requested proposed desktop/iPad comparison uses synthetic events. Collection/design only;
+the operator clarified message-detail/relationship parity within each platform's existing design,
+especially iPhone's different native layout. No full visual redesign or identical styling requested.
+No runtime implementation, build, install or deployment. Earlier release approvals do not
+authorize this fresh batch. See [new intake](planned-updates.md#october-12-new-release-intake--collection-only).
+
+**October 11 revised Workspaces design — current direction:** The operator rejected the first
+preview. Workspaces is a feature page with seven recent sidebar entries and no feature tab.
+Opening a workspace creates its named main tab; its pinned Workspace child contains Chats /
+Configuration button pages, with expandable configuration sections. Master Chats opens chat tabs
+in main navigation; workspace Chats opens them inside the workspace. Same chat identity in both;
+right-click Send to workspace deduplicates the workspace representation. Each workspace belongs
+to one machine, synced for access elsewhere; another machine gets its own configuration copy.
+Preserve existing configuration labels/modes/controls and BF-12 alphabetical folder sections/master
+filter. Add per-root Refresh. All normal tools remain available; remove feature enable switches.
+See [current design](workspaces-design.md), BF-17, and the current release ledger for implementation/verification.
+
+**October 11 native iPad client on Mac:** The unchanged .5 iPad release is installed as
+**Proteus iPad**, alongside the existing desktop app. The operator authorized its first launch
+in macOS Security settings and confirmed it running; both processes were independently verified.
+The Mac-compatible profile expires October 18 at 16:38 MDT and uses the existing Omi certificate.
+No source implementation or certificate change. See `apple-build.md`; relay/account acceptance
+is separate, and the feature hold below remains in effect.
+
+**October 11 iPad recovery completed:** The same validated 0.2.11 / 2610.10.5 release is now
+installed in place and launch/process-verified on iPad. Seven protected files were byte-identical
+before launch and destinations retained afterward. The iPad profile expires October 18 at
+16:24 MDT, using the existing Omi certificate. No certificate or Omi/iPhone change. Private
+backups/receipts remain outside Git; see `apple-build.md`. The feature batch below remains held.
+
+**October 11 iPhone signing recovery:** Re-signed the validated native 0.2.11 / 2610.10.5 artifact
+and installed it in place on iPhone. Launch/process checks passed; seven protected files were
+unchanged before launch and destinations retained afterward. Renewed profile expires October 18
+at 00:47 MDT, using the same existing certificate as the recent Omi deployment. Omi and iPad
+were not changed. Account checks now require Mac unlock first; after unlock, inspect the existing
+Xcode account/device before treating CLI “No Accounts” as missing setup. See `apple-build.md`.
+This recovery does not authorize the held feature batch below.
+
+**October 10 new planning batch — hold:** The operator started a new issue/feature plan and
+explicitly withheld implementation/build authorization. BF-2026-10-10-01–17 cover Ghostery
+Browser Preferences opening Resources, Update Ghostery filters appearing to do nothing,
+Chrome Web Store installation without manual folder handling, new tabs from menus/links retaining
+the source navigation area (same chat, top application navigation, Team as applicable), and choppy
+browser scrolling, plus a screenshot-confirmed gap beneath the website chat composer instead of
+bottom docking, and an Internet Search dialog 30% wider / 40% taller with added space assigned
+to its message box. BF-08 adds recurring main-process exceptions when moving a browser tab to an
+Internet Search chat: both `onBeforeRequest` (line 82) and `onHeadersReceived` (line 78) dereference
+`tab.view?.webContents.id`. Screenshot/source match is confirmed; lifecycle trigger remains unverified.
+The blocking preload wheel listener is a performance lead, not a confirmed scrolling cause.
+BF-09 limits link-hover status popups to one line, allowing the full browser width within edge
+margins and truncating long addresses with an ellipsis.
+BF-10 confirms Claude input accounting drops cache-read/cache-creation fields while labeling
+uncached input as total Input tokens. The affected record has nonzero cached metadata; differing
+summary scopes require reconciliation before historical backfill. No usage values saved here.
+BF-11 records desktop history rapidly shifting up/down while typing; inspect composer sizing and
+transcript resize/scroll-following interactions. Cause remains unconfirmed; coordinate with BF-06.
+BF-12's operator-selected design is **Folder sections**, with folders/items alphabetical and
+the master filter searching all Instructions/Skills/Agents/MCPs sections. The operator explicitly
+reaffirmed do not build yet. [The preview](design/2026-10-10/artifact-folders.html) uses synthetic
+sources; Folder sidebar remains unselected review history. Browser rehearsal covers filtering,
+collapse/type/scope/narrow layouts. Production implementation remains held; no source files
+or real loading rules reorganized. Design approval is not implementation/build authorization.
+BF-13 adds address-bar filtering of recent history as typed, multiword-query **Search with…**
+engine options and Enter using the configured default engine. Search chooser/default persistence
+remain queued; preserve the current profile and source container. No application changes authorized.
+BF-14 revisits Projects with a [design proposal](projects-design.md) and synthetic desktop/phone
+[interactive preview](design/2026-10-10/projects.html). Projects own chats/tabs and inherited setup;
+existing Workspaces remain reusable presets. Browser context stays in the project, and cross-device
+sync distinguishes portable descriptors/configuration from host-local sessions/permissions.
+Design review only; proposal acceptance and all production work remain pending.
+The operator has now paused Projects here to continue it separately. BF-15 independently queues
+whole-folder trust for one chat. Current pending-request folder trust saves workspace-wide grants;
+chat-only auto-approval adds no folder access, and chat details lacks a folder grant editor.
+Plan recursive read/read-write grants with continuation/restart persistence and revocation, without
+affecting other chats/workspaces. Historical removal is unconfirmed. No permission changes authorized.
+BF-16 (October 11) confirms a global discovery counter exhausted by an earlier root immediately
+rejects later roots with a misleading 60,000-folder warning. Installed scanner matches source;
+isolated scanning of the affected later root succeeds. Dependency/cache/generated copies inflate
+earlier traversal. Plan per-root fairness, accurate partial status, configurable exclusions and
+background/cached scans; separate mode saves from rescans. Starting-folder choices come from
+workspace/chat roots, not the source library or recursive discovery. All runtime changes remain held.
+October 11 follow-up: operator accepted BF-16's configurable exclusions and discovery recommendations
+but immediately said **wait to build**. Work remains queued; no source implementation/build started.
+Drop the proposed Use in this chat feature. Add Set as starting folder to BF-12 source-folder headers,
+with an explicit chat/workspace target and unchanged trust/loading modes. Projects remains paused.
+Intake, source leads,
+feasibility references and acceptance criteria are in [planned updates](planned-updates.md).
+Documentation and the explicitly requested standalone design preview only; no production runtime
+changes, builds, installs or deployments. Historical release
+approvals below do not authorize this batch. Extension-store feasibility is distinct from
+verified compatibility of each extension.
+
+**October 10 long-chat follow-up:** Adaptive meaningful-row pagination, ahead-of-scroll cache loading, lazy activity bodies, native composer-inset bottom restoration, one green directional expander, taller desktop/web New chat and stacked dark runtime/token values are implemented. Build Mac, web, iPhone and iPad have verified installations; HC has the latest signed artifact and retains its pending-run hold. See [current evidence](2026-10-10-mobile-history.md). Native .5 is installed on both devices with earlier history preparation; desktop/web paging remains unchanged after favorable operator feedback. Browser errors use a verified transient notification/Logs implementation. The repeated Build Mac command-limit report remains unexplained by the inspected 771-entry receipt log. The 40% size reduction was withdrawn; original sizes remain.
 
 > **Acceptance reopened — October 6 evening:** The operator rejected the delivered UI.
 > Read [the complete acceptance audit](2026-10-07-acceptance-audit.md) before relying on
 > the historical completion claims below. It reviews all 22 + 28 build items and current reports;
 > working-tree corrections are not installed release acceptance.
+
+## October 9 follow-up issue queue
+
+**0.2.11 production integration:** All BF-04–39 changes are included in the current source and fresh packages, including approved composer/details designs and automatic preview bundling. Historical paragraphs saying queued-only are intake evidence, superseded by [the full release ledger](2026-10-10-full-chat-release.md). Verify each actual installation separately.
+
+**Corrected release scope — October 10:** The operator rejected the partial installation and
+explicitly required **all changes queued in this whole chat**, including BF-25–37 and BF-39.
+The earlier assumption that only BF-04–24 plus typing belonged in the rollout was wrong. The
+approved prototypes are now integrated into production desktop/remote/web and native clients;
+automatic preview bundling is also included. Track implementation, verification and deployment
+separately in [the full-chat release ledger](2026-10-10-full-chat-release.md). Do not treat the
+previous 0.2.10 installation receipt as completion of this release.
+
+**Current rollout authorization — October 10:** The operator lifted the build hold and explicitly
+approved building/installing on Work Mac, Build Mac, iPad and iPhone if available. The referenced
+Codex build thread was read: it confirms 0.2.10 signed/staged and not deployed. Native typing
+postdates that build. Current preparation covers BF-04–39, including the approved production designs and automatic previews. Preserve
+signing, app data and pairing; install Build Mac last with an external handoff because this
+chat's runner is hosted by the app being replaced. Record installed evidence separately from
+build receipts. The previous hold and old deployment-separate notes below are historical.
+
+October 10 full release evidence: [current ledger](2026-10-10-full-chat-release.md). Fresh 0.2.11
+Mac and native 2610.10.2 packages are signed with the original certificates. Node 404, native 69,
+Laravel 80 / 717 assertions and isolated desktop/web/phone/tablet acceptance checks passed.
+The historical 0.2.10 physical installations lack this full scope. Build Mac, iPhone and iPad
+now have verified 0.2.11 installations. Web release `20261010T160437Z` is deployed with 9,214
+file hashes and 14 endpoint checks passed. HC has verified its signed installer but remains on
+0.2.9 pending the operator’s choice about one awaiting-input chat and three queued runs.
+Native development signing still expires October 10 at 17:29 MDT.
+
+BF-2026-10-09-39 queues automatic sharing of chat-linked localhost previews through the encrypted
+relay, including previews opened by a locally originated Mac chat. Proteus owns asset bundling,
+versioning and updates; agents should not need custom packaging. See the acceptance contract in
+`planned-updates.md`. Production 0.2.11 automatically bundles these previews; the older shared
+HTML copies remain design-review history. Static snapshot delivery does not forward host APIs or HMR.
+
+BF-2026-10-09-38 is separately authorized for implementation: native typing lag. `NativeReplyDraft`
+and its observing composer child isolate text edits from `ChatView`/loaded-event scans. Quiet
+text-draft writes preserve immediate in-memory save; other draft actions still notify. Automatic
+cache encoding/encryption now runs on a serial utility queue; lifecycle flush/delete retain order.
+Native long-chat typing and persistence verification passed; no physical install claimed.
+The final iPhone simulator run passed 33 native unit tests, keyboard Send and both long-history
+typing cases. Final iPad testing passed with those same compiled binaries using
+`test-without-building`; no new build was started under the hold. 402 Node tests and static checks
+passed. Full verification/limits: `2026-10-09-native-typing.md`.
+
+Remote design review: `docs/design/2026-10-09/shared-previews.md` links the self-contained
+desktop/web and adaptive mobile HTML documents. The existing encrypted document transport can
+carry them without a localhost HTTP proxy; CSS and attachment-picker scripts are bundled into
+`desktop-web-composer.shared.html`. Rebuild after design changes with the sibling
+`build-shared-preview.mjs`. HTML client support is source-confirmed; installed/physical remote
+delivery remains unverified. No relay or application behavior changed.
+
+BF-2026-10-09-25 records the operator's iPad **Choose photos** attachment action doing nothing.
+Queued for investigation only; no fix/build/deployment. Both native attachment menus embed
+`PhotosPicker` inside `Menu`, a presentation lead rather than a confirmed cause. See
+`planned-updates.md` for reproduction gaps and acceptance criteria. This follow-up is separate
+from the authorized BF-04–24 combined batch.
+
+BF-2026-10-09-26 queues moving iPhone/iPad chat-level **Working** text and spinner from the top
+to the bottom, after current content and above the composer. Source confirms the status row is
+currently first in the conversation stack. Preserve reading position and correct run-state changes;
+retain tool-specific progress. No implementation/build/deployment for this follow-up.
+
+BF-2026-10-09-27 queues putting the iPhone/iPad attach icon on the model-selection row and
+closer to the composer corner to free space. Source confirms separate rows today. Preserve
+touch targets, narrow layouts and composer actions; coordinate with BF-25 photo-picker checks.
+No implementation/build/deployment for this follow-up.
+
+BF-2026-10-09-28 records the selected Send design on every platform: up-arrow icon inside a
+circular button, retaining the current green color. Preserve accessibility, disabled states and
+send behavior; coordinate native composer layout with BF-27. Queued only, no build/deployment.
+
+The BF-27 adaptive composer design preview is at `docs/design/2026-10-09/adaptive-composer.html`.
+The operator approved iPhone combined options, wide iPad separate Model/Level/Speed controls and narrow
+iPad fallback, all in one bottom row. Idle/working toggles and options are interactive; browser
+layout rehearsal passes. The latest direction keeps Attach as the old plain + with no circular
+background or border, makes Steer, Send/Queue and Stop circular, and preserves existing
+composer/text-box colors. Native implementation remains queued.
+
+BF-2026-10-09-29 extends the approved adaptive layout to desktop/web: keep + at the left,
+labels over Model/Level/Speed and supported Context, smaller circular actions and local desktop's
+text-box colors across all three views. `docs/design/2026-10-09/desktop-web-composer.html` is a full interactive HTML
+prototype using production styles and the existing attachment picker, with rendered markup
+available for review. Browser rehearsal passes; application integration/build/deployment queued.
+
+BF-30–31 extend that review model with matching local/remote/web Run details, expanded selector
+hover areas, centered + hover without moving the glyph, collapsed Explanation paragraphs,
+larger runtime/smaller input-output tokens directly beneath it, visible/copyable paths and disabled
+remote/web local-file Open. The editor grows upward and scrolls at a measured 60% chat-area cap.
+Rehearsal checks pass; production integration remains queued.
+
+BF-32–36 queue the native follow-ups: headings against the nav border, missing Live Browser
+divider, unavailable/unreliable reorder, duplicate desktop-origin tabs on refresh, and repeated
+native website sign-ins. Source already has reorder and persistent profile stores; affected-device
+behavior remains unverified. Same-device/profile session sharing is distinct from cookie sync
+across devices. See `planned-updates.md`; no native application edits or device changes here.
+
+BF-2026-10-09-37 queues using the web Home, Workspaces and Internet Searches SVGs on desktop.
+The review page includes the exact current web artwork; use the Blade SVGs, not Unicode section
+fallbacks. Application integration/build/deployment remains queued.
+
+## October 9 combined update — implementation/build authorized
+
+Current implementation, verification and build status: [October 9 combined ledger](2026-10-09-combined-update.md).
+The individual intake notes below are historical and are superseded by that ledger. Deployment remains separate.
+
+Browser design side-chat handoff adds BF-2026-10-09-21–24: authenticated profile definitions,
+persistent desktop/native stores, Ghostery, Chrome-extension adapters/GPL-3, Bitwarden extension primary
+with preserved CLI fallback, and native AutoFill with custom native extensions/filtering deferred.
+The operator directly confirmed **Begin implementation and builds**, lifting the queue-only hold for
+BF-04–24. Deployment remains separate. The staged 0.2.10 batch includes isolated per-session execution;
+intake notes below are historical diagnostics, not completion claims. Preserve existing dirty changes
+and installed 0.2.9 data/signing. See `planned-updates.md` for scope and validation gates.
+
+BF-2026-10-09-20 queues automatic older-message loading on desktop local/remote, web, iPhone and iPad:
+fill the viewport plus headroom, prefetch near the top and preserve reading position. Existing partial
+auto-load paths need parity; remove normal load-more buttons while retaining error Retry. No build.
+
+BF-2026-10-09-19 queues website sign-ins lost on full restart on Work Mac. The operator explicitly
+ruled out disk space for this incident. A persistent Electron partition already exists and no explicit
+wipe was found; investigate session-cookie policy, storage-path/flush behavior and actual restart mode.
+Cause unconfirmed; no live session inspection.
+
+BF-2026-10-09-18 records the corrected screenshot: Instructions changed / Refresh context refers to
+stale source-catalog hashes, not unsaved schedule edits. Existing Refresh sources is inside the
+collapsed Instructions, skills, agents & MCPs picker; queue a direct recovery action preserving drafts.
+Keep BF-2026-10-09-17 as the earlier separate report. No source refresh or schedule run performed.
+
+BF-2026-10-09-17 queues Run now rejecting a reportedly saved schedule as unsaved. The message is
+the frontend dirty-state guard; save/refresh/global-draft races remain leads, not a confirmed cause.
+Also reconcile draft JSON versus status badge. No actual schedule was changed or run.
+
+BF-2026-10-09-16 queues directional Pause/Resume in Mac Connections: hide a paused host's remote
+content on this Mac and suspend outgoing traffic, while retaining pairing/drafts and the reverse
+connection. Existing disconnect suppresses recovery in memory but still exposes cached rows; no live
+connection has been changed.
+
+BF-2026-10-09-04 queues the browsing-history disk-full uncaught exception for the next combined
+bug/feature update. The operator explicitly deferred building. Investigation confirmed `ENOSPC`
+and an unguarded history-save callback; exploratory application edits were removed. Installed
+0.2.9 remains unchanged. BF-2026-10-09-05 adds direct document access when the device toggle is on
+and one-time desktop approval when off; BF-2026-10-09-06 is the approved 15-second top-center
+notification design. BF-2026-10-09-07 adds Needs attention Chats/Notifications tabs, rich actions and
+seven mixed recent unresolved sidebar items. Navigation opens lists/details, never replays banners.
+Document Details shows the full disk path. BF-2026-10-09-08 reproduces clipboard image rejection
+before provider selection and a bottom toast obscured by the modal top layer. BF-2026-10-09-09
+queues duplicated Copilot model choices: duplicate IDs pass through current adapter/rendering, while
+the affected-host raw catalog/native popup cause remains unconfirmed. BF-2026-10-09-10 queues
+Internet Search defaults repeatedly loading/disappearing: source and a synthetic deferred-response
+harness support a background-rerender/detached-container race, pending affected-host confirmation.
+BF-2026-10-09-11 adds parallel independent chats across all providers/devices without an arbitrary Proteus cap and visible queue reasons. Current
+host-wide AI serialization (including input waits) is source/test-confirmed; parallel behavior is not
+implemented. Preserve one turn per session and the single runner lock. These remain queued;
+BF-2026-10-09-12 queues the pinned-Chat gutter, removal of the top-nav Find icon, working browser
+find dismissal and matching chat/top-strip + icons. The find X shares a selector overwritten by
+document-wide tab-close binding; CSS gap and font rules also identified. No runtime changes.
+BF-2026-10-09-13 queues website notification grants and alerts using the shared notification system;
+the operator approved Browser Preferences for site permissions and Notifications for shared delivery/history.
+Electron permission hooks are available; actual page/worker alert bridging still needs validation.
+BF-2026-10-09-14 queues revealing newly opened tabs in their owning strip without resetting to the
+start, preserving pinned Chat, manual scroll during refresh and page focus/drafts.
+Design and diagnostic examples use synthetic data. See
+`planned-updates.md` for diagnostics and acceptance criteria.
+
+BF-2026-10-09-15 queues a persistent agent browser pointer with smooth position transitions. Current
+code clears it 1.2 seconds after each operation and recreates its overlay per point; retain visibility
+across tool-call gaps while tying cleanup to actual agent use. No implementation/build.
+
+## October 9 follow-ups — 0.2.9 rollout authorized
+
+The operator likes the native green preview and added content-edge swipes on iPhone/iPad,
+desktop two-finger tab close/reopen, and web setup expansion retention. Native swipe and web
+setup checks pass; desktop gestures are verified with trusted wheel input. HC's Claude upgrade completed through
+its supported updater after execution became idle, without restarting Proteus. Follow-up model
+picker discrepancy was stale metadata: the operator confirmed Providers refresh fixes it and declined extra new-chat refresh logic. Both Macs and physical iPhone/iPad updates are authorized, preserving data and signing. Source version is 0.2.9, native build 2610.9.1. Continue from the
+[batch ledger](2026-10-08-live-browser-release.md). Build Mac, iPad and iPhone have verified 0.2.9 installations. HC also has a verified 0.2.9 installation from approved artifact commit `a4d6c0ae4417134cb63e918d17cd0f75a44724dc`. Original signer and saved state are preserved; window, relay and all three providers pass readiness checks. Both Macs, iPad and iPhone are now updated.
+
+## October 8 live browser and native design — implementation authorized
+
+The operator authorized implementation/build of BF-2026-10-08-07–16, including the prior queued
+fixes, Live Browser viewing, native green styling, iPad navigation, categorized recents/running
+indicators and Claude catalog investigation. Preview native styling in simulators before full
+integration/device updates. Read [the current ledger](2026-10-08-live-browser-release.md).
+Prior 0.2.8 working-tree edits are preserved; installed acceptance remains separate. Source work,
+395 Node tests, desktop/web synthetic checks and native previews now exist; consult the ledger
+for exact coverage and review gates. Nothing from this batch is installed.
+
+## October 8 account health and chat release
+
+The earlier release request authorized implementation, build and deployment and superseded its
+preceding queue-only hold; the newer implementation batch above is now current. Read [the current release ledger](2026-10-08-account-chat-release.md)
+for implemented, verified and installed boundaries. Source is 0.2.8; native build is 2610.8.1.
+Queue editing, focused Enter-answer dismissal, complete approval options, connection notices and
+browser refresh corrections are implemented. Accounts & Integrations now owns MCP consumer
+health and context metadata; Providers owns model sign-in, Mac Connections owns device transport,
+and Proteus Account & Security owns website identity. Website profiles are read-only, with checks
+and supported automatic recovery delegated to the owning Mac.
+
+The account design is only partially implemented: isolated multi-identity credential selection,
+independent resource/identity probes, expiry-driven renewal and grouped notifications still need
+adapter support. No current adapter advertises isolated switching. Agents can list their chat's
+selected consumers and explicit resource metadata and request verification. Do not claim browser
+SSO, CLI login and MCP credentials are interchangeable. Native simulator validation is now working;
+Build Mac and website are deployed at 0.2.8. The signed native artifact and three focused
+simulator flows pass; physical iPhone/iPad 0.2.8 (2610.8.1) installation and launch are verified,
+with data/preferences preserved. Work Mac is also installed and running 0.2.8, with original signing,
+app-data continuity and all three model-provider readiness checks verified. HC's initial stale
+loading/blank display cleared after one idle-guarded restart of the unchanged signed app; the
+normal window and original chat are restored. The initial display cause remains undiagnosed.
+Actual Jira flicker remains a live check.
 
 ## October 7 desktop tab-layout correction
 
@@ -746,3 +2307,5 @@ with provider-specific company-system access and allowance-aware routing. Read
 `multi-provider-workflows.md`. No orchestration, account policy, cross-host delegation pairing or
 connector grant has been enabled. The current engine still serializes AI runs; changing that safely
 requires explicit parent/child capacity, adapter isolation, data-transfer policy and recovery work.
+
+October 18 browser-agent follow-up: see [browser access and spacing acceptance](2026-10-18-browser-agent-access.md). Build Mac and Work Mac 0.2.22 and web are accepted. HC retained 248 chats, 88 saved views and 367 protected receipts, with two full recovery generations. The separate 0.2.23 existing-Codex-chat catalog correction passes the final guard and full 740-test suite; desktop narrow UI verification and build/signing await Mac unlock. Keep the installed 0.2.22 builds until that correction is verified.

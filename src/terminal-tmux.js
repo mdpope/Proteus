@@ -1,15 +1,21 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawnSync, execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+
+const asyncRun=(binary,args,options)=>new Promise(resolve=>{
+  execFile(binary,args,options,(error,stdout,stderr)=>resolve({status:error?typeof error.code==='number'?error.code:1:0,stdout,stderr,...(error&&typeof error.code!=='number'?{error}:{})}));
+});
 
 const SESSION = /^[a-zA-Z0-9_-]{1,80}$/;
 
 /** A dedicated tmux server; it never opens, lists, or kills sessions on the user's default socket. */
 export class ProteusTmux {
-  constructor(home, { binary = process.platform === 'darwin' ? '/opt/homebrew/bin/tmux' : 'tmux', run = spawnSync } = {}) {
+  constructor(home, { binary = process.platform === 'darwin' ? '/opt/homebrew/bin/tmux' : 'tmux', run = spawnSync, runAsync = asyncRun } = {}) {
     this.binary = binary;
     this.run = run;
+    this.runAsync = runAsync;
+    this.statusPending = null;
     this.root = path.join(home, 'terminal-tmux');
     fs.mkdirSync(this.root, { recursive: true, mode: 0o700 });
     fs.chmodSync(this.root, 0o700);
@@ -48,6 +54,40 @@ export class ProteusTmux {
       if (known.has(sessionId) && Number.isSafeInteger(pid) && pid > 0 && !managedPids.some(item => item.pid === pid)) managedPids.push({ pid, sessionId, role: 'tmux pane' });
     }
     return { ...state, managedPids };
+  }
+  async commandAsync(args, { allowMissing = false } = {}) {
+    const env = { ...process.env }; delete env.TMUX; delete env.TMUX_PANE;
+    const result = await this.runAsync(this.binary, ['-S', this.socket, '-f', '/dev/null', ...args], { encoding: 'utf8', timeout: 4000, maxBuffer: 4 * 1024 * 1024, env });
+    if (result.error || (result.status !== 0 && !allowMissing)) throw new Error(`Proteus tmux ${args[0]} failed: ${result.error?.message || String(result.stderr || '').trim() || 'unavailable'}`);
+    return result;
+  }
+  statusAsync() {
+    if(this.statusPending)return this.statusPending;
+    this.statusPending=this.inspectAsync().finally(()=>{this.statusPending=null;});
+    return this.statusPending;
+  }
+  async inspectAsync() {
+    const available=await this.runAsync(this.binary,['-V'],{encoding:'utf8',timeout:2000});
+    if(available.error||available.status!==0)return {available:false,managedSessions:[],managedPids:[]};
+    const result=await this.commandAsync(['list-sessions','-F','#{session_name}\t#{session_attached}\t#{session_created}\t#{@proteus_session_id}\t#{session_id}'],{allowMissing:true});
+    const managedSessions=result.status===0?String(result.stdout).trim().split('\n').filter(Boolean).map(line=>{
+      const [id,attached,created,tag,internalId]=line.split('\t');
+      return {id,name:id,tag,internalId,attached:Number(attached)>0,createdAt:Number(created)?new Date(Number(created)*1000).toISOString():null,provenance:'Proteus-managed tmux socket'};
+    }).filter(item=>SESSION.test(item.id)&&/^[0-9a-f-]{36}$/i.test(item.tag)&&/^\$\d+$/.test(item.internalId)):[];
+    const managedPids=[];
+    if(!managedSessions.length)return {available:true,managedSessions,managedPids};
+    const known=new Set(managedSessions.map(item=>item.id));
+    const [server,panes]=await Promise.all([
+      this.commandAsync(['display-message','-p','#{pid}'],{allowMissing:true}),
+      this.commandAsync(['list-panes','-a','-F','#{session_name}\t#{pane_pid}'],{allowMissing:true})
+    ]);
+    const serverPid=Number(String(server.stdout||'').trim());
+    if(server.status===0&&Number.isSafeInteger(serverPid)&&serverPid>0)managedPids.push({pid:serverPid,sessionId:null,role:'tmux server'});
+    if(panes.status===0)for(const line of String(panes.stdout||'').trim().split('\n')){
+      const [sessionId,rawPid]=line.split('\t'),pid=Number(rawPid);
+      if(known.has(sessionId)&&Number.isSafeInteger(pid)&&pid>0&&!managedPids.some(item=>item.pid===pid))managedPids.push({pid,sessionId,role:'tmux pane'});
+    }
+    return {available:true,managedSessions,managedPids};
   }
   validate(id) { if (!SESSION.test(id)) throw new Error('Invalid Proteus tmux session name.'); return id; }
   create({ id, cwd, shell, args = ['-l'] }) {

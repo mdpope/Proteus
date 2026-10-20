@@ -33,3 +33,57 @@ test('selected chat child survives restart only while its parent and child remai
   const removed=normalizeSession({tabs:tabs.slice(0,1),selectedChildren:restored.selectedChildren});assert.deepEqual(removed.selectedChildren,{});
  } finally {fs.rmSync(home,{recursive:true,force:true});}
 });
+
+test('workspace shells retain hidden children and distinct views of a shared chat',()=>{
+ const host='00000000-0000-4000-8000-000000000001',parent='workspace:'+host+':research';
+ const value=normalizeSession({page:'workspaces',active:parent,tabs:[{id:parent,type:'workspace',workspaceId:'research',label:'Research',hidden:true,workspacePage:'configuration'},{id:'same',type:'run',label:'Main chat'},{id:parent+':chat:same',type:'run',runId:'same',parentId:parent,label:'Same chat'},{id:'browser',type:'browser',parentId:parent,url:'https://example.test',history:{entries:[{url:'https://example.test',title:'Example'}],index:0}}],selectedChildren:{[parent]:parent+':chat:same'}});
+ assert.equal(value.tabs.find(t=>t.id===parent).hidden,true);assert.equal(value.tabs.find(t=>t.id===parent).workspacePage,'configuration');
+ assert.equal(value.tabs.find(t=>t.parentId===parent&&t.type==='run').runId,'same');assert.equal(value.tabs.find(t=>t.id==='browser').parentId,parent);
+ assert.equal(value.selectedChildren[parent],parent+':chat:same');assert.notEqual(value.active,parent);assert.equal(value.page,'workspaces');
+});
+
+test('chat drafts survive normalization with stable shared-chat keys and bounded storage',()=>{
+ const values={same:'A draft shared by both chat representations','peer:host:chat':'Remote draft',invalid:{token:'not text'},huge:'x'.repeat(110000)};
+ const clean=normalizeSession({chatDrafts:values});assert.equal(clean.chatDrafts.same,values.same);assert.equal(clean.chatDrafts.huge.length,100000);assert.equal(clean.chatDrafts.invalid,undefined);
+ const lots=normalizeSession({chatDrafts:Object.fromEntries(Array.from({length:250},(_,i)=>['chat-'+i,'x'.repeat(100000)]))});assert.ok(Object.keys(lots.chatDrafts).length<=200);assert.ok(Buffer.byteLength(JSON.stringify(lots.chatDrafts))<501000);
+});
+
+test('agent terminal serialization preserves the actual chat independently of workspace parent',()=>{
+ const workspace={id:'workspace:local:fixture',type:'workspace',workspaceId:'fixture',label:'Fixture'};
+ const result=normalizeSession({tabs:[workspace,{id:'agent-terminal:actual',type:'agent-terminal',parentId:workspace.id,runId:'actual'},{id:'legacy',type:'run'},{id:'agent-terminal:legacy',type:'agent-terminal',parentId:'legacy'},{id:'invalid',type:'agent-terminal',parentId:workspace.id,runId:'bad/path'}]});
+ assert.equal(result.tabs.find(tab=>tab.id==='agent-terminal:actual').runId,'actual');assert.equal(result.tabs.find(tab=>tab.id==='agent-terminal:actual').parentId,workspace.id);assert.equal(result.tabs.find(tab=>tab.id==='agent-terminal:legacy').parentId,'legacy');assert.ok(!result.tabs.some(tab=>tab.id==='invalid'));
+});
+
+test('workspace save returns its committed normalized descriptors without requiring a disk reread',()=>{
+ const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-session-save-result-'));
+ try{
+  const store=new WorkspaceSession(home),saved=store.save({active:'feature-omi',tabs:[{id:'feature-omi',type:'omi'}]});
+  assert.deepEqual(saved,store.get());assert.deepEqual(store.save(saved),saved);
+  fs.writeFileSync(store.file,JSON.stringify({active:'feature-life',tabs:[{id:'feature-life',type:'life'}]}));assert.equal(store.get().active,'feature-life');
+ }finally{fs.rmSync(home,{recursive:true,force:true});}
+});
+
+test('project migration retains more than one hundred tabs, selections and browser history identities',()=>{
+ const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-project-session-'));
+ try{
+  const project={id:'project:local:default',type:'workspace',workspaceId:'work',projectId:'default',label:'General'};
+  const tabs=[project,...Array.from({length:130},(_,i)=>({id:'browser-'+i,type:'browser',parentId:project.id,url:'https://example.test/'+i,hidden:i===5,unloaded:true,history:{entries:[{id:'entry-'+i,url:'https://example.test/'+i,title:'Page '+i}],index:0,currentEntryId:'entry-'+i,revision:7}}))];
+  const store=new WorkspaceSession(home,{projects:true});
+  store.save({tabs,active:'browser-129',selectedChildren:{[project.id]:'browser-129'},chatDrafts:{chat:'Keep this draft'}});
+  const result=new WorkspaceSession(home,{projects:true}).get();
+  assert.equal(result.tabs.length,132);assert.equal(result.active,'browser-129');
+  assert.equal(result.selectedChildren[project.id],'browser-129');assert.equal(result.chatDrafts.chat,'Keep this draft');
+  for(let i=0;i<130;i++){const tab=result.tabs.find(row=>row.id==='browser-'+i);assert.equal(tab.parentId,project.id);assert.equal(tab.history.entries[0].id,'entry-'+i);assert.equal(tab.history.revision,7);}
+  assert.equal(result.tabs.find(row=>row.id==='browser-5').hidden,true);
+  const before=fs.readFileSync(store.file,'utf8');
+  assert.throws(()=>store.save({tabs:Array.from({length:1001},(_,i)=>({id:'tab-'+i,type:'run'}))}),/original record was preserved/);
+  assert.equal(fs.readFileSync(store.file,'utf8'),before);
+ }finally{fs.rmSync(home,{recursive:true,force:true});}
+});
+
+test('remembered workspace project selection survives normalization without allowing foreign owners or workspaces',()=>{
+ const host='aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',tabs=[{id:'workspace',type:'workspace',workspaceId:'w'},{id:'project',type:'workspace',workspaceId:'w',projectId:'p'},{id:'chat',type:'run',runId:'chat',parentId:'project'},{id:'inactive-terminal',type:'terminal',terminal:{id:'pty'}},{id:'foreign-project',type:'workspace',workspaceId:'w',hostId:host,projectId:'foreign'},{id:'other-project',type:'workspace',workspaceId:'other',projectId:'other'},{id:'peer-workspace',type:'workspace',workspaceId:'w',hostId:host}];
+ const value=normalizeSession({tabs,active:'inactive-terminal',selectedChildren:{workspace:'project',project:'chat','peer-workspace':'foreign-project'}});
+ assert.equal(value.active,'inactive-terminal');assert.deepEqual(value.selectedChildren,{workspace:'project',project:'chat','peer-workspace':'foreign-project'});assert.ok(!value.tabs.find(tab=>tab.id==='project').parentId,'Top-level view identity remains unchanged');
+ for(const id of ['foreign-project','other-project'])assert.equal(normalizeSession({tabs,selectedChildren:{workspace:id}}).selectedChildren.workspace,undefined);
+});

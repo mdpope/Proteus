@@ -21,6 +21,7 @@ import SwiftUI
 struct ProteusRoot: View {
     @EnvironmentObject var destinations: DestinationStore
     @EnvironmentObject var life: LifeStore
+    @EnvironmentObject var shared: SharedAppStore
     @State private var area = "macs"
     @AppStorage("lifeEnabled") private var lifeEnabled = false
     private var showLife: Bool {
@@ -31,15 +32,24 @@ struct ProteusRoot: View {
     }
     @Environment(\.scenePhase) private var phase
     var body: some View {
-            NativeShell().overlay { if phase != .active { Color.black.ignoresSafeArea().overlay { Label("Proteus",systemImage:"lock.shield").font(.title2).foregroundStyle(.secondary) } } }.tint(Color(red: 0.67, green: 0.86, blue: 0.49)).preferredColorScheme(.dark)
+            NativeShell().overlay { if phase != .active { Color.black.ignoresSafeArea().overlay { Label("Proteus",systemImage:"lock.shield").font(.title2).foregroundStyle(.secondary) } } }.tint(NativeTheme.accent).preferredColorScheme(.dark)
                 .onOpenURL { url in if url.scheme == "proteus" && url.host == "pair" { area = "macs"; do { try destinations.add(url.absoluteString, label: "New Mac") } catch { destinations.error = error.localizedDescription } } }
                 .task {
                     #if DEBUG
                     if ProcessInfo.processInfo.arguments.contains("--reset-pairing") { destinations.resetForTesting() }
+                    if NativeDesignPreview.enabled && ProcessInfo.processInfo.arguments.contains("--phone-preview-fixture") && destinations.destinations.isEmpty {
+                        do {
+                            // Pairing invitations are one-use: never reuse URLSession's cached response.
+                            let request = URLRequest(url: URL(string: "http://127.0.0.1:4329/pair?projects=1")!, cachePolicy: .reloadIgnoringLocalCacheData)
+                            let (data, _) = try await URLSession.shared.data(for: request)
+                            let fixture = try JSONDecoder().decode(JSON.self, from: data)
+                            try destinations.add(fixture["code"].string, label: "Preview Mac")
+                        } catch { destinations.error = "Start the local synthetic mobile fixture to use this preview: " + error.localizedDescription }
+                    }
                     if ProcessInfo.processInfo.arguments.contains("--synthetic-destinations") {
                         destinations.resetForTesting()
                         // Keep synthetic count and long-message fixtures isolated from relay reconnects.
-                        if ProcessInfo.processInfo.arguments.contains("--synthetic-nav-counts") || ProcessInfo.processInfo.arguments.contains("--synthetic-long-chat") { destinations.activity(false) }
+                        if ProcessInfo.processInfo.arguments.contains("--synthetic-nav-counts") || ProcessInfo.processInfo.arguments.contains("--synthetic-long-chat") || ProcessInfo.processInfo.arguments.contains("--synthetic-many-chat") || ProcessInfo.processInfo.arguments.contains("--synthetic-heavy-chat") { destinations.activity(false) }
                         for (id, label) in [("10000000-0000-4000-8000-000000000001", "Alpha Mac"), ("10000000-0000-4000-8000-000000000002", "Beta Mac")] {
                             try? destinations.register(DeviceConnection(relay: "ws://127.0.0.1:1", hostId: id, deviceId: UUID().uuidString, key: RemoteCrypto.random()), label: label)
                         }
@@ -77,7 +87,9 @@ struct ProteusRoot: View {
                        let remote = destinations.remote(for: "10000000-0000-4000-8000-000000000001") {
                         let longText = (0..<180).map { "Line \($0): synthetic long-message reading-position fixture." }.joined(separator: "\n")
                         let events: [JSON]
-                        if ProcessInfo.processInfo.arguments.contains("--synthetic-activity-spacing") {
+                        if ProcessInfo.processInfo.arguments.contains("--synthetic-activity-details") {
+                            events = nativeActivityFixtureEvents()
+                        } else if ProcessInfo.processInfo.arguments.contains("--synthetic-activity-spacing") {
                             events = (0..<40).map { index in
                                 index.isMultiple(of: 2)
                                     ? .object(["role": .string("tool"), "data": .object(["tool": .object(["name": .string("Fixture tool"), "status": .string("completed")])])])
@@ -89,18 +101,24 @@ struct ProteusRoot: View {
                         let run: JSON = .object(["id": .string("long-chat"), "title": .string("Long fixture"), "status": .string("completed"), "createdAt": .string("2026-10-05T20:00:00Z"), "updatedAt": .string("2026-10-05T21:00:00Z"), "eventStart": .number(0), "events": .array(events), "schedule": .object(["provider": .string("codex")]), "nextModelOptions": .object(["model": .string("gpt-6-sol")])])
                         remote.state = .object(["runs": .array([run]), "runCount": .number(1), "attentionCount": .number(0), "schedules": .array([]), "capabilities": .array([.string("chat.attachments.v1")]), "attachmentMediaTypes": .object(["codex": .array([.string("image/png")])])])
                         remote.chats["long-chat"] = run
+                        if ProcessInfo.processInfo.arguments.contains("--synthetic-workspace-tab-icons") {
+                            configureNativeIconFixture(remote: remote, shared: shared, life: life)
+                        }
                         remote.flushCache()
                         return
                     }
-                    if ProcessInfo.processInfo.arguments.contains("--synthetic-many-chat"),
+                    if ProcessInfo.processInfo.arguments.contains("--synthetic-many-chat") || ProcessInfo.processInfo.arguments.contains("--synthetic-heavy-chat"),
                        let remote = destinations.remote(for: "10000000-0000-4000-8000-000000000001") {
-                        let events: [JSON] = (0..<100).map { index in
-                            .object(["role": .string(index.isMultiple(of: 2) ? "user" : "assistant"),
-                                     "text": .string("Synthetic message \(index): a short bounded-history fixture."),
+                        let heavy = ProcessInfo.processInfo.arguments.contains("--synthetic-heavy-chat")
+                        let events: [JSON] = (0..<(heavy ? 1000 : 100)).map { index in
+                            let varied = ProcessInfo.processInfo.arguments.contains("--synthetic-varied-chat") && (index.isMultiple(of: 17) || index == 999)
+                            return .object(["role": .string(index.isMultiple(of: 2) ? "user" : "assistant"),
+                                     "text": .string(heavy ? "Message \(index): " + String(repeating: "Rich **history** content. ", count: varied ? 240 : 24) : "Synthetic message \(index): a short bounded-history fixture."),
                                      "at": .string("2026-10-05T21:00:00Z")])
                         }
-                        let run: JSON = .object(["id": .string("many-chat"), "title": .string("Many fixture"),
+                        let run: JSON = .object(["id": .string("many-chat"), "title": .string(heavy ? "Heavy fixture" : "Many fixture"),
                             "status": .string("completed"), "eventStart": .number(0), "events": .array(events),
+                            "usage": .object(["observed": .bool(true), "inputTokens": .number(123456), "outputTokens": .number(6789)]),
                             "schedule": .object(["provider": .string("rehearsal")])])
                         remote.state = .object(["runs": .array([run]), "runCount": .number(1), "attentionCount": .number(0), "schedules": .array([])])
                         remote.chats["many-chat"] = run
@@ -112,7 +130,7 @@ struct ProteusRoot: View {
                 }
                 .onChange(of: phase) { _, value in
                     #if DEBUG
-                    if ProcessInfo.processInfo.arguments.contains("--synthetic-nav-counts") || ProcessInfo.processInfo.arguments.contains("--synthetic-long-chat") { return }
+                    if ProcessInfo.processInfo.arguments.contains("--synthetic-nav-counts") || ProcessInfo.processInfo.arguments.contains("--synthetic-long-chat") || ProcessInfo.processInfo.arguments.contains("--synthetic-many-chat") || ProcessInfo.processInfo.arguments.contains("--synthetic-heavy-chat") { return }
                     #endif
                     destinations.activity(value == .active)
                 }
@@ -154,12 +172,12 @@ struct DestinationBar: View {
                     Button { do { try destinations.select(destination.id) } catch { destinations.error = error.localizedDescription } } label: { Label(destination.label, systemImage: destination.id == destinations.selectedID ? "checkmark" : "desktopcomputer") }
                 }
                 Divider()
-                Button("Add Mac", systemImage: "plus") { adding = true }
-                Button("Manage Macs", systemImage: "desktopcomputer") { managing = true }
+                Button("Add computer", systemImage: "plus") { adding = true }
+                Button("Manage computers", systemImage: "desktopcomputer") { managing = true }
                 Button("App setup", systemImage: "gearshape") { setup = true }.accessibilityIdentifier("app-setup")
             } label: {
                 HStack(spacing: 9) { Image(systemName: "desktopcomputer"); VStack(alignment: .leading, spacing: 2) { Text(destinations.selectedLabel).font(.subheadline.bold()); Text(remote.status).font(.caption2).foregroundStyle(.secondary) }; Image(systemName: "chevron.down").font(.caption); Spacer() }
-            }.accessibilityIdentifier("destination-picker").accessibilityLabel("Mac destination: " + destinations.selectedLabel)
+            }.accessibilityIdentifier("destination-picker").accessibilityLabel("Computer: " + destinations.selectedLabel)
             Circle().fill(remote.connected ? Color.green : Color.orange).frame(width: 7, height: 7)
         }.padding(.horizontal).padding(.vertical, 9).background(.bar)
     }
@@ -171,7 +189,7 @@ struct NativeSetupView: View {
         Form {
             Section("Optional features") {
                 Toggle("Show Life", isOn: $lifeEnabled).accessibilityIdentifier("show-life")
-                Text("Add the Life tab for your website account. This preference belongs to this device and is independent of your selected Mac. Website sign-in is required separately.").font(.footnote).foregroundStyle(.secondary)
+                Text("Add the Life tab for your website account. This preference belongs to this device and is independent of your selected computer. Website sign-in is required separately.").font(.footnote).foregroundStyle(.secondary)
                 Text("Hiding Life keeps its secure sign-in. To remove that session, sign out from Life account first.").font(.footnote).foregroundStyle(.secondary)
             }
         }.navigationTitle("App setup").toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
@@ -218,20 +236,20 @@ struct PairView: View {
         Form {
             Section {
                 Image(systemName: "point.3.connected.trianglepath.dotted").font(.system(size: 52)).foregroundStyle(.tint).frame(maxWidth: .infinity).padding()
-                Text("Add your Mac").font(.title2.bold())
-                Text("Open Connections in Proteus on the Mac you want to add, then create a one-time pairing code. Each Mac keeps its own chats, schedules and workspace context.").foregroundStyle(.secondary)
+                Text("Add your computer").font(.title2.bold())
+                Text("Open Connections in Proteus on the computer you want to add, then create a one-time pairing code. Each computer keeps its own chats, schedules and workspace context.").foregroundStyle(.secondary)
             }
-            Section("Add a Mac") {
-                TextField("Mac name", text: $label).accessibilityIdentifier("destination-name")
-                Text("This name updates from the Mac after it connects.").font(.caption).foregroundStyle(.secondary)
+            Section("Add a computer") {
+                TextField("Computer name", text: $label).accessibilityIdentifier("destination-name")
+                Text("This name updates from the computer after it connects.").font(.caption).foregroundStyle(.secondary)
                 Button("Scan pairing QR code", systemImage: "qrcode.viewfinder") { scan = true }
                 TextField("Paste pairing link", text: $code, axis: .vertical).textInputAutocapitalization(.never).autocorrectionDisabled().accessibilityIdentifier("pairing-link")
-                Button("Pair Mac") { pair() }.disabled(code.isEmpty || label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty).accessibilityIdentifier("pair-mac")
+                Button("Pair computer") { pair() }.disabled(code.isEmpty || label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty).accessibilityIdentifier("pair-mac")
                 if let remote = destinations.pairing { PairingStatus(remote: remote) }
             }
-            if !destinations.destinations.isEmpty { Section("Saved Macs") { ForEach(destinations.destinations) { destination in Button(destination.label) { do { try destinations.select(destination.id) } catch { destinations.error = error.localizedDescription } } } } }
-            Section { Text("Macs can share the same encrypted relay address. Pair each Mac separately; adding one does not replace another. Life remains your shared website database. Omi pendant capture remains in the separate Omi app.").font(.footnote).foregroundStyle(.secondary) }
-        }.navigationTitle(destinations.destinations.isEmpty ? "Proteus" : "Add Mac")
+            if !destinations.destinations.isEmpty { Section("Saved computers") { ForEach(destinations.destinations) { destination in Button(destination.label) { do { try destinations.select(destination.id) } catch { destinations.error = error.localizedDescription } } } } }
+            Section { Text("Computers can share the same encrypted relay address. Pair each computer separately; adding one does not replace another. Life remains your shared website database. Omi pendant capture remains in the separate Omi app.").font(.footnote).foregroundStyle(.secondary) }
+        }.navigationTitle(destinations.destinations.isEmpty ? "Proteus" : "Add computer")
             .sheet(isPresented: $scan) { QRScanner { value in scan = false; code = value; pair() }.ignoresSafeArea().overlay(alignment: .topTrailing) { Button("Cancel") { scan = false }.padding().buttonStyle(.borderedProminent) } }
     }
     private func pair() { do { try destinations.add(code, label: label) } catch { destinations.error = error.localizedDescription } }
@@ -249,13 +267,13 @@ struct DestinationsView: View {
     @State private var editingRelay: MacDestination?
     var body: some View {
         List {
-            Section("Saved Macs") {
+            Section("Saved computers") {
                 ForEach(destinations.destinations) { destination in
                     VStack(alignment: .leading, spacing: 9) {
                         HStack { Label(destination.label, systemImage: "desktopcomputer").font(.headline); Spacer(); if destination.id == destinations.selectedID { Image(systemName: "checkmark.circle.fill").foregroundStyle(.tint) } }
                         if let remote = destinations.remote(for: destination.id) { PairingStatus(remote: remote) } else { Text("Saved · not connected").font(.caption).foregroundStyle(.secondary) }
                         HStack {
-                            Button("Use Mac") { do { try destinations.select(destination.id) } catch { destinations.error = error.localizedDescription } }.disabled(destination.id == destinations.selectedID).accessibilityIdentifier("select-" + destination.id)
+                            Button("Use computer") { do { try destinations.select(destination.id) } catch { destinations.error = error.localizedDescription } }.disabled(destination.id == destinations.selectedID).accessibilityIdentifier("select-" + destination.id)
                             Button("Reconnect") { destinations.remote(for: destination.id)?.activity(true) }
                             Button("Rename") { renameID = destination.id; renameLabel = destination.label }.accessibilityIdentifier("rename-" + destination.id)
                             Button("Edit relay") { editingRelay = destination }.accessibilityIdentifier("edit-relay-" + destination.id)
@@ -264,11 +282,11 @@ struct DestinationsView: View {
                     }.padding(.vertical, 5)
                 }
             }
-            Section { Button("Add Mac", systemImage: "plus", action: addMac); Text("Switching stops local retries to the previous Mac. Work already accepted by that Mac continues there. Unconfirmed actions should be checked in that Mac’s history before retrying.").font(.footnote).foregroundStyle(.secondary) }
-        }.navigationTitle("Mac destinations")
+            Section { Button("Add computer", systemImage: "plus", action: addMac); Text("Switching stops local retries to the previous computer. Work already accepted by that computer continues there. Unconfirmed actions should be checked in that computer’s history before retrying.").font(.footnote).foregroundStyle(.secondary) }
+        }.navigationTitle("Computers")
             .sheet(item: $editingRelay) { destination in NavigationStack { RelayEditor(destination: destination, address: destinations.relayAddress(for: destination.id) ?? "") } }
-            .alert("Rename Mac", isPresented: Binding(get: { renameID != nil }, set: { if !$0 { renameID = nil } })) { TextField("Mac name", text: $renameLabel); Button("Cancel", role: .cancel) { renameID = nil }; Button("Save") { if let id = renameID { do { try destinations.rename(id, label: renameLabel) } catch { destinations.error = error.localizedDescription } }; renameID = nil } }
-            .confirmationDialog("Forget this Mac? Its key, cached history and local drafts will be removed from this device. Other Macs are unchanged.", isPresented: Binding(get: { forgetID != nil }, set: { if !$0 { forgetID = nil } }), titleVisibility: .visible) { Button("Forget Mac", role: .destructive) { if let id = forgetID { do { try destinations.forget(id) } catch { destinations.error = error.localizedDescription } }; forgetID = nil } }
+            .alert("Rename computer", isPresented: Binding(get: { renameID != nil }, set: { if !$0 { renameID = nil } })) { TextField("Computer name", text: $renameLabel); Button("Cancel", role: .cancel) { renameID = nil }; Button("Save") { if let id = renameID { do { try destinations.rename(id, label: renameLabel) } catch { destinations.error = error.localizedDescription } }; renameID = nil } }
+            .confirmationDialog("Forget this computer? Its key, cached history and local drafts will be removed from this device. Other computers are unchanged.", isPresented: Binding(get: { forgetID != nil }, set: { if !$0 { forgetID = nil } }), titleVisibility: .visible) { Button("Forget computer", role: .destructive) { if let id = forgetID { do { try destinations.forget(id) } catch { destinations.error = error.localizedDescription } }; forgetID = nil } }
     }
 }
 struct RelayEditor: View {
@@ -281,11 +299,11 @@ struct RelayEditor: View {
         Form {
             Section(destination.label) {
                 TextField("Relay address", text: $address).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL).accessibilityIdentifier("relay-address")
-                Text("Use wss:// for an internet relay, or ws:// for a local network relay. Configure this Mac to use the same relay first.").font(.footnote).foregroundStyle(.secondary)
+                Text("Use wss:// for an internet relay, or ws:// for a local network relay. Configure \(destination.label) to use the same relay first.").font(.footnote).foregroundStyle(.secondary)
             }
             Section {
-                Text("Your Mac identity, device key, cached history and drafts stay the same. Only this Mac’s relay address on this device changes. The selected Mac reconnects immediately.")
-                Text("Unconfirmed actions will stop retrying. Check this Mac’s refreshed history before submitting them again.").font(.footnote).foregroundStyle(.secondary)
+                Text("The identity, device key, cached history and drafts for \(destination.label) stay the same. Only its relay address on this device changes. It reconnects immediately.")
+                Text("Unconfirmed actions will stop retrying. Check \(destination.label)’s refreshed history before submitting them again.").font(.footnote).foregroundStyle(.secondary)
                 if let failure { Text(failure).foregroundStyle(.orange).accessibilityIdentifier("relay-error") }
             }
         }.navigationTitle("Edit relay")
@@ -301,9 +319,38 @@ struct ConnectionView: View {
     @State private var adding = false
     var body: some View {
         DestinationsView { adding = true }
-            .safeAreaInset(edge: .bottom) { VStack(alignment: .leading, spacing: 7) { Text(destinations.selectedLabel).font(.headline); ConnectionStatus(); Text(store.connection?.relay ?? "").font(.caption).textSelection(.enabled); Button("Reconnect selected Mac") { store.disconnect(); store.activity(true) } }.padding().frame(maxWidth: .infinity, alignment: .leading).background(.bar) }
+            .safeAreaInset(edge: .bottom) { VStack(alignment: .leading, spacing: 7) { Text(destinations.selectedLabel).font(.headline); ConnectionStatus(); Text(store.connection?.relay ?? "").font(.caption).textSelection(.enabled); Button("Reconnect " + destinations.selectedLabel) { store.disconnect(); store.activity(true) } }.padding().frame(maxWidth: .infinity, alignment: .leading).background(.bar) }
             .sheet(isPresented: $adding, onDismiss: { destinations.cancelPairing() }) { NavigationStack { PairView().toolbar { Button("Cancel") { destinations.cancelPairing(); adding = false } } } }
             .onChange(of: destinations.selectedID) { _, _ in adding = false }
     }
 }
 func statusLabel(_ value: String) -> String { ["awaiting_input": "Needs feedback", "completed": "Turn complete", "running": "Working", "queued": "Queued", "interrupted": "Interrupted", "failed": "Failed", "cancelled": "Cancelled"][value] ?? value }
+
+#if DEBUG
+private func nativeActivityFixtureEvents() -> [JSON] {
+    return [
+                                .object(["role": .string("user"), "text": .string("Synthetic activity detail rehearsal")]),
+                                .object(["role": .string("tool"), "data": .object(["tool": .object(["callId": .string("native-rehearsal-read"), "summary": .string("Read synthetic fixture"), "status": .string("completed"), "startedAt": .string("2026-10-12T12:00:00Z"), "finishedAt": .string("2026-10-12T12:00:04.250Z"), "durationMs": .number(4250), "output": .string("Synthetic read output")])])]),
+                                .object(["role": .string("system"), "text": .string("Synthetic system note inside activity"), "at": .string("2026-10-12T12:00:05Z")]),
+                                .object(["role": .string("system"), "at": .string("2026-10-12T12:00:06Z"), "data": .object(["permission": .object(["automatic": .bool(true), "toolCallId": .string("native-rehearsal-read"), "intention": .string("Read synthetic fixture"), "reason": .string("Synthetic workspace rule"), "request": .string("{\"toolCallId\":\"native-rehearsal-read\",\"path\":\"synthetic-fixture.md\"}")])])]),
+                                .object(["role": .string("tool"), "data": .object(["tool": .object(["callId": .string("native-rehearsal-missing"), "summary": .string("Synthetic tool without recorded timing"), "status": .string("completed")])])]),
+                                .object(["role": .string("assistant"), "text": .string("Synthetic activity rehearsal complete.")])
+                            ]
+}
+@MainActor private func configureNativeIconFixture(remote: RemoteStore, shared: SharedAppStore, life: LifeStore) {
+                            shared.reset(for: life.accountIdentity)
+                            let workspaceID = "native-icon-workspace"
+                            let scope = "workspace:10000000-0000-4000-8000-000000000001:" + workspaceID
+                            var fields = remote.state.object
+                            fields["context"] = .object(["workspaces": .array([.object(["id": .string(workspaceID), "name": .string("Native icon rehearsal"), "cwd": .string("/synthetic-fixture")])])])
+                            remote.state = .object(fields)
+                            remote.setDraft("workspace-navigation:" + workspaceID, .object(["chats": .array([.string("long-chat")]), "selected": .string("workspace")]))
+                            shared.applyContentTabs(.object(["revision": .number(1), "tabs": .array([
+                                .object(["id": .string("chat:long-chat"), "type": .string("chat"), "chatId": .string("long-chat"), "title": .string("Long fixture")]),
+                                .object(["id": .string("fixture-terminal"), "type": .string("terminal"), "title": .string("Synthetic terminal")]),
+                                .object(["id": .string("document:fixture-document"), "documentId": .string("fixture-document"), "type": .string("document"), "title": .string("Synthetic document"), "mediaType": .string("text/markdown")])
+                            ])]), scope: scope)
+                            shared.open(nil, title: "Synthetic browser", scope: scope)
+                            shared.browserTabs.append(BrowserDescriptor(id: "fixture-local-recents", title: "Local recent across scopes", url: nil, scope: "fixture-history", history: BrowserTabHistory(entries: [BrowserHistoryEntry(url: "https://example.test/local", title: "Local recent across scopes")], index: 0)))
+}
+#endif

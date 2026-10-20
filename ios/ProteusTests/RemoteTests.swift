@@ -4,6 +4,7 @@ import CryptoKit
 import Network
 import SwiftUI
 import XCTest
+import Combine
 @testable import Proteus
 
 private actor PreviewRequestCounter {
@@ -12,21 +13,685 @@ private actor PreviewRequestCounter {
 }
 
 final class RemoteTests: XCTestCase {
+    private func projectFixture() throws -> JSON {
+        try JSONDecoder().decode(JSON.self, from: Data("""
+        {"schemaVersion":1,"revision":"catalog-revision","projects":[
+          {"id":"second","workspaceId":"work","name":"Second","futureProject":"preserved"},
+          {"id":"general","workspaceId":"work","name":"General"},
+          {"id":"other","workspaceId":"elsewhere","name":"Other"}],
+          "defaultProjectIds":{"work":"general","elsewhere":"other"},
+          "projectRedirects":{"retired":{"workspaceId":"work","projectId":"general"}},
+          "memberships":{"chat":{"workspaceId":"work","projectId":"retired"},"unhoused":{"workspaceId":null,"projectId":null}},
+          "sourceLibrary":[],"futureCatalog":{"preserve":true}}
+        """.utf8))
+    }
+    func testNativeProjectsKeepManualOrderDefaultsAndSameWorkspaceRedirects() throws {
+        let raw = try projectFixture(), catalog = NativeProjectCatalog(raw: raw)
+        XCTAssertTrue(catalog.isValid)
+        XCTAssertEqual(catalog.projects(in: "work").map { $0["id"].string }, ["second", "general"])
+        XCTAssertEqual(catalog.defaultProject(in: "work")?["id"].string, "general")
+        XCTAssertEqual(catalog.project(id: "retired", workspaceID: "work")?["id"].string, "general")
+        XCTAssertNil(catalog.project(id: "retired", workspaceID: "elsewhere"))
+        XCTAssertEqual(catalog.raw["futureCatalog"]["preserve"], .bool(true))
+        var invalid = raw.object
+        invalid["projectRedirects"] = .object(["loop": .object(["workspaceId": .string("work"), "projectId": .string("loop")]), "cross": .object(["workspaceId": .string("work"), "projectId": .string("other")])])
+        XCTAssertNil(NativeProjectCatalog(raw: .object(invalid)).project(id: "loop"))
+        XCTAssertNil(NativeProjectCatalog(raw: .object(invalid)).project(id: "cross"))
+    }
+    func testNativeProjectMembershipDoesNotRehouseOrInferUnknownProjects() throws {
+        let catalog = NativeProjectCatalog(raw: try projectFixture())
+        XCTAssertEqual(catalog.membership(for: .object(["id": .string("chat")]))["projectId"], .string("general"))
+        let unhoused = catalog.membership(for: .object(["id": .string("unhoused"), "workspaceId": .string("work"), "projectId": .string("second")]))
+        XCTAssertEqual(unhoused["workspaceId"], .null); XCTAssertEqual(unhoused["projectId"], .null)
+        let unknown: JSON = .object(["id": .string("missing"), "workspaceId": .string("work"), "projectId": .string("unavailable")])
+        XCTAssertEqual(catalog.membership(for: unknown), unknown)
+        XCTAssertEqual(catalog.membership(for: .object(["id": .string("legacy"), "workspaceId": .string("work")]))["projectId"], .string("general"))
+        XCTAssertNotEqual(NativeProjectIdentity(hostID: "first", workspaceID: "work", projectID: "general").scope, NativeProjectIdentity(hostID: "second", workspaceID: "work", projectID: "general").scope)
+    }
+    func testNativeProjectActivityIgnoresFocusAndRetainsUnknownDates() {
+        let created = "2026-10-17T10:00:00Z", active = "2026-10-17T11:00:00Z"
+        let base: JSON = .object(["createdAt": .string(created), "lastTouchedAt": .string("2026-10-18T12:00:00Z"), "updatedAt": .string("2026-10-18T13:00:00Z")])
+        XCTAssertEqual(NativeProjectActivity.date(base), ISO8601DateFormatter().date(from: created))
+        var changed = base.object; changed["lastActivityAt"] = .string(active)
+        XCTAssertEqual(NativeProjectActivity.date(.object(changed)), ISO8601DateFormatter().date(from: active))
+        XCTAssertNil(NativeProjectActivity.date(.object(["lastTouchedAt": .string(active), "updatedAt": .string(active)])))
+    }
+    @MainActor func testNativeProjectCatalogOfflineCacheRetainsUnknownFieldsHistoryAndDrafts() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let connection = DeviceConnection(relay: "wss://relay.example.test", hostId: UUID().uuidString, deviceId: UUID().uuidString, key: RemoteCrypto.random())
+        let store = RemoteStore(connection: connection, cacheRoot: root, legacyCredentials: false), catalog = try projectFixture()
+        store.state = .object(["capabilities": .array([.string("projects.v1")]), "workspaceProjects": catalog])
+        let chat: JSON = .object(["id": .string("chat"), "providerSessionId": .string("synthetic-session"), "pendingApproval": .object(["id": .string("synthetic-request")]), "events": .array([.object(["text": .string("Synthetic retained history")])])])
+        store.chats["chat"] = chat; store.setDraft("reply:chat", .string("Synthetic unsent draft")); store.flushCache()
+        let restored = RemoteStore(connection: connection, cacheRoot: root, legacyCredentials: false)
+        XCTAssertFalse(restored.connected); XCTAssertTrue(restored.supportsProjects)
+        XCTAssertEqual(restored.projectCatalog.raw, catalog); XCTAssertEqual(restored.chats["chat"], chat)
+        XCTAssertEqual(restored.draft("reply:chat"), .string("Synthetic unsent draft"))
+        var oldHost = restored.state.object; oldHost["capabilities"] = .array([]); restored.state = .object(oldHost)
+        XCTAssertFalse(restored.supportsProjects); XCTAssertEqual(restored.projectCatalog.raw, catalog)
+    }
+    @MainActor func testNativeProjectScopesRetainAllTypesOrderAndOwnerIsolationAfterRestart() throws {
+        let shared = SharedAppStore(), host = UUID().uuidString, other = UUID().uuidString
+        let scope = "project:" + host + ":general", otherScope = "project:" + other + ":general"
+        let descriptors: [JSON] = [
+            .object(["id": .string("chat-view"), "type": .string("chat"), "chatId": .string("chat"), "hidden": .bool(true)]),
+            .object(["id": .string("terminal"), "type": .string("terminal"), "sessionId": .string("synthetic-session")]),
+            .object(["id": .string("document:document"), "type": .string("document"), "documentId": .string("document"), "associationChatId": .string("origin-chat"), "title": .string("Document")]),
+            .object(["id": .string("browser"), "type": .string("browser"), "title": .string("Browser"), "lastActivityAt": .string("2026-10-17T11:00:00Z"), "futureDescriptor": .string("retained")])]
+        let snapshot: JSON = .object(["revision": .number(4), "tabs": .array(descriptors)])
+        shared.applyContentTabs(snapshot, scope: scope); shared.applyContentTabs(snapshot, scope: otherScope)
+        let browser = try XCTUnwrap(shared.tabs(in: scope).first)
+        XCTAssertNotEqual(browser.id, shared.tabs(in: otherScope).first?.id)
+        XCTAssertEqual(browser.ownerHostId, host)
+        shared.touch(browser.id)
+        XCTAssertEqual(shared.tabs(in: scope).first?.lastActivityAt, "2026-10-17T11:00:00Z")
+        let restored = SharedAppStore()
+        defer { shared.revokeContentHost(host); shared.revokeContentHost(other); restored.revokeContentHost(host); restored.revokeContentHost(other) }
+        XCTAssertEqual(restored.workspaceContentDescriptors[scope], descriptors)
+        XCTAssertEqual(restored.chatChildOrder[scope], ["chat-view", "terminal", "document", browser.id])
+        shared.applyContentTabs(.object(["revision": .number(5), "tabs": .array([])]), scope: scope)
+        XCTAssertEqual(shared.workspaceContentDescriptors[otherScope], descriptors)
+    }
+    @MainActor func testNativeProjectDeletionRedirectKeepsLiveBrowserIdentityAndDirectResources() throws {
+        let shared = SharedAppStore(), host = UUID().uuidString
+        let source = "project:" + host + ":retired", target = "project:" + host + ":general", workspace = "workspace:" + host + ":work"
+        let tab: JSON = .object(["id": .string("browser"), "type": .string("browser"), "title": .string("Retained browser"), "persist": .bool(true)])
+        shared.applyContentTabs(.object(["revision": .number(2), "tabs": .array([tab])]), scope: source)
+        shared.applyContentTabs(.object(["revision": .number(1), "tabs": .array([tab])]), scope: workspace)
+        let browser = try XCTUnwrap(shared.tabs(in: source).first), view = shared.webView(try XCTUnwrap(shared.tabs(in: source).first))
+        shared.selectChatChild(browser.id, for: source)
+        shared.reconcileProjectScopes(catalog: NativeProjectCatalog(raw: try projectFixture()), hostID: host)
+        defer { shared.revokeContentHost(host) }
+        let moved = try XCTUnwrap(shared.tabs(in: target).first)
+        XCTAssertEqual(moved.id, browser.id); XCTAssertEqual(moved.contentTabId, browser.contentTabId)
+        XCTAssertTrue(shared.webView(moved) === view); XCTAssertTrue(moved.persist)
+        XCTAssertEqual(shared.chatSelectedChildren[target], browser.id); XCTAssertTrue(shared.tabs(in: source).isEmpty)
+        XCTAssertEqual(shared.tabs(in: workspace).count, 1)
+        XCTAssertNil(shared.contentPending[target], "Owner reconciliation must not reopen or execute a moved resource")
+        let restored = SharedAppStore(); defer { restored.revokeContentHost(host) }
+        XCTAssertEqual(restored.workspaceContentDescriptors[target]?.first?["id"], .string("browser"))
+        XCTAssertNil(restored.workspaceContentDescriptors[source])
+    }
+    @MainActor func testNativeProjectOwnerMovePreservesHistoryAndAllResourceMetadataWithoutRepublishing() throws {
+        let shared = SharedAppStore(), host = UUID().uuidString
+        let source = "project:" + host + ":second", destination = "project:" + host + ":general"
+        let rows: [JSON] = [
+            .object(["id": .string("browser"), "type": .string("browser"), "title": .string("Page"), "history": .object(["entries": .array([.object(["id": .string("entry"), "url": .string("https://example.test/page"), "title": .string("Page")])]), "index": .number(0), "revision": .number(7)])]),
+            .object(["id": .string("terminal"), "type": .string("terminal"), "sessionId": .string("unchanged-session")]),
+            .object(["id": .string("document:source"), "type": .string("document"), "documentId": .string("source"), "associationChatId": .string("original-chat")])]
+        shared.applyContentTabs(.object(["revision": .number(5), "tabs": .array(rows)]), scope: source)
+        let browser = try XCTUnwrap(shared.tabs(in: source).first), view = shared.webView(try XCTUnwrap(shared.tabs(in: source).first))
+        for row in rows { shared.applyOwnedContentMove(tabID: row["id"].string, from: source, to: destination, hostID: host) }
+        defer { shared.revokeContentHost(host) }
+        let moved = try XCTUnwrap(shared.tabs(in: destination).first)
+        XCTAssertEqual(moved.id, browser.id); XCTAssertEqual(moved.history, browser.history); XCTAssertTrue(shared.webView(moved) === view)
+        XCTAssertEqual(shared.workspaceContentDescriptors[destination], rows)
+        XCTAssertEqual(shared.documents(in: destination).first?.id, "source")
+        XCTAssertTrue(shared.documents(in: source).isEmpty); XCTAssertTrue(shared.tabs(in: source).isEmpty)
+        XCTAssertFalse(shared.hasPendingContent(in: source)); XCTAssertFalse(shared.hasPendingContent(in: destination))
+    }
+    @MainActor func testNativeProjectRedirectRetainsUnconfirmedOriginalOperationsThroughRestart() throws {
+        let shared = SharedAppStore(), host = UUID().uuidString, source = "project:" + host + ":retired"
+        let pending: JSON = .object(["action": .string("browser-navigate"), "tabId": .string("browser"), "operationId": .string("original-operation")])
+        let snapshot: JSON = .object(["revision": .number(6), "tabs": .array([.object(["id": .string("browser"), "type": .string("browser"), "title": .string("Retained pending page")])])])
+        shared.applyContentTabs(snapshot, scope: source)
+        shared.preserveBrowserNavigationConflict(scope: source, operations: [], pending: [pending], fresh: snapshot)
+        shared.reconcileProjectScopes(catalog: NativeProjectCatalog(raw: try projectFixture()), hostID: host)
+        XCTAssertEqual(shared.contentPending[source], [pending]); XCTAssertFalse(shared.tabs(in: source).isEmpty)
+        XCTAssertNotNil(shared.error)
+        let restored = SharedAppStore(); defer { shared.revokeContentHost(host); restored.revokeContentHost(host) }
+        XCTAssertEqual(restored.contentPending[source], [pending]); XCTAssertNotNil(restored.workspaceContentDescriptors[source])
+    }
+    @MainActor func testMirroredRedirectDoesNotCreateAVisitOrReplaceLogicalForwardList() {
+        let shared = SharedAppStore(), host = UUID().uuidString
+        let entries = ["one", "two", "three"].map { BrowserHistoryEntry(id: $0, url: "http://127.0.0.1:4329/browser/" + $0, title: $0) }
+        shared.browserTabs = [BrowserDescriptor(id: "mirror", title: "two", url: entries[1].url, scope: "main", history: BrowserTabHistory(entries: entries, index: 1, currentEntryId: "two", revision: 6))]
+        shared.assignBrowserOwner("mirror", host: host)
+        _ = shared.webView(shared.browserTabs[0], allowLocalNavigation: true); defer { shared.unloadBrowsers() }
+        let before = shared.historyOutbox.count
+        shared.completeBrowserNavigation(URL(string: entries[2].url)!, title: "Device redirect", in: "mirror")
+        XCTAssertEqual(shared.browserTabs[0].url, entries[1].url); XCTAssertEqual(shared.browserTabs[0].history?.entries, entries); XCTAssertEqual(shared.browserTabs[0].history?.index, 1); XCTAssertEqual(shared.historyOutbox.count, before)
+    }
+    @MainActor func testNativeURLPolicyExcludesSignedCookiesAndCanonicalOverlength() {
+        for key in ["cookie", "signedCookie", "signed_cookie", "signed-cookie", "X-Amz-Credential", "X-Amz-Signature", "X-Amz-Security-Token", "X-Goog-Credential", "X-Goog-Signature", "X-Goog-Security-Token", "Key-Pair-Id"] {
+            XCTAssertNil(SharedAppStore.safeURL("https://example.test/file?" + key + "=private"), key)
+            XCTAssertNil(SharedAppStore.safeURL("https://example.test/file#" + key + "=private"), key)
+        }
+        XCTAssertNil(SharedAppStore.safeURL("https://example.test/" + String(repeating: "a", count: 4096)))
+    }
+    @MainActor func testStandaloneAndTeamSnapshotsKeepOtherOwnerTabs() {
+        let shared = SharedAppStore(), first = UUID().uuidString, second = UUID().uuidString
+        let tab: JSON = .object(["id": .string("same-tab-id"), "type": .string("browser"), "title": .string("Saved page"), "url": .string("https://example.test/page")])
+        for kind in ["main", "team"] {
+            shared.applyContentTabs(.object(["revision": .number(1), "tabs": .array([tab])]), scope: kind + ":" + first)
+            shared.applyContentTabs(.object(["revision": .number(1), "tabs": .array([tab])]), scope: kind + ":" + second)
+            XCTAssertEqual(shared.tabs(in: kind + ":" + first).count, 1); XCTAssertEqual(shared.tabs(in: kind + ":" + second).count, 1)
+            XCTAssertNotEqual(shared.tabs(in: kind + ":" + first).first?.id, shared.tabs(in: kind + ":" + second).first?.id)
+            shared.applyContentTabs(.object(["revision": .number(2), "tabs": .array([])]), scope: kind + ":" + first)
+            XCTAssertEqual(shared.tabs(in: kind + ":" + second).count, 1, "Closing on one owner must preserve another owner's row")
+        }
+    }
+    @MainActor func testOpeningUnavailableHistoryProfilePreservesPreviousTabAndOwner() throws {
+        let shared = SharedAppStore(), previousOwner = UUID().uuidString, historyOwner = UUID().uuidString
+        let previous = try XCTUnwrap(shared.open(URL(string: "https://example.test/previous"), scope: "main"))
+        let unknown = UUID().uuidString
+        XCTAssertNil(shared.openHistoryVisit(.object(["url": .string("https://example.test/named"), "profileId": .string(unknown)]), ownerHostID: historyOwner))
+        XCTAssertNil(shared.browserTabs[0].ownerHostId, "A failed profile open must not claim an existing unowned tab")
+        shared.assignBrowserOwner(previous, host: previousOwner)
+        XCTAssertNil(shared.openHistoryVisit(.object(["url": .string("https://example.test/named"), "profileId": .string(unknown), "title": .string("Named history")]), ownerHostID: historyOwner))
+        XCTAssertEqual(shared.selectedMainBrowser, previous); XCTAssertEqual(shared.browserTabs.count, 1); XCTAssertEqual(shared.browserTabs[0].ownerHostId, previousOwner)
+        let defaultVisit = try XCTUnwrap(shared.openHistoryVisit(.object(["url": .string("https://example.test/default"), "profileId": .string("default"), "title": .string("Default history")]), ownerHostID: historyOwner))
+        XCTAssertNotEqual(defaultVisit, previous); XCTAssertEqual(shared.browserTabs.first(where: { $0.id == defaultVisit })?.ownerHostId, historyOwner); XCTAssertEqual(shared.browserTabs.first(where: { $0.id == previous })?.ownerHostId, previousOwner)
+        shared.revokeContentHost(previousOwner); shared.revokeContentHost(historyOwner)
+    }
+    @MainActor func testHistoryProfileChoicesUseOwnerCatalogAndKeepUnknownCachedIDs() {
+        let choices = NativeBrowserHistoryView.profileChoices(ownerProfiles: [.object(["id": .string("default"), "name": .string("Default")]), .object(["id": .string("owner-work"), "name": .string("Owner Work")])], cachedIDs: ["legacy-profile", "owner-work", "default"])
+        XCTAssertEqual(choices.map { $0["id"].string }, ["", "default", "owner-work", "legacy-profile"])
+        XCTAssertEqual(choices[2]["name"].string, "Owner Work"); XCTAssertTrue(choices[3]["name"].string.hasPrefix("Saved profile"))
+        let otherOwner = NativeBrowserHistoryView.profileChoices(ownerProfiles: [], cachedIDs: ["other-owner-profile"])
+        XCTAssertFalse(otherOwner.contains(where: { $0["id"].string == "owner-work" }))
+    }
+    @MainActor func testNativeHistorySettingsMergeKeepsUnknownAndUneditedOwnerPreferences() throws {
+        let owner = UUID().uuidString, peer = UUID().uuidString, other = UUID().uuidString
+        let original: JSON = .object(["enabled": .bool(true), "retentionDays": .number(30), "futureRoot": .string("original"), "peers": .array([.object(["hostId": .string(peer), "enabled": .bool(false), "backfill": .string("7"), "profileIds": .array([.string("default")]), "futurePeer": .string("original")])])])
+        var draft = NativeHistorySettingsDraft(original); draft.enabled = false; draft.retentionDays = 0; draft.setPeer(peer, key: "enabled", value: .bool(true)); draft.setPeer(peer, key: "backfill", value: .string("all"))
+        var latest = original.object
+        latest["availablePeers"] = .array([.object(["hostId": .string(peer)])]); latest["availableProfiles"] = .array([.object(["id": .string("default")])])
+        latest["peers"] = .array([.object(["hostId": .string(peer), "enabled": .bool(false), "backfill": .string("30"), "profileIds": .array([.string("default"), .string("retained-unknown-profile")]), "futurePeer": .string("newer"), "lastSyncAt": .string("runtime"), "cursor": .string("runtime")]), .object(["hostId": .string(other), "enabled": .bool(false), "backfill": .string("7"), "profileIds": .array([.string("default")]), "futurePeer": .string("untouched")])])
+        let payload = try draft.payload(merging: .object(latest), ownerHostID: owner)
+        XCTAssertEqual(payload["action"].string, "set"); XCTAssertEqual(payload["enabled"], .bool(false)); XCTAssertEqual(payload["retentionDays"], .number(0))
+        XCTAssertEqual(payload["peers"].array[0]["futurePeer"].string, "newer"); XCTAssertEqual(payload["peers"].array[0]["profileIds"].array, [.string("default"), .string("retained-unknown-profile")])
+        XCTAssertEqual(payload["peers"].array[0]["lastSyncAt"], .null); XCTAssertEqual(payload["peers"].array[0]["cursor"], .null)
+        XCTAssertEqual(payload["peers"].array[1]["futurePeer"].string, "untouched"); XCTAssertEqual(payload["futureRoot"], .null, "Only edited known root fields are sent; owner retains unknown preferences")
+    }
+    @MainActor func testNativeHistorySettingsRejectsGrantExpansionAndEmptyProfiles() throws {
+        let owner = UUID().uuidString, peer = UUID().uuidString
+        let settings: JSON = .object(["availablePeers": .array([.object(["hostId": .string(peer)])]), "availableProfiles": .array([.object(["id": .string("default")])]), "peers": .array([])])
+        var draft = NativeHistorySettingsDraft(settings)
+        XCTAssertEqual(draft.retentionDays, 0); XCTAssertEqual(try draft.payload(merging: settings, ownerHostID: owner).object.count, 1)
+        draft.setPeer(owner, key: "enabled", value: .bool(true)); XCTAssertThrowsError(try draft.payload(merging: settings, ownerHostID: owner))
+        draft = NativeHistorySettingsDraft(settings); draft.setPeer(UUID().uuidString, key: "enabled", value: .bool(true)); XCTAssertThrowsError(try draft.payload(merging: settings, ownerHostID: owner))
+        draft = NativeHistorySettingsDraft(settings); draft.selectProfile("unavailable", host: peer, enabled: true); XCTAssertThrowsError(try draft.payload(merging: settings, ownerHostID: owner))
+        draft = NativeHistorySettingsDraft(settings); draft.selectProfile("default", host: peer, enabled: false); XCTAssertThrowsError(try draft.payload(merging: settings, ownerHostID: owner))
+        draft = NativeHistorySettingsDraft(settings); draft.retentionDays = 365; XCTAssertEqual(try draft.payload(merging: settings, ownerHostID: owner)["retentionDays"], .number(365))
+    }
+    @MainActor func testOfflineConflictPreservesOtherTabsReceiptsAndOffersSameScopeRecovery() throws {
+        let shared = SharedAppStore(), host = UUID().uuidString, scope = "chat:" + host + ":" + UUID().uuidString
+        let firstEntries = ["one", "local-branch"].map { BrowserHistoryEntry(id: $0, url: "https://example.test/" + $0, title: $0) }
+        shared.browserTabs = [
+            BrowserDescriptor(id: "local-a", title: "Local branch", url: firstEntries[1].url, scope: scope, contentTabId: "a", history: BrowserTabHistory(entries: firstEntries, index: 1, revision: 2)),
+            BrowserDescriptor(id: "local-b", title: "Other pending page", url: "https://example.test/other", scope: scope, contentTabId: "b")
+        ]
+        let first: JSON = .object(["action": .string("browser-navigate"), "tabId": .string("a"), "operationId": .string("rejected-a")])
+        let firstLater: JSON = .object(["action": .string("browser-traverse"), "tabId": .string("a"), "operationId": .string("later-a")])
+        let second: JSON = .object(["action": .string("browser-navigate"), "tabId": .string("b"), "operationId": .string("preserve-b")])
+        let rename: JSON = .object(["action": .string("rename"), "id": .string("b"), "title": .string("Other pending page")])
+        let fresh: JSON = .object(["revision": .number(8), "tabs": .array([
+            .object(["id": .string("a"), "type": .string("browser"), "url": .string("https://example.test/owner"), "title": .string("Owner page")]),
+            .object(["id": .string("b"), "type": .string("browser"), "url": .string("https://example.test/old"), "title": .string("Old page")])
+        ])])
+        shared.preserveBrowserNavigationConflict(scope: scope, operations: [first], pending: [first, second, firstLater, rename], fresh: fresh)
+        XCTAssertEqual(shared.contentPending[scope], [second, rename], "One rejected tab must not drop another tab's original receipts")
+        XCTAssertEqual(shared.tabs(in: scope).count, 2, "Recovery never creates an unsolicited tab")
+        XCTAssertEqual(shared.tabs(in: scope).first(where: { $0.contentTabId == "b" })?.url, "https://example.test/other")
+        let conflict = try XCTUnwrap(shared.browserConflicts.first(where: { $0.scope == scope }))
+        XCTAssertEqual(conflict.operations, [first, firstLater]); XCTAssertEqual(conflict.tab.history?.entries, firstEntries)
+        let restarted = SharedAppStore(); defer { shared.revokeContentHost(host); restarted.revokeContentHost(host) }
+        XCTAssertEqual(restarted.contentPending[scope], [second, rename]); XCTAssertEqual(restarted.browserConflicts.first(where: { $0.id == conflict.id }), conflict)
+        shared.resolveBrowserNavigationConflict(conflict.id, openLocalCopy: true)
+        let recovered = try XCTUnwrap(shared.tabs(in: scope).first(where: { $0.title.hasPrefix("Offline copy") }))
+        XCTAssertEqual(recovered.scope, scope); XCTAssertEqual(recovered.history?.entries, firstEntries); XCTAssertEqual(recovered.history?.revision, 0)
+        XCTAssertNil(recovered.contentTabId); XCTAssertFalse(shared.browserConflicts.contains(where: { $0.id == conflict.id }))
+        XCTAssertEqual(shared.contentPending[scope], [second, rename])
+    }
+    @MainActor func testOwnerNavigationAppliesWhenScopeMetadataRevisionIsUnchanged() {
+        let shared = SharedAppStore(), scope = "main:" + UUID().uuidString
+        let entries = ["one", "two", "three"].map { BrowserHistoryEntry(id: $0, url: "https://example.test/" + $0, title: $0) }
+        func snapshot(index: Int, navigationRevision: Int) -> JSON {
+            let history = BrowserTabHistory(entries: entries, index: index, currentEntryId: entries[index].id, revision: navigationRevision)
+            return .object(["revision": .number(7), "tabs": .array([.object(["id": .string("owner-tab"), "type": .string("browser"), "title": .string(entries[index].title), "url": .string(entries[index].url), "history": try! JSONDecoder().decode(JSON.self, from: JSONEncoder().encode(history))])])])
+        }
+        shared.applyContentTabs(snapshot(index: 1, navigationRevision: 3), scope: scope)
+        let localID = shared.tabs(in: scope).first?.id
+        shared.applyContentTabs(snapshot(index: 0, navigationRevision: 4), scope: scope)
+        let refreshed = shared.tabs(in: scope).first
+        XCTAssertEqual(refreshed?.id, localID); XCTAssertEqual(refreshed?.url, entries[0].url)
+        XCTAssertEqual(refreshed?.history?.currentEntryId, "one"); XCTAssertEqual(refreshed?.history?.revision, 4)
+        XCTAssertEqual(refreshed?.history?.entries, entries, "Owner traversal preserves the full Forward list")
+        shared.revokeContentHost(String(scope.dropFirst("main:".count)))
+    }
+    @MainActor func testHistoryCacheDayBoundaryUsesCalendarAcrossDST() throws {
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: "America/Denver")!
+        let now = try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-11-15T18:00:00Z"))
+        let threshold = SharedAppStore.historyCacheStart(now: now, calendar: calendar)
+        let components = calendar.dateComponents([.year, .month, .day, .hour], from: threshold)
+        XCTAssertEqual(components.year, 2026); XCTAssertEqual(components.month, 10); XCTAssertEqual(components.day, 16); XCTAssertEqual(components.hour, 0)
+    }
+    @MainActor func testHistoryOutboxRetainsExactOwnerAndEventAcrossRestart() throws {
+        let host = UUID().uuidString, shared = SharedAppStore(), id = UUID().uuidString
+        shared.browserTabs = [BrowserDescriptor(id: id, title: "Page", url: nil, scope: "main")]
+        shared.assignBrowserOwner(id, host: host)
+        let url = URL(string: "https://example.test/page?view=one")!
+        XCTAssertTrue(shared.navigate(url, in: id)); shared.completeBrowserNavigation(url, title: "Page", in: id)
+        let visit = try XCTUnwrap(shared.historyOutbox.last(where: { $0["ownerHostId"].string == host }))
+        XCTAssertFalse(visit["eventId"].string.isEmpty); XCTAssertFalse(visit["visitedAt"].string.isEmpty)
+        XCTAssertEqual(visit["sourceHostId"].string, host); XCTAssertEqual(visit["url"].string, url.absoluteString)
+        let restarted = SharedAppStore(); defer { restarted.revokeContentHost(host) }
+        XCTAssertEqual(restarted.historyOutbox.first(where: { $0["eventId"] == visit["eventId"] }), visit)
+        restarted.assignBrowserOwner(id, host: UUID().uuidString)
+        XCTAssertEqual(restarted.historyOutbox.first(where: { $0["eventId"] == visit["eventId"] })?["ownerHostId"].string, host)
+    }
+    @MainActor func testInvalidAndFailedNavigationNeverEraseSharedForwardEntries() {
+        let shared = SharedAppStore()
+        let entries = ["one", "two", "three"].map { BrowserHistoryEntry(id: $0, url: "https://example.test/" + $0, title: $0) }
+        shared.browserTabs = [BrowserDescriptor(id: "tab", title: "two", url: entries[1].url, history: BrowserTabHistory(entries: entries, index: 1, revision: 4))]
+        shared.completeBrowserNavigation(URL(string: "about:blank")!, title: "Invalid location", in: "tab")
+        shared.failBrowserNavigation("tab", currentURL: URL(string: "about:blank"))
+        shared.unload("tab")
+        XCTAssertEqual(shared.browserTabs[0].url, entries[1].url)
+        XCTAssertEqual(shared.browserTabs[0].history?.entries, entries)
+        XCTAssertEqual(shared.browserHistory("tab", back: false).first?.url.absoluteString, entries[2].url)
+    }
+    @MainActor func testLogicalHistoryKeepsStableIDsAndFullForwardList() throws {
+        let entries = (0..<240).map { BrowserHistoryEntry(id: "entry-\($0)", url: "https://example.test/\($0)", title: "Page \($0)") }
+        let history = BrowserTabHistory(entries: entries, index: 100, currentEntryId: entries[100].id, revision: 12)
+        let retained = try XCTUnwrap(SharedAppStore.safeBrowserHistory(history))
+        XCTAssertEqual(retained.entries.count, 240); XCTAssertEqual(retained.currentEntryId, "entry-100"); XCTAssertEqual(retained.revision, 12)
+        var json = try JSONDecoder().decode(JSON.self, from: JSONEncoder().encode(retained)).object
+        json["index"] = .number(0)
+        let decoded = try XCTUnwrap(SharedAppStore.decodeBrowserHistory(.object(json)))
+        XCTAssertEqual(decoded.index, 100, "Stable selected entry identity overrides an obsolete engine index")
+    }
+    @MainActor func testTwoFingerTraversalRejectsVerticalAndShortMovement() {
+        XCTAssertEqual(NativeBrowser.Coordinator.traversalDirection(x: 100, y: 15), -1)
+        XCTAssertEqual(NativeBrowser.Coordinator.traversalDirection(x: -100, y: 15), 1)
+        XCTAssertNil(NativeBrowser.Coordinator.traversalDirection(x: 79, y: 0))
+        XCTAssertNil(NativeBrowser.Coordinator.traversalDirection(x: 100, y: 60))
+        XCTAssertNil(NativeBrowser.Coordinator.traversalDirection(x: .nan, y: 0))
+    }
+    @MainActor func testChatLinkRejectsAmbiguousAndCredentialFields() throws {
+        let host = UUID().uuidString, id = UUID().uuidString
+        let link = try XCTUnwrap(NativeChatLink.url(host: host, id: id))
+        XCTAssertEqual(NativeChatLink.parse(link)?.host, host); XCTAssertEqual(NativeChatLink.parse(link)?.id, id)
+        XCTAssertNil(NativeChatLink.parse(URL(string: link.absoluteString + "&host=" + host)!))
+        XCTAssertNil(NativeChatLink.parse(URL(string: link.absoluteString + "&token=secret")!))
+        XCTAssertNil(NativeChatLink.parse(URL(string: "https://example.test/chat?host=" + host + "&id=" + id)!))
+    }
+    @MainActor func testRunFilesFieldsUseOwnerPathsInOrder() {
+        let run: JSON = .object(["storage": .object(["run": .string("/owner/run.json"), "nativeSession": .string("/owner/session")]), "schedule": .object(["workspace": .object(["cwd": .string("/owner/start"), "additionalDirectories": .array([.string("/owner/extra")])])])])
+        XCTAssertEqual(NativeRunFilesView.paths(run).map { $0.0 }, ["Proteus run record", "Provider session folder", "Starting folder", "Additional workspace folder"])
+        XCTAssertEqual(NativeRunFilesView.paths(run).map { $0.1 }, ["/owner/run.json", "/owner/session", "/owner/start", "/owner/extra"])
+    }
+    @MainActor func testOverviewPinchRequiresCurrentPageMinimumZoom() {
+        XCTAssertTrue(NativeBrowser.Coordinator.beginsAtMinimumZoom(1, minimum: 1, fallback: nil))
+        XCTAssertFalse(NativeBrowser.Coordinator.beginsAtMinimumZoom(2, minimum: 1, fallback: 2))
+        XCTAssertFalse(NativeBrowser.Coordinator.beginsAtMinimumZoom(1, minimum: 0.5, fallback: 1), "The loaded page minimum overrides an earlier initial zoom")
+        XCTAssertTrue(NativeBrowser.Coordinator.beginsAtMinimumZoom(0.5, minimum: 0.5, fallback: 1))
+        XCTAssertFalse(NativeBrowser.Coordinator.beginsAtMinimumZoom(2, minimum: 0, fallback: 1))
+        XCTAssertFalse(NativeBrowser.Coordinator.beginsAtMinimumZoom(.nan, minimum: 1, fallback: nil))
+    }
+    @MainActor func testBrowserHistoryMenuSelectsOlderDuplicatePageInstance() async throws {
+        let shared = SharedAppStore(), id = "duplicate-navigation"
+        let base = "http://127.0.0.1:4329/browser/spa"
+        shared.browserTabs = [BrowserDescriptor(id: id, title: "SPA", url: base + "?step=1")]
+        let view = shared.webView(shared.browserTabs[0], allowLocalNavigation: true)
+        defer { shared.unloadBrowsers() }
+        for _ in 0..<200 { if !view.isLoading, shared.browserTabs[0].history?.entries.count == 1 { break }; try await Task.sleep(for: .milliseconds(50)) }
+        XCTAssertEqual(shared.browserTabs[0].history?.entries.count, 1)
+        _ = try await view.evaluateJavaScript("history.replaceState({visit:0}, '', '?step=1')")
+        for (index, step) in [2, 1, 3].enumerated() {
+            _ = try await view.evaluateJavaScript("history.pushState({visit:\(index + 1)}, '', '?step=\(step)')")
+            for _ in 0..<100 { if shared.browserTabs[0].history?.entries.count == index + 2 { break }; try await Task.sleep(for: .milliseconds(25)) }
+        }
+        XCTAssertEqual(shared.browserTabs[0].history?.entries.count, 4)
+        XCTAssertTrue(view.allowsBackForwardNavigationGestures, "An aligned native stack keeps WebKit's navigation gestures enabled after pushState")
+        let oldest = try XCTUnwrap(shared.browserHistory(id, back: true).last)
+        shared.goBrowserHistory(oldest, in: id)
+        var visit: Int?
+        for _ in 0..<100 { visit = try await view.evaluateJavaScript("history.state.visit") as? Int; if visit == 0 { break }; try await Task.sleep(for: .milliseconds(25)) }
+        XCTAssertEqual(visit, 0, "The oldest repeated URL must select its original native page instance")
+        XCTAssertEqual(shared.browserTabs[0].history?.index, 0)
+        XCTAssertEqual(shared.browserTabs[0].history?.entries.count, 4)
+    }
+    @MainActor func testSupersededBrowserCancellationKeepsNewerHistoryTraversal() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let entries = ["one", "two", "three"].map { BrowserHistoryEntry(url: "https://example.test/" + $0, title: $0) }
+        let shared = SharedAppStore(), id = "cancelled-history"
+        shared.browserTabs = [BrowserDescriptor(id: id, title: "three", url: nil, history: BrowserTabHistory(entries: entries, index: 2))]
+        let view = shared.webView(shared.browserTabs[0]); defer { shared.unloadBrowsers() }
+        let earlier = view.loadHTMLString("<p>Third page</p>", baseURL: URL(string: entries[2].url))
+        for _ in 0..<100 { if !view.isLoading, view.url?.absoluteString == entries[2].url { break }; try await Task.sleep(for: .milliseconds(50)) }
+        XCTAssertEqual(view.url?.absoluteString, entries[2].url)
+        let coordinator = NativeBrowser.Coordinator(shared: shared, life: LifeStore(keychainService: UUID().uuidString), destinations: DestinationStore(root: root, keychainService: UUID().uuidString), id: id)
+        shared.goBack(id)
+        coordinator.webView(view, didFailProvisionalNavigation: earlier, withError: NSError(domain: NSURLErrorDomain, code: NSURLErrorCancelled))
+        shared.completeBrowserNavigation(URL(string: entries[1].url)!, title: "two", in: id)
+        XCTAssertEqual(shared.browserTabs[0].history?.entries.map(\.url), entries.map(\.url), "Cancellation from an earlier load cannot reset the newer traversal or truncate its saved forward stack")
+        XCTAssertEqual(shared.browserTabs[0].history?.index, 1)
+        shared.unload(id)
+        _ = shared.navigate(URL(string: entries[2].url)!, in: id)
+        coordinator.webView(view, didFinish: earlier)
+        XCTAssertEqual(shared.browserTabs[0].url, entries[2].url, "A queued finish from an unloaded view cannot overwrite its replacement")
+    }
+    @MainActor func testBrowserSameDocumentHistoryKeepsPushStateAndHashTraversals() {
+        let shared = SharedAppStore(); let id = "spa-history"
+        shared.browserTabs = [BrowserDescriptor(id: id, title: "SPA", url: nil)]
+        let one = URL(string: "https://example.test/spa")!, two = URL(string: "https://example.test/spa?step=2")!, hash = URL(string: "https://example.test/spa?step=2#section")!
+        shared.completeBrowserNavigation(one, title: "SPA", in: id, nativePosition: 0)
+        shared.completeBrowserNavigation(two, title: "SPA", in: id, nativePosition: 1, sameDocumentObservation: true)
+        shared.completeBrowserNavigation(hash, title: "SPA", in: id, nativePosition: 2, sameDocumentObservation: true)
+        shared.completeBrowserNavigation(two, title: "SPA", in: id, nativePosition: 1, sameDocumentObservation: true)
+        XCTAssertEqual(shared.browserTabs[0].history?.index, 1)
+        XCTAssertEqual(shared.browserHistory(id, back: false).map(\.url), [hash])
+        shared.completeBrowserNavigation(one, title: "SPA", in: id, nativePosition: 0, sameDocumentObservation: true)
+        XCTAssertEqual(shared.browserTabs[0].history?.entries.count, 3)
+        XCTAssertEqual(shared.browserTabs[0].history?.index, 0)
+    }
+    @MainActor func testNewLinkedBrowserTabInsertsAfterSourceInEveryScope() {
+        for scope in ["main", "team", "chat:host:chat", "workspace:host:workspace"] {
+            let shared = SharedAppStore()
+            shared.browserTabs = [BrowserDescriptor(id: "outside", title: "Outside", url: nil, scope: "elsewhere"), BrowserDescriptor(id: "source", title: "Source", url: nil, scope: scope), BrowserDescriptor(id: "tail", title: "Tail", url: nil, scope: scope)]
+            shared.open(URL(string: "https://example.test/new"), scope: scope, afterSourceID: "source")
+            let inserted = shared.selected(in: scope)!
+            XCTAssertEqual(shared.tabs(in: scope).map(\.id), ["source", inserted, "tail"])
+            XCTAssertEqual(shared.tabs(in: "elsewhere").map(\.id), ["outside"])
+            XCTAssertFalse((try? JSONEncoder().encode(shared.browserTabs)).map { String(decoding: $0, as: UTF8.self).contains("afterSourceID") } ?? true)
+            shared.close("source")
+            shared.open(nil, scope: scope, afterSourceID: "source")
+            XCTAssertEqual(shared.tabs(in: scope).dropLast().map(\.id), [inserted, "tail"])
+        }
+    }
+    @MainActor func testLinkedBrowserInsertionKeepsMixedDocumentOrderAfterSync() {
+        let shared = SharedAppStore(), scope = "chat:host:mixed-" + UUID().uuidString
+        let initial: [JSON] = [
+            .object(["id": .string("source"), "type": .string("browser"), "title": .string("Source"), "url": .string("")]),
+            .object(["id": .string("document:doc"), "type": .string("document"), "documentId": .string("doc"), "title": .string("Document"), "mediaType": .string("text/markdown")]),
+            .object(["id": .string("tail"), "type": .string("browser"), "title": .string("Tail"), "url": .string("")])
+        ]
+        shared.applyContentTabs(.object(["revision": .number(1), "tabs": .array(initial)]), scope: scope)
+        let source = shared.tabs(in: scope)[0].id, tail = shared.tabs(in: scope)[1].id
+        shared.open(nil, scope: scope, afterSourceID: source)
+        let created = shared.selected(in: scope)!
+        XCTAssertEqual(shared.orderedChatChildren(in: scope, documentIDs: ["doc"]), [source, created, "doc", tail])
+        var echoed = initial; echoed.insert(.object(["id": .string(created), "type": .string("browser"), "title": .string("New tab"), "url": .string("")]), at: 1)
+        shared.applyContentTabs(.object(["revision": .number(2), "tabs": .array(echoed)]), scope: scope)
+        XCTAssertEqual(shared.orderedChatChildren(in: scope, documentIDs: ["doc"]), [source, created, "doc", tail])
+    }
+    @MainActor func testFinishedBrowserTraversalKeepsRestoredForwardHistory() throws {
+        let entries = ["one", "two", "three"].map { BrowserHistoryEntry(url: "https://example.test/" + $0, title: $0) }
+        let descriptor = BrowserDescriptor(id: "restored-stack", title: "three", url: entries[2].url, history: BrowserTabHistory(entries: entries, index: 2))
+        let restored = try JSONDecoder().decode(BrowserDescriptor.self, from: JSONEncoder().encode(descriptor))
+        let shared = SharedAppStore(); shared.browserTabs = [restored]
+        shared.unload(restored.id)
+        XCTAssertEqual(shared.browserTabs[0].history, restored.history, "Unloading keeps the saved per-tab stack")
+        shared.reload(restored.id)
+        shared.goBack(restored.id)
+        shared.completeBrowserNavigation(URL(string: entries[1].url)!, title: "two", in: restored.id)
+        XCTAssertEqual(shared.browserTabs[0].history?.entries, entries)
+        XCTAssertEqual(shared.browserTabs[0].history?.index, 1)
+        XCTAssertEqual(shared.browserHistory(restored.id, back: false).map(\.url.absoluteString), [entries[2].url])
+        shared.goForward(restored.id)
+        shared.completeBrowserNavigation(URL(string: entries[2].url)!, title: "three", in: restored.id)
+        XCTAssertEqual(shared.browserTabs[0].history?.entries.count, 3)
+        XCTAssertEqual(shared.browserTabs[0].history?.index, 2)
+        shared.goBack(restored.id)
+        shared.failBrowserNavigation(restored.id, currentURL: URL(string: entries[2].url))
+        XCTAssertEqual(shared.browserTabs[0].history?.index, 1, "Engine failure cannot change the logical cursor already selected by the user")
+        XCTAssertEqual(shared.browserTabs[0].history?.entries, entries, "A failed/cancelled traversal retains the forward stack")
+        shared.prepareBrowserHistoryNavigation(URL(string: entries[0].url)!, in: restored.id)
+        shared.completeBrowserNavigation(URL(string: entries[0].url)!, title: "one", in: restored.id)
+        XCTAssertEqual(shared.browserTabs[0].history?.index, 0)
+        XCTAssertEqual(shared.browserHistory(restored.id, back: false).count, 2)
+        shared.completeBrowserNavigation(URL(string: "https://example.test/new")!, title: "new", in: restored.id)
+        XCTAssertEqual(shared.browserTabs[0].history?.entries.map(\.url), [entries[0].url, "https://example.test/new"])
+    }
+    @MainActor func testRecentSitesUseAccountHistoryAndLocalDefaultProfilesAcrossScopes() {
+        let shared = SharedAppStore()
+        let publicEntries = [BrowserHistoryEntry(url: "https://example.test/local?view=one", title: "Local site"), BrowserHistoryEntry(url: "https://example.test/auth?token=private", title: "Private token")]
+        shared.browserTabs = [
+            BrowserDescriptor(id: "workspace-browser", title: "Local", url: publicEntries[0].url, scope: "workspace:a:new", history: BrowserTabHistory(entries: publicEntries, index: 0)),
+            BrowserDescriptor(id: "private-profile-browser", title: "Private profile", url: "https://private.test/", scope: "main", history: BrowserTabHistory(entries: [BrowserHistoryEntry(url: "https://private.test/", title: "Private profile")], index: 0), profileId: UUID().uuidString)
+        ]
+        shared.snapshot = .object(["history": .array([.object(["id": .string("shared"), "url": .string("https://shared.test/"), "title": .string("Shared site")])])])
+        XCTAssertEqual(shared.recentHistory.map { $0["url"].string }, ["https://shared.test/", "https://example.test/auth?token=private", "https://example.test/local?view=one"])
+        XCTAssertEqual(shared.recentHistory.last?["deviceName"].string, "This device")
+        XCTAssertEqual(shared.recentHistory.last?["visitedAt"], .null, "A restored backstack has no recorded visit timestamp to invent")
+        shared.snapshot = .object(["history": .array((1...2).map { .object(["id": .string("visit-\($0)"), "url": .string("https://shared.test/"), "visitedAt": .string("2026-10-12T12:00:0\($0)Z")]) })])
+        XCTAssertEqual(shared.recentHistory.prefix(2).map { $0["id"].string }, ["visit-1", "visit-2"], "Merging local fallback must preserve distinct authoritative visits to the same URL")
+    }
+    func testNativeContentTabSymbolsMatchTheirType() {
+        XCTAssertEqual(NativeTabSymbol.name(kind: "chat"), "bubble.left.and.bubble.right")
+        XCTAssertEqual(NativeTabSymbol.name(kind: "chat", chatType: "internet"), "magnifyingglass")
+        XCTAssertEqual(NativeTabSymbol.name(kind: "workspace"), "square.grid.2x2")
+        XCTAssertEqual(NativeTabSymbol.name(kind: "browser"), "globe")
+        XCTAssertEqual(NativeTabSymbol.name(kind: "terminal"), "terminal")
+        XCTAssertEqual(NativeTabSymbol.name(kind: "document"), "doc.text")
+        XCTAssertEqual(NativeTabSymbol.name(kind: "document", mediaType: "text/html"), "doc.richtext")
+        XCTAssertEqual(NativeTabSymbol.name(kind: "schedule"), "calendar")
+        XCTAssertEqual(NativeTabSymbol.name(kind: "live"), "rectangle.on.rectangle")
+    }
+    func testWorkspaceIdentityUsesStableIDsAndDeduplicatesPerContainer() {
+        let summary: JSON = .object(["workspaceId": .string("workspace-a"), "workspaceName": .string("Renamed workspace")])
+        XCTAssertEqual(NativeWorkspaceIdentity.workspaceID(summary), "workspace-a")
+        XCTAssertEqual(NativeWorkspaceIdentity.workspaceID(.object(["workspaceName": .string("Ambiguous name")])), "")
+        XCTAssertEqual(NativeWorkspaceNavigation.deduplicated(["a", "b", "a", "", "b"]), ["a", "b"])
+        let profile: JSON = .object(["id": .string("same-id"), "name": .string("Same name")])
+        XCTAssertNotEqual(NativeWorkspaceIdentity(hostID: "host-a", hostName: "A", profile: profile).id, NativeWorkspaceIdentity(hostID: "host-b", hostName: "B", profile: profile).id)
+    }
+
+    @MainActor func testWorkspaceCopyIsolationAndMixedContentSynchronization() async throws {
+        let (data, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/pair")!)
+        let fixture = try JSONDecoder().decode(JSON.self, from: data)
+        let remote = RemoteStore(); remote.forget(); try remote.pair(fixture["code"].string)
+        let shared = SharedAppStore(); defer { shared.unloadBrowsers(); remote.forget() }
+        for _ in 0..<100 { if remote.connected && remote.state["capabilities"].array.contains(.string("workspaces.v1")) { break }; try await Task.sleep(for: .milliseconds(100)) }
+        XCTAssertTrue(remote.connected)
+        let catalog = try await remote.request("context.get", [:]), sourceID = catalog["defaultWorkspaceId"].string
+        let copied = try await remote.request("context.update", ["action": .string("copy-workspace"), "workspaceId": .string(sourceID), "name": .string("Native copied workspace"), "expectedRevision": catalog["revision"]])
+        let copyID = copied["copiedWorkspaceId"].string; XCTAssertFalse(copyID.isEmpty); XCTAssertNotEqual(copyID, sourceID)
+        let entries = try await remote.request("context.refresh", ["workspaceId": .string(copyID)]), entryID = try XCTUnwrap(entries["entries"].array.first?["id"])
+        _ = try await remote.request("context.mode", ["workspaceId": .string(copyID), "id": entryID, "mode": .string("disabled"), "expectedRevision": entries["revision"]])
+        let original = try await remote.request("context.get", ["workspaceId": .string(sourceID)])
+        XCTAssertNotEqual(original["entries"].array.first { $0["id"] == entryID }?["mode"], .string("disabled"))
+        let created = try await remote.request("chat.start", ["workspaceId": .string(copyID), "provider": .string("rehearsal"), "prompt": .string("Native workspace scope rehearsal")]), chatID = created["runId"].string
+        let chat: JSON = .object(["id": .string("chat:" + chatID), "type": .string("chat"), "chatId": .string(chatID), "title": .string("Workspace chat")])
+        let browser: JSON = .object(["id": .string("workspace-browser"), "type": .string("browser"), "title": .string("Reference"), "url": .string("https://example.test/reference")])
+        _ = try await remote.request("tabs.mutate", ["scope": .string("workspace"), "id": .string(copyID), "expectedRevision": .number(0), "operations": .array([chat, browser].map { .object(["action": .string("open"), "tab": $0]) })])
+        let scope = "workspace:\(remote.connection!.hostId):\(copyID)"
+        await shared.refreshContentTabs(scope: scope, remote: remote, kind: "workspace", id: copyID)
+        XCTAssertEqual(shared.tabs(in: scope).count, 1)
+        XCTAssertEqual(shared.workspaceContentDescriptors[scope]?.filter { $0["type"].string == "chat" }.count, 1)
+        shared.open(nil, scope: scope)
+        for _ in 0..<10 { await shared.refreshContentTabs(scope: scope, remote: remote, kind: "workspace", id: copyID); try await Task.sleep(for: .milliseconds(100)) }
+        let result = try await remote.request("tabs.get", ["scope": .string("workspace"), "id": .string(copyID)])
+        XCTAssertEqual(result["tabs"].array.filter { $0["type"].string == "chat" && $0["chatId"].string == chatID }.count, 1, "Browser sync must retain the chat descriptor")
+        XCTAssertEqual(result["tabs"].array.filter { $0["type"].string == "browser" }.count, 2)
+        _ = try await remote.request("chat.cancel", ["id": .string(chatID)])
+
+        let (secondData, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/pair?host=second")!)
+        let secondFixture = try JSONDecoder().decode(JSON.self, from: secondData)
+        let second = RemoteStore(connection: nil, legacyCredentials: false); try second.pair(secondFixture["code"].string); defer { second.forget() }
+        for _ in 0..<100 { if second.connected { break }; try await Task.sleep(for: .milliseconds(100)) }
+        let targetCatalog = try await second.request("context.get", [:])
+        let sourceProfile = try XCTUnwrap(original["workspaces"].array.first { $0["id"].string == sourceID })
+        let targetRoot = try XCTUnwrap(targetCatalog["workspaces"].array.first?["cwd"])
+        let imported = try await second.request("context.update", ["action": .string("import-workspace"), "name": .string("Native mapped copy"), "configuration": sourceProfile, "entries": original["entries"], "pathMappings": .array([.object(["from": sourceProfile["cwd"], "to": targetRoot])]), "expectedRevision": targetCatalog["revision"]])
+        let importedProfile = try XCTUnwrap(imported["workspaces"].array.first { $0["id"] == imported["copiedWorkspaceId"] })
+        XCTAssertEqual(importedProfile["cwd"], targetRoot)
+        XCTAssertEqual(importedProfile["approvals"]["mode"], .string("ask"))
+        XCTAssertTrue(importedProfile["approvals"]["folders"].array.isEmpty)
+        XCTAssertNotEqual(second.connection?.hostId, remote.connection?.hostId)
+    }
+
+    @MainActor func testMarkdownRenderingSharesOnlyItsEphemeralStoreAndIdleSearchDoesNotPublish() {
+        let first = MarkdownView.rendererConfiguration(), second = MarkdownView.rendererConfiguration()
+        XCTAssertTrue(first.websiteDataStore === second.websiteDataStore)
+        XCTAssertFalse(first.websiteDataStore.isPersistent)
+        XCTAssertFalse(first.userContentController === second.userContentController, "Each message retains its own bridge")
+        XCTAssertFalse(first.websiteDataStore === WKWebsiteDataStore.default())
+        XCTAssertFalse(first.websiteDataStore === IsolatedArtifactWebView.configuration(scriptsEnabled: true).websiteDataStore)
+        let search = NativePageSearch()
+        var publications = 0
+        let observation = search.objectWillChange.sink { publications += 1 }
+        defer { observation.cancel() }
+        for index in 0..<100 { search.count(0, key: index, query: "") }
+        XCTAssertEqual(publications, 0, "Idle message renderers must not invalidate the entire chat")
+        search.query = "matching"; search.count(2, key: 4, query: "matching")
+        XCTAssertEqual(search.total, 2)
+        search.count(0, key: 4, query: "matching"); XCTAssertEqual(search.total, 0)
+        search.close(); XCTAssertTrue(search.counts.isEmpty)
+    }
+
+    func testConversationEndIncludesComposerSafeAreaInset() {
+        let state = NativeScrollSnapshot(offset: 1100, contentHeight: 2000, viewportHeight: 1000, viewportWidth: 390, viewportTop: 0, bottomInset: 100)
+        XCTAssertEqual(state.maxOffset, 1100)
+        XCTAssertTrue(state.atEnd)
+        let obscured = NativeScrollSnapshot(offset: 1000, contentHeight: 2000, viewportHeight: 1000, viewportWidth: 390, viewportTop: 0, bottomInset: 100)
+        XCTAssertFalse(obscured.atEnd, "Content above the composer is not the real end of the conversation")
+    }
+    func testReturnDetectionPreservesPastesAutocorrectionAndUnicode() {
+        for (before, after) in [("", "\n"), ("ab", "a\nb"), ("ab", "ab\n"), ("ab", "\nab"), ("a\nb", "a\n\nb"), ("café 👨‍👩‍👧", "café\n 👨‍👩‍👧")] {
+            XCTAssertTrue(NativeChatTextEdit.isSingleReturn(before: before, after: after))
+        }
+        for (before, after) in [("a", "ab"), ("a", ""), ("", "two\nlines"), ("teh", "the\n"), ("ab", "a\n\nb"), ("a\nb", "a\nxb"), ("cafe", "café")] {
+            XCTAssertFalse(NativeChatTextEdit.isSingleReturn(before: before, after: after))
+        }
+        let long = String(repeating: "Long draft 👨‍👩‍👧 café\n", count: 500)
+        XCTAssertTrue(NativeChatTextEdit.isSingleReturn(before: long, after: long + "\n"))
+        XCTAssertFalse(NativeChatTextEdit.isSingleReturn(before: long, after: long + "x"))
+    }
+
+    func testReplyEditorGrowsOnlyForExplicitLineBreaksAndCapsWholeCard() {
+        let height = { (text: String, screen: CGFloat, chrome: CGFloat) in
+            NativeReplyEditorLayout.height(text: text, lineHeight: 22, screenHeight: screen, chromeHeight: chrome)
+        }
+        XCTAssertEqual(height("", 900, 76), 44)
+        XCTAssertEqual(height(String(repeating: "A long line that will wrap. ", count: 100), 900, 76), 44)
+        XCTAssertEqual(height("first\nsecond", 900, 76), 60)
+        XCTAssertEqual(height("first\r\nsecond", 900, 76), 60)
+        XCTAssertEqual(height("first\n", 900, 76), 60)
+        for screen in [CGFloat(400), 900, 1376] {
+            for chrome in [CGFloat(76), 180] {
+                XCTAssertLessThanOrEqual(height(String(repeating: "line\n", count: 1000), screen, chrome) + chrome, screen * 0.5)
+            }
+        }
+    }
+
+    @MainActor func testReplyEditorKeyboardCommandsKeepShiftReturnAsText() {
+        let view = NativeReplyTextView(); view.submitOnReturn = true
+        view.text = "First line"; view.selectedRange = NSRange(location: view.text.utf16.count, length: 0)
+        var submitted = 0; view.submit = { submitted += 1 }
+        let newline = view.keyCommands!.first { $0.input == "\r" && $0.modifierFlags == .shift }!
+        XCTAssertTrue(view.canPerformAction(newline.action!, withSender: newline))
+        view.perform(newline.action!, with: newline)
+        XCTAssertEqual(view.text, "First line\n"); XCTAssertEqual(submitted, 0)
+        let send = view.keyCommands!.first { $0.input == "\r" && $0.modifierFlags.isEmpty }!
+        view.perform(send.action!, with: send)
+        XCTAssertEqual(submitted, 1); XCTAssertEqual(view.text, "First line\n")
+    }
+
+    @MainActor func testTypingDraftDoesNotPublishConversationChangesAndKeepsScopesSeparate() {
+        let first = RemoteStore(connection: nil), second = RemoteStore(connection: nil)
+        let draft = NativeReplyDraft()
+        var publications = 0
+        let observation = first.objectWillChange.sink { publications += 1 }
+        defer { observation.cancel() }
+        draft.activate(store: first, key: "reply:chat")
+        for _ in 0..<300 { draft.text += "a" }
+        XCTAssertEqual(publications, 0, "Typing must not invalidate every observer of the Mac's history")
+        XCTAssertEqual(first.draft("reply:chat").string, String(repeating: "a", count: 300))
+        first.setDraft("answer:chat:question", .string("Earlier answer"))
+        XCTAssertEqual(publications, 1, "External draft and attachment changes still notify their views")
+        publications = 0
+        draft.activate(store: first, key: "answer:chat:question")
+        XCTAssertEqual(draft.text, "Earlier answer")
+        draft.text = "Edited answer\nwith another line"
+        draft.activate(store: second, key: "reply:chat")
+        XCTAssertEqual(draft.text, "", "Same chat ID on another Mac cannot inherit text")
+        draft.text = "Other Mac"
+        draft.activate(store: first, key: "reply:chat")
+        XCTAssertEqual(draft.text, String(repeating: "a", count: 300))
+        XCTAssertEqual(first.draft("answer:chat:question").string, "Edited answer\nwith another line")
+        XCTAssertEqual(second.draft("reply:chat").string, "Other Mac")
+        draft.text = ""
+        XCTAssertEqual(first.draft("reply:chat"), .null)
+        XCTAssertEqual(publications, 0)
+    }
+
+    @MainActor func testBackgroundCacheThenLifecycleFlushKeepsLatestLongChatDraft() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("proteus-typing-" + UUID().uuidString)
+        let connection = DeviceConnection(relay: "wss://relay.example.test", hostId: UUID().uuidString, deviceId: UUID().uuidString, key: RemoteCrypto.random())
+        let store = RemoteStore(connection: connection, cacheRoot: root, legacyCredentials: false)
+        defer { store.forget(); try? FileManager.default.removeItem(at: root) }
+        let events: [JSON] = (0..<2000).map { .object(["role": .string("assistant"), "text": .string("Synthetic \($0): " + String(repeating: "history ", count: 64))]) }
+        store.chats["chat"] = .object(["events": .array(events)])
+        let draft = NativeReplyDraft(); draft.activate(store: store, key: "reply:chat")
+        draft.text = "Initial text"
+        try await Task.sleep(for: .milliseconds(1200))
+        draft.text = "Latest café draft\nsecond line"
+        store.flushCache()
+        let restored = RemoteStore(connection: connection, cacheRoot: root, legacyCredentials: false)
+        XCTAssertEqual(restored.draft("reply:chat").string, draft.text)
+        XCTAssertEqual(restored.chats["chat"]?["events"].array.count, 2000)
+        store.forget()
+        try await Task.sleep(for: .milliseconds(1200))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: store.cacheURL.path), "Queued cache work cannot recreate a forgotten device's history")
+    }
+
+    @MainActor func testBrowserProfilesKeepPersistentStoresSeparateAndDecodeLegacyDefault() async throws {
+        let id = UUID().uuidString
+        let first = SharedAppStore.persistentProfileStoreID(account: "synthetic-a", id: id)
+        XCTAssertEqual(first, SharedAppStore.persistentProfileStoreID(account: "synthetic-a", id: id))
+        XCTAssertNotEqual(first, SharedAppStore.persistentProfileStoreID(account: "synthetic-b", id: id))
+        let second = SharedAppStore.persistentProfileStoreID(account: "synthetic-a", id: UUID().uuidString)
+        XCTAssertNotEqual(first, second)
+        let one = WKWebsiteDataStore(forIdentifier: first), two = WKWebsiteDataStore(forIdentifier: second)
+        XCTAssertTrue(one.isPersistent); XCTAssertTrue(two.isPersistent)
+        let cookie = try XCTUnwrap(HTTPCookie(properties: [.domain: "profile.test", .path: "/", .name: "synthetic-profile", .value: "first"]))
+        await one.httpCookieStore.setCookie(cookie)
+        let isolatedCookies = await two.httpCookieStore.allCookies(); XCTAssertTrue(isolatedCookies.isEmpty)
+        let restored = WKWebsiteDataStore(forIdentifier: first)
+        let cookies = await restored.httpCookieStore.allCookies()
+        XCTAssertEqual(cookies.first(where: { $0.name == "synthetic-profile" })?.value, "first")
+        await one.httpCookieStore.deleteCookie(cookie)
+        let legacy = try JSONDecoder().decode(BrowserDescriptor.self, from: Data(#"{"id":"legacy","title":"Legacy","scope":"main"}"#.utf8))
+        XCTAssertEqual(legacy.profileId, "default")
+        let shared = SharedAppStore(); defer { shared.unloadBrowsers() }
+        XCTAssertTrue(shared.webView(legacy).configuration.websiteDataStore.isPersistent)
+        let unavailable = BrowserDescriptor(id: "missing", title: "Unavailable", url: nil, profileId: id)
+        XCTAssertFalse(shared.webView(unavailable).configuration.websiteDataStore.isPersistent)
+    }
     func testNavigationCountsUseHostTotalsBeyondCachedChatPage() {
-        let first: JSON = .object(["runCount": .number(120), "attentionCount": .number(7), "schedules": .array([.object(["id": .string("a")])]), "runs": .array([.object(["id": .string("recent")])])])
-        let second: JSON = .object(["runCount": .number(9), "attentionCount": .number(2), "schedules": .array([]), "runs": .array([])])
-        XCTAssertEqual(NativeNavigationCounts.chats([first, second]), 129)
+        let first: JSON = .object(["runningChatCount": .number(4), "runCount": .number(120), "attentionCount": .number(7), "schedules": .array([.object(["id": .string("a")])]), "runs": .array([.object(["id": .string("recent")])])])
+        let second: JSON = .object(["runningChatCount": .number(2), "runCount": .number(9), "attentionCount": .number(2), "schedules": .array([]), "runs": .array([])])
+        XCTAssertEqual(NativeNavigationCounts.chats([first, second]), 6)
         XCTAssertEqual(NativeNavigationCounts.attention([first, second]), 9)
         XCTAssertEqual(NativeNavigationCounts.schedules([first, second]), 1)
         XCTAssertNil(NativeNavigationCounts.attention([first, .object(["runs": .array([])])]), "An older host without an exact total must not display a partial count as complete")
         XCTAssertNil(NativeNavigationCounts.chats([first, .null]), "An unavailable destination must not disappear from an aggregate count")
-        XCTAssertNil(NativeNavigationCounts.chats([first, .object(["runCount": .string("9")])]), "A malformed total must not look like zero")
+        XCTAssertNil(NativeNavigationCounts.chats([first, .object(["runningChatCount": .string("9")])]), "A malformed total must not look like zero")
         XCTAssertNil(NativeNavigationCounts.schedules([first, .object(["schedules": .null])]))
         XCTAssertTrue(nativeNeedsAttention(.object(["status": .string("awaiting_input")])))
         XCTAssertTrue(nativeNeedsAttention(.object(["status": .string("failed")])))
         XCTAssertFalse(nativeNeedsAttention(.object(["status": .string("failed"), "failureReviewedAt": .string("2026-10-05T21:00:00Z")])))
         XCTAssertFalse(nativeNeedsAttention(.object(["status": .string("failed"), "attentionRequired": .bool(false)])))
         XCTAssertFalse(nativeNeedsAttention(.object(["status": .string("awaiting_input"), "archivedAt": .string("2026-10-05T21:00:00Z")])))
+    }
+    func testRunningChatCountsDeduplicateAndExcludeInactiveRows() {
+        func row(_ id: String, _ status: String, archived: Bool = false) -> JSON { .object(["id": .string(id), "status": .string(status), "archived": .bool(archived)]) }
+        let first: JSON = .object(["hostId": .string("one"), "runs": .array([row("same", "running"), row("same", "running"), row("queued", "queued"), row("done", "completed"), row("input", "awaiting_input"), row("archived", "running", archived: true), row("", "running")])])
+        let second: JSON = .object(["hostId": .string("two"), "runs": .array([row("same", "running")])])
+        XCTAssertEqual(NativeNavigationCounts.chats([first, first, second]), 2, "Duplicate host/chat representations count once; matching IDs on separate hosts remain distinct")
+        XCTAssertEqual(NativeNavigationCounts.chats([.object(["runs": .array([row("queued", "queued")])])]), 0)
+        XCTAssertNil(NativeNavigationCounts.chats([.object(["runningChatCount": .number(-1)])]))
+    }
+    @MainActor func testRemoteDisplayNameUsesAuthenticatedHostLabel() {
+        let remote = RemoteStore(connection: nil, legacyCredentials: false)
+        XCTAssertEqual(remote.displayName, "Connected computer")
+        remote.state = .object(["hostName": .string("Studio workstation")])
+        XCTAssertEqual(remote.displayName, "Studio workstation")
     }
     func testAttentionCountUsesCompleteLegacyHostSummariesOnly() {
         let awaiting: JSON = .object(["id": .string("a"), "status": .string("awaiting_input"), "attentionRequired": .bool(true)])
@@ -148,14 +813,64 @@ final class RemoteTests: XCTestCase {
         XCTAssertTrue(shell.contains("default-src 'none'"))
         XCTAssertTrue(shell.contains("connect-src 'none'"))
         XCTAssertTrue(shell.contains("form-action 'none'"))
+        let staticHTML = IsolatedArtifactWebView.shell("<p>Static snapshot stays visible</p>", scriptsEnabled: false)
+        XCTAssertTrue(staticHTML.contains("<p>Static snapshot stays visible</p>"))
+        XCTAssertTrue(staticHTML.contains("script-src 'none'"))
+        XCTAssertTrue(staticHTML.contains("frame-src 'none'"))
         XCTAssertFalse(IsolatedArtifactWebView.configuration(scriptsEnabled: false).defaultWebpagePreferences.allowsContentJavaScript)
         XCTAssertTrue(IsolatedArtifactWebView.configuration(scriptsEnabled: true).defaultWebpagePreferences.allowsContentJavaScript)
         XCTAssertFalse(IsolatedArtifactWebView.configuration(scriptsEnabled: true).websiteDataStore.isPersistent)
+    }
+    @MainActor func testSelectedPhotoLoadsAsynchronouslyAndRejectsUnreadableItems() async throws {
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 2, height: 2)).image { context in UIColor.green.setFill(); context.fill(CGRect(x: 0, y: 0, width: 2, height: 2)) }
+        let png = try XCTUnwrap(image.pngData()), provider = NSItemProvider()
+        provider.registerDataRepresentation(forTypeIdentifier: "public.png", visibility: .all) { completion in completion(png, nil); return nil }
+        let data = try await selectedPhotoData(provider)
+        XCTAssertEqual(data, png); XCTAssertNotNil(UIImage(data: data))
+        XCTAssertNil(NativeAttachmentBudget.rejection(existingCount: 0, existingBytes: 0, incomingBytes: data.count))
+        do { _ = try await selectedPhotoData(NSItemProvider()); XCTFail("An unreadable selection must report an error") } catch { XCTAssertTrue(error.localizedDescription.contains("photo could not be read")) }
     }
     func testFailedToolActivityIsActionableWhileSuccessfulRoutineActivityCanCollapse() {
         XCTAssertTrue(toolActivityFailed(.object(["name": .string("bash"), "status": .string("completed"), "output": .string("permission denied\n<shellId: local completed with exit code 1>")])))
         XCTAssertTrue(toolActivityFailed(.object(["name": .string("read_file"), "status": .string("failed"), "error": .string("Access denied")])))
         XCTAssertFalse(toolActivityFailed(.object(["name": .string("read_file"), "status": .string("completed")])))
+    }
+    func testActivityGroupsSystemAndApprovalsUntilCommunication() {
+        let tool: JSON = .object(["role": .string("tool"), "data": .object(["tool": .object([:])])])
+        let approval: JSON = .object(["role": .string("system"), "data": .object(["permission": .object([:])])])
+        let system: JSON = .object(["role": .string("system"), "text": .string("Synthetic note")])
+        let user: JSON = .object(["role": .string("user"), "text": .string("Next request")])
+        let model: JSON = .object(["role": .string("assistant"), "text": .string("Response")])
+        let events = [user, tool, system, approval, model, system, user]
+        XCTAssertEqual(NativeActivity.group(events: events, startingAt: 1), [tool, system, approval])
+        XCTAssertEqual(NativeActivity.group(events: events, startingAt: 5), [system])
+        XCTAssertTrue(NativeActivity.group(events: events, startingAt: 0).isEmpty)
+        XCTAssertTrue(NativeActivity.group(events: events, startingAt: 4).isEmpty)
+        XCTAssertTrue(NativeActivity.group(events: events, startingAt: -1).isEmpty)
+        XCTAssertEqual(NativeHistoryWindow.start(events: [tool, system, approval]), 0)
+    }
+    func testIndividualToolElapsedUsesRecordedTimingWithoutTurnClipping() {
+        let now = ProviderAllowance.date("2026-10-12T12:00:20Z")!
+        let finished: JSON = .object(["status": .string("completed"), "startedAt": .string("2026-10-12T12:00:00Z"), "finishedAt": .string("2026-10-12T12:00:04.250Z")])
+        XCTAssertEqual(NativeActivity.toolSeconds(finished, now: now, verified: false), 4.25)
+        var recorded = finished.object; recorded["durationMs"] = .number(120)
+        XCTAssertEqual(NativeActivity.toolSeconds(.object(recorded), now: now, verified: false), 0.12)
+        XCTAssertEqual(NativeActivity.elapsedLabel(0.12), "Elapsed 120 ms")
+        XCTAssertEqual(NativeActivity.elapsedLabel(nil), "Elapsed unavailable")
+        XCTAssertNil(NativeActivity.toolSeconds(.object(["status": .string("completed")]), now: now, verified: true))
+        XCTAssertNil(NativeActivity.toolSeconds(.object(["status": .string("completed"), "startedAt": .string("2026-10-12T12:00:00Z")]), now: now, verified: true))
+        let running: JSON = .object(["status": .string("running"), "startedAt": .string("2026-10-12T12:00:00Z")])
+        XCTAssertEqual(NativeActivity.toolSeconds(running, now: now, verified: true), 20)
+        XCTAssertNil(NativeActivity.toolSeconds(running, now: now, verified: false))
+        XCTAssertNil(NativeActivity.toolSeconds(.object(["status": .string("completed"), "durationMs": .number(-1)]), now: now, verified: true))
+        recorded["durationMs"] = .null; recorded["finishedAt"] = .string("2026-10-11T12:00:00Z")
+        XCTAssertNil(NativeActivity.toolSeconds(.object(recorded), now: now, verified: true))
+    }
+    func testApprovalReferencePreservesHistoricalOriginalRequest() {
+        XCTAssertEqual(NativeActivity.permissionCallID(.object(["toolCallId": .string("direct"), "request": .string("{\"toolCallId\":\"historical\"}")])), "direct")
+        XCTAssertEqual(NativeActivity.permissionCallID(.object(["request": .string("{\"toolCallId\":\"historical\"}")])), "historical")
+        XCTAssertEqual(NativeActivity.permissionCallID(.object(["request": .string("shortened or unstructured request")])), "")
+        XCTAssertTrue(nativeTimestamp(ProviderAllowance.date("2026-10-12T12:00:04Z")!, timezone: "UTC", includeSeconds: true).contains("12:00:04"))
     }
     @MainActor func testRestoredDocumentTabKeepsStableIdentityWithoutBodyOrApproval() {
         let chatKey = "chat:synthetic-host:" + UUID().uuidString
@@ -222,6 +937,9 @@ final class RemoteTests: XCTestCase {
         XCTAssertEqual(local.contentTabId, "shared-browser-a"); XCTAssertNotEqual(local.id, local.contentTabId)
         XCTAssertTrue(shared.unloadedBrowsers.contains(local.id)); XCTAssertNil(shared.selected(in: scope))
         shared.select(local.id, in: scope)
+        // Selecting records a real interaction. Settle that metadata write before
+        // arranging the independent client's concurrent descriptor addition.
+        for _ in 0..<100 { await shared.refreshContentTabs(scope: scope, remote: remote, kind: "chat", id: id); if shared.contentPending[scope] == nil { break }; try await Task.sleep(for: .milliseconds(50)) }
         let current = try await remote.request("tabs.get", ["scope": .string("chat"), "id": .string(id)])
         let concurrent: JSON = .object(["id": .string("shared-browser-b"), "type": .string("browser"), "title": .string("Concurrent"), "url": .string("https://example.test/two")])
         _ = try await remote.request("tabs.mutate", ["scope": .string("chat"), "id": .string(id), "expectedRevision": current["revision"], "operations": .array([.object(["action": .string("open"), "tab": concurrent])])])
@@ -277,15 +995,61 @@ final class RemoteTests: XCTestCase {
     @MainActor func testBrowserBackstackSurvivesDescriptorRoundTrip() throws {
         let history = BrowserTabHistory(entries: [BrowserHistoryEntry(url: "https://example.test/one", title: "One"), BrowserHistoryEntry(url: "https://example.test/login?token=secret", title: "Login"), BrowserHistoryEntry(url: "https://example.test/two", title: "Two")], index: 2)
         let safe = try XCTUnwrap(SharedAppStore.safeBrowserHistory(history))
-        XCTAssertEqual(safe.entries.count, 2); XCTAssertEqual(safe.index, 1)
+        XCTAssertEqual(safe.entries.count, 3); XCTAssertEqual(safe.index, 2)
         let descriptor = BrowserDescriptor(id: "test", title: "Two", url: "https://example.test/two", history: safe)
         let restored = try JSONDecoder().decode(BrowserDescriptor.self, from: JSONEncoder().encode(descriptor))
         let shared = SharedAppStore(); shared.browserTabs = [restored]
         let back = try XCTUnwrap(shared.browserHistory("test", back: true).first)
-        XCTAssertEqual(back.url.absoluteString, "https://example.test/one")
+        XCTAssertEqual(back.url.absoluteString, "https://example.test/login?token=secret")
         shared.goBrowserHistory(back, in: "test")
-        XCTAssertEqual(shared.browserTabs.first?.history?.index, 0)
+        XCTAssertEqual(shared.browserTabs.first?.history?.index, 1)
         XCTAssertEqual(shared.browserHistory("test", back: false).first?.url.absoluteString, "https://example.test/two")
+    }
+    func testMobileCollapsedActivityUsesWholeTransportPage() {
+        let events: [JSON] = (0..<2507).map { _ in .object(["data": .object(["tool": .object(["output": .string(String(repeating: "x", count: 20000))])])]) }
+        XCTAssertEqual(NativeHistoryWindow.start(events: events), 2407)
+    }
+    func testMobileHistoryStartsSmallAndAdvancesWithoutDroppingContent() {
+        let events: [JSON] = (0..<1000).map { .object(["text": .string("Message \($0)")]) }
+        var start = NativeHistoryWindow.start(events: events)
+        XCTAssertEqual(start, 988)
+        var seen = Set(start..<events.count)
+        while start > 0 {
+            let next = NativeHistoryWindow.start(events: events, before: start)
+            XCTAssertLessThan(next, start)
+            XCTAssertLessThanOrEqual(start - next, NativeHistoryWindow.pageCount)
+            seen.formUnion(next..<start); start = next
+        }
+        XCTAssertEqual(seen.count, 1000)
+        let large: [JSON] = (0..<30).map { _ in .object(["text": .string(String(repeating: "x", count: 20000))]) }
+        XCTAssertEqual(NativeHistoryWindow.start(events: large), 28)
+        XCTAssertEqual(NativeHistoryWindow.start(events: [.object(["text": .string(String(repeating: "x", count: 100000))])]), 0, "A single long message must remain complete")
+    }
+    func testHistoryPrefetchWaitsForBottomAndUserReadingButFillsShortScreen() {
+        XCTAssertFalse(NativeHistoryWindow.shouldPrefetch(offset: 0, viewport: 800, content: 9000, reading: false, ready: false))
+        XCTAssertFalse(NativeHistoryWindow.shouldPrefetch(offset: 0, viewport: 800, content: 9000, reading: false, ready: true))
+        XCTAssertFalse(NativeHistoryWindow.shouldPrefetch(offset: 8000, viewport: 800, content: 9000, reading: true, ready: true))
+        XCTAssertTrue(NativeHistoryWindow.shouldPrefetch(offset: 300, viewport: 800, content: 9000, reading: true, ready: true))
+        XCTAssertTrue(NativeHistoryWindow.shouldPrefetch(offset: 1800, viewport: 800, content: 9000, reading: true, ready: true), "Prepare visible history before reaching the top")
+        XCTAssertFalse(NativeHistoryWindow.shouldPrefetch(offset: 2400, viewport: 800, content: 9000, reading: true, ready: true))
+        let events: [JSON] = (0..<1000).map { .object(["text": .string("Message \($0)")]) }
+        XCTAssertEqual(NativeHistoryWindow.start(events: events, before: 988, preparingOlder: true), 964, "Keep initial rendering small but prepare older history in larger batches")
+        XCTAssertTrue(NativeHistoryWindow.shouldPrefetch(offset: 0, viewport: 1000, content: 500, reading: false, ready: true))
+    }
+    @MainActor func testCompletedRuntimeDoesNotRunPeriodicClock() {
+        let store = RemoteStore(connection: nil)
+        store.connected = true; store.runtimeClockOffset = 0
+        let finished: JSON = .object(["intervals": .array([.array([.string("2026-10-10T15:00:00Z"), .string("2026-10-10T15:00:10Z")])])])
+        XCTAssertFalse(runtimeClockRunning(turns: [finished], tools: [], verified: true))
+        let running: JSON = .object(["activeSince": .string("2026-10-10T15:00:00Z")])
+        XCTAssertTrue(runtimeClockRunning(turns: [running], tools: [], verified: true))
+        XCTAssertFalse(runtimeClockRunning(turns: [running], tools: [], verified: false))
+        XCTAssertTrue(runtimeClockRunning(turns: [], tools: [.object(["status": .string("running")])], verified: true))
+        XCTAssertFalse(runtimeClockRunning(turns: [], tools: [.object(["status": .string("completed"), "finishedAt": .string("2026-10-10T15:01:00Z")])], verified: true))
+        XCTAssertEqual(runtimeSeconds(finished, now: Date(), verified: true), 10)
+        XCTAssertNil(ProviderAllowance.date(""))
+        XCTAssertNotNil(ProviderAllowance.date("2026-10-10T15:00:00.123Z"))
+        XCTAssertNotNil(ProviderAllowance.date("2026-10-10T15:00:00Z"))
     }
     @MainActor func testHistoryPagesStayContiguousWhenNewMessagesArrive() {
         let store = RemoteStore(); store.forget()
@@ -723,35 +1487,57 @@ final class NativeParityTests: XCTestCase {
         for tab in shared.browserTabs { shared.close(tab.id) }
     }
     @MainActor func testDesktopChatTabsKeepLiveTitlesThroughRemoteRefresh() async throws {
-        let (data, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/pair")!)
+        let data: Data
+        do { (data, _) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:4329/pair")!) } catch { throw RemoteError(message: "Pair fixture HTTP: " + error.localizedDescription) }
         let fixture = try JSONDecoder().decode(JSON.self, from: data)
-        let remote = RemoteStore(); remote.forget(); try remote.pair(fixture["code"].string)
+        let cache = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString); let remote = RemoteStore(connection: nil, cacheRoot: cache, legacyCredentials: false); try remote.pair(fixture["code"].string)
+        func checkedRequest(_ method: String, _ args: [String: JSON]) async throws -> JSON {
+            var payload = args
+            for attempt in 0..<5 {
+                do { return try await remote.request(method, payload) }
+                catch {
+                    let operations = payload["operations"]?.array ?? []
+                    guard attempt < 4, method == "tabs.mutate", (error as? RemoteError)?.message.contains("Content tabs changed") == true,
+                          !operations.isEmpty, operations.allSatisfy({ ["open", "rename"].contains($0["action"].string) }) else { throw error }
+                    let fresh = try await remote.request("tabs.get", ["scope": payload["scope"] ?? .null, "id": payload["id"] ?? .null])
+                    for operation in operations {
+                        let key = operation["action"].string == "open" ? operation["tab"]["id"].string : operation["id"].string
+                        guard let current = fresh["tabs"].array.first(where: { $0["id"].string == key }) else { throw error }
+                        if operation["action"].string == "open" { guard current["url"] == operation["tab"]["url"], current["profileId"].string == operation["tab"]["profileId"].string else { throw error } }
+                    }
+                    payload["expectedRevision"] = fresh["revision"]
+                }
+            }
+            throw RemoteError(message: "Metadata revision did not settle")
+        }
         let shared = SharedAppStore()
-        defer { shared.unloadBrowsers(); remote.forget() }
+        defer { shared.unloadBrowsers(); remote.forget(); try? FileManager.default.removeItem(at: cache) }
         for _ in 0..<100 { if remote.connected && remote.state["capabilities"].array.contains(.string("content-tabs.v1")) { break }; try await Task.sleep(for: .milliseconds(100)) }; XCTAssertTrue(remote.connected)
-        let created = try await remote.request("chat.start", ["prompt": .string("Desktop browser title rehearsal"), "provider": .string("rehearsal")])
+        let created = try await checkedRequest("chat.start", ["prompt": .string("Desktop browser title rehearsal"), "provider": .string("rehearsal")])
         let run = created["runId"].string, host = try XCTUnwrap(remote.connection?.hostId)
         let scope = "chat:\(host):\(run)"
         let url = "http://127.0.0.1:4329/browser/one"
         let desktop: JSON = .object(["id": .string("desktop-browser"), "type": .string("browser"), "title": .string("New tab"), "url": .string(url)])
-        _ = try await remote.request("tabs.mutate", ["scope": .string("chat"), "id": .string(run), "expectedRevision": .number(0), "operations": .array([.object(["action": .string("open"), "tab": desktop])])])
+        _ = try await checkedRequest("tabs.mutate", ["scope": .string("chat"), "id": .string(run), "expectedRevision": .number(0), "operations": .array([.object(["action": .string("open"), "tab": desktop])])])
         await shared.refreshContentTabs(scope: scope, remote: remote, kind: "chat", id: run)
         let initial = try XCTUnwrap(shared.tabs(in: scope).first)
         shared.select(initial.id, in: scope)
-        let web = shared.webView(initial)
+        // This fixture lives on the test client's own loopback server. Exercise browser
+        // retention explicitly; automatic host-local preview isolation has separate coverage.
+        let web = shared.webView(initial, allowLocalNavigation: true)
         for _ in 0..<100 { if shared.browserTabs.first(where: { $0.id == initial.id })?.title == "First browser page" && !web.isLoading { break }; try await Task.sleep(for: .milliseconds(100)) }; XCTAssertEqual(web.title, "First browser page")
         // Let native title publication settle, then simulate another desktop workspace refresh
         // carrying its unloaded placeholder for the same URL and stable shared tab identity.
         for _ in 0..<8 { await shared.refreshContentTabs(scope: scope, remote: remote, kind: "chat", id: run); try await Task.sleep(for: .milliseconds(100)) }
-        let current = try await remote.request("tabs.get", ["scope": .string("chat"), "id": .string(run)])
-        _ = try await remote.request("tabs.mutate", ["scope": .string("chat"), "id": .string(run), "expectedRevision": current["revision"], "operations": .array([.object(["action": .string("open"), "tab": desktop])])])
+        let current = try await checkedRequest("tabs.get", ["scope": .string("chat"), "id": .string(run)])
+        _ = try await checkedRequest("tabs.mutate", ["scope": .string("chat"), "id": .string(run), "expectedRevision": current["revision"], "operations": .array([.object(["action": .string("open"), "tab": desktop])])])
         await shared.refreshContentTabs(scope: scope, remote: remote, kind: "chat", id: run)
         XCTAssertEqual(shared.tabs(in: scope).first?.title, "First browser page", "An unloaded desktop placeholder must not replace the title of the page displayed on iPad")
         XCTAssertEqual(shared.selected(in: scope), initial.id)
         XCTAssertTrue(shared.webView(try XCTUnwrap(shared.tabs(in: scope).first)) === web)
         XCTAssertEqual(shared.tabs(in: scope).count, 1)
-        let renameBase = try await remote.request("tabs.get", ["scope": .string("chat"), "id": .string(run)])
-        _ = try await remote.request("tabs.mutate", ["scope": .string("chat"), "id": .string(run), "expectedRevision": renameBase["revision"], "operations": .array([.object(["action": .string("rename"), "id": .string("desktop-browser"), "title": .string("Pinned desktop name")])])])
+        let renameBase = try await checkedRequest("tabs.get", ["scope": .string("chat"), "id": .string(run)])
+        _ = try await checkedRequest("tabs.mutate", ["scope": .string("chat"), "id": .string(run), "expectedRevision": renameBase["revision"], "operations": .array([.object(["action": .string("rename"), "id": .string("desktop-browser"), "title": .string("Pinned desktop name")])])])
         await shared.refreshContentTabs(scope: scope, remote: remote, kind: "chat", id: run)
         XCTAssertEqual(shared.tabs(in: scope).first?.title, "Pinned desktop name", "An explicit desktop rename still takes priority")
         XCTAssertTrue(shared.navigate(URL(string: "http://127.0.0.1:4329/browser/two")!, in: initial.id))
@@ -759,14 +1545,107 @@ final class NativeParityTests: XCTestCase {
         XCTAssertEqual(web.title, "Second browser page")
         XCTAssertEqual(shared.tabs(in: scope).first?.title, "Pinned desktop name")
         for _ in 0..<8 { await shared.refreshContentTabs(scope: scope, remote: remote, kind: "chat", id: run); try await Task.sleep(for: .milliseconds(100)) }
-        let navigationBase = try await remote.request("tabs.get", ["scope": .string("chat"), "id": .string(run)])
-        let changed: JSON = .object(["id": .string("desktop-browser"), "type": .string("browser"), "title": .string("New tab"), "url": .string("http://127.0.0.1:4329/browser/three")])
-        _ = try await remote.request("tabs.mutate", ["scope": .string("chat"), "id": .string(run), "expectedRevision": navigationBase["revision"], "operations": .array([.object(["action": .string("open"), "tab": changed])])])
+        let navigationBase = try await checkedRequest("tabs.get", ["scope": .string("chat"), "id": .string(run)])
+        var changed: JSON = .object(["action": .string("browser-navigate"), "tabId": .string("desktop-browser"), "operationId": .string(UUID().uuidString), "entryId": .string(UUID().uuidString), "baseRevision": navigationBase["tabs"].array.first?["history"]["revision"] ?? .number(0), "title": .string("New tab"), "url": .string("http://127.0.0.1:4329/browser/three")])
+        var navigationRevision = navigationBase["revision"], applied = false
+        for _ in 0..<5 {
+            do { _ = try await checkedRequest("tabs.mutate", ["scope": .string("chat"), "id": .string(run), "expectedRevision": navigationRevision, "operations": .array([changed])]); applied = true; break }
+            catch {
+                guard let message = (error as? RemoteError)?.message, message.contains("Content tabs changed") || message.contains("Navigation changed on the owning computer") else { throw error }
+                let fresh = try await checkedRequest("tabs.get", ["scope": .string("chat"), "id": .string(run)])
+                let previous = navigationBase["tabs"].array.first { $0["id"].string == "desktop-browser" } ?? .null
+                let current = fresh["tabs"].array.first { $0["id"].string == "desktop-browser" } ?? .null
+                XCTAssertEqual(current["url"], previous["url"]); XCTAssertEqual(current["history"]["currentEntryId"], previous["history"]["currentEntryId"])
+                guard current["url"] == previous["url"], current["history"]["currentEntryId"] == previous["history"]["currentEntryId"] else { throw error }
+                navigationRevision = fresh["revision"]; var operation = changed.object; operation["baseRevision"] = current["history"]["revision"]; changed = .object(operation)
+            }
+        }
+        XCTAssertTrue(applied, "Known title-only revision conflicts must converge without overwriting a different navigation")
         await shared.refreshContentTabs(scope: scope, remote: remote, kind: "chat", id: run)
         for _ in 0..<100 { if web.title == "Third browser page" && !web.isLoading { break }; try await Task.sleep(for: .milliseconds(100)) }
         XCTAssertEqual(web.title, "Third browser page", "A real desktop URL change still navigates the retained view")
-        XCTAssertEqual(shared.tabs(in: scope).first?.title, "Third browser page")
+        XCTAssertEqual(shared.tabs(in: scope).first?.title, "Pinned desktop name", "Explicit tab names survive navigation")
         XCTAssertTrue(shared.webView(try XCTUnwrap(shared.tabs(in: scope).first)) === web)
+        if let index = shared.browserTabs.firstIndex(where: { $0.id == initial.id }) {
+            shared.browserTabs[index].url = "https://synthetic.example.test/login?code=synthetic-private"
+            for _ in 0..<3 { await shared.refreshContentTabs(scope: scope, remote: remote, kind: "chat", id: run) }
+            XCTAssertEqual(shared.tabs(in: scope).count, 1, "A private login URL still represents the existing desktop tab")
+            XCTAssertEqual(shared.tabs(in: scope).first?.id, initial.id)
+            XCTAssertTrue(shared.tabs(in: scope).first?.url?.contains("synthetic-private") == true)
+            XCTAssertTrue(shared.webView(try XCTUnwrap(shared.tabs(in: scope).first)) === web)
+        }
+    }
+    @MainActor func testSameProfileTabsShareCookiesAndReorderOnlyTheirScope() async throws {
+        let shared = SharedAppStore(), scope = "chat:synthetic-cookie-host:synthetic-cookie-chat"
+        var created: [BrowserDescriptor] = []
+        for group in ["main", "team", scope, scope] { shared.open(nil, scope: group); created.append(try XCTUnwrap(shared.tabs(in: group).last)) }
+        defer { for tab in created { shared.close(tab.id) } }
+        let views = created.map { shared.webView($0) }, dataStore = views[0].configuration.websiteDataStore
+        XCTAssertTrue(views.allSatisfy { $0.configuration.websiteDataStore === dataStore })
+        let cookie = try XCTUnwrap(HTTPCookie(properties: [.domain: "synthetic.example.test", .path: "/", .name: "proteus-test-session", .value: "synthetic", .expires: Date().addingTimeInterval(60)]))
+        await dataStore.httpCookieStore.setCookie(cookie)
+        let cookies = await views[2].configuration.websiteDataStore.httpCookieStore.allCookies()
+        XCTAssertTrue(cookies.contains { $0.name == cookie.name && $0.value == "synthetic" })
+        await dataStore.httpCookieStore.deleteCookie(cookie)
+        let mainOrder = shared.tabs(in: "main").map(\.id), teamOrder = shared.tabs(in: "team").map(\.id)
+        shared.select(created[2].id, in: scope); shared.reorderBrowsers([created[3].id, created[2].id], in: scope)
+        XCTAssertEqual(shared.tabs(in: scope).map(\.id), [created[3].id, created[2].id])
+        XCTAssertEqual(shared.selected(in: scope), created[2].id)
+        XCTAssertEqual(shared.tabs(in: "main").map(\.id), mainOrder); XCTAssertEqual(shared.tabs(in: "team").map(\.id), teamOrder)
+    }
+    @MainActor func testBlankSharedBrowserResponsePreservesFirstNavigationBeforeViewCreation() throws {
+        for scope in ["chat:synthetic-host:" + UUID().uuidString, "workspace:synthetic-host:" + UUID().uuidString] {
+            let shared = SharedAppStore(); defer { shared.unloadBrowsers() }
+            shared.open(nil, scope: scope)
+            let tab = try XCTUnwrap(shared.tabs(in: scope).first)
+            let address = "https://example.test/first-navigation"
+            XCTAssertTrue(shared.navigate(URL(string: address)!, in: tab.id))
+            XCTAssertFalse(shared.isBrowserLoaded(tab.id), "SwiftUI has not constructed the view yet")
+            let placeholder: JSON = .object(["id": .string(tab.id), "type": .string("browser"), "profileId": .string("default"), "title": .string("New tab"), "url": .string("")])
+            // Both the initial tabs.get and a delayed tabs.mutate acknowledgement use this boundary.
+            for revision in [1, 2] {
+                shared.applyContentTabs(.object(["revision": .number(Double(revision)), "tabs": .array([placeholder])]), scope: scope)
+                XCTAssertEqual(shared.tabs(in: scope).first?.url, address, "A blank sync echo must not send the first navigation back to Browsing home")
+                XCTAssertFalse(shared.unloadedBrowsers.contains(tab.id), "A pending local navigation must remain eligible for view creation")
+                XCTAssertEqual(shared.selected(in: scope), tab.id)
+            }
+        }
+    }
+    @MainActor func testBlankSharedBrowserResponsePreservesLivePageButHonorsRemoteChanges() async throws {
+        for scope in ["chat:synthetic-host:" + UUID().uuidString, "workspace:synthetic-host:" + UUID().uuidString] {
+            let shared = SharedAppStore(); defer { shared.unloadBrowsers() }
+            let address = "http://127.0.0.1:4329/browser/one"
+            shared.open(URL(string: address)!, scope: scope)
+            let tab = try XCTUnwrap(shared.tabs(in: scope).first), web = shared.webView(tab)
+            for _ in 0..<100 { if web.title == "First browser page" && !web.isLoading { break }; try await Task.sleep(for: .milliseconds(50)) }
+            XCTAssertEqual(web.title, "First browser page")
+            let history = shared.tabs(in: scope).first?.history
+            func response(_ revision: Int, url: String = "", customTitle: String? = nil, profile: String = "default") -> JSON {
+                var fields: [String: JSON] = ["id": .string(tab.id), "type": .string("browser"), "profileId": .string(profile), "title": .string("New tab"), "url": .string(url)]
+                if let customTitle { fields["customTitle"] = .string(customTitle) }
+                return .object(["revision": .number(Double(revision)), "tabs": .array([.object(fields)])])
+            }
+            shared.applyContentTabs(response(1), scope: scope)
+            shared.applyContentTabs(response(2), scope: scope)
+            XCTAssertEqual(shared.tabs(in: scope).first?.url, address)
+            XCTAssertEqual(shared.tabs(in: scope).first?.title, "First browser page")
+            XCTAssertEqual(shared.tabs(in: scope).first?.history, history)
+            XCTAssertFalse(shared.unloadedBrowsers.contains(tab.id)); XCTAssertTrue(shared.isBrowserLoaded(tab.id))
+            XCTAssertTrue(shared.webView(try XCTUnwrap(shared.tabs(in: scope).first)) === web)
+            shared.applyContentTabs(response(3, customTitle: "Explicit shared name"), scope: scope)
+            XCTAssertEqual(shared.tabs(in: scope).first?.title, "Explicit shared name")
+            XCTAssertEqual(shared.tabs(in: scope).first?.url, address)
+            let changed = "http://127.0.0.1:4329/browser/two"
+            shared.applyContentTabs(response(4, url: changed), scope: scope)
+            for _ in 0..<100 { if web.title == "Second browser page" && !web.isLoading { break }; try await Task.sleep(for: .milliseconds(50)) }
+            XCTAssertEqual(web.title, "Second browser page"); XCTAssertEqual(shared.tabs(in: scope).first?.url, changed)
+            let profile = UUID().uuidString
+            shared.applyContentTabs(response(5, profile: profile), scope: scope)
+            XCTAssertEqual(shared.tabs(in: scope).first?.profileId, profile)
+            XCTAssertNil(shared.tabs(in: scope).first?.url); XCTAssertFalse(shared.isBrowserLoaded(tab.id))
+            shared.applyContentTabs(.object(["revision": .number(6), "tabs": .array([])]), scope: scope)
+            XCTAssertTrue(shared.tabs(in: scope).isEmpty, "Explicit close still removes the tab")
+        }
     }
     @MainActor func testBrowserNavigationPreservesTabAndWebViewAndInvalidatesUnloadedObservers() async throws {
         let shared = SharedAppStore(); shared.open(nil)
@@ -805,9 +1684,9 @@ final class NativeParityTests: XCTestCase {
         XCTAssertEqual(visit["deviceId"].string, id)
         XCTAssertEqual(visit["deviceName"].string, "Visiting iPhone")
         XCTAssertEqual(visit["source"].string, "mobile")
-        XCTAssertEqual(visit["url"].string, "https://example.test/page")
+        XCTAssertEqual(visit["url"].string, "https://example.test/page?filter=mine#section")
         XCTAssertEqual(visit["hostId"], .null)
-        XCTAssertNil(SharedAppStore.historyVisit(try XCTUnwrap(URL(string: "https://example.test/?token=secret")), title: "Unsafe", at: date, deviceID: id, deviceName: "Phone"))
+        XCTAssertEqual(SharedAppStore.historyVisit(try XCTUnwrap(URL(string: "https://example.test/?token=fixture")), title: "Redirect", at: date, deviceID: id, deviceName: "Phone")?["url"].string, "https://example.test/?token=fixture")
         XCTAssertNil(SharedAppStore.historyVisit(try XCTUnwrap(URL(string: "https://example.test")), title: "Page", at: date, deviceID: "hardware-id", deviceName: "Phone"))
         XCTAssertEqual(SharedAppStore.historyDeviceName("\n  ", fallback: "iPad"), "iPad")
         XCTAssertEqual(SharedAppStore.historyDeviceName(String(repeating: "x", count: 120)).count, 100)
@@ -824,6 +1703,7 @@ final class NativeParityTests: XCTestCase {
         let old = BrowserHistoryRows.details(legacy, timeZone: denver, locale: locale)
         XCTAssertTrue(old.contains("11:00")); XCTAssertTrue(old.hasSuffix("Unknown device"))
         XCTAssertEqual(BrowserHistoryRows.details(.null, timeZone: denver, locale: locale), "Time unavailable · Unknown device")
+        XCTAssertEqual(BrowserHistoryRows.details(.object(["local": .bool(true)]), timeZone: denver, locale: locale), "Saved on this device")
     }
     @MainActor func testUnauthenticatedRelayNoticesPreservePairingAndCachedHistory() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -845,17 +1725,17 @@ final class NativeParityTests: XCTestCase {
         XCTAssertEqual(try scopes(false), Set(["brain:read", "brain:write"]))
         XCTAssertEqual(try scopes(true), Set(["brain:read", "brain:write", "app:read", "app:write"]))
     }
-    @MainActor func testBrowserBookmarksPreserveFiltersWhileHistoryRedactsAndRejectsSecrets() throws {
+    @MainActor func testBrowserHistoryRetainsFullURLsWhileBookmarksKeepExistingValidation() throws {
         let bookmark = "https://dev.azure.com/example/project/_boards/board/t/team/Stories?view=backlog&iteration=42#selected=123"
         let search = "https://example.test/search?q=build%20status#results"
         for input in [bookmark, search, "https://example.test/docs#code-review"] { XCTAssertEqual(SharedAppStore.safeURL(input)?.absoluteString, input) }
-        XCTAssertEqual(SharedAppStore.historyURL(bookmark)?.absoluteString, "https://dev.azure.com/example/project/_boards/board/t/team/Stories")
-        XCTAssertEqual(SharedAppStore.historyURL(search)?.absoluteString, "https://example.test/search")
+        XCTAssertEqual(SharedAppStore.historyURL(bookmark)?.absoluteString, bookmark)
+        XCTAssertEqual(SharedAppStore.historyURL(search)?.absoluteString, search)
         let capsule = try JSONSerialization.data(withJSONObject: ["version": 1, "hostId": "synthetic-host", "relay": "wss://example.test", "key": "synthetic-key", "expiresAt": "2099-01-01T00:00:00Z"]).base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
         let unsafe = ["https://user:password@example.test/", "javascript:alert(1)", "https://example.test/oauth/callback?code=secret", "https://example.test/page?access_token=secret", "https://example.test/signin", "https://example.test/page?apiKey=secret", "https://example.test/remote#pair=" + capsule, "https://example.test/remote#%70air=" + capsule, "https://example.test/remote?pairing=" + capsule, "https://example.test/remote?data=" + capsule, "https://example.test/remote#" + capsule, "https://example.test/page#route?session=secret", "https://example.test/page#auth=secret", "https://example.test/page#code=secret", "https://example.test/page?next=proteus%3A%2F%2Fpair%3Fdata%3D" + capsule]
-        for input in unsafe { XCTAssertNil(SharedAppStore.safeURL(input), input); XCTAssertNil(SharedAppStore.historyURL(input), input) }
+        for input in unsafe { XCTAssertNil(SharedAppStore.safeURL(input), input); if input.hasPrefix("javascript:") || input.contains("user:password@") { XCTAssertNil(SharedAppStore.historyURL(input), input) } else { XCTAssertEqual(SharedAppStore.historyURL(input)?.absoluteString, input) } }
     }
-    @MainActor func testEncryptedBrowserRestartPreservesExactSafePageAndOmitsPairingDescriptor() throws {
+    @MainActor func testEncryptedBrowserRestartPreservesExactFullURLs() throws {
         let identity = "synthetic-browser-" + UUID().uuidString
         let digest = SHA256.hash(data: Data(identity.utf8)).map { String(format: "%02x", $0) }.joined()
         let cache = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Proteus/browsers/" + digest + ".enc")
@@ -865,7 +1745,7 @@ final class NativeParityTests: XCTestCase {
         store.open(try XCTUnwrap(SharedAppStore.safeURL(bookmark)), title: "Board filter")
         store.open(URL(string: "https://example.test/remote#pair=synthetic-capsule"), title: "Do not retain pairing")
         let restored = SharedAppStore(); restored.reset(for: identity)
-        XCTAssertEqual(restored.browserTabs.count, 1)
+        XCTAssertEqual(restored.browserTabs.count, 2)
         XCTAssertEqual(restored.browserTabs.first?.title, "Board filter")
         XCTAssertEqual(restored.browserTabs.first?.url, bookmark)
         XCTAssertFalse(String(decoding: try Data(contentsOf: cache), as: UTF8.self).contains("team=42"))
@@ -891,6 +1771,46 @@ final class NativeParityTests: XCTestCase {
         let draft = remote.draft("new-chat")
         XCTAssertFalse(store.prepareLinkDraft(try XCTUnwrap(URL(string: "https://example.test/#pair=secret")), remote: remote, hostID: connection.hostId, hostName: "Chosen Mac"))
         XCTAssertEqual(remote.draft("new-chat"), draft)
+    }
+    @MainActor func testBrowserViewLookupIsNotAnInteractionAndLinkTargetsKeepExactAddresses() throws {
+        let shared = SharedAppStore()
+        var descriptor = BrowserDescriptor(id: "synthetic-idle", title: "Idle tab", url: nil, scope: "team")
+        descriptor.openedAt = "2026-10-01T00:00:00Z"; descriptor.lastTouchedAt = "2026-10-02T00:00:00Z"
+        shared.browserTabs = [descriptor]
+        let first = shared.webView(descriptor)
+        XCTAssertTrue(first is NativeLinkWebView)
+        XCTAssertTrue(first === shared.webView(descriptor))
+        XCTAssertEqual(shared.browserTabs[0].lastTouchedAt, descriptor.lastTouchedAt)
+        let link = try XCTUnwrap(first as? NativeLinkWebView)
+        let address = "https://example.test/relative/document?view=results&item=42#section"
+        link.rememberLink(address); XCTAssertEqual(link.currentLink?.absoluteString, address)
+        link.rememberLink(""); XCTAssertNil(link.currentLink, "Pressing non-link text clears the earlier target")
+        for value in ["javascript:alert(1)", "file:///private/test", "https://user:secret@example.test/", "data:text/plain,test"] { XCTAssertNil(NativeLinkWebView.linkURL(value)) }
+        shared.unloadBrowsers()
+    }
+    @MainActor func testPressedImageLinkResolvesRelativeURLAndClearsOnNonLink() async throws {
+        let web = NativeLinkWebView(frame: .zero, configuration: WKWebViewConfiguration())
+        web.loadHTMLString("<a href='/document?view=results&amp;item=42#section'><img id='linked' alt='Linked image'></a><p id='plain'>Plain text</p>", baseURL: URL(string: "https://example.test/folder/"))
+        for _ in 0..<100 { if !web.isLoading { break }; try await Task.sleep(for: .milliseconds(50)) }
+        _ = try await web.evaluateJavaScript("document.getElementById('linked').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,composed:true})); true")
+        for _ in 0..<100 { if web.currentLink != nil { break }; try await Task.sleep(for: .milliseconds(20)) }
+        XCTAssertEqual(web.currentLink?.absoluteString, "https://example.test/document?view=results&item=42#section")
+        _ = try await web.evaluateJavaScript("document.getElementById('plain').dispatchEvent(new MouseEvent('pointerdown',{bubbles:true,composed:true})); true")
+        for _ in 0..<100 { if web.currentLink == nil { break }; try await Task.sleep(for: .milliseconds(20)) }
+        XCTAssertNil(web.currentLink, "Non-link selection must not reuse the last link")
+        web.stopLoading()
+    }
+    @MainActor func testLinkDraftUsesSourceWorkspaceWithoutReplacingAnExistingDraft() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let connection = DeviceConnection(relay: "wss://relay.example.test", hostId: UUID().uuidString, deviceId: UUID().uuidString, key: RemoteCrypto.random())
+        let remote = RemoteStore(connection: connection, cacheRoot: root, legacyCredentials: false), shared = SharedAppStore()
+        let address = try XCTUnwrap(URL(string: "https://example.test/item?view=results"))
+        XCTAssertTrue(shared.prepareLinkDraft(address, remote: remote, hostID: connection.hostId, hostName: "Source Mac", workspaceID: "source-workspace"))
+        XCTAssertEqual(remote.draft("new-chat")["workspace"].string, "source-workspace")
+        XCTAssertTrue(shared.prepareLinkDraft(address, remote: remote, hostID: connection.hostId, hostName: "Source Mac", workspaceID: "another-workspace"))
+        XCTAssertEqual(remote.draft("new-chat")["workspace"].string, "source-workspace", "An existing draft keeps its chosen configuration")
+        XCTAssertEqual(remote.pendingCommandCount, 0, "Preparing a draft does not start a chat")
     }
     @MainActor func testWebKitDownloadProducesExportableFileAndAccountChangeCleansIt() async throws {
         let shared = SharedAppStore()
@@ -1117,5 +2037,44 @@ final class ActiveRuntimeTests: XCTestCase {
         XCTAssertEqual(runtimeSeconds(turn,now:now,verified:true),8)
         XCTAssertEqual(runtimeSeconds(turn,now:now,verified:false),3)
         XCTAssertNil(runtimeSeconds(.null,now:now,verified:true))
+    }
+}
+
+final class TabManagementNativeTests: XCTestCase {
+    func testAnsweredQuestionsRemainOutsideActivityGroups() {
+        let question: JSON = .object(["role": .string("system"), "text": .string("Explain before proceeding?"), "data": .object(["question": .object(["id": .string("q"), "status": .string("answered")])])])
+        let tool: JSON = .object(["role": .string("tool"), "data": .object(["tool": .object([:])])])
+        XCTAssertFalse(NativeActivity.contains(question)); XCTAssertEqual(NativeActivity.group(events: [tool, question], startingAt: 0), [tool])
+    }
+    @MainActor func testReplacementAndRealPushBothPreserveOriginalURLs() throws {
+        let shared = SharedAppStore(); let id = try XCTUnwrap(shared.open(nil, scope: "main"))
+        defer { shared.close(id) }
+        shared.completeBrowserNavigation(URL(string: "https://example.test/one")!, title: "One", in: id, nativePosition: 0)
+        shared.completeBrowserNavigation(URL(string: "https://example.test/one?view=results")!, title: "Results", in: id, nativePosition: 0, sameDocumentObservation: true)
+        var history = try XCTUnwrap(shared.browserTabs.first { $0.id == id }?.history)
+        XCTAssertEqual(history.entries.count, 2); XCTAssertEqual(history.entries[0].url, "https://example.test/one"); XCTAssertEqual(history.entries[1].url, "https://example.test/one?view=results")
+        shared.completeBrowserNavigation(URL(string: "https://example.test/two")!, title: "Two", in: id, nativePosition: 1, sameDocumentObservation: true)
+        history = try XCTUnwrap(shared.browserTabs.first { $0.id == id }?.history); XCTAssertEqual(history.entries.count, 3)
+    }
+    @MainActor func testFullNavigationBeforeNativePositionUpdatesDoesNotRewriteThePriorPage() throws {
+        let shared = SharedAppStore(); let id = try XCTUnwrap(shared.open(nil, scope: "main")); defer { shared.close(id) }
+        shared.completeBrowserNavigation(URL(string: "https://example.test/one")!, title: "One", in: id, nativePosition: 0)
+        let next = URL(string: "https://example.test/two")!; shared.prepareBrowserLoad(next, in: id)
+        shared.completeBrowserNavigation(next, title: "Two", in: id, nativePosition: 0, sameDocumentObservation: true)
+        XCTAssertEqual(shared.browserTabs.first { $0.id == id }?.history?.entries.map(\.url), ["https://example.test/one", "https://example.test/two"])
+    }
+    @MainActor func testLoginRedirectRetainsOriginallyRequestedPath() throws {
+        let shared = SharedAppStore(); let id = try XCTUnwrap(shared.open(nil, scope: "main")); defer { shared.close(id) }
+        let original = URL(string: "https://example.test/project/deep")!
+        XCTAssertTrue(shared.navigate(original, in: id)); shared.prepareBrowserLoad(original, in: id); shared.markBrowserRedirect(id)
+        shared.completeBrowserNavigation(URL(string: "https://example.test/login?token=private")!, title: "Login", in: id, nativePosition: 0)
+        let history = try XCTUnwrap(shared.browserTabs.first { $0.id == id }?.history)
+        XCTAssertEqual(history.entries.first?.url, original.absoluteString); XCTAssertEqual(history.entries.last?.url, "https://example.test/login?token=private"); XCTAssertEqual(history.entries.count, 2)
+    }
+    @MainActor func testMovingBrowserPreservesItsWebViewAndPersistence() throws {
+        let shared = SharedAppStore(); let id = try XCTUnwrap(shared.open(nil, scope: "main")); defer { shared.close(id) }
+        let tab = try XCTUnwrap(shared.browserTabs.first { $0.id == id }); let view = shared.webView(tab)
+        shared.persistBrowser(id, enabled: true); shared.transferBrowser(id, to: "workspace:fixture:target", copy: false)
+        let moved = try XCTUnwrap(shared.browserTabs.first { $0.id == id }); XCTAssertEqual(moved.scope, "workspace:fixture:target"); XCTAssertTrue(moved.persist); XCTAssertTrue(shared.webView(moved) === view)
     }
 }

@@ -86,3 +86,47 @@ test('Codex document tool remains available on resumed chats and enforces approv
   await assert.rejects(fetch(env.PROTEUS_DOCUMENT_ENDPOINT));
  }}finally{await f.provider.close();}
 });
+
+test('chat-only folder grants reach Codex roots without granting the original cwd under Ask',async()=>{
+ const f=sandboxFixture();try{
+  const read={...f.store.describe(f.run.schedule),mode:'custom',chatFolders:[{path:f.outside,access:'read'}],folders:[{path:f.outside,access:'read'}]};
+  const limited=codexSandbox(f.run.schedule,read);assert.equal(limited.sandbox,'read-only');assert.ok(limited.runtimeWorkspaceRoots.includes(f.outside));
+  f.store.setMode(f.run.schedule,'trusted');const trusted=f.store.describe(f.run.schedule);trusted.chatFolders=[{path:f.outside,access:'read-write'}];trusted.folders.push(...trusted.chatFolders);
+  assert.ok(codexSandbox(f.run.schedule,trusted).policy.writableRoots.includes(f.outside));
+  trusted.chatFolders=[];trusted.folders=trusted.folders.filter(g=>g.path!==f.outside);assert.ok(!codexSandbox(f.run.schedule,trusted).policy.writableRoots.includes(f.outside));
+ }finally{await f.dispose();}
+});
+
+test('Codex records its isolated provider session home without changing the process environment',async()=>{
+ const f=fixture(),original=process.env.CODEX_HOME;f.provider.options.env={...process.env,CODEX_HOME:'/synthetic/private-preview/codex'};
+ try{const task=f.provider.run(f.args);await until(()=>f.rpc.turn===1);assert.equal(f.run.providerHome,'/synthetic/private-preview/codex');assert.equal(process.env.CODEX_HOME,original);f.rpc.notice('turn/completed',{turn:{status:'completed'}});await task;}finally{await f.provider.close();}
+});
+
+test('resumed Codex chats receive current browser/tab schemas through a turn-bound approval-checked MCP catalog',async()=>{
+ const f=fixture();const calls=[],approvals=[];let answer='decline';
+ f.provider.browser={agent:async(args,id)=>{calls.push({args,id});return {id:'synthetic-tab',loaded:false,hidden:true};},manageTabs:async args=>{calls.push({args});return {tabs:[]};}};
+ f.args.ask=async request=>{approvals.push(request);return answer;};
+ const bridge=async(env,value)=>{const response=await fetch(env.PROTEUS_DOCUMENT_ENDPOINT,{method:'POST',headers:{authorization:env.PROTEUS_DOCUMENT_CAPABILITY},body:JSON.stringify(value)});return {status:response.status,value:await response.json()};};
+ try{
+  const first=f.provider.run(f.args);await until(()=>f.rpc.turn===1);const start=f.rpc.calls.find(c=>c.method==='thread/start').params;
+  assert.ok(start.dynamicTools.some(t=>t.name==='proteus_browser'));f.rpc.notice('turn/completed',{turn:{status:'completed'}});await first;
+  // Simulate resuming an old saved thread: the provider does not accept dynamicTools on resume.
+  const second=f.provider.run(f.args);await until(()=>f.rpc.turn===2);const resume=f.rpc.calls.findLast(c=>c.method==='thread/resume').params;
+  assert.equal(resume.dynamicTools,undefined);assert.match(resume.developerInstructions,/fresh tools published by the proteus_app MCP server/);
+  const env=resume.config.mcp_servers.proteus_app.env;const listed=await bridge(env,{action:'list'});assert.equal(listed.status,200);
+  const browser=listed.value.find(t=>t.name==='proteus_browser'),tabs=listed.value.find(t=>t.name==='proteus_tabs');assert.ok(browser&&tabs);assert.ok(browser.inputSchema.properties.action.enum.includes('load'));assert.equal(browser.inputSchema.properties.hidden.type,'boolean');assert.equal(browser.inputSchema.properties.unloaded.type,'boolean');assert.match(browser.description,/no per-tab sharing/);
+  const args={action:'open',url:'https://fixture.invalid',hidden:true,unloaded:true,profileId:'fixture'};
+  const denied=await bridge(env,{action:'call',name:'proteus_browser',arguments:args});assert.equal(denied.value.resultType,'failure');assert.equal(calls.length,0);
+  answer='approve';const opened=await bridge(env,{action:'call',name:'proteus_browser',arguments:args});assert.equal(opened.status,200);assert.deepEqual(calls,[{args,id:'run'}]);assert.equal(approvals.at(-1).details.toolName,'proteus_browser');assert.equal(approvals.at(-1).details.kind,'custom-tool');
+  f.rpc.notice('turn/completed',{turn:{status:'completed'}});await second;await assert.rejects(bridge(env,{action:'list'}));
+  const third=f.provider.run(f.args);await until(()=>f.rpc.turn===3);const next=f.rpc.calls.findLast(c=>c.method==='thread/resume').params.config.mcp_servers.proteus_app.env;assert.notEqual(next.PROTEUS_DOCUMENT_CAPABILITY,env.PROTEUS_DOCUMENT_CAPABILITY);assert.ok((await bridge(next,{action:'list'})).value.some(t=>t.name==='proteus_tabs'));f.rpc.notice('turn/completed',{turn:{status:'completed'}});await third;
+ }finally{await f.provider.close();}
+});
+test('resumed browser approval cannot perform an action after its turn ends',async()=>{
+ const f=fixture();let approve,calls=0;f.run.providerSessionId='thread';f.provider.browser={agent:async()=>{calls++;return {};}};f.args.ask=()=>new Promise(resolve=>{approve=resolve;});
+ try{
+  const task=f.provider.run(f.args);await until(()=>f.rpc.turn===1);const env=f.rpc.calls.find(c=>c.method==='thread/resume').params.config.mcp_servers.proteus_app.env;
+  const pending=fetch(env.PROTEUS_DOCUMENT_ENDPOINT,{method:'POST',headers:{authorization:env.PROTEUS_DOCUMENT_CAPABILITY},body:JSON.stringify({action:'call',name:'proteus_browser',arguments:{action:'close',tabId:'fixture'}})});pending.catch(()=>{});await until(()=>approve);
+  f.rpc.notice('turn/completed',{turn:{status:'completed'}});await task;approve('approve');await new Promise(resolve=>setTimeout(resolve,10));assert.equal(calls,0);await assert.rejects(pending);
+ }finally{await f.provider.close();}
+});

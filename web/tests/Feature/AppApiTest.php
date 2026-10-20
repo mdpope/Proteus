@@ -51,6 +51,39 @@ class AppApiTest extends TestCase
         $this->assertStringNotContainsString('Synthetic team', DB::table('app_records')->value('payload'));
     }
 
+    public function test_browser_profiles_require_scope_and_revisions_and_exclude_credentials(): void
+    {
+        $user = $this->owner();
+        Passport::actingAs($user, ['app:read']);
+        $this->postJson('/api/v1/app/browser-profiles', ['name' => 'Research'])->assertForbidden();
+        Passport::actingAs($user, ['app:read', 'app:write']);
+        $this->postJson('/api/v1/app/browser-profiles', ['name' => 'Default'])->assertUnprocessable();
+        $input = ['name' => 'Research', 'settings' => ['blockingEnabled' => true, 'exceptions' => ['https://example.test']]];
+        $created = $this->postJson('/api/v1/app/browser-profiles', $input + ['cookies' => 'must not persist'])->assertCreated()->assertJsonPath('revision', 1)->assertJsonMissingPath('cookies')->json();
+        $this->putJson('/api/v1/app/browser-profiles/'.$created['id'], $input + ['expectedRevision' => 1])->assertOk()->assertJsonPath('revision', 2);
+        $this->deleteJson('/api/v1/app/browser-profiles/'.$created['id'], ['expectedRevision' => 1])->assertConflict();
+        $this->postJson('/api/v1/app/browser-profiles', ['name' => 'Other', 'settings' => ['cookies' => 'private']])->assertUnprocessable();
+        $this->postJson('/api/v1/app/browser-profiles', ['name' => 'Other', 'settings' => ['exceptions' => ['https://user:secret@example.test']]])->assertUnprocessable();
+        Passport::actingAs($this->owner(), ['app:read', 'app:write']);
+        $this->getJson('/api/v1/app/browser-profiles')->assertExactJson(['items' => []]);
+        $this->putJson('/api/v1/app/browser-profiles/'.$created['id'], $input + ['expectedRevision' => 2])->assertNotFound();
+        Passport::actingAs($user, ['app:read', 'app:write']);
+        $this->deleteJson('/api/v1/app/browser-profiles/'.$created['id'], ['expectedRevision' => 2])->assertOk();
+        $this->getJson('/api/v1/app/browser-profiles')->assertExactJson(['items' => []]);
+    }
+
+    public function test_empty_browser_profile_settings_keep_json_object_shape(): void
+    {
+        $user = $this->owner();
+        Passport::actingAs($user, ['app:read', 'app:write']);
+        $created = $this->postJson('/api/v1/app/browser-profiles', ['name' => 'Empty settings', 'settings' => (object) []])->assertCreated();
+        $this->assertStringContainsString('"settings":{}', $created->getContent());
+        $list = $this->getJson('/api/v1/app/browser-profiles')->assertOk();
+        $this->assertStringContainsString('"settings":{}', $list->getContent());
+        $this->putJson('/api/v1/app/browser-profiles/'.$created->json('id'), ['name' => 'Renamed', 'settings' => (object) [], 'expectedRevision' => 1])->assertOk();
+        $this->getJson('/api/v1/app')->assertOk()->assertJsonPath('browserProfiles.0.name', 'Renamed');
+    }
+
     public function test_history_rejects_auth_urls_and_strips_query_and_fragment(): void
     {
         Passport::actingAs($this->owner(), ['app:read', 'app:write']);

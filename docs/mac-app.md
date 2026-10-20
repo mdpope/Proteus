@@ -1,5 +1,53 @@
 # Local Mac application
 
+## Queued native desktop control
+
+BF-2026-10-19-22 in [planned updates](planned-updates.md) selects **Cua Driver primary, Peekaboo
+backup on Mac** behind one host-owned desktop broker. Include the Linux development branch in
+Cua integration/validation; gate Windows/Linux by actual capabilities and do not load Mac Peekaboo
+or its separate community ports as a cross-platform fallback. Support app/window discovery,
+accessibility, real image observations and input, including authorized Proteus UI testing. The
+existing chat/provider remains the planner; browser Playwright/DevTools stay separate. Versions,
+packaging, implementation and actual platform acceptance remain pending under the build hold.
+
+Required guidance/inventory should describe when to use each tool and the default order. Use a
+small desktop catalog/wrapper, start backends on demand and stop only unused Proteus-owned runtime
+resources after idle cleanup. Switching requires a fresh backend-owned observation of the same
+app/window, serialized control and verification of any uncertain earlier effects. Do not repeat a
+possibly completed action or bypass denied permission through the other driver. Backend shutdown
+does not erase schemas/images already in model history; verify provider-specific discovery/lifetime
+behavior rather than promising universal tool unloading. Peekaboo suppresses its cursor overlay
+during targeted background input; Cua overlay delivery also requires actual host validation.
+
+Engine Room Desktop Control should show the primary/backup and explain backend readiness and actual OS permission/setup
+requirements, with app/window scope, a harmless Test, active-target indication and Stop/revoke.
+Capture/accessibility grants belong to the signed native host that performs the action, not
+automatically to Proteus or a launching shell. Preserve task/chat permission boundaries, handle
+user interference/stale windows and keep screenshots private. Verify real provider image transport
+and exact signed runtime interaction before claiming capability. The BF-21 update verifier may
+reuse the control/test boundary while retaining independent recovery if UI automation is unavailable.
+
+## Queued supervised updates and automatic original-chat continuation
+
+BF-2026-10-19-21 selects the independent helper-and-handoff approach for the next release. The
+same updating chat must resume automatically after a healthy update restart **or compatible
+rollback**, without Continue. Persist the handoff and delivery claims outside rollback-restored
+state, verify the supported old build/adapter, preserve permissions and retry automatically on
+temporary provider unavailability without repeating earlier actions or reinstalling a failed build.
+See [desktop updates](desktop-updates.md). This is queued only; no updater or live restart yet.
+
+## Queued multiwindow follow-up
+
+BF-2026-10-19-11 in [planned updates](planned-updates.md) requests multiple Proteus windows,
+Command+N for a window and Command+T for a tab in the focused window. Individual Close removes
+that window's saved placement/restore entry. App Quit preserves all still-open windows so the
+next launch restores their bounds, selected items and reading positions. Preserve one background
+host/runner and existing resource identities/lifetimes; changed displays need accessible fallback
+bounds. BF-12 supplies the direct new-tab page. This is queued only: current source uses one
+primary window, hides it on Close and does not establish this multiwindow restoration behavior.
+
+## Current application
+
 The Mac and iOS use the same artwork from
 `ios/Proteus/Assets.xcassets/AppIcon.appiconset/AppIcon.png`. `desktop/icon.png` is its runtime
 copy. The package script converts that artwork into all required ICNS sizes without changing the

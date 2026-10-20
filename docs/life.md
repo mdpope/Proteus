@@ -8,8 +8,24 @@ Life is independent of the selected execution Mac and remains available when tho
 
 ## Connect an account
 
-In desktop Setup, enable Life, choose the HTTPS website origin, and sign in through the system
-browser. Use the existing website account and its normal strong authentication. OAuth uses the
+**Queued auth correction — BF-2026-10-19-14:** use the configured in-app/system browser for this
+account sign-in and route completion back to the exact initiating app/installation/window.
+Current source forces the system browser and shares `proteus://life-oauth/callback` with mobile;
+website provisioning also gives that shared OAuth client an iPhone/iPad label. Distinguish that
+label from actual delivery to the wrong bundle, which the operator reports but this investigation
+has not reproduced. Preserve the working Life/Team account, existing mobile sessions, PKCE/state
+and origin checks; do not reset sign-in or OS handlers as a diagnostic shortcut. BF-13's earlier
+Life-off lazy-load reproduction does not fully explain a disabled profile switch while Life and
+Team already work. See [planned updates](planned-updates.md). No auth implementation/build yet.
+
+In desktop Engine Room → App settings (App Setup in older layouts), use the **Proteus account**
+card to choose the HTTPS website origin and **Sign in securely** through the system browser.
+Connecting the shared app account does not require Enable Life; that toggle separately enables
+personal-record screens. For a saved sign-in, **Refresh connection** loads/reconnects the account
+while Life remains off. **Authorize shared features** extends an existing account's consent when
+needed. BF-2026-10-19-13 queues clearer Browser Preferences guidance and fixing startup account
+loading when Life is off; its synthetic reproduction is not a live-account verification.
+Use the existing website account and its normal strong authentication. OAuth uses the
 same public native client as mobile, PKCE S256 and the fixed `proteus://life-oauth/callback`.
 The app verifies discovery origin/endpoints, pending state and authorization attempt. Cancel,
 logout or a newer attempt prevents an old callback from saving a session.

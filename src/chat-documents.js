@@ -69,7 +69,7 @@ export class ChatDocumentApprovals {
   revokeChat(chatId){for(const [id,item] of this.requests)if(item.chatId===chatId)this.requests.delete(id);}
   clear(){this.requests.clear();}
   prune(){for(const [id,item] of this.requests)if(item.expiresAt<=Date.now())this.requests.delete(id);}
-  request(run,device,source,documentId,fromRequestId,relativePath){
+  request(run,device,source,documentId,fromRequestId,relativePath,{direct=false}={}){
     this.prune();if(this.requests.size>=50)throw new Error('Too many document requests. Review pending requests on the Mac.');
     if([source!==undefined,documentId!==undefined,fromRequestId!==undefined].filter(Boolean).length!==1)throw new Error('Choose one linked source, document ID or approved parent request.');
     let doc,verifiedLink=false;
@@ -90,10 +90,10 @@ export class ChatDocumentApprovals {
       if(!doc)throw new Error('This linked document is no longer available in a currently authorized workspace.');
     }else doc=snapshot(run,source,this.currentRoots);
     const requestId=randomUUID(),expiresAt=Date.now()+TTL_MS;
-    this.requests.set(requestId,{requestId,documentId:doc.documentId,deviceId:device.id,deviceName:device.name,chatId:run.id,source,verifiedLink,file:doc.file,title:doc.title,size:doc.size,mediaType:doc.mediaType,version:doc.version,assets:publicAssets(doc.assets),links:doc.links,expiresAt,approvedAt:null});
-    return {documentId:doc.documentId,requestId,status:'pending',expiresAt:new Date(expiresAt).toISOString(),title:doc.title,version:doc.version,size:doc.size,mediaType:doc.mediaType,assets:publicAssets(doc.assets),links:doc.links};
+    this.requests.set(requestId,{requestId,documentId:doc.documentId,deviceId:device.id,deviceName:device.name,chatId:run.id,source,verifiedLink,file:doc.file,title:doc.title,size:doc.size,mediaType:doc.mediaType,version:doc.version,assets:publicAssets(doc.assets),links:doc.links,expiresAt,access:direct?'device':'once',approvedAt:direct?new Date().toISOString():null});
+    return {documentId:doc.documentId,requestId,status:direct?'approved':'pending',access:direct?'device':'once',expiresAt:new Date(expiresAt).toISOString(),title:doc.title,version:doc.version,size:doc.size,mediaType:doc.mediaType,assets:publicAssets(doc.assets),links:doc.links};
   }
-  list(){this.prune();return [...this.requests.values()].map(item=>({requestId:item.requestId,documentId:item.documentId,deviceId:item.deviceId,deviceName:item.deviceName,chatId:item.chatId,path:item.file,title:item.title,size:item.size,mediaType:item.mediaType,version:item.version,assets:item.assets,links:item.links,expiresAt:new Date(item.expiresAt).toISOString(),approvedAt:item.approvedAt}));}
+  list(){this.prune();return [...this.requests.values()].map(item=>({requestId:item.requestId,access:item.access,documentId:item.documentId,deviceId:item.deviceId,deviceName:item.deviceName,chatId:item.chatId,path:item.file,title:item.title,size:item.size,mediaType:item.mediaType,version:item.version,assets:item.assets,links:item.links,expiresAt:new Date(item.expiresAt).toISOString(),approvedAt:item.approvedAt}));}
   review(requestId,approved,engine){
     this.prune();const item=this.requests.get(requestId);if(!item)throw new Error('Document request expired or unavailable.');
     if(approved!==true){this.requests.delete(requestId);return {requestId,status:'denied'};}

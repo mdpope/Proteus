@@ -10,7 +10,7 @@ use Illuminate\Support\Str;
 
 class AppRecords
 {
-    public const LIMITS = ['preferences' => 1, 'team-lists' => 50, 'links' => 200, 'history' => 500, 'notifications' => 500, 'logs' => 1000, 'push-subscriptions' => 32, 'push-outbox' => 1000];
+    public const LIMITS = ['browser-profiles' => 32, 'preferences' => 1, 'team-lists' => 50, 'links' => 200, 'history' => 500, 'notifications' => 500, 'logs' => 1000, 'push-subscriptions' => 32, 'push-outbox' => 1000];
 
     public function query(User $user, string $kind): Builder
     {
@@ -20,6 +20,11 @@ class AppRecords
     public function decode(object $row): array
     {
         $payload = json_decode(decrypt($row->payload), true, 512, JSON_THROW_ON_ERROR);
+
+        // PHP decodes an empty JSON object to []; profile settings must retain object shape.
+        if (($row->kind ?? null) === 'browser-profiles' && empty($payload['settings'])) {
+            $payload['settings'] = (object) [];
+        }
 
         return ['id' => $row->id, 'revision' => (int) $row->revision, 'createdAt' => CarbonImmutable::parse($row->created_at, 'UTC')->toISOString(), 'updatedAt' => CarbonImmutable::parse($row->updated_at, 'UTC')->toISOString()] + $payload;
     }
@@ -48,7 +53,7 @@ class AppRecords
             if ($old) {
                 $this->query($user, $kind)->where('id', $id)->update($row);
             } else {
-                abort_if(in_array($kind, ['team-lists', 'links', 'push-subscriptions']) && $this->query($user, $kind)->count() >= self::LIMITS[$kind], 422, 'Remove an older record before adding another.');
+                abort_if(in_array($kind, ['browser-profiles', 'team-lists', 'links', 'push-subscriptions']) && $this->query($user, $kind)->count() >= self::LIMITS[$kind], 422, 'Remove an older record before adding another.');
                 DB::table('app_records')->insert($row);
             }
             $expired = $this->query($user, $kind)->orderByDesc('updated_at')->orderByDesc('id')->skip(self::LIMITS[$kind])->take(1000)->pluck('id');

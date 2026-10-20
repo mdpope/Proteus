@@ -1,0 +1,106 @@
+/* One production chat presentation across local desktop, remote desktop and web. */
+.adaptive-composer{container-type:inline-size;position:relative;background:#222b26!important;border:1px solid var(--line);border-radius:16px;padding:10px 12px!important;max-height:none!important;overflow:visible!important;flex:none}
+.adaptive-composer textarea{display:block;width:100%;min-height:0!important;max-height:none!important;resize:none!important;overflow-y:hidden;padding:4px 3px!important;border:0!important;background:transparent!important;font-size:14px;line-height:1.6}
+.adaptive-composer>.composer-footer,.adaptive-composer .remote-composer-primary{display:flex;align-items:center;flex-wrap:nowrap!important;gap:8px;justify-content:initial;margin-top:6px}
+.adaptive-composer .composer-models{display:flex;flex:1;align-items:center;flex-wrap:nowrap;gap:12px;min-width:0;overflow:visible}
+.adaptive-composer .model-controls{display:flex;align-items:center;gap:12px;margin:0;flex:none}
+.adaptive-composer .model-field{position:relative;isolation:isolate;flex:1;min-width:60px;margin:0;display:block}
+.adaptive-composer .model-controls .model-field{flex:none}
+.adaptive-composer .model-field::before{content:"";position:absolute;inset:-4px -5px;border-radius:7px;background:var(--proteus-control-hover,#ffffff0d);opacity:0;pointer-events:none;z-index:-1}
+.adaptive-composer .model-field:hover::before,.adaptive-composer .model-field:focus-within::before{opacity:1}
+.adaptive-composer .composer-models label,.adaptive-composer .model-field-label{display:block;margin:0 0 2px;color:var(--soft,var(--muted));font-size:10px;line-height:13px;font-weight:500;letter-spacing:.02em}
+.adaptive-composer .composer-models select{display:block;width:100%;max-width:none;min-width:0;height:29px;padding:4px 18px 4px 0;border:0;background-color:transparent;border-radius:4px;color:var(--ink);font-size:12px;text-overflow:ellipsis}
+.adaptive-composer .model-controls select{max-width:110px}
+.adaptive-composer .composer-models select:hover{background-color:transparent}
+.adaptive-composer .model-refresh{flex:none;padding:0;border:0;width:26px;min-width:26px;height:28px;align-self:end;margin-bottom:3px;font-size:16px}
+.adaptive-composer .composer-actions{display:flex;flex:none;flex-wrap:nowrap;align-items:center;gap:6px;margin-left:0}
+.adaptive-composer .composer-actions .icon-action{width:34px;min-width:34px;height:34px;min-height:34px;border:0;border-radius:50%;padding:0;display:grid;place-items:center;position:relative}
+.icon-action svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.adaptive-composer .steer-action{color:var(--accent,var(--green));background:#2a382c}
+.adaptive-composer .send-action{background:var(--accent,var(--green));color:var(--proteus-accent-ink,#182414)}
+.send-action>svg{width:20px;height:20px;stroke-width:2.2}
+.adaptive-composer .stop-action{background:#332723;color:#f1b49f}
+.queue-clock{position:absolute;right:1px;bottom:1px;width:11px;height:11px;border-radius:50%;background:var(--accent,var(--green))}
+.queue-clock svg{display:block;width:11px;height:11px;stroke-width:1.6}
+.adaptive-composer .model-options{display:none}
+.adaptive-composer .attachment-add,.adaptive-composer .remote-attach-button{background:transparent!important;border:0!important;position:relative;isolation:isolate}
+.adaptive-composer .attachment-add>span{position:relative;isolation:isolate}
+.adaptive-composer .attachment-add>span::before,.adaptive-composer .remote-attach-button::before{content:"";position:absolute;width:34px;height:34px;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--proteus-control-hover,#ffffff0d);border-radius:7px;opacity:0;pointer-events:none;z-index:-1}
+.adaptive-composer .attachment-add:hover>span::before,.adaptive-composer .attachment-add:focus-visible>span::before,.adaptive-composer .remote-attach-button:hover::before,.adaptive-composer .remote-attach-button:focus-visible::before{opacity:1}
+.adaptive-composer .attachment-controls{flex:none}
+.adaptive-composer .attachment-strip{width:100%}
+.adaptive-composer .queued-message{max-height:60px;overflow:auto}
+.chat-details .runtime-stat,.remote-chat-details .runtime-stat{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center}
+.runtime-stat>span,.token-stats>div>span{font-size:11px;color:var(--soft,var(--muted))}
+.runtime-stat>strong,.token-stats>div>strong{display:block;width:100%;box-sizing:border-box;padding:12px;border:1px solid var(--line);border-radius:8px;background:#0f1713;text-align:center;color:var(--ink);overflow-wrap:anywhere}
+.runtime-stat>strong{font-size:28px;line-height:1.15;font-weight:600}
+.token-stats{margin:12px 0 17px;display:flex;flex-direction:column;align-items:center;gap:12px;color:var(--soft,var(--muted));font-size:11px;text-align:center}
+.token-stats>div{display:flex;flex-direction:column;align-items:center;gap:6px;width:100%}
+.token-stats strong{font-size:18px;font-weight:500}
+.explanation{margin:12px 0;color:var(--soft,var(--muted));font-size:12px}.explanation summary{cursor:pointer;color:var(--ink)}
+.chat-details .path-control,.remote-chat-details .path-control{margin:15px 0;font-size:12px}.path-control .filepath{font-size:11px;overflow-wrap:anywhere}.path-control .actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:5px}
+.remote-chat-details h2{font-size:18px}.remote-chat-details .chat-permission-scope{border:1px solid var(--line);border-radius:8px;padding:12px;margin-top:14px}
+.remote-chat-details button,.chat-details button{font-size:12px}
+.remote-chat-details.card{border:0;background:transparent;padding:0}.remote-chat-details>.card{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:24px;margin-bottom:18px}
+.chat-details h2,.remote-chat-details h2{font-size:18px}
+.remote-message{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:16px 20px;margin:12px 0;line-height:1.65}
+.remote-message.user{background:#222e23;border-left:3px solid var(--accent);padding:16px 20px}.remote-message.assistant{border-left:3px solid #8cb6bc;margin-right:0}.remote-message.system{font-size:12px;background:#17201c;border-style:dashed}
+.remote-message>.eyebrow{font-size:10px;letter-spacing:1px;margin-bottom:10px}
+.path-control button:disabled{cursor:default}
+@container(max-width:590px){
+ .adaptive-composer .model-options{flex:1;min-width:0;height:40px;display:flex;align-items:center;justify-content:space-between;padding:0 4px;border:0;background:transparent;color:var(--ink);font-size:12px;text-align:left}
+ .model-options strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}.model-options small{display:block;color:var(--soft,var(--muted));font-size:10px}.model-options>span:first-child{min-width:0}
+ .adaptive-composer .composer-models{display:none}
+ .adaptive-composer[data-options-open=true] .composer-models{display:flex;flex-wrap:wrap;position:absolute;z-index:5;bottom:55px;left:8px;right:8px;padding:15px;border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:0 8px 35px #0008}
+ .adaptive-composer .model-controls{flex-wrap:wrap}.adaptive-composer .model-field{min-width:90px}
+}
+@media(pointer:coarse){.adaptive-composer .composer-actions .icon-action{width:44px;height:44px;min-width:44px;min-height:44px}}
+[hidden]{display:none!important}
+
+/* Attachments own a full row; they cannot consume the controls' horizontal lane. */
+.adaptive-composer .composer-footer{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px}
+.adaptive-composer .chat-attachment-picker{display:contents}
+.adaptive-composer .attachment-strip,.adaptive-composer .remote-attachment-strip{min-width:0;max-height:min(100px,18dvh);overflow:auto;overscroll-behavior:contain;display:flex;flex-wrap:wrap;gap:7px;margin:0;padding:3px 0}
+.adaptive-composer .attachment-strip{grid-column:1 / -1;grid-row:1}
+.adaptive-composer .attachment-strip:empty,.adaptive-composer .remote-attachment-strip:empty{display:none}
+.adaptive-composer .attachment-controls,.adaptive-composer .remote-attach-button{grid-column:1;grid-row:2}
+.adaptive-composer .composer-models,.adaptive-composer .model-options{grid-column:2;grid-row:2;min-width:0}
+.adaptive-composer .composer-actions{grid-column:3;grid-row:2}
+.adaptive-composer .attachment-add,.adaptive-composer .remote-attach-button{display:grid;place-items:center;width:32px;height:32px;min-width:32px;padding:0;color:var(--soft,var(--muted));font-size:20px;line-height:1}
+.adaptive-composer .attachment-chip,.adaptive-composer .remote-attachment-tag{display:flex;align-items:center;gap:4px;max-width:min(100%,300px);padding:4px 7px;border:1px solid var(--line);border-radius:8px;background:rgba(127,151,133,.08);font-size:12px;line-height:1.3}
+.adaptive-composer .attachment-chip>button:first-child,.adaptive-composer .remote-attachment-tag>button:first-child{display:flex;align-items:center;gap:6px;min-width:0;padding:0;border:0;background:transparent;text-align:left;color:inherit;opacity:1}
+.adaptive-composer .attachment-chip span,.adaptive-composer .remote-attachment-tag span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.adaptive-composer .attachment-chip small,.adaptive-composer .remote-attachment-tag small{display:block;color:var(--soft,var(--muted));font-size:10px}
+.adaptive-composer .attachment-chip img,.adaptive-composer .remote-attachment-tag img{width:34px;height:34px;object-fit:cover;border-radius:4px;flex:none}
+.adaptive-composer .attachment-chip>button:last-child,.adaptive-composer .remote-attachment-tag>button:last-child{flex:none;border:0;background:transparent;color:inherit;padding:2px 4px}
+.new-chat-dialog{max-height:calc(100dvh - 48px);overflow-y:auto}
+
+#dialog.new-chat-dialog[open]{display:flex;flex-direction:column;min-height:min(820px,calc(100dvh - 48px))}
+#dialog.new-chat-dialog .new-chat-composer{margin-top:auto}
+
+.remote-new-chat{min-height:min(820px,calc(100dvh - 110px));display:flex;flex-direction:column}
+.remote-new-chat>#remote-composer{flex:1;display:flex;flex-direction:column}
+.remote-new-chat .new-chat-composer{margin-top:auto}
+
+/* The search dialog's extra area belongs to the message, with viewport bounds. */
+#dialog.internet-search-dialog[open]{width:min(1170px,calc(100vw - 48px));max-width:calc(100vw - 48px);height:min(690px,calc(100dvh - 48px));max-height:calc(100dvh - 48px);display:flex;flex-direction:column}
+.internet-search-dialog .internet-search-composer{flex:1;min-height:0;display:flex;flex-direction:column}
+.internet-search-dialog .internet-search-composer textarea{flex:1;min-height:120px;max-height:none;resize:none;overflow-y:auto}
+.internet-search-dialog .composer-footer,.internet-search-dialog>h2,.internet-search-dialog>label,.internet-search-dialog>.actions,.internet-search-dialog #search-status{flex:none}
+.internet-search-dialog #search-status:empty{display:none}
+@media(max-width:600px){#dialog.internet-search-dialog[open]{width:calc(100vw - 24px);max-width:calc(100vw - 24px);height:calc(100dvh - 24px);max-height:calc(100dvh - 24px)}.internet-search-dialog .composer-actions{flex-wrap:wrap}}
+
+/* Preview approval choices stay visible beside the conversation. */
+.preview-mode-toggle{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--line);border-radius:9px;overflow:hidden;margin:10px 0}
+.preview-mode-toggle button{border:0;border-radius:0;margin:0;min-height:38px;padding:7px 5px;background:transparent;color:var(--muted);font-size:12px}
+.preview-mode-toggle button[aria-pressed=true],.preview-remember-toggle button[aria-pressed=true]{background:#34432b;color:var(--accent);box-shadow:inset 0 0 0 1px #70885a}
+.preview-read-only{display:flex;align-items:center;gap:8px;font-size:12px;margin:12px 0}
+.preview-read-only input{width:auto;margin:0}
+.preview-remember-toggle{display:flex;flex-wrap:wrap;gap:6px;margin:16px 0}
+.preview-working-grants{display:grid;gap:8px;margin:12px 0}
+.preview-working-grant{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:8px}
+.preview-working-grant select{width:auto;min-width:140px}
+.preview-permissions ul{list-style:none;padding:0;margin:10px 0 16px}
+.preview-permissions li{margin:10px 0}
+.preview-permissions li>.filepath,.preview-permissions li>small{display:block}
+.preview-permissions li>small{color:var(--muted);margin:4px 0}

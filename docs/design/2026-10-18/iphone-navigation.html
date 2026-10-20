@@ -1,0 +1,271 @@
+<style>
+#proteus-iphone-lab .ip-stage { display:grid; justify-items:center; gap:14px; padding:24px 0 16px; }
+#proteus-iphone-lab .ip-phone { color-scheme:dark; --ip-bg:#101711; --ip-rail:#121512; --ip-panel:#1d231e; --ip-card:#263026; --ip-selected:#31392c; --ip-text:#eef1e9; --ip-muted:#a4b1a5; --ip-accent:#bedc93; --ip-line:#343e34; --ip-paper:#e9e7d8; --ip-ink:#25392e; font:400 15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; width:min(393px,100%); height:790px; position:relative; overflow:hidden; background:var(--ip-bg); color:var(--ip-text); border:6px solid #303830; border-radius:48px; box-shadow:0 18px 44px #0003; isolation:isolate; }
+#proteus-iphone-lab .ip-phone *, #proteus-iphone-lab .ip-phone *::before, #proteus-iphone-lab .ip-phone *::after { box-sizing:border-box; }
+#proteus-iphone-lab .ip-phone button,#proteus-iphone-lab .ip-phone input,#proteus-iphone-lab .ip-phone textarea { font:inherit; color:inherit; }
+#proteus-iphone-lab .ip-phone button { border:0; border-radius:0; background:transparent; padding:0; min-width:44px; min-height:44px; display:inline-flex; align-items:center; justify-content:center; gap:8px; cursor:inherit; -webkit-tap-highlight-color:transparent; }
+#proteus-iphone-lab .ip-phone button:focus-visible { outline:2px solid var(--ip-accent); outline-offset:-3px; border-radius:8px; }
+#proteus-iphone-lab .ip-phone button:disabled { opacity:.3; }
+#proteus-iphone-lab .ip-phone svg { width:21px; height:21px; flex-shrink:0; stroke-width:1.7; }
+#proteus-iphone-lab .ip-status { height:48px; padding:12px 22px 0; display:flex; align-items:center; justify-content:space-between; font-size:14px; font-weight:500; position:relative; z-index:12; background:var(--ip-bg); }
+#proteus-iphone-lab .ip-island { position:absolute; width:108px; height:28px; background:#040704; border-radius:24px; top:8px; left:50%; transform:translateX(-50%); }
+#proteus-iphone-lab .ip-status-icons { display:flex; align-items:center; gap:5px; }
+#proteus-iphone-lab .ip-status-icons svg { width:15px; height:15px; }
+#proteus-iphone-lab .ip-screen { position:absolute; inset:48px 0 19px; overflow:hidden; touch-action:pan-y; }
+#proteus-iphone-lab .ip-screen.ip-gesturing { user-select:none; -webkit-user-select:none; }
+#proteus-iphone-lab .ip-page { position:absolute; inset:0; display:flex; flex-direction:column; background:var(--ip-bg); overflow:hidden; will-change:transform; }
+#proteus-iphone-lab .ip-chrome { height:57px; min-height:57px; padding:0 12px 0 8px; display:flex; align-items:center; border-bottom:1px solid var(--ip-line); gap:5px; background:var(--ip-rail); }
+#proteus-iphone-lab .ip-brand { display:flex; flex-direction:column; flex:1; min-width:0; padding-left:6px; }
+#proteus-iphone-lab .ip-brand strong { font-size:16px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#proteus-iphone-lab .ip-brand small { font-size:11px; color:var(--ip-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#proteus-iphone-lab .ip-nav-button { color:var(--ip-accent)!important; flex-shrink:0; }
+#proteus-iphone-lab .ip-pull-zone { position:absolute; top:0; left:0; width:108px; height:57px; z-index:1; pointer-events:none; border-radius:0 0 18px 0; background:linear-gradient(145deg,#bedc9314,transparent); }
+#proteus-iphone-lab .ip-pull-zone::after { content:""; position:absolute; width:24px; height:3px; border-radius:4px; background:var(--ip-accent); opacity:.45; top:5px; left:17px; }
+#proteus-iphone-lab .ip-url { min-height:48px; padding:7px 14px; background:var(--ip-rail); }
+#proteus-iphone-lab .ip-address { width:100%; min-height:34px!important; background:var(--ip-panel)!important; border:1px solid var(--ip-line)!important; border-radius:10px!important; padding:4px 10px!important; font-size:13px!important; justify-content:flex-start!important; color:var(--ip-muted)!important; }
+#proteus-iphone-lab .ip-address svg { width:14px; height:14px; }
+#proteus-iphone-lab .ip-address span { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#proteus-iphone-lab .ip-content { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:none; }
+#proteus-iphone-lab .ip-content::-webkit-scrollbar { display:none; }
+#proteus-iphone-lab .ip-browser { color:var(--ip-ink); background:var(--ip-paper); min-height:100%; padding:24px 23px 36px; }
+#proteus-iphone-lab .ip-journal { display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #25392e30; padding-bottom:14px; font-size:12px; letter-spacing:.08em; }
+#proteus-iphone-lab .ip-journal span:last-child { font-size:11px; letter-spacing:0; }
+#proteus-iphone-lab .ip-landscape { height:146px; background:linear-gradient(170deg,#c7d0bc 0 36%,transparent 36%),linear-gradient(146deg,transparent 0 40%,#758c6d 41% 69%,transparent 70%),linear-gradient(22deg,#3e604b 0 56%,#97ac83 57%); margin:24px 0; position:relative; overflow:hidden; border-radius:3px; }
+#proteus-iphone-lab .ip-landscape::after { content:""; position:absolute; height:120px; width:72px; border-radius:50%; background:#d4d6ba; transform:rotate(54deg); left:43%; top:86px; }
+#proteus-iphone-lab .ip-browser h1 { font-family:Georgia,serif; font-weight:400; font-size:34px; line-height:1.12; margin:17px 0; letter-spacing:-.04em; }
+#proteus-iphone-lab .ip-eyebrow { color:#586d55; font-size:11px; letter-spacing:.1em; text-transform:uppercase; }
+#proteus-iphone-lab .ip-browser p { font-family:Georgia,serif; font-size:17px; line-height:1.6; margin:16px 0; }
+#proteus-iphone-lab .ip-browser .ip-read-link { color:var(--ip-ink); border-bottom:1px solid #25392e50; justify-content:space-between; width:100%; font-size:14px; margin-top:10px; }
+#proteus-iphone-lab .ip-browser .ip-byline { font:400 12px/1.5 -apple-system,sans-serif; color:#586d55; }
+#proteus-iphone-lab .ip-bottom { min-height:55px; display:flex; align-items:center; justify-content:space-around; border-top:1px solid var(--ip-line); background:var(--ip-rail); color:var(--ip-accent); padding:0 8px; }
+#proteus-iphone-lab .ip-bottom .ip-count { font-size:12px; width:23px; height:23px; border:1.5px solid currentColor; border-radius:5px; display:grid; place-items:center; position:relative; }
+#proteus-iphone-lab .ip-bottom .ip-count::before { content:""; position:absolute; inset:-4px 3px 3px -4px; border-left:1px solid; border-top:1px solid; border-radius:4px; opacity:.6; }
+#proteus-iphone-lab .ip-home-indicator { position:absolute; width:118px; height:5px; border-radius:5px; background:var(--ip-text); opacity:.9; bottom:7px; left:50%; transform:translateX(-50%); z-index:15; }
+#proteus-iphone-lab .ip-chat { padding:19px 16px 26px; background:var(--ip-bg); min-height:100%; }
+#proteus-iphone-lab .ip-chat small { color:var(--ip-muted); font-size:11px; letter-spacing:.04em; }
+#proteus-iphone-lab .ip-chat h2 { font-size:23px; line-height:1.25; font-weight:500; letter-spacing:-.025em; margin:7px 0 20px; }
+#proteus-iphone-lab .ip-message { background:var(--ip-panel); padding:16px; border-radius:17px; margin-bottom:14px; }
+#proteus-iphone-lab .ip-message.user { background:var(--ip-selected); margin-left:28px; }
+#proteus-iphone-lab .ip-message p { margin:8px 0 0; font-size:14px; line-height:1.6; }
+#proteus-iphone-lab .ip-plan-row { display:flex; gap:12px; align-items:baseline; margin:15px 0 0; font-size:14px; }
+#proteus-iphone-lab .ip-plan-row span { color:var(--ip-accent); font-size:12px; width:38px; flex-shrink:0; }
+#proteus-iphone-lab .ip-chat-link { width:100%; padding:7px 10px!important; justify-content:flex-start!important; border:1px solid var(--ip-line)!important; border-radius:10px!important; margin-top:15px; color:var(--ip-accent)!important; text-align:left; font-size:13px!important; }
+#proteus-iphone-lab .ip-composer { padding:10px 12px 12px; background:var(--ip-bg); }
+#proteus-iphone-lab .ip-composer-box { display:flex; gap:8px; background:var(--ip-card); border:1px solid var(--ip-line); border-radius:22px; padding:3px 7px; align-items:center; }
+#proteus-iphone-lab .ip-composer textarea { flex:1; width:0; resize:none; outline-offset:2px; border:0; background:none; font-size:16px; line-height:1.4; height:38px; padding:8px 0; }
+#proteus-iphone-lab .ip-composer textarea::placeholder { color:var(--ip-muted); }
+#proteus-iphone-lab .ip-send { background:var(--ip-accent)!important; color:var(--ip-bg)!important; width:34px; min-width:34px!important; min-height:34px!important; border-radius:50%!important; }
+#proteus-iphone-lab .ip-home { padding:22px 17px 25px; }
+#proteus-iphone-lab .ip-home h1 { font-size:29px; font-weight:500; letter-spacing:-.04em; margin:2px 0 20px; }
+#proteus-iphone-lab .ip-home h2 { font-size:14px; font-weight:500; margin:23px 0 10px; color:var(--ip-muted); }
+#proteus-iphone-lab .ip-home-context { color:var(--ip-muted); font-size:12px; }
+#proteus-iphone-lab .ip-sections { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+#proteus-iphone-lab .ip-section { border-radius:14px!important; background:var(--ip-panel)!important; min-height:77px!important; padding:12px!important; flex-direction:column; align-items:flex-start!important; gap:8px!important; text-align:left; font-size:13px!important; }
+#proteus-iphone-lab .ip-section svg { color:var(--ip-accent); width:20px; height:20px; }
+#proteus-iphone-lab .ip-recent { width:100%; text-align:left; justify-content:flex-start!important; gap:12px!important; padding:10px 0!important; border-bottom:1px solid var(--ip-line)!important; }
+#proteus-iphone-lab .ip-recent svg { color:var(--ip-accent); }
+#proteus-iphone-lab .ip-recent strong { font-size:14px; font-weight:400; display:block; }
+#proteus-iphone-lab .ip-recent small { color:var(--ip-muted); display:block; font-size:11px; margin-top:3px; }
+#proteus-iphone-lab .ip-list { padding:20px 17px; }
+#proteus-iphone-lab .ip-list h1 { font-weight:500; font-size:27px; margin:0 0 20px; letter-spacing:-.03em; }
+#proteus-iphone-lab .ip-list p { color:var(--ip-muted); }
+#proteus-iphone-lab .ip-list-panel { padding:15px; background:var(--ip-panel); border-radius:16px; margin:12px 0; }
+#proteus-iphone-lab .ip-document { padding:28px 23px; }
+#proteus-iphone-lab .ip-document h1 { font-size:29px; line-height:1.15; font-weight:500; margin:0 0 22px; }
+#proteus-iphone-lab .ip-document h2 { font-size:17px; font-weight:500; color:var(--ip-accent); margin-top:26px; }
+#proteus-iphone-lab .ip-document p { color:var(--ip-muted); line-height:1.7; }
+#proteus-iphone-lab .ip-check { display:flex; gap:10px; margin:15px 0; }
+#proteus-iphone-lab .ip-check svg { width:18px; color:var(--ip-accent); }
+#proteus-iphone-lab .ip-overview { position:absolute; inset:0; background:var(--ip-bg); z-index:5; display:flex; flex-direction:column; }
+#proteus-iphone-lab .ip-overview-head { display:flex; padding:5px 17px 12px; align-items:center; gap:8px; min-height:62px; }
+#proteus-iphone-lab .ip-overview-head strong { flex:1; font-size:23px; font-weight:500; letter-spacing:-.035em; }
+#proteus-iphone-lab .ip-overview-head button { color:var(--ip-accent); }
+#proteus-iphone-lab .ip-overview-scope { padding:0 17px 14px; font-size:12px; color:var(--ip-muted); }
+#proteus-iphone-lab .ip-overview-grid { flex:1; overflow:auto; padding:0 16px 16px; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-content:start; gap:18px 12px; scrollbar-width:none; }
+#proteus-iphone-lab .ip-tab-card { min-width:0; position:relative; }
+#proteus-iphone-lab .ip-thumb { height:206px; border:1px solid var(--ip-line); border-radius:16px; background:var(--ip-panel); overflow:hidden; position:relative; }
+#proteus-iphone-lab .ip-tab-card.active .ip-thumb { outline:2px solid var(--ip-accent); outline-offset:2px; }
+#proteus-iphone-lab .ip-thumb-view { position:absolute; top:0; left:0; width:360px; transform-origin:top left; pointer-events:none; background:var(--ip-bg); min-height:520px; }
+#proteus-iphone-lab .ip-thumb-view .ip-browser { min-height:540px; }
+#proteus-iphone-lab .ip-thumb-view .ip-chat { min-height:540px; }
+#proteus-iphone-lab .ip-thumb-scrim { position:absolute; inset:0; width:100%; height:100%; }
+#proteus-iphone-lab .ip-close-tab { position:absolute; right:3px; top:3px; border-radius:50%!important; color:#fff!important; z-index:1; text-shadow:0 1px 4px #000; }
+#proteus-iphone-lab .ip-close-tab::before { content:""; background:#101711c9; position:absolute; inset:8px; border-radius:50%; z-index:-1; }
+#proteus-iphone-lab .ip-close-tab svg { width:16px; height:16px; }
+#proteus-iphone-lab .ip-tab-caption { display:flex; align-items:center; gap:6px; margin-top:8px; font-size:12px; white-space:nowrap; }
+#proteus-iphone-lab .ip-tab-caption svg { width:14px; height:14px; color:var(--ip-accent); }
+#proteus-iphone-lab .ip-tab-caption span { overflow:hidden; text-overflow:ellipsis; }
+#proteus-iphone-lab .ip-tab-meta { font-size:11px; color:var(--ip-muted); margin:3px 0 0 20px; }
+#proteus-iphone-lab .ip-overview-foot { min-height:53px; padding:0 12px; border-top:1px solid var(--ip-line); display:flex; justify-content:space-between; align-items:center; color:var(--ip-accent); }
+#proteus-iphone-lab .ip-nav-overlay { position:absolute; inset:0; z-index:10; }
+#proteus-iphone-lab .ip-dim { position:absolute; inset:0; background:#0008; }
+#proteus-iphone-lab .ip-drawer { position:absolute; top:0; bottom:0; left:0; width:85%; max-width:322px; padding:15px 16px; background:var(--ip-rail); border-radius:0 22px 22px 0; box-shadow:15px 0 40px #0005; overflow-y:auto; scrollbar-width:none; }
+#proteus-iphone-lab .ip-drawer.right { left:auto; right:0; border-radius:22px 0 0 22px; box-shadow:-15px 0 40px #0005; }
+#proteus-iphone-lab .ip-drawer-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; font-size:23px; letter-spacing:-.04em; }
+#proteus-iphone-lab .ip-drawer-head span { color:var(--ip-accent); }
+#proteus-iphone-lab .ip-nav-row { width:100%; justify-content:flex-start!important; gap:12px!important; padding:0 10px!important; border-radius:10px!important; min-height:45px!important; text-align:left; font-size:14px!important; }
+#proteus-iphone-lab .ip-nav-row svg { width:19px; height:19px; color:var(--ip-accent); }
+#proteus-iphone-lab .ip-nav-row .ip-badge { margin-left:auto; font-size:12px; color:var(--ip-muted); }
+#proteus-iphone-lab .ip-nav-row.active { background:var(--ip-selected); }
+#proteus-iphone-lab .ip-divider { height:1px; margin:10px 0; background:var(--ip-line); }
+#proteus-iphone-lab .ip-workspace-title { display:flex; align-items:center; }
+#proteus-iphone-lab .ip-workspace-title .ip-nav-row { flex:1; }
+#proteus-iphone-lab .ip-workspace-title>button { color:var(--ip-muted); }
+#proteus-iphone-lab .ip-tree-row { background:var(--ip-panel); border-radius:12px; padding:7px; margin-top:7px; }
+#proteus-iphone-lab .ip-tree-row .ip-nav-row { font-size:13px!important; }
+#proteus-iphone-lab .ip-tree-row .ip-nav-row.sub { padding-left:22px!important; color:var(--ip-muted); }
+#proteus-iphone-lab .ip-allowance { font-size:11px; color:var(--ip-muted); margin:15px 0 4px; }
+#proteus-iphone-lab .ip-meter { display:flex; gap:8px; margin-top:8px; }
+#proteus-iphone-lab .ip-meter span { flex:1; padding:5px; border-radius:9px; text-align:center; background:var(--ip-card); color:var(--ip-accent); }
+#proteus-iphone-lab .ip-sheet { position:absolute; z-index:11; bottom:0; left:0; right:0; background:var(--ip-panel); border:1px solid var(--ip-line); border-radius:24px 24px 0 0; padding:12px 16px 20px; box-shadow:0 -12px 45px #0005; }
+#proteus-iphone-lab .ip-sheet h2 { font-size:17px; font-weight:500; margin:5px 10px 9px; }
+#proteus-iphone-lab .ip-sheet .ip-nav-row { min-height:48px!important; }
+#proteus-iphone-lab .ip-sheet-handle { width:32px; height:4px; background:var(--ip-muted); border-radius:4px; margin:0 auto 10px; opacity:.55; }
+#proteus-iphone-lab .ip-toast { position:absolute; left:20px; right:20px; bottom:66px; z-index:14; background:var(--ip-card); border:1px solid var(--ip-line); border-radius:12px; padding:11px 14px; font-size:13px; text-align:center; box-shadow:0 5px 25px #0004; }
+#proteus-iphone-lab .ip-animation-plane { position:absolute; z-index:8; overflow:hidden; background:var(--ip-bg); transform-origin:top left; pointer-events:none; box-shadow:0 10px 34px #0004; }
+#proteus-iphone-lab .ip-animation-plane * { pointer-events:none!important; }
+#proteus-iphone-lab .ip-rehearsal { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
+#proteus-iphone-lab .ip-rehearsal button { font:400 12px/1.3 -apple-system,sans-serif; border:1px solid light-dark(#d9dfd6,#424a42); color:light-dark(#34412f,#c8d4c2); background:light-dark(#f4f7f2,#252d25); padding:10px 13px; min-height:38px; border-radius:20px; }
+#proteus-iphone-lab .ip-rehearsal button:disabled { opacity:.45; }
+#proteus-iphone-lab .ip-rehearsal-label { font:400 11px/1.4 -apple-system,sans-serif; color:light-dark(#5b6756,#a9b6a4); display:flex; gap:7px; align-items:center; }
+#proteus-iphone-lab .ip-rehearsal-label svg { width:13px; height:13px; }
+#proteus-iphone-lab [hidden] { display:none!important; }
+@media(max-width:420px) { #proteus-iphone-lab .ip-phone { border-width:3px; border-radius:35px; height:754px; } #proteus-iphone-lab .ip-stage { padding-top:12px; } #proteus-iphone-lab .ip-overview-grid { gap:14px 10px; padding:0 12px 12px; } #proteus-iphone-lab .ip-thumb { height:187px; } }
+@media(prefers-reduced-motion:reduce) { #proteus-iphone-lab .ip-phone * { scroll-behavior:auto!important; } }
+</style>
+<div id="proteus-iphone-lab" class="viz-carousel viz-dotted-background" aria-label="Proteus iPhone navigation designs">
+  <section data-variant="Button drawer" aria-label="Button-opened app navigation"></section>
+  <section data-variant="Right-edge drawer" aria-label="Right-edge swipe navigation" hidden></section>
+  <section data-variant="Upper-left pull" aria-label="Upper-left downward navigation gesture" hidden></section>
+</div>
+<script>
+(() => {
+  const root=document.getElementById('proteus-iphone-lab');
+  const reduced=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const prefs={motion:440,columns:'Two',snapshots:'Content'};
+  const sections=[['Home','house'],['Chats','messages-square'],['Schedules','calendar-days'],['Internet Searches','search'],['Needs Attention','circle-alert'],['Life','heart'],['Team','users'],['Workspaces','panels-top-left'],['Engine Room','settings-2']];
+  const icons={browser:'globe',chat:'messages-square',document:'file-text',live:'screen-share'};
+  const initialTabs=[{id:'read',type:'browser',title:'A little room to wander',url:'fieldnotes.example',page:0},{id:'plan',type:'chat',title:'A slower Saturday'},{id:'notes',type:'document',title:'Weekend notes'},{id:'garden',type:'browser',title:'The small garden',url:'fieldnotes.example/garden',page:2}];
+  const instances=[];
+  const icon=name=>`<i data-lucide="${name}" aria-hidden="true"></i>`;
+  const escape=text=>String(text).replace(/[&<>"']/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+  const symbols=()=>{if(globalThis.lucide)globalThis.lucide.createIcons({attrs:{width:20,height:20}})};
+  let saved={},lastSavedState=''; try{saved=window.openai?.widgetState?.privateContent||{}}catch{};if(saved.prefs)Object.assign(prefs,saved.prefs)
+  const persist=()=>{try{const state={instances:instances.map(i=>({variant:i.mode,current:i.current,tabs:i.tabs,draft:i.draft,overview:i.overview})),prefs};lastSavedState=JSON.stringify(state);window.openai?.setWidgetState({modelContent:{preview:'iPhone navigation rehearsal',variants:['Button drawer','Right-edge drawer','Upper-left pull'],thumbnailColumns:prefs.columns,motionMs:prefs.motion},privateContent:state})?.catch(()=>{})}catch{}};
+  function browserContent(page=0){
+    const data=page===1?{eyebrow:'ON FOOT · 6 MIN READ',title:'The long way home',body:'A familiar path feels different when there is nowhere else to be. Leave the map folded for a little while.',tail:'Follow the river until the city becomes quiet. There is time to take the long way.',link:'Back to the reading list'}:page===2?{eyebrow:'IN SEASON · 4 MIN READ',title:'A garden, one pot at a time',body:'You do not need much room to grow something. A sunny corner, a little water, and a reason to look outside.',tail:'Start with herbs you already use. Let the rest happen slowly.',link:'A little room to wander'}:{eyebrow:'SLOW WEEKENDS · 5 MIN READ',title:'A little room to wander',body:'Make a little space for an unplanned afternoon. The best part of a day off might be the part you did not schedule.',tail:'A trail close to home. A book you have been meaning to finish. A table with room for one more.',link:'Read next: The long way home'};
+    return `<article class="ip-browser"><div class="ip-journal"><span>FIELDNOTES</span><span>Journal / Autumn</span></div><div class="ip-landscape" role="img" aria-label="Illustrated green hills and a winding trail"></div><div class="ip-eyebrow">${data.eyebrow}</div><h1>${data.title}</h1><div class="ip-byline">By Ellis Morgan · October 18</div><p>${data.body}</p><p>${data.tail}</p><button type="button" class="ip-read-link cursor-interaction" data-action="web-next">${data.link}${icon('arrow-up-right')}</button></article>`;
+  }
+  function chatContent(){return `<article class="ip-chat"><small>PERSONAL / GENERAL</small><h2>A slower Saturday</h2><div class="ip-message user"><small>YOU · 9:12 PM</small><p>Help me plan a low-key Saturday. A walk, lunch, and time to read.</p></div><div class="ip-message"><small>ASSISTANT · 9:12 PM</small><p>Leave some breathing room between each stop.</p><div class="ip-plan-row"><span>9:30</span><div>Walk the river trail before it gets busy.</div></div><div class="ip-plan-row"><span>12:00</span><div>Lunch somewhere close to home.</div></div><div class="ip-plan-row"><span>2:00</span><div>Read for a while. The rest stays open.</div></div><button type="button" class="ip-chat-link cursor-interaction" data-action="open-notes">${icon('file-text')}Weekend notes${icon('arrow-up-right')}</button></div><div class="ip-message"><small>ASSISTANT · 9:13 PM</small><p>I found a short essay for your reading list.</p><button type="button" class="ip-chat-link cursor-interaction" data-action="open-reading">${icon('globe')}A little room to wander</button></div></article>`}
+  function documentContent(){return `<article class="ip-document"><div class="ip-home-context">PERSONAL / GENERAL · NOTES</div><h1>Leave a little space.</h1><p>A few ideas for Saturday. Nothing that needs a reservation.</p><h2>Outside</h2><div class="ip-check">${icon('square-check')}River trail, easy loop</div><div class="ip-check">${icon('square')}Pick up something for lunch</div><h2>At home</h2><div class="ip-check">${icon('square')}Finish the book on the table</div><div class="ip-check">${icon('square')}Make soup for Sunday</div><h2>Keep open</h2><p>The afternoon. The route. A little room for whatever comes up.</p></article>`}
+  function liveContent(){return `<article class="ip-document"><div class="ip-home-context">LIVE BROWSER · DESIGN REHEARSAL</div><h1>Following the browser</h1><div class="ip-list-panel">${icon('screen-share')}<p>Fieldnotes · A little room to wander</p></div><div class="ip-landscape" role="img" aria-label="Illustrated browser page"></div><p>Sample frame · Personal / General</p></article>`}
+  function content(tab){return tab.type==='browser'?browserContent(tab.page):tab.type==='chat'?chatContent():tab.type==='live'?liveContent():documentContent()}
+  function homeContent(i){return `<div class="ip-home"><div class="ip-home-context">PERSONAL / GENERAL</div><h1>A place to begin.</h1><div class="ip-sections">${sections.filter(s=>s[0]!=='Home').map(([name,symbol])=>`<button type="button" class="ip-section cursor-interaction" data-section="${name}">${icon(symbol)}<span>${name}</span></button>`).join('')}</div><h2>Pick up where you left off</h2>${i.tabs.slice(0,3).map(t=>`<button type="button" class="ip-recent cursor-interaction" data-open="${t.id}">${icon(icons[t.type])}<span><strong>${escape(t.title)}</strong><small>${t.type==='browser'?escape(t.url):'Personal / General'}</small></span></button>`).join('')}</div>`}
+  function listContent(name){const workspace=name==='Workspaces';return `<div class="ip-list"><h1>${escape(name)}</h1>${workspace?`<div class="ip-list-panel"><div class="ip-home-context">WORKSPACE</div><button type="button" class="ip-recent cursor-interaction" data-section="General">${icon('panels-top-left')}<span><strong>Personal</strong><small>General · 4 open tabs</small></span>${icon('chevron-right')}</button></div><div class="ip-list-panel"><div class="ip-home-context">OTHER COMPUTERS</div><button type="button" class="ip-recent cursor-interaction" data-section="Studio">${icon('monitor')}<span><strong>Studio</strong><small>Saved workspace</small></span>${icon('chevron-right')}</button></div>`:name==='Chats'||name==='General'?`<button type="button" class="ip-recent cursor-interaction" data-open="plan">${icon('messages-square')}<span><strong>A slower Saturday</strong><small>Personal / General</small></span></button><button type="button" class="ip-recent cursor-interaction" data-open="read">${icon('globe')}<span><strong>A little room to wander</strong><small>Browser · open tab</small></span></button>`:`<div class="ip-list-panel"><div class="ip-home-context">DESIGN REHEARSAL</div><p>${name==='Needs Attention'?'You are all caught up.':name==='Life'?'Nutrition · Garage · Captures':name==='Team'?'Overview · Standup':name==='Schedules'?'Your schedules appear here.':name==='Engine Room'?'Connections · Providers · App settings':'Your saved items appear here.'}</p></div>`}</div>`}
+  function navButton(i){return `<button type="button" class="ip-nav-button cursor-interaction" data-action="nav" aria-label="Open app navigation">${icon(i.mode===1?'panel-right':'panel-left')}</button>`}
+  function chrome(i,title,subtitle='Personal / General'){return `<header class="ip-chrome">${i.mode!==1?navButton(i):''}<div class="ip-brand"><strong>${escape(title)}</strong><small>${escape(subtitle)}</small></div><button type="button" data-action="overview" class="cursor-interaction" aria-label="Show all tabs">${icon('panels-top-left')}</button><button type="button" data-action="add" class="cursor-interaction" aria-label="Add a tab">${icon('plus')}</button>${i.mode===1?navButton(i):''}</header>${i.mode===2?'<div class="ip-pull-zone" aria-hidden="true"></div>':''}`}
+  function pageMarkup(i,route){
+    const tab=i.tabs.find(t=>t.id===route);
+    if(!tab)return `${chrome(i,route==='home'?'Proteus':route,route==='home'?'Home':'Personal / General')}<main class="ip-content">${route==='home'?homeContent(i):listContent(route)}</main>`;
+    return `${chrome(i,tab.type==='browser'?'General':tab.title)}${tab.type==='browser'?`<div class="ip-url"><button type="button" class="ip-address cursor-interaction" data-action="address" aria-label="Edit address">${icon('lock-keyhole')}<span>${escape(tab.url)}</span>${icon('type')}</button></div>`:''}<main class="ip-content">${content(tab)}</main>${tab.type==='browser'?`<footer class="ip-bottom" aria-label="Browser navigation"><button type="button" data-action="browser-back" class="cursor-interaction" aria-label="Browser back" ${tab.page!==1?'disabled':''}>${icon('chevron-left')}</button><button type="button" data-action="browser-forward" class="cursor-interaction" aria-label="Browser forward" ${tab.page===1?'disabled':''}>${icon('chevron-right')}</button><button type="button" data-action="share" class="cursor-interaction" aria-label="Share page">${icon('share')}</button><button type="button" data-action="overview" class="cursor-interaction" aria-label="Show all tabs"><span class="ip-count">${i.tabs.length}</span></button><button type="button" data-action="browser-menu" class="cursor-interaction" aria-label="Browser menu">${icon('ellipsis')}</button></footer>`:tab.type==='chat'?`<footer class="ip-composer"><div class="ip-composer-box"><button type="button" data-action="add" class="cursor-interaction" aria-label="Add to chat">${icon('plus')}</button><textarea aria-label="Chat draft" placeholder="Continue the conversation…">${escape(i.draft)}</textarea><button type="button" data-action="send" class="ip-send cursor-interaction" aria-label="Send sample message">${icon('arrow-up')}</button></div></footer>`:''}`;
+  }
+  function makePage(i,route){const p=document.createElement('div');p.className='ip-page';p.dataset.route=route;p.innerHTML=pageMarkup(i,route);return p}
+  function iconsNow(){symbols();requestAnimationFrame(symbols)}
+  function duration(){return reduced()?0:prefs.motion}
+  function animate(el,frames,options={}){return el.animate(frames,{duration:duration(),easing:'cubic-bezier(.2,.8,.2,1)',fill:'forwards',...options})}
+  function currentTab(i){return i.tabs.find(t=>t.id===i.current)}
+  function visiblePage(i){return i.screen.querySelector('.ip-page:not(.ip-previous)')}
+  function recordScroll(i){const p=visiblePage(i);if(p)i.scrolls[i.current]=p.querySelector('.ip-content')?.scrollTop||0}
+  function restoreScroll(i,p,route){const el=p.querySelector('.ip-content');if(el)el.scrollTop=i.scrolls[route]||0}
+  function updateRehearsals(i){i.phone.dataset.current=i.current;i.phone.dataset.overview=String(i.overview);i.variant.querySelector('[data-demo="back"]').disabled=i.busy||i.overview;i.variant.querySelector('[data-demo="pinch"]').disabled=i.busy||i.overview||!currentTab(i)}
+  function replacePage(i){recordScroll(i);i.screen.querySelectorAll('.ip-page').forEach(p=>p.remove());const p=makePage(i,i.current);i.screen.prepend(p);restoreScroll(i,p,i.current);iconsNow();updateRehearsals(i)}
+  async function navigate(i,route,push=true){
+    if(i.busy)return;if(route===i.current&&!i.overview){closeNav(i);return}closeSheet(i);closeNav(i);recordScroll(i);
+    if(i.overview){i.screen.querySelector('.ip-overview')?.remove();i.overview=false}
+    const old=visiblePage(i);if(push&&route!==i.current)i.history.push(i.current);i.current=route;
+    const p=makePage(i,route);i.screen.append(p);restoreScroll(i,p,route);iconsNow();i.busy=true;
+    if(old)await Promise.all([animate(old,[{transform:'translateX(0)'},{transform:'translateX(-24%)',filter:'brightness(.65)'}]).finished,animate(p,[{transform:'translateX(100%)'},{transform:'translateX(0)'}]).finished]);
+    old?.remove();p.getAnimations().forEach(a=>a.cancel());i.busy=false;persist();updateRehearsals(i);
+  }
+  function beginBack(i){
+    if(i.busy||i.overview||i.nav||i.sheet)return null;
+    recordScroll(i);const tab=currentTab(i);const browserBack=tab?.type==='browser'&&tab.page===1;
+    const target=browserBack?i.current:(i.history.at(-1)||'home');if(target===i.current&&!browserBack)return null;
+    const p=visiblePage(i),previous=makePage(i,target);previous.classList.add('ip-previous');
+    if(browserBack){const article=previous.querySelector('.ip-content');article.innerHTML=browserContent(0);previous.querySelector('.ip-bottom [data-action="browser-back"]').disabled=true;previous.querySelector('.ip-bottom [data-action="browser-forward"]').disabled=false}
+    i.screen.insertBefore(previous,p);restoreScroll(i,previous,target);iconsNow();i.busy=true;
+    return {p,previous,target,browserBack,width:i.screen.clientWidth,progress:0};
+  }
+  function moveBack(b,progress){b.progress=Math.max(0,Math.min(1,progress));b.p.style.transform=`translateX(${b.progress*b.width}px)`;b.p.style.boxShadow='-8px 0 30px #0005';b.previous.style.transform=`translateX(${(-.24+.24*b.progress)*b.width}px)`;b.previous.style.filter=`brightness(${.65+.35*b.progress})`}
+  async function finishBack(i,b,commit){
+    if(!b)return;const progress=commit?1:0;
+    await Promise.all([animate(b.p,[{transform:b.p.style.transform},{transform:`translateX(${progress*b.width}px)`}],{duration:duration()*.7}).finished,animate(b.previous,[{transform:b.previous.style.transform,filter:b.previous.style.filter},{transform:`translateX(${(-.24+.24*progress)*b.width}px)`,filter:`brightness(${.65+.35*progress})`}],{duration:duration()*.7}).finished]);
+    if(commit){b.p.remove();if(b.browserBack){currentTab(i).page=0}else{i.history.pop();i.current=b.target}b.previous.remove();const p=makePage(i,i.current);i.screen.prepend(p);restoreScroll(i,p,i.current)}else{b.previous.remove();b.p.getAnimations().forEach(a=>a.cancel());b.p.style.transform='';b.p.style.boxShadow=''}
+    i.busy=false;iconsNow();persist();updateRehearsals(i);
+  }
+  async function demoBack(i){const b=beginBack(i);if(!b)return;moveBack(b,0);await Promise.all([animate(b.p,[{transform:'translateX(0)'},{transform:`translateX(${b.width*.53}px)`}],{duration:duration()*1.3}).finished,animate(b.previous,[{transform:`translateX(${-b.width*.24}px)`,filter:'brightness(.65)'},{transform:`translateX(${-b.width*.113}px)`,filter:'brightness(.84)'}],{duration:duration()*1.3}).finished]);moveBack(b,.53);b.p.getAnimations().forEach(a=>a.cancel());b.previous.getAnimations().forEach(a=>a.cancel());await new Promise(r=>setTimeout(r,reduced()?0:190));await finishBack(i,b,true)}
+  function overviewMarkup(i){return `<div class="ip-overview-head"><strong>Open tabs</strong><button type="button" data-action="overview-close" class="cursor-interaction">Done</button></div><div class="ip-overview-scope">Personal / General · ${i.tabs.length} tabs</div><div class="ip-overview-grid">${i.tabs.map(t=>`<div class="ip-tab-card ${i.current===t.id?'active':''}" data-tab="${t.id}"><div class="ip-thumb"><div class="ip-thumb-view">${prefs.snapshots==='Content'?content(t):`<div class="ip-document"><h1>${escape(t.title)}</h1></div>`}</div><button type="button" class="ip-thumb-scrim cursor-interaction" data-open="${t.id}" aria-label="Open ${escape(t.title)}"></button><button type="button" class="ip-close-tab cursor-interaction" data-close="${t.id}" aria-label="Close ${escape(t.title)}">${icon('x')}</button></div><div class="ip-tab-caption">${icon(icons[t.type])}<span>${escape(t.title)}</span></div><div class="ip-tab-meta">${t.type==='browser'?escape(t.url):t.type==='chat'?'Chat · draft kept':t.type==='live'?'Live Browser':'Document'}</div></div>`).join('')}</div><div class="ip-overview-foot"><button type="button" data-action="add" class="cursor-interaction" aria-label="New tab">${icon('plus')}</button><span>${i.tabs.length} tabs</span><button type="button" data-section="Workspaces" class="cursor-interaction" aria-label="Show workspaces">${icon('panels-top-left')}</button></div>`}
+  function fitThumbs(i){const grid=i.screen.querySelector('.ip-overview-grid');if(!grid)return;grid.style.gridTemplateColumns=`repeat(${prefs.columns==='Three'?3:2},minmax(0,1fr))`;grid.querySelectorAll('.ip-thumb').forEach(t=>{const width=i.screen.clientWidth,s=t.clientWidth/width,view=t.querySelector('.ip-thumb-view');view.style.width=`${width}px`;view.style.transform=`scale(${s})`;const id=t.closest('[data-tab]').dataset.tab;view.style.top=`${-(i.scrolls[id]||0)*s}px`;t.style.height=`${Math.min(214,t.clientWidth*1.39)}px`})}
+  function addOverview(i){const overview=document.createElement('div');overview.className='ip-overview';overview.innerHTML=overviewMarkup(i);i.screen.append(overview);fitThumbs(i);iconsNow();return overview}
+  function beginOverview(i){
+    if(i.busy||i.overview||!currentTab(i))return null;recordScroll(i);closeNav(i);closeSheet(i);const p=visiblePage(i),o=addOverview(i),thumb=o.querySelector(`[data-tab="${i.current}"] .ip-thumb`);thumb.scrollIntoView({block:'nearest'});
+    const screenRect=i.screen.getBoundingClientRect(),rect=thumb.getBoundingClientRect(),source=p.querySelector('.ip-content'),sourceRect=source.getBoundingClientRect(),plane=document.createElement('div');plane.className='ip-animation-plane';plane.style.cssText=`left:0;top:${sourceRect.top-screenRect.top}px;width:${i.screen.clientWidth}px;height:${source.clientHeight}px;`;
+    const cloned=source.cloneNode(true);cloned.style.cssText='width:100%;height:100%;overflow:hidden;';plane.append(cloned);i.screen.append(plane);cloned.scrollTop=i.scrolls[i.current]||0;p.style.zIndex='6';thumb.style.visibility='hidden';
+    const b={p,o,thumb,plane,x:rect.left-screenRect.left,y:rect.top-sourceRect.top,sx:rect.width/i.screen.clientWidth,height:source.clientHeight,targetHeight:rect.height/(rect.width/i.screen.clientWidth),progress:0};i.busy=true;return b;
+  }
+  function overviewTransform(b,p){return `translate(${b.x*p}px,${b.y*p}px) scale(${1-(1-b.sx)*p})`}
+  function overviewClip(b,p){return `inset(0 0 ${Math.max(0,b.height-b.targetHeight)*p}px 0 round ${27*p}px)`}
+  function moveOverview(b,p){b.progress=Math.max(0,Math.min(1,p));b.plane.style.transform=overviewTransform(b,b.progress);b.plane.style.clipPath=overviewClip(b,b.progress);b.p.style.opacity=String(1-b.progress);b.o.style.opacity=String(b.progress)}
+  async function finishOverview(i,b,commit){
+    if(!b)return;await Promise.all([animate(b.plane,[{transform:b.plane.style.transform,clipPath:b.plane.style.clipPath},{transform:overviewTransform(b,commit?1:0),clipPath:overviewClip(b,commit?1:0)}],{duration:duration()*.8}).finished,animate(b.p,[{opacity:b.p.style.opacity},{opacity:commit?0:1}],{duration:duration()*.8}).finished,animate(b.o,[{opacity:b.o.style.opacity},{opacity:commit?1:0}],{duration:duration()*.8}).finished]);
+    b.plane.remove();b.p.getAnimations().forEach(a=>a.cancel());b.o.getAnimations().forEach(a=>a.cancel());b.p.style.zIndex='';b.p.style.opacity='';if(commit){b.thumb.style.visibility='';b.o.style.opacity='';b.p.hidden=true;i.overview=true}else b.o.remove();i.busy=false;persist();updateRehearsals(i);
+  }
+  async function showOverview(i){if(i.overview||i.busy)return;const b=beginOverview(i);if(!b){addOverview(i);i.overview=true;updateRehearsals(i);return}moveOverview(b,0);await finishOverview(i,b,true)}
+  async function openFromOverview(i,id){
+    if(i.busy)return;const o=i.screen.querySelector('.ip-overview'),thumb=o.querySelector(`[data-tab="${id}"] .ip-thumb`);if(!thumb)return;
+    i.busy=true;const screenRect=i.screen.getBoundingClientRect(),rect=thumb.getBoundingClientRect(),p=makePage(i,id);i.screen.append(p);restoreScroll(i,p,id);p.style.zIndex='6';p.style.opacity='0';const source=p.querySelector('.ip-content'),sourceRect=source.getBoundingClientRect(),plane=document.createElement('div');plane.className='ip-animation-plane';plane.style.cssText=`left:0;top:${sourceRect.top-screenRect.top}px;width:${i.screen.clientWidth}px;height:${source.clientHeight}px;`;const cloned=source.cloneNode(true);cloned.style.cssText='width:100%;height:100%;overflow:hidden;';plane.append(cloned);i.screen.append(plane);cloned.scrollTop=i.scrolls[id]||0;thumb.style.visibility='hidden';iconsNow();const b={x:rect.left-screenRect.left,y:rect.top-sourceRect.top,sx:rect.width/i.screen.clientWidth,height:source.clientHeight,targetHeight:rect.height/(rect.width/i.screen.clientWidth)};
+    await Promise.all([animate(plane,[{transform:overviewTransform(b,1),clipPath:overviewClip(b,1)},{transform:overviewTransform(b,0),clipPath:overviewClip(b,0)}]).finished,animate(p,[{opacity:0},{opacity:1}]).finished,animate(o,[{opacity:1},{opacity:0}]).finished]);
+    plane.remove();i.screen.querySelectorAll('.ip-page').forEach(p=>p.remove());o.remove();i.current=id;i.overview=false;i.busy=false;replacePage(i);persist();
+  }
+  function openNav(i){
+    if(i.busy||i.nav)return;closeSheet(i);const overlay=document.createElement('div');overlay.className='ip-nav-overlay';overlay.innerHTML=`<button type="button" class="ip-dim cursor-interaction" data-action="nav-close" aria-label="Dismiss navigation"></button><nav class="ip-drawer ${i.mode===1?'right':''}" aria-label="App navigation"><div class="ip-drawer-head"><div><span>⤨</span> Proteus</div><button type="button" data-action="nav-close" class="cursor-interaction" aria-label="Close app navigation">${icon('x')}</button></div>${sections.filter(s=>!['Workspaces','Engine Room'].includes(s[0])).map(([name,symbol])=>`<button type="button" class="ip-nav-row cursor-interaction ${i.current===name||name==='Home'&&i.current==='home'?'active':''}" data-section="${name}">${icon(symbol)}${name}${name==='Needs Attention'?'<span class="ip-badge">0</span>':''}</button>`).join('')}<div class="ip-divider"></div><div class="ip-workspace-title"><button type="button" class="ip-nav-row cursor-interaction" data-section="Workspaces">${icon('panels-top-left')}Workspaces</button><button type="button" class="cursor-interaction" data-action="collapse" aria-label="Collapse all workspaces">${icon('fold-vertical')}</button></div><div class="ip-tree-row"><button type="button" class="ip-nav-row cursor-interaction" data-section="General">${icon('panels-top-left')}Personal</button><div class="ip-tree-content"><button type="button" class="ip-nav-row sub cursor-interaction" data-section="General">${icon('folder')}General</button><button type="button" class="ip-nav-row sub cursor-interaction" data-open="plan">${icon('messages-square')}A slower Saturday</button></div></div><div class="ip-divider"></div><button type="button" class="ip-nav-row cursor-interaction" data-section="Engine Room">${icon('settings-2')}Engine Room</button><div class="ip-allowance">AI allowance · sample<div class="ip-meter"><span>Copilot</span><span>Codex</span><span>Claude</span></div></div></nav>`;i.screen.append(overlay);i.nav=overlay;const drawer=overlay.querySelector('.ip-drawer');animate(drawer,[{transform:`translateX(${i.mode===1?'100%':'-100%'})`},{transform:'translateX(0)'}]);iconsNow();
+  }
+  function closeNav(i){i.nav?.remove();i.nav=null}
+  function closeSheet(i){i.sheet?.remove();i.sheet=null}
+  function sheet(i,kind){if(i.busy)return;closeNav(i);closeSheet(i);const el=document.createElement('div');el.className='ip-sheet';el.innerHTML=`<div class="ip-sheet-handle"></div><h2>${kind==='add'?'Add a tab':kind==='share'?'Share page':kind==='address'?'Address':'Page options'}</h2>${kind==='add'?`<button type="button" class="ip-nav-row cursor-interaction" data-new="chat">${icon('messages-square')}New chat</button><button type="button" class="ip-nav-row cursor-interaction" data-new="browser">${icon('globe')}Browser tab</button><button type="button" class="ip-nav-row cursor-interaction" data-new="live">${icon('screen-share')}Live Browser</button><button type="button" class="ip-nav-row cursor-interaction" data-open="notes">${icon('file-text')}Open document</button>`:kind==='address'?`<button type="button" class="ip-nav-row cursor-interaction" data-action="sample-address">${icon('lock-keyhole')}fieldnotes.example</button>`:`<button type="button" class="ip-nav-row cursor-interaction" data-action="sample-option">${icon(kind==='share'?'copy':'rotate-cw')}${kind==='share'?'Copy link':'Reload page'}</button><button type="button" class="ip-nav-row cursor-interaction" data-action="sample-option">${icon('bookmark')}Save for later</button>`}<button type="button" class="ip-nav-row cursor-interaction" data-action="sheet-close">${icon('x')}Dismiss</button>`;i.screen.append(el);i.sheet=el;animate(el,[{transform:'translateY(100%)'},{transform:'translateY(0)'}]);iconsNow()}
+  function toast(i,message){i.screen.querySelector('.ip-toast')?.remove();const el=document.createElement('div');el.className='ip-toast';el.setAttribute('role','status');el.textContent=message;i.screen.append(el);setTimeout(()=>el.remove(),2200)}
+  async function click(i,e){const button=e.target.closest('button');if(!button)return;if(i.ignoreClickUntil>Date.now())return;
+    if(button.dataset.open){const id=button.dataset.open;if(i.overview){await openFromOverview(i,id)}else await navigate(i,id);return}
+    if(button.dataset.close){if(i.busy)return;const id=button.dataset.close;i.tabs=i.tabs.filter(t=>t.id!==id);if(i.current===id)i.current=i.tabs[0]?.id||'home';const o=i.screen.querySelector('.ip-overview');o.innerHTML=overviewMarkup(i);fitThumbs(i);iconsNow();persist();return}
+    if(button.dataset.section){await navigate(i,button.dataset.section==='Home'?'home':button.dataset.section);return}
+    if(button.dataset.new){const type=button.dataset.new;let tab=type==='live'?i.tabs.find(t=>t.type==='live'):null;if(!tab){tab={id:`sample-${type}-${++i.serial}`,type,title:type==='live'?'Live Browser':type==='browser'?'A little room to wander':'A slower Saturday',...(type==='browser'?{url:'fieldnotes.example',page:0}:{})};i.tabs.push(tab)}closeSheet(i);await navigate(i,tab.id);return}
+    const action=button.dataset.action;
+    if(action==='nav')openNav(i);else if(action==='nav-close')closeNav(i);else if(action==='overview')showOverview(i);else if(action==='overview-close'){if(currentTab(i))openFromOverview(i,i.current);else navigate(i,'home',false)}else if(action==='add'||action==='share'||action==='address')sheet(i,action);else if(action==='browser-menu')sheet(i,'menu');else if(action==='sheet-close')closeSheet(i);else if(action==='collapse'){i.nav.querySelector('.ip-tree-content').hidden=!i.nav.querySelector('.ip-tree-content').hidden}else if(action==='open-notes')navigate(i,'notes');else if(action==='open-reading')navigate(i,'read');else if(action==='web-next'||action==='browser-forward'){const tab=currentTab(i);if(tab?.type==='browser'){tab.page=tab.page===1?0:1;tab.title=tab.page===1?'The long way home':'A little room to wander';replacePage(i);persist()}}else if(action==='browser-back'){const b=beginBack(i);if(b){moveBack(b,0);finishBack(i,b,true)}}else if(action==='send'){toast(i,'Sample only · your draft stays here')}else if(action==='sample-option'||action==='sample-address'){closeSheet(i);toast(i,'Design rehearsal · sample page')}
+  }
+  function bindGestures(i){
+    let gesture=null;const points=new Map();
+    const local=e=>{const r=i.screen.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}};
+    i.screen.addEventListener('pointerdown',e=>{if(e.pointerType==='touch'){points.set(e.pointerId,local(e));if(points.size===2){if(gesture?.back){finishBack(i,gesture.back,false);gesture=null;return}const a=[...points.values()];gesture={type:'pinch',start:Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y),overview:beginOverview(i)};if(gesture.overview)e.preventDefault();return}}if(gesture||i.busy||i.overview||i.nav||i.sheet)return;const p=local(e);gesture={type:'pending',id:e.pointerId,x:p.x,y:p.y,time:performance.now(),upper:i.mode===2&&p.x<110&&p.y<57,right:i.mode===1&&p.x>i.screen.clientWidth-25,left:p.x<25};});
+    i.screen.addEventListener('pointermove',e=>{if(points.has(e.pointerId))points.set(e.pointerId,local(e));if(!gesture)return;const p=local(e);
+      if(gesture.type==='pinch'){if(!gesture.overview||points.size<2)return;e.preventDefault();const a=[...points.values()],distance=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);moveOverview(gesture.overview,(1-distance/gesture.start)/.48);return}
+      if(gesture.id!==e.pointerId)return;const dx=p.x-gesture.x,dy=p.y-gesture.y;
+      if(gesture.type==='pending'&&Math.hypot(dx,dy)>8){if(gesture.upper&&dy>12&&dy>Math.abs(dx)*1.2){gesture.type='nav-pull';i.screen.classList.add('ip-gesturing');document.getSelection()?.removeAllRanges();i.screen.setPointerCapture(e.pointerId)}else if(gesture.right&&dx< -10&&Math.abs(dx)>Math.abs(dy)*1.2){gesture.type='nav-right';i.screen.classList.add('ip-gesturing');document.getSelection()?.removeAllRanges();i.screen.setPointerCapture(e.pointerId)}else if(gesture.left&&dx>8&&dx>Math.abs(dy)*1.2){gesture.back=beginBack(i);gesture.type=gesture.back?'back':'none';if(gesture.back){i.screen.classList.add('ip-gesturing');document.getSelection()?.removeAllRanges();i.screen.setPointerCapture(e.pointerId)}}else if(Math.hypot(dx,dy)>22)gesture.type='none'}
+      if(gesture.type==='back'){e.preventDefault();moveBack(gesture.back,dx/i.screen.clientWidth)}else if(gesture.type==='nav-pull'&&dy>45){e.preventDefault();i.ignoreClickUntil=Date.now()+450;gesture=null;openNav(i)}else if(gesture.type==='nav-right'&&dx< -50){e.preventDefault();i.ignoreClickUntil=Date.now()+450;gesture=null;openNav(i)}
+    },{passive:false});
+    const end=(e,cancel=false)=>{points.delete(e.pointerId);i.screen.classList.remove('ip-gesturing');if(!gesture)return;if(gesture.type==='pinch'){const b=gesture.overview;gesture=null;if(b){i.ignoreClickUntil=Date.now()+450;finishOverview(i,b,!cancel&&b.progress>.24)}return}if(gesture.id!==e.pointerId)return;const b=gesture.back;gesture=null;if(b){i.ignoreClickUntil=Date.now()+450;finishBack(i,b,!cancel&&b.progress>.27)}};
+    i.screen.addEventListener('pointerup',e=>end(e));i.screen.addEventListener('pointercancel',e=>end(e,true));
+    i.screen.addEventListener('touchstart',e=>{if(e.touches.length===2)e.preventDefault()},{passive:false});
+    i.screen.addEventListener('wheel',e=>{if(e.ctrlKey&&e.deltaY>0){e.preventDefault();showOverview(i)}},{passive:false});
+    i.phone.addEventListener('keydown',e=>{if(e.key==='Escape'){if(i.nav)closeNav(i);else if(i.sheet)closeSheet(i);else if(i.overview)openFromOverview(i,i.current);else demoBack(i)}});
+  }
+  root.querySelectorAll(':scope > section').forEach((variant,mode)=>{
+    const prior=saved.instances?.find(s=>s.variant===mode),i={mode,variant,tabs:prior?.tabs?.length?prior.tabs:structuredClone(initialTabs),current:prior?.current||'read',history:['home','Workspaces','General','plan'],draft:prior?.draft||'',overview:false,scrolls:{},serial:10,busy:false,nav:null,sheet:null,ignoreClickUntil:0};
+    variant.innerHTML=`<div class="ip-stage"><div class="ip-rehearsal-label">${icon('smartphone')}iPhone · design rehearsal</div><div class="ip-phone" aria-label="${['Button drawer','Right-edge drawer','Upper-left pull'][mode]} iPhone preview"><div class="ip-status"><span>9:41</span><div class="ip-island"></div><div class="ip-status-icons">${icon('signal')}${icon('wifi')}${icon('battery-full')}</div></div><div class="ip-screen"></div><div class="ip-home-indicator"></div></div><div class="ip-rehearsal"><button type="button" class="cursor-interaction" data-demo="back">Rehearse swipe-back</button><button type="button" class="cursor-interaction" data-demo="pinch">Rehearse pinch to tabs</button></div></div>`;
+    i.phone=variant.querySelector('.ip-phone');i.screen=variant.querySelector('.ip-screen');instances.push(i);replacePage(i);i.screen.addEventListener('click',e=>click(i,e));i.screen.addEventListener('input',e=>{if(e.target.matches('textarea')){i.draft=e.target.value;persist()}});variant.querySelector('[data-demo="back"]').addEventListener('click',()=>demoBack(i));variant.querySelector('[data-demo="pinch"]').addEventListener('click',()=>showOverview(i));bindGestures(i);
+  });
+  const resize=new ResizeObserver(()=>instances.forEach(fitThumbs));instances.forEach(i=>resize.observe(i.phone));
+  if(globalThis.Tweak){const tweak=new Tweak({container:root,onChange:()=>{instances.forEach(i=>{if(i.overview){const o=i.screen.querySelector('.ip-overview');o.innerHTML=overviewMarkup(i);fitThumbs(i)}});symbols();persist()}});tweak.addSlider(prefs,'motion',{label:'Animation duration',min:250,max:800,step:10,unit:'ms'});tweak.addSelect(prefs,'columns',{label:'Overview columns',options:['Two','Three']});tweak.addSelect(prefs,'snapshots',{label:'Thumbnails',options:['Content','Title only']})}
+  window.addEventListener('openai:set_globals',event=>{const state=event.detail?.globals?.widgetState?.privateContent;if(!state||JSON.stringify(state)===lastSavedState)return;if(state.prefs)Object.assign(prefs,state.prefs);state.instances?.forEach(s=>{const i=instances.find(i=>i.mode===s.variant);if(!i||i.busy)return;i.current=s.current;i.tabs=s.tabs?.length?s.tabs:i.tabs;i.draft=s.draft||'';closeNav(i);closeSheet(i);i.screen.querySelector('.ip-overview')?.remove();i.overview=false;replacePage(i);if(s.overview){visiblePage(i).hidden=true;addOverview(i);i.overview=true;updateRehearsals(i)}});symbols()});
+  symbols();
+})();
+</script>

@@ -1,5 +1,23 @@
 # Provider boundary
 
+**Queued October 19 — BF-2026-10-19-29:** Work Mac's New Chat lists only Codex/Local rehearsal
+despite the operator having Copilot and Claude. A matching renderer defect is reproduced from
+checkout and installed Personal code: `previewEnabled()` includes normal production projects,
+but its old New Chat branch removes Copilot/Claude and forces Codex regardless of provider status.
+Keep actual isolated-preview policy separate from production project UI and use the destination
+host's real provider/catalog state. Preserve selection/defaults, drafts and provider-specific model
+capabilities; expose actual unavailable/loading errors without silently substituting providers.
+HC live catalogs and provider execution remain unverified in this intake. Repair and UI/host
+acceptance are queued under the build hold; no sign-in/reset/runtime change. See
+[planned updates](planned-updates.md).
+
+**Queued October 15 — BF-2026-10-15-09:** Investigate intermittent Claude second-send dependency
+across engine queue wakeup, provider handoff/resume, tool waits and response delivery. Correlate
+message identities with actual runtime events before identifying a cause; a delivered queue label
+alone proves neither provider processing nor completion. Keep per-session turns serialized and
+ambiguous-delivery retries safe. See [next release list](planned-updates.md). Planning only; no
+provider/runtime change or live reproduction claimed.
+
 A provider implements `run({ run, prompt, emit, ask, update, signal, stream })`, `status()`, and
 `close()`. Optional `steer(run, prompt)` supports active-turn input; MCP connection methods are separate from model execution. The engine owns persistence and conversation state. `ask` suspends for permission/input;
 `stream` publishes partial text; `emit` records durable events; `update` saves provider metadata.
@@ -11,6 +29,20 @@ roots, and reapplies context, model options and MCPs on resume. `RehearsalProvid
 makes no AI calls, and exercises the same feedback states. Never present rehearsal as AI output.
 Account quota and per-run tokens are separate measurements. Missing data remains unavailable;
 do not estimate subscription quota from local tokens or silently substitute another model.
+
+**Claude usage accounting (October 11):** Input tokens now includes uncached input, cache reads
+and cache creation from the final result's turn aggregate. The separate components remain available
+in chat details; assistant/stream usage is not added again. Earlier records without complete cache
+accounting are labeled partial, including when a new complete turn is appended; no historical
+backfill or invented reconstruction is performed. Account quota remains a separate measurement.
+
+## Chat concurrency
+
+Independent chats run concurrently through per-chat provider runtimes. Turns within the same
+provider session remain serialized, and one runner owns each application-data directory. Metadata
+runtimes are separate from executing chats; steering, cancellation, approval listeners and cleanup
+route to the owning runtime. Visible queue reasons explain same-session serialization or actual
+provider constraints. No arbitrary Proteus chat-count cap is introduced.
 
 ## Allowance refresh: current behavior and queued review
 
@@ -124,8 +156,9 @@ does not prove its contents were supplied to the model. Configured unselected MC
 plugins are disabled for these threads; built-in provider instructions/tools still consume context.
 
 Codex receives the actual working directory and all selected workspace roots, with no worktree
-creation. Commands and edits use native read-only sandbox plus per-operation approval requests
-forwarded to Proteus. The shared permission store remains authoritative for host approvals;
+creation. Ask/Saved rules uses native read-only sandbox plus per-operation approval requests
+forwarded to Proteus; trusted canonical folder grants can select the validated workspace-write
+policy described below. The shared permission store remains authoritative for host approvals;
 requested sandbox/network expansion still needs explicit approval. Browser actions use the same
 scoped `proteus_browser` bridge. MCP tools use a disclosed per-server grant for all selected tools;
 Codex then manages tool execution within that grant. Server tool filters are translated when
@@ -276,7 +309,7 @@ approval round trip, not unattended permission coverage for real transcript work
 
 Codex now maps an already saved **Trusted workspace** or **Auto-approve tools** profile to a
 `workspaceWrite` sandbox only when its canonical working directory currently has a read-write
-grant. The writable list contains only selected workspace roots covered by still-valid saved
+grant. The writable list contains only selected workspace roots and explicit chat-folder roots covered by still-valid saved
 grants. A changed symlink cannot transfer a grant. Ask and Saved rules only remain read-only;
 no mode or folder grant is enabled by importing, previewing or running a schedule.
 
@@ -341,3 +374,20 @@ by an ephemeral loopback capability tied to one run and turn. The adapter receiv
 API credential. It supports document listing/opening only and closes after the turn. Codex resume
 uses MCP configuration rather than unsupported dynamic-tool changes. `proteus_app` is reserved.
 Normal provider tool-approval behavior still applies; runtime guidance does not grant permission.
+
+## Concurrent chats
+
+The October 9 adapter wrapper owns one runtime per executing chat and a separate metadata runtime. Same-session turns and per-chat connection probes remain serialized; independent provider chats do not block each other. Steering, cancellation, approval listeners and cleanup route to the owning runtime. Synthetic coverage is recorded in the combined ledger; live provider allowance remains provider-controlled.
+
+
+## Workspace-scoped runtime configuration (October 11)
+
+Workspace identity participates in permission fingerprints, so identical folders in two workspaces
+do not share grants. New chats inherit selected source/default configuration; changes to inherited
+configuration are captured between turns, preserving history and the active-turn snapshot.
+Chat-only folder grants remain attached to the chat and enter Claude/Copilot native additional
+directories on the next turn. Copilot configuration fingerprints include that set for cold resume.
+Codex uses the current permission profile for native sandbox/root validation, including revocation;
+Ask/Custom retains read-only sandbox and per-operation approval routing. See
+[permissions](permissions.md) for the distinction between native roots, recursive folder trust,
+and command approval. Provider option choices still come from refreshed model metadata.

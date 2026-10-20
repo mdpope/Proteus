@@ -2,26 +2,44 @@ import path from 'node:path';
 import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
 import { atomicJSON, readJSON } from './files.js';
+import { RemoteCommandJournal } from './remote-command-journal.js';
 
 const types = new Set(['chat.completed', 'review.required', 'schedule.completed', 'device.added', 'device.reconnected']);
 const sharedLogTypes=new Set(['chat.queued','chat.running','chat.awaiting_input','chat.completed','chat.failed','chat.cancelled','chat.interrupted','chat.deleted','transport.online','transport.offline','transport.device_added','browser.open','browser.unload','app.started','app.stopping','api.failed']);
-const limits = { notifications: 1000, logs: 2000, outbox: 500 };
-export function safeLog(value) {
+const limits = { notifications: 1000, outbox: 500 };
+export function safeLog(value, limit = 1000) {
   return String(value || '').replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '')
     .replace(/\b(?:Bearer|Basic)\s+\S+/gi, '[credential]')
+    .replace(/\b(?:Cookie|Set-Cookie)\s*:\s*[^\r\n]+/gi, '[credential]')
     .replace(/\b(?:token|password|secret|authorization|api[_-]?key|code)\s*[:=]\s*["']?[^\s,"']+/gi, '[credential]')
     .replace(/https?:\/\/[^\s]+/gi, raw => { try { const u = new URL(raw); return u.origin + u.pathname; } catch { return '[url]'; } })
-    .slice(0, 1000);
+    .slice(0, limit);
+}
+const hiddenField = /token|password|passwd|secret|authorization|api[_-]?key|cookie|credential|prompt|transcript/i;
+function diagnostic(value, seen = new Set(), depth = 0) {
+  if (typeof value === 'string') {const text=safeLog(value,Infinity);return text.length>128000?text.slice(0,128000)+'\n[diagnostic field exceeded its size limit]':text;}
+  if (value === null || typeof value === 'number' || typeof value === 'boolean') return value;
+  if (value === undefined) return null;
+  if (depth >= 8 || seen.has(value)) return '[nested diagnostic omitted]';
+  if (typeof value !== 'object') return safeLog(String(value));
+  seen.add(value);
+  const fields = value instanceof Error ? { name:value.name, message:value.message, stack:value.stack, ...(value.cause ? {cause:value.cause} : {}), ...value } : value;
+  const result = Array.isArray(fields) ? fields.slice(0,100).map(item => diagnostic(item,seen,depth+1)) : Object.fromEntries(Object.entries(fields).slice(0,100).map(([key,item]) => [safeLog(key), hiddenField.test(key) ? '[withheld]' : diagnostic(item,seen,depth+1)]));
+  seen.delete(value); return result;
 }
 export class ActivityStore extends EventEmitter {
   constructor(home, { clock = () => new Date(), identity = () => null, publish } = {}) {
     super(); this.file = path.join(home, 'activity.json'); this.clock = clock; this.identity = identity; this.publish = publish;
     this.data = readJSON(this.file, { version: 1, notifications: [], logs: [], outbox: [], preferences: { systemEnabled: false, 'chat.completed': true, 'review.required': true, 'schedule.completed': true, 'device.added': true, 'device.reconnected': true } });
     this.data.outbox ||= []; this.data.preferences ||= {}; this.states = new Map();
+    this.logClient = new RemoteCommandJournal(home, {workerURL:new URL('./log-worker.js',import.meta.url)});
+    this.logTail = this.logClient.ready.then(() => { if(Object.hasOwn(this.data,'logs')){delete this.data.logs;this.save();} });
+    this.logTail.catch(error => { this.logFailure = error; });
   }
-  save() { atomicJSON(this.file, this.data); }
+  save() { const persist=()=>atomicJSON(this.file,this.data);return this.performanceDiagnostics?this.performanceDiagnostics.measureSync('activity.persist',persist):persist(); }
   notifications() { return { items: [...this.data.notifications].reverse(), preferences: { ...this.data.preferences } }; }
-  logs(limit = 200) { return { items: this.data.logs.slice(-Math.max(1, Math.min(1000, Number(limit) || 200))).reverse() }; }
+  async logs(value = {}) { await this.logTail; if(this.logFailure)throw this.logFailure; return this.logClient.request('query', typeof value === 'object' && value !== null ? value : {limit:value}); }
+  async logDetail(id) { await this.logTail; if(this.logFailure)throw this.logFailure; return this.logClient.request('detail',id); }
   preferences(value) {
     for (const [key, enabled] of Object.entries(value || {})) {
       if ((!types.has(key) && key !== 'systemEnabled') || typeof enabled !== 'boolean') throw new Error('Choose valid notification preferences.');
@@ -34,8 +52,19 @@ export class ActivityStore extends EventEmitter {
   }
   log(level, event, message, extra = {}) {
     if (!['info', 'warning', 'error'].includes(level) || !/^[a-z][a-z0-9_.-]{0,79}$/.test(event || '')) throw new Error('Invalid log event.');
-    const item = { id: randomUUID(), createdAt: this.clock().toISOString(), level, event, message: safeLog(message), ...(extra.hostId ? { hostId: extra.hostId } : {}) };
-    this.data.logs.push(item); this.data.logs = this.data.logs.slice(-limits.logs); this.save(); this.emit('log', item);if(sharedLogTypes.has(event))this.queue('logs',{id:item.id,event,level,source:'desktop',createdAt:item.createdAt,...(item.hostId?{hostId:item.hostId}:{})}); return item;
+    const full = message instanceof Error ? message.stack || message.message : String(message || '');
+    const redacted=safeLog(full,Infinity),bounded=Buffer.from(redacted).subarray(0,128000).toString('utf8');
+    const item = { id: randomUUID(), createdAt: this.clock().toISOString(), level, event,
+      summary: safeLog(full.split('\n')[0] || event,240), message: bounded,
+      ...Object.fromEntries(['hostId','chatId','scheduleId','source'].filter(key=>typeof extra[key]==='string').map(key=>[key,safeLog(extra[key],256)])),
+      details: diagnostic({...extra,...(message instanceof Error ? {error:message} : {})}) };
+    if(Buffer.byteLength(redacted)>128000)item.truncated=true;
+    if(Buffer.byteLength(JSON.stringify(item))>256*1024){item.details='Diagnostic fields exceed the entry size limit.';item.truncated=true;}
+    // Keep the caller's synchronous event identity; ordered worker writes are
+    // drained before reads/shutdown. Persistence failures are surfaced by Logs.
+    this.logTail = this.logTail.then(() => this.logClient.request('append',item));
+    this.logTail.catch(error => { this.logFailure = error; });
+    this.emit('log', item);if(sharedLogTypes.has(event))this.queue('logs',{id:item.id,event,level,source:'desktop',createdAt:item.createdAt,...(item.hostId?{hostId:item.hostId}:{})}); return item;
   }
   add(type, detail = {}) {
     if (!types.has(type)) throw new Error('Unknown notification type.');
@@ -87,5 +116,5 @@ export class ActivityStore extends EventEmitter {
       }
     } finally { this.flushing = false; }
   }
-  close() { this.closed = true; this.engine?.off('change', this.listener); }
+  async close() { this.closed = true; this.engine?.off('change', this.listener); try { await this.logTail; } finally { await this.logClient.close(); } }
 }

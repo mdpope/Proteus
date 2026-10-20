@@ -15,3 +15,19 @@ test('usage visibility and collapse are independent persisted boolean preference
   assert.deepEqual(store.get().appearance,collapsed.appearance);
  }finally{fs.rmSync(home,{recursive:true,force:true});}
 });
+
+test('sidebar width is optional, revision-protected application state preserved across store restart',()=>{
+ const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-sidebar-width-'));
+ try{
+  const store=new SettingsStore(home,home),initial=store.get();
+  assert.equal(initial.appearance.sidebarWidth,undefined);
+  const saved=store.save({...initial,extension:{retained:true},appearance:{...initial.appearance,sidebarWidth:327}},initial.revision);
+  const restarted=new SettingsStore(home,home).get();
+  assert.equal(restarted.appearance.sidebarWidth,327);assert.deepEqual(restarted.extension,{retained:true});assert.equal(restarted.revision,saved.revision);
+  for(const invalid of [219,521,300.5,'327',null,NaN,Infinity])assert.throws(()=>store.save({...saved,appearance:{...saved.appearance,sidebarWidth:invalid}},saved.revision),/Sidebar width/);
+  assert.throws(()=>store.save({...saved,appearance:{...saved.appearance,sidebarWidth:400}},initial.revision),/changed outside/);
+  assert.equal(store.get().appearance.sidebarWidth,327);
+  const latest=store.get();store.save({...latest,appearance:{...latest.appearance,showProviderUsage:false}},latest.revision);
+  assert.equal(new SettingsStore(home,home).get().appearance.sidebarWidth,327);
+ }finally{fs.rmSync(home,{recursive:true,force:true});}
+});

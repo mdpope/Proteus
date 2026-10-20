@@ -1,5 +1,12 @@
 # Local terminals
 
+October 13 queued BF-2026-10-13-12 in [planned updates](planned-updates.md) requires terminal
+association/management parity with browsers/viewers. Workspace Tabs supports list/hide/restore/
+reorder/close and same-owner moves without restarting PTY/tmux sessions, changing directory/profile
+or replaying startup commands. Hide differs from detach/end; temporary Close versus persistent
+detach/end keeps explicit lifecycle. This does not enable remote shell access. Non-transferable
+behavior described below remains current until implementation is authorized.
+
 October 7 planning: BF-2026-10-07-15 and BF-2026-10-07-16 in
 [planned updates](planned-updates.md) queue terminal-tab navigation spacing fixes and an
 investigation of agent terminal integration/defaults. BF-13 covers move/copy semantics for
@@ -39,3 +46,11 @@ do not expose a safe attachable PTY/input channel through the current boundary. 
 this view neither starts a shell nor stops the agent. Interactive shell and tmux tabs retain their
 existing explicit lifecycle; they are not transferable/copyable. Main terminal layout fills the
 available area below navigation without chat-content spacing.
+
+## Isolated preview activity and closure — October 17
+
+See [desktop preview](desktop-preview.md) for the preview-only activity/ordering and closure revision.
+Selection and restoration do not advance recent activity. Workspace aggregate Tabs is not
+reorderable; project order is manual. Browser Hide unloads and Restore waits for selection to
+load. Chat view closure preserves durable state and active work while releasing presentation
+caches; successful terminal input advances its recent activity. Production rollout remains held.

@@ -31,6 +31,7 @@ export class WorkspaceFiles {
     const workspaces = Array.isArray(configuration) ? configuration : (configuration?.workspaces || []);
     const configured = new Set(workspaces.flatMap(workspace=>[workspace.cwd,...(workspace.additionalDirectories||[])]).filter(value=>typeof value==='string').map(value=>path.resolve(value)));
     const extra = [];
+    for(const workspace of workspaces)for(const [scope,folders] of [['library',workspace.libraryFolders],['universal',workspace.universalFolders]])for(const folder of folders||[]){if(typeof folder!=='string'||!path.isAbsolute(folder)||configured.has(path.resolve(folder)))continue;configured.add(path.resolve(folder));extra.push({id:workspace.id+'-'+scope,name:workspace.name||workspace.id,cwd:folder,scope,additionalDirectories:[]});}
     for(const [scope,label,folders] of [['library','Shared repositories',configuration?.libraryFolders],['universal','Every-chat folders',configuration?.universalFolders]]) {
       for(const folder of folders||[]) { if(typeof folder!=='string'||!path.isAbsolute(folder)||configured.has(path.resolve(folder)))continue; configured.add(path.resolve(folder));extra.push({id:'context-'+scope,name:label,cwd:folder,scope,additionalDirectories:[]}); }
     }

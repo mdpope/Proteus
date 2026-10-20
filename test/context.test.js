@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { ContextStore, parseJSONC } from '../src/context.js';
 import { SettingsStore } from '../src/settings.js';
+import { Engine } from '../src/engine.js';
 import { StandupStore } from '../src/standup.js';
 import { CredentialBroker, BitwardenCLI } from '../src/credentials.js';
 import { exportTranscript } from '../src/transcripts.js';
@@ -23,6 +24,37 @@ function fixture(t) {
 }
 test('JSONC retains URL strings and quoted punctuation while accepting comments', () => {
   assert.deepEqual(parseJSONC('{/*x*/"url":"https://example.test/a,}","list":[1,],//x\n}'), { url: 'https://example.test/a,}', list: [1] });
+});
+test('missing supplemental folders skip stale sources, preserve configuration and report chat warnings', async t => {
+  const f = fixture(t);
+  f.write(path.join(f.repo, 'AGENTS.md'), '# Available instructions');
+  f.write(path.join(f.library, 'AGENTS.md'), '# Unavailable instructions');
+  f.write(path.join(f.library, '.mcp.json'), '{"mcpServers":{"missing":{"command":"node"}}}');
+  f.context.mutate(c => { c.workspaces[0].additionalDirectories = [f.library]; c.workspaces[0].universalFolders = [f.library]; }, f.context.config().revision);
+  const missing = f.context.get().entries.filter(e => e.roots.includes(f.library));
+  for (const entry of missing) f.mode(entry, 'universal');
+  const before = fs.readFileSync(f.context.file, 'utf8');
+  fs.rmSync(f.library, { recursive: true });
+  for (const refresh of [false, true]) {
+    if (refresh) f.context.refresh();
+    const snapshot = f.context.capture({ selectedIds: missing.map(e => e.id) });
+    assert.deepEqual(snapshot.workspace, { cwd: f.repo, additionalDirectories: [] });
+    assert.equal(snapshot.followsWorkspace, true);
+    assert.deepEqual(snapshot.baseWorkspace.additionalDirectories, [f.library]);
+    assert.equal(snapshot.entries.length, 1);
+    assert.match(snapshot.entries[0].content, /Available instructions/);
+    assert.ok(snapshot.warnings.some(w => w.path === f.library));
+    assert.deepEqual(f.context.providerContext(snapshot).mcpServers, {});
+    const engine = new Engine(path.join(f.home, 'engine-' + refresh));
+    const run = engine.createRun({ schemaVersion: 1, id: 'missing-folder', name: 'Rehearsal', enabled: false, cron: '0 9 * * 1-5', timezone: 'UTC', provider: 'rehearsal', model: '', workspace: snapshot.workspace, context: snapshot, misfire: 'skip', prompt: 'Rehearsal only' }, 'chat', null, { deferStart: true });
+    assert.ok(run.events.some(e => e.role === 'system' && e.text.includes(f.library)));
+    await engine.close();
+  }
+  assert.equal(fs.readFileSync(f.context.file, 'utf8'), before);
+  f.write(path.join(f.library, 'AGENTS.md'), '# Restored instructions');
+  f.write(path.join(f.library, '.mcp.json'), '{"mcpServers":{"missing":{"command":"node"}}}');
+  f.context.refresh();
+  assert.ok(f.context.capture().workspace.additionalDirectories.includes(f.library));
 });
 test('refresh discovers new files and changed hashes, preserves selections and records missing universal sources across restart', t => {
   const f = fixture(t); const file = path.join(f.repo, 'AGENTS.md'); f.write(file, '# Workspace\nOriginal rules.');

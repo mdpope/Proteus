@@ -1,4 +1,42 @@
+**October 14 question history:**
+
+Questions are first-class chronological messages outside collapsed Activity, with complete
+recorded context/choices and a linked reply. Required core guidance tells agents to explain before
+asking a dependent follow-up. The owner audit found the first reported explanation never existed
+as a finalized assistant reply; the interface does not fabricate missing provider output.
+
+See [release status](2026-10-13-tab-management-release.md).
+
 # Rich chat rendering
+
+**Queued October 19 — BF-2026-10-19-09:** Give chat tabs cached conversation thumbnails in tab
+overview, alongside browser thumbnails. Capture the actual viewed conversation viewport soon
+after interaction and periodically while viewed; throttle scrolling/streaming updates. Retain
+the last good owner-scoped image after switching away and across restart. Overview uses cached
+images immediately, with the chat icon as fallback, without reopening a chat or changing its
+scroll, focus, selection, drafts, approvals or active turn. Keep images in bounded local app-data
+storage, validate stable chat/source identity and reject stale capture results. Hidden tabs stay
+excluded under BF-08. This is queued scope only; cache implementation and UI/performance
+acceptance remain pending under the build hold. See [planned updates](planned-updates.md).
+
+**Queued October 15 — BF-2026-10-15-04:** Recognize paths/URLs in agent response prose,
+inline code and explicit links, keeping the full destination visibly present and copyable.
+On click, folders open Finder on the owning Mac, Markdown files open the in-app editor tab,
+websites open Proteus browser tabs, and other supported resources use their available viewer.
+Preserve chat placement/state and current file/document/browser authorization. Resolve relative
+paths from the chat's working directory; do not treat remote paths as local. This request does
+not require transforming every Activity/tool block or opening anything automatically. See
+[next release list](planned-updates.md). Planning only; no implementation or build is authorized.
+
+**October 12 proposed change — queued only:** BF-2026-10-12-01 requests desktop's contained
+tool/approval entries, associated original-request disclosures, tool-call references and per-tool
+completion timestamps/durations on native iPad/iPhone. Desktop should adopt native's single
+contiguous Activity group for tools, approvals and system messages between user/model messages,
+retaining distinct darker system boxes inside that group. Timing availability is not yet verified.
+Preserve the existing platform-specific design, particularly iPhone's different native layout;
+this request covers message details/relationships, not a full visual redesign or identical styling.
+This new release batch is collection/design only under an explicit build hold; it does not change
+the implemented behavior described below. See [intake](planned-updates.md#bf-2026-10-12-01--shared-activity-approval-and-system-message-presentation).
 
 Chat text remains Markdown in the existing run JSON and encrypted mobile protocol. The Mac and
 native iPhone/iPad apps use the same bundled renderer: markdown-it for Markdown and highlight.js
@@ -150,3 +188,14 @@ Remote paging accepts an absolute `beforeEvent` boundary, with offset fallback f
 Web, visiting desktop and native clients retain loaded pages across live event windows and keep
 sparse segments separate until missing pages bridge them. Earlier messages is an actionable
 load/retry control. Native visible-row filtering precedes layout, avoiding empty Activity gaps.
+
+
+October 12 activity parity: contiguous system/tool/approval events share one Activity group between user/model messages, preserving darker system messages. Per-tool completion time and elapsed duration come from recorded tool lifecycle fields; missing values remain unavailable. Remote Working uses current owner state and is cleared for a disconnected view.
+
+## Isolated preview activity and closure — October 17
+
+See [desktop preview](desktop-preview.md) for the preview-only activity/ordering and closure revision.
+Selection and restoration do not advance recent activity. Workspace aggregate Tabs is not
+reorderable; project order is manual. Browser Hide unloads and Restore waits for selection to
+load. Chat view closure preserves durable state and active work while releasing presentation
+caches; successful terminal input advances its recent activity. Production rollout remains held.

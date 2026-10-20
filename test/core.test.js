@@ -36,6 +36,18 @@ test('saving rejects stale edits and preserves extension fields', () => {
 test('malformed external files are listed as errors and cannot run', () => {
   const dir=temp();try{fs.writeFileSync(path.join(dir,'broken.json'),'{');const store=new ScheduleStore(dir);assert.equal(store.list().length,1);assert.ok(store.list()[0].error);}finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
+test('schedule reload compares disk bytes and cached objects cannot alter later reads', () => {
+  const dir=temp();try{
+    const store=new ScheduleStore(dir),original={...example(dir),extension:{owner:'synthetic'}};
+    store.save(original);const first=store.list()[0],stale=first.revision,file=path.join(dir,'sample.json'),stat=fs.statSync(file);
+    first.workspace.additionalDirectories.push('/tmp');first.extension.owner='modified';first.nextRuns.length=0;
+    const fetched=store.get('sample');fetched.extension.owner='also modified';
+    assert.deepEqual(store.get('sample').extension,{owner:'synthetic'});assert.deepEqual(store.list()[0].workspace.additionalDirectories,[]);assert.equal(store.list()[0].nextRuns.length,5);
+    const source=fs.readFileSync(file,'utf8');fs.writeFileSync(file,source.replace('Check the workspace.','Check new workspace.'));fs.utimesSync(file,stat.atime,stat.mtime);
+    assert.equal(fs.statSync(file).size,stat.size);assert.equal(store.get('sample').prompt,'Check new workspace.');assert.equal(store.list()[0].prompt,'Check new workspace.');
+    assert.throws(()=>store.save({...original,name:'Stale editor'},stale),/changed outside/);
+  }finally{fs.rmSync(dir,{recursive:true,force:true});}
+});
 test('directory checks reject symlink escapes and sibling-prefix paths', () => {
   const dir=temp();try{const root=path.join(dir,'work');fs.mkdirSync(root);fs.mkdirSync(path.join(dir,'work-other'));fs.symlinkSync(path.join(dir,'work-other'),path.join(root,'escape'));assert.equal(isWithin(path.join(root,'escape'),[root]),false);assert.equal(isWithin(root,[root]),true);assert.equal(isWithin(path.join(dir,'work-other'),[root]),false);}finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
@@ -57,17 +69,17 @@ test('a stopped runner leaves work resumable and rejects parallel turns', async 
 });
 test('scheduler claims an occurrence once, even if polled repeatedly', async () => {
   const dir=temp();let now=new Date('2026-09-30T14:59:59Z');const engine=new Engine(dir,{},()=>now);try{
-    engine.schedules.save({...example(dir),enabled:true});now=new Date('2026-09-30T15:00:01Z');engine.tick();engine.tick();assert.equal(engine.listRuns().length,1);assert.equal(engine.listRuns()[0].slot,'2026-09-30T15:00:00.000Z');
-    now=new Date('2026-09-30T15:00:20Z');engine.tick();assert.equal(engine.listRuns().length,1);
+    engine.schedules.save({...example(dir),enabled:true});now=new Date('2026-09-30T15:00:01Z');await Promise.all([engine.tick(),engine.tick()]);assert.equal(engine.listRuns().length,1);assert.equal(engine.listRuns()[0].slot,'2026-09-30T15:00:00.000Z');
+    now=new Date('2026-09-30T15:00:20Z');await engine.tick();assert.equal(engine.listRuns().length,1);
   }finally{await engine.close();fs.rmSync(dir,{recursive:true,force:true});}
 });
 test('missed runs skip or coalesce according to the schedule', async () => {
-  for(const policy of ['skip','coalesce']){const dir=temp();let now=new Date('2026-09-30T14:00:00Z');const engine=new Engine(dir,{},()=>now);try{engine.schedules.save({...example(dir),enabled:true,misfire:policy});now=new Date('2026-09-30T17:00:00Z');engine.tick();assert.equal(engine.listRuns().length,policy==='skip'?0:1);}finally{await engine.close();fs.rmSync(dir,{recursive:true,force:true});}}
+  for(const policy of ['skip','coalesce']){const dir=temp();let now=new Date('2026-09-30T14:00:00Z');const engine=new Engine(dir,{},()=>now);try{engine.schedules.save({...example(dir),enabled:true,misfire:policy});now=new Date('2026-09-30T17:00:00Z');await engine.tick();assert.equal(engine.listRuns().length,policy==='skip'?0:1);}finally{await engine.close();fs.rmSync(dir,{recursive:true,force:true});}}
 });
 test('partial run/journal persistence cannot replay the same occurrence', async () => {
   const dir=temp();let now=new Date('2026-09-30T15:00:01Z');const engine=new Engine(dir,{},()=>now);try{
     const s={...example(dir),enabled:true};engine.schedules.save(s);engine.createRun(s,'scheduled','2026-09-30T15:00:00.000Z');
-    engine.journal.lastPoll='2026-09-30T14:59:59Z';engine.tick();assert.equal(engine.listRuns().length,1);
+    engine.journal.lastPoll='2026-09-30T14:59:59Z';await engine.tick();assert.equal(engine.listRuns().length,1);
   }finally{await engine.close();fs.rmSync(dir,{recursive:true,force:true});}
 });
 test('loopback API enforces authentication, origin, duplicate IDs, and paused imports', async () => {
@@ -194,7 +206,7 @@ test('question history retains wording, option descriptions, stable reply links 
  const engine=new Engine(dir,{copilot:provider});
  try{const run=engine.createRun({...example(dir),provider:'copilot',model:'test-model'});await until(()=>run.pending?.question==='first wording');const first=run.pending.id;engine.reply(run.id,'freeform answer',first);await until(()=>run.pending?.question==='second wording');
  const firstEvent=run.events.find(e=>e.data?.question?.id===first);assert.equal(firstEvent.data.question.answer,'freeform answer');assert.match(firstEvent.text,/original explanation/);assert.equal(firstEvent.data.question.providerQuestionId,'first');assert.equal(run.events.find(e=>e.data?.questionReply)?.data.questionReply.requestId,first);
- engine.cancel(run.id);await until(()=>!engine.running);assert.equal(run.events.find(e=>e.data?.question?.providerQuestionId==='second').data.question.status,'cancelled');assert.deepEqual(answers,['freeform answer']);
+ engine.cancel(run.id);await until(()=>!engine.running.size);assert.equal(run.events.find(e=>e.data?.question?.providerQuestionId==='second').data.question.status,'cancelled');assert.deepEqual(answers,['freeform answer']);
  const persisted=JSON.parse(fs.readFileSync(path.join(dir,'runs',run.id+'.json'),'utf8'));assert.equal(persisted.events.find(e=>e.data?.question?.id===first).data.question.answer,'freeform answer');
  }finally{await engine.close();fs.rmSync(dir,{recursive:true,force:true});}
 });

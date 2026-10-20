@@ -1,0 +1,7 @@
+// Physical iPhone/iPad release builds for the paid organization account.
+// Pass with -xcconfig ios/PaidAccount.xcconfig to the Proteus Release build.
+// Do not apply this configuration to the existing native Mac installation.
+DEVELOPMENT_TEAM = TEAMID0000
+PRODUCT_BUNDLE_IDENTIFIER = org.proteusapp.review.proteus
+CODE_SIGN_STYLE = Automatic
+CODE_SIGN_IDENTITY = Apple Development

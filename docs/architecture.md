@@ -1,5 +1,42 @@
 # Architecture
 
+**Queued supervised self-update — BF-2026-10-19-21:** add explicit runtime identity, a durable
+update checkpoint and a narrowly scoped independent helper/verifier that survives app shutdown.
+The current Electron-owned service aborts turns on quit; its scheduler worker is not a daemon.
+After exact-artifact installation and verified startup under the sole runner lock, automatically
+claim the authorized continuation in the original chat/provider session without replaying earlier
+effects or requiring Continue. Successful compatible rollback must also resume that chat; preserve
+handoff claims independently of restored data and test the recovery build's continuation boundary.
+Keep update health/recovery independent of model availability. A later independently hosted runner
+is optional; helper/handoff design does not require a second live runner. See the queued proposal
+in [desktop updates](desktop-updates.md#queued-self-update-and-chat-continuation--bf-2026-10-19-21).
+No helper, self-update tool or automatic continuation is implemented by this intake.
+
+**Queued native desktop broker — BF-2026-10-19-22:** app/window-scoped native observation/input
+is separate from embedded browser control. The operator selects Cua Driver primary and Peekaboo
+as an on-demand Mac fallback, with Linux branch support through Cua and capability-gated Windows.
+Use a compact stable tool catalog/wrapper and lazy backend runtimes under one host authorization/
+target/control boundary across chats, internal tools, MCP and UI. Switch only after fresh observation
+and resolution of uncertain prior effects; never duplicate an action or bypass a denied scope.
+Separate schema/context loading, runtime lifetime and permission; stopping a backend cannot remove
+already-read tool results from model history. Verify actual provider image delivery and visible
+readiness/Stop controls. Exact package pins and integration are pending. This may support
+BF-21's UI verification without making deterministic update recovery depend on a model/UI grant.
+No backend installation or desktop-control tool is introduced by this queue-only review.
+
+**Queued multiwindow boundary — BF-2026-10-19-11:** keep one host-owned service/runner per app-data
+home while adding independently identified presentation windows. Route IPC, approvals, browser/
+terminal/viewer surfaces and commands to the owning window; persist independent geometry,
+navigation and view positions without renderer saves overwriting peers. Explicit window Close
+and app Quit have different restoration semantics. This is next-release design scope, not an
+implemented second service or permission change; see [planned updates](planned-updates.md).
+
+The opt-in desktop design preview uses the same boundaries with a separate data root and app
+identity. `desktop/preview-runtime.cjs` initializes only a fresh marked profile; `src/desktop-preview.js`
+owns experimental projects and discovery registrations. `public/desktop-preview.js` and
+`public/preview-permissions.js` gate presentation on the authenticated preview flag. Normal servers
+do not expose preview mutation routes. See [desktop preview](desktop-preview.md).
+
 Proteus has four boundaries: file-backed schedules, the runner, provider adapters, and clients.
 The scheduler has no model API knowledge. The desktop UI and VS Code companion use an authenticated
 loopback service. The Electron host stays in the menu bar when its window closes. Native iPhone/iPad clients connect through an encrypted relay protocol; see `remote.md`.
@@ -24,6 +61,10 @@ run per schedule. Already-active schedules skip overlapping occurrences.
 
 Module map: [agent handoff](handoff.md). Rationale: [design decisions](decisions.md).
 Remaining work: [backlog](planned-updates.md). Live capabilities: [providers](providers.md).
+
+General computer diagnostics use an independent worker-owned rotating SQLite log store with
+summary cursor pages and on-demand redacted details. Notifications/preferences/account outbox
+remain separate; diagnostic retention cannot expire execution receipts. See [logs](logs.md).
 
 The initial app deliberately owns its generic schemas, templates, and client implementation.
 Operating-system repositories own their own schedules, workflow policy, and durable knowledge.

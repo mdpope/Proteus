@@ -1,3 +1,7 @@
+import {browserTools} from './browser-tools.js';
+import {captureAppCapabilities} from './app-capabilities.js';
+import {accumulateClaudeUsage} from './claude-usage.js';
+import {integrationTools} from './integration-tools.js';
 import {appInstructions,documentBridge} from './document-tools.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -146,7 +150,8 @@ export class ClaudeRPC extends EventEmitter {
 export class ClaudeProvider {
   constructor(options={}, {context,browser}={}) {this.browser=browser;this.options=options;this.context=context;this.active=null;this.cleanupClients=new Set();this.cleanupError=null;this.acceptedMediaTypes=Object.freeze(['image/png','image/jpeg','image/gif','image/webp','text/plain']);}
   client(args=[],cwd,mcpConfigPath=null){return this.options.clientFactory ? this.options.clientFactory({args,cwd,mcpConfigPath}) : new ClaudeRPC({...this.options,args,cwd,mcpConfigPath});}
-  selectedMcp(run){const snapshot=run.schedule.context,managed=snapshot&&this.context?this.context.providerContext(snapshot):null;return managed?{...Object.fromEntries(Object.entries(snapshot.includeDefaults!==false?run.schedule.mcpServers||{}:{}).filter(([name])=>!managed.disabledLegacyMcp.includes(name))),...managed.mcpServers}:run.schedule.mcpServers||{};}
+  selectedMcp(run){const snapshot=run.schedule.context,managed=snapshot&&this.context?(this.context.providerMcpContext?.(snapshot)||this.context.providerContext(snapshot)):null;return managed?{...Object.fromEntries(Object.entries(snapshot.includeDefaults!==false?run.schedule.mcpServers||{}:{}).filter(([name])=>!managed.disabledLegacyMcp.includes(name))),...managed.mcpServers}:run.schedule.mcpServers||{};}
+  withMcpSelectionBatch(callback){return this.context?.withMcpSelectionBatch?this.context.withMcpSelectionBatch(callback):callback();}
   async mcpState(client,names,timeout=10000,selected={}){
     let raw;
     try{raw=await client.request({subtype:'mcp_status'},timeout);}catch{throw new Error('Claude MCP connection status is unavailable. Check the selected server on this Mac and retry.');}
@@ -154,6 +159,7 @@ export class ClaudeProvider {
     if(!Array.isArray(list))throw new Error('Claude did not return MCP connection status. Update Claude Code on this Mac.');
     return names.map(name=>{const item=list.find(value=>value?.name===name),status=['connected','pending','failed','needs-auth','disabled'].includes(item?.status)?item.status:'not-connected';return {name,status,scope:'selected-chat',observedAt:new Date().toISOString(),remote:['http','sse'].includes(selected[name]?.type),...(status==='failed'?{error:'Claude could not connect to this selected server. Check its Mac configuration and credentials.'}:status==='needs-auth'?{error:'This server needs sign-in in Claude Code on the owning Mac.'}:{})};});
   }
+  hasMcpSession(run){return !!this.active&&this.activeRunId===run.id;}
   async mcpStatus(run,{signal}={}){
     const selected=this.selectedMcp(run),names=Object.keys(selected);if(!names.length)return {servers:[]};
     const cancelled=()=>new Error('Claude MCP connection check cancelled.');
@@ -228,7 +234,7 @@ export class ClaudeProvider {
     if(this.quotaClient===client)this.quotaClient=null;return quota;
   }
 
-  async run({run,prompt,attachments=[],emit,ask,update,signal,stream}) {
+  async run({run,prompt,attachments=[],emit,ask,update,signal,stream,permissionProfile}) {
     const content=attachments.length?[{type:'text',text:prompt}]:prompt;
     for(const item of attachments){
       if(!this.acceptedMediaTypes.includes(item.mediaType)||!Buffer.isBuffer(item.bytes)||item.bytes.length>8*1024*1024)throw new Error('Claude can receive images and UTF-8 plain text here. PDF and other files are not supported.');
@@ -256,8 +262,9 @@ export class ClaudeProvider {
     if(run.schedule.reasoningEffort)args.push('--effort',run.schedule.reasoningEffort);
     if(run.providerSessionId)args.push('--resume',run.providerSessionId);
     // Additional roots are conveyed to the native permission system, with skills disabled.
-    for(const root of run.schedule.workspace.additionalDirectories||[])args.push('--add-dir',root);
-    const bridge=await documentBridge(this.browser,run.id);
+    for(const root of new Set([...(run.schedule.workspace.additionalDirectories||[]),...(permissionProfile?.().chatFolders||[]).map(folder=>folder.path)]))args.push('--add-dir',root);
+    const appTools=[...browserTools(this.browser,run.id),...integrationTools(this.integrations,run.id)];captureAppCapabilities(run,appTools,update);
+    const bridge=await documentBridge(this.browser,run.id,appTools.filter(tool=>tool.name!=='proteus_open_document'));
     const configured={...selected,...(bridge?{proteus_app:bridge.config}:{})};
     let mcpConfig;try{mcpConfig=Object.keys(configured).length?privateClaudeMcpConfig(configured,run.schedule.workspace.cwd):null;}catch(error){await bridge?.close();throw error;}
     let client;try{client=this.client(args,run.schedule.workspace.cwd,mcpConfig?.file||null);}catch(error){mcpConfig?.dispose();await bridge?.close();throw error;}
@@ -297,7 +304,7 @@ export class ClaudeProvider {
         const q=m.rate_limit_info||m.rateLimitInfo||{},id=q.rateLimitType||q.rate_limit_type;
         if(id){this.rateLimits??=new Map();this.rateLimitsObservedAt=new Date().toISOString();const reset=q.resetsAt??q.resets_at;this.rateLimits.set(id,{id,label:id.replaceAll('_',' '),remainingPercent:Number.isFinite(q.utilization)?Math.max(0,Math.min(100,100-q.utilization*100)):null,resetAt:Number.isFinite(reset)?new Date(reset*1000).toISOString():null,status:q.status,unlimited:false});}
       }
-      if(m.type==='result'){if(resultSeen)return;resultSeen=true;if(m.usage)run.usage={observed:true,inputTokens:(run.usage?.inputTokens||0)+(m.usage.input_tokens||0),outputTokens:(run.usage?.outputTokens||0)+(m.usage.output_tokens||0)};run.contextUsage=m.modelUsage||null;update();m.is_error||m.subtype!=='success'?reject(new Error((m.errors||[]).join('\n')||`Claude ${m.subtype}`)):resolve();}
+      if(m.type==='result'){if(resultSeen)return;resultSeen=true;if(m.usage)run.usage=accumulateClaudeUsage(run.usage,m.usage);run.contextUsage=m.modelUsage||null;update();m.is_error||m.subtype!=='success'?reject(new Error((m.errors||[]).join('\n')||`Claude ${m.subtype}`)):resolve();}
     };
     const closed=e=>{if(!resultSeen)reject(e);};const abort=()=>{void client.close().then(()=>reject(new Error('Cancelled')),error=>reject(error));};
     client.on('message',message);client.on('request',request);client.on('closed',closed);signal.addEventListener('abort',abort,{once:true});
@@ -309,7 +316,7 @@ export class ClaudeProvider {
         const names=Object.keys(selected),deadline=Date.now()+30_000;let states=[];
         do{
           states=await this.mcpState(client,names,Math.max(1000,Math.min(5000,deadline-Date.now())),selected);
-          run.mcpConnections=Object.fromEntries(states.map(item=>[item.name,{status:item.status,...(item.error?{error:item.error}:{})}]));update();
+          run.mcpConnections=Object.fromEntries(states.map(item=>[item.name,{status:item.status,observedAt:new Date().toISOString(),...(item.error?{error:item.error}:{})}]));update();
           const unavailable=states.find(item=>['failed','needs-auth','disabled','not-connected'].includes(item.status));
           if(unavailable)throw new Error(`Claude MCP ${unavailable.name}: ${unavailable.status}. ${unavailable.error||'Check the selected server on this Mac.'}`);
           if(states.every(item=>item.status==='connected'))break;

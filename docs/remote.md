@@ -1,4 +1,41 @@
+## 0.2.20 receipt-capacity correction
+
+Capacity refusal includes owner identity, record/byte/pending counters and retry delay. Tab
+synchronization merges monotonic metadata, sends at most 100 metadata operations per batch,
+retains an exact request envelope for uncertain transport retries, and backs off capacity errors
+per host with at most one notice per minute. The 10,000-record/256 MiB defaults and protected
+retry windows are unchanged. A full protected ledger can remain unavailable until settled
+receipts naturally expire; this is reported separately from a successful build/install.
+
+**Queued October 14 — BF-2026-10-14-02:** Investigate and fix journal-capacity warnings during
+background tab synchronization. Establish the affected owner/counter, reduce redundant mutations,
+batch and back off retries, and name the owner in a deduplicated warning while preserving
+idempotent replay and unresolved receipts. Current limits remain 10,000 receipts/256 MiB per
+owner and 24-hour settled retention. See [next release queue](planned-updates.md). Queued only;
+no journal behavior, limits, data or deployment changed.
+
 # Remote clients
+
+## Automatic local design previews — 0.2.11
+
+The owning Mac discovers localhost HTML links in assistant messages and ordinary chat browser
+tabs, including locally originated chats. `ChatPreviews` bundles static HTML/CSS/JavaScript
+modules/images/fonts on that origin. `chat.previews.list/read` delivers a stable chat/URL identity
+and SHA-256 version through existing encrypted relay and document-viewing grants. Agents need
+no special packaging. Remote clients update one snapshot tab and never resolve host localhost
+on their own device. New versions reset script consent; cold launches restore metadata and read
+fresh contents without restoring interactive consent.
+
+Discover eight previews per chat; bound each to 4 MiB, 64 dependencies and 1 MiB per fetched asset.
+Exclude privileged app origins, API/auth paths, credential queries and protected profiles. Fetch
+only dependencies on the selected design origin. Preserve offline cached snapshots with a label.
+This supports static designs; host APIs, WebSockets and HMR are not forwarded. Native static HTML
+uses a separate nonpersistent view with JavaScript disabled; interactive HTML uses an opaque
+sandbox frame. Network, files and app actions stay blocked in each client.
+
+Browser transports bound command bursts below the existing relay budget; website connects coalesce
+requests for one destination. The [full release ledger](2026-10-10-full-chat-release.md) separates
+implementation, verification and deployment.
 
 Proteus for iPhone/iPad and the website can select among independently paired Macs. Each Mac is the only
 scheduler and provider execution host. The relay routes encrypted messages; it never runs agents,
@@ -6,10 +43,21 @@ receives provider credentials, or reads workspace files. Mobile clients do not n
 
 ## Mac lifecycle
 
+Directional Pause/Resume is queued in BF-2026-10-09-16. Pausing an outgoing peer will hide that host's
+content on the pausing Mac and suppress outgoing recovery until resumed, preserving incoming access,
+reverse connections and remote work. Current disconnect only suspends recovery in memory and does
+not hide cached chats; do not describe it as the queued pause feature.
+
 The menu bar icon opens Proteus, opens Remote Access, or explicitly quits the host. Closing the
 window hides it, preserving the scheduler, browser profile, MCP connections and active sessions.
 Dock activation brings the existing window back. Quit Proteus stops work gracefully and leaves
 active runs interrupted/resumable. Launch the desktop app again after restarting the Mac.
+
+Updating the execution host by quitting/replacing Proteus therefore interrupts its active turns;
+the saved conversation/provider session can be continued explicitly after restart. Updating only
+a remote viewer does not stop the owning Mac. Proteus launches its own Codex `app-server` child,
+so an update to the separate Codex desktop UI need not stop that runtime. An uninterrupted
+host self-update would require execution to outlive the UI process; the current runner is embedded.
 
 This version does not install a login item or keep the Mac awake. A sleeping/offline Mac cannot run
 work; the mobile app shows cached history and reconnects when foregrounded and the host is available.
@@ -110,12 +158,39 @@ relays must use wss:// behind TLS. This application protocol has regression cove
 independent security audit; production internet deployment should review it and add operational
 monitoring, abuse controls, and TLS termination.
 
-Commands have UUIDs and issue times. The Mac claims mutation IDs on disk before execution, remembers
-results for 24 hours, rejects altered payloads/replays, and rejects new commands older than five
-minutes. A crash during an uncertain mutation leaves a claim that cannot execute again automatically.
+Commands have UUIDs and issue times. The Mac durably claims mutation IDs before execution in an
+indexed SQLite journal, operated by a dedicated worker rather than Electron's main thread. Each
+claim/result commits independently with SQLite FULL synchronous WAL durability. The host keeps
+only active command promises (at most 32), rather than all saved results. Concurrent retries share
+one execution; altered payloads fail. Existing results/errors remain available for at least 24 hours,
+including retries whose issue times are now old; new IDs must be within five minutes in either
+direction. A crash or failed result write leaves an unresolved claim that cannot execute again
+automatically. Unresolved claims never expire automatically. Current device/grants are checked
+before lookup and again after asynchronous lookup/execution so revocation also blocks saved results.
 The mobile client retries the same command ID after connection loss, not a newly created command.
 Provider execution is still serialized by the existing engine. Two devices cannot create parallel
 turns in one session, and stale answers cannot approve a different pending request.
+
+The default admission budgets are 10,000 receipts and 256 MiB of encoded receipt bytes. Only
+completed receipts older than 24 hours are removed, with cleanup at most once a minute during
+new claims. Capacity refuses new claims before effects instead of dropping protected results.
+Already claimed commands may save large results beyond the byte budget; later new claims wait
+for safely expired capacity. `RemoteHost.commandDiagnostics()` exposes bounded per-method command
+counts, receipt/pending counts, encoded/disk bytes, committed claim/result write counts and logical
+payload bytes written, budget state and worker operation timing, never
+command arguments or result bodies. SQLite pages may remain allocated after retention cleanup;
+physical bytes and logical receipt bytes are reported separately. The worker does JSON encoding,
+SQLite updates and fsync; response projection/transport and active response bodies still use the host.
+
+On first use, the worker imports `remote-commands.json` and its completion marker in one transaction,
+preserving unknown receipt fields and the original JSON file byte-for-byte. Malformed legacy data
+fails closed; an interrupted transaction can safely retry without a partial import. Migration streams one receipt at a time in the worker with a 64 KiB read buffer and a
+4 MiB SQLite page cache; neither thread keeps a full legacy object or resident replay cache. New
+receipts live solely in `remote-commands.sqlite` and its private WAL/SHM files. Do not roll back to a
+JSON-only binary against this home: the old file lacks later claims and could repeat an effect.
+Recovery must retain/reconcile the SQLite journal, or keep remote mutations disabled during rollback.
+Worker failure disables further mutations in that host until restart; read-only commands remain
+available. Graceful shutdown drains existing command tasks before closing the journal.
 
 Event cursors include a host epoch. A bounded in-memory journal supports reconnect replay; a full
 snapshot recovers after a journal gap or host restart. Durable conversation records remain the
@@ -206,3 +281,114 @@ current document-grant filtering including mutation replays. Scope/revision noti
 no content. Visiting desktops reconcile the host's chat tabs; native clients also reconcile Team
 browser tabs. Browser-only reorder preserves hidden document slots. Cookies, history, page state,
 terminals, selection and document approval do not synchronize. See `src/content-tabs.js`.
+
+## Desktop connection notices and recovery
+
+Requests to an unavailable saved peer start or join background recovery. A request rejected before
+sending is not queued or replayed; actions must be retried after reconnection. Polling preserves
+the current exponential retry delay. Manual Connect and network/wake recovery can retry sooner,
+while explicit disconnect and authentication-required states stop automatic attempts.
+Background tab synchronization retains its baseline and suppresses expected offline errors.
+Transient notices have a Dismiss button and finite expiry; repeated identical errors neither
+extend the expiry nor continually reopen a dismissed notice.
+
+## October 8 queue and account-health parity
+
+`chat.queue-edit.v1` exposes `chat.edit-queued` with message ID, expected text and replacement
+text; host queue membership and steering-in-flight guards are authoritative. Local/remote
+desktop, web and native expose Edit beside unprocessed queued messages. Text-only running
+messages retain Steer now. Host-offered persistent permission choices are displayed alongside
+Approve once, Deny and guarded chat-only approval. Web Accounts & Integrations uses
+`integrations.health.v1` and encrypted `integrations.list/check/recover`; metadata remains
+read-only and recovery never opens a browser. See `mcp-auth.md` for capability limitations.
+
+The native compact composer gives model/effort/context controls their own horizontal row above
+feedback, steering, queue and stop actions, so input-needed controls cannot overlap the model menu.
+
+## October 8 source preview: live browser viewing
+
+`browser.live.v1` advertises `browser.live.list`, `browser.live.frame` and
+`browser.live.instruct`. Each paired device needs a separate host-owned browser viewing grant.
+The host checks chat access and current loaded-tab membership, limits frames to 500 KB, keeps
+one capture in flight per chat/tab, caches briefly and retains at most 40 references for 30
+seconds. A device may submit only a frame it received; navigation and revoked grants invalidate
+references. Captures contain only the selected chat's browser page, not the desktop or other apps.
+
+Instructions reuse chat queue/steering/answer paths and bind point coordinates to the observed
+frame. Permission choices remain separate guarded chat replies. Clients clear images on
+disconnect, backgrounding or revoked access and check grants while a frame is frozen; a frozen
+reference cannot remain actionable indefinitely. Unsent instructions survive tab switching.
+
+Native source previews use the desktop green palette, matching icon meanings, collapsed chat
+activity and explicit list navigation. Web chat uses the full workspace width, keeps Queue/Stop
+on one line with desktop colors and hides Stop for queued/completed runs. Categorized recents
+include seven search and schedule-associated chats. Tests are synthetic; this does not certify
+real-device network performance or provider workflow completion. Synthetic Electron capture
+checks also pass with the tab hidden and its window minimized; locked/asleep Macs remain unverified.
+
+Web new-chat setup starts expanded and remembers an explicit collapse/expansion with each
+Mac's draft. Host-state notifications and provider catalog changes retain that state and the
+entered fields. The heading, destination label, spacing and Start chat action follow desktop.
+Presentation state remains outside submitted values.
+
+## Directional pause and document access
+
+The October 9 desktop peer pause is local and directional. It suppresses outgoing connections and that host’s visible references while retaining pairing and drafts; it does not revoke the reverse connection. View chat documents permits direct current-root retrieval. Otherwise one-time exact-version requests remain in Needs attention after their banner dismisses.
+
+### Self-contained design reviews
+
+The October 9 [shared composer reviews](design/2026-10-09/shared-previews.md) use existing
+encrypted `chat.documents` transport. Desktop/web CSS and scripts are inlined into one HTML
+document; adaptive mobile HTML already contains its dependencies. The transport supplies raster
+document assets but does not fetch stylesheet or JavaScript module dependencies from localhost.
+Remote clients can enable interactive preview using their existing isolated HTML viewer. The
+owning Mac must be connected for reads, and normal device document-access/version grants apply.
+Refresh requests retrieve the latest document; changes are not pushed as a live server session.
+Installed remote-device delivery of these artifacts remains unverified.
+
+The relay forwards encrypted commands; its HTTP endpoint serves health checks rather than a
+general HTTP proxy. Live Browser can share frames and send chat instructions, but does not provide
+direct pointer/keyboard control of these design pages. Forwarding a live development server would
+need a separate scoped host-side service and client support.
+
+BF-2026-10-09-39 queues automatic host-side bundling and remote discovery/updates for chat-linked
+localhost previews, including locally originated chats. See `planned-updates.md` for the acceptance
+contract. Agent-authored packaging is not the intended product workflow; the standalone copies
+above are an interim review artifact. This feature is not implemented, and further builds are on
+hold during the remaining change/design review.
+
+
+## Local desktop responsiveness diagnostics
+
+The owning desktop provides authenticated `GET /api/performance/diagnostics` for bounded,
+payload-free synchronous/async phase timings, event-loop delay and scheduler-worker status.
+It is a local diagnostic route, not a remote command. Reports retain fixed source-owned labels
+and timing values, never chat bodies, URLs, paths, arguments or error text. Current/previous
+snapshots live in the application-data `diagnostics` directory and are written asynchronously.
+A slow async phase includes network/worker waiting and is not evidence of main-thread blocking;
+event-loop overlap is correlation, not proof of cause. See the
+[scheduler and timing ledger](2026-10-12-scheduler-performance.md) for tests and rollout status.
+
+
+Remote-state assembly shares a fresh scoped catalog only within a synchronous MCP health enumeration; it does not reuse old configuration between requests. Registry identity caches retain only bounded digests and preserve existing connection/recovery bindings. Long stalls are retained separately from frequent short delays in private diagnostics.
+
+## October 18 — desktop peer project protocol
+
+Desktop peers forward `projects.get/update`, `sources.get/update`, `chat.move`, `context.update`,
+`workspace.delete` and `tabs.manage` through the existing authenticated owner connection. Project
+scopes still require a project owned by that computer, current revisions and the existing resource
+or document grants. Paused, revoked, unpaired or replaced sessions cannot bypass these checks.
+The renderer negotiates `projects.v1` and `source-library.v1`; older owners keep their workspace UI.
+
+The encrypted desktop chat index retains project IDs/names alongside workspace membership.
+Authoritative project catalogs reconcile moves, renames and deletion redirects, including a move
+between projects in the same workspace and an in-flight stale chat index. Membership changes do
+not advance chat activity timestamps or alter archive state. A project-shaped `chat.move` result
+uses the same source-metadata projection as project/source reads; source instruction bodies are
+excluded. Legacy workspace-move responses retain their existing shape.
+
+Disposable paired-owner tests cover revision conflicts, retry identity, host isolation, project
+chat/tab routing, resource-grant denial, sanitized source catalogs, encrypted cache restart and
+revocation. History tests verify opt-in selected-profile sharing and idempotent event import.
+These tests do not establish installed cross-machine verification; that requires the accepted
+signed release on both owners and an explicit check of their saved history-sharing settings.

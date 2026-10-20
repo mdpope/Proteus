@@ -286,3 +286,111 @@ Activity groups are green except for issues, with straight left accents. Tab ove
 by backdrop, top close button or choosing a tab. Live index refresh keeps archived rows until the
 replacement arrives and restores an open action menu against the updated row, avoiding flicker
 and lost clicks. None of this represents new production deployment; the audit tracks acceptance.
+
+## Workspace projects and source library — 0.2.21
+
+The website uses the connected computer's `projects.v1` catalog and revision-checked
+`projects.get` / `projects.update` operations. Workspace navigation exposes Projects, Chats,
+Tabs and Configuration; project navigation exposes its scoped Chats and Tabs. The sidebar
+keeps workspace/project groups, manual project order, independent expanders and paged recents.
+Create, rename, default selection, reorder and reviewed deletion operate on the owning host.
+Deleting a nondefault project redirects its chats and resource descriptors into the reviewed
+default project while preserving execution configuration, history, drafts and approval state.
+Project URLs restore the selected chat/resource, and old project links follow owner redirects.
+Older connected hosts retain their existing workspace controls until upgraded.
+
+Project-scoped tab operations use the existing host content-tab service. Workspace Tabs combines
+direct and project descriptors without permitting aggregate reorder. Browser pages continue to
+open in browser-managed windows using that browser's session. Terminal sessions and standalone
+host documents remain owned by the computer; organizational controls do not replay commands or
+create local executable sessions. Existing approved chat-document flows keep their source origin.
+
+Engine Room → Source library selects an explicit paired computer, registers existing absolute
+folder paths, reports scan results, rescans and removes registrations through `sources.get` /
+`sources.update`. Registrations discover reusable sources without granting working-folder access
+or enabling connections. Workspace Configuration shares the one-time folder Load in → Apply to
+all controls, including filtered items. Chat details share the concise Ask, Saved permissions,
+Auto-approve tools and Use workspace controls, read-only setting, folder exceptions and remembered
+rule removal. Mutations retain context/chat revision checks and pending-request identity.
+
+Projects, source catalogs, full history and execution remain on their host. No Laravel schema or
+account migration is required. The existing encrypted bounded offline chat summary adds workspace/
+project identity and accepted-user activity; it excludes execution context and full history.
+Account pairing, encrypted draft storage and logout clearing retain their existing boundaries.
+
+Local acceptance: the disposable `test/web-projects-ui.mjs` exercises project creation/default/
+order, project chat routing, hidden browser identity across deletion, permission mode changes,
+preserved history/configuration/drafts, source registration without grants and folder bulk loading.
+The Laravel suite passes 81 tests / 724 assertions, encrypted cache tests pass, and Vite/Pint pass.
+This is source/disposable-browser evidence; deployment and authenticated production verification
+are recorded separately by the release operator.
+The full disposable two-owner `test/web-remote-ui.mjs` regression also passed, including MFA,
+pairing, chat history/drafts, remote permissions, workspace copies, attachment limits and consent,
+concurrent browser sessions, encrypted transport, logout clearing, revocation and isolated previews.
+
+
+## Desktop design parity (October 18 follow-up)
+
+The website shell uses the accepted desktop sidebar colors, green selected treatment, typography,
+spacing and feature icons. Workspaces contain manually ordered projects and typed chat/browser/
+terminal/document recents, with two-line names, owner labels and relative activity age. The tree
+remains available on Engine Room and other pages. Only the active feature's own panel expands.
+Ordinary counts are plain text; Needs attention keeps its filled badge. Engine Room scrolls after
+the workspace tree, while AI Allowance remains fixed below navigation.
+
+Expansion is account/owner/workspace/project-specific, retained across navigation and reload.
+Each list starts at seven items and More reveals four. Collapsing a workspace resets both its own
+paging and its project paging; switching features resets paging while keeping expansion. Collapse
+all is inside the Workspaces control. Sidebar width is retained per account with pointer and
+keyboard resize; collapsed and narrow layouts use an overlay without moving the content. Older
+hosts explain the projects upgrade requirement, and offline owners label their last-known catalog.
+Inventory reads never open tabs or advance their activity timestamps.
+
+Workspace fixed tabs are Projects, Chats, Tabs and Configuration, with the same folder,
+double-bubble, four-box and gear icons; project views have Chats and Tabs. Fixed tabs remain on
+the left and cannot close. The redundant workspace-name tab is removed for projects-capable
+owners; independently opened content retains its icons and close control. Engine Room cards,
+source rows and configuration use desktop sizing, including wrapping long paths on narrow screens.
+
+Disposable browser acceptance includes `test/web-design-parity.mjs` through the actual Laravel
+project workflow, plus `test/web-workspace-tree-ui.mjs` for colliding IDs on two owners, manual
+order, nested paging resets, cross-feature/reload retention and old/offline explanations. Screenshots
+are private test artifacts. Native browser embedding, terminal rendering and standalone host-file
+viewing retain the web limitations described above; matching their navigation does not imply a
+local executable session or additional document permission.
+
+The conversation page also uses a large title, provider/ID and date/model metadata above separate
+transcript and details cards. Project chats show a workspace/project breadcrumb that returns to
+the project list. Permission Help/Add are secondary controls. The adaptive composer keeps its
+model selectors and send controls fully inside the visible card; desktop/mobile viewport and
+scroll-anchor regressions cover this layout independently of provider execution.
+
+
+Production acceptance for the desktop-design parity follow-up completed on October 18 with release
+`20261018T174132Z`. All 9,214 deployed file hashes, eight served assets plus the manifest, 14
+endpoints, central recovery and ordinary isolated restore passed; bounded log classification found
+only expected protected-file denials and known database column-statistics events. The existing
+signed-in session verified both owners in Engine Room, fixed workspace tabs, existing chat history,
+the large heading and separate permission/details cards, visible composer controls, project
+expansion, and sidebar keyboard resize/collapse/reload persistence. No permission or chat-content
+mutation was performed. Live screenshots and recovery/access details remain in the private
+website deployment workspace. Native browser/terminal/document limitations are unchanged.
+
+The project header explicitly left-aligns its folder and name instead of inheriting centered
+button content. Its count and expander remain at the right edge. The production-CSS tree
+regression checks sidebar widths 190, 230, 260 and 460 pixels plus the compact overlay; the
+project workflow also passes. The combined alignment/grouping release is deployed; live acceptance is recorded separately.
+
+The account Default computer’s workspaces appear first without repeated inline computer labels.
+A divided, expandable Other Computers group places each remaining computer name above its
+workspace/project tree. Opening another owner’s chat does not reorder these groups. The browser
+does not infer physical local identity; without a Default, all known owners use named computer
+groups. The group’s expanded state is retained per account independently of each owner’s
+workspace/project state, including across Engine Room navigation and reload.
+
+Production release `20261018T184327Z` passes signed-in grouping and routing acceptance: the
+Default owner stays first and supplies allowance while another computer’s project opens correctly;
+Other Computers expands/collapses and project headings align left. Deployment hashes, served
+assets, endpoints, central recovery and ordinary restore pass. Bounded log review is accepted
+with one informational systemd event classified by metadata only; private message text was not
+printed or semantically classified. No additional source or deployment change was needed.

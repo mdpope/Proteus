@@ -1,5 +1,34 @@
 # Workspace Markdown picker
 
+## Next release intake — October 19, queued only
+
+BF-2026-10-19-19 in [planned updates](planned-updates.md) records the reported jump to the top
+when returning to a Markdown tab. Preserve each document tab's reading position independently
+across tab switching, document refresh, renderer/web-page reload and app quit/relaunch, including
+unchanged files, harmless rerenders and delayed image layout. Save during reading as well as
+supported exit transitions, so a still-selected document resumes after restart. Restore the same
+paragraph/offset after content mounts without overriding a newer user scroll or tab selection.
+Keep the source-refresh and remote approval rules below; shorter changed documents use the
+nearest valid position. Source inspection finds outgoing capture but no `restoreView` call in
+the local Markdown rendering path; the position helper's in-memory Map also cannot survive reload.
+Queue durable bounded position metadata through the owner state boundary, independently of the
+multiwindow feature, with stable document/window identity. Exact live reproduction, persistence
+checks and UI acceptance remain pending;
+no implementation or build is authorized yet.
+
+## Next release intake — October 15, queued only
+
+BF-2026-10-15-01 in [planned updates](planned-updates.md) requests checking the original file on
+disk when the user returns to its Markdown tab and refreshing the rendered page if saved content
+changed. BF-2026-10-15-02 adds **Refresh** to the tab's right-click menu. Both use the same
+authorized source reader, preserve the existing tab and retain remote host/version approval
+boundaries. Both automatic and menu refresh must preserve the user's scroll position instead
+of jumping to the top; unchanged content retains its rendering and reading position. This queued
+return-to-tab behavior extends the earlier manual-refresh design below; it does not request
+continuous background replacement. No implementation or build is authorized yet.
+
+## Current picker behavior
+
 The Markdown action opens a folder picker with **Open existing** and **New file** modes.
 Choose a configured workspace root, enter subfolders, or use the breadcrumbs to move
 up. **All folders** includes each workspace's main/additional folders, shared repository roots

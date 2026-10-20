@@ -1,3 +1,4 @@
+export { findTextRanges } from '../public/page-find.js';
 import { parser, linkKind } from './markdown-parser.js';
 import hljs from 'highlight.js/lib/common';
 

@@ -1,3 +1,5 @@
+import {remoteState} from '../src/remote.js';
+import { LiveBrowser } from '../src/live-browser.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -33,6 +35,49 @@ test('AES-GCM authenticates the payload and routing context', () => {
   assert.throws(() => unseal(secret(), box, 'connection:client:1'));
   const corrupt = Buffer.from(box, 'base64'); corrupt[14] ^= 1; assert.throws(() => unseal(key, corrupt.toString('base64'), 'connection:client:1'));
 });
+test('logs expose bounded summary pages and complete redacted details through local and paired APIs',async t=>{
+  const {app,connect}=await fixture(t),viewer=await connect();let target;
+  for(let i=0;i<120;i++){const entry=app.activity.log('error','synthetic.error','Rehearsal '+i+'\n'+('    at synthetic-frame\n'.repeat(200)),{details:{password:'DO_NOT_EXPOSE',index:i}});if(i===10)target=entry.id;}
+  const page=await viewer.request('logs.list',{limit:50});assert.equal(page.items.length,50);assert.ok(page.hasMore);assert.ok(!page.items[0].details);
+  const older=await viewer.request('logs.list',{limit:50,cursor:page.nextCursor});assert.equal(older.items[0].summary,'Rehearsal 69');
+  const detail=await viewer.request('logs.get',{id:target});assert.ok(detail.message.length>1000);assert.doesNotMatch(JSON.stringify(detail),/DO_NOT_EXPOSE/);
+  const response=await fetch(app.origin+'/api/logs?target='+target,{headers:{Authorization:`Bearer ${app.token}`}});assert.equal(response.status,200);assert.equal((await response.json()).items[0].id,target);
+  const localDetail=await fetch(app.origin+'/api/logs?id='+target,{headers:{Authorization:`Bearer ${app.token}`}});assert.deepEqual(await localDetail.json(),detail);
+});
+test('failed legacy log migration preserves source and still releases the runner and listener on shutdown',async t=>{
+  const folder=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-log-recovery-'));t.after(()=>fs.rmSync(folder,{recursive:true,force:true}));
+  const original=JSON.stringify({version:1,logs:[{}],notifications:[],outbox:[],preferences:{custom:'preserved'}});fs.writeFileSync(path.join(folder,'activity.json'),original);
+  const app=await startServer({home:folder,port:0,timers:false});await assert.rejects(app.activity.logs());
+  await assert.rejects(app.close());assert.equal(fs.existsSync(path.join(folder,'connection.json')),false);assert.equal(fs.readFileSync(path.join(folder,'activity.legacy.json'),'utf8'),original);
+  const restarted=await startServer({home:folder,port:0,timers:false});await assert.rejects(restarted.close());
+});
+test('history settings expose owner catalogs, preserve receipts, and never grant viewer pairings',async t=>{
+  const {app,connect}=await fixture(t),viewer=await connect();
+  const ownerPeer='11111111-1111-4111-8111-111111111111',viewerPeer='22222222-2222-4222-8222-222222222222',profileId='33333333-3333-4333-8333-333333333333';
+  let paired=[{hostId:ownerPeer,label:'Owner paired desktop',status:'online',paused:true,key:'PAIR_SECRET',config:{token:'CONFIG_SECRET'}}],syncs=0;
+  app.peers={list:()=>paired,syncHistory:async()=>{syncs++;return {synced:true};}};
+  let identity={origin:'https://synthetic-owner.test',accountId:'owner'};
+  app.browserProfiles.identity=()=>identity;app.browserProfiles.data={enabled:true,account:app.browserProfiles.key(),items:[{id:profileId,name:'Owner profile',settings:{secret:'PROFILE_SECRET'},partition:'PRIVATE_PARTITION'}]};
+  app.browserProfiles.refresh=()=>{throw new Error('Settings reads must use the cached owner profiles.');};
+  const settings=await viewer.request('browser.history.settings',{availablePeers:[{hostId:viewerPeer,label:'Viewer desktop'}]});
+  assert.deepEqual(settings.availablePeers,[{hostId:ownerPeer,label:'Owner paired desktop',status:'online',paused:true}]);
+  assert.deepEqual(settings.availableProfiles,[{id:'default',name:'Default'},{id:profileId,name:'Owner profile'}]);
+  assert.doesNotMatch(JSON.stringify(settings),/PAIR_SECRET|CONFIG_SECRET|PROFILE_SECRET|PRIVATE_PARTITION/);
+  const local=await fetch(app.origin+'/api/browser-history',{method:'POST',headers:{Authorization:`Bearer ${app.token}`,'Content-Type':'application/json'},body:JSON.stringify({action:'settings'})});
+  assert.equal(local.status,200);assert.deepEqual(await local.json(),settings);
+  await assert.rejects(viewer.request('browser.history.settings',{peers:[{hostId:viewerPeer,enabled:true,backfill:'all',profileIds:['default']}],availablePeers:[{hostId:viewerPeer}]}),/already paired/);
+  const peer={hostId:ownerPeer,enabled:true,backfill:'30',profileIds:['default',profileId],extension:{future:true}},requestId=randomUUID();
+  const saved=await viewer.request('browser.history.settings',{peers:[{...peer,cursor:'FAKE_CURSOR',error:'FAKE_ERROR'}],availablePeers:[{hostId:viewerPeer}],availableProfiles:[{id:'viewer'}]},requestId);
+  assert.deepEqual(await viewer.request('browser.history.settings',{peers:[{...peer,cursor:'FAKE_CURSOR',error:'FAKE_ERROR'}],availablePeers:[{hostId:viewerPeer}],availableProfiles:[{id:'viewer'}]},requestId),saved);assert.equal(syncs,1);
+  const persisted=await app.browserHistory.settings();assert.deepEqual(persisted.peers,[peer]);assert.equal(Object.hasOwn(persisted,'availablePeers'),false);assert.equal(Object.hasOwn(persisted,'availableProfiles'),false);
+  paired=[];
+  await viewer.request('browser.history.settings',{peers:[peer]});
+  await assert.rejects(viewer.request('browser.history.settings',{peers:[{...peer,backfill:'all'}]}),/already paired/);
+  await viewer.request('browser.history.settings',{peers:[{...peer,enabled:false}]});
+  await assert.rejects(viewer.request('browser.history.settings',{peers:[peer]}),/already paired/);
+  identity={...identity,accountId:'another-owner-account'};
+  assert.deepEqual((await viewer.request('browser.history.settings')).availableProfiles,[{id:'default',name:'Default'}]);
+});
 test('paired chat archive and delete synchronize without resurrecting cached history',async t=>{
   const {app,connect,workspace}=await fixture(t);const first=await connect(),second=await connect();
   const controls=(await first.request('sync')).state;assert.ok(controls.mcpStatusProviders.includes('claude'));assert.equal(controls.mcpLoginProviders.includes('claude'),false);
@@ -54,7 +99,7 @@ test('paired chat archive and delete synchronize without resurrecting cached his
   await assert.rejects(first.request('chat.send',{id:run.id,prompt:'Synthetic retry',mode:'queue'}),/not found/);
   await assert.rejects(first.request('chat.attachments.begin',{id:run.id,messageId:'synthetic',name:'x.txt',mediaType:'text\/plain',size:1,sha256:'x'}),/not found/);
   assert.equal((await second.request('runs.list',{includeArchived:true})).length,0);
-  assert.equal(app.activity.logs(40).items.some(item=>item.event==='chat.undefined'),false);
+  assert.equal((await app.activity.logs(40)).items.some(item=>item.event==='chat.undefined'),false);
 });
 test('a paired client can apply permissions to the current waiting chat and receive tool details', async t => {
   const { app, connect, workspace } = await fixture(t, { copilot: { run: async ({ ask, emit }) => {
@@ -207,4 +252,58 @@ test('provider usage is normalized, selected-host scoped, and blocked when hidde
   const settings=app.settings.get();app.settings.save({...settings,appearance:{showProviderUsage:false,providerUsageCollapsed:true}},settings.revision);
   usage=await client.request('provider.usage',{force:true});assert.deepEqual(usage,{enabled:false,providers:{}});assert.equal(reads,1);
   state=(await client.request('sync')).state;assert.equal(state.appearance.showProviderUsage,false);assert.equal(state.appearance.providerUsageCollapsed,true);assert.equal(state.providerUsage,undefined);
+});
+
+
+test('live browser requires a per-device grant and the same device must view the referenced frame',async t=>{
+ const {app,connect}=await fixture(t);let release=null;
+ app.liveBrowser=new LiveBrowser({list:()=>[{id:'synthetic-tab'}],current:()=>true,capture:async()=>{if(release)await new Promise(resolve=>{release.resolve=resolve;});return {revision:1,width:800,height:600,image:'data:image/jpeg;base64,synthetic'};}});
+ const first=await connect(),second=await connect();const run=app.engine.createRun(app.engine.schedules.list()[0]);await until(()=>run.pending);
+ await assert.rejects(first.request('browser.live.list',{id:run.id}),/permission|enable|allow/i);
+ const [a,b]=app.remote.config.devices;app.remote.setBrowserAccess(a.id,true);app.remote.setBrowserAccess(b.id,true);
+ const frame=await first.request('browser.live.frame',{id:run.id,tabId:'synthetic-tab'});
+ await assert.rejects(second.request('browser.live.instruct',{id:run.id,frameId:frame.id,text:'Synthetic instruction',mode:'queue'}),/View this browser frame/);
+ await first.request('browser.live.instruct',{id:run.id,frameId:frame.id,text:'Synthetic answer',mode:'answer',requestId:run.pending.id,point:{x:.5,y:.5}});
+ await until(()=>run.status==='completed');assert.ok(run.events.some(event=>event.text?.includes('marked point 400,300')));
+ app.liveBrowser.clear();release={};const capture=first.request('browser.live.frame',{id:run.id,tabId:'synthetic-tab'});await until(()=>release.resolve);
+ app.remote.setBrowserAccess(a.id,false);release.resolve();await assert.rejects(capture,/permission|enable|allow/i);
+ assert.equal(app.liveBrowser.frames.size,0);await assert.rejects(first.request('browser.live.list',{id:run.id}),/permission|enable|allow/i);
+});
+
+test('paired workspace configuration preserves scoped selections, full local copies and root refresh parity',async t=>{
+ const {app,connect,workspace}=await fixture(t);const first=await connect(),second=await connect();
+ const original=await first.request('context.get'),entry=original.entries.find(e=>e.kind==='instruction');
+ const copied=await first.request('context.update',{action:'copy-workspace',workspaceId:'default',name:'Paired configuration',expectedRevision:original.revision});const workspaceId=copied.copiedWorkspaceId;
+ let state=await first.request('context.update',{action:'mode',workspaceId,id:entry.id,mode:'available',expectedRevision:copied.revision});
+ state=await first.request('context.update',{action:'save-workspace',workspaceId,configuration:{defaults:{includeDefaults:false,selectedIds:[entry.id]},approvals:{mode:'custom',readOnlyTools:false,folders:[{path:fs.realpathSync(workspace),access:'read'}],rules:[{kind:'shell',command:'git status'}]}},expectedRevision:state.revision});
+ const remote=await second.request('context.get',{workspaceId});assert.equal(remote.entries.find(e=>e.id===entry.id).mode,'available');assert.deepEqual(remote.workspaces.find(w=>w.id===workspaceId).approvals.rules,[{kind:'shell',command:'git status'}]);assert.equal((await second.request('context.get',{workspaceId:'default'})).entries.find(e=>e.id===entry.id).mode,'workspace');
+ const duplicate=await second.request('context.update',{action:'copy-workspace',workspaceId,name:'Independent paired copy',expectedRevision:remote.revision});assert.deepEqual(duplicate.workspaces.find(w=>w.id===duplicate.copiedWorkspaceId).defaults.selectedIds,[entry.id]);
+ assert.deepEqual(duplicate.workspaces.find(w=>w.id===duplicate.copiedWorkspaceId).approvals,remote.workspaces.find(w=>w.id===workspaceId).approvals);
+ const refreshed=await first.request('context.refresh',{workspaceId,root:workspace});assert.ok(refreshed.rootStatus[fs.realpathSync(workspace)].scannedFolders>0);assert.equal(app.context.scope('default').approvals.mode,'ask');
+});
+test('state uses the configured computer name and counts running chats outside the recent page',async t=>{
+ const {app,connect}=await fixture(t);app.remote.config.label='Synthetic Office PC';
+ const rows=Array.from({length:101},(_,i)=>({id:'synthetic-'+i,status:i===100?'running':'completed',schedule:{provider:'rehearsal'},events:[]}));
+ const visible=app.engine.visibleRuns.bind(app.engine),listed=app.engine.listRuns.bind(app.engine);app.engine.visibleRuns=()=>rows;app.engine.listRuns=()=>rows;
+ t.after(()=>{app.engine.visibleRuns=visible;app.engine.listRuns=listed;});
+ const state=remoteState({...app,attention:()=>[]});assert.equal(state.hostName,'Synthetic Office PC');assert.equal(state.runs.length,100);assert.equal(state.runningChatCount,1);assert.equal(state.runs.some(r=>r.status==='running'),false);
+});
+test('remote starting-folder selection tolerates missing siblings without authorizing outside folders',async t=>{
+ const {app,connect,workspace,home}=await fixture(t),client=await connect();
+ const missing=path.join(home,'temporarily-missing'),alternate=path.join(home,'alternate'),outside=path.join(home,'outside');
+ for(const folder of [missing,alternate,outside])fs.mkdirSync(folder);
+ app.context.mutate(config=>{config.workspaces.find(w=>w.id===config.defaultWorkspaceId).additionalDirectories=[missing,alternate];},app.context.config().revision);
+ const missingRoot=fs.realpathSync(missing);fs.rmdirSync(missing);
+ const start=commandFolder=>client.request('chat.start',{provider:'rehearsal',prompt:'Synthetic missing supplemental folder regression',workspaceId:app.context.config().defaultWorkspaceId,commandFolder});
+ for(const folder of [workspace,alternate]){
+  const result=await start(folder),run=app.engine.getRun(result.runId);
+  assert.equal(run.schedule.workspace.cwd,fs.realpathSync(folder));
+  assert.ok(!run.schedule.workspace.additionalDirectories.includes(missingRoot));
+  assert.ok(run.schedule.context.baseWorkspace.additionalDirectories.includes(missingRoot),'preserve configured unavailable sibling in the snapshot base');
+ }
+ assert.ok(app.context.scope().additionalDirectories.includes(missingRoot),'saved configuration remains intact');
+ await assert.rejects(start(outside),/configured starting folder/);
+ await assert.rejects(start(missing),/ENOENT|existing starting folder/);
+ const file=path.join(home,'not-a-folder');fs.writeFileSync(file,'synthetic');
+ await assert.rejects(start(file),/existing starting folder/);
 });

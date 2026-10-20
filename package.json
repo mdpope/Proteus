@@ -1,6 +1,6 @@
 {
   "name": "proteus",
-  "version": "0.2.7",
+  "version": "0.2.25",
   "buildRevision": "source",
   "private": true,
   "description": "A local control room for scheduled AI work and resumable conversations.",
@@ -12,6 +12,7 @@
   "scripts": {
     "start": "node src/server.js",
     "desktop": "electron .",
+    "desktop:preview": "node scripts/desktop-preview.mjs",
     "test": "node --test test/*.test.js",
     "check": "node scripts/check.mjs",
     "cli": "node src/cli.js",
@@ -22,20 +23,27 @@
     "markdown:build": "node scripts/build-markdown.mjs",
     "package:mac": "node scripts/package-mac.mjs",
     "ios:doctor": "node scripts/apple-build.mjs doctor",
+    "ios:preview:phone": "node scripts/iphone-design-preview.mjs",
     "ios:build": "node scripts/apple-build.mjs build",
     "ios:test": "node scripts/apple-build.mjs test",
     "terminal:build": "node scripts/build-terminal.mjs",
     "postinstall": "node scripts/prepare-pty.mjs"
   },
   "dependencies": {
+    "@ghostery/adblocker-electron": "2.20.1",
     "@github/copilot-sdk": "1.0.16",
+    "@playwright/mcp": "0.0.83",
+    "chrome-devtools-mcp": "1.10.1",
     "cron-parser": "5.10.1",
+    "electron-chrome-extensions": "4.9.0",
+    "electron-chrome-web-store": "0.13.0",
+    "esbuild": "^0.28.2",
     "ghostty-web": "0.4.0",
     "highlight.js": "11.12.0",
     "markdown-it": "15.0.2",
     "mysql2": "3.24.5",
     "node-pty": "1.1.0",
-    "playwright": "1.58.2",
+    "playwright": "1.64.0",
     "qrcode": "1.5.4",
     "ws": "8.22.0",
     "yaml": "2.9.1"
@@ -43,7 +51,11 @@
   "devDependencies": {
     "@electron/packager": "20.3.0",
     "@electron/rebuild": "4.2.0",
-    "electron": "44.5.1",
-    "esbuild": "0.28.2"
+    "electron": "44.5.1"
+  },
+  "overrides": {
+    "electron-chrome-web-store": {
+      "adm-zip": "0.6.1"
+    }
   }
 }

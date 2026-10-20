@@ -1,1 +1,3 @@
 :root{color-scheme:dark}html,body{padding:0;margin:0;background:transparent;color:#edf2ec;-webkit-text-size-adjust:100%;overflow-x:hidden}body{padding:1px 0}.rich-text{font-size:16px}button{min-height:32px}
+
+::highlight(page-find-all){background:#66571b;color:#fff5ba}::highlight(page-find-current){background:#c2e8a0;color:#182414}

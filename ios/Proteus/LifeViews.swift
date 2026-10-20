@@ -18,12 +18,12 @@ struct LifeRootView:View{
             if life.signedIn{
                 NavigationSplitView{
                     List(LifeSection.allCases.filter{life.profile["sections"].array.isEmpty || life.profile["sections"].array.contains(.string($0.rawValue))},selection:$section){item in NavigationLink(value:item){Label(item.title,systemImage:item.icon)}}
-                        .navigationTitle("Life")
-                        .safeAreaInset(edge:.bottom){VStack(alignment:.leading,spacing:4){Text(life.profile["displayName"].string).font(.caption.bold());Text("Website account · separate from Macs").font(.caption2).foregroundStyle(.secondary)}.padding()}
+                        .navigationTitle(NativeDesignPreview.enabled ? "" : "Life").nativeFeaturePage("Life")
+                        .safeAreaInset(edge:.bottom){VStack(alignment:.leading,spacing:4){Text(life.profile["displayName"].string).font(.caption.bold());Text("Website account · separate from computers").font(.caption2).foregroundStyle(.secondary)}.padding()}
                 }detail:{LifePage(section:section ?? .overview).id(life.accountIdentity+"|"+(section ?? .overview).rawValue)}
                     .toolbar{ToolbarItem(placement:.primaryAction){Button{account=true}label:{Image(systemName:"person.crop.circle")}.accessibilityLabel("Life account")}}
                     .sheet(isPresented:$account){NavigationStack{LifeAccountView()}}
-            }else{NavigationStack{LifeAccountView()}}
+            }else{NavigationStack{LifeAccountView().nativeFeaturePage("Life")}}
         }.task{section = LifeSection(rawValue: selectedSection) ?? .overview; await life.restore()}.onChange(of: selectedSection) { _, value in section = LifeSection(rawValue: value) ?? .overview }.onChange(of: section) { _, value in selectedSection = value?.rawValue ?? "overview" }
     }
 }
@@ -32,10 +32,10 @@ struct LifeAccountView:View{
     @Environment(\.dismiss) private var dismiss
     @State private var origin="https://proteus.example"
     var body:some View{
-        Form{
+        NativeForm {
             Section{
                 Label("Your records, together",systemImage:"heart.text.square").font(.title2.bold())
-                Text("Nutrition, vehicles and evidence connect directly to your website account, even while your Macs sleep.").foregroundStyle(.secondary)
+                Text("Nutrition, vehicles and evidence connect directly to your website account, even while your computers sleep.").foregroundStyle(.secondary)
             }
             if life.signedIn{
                 Section("Signed in"){
@@ -54,8 +54,8 @@ struct LifeAccountView:View{
             if life.busy{ProgressView("Connecting…")}
             if let error=life.error{Text(error).foregroundStyle(.orange)}
             if let notice=life.notice{Text(notice).foregroundStyle(.secondary)}
-            Section{Text("Records and drafts stay in memory on this device. Sign-out clears them. Website credentials are saved in this device’s Keychain, independently of Mac pairings.").font(.footnote).foregroundStyle(.secondary)}
-        }.navigationTitle("Life account").toolbar{if life.signedIn{ToolbarItem(placement:.cancellationAction){Button("Done"){dismiss()}}}}
+            Section{Text("Records and drafts stay in memory on this device. Sign-out clears them. Website credentials are saved in this device’s Keychain, independently of computer pairings.").font(.footnote).foregroundStyle(.secondary)}
+        }.background(NativeTheme.background).navigationTitle("Life account").toolbar{if life.signedIn{ToolbarItem(placement:.cancellationAction){Button("Done"){dismiss()}}}}
     }
 }
 private struct LifeActionSheet:Identifiable{let id=UUID();let action:String;var input:[String:JSON]=[:]}
@@ -266,7 +266,7 @@ private struct LifePage:View{
     private var connections:some View{
         Group{
             LifeCard("Connections"){
-                Text("These integrations belong to your website account. Mac AI providers and pairings remain separate.").foregroundStyle(.secondary)
+                Text("These integrations belong to your website account. Desktop AI providers and pairings remain separate.").foregroundStyle(.secondary)
                 Link("Manage connections on website",destination:URL(string:life.website+"/connections")!)
             }
             LifeCard("Access tokens"){ForEach(value["tokens"].array,id:\.self){token in VStack(alignment:.leading,spacing:4){Text(token["name"].string).font(.headline);Text(token["scopes"].array.map(\.string).joined(separator:", ")).font(.caption);Text(lifeBool(token["revoked"]) ? "Revoked" : "Expires "+token["expires_at"].string).font(.caption).foregroundStyle(.secondary)}}}
@@ -280,7 +280,7 @@ private struct LifePage:View{
 struct LifeCard<Content:View>:View{
     let title:String;@ViewBuilder let content:()->Content
     init(_ title:String,@ViewBuilder content:@escaping()->Content){self.title=title;self.content=content}
-    var body:some View{VStack(alignment:.leading,spacing:12){if !title.isEmpty{Text(title).font(.headline)};content()}.frame(maxWidth:.infinity,alignment:.leading).padding(18).background(Color(.secondarySystemGroupedBackground),in:RoundedRectangle(cornerRadius:20))}
+    var body:some View{VStack(alignment:.leading,spacing:12){if !title.isEmpty{Text(title).font(.headline)};content()}.frame(maxWidth:.infinity,alignment:.leading).padding(18).background(NativeTheme.surface,in:RoundedRectangle(cornerRadius:20))}
 }
 struct LifeMetric:View{let title:String;let value:String;init(_ title:String,value:String){self.title=title;self.value=value};var body:some View{VStack(alignment:.leading,spacing:4){Text(value).font(.title2.bold()).monospacedDigit();Text(title).font(.caption).foregroundStyle(.secondary)}.frame(maxWidth:.infinity,alignment:.leading).padding(10)}}
 struct LifeMacros:View{let value:JSON;var multiplier:Double=1;var body:some View{LazyVGrid(columns:[GridItem(.adaptive(minimum:130))],alignment:.leading){ForEach([("calories","Calories"),("protein","Protein, g"),("carbs","Carbs, g"),("fat","Fat, g")],id:\.0){key,label in LifeMetric(label,value:lifeDouble(value[key]).map{($0*multiplier).formatted(.number.precision(.fractionLength(0...1)))} ?? "—")}}}}
@@ -307,7 +307,7 @@ private struct LifeEvidenceView:View{
                 else if data.starts(with:Data("%PDF-".utf8)){LifePDF(data:data)}
                 else{ContentUnavailableView("Preview unavailable",systemImage:"doc",description:Text("This file type can be downloaded from the website. HTML and executable previews are disabled."));Link("Open evidence on website",destination:URL(string:life.website+"/attachments/"+item.id)!)}
             }else{ProgressView("Loading evidence…")}
-        }.navigationTitle(item.name).navigationBarTitleDisplayMode(.inline).toolbar{ToolbarItem(placement:.cancellationAction){Button("Done"){dismiss()}}}
+        }.background(NativeTheme.background).navigationTitle(item.name).navigationBarTitleDisplayMode(.inline).toolbar{ToolbarItem(placement:.cancellationAction){Button("Done"){dismiss()}}}
             .task{do{let result=try await life.evidence(item.id);data=result.0;mime=result.1}catch{failure=life.display(error)}}
     }
 }

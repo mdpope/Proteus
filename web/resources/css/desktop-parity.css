@@ -1,0 +1,168 @@
+/* Web shell parity with the accepted desktop grouped navigation. Native runtime remains owner-side. */
+body.web-desktop-shell[data-browser-account]{font-size:14px;--web-sidebar-width:230px;--web-nav-bg:#121512;--web-nav-group:#181d19;--web-nav-project:#1d231e;--web-nav-selected:#31392c;--web-nav-text:#a8b1a8;--web-nav-muted:#6e786f;--web-nav-accent:#bedc93;--web-nav-border:#252b26}
+body.web-desktop-shell[data-browser-account] .shell{display:grid;grid-template-columns:var(--web-sidebar-width) minmax(0,1fr);grid-template-rows:40px minmax(0,1fr);height:100dvh;min-height:0;overflow:hidden}
+body.web-desktop-shell[data-browser-account] .shell-tabbar{grid-area:1/1/2/-1;position:relative;top:auto;height:40px}
+body.web-desktop-shell[data-browser-account] .shell-workspace{grid-area:2/2;min-height:0;overflow:hidden}
+body.web-desktop-shell[data-browser-account] .main{height:100%;max-width:none;overflow:auto;padding:35px 34px 60px}
+body.web-desktop-shell[data-browser-account] .main:has(.remote-inner-tabs),body.web-desktop-shell[data-browser-account] .main:has(.team-tabs){padding-top:0;--subtab-gutter:34px}
+body.web-desktop-shell[data-browser-account] h1{font-size:29px;letter-spacing:-.8px;font-weight:620;line-height:1.25;margin:5px 0 9px}
+body.web-desktop-shell[data-browser-account] h2{font-size:17px;letter-spacing:-.2px;margin:0 0 17px}
+body.web-desktop-shell[data-browser-account] h3{font-size:15px;margin:0 0 12px}
+body.web-desktop-shell[data-browser-account] .card{border-radius:10px;padding:22px;box-shadow:none}
+body.web-desktop-shell[data-browser-account] :is(#engine-room,[data-workspace-page],dialog) button,body.web-desktop-shell[data-browser-account] :is(#engine-room,[data-workspace-page],dialog) .button{background:#242e29;color:var(--proteus-ink);border-color:#3c4840;border-radius:7px;padding:9px 13px;font-size:14px;font-weight:400}
+body.web-desktop-shell[data-browser-account] :is(#engine-room,[data-workspace-page],dialog) button:hover,body.web-desktop-shell[data-browser-account] :is(#engine-room,[data-workspace-page],dialog) .button:hover{background:#334137}
+body.web-desktop-shell[data-browser-account] button.primary,body.web-desktop-shell[data-browser-account] .button.primary{background:var(--proteus-accent);border-color:var(--proteus-accent);color:#182414;font-weight:650}
+body.web-desktop-shell[data-browser-account] button.danger{color:#ffb3a4}
+body.web-desktop-shell[data-browser-account] input,body.web-desktop-shell[data-browser-account] select,body.web-desktop-shell[data-browser-account] textarea{padding:10px;border-radius:6px}
+body.web-desktop-shell[data-browser-account] .sidebar{grid-area:2/1;position:relative;top:0;width:var(--web-sidebar-width);height:100%;min-height:0;display:flex;flex-direction:column;overflow:hidden;padding:26px 10px 12px;background:var(--web-nav-bg);color:var(--web-nav-text);border-right:1px solid var(--web-nav-border);z-index:20}
+body.web-desktop-shell[data-browser-account] .sidebar .brand{display:none}
+body.web-desktop-shell[data-browser-account] .sidebar nav.shell-navigation{display:block;flex:1;min-height:0;overflow:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#3a443b transparent;margin:0}
+body.web-desktop-shell[data-browser-account] .sidebar nav a{display:flex;align-items:center;gap:10px;min-height:36px;margin:2px 0;padding:8px 12px;border:1px solid transparent;border-radius:8px;font-size:14px;font-weight:400;color:var(--web-nav-text);text-decoration:none}
+body.web-desktop-shell[data-browser-account] .sidebar nav a>.nav-icon{width:20px;height:20px;color:var(--web-nav-muted)}
+body.web-desktop-shell[data-browser-account] .sidebar nav a>.rail-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.web-desktop-shell[data-browser-account] .sidebar nav a.active{background:var(--web-nav-project);border-color:#313a32;color:#eaefe8}
+body.web-desktop-shell[data-browser-account] .sidebar nav a.active>.nav-icon{color:var(--web-nav-accent)}
+body.web-desktop-shell[data-browser-account] .sidebar nav a:hover{background:var(--web-nav-project);color:#eaefe8}
+body.web-desktop-shell[data-browser-account] .sidebar .count{margin-left:auto;padding:2px 4px;background:transparent;border:0;color:var(--web-nav-muted);border-radius:0;font-size:11px;line-height:1.3;font-variant-numeric:tabular-nums}
+body.web-desktop-shell[data-browser-account] .sidebar .count.attention-count{color:var(--web-nav-bg);background:var(--web-nav-accent);border-radius:6px;padding:2px 6px}
+body.web-desktop-shell[data-browser-account] .sidebar a.active .count{color:var(--web-nav-accent)}
+body.web-desktop-shell[data-browser-account] .sidebar a.active .count.attention-count{color:var(--web-nav-bg)}
+body.web-desktop-shell[data-browser-account] .shell-subitems{margin:2px 2px 5px;padding:0;border:0}
+body.web-desktop-shell[data-browser-account] .shell-subitems:empty{display:none}
+body.web-desktop-shell[data-browser-account] .shell-subitems a{font-size:12px;min-height:32px;padding:7px 9px}
+body.web-desktop-shell[data-browser-account] .shell-subitems a.active{background:var(--web-nav-selected);color:#d4e7b6;border-left:2px solid var(--web-nav-accent)}
+body.web-desktop-shell[data-browser-account] .shell-nav-group:has(>[data-shell-nav].active):has(>.shell-subitems:not([hidden]):not(:empty)){background:var(--web-nav-project);border:1px solid var(--web-nav-border);border-radius:10px;margin:8px 0;overflow:hidden}
+body.web-desktop-shell[data-browser-account] .shell-nav-group:has(>.shell-subitems:not([hidden]):not(:empty))>[data-shell-nav].active{background:transparent;border-color:transparent;margin:0}
+body.web-desktop-shell[data-browser-account] .shell-workspaces-control{display:flex;align-items:center;border:1px solid transparent;border-radius:8px;padding-right:7px;margin:2px 0}
+body.web-desktop-shell[data-browser-account] .shell-workspaces-control:has(.active){background:var(--web-nav-project);border-color:#313a32}
+body.web-desktop-shell[data-browser-account] .shell-workspaces-control>[data-shell-nav]{flex:1;min-width:0;width:auto;margin:0;border:0;background:transparent;padding-right:5px}
+body.web-desktop-shell[data-browser-account] .sidebar button.web-collapse-all{display:flex;align-items:center;justify-content:center;flex:0 0 28px;min-height:28px;padding:4px;width:28px;border:0;background:transparent;color:var(--web-nav-muted)}
+body.web-desktop-shell[data-browser-account] .sidebar button.web-collapse-all:hover{color:var(--web-nav-accent);background:var(--web-nav-selected)}
+body.web-desktop-shell[data-browser-account] #shell-recent-workspaces{margin:10px 0 0;padding:0;border:0;border-top:1px solid var(--web-nav-border);min-width:0;display:block}
+body.web-desktop-shell[data-browser-account] .shell-engine-divider{border:0;border-top:1px solid var(--web-nav-border);margin:10px 0}
+body.web-desktop-shell[data-browser-account] .web-other-computers{border-top:1px solid var(--web-nav-border);margin:10px 0 0;padding-top:6px}
+body.web-desktop-shell[data-browser-account] .sidebar .web-other-computers-toggle{display:flex;justify-content:space-between;align-items:center;width:100%;padding:9px 10px;margin:0;background:transparent;border:0;color:var(--web-nav-text);font-size:13px;font-weight:600;text-align:left}
+body.web-desktop-shell[data-browser-account] .web-other-computers-toggle>span:last-child{color:var(--web-nav-muted);font-size:18px;font-weight:400}
+body.web-desktop-shell[data-browser-account] .web-computer-heading{font-size:11px;font-weight:600;color:var(--web-nav-muted);margin:12px 10px 5px;overflow-wrap:anywhere}
+body.web-desktop-shell[data-browser-account] .web-other-computers-body[hidden]{display:none}
+body.web-desktop-shell[data-browser-account] .web-workspace-group{background:var(--web-nav-bg);border:1px solid var(--web-nav-border);border-radius:13px;padding:3px;margin:8px 0;overflow:hidden}
+body.web-desktop-shell[data-browser-account] .web-workspace-group.active{background:var(--web-nav-group);border-color:#313a32}
+body.web-desktop-shell[data-browser-account] .web-project-group{background:transparent;border:1px solid transparent;border-radius:10px;margin:3px 0;overflow:hidden}
+body.web-desktop-shell[data-browser-account] .web-project-group.active.expanded{background:var(--web-nav-project);border-color:var(--web-nav-border)}
+body.web-desktop-shell[data-browser-account] .web-group-heading{display:flex;align-items:center;min-width:0}
+body.web-desktop-shell[data-browser-account] .web-group-heading button{border:0;background:transparent;color:var(--web-nav-text);padding:12px 10px;display:flex;align-items:center;gap:7px;margin:0;min-width:0;text-align:left;font-size:14px}
+body.web-desktop-shell[data-browser-account] .web-group-heading button[data-open]{flex:1;overflow:hidden;justify-content:flex-start}
+body.web-desktop-shell[data-browser-account] .web-group-heading button[data-open]>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.web-desktop-shell[data-browser-account] .web-group-heading svg{width:18px;height:18px;flex:0 0 18px;color:var(--web-nav-muted)}
+body.web-desktop-shell[data-browser-account] .web-workspace-group.active>.web-group-heading button,.web-desktop-shell .web-project-group.active>.web-group-heading button[data-open]{color:#eaefe8;font-weight:600}
+body.web-desktop-shell[data-browser-account] .web-workspace-group.active>.web-group-heading svg,.web-desktop-shell .web-project-group.active>.web-group-heading svg{color:var(--web-nav-accent)}
+body.web-desktop-shell[data-browser-account] .web-project-group .web-group-heading button{padding:10px}
+body.web-desktop-shell[data-browser-account] .web-group-heading button[data-expand]{flex:0 0 28px;width:28px;padding:4px;min-height:30px;justify-content:center;color:var(--web-nav-muted);font-size:18px}
+body.web-desktop-shell[data-browser-account] .web-group-heading button[data-expand]:hover{background:var(--web-nav-selected)}
+body.web-desktop-shell[data-browser-account] .web-tree-count{font-size:10px;line-height:1.5;padding:0 4px;color:var(--web-nav-muted);flex-shrink:0;font-variant-numeric:tabular-nums}
+body.web-desktop-shell[data-browser-account] .web-workspace-group.active>.web-group-heading>.web-tree-count{color:#d4e7b6}
+body.web-desktop-shell[data-browser-account] .web-tree-computer{font-size:10px;font-weight:400;color:var(--web-nav-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1 1 35px;max-width:85px}
+body.web-desktop-shell[data-browser-account] .web-workspace-name{font-weight:600;flex:0 1 auto}
+body.web-desktop-shell[data-browser-account] .sidebar .web-tree-item{display:grid;grid-template-columns:18px minmax(0,1fr) auto;align-items:start;column-gap:6px;width:100%;padding:7px 9px;margin:2px 0;border:1px solid transparent;border-left-width:2px;border-radius:8px;background:transparent;text-align:left;white-space:normal;color:var(--web-nav-text);font-size:12px;font-weight:400}
+body.web-desktop-shell[data-browser-account] .sidebar .web-tree-item.active{background:var(--web-nav-selected);border-color:transparent;border-left-color:var(--web-nav-accent);color:#d4e7b6}
+body.web-desktop-shell[data-browser-account] .sidebar .web-tree-item:hover{background:var(--web-nav-project)}
+body.web-desktop-shell[data-browser-account] .web-tree-icon{display:flex;width:18px;height:18px;align-items:center;justify-content:center;margin-top:1px;color:var(--web-nav-muted)}
+body.web-desktop-shell[data-browser-account] .web-tree-icon svg,.web-desktop-shell .web-tree-icon img{width:16px;height:16px;object-fit:contain;flex:0 0 16px}
+body.web-desktop-shell[data-browser-account] .web-tree-copy{display:block;min-width:0;overflow:hidden;white-space:normal}
+body.web-desktop-shell[data-browser-account] .web-tree-title{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:normal;overflow-wrap:anywhere;line-height:1.4}
+body.web-desktop-shell[data-browser-account] .web-tree-age{font-size:10px;line-height:1.7;color:var(--web-nav-muted);white-space:nowrap;padding-left:2px}
+body.web-desktop-shell[data-browser-account] .web-tree-item.active .web-tree-icon,.web-desktop-shell .web-tree-item.active .web-tree-age{color:var(--web-nav-accent)}
+body.web-desktop-shell[data-browser-account] .sidebar .web-tree-more{font-size:11px;color:var(--web-nav-muted);padding:5px 7px;border:0;background:transparent;margin:0 2px 5px}
+body.web-desktop-shell[data-browser-account] .web-tree-empty{font-size:12px;color:var(--web-nav-muted);margin:5px 8px 8px}
+body.web-desktop-shell[data-browser-account] .sidebar #web-provider-usage{flex-shrink:0;border-top:1px solid var(--web-nav-border);margin:0;padding:12px 0 5px}
+body.web-desktop-shell[data-browser-account] .shell-runtime{flex-shrink:0;font-size:11px;padding:4px 2px;color:var(--web-nav-muted)}
+body.web-desktop-shell[data-browser-account] .account{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-shrink:0;padding:7px 2px 0;margin:0;border:0;font-size:11px;color:var(--web-nav-muted)}
+body.web-desktop-shell[data-browser-account] .account form button{margin:0;font-size:11px;padding:3px 7px;background:transparent;border-color:var(--web-nav-border);color:var(--web-nav-text)}
+body.web-desktop-shell[data-browser-account] .sidebar .rail-toggle{display:block;position:absolute;top:2px;right:10px;left:auto;width:28px;height:24px;padding:0;border:0;background:transparent;color:var(--web-nav-muted);font-size:23px}
+body.web-desktop-shell[data-browser-account]:is(.rail-collapsed,.web-compact-sidebar) .shell{grid-template-columns:56px minmax(0,1fr)}
+body.web-desktop-shell[data-browser-account]:is(.rail-collapsed,.web-compact-sidebar) .sidebar{width:56px;padding:26px 5px 12px;overflow:hidden}
+body.web-desktop-shell[data-browser-account]:is(.rail-collapsed,.web-compact-sidebar).web-sidebar-overlay-open .sidebar{width:var(--web-sidebar-width);padding:26px 10px 12px;box-shadow:8px 0 25px #0006;background:var(--web-nav-bg)}
+body.web-desktop-shell[data-browser-account]:is(.rail-collapsed,.web-compact-sidebar):not(.web-sidebar-overlay-open) .sidebar .rail-label,body.web-desktop-shell[data-browser-account]:is(.rail-collapsed,.web-compact-sidebar):not(.web-sidebar-overlay-open) #web-provider-usage,body.web-desktop-shell[data-browser-account]:is(.rail-collapsed,.web-compact-sidebar):not(.web-sidebar-overlay-open) .sidebar .count,body.web-desktop-shell[data-browser-account]:is(.rail-collapsed,.web-compact-sidebar):not(.web-sidebar-overlay-open) .sidebar .account,body.web-desktop-shell[data-browser-account]:is(.rail-collapsed,.web-compact-sidebar):not(.web-sidebar-overlay-open) #shell-recent-workspaces{display:none!important}
+body.web-desktop-shell[data-browser-account]:is(.rail-collapsed,.web-compact-sidebar):not(.web-sidebar-overlay-open) .shell-nav-group{background:transparent;border:0;margin:0}
+body.web-desktop-shell[data-browser-account]:is(.rail-collapsed,.web-compact-sidebar):not(.web-sidebar-overlay-open) .shell-workspaces-control{border:0;padding:0;background:transparent}
+body.web-desktop-shell[data-browser-account]:is(.rail-collapsed,.web-compact-sidebar):not(.web-sidebar-overlay-open) .sidebar nav a{justify-content:center;padding:8px 4px}
+body.web-desktop-shell[data-browser-account]:is(.rail-collapsed,.web-compact-sidebar).web-sidebar-overlay-open .sidebar .rail-label{display:initial}
+body.web-desktop-shell[data-browser-account]:is(.rail-collapsed,.web-compact-sidebar).web-sidebar-overlay-open .sidebar #shell-recent-workspaces{display:block}
+body.web-desktop-shell[data-browser-account]:is(.rail-collapsed,.web-compact-sidebar).web-sidebar-overlay-open .sidebar #web-provider-usage{display:block}
+#shell-sidebar-resizer{position:absolute;top:0;bottom:0;right:0;width:7px;cursor:col-resize;touch-action:none;z-index:60;outline:0}
+#shell-sidebar-resizer::after{content:"";position:absolute;right:0;top:0;bottom:0;width:2px}
+#shell-sidebar-resizer:hover::after,#shell-sidebar-resizer:focus-visible::after,.web-sidebar-resizing #shell-sidebar-resizer::after{background:#bedc93}
+:is(.rail-collapsed,.web-compact-sidebar):not(.web-sidebar-overlay-open) #shell-sidebar-resizer{display:none}
+.web-sidebar-resizing,.web-sidebar-resizing *{cursor:col-resize!important;user-select:none!important}
+body.web-desktop-shell[data-browser-account] .shell-tab a{color:#b9c5bd}
+body.web-desktop-shell[data-browser-account] .shell-tab a svg{color:var(--web-nav-muted);width:17px;height:17px;flex:0 0 17px}
+body.web-desktop-shell[data-browser-account] .shell-tab.selected a{color:#fff}
+body.web-desktop-shell[data-browser-account] .shell-tab.selected a svg{color:var(--web-nav-accent)}
+body.web-desktop-shell[data-browser-account] .shell-tab-close{border:0;background:transparent;color:var(--proteus-muted);border-radius:0;padding:0 5px;font-size:15px}
+body.web-desktop-shell[data-browser-account] .shell-overview-button,body.web-desktop-shell[data-browser-account] .shell-find{background:transparent;border:0;border-left:1px solid var(--proteus-line);border-radius:0;color:var(--web-nav-muted);padding:0 11px}
+body.web-desktop-shell[data-browser-account] .workspace-inner-tabs{overflow:visible;gap:0;min-height:38px}
+body.web-desktop-shell[data-browser-account] .workspace-fixed-tabs{display:flex;flex:0 0 auto;min-width:0}
+body.web-desktop-shell[data-browser-account] .workspace-fixed-tabs button{display:flex;align-items:center;gap:7px;flex-shrink:0;white-space:nowrap;border:0;border-right:1px solid var(--proteus-line);border-radius:0;padding:7px 8px;background:transparent;color:#b9c5bd;font-size:13px}
+body.web-desktop-shell[data-browser-account] .workspace-fixed-tabs button.selected{color:#fff;background:#ffffff0b;border-bottom:2px solid var(--web-nav-accent)}
+body.web-desktop-shell[data-browser-account] .workspace-inner-tabs>.remote-inner-scroll{flex:1;min-width:0;display:flex;overflow-x:auto;scrollbar-width:none;margin:0;padding:0;border:0}
+body.web-desktop-shell[data-browser-account] .workspace-child{display:flex;flex:0 0 auto;max-width:260px;min-width:0;border-right:1px solid var(--proteus-line)}
+body.web-desktop-shell[data-browser-account] .workspace-child button{display:flex;align-items:center;gap:7px;min-width:0;background:transparent;border:0;border-radius:0;padding:7px;color:#b9c5bd;font-size:13px}
+body.web-desktop-shell[data-browser-account] .workspace-child.selected{background:#ffffff0b;border-bottom:2px solid var(--web-nav-accent)}
+body.web-desktop-shell[data-browser-account] .workspace-child.selected button{color:#fff}
+body.web-desktop-shell[data-browser-account] .web-tab-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.web-desktop-shell[data-browser-account] .web-tab-icon{display:flex;align-items:center;justify-content:center;flex:0 0 18px;width:18px;height:18px;color:var(--web-nav-muted)}
+body.web-desktop-shell[data-browser-account] .web-tab-icon svg,.web-desktop-shell .web-tab-icon img{width:18px;height:18px;object-fit:contain}
+body.web-desktop-shell[data-browser-account] .selected .web-tab-icon{color:var(--web-nav-accent)}
+body.web-desktop-shell[data-browser-account] .web-workspace-heading{display:flex;align-items:start;justify-content:space-between;margin:30px 0 26px}
+body.web-desktop-shell[data-browser-account] .web-workspace-heading p{margin:10px 0 0}
+body.web-desktop-shell[data-browser-account] .web-project-row{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:16px 4px;border-bottom:1px solid var(--proteus-line)}
+body.web-desktop-shell[data-browser-account] .web-project-row>[data-project-open]{flex:1;justify-content:flex-start;background:transparent;border:0;text-align:left;font-size:15px}
+body.web-desktop-shell[data-browser-account] #engine-content{margin-top:26px;display:grid;grid-template-columns:minmax(0,1fr);gap:18px;align-content:start}
+body.web-desktop-shell[data-browser-account] #engine-title{font-size:29px}
+body.web-desktop-shell[data-browser-account] #engine-room .eyebrow{font-weight:400;letter-spacing:.13em;margin-bottom:8px}
+body.web-desktop-shell[data-browser-account] #engine-room .card>p{font-size:13px;color:var(--proteus-muted)}
+@media(max-width:900px){body.web-desktop-shell[data-browser-account] .main{padding:24px}body.web-desktop-shell[data-browser-account] .main:has(.remote-inner-tabs),body.web-desktop-shell[data-browser-account] .main:has(.team-tabs){--subtab-gutter:24px}.web-desktop-shell .workspace-fixed-tabs button{padding:7px 6px}}
+@media(max-width:730px){body.web-desktop-shell[data-browser-account] .shell{grid-template-columns:56px minmax(0,1fr)}body.web-desktop-shell[data-browser-account] .sidebar{width:56px;padding:26px 5px 12px}body.web-desktop-shell[data-browser-account] .main{padding:20px 16px 36px}body.web-desktop-shell[data-browser-account] .main:has(.remote-inner-tabs),body.web-desktop-shell[data-browser-account] .main:has(.team-tabs){--subtab-gutter:16px}body.web-desktop-shell[data-browser-account] .workspace-inner-tabs{flex-wrap:wrap}body.web-desktop-shell[data-browser-account] .workspace-fixed-tabs{max-width:100%;overflow-x:auto}body.web-desktop-shell[data-browser-account] .workspace-inner-tabs>.remote-inner-scroll{flex-basis:50%}body.web-desktop-shell[data-browser-account] .sidebar .shell-subitems{display:block}}
+body.web-desktop-shell[data-browser-account] #shell-running-chats{background:transparent;color:var(--web-nav-muted);padding:2px 4px;border-radius:0}
+body.web-desktop-shell[data-browser-account] .workspace-folder-content>.actions{align-items:center;gap:8px}
+body.web-desktop-shell[data-browser-account] .workspace-folder-content>.actions>label{margin:0;min-width:170px}
+body.web-desktop-shell[data-browser-account] .workspace-folder-content>.actions>.note{flex:1 1 100%;font-size:12px;color:var(--proteus-muted)}
+body.web-desktop-shell[data-browser-account] .workspace-folder-content>.actions>[data-refresh-root]{margin-left:auto}
+body.web-desktop-shell[data-browser-account] #engine-room .resource-row>div{min-width:0;max-width:100%}
+body.web-desktop-shell[data-browser-account] #engine-room .filepath{overflow-wrap:anywhere}
+/* Conversation hierarchy follows desktop: page heading, then transcript and details cards. */
+body.web-desktop-shell[data-browser-account] .remote-chat-title{display:flex;align-items:flex-start;gap:20px;margin:30px 0 24px;flex:none}
+body.web-desktop-shell[data-browser-account] .remote-chat-heading-copy{min-width:0}
+body.web-desktop-shell[data-browser-account] .remote-chat-title-line{display:flex;align-items:center;gap:8px}
+body.web-desktop-shell[data-browser-account] .remote-chat-title h1{margin:5px 0 9px;font-size:29px;overflow-wrap:anywhere}
+body.web-desktop-shell[data-browser-account] .remote-chat-title .eyebrow{font-size:11px;font-weight:400;letter-spacing:.13em;color:var(--proteus-muted)}
+body.web-desktop-shell[data-browser-account] .remote-chat-title p{margin:5px 0 0;color:var(--proteus-muted);font-size:13px}
+body.web-desktop-shell[data-browser-account] .remote-project-breadcrumb{border:0;background:transparent;color:var(--proteus-muted);font-size:12px;padding:0;margin:0 0 12px;text-align:left}
+body.web-desktop-shell[data-browser-account] .remote-project-breadcrumb:hover{color:var(--web-nav-accent)}
+body.web-desktop-shell[data-browser-account] .remote-chat-heading-actions{display:flex;align-items:center;gap:10px;flex-shrink:0;flex-wrap:wrap}
+body.web-desktop-shell[data-browser-account] .remote-chat-status{border:1px solid var(--proteus-line);border-radius:6px;padding:4px 8px;color:var(--proteus-muted);font-size:11px}
+body.web-desktop-shell[data-browser-account] .remote-chat-body{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:20px;align-items:start}
+body.web-desktop-shell[data-browser-account] .remote-chat-body>.remote-chat-main{min-width:0;margin:0}
+body.web-desktop-shell[data-browser-account] .remote-chat-body>.remote-chat-details{margin:0;padding:0;min-width:0;max-height:calc(100dvh - 250px);overflow:auto}
+body.web-desktop-shell[data-browser-account] .remote-chat-details>summary{margin:0 0 12px;font-size:12px;color:var(--proteus-muted)}
+body.web-desktop-shell[data-browser-account] .remote-chat-details :is([data-preview-permission-help],[data-preview-add-folder]){background:transparent;border-color:var(--proteus-line);color:var(--proteus-muted);padding:5px 8px;font-size:12px;font-weight:400}
+body.web-desktop-shell[data-browser-account] .remote-chat-details [data-preview-permission-help]{border-color:transparent;padding:0}
+body.web-desktop-shell[data-browser-account] #remote-composer .composer-models select{padding:4px 18px 4px 0;height:29px;font-size:12px}
+body.web-desktop-shell[data-browser-account] .remote-chat-main.docked-chat{grid-template-rows:minmax(0,1fr) auto auto auto;gap:0;overflow:visible}
+body.web-desktop-shell[data-browser-account] .remote-chat-main.docked-chat>.remote-messages{grid-row:1;margin:0 0 12px}
+body.web-desktop-shell[data-browser-account] .remote-chat-main.docked-chat>.remote-pending{grid-row:2}
+body.web-desktop-shell[data-browser-account] .remote-chat-main.docked-chat>section.card{grid-row:3}
+body.web-desktop-shell[data-browser-account] .remote-chat-main.docked-chat>#remote-composer{grid-row:4}
+body.web-desktop-shell[data-browser-account] .remote-chat-main.docked-chat>p[role=status]{grid-row:2}
+@media(max-width:1099px){body.web-desktop-shell[data-browser-account] .remote-chat-body{grid-template-columns:minmax(0,1fr)}body.web-desktop-shell[data-browser-account] .remote-chat-body>.remote-chat-details{max-height:360px}body.web-desktop-shell[data-browser-account] .remote-chat-title{flex-wrap:wrap;gap:10px}}
+@media(max-width:730px){body.web-desktop-shell[data-browser-account] .remote-chat-title{margin:18px 0}body.web-desktop-shell[data-browser-account] .remote-chat-title h1{font-size:23px}body.web-desktop-shell[data-browser-account] .remote-chat-title p{font-size:11px}body.web-desktop-shell[data-browser-account] .remote-chat-heading-actions{gap:5px}body.web-desktop-shell[data-browser-account] .remote-chat-main.card{padding:12px}}
+
+body.web-desktop-shell[data-browser-account] #engine-content>.card{margin:0;min-width:0}
+
+/* Registered source folders follow the same card rhythm as desktop Engine Room. */
+body.web-desktop-shell[data-browser-account] .source-library-entries{display:grid;grid-template-columns:minmax(0,1fr);gap:18px;min-width:0;align-content:start}
+body.web-desktop-shell[data-browser-account] #engine-room .source-library-entries>.card{margin:0;min-width:0;padding:22px;border:1px solid var(--proteus-line);border-radius:10px}
+body.web-desktop-shell[data-browser-account] .source-library-entry-heading{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:16px}
+body.web-desktop-shell[data-browser-account] .source-library-entry-heading>div:first-child{flex:1 1 280px;min-width:0}
+body.web-desktop-shell[data-browser-account] .source-library-entry .resource-actions{display:flex;flex-wrap:wrap;gap:8px}
+body.web-desktop-shell[data-browser-account] .source-library-entry .filepath{white-space:normal;overflow-wrap:anywhere}

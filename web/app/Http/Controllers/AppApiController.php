@@ -39,7 +39,7 @@ class AppApiController extends Controller
         $this->account($request);
         $user = $request->user();
 
-        return $this->response(['protocol' => 1, 'accountId' => hash_hmac('sha256', 'proteus-life:'.$user->id, config('app.key')), 'workspaceId' => (string) $user->current_workspace_id, 'preferences' => $this->records->preferences($user), 'teamLists' => $this->records->all($user, 'team-lists'), 'links' => $this->records->all($user, 'links'), 'history' => $this->records->all($user, 'history'), 'notifications' => $this->records->all($user, 'notifications'), 'logs' => $this->records->all($user, 'logs'), 'push' => $this->push->status()]);
+        return $this->response(['protocol' => 1, 'accountId' => hash_hmac('sha256', 'proteus-life:'.$user->id, config('app.key')), 'workspaceId' => (string) $user->current_workspace_id, 'preferences' => $this->records->preferences($user), 'browserProfiles' => $this->records->all($user, 'browser-profiles'), 'teamLists' => $this->records->all($user, 'team-lists'), 'links' => $this->records->all($user, 'links'), 'history' => $this->records->all($user, 'history'), 'notifications' => $this->records->all($user, 'notifications'), 'logs' => $this->records->all($user, 'logs'), 'push' => $this->push->status()]);
     }
 
     public function list(Request $request, string $kind): JsonResponse
@@ -76,6 +76,7 @@ class AppApiController extends Controller
             }
         }
         $rules = match ($kind) {
+            'browser-profiles' => ['name' => ['required', 'string', 'max:80', 'not_regex:/[\x00-\x1f\x7f]/', 'not_in:Default,default'], 'settings' => 'sometimes|array:blockingEnabled,exceptions,notifications,extensions,allowExtensionAgents', 'settings.blockingEnabled' => 'sometimes|boolean', 'settings.allowExtensionAgents' => 'sometimes|boolean', 'settings.exceptions' => 'sometimes|array|max:200', 'settings.exceptions.*' => 'string|max:2048|distinct', 'settings.notifications' => 'sometimes|array|max:200', 'settings.notifications.*' => 'array:origin,permission', 'settings.notifications.*.origin' => 'required|string|max:2048|distinct', 'settings.notifications.*.permission' => 'required|in:ask,allow,block', 'settings.extensions' => 'sometimes|array|max:50', 'settings.extensions.*' => 'array:id,enabled', 'settings.extensions.*.id' => 'required|string|regex:/^[a-p]{32}$/|distinct', 'settings.extensions.*.enabled' => 'required|boolean'],
             'team-lists' => ['name' => 'required|string|max:100', 'instructions' => 'sometimes|nullable|string|max:4000', 'timezone' => ['sometimes', Rule::in(timezone_identifiers_list())], 'members' => 'present|array|max:200', 'members.*' => 'array:id,name,mode', 'members.*.id' => 'required|string|max:100|distinct', 'members.*.name' => 'required|string|max:100', 'members.*.mode' => 'required|in:fixed,random', 'links' => 'sometimes|array|max:50', 'links.*' => 'array:id,title,url', 'links.*.id' => 'required|string|max:100|distinct', 'links.*.title' => 'required|string|max:100', 'links.*.url' => 'required|string|max:2048'],
             'links' => ['title' => 'required|string|max:100', 'url' => 'required|string|max:2048'],
             'history' => ['visitedAt' => ['sometimes', 'string', 'max:40', 'date', 'regex:/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/'], 'deviceId' => 'sometimes|nullable|uuid', 'deviceName' => ['sometimes', 'nullable', 'string', 'max:100', 'regex:/\A[^\x00-\x1f\x7f]*\z/u'], 'eventId' => 'sometimes|nullable|uuid', 'url' => 'required|string|max:2048', 'title' => 'sometimes|string|max:160', 'source' => 'required|in:desktop,mobile,web', 'hostId' => 'sometimes|nullable|uuid'],
@@ -87,6 +88,12 @@ class AppApiController extends Controller
             $rules['expectedRevision'] = 'required|integer|min:1';
         }
         $value = $request->validate($rules);
+        if ($kind === 'browser-profiles') {
+            foreach (array_merge($value['settings']['exceptions'] ?? [], array_column($value['settings']['notifications'] ?? [], 'origin')) as $origin) {
+                $parts = parse_url($origin);
+                abort_unless($parts && in_array($parts['scheme'] ?? '', ['https', 'http']) && isset($parts['host']) && ! isset($parts['user']) && ! isset($parts['pass']) && ! isset($parts['query']) && ! isset($parts['fragment']) && empty($parts['path']), 422, 'Use a website origin without a path or credentials.');
+            }
+        }
         $revision = $value['expectedRevision'] ?? null;
         unset($value['expectedRevision']);
         if (isset($value['url'])) {
@@ -140,6 +147,19 @@ class AppApiController extends Controller
     public function destroy(Request $request, string $kind, string $id): JsonResponse
     {
         $this->account($request);
+        if ($kind === 'browser-profiles') {
+            $value = $request->validate(['expectedRevision' => 'required|integer|min:1']);
+
+            return DB::transaction(function () use ($request, $kind, $id, $value) {
+                User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
+                $old = $this->records->query($request->user(), $kind)->where('id', $id)->first();
+                abort_unless($old, 404);
+                abort_unless((int) $old->revision === $value['expectedRevision'], 409, 'This profile changed. Refresh before deleting.');
+                $this->records->query($request->user(), $kind)->where('id', $id)->delete();
+
+                return $this->response(['removed' => true]);
+            });
+        }
         abort_unless($this->records->query($request->user(), $kind)->where('id', $id)->delete(), 404);
 
         return $this->response(['removed' => true]);

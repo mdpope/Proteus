@@ -1,0 +1,125 @@
+const prefix='project:local:';
+const projectId=id=>typeof id==='string'&&id.startsWith(prefix)?id.slice(prefix.length):null;
+const own=(object,key)=>Object.prototype.hasOwnProperty.call(object||{},key);
+
+// Redirects are durable organizational aliases, never execution/access grants.
+export function resolvePreviewProject(catalog,id,workspaceId){
+ if(typeof id!=='string'||!id)return null;
+ const projects=Array.isArray(catalog?.projects)?catalog.projects:[],seen=new Set();
+ let workspace=workspaceId;
+ while(id&&!seen.has(id)){
+  seen.add(id);
+  const project=projects.find(row=>row.id===id),hasRedirect=own(catalog?.projectRedirects,id),redirect=hasRedirect?catalog.projectRedirects[id]:null;
+  if(project){if(workspace!==undefined&&project.workspaceId!==workspace)return null;workspace??=project.workspaceId;}
+  if(hasRedirect){
+   if(!redirect||typeof redirect!=='object')return null;
+   if(typeof redirect.workspaceId!=='string'||!redirect.workspaceId||typeof redirect.projectId!=='string'||!redirect.projectId)return null;
+   if(workspace!==undefined&&redirect.workspaceId!==workspace)return null;
+   workspace??=redirect.workspaceId;id=redirect.projectId;continue;
+  }
+  return project&&typeof project.workspaceId==='string'&&project.workspaceId?project:null;
+ }
+ return null;
+}
+
+export function remapPreviewBrowserPlacement(value,catalog){
+ if(!value||typeof value!=='object')return value;
+ // Agent open responses wrap the route under destination; native state stores
+ // the inner {type:'project',id,workspaceId} destination directly.
+ const wrapped=value.destination?.destination?.type==='project'&&!value.destination.type;
+ const route=wrapped?remapPreviewBrowserPlacement(value.destination,catalog):value.destination;
+ const destination=value.destination?.type==='project'?value.destination:null;
+ const workspace=value.workspaceId??destination?.workspaceId??(wrapped?route.workspaceId:undefined);
+ const parent=projectId(value.parentId),target=parent&&resolvePreviewProject(catalog,parent,workspace);
+ const destinationTarget=destination&&resolvePreviewProject(catalog,destination.id,workspace);
+ let next=route!==value.destination?{...value,destination:route}:value;
+ const set=(key,data)=>{if(next[key]===data)return;if(next===value)next={...value};next[key]=data;};
+ if(target&&target.id!==parent)set('parentId',prefix+target.id);
+ if(destinationTarget&&destinationTarget.id!==destination.id)set('destination',{...destination,id:destinationTarget.id,workspaceId:destinationTarget.workspaceId});
+ const metadata=typeof value.projectId==='string'&&resolvePreviewProject(catalog,value.projectId,workspace);
+ const metadataTarget=target||destinationTarget||metadata;
+ if(metadataTarget&&((metadata&&metadata.id!==value.projectId&&metadata.id===metadataTarget.id)||next!==value)){
+  if(own(value,'projectId')&&metadata?.id===metadataTarget.id)set('projectId',metadataTarget.id);
+  if(own(value,'projectName'))set('projectName',metadataTarget.name);
+  if(own(value,'workspaceId'))set('workspaceId',metadataTarget.workspaceId);
+ }
+ return next;
+}
+
+export function remapPreviewProjectSession(value,catalog,{hostId}={}){
+ if(!value||!Array.isArray(value.tabs))return value;
+ const prefix='project:'+(hostId||'local')+':';
+ const projectId=id=>typeof id==='string'&&id.startsWith(prefix)?id.slice(prefix.length):null;
+ const roots=new Map(),replacements=new Map(),parents=new Map(),required=new Map(),chatParents=new Map();
+ for(const tab of value.tabs){
+  if(tab.type!=='workspace'||!tab.projectId||(tab.hostId||undefined)!==hostId)continue;
+  const target=resolvePreviewProject(catalog,tab.projectId,tab.workspaceId);
+  if(!target)continue;
+  const targetId=prefix+target.id;
+  if(target.id===tab.projectId)roots.set(targetId,tab);
+  else {parents.set(tab.id,targetId);replacements.set(tab,target);required.set(targetId,target);}
+ }
+ // A peer upgrade introduces project membership after this desktop saved its
+ // workspace chat aliases. Move the same views, retaining their child origins.
+ if(hostId)for(const tab of value.tabs){
+  if(tab.type!=='remote-run'||tab.hostId!==hostId)continue;
+  const parent=value.tabs.find(row=>row.id===tab.parentId&&row.type==='workspace'&&row.hostId===hostId&&!row.projectId);
+  const member=catalog?.memberships?.[tab.runId],target=parent&&member&&resolvePreviewProject(catalog,member.projectId,parent.workspaceId);
+  if(target){const id=prefix+target.id;chatParents.set(tab.id,id);required.set(id,target);}
+ }
+ // A browser creation can finish after its old root was removed from the session.
+ for(const tab of value.tabs){
+  const source=projectId(tab.parentId);if(!source)continue;
+  const target=resolvePreviewProject(catalog,source);
+  if(target&&target.id!==source){parents.set(tab.parentId,prefix+target.id);required.set(prefix+target.id,target);}
+ }
+ const tabs=[];
+ for(const original of value.tabs){
+  let tab=original;
+  const replacement=replacements.get(tab);
+  if(replacement){
+   const id=prefix+replacement.id;if(roots.has(id))continue;
+   tab={...tab,id,projectId:replacement.id,workspaceId:replacement.workspaceId,label:replacement.name};
+   if(own(tab,'projectName'))tab.projectName=replacement.name;
+   roots.set(id,tab);
+  }
+  const parent=chatParents.get(tab.id)||parents.get(tab.parentId);
+  if(parent)tab={...tab,parentId:parent};
+  if(tab.type==='browser'&&!hostId){
+   tab=remapPreviewBrowserPlacement(tab,catalog);
+   if(tab.info){const info=remapPreviewBrowserPlacement(tab.info,catalog);if(info!==tab.info)tab={...tab,info};}
+  }else if(tab.type==='browser'&&parents.has(tab.info?.parentId)){
+   tab={...tab,info:{...tab.info,parentId:parents.get(tab.info.parentId)}};
+  }
+  tabs.push(tab);
+ }
+ for(const [id,target] of required){
+  if(roots.has(id))continue;
+  const root={id,type:'workspace',workspaceId:target.workspaceId,projectId:target.id,label:target.name,workspacePage:'chats',...(hostId?{hostId}:{})};
+  const index=tabs.findIndex(tab=>tab.parentId===id);tabs.splice(index<0?tabs.length:index,0,root);roots.set(id,root);
+ }
+ const active=parents.get(value.active)||value.active;
+ let selectedChildren=value.selectedChildren;
+ if(selectedChildren&&typeof selectedChildren==='object'){
+  const selected={};
+  // Existing destination selection wins unless a moved child is currently active.
+  for(const [parent,child] of Object.entries(selectedChildren))if(!parents.has(parent))selected[parent]=parents.get(child)||child;
+  for(const [parent,child] of Object.entries(selectedChildren))if(parents.has(parent)){
+   const target=parents.get(parent),nextChild=parents.get(child)||child;
+   if(!own(selected,target)||child===value.active)selected[target]=nextChild;
+  }
+  const activeAncestors=new Set();let activeView=value.tabs.find(tab=>tab.id===value.active);
+  while(activeView&&!activeAncestors.has(activeView.id)){activeAncestors.add(activeView.id);activeView=value.tabs.find(tab=>tab.id===activeView.parentId);}
+  for(const [view,parent] of chatParents){
+   const old=value.tabs.find(tab=>tab.id===view)?.parentId;
+   if(activeAncestors.has(view)){selected[parent]=view;selected[old]=parent;}
+   else if(selectedChildren[old]===view){selected[parent]??=view;selected[old]=parent;}
+  }
+  const activeTab=tabs.find(tab=>tab.id===active);
+  if(activeTab&&parents.has(value.tabs.find(tab=>tab.id===active)?.parentId))selected[activeTab.parentId]=active;
+  const before=Object.entries(selectedChildren),after=Object.entries(selected);
+  if(before.length!==after.length||before.some(([key,child])=>selected[key]!==child))selectedChildren=selected;
+ }
+ if(active===value.active&&selectedChildren===value.selectedChildren&&tabs.length===value.tabs.length&&tabs.every((tab,index)=>tab===value.tabs[index]))return value;
+ return {...value,tabs,active,...(selectedChildren!==undefined?{selectedChildren}:{})};
+}

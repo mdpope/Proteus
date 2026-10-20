@@ -1,3 +1,160 @@
+## October 19 — final Standup/browser/sidebar simulator follow-up accepted
+
+Both separate preview apps are built, installed and relaunched on their existing OS 26.5
+simulators. Six focused native UI cases pass: final browser order/menus, drawer bounds,
+chat Back/pinch, service-owned links and roster editing, numbered Standup, iPad dock X and
+portrait bounds, flexible header search, Home continuation and a main-browser → project-chat
+selection regression. The latter verifies owner propagation and fixes the reproduced missing-store
+crash without closing the main browser tab. Shuffle/zoom unit cases,
+756 runtime tests and static checks pass. Final phone/pad screenshots are inspected. Shared
+service ownership is unchanged; data acceptance uses the private synthetic fixture. Native
+checks reuse existing preview pairings after retiring six stale test-only pairings through
+the fixture owner API. No fixture/service restart, direct app-data edit, signing-account change
+or physical install occurred. Desktop/web overview mark is queued in the named release chat;
+production mobile rollout remains held. See [design details](../docs/iphone-navigation-design.md).
+
+## October 19 — both native design previews accepted
+
+The operator authorized both simulator idioms. Five focused native UI cases pass across the
+separate phone/pad apps, alongside the zoom arbitration unit case, 747 runtime tests and static
+checks. Both apps are installed and launched on existing OS 26.5 simulators. Native acceptance
+covers full one-line URLs and multiline editing, compact feature headers and action placement,
+phone double-tap chrome/interactive chat Back/pinch, iPad retained main navigation and shared
+overview, Team Tools service link editing visible on the other preview, and phone long-press
+link actions. Actual rendered screenshots were inspected. Account ownership remains the website
+service; the rehearsal uses synthetic records. Durable cross-device chat Recents, physical
+behavior and real-account workflow acceptance are not established by this preview. See
+[design details](../docs/iphone-navigation-design.md). Production mobile rollout remains held.
+
+## October 19 — selected iPhone functional preview: installed, focused native checks pass
+
+The selected button-drawer design is prepared behind `NativePhonePreview.enabled`, limited to
+Debug iPhone simulators with a separate preview bundle or explicit preview argument. It reuses
+the current app, complete top URLs and bottom browser actions, with manual double-tap top-control
+visibility and one overview control. No new Share/Home redesign or iPad navigation change.
+
+Signed simulator build, installation and launch pass on the existing iPhone 17 Pro/iOS 26.5.
+Both `PhoneDesignPreviewUITests` cases pass: drawer order/selection, no bottom app-section bar or
+Chat tools, full URLs, 44-point browser controls, Back/Forward/History, one overview button, the
+circle menu, double-tap visibility, browser/chat pinch and native chat edge-back. The existing
+minimum-page-zoom unit case passes. Captured mixed-overview screenshots show actual chat/browser
+content, aligned cards and explicit unavailable previews. All 740 runtime tests and static checks
+pass. The final signed app was relaunched for review with its disposable owner fixture.
+
+Native findings fixed masked control IDs, hit areas and a SwiftUI chat drag competing with native
+Back. Phone reading uses the existing UIKit observer; iPad stays on its prior branch. Use ad-hoc
+simulator signing for Keychain. Tests used private separate app/runner identities. No simulator/
+service reset, erasure, account/certificate change or physical installation occurred. XcodeGen is
+unavailable; the matching source reference is checked in. Physical gestures, iPad changes and actual
+agent-triggered Live Browser loading remain unverified by this preview. Earlier HTML rehearsal
+checks apply only to that mock-up, not this Swift source.
+
+See [phone navigation design](../docs/iphone-navigation-design.md) for scope and the repeatable
+preview command. Existing paid mobile installation status below is unchanged.
+
+## October 18 — paid iPhone/iPad migration accepted (0.2.21 / 2610.18.2)
+
+Both physical devices now run `org.proteusapp.review.proteus` under paid team `TEAMID0000`, with the existing paid
+certificate and profile expiring October 16, 2027 at 22:03:20 UTC. Signed artifact, registered-device
+coverage, exact durable file contents, credential readback, encrypted cache counts, production launch,
+second launch and saved destination selection passed independently for each device. The iPhone also
+reconnected to Build Mac using its existing pairing. Its 94 verified files retain 55 browser tabs,
+29 cached chats, six drafts and 6,263 cached history entries; iPad's 112 files retain 67 tabs,
+23 cached chats, seven drafts and 4,648 history entries. Each retains two destinations, four Keychain
+records and one document tab. Pending scopes and retry receipts matched. These counts describe local
+caches, not total owner history. The original installations remain closed as Proteus Legacy recovery copies.
+
+The temporary helper preserves keys through device-bound authenticated encryption; it is absent from
+the full product. The final helper passes 46 synthetic checks and iOS type-checking. Exact protected
+OS directories/download/loader caches are excluded and disclosed, while durable WebKit/cookie data,
+preferences and app caches remain strictly verified. The unchanged native runtime retains its prior
+124-case/project UI acceptance. The iPad's live HC reconnection and website-session continuity were
+not independently verified in this signing pass. See [paid migration](../docs/native-paid-account.md)
+for details and retained recovery evidence. Native Mac remains on its original signing identity.
+
+## October 18 — native workspace/projects candidate (0.2.21 / 2610.18.1)
+
+Native source now uses the owner `projects.v1` catalog and project tab scopes. Workspaces expose
+fixed Projects, Chats, Tabs and Configuration controls; projects retain Chats and Tabs. Project
+creation, rename, default selection, deletion redirects and same-owner chat/resource movement use
+revision-checked owner operations. Placement changes preserve chat history, captured configuration,
+approvals, drafts and provider sessions. Saved mixed browser/terminal/document/chat descriptors
+remain host-scoped; terminal and owner-document rows disclose their existing access limits.
+Unknown catalog fields and offline/older-owner cached views survive. An unconfirmed mutation in a
+deleted project retains its original request receipt for recovery instead of replaying at a new target.
+
+The iPad Pro 13-inch (M5) run passed all 124 unit tests, the new owner project lifecycle UI
+workflow and the existing workspace-copy/configuration workflow (`proteus-apple-t2whkb`). The
+first iPhone run passed 123 of 124 unit cases and workspace copying. Its WebKit page-load timeout
+passed unchanged in isolation, and the owner project workflow passed after the test waited for
+menu dismissal (`proteus-apple-BFlNya`). Eight new model cases cover identity, defaults/manual
+order, redirects, meaningful activity, encrypted offline retention and pending request receipts.
+
+The cached-workspace navigation check exposed a transient Configuration render issuing an offline
+owner request. Explicit page routing and cached Configuration loading fixed that read path. The
+regression now passes on iPhone (`proteus-apple-JvApvU`) and iPad (`proteus-apple-XU1UIK`), including
+Configuration → Chats, no offline error alert, selected tab visibility, resource type icons and
+cached browser/history navigation. No simulator test failure remains unresolved; the initial
+phone WebKit timeout is recorded as a transient test-runtime failure, not a production fix.
+
+Phone/tablet project screenshots were exported and visually reviewed. They show scoped resources,
+the protected default project and retained chat membership after reassignment. These are disposable
+owner fixtures, not production data or provider execution. Initial XCTest launch stalls recovered
+by restarting only owned helpers and selected simulators without erasing data; no shared-service
+restart was necessary. Simulator results do not verify physical gestures, live website sessions,
+terminal execution, owner-document authorization or APNs delivery.
+
+The source-hashed Release build succeeded; all 38 source inputs and bundled Markdown/README/
+CHANGELOG resources matched its receipt. After a fresh Mac unlock, ordinary target provisioning
+renewed the existing Personal Team profile without changing the team or shared certificate.
+The new profile `5954c6f5-7f4b-4151-85a4-ba14cf6ebbb8` covers iPhone, iPad and the native Mac and
+expires **October 25, 2026 at 22:32:17 UTC (16:32:17 MDT)**. Xcode's incremental profile replacement
+needed the staged resource seal renewed; strict signature, original certificate, unchanged
+entitlements and executable sections were verified afterward.
+
+**Native Mac installed and launch-verified October 18 at 22:35 UTC:** 0.2.21 / 2610.18.1 replaced
+the prior app in place. Its rollback app copy was verified before replacement. An initial launch
+spawn error resolved after refreshing only this wrapper's LaunchServices registration. The running
+system launch-copy executable matches the verified installed binary. Native container and Keychain
+were not edited; macOS privacy prevents container metadata/hash inspection, so data preservation is
+limited to leaving that existing container in place, not a claimed file-by-file native-data check.
+
+**Physical iPhone installed and launch-verified October 18 at 23:40 UTC:** 0.2.21 / 2610.18.1
+preserved all 1,675 accessible original file contents, with four byte-identical OS snapshot paths
+renamed. Saved destinations and selection remained identical after launch. iOS initially denied
+launch; the operator confirmed and completed the existing developer-trust step, after which launch
+and the running process passed without reinstalling. Proteus retains its original Personal Team
+identity for this in-place update; the separate paid-account capture-app migration does not migrate
+Proteus. The renewed Proteus profile still expires October 25 as stated above.
+
+**Physical iPad installed and launch-verified October 19 at 02:21 UTC (October 18, 20:21 MDT):**
+the same exact build preserved all 3,987 accessible original files byte-for-byte with no path
+changes. Thirteen existing OS snapshot-cache files were excluded under the prior reproducible-cache
+allowance. The operator confirmed developer trust; launch/process and unchanged saved destinations/
+selection then passed without reinstalling. Both device backups resumed partial transfers after
+bounded timeouts; no extra full after-copy was retained. Omi, pairings and live data were untouched.
+This closes the Personal Team update. The separately authorized paid-team migration is in progress;
+its completion is not claimed by these original-identity acceptance checks.
+
+Phone recovery rotation rehashed both retained generations, then retired its oldest full snapshot
+and duplicate app copies: 228,943,245 logical bytes removed, with 8,888,320 bytes of observed free
+space increase during rotation. The iPad rotation then rehashed its two retained generations and
+retired its oldest snapshot/duplicate app copies: 450,792,679 logical bytes removed. Actual free
+space changed by -290,816 bytes during concurrent work/APFS sharing, ending at 154,728,370,176 bytes.
+Both physical devices now have two accepted full recovery generations; the iPad's prior in-flight
+hold is closed. Its retained data snapshots contain 3,887 files/468,161,448 bytes and 3,987 files/
+442,550,368 bytes, each with a rollback app and private receipts. Physical gesture, authenticated
+session, APNs and owner workflow acceptance remain separate from installation/data/launch checks.
+
+Retention review covered configured/legacy backup roots, native app wrappers and temporary release
+staging. Two accepted full recovery generations remain per physical device and two native Mac app
+rollback generations remain. Obsolete native before/after mirrors, superseded partial attempts and
+old build-only outputs were retired with private hash/coverage/deletion receipts: **1,400,703,405
+logical bytes removed**. Measured free space across that interval decreased **126,439,424 bytes**
+while other system work continued; no equivalent physical-space reclamation is claimed. Current
+free space at the receipt was 159,627,276,288 bytes. Private release/install/retention receipts are
+under `proteus-0221-native-release` in the temporary directory; no live data was committed.
+
 # Native parity — October 4, 2026
 
 The native source implements Home / Chats / Life / Team / Engine Room phone navigation and an iPad sidebar with group tabs, close/unload controls, contextual children, a touch/keyboard expander and delayed pointer-edge hover. Allowance is confined to phone Home or the iPad sidebar, with a persistent label-only collapsed state. The existing optional Life preference controls its content. The pairing screen no longer contains the tagline.
@@ -88,3 +245,28 @@ The operator initially deferred the iPad update; a later explicit instruction li
 A fresh device check found the already-paired iPad unlocked and running Proteus 0.2.0 (2610.5.2). The guarded installer reverified the 0.2.1 (2610.5.3) signed app, original signer/team, unexpired profile and iPad coverage, immutable build snapshot, compiled source/resource hashes, and complete app-bundle hashes. The iPad then received the signed build **in place**, without uninstalling or altering pairing/signing. Installed-app inventory reported the new version and build number; launch and independent process checks passed.
 
 All six app-owned data files were byte-identical immediately before and after installation, and preferences were preserved. After launch, both existing Mac destination identities and the selected destination remained intact. Private backup and receipt: `/private/tmp/proteus-native-021-ipad-update-20261006T142653Z`. The first guarded attempt ended before any device mutation because this validation document had changed after signing; the successful run excluded only that non-bundled document from current-checkout equality while retaining the signed-snapshot hash and compiled-input checks. Installation and continuity are physical observations; the new UI interaction tests above remain simulator results.
+
+
+## Unified owner browser navigation — October 12, 2026
+
+Native source implements stable shared navigation entries/current cursor, explicit durable owner operations, durable conflict choices, private-URL protection, owner-scoped main/Team tabs and a protected mobile visit outbox. Full navigation lists hydrate through owner pages. Engine Room history queries the paired computer without requiring website-account sign-in; each owner/profile cache covers 30 calendar days, with full owner search and daywise older paging. Mirrored loads and unloads do not create visits or truncate Forward. Local previews/favicons have bounded caches. Native Back/Forward long press and the explicit history control share a current/Back/Forward sheet; two-finger touch/trackpad gestures invoke the same traversal. Copy chat link and the ordered Run files & folders disclosure are implemented.
+
+Earlier iPhone and iPad suites each passed 102 unit cases. Held-arrow selection, same-document navigation and owner history without website sign-in passed UI checks on both form factors. A separate added regression passed for navigation changes with an unchanged scope metadata revision; the client compares complete state and applies the newer navigation cursor. Phone/tablet history screenshots were reviewed. The phone history test originally chose an offscreen horizontal-navigation button; the visible Overview list selector passed without a production-code change.
+
+A queue audit then found that rejecting one tab could clear unrelated pending scope operations. The corrected native path retains every unrelated operation with its original ID/order, preserves its optimistic page/name, and stores the rejected tab’s complete local branch and operations in the encrypted cache across restart. An explicit alert offers Use owner history or Open local destination in new tab; the chosen copy stays in the original chat/workspace/owner. No recovery tab appears before the user chooses. A two-tab conflict/restart regression passed. Final expanded checks and restaging follow below.
+
+The earlier build 2610.12.4 was staged for the computer-native iPad wrapper and physical iPhone/iPad with the existing certificates, entitlements and provisioning profiles. Strict signatures and executable/resource parity with the generic release were verified. Deployment remains separate: the first fresh rollout preflight found the Mac and iPad locked, so neither installed app was changed. Physical two-finger/trackpad feel, website login state and a live multi-device browsing session are not established by simulator checks or signing. Private receipts remain outside the repository.
+
+
+Final conflict-fix acceptance: 104 native unit cases passed on both iPhone and iPad. Four focused UI workflows passed on each form factor: explicit conflict recovery, held-arrow/direct-list selection, same-document history and paired-owner history without website sign-in. The exact final phone source was rechecked after the last copy-title/multiple-conflict safeguards; all 104 unit cases and the recovery UI passed again. Phone/tablet conflict alerts were visually reviewed. The generic Release build includes those last safeguards and passed. Final signing and installation remain pending the Mac unlock and coordinator confirmation that the updated desktop owner is ready. Earlier signed 2610.12.4 stages are obsolete and their installers reject them; they must not be used. No installed app, protected container, pairing, cookie store or Keychain item was changed by these checks.
+
+
+## Owner history synchronization controls — October 13, 2026
+
+Engine Room history now includes native owner-backed recording and retention controls (Keep all, one week, one month, 90 days, one year), plus existing paired-computer/profile selection and one-week, one-month or all-available backfill. Catalogs come from the selected owner; these controls do not pair computers or expand website-session access. Save requires the owner online, re-reads current settings, merges only edited preferences, preserves unrelated/unknown peer preferences and omits replication runtime fields. The native cache remains 30 days independently of host retention.
+
+The history-only profile filter uses the owner catalog, includes All non-private profiles and retains unknown cached historical IDs. Switching owners clears rows/filter/catalog immediately. Offline All searches combine only that owner’s cache buckets with event-ID deduplication. Opening a visit uses its stored profile ID; unavailable named profiles never become Default and a failed open cannot claim or alter an existing selected tab. Cross-owner transfer also requires a newly created tab before closing the original.
+
+Final iPhone acceptance passed all 108 unit cases and three relevant UI workflows: offline Save gating, paired-owner settings Save plus owner-only named-profile history without website sign-in, and anonymous offline history access. The iPad full 107-case suite passed before the final row-opening guard; focused final tests covered that new guard and profile choices, and all three relevant UI workflows passed on the final source. Existing held-arrow, same-document and explicit-conflict UI baselines remain verified. Paired settings receipts confirm recording off, Keep all retention, enabled selected peer with all-available backfill and the chosen named profile; unknown preferences survive and the other owner remains unchanged. Phone/tablet settings screenshots were reviewed. Initial automated row-center switch taps and an offscreen tablet profile required direct switch-thumb assertions and scrolling the identified settings list; corrected checks passed.
+
+The final generic Release build includes these controls and safeguards. Final signing and deployment are still pending the Mac unlock and updated desktop-owner readiness. Fresh physical inventory reports both iPad and iPhone passcode-locked and still installed at 0.2.12 (2610.12.3). No installed app, protected data, pairing, cookie store or Keychain item was changed. All earlier 2610.12.4 artifacts are superseded by the final settings build and must not be installed. Physical gesture feel and a live production multi-device session remain separate acceptance.

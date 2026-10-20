@@ -30,12 +30,30 @@ export function safeToolError(value) {
 }
 export function normalizedTool(tool) {
  const exitCode=['bash','shell','powershell'].includes(tool.name)&&typeof tool.output==='string'&&tool.output.match(/<shellId: [^<>\r\n]+ completed with exit code ([1-9]\d*)>\s*$/)?.[1];
- const output=parse(tool.output),error=safeToolError(tool.error)||safeToolError(tool.presentation?.error)||safeToolError(output?.error)||(exitCode?`Command exited with code ${exitCode}.`:null);
+ const output=tool.presentation&&Object.hasOwn(tool.presentation,'error')?null:parse(tool.output),error=safeToolError(tool.error)||safeToolError(tool.presentation?.error)||safeToolError(output?.error)||(exitCode?`Command exited with code ${exitCode}.`:null);
  return {...tool,...(error?{error,status:'failed'}:{})};
 }
-export function activitySummary(tools,approvals=0) {
+export function isActivityEvent(event) {
+ if(event?.data?.question)return false;
+ const role=event?.role||event?.type;
+ return Boolean(event?.data?.tool||event?.data?.permission||role==='tool'||role==='system');
+}
+export function groupActivity(entries) {
+ const result=[];let batch=[];
+ const flush=()=>{if(batch.length){result.push({key:'activity-'+batch[0].key,role:'activity',items:batch,at:batch.at(-1).at});batch=[];}};
+ for(const entry of entries){if(isActivityEvent(entry)){batch.push(entry);continue;}flush();result.push(entry);}flush();return result;
+}
+export function permissionToolCallId(permission) {
+ const request=parse(permission?.request);
+ return permission?.toolCallId||request?.toolCallId||null;
+}
+export function toolEventTime(tool,event) {
+ // Event timestamps identify the start of a mutable tool row, never its completion.
+ return tool.finishedAt||((tool.status==='running'||tool.status==='output')?(tool.startedAt||event.at||event.timestamp||event.createdAt):null);
+}
+export function activitySummary(tools,approvals=0,decisions=0,systems=0) {
  const failed=tools.filter(tool=>['failed','error'].includes(normalizedTool(tool).status)).length,running=tools.filter(tool=>normalizedTool(tool).status==='running').length;
- return `Activity · ${tools.length} ${tools.length===1?'tool':'tools'}${approvals?' · '+approvals+' automatic '+(approvals===1?'approval':'approvals'):''}${failed?' · '+failed+' failed':''}${running?' · '+running+' running':''}`;
+ return `Activity${tools.length?' · '+tools.length+' '+(tools.length===1?'tool':'tools'):''}${approvals?' · '+approvals+' automatic '+(approvals===1?'approval':'approvals'):''}${decisions?' · '+decisions+' permission '+(decisions===1?'decision':'decisions'):''}${systems?' · '+systems+' system '+(systems===1?'message':'messages'):''}${failed?' · '+failed+' failed':''}${running?' · '+running+' running':''}`;
 }
 export function toolPresentation(tool) {
  tool=normalizedTool(tool);

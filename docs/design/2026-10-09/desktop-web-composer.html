@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Proteus · Desktop and web chat composer</title>
+<link rel="stylesheet" href="../../../public/style.css">
+<link rel="stylesheet" href="../../../public/parity.css">
+<link id="web-styles" rel="stylesheet" href="../../../web/resources/css/remote.css" disabled>
+<link rel="stylesheet" href="desktop-web-composer.css">
+</head>
+<body class="composer-rehearsal">
+<main class="review-page">
+  <div class="eyebrow">Interactive HTML design rehearsal</div>
+  <h1>One chat layout on desktop, remote and web.</h1>
+  <details class="review-explanation"><summary>Explanation</summary>
+    <p>All three views use the local desktop format and colors. Only local-file Open buttons are disabled in remote and web views. Paths remain visible and can be copied.</p>
+    <p>The plain + stays in position; its hover background is centered on the glyph. Option hover areas include the label and selection. Circular actions keep desktop sizing.</p>
+    <p>The editor grows upward as lines are entered or wrap. The composer can occupy up to 60% of the available chat area before the editor scrolls.</p>
+    <p>Switch views, resize the layout, add an attachment or try a long draft. Steer changes the current turn; the up arrow with a clock queues the next message. This is a synthetic review model; no messages, permission changes or uploads reach a host.</p>
+  </details>
+  <div class="review-toolbar" aria-label="Preview settings">
+    <div class="review-segment" aria-label="Platform"><button data-platform="desktop" aria-pressed="true">Desktop</button><button data-platform="remote" aria-pressed="false">Desktop remote</button><button data-platform="web" aria-pressed="false">Web</button></div>
+    <label>Chat state<select id="preview-state"><option value="running">Working</option><option value="idle">Idle</option><option value="awaiting_input">Needs input</option></select></label>
+    <label class="width-control">Layout width <output id="width-value">1240 px</output><input id="preview-width" type="range" min="560" max="1240" value="1240" step="10"></label>
+    <label class="review-check"><input id="show-context" type="checkbox">Context supported</label>
+    <button id="sample-attachment" class="subtle">Add sample attachment</button>
+    <button id="long-draft" class="subtle">Try long draft</button>
+  </div>
+  <div class="preview-stage"><div class="workspace-preview" id="preview-workspace">
+    <aside class="preview-nav" aria-label="Application navigation"><strong>Proteus</strong>
+      <div data-preview-nav="home"><span class="preview-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V10Z"/><path d="M9 21v-7h6v7"/></svg></span><span>Home</span></div>
+      <div><span class="preview-nav-icon"></span><span>Schedules</span></div>
+      <div class="selected"><span class="preview-nav-icon"></span><span>Chats</span></div>
+      <div data-preview-nav="internet"><span class="preview-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7"/><path d="m15 15 6 6"/></svg></span><span>Internet Searches</span></div>
+      <div><span class="preview-nav-icon"></span><span>Needs attention</span></div>
+      <div><span class="preview-nav-icon"></span><span>Life</span></div>
+      <div><span class="preview-nav-icon"></span><span>Team</span></div>
+      <div data-preview-nav="workspaces"><span class="preview-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span><span>Workspaces</span></div>
+      <div><span class="preview-nav-icon"></span><span>Engine Room</span></div>
+    </aside>
+    <div class="workspace-content"><header class="workspace-heading"><h2>Chats</h2><span class="muted small">Synthetic design rehearsal</span></header>
+    <div class="designed-grid"><section class="card chat-pane designed-chat" id="preview-chat" aria-label="Designed chat panel">
+    <header class="designed-heading"><div><div class="eyebrow" id="platform-caption">Desktop · synthetic conversation</div><h2>Project update</h2></div><button class="subtle" aria-label="More chat options" title="More chat options">⋯</button></header>
+    <nav class="designed-tabs" aria-label="Chat tabs"><span class="selected">Chat</span><span>Live Browser</span><span>Notes</span><span>Browser</span></nav>
+    <div class="designed-history" aria-label="Conversation">
+      <article class="message user"><div class="role">You</div><div class="text">Review the open items and suggest what we should tackle next.</div></article>
+      <article class="message assistant"><div class="role">Assistant</div><div class="text">I’ll check the latest notes and identify the decisions that need your attention.</div></article>
+      <details class="designed-activity"><summary>Activity · Reviewing project notes</summary><p class="note">Synthetic activity for this layout preview.</p></details>
+      <div class="designed-status" role="status"><span class="spinner" aria-hidden="true"></span><span id="chat-status">Working…</span></div>
+      <section class="pending" id="preview-pending" hidden><strong>Your input is needed</strong><p>Which item should I review first?</p><div class="actions"><button type="button" class="primary" data-feedback>Review the attachment flow</button><button type="button" data-feedback>Review chat controls</button></div></section>
+    </div>
+    <div id="composer-mount"></div>
+    <div class="queued-preview" id="queued-preview" hidden><span></span><button type="button" class="subtle" id="remove-queued">Remove</button></div>
+  </section>
+  <aside class="designed-details" aria-label="Run details">
+    <section class="card details-card"><h2>Run details</h2>
+      <div class="runtime-stat"><span>Total AI runtime</span><strong>14m 15s</strong></div>
+      <div class="token-stats"><div><span>Input tokens</span><strong>128,640</strong></div><div><span>Output tokens</span><strong>6,214</strong></div><small>Synthetic usage</small></div>
+      <h3>Workspace tool approvals</h3>
+      <select id="preview-permissions" aria-label="Workspace tool approvals"><option>Auto-approve tools</option><option>Saved rules</option><option>Trusted workspace</option><option>Ask each time</option></select>
+      <button type="button" data-rehearsal-action>Apply permissions</button>
+      <div class="effective-permission">Effective: <strong>Auto-approve tools</strong><br>Source: Workspace</div>
+      <details class="explanation"><summary>Explanation</summary><p>Saved on the executing Mac for chats and schedules with the same provider and workspace configuration, until changed or revoked. Changing the workspace setting also affects those chats and schedules.</p><p>Trusted workspace permits folder reads/writes, read-only MCP calls and browser reads/navigation. Auto-approve tools also permits configured tools and terminal commands. Mandatory approvals still pause.</p><p>The original schedule and earlier context versions remain available after a context refresh. Approval details are retained in the run record.</p></details>
+      <details class="saved-rules"><summary>Authorized folders and saved rules</summary><div class="filepath">/workspace/example-project</div><div class="muted small">No individual saved rules</div></details>
+      <section class="chat-approval"><h3>This chat only</h3><div class="muted small">Workspace setting</div><button type="button" data-rehearsal-action>Auto-approve this chat and future continuations</button><button type="button" disabled>Use workspace setting</button><details class="explanation"><summary>Explanation</summary><p>This chat inherits its workspace setting. Chat-only approval applies to this chat and its future continuations, within existing granted resources. It does not grant new filesystem access; mandatory approvals and sandbox rules still apply.</p></details></section>
+      <div class="muted small approval-count">83 tools approved automatically</div>
+    </section>
+    <section class="card details-card"><h2>MCP connections</h2><button type="button" data-rehearsal-action>Manage connections</button><details class="explanation"><summary>Explanation</summary><p>Connection and supported sign-in actions use the executing Mac. Runtime connection status does not independently verify account identity or resource access.</p></details></section>
+    <section class="card details-card"><h2>Session files &amp; context</h2>
+      <dl class="session-facts"><dt>Level</dt><dd>High</dd><dt>Speed</dt><dd>Standard</dd><dt>Context tier</dt><dd>Default</dd><dt>Run ID</dt><dd>example-run-001</dd><dt>Provider session</dt><dd>example-session-001</dd></dl>
+      <div class="path-row"><strong>Proteus run record</strong><div class="filepath">/workspace/app-data/runs/example-run-001.json</div><div class="path-actions"><button type="button" data-open-path>Open</button><button type="button" data-copy-path="/workspace/app-data/runs/example-run-001.json">Copy path</button></div></div>
+      <div class="path-row"><strong>Provider session folder</strong><div class="filepath">/workspace/provider-sessions/example-session-001</div><div class="path-actions"><button type="button" data-open-path>Open</button><button type="button" data-copy-path="/workspace/provider-sessions/example-session-001">Copy path</button></div></div>
+      <div class="path-actions"><button type="button" data-rehearsal-action>Export Markdown</button><button type="button" data-rehearsal-action>Export JSON</button></div>
+      <h3 class="workspace-name">Example workspace</h3><div class="path-row"><strong>Commands start in</strong><div class="filepath">/workspace/example-project</div><div class="path-actions"><button type="button" data-open-path>Open</button><button type="button" data-copy-path="/workspace/example-project">Copy path</button></div></div>
+      <div class="context-record"><strong>Project instructions</strong><div class="filepath">/workspace/example-project/AGENTS.md</div><small>Instructions · version 123abc456def</small></div>
+      <button type="button" data-rehearsal-action>↻ Refresh / choose context</button><details class="explanation"><summary>Explanation</summary><p>Selected context is captured with the run. Updates apply to the next turn and do not erase earlier conversation context. Source paths and Copy path controls are retained in local, remote and web views.</p></details>
+    </section>
+    <section class="card details-card"><h2>Completion</h2><details class="explanation"><summary>Explanation</summary><p>A completed model turn does not certify external workflow completion; that workflow uses its own validation.</p></details><details class="saved-rules"><summary>Schedule snapshot</summary><pre>{ "rehearsal": true }</pre></details></section>
+  </aside></div></div></div></div>
+  <div class="review-status" id="preview-notice" role="status" aria-live="polite">Design rehearsal · no messages sent.</div>
+  <details class="review-explanation"><summary>Native follow-ups · queued for device verification</summary><ul>
+    <li>BF-32 · Chats and other headings need a gutter beside navigation.</li>
+    <li>BF-33 · Restore the divider after Live Browser.</li>
+    <li>BF-34 · Make tab reordering work reliably on iPhone and iPad.</li>
+    <li>BF-35 · Refresh desktop-origin tabs without reopening duplicate copies on iPad.</li>
+    <li>BF-36 · Verify that same-profile tabs on each native device share persistent website sessions.</li>
+  </ul><p>Existing reorder/profile-store code does not establish affected-device acceptance. Profile definitions can sync; website sign-ins remain independent on each device.</p></details>
+  <details class="review-source"><summary>HTML used for this composer</summary><pre><code id="source-preview"></code></pre></details>
+</main>
+<script type="module" src="desktop-web-composer.js"></script>
+</body>
+</html>

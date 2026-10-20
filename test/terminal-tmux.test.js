@@ -42,3 +42,27 @@ test('tmux helper uses only its protected Proteus socket and exact managed sessi
     }
   } finally { fs.rmSync(home, { recursive: true, force: true }); }
 });
+
+test('async tmux inspection shares pending requests and measures only tagged session PIDs',async t=>{
+  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-tmux-async-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+  const calls=[];let release;
+  const tmux=new ProteusTmux(home,{binary:'/synthetic/tmux',run:()=>{throw new Error('synchronous inspection must not run');},runAsync:async(binary,args,options)=>{
+    calls.push({binary,args,options});
+    if(args[0]==='-V'){await new Promise(resolve=>{release=resolve;});return {status:0};}
+    if(args[4]==='list-sessions')return {status:0,stdout:'work\t0\t1730000000\t00000000-0000-4000-8000-000000000001\t$1\nunmanaged\t0\t1730000000\t\t$2\n'};
+    if(args[4]==='display-message')return {status:0,stdout:'23001\n'};
+    if(args[4]==='list-panes')return {status:0,stdout:'work\t23002\nwork\t23002\nunmanaged\t23003\n'};
+    throw new Error('unexpected command');
+  }});
+  const first=tmux.statusAsync(),second=tmux.statusAsync();assert.equal(first,second);await new Promise(resolve=>setImmediate(resolve));assert.equal(calls.length,1);release();
+  const result=await first;assert.deepEqual(result.managedSessions.map(item=>item.id),['work']);assert.deepEqual(result.managedPids,[{pid:23001,sessionId:null,role:'tmux server'},{pid:23002,sessionId:'work',role:'tmux pane'}]);assert.equal(calls.length,4);
+  for(const call of calls.slice(1)){assert.deepEqual(call.args.slice(0,4),['-S',tmux.socket,'-f','/dev/null']);assert.equal(call.options.env.TMUX,undefined);assert.equal(call.options.env.TMUX_PANE,undefined);}
+  const fresh=tmux.statusAsync();assert.notEqual(fresh,first);release();await fresh;
+});
+
+test('async tmux inspection reports unavailable or an empty dedicated server without PID probes',async t=>{
+  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-tmux-empty-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));let installed=false,calls=0;
+  const tmux=new ProteusTmux(home,{runAsync:async(binary,args)=>{calls++;return args[0]==='-V'?{status:installed?0:1,error:installed?undefined:new Error('missing')}:{status:1,stderr:'no server'};}});
+  assert.deepEqual(await tmux.statusAsync(),{available:false,managedSessions:[],managedPids:[]});assert.equal(calls,1);
+  installed=true;assert.deepEqual(await tmux.statusAsync(),{available:true,managedSessions:[],managedPids:[]});assert.equal(calls,3);
+});

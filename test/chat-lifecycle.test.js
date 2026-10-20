@@ -16,7 +16,7 @@ test('archive preserves history, delete tombstones it across restart, and active
     assert.throws(()=>engine.lifecycle(run.id,'archive'),/Finish or cancel/);
     assert.throws(()=>engine.lifecycle(run.id,'delete'),/Finish or cancel/);
     run.deferredStart=false;run.status='completed';engine.persist(run);
-    engine.running={id:run.id};assert.throws(()=>engine.lifecycle(run.id,'delete'),/Finish or cancel/);engine.running=null;
+    engine.running.set(run.id,{id:run.id});assert.throws(()=>engine.lifecycle(run.id,'delete'),/Finish or cancel/);engine.running.clear();
     const updatedAt=run.updatedAt;
     const archived=engine.lifecycle(run.id,'archive',{expectedUpdatedAt:updatedAt,expectedArchivedAt:null});
     assert.equal(archived.archived,true);assert.equal(run.updatedAt,updatedAt);assert.equal(engine.visibleRuns().length,0);
@@ -32,11 +32,11 @@ test('archive preserves history, delete tombstones it across restart, and active
     assert.throws(()=>engine.getRun(run.id),/not found/);
     assert.equal(engine.visibleRuns(true).length,0);
     assert.equal(fs.existsSync(path.join(home,'runs',run.id+'.json')),false);
-    assert.equal(activity.logs(20).items?.some(item=>item.event==='chat.undefined'),false);
+    assert.equal((await activity.logs(20)).items?.some(item=>item.event==='chat.undefined'),false);
     await engine.close();
     // A stale run file restored by sync/backup cannot reimport the deleted ID.
     fs.writeFileSync(path.join(home,'runs',run.id+'.json'),JSON.stringify(run));
     const restored=new Engine(home);assert.equal(restored.listRuns().length,0);assert.equal(fs.existsSync(path.join(home,'runs',run.id+'.json')),false);await restored.close();
-    activity.close?.();
+    await activity.close();
   }finally{await engine.close();fs.rmSync(home,{recursive:true,force:true});}
 });

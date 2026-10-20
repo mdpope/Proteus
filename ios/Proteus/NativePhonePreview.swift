@@ -1,0 +1,330 @@
+import SwiftUI
+import UIKit
+
+/// Reviewed navigation is shared with release builds. Synthetic service access
+/// still requires a separate Debug simulator identity/explicit rehearsal launch.
+enum NativeDesignPreview {
+    static var enabled: Bool { true }
+    static var fixtureService: Bool { isolated && ProcessInfo.processInfo.arguments.contains("--native-app-fixture") }
+    static var isolated: Bool {
+        #if DEBUG && targetEnvironment(simulator)
+        return ["org.proteusapp.review.proteus.iphone-preview", "org.proteusapp.review.proteus.ipad-preview"].contains(Bundle.main.bundleIdentifier ?? "") || ProcessInfo.processInfo.arguments.contains("--native-design-preview") || ProcessInfo.processInfo.arguments.contains("--iphone-design-preview")
+        #else
+        return false
+        #endif
+    }
+}
+enum NativePhonePreview { static var enabled: Bool { NativeDesignPreview.enabled && UIDevice.current.userInterfaceIdiom == .phone } }
+enum NativePadPreview { static var enabled: Bool { NativeDesignPreview.enabled && UIDevice.current.userInterfaceIdiom == .pad } }
+
+/// Shared overview mark: the two outlined, overlapping tabs used by desktop and web.
+struct NativeTabOverviewIcon: View {
+    var body: some View {
+        Canvas { context, size in
+            context.scaleBy(x: size.width / 24, y: size.height / 24)
+            var back = Path()
+            back.move(to: CGPoint(x: 7, y: 19)); back.addLine(to: CGPoint(x: 5, y: 19))
+            back.addQuadCurve(to: CGPoint(x: 3, y: 17), control: CGPoint(x: 3, y: 19))
+            back.addLine(to: CGPoint(x: 3, y: 5)); back.addQuadCurve(to: CGPoint(x: 5, y: 3), control: CGPoint(x: 3, y: 3))
+            back.addLine(to: CGPoint(x: 15, y: 3)); back.addQuadCurve(to: CGPoint(x: 17, y: 5), control: CGPoint(x: 17, y: 3))
+            back.addLine(to: CGPoint(x: 17, y: 7))
+            context.stroke(back, with: .foreground, style: StrokeStyle(lineWidth: 1.7, lineCap: .round, lineJoin: .round))
+            context.stroke(Path(roundedRect: CGRect(x: 7, y: 7, width: 14, height: 16), cornerRadius: 2), with: .foreground, lineWidth: 1.7)
+        }.frame(width: 21, height: 21).accessibilityHidden(true)
+    }
+}
+
+/// The grouped desktop sidebar palette, kept separate from content and tab chrome.
+enum NativeSidebarStyle {
+    static let ink = Color(red: 184/255, green: 193/255, blue: 184/255)
+    static let muted = Color(red: 132/255, green: 142/255, blue: 133/255)
+    static let strong = Color(red: 234/255, green: 239/255, blue: 232/255)
+    static let button = Color(red: 29/255, green: 35/255, blue: 30/255)
+    static let group = Color(red: 24/255, green: 29/255, blue: 25/255)
+    static let selected = Color(red: 49/255, green: 57/255, blue: 44/255)
+    static let selectedInk = Color(red: 212/255, green: 231/255, blue: 182/255)
+    static let border = Color(red: 37/255, green: 43/255, blue: 38/255)
+    static let activeBorder = Color(red: 49/255, green: 58/255, blue: 50/255)
+}
+
+/// Desktop workspace/folder/team/collapse paths, rather than platform substitutions.
+struct NativeSidebarIcon: View {
+    let kind: String
+    var body: some View {
+        if kind == "schedules" || kind == "team" {
+            // Desktop uses these glyphs directly in its feature navigation.
+            Text(kind == "schedules" ? "◷" : "☷").font(.system(size: 22)).frame(width: 18, height: 18).accessibilityHidden(true)
+        } else {
+        Canvas { context, size in
+            context.scaleBy(x: size.width / 24, y: size.height / 24)
+            var path = Path()
+            switch kind {
+            case "home":
+                path.move(to: CGPoint(x: 3, y: 10)); path.addLine(to: CGPoint(x: 12, y: 3)); path.addLine(to: CGPoint(x: 21, y: 10)); path.addLine(to: CGPoint(x: 21, y: 20)); path.addQuadCurve(to: CGPoint(x: 20, y: 21), control: CGPoint(x: 21, y: 21)); path.addLine(to: CGPoint(x: 4, y: 21)); path.addQuadCurve(to: CGPoint(x: 3, y: 20), control: CGPoint(x: 3, y: 21)); path.closeSubpath()
+                path.move(to: CGPoint(x: 9, y: 21)); path.addLine(to: CGPoint(x: 9, y: 14)); path.addLine(to: CGPoint(x: 15, y: 14)); path.addLine(to: CGPoint(x: 15, y: 21))
+            case "workspace":
+                path.addRoundedRect(in: CGRect(x: 3, y: 3, width: 18, height: 18), cornerSize: CGSize(width: 3, height: 3))
+                path.move(to: CGPoint(x: 3, y: 9)); path.addLine(to: CGPoint(x: 21, y: 9)); path.move(to: CGPoint(x: 9, y: 9)); path.addLine(to: CGPoint(x: 9, y: 21))
+            case "folder":
+                path.move(to: CGPoint(x: 3, y: 7)); path.addLine(to: CGPoint(x: 3, y: 5)); path.addQuadCurve(to: CGPoint(x: 5, y: 3), control: CGPoint(x: 3, y: 3)); path.addLine(to: CGPoint(x: 10, y: 3)); path.addLine(to: CGPoint(x: 13, y: 6)); path.addLine(to: CGPoint(x: 19, y: 6)); path.addQuadCurve(to: CGPoint(x: 21, y: 8), control: CGPoint(x: 21, y: 6)); path.addLine(to: CGPoint(x: 21, y: 19)); path.addQuadCurve(to: CGPoint(x: 19, y: 21), control: CGPoint(x: 21, y: 21)); path.addLine(to: CGPoint(x: 5, y: 21)); path.addQuadCurve(to: CGPoint(x: 3, y: 19), control: CGPoint(x: 3, y: 21)); path.closeSubpath()
+            case "chat":
+                path.move(to: CGPoint(x: 3, y: 4)); path.addLine(to: CGPoint(x: 13, y: 4)); path.addQuadCurve(to: CGPoint(x: 16, y: 7), control: CGPoint(x: 16, y: 4)); path.addLine(to: CGPoint(x: 16, y: 12)); path.addQuadCurve(to: CGPoint(x: 13, y: 15), control: CGPoint(x: 16, y: 15)); path.addLine(to: CGPoint(x: 8, y: 15)); path.addLine(to: CGPoint(x: 4, y: 18)); path.addLine(to: CGPoint(x: 4, y: 14)); path.addQuadCurve(to: CGPoint(x: 3, y: 12), control: CGPoint(x: 3, y: 14)); path.closeSubpath()
+                path.move(to: CGPoint(x: 17, y: 8)); path.addLine(to: CGPoint(x: 20, y: 8)); path.addQuadCurve(to: CGPoint(x: 22, y: 10), control: CGPoint(x: 22, y: 8)); path.addLine(to: CGPoint(x: 22, y: 17)); path.addQuadCurve(to: CGPoint(x: 20, y: 19), control: CGPoint(x: 22, y: 19)); path.addLine(to: CGPoint(x: 17, y: 19)); path.addLine(to: CGPoint(x: 14, y: 21)); path.addLine(to: CGPoint(x: 14, y: 17))
+            case "collapse":
+                path.addRoundedRect(in: CGRect(x: 4, y: 4, width: 16, height: 5), cornerSize: CGSize(width: 1, height: 1)); path.addRoundedRect(in: CGRect(x: 4, y: 15, width: 16, height: 5), cornerSize: CGSize(width: 1, height: 1))
+            default:
+                for x in [CGFloat(3), 14] { for y in [CGFloat(3), 14] { path.addRoundedRect(in: CGRect(x: x, y: y, width: 7, height: 7), cornerSize: CGSize(width: 1, height: 1)) } }
+            }
+            context.stroke(path, with: .foreground, style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
+        }.frame(width: 18, height: 18).accessibilityHidden(true)
+        }
+    }
+}
+
+struct NativeFeatureHeading: View {
+    @EnvironmentObject private var chrome: NativePhoneChrome
+    let title: String
+    var body: some View {
+        HStack(spacing: 8) {
+            if NativePhonePreview.enabled {
+                Button { chrome.captureCurrent(); withAnimation(.easeInOut(duration: 0.22)) { chrome.drawer = true } } label: { Image(systemName: "sidebar.left").frame(width: 44, height: 44) }
+                    .accessibilityLabel("App navigation").accessibilityIdentifier("phone-app-navigation")
+            }
+            Text(title).font(NativePhonePreview.enabled ? .subheadline.weight(.semibold) : .title2.weight(.semibold)).lineLimit(1).frame(maxWidth: NativePhonePreview.enabled ? 150 : 320, alignment: .leading).fixedSize(horizontal: true, vertical: false)
+        }.foregroundStyle(.primary)
+    }
+}
+struct NativeMainTabAdd: View {
+    @EnvironmentObject private var shared: SharedAppStore
+    @EnvironmentObject private var chrome: NativePhoneChrome
+    var body: some View {
+        Menu {
+            ForEach(shared.browserProfiles, id: \.self) { profile in Button("Browser · " + profile["name"].string, systemImage: "globe") { shared.open(nil, scope: "main", profileId: profile["id"].string) } }
+            Button("New chat", systemImage: "square.and.pencil") { chrome.newMainChat?(false) }
+            Button("Internet Search", systemImage: "magnifyingglass") { chrome.newMainChat?(true) }
+        } label: { Image(systemName: "plus").frame(width: 44, height: 44) }.accessibilityLabel("New main tab").accessibilityIdentifier("phone-new-tab")
+    }
+}
+private struct NativeFeaturePage: ViewModifier {
+    @EnvironmentObject private var chrome: NativePhoneChrome
+    let title: String
+    var search: Binding<String>?
+    @Environment(\.nativePhoneAreaActive) private var active
+    func body(content: Content) -> some View {
+        if NativeDesignPreview.enabled {
+            content.navigationTitle("").navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) { NativeFeatureHeading(title: title) }
+                    if NativePhonePreview.enabled { ToolbarItem(placement: .topBarTrailing) { NativeMainTabAdd() } }
+                    if NativePadPreview.enabled, let search {
+                        ToolbarItem(placement: .topBarTrailing) { searchField(search).frame(width: 230) }
+                    }
+                }
+                .toolbar(NativePhonePreview.enabled && (chrome.controlsHidden || !active) ? .hidden : .visible, for: .navigationBar)
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if NativePhonePreview.enabled, let search { searchField(search).padding(.horizontal, 16).padding(.vertical, 8).background(NativeTheme.background) }
+                }
+                .simultaneousGesture(TapGesture(count: 2).onEnded { if NativePhonePreview.enabled { chrome.toggleControls() } })
+        } else if let search { content.searchable(text: search) }
+        else { content }
+    }
+    private func searchField(_ text: Binding<String>) -> some View {
+        HStack { Image(systemName: "magnifyingglass"); TextField("Search", text: text).textInputAutocapitalization(.never).autocorrectionDisabled(); if !text.wrappedValue.isEmpty { Button { text.wrappedValue = "" } label: { Image(systemName: "xmark.circle.fill") }.accessibilityLabel("Clear search") } }
+            .font(.subheadline).padding(11).background(NativeTheme.surface, in: RoundedRectangle(cornerRadius: 20)).accessibilityIdentifier("feature-search")
+    }
+}
+extension View {
+    func nativeFeaturePage(_ title: String, search: Binding<String>? = nil) -> some View { modifier(NativeFeaturePage(title: title, search: search)) }
+}
+
+struct NativePhoneTab: Identifiable {
+    let id: String
+    var title: String
+    var symbol: String
+    var detail: String
+    var preview: UIImage?
+    var select: () -> Void
+    var close: (() -> Void)? = nil
+}
+
+@MainActor final class NativePhoneChrome: ObservableObject {
+    @Published var controlsHidden = false
+    @Published var drawer = false
+    @Published var overview = false
+    @Published var overviewProgress: CGFloat = 0
+    @Published var currentID = ""
+    @Published var visited: [NativePhoneTab] = []
+    @Published var recent: [NativePhoneTab] = []
+    var interactedAt: [String: Date] = [:]
+    var browserOwnsBack = false
+    var snapshot: (() -> UIImage?)?
+    var showTabs: (() -> Void)?
+    var activateArea: ((String) -> Void)?
+    var newMainChat: ((Bool) -> Void)?
+
+    func reset() { visited = []; recent = []; interactedAt = [:]; currentID = ""; snapshot = nil; overview = false; overviewProgress = 0; controlsHidden = false; drawer = false; browserOwnsBack = false }
+    func register(_ item: NativePhoneTab) {
+        if let index = visited.firstIndex(where: { $0.id == item.id }) {
+            var updated = item
+            updated.preview = item.preview ?? visited[index].preview
+            visited[index] = updated
+        } else { visited.append(item); if visited.count > 24 { visited.removeFirst(visited.count - 24) } }
+        if currentID != item.id { record(item) }
+        currentID = item.id
+    }
+    func record(_ item: NativePhoneTab) { interactedAt[item.id] = Date(); recent.removeAll { $0.id == item.id }; recent.insert(item, at: 0); if recent.count > 50 { recent.removeLast(recent.count - 50) } }
+    func captureCurrent() {
+        guard let index = visited.firstIndex(where: { $0.id == currentID }), let image = snapshot?() else { return }
+        visited[index].preview = image
+    }
+    func toggleControls() {
+        withAnimation(UIAccessibility.isReduceMotionEnabled ? nil : .easeInOut(duration: 0.24)) { controlsHidden.toggle() }
+    }
+    func beginOverview() {
+        guard !overview else { return }
+        captureCurrent(); overview = true; overviewProgress = 0
+    }
+    func pinch(_ scale: CGFloat) {
+        beginOverview()
+        overviewProgress = min(1, max(0, (1 - scale) / 0.48))
+    }
+    func finishPinch(committed: Bool) {
+        withAnimation(UIAccessibility.isReduceMotionEnabled ? .linear(duration: 0.01) : .spring(response: 0.38, dampingFraction: 0.9)) { overviewProgress = committed ? 1 : 0 }
+        if !committed { Task { @MainActor in try? await Task.sleep(for: .milliseconds(400)); if overviewProgress == 0 { overview = false } } }
+    }
+    func openOverview() { beginOverview(); finishPinch(committed: true) }
+    func closeOverview(select item: NativePhoneTab? = nil) {
+        if let item { currentID = item.id; item.select() }
+        finishPinch(committed: false)
+    }
+}
+
+/// A weak capture hook for the actual rendered SwiftUI surface. No disk snapshots or page loads.
+struct NativePhoneSurface: UIViewRepresentable {
+    let chrome: NativePhoneChrome
+    func makeUIView(context: Context) -> UIView { let view = UIView(); view.isUserInteractionEnabled = false; return view }
+    func updateUIView(_ view: UIView, context: Context) {
+        chrome.snapshot = { [weak view] in
+            guard let view, let window = view.window, view.bounds.width > 20, view.bounds.height > 20 else { return nil }
+            let rect = view.convert(view.bounds, to: window)
+            let format = UIGraphicsImageRendererFormat(); format.scale = 1
+            return UIGraphicsImageRenderer(size: rect.size, format: format).image { _ in
+                window.drawHierarchy(in: CGRect(x: -rect.minX, y: -rect.minY, width: window.bounds.width, height: window.bounds.height), afterScreenUpdates: false)
+            }
+        }
+    }
+}
+
+/// Keep UIKit's interactive previous-page reveal when the visible Back button is removed.
+struct NativePhoneBackNavigation: ViewModifier {
+    func body(content: Content) -> some View {
+        if NativePhonePreview.enabled {
+            content.navigationBarBackButtonHidden(true).background(PhonePopBridge().frame(width: 0, height: 0))
+        } else { content }
+    }
+}
+private struct PhonePopBridge: UIViewControllerRepresentable {
+    @EnvironmentObject private var chrome: NativePhoneChrome
+    func makeUIViewController(context: Context) -> PopController { PopController() }
+    func updateUIViewController(_ controller: PopController, context: Context) { controller.chrome = chrome; controller.install() }
+    final class PopController: UIViewController, UIGestureRecognizerDelegate {
+        weak var chrome: NativePhoneChrome?
+        private weak var pop: UIGestureRecognizer?
+        private weak var formerDelegate: UIGestureRecognizerDelegate?
+        private weak var contentPop: UIGestureRecognizer?
+        private weak var formerContentDelegate: UIGestureRecognizerDelegate?
+        override func viewDidAppear(_ animated: Bool) { super.viewDidAppear(animated); install() }
+        func install() {
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                guard let nav = self.navigationController, let gesture = nav.interactivePopGestureRecognizer else { return }
+                if gesture.delegate !== self { self.formerDelegate = gesture.delegate; self.pop = gesture; gesture.delegate = self }
+                gesture.isEnabled = nav.viewControllers.count > 1
+                if #available(iOS 26.0, *), let contentGesture = nav.interactiveContentPopGestureRecognizer {
+                    if contentGesture.delegate !== self { self.formerContentDelegate = contentGesture.delegate; self.contentPop = contentGesture; contentGesture.delegate = self }
+                    contentGesture.isEnabled = nav.viewControllers.count > 1
+                }
+            }
+        }
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            guard let nav = navigationController, nav.viewControllers.count > 1, nav.transitionCoordinator == nil, chrome?.browserOwnsBack != true else { return false }
+            // iOS 26 also installs a content pan. Reserve only its leading edge for app Back.
+            if gestureRecognizer === contentPop {
+                guard gestureRecognizer.location(in: nav.view).x <= 64, let pan = gestureRecognizer as? UIPanGestureRecognizer else { return false }
+                let velocity = pan.velocity(in: nav.view)
+                guard velocity.x > 0, velocity.x > abs(velocity.y) else { return false }
+            }
+            chrome?.captureCurrent()
+            return true
+        }
+        override func viewWillDisappear(_ animated: Bool) {
+            if pop?.delegate === self { pop?.delegate = formerDelegate }
+            if contentPop?.delegate === self { contentPop?.delegate = formerContentDelegate }
+            super.viewWillDisappear(animated)
+        }
+    }
+}
+
+struct NativePhoneOverview: View {
+    @ObservedObject var chrome: NativePhoneChrome
+    let items: [NativePhoneTab]
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var targets: [String: CGRect] = [:]
+    private var current: NativePhoneTab? { items.first { $0.id == chrome.currentID } }
+    var body: some View {
+        GeometryReader { geometry in
+            let p = chrome.overviewProgress
+            ZStack(alignment: .topLeading) {
+                VStack(spacing: 0) {
+                    HStack {
+                        Text("Tabs").font(.title2.bold()); Spacer()
+                        Button("Done") { chrome.closeOverview() }.frame(minWidth: 44, minHeight: 44)
+                    }.padding(.horizontal, 20)
+                    ScrollView {
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .top), count: NativePadPreview.enabled ? 3 : 2), spacing: 18) {
+                            ForEach(items) { item in
+                                Button { chrome.closeOverview(select: item) } label: {
+                                    VStack(alignment: .leading, spacing: 7) {
+                                        Group {
+                                            if let image = item.preview { Image(uiImage: image).resizable().scaledToFill().frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top).clipped() }
+                                            else { VStack(spacing: 12) { Image(systemName: item.symbol).font(.title); Text("Preview unavailable").font(.caption) }.frame(maxWidth: .infinity, maxHeight: .infinity).background(NativeTheme.surface) }
+                                        }.frame(height: 225).clipShape(RoundedRectangle(cornerRadius: 15))
+                                            .overlay { RoundedRectangle(cornerRadius: 15).stroke(item.id == chrome.currentID ? NativeTheme.accent : NativeTheme.line, lineWidth: 1) }
+                                            .background(GeometryReader { tile in Color.clear.preference(key: PhoneTabRects.self, value: [item.id: tile.frame(in: .named("phone-overview"))]) })
+                                        Label(item.title, systemImage: item.symbol).font(.caption).lineLimit(2)
+                                        Text(item.detail).font(.caption2).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                                    }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                                }.buttonStyle(.plain).accessibilityIdentifier("phone-tab-" + item.id)
+                            }
+                        }.padding(18)
+                    }
+                }.background(NativeTheme.background).opacity(reduceMotion ? p : max(0, (p - 0.12) / 0.88))
+                if !reduceMotion, p < 0.999, let image = current?.preview {
+                    let rect = targets[chrome.currentID] ?? CGRect(x: 18, y: 70, width: (geometry.size.width - 48) / 2, height: 225)
+                    Image(uiImage: image).resizable().scaledToFill()
+                        .frame(width: geometry.size.width + (rect.width - geometry.size.width) * p, height: geometry.size.height + (rect.height - geometry.size.height) * p, alignment: .top)
+                        .clipped().clipShape(RoundedRectangle(cornerRadius: 15 * p))
+                        .offset(x: rect.minX * p, y: rect.minY * p).allowsHitTesting(false)
+                }
+            }.coordinateSpace(name: "phone-overview").onPreferenceChange(PhoneTabRects.self) { targets = $0 }
+        }.background(NativeTheme.background.opacity(chrome.overviewProgress)).accessibilityElement(children: .contain).accessibilityIdentifier("phone-tab-overview")
+    }
+}
+private struct PhoneTabRects: PreferenceKey {
+    static var defaultValue: [String: CGRect] = [:]
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) { value.merge(nextValue(), uniquingKeysWith: { _, new in new }) }
+}
+
+extension View {
+    @ViewBuilder func nativePhoneDestination<Destination: View>(isPresented: Binding<Bool>, @ViewBuilder destination: @escaping () -> Destination) -> some View {
+        if NativePhonePreview.enabled { navigationDestination(isPresented: isPresented, destination: destination) } else { self }
+    }
+}
+
+private struct NativePhoneAreaActiveKey: EnvironmentKey { static var defaultValue = true }
+extension EnvironmentValues {
+    var nativePhoneAreaActive: Bool {
+        get { self[NativePhoneAreaActiveKey.self] }
+        set { self[NativePhoneAreaActiveKey.self] = newValue }
+    }
+}

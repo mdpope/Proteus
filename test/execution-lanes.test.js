@@ -6,7 +6,7 @@ import path from 'node:path';
 import { Engine } from '../src/engine.js';
 const until = async check => { for (let i=0;i<100;i++) { if (check()) return; await new Promise(r=>setTimeout(r,10)); } throw new Error('Timed out'); };
 const schedule = (home,id,job) => ({schemaVersion:1,id,name:id,enabled:false,cron:'* * * * *',timezone:'UTC',provider:job?'local-process':'rehearsal',model:'',workspace:{cwd:home,additionalDirectories:[]},misfire:'skip',prompt:'Synthetic test',...(job?{integration:{type:'omi',job}}:{})});
-test('native lanes remain responsive during AI work and serialize each job independently',async()=>{
+test('independent AI chats run together while native jobs serialize per lane',async()=>{
  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-lanes-')); const started=[]; const releases=new Map();
  const provider={run:({run,signal})=>new Promise(resolve=>{started.push(run.schedule.id);releases.set(run.schedule.id,resolve);signal.addEventListener('abort',resolve,{once:true});})};
  const engine=new Engine(home,{'local-process':provider,rehearsal:provider});
@@ -14,9 +14,9 @@ test('native lanes remain responsive during AI work and serialize each job indep
  try {
   const ai=engine.createRun(schedule(home,'ai')); const audio=engine.createRun(schedule(home,'audio','audio')); const library=engine.createRun(schedule(home,'library','library'));
   const waiting=engine.createRun(schedule(home,'second-audio','audio')); const nextAI=engine.createRun(schedule(home,'next-ai'));
-  await until(()=>started.length===3); assert.deepEqual(new Set(started),new Set(['ai','audio','library']));
+  await until(()=>started.length===4); assert.deepEqual(new Set(started),new Set(['ai','audio','library','next-ai']));
   releases.get('library')(); await until(()=>library.status==='completed'); assert.equal(ai.status,'running'); assert.equal(audio.status,'running');
-  releases.get('audio')(); await until(()=>started.includes('second-audio')); assert.equal(nextAI.status,'queued');
+  releases.get('audio')(); await until(()=>started.includes('second-audio')); assert.equal(nextAI.status,'running');
   engine.cancel(waiting.id); await until(()=>waiting.status==='cancelled');
   releases.get('ai')(); await until(()=>started.includes('next-ai'));
  } finally { await engine.close(); assert.equal(engine.executions.size,0); fs.rmSync(home,{recursive:true,force:true}); }
@@ -42,9 +42,9 @@ test('provider sign-in holds only its queued provider and resumes after cleanup'
  try{
   const codex=engine.createRun(entry('held-codex','codex'));
   const copilot=engine.createRun(entry('free-copilot','copilot'));
-  await until(()=>started.includes('copilot'));assert.equal(codex.status,'queued');assert.deepEqual(started,['copilot']);
+  await until(()=>started.includes('copilot'));assert.equal(codex.status,'queued');assert.match(codex.queueReason,/provider sign-in/);assert.deepEqual(started,['copilot']);
   releaseCopilot();await until(()=>copilot.status==='completed');await engine.drain();
-  assert.equal(codex.status,'queued');assert.deepEqual(started,['copilot']);
+  assert.equal(codex.status,'queued');assert.match(codex.queueReason,/provider sign-in/);assert.deepEqual(started,['copilot']);
   authActive=false;await engine.drain();await until(()=>codex.status==='completed');assert.deepEqual(started,['copilot','codex']);
  }finally{await engine.close();fs.rmSync(home,{recursive:true,force:true});}
 });

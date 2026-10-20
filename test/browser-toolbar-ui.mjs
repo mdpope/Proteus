@@ -57,10 +57,10 @@ try {
     const button = page.locator('#' + prefix + '-share');
     const address = page.locator('#' + prefix + '-url');
     await button.waitFor();
-    await page.waitForFunction(selector => document.querySelector(selector)?.getAttribute('aria-pressed') === 'false', '#' + prefix + '-share');
+    assert.equal(await button.getAttribute('role'),'img');
     assert.equal(await button.locator('svg').count(), 1);
     assert.equal((await button.textContent()).trim(), '', 'The robot has no visible text or badge');
-    assert.match(await button.getAttribute('title'), /OFF.*Private tab/);
+    assert.match(await button.getAttribute('title'), /Agents can use this tab/);
     const off = await (await page.waitForFunction(selector => {
       const element = document.querySelector(selector);
       if (!element?.isConnected) return false;
@@ -78,7 +78,7 @@ try {
       const form = input.closest('.browserbar');
       const field = input.closest('.browser-address');
       const sidebar = document.querySelector('#sidebar');
-      const controls = [...form.querySelectorAll('button:not(.browser-agent-toggle)')].map(button => {
+      const controls = [...form.querySelectorAll('button:not(.browser-agent-toggle)')].filter(button=>!button.hidden).map(button => {
         const style = getComputedStyle(button), bounds = button.getBoundingClientRect();
         return { id: button.id, background: style.backgroundColor, border: style.borderWidth, color: style.color, width: bounds.width, height: bounds.height };
       });
@@ -104,25 +104,7 @@ try {
     }
     await page.screenshot({ path: '/private/tmp/proteus-toolbar-' + scope + '-off.png' });
     if (scope === 'main') await page.screenshot({ path: '/private/tmp/proteus-toolbar-compact-detail.png', clip: { x: 0, y: 0, width: 1200, height: 230 } });
-    await button.click();
-    await waitForAsync(async id => (await window.desktop.browser({ action: 'list' })).find(tab => tab.id === id)?.shared === true, id);
-    await page.waitForFunction(selector => document.querySelector(selector)?.getAttribute('aria-pressed') === 'true', '#' + prefix + '-share');
-    assert.match(await button.getAttribute('aria-label'), /ON.*revoke access.*cancel pending/);
-    const onHandle = await page.waitForFunction(selector => {
-      const element = document.querySelector(selector);
-      if (!element || element.getAttribute('aria-pressed') !== 'true') return false;
-      const style = getComputedStyle(element);
-      return style.backgroundColor === 'rgb(194, 232, 160)' && { background: style.backgroundColor, color: style.color };
-    }, '#' + prefix + '-share');
-    const on = await onHandle.jsonValue();
-    assert.notEqual(on.background, off.background);
-    assert.equal(on.background, 'rgb(194, 232, 160)');
-    assert.equal(on.color, 'rgb(24, 36, 20)', 'Pressed robot inverts to dark ink');
-    await page.screenshot({ path: '/private/tmp/proteus-toolbar-' + scope + '-on.png' });
-    await button.focus();
-    await page.keyboard.press('Space');
-    await waitForAsync(async id => (await window.desktop.browser({ action: 'list' })).find(tab => tab.id === id)?.shared === false, id);
-    assert.equal(await address.inputValue(), url, 'Toggling does not submit or replace the address');
+    assert.equal(await address.inputValue(), url, 'Agent availability does not change the address');
     await address.fill(url + '?typed=1');
     await address.press('Enter');
     await waitForAsync(async id => (await window.desktop.browser({ action: 'list' })).find(tab => tab.id === id)?.url.endsWith('?typed=1'), id);
@@ -203,7 +185,7 @@ try {
   }, team.id);
   assert.ok((await command({ action: 'list' })).every(tab => !tab.shared && !tab.owner), 'Other tabs remain private');
 
-  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(850, 650));
+  await app.evaluate(({app})=>process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser().window.setSize(850,650));
   await page.waitForFunction(() => innerWidth === 850);
   const fits = await page.locator('#team-browser-form').evaluate(form => {
     const address = form.querySelector('.browser-address').getBoundingClientRect();
@@ -226,8 +208,12 @@ try {
   });
   const nativeHistory = id => app.evaluate(({ app }, id) => {
     const browser = process.mainModule.require(app.getAppPath() + '/desktop/main.cjs').getBrowser();
-    const history = browser.get(id).view.webContents.navigationHistory;
-    return { entries: history.getAllEntries().map(entry => ({url:entry.url,title:entry.title})), index: history.getActiveIndex() };
+    // Menus use the portable stack: a shared traversal can reconstruct Chromium's
+    // stack with loadURL, while logical Forward entries intentionally survive.
+    const tab=browser.get(id),portable=browser.state(tab,true).history;
+    if(portable)return {entries:portable.entries.map(entry=>({url:entry.url,title:entry.title})),index:portable.index};
+    const history=tab.view.webContents.navigationHistory;
+    return {entries:history.getAllEntries().map(entry=>({url:entry.url,title:entry.title})),index:history.getActiveIndex()};
   }, id);
   // A browser-state redraw can replace the held control before pointer-up.
   // Its release click must still be consumed by the same tab/direction.
