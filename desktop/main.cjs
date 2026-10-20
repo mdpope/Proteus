@@ -294,7 +294,7 @@ else {
         const key=String(input.key).toLowerCase();
         if(key==='w'){event.preventDefault();closeCurrentTab();}
         else if(key==='n'){event.preventDefault();void createAppWindow();}
-        else if(key==='t'){event.preventDefault();target.webContents.send('proteus:new-tab');}
+        else if(key==='t'){event.preventDefault();browser.requestNewTab();}
       }));
       target.on('resize',()=>target.webContents.send('proteus:browser-resize'));
       target.on('close',event=>{
@@ -334,7 +334,7 @@ else {
     ]));
     Menu.setApplicationMenu(Menu.buildFromTemplate([
       ...(process.platform==='darwin'?[{label:app.name,submenu:[{role:'about'},{type:'separator'},{role:'hide'},{role:'hideOthers'},{role:'unhide'},{type:'separator'},{role:'quit'}]}]:[]),
-      {label:'File',submenu:[{label:'New Window',accelerator:'CommandOrControl+N',click:()=>void createAppWindow()},{label:'New Tab',accelerator:'CommandOrControl+T',click:()=>windows.current()?.window.webContents.send('proteus:new-tab')},{type:'separator'},{label:'Close Window',accelerator:'CommandOrControl+Shift+W',click:()=>windows.current()?.window.close()},{label:'Close Tab',accelerator:'CommandOrControl+W',click:closeCurrentTab}]},{role:'editMenu'},{role:'viewMenu'},{role:'windowMenu'}
+      {label:'File',submenu:[{label:'New Window',accelerator:'CommandOrControl+N',click:()=>void createAppWindow()},{label:'New Tab',accelerator:'CommandOrControl+T',click:()=>browser.requestNewTab()},{type:'separator'},{label:'Close Window',accelerator:'CommandOrControl+Shift+W',click:()=>windows.current()?.window.close()},{label:'Close Tab',accelerator:'CommandOrControl+W',click:closeCurrentTab}]},{role:'editMenu'},{role:'viewMenu'},{role:'windowMenu'}
     ]));
     await firstWindow.loadURL(service.url).catch(error=>{if(error.code!=='ERR_ABORTED'&&error.errno!==-3)throw error;});if(firstRecord.maximized)firstWindow.maximize();
     for(const record of records.slice(1))await createAppWindow(record);

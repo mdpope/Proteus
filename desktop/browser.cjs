@@ -332,7 +332,7 @@ class BrowserTabs {
     // Only a new top-level document restarts Find, never unrelated shell/title/usage updates.
     on('dom-ready',()=>{tab.findRevision=(tab.findRevision||0)+1;this.changed();});
     on('before-input-event', (event, input) => {
-      if(input.type==='keyDown'&&(input.meta||input.control)&&!input.shift&&!input.alt&&['n','t'].includes(String(input.key).toLowerCase())){event.preventDefault();if(String(input.key).toLowerCase()==='n')this.options.newWindow?.();else this.window.webContents.send('proteus:new-tab');return;}
+      if(input.type==='keyDown'&&(input.meta||input.control)&&!input.shift&&!input.alt&&['n','t'].includes(String(input.key).toLowerCase())){event.preventDefault();if(String(input.key).toLowerCase()==='n')this.options.newWindow?.();else this.requestNewTab();return;}
       if(input.type==='keyDown'&&((input.meta||input.control)&&String(input.key).toLowerCase()==='r'||input.key==='F5')){event.preventDefault();void this.command({action:'reload',id:tab.id}).catch(error=>this.actions.send({type:'error',message:error.message}));return;}
       if(input.type==='keyDown'&&(input.meta||input.control)&&String(input.key).toLowerCase()==='f'){event.preventDefault();this.window.webContents.focus();this.actions.send({type:'find',tabId:tab.id});return;}
       if(this.active===tab.id&&event.senderFrame===wc.mainFrame&&['keyDown','mouseDown'].includes(input.type))this.touch(tab,input.type==='keyDown'&&((input.meta||input.control)&&String(input.key).toLowerCase()==='r'||input.key==='F5'));
@@ -409,6 +409,11 @@ class BrowserTabs {
     }
     if(tab.navigation===navigation){tab.inflightEntryId=null;tab.navigationURL=null;}
     this.changed(); return this.state(tab);
+  }
+  requestNewTab() {
+    const hadActive=!!this.active;this.show(null);
+    if(!hadActive&&this.window.isFocused?.()===true)this.window.webContents.focus();
+    this.window.webContents.send('proteus:new-tab');
   }
   show(id, bounds) {
     if(id&&((this.options.projects&&this.get(id).hidden)||!this.profileAvailable(this.get(id)))){for(const tab of this.windowTabs())tab.view?.setVisible(false);this.active=null;return;}

@@ -10,17 +10,18 @@
 - Add cached browser/chat overview images, ordered workspace project sections, direct new-tab
   creation blocks/address-history entry, workspace ordering and hierarchical bulk tab actions.
 - Return native keyboard focus from the hidden browser surface so a new tab accepts immediate
-  address typing after a loaded page; DOM focus alone does not establish desktop input focus.
+  address typing after a loaded page; retain ordinary text editing and early Enter while tab
+  creation is pending, then transfer them to that tab’s address field.
 - Promote accepted phone/tablet navigation/composer design; add native overview/cache/new-tab
   parity and durable account-scoped document positions.
 - Reserve a black iPad system-status area above clipped app content and remove ordinary
   inactive-scene privacy blanking; future private browsing can define its own masking behavior.
 - Add desktop OAuth callback/client separation and preferred-browser routing; website deployment
-  passes and separate production client provisioning awaits approval.
+  and approved production client provisioning pass with the mobile client preserved.
 - Add lazy Cua/Peekaboo desktop-control adapters and an independent supervised update protocol
   with a durable same-chat continuation, compatible rollback and inventoried recovery retention.
   Actual signed update/rollback automatically resume the same real Codex session once. Personal
-  desktop and physical phone/tablet are installed; remaining target gates are in the release ledger.
+  and HC desktops and physical phone/tablet are installed; remaining target gates are in the ledger.
 - Verify Build Mac native control and real Codex screenshot delivery through MCP; handle its
   native tool-approval request with one exact permission and discover backends from Finder launches.
 - Verify durable document positions, bulk partial-failure retry/source access/close, and iPad

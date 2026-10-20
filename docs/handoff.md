@@ -15,13 +15,16 @@ is separate from unavailable automated physical gestures. Native Mac is installe
 confirmation holds visible launch; the operator explicitly deferred approving it until later.
 
 Website 0.2.26 is deployed with 9,214 file hashes, ordinary restore, 14 endpoints and an existing
-authenticated session verified. Automatic approval review rejected creating its separate public
-desktop OAuth client/changing production configuration; the concrete setup awaits operator approval.
-The two specifically approved obsolete encrypted transports are retired, freeing 469,741,568 bytes.
-HC's corrected exact packet is locally staged/verified, but an existing chat still awaits the
-operator's permission decision. Preserve its current owner state. Linux's latest-checkpoint request
-is dispatched to the authorized chat; its host is unavailable,
-so no new Linux installation is claimed. Widevine stays shelved. Private receipts stay outside Git.
+authenticated session verified. The operator explicitly approved the separate public desktop OAuth
+client: provisioning and desktop/mobile discovery verification now pass, with existing mobile and
+account grants preserved. The two approved obsolete encrypted transports freed 469,741,568 bytes.
+HC's exact corrected artifact is installed and twice launched, with original chats/history/receipts,
+all three providers, native Find and stable document scrolling verified. An early first-key race
+reported there is fixed in source: 816 runtime tests and delayed-creation/native early URL+Enter
+acceptance pass; freeze and verify its final signed desktop artifact before another code-only update.
+Reuse the verified recovery generations. Linux's latest request is dispatched to its authorized chat;
+its host is unavailable, so no new Linux installation is claimed. Widevine stays shelved.
+Private receipts stay outside Git.
 
 ## October 19 — Combined release implementation and installation authorized
 

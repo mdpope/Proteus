@@ -38,6 +38,7 @@ import {tabOverviewGroups} from './tab-overview-model.js';
 import {showBrowserCertificate} from './browser-address-menu.js';
 import { initBrowserOverview, showBrowserOverview, isBrowserOverviewOpen } from './browser-overview.js';
 import { browserTarget, renderBrowserHome } from './browser-home.js';
+import {beginNewTabInput,withNewTabInput} from './new-tab-input.js';
 import { browserAddress, updateAgentAccess, bindBrowserHistoryButton, browserSurfaceIdentity, browserSurfaceRevision, selectBrowserSurface } from './browser-toolbar.js';
 import { bindBrowserAddressMenu } from './browser-address-menu.js';
 import { bindTabEdges, bindTabReorder, reorderById } from './tab-interactions.js';
@@ -920,7 +921,7 @@ function renderChatSubtabs(){
   const childList=bar.querySelector('.chat-subtab-list');childList.scrollLeft=previousScroll;cleanupChatEdges=bindTabEdges(childList);bindTabReorder(childList,'.chat-subtab',node=>node.querySelector('[data-chat-subtab]')?.dataset.chatSubtab,(source,target,after)=>reorderVisibleTabs(source,target,after,parent.id));
   bar.querySelectorAll('[data-chat-child-close]').forEach(button=>button.onclick=event=>{event.stopPropagation();const tab=state.tabs.find(item=>item.id===button.dataset.chatChildClose);if(tab)void closeChildTab(tab).catch(error=>toast(error.message));});
   bar.querySelector('.chat-tab-add summary').onclick=event=>{event.preventDefault();bar.querySelector('[data-chat-add="browser"]')?.click();};
-  bar.querySelectorAll('[data-chat-add]').forEach(button=>button.onclick=async()=>{bar.querySelector('details').open=false;try{if(button.dataset.chatAdd==='new-chat'||button.dataset.chatAdd==='internet')return newWorkspaceChat(parent,button.dataset.chatAdd==='internet');if(button.dataset.chatAdd.startsWith('profile:'))return;else if(button.dataset.chatAdd==='agent-terminal'){if(parent.type!=='run')throw new Error('Agent command output is available on the executing computer; remote chat activity remains in its conversation.');openTab({id:'agent-terminal:'+(parent.runId||parent.id),type:'agent-terminal',runId:parent.runId||parent.id,label:'Agent terminal output',parentId:parent.id});}else if(button.dataset.chatAdd==='browser'){const info=await window.desktop.browser({action:'create',parentId:parent.id});openTab({id:info.id,type:'browser',label:info.title||'New tab',parentId:parent.id,info});}else if(button.dataset.chatAdd==='terminal')void openTerminalDialog(parent.id);else{if(parent.hostId)throw Error('Choose local files on the owning computer.');markdownDialog(parent.id);};}catch(error){toast(error.message);}});
+  bar.querySelectorAll('[data-chat-add]').forEach(button=>button.onclick=async()=>{bar.querySelector('details').open=false;try{if(button.dataset.chatAdd==='new-chat'||button.dataset.chatAdd==='internet')return newWorkspaceChat(parent,button.dataset.chatAdd==='internet');if(button.dataset.chatAdd.startsWith('profile:'))return;else if(button.dataset.chatAdd==='agent-terminal'){if(parent.type!=='run')throw new Error('Agent command output is available on the executing computer; remote chat activity remains in its conversation.');openTab({id:'agent-terminal:'+(parent.runId||parent.id),type:'agent-terminal',runId:parent.runId||parent.id,label:'Agent terminal output',parentId:parent.id});}else if(button.dataset.chatAdd==='browser'){try{await withNewTabInput(async capture=>{const info=await window.desktop.browser({action:'create',parentId:parent.id});capture.bind(info.id);openTab({id:info.id,type:'browser',label:info.title||'New tab',parentId:parent.id,info});});}catch(error){render();throw error;}}else if(button.dataset.chatAdd==='terminal')void openTerminalDialog(parent.id);else{if(parent.hostId)throw Error('Choose local files on the owning computer.');markdownDialog(parent.id);};}catch(error){toast(error.message);}});
 }
 
 async function closeTopTab(id){
@@ -994,7 +995,7 @@ function renderTabs() {
   $('#internet-search').onclick=()=>{ $('#tab-add-menu').open=false;internetSearchDialog({state,escape,showDialog,api,toast,refresh,open:runTab}); };
   $('#new-chat').onclick=()=>{ $('#tab-add-menu').open=false;chatDialog(); };$('#markdown').onclick=()=>{ $('#tab-add-menu').open=false;markdownDialog(); };
   $('#terminal').onclick=()=>{ $('#tab-add-menu').open=false;openTerminalDialog(); };
-  $('#browser').onclick=async()=>{ $('#tab-add-menu').open=false;try{if(!window.desktop)throw new Error('Open the desktop app to use browser tabs.');const info=await window.desktop.browser({action:'create'});openTab({id:info.id,type:'browser',label:info.title||'New tab',info});}catch(error){toast(error.message);}};
+  $('#browser').onclick=async()=>{ $('#tab-add-menu').open=false;try{if(!window.desktop)throw new Error('Open the desktop app to use browser tabs.');await withNewTabInput(async capture=>{const info=await window.desktop.browser({action:'create'});capture.bind(info.id);openTab({id:info.id,type:'browser',label:info.title||'New tab',info});});}catch(error){render();toast(error.message);}};
 }
 
 function browserBounds() {
@@ -1058,7 +1059,7 @@ function renderBrowser() {
 
   updateBrowserControls();
   const current=state.tabs.find(t=>t.id===state.tab);
-  if(current?.info?.profileLocked){void window.desktop?.browser({action:'hide',...browserSurfaceIdentity()});$('#browser-area').innerHTML='<div class="empty"><p>This browser profile is unavailable. Sign in and refresh profiles in Browser Preferences to resume it.</p></div>';}else if(!current?.info?.url){void window.desktop?.browser({action:'hide',...browserSurfaceIdentity()});void renderBrowserHome($('#browser-area'),{escape,toast,time,api,showDialog,profileId:current.info?.profileId||current.profileId||'default',browser:window.desktop.browser,navigate:navigateBrowser,actions:addTabMenuEntries(selectedChatParent()?.type==='workspace'?'workspace':selectedChatParent()?'chat':'main').map(action=>({...action,run:()=>newTabAction(current,action)}))});}
+  if(current?.info?.profileLocked){void window.desktop?.browser({action:'hide',...browserSurfaceIdentity()});$('#browser-area').innerHTML='<div class="empty"><p>This browser profile is unavailable. Sign in and refresh profiles in Browser Preferences to resume it.</p></div>';}else if(!current?.info?.url){void window.desktop?.browser({action:'hide',...browserSurfaceIdentity()});void renderBrowserHome($('#browser-area'),{escape,toast,time,api,showDialog,tabId:current.id,profileId:current.info?.profileId||current.profileId||'default',browser:window.desktop.browser,navigate:navigateBrowser,actions:addTabMenuEntries(selectedChatParent()?.type==='workspace'?'workspace':selectedChatParent()?'chat':'main').map(action=>({...action,run:()=>newTabAction(current,action)}))});}
   else if(current.info.loaded===false){void window.desktop?.browser({action:'hide',...browserSurfaceIdentity()});$('#browser-area').innerHTML='<div class="empty"><p>This tab is unloaded.</p><button id="browser-load">Load tab</button></div>';$('#browser-load').onclick=async()=>{await command('activate');current.info.loaded=true;renderBrowser();};}
   else requestAnimationFrame(browserBounds);
   renderChatSubtabs();
@@ -1415,7 +1416,8 @@ function selectBrowserTab(info, afterId=null) {
 window.desktop?.onNewTab?.(()=>{
  const parent=selectedChatParent(),team=previousFeature==='team';
  const button=team?document.querySelector('[data-team-add="browser"]'):parent?document.querySelector('[data-chat-add="browser"]'):document.querySelector('#browser');
- if(button)button.click();else document.querySelector('#browser')?.click();
+ const target=button||document.querySelector('#browser');if(!target)return;
+ beginNewTabInput({replace:true});target.click();
 });
 window.desktop?.onBrowserAction?.(value=>{
   if(value.type==='downloads'){downloadsChanged();return;}

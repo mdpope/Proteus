@@ -4,15 +4,18 @@ The operator lifted the intake hold and authorized the combined release. BF-04â€
 implemented, except BF-15 Widevine, explicitly shelved. Historical queue-only statuses below record
 intake; the [release ledger](2026-10-19-next-release.md) distinguishes actual fixture/live-provider
 acceptance from pending signed-helper, website authentication and device installation acceptance.
-The latest checks include 815 runtime cases, real durable reading-position/bulk-action UI, iPad
+The latest checks include 816 runtime cases, real durable reading-position/bulk-action UI, iPad
 status/cache/rotation/reactivation and a real Codex image-only desktop observation through MCP.
 Actual signed helper update and forced compatible rollback both automatically resume the original
 real Codex session once, preserving full history and operation receipts. Personal's first 0.2.26
 installation preserves current data; live typing exposed hidden native-browser keyboard focus.
 The corrected foreground-only focus handoff passes a real native-focus regression and the scoped
-conflict/DevTools/context-menu UI checks. Freeze and accept its corrected signed artifact before
-continuing desktop rollout. Device, website and native Mac visible-launch acceptance remain
-separate; see the ledger rather than interpreting historical intake holds as current policy.
+conflict/DevTools/context-menu UI checks. Both desktop installations, physical phone/tablet and website are accepted at the previous signed
+checkpoint. HC then exposed typing before asynchronous tab creation completes: native keyboard
+handoff plus temporary window-local text editing preserves the complete URL and Enter through
+that delay. Source/native regression passes; final signed package acceptance and desktop updates
+remain. Approved desktop OAuth provisioning is verified with the separate callback and unchanged
+mobile client. Native Mac visible launch and Linux availability remain separate; see the ledger.
 
 ## October 19 â€” Linux implementation checkpoint validation
 

@@ -940,3 +940,12 @@ receive immediate real typing after a loaded page. Its DOM focus alone is insuff
 hidden WebContentsView still owns native keyboard input. Repeated hide/layout calls and inactive
 windows must not steal focus. Live release acceptance found this after the first signed candidate;
 the corrected artifact must repeat package/update acceptance before other desktop installations.
+
+
+October 20 follow-up: native Command-T and the File menu return keyboard ownership before
+notifying the renderer. Each window temporarily uses an ordinary text input while its blank tab
+is created, preserving native editing/composition and early Enter for that exact tab. The final
+address field takes its value/selection after its handlers are installed. Pointer navigation,
+page teardown or creation failure clears this temporary state; nothing is logged or persisted.
+The foreground native regression delays creation while delivering a complete URL and Enter,
+then verifies the exact loaded destination and removal of the temporary input.

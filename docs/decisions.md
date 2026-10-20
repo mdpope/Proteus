@@ -1748,3 +1748,13 @@ keyboard focus to that window's shell after hiding the browser. DOM focus alone 
 in the hidden WebContentsView. Do this once on the transition; repeated layout updates and
 background windows must not steal focus. A real native-focus regression fails the prior signed
 artifact and passes the correction, alongside foreground/background ownership unit coverage.
+
+
+## October 20 — Preserve text entered during asynchronous tab creation
+
+Hiding a native browser after creation is too late for fast Command-T typing. Return native
+keyboard ownership synchronously, then keep a window-local ordinary text input until the owner
+returns the new stable tab identity and its address field mounts. Transfer text, selection and
+early Enter only to that identity after form handlers exist. Native input editing handles paste
+and composition; there is no global key recorder or persisted typed buffer. This also serves
+main, chat-child and Team new-tab creation without changing browser page authorization.

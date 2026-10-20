@@ -1,4 +1,5 @@
 import {addTabIcons} from './add-tab-menu.js';
+import {focusNewTabAddress} from './new-tab-input.js';
 const engines={google:'https://www.google.com/search?q=',duckduckgo:'https://duckduckgo.com/?q=',bing:'https://www.bing.com/search?q='};
 export const browserSearchEngines={google:'Google',duckduckgo:'DuckDuckGo',bing:'Bing'};
 export function browserDefaultEngine(){try{const value=globalThis.localStorage?.getItem('proteus-browser-search-engine');return engines[value]?value:'google';}catch{return 'google';}}
@@ -37,7 +38,6 @@ export async function renderBrowserHome(area,options){
   const active=()=>area.isConnected&&area.firstElementChild===root;
   const find=selector=>area.querySelector(selector);
   area.querySelectorAll('[data-new-tab-action]').forEach(button=>button.onclick=act(()=>options.actions[Number(button.dataset.newTabAction)].run()));
-  find('#browser-home-url').focus({preventScroll:true});
   find('#browser-home-search').onsubmit=act(event=>options.navigate(searchTarget(find('#browser-home-query').value,event.submitter?.dataset.engine||browserDefaultEngine())));
   find('#browser-home-address').onsubmit=act(()=>options.navigate(browserTarget(find('#browser-home-url').value)));
   const links=async()=>{try{const value=await options.api('/api/app');if(!active())return;identity=value.identity;shared=value.links||[];find('#browser-shared-links').innerHTML=shared.map((link,i)=>`<div class="browser-shared-link"><button data-link-open="${i}">${escape(link.title||link.url)}</button><button data-link-remove="${i}" aria-label="Remove ${escape(link.title||'link')}">×</button></div>`).join('')||'<p class="note">No shared links yet.</p>';find('#browser-link-form').hidden=false;area.querySelectorAll('[data-link-open]').forEach(button=>button.onclick=act(()=>options.navigate(browserTarget(shared[Number(button.dataset.linkOpen)].url))));area.querySelectorAll('[data-link-remove]').forEach(button=>button.onclick=act(async()=>{const link=shared[Number(button.dataset.linkRemove)];await options.api('/api/app',{path:'/links/'+link.id,method:'DELETE',body:{expectedRevision:link.revision},identity});await links();}));}catch(error){if(active()){find('#browser-shared-links').textContent=error.message+' Connect your Proteus account in App Setup.';find('#browser-link-form').hidden=true;}}};
@@ -75,5 +75,6 @@ export async function renderBrowserHome(area,options){
   find('#browser-history-more').onclick=()=>{void load();};
   const saveHistory=act(async()=>{await options.api('/api/browser-history',{action:'settings',enabled:find('#history-enabled').checked,retentionDays:Number(find('#history-retention').value)});await load(true);});find('#history-enabled').onchange=saveHistory;find('#history-retention').onchange=saveHistory;
   find('#history-clear').onclick=()=>{if(options.showDialog){options.showDialog('<h2>Clear this profile’s history?</h2><p>This deletes retained visits for this profile and propagates removal to configured peers.</p><button id="close-dialog">Cancel</button><button id="dialog-submit">Clear history</button>',async()=>{await options.api('/api/browser-history',{action:'delete',all:true,profileId:options.profileId||'default'});await load(true);});}else if(window.confirm('Clear retained Proteus history on this computer?'))void options.api('/api/browser-history',{action:'delete',all:true,profileId:options.profileId||'default'}).then(()=>load(true));};
+  focusNewTabAddress(find('#browser-home-url'),options.tabId);
   await Promise.allSettled([load(true),links()]);
 }

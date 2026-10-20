@@ -10,16 +10,16 @@ signing identities. Use exact tested artifacts and the two-generation recovery p
 ## Current rollout — October 20
 
 The implementation scope is complete except shelved Widevine and the unproven black-rectangle
-symptom. **815 runtime tests, static checks, 135 native units and focused desktop/web/native UI
+symptom. **816 runtime tests, static checks, 135 native units and focused desktop/web/native UI
 acceptance pass.** The corrected exact signed desktop is `359c75fc3217+src.bf58ce118fbd`.
 Its actual signed helper update and forced compatible rollback resume the original real Codex
 session automatically once, retaining previous events and complete navigation/operation receipts.
 
 | Target | Actual status |
 | --- | --- |
-| Personal desktop | Corrected artifact installed; second restart, original selection, all original data/history/receipts, native instant typing, Command-N and all three production provider choices verified. |
-| HC desktop | Corrected exact packet dispatched to its authorized chat; awaiting-input work must finish before installation. |
-| Website | 0.2.26 deployed; 9,214 file hashes, ordinary isolated restore, 14 endpoints and existing authenticated session pass. Separate desktop OAuth provisioning awaits explicit approval after automatic review rejected its production submission. |
+| Personal desktop | Corrected artifact installed; second restart, original selection, all original data/history/receipts, native typing after the field is ready, Command-N and all three production provider choices verified. |
+| HC desktop | Corrected artifact installed and twice launched; all three providers, retained chats/history/retry receipts, native Find and stable document scrolling verified. Its early first-key report is fixed in source and awaits the final signed update. |
+| Website | 0.2.26 deployed; 9,214 file hashes, ordinary isolated restore, 14 endpoints and existing authenticated session pass. Approved desktop OAuth provisioning is complete; desktop discovery is enabled with its separate desktop callback and unchanged mobile client. |
 | iPhone/iPad | Paid 0.2.26 / 2610.19.1 installed in place and launched; all 69/72 protected files respectively match recovery hashes. Physical gesture testing is unavailable through current automation; simulator acceptance is separate. |
 | Native Mac client | Installed with unchanged identity; running executable matches. Visible launch awaits the macOS security prompt, explicitly deferred by the operator. |
 | Linux | Branch incorporated and earlier package/UI checks pass; latest checkpoint dispatched to the authorized Linux chat, whose host is unavailable. No new Linux installation claimed. |
@@ -30,6 +30,12 @@ is on `codex/signed-proteus-0226-focus-20261020`; its transfer-list SHA-256 is
 Corresponding source and exact artifact hashes remain in its manifest. Detailed deployment,
 device, recovery and live-data receipts stay outside this repository.
 
+The early first-key follow-up passes all 816 runtime tests and a foreground native regression:
+tab creation is deliberately delayed while a complete URL and Enter arrive through real native
+input before the final address field exists. The requested new tab receives the exact URL; its
+temporary editing control is removed. The final source is awaiting exact signed package acceptance.
+This desktop-only repair does not change the accepted native Swift build.
+
 ## Source implementation and release acceptance checklist
 
 Checked implementation items do not assert acceptance on every target; the table above is authoritative.
@@ -39,7 +45,7 @@ Checked implementation items do not assert acceptance on every target; the table
 - [x] BF-08/09/10: workspace-wide ordered overview, persistent browser/chat thumbnails and icon.
 - [x] BF-11: multiple desktop windows, shortcuts and complete quit restoration.
 - [x] BF-12: direct new-tab page and combined address/history entry, desktop and iOS.
-- [x] BF-13/14: connected profile controls/guidance and correct auth browser/callback app; production client provisioning remains pending above.
+- [x] BF-13/14: connected profile controls/guidance and correct auth browser/callback app; production client provisioning is verified above.
 - [ ] BF-15: **Shelved by operator**: no paid Widevine vendor-signing account or runtime migration in this release.
 - [x] BF-16/17/18: workspace ordering, hierarchical move destinations and bulk tab actions.
 - [x] BF-19/20: durable document positions and circled More icon.
