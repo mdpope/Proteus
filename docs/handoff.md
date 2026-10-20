@@ -19,9 +19,12 @@ authenticated session verified. Automatic approval review rejected creating its 
 desktop OAuth client/changing production configuration; the concrete setup awaits operator approval.
 The two specifically approved obsolete encrypted transports are retired, freeing 469,741,568 bytes.
 HC's corrected exact packet is locally staged/verified, but an existing chat still awaits the
-operator's permission decision. Preserve its current owner state. Linux's latest-checkpoint request
-is dispatched to the authorized chat; its host is unavailable,
-so no new Linux installation is claimed. Widevine stays shelved. Private receipts stay outside Git.
+operator's permission decision. Preserve its current owner state. Linux main `9114970` is now
+installed as `linux.34d37e887ee5`, independently verified with real synthetic Codex, restored UI,
+second restart and preserved history/receipts. Two verified recovery generations and the helper
+inventory are initialized. Native Wayland control remains unavailable and existing remote access
+stays disabled. See [Linux acceptance](2026-10-19-linux-026-install.md). Widevine stays shelved.
+Private receipts stay outside Git.
 
 ## October 19 — Combined release implementation and installation authorized
 

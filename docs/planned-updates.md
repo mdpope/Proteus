@@ -8575,3 +8575,13 @@ first-run host identity in an owner with remote access never configured. The imp
 persists that disabled identity; its real service restart regression preserves full navigation and
 duplicate-operation receipts. Existing histories/configured owners are not rewritten. A fresh signed
 candidate and update/rollback acceptance are still required; production installations are unchanged.
+
+## Linux 0.2.26 installed acceptance
+
+Main `9114970` is now installed as `linux.34d37e887ee5`: 815 tests/static, exact-package UI/PTY/restart
+and native New-tab focus pass. The actual UI and a synthetic real Codex session pass; the second
+normal launch preserves both chat files and all original protected navigation/approval/configuration
+state. Two verified same-owner recovery generations remain; all-root imported inventory initializes
+future supervised updates. Official user-local Cua is discoverable, with honest native Wayland
+limitations and no Peekaboo fallback. Existing remote access stays disabled. Full receipts stay
+private; [installation acceptance](2026-10-19-linux-026-install.md) records hashes and scope.

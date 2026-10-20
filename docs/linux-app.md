@@ -308,3 +308,15 @@ its launch command. Initial and second-instance URLs use the strict shared callb
 desktop OAuth never accepts the mobile callback scheme. Final Linux installation must verify its
 desktop entry/handler registration and actual callback delivery. Mac-side unit checks are source
 evidence; package/desktop/live validation remains on the authorized Linux chat and machine.
+
+## 0.2.26 installed on the Linux laptop
+
+Release main `9114970` is installed as `linux.34d37e887ee5` and independently live-verified after
+two graceful launches. Fresh 815 runtime/static checks, exact-package UI/PTY/restart/native focus,
+real synthetic Codex execution and protected history/receipt/cookie continuity pass. Two audited
+same-owner full recovery generations and the supervised-update inventory are retained. User-local
+launcher/protocol registration and official Cua discovery are configured; native Wayland desktop
+control remains unavailable at default settings, with no Linux Peekaboo fallback. Existing remote
+access stays disabled. See the [installation acceptance](2026-10-19-linux-026-install.md) for exact
+artifact hashes, actual free-space change and evidence/limits. Earlier hold/preparation sections
+above are historical checkpoints.
