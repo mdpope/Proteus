@@ -320,3 +320,12 @@ control remains unavailable at default settings, with no Linux Peekaboo fallback
 access stays disabled. See the [installation acceptance](2026-10-19-linux-026-install.md) for exact
 artifact hashes, actual free-space change and evidence/limits. Earlier hold/preparation sections
 above are historical checkpoints.
+
+## Early-input/IPC follow-up `e350395` — tested, restart held
+
+The [follow-up ledger](2026-10-19-linux-followup-e350395.md) records exact candidate
+`linux.8e2611e6ef29`, 817 tests/static, private-X11 native early URL/Enter (main and Team), sidebar
+color, package UI/PTY/restart and independent helper update/rollback acceptance. Current installed
+`linux.34d37e887ee5` stays running because a non-tmux terminal is active. Preserve that work; a
+passing candidate is not a completed installation. Recovery reuse/current-state requirements and
+the separate host-session canvas timeout remain explicit in the ledger.
