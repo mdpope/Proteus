@@ -4,12 +4,22 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import {sidebarFixture} from './preview-sidebar-fixture.mjs';
+const ozonePlatform=process.platform==='linux'?process.env.PROTEUS_TEST_OZONE_PLATFORM:undefined;
+if(ozonePlatform&&ozonePlatform!=='x11')throw Error('PROTEUS_TEST_OZONE_PLATFORM supports only x11.');
 const fixture=await sidebarFixture();let app;
 const errors=[];
 const until=async(fn,label)=>{for(let n=0;n<150;n++){if(await fn())return;await new Promise(resolve=>setTimeout(resolve,100));}throw Error('Timed out: '+label);};
 const main=(fn,value)=>app.evaluate(async({app},{code,value})=>new Function('main','value','return ('+code+')(main,value)')(process.mainModule.require(app.getAppPath()+'/desktop/main.cjs'),value),{code:fn.toString(),value});
+// Wait for compositor acknowledgement instead of recording cached setter bounds.
+const stableBounds=async label=>{
+ let prior='',repeats=0;
+ await until(async()=>{
+  const rows=await main(main=>[...main.getWindows().contexts.values()].map(ctx=>({id:ctx.id,bounds:ctx.window.getNormalBounds()})));
+  const signature=JSON.stringify(rows);repeats=signature===prior?repeats+1:0;prior=signature;return repeats>=5;
+ },label);
+};
 const ready=async page=>{page.on('pageerror',error=>errors.push(error.message));await page.locator('#topbar-home').waitFor();return page;};
-const launch=async()=>{app=await electron.launch({args:['.','--use-mock-keychain','--user-data-dir='+fixture.locations.userData],env:{...process.env,PROTEUS_DESKTOP_PREVIEW:'1',PROTEUS_PREVIEW_HOME:fixture.locations.root,PROTEUS_HOME:fixture.locations.home,CODEX_HOME:fixture.auth,PORT:'0'}});await ready(await app.firstWindow());};
+const launch=async()=>{app=await electron.launch({args:['.',...(ozonePlatform?['--ozone-platform='+ozonePlatform]:[]),'--use-mock-keychain','--user-data-dir='+fixture.locations.userData],env:{...process.env,PROTEUS_DESKTOP_PREVIEW:'1',PROTEUS_PREVIEW_HOME:fixture.locations.root,PROTEUS_HOME:fixture.locations.home,CODEX_HOME:fixture.auth,PORT:'0'}});await ready(await app.firstWindow());if(ozonePlatform)assert.equal(await app.evaluate(({app})=>app.commandLine.getSwitchValue('ozone-platform')),ozonePlatform);};
 const pages=()=>app.windows().filter(page=>{try{return new URL(page.url()).pathname==='/'&&page.url().startsWith('http');}catch{return false;}});
 const command=(page,value)=>page.evaluate(value=>window.desktop.browser(value),value);
 try{
@@ -24,10 +34,12 @@ try{
  await main((main,ids)=>{const registry=main.getWindows();registry.contexts.get(ids[0]).window.setBounds({x:110,y:140,width:1050,height:720});registry.contexts.get(ids[1]).window.setBounds({x:220,y:180,width:1000,height:740});},ids);
  // Distinct main scopes and reading positions cannot overwrite a sibling.
  for(const [index,page]of [first,second].entries())await page.evaluate(async index=>{await window.desktop.viewPositions({action:'set',key:'document:shared',position:[['root',{top:100+index,left:0}]]});const saved=await window.desktop.workspaceSession({action:'get'});await window.desktop.workspaceSession({action:'save',session:{...saved,page:index?'context':'engine'}});},index);
+ await stableBounds('settled pre-Quit compositor bounds');
  const before=await main(main=>[...main.getWindows().contexts.values()].map(ctx=>({id:ctx.id,bounds:ctx.window.getNormalBounds()})));
  await app.close();app=null;await launch();
  await until(()=>pages().length===2,'both windows restored');
  for(const page of pages())await ready(page);
+ await stableBounds('settled restored compositor bounds');
  const restored=await main(main=>[...main.getWindows().contexts.values()].map(ctx=>({id:ctx.id,bounds:ctx.window.getNormalBounds()})));
  assert.deepEqual(restored,before);
  for(const page of pages()){const id=await page.evaluate(()=>window.desktop.windowId),index=ids.indexOf(id);const rows=await page.evaluate(()=>window.desktop.viewPositions({action:'get'}));assert.equal(rows.find(([key])=>key==='document:shared')[1][0][1].top,100+index);}

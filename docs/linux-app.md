@@ -4,6 +4,88 @@ workflow results supersede their pending/failure status without changing the rec
 
 # Linux build of the current Mac source
 
+## October 19 implementation checkpoint `c41ffa5` — Linux preparation
+
+This unfrozen implementation checkpoint on `codex/next-release-0.2.26` incorporates the earlier
+`9439f24` signed-out startup correction. It still declares package version **0.2.25**; it is not
+an installable final 0.2.26 release. Separate validation work belongs to `linux/c41ffa5-validation`.
+
+**Source tested:** fresh `npm ci`, all **811 Node tests**, and static checks pass. The twelve
+synthetic updater cases include Linux executable lookup, idle/continuation barriers, recovery
+journals, compatible rollback and preservation of new records; they do not install an app.
+
+**Packaged:** the exact Linux x64 package is **`linux.2b491477dc2d`**, with **253 runtime files**:
+
+- Source fingerprint: `2b491477dc2d20069518b0e4ce78676f1a8c7fabb2f2c32ec1cb328b1d7aced7`.
+- Archive SHA-256: `78c92d4e622b32b43e88275da9df01b3eb50e8e8dbc5b347dc72e4b630a0a7e3`.
+- Whole-bundle tree hash used by the updater: `9498ea427734fc86a63809042678e016c6d80f5a3fc44e7f69bae93907f51258`.
+- Exact-package UI acceptance passes runtime/provenance/private-file checks, signed-out startup,
+  explicit synthetic chat feedback, packaged native PTY keyboard input and retained history after
+  a full restart. Provider paths deliberately fail before credential discovery; no model is called.
+- `desktop-file-validate` accepts `Exec=proteus %U` and both `proteus`/`proteus-desktop` MIME schemes.
+  Initial argv opens the seeded chat; a second instance forwards another chat URL to the existing
+  owner and exits. Unmatched desktop OAuth is rejected, while mobile/wrong-path/userinfo URLs
+  remain ignored, with no token exchange or saved credential. A cold unmatched callback stays
+  signed out. System registration and external-browser OAuth are not exercised or changed.
+- The actual packaged updater inspector resolves lowercase `proteus`, its exact installation and
+  source identity. Active journal lookup and foreign-pointer rejection pass with private fabricated
+  fixtures. The packaged helper's exported `smoke()` passes fresh renderer/API startup against
+  those exact bytes. The whole-bundle tree hash is unchanged afterward. No update prepare,
+  handoff, replacement, rollback or provider continuation is invoked against a live installation.
+
+The previously failing workspace-child-selection suite now passes its three real process cycles,
+preserving stable identities, URL/history/selection/order and unrelated Team entries. Current
+browser-home UI passes direct +, unified address/history, pagination retry, Team draft retention
+and creation actions. The tab-stability fixture originally created uncommitted `restore:true`
+views after alpha had seeded an authoritative owner; reconciliation correctly removed beta/gamma.
+The corrected fixture seeds the complete saved session before launch, distinguishes canonical
+owner IDs from native view IDs and retains every title/order/DOM-node/polling/second-client-title/
+reorder-during-load assertion. Its full suite passes, with added unloaded-restoration assertions.
+
+The strict multiwindow suite passes IPC/browser isolation, independent reading positions, all
+geometry comparisons, Quit restoration and explicit Close persistence on private Xvfb/Openbox/X11.
+The tracked harness accepts Linux-only `PROTEUS_TEST_OZONE_PLATFORM=x11` and waits for compositor
+bounds to settle before comparing them. Mac launch defaults and all strict assertions remain.
+The laptop's native Wayland run fails global-position equality, returning `(0,0)` after restore;
+Electron explicitly does not support global window positioning on
+[Wayland](https://www.electronjs.org/docs/latest/api/browser-window/). A host KWin/XWayland run also
+shows position/decoration deltas. Neither result is waived into a full geometry pass; the private
+X11 result does not establish matching placement on the operator's native desktop.
+
+[Official Cua Driver **0.36.0**](https://github.com/trycua/cua/releases/tag/cua-driver-rs-v0.36.0)
+is staged only in ignored test storage. Its Linux archive SHA-256
+`05dae2160c86bdf4855c279d30898213d7a150edb1992b7470afdd69f0df4064` matches official published checksums
+and the GitHub asset digest. Private Xvfb/Openbox, a separate D-Bus session and disposable homes
+isolate discovery/capture/input attempts from production windows. Actual discovery and matching
+process/window receipts pass through the unchanged Proteus broker, returning a real 640×440 PNG.
+The Electron fixture's AT-SPI tree is degraded to window metadata; semantic controls are unverified.
+A fresh capture-bound pixel click is explicitly refused by the vendor's `background_unavailable`
+response for an unfocused Chromium/Electron renderer. Proteus does not enable its suggested
+foreground path, replay input or bypass its target/observation guards. The independent counter
+stays zero: Electron input acceptance fails, even though capture and permission discovery pass.
+A separate native GTK counter on the same private X11 environment passes exact-process/window
+observation, a background accessibility click, an independent counter of exactly one, a fresh
+"Confirmed once" label and changed screenshot. The vendor labels the immediate click effect
+`unverifiable`; independent state and fresh observation establish this fixture's result without
+replaying it. Actual captured image bytes also pass the `desktopTools` model-result adapter and
+MCP/Codex conversion checks. These are adapter checks, not delivery to a real model. The official
+archive checksum and asset digest are verified; its preserved Sigstore bundle is not independently
+verified because cosign is unavailable. Cursor animation, keyboard routes, arbitrary apps and
+native Wayland control remain unverified. Peekaboo remains Mac-only; no guard or source backend
+adapter is changed for these tests.
+
+The checked-in `test/desktop-control-live-ui.mjs` still assumes the Mac Peekaboo fallback and
+is not an unchanged Linux acceptance command. Linux's receipts use the separate disposable
+GTK/Electron fixtures and real broker; its optional fallback section needs platform gating before
+that common harness is advertised on Linux. This test-surface gap does not permit a non-Mac fallback.
+
+**Installed/live verified:** no candidate replaces the installed 0.2.20 app. No production profile,
+application data, handler registration, credential grants, relay identity or recovery generation
+is changed, and build-only tests create no full live-data backup. Final installation, production
+relay/device acceptance and real-provider continuation await the coordinator's frozen identity.
+The historical embedded 0.2.20 upstream receipt remains import lineage; current payload identity
+comes from this checkpoint and its current fingerprint above.
+
 ## October 19 preliminary combined-release validation
 
 The release coordinator's unfrozen checkpoint `0a5a2f6` on

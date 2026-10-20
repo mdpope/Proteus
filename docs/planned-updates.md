@@ -8,6 +8,24 @@ The latest checks include 812 runtime cases, real durable reading-position/bulk-
 status/cache/rotation/reactivation and a real Codex image-only desktop observation through MCP.
 No production installation or website-client provisioning follows merely from those checks.
 
+## October 19 — Linux implementation checkpoint validation
+
+Checkpoint `c41ffa5` passes all 811 Node tests/static checks and exact Linux package UI/PTY/restart
+acceptance as `linux.2b491477dc2d`. Actual packaged updater smoke, lowercase executable lookup,
+desktop-file MIME metadata, initial/second-instance URLs and strict callback rejection pass without
+installation or handler registration. Child-selection and browser-home UI pass. Correct the
+stability fixture to restore a complete authoritative saved session and distinguish canonical
+IDs from native views; retain every assertion. Multiwindow strict geometry/IPC/reading/close checks
+pass in isolated X11/Openbox, while native Wayland global positioning is unavailable and host
+KWin/XWayland shows placement/frame deltas. Official staged Cua 0.36.0 captures the exact private
+Electron window, but refuses background input to that unfocused renderer; foreground fallback is
+not enabled and the counter remains unchanged. A disposable native GTK counter does pass one
+background accessibility click, independent count/fresh-observation verification and actual image
+adapter transport. This does not certify keyboard, native Wayland or arbitrary apps. See
+[exact receipts and limits](linux-app.md).
+No new release is installed; frozen-candidate, production relay/device and live-provider acceptance
+remain separate gates. Validation-only changes do not alter the tested runtime/package bytes.
+
 ## October 19 — Linux release preparation follow-up
 
 Isolated checkpoint `0a5a2f6` passes 783 runtime tests and static checks, and produces a Linux

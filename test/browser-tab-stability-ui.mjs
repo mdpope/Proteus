@@ -4,14 +4,24 @@ import fs from 'node:fs';import os from 'node:os';import path from 'node:path';i
 const home=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'proteus-tab-stability-')));
 fs.writeFileSync(path.join(home,'settings.json'),JSON.stringify({schemaVersion:1,provider:'rehearsal',model:'',timezone:'UTC',workspace:{cwd:home,additionalDirectories:[]},skillDirectories:[],mcpServers:{}}));
 let resolveLateLoad;const server=http.createServer((req,res)=>{if(req.url==='/late-load')resolveLateLoad?.();setTimeout(()=>res.end(`<title>Synthetic ${req.url.slice(1)}</title><h1>Stable page</h1>`),700);});await new Promise(r=>server.listen(0,'127.0.0.1',r));
-const origin='http://127.0.0.1:'+server.address().port;let app;
+const origin='http://127.0.0.1:'+server.address().port;
+const names=['alpha','beta','gamma'],canonicalIds=names.map(name=>'stability-'+name);
+// Restore one authoritative saved session. Incrementally creating restore:true
+// views after the owner is seeded makes them uncommitted views to reconcile away.
+const savedTabs=names.map((name,index)=>({id:canonicalIds[index],contentTabId:canonicalIds[index],type:'browser',label:'Synthetic '+name,url:origin+'/'+name,unloaded:true,history:{entries:[{id:name+'-entry',url:origin+'/'+name,title:'Synthetic '+name}],index:0,currentEntryId:name+'-entry',revision:0}}));
+fs.writeFileSync(path.join(home,'desktop-workspace.json'),JSON.stringify({schemaVersion:1,active:'overview',page:'home',tabs:[{id:'overview',type:'overview',label:'Home'},...savedTabs]}));
+let app;
 try{
  app=await electron.launch({...(process.env.PROTEUS_TEST_EXECUTABLE?{executablePath:process.env.PROTEUS_TEST_EXECUTABLE}:{}),args:[...(process.env.PROTEUS_TEST_EXECUTABLE?[]:['.']),'--use-mock-keychain','--user-data-dir='+path.join(home,'electron')],env:{...process.env,PROTEUS_HOME:home,PORT:'0'},timeout:60000});
  const page=await app.firstWindow();page.setDefaultTimeout(15000);const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.locator('#home-screen').waitFor();
  await page.route('**/app.js',async route=>{const response=await route.fetch();await route.fulfill({response,body:(await response.text()).replace('refresh().then(restoreWorkspace)','window.stabilityReady=refresh().then(restoreWorkspace)')+'\nwindow.stabilityFixture={contentTabSync,state,refresh,renderTabs,reorderVisibleTabs};\n'});});
  await page.reload();await page.evaluate(()=>window.stabilityReady);
  await app.evaluate(({app})=>{const b=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser();b.blocker.ensure=async()=>{};});
- const ids=[];for(const name of ['alpha','beta','gamma']){const info=await page.evaluate(value=>window.desktop.browser(value),{action:'create',restore:true,unloaded:true,title:'Synthetic '+name,url:origin+'/'+name});ids.push(info.id);}
+ const restored=await page.evaluate(canonicalIds=>canonicalIds.map(contentTabId=>{const tab=window.stabilityFixture.state.tabs.find(tab=>tab.contentTabId===contentTabId);return tab?{id:tab.id,contentTabId:tab.contentTabId,loaded:tab.info?.loaded}:null;}),canonicalIds);
+ assert.ok(restored.every(Boolean),'Every saved canonical descriptor restores a native browser view');
+ assert.deepEqual(restored.map(tab=>tab.contentTabId),canonicalIds);
+ assert.ok(restored.every(tab=>tab.loaded===false),'Restored siblings start unloaded');
+ const ids=restored.map(tab=>tab.id);
  await page.evaluate(()=>window.stabilityFixture.contentTabSync.all());
  const before=await page.locator('#tabs [data-tab]').allTextContents();
  await page.evaluate(()=>{window.stabilityEvidence=[];const sample=()=>window.stabilityEvidence.push([...document.querySelectorAll('#tabs [data-tab]')].map(n=>({id:n.dataset.tab,title:n.textContent.trim()})));new MutationObserver(sample).observe(document.querySelector('#tabs'),{childList:true,subtree:true,characterData:true});sample();});
@@ -23,7 +33,7 @@ try{
  assert.equal(await handle.evaluate(n=>n.isConnected),true,'No-op polling retains tab nodes');
  // A second client updates an unloaded sibling's canonical page title. Native
  // state broadcasts must not restore its stale snapshot title on the next poll.
- await app.evaluate(async({app},id)=>{const s=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getService();const row=await s.contentTabs.getAsync('main','main'),tab=row.tabs.find(t=>t.id===id),entry=tab.history.entries[tab.history.index];await s.contentTabs.mutateAsync({scope:'main',id:'main',expectedRevision:row.revision,operations:[{action:'browser-redirect',tabId:id,entryId:entry.id,url:entry.url,title:'Updated by second client',operationId:process.mainModule.require('node:crypto').randomUUID(),baseRevision:tab.history.revision}]});},ids[2]);
+ await app.evaluate(async({app},id)=>{const s=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getService();const row=await s.contentTabs.getAsync('main','main'),tab=row.tabs.find(t=>t.id===id),entry=tab.history.entries[tab.history.index];await s.contentTabs.mutateAsync({scope:'main',id:'main',expectedRevision:row.revision,operations:[{action:'browser-redirect',tabId:id,entryId:entry.id,url:entry.url,title:'Updated by second client',operationId:process.mainModule.require('node:crypto').randomUUID(),baseRevision:tab.history.revision}]});},canonicalIds[2]);
  await page.evaluate(()=>window.stabilityFixture.contentTabSync.all());
  await app.evaluate(({app})=>process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser().changed());
  await page.waitForTimeout(200);await page.evaluate(()=>window.stabilityFixture.contentTabSync.all());
@@ -35,7 +45,7 @@ try{
  assert.deepEqual(await page.locator('#tabs [data-tab]').evaluateAll(nodes=>nodes.map(n=>n.dataset.tab)),[ids[2],ids[0],ids[1]]);
  // A user drag during the native load awaited by reconciliation must win over
  // the order captured before that await, then publish on the next pass.
- await app.evaluate(async({app},{ids,origin})=>{const s=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getService();let row=await s.contentTabs.getAsync('main','main'),tab=row.tabs.find(t=>t.id===ids[0]);await s.contentTabs.mutateAsync({scope:'main',id:'main',expectedRevision:row.revision,operations:[{action:'browser-navigate',tabId:tab.id,entryId:'late-entry',url:origin+'/late-load',title:'Late load',operationId:'late-entry',visitedAt:new Date().toISOString(),baseRevision:tab.history.revision}]});row=await s.contentTabs.getAsync('main','main');await s.contentTabs.mutateAsync({scope:'main',id:'main',expectedRevision:row.revision,operations:[{action:'reorder',ids:[ids[2],ids[1],ids[0]]}]});},{ids,origin});
+ await app.evaluate(async({app},{ids,origin})=>{const s=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getService();let row=await s.contentTabs.getAsync('main','main'),tab=row.tabs.find(t=>t.id===ids[0]);await s.contentTabs.mutateAsync({scope:'main',id:'main',expectedRevision:row.revision,operations:[{action:'browser-navigate',tabId:tab.id,entryId:'late-entry',url:origin+'/late-load',title:'Late load',operationId:'late-entry',visitedAt:new Date().toISOString(),baseRevision:tab.history.revision}]});row=await s.contentTabs.getAsync('main','main');await s.contentTabs.mutateAsync({scope:'main',id:'main',expectedRevision:row.revision,operations:[{action:'reorder',ids:[ids[2],ids[1],ids[0]]}]});},{ids:canonicalIds,origin});
  const loading=new Promise(r=>resolveLateLoad=r);await page.evaluate(()=>{window.syncDuringLoad=window.stabilityFixture.contentTabSync.all();});await loading;
  await page.evaluate(ids=>window.stabilityFixture.reorderVisibleTabs(ids[1],ids[2],false),ids);await page.evaluate(()=>window.syncDuringLoad);await page.waitForTimeout(1000);
  assert.deepEqual(await page.locator('#tabs [data-tab]').evaluateAll(nodes=>nodes.map(n=>n.dataset.tab)),[ids[1],ids[2],ids[0]],'A reorder during an awaited native load is retained');
