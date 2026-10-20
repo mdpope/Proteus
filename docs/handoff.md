@@ -1,3 +1,15 @@
+## October 20 — latest follow-up is still being accepted
+
+All 817 runtime checks and static checks pass. The operator subsequently adds native strip spacing/dividers, independent plain headings/sidebar
+buttons, compact phone footer, reliable hide/reveal, ordered address swipes, browser performance
+and matching sidebar backgrounds. See BF-2026-10-20-32–38 and the release ledger. Native 136 units,
+phone labels/ordered swipes/footer/scroll recovery, iPad strip spacing and simulator scrolling
+CPU/memory measurements pass. Physical smoothness is not inferred from simulator metrics. New
+signed 2610.20.1/device and desktop packages remain pending. The 64a777 early-input artifact is accepted for package/focus and
+real successful Codex continuation, but is superseded by the new color scope; its forced rollback
+fixture timed out waiting for the old process to exit. Diagnose and reaccept the final signed
+artifact before any further desktop installation. Neither installed desktop has been stopped.
+
 ## October 20 — corrected 0.2.26 installed; remaining rollout gates
 
 Use the [current target table and acceptance ledger](2026-10-19-next-release.md), rather than the

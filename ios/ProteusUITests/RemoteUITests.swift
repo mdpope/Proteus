@@ -2284,3 +2284,60 @@ final class TabletComposerPreviewUITests: XCTestCase {
         XCTAssertTrue(saved.waitForExistence(timeout: 15), "Unmodified Return still submits on iPad")
     }
 }
+
+final class NativeReleaseFollowupUITests: XCTestCase {
+    override func setUpWithError() throws { continueAfterFailure = false }
+    @MainActor func testIPadWorkspacePagesAndItemsUseOneContinuousTabStrip() {
+        let app = nativeFixtureApplication()
+        app.launchArguments = ["--reset-pairing", "--native-design-preview", "--synthetic-destinations", "--synthetic-long-chat", "--synthetic-workspace-tab-icons"]
+        app.launch()
+        let workspace = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Native icon rehearsal")).firstMatch
+        XCTAssertTrue(workspace.waitForExistence(timeout: 10)); workspace.tap()
+        let configuration = app.buttons["workspace-page-Configuration"]
+        let chat = app.buttons["workspace-child-tab-chat:long-chat"]
+        XCTAssertTrue(configuration.waitForExistence(timeout: 10)); XCTAssertTrue(chat.exists)
+        XCTAssertLessThanOrEqual(chat.frame.minX - configuration.frame.maxX, 44, "No flexible gap separates Configuration from the first content tab")
+        XCTAssertLessThan(abs(chat.frame.midY - configuration.frame.midY), 3)
+        configuration.tap(); app.buttons["workspace-page-Chats"].tap()
+        XCTAssertTrue(chat.exists)
+        let proof = XCTAttachment(screenshot: app.screenshot()); proof.name = "iPad continuous workspace strip and tab dividers"; proof.lifetime = .keepAlways; add(proof)
+    }
+    @MainActor func testPhoneLabelsAddressTabSwipesCompactBottomAndScrollRecovery() {
+        let app = nativeFixtureApplication()
+        app.launchArguments = ["--reset-pairing", "--native-design-preview", "--phone-preview-fixture", "--synthetic-browser-workspace", "--native-app-fixture"]
+        app.launch()
+        XCTAssertTrue(app.buttons["phone-new-tab"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.staticTexts["feature-page-label"].exists, "The page name is a plain label")
+        XCTAssertEqual(app.buttons.matching(identifier: "feature-page-label").count, 0)
+        XCTAssertLessThanOrEqual(app.buttons["phone-app-navigation"].frame.width, 64, "Sidebar control contains only its icon")
+        let headingProof = XCTAttachment(screenshot: app.screenshot()); headingProof.name = "Phone Home label separate from sidebar button"; headingProof.lifetime = .keepAlways; add(headingProof)
+        let urls = ["\(nativeFixtureHTTPOrigin)/browser/phone-preview?tab=first", "\(nativeFixtureHTTPOrigin)/browser/phone-preview?tab=second"]
+        for url in urls {
+            app.buttons["phone-new-tab"].tap()
+            let editor = app.textFields["new-tab-address"]
+            XCTAssertTrue(editor.waitForExistence(timeout: 10)); editor.tap(); editor.typeText(url); app.buttons["Open address"].tap()
+            XCTAssertTrue(app.webViews.firstMatch.staticTexts["Proteus browser rehearsal"].waitForExistence(timeout: 15))
+        }
+        let address = app.buttons["browser-address"]
+        let start = address.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.5))
+        let end = address.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5))
+        start.press(forDuration: 0.1, thenDragTo: end)
+        let first = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", urls[0]), object: address)
+        XCTAssertEqual(XCTWaiter.wait(for: [first], timeout: 5), .completed)
+        end.press(forDuration: 0.1, thenDragTo: start)
+        let second = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", urls[1]), object: address)
+        XCTAssertEqual(XCTWaiter.wait(for: [second], timeout: 5), .completed)
+        XCTAssertFalse(app.descendants(matching: .any)["browser-address-editor"].exists, "A swipe must not start address editing")
+        XCTAssertLessThan(app.frame.maxY - app.buttons["browser-find"].frame.midY, 49, "Only a compact home-indicator allowance remains")
+        let page = app.webViews.firstMatch
+        page.swipeUp()
+        let hidden = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: address)
+        XCTAssertEqual(XCTWaiter.wait(for: [hidden], timeout: 5), .completed)
+        XCTAssertTrue(app.buttons["phone-browser-more"].isHittable)
+        page.swipeDown()
+        XCTAssertTrue(address.waitForExistence(timeout: 5), "Scroll up always restores top navigation")
+        let proof = XCTAttachment(screenshot: app.screenshot()); proof.name = "Phone separate label, compact footer and ordered address swipe"; proof.lifetime = .keepAlways; add(proof)
+        let options = XCTMeasureOptions(); options.iterationCount = 3
+        measure(metrics: [XCTOSSignpostMetric.scrollingAndDecelerationMetric, XCTCPUMetric(application: app), XCTMemoryMetric(application: app)], options: options) { page.swipeUp(); page.swipeDown() }
+    }
+}

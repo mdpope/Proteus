@@ -1099,12 +1099,18 @@ struct MainBrowserSelectionRequest: Equatable {
         return NativeThumbnailCache.load(thumbnailKey(tab))
     }
     private var previewCaptureTimes: [String: Date] = [:]
+    private var previewCaptureTasks: [String: Task<Void, Never>] = [:]
     func scheduleBrowserPreview(_ id: String) {
         guard Date().timeIntervalSince(previewCaptureTimes[id] ?? .distantPast) > 5 else { return }
-        Task { @MainActor in try? await Task.sleep(for: .milliseconds(700)); if let tab = browserTabs.first(where: { $0.id == id }), selected(in: tab.scope) == id { captureBrowserPreview(id) } }
+        previewCaptureTasks[id]?.cancel()
+        previewCaptureTasks[id] = Task { @MainActor [weak self] in
+            do { try await Task.sleep(for: .milliseconds(700)) } catch { return }
+            guard let self else { return }; previewCaptureTasks[id] = nil
+            if let tab = browserTabs.first(where: { $0.id == id }), selected(in: tab.scope) == id { captureBrowserPreview(id) }
+        }
     }
     func captureBrowserPreview(_ id: String) {
-        guard UIApplication.shared.applicationState == .active, Date().timeIntervalSince(previewCaptureTimes[id] ?? .distantPast) >= 5, let tab = browserTabs.first(where: { $0.id == id }), profileAvailable(tab.profileId), let view = browserViews[id], view.window != nil, !view.isLoading, let url = view.url, Self.safeURL(url.absoluteString) != nil else { return }
+        guard UIApplication.shared.applicationState == .active, Date().timeIntervalSince(previewCaptureTimes[id] ?? .distantPast) >= 5, let tab = browserTabs.first(where: { $0.id == id }), profileAvailable(tab.profileId), let view = browserViews[id], view.window != nil, !view.isLoading, !view.scrollView.isDragging, !view.scrollView.isDecelerating, !view.scrollView.isZooming, let url = view.url, Self.safeURL(url.absoluteString) != nil else { return }
         previewCaptureTimes[id] = Date()
         let key = thumbnailKey(tab), identity = account
         let config = WKSnapshotConfiguration(); config.snapshotWidth = 320

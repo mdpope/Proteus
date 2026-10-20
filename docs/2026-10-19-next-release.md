@@ -7,6 +7,15 @@ are intake records, superseded by this authorization. Preserve active work and c
 installation authorization does not authorize cancelling unrelated turns or changing shared
 signing identities. Use exact tested artifacts and the two-generation recovery policy.
 
+## Latest operator follow-up — October 20
+
+BF-2026-10-20-32–38 extends the freeze with native spacing, headings, footer, scroll recovery,
+ordered address swipes, off-main-thread thumbnail work and shared sidebar color. Native build
+2610.20.1 is in preparation; 136 unit cases, phone and iPad follow-up UI pass. Three simulator
+scrolling samples collect CPU/memory/duration without a prior baseline or physical hitch claim.
+All 817 runtime checks and static checks pass. Final signed-package/device acceptance remains outstanding. Installed builds in the table below
+are unchanged. The intermediate 64a777 desktop packet is superseded before installation.
+
 ## Current rollout — October 20
 
 The implementation scope is complete except shelved Widevine and the unproven black-rectangle

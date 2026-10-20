@@ -1758,3 +1758,24 @@ returns the new stable tab identity and its address field mounts. Transfer text,
 early Enter only to that identity after form handlers exist. Native input editing handles paste
 and composition; there is no global key recorder or persisted typed buffer. This also serves
 main, chat-child and Team new-tab creation without changing browser page authorization.
+
+
+## October 20 — Native chrome follows scroll intent; thumbnail work stays off the UI thread
+
+Use the existing WebKit scroll recognizer as an observer without replacing its delegate or
+consuming page input. Separate hide/reveal thresholds avoid oscillation; an explicit menu action
+remains available. Address swipes apply only to the unedited display and resolve fresh visible
+container order, preserving scope and page history. A serial utility queue performs thumbnail
+resizing, encoding, atomic persistence and retention; temporary capture tasks coalesce and avoid
+active scrolling. Toolbar labels have independent presentation so iOS cannot visually merge the
+page name into the sidebar button. The existing iPad rail color also defines desktop and phone.
+
+
+## October 20 — Readiness IPC ends before the update host exits
+
+After the signed helper acknowledges its job identity, the host removes handshake listeners and
+disconnects/unrefs the transient IPC channel. The helper continues through its private durable
+journal independently. Error/timeout paths release the same channel. A subprocess regression
+verifies disconnection while the independent helper remains alive; the forced-health test's
+injected helper follows the same contract. This hardens independence; final exact signed
+update/rollback acceptance remains required after an earlier fixture exit timeout.

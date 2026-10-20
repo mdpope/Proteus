@@ -566,7 +566,12 @@ struct NativeShell: View {
                             .opacity(area == item && selectedTab == nil ? 1 : 0)
                             .allowsHitTesting(area == item && selectedTab == nil).accessibilityHidden(area != item || selectedTab != nil)
                     }
-                    if let tab = opened.first(where: { $0.id == selectedTab }) { contentTab(tab) }
+                    if let tab = opened.first(where: { $0.id == selectedTab }) {
+                        contentTab(tab).environment(\.nativeTabStep, { direction in
+                            guard let index = opened.firstIndex(where: { $0.id == tab.id }), opened.indices.contains(index + direction) else { return }
+                            selectContent(opened[index + direction])
+                        })
+                    }
                 }
             }
             .frame(width: geometry.size.width, height: geometry.size.height).clipped()
@@ -579,7 +584,7 @@ struct NativeShell: View {
                 .allowsHitTesting(phoneChrome.drawer).accessibilityHidden(!phoneChrome.drawer).shadow(radius: 12)
             if phoneChrome.overview { NativePhoneOverview(chrome: phoneChrome, items: phoneOverviewItems).zIndex(3) }
         }.frame(width: geometry.size.width, height: geometry.size.height, alignment: .leading).background(NativeTheme.background)
-        }
+        }.ignoresSafeArea(.container, edges: phoneChrome.browserSurfaceScope == nil ? [] : .bottom)
     }
     private func phoneDrawer(width: CGFloat) -> some View {
         ScrollView {

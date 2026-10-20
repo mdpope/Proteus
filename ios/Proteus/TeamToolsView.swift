@@ -170,6 +170,7 @@ struct NativeNewTabAction {
     var run: () -> Void
 }
 struct TeamBrowserView: View {
+    @Environment(\.nativeTabStep) private var stepContainerTab
     @EnvironmentObject var destinations: DestinationStore
     @EnvironmentObject var life: LifeStore
     @EnvironmentObject var shared: SharedAppStore
@@ -252,7 +253,7 @@ struct TeamBrowserView: View {
             }
             if !shared.downloads.isEmpty { HStack { ProgressView().accessibilityLabel("Downloading linked file"); Button("Cancel download") { for transfer in Array(shared.downloads.values) { transfer.cancel() } } }.padding(8) }
             Group {
-                if let tab = selectedTab, !shared.profileAvailable(tab.profileId) { ContentUnavailableView("Profile unavailable", systemImage: "person.crop.circle.badge.exclamationmark", description: Text("Sign in and refresh browser profiles in Preferences to resume this tab.")) } else if let tab = selectedTab, tab.url != nil { if shared.unloadedBrowsers.contains(tab.id) { ContentUnavailableView { Label("Page unloaded", systemImage: "pause.circle") } actions: { Button("Reload page") { shared.reload(tab.id); shared.touch(tab.id) } } } else { NativeBrowser(tab: tab, onOverview: { showOverview() }, onChromeToggle: NativePhonePreview.enabled ? { addressFocused = false; phoneChrome.toggleControls() } : nil, onPinchChanged: NativeDesignPreview.enabled ? { phoneChrome.pinch($0) } : nil, onPinchEnded: NativeDesignPreview.enabled ? { phoneChrome.finishPinch(committed: $0) } : nil).id(tab.id) } }
+                if let tab = selectedTab, !shared.profileAvailable(tab.profileId) { ContentUnavailableView("Profile unavailable", systemImage: "person.crop.circle.badge.exclamationmark", description: Text("Sign in and refresh browser profiles in Preferences to resume this tab.")) } else if let tab = selectedTab, tab.url != nil { if shared.unloadedBrowsers.contains(tab.id) { ContentUnavailableView { Label("Page unloaded", systemImage: "pause.circle") } actions: { Button("Reload page") { shared.reload(tab.id); shared.touch(tab.id) } } } else { NativeBrowser(tab: tab, onOverview: { showOverview() }, onChromeToggle: NativePhonePreview.enabled ? { addressFocused = false; phoneChrome.toggleControls() } : nil, onChromeVisibility: NativePhonePreview.enabled ? { hidden in if hidden { addressFocused = false }; phoneChrome.setControlsHidden(hidden) } : nil, onPinchChanged: NativeDesignPreview.enabled ? { phoneChrome.pinch($0) } : nil, onPinchEnded: NativeDesignPreview.enabled ? { phoneChrome.finishPinch(committed: $0) } : nil).id(tab.id) } }
                 else { home.simultaneousGesture(MagnificationGesture().onEnded { scale in if scale < 0.75 { showOverview() } }) }
             }.modifier(NativePageSwipe(enabled: !NativePhonePreview.enabled, back: {
                 if let id = selectedID, shared.isTwoFingerNavigation(id) { return }
@@ -290,16 +291,16 @@ struct TeamBrowserView: View {
             guard !Task.isCancelled else { return }
             if result != .null { ownerHistoryResults = result["items"].array }
         }
-        .onAppear { if tabs.isEmpty && showTabs { shared.open(nil, scope: scope) }; text = selectedTab?.url ?? ""; engine = ["google": "Google", "duckduckgo": "DuckDuckGo", "bing": "Bing"][shared.snapshot["preferences"]["searchEngine"].string] ?? "Google"; if NativePhonePreview.enabled { editingAddress = false } else { addressFocused = false } }
+        .onAppear { if NativePhonePreview.enabled && phoneAreaActive { phoneChrome.browserSurfaceScope = scope }; if tabs.isEmpty && showTabs { shared.open(nil, scope: scope) }; text = selectedTab?.url ?? ""; engine = ["google": "Google", "duckduckgo": "DuckDuckGo", "bing": "Bing"][shared.snapshot["preferences"]["searchEngine"].string] ?? "Google"; if NativePhonePreview.enabled { editingAddress = false } else { addressFocused = false } }
         .onChange(of: selectedID) { _, _ in text = selectedTab?.url ?? ""; if NativePhonePreview.enabled { editingAddress = false } else { addressFocused = false } }
         .task(id: accountRefreshIdentity) { if addressFocused || selectedTab?.url == nil { await shared.refresh(life) } }
         .onChange(of: addressFocused) { _, focused in if NativePhonePreview.enabled && !focused { editingAddress = false } }
         .onChange(of: navigation.url) { _, url in if !addressFocused && !url.isEmpty { text = url }; if NativePhonePreview.enabled && phoneAreaActive { phoneChrome.browserOwnsBack = navigation.canGoBack } }
         .onChange(of: navigation.canGoBack) { _, value in if NativePhonePreview.enabled && phoneAreaActive { phoneChrome.browserOwnsBack = value } }
-        .onChange(of: phoneAreaActive) { _, active in if NativePhonePreview.enabled && active { phoneChrome.currentID = selectedID.map { "browser:" + $0 } ?? ""; phoneChrome.browserOwnsBack = navigation.canGoBack } }
-        .task(id: selectedID) { while !Task.isCancelled { try? await Task.sleep(for: .seconds(20)); guard !Task.isCancelled else { return }; if let selectedID { shared.scheduleBrowserPreview(selectedID) } } }
+        .onChange(of: phoneAreaActive) { _, active in if NativePhonePreview.enabled { if active { phoneChrome.browserSurfaceScope = scope } else if phoneChrome.browserSurfaceScope == scope { phoneChrome.browserSurfaceScope = nil } }; if NativePhonePreview.enabled && active { phoneChrome.currentID = selectedID.map { "browser:" + $0 } ?? ""; phoneChrome.browserOwnsBack = navigation.canGoBack } }
+        .task(id: selectedID) { while !Task.isCancelled { do { try await Task.sleep(for: .seconds(20)) } catch { return }; guard phoneAreaActive else { continue }; if let selectedID { shared.scheduleBrowserPreview(selectedID) } } }
         .simultaneousGesture(DragGesture(minimumDistance: 1).onEnded { _ in if let selectedID { shared.scheduleBrowserPreview(selectedID) } })
-        .onDisappear { if NativeDesignPreview.enabled { if let selectedID { shared.captureBrowserPreview(selectedID) }; phoneChrome.browserOwnsBack = false } }
+        .onDisappear { if NativeDesignPreview.enabled { if let selectedID { shared.captureBrowserPreview(selectedID) }; phoneChrome.browserOwnsBack = false; if phoneChrome.browserSurfaceScope == scope { phoneChrome.browserSurfaceScope = nil } } }
     }
     private var navigationHistorySheet: some View {
             NavigationStack {
@@ -334,6 +335,11 @@ struct TeamBrowserView: View {
                                 .frame(width: geometry.size.width, height: geometry.size.height, alignment: .leading).clipped()
                         }.frame(height: 20)
                     }.buttonStyle(.plain).accessibilityValue(text).accessibilityIdentifier("browser-address")
+                        .highPriorityGesture(DragGesture(minimumDistance: 24).onEnded { value in
+                            guard let direction = NativeAddressSwipe.direction(x: value.translation.width, y: value.translation.height) else { return }
+                            if let stepContainerTab { stepContainerTab(direction) }
+                            else if let selectedID, let index = tabs.firstIndex(where: { $0.id == selectedID }), tabs.indices.contains(index + direction) { shared.select(tabs[index + direction].id, in: scope) }
+                        })
                         .frame(maxWidth: .infinity, alignment: .leading).clipped()
                         .mask(LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.9), .init(color: .clear, location: 1)], startPoint: .leading, endPoint: .trailing))
                 }
@@ -364,7 +370,7 @@ struct TeamBrowserView: View {
                 }
             } label: { Image(systemName: "ellipsis.circle").frame(maxWidth: .infinity).frame(height: 48).contentShape(Rectangle()) }.accessibilityLabel("More browser options").accessibilityIdentifier("phone-browser-more")
             Button { showOverview() } label: { NativeTabOverviewIcon().frame(maxWidth: .infinity).frame(height: 48).contentShape(Rectangle()) }.accessibilityLabel("Tab overview").accessibilityIdentifier("browser-tab-overview")
-        }.buttonStyle(.plain).font(.system(size: 19)).foregroundStyle(NativeTheme.accent).background(NativeTheme.rail).overlay(alignment: .top) { Divider() }
+        }.buttonStyle(.plain).font(.system(size: 19)).foregroundStyle(NativeTheme.accent).padding(.bottom, 8).background(NativeTheme.rail).overlay(alignment: .top) { Divider() }
     }
     private var toolbar: some View {
         let chrome = Color(red: 20 / 255, green: 27 / 255, blue: 24 / 255)
@@ -554,11 +560,12 @@ struct NativeBrowser: UIViewRepresentable {
     let tab: BrowserDescriptor
     var onOverview: () -> Void = {}
     var onChromeToggle: (() -> Void)? = nil
+    var onChromeVisibility: ((Bool) -> Void)? = nil
     var onPinchChanged: ((CGFloat) -> Void)? = nil
     var onPinchEnded: ((Bool) -> Void)? = nil
     func makeCoordinator() -> Coordinator { Coordinator(shared: shared, life: life, destinations: destinations, id: tab.id, onOverview: onOverview) }
     func makeUIView(context: Context) -> WKWebView { let view = shared.webView(tab); view.navigationDelegate = context.coordinator; view.uiDelegate = context.coordinator; context.coordinator.attachPinch(to: view); if let linkView = view as? NativeLinkWebView { linkView.linkActions = { [weak coordinator = context.coordinator, weak view] url in guard let coordinator, let view else { return [] }; return coordinator.linkMenuActions(url, in: view) } }; return view }
-    func updateUIView(_ view: WKWebView, context: Context) { context.coordinator.onOverview = onOverview; context.coordinator.onChromeToggle = onChromeToggle; context.coordinator.onPinchChanged = onPinchChanged; context.coordinator.onPinchEnded = onPinchEnded }
+    func updateUIView(_ view: WKWebView, context: Context) { context.coordinator.onOverview = onOverview; context.coordinator.onChromeToggle = onChromeToggle; context.coordinator.onChromeVisibility = onChromeVisibility; context.coordinator.onPinchChanged = onPinchChanged; context.coordinator.onPinchEnded = onPinchEnded }
     static func dismantleUIView(_ view: WKWebView, coordinator: Coordinator) {
         if view.navigationDelegate === coordinator { view.navigationDelegate = nil }
         if view.uiDelegate === coordinator { view.uiDelegate = nil }
@@ -568,9 +575,12 @@ struct NativeBrowser: UIViewRepresentable {
         let shared: SharedAppStore; let life: LifeStore; let destinations: DestinationStore; let id: String
         var onOverview: () -> Void
         var onChromeToggle: (() -> Void)?
+        var onChromeVisibility: ((Bool) -> Void)?
         var onPinchChanged: ((CGFloat) -> Void)?
         var onPinchEnded: ((Bool) -> Void)?
         private var overviewPinching = false
+        private weak var scrollPan: UIPanGestureRecognizer?
+        private var chromeScrollAnchor: CGFloat = 0
         private weak var doubleTap: UITapGestureRecognizer?
         private weak var pagePan: UIPanGestureRecognizer?
         private weak var pinch: UIPinchGestureRecognizer?
@@ -582,8 +592,16 @@ struct NativeBrowser: UIViewRepresentable {
         func attachPinch(to view: WKWebView) { self.view = view; initialPageZoom = view.scrollView.zoomScale; let recognizer = UIPinchGestureRecognizer(target: self, action: #selector(observedPinch(_:))); recognizer.delegate = self; recognizer.cancelsTouchesInView = false; recognizer.delaysTouchesEnded = false; view.scrollView.addGestureRecognizer(recognizer); pinch = recognizer
             if NativePhonePreview.enabled {
                 let tap = UITapGestureRecognizer(target: self, action: #selector(togglePhoneChrome(_:))); tap.numberOfTapsRequired = 2; tap.delegate = self; tap.cancelsTouchesInView = false; view.addGestureRecognizer(tap); doubleTap = tap
+                view.scrollView.panGestureRecognizer.addTarget(self, action: #selector(observedPhoneScroll(_:))); scrollPan = view.scrollView.panGestureRecognizer
             }
             let pan = UIPanGestureRecognizer(target: self, action: #selector(observedPagePan(_:))); pan.minimumNumberOfTouches = 2; pan.maximumNumberOfTouches = 2; pan.allowedScrollTypesMask = .continuous; pan.delegate = self; pan.cancelsTouchesInView = false; view.addGestureRecognizer(pan); pagePan = pan
+        }
+        @objc private func observedPhoneScroll(_ gesture: UIPanGestureRecognizer) {
+            guard let view, gesture.numberOfTouches <= 1, !view.scrollView.isZooming else { return }
+            let y = gesture.translation(in: view.scrollView).y
+            if gesture.state == .began { chromeScrollAnchor = y }
+            guard gesture.state == .changed, view.scrollView.contentOffset.y >= 0, view.scrollView.contentSize.height > view.scrollView.bounds.height + 32 else { return }
+            if let hidden = NativeAddressSwipe.chromeVisibility(delta: y - chromeScrollAnchor) { chromeScrollAnchor = y; onChromeVisibility?(hidden) }
         }
         @objc private func togglePhoneChrome(_ gesture: UITapGestureRecognizer) { if gesture.state == .ended { onChromeToggle?() } }
         static func traversalDirection(x: CGFloat, y: CGFloat) -> Int? { guard x.isFinite, y.isFinite, abs(x) >= 80, abs(x) > abs(y) * 2 else { return nil }; return x > 0 ? -1 : 1 }
@@ -592,7 +610,7 @@ struct NativeBrowser: UIViewRepresentable {
             guard gesture.state == .ended, let view, shared.isCurrentBrowserView(view, id: id), let direction = Self.traversalDirection(x: gesture.translation(in: view).x, y: gesture.translation(in: view).y) else { return }
             if direction < 0 { shared.goBack(id) } else { shared.goForward(id) }
         }
-        func detachPinch() { if let doubleTap { doubleTap.view?.removeGestureRecognizer(doubleTap) }; doubleTap = nil; if let pagePan { pagePan.view?.removeGestureRecognizer(pagePan) }; pagePan = nil; if let pinch { pinch.view?.removeGestureRecognizer(pinch) }; pinch = nil; view = nil }
+        func detachPinch() { scrollPan?.removeTarget(self, action: #selector(observedPhoneScroll(_:))); scrollPan = nil; if let doubleTap { doubleTap.view?.removeGestureRecognizer(doubleTap) }; doubleTap = nil; if let pagePan { pagePan.view?.removeGestureRecognizer(pagePan) }; pagePan = nil; if let pinch { pinch.view?.removeGestureRecognizer(pinch) }; pinch = nil; view = nil }
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool { true }
         static func beginsAtMinimumZoom(_ zoom: CGFloat, minimum: CGFloat, fallback: CGFloat?) -> Bool {
             let minimum = minimum > 0 ? minimum : fallback ?? zoom

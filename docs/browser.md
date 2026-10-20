@@ -949,3 +949,14 @@ address field takes its value/selection after its handlers are installed. Pointe
 page teardown or creation failure clears this temporary state; nothing is logged or persisted.
 The foreground native regression delays creation while delivering a complete URL and Enter,
 then verifies the exact loaded destination and removal of the temporary input.
+
+
+## October 20 native navigation follow-up
+
+Native workspace pages and content share one horizontal strip with separators. The page name is
+a plain label, independent of the sidebar control. Phone browser controls extend to a compact
+bottom allowance. A deliberate downward page scroll hides top controls and upward movement
+restores them; double tap and More remain available. Horizontal drags on the unedited phone
+address select adjacent visible container tabs in their current order, with no wrap or history
+traversal. Browser snapshots wait for scrolling/deceleration/zoom to stop and coalesce; thumbnail
+encoding, writes and retention run on a serial utility queue. Current acceptance is in the ledger.

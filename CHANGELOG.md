@@ -26,6 +26,14 @@
   native tool-approval request with one exact permission and discover backends from Finder launches.
 - Verify durable document positions, bulk partial-failure retry/source access/close, and iPad
   status-area geometry/cache/reactivation with explicit per-run simulator fixture environments.
+- Align sidebar backgrounds across desktop, iPad and iPhone; join native workspace page/content
+  tabs without a flexible gap and retain tab dividers. Separate native page labels from the sidebar button.
+- Compact the phone browser footer; hide/show top controls with deliberate scroll direction and
+  retain double tap/More recovery. Swipe the displayed address to select adjacent visible tabs.
+- Move native thumbnail encoding/persistence/retention off the main thread, coalesce capture tasks,
+  and avoid snapshots during scrolling, deceleration or zoom.
+- Detach the helper readiness IPC before host shutdown while preserving the independent helper
+  and durable journal.
 - Widevine remains shelved under the operator's no-paid-signing instruction.
 
 ## October 19 — Linux release preparation startup repair

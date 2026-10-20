@@ -13,15 +13,27 @@ private actor PreviewRequestCounter {
 }
 
 final class RemoteTests: XCTestCase {
-    @MainActor func testPrivateThumbnailCacheSurvivesMemoryLossAndSeparatesScopes() {
+    @MainActor func testPrivateThumbnailCacheSurvivesMemoryLossAndSeparatesScopes() async throws {
         let key = "synthetic-cache:" + UUID().uuidString, other = key + ":other-account"
         defer { NativeThumbnailCache.remove(key); NativeThumbnailCache.remove(other) }
         let image = UIGraphicsImageRenderer(size: CGSize(width: 32, height: 24)).image { context in UIColor.green.setFill(); context.fill(CGRect(x: 0, y: 0, width: 32, height: 24)) }
         NativeThumbnailCache.save(image, key: key)
+        for _ in 0..<100 { if NativeThumbnailCache.load(key) != nil { break }; try await Task.sleep(for: .milliseconds(20)) }
         XCTAssertNotNil(NativeThumbnailCache.load(key))
         XCTAssertNil(NativeThumbnailCache.load(other))
         NativeThumbnailCache.remove(key)
+        for _ in 0..<100 { if NativeThumbnailCache.load(key) == nil { break }; try await Task.sleep(for: .milliseconds(20)) }
         XCTAssertNil(NativeThumbnailCache.load(key))
+    }
+    func testAddressSwipesRequireDeliberateHorizontalTravelAndScrollChromeHasHysteresis() {
+        XCTAssertEqual(NativeAddressSwipe.direction(x: -90, y: 12), 1)
+        XCTAssertEqual(NativeAddressSwipe.direction(x: 90, y: -12), -1)
+        XCTAssertNil(NativeAddressSwipe.direction(x: 20, y: 0))
+        XCTAssertNil(NativeAddressSwipe.direction(x: 90, y: 70))
+        XCTAssertNil(NativeAddressSwipe.direction(x: .infinity, y: 0))
+        XCTAssertEqual(NativeAddressSwipe.chromeVisibility(delta: -90), true)
+        XCTAssertEqual(NativeAddressSwipe.chromeVisibility(delta: 40), false)
+        XCTAssertNil(NativeAddressSwipe.chromeVisibility(delta: 15))
     }
     @MainActor func testDocumentReadingPositionSurvivesNewStoreAndSeparatesAccounts() throws {
         let account = "synthetic-reading-" + UUID().uuidString, other = UUID().uuidString, key = "document:synthetic"

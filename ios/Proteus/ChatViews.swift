@@ -781,7 +781,11 @@ struct ChatView: View {
             if selectedChild == "chat" { conversation }
             else if selectedChild == "live" { LiveBrowserView(chatID: id).environmentObject(store) }
             else if let tab = shared.browserTabs.first(where: { $0.id == selectedChild && $0.scope == chatBrowserScope }) {
-                TeamBrowserView(scope: chatBrowserScope, showTabs: false, onBackToList: returnToChats, newTabOptions: [NativeNewTabAction(title: "Live Browser", symbol: "rectangle.on.rectangle", enabled: store.state["capabilities"].array.contains(.string("browser.live.v1")), run: { phoneLiveOpened = true; selectedChild = "live"; shared.selectChatChild("live", for: chatBrowserScope) })]).onAppear { shared.select(tab.id, in: chatBrowserScope) }
+                TeamBrowserView(scope: chatBrowserScope, showTabs: false, onBackToList: returnToChats, newTabOptions: [NativeNewTabAction(title: "Live Browser", symbol: "rectangle.on.rectangle", enabled: store.state["capabilities"].array.contains(.string("browser.live.v1")), run: { phoneLiveOpened = true; selectedChild = "live"; shared.selectChatChild("live", for: chatBrowserScope) })]).environment(\.nativeTabStep, { direction in
+                    let ids = ["chat"] + shared.orderedChatChildren(in: chatBrowserScope, documentIDs: documents.map(\.id))
+                    guard let index = ids.firstIndex(of: selectedChild), ids.indices.contains(index + direction) else { return }
+                    selectedChild = ids[index + direction]; shared.selectChatChild(selectedChild, for: chatBrowserScope)
+                }).onAppear { shared.select(tab.id, in: chatBrowserScope) }
             } else if let document = documents.first(where: { $0.id == selectedChild }) {
                 ChatDocumentReader(document: document, store: store, runID: id, requestLatest: {
                     if document.requestID.hasPrefix("preview:") {

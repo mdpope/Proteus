@@ -83,17 +83,25 @@ struct NativeSidebarIcon: View {
 }
 
 struct NativeFeatureHeading: View {
-    @EnvironmentObject private var chrome: NativePhoneChrome
     let title: String
     var body: some View {
-        HStack(spacing: 8) {
-            if NativePhonePreview.enabled {
-                Button { chrome.captureCurrent(); withAnimation(.easeInOut(duration: 0.22)) { chrome.drawer = true } } label: { Image(systemName: "sidebar.left").frame(width: 44, height: 44) }
-                    .accessibilityLabel("App navigation").accessibilityIdentifier("phone-app-navigation")
-            }
-            Text(title).font(NativePhonePreview.enabled ? .subheadline.weight(.semibold) : .title2.weight(.semibold)).lineLimit(1).frame(maxWidth: NativePhonePreview.enabled ? 150 : 320, alignment: .leading).fixedSize(horizontal: true, vertical: false)
-        }.foregroundStyle(.primary)
+        Text(title).font(NativePhonePreview.enabled ? .subheadline.weight(.semibold) : .title2.weight(.semibold))
+            .lineLimit(1).foregroundStyle(.primary).accessibilityIdentifier("feature-page-label")
     }
+}
+enum NativeAddressSwipe {
+    static func direction(x: CGFloat, y: CGFloat) -> Int? {
+        guard x.isFinite, y.isFinite, abs(x) >= 48, abs(x) > abs(y) * 2 else { return nil }
+        return x < 0 ? 1 : -1
+    }
+    static func chromeVisibility(delta: CGFloat) -> Bool? {
+        guard delta.isFinite else { return nil }
+        return delta < -72 ? true : delta > 32 ? false : nil
+    }
+}
+private struct NativeTabStepKey: EnvironmentKey { static let defaultValue: ((Int) -> Void)? = nil }
+extension EnvironmentValues {
+    var nativeTabStep: ((Int) -> Void)? { get { self[NativeTabStepKey.self] } set { self[NativeTabStepKey.self] = newValue } }
 }
 struct NativeMainTabAdd: View {
     @EnvironmentObject private var shared: SharedAppStore
@@ -111,7 +119,17 @@ private struct NativeFeaturePage: ViewModifier {
         if NativeDesignPreview.enabled {
             content.navigationTitle("").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    ToolbarItem(placement: .topBarLeading) { NativeFeatureHeading(title: title) }
+                    if NativePhonePreview.enabled {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button { chrome.captureCurrent(); withAnimation(.easeInOut(duration: 0.22)) { chrome.drawer = true } } label: { Image(systemName: "sidebar.left") }
+                                .accessibilityLabel("App navigation").accessibilityIdentifier("phone-app-navigation")
+                        }
+                    }
+                    if #available(iOS 26.0, *) {
+                        ToolbarItem(placement: .topBarLeading) { NativeFeatureHeading(title: title) }.sharedBackgroundVisibility(.hidden)
+                    } else {
+                        ToolbarItem(placement: .topBarLeading) { NativeFeatureHeading(title: title) }
+                    }
                     if NativePhonePreview.enabled { ToolbarItem(placement: .topBarTrailing) { NativeMainTabAdd() } }
                     if NativePadPreview.enabled, let search {
                         ToolbarItem(placement: .topBarTrailing) { searchField(search).frame(width: 230) }
@@ -148,6 +166,7 @@ struct NativePhoneTab: Identifiable {
 
 @MainActor final class NativePhoneChrome: ObservableObject {
     @Published var controlsHidden = false
+    @Published var browserSurfaceScope: String?
     @Published var drawer = false
     @Published var overview = false
     @Published var overviewProgress: CGFloat = 0
@@ -166,7 +185,7 @@ struct NativePhoneTab: Identifiable {
     var activateArea: ((String) -> Void)?
     var newMainChat: ((Bool) -> Void)?
 
-    func reset() { captureTask?.cancel(); captureTask = nil; delayedCapture?.cancel(); delayedCapture = nil; delayedCaptureID = ""; lastCapture = [:]; visited = []; recent = []; interactedAt = [:]; currentID = ""; snapshot = nil; overview = false; overviewProgress = 0; controlsHidden = false; drawer = false; browserOwnsBack = false }
+    func reset() { captureTask?.cancel(); captureTask = nil; delayedCapture?.cancel(); delayedCapture = nil; delayedCaptureID = ""; lastCapture = [:]; visited = []; recent = []; interactedAt = [:]; currentID = ""; snapshot = nil; overview = false; overviewProgress = 0; controlsHidden = false; browserSurfaceScope = nil; drawer = false; browserOwnsBack = false }
     func register(_ item: NativePhoneTab) {
         if captureTask == nil {
             captureTask = Task { @MainActor [weak self] in
@@ -204,9 +223,11 @@ struct NativePhoneTab: Identifiable {
             if currentID == expected { captureCurrent() }
         }
     }
-    func toggleControls() {
-        withAnimation(UIAccessibility.isReduceMotionEnabled ? nil : .easeInOut(duration: 0.24)) { controlsHidden.toggle() }
+    func setControlsHidden(_ hidden: Bool) {
+        guard controlsHidden != hidden else { return }
+        withAnimation(UIAccessibility.isReduceMotionEnabled ? nil : .easeInOut(duration: 0.18)) { controlsHidden = hidden }
     }
+    func toggleControls() { setControlsHidden(!controlsHidden) }
     func beginOverview() {
         guard !overview else { return }
         overview = true; overviewProgress = 0
@@ -390,7 +411,8 @@ extension EnvironmentValues {
 }
 
 /// Private, bounded last-good images. This cache never loads an unloaded page.
-@MainActor enum NativeThumbnailCache {
+enum NativeThumbnailCache {
+    private static let writer = DispatchQueue(label: "org.proteusapp.review.proteus.thumbnail-cache", qos: .utility)
     private static var directory: URL { URL.applicationSupportDirectory.appending(path: "tab-thumbnails", directoryHint: .isDirectory) }
     private static func file(_ key: String) -> URL { directory.appending(path: SHA256.hash(data: Data(key.utf8)).map { String(format: "%02x", $0) }.joined() + ".jpg") }
     static func load(_ key: String) -> UIImage? {
@@ -399,6 +421,9 @@ extension EnvironmentValues {
         return UIImage(data: data)
     }
     static func save(_ image: UIImage, key: String) {
+        writer.async { autoreleasepool { write(image, key: key) } }
+    }
+    private static func write(_ image: UIImage, key: String) {
         let width = min(360, image.size.width), height = image.size.height * width / max(1, image.size.width)
         guard width > 0, height > 0, height < 4096 else { return }
         let format = UIGraphicsImageRendererFormat(); format.scale = 1
@@ -412,5 +437,5 @@ extension EnvironmentValues {
             for (index, url) in files.enumerated() { bytes += (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0; if index >= 200 || bytes > 24 * 1024 * 1024 { try? FileManager.default.removeItem(at: url) } }
         } catch { /* Keep the previous good preview and the icon fallback. */ }
     }
-    static func remove(_ key: String) { try? FileManager.default.removeItem(at: file(key)) }
+    static func remove(_ key: String) { writer.async { try? FileManager.default.removeItem(at: file(key)) } }
 }

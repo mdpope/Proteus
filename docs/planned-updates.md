@@ -1,3 +1,19 @@
+## October 20 — mobile spacing, gestures, performance and sidebar follow-up
+
+The operator adds BF-2026-10-20-32–38 to the authorized release: one continuous workspace page/content
+strip with dividers; plain page labels and an independent sidebar icon; compact phone browser footer;
+reliable navigation recovery; address-bar tab swipes in visible order; phone browser performance;
+and the same sidebar background on desktop, iPad and iPhone. Source uses iPad's `#121512` rail color.
+Phone hide/show follows deliberate scrolling down/up, while double tap and the explicit More action
+remain available. Address swipes operate only on the displayed, unedited phone address, following
+the current container's visible tab order without wrapping or touching saved page history.
+
+Thumbnail resizing/JPEG encoding/writes/retention move to a utility serial queue. Pending captures
+coalesce; inactive scopes and active drag/deceleration/zoom do not request screenshots. Native 136
+unit cases, phone label/swipe/footer/scroll UI and iPad spacing pass. Three simulator scrolling
+samples collect duration, CPU and memory (about 74 MB peak); no pre-change baseline or physical
+frame-hitch result is claimed. Final signed packages and updated installations remain pending. Target native build is 2610.20.1.
+
 ## October 19 — combined release implementation and acceptance
 
 The operator lifted the intake hold and authorized the combined release. BF-04–31 source work is

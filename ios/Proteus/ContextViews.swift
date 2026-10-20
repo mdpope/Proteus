@@ -536,23 +536,7 @@ struct NativeWorkspaceContentView: View {
     private func run(_ id: String) -> JSON { store.chats[id] ?? store.state["runs"].array.first { $0["id"].string == id } ?? .object(["id": .string(id), "title": .string("Chat")]) }
     var body: some View {
         VStack(spacing: 0) {
-            if !NativePhonePreview.enabled || !phoneChrome.controlsHidden { HStack(spacing: 0) {
-                if let projectID {
-                    Button { selected = "workspace" } label: { Label(store.projectCatalog.project(id: projectID, workspaceID: workspaceID)?["name"].string ?? "Project", systemImage: "folder").padding(12).background(selected == "workspace" ? NativeTheme.accent.opacity(0.12) : .clear) }.accessibilityIdentifier("project-pinned-tab")
-                } else {
-                    ScrollView(.horizontal) { HStack(spacing: 0) { ForEach(store.supportsProjects ? ["Projects", "Chats", "Tabs", "Configuration"] : ["Chats", "Tabs", "Configuration"], id: \.self) { name in
-                        Button(name) { selected = "workspace"; page = name }.padding(.horizontal, 10).padding(.vertical, 12).background(selected == "workspace" && page == name ? NativeTheme.accent.opacity(0.12) : .clear).accessibilityIdentifier("workspace-page-" + name)
-                    } } }.scrollIndicators(.hidden)
-                }
-                if !orderedChildren.isEmpty {
-                Divider().frame(height: 28)
-                NativeTabStrip(ids: orderedChildren.map { $0["id"].string }, selection: selected) {
-                    HStack(spacing: 0) { ForEach(orderedChildren, id: \.self) { child in workspaceChild(child) } }
-                }.scrollIndicators(.hidden)
-                } else if projectID != nil { Spacer(minLength: 0) }
-                Button { shared.open(nil, scope: scope); selected = shared.selected(in: scope) ?? "workspace" } label: { Image(systemName: "plus").padding(12) }.accessibilityLabel("New workspace tab")
-            }.buttonStyle(.plain).nativeTabBar()
-            Divider() }
+            if !NativePhonePreview.enabled || !phoneChrome.controlsHidden { workspaceTabStrip; Divider() }
             if selected == "workspace" || (NativePhonePreview.enabled && selected.hasPrefix("chat:")) {
                 if projectID != nil { Picker("Project page", selection: $page) { Text("Chats").tag("Chats"); Text("Tabs").tag("Tabs") }.pickerStyle(.segmented).padding(12) }
                 if page == "Projects" && projectID == nil && store.supportsProjects { NativeProjectsView(workspaceID: workspaceID, onOpen: onOpenProject) }
@@ -563,7 +547,12 @@ struct NativeWorkspaceContentView: View {
             else if selected.hasPrefix("remote:") {
                 ContentUnavailableView("Available on \(store.displayName)", systemImage: "desktopcomputer", description: Text("This saved terminal or host document tab remains on \(store.displayName). Open it there to reconnect to the terminal; chat documents can be requested through their chat’s approved document controls.")).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else { TeamBrowserView(scope: scope, showTabs: false, onBackToList: { selected = "workspace" }, newTabOptions: [NativeNewTabAction(title: "New chat", symbol: "bubble.left.and.bubble.right", enabled: store.connected, run: { internet = false; newChat = true }), NativeNewTabAction(title: "Internet Search", symbol: "magnifyingglass", enabled: store.connected, run: { internet = true; newChat = true })]) }
-        }.background(NativeTheme.background).navigationTitle(profile["name"].string).navigationBarTitleDisplayMode(.inline)
+        }.environment(\.nativeTabStep, { direction in
+            let ids = orderedChildren.map { $0["id"].string }
+            guard let index = ids.firstIndex(of: selected), ids.indices.contains(index + direction) else { return }
+            selected = ids[index + direction]
+            if shared.tabs(in: scope).contains(where: { $0.id == selected }) { shared.select(selected, in: scope) }
+        }).background(NativeTheme.background).navigationTitle(profile["name"].string).navigationBarTitleDisplayMode(.inline)
             .toolbar(NativePhonePreview.enabled && phoneChrome.controlsHidden ? .hidden : .automatic, for: .navigationBar)
             .nativeFeaturePage(projectID.flatMap { store.projectCatalog.project(id: $0, workspaceID: workspaceID)?["name"].string } ?? profile["name"].string)
             .nativePhoneDestination(isPresented: Binding(get: { NativePhonePreview.enabled && selected.hasPrefix("chat:") }, set: { if !$0 { selected = "workspace" } })) {
@@ -581,6 +570,25 @@ struct NativeWorkspaceContentView: View {
                 guard let value else { return }; chatIDs = NativeWorkspaceNavigation.deduplicated(value.filter { $0["type"].string == "chat" }.map { $0["chatId"].string }); save()
             }
             .task(id: scope) { while !Task.isCancelled { await shared.refreshContentTabs(scope: scope, remote: store, kind: scopeKind, id: scopeID); try? await Task.sleep(for: .seconds(3)) } }
+    }
+    private var workspacePageNames: [String] { projectID == nil ? (store.supportsProjects ? ["Projects", "Chats", "Tabs", "Configuration"] : ["Chats", "Tabs", "Configuration"]) : [] }
+    private var workspaceTabStrip: some View {
+        HStack(spacing: 0) {
+            if let projectID {
+                Button { selected = "workspace" } label: { Label(store.projectCatalog.project(id: projectID, workspaceID: workspaceID)?["name"].string ?? "Project", systemImage: "folder").padding(12).background(selected == "workspace" ? NativeTheme.accent.opacity(0.12) : .clear) }.accessibilityIdentifier("project-pinned-tab")
+                Divider().frame(height: 24)
+            }
+            NativeTabStrip(ids: workspacePageNames.map { "page:" + $0 } + orderedChildren.map { $0["id"].string }, selection: selected == "workspace" ? "page:" + page : selected) {
+                HStack(spacing: 0) {
+                    ForEach(workspacePageNames, id: \.self) { name in
+                        Button(name) { selected = "workspace"; page = name }.padding(.horizontal, 10).padding(.vertical, 12).background(selected == "workspace" && page == name ? NativeTheme.accent.opacity(0.12) : .clear).accessibilityIdentifier("workspace-page-" + name).id("page:" + name)
+                        Divider().frame(height: 24)
+                    }
+                    ForEach(orderedChildren, id: \.self) { child in workspaceChild(child); Divider().frame(height: 24) }
+                }
+            }.scrollIndicators(.hidden)
+            Button { shared.open(nil, scope: scope); selected = shared.selected(in: scope) ?? "workspace" } label: { Image(systemName: "plus").padding(12) }.accessibilityLabel("New workspace tab")
+        }.buttonStyle(.plain).nativeTabBar()
     }
     private func workspaceChild(_ child: JSON) -> some View {
         HStack {

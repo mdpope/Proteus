@@ -4,10 +4,22 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {createRequire} from 'node:module';
+import {spawn} from 'node:child_process';
 import {Engine} from '../src/engine.js';
 import {Updates} from '../src/updates.js';
 const {tree,atomic,readJob,writeJob,spaceBudget,packagePaths}=createRequire(import.meta.url)('../desktop/update-package.cjs');
 const {supervise}=createRequire(import.meta.url)('../desktop/update-helper.cjs');
+test('helper readiness releases IPC before handoff while the independent helper stays alive',async t=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-helper-ipc-')),home=path.join(root,'data'),bundle=path.join(root,'candidate'),helper=path.join(bundle,'resources/app/desktop/update-helper.cjs'),job=path.join(root,'job.json');
+ fs.mkdirSync(home);fs.mkdirSync(path.dirname(helper),{recursive:true});
+ fs.writeFileSync(helper,`const fs=require('node:fs');const file=process.argv[3];fs.writeFileSync(file+'.pid',String(process.pid));process.on('disconnect',()=>fs.writeFileSync(file+'.detached','yes'));process.send({ready:'synthetic-helper'});setInterval(()=>{},1000);`);
+ let helperPid,parent;
+ t.after(()=>{parent?.kill('SIGKILL');try{helperPid||=Number(fs.readFileSync(job+'.pid','utf8'));if(helperPid)process.kill(helperPid,'SIGTERM');}catch{}fs.rmSync(root,{recursive:true,force:true});});
+ const script=`import {Updates} from ${JSON.stringify(new URL('../src/updates.js',import.meta.url).href)};const u=new Updates({home:${JSON.stringify(home)},engine:{}},{platform:'linux'});await u.spawnHelper({id:'synthetic-helper',file:${JSON.stringify(job)},candidate:{bundle:${JSON.stringify(bundle)},executable:process.execPath}},true);await new Promise(r=>setTimeout(r,200));u.close();`;
+ parent=spawn(process.execPath,['--input-type=module','-e',script],{stdio:['ignore','pipe','pipe']});let errors='';parent.stderr.on('data',chunk=>errors+=chunk);
+ const code=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('Helper IPC kept the parent alive')),4000);parent.once('error',reject);parent.once('exit',code=>{clearTimeout(timer);resolve(code);});});
+ helperPid=Number(fs.readFileSync(job+'.pid','utf8'));assert.equal(code,0,errors);assert.equal(fs.readFileSync(job+'.detached','utf8'),'yes');assert.doesNotThrow(()=>process.kill(helperPid,0),'helper remains independent after the host closes');
+});
 function fixture(t){
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-updates-')),home=path.join(root,'data'),installation=path.join(root,'installed'),candidate=path.join(root,'candidate');
  for(const dir of [home,installation,candidate])fs.mkdirSync(dir);fs.writeFileSync(path.join(installation,'identity'),'old');fs.writeFileSync(path.join(candidate,'identity'),'new');
