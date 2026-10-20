@@ -932,3 +932,11 @@ Fresh input observations require matching backend process/window receipts. Cua 0
 diff can fail typed-output validation; use a fresh full read without replaying input. Run the opt-in
 `test/desktop-control-live-ui.mjs` only with installed/granted hosts. Team's new-tab address/filter
 survives resize/polling and uses the shared outlined overview icon.
+# October 19: native keyboard focus on New tab
+
+When the selected native browser is hidden for a renderer surface, return keyboard focus to that
+window's renderer if the window is currently focused. This lets the new-tab Website address field
+receive immediate real typing after a loaded page. Its DOM focus alone is insufficient while a
+hidden WebContentsView still owns native keyboard input. Repeated hide/layout calls and inactive
+windows must not steal focus. Live release acceptance found this after the first signed candidate;
+the corrected artifact must repeat package/update acceptance before other desktop installations.

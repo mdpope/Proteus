@@ -1,4 +1,4 @@
-## 0.2.26 — in development, not installed
+## 0.2.26 — rollout in progress
 
 - Incorporate the Linux branch and its verified signed-out secure-storage startup repair.
 - Restore production provider choices; retain sidebar expansion; fix startup readiness, browser
@@ -9,6 +9,8 @@
   reading-position restoration; keep one host, browser/profile broker and terminal store.
 - Add cached browser/chat overview images, ordered workspace project sections, direct new-tab
   creation blocks/address-history entry, workspace ordering and hierarchical bulk tab actions.
+- Return native keyboard focus from the hidden browser surface so a new tab accepts immediate
+  address typing after a loaded page; DOM focus alone does not establish desktop input focus.
 - Promote accepted phone/tablet navigation/composer design; add native overview/cache/new-tab
   parity and durable account-scoped document positions.
 - Reserve a black iPad system-status area above clipped app content and remove ordinary

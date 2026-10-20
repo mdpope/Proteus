@@ -160,3 +160,30 @@ without changing existing configured owners or rewriting operation receipts. The
 harness saves its older test baseline's identity before creating history; the new owner regression
 separately covers first-run persistence. Rebuild/retest and forced rollback remain required before
 accepting an installation artifact. No production application is replaced by these tests.
+
+## First installation and native-focus acceptance follow-up
+
+Signed successful update and forced compatible rollback both pass with a real Codex session,
+automatic exactly-once continuation and complete history/operation receipts. Detach the test's
+Node inspector before handoff: an attached debugger can hold Electron after its owner/runner lock
+is already closed. The rollback harness's injected helper uses its actual main-module require.
+
+Personal desktop is installed at the first 0.2.26 checkpoint; read-only preservation verifies all
+original chats/configuration, histories and receipts. The selected X page refreshes only its title
+and monotonic touch time, and a generic Chat cache label hydrates from its unchanged saved chat.
+Its login form now visibly renders with Ghostery enabled; no credentials are submitted or site
+data cleared. Live keyboard testing finds an additional New-tab focus defect: the hidden native
+browser retains input despite correct DOM focus. Foreground-only focus-on-hide corrects it. The
+real native-focus regression fails on the earlier signed checkpoint and passes corrected source;
+repeated/inactive-window hides are separately covered. The earlier HC packet is held/superseded;
+freeze/sign/accept the corrected artifact and reuse the in-flight recovery generation on retry.
+
+The native Mac app is installed with unchanged identity/entitlements and its new executable is
+confirmed running. macOS's security confirmation holds its visible launch; the operator explicitly
+defers approving that prompt until later. Do not bypass it. Physical phone/tablet build succeeds
+with the existing paid identity; after operator unlock, both recovery snapshots verify and in-place
+installation succeeds. Protected-file comparison and live device acceptance are in progress.
+HC is unlocked, but its awaiting-input chat still needs the operator's permission decision; preserve
+that work. Linux validation is dispatched to its authorized existing chat, but its host is currently
+unavailable. The two explicitly approved obsolete encrypted server transports are retired, freeing
+469,741,568 bytes; latest transport and all raw recovery sets remain. Website rollout is in progress.

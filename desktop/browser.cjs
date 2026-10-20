@@ -413,6 +413,7 @@ class BrowserTabs {
   show(id, bounds) {
     if(id&&((this.options.projects&&this.get(id).hidden)||!this.profileAvailable(this.get(id)))){for(const tab of this.windowTabs())tab.view?.setVisible(false);this.active=null;return;}
     const previousActive=this.active;
+    const returnRendererFocus=!id&&!!previousActive&&this.window.isFocused?.()===true;
     if(id!==this.active || (bounds&&this.bounds&&['x','y','width','height'].some(key=>Math.round(bounds[key])!==this.bounds[key])))this.transition?.cancel();
     if (bounds) {
       for (const key of ['x','y','width','height']) if (!Number.isFinite(bounds[key]) || bounds[key] < 0) throw new Error('Invalid browser bounds.');
@@ -431,6 +432,10 @@ class BrowserTabs {
       const visible=tab.id===id&&!!this.bounds&&!!tab.view.webContents.getURL();
       if(tab.view.getVisible()!==visible)tab.view.setVisible(visible);
     }
+    // A hidden WebContentsView can retain native keyboard focus. Restore the
+    // shell's focused input when switching to New tab or another renderer page.
+    // Repeated background layout/hide calls must not move focus across windows.
+    if(returnRendererFocus)this.window.webContents.focus();
     this.updateThrottling();
   }
   async close(id,{preserveCache=false}={}) {

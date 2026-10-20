@@ -154,6 +154,14 @@ test('overlay retains latest desired selection and bounds and reconciles before 
  b.setOverlay('synthetic-modal',false);assert.equal(b.get(a.id).view.getVisible(),false);assert.equal(b.get(c.id).view.getVisible(),true);assert.equal(b.get(c.id).view.getBounds().width,600);
 });
 
+test('hiding a browser returns keyboard focus only once in the foreground window',async()=>{
+ const {browser:b}=fixture(),tab=await b.create('https://example.test/focus');let focused=true,calls=0;
+ b.window.isFocused=()=>focused;b.window.webContents.focus=()=>calls++;
+ b.show(tab.id,{x:0,y:0,width:700,height:500});b.show(null);assert.equal(calls,1);
+ b.show(null);assert.equal(calls,1,'repeated layout does not move focus');
+ focused=false;b.show(tab.id);b.show(null);assert.equal(calls,1,'background window does not steal focus');
+});
+
 test('one browser owner isolates simultaneous window selection, overlays and close without recreating the other page',async()=>{
  const {AsyncLocalStorage}=require('node:async_hooks'),scope=new AsyncLocalStorage(),f=fixture(),b=f.browser,first=b.window,second={...first,contentView:{addChildView(){},removeChildView(){}}};
  const registry={contexts:new Map([['main',{id:'main',window:first}],['22222222-2222-4222-8222-222222222222',{id:'22222222-2222-4222-8222-222222222222',window:second}]]),current(){return this.contexts.get(scope.getStore()||'main');},run(id,callback){return scope.run(id,callback);},bind(id,callback){return (...args)=>this.run(id,()=>callback(...args));}};

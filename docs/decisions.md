@@ -1741,3 +1741,10 @@ operation digests include its host identity even when no remote listener is conf
 a new identity on restart breaks otherwise identical retry receipts. Saving the default does not
 enable remote access, pair devices or rewrite existing histories/receipts. A restart regression
 preserves the complete Back/Forward stack and replays its original operation successfully.
+## October 20 — native browser keyboard ownership on renderer navigation
+
+When the foreground window leaves an active native browser for a renderer page, return native
+keyboard focus to that window's shell after hiding the browser. DOM focus alone leaves keystrokes
+in the hidden WebContentsView. Do this once on the transition; repeated layout updates and
+background windows must not steal focus. A real native-focus regression fails the prior signed
+artifact and passes the correction, alongside foreground/background ownership unit coverage.
