@@ -31,7 +31,7 @@ session automatically once, retaining previous events and complete navigation/op
 | Website | 0.2.26 deployed; 9,214 file hashes, ordinary isolated restore, 14 endpoints and existing authenticated session pass. Approved desktop OAuth provisioning is complete; desktop discovery is enabled with its separate desktop callback and unchanged mobile client. |
 | iPhone/iPad | Paid 0.2.26 / 2610.19.1 installed in place and launched; all 69/72 protected files respectively match recovery hashes. Physical gesture testing is unavailable through current automation; simulator acceptance is separate. |
 | Native Mac client | Installed with unchanged identity; running executable matches. Visible launch awaits the macOS security prompt, explicitly deferred by the operator. |
-| Linux | Branch incorporated and earlier package/UI checks pass; latest checkpoint dispatched to the authorized Linux chat, whose host is unavailable. No new Linux installation claimed. |
+| Linux | Main `9114970` installed as `linux.34d37e887ee5`; 815 tests/static, exact-package UI/PTY/focus, actual UI, real synthetic Codex, second restart and protected history/receipts pass. Two verified recovery generations/policy retained. Native Wayland Cua control remains unavailable; existing relay access remains disabled. [Acceptance](2026-10-19-linux-026-install.md). |
 
 The first desktop packet is superseded. Private final transfer commit `37da6fa3e360b5243f557021f17994888234041f`
 is on `codex/signed-proteus-0226-focus-20261020`; its transfer-list SHA-256 is
@@ -224,6 +224,6 @@ defers approving that prompt until later. Do not bypass it. Physical phone/table
 with the existing paid identity; after operator unlock, both recovery snapshots verify and in-place
 installation succeeds. Protected-file comparison and live device acceptance are in progress.
 HC is unlocked, but its awaiting-input chat still needs the operator's permission decision; preserve
-that work. Linux validation is dispatched to its authorized existing chat, but its host is currently
-unavailable. The two explicitly approved obsolete encrypted server transports are retired, freeing
+that work. Linux subsequently installs and independently verifies main `9114970`; see the current
+target table and [Linux acceptance](2026-10-19-linux-026-install.md). The two explicitly approved obsolete encrypted server transports are retired, freeing
 469,741,568 bytes; latest transport and all raw recovery sets remain. Website rollout is in progress.

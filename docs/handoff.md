@@ -34,8 +34,13 @@ HC's exact corrected artifact is installed and twice launched, with original cha
 all three providers, native Find and stable document scrolling verified. An early first-key race
 reported there is fixed in source: 816 runtime tests and delayed-creation/native early URL+Enter
 acceptance pass; freeze and verify its final signed desktop artifact before another code-only update.
-Reuse the verified recovery generations. Linux's latest request is dispatched to its authorized chat;
-its host is unavailable, so no new Linux installation is claimed. Widevine stays shelved.
+Reuse the verified recovery generations. Linux main `9114970` is now installed as
+`linux.34d37e887ee5`, independently verified with real synthetic Codex, restored UI, second
+restart and preserved history/receipts. Two verified recovery generations and the helper
+inventory are initialized. Native Wayland control remains unavailable and existing remote
+access stays disabled. See [Linux acceptance](2026-10-19-linux-026-install.md). Its installed
+checkpoint predates the early-input/color/IPC follow-up; coordinate its next update through the
+authorized Linux chat. Widevine stays shelved.
 Private receipts stay outside Git.
 
 ## October 19 — Combined release implementation and installation authorized
