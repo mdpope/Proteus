@@ -8562,3 +8562,10 @@ switching on iPhone/iPad. Keep normal scene activity, connection and state persi
 Reconsider privacy masking with a future explicit private-browsing feature. Both changes are
 included in the currently authorized iOS release work; source is updated, UI/device verification
 and installation remain pending.
+# October 19 signed restart acceptance follow-up
+
+The disposable signed-helper test resumed its original real Codex session, then exposed unstable
+first-run host identity in an owner with remote access never configured. The implementation now
+persists that disabled identity; its real service restart regression preserves full navigation and
+duplicate-operation receipts. Existing histories/configured owners are not rewritten. A fresh signed
+candidate and update/rollback acceptance are still required; production installations are unchanged.

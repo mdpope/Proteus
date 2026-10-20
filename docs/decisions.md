@@ -1733,3 +1733,11 @@ an exact PID/window receipt instead of guessed Cua parameters. Catalogs/processe
 only Proteus-owned transports and sessions are stopped. Stop retains uncertain input effects until
 the same target is observed again. Permission refusals remain host-wide across chat/backend changes.
 No foreground/global-pointer or nested agent/shell/browser control is exposed through this surface.
+
+## October 19: disabled owners retain a stable identity
+
+Persist the initial disabled remote configuration when creating a new local owner. Navigation
+operation digests include its host identity even when no remote listener is configured. Generating
+a new identity on restart breaks otherwise identical retry receipts. Saving the default does not
+enable remote access, pair devices or rewrite existing histories/receipts. A restart regression
+preserves the complete Back/Forward stack and replays its original operation successfully.

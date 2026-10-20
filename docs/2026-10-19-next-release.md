@@ -148,3 +148,15 @@ Build Mac installation/grants/input; other hosts and real-provider image deliver
 - Website desktop-client provisioning needs the existing signed-in administration tab. Automatic
   review rejected creation of a new hidden admin tab; no administration action ran. The operator
   was asked to expose the existing session. The restricted deployment route remains separate.
+
+## Signed supervisor acceptance follow-up
+
+The first signed candidate passes package signatures/vendor-byte preservation, actual launch/UI and
+its bundled Copilot catalog. An actual independent helper replaces a disposable installation and
+automatically resumes the original real Codex session once. Its final history-receipt assertion
+finds a pre-existing first-run identity defect: an unconfigured remote host regenerates its ID on
+restart. Persisting the disabled first-run configuration fixes the focused owner-restart regression,
+without changing existing configured owners or rewriting operation receipts. The signed helper
+harness saves its older test baseline's identity before creating history; the new owner regression
+separately covers first-run persistence. Rebuild/retest and forced rollback remain required before
+accepting an installation artifact. No production application is replaced by these tests.

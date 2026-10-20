@@ -4,6 +4,7 @@
 - Restore production provider choices; retain sidebar expansion; fix startup readiness, browser
   abort alerts, Inspect ordering and the Page-menu DevTools guard.
 - Preserve empty navigation revisions, recoverable pending intent and scoped conflict handling.
+- Persist a disabled first-run host identity so navigation retry receipts remain valid after restart.
 - Add independent desktop windows, native view/IPC ownership, shortcuts, geometry/session and
   reading-position restoration; keep one host, browser/profile broker and terminal store.
 - Add cached browser/chat overview images, ordered workspace project sections, direct new-tab
