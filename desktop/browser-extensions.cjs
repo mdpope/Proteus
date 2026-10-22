@@ -15,7 +15,7 @@ class BrowserExtensions {
  async initialize(profileId,session){
   if(this.profiles.has(profileId)){if(this.profiles.get(profileId).session!==session)throw new Error('Restart Proteus to use this profile with the current account.');return this.profiles.get(profileId).ready;}
   const folder=path.join(this.home,createHash('sha256').update(session.storagePath).digest('hex'));const file=path.join(folder,'installed.json');let rows=[];try{rows=JSON.parse(fs.readFileSync(file,'utf8'));if(!Array.isArray(rows)||rows.length>50||rows.some(row=>!row||!/^[a-p]{32}$/.test(row.id)||!/^[a-f0-9-]{36}$/.test(row.directory)||typeof row.enabled!=='boolean'))throw new Error('Invalid extension list');}catch(error){if(error.code!=='ENOENT')throw error;}
-  const host={session,folder,file,rows,adapter:null};this.profiles.set(profileId,host);
+  const host={profileId,session,folder,file,rows,adapter:null};this.profiles.set(profileId,host);
   host.adapter=new ElectronChromeExtensions({license:'GPL-3.0',session,
    createTab:async details=>{if(String(details.url||'').startsWith('chrome-extension:')){const popup=this.openPage(host,details.url);return [popup.webContents,popup];}const info=await this.browser.create(details.url||'',null,null,{profileId});const tab=this.browser.get(info.id);if(details.active!==false)this.browser.actions.send({type:'select-tab',info});return [tab.view.webContents,this.browser.window];},
    selectTab:wc=>{if(host.reflectingSelection)return;const tab=[...this.browser.tabs.values()].find(tab=>tab.view?.webContents===wc);if(tab)this.browser.actions.send({type:'select-tab',info:this.browser.state(tab)});},
@@ -28,7 +28,7 @@ class BrowserExtensions {
   });
   host.ready=(async()=>{for(const row of rows)if(row.enabled){try{await session.extensions.loadExtension(path.join(folder,row.directory),{allowFileAccess:false});}catch(error){row.error=error.message;}}})();return host.ready;
  }
- save(host){fs.mkdirSync(host.folder,{recursive:true});const tmp=host.file+'.tmp';fs.writeFileSync(tmp,JSON.stringify(host.rows),{mode:0o600});fs.renameSync(tmp,host.file);}
+ save(host){fs.mkdirSync(host.folder,{recursive:true});const tmp=host.file+'.tmp';fs.writeFileSync(tmp,JSON.stringify(host.rows),{mode:0o600});fs.renameSync(tmp,host.file);host.listCache=null;const notice={type:'extensions-changed',profileId:host.profileId};if(this.browser.windowRegistry){for(const {window} of this.browser.windowRegistry.contexts.values())if(!window.isDestroyed())window.webContents.send('proteus:browser-action',notice);}else this.browser.actions.send(notice);}
  host(id){const host=this.profiles.get(id);if(!host)throw new Error('Open a tab in this browser profile first.');if(this.browser.sessionFor(id)!==host.session)throw new Error('The profile account changed.');return host;}
  storageOrigins(profileId,session){
   let rows=this.profiles.get(profileId)?.session===session?this.profiles.get(profileId).rows:null;
@@ -37,7 +37,10 @@ class BrowserExtensions {
   return rows.map(row=>'chrome-extension://'+row.id);
  }
  hasEnabled(profileId){return this.profiles.get(profileId)?.rows.some(row=>row.enabled)===true;}
- list(profileId){const host=this.host(profileId);return host.rows.map(row=>{let icon='';try{const base=path.join(host.folder,row.directory),manifest=JSON.parse(fs.readFileSync(path.join(base,'manifest.json'),'utf8')),relative=Object.values(manifest.icons||{})[0];if(relative){const file=path.resolve(base,relative);if(file.startsWith(base+path.sep)&&fs.statSync(file).size<250000){const image=nativeImage.createFromPath(file);if(!image.isEmpty())icon=image.resize({width:20,height:20}).toDataURL();}}}catch{}return {id:row.id,name:row.name,version:row.version,enabled:row.enabled,store:row.store===true,icon,error:row.error||null};});}
+ list(profileId){const host=this.host(profileId);if(host.listCache)return host.listCache;
+  return host.listCache=host.rows.map(row=>{let icon='';try{const base=fs.realpathSync(path.join(host.folder,row.directory)),manifest=JSON.parse(fs.readFileSync(path.join(base,'manifest.json'),'utf8')),icons=manifest.action?.default_icon||manifest.browser_action?.default_icon||manifest.icons||{},relative=typeof icons==='string'?icons:Object.entries(icons).sort((a,b)=>Math.abs(Number(a[0])-20)-Math.abs(Number(b[0])-20))[0]?.[1];if(typeof relative==='string'){const file=fs.realpathSync(path.resolve(base,relative));if(file.startsWith(base+path.sep)&&fs.statSync(file).size<250000){const image=nativeImage.createFromPath(file);if(!image.isEmpty())icon=image.resize({width:20,height:20}).toDataURL();}}}catch{}return {id:row.id,name:row.name,version:row.version,enabled:row.enabled,toolbar:row.toolbar===true,store:row.store===true,icon,error:row.error||null};});
+ }
+
  // The adapter calls selectTab for both host bookkeeping and extension requests.
  // Reflecting host state must not enqueue a second, potentially stale UI selection.
  reflectSelection(profileId,update){const host=this.profiles.get(profileId);if(!host)return;host.reflectingSelection=(host.reflectingSelection||0)+1;try{return update(host.adapter);}finally{host.reflectingSelection--;}}
@@ -114,6 +117,14 @@ class BrowserExtensions {
  command(value){const key=value.profileId||'default',previous=this.commands.get(key)||Promise.resolve();const task=previous.catch(()=>{}).then(()=>this.perform(value));this.commands.set(key,task);void task.finally(()=>{if(this.commands.get(key)===task)this.commands.delete(key);}).catch(()=>{});return task;}
  async perform(value){const profileId=value.profileId||'default';await this.initialize(profileId,this.browser.sessionFor(profileId));const host=this.host(profileId);
   if(value.action==='extensions-list')return this.list(profileId);
+  if(value.action==='extensions-order'){
+   const ids=value.ids;if(!Array.isArray(ids)||ids.length!==host.rows.length||new Set(ids).size!==ids.length||ids.some(id=>!host.rows.some(row=>row.id===id)))throw Error('Refresh the extension list before reordering.');
+   const before=host.rows;host.rows=ids.map(id=>before.find(row=>row.id===id));try{this.save(host);}catch(error){host.rows=before;throw error;}return this.list(profileId);
+  }
+  if(value.action==='extensions-toolbar'){
+   const row=host.rows.find(row=>row.id===value.extensionId);if(!row||typeof value.pinned!=='boolean')throw Error('Choose an installed extension and toolbar visibility.');
+   const before=row.toolbar;row.toolbar=value.pinned;try{this.save(host);}catch(error){row.toolbar=before;throw error;}return this.list(profileId);
+  }
   if(value.action==='extensions-store-browse'){const info=await this.browser.create('https://chromewebstore.google.com/',null,null,{profileId,group:value.group,parentId:value.parentId});this.browser.actions.send({type:'select-tab',info});return this.list(profileId);}
   if(['extensions-store-install','extensions-store-update'].includes(value.action)){await this.installStore(profileId,host,value);return this.list(profileId);}
   if(value.action==='extensions-install'){

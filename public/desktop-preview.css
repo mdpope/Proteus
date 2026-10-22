@@ -212,3 +212,5 @@ body.desktop-preview #main.new-chat-main{display:block;overflow:auto;padding:28p
 .new-chat-tab-panel .actions{margin-top:16px}.new-chat-tab-panel [hidden]{display:none!important}
 body.desktop-preview .preview-window-header,body.desktop-preview #tabs,body.desktop-preview #chat-subtabs,body.desktop-preview #team-subtabs,body.desktop-preview #window-content-tabs{background:var(--preview-sidebar-bg)}
 body.desktop-preview{--proteus-muted:#a1b1a5;--preview-sidebar-ink:#b7c4b7;--preview-sidebar-muted:#879489;--preview-sidebar-project-border:#344135}
+/* Blank tab-strip space accepts double-click creation; the brand remains a drag handle. */
+body.window-design-preview #tabs .tab-list{-webkit-app-region:no-drag;app-region:no-drag}

@@ -1,3 +1,16 @@
+## October 22 — video gestures and extension placement
+
+Keep the existing native website WebContents in the detached video window. Isolated frame preloads
+forward only trusted numeric drag/pinch gestures; the host checks current player/frame/focus and
+applies bounded work-area geometry. Playback controls remain interactive. Do not mirror video or
+recreate the media stream. Keep pin/order preferences in the existing per-profile local extension
+registry, with cached icon metadata and explicit change notifications, rather than adding account
+sync or fetching installed files on every browser-state update. Hide reuses existing lifecycle
+operations, and new-tab gestures delegate to the existing scoped creation actions.
+
+The operator rejected the earlier Home URL/search entry. Remove it from both normal and error
+states, keep browsing in existing browser tabs, and make Proteus the primary Home heading.
+
 ## 2026-10-22 — preserve durable state; synchronize visible presentation separately
 
 Keep durable tab/history ownership in ContentTabs and introduce a small ephemeral follow service

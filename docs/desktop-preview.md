@@ -1,3 +1,35 @@
+## October 22 — browser controls preview open
+
+Current retained preview is `0fdf5f9dc78c+dirty.19144eb051fb` from
+`dist/design-preview-browser-review`, fingerprint
+`19144eb051fbf3acf8aab8bb50e97fd5d2b73c83efc41e9a00e340b1013e8f7f` (319 runtime files).
+Home has no URL/search box, including its error state; Proteus is the main heading.
+The operator explicitly rejected relocating the earlier Apple-review browsing entry on Home.
+[Browser controls](browser.md) records video dragging/pinch, Hide, blank-strip double-click,
+extension pin/order controls and compact icons, Downloads/Page menu order and autoplay persistence.
+
+All 979 Node tests, static checks and diff checks pass. Exact locally signed package checks pass
+for Home/incoming links, tab hiding and complete navigation, extension menus/pins/order/popups and
+restart, video drag/pinch/work-area bounds/same-player return, real-video autoplay/manual playback,
+and native downloads/window restoration. Screenshots were inspected. All 319 runtime files match
+source and the embedded manifest; strict signature and preserved vendor-signature checks pass.
+Physical Windows/Linux trackpad acceptance remains outstanding. Production installation remains held.
+
+The retained preview launches with its prior selected page. Nine chat records, 39 saved logical
+tabs, all 44 session navigation entries, 77 historical visits, 82 durable navigation entries and
+281 navigation retry receipts are preserved. Eighteen protected files are byte-identical; three
+configuration files differ only by the existing one-time favorites migration and scan timestamps,
+verified against the expected transformation. Native browser view IDs change on cold restart;
+logical content IDs, selection, placement and history remain intact. Normal launch is verified
+with debugging disabled. No provider turn was started for acceptance.
+
+One cache-aware recovery snapshot was reused throughout acceptance (164,134,599 logical bytes,
+178,880,512 allocated bytes). Keep this current app and previous e9e2 recovery app. The superseded
+8cfc generated preview bundle was retired after verification: 608,362,496 allocated bytes removed,
+with an actual measured free-space increase of 2,322,432 bytes (shared APFS storage is not counted
+as newly free). Private recovery, hashes, screenshots and receipt remain outside this repository.
+Production data, platform installations and other installation recovery generations are unchanged.
+
 ## October 21 — renderer recovery preview open
 
 Current preview is `4338f058a3f7+dirty.e9e22a05e82d` from

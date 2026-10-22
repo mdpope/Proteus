@@ -19,8 +19,6 @@ try{
  for(let i=0;i<100&&!shell.isClosed();i++)await new Promise(r=>setTimeout(r,100));assert.ok(shell.isClosed());
  await app.evaluate(({app},url)=>app.emit('open-url',{preventDefault(){}},url+'/reopen'),url);
  rows=await wait(rows=>rows.some(t=>t.url===url+'/reopen'));const reopened=rows.find(t=>t.url===url+'/reopen');shell=app.windows().find(p=>p.url().startsWith('http:')&&!p.url().startsWith(fixture.origin));assert.ok(shell);await shell.locator('[data-tab-container="'+reopened.id+'"].selected').waitFor();
- await shell.getByRole('button',{name:'Home',exact:true}).click();await shell.locator('#home-browser-query').fill(fixture.origin+'/home-entry');await shell.locator('#home-browser-entry button').click();
- rows=await wait(rows=>rows.some(t=>t.url===fixture.origin+'/home-entry'));const homeTab=rows.find(t=>t.url===fixture.origin+'/home-entry');await shell.locator('[data-tab-container="'+homeTab.id+'"].selected').waitFor();
- await shell.getByRole('button',{name:'Home',exact:true}).click();await shell.locator('#home-browser-query').waitFor();await shell.setViewportSize({width:1000,height:760});await shell.screenshot({path:'/private/tmp/proteus-browser-home-review.png'});
- console.log(JSON.stringify({homeAddressEntry:true,passed:true,earlyOpen:true,warmOpen:true,secondInstance:true,repeatedURLsPreserved:true,backgroundReopen:true,noAgentGrants:true,credentialURLRejected:true}));
+ await shell.getByRole('button',{name:'Home',exact:true}).click();await shell.locator('#home-screen .home-heading h1').waitFor();assert.equal(await shell.locator('#home-screen .home-heading h1').textContent(),'Proteus');assert.equal(await shell.locator('#home-browser-entry, #home-browser-query').count(),0);await shell.setViewportSize({width:1000,height:760});await shell.screenshot({path:'/private/tmp/proteus-browser-home-review.png'});
+ console.log(JSON.stringify({homeBrandWithoutAddressEntry:true,passed:true,earlyOpen:true,warmOpen:true,secondInstance:true,repeatedURLsPreserved:true,backgroundReopen:true,noAgentGrants:true,credentialURLRejected:true}));
 }finally{await app?.close();await fixture.cleanup();}

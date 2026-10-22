@@ -361,8 +361,8 @@ class BrowserTabs {
     on('did-start-navigation',details=>{if(!details.isMainFrame||details.isSameDocument)return;tab.certificateRevision=(tab.certificateRevision||0)+1;tab.certificate=null;tab.certificateDetails=null;tab.favicon=this.siteSettings.get(this.sessionNames.get(profileId),wc.getURL()).favicon||'';tab.faviconResolver?.reset();tab.iconURLs=null;tab.iconResponses=new Map();this.sessionIcons?.clear();void observeCertificate();});
     on('dom-ready',()=>{const origin=siteOrigin(wc.getURL());if(origin){this.siteSettings.remember(this.sessionNames.get(profileId),origin);if(!tab.favicon)tab.favicon=this.siteSettings.get(this.sessionNames.get(profileId),origin).favicon||'';void wc.executeJavaScript("[...document.querySelectorAll('link[rel~=icon]')].map(link=>link.href).slice(0,5)").then(icons=>this.resolveFavicon(tab,icons.length?icons:[origin+'/favicon.ico'])).catch(()=>{});}});
     on('page-favicon-updated',(_event,icons)=>{tab.iconURLs=icons.slice(0,5);void this.resolveFavicon(tab,tab.iconURLs);});
-    on('zoom-changed',(_event,direction)=>wc.send('proteus:pinch-update',{direction,zoom:wc.getZoomFactor()}));
-    on('input-event',(_event,input)=>{if(['gesturePinchBegin','gesturePinchEnd'].includes(input.type))wc.send('proteus:pinch-boundary',{type:input.type,zoom:wc.getZoomFactor()});});
+    on('zoom-changed',(_event,direction)=>{if(!tab.videoPopout)wc.send('proteus:pinch-update',{direction,zoom:wc.getZoomFactor()});});
+    on('input-event',(_event,input)=>{if(!tab.videoPopout&&['gesturePinchBegin','gesturePinchEnd'].includes(input.type))wc.send('proteus:pinch-boundary',{type:input.type,zoom:wc.getZoomFactor()});});
     wc.setWindowOpenHandler(bind(({ url: next }) => {
       try { if(this.options.handleCallback?.(next))return {action:'deny'};const address = this.address(next); void this.create(address, tab.owner,null,{profileId:tab.profileId,group:tab.group,parentId:tab.parentId}).then(info=>this.actions.send({type:'select-tab',info,afterId:tab.id})).catch(error=>this.actions.send({type:'error',message:error.message})); } catch { /* Unsupported schemes remain blocked. */ }
       return { action: 'deny' };
@@ -658,10 +658,10 @@ class BrowserTabs {
       return require('./browser-address-popup.cjs').updateAddressPopup(parent,value,{valid:()=>!parent.isDestroyed()&&!!tab&&this.tabs.get(tab.id)===tab&&(context?context.browserFields.active:this.active)===tab.id,choose:url=>{if(!parent.isDestroyed())parent.webContents.send('proteus:browser-action',{type:'address-choice',token:value.token,url});}});
     }
     if(action==='popup-menu'||action==='page-menu') {
-      if(!Array.isArray(value.items)||value.items.length>40)throw new Error('Invalid tab menu.');
+      if(!Array.isArray(value.items)||value.items.length>80)throw new Error('Invalid tab menu.');
       const entries=value.items.map(item=>{
         if(typeof item?.id!=='string'||!/^[a-z0-9:-]{1,50}$/i.test(item.id)||typeof item.label!=='string'||!item.label.trim()||item.label.length>100)throw new Error('Invalid tab menu item.');
-        return {id:item.id,label:item.label,enabled:item.enabled!==false};
+        return {id:item.id,label:item.label,enabled:item.enabled!==false,...(typeof item.icon==='string'&&item.icon.length<=32768&&/^data:image\/png;base64,[a-zA-Z0-9+/=]+$/.test(item.icon)?{icon:item.icon}:{})};
       });
       if(!entries.length)return null;
       if(action==='page-menu'){

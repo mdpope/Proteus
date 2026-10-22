@@ -1,3 +1,36 @@
+## October 22 — browser review controls
+
+Home has no URL/search box. Proteus is its primary heading; normal browser tabs and their address bars remain the browsing entry points.
+
+Browser tab menus place **Hide browser tab** directly below Unload. Hide uses the existing
+visibility/lifecycle operation: unload first, preserve logical identity, profile, placement and
+full history, and then remove the navigation entry. Existing active-work/unsaved-form blockers
+remain. Restore stays available from the existing tab inventory. Main, project/chat/workspace
+and Team strips create a normal browser tab on a double click in blank space; existing tabs,
+buttons and reorder handles are excluded. The main strip's blank space is no longer a native
+drag region; the brand area remains available for moving the application window.
+
+The detached video player supports dragging its video surface after a small movement threshold,
+leaving buttons, sliders and native bottom playback controls usable. Trusted trackpad pinch
+(control-wheel events) proportionally resizes the current window, preserving its aspect ratio and
+clamping both axes to the display work area. No player, session or navigation is recreated.
+Script-generated gestures are ignored; host IPC is scoped to the active player's own frames.
+Escape/return-to-tab, navigation and disposal retain their existing cleanup. Platform code uses
+Electron work-area/bounds APIs on macOS, Windows and Linux. Physical Windows/Linux gestures remain
+release acceptance; native Wayland compositors can restrict programmatic move/resize (see
+[Electron window limits](https://www.electronjs.org/docs/latest/api/browser-window/)).
+
+Autoplay blocking remains a device-wide atomic `browser-media.json` preference under application
+data and is restored before browser pages are created. No new shared account setting is needed.
+Browser Preferences adds per-profile, device-local **Show in toolbar** controls and Move left /
+Move right ordering. The same installed-extension records preserve pins/order across restart and
+updates. Enabled pinned extensions appear between Go and the trailing controls; unpinned ones
+remain in the page menu. Extension popup/profile boundaries and permissions are unchanged.
+Installed icon files are bounded, resolved within the extension folder and rendered as small PNGs;
+a compact generic icon is used if no image exists. Lists are cached until extension changes, and
+all open app windows refresh their toolbar metadata. Downloads precedes the Page menu button.
+Tab/page menus use 15px vector/extension icons while retaining their 32px native menu rows.
+
 ## October 22 — open links in a loaded background tab
 
 Native browser link menus now offer **Open Link in Background Tab** immediately after

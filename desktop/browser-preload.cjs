@@ -91,6 +91,7 @@ function draw() {
 // Observe gestures without making Chromium wait for the renderer on every wheel event.
 // Horizontal navigation starts only at a scroll boundary; all native scrolling stays intact.
 function pinchAttempt(delta){
+    if(document.fullscreenElement)return;
     const now=Date.now(),scale=window.visualViewport?.scale||1;
     if(now<cooldown)return;
     if(!overviewGate||!overviewGate.explicit&&now-overviewGate.last>240)overviewGate={started:now,last:now,delta:0,blocked:scale>1.001};
@@ -108,7 +109,7 @@ window.addEventListener('wheel', event=>{
     pinchAttempt(event.deltaY);
     return;
   }
-  if(!event.isTrusted||event.ctrlKey||event.shiftKey||event.deltaMode!==0||Date.now()<cooldown||(window.visualViewport?.scale||1)>1.01)return;
+  if(document.fullscreenElement||!event.isTrusted||event.ctrlKey||event.shiftKey||event.deltaMode!==0||Date.now()<cooldown||(window.visualViewport?.scale||1)>1.01)return;
   if(!direction) {
     if(Math.abs(event.deltaX)<3||Math.abs(event.deltaX)<Math.abs(event.deltaY)*1.5||canScroll(event,event.deltaX))return;
     direction=event.deltaX<0?'back':'forward';if(direction==='forward'&&!history.forward&&!canReopen){direction=null;return;}

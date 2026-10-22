@@ -1,3 +1,12 @@
+## Unreleased — browser controls review
+
+- Remove the unrequested Home URL/search box; make Proteus the primary heading and retain browsing in browser tabs.
+- Drag detached video windows from the video surface and pinch to resize within the display work area, retaining the original player and controls.
+- Add Hide browser tab below Unload and double-click blank tab-strip space to create a scoped browser tab.
+- Add optional extension toolbar icons and per-profile ordering in Browser Preferences; show small extension/action icons in tab and page menus.
+- Place Downloads before the Page menu, and verify device-wide autoplay blocking across restart.
+- Refresh the retained isolated design preview for operator review; production/platform installation remains held. See [preview acceptance](docs/desktop-preview.md).
+
 ## Unreleased — stabilization and scoped desktop follow-along
 
 - Add Open Link in Background Tab below the foreground new-tab action; load in the source profile and placement while preserving selection/focus. Keep the unloaded option.

@@ -1,3 +1,18 @@
+## October 22 — browser controls and Home correction ready for review
+
+The retained Design Preview is open at `0fdf5f9dc78c+dirty.19144eb051fb`, containing the
+stabilization/follow-along work below plus the operator's additional browser controls. Home's
+unrequested URL/search box is removed entirely; Proteus is the primary heading. See
+[browser behavior](browser.md) and [exact preview acceptance](desktop-preview.md).
+
+979 Node tests, static checks, exact-package Home/link, browser controls, video gestures and
+media/download/window checks pass. Existing preview chats, logical tabs, selection and full
+navigation/retry history are preserved; expected favorites migration/scan metadata changes are
+recorded separately. The verified snapshot was reused, and only the superseded generated preview
+app was retired. Production installation remains held for operator review; physical Windows/Linux
+gestures are not yet verified. A fresh upstream-main fetch found no additional changes. Preserve
+the separately pending Windows version/update work when integrating it later.
+
 ## October 22 — stabilization and scoped follow-along
 
 Start with [the current architecture](architecture.md), [stabilization ledger](stabilization-plan.md),

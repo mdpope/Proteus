@@ -1,3 +1,15 @@
+## October 22 — additional browser controls and retained preview
+
+The operator rejected the Home URL/search box added during earlier Apple browser preparation. Remove it entirely and make Proteus the primary Home heading; do not relocate the box elsewhere on Home.
+
+Implemented for the operator's next design-preview review: detached-video surface dragging and
+proportional work-area-bounded pinch resizing; Hide browser tab below Unload; scoped blank-strip
+double-click creation; persistent autoplay verification; optional ordered extension toolbar icons;
+Downloads/Page menu swap; compact tab/page-menu icons. Preserve the current player's WebContents,
+full histories, local profiles, existing permissions and retained preview data. Production builds
+and all-platform installation remain held pending operator review. See [browser behavior](browser.md)
+and [preview acceptance](desktop-preview.md).
+
 ## October 22 — authorized stabilization implemented in source
 
 The operator authorized the architecture/performance plan and selected-scope desktop follow-along.

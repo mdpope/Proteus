@@ -50,3 +50,5 @@ test('both desktop builds verify final version metadata and complete embedded pr
   fs.writeFileSync(path.join(base, 'build-source.json'), JSON.stringify({ ...provenance, runtimeFiles: {} }));
   assert.throws(() => verifyDesktopMetadata(base, source, provenance), /source provenance/);
 });
+
+test('contributor and security documentation stay in the repository, outside app runtime',()=>{for(const file of ['/CONTRIBUTING.md','/SECURITY.md'])assert.ok(desktopPackageIgnore.some(pattern=>pattern.test(file)));});
