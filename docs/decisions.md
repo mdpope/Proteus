@@ -1,3 +1,9 @@
+## 2026-10-22 — Windows reuses Linux desktop chrome
+
+Use the existing shared frameless shell and native popup menu on Windows, including sender-bound
+window actions and menu command routing. Preserve native accelerators and F10 access instead of
+adding a separate menu implementation. macOS retains its native traffic lights and menu.
+
 ## 2026-10-22 — Windows distribution and recovery use the existing owner protocol
 
 The operator selected a conventional per-user installer and an initially unsigned Windows

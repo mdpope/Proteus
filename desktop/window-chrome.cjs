@@ -1,11 +1,11 @@
-// Linux draws its controls in the shell; other desktops retain their native frame.
-const windowChromeOptions = (platform = process.platform) => platform === 'linux' ? { frame: false } : {};
+// Linux and Windows share shell controls; macOS retains its native frame.
+const windowChromeOptions = (platform = process.platform) => ['linux', 'win32'].includes(platform) ? { frame: false } : {};
 const windowChromeState = target => ({ maximized: target.isMaximized(), fullscreen: target.isFullScreen(), focused: target.isFocused() });
 
 function installWindowChrome({ windows, trusted, Menu, isClosing, platform = process.platform }) {
   windows.handle('proteus:window-chrome', async (event, value) => {
     trusted(event);
-    if (platform !== 'linux' || isClosing()) throw Error('Linux window controls are unavailable.');
+    if (!['linux', 'win32'].includes(platform) || isClosing()) throw Error('Window controls are unavailable.');
     const target = windows.current().window;
     switch (value?.action) {
       case 'state': break;
@@ -29,7 +29,7 @@ function installWindowChrome({ windows, trusted, Menu, isClosing, platform = pro
     if (!target.isDestroyed()) return windowChromeState(target);
   });
   return target => {
-    if (platform !== 'linux') return;
+    if (!['linux', 'win32'].includes(platform)) return;
     // Keep the native menu/accelerators registered without a second menu-bar row.
     target.setAutoHideMenuBar(false);
     target.setMenuBarVisibility(false);

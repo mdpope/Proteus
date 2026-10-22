@@ -4,10 +4,11 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
-const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-window-chrome-ui-'));
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+const temporary = privateTemporaryDirectory(path.join(os.tmpdir(), 'proteus-window-chrome-ui-'));
 const workspace = path.join(temporary, 'workspace'); fs.mkdirSync(workspace);
 fs.writeFileSync(path.join(temporary, 'settings.json'), JSON.stringify({ schemaVersion: 1, provider: 'rehearsal', model: '', timezone: 'UTC', workspace: { cwd: workspace, additionalDirectories: [] }, skillDirectories: [], mcpServers: {} }));
-const inherited = ['PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'LANG', 'LC_ALL', 'DISPLAY', 'WAYLAND_DISPLAY', 'XAUTHORITY', 'XDG_RUNTIME_DIR', 'DBUS_SESSION_BUS_ADDRESS', 'TMPDIR', 'TMP', 'TEMP'];
+const inherited = ['PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'LANG', 'LC_ALL', 'DISPLAY', 'WAYLAND_DISPLAY', 'XAUTHORITY', 'XDG_RUNTIME_DIR', 'DBUS_SESSION_BUS_ADDRESS', 'TMPDIR', 'TMP', 'TEMP','SystemRoot','WINDIR','COMSPEC','USERPROFILE','LOCALAPPDATA','APPDATA'];
 const env = Object.fromEntries(inherited.filter(key => process.env[key] !== undefined).map(key => [key, process.env[key]]));
 Object.assign(env, { PROTEUS_HOME: temporary, PORT: '0', COPILOT_HOME: path.join(temporary, 'copilot'), COPILOT_CLI_PATH: path.join(temporary, 'unavailable-copilot'), PROTEUS_CODEX_PATH: path.join(temporary, 'unavailable-codex'), PROTEUS_CLAUDE_PATH: path.join(temporary, 'unavailable-claude'), CLAUDE_CONFIG_DIR: path.join(temporary, 'claude') });
 let app;
@@ -73,7 +74,7 @@ try {
   await page.waitForTimeout(300);
   assert.equal(await page.evaluate(() => document.querySelector('#linux-window-controls').getBoundingClientRect().right <= document.querySelector('#topbar-home').getBoundingClientRect().left), true);
   await page.evaluate(() => document.activeElement?.blur());
-  const screenshot = path.resolve('dist/linux-window-chrome.png'); fs.mkdirSync(path.dirname(screenshot), { recursive: true }); await page.screenshot({ path: screenshot });
+  const screenshot = path.resolve('work/'+process.platform+'-window-chrome.png'); fs.mkdirSync(path.dirname(screenshot), { recursive: true }); await page.screenshot({ path: screenshot });
   assert.deepEqual(errors, []);
   console.log(JSON.stringify({ passed: true, synthetic: true, checks, screenshot }));
 } finally { await app?.close(); fs.rmSync(temporary, { recursive: true, force: true }); }

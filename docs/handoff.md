@@ -1,3 +1,18 @@
+## October 22 — Windows chrome follow-up
+
+The operator requested Windows match Linux's frameless window controls and application menu.
+The shared host/renderer implementation now includes Windows; source UI acceptance verifies
+native minimize/maximize/restore, menu popup/F10, additional windows and sender ownership.
+The Mac connection is restored and the authorized handoff reached Proteus Windows Build.
+Publication activation waits for the replacement exact tested Windows artifact/source transfer.
+
+Replacement `windows.2cf4ad5cdad6` passes 887 of 889 tests (two existing POSIX skips), static
+checks and the same actual packaged chrome UI checks. Its official signed offline release was
+consumed by the existing installed owner: protocol-1 NSIS replacement and restarted renderer health
+pass, with exact installed payload, stable identity and current runs/schedules preserved. One
+verified recovery generation remains. Prior build6e real-chat update/rollback acceptance was not
+repeated for this chrome-only follow-up. Physical window dragging is not claimed.
+
 ## October 22 — Windows WTB release acceptance
 
 The latest operator choice selects downloads.proteus.example Windows downloads, an unsigned conventional installer

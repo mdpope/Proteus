@@ -1,5 +1,6 @@
 ## Unreleased — Windows installer and signed WTB desktop releases
 
+- Match Linux's frameless desktop shell on Windows, with the same upper-left window controls and circled-dots File/Edit/View/Window menu button, F10 access and native shortcuts.
 - Add a per-user Windows x64 NSIS installer, native PowerShell terminal startup/cleanup, provider executable discovery and owner-only data/credential ACL checks.
 - Retry transient Windows sharing violations during atomic state replacement without removing the previous durable file; preserve update-button gating after cancellation.
 - Add trusted signed release manifests, a pinned downloads.proteus.example Windows catalog/download channel, bounded verified offline/network staging, and registered Windows installer recovery through the existing protocol-1 helper. Keep the separately authenticated website service compatible without sending its account credentials to WTB.

@@ -1,3 +1,12 @@
+## October 22 — Windows chrome follow-up
+
+Windows now reuses the Linux frameless shell controls and circled-dots File/Edit/View/Window menu,
+with native shortcuts, F10 access and sender-bound actions. Source and exact packaged UI checks
+pass. Build `windows.2cf4ad5cdad6` passes 887 tests with two skips and static checks, then completes
+the actual installed signed-release update with healthy renderer, exact payload and identity/data
+preservation. One verified recovery generation remains. The restored Mac chat received the authorized
+handoff and is preparing WTB deployment while activation waits for the replacement artifacts.
+
 ## October 22 — Windows WTB release acceptance
 
 The latest operator choice selects downloads.proteus.example Windows downloads, an unsigned conventional installer

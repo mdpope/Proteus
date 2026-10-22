@@ -1,5 +1,17 @@
 # Windows desktop
 
+Windows shares Linux's frameless shell: upper-left Close, Minimize and Maximize/Restore controls,
+plus the circled-dots application menu containing File, Edit, View and Window. F10 opens that menu;
+native shortcuts remain registered. The top tab strip is draggable and its buttons are excluded
+from dragging. Additional windows use the same controls, bound to their owning window.
+
+Follow-up build `windows.2cf4ad5cdad6` passes 887 of 889 tests (two POSIX skips), static checks,
+source and exact packaged chrome UI checks. The existing installed owner consumed its official
+signed release, completed protocol-1 NSIS replacement and restarted with healthy renderer, exact
+payload, stable identity and preserved runs/schedules. One verified recovery generation remains.
+Prior build6e real-model continuation/rollback tests below were not repeated for this chrome-only
+change. Drag-region styles are verified; physical window dragging is not claimed.
+
 Windows x64 uses a conventional, per-user NSIS installer with a Start-menu entry and Apps uninstall registration. It includes Electron, runtime dependencies and the native PowerShell PTY; target PCs do not need Node, npm, Git or Python. The first release is deliberately unsigned under operator authorization. Windows may display an unknown publisher or SmartScreen warning. Signed release manifests authenticate update packages independently of Authenticode.
 
 The installer registers `proteus:` chat links and `proteus-desktop:` sign-in callbacks for the current user, so links opened from a system browser reach this installation. It does not change the default web browser.
