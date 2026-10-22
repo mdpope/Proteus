@@ -1,3 +1,12 @@
+## October 22 — bounded external transcript coverage for manual Linux update
+
+The current Linux provider uses a shared home outside Proteus app/profile snapshot roots. The
+manual deployment captures only the existing referenced native transcripts in the same current
+recovery generation, with stable per-file hashes and an explicit missing-reference/external-state
+manifest. Shared account/index/config and unrelated chats remain dependencies. This avoids claiming
+whole-provider recovery or restoring stale shared state. It is a manual recovery procedure, not an
+automatic-helper feature. See desktop-updates.md and the October 22 Linux acceptance.
+
 ## October 22 — integrate Windows releases at existing service boundaries
 
 Keep release streaming and token refresh in AccountSession, so the extracted shared account

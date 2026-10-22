@@ -1,3 +1,14 @@
+## October 22 — preserve Linux release evidence before 0.2.29
+
+The docs-only Linux reconciliation recovers four artifact-specific 0.2.27/0.2.28 acceptance
+reports and the bounded external native-transcript recovery procedure. See
+[Linux source references and scope](linux-app.md#october-22--linux-acceptance-evidence-reconciled-with-main).
+The older reports are historical; their tests do not certify the next candidate. Main's newer
+Windows/mobile/updater documentation and runtime remain unchanged. The preflight content audit
+finds no missing Linux runtime/build patch to port. Final frozen 0.2.29 source, candidate tests,
+current cold recovery and installation acceptance remain separate; installed 0.2.28 stays running.
+Navigation receipt growth remains unresolved and protected command receipts must be preserved.
+
 ## October 22 — desktop, Windows release, and mobile source integrated
 
 The operator requested all completed changes be pushed, reviewed through a PR, and synchronized

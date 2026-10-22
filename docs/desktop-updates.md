@@ -245,6 +245,25 @@ newer retry protections. Do not restore an old data snapshot over subsequent use
 Keep machine-specific transfer/install receipts private. Update the release ledger and handoff
 with verified status and limits; do not put runtime data or private paths into project docs.
 
+## External native transcripts in manual deployments
+
+Inventory the provider session paths referenced by Proteus runs before claiming recovery coverage.
+A shared provider home can be outside both app-data and browser-profile roots. In that case, an
+external deployment driver may add only the referenced existing transcript files to the SAME
+current generation, with a private original-path/stored-path/size/hash manifest and stable
+before/copy/after checks. Keep private modes; verify the supplement when auditing/retiring that
+generation. Missing references are recorded as pre-existing coverage gaps, never fabricated.
+The October 22 Linux capture implements this bounded manual supplement; it does not add shared
+provider-home backup support to the automatic helper. Index/auth/config remain explicit external
+dependencies. Never interrupt unrelated provider/Codex chats or copy their whole home merely to
+make a backup claim. Do not restore older transcript/data copies over newer user work.
+
+Preserve strict failed receipts when live metadata legitimately changes. A separate source-bound
+classification can accept only proven lossless fields/operations while keeping identity, URL,
+ownership, context, approval and original receipt protections. Encrypted derived caches require
+actual-owner logical evidence; their ciphertext alone does not establish content preservation.
+Distinguish evidence captured at a stated time from current opaque cache inspection.
+
 ## Two generation backup retention
 
 The operator requires only a couple of full recovery backups at one time. This policy applies

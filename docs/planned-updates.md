@@ -1,3 +1,13 @@
+## October 22 — Linux documentation reconciliation; next artifact pending
+
+Recovered the four source-bound Linux 0.2.27/0.2.28 acceptance reports and the bounded external
+native-transcript manual recovery procedure without replacing main's newer implementation or
+release documentation. The old checkpoints are explicitly historical. See the
+[Linux reconciliation](linux-app.md#october-22--linux-acceptance-evidence-reconciled-with-main).
+No runtime, package, installed-app, recovery snapshot or journal pruning change is included.
+The next Linux build awaits final frozen 0.2.29 source and separate acceptance. Continued
+navigation/operation receipt growth needs investigation; retention protections remain unchanged.
+
 ## October 22 — completed source integration authorized
 
 The operator requested PR, push, merge, and source synchronization for the completed desktop,
