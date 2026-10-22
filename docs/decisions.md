@@ -1,3 +1,22 @@
+## 2026-10-22 — preserve durable state; synchronize visible presentation separately
+
+Keep durable tab/history ownership in ContentTabs and introduce a small ephemeral follow service
+for the selected owner project/workspace. Bind browser positions to navigation identity, use stable
+chat anchors, and coalesce replaceable gestures. Never transmit browser sessions or page contents.
+Join/read on entry; do not hydrate inactive scopes. Validate the existing document/resource boundary
+and avoid replaying old gestures after reconnect. The operator chose to keep terminal output local.
+
+Preserve full histories, native find, drafts, and selection: reduce layout work and reuse DOM instead
+of removing arbitrary loaded rows. Bound inactive history by count and serialized-byte estimate,
+while pinning active provider references. Keep atomic synchronous durability and remove only a
+proven duplicate save; do not introduce a new event format in a performance refactor.
+
+Use versioned updater provenance with installation-bound identity and worker I/O. Recovery follows
+two verified generations per installation/device, narrowly excludes disposable caches, and resumes
+verified partial copies. Storage accounting is read-only by default; cleanup retains active helper
+and unresolved recovery dependencies. Shared-account auth is independent of Life, preserving the
+existing vault/consent while adding optional projections. Leave the root license unchanged.
+
 ## 2026-10-22 — host-owned agent chat authority and durable feedback
 
 Use one `ChatControl` service for internal provider tools and external local MCP, layered on

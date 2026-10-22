@@ -214,3 +214,17 @@ html,body{height:100%;overflow:hidden}#app{height:100dvh;min-height:0;overflow:h
 #navigation-conflicts .navigation-conflict p{margin:6px 0}
 .new-tab-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin:18px 0 24px}.new-tab-actions button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;min-height:88px;padding:14px 10px;background:var(--panel)}.new-tab-actions svg{width:25px;height:25px;color:var(--accent)}#browser-home-address{display:flex;align-items:flex-end;gap:6px}#browser-home-address label{flex:1;margin:0}#browser-home-address button{height:39px;min-width:44px;font-size:21px}
 .source-kind-icon{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;flex:0 0 28px;border-radius:6px;color:var(--accent);background:color-mix(in srgb,currentColor 9%,transparent)}.source-kind-icon svg{display:block}.source-kind-agent{color:color-mix(in srgb,var(--ink) 30%,#bea9e7)}.source-kind-mcp{color:color-mix(in srgb,var(--ink) 30%,#86c9d0)}.source-kind-skill{color:color-mix(in srgb,var(--ink) 30%,#e4c181)}.source-entry-heading{display:flex;align-items:center;gap:10px;margin-bottom:3px;min-width:0}.source-entry-heading>strong{min-width:0;overflow-wrap:anywhere}.context-option>label>.source-kind-icon{margin-top:0}.context-option-copy{min-width:0;overflow-wrap:anywhere}.source-refresh-option{display:flex;align-items:flex-start;gap:10px}.source-refresh-option>input{width:auto;margin-top:7px}.source-refresh-option>span:last-child{min-width:0}
+
+/* Keep the existing sidebar and composer controls usable in narrow windows. */
+@media(max-width:480px){
+  #main.run-main{padding:4px}
+  #main.run-main .chat-pane.card{padding:2px}
+  #main.run-main .adaptive-composer{padding:8px 2px!important}
+  #main.run-main .adaptive-composer .composer-footer{grid-template-columns:auto minmax(0,1fr);gap:4px}
+  #main.run-main .adaptive-composer .model-options{grid-column:1/-1;grid-row:2;padding:0}
+  #main.run-main .adaptive-composer .attachment-controls{grid-column:1;grid-row:3}
+  #main.run-main .adaptive-composer .composer-actions{grid-column:2;grid-row:3;justify-content:flex-end;gap:4px}
+  #main.run-main .adaptive-composer .model-options small{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #main.run-main .chat-pane>.pending{padding:10px 8px}
+  #main.run-main .jump-latest{max-width:calc(100% - 12px);padding:8px;font-size:11px;white-space:nowrap}
+}

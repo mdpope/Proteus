@@ -1,8 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import { fileStamp } from './file-stamp.js';
 import {safeContentTabURL as safeHistoryURL,normalizeContentTabHistory as normalizeHistory,contentTabTitle as title,sameContentTabs,contentTabMetadata,mergeContentTabMetadata} from '../public/content-tab-descriptor.js';
 const ID=/^[a-zA-Z0-9_:.\-]{1,256}$/;
+export const contentTabMembershipLimits=Object.freeze({scopes:128,tabs:8192});
 export function contentTab(value){
   if(!value||!ID.test(value.id||'')||!['browser','document','chat','terminal'].includes(value.type))throw new Error('Choose a bounded browser or document tab.');
   const tab={id:value.id,type:value.type,title:title(value.title)||'New tab',...contentTabMetadata(value)};if(title(value.customTitle))tab.customTitle=title(value.customTitle);
@@ -37,7 +39,7 @@ export function workspaceContentScopes(session){
 }
 /** Host-owned descriptors only. Selection, page state and document approval never enter this store. */
 export class ContentTabs {
-  constructor(home,{onChange=()=>{},history}={}){this.file=path.join(home,'content-tabs.json');this.sourcesFile=path.join(home,'content-tab-sources.json');this.onChange=onChange;this.historyStore=history;this.asyncTail=Promise.resolve();}
+  constructor(home,{onChange=()=>{},history}={}){this.file=path.join(home,'content-tabs.json');this.sourcesFile=path.join(home,'content-tab-sources.json');this.onChange=onChange;this.historyStore=history;this.asyncTail=Promise.resolve();this.memberships=new Map();this.membershipCount=0;this.membershipStamp=null;}
   migrateWindowTeams(){
     const data=this.read();if(data.sharedTeamWindowsVersion===1)return;
     const current=data.scopes['team:team'],tabs=(current?.tabs||[]).map(contentTab);
@@ -48,21 +50,21 @@ export class ContentTabs {
   }
   navigationKey(scope,id,tabId){this.key(scope,id);if(!ID.test(tabId||''))throw new Error('Choose an existing browser tab.');return `${scope}:${id}:${tabId}`;}
   async history({scope,id,tabId,...query}){const tab=this.get(scope,id).tabs.find(tab=>tab.id===tabId&&tab.type==='browser');if(!tab){const error=new Error('This browser tab is no longer open.');error.code='NAVIGATION_TAB_CLOSED';throw error;}return this.historyStore.navigationGet({...query,tabId:this.navigationKey(scope,id,tabId)});}
-  async getAsync(scope,id){
+  async getAsync(scope,id,{historyLimit}={}){
     const result=this.get(scope,id);if(!this.historyStore)return result;
     const hydrated=[];for(let offset=0;offset<result.tabs.length;offset+=8)hydrated.push(...await Promise.all(result.tabs.slice(offset,offset+8).map(async tab=>{
       if(tab.type!=='browser')return tab;
       const tabId=this.navigationKey(scope,id,tab.id);
       await this.historyStore.navigation({action:'seed',tabId,profileId:tab.profileId||'default',history:tab.history,url:tab.url,title:tab.title});
-      let navigation;try{navigation=await this.historyStore.navigationGet({tabId,limit:10000});}catch(error){if(error.code!=='HISTORY_PAGE_REQUIRED'&&!/requires paging/.test(error.message))throw error;navigation=await this.historyStore.navigationGet({tabId});}
-      const history=navigation?.history?{...navigation.history,offset:navigation.offset,total:navigation.total,nextCursor:navigation.nextCursor,hasMore:navigation.hasMore}:undefined;
+      let navigation;try{navigation=await this.historyStore.navigationGet({tabId,limit:Number.isSafeInteger(historyLimit)?Math.max(1,Math.min(200,historyLimit)):10000});}catch(error){if(error.code!=='HISTORY_PAGE_REQUIRED'&&!/requires paging/.test(error.message))throw error;navigation=await this.historyStore.navigationGet({tabId});}
+      const history=navigation?.history?{...navigation.history,offset:navigation.offset,total:navigation.total,nextCursor:navigation.nextCursor,hasMore:navigation.hasMore,deltaSupported:navigation.deltaSupported===true}:undefined;
       const selected=history?.entries?.[history.index];return selected?{...tab,url:selected.url,title:tab.customTitle || selected.title || tab.title,history}:history?{...tab,history}:tab;
     })));result.tabs=hydrated;return result;
   }
   mutateAsync(value){
     const work=this.asyncTail.then(async()=>{
       if(!this.historyStore)return this.mutate(value);
-      const {scope,id,operations}=value,current=await this.getAsync(scope,id);
+      const {scope,id,operations}=value,current=await this.getAsync(scope,id,{historyLimit:value.historyLimit});
       if(!Array.isArray(operations)||operations.length>100)throw new Error('Choose at most 100 tab changes.');
       const navigation=operations.filter(op=>/^browser-(navigate|traverse|redirect)$/.test(op.action));
       if(navigation.length){
@@ -72,7 +74,7 @@ export class ContentTabs {
         // The navigation store validates its own revision and durable operation receipt.
         // Scope metadata revisions do not invalidate an otherwise current traversal.
         const navigationResult=await this.historyStore.navigation({...op,action:op.action.slice(8),tabId:this.navigationKey(scope,id,tab.id),visitTabId:tab.id,profileId:tab.profileId||'default'});
-        const result=await this.getAsync(scope,id);if(!navigationResult.replayed)this.onChange(result);return result;
+        const result=await this.getAsync(scope,id,{historyLimit:value.historyLimit});if(!navigationResult.replayed)this.onChange(result);return result;
       }
       const safe=operations.map(op=>{
         if(op.action!=='open'||op.tab?.type!=='browser')return op;
@@ -83,13 +85,32 @@ export class ContentTabs {
         const metadata=this.get(scope,id).tabs.find(tab=>tab.id===op.tab.id);
         return {...op,tab:{...op.tab,url:metadata.url,history:metadata.history}};
       });
-      this.mutate({...value,operations:safe});const result=await this.getAsync(scope,id);
+      this.mutate({...value,operations:safe});const result=await this.getAsync(scope,id,{historyLimit:value.historyLimit});
       return result;
     });this.asyncTail=work.catch(()=>{});return work;
   }
   read(){try{if(fs.statSync(this.file).size>16_000_000)throw new Error();const data=JSON.parse(fs.readFileSync(this.file,'utf8'));if(data.schemaVersion!==1||typeof data.scopes!=='object'||!data.scopes)throw new Error();if(Object.keys(data.scopes).length>1000)throw new Error();for(const [key,row]of Object.entries(data.scopes)){const [scope,...id]=key.split(':');this.key(scope,id.join(':'));if(!/^(chat|team|workspace|project|main):/.test(key)||!row||!Number.isSafeInteger(row.revision)||row.revision<0||!Array.isArray(row.tabs)||row.tabs.length>1000||new Set(row.tabs.map(tab=>contentTab(tab).id)).size!==row.tabs.length)throw new Error();}return data;}catch(error){if(error.code==='ENOENT')return {schemaVersion:1,scopes:{}};throw new Error('Saved content tabs could not be read. The original file was preserved.');}}
   key(scope,id){if(!['chat','team','workspace','project','main'].includes(scope)||!ID.test(id||'')||(scope==='team'&&id!=='team'&&!/^window:[a-f0-9-]{36}$/i.test(id))||(scope==='main'&&id!=='main'&&!/^window:[a-f0-9-]{36}$/i.test(id)))throw new Error('Choose an explicit chat or Team tab scope.');return scope+':'+id;}
   get(scope,id){const key=this.key(scope,id),row=this.read().scopes[key];return {scope,id,revision:row?.revision||0,tabs:(row?.tabs||[]).map(contentTab)};}
+  member(scope,id,tabId){
+    const key=this.key(scope,id);
+    for(let attempt=0;attempt<2;attempt++){
+      const stamp=fileStamp([this.file]);
+      if(stamp!==this.membershipStamp){this.memberships.clear();this.membershipCount=0;this.membershipStamp=stamp;}
+      let members=this.memberships.get(key);
+      if(!members){
+        const row=this.read().scopes[key];
+        if(fileStamp([this.file])!==stamp)continue;
+        // Cache identity only, never URLs, histories, titles or document paths.
+        members=new Map((row?.tabs||[]).map(raw=>{const tab=contentTab(raw);return [tab.id,Object.freeze({id:tab.id,type:tab.type,...(tab.chatId?{chatId:tab.chatId}:{})})];}));
+        this.membershipCount+=members.size;
+      }
+      this.memberships.delete(key);this.memberships.set(key,members);
+      while(this.memberships.size>contentTabMembershipLimits.scopes||this.membershipCount>contentTabMembershipLimits.tabs){const first=this.memberships.keys().next().value;this.membershipCount-=this.memberships.get(first).size;this.memberships.delete(first);}
+      return members.get(tabId);
+    }
+    throw new Error('Content tabs changed while checking membership. Retry shortly.');
+  }
   list({scope,id,type}={}){
     if(scope&&!['chat','workspace','project','main','team'].includes(scope))throw new Error('Choose a tab scope.');
     if(type&&!['browser','document','terminal','chat'].includes(type))throw new Error('Choose a tab type.');

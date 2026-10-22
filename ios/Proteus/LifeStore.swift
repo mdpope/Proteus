@@ -171,12 +171,18 @@ struct LifeHTTPError:Error{let status:Int;let message:String}
             catch let second as LifeHTTPError where second.status==401{if expected==generation,credential?.accessToken==next.accessToken{clearCredentials();throw RemoteError(message:"Life session was revoked. Sign in again.")};throw RemoteError(message:"Life session refreshed while this request was in flight. Please retry.")}
         }
     }
-    func appRequest(_ path:String="", method:String="GET", body:JSON?=nil)async throws->JSON {
+    func appRequest(_ path:String="", method:String="GET", body:JSON?=nil, collections:[String]?=nil)async throws->JSON {
         guard credential?.appAuthorized == true else { throw RemoteError(message:"Connect shared Team tools in Account & Security. Existing Life access does not grant shared app access.") }
         guard path.isEmpty || (path.hasPrefix("/") && !path.contains("..") && !path.contains("?")) else { throw RemoteError(message:"Invalid app endpoint.") }
+        var query = ""
+        if let collections {
+            let allowed = Set(["browserProfiles", "teamLists", "links", "history", "notifications", "logs"])
+            guard path.isEmpty, method == "GET", collections.allSatisfy({ allowed.contains($0) }) else { throw RemoteError(message:"Invalid account collection.") }
+            query = "?view=bootstrap" + (collections.isEmpty ? "" : "&include=" + collections.joined(separator: ","))
+        }
         var payload = body
         if method != "GET", case .object(var fields) = body { fields["expectedAccountId"] = .string(credential?.accountID ?? ""); fields["expectedWorkspaceId"] = .string(credential?.workspaceID ?? ""); payload = .object(fields) }
-        let result = try await authorized(path:"/api/v1/app"+path,method:method,body:payload)
+        let result = try await authorized(path:"/api/v1/app"+path+query,method:method,body:payload)
         if path.isEmpty { try verifyAccount(result) }
         return result
     }

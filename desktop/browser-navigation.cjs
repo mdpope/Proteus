@@ -1,5 +1,14 @@
 const {randomUUID}=require('node:crypto');
 const {safeHistoryURL}=require('./browser-history.cjs');
+function validPendingNavigation(history){
+  return Array.isArray(history?.entries)&&history.entries.length>0&&Number.isSafeInteger(history.index)&&history.index>=0&&history.index<history.entries.length&&history.currentEntryId===history.entries[history.index]?.id&&(history.revision===undefined||Number.isSafeInteger(history.revision)&&history.revision>=0)&&history.entries.every(entry=>typeof entry?.id==='string'&&/^[-a-zA-Z0-9_.:]{1,128}$/.test(entry.id))&&new Set(history.entries.map(entry=>entry.id)).size===history.entries.length;
+}
+function acknowledgesNavigation(pending,history){
+  if(!validPendingNavigation(pending)||!history||history.currentEntryId!==pending.currentEntryId)return false;
+  const positions=new Map(history.entries.map((entry,index)=>[entry.id,{entry,index}]));let prior=-1;
+  for(const entry of pending.entries){const found=positions.get(entry.id);if(!found||found.index<=prior||found.entry.url!==entry.url)return false;prior=found.index;}
+  return true;
+}
 // Portable logical navigation is independent of Chromium's reconstructed page stack.
 function restoreNavigation(value,appOrigin){
   if(Array.isArray(value?.entries)&&value.entries.length===0&&value.index===-1&&Number.isSafeInteger(value.revision)&&value.revision>=0)return {entries:[],index:-1,currentEntryId:null,revision:value.revision};
@@ -19,4 +28,4 @@ function commitNavigation(tab,url,title,{redirect=false,force=false}={}){
   tab.logicalHistory={entries,index:entries.length-1,currentEntryId:entry.id,...(Number.isSafeInteger(prior?.revision)?{revision:prior.revision}:{})};return entry;
 }
 function traverseNavigation(tab,index){const history=tab.logicalHistory;if(!history?.entries[index])return null;tab.navigationPending=true;history.index=index;history.currentEntryId=history.entries[index].id;return history.entries[index];}
-module.exports={restoreNavigation,commitNavigation,traverseNavigation};
+module.exports={restoreNavigation,commitNavigation,traverseNavigation,validPendingNavigation,acknowledgesNavigation};

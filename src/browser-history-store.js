@@ -39,7 +39,8 @@ export class BrowserHistoryStore {
         CREATE TABLE IF NOT EXISTS nav_tabs(tab_id TEXT PRIMARY KEY,revision INTEGER NOT NULL,selected_entry_id TEXT);
         CREATE TABLE IF NOT EXISTS nav_entries(tab_id TEXT NOT NULL,entry_id TEXT NOT NULL,position INTEGER NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(tab_id,entry_id));
         CREATE INDEX IF NOT EXISTS nav_position ON nav_entries(tab_id,position);
-        CREATE TABLE IF NOT EXISTS nav_receipts(operation_id TEXT PRIMARY KEY,digest TEXT NOT NULL,payload TEXT NOT NULL);`);
+        CREATE TABLE IF NOT EXISTS nav_receipts(operation_id TEXT PRIMARY KEY,digest TEXT NOT NULL,payload TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS nav_changes(tab_id TEXT NOT NULL,revision INTEGER NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(tab_id,revision));`);
       this.db.prepare('INSERT OR IGNORE INTO metadata VALUES(?,?)').run('epoch', randomUUID());
       this.db.prepare('INSERT OR IGNORE INTO metadata VALUES(?,?)').run('settings', JSON.stringify({enabled:true,retentionDays:0,peers:[]}));
       this.epoch = this.meta('epoch'); this.migrateSearch(); this.migrate(legacyFile);
@@ -185,21 +186,41 @@ export class BrowserHistoryStore {
   navigationGet(value={}) {
     const tabId=identity(value.tabId,'tab'),tab=this.db.prepare('SELECT revision,selected_entry_id AS selectedEntryId FROM nav_tabs WHERE tab_id=?').get(tabId) || {revision:0,selectedEntryId:null};
     const limit=Math.max(1,Math.min(10000,Math.floor(Number(value.limit)||200))),total=this.db.prepare('SELECT COUNT(*) AS total FROM nav_entries WHERE tab_id=?').get(tabId).total;
+    if(value.sinceRevision!==undefined){
+      if(!Number.isSafeInteger(value.sinceRevision)||value.sinceRevision<0||value.sinceRevision>tab.revision)throw new Error('Invalid navigation base revision.');
+      const rows=this.db.prepare('SELECT revision,payload FROM nav_changes WHERE tab_id=? AND revision>? ORDER BY revision').all(tabId,value.sinceRevision);
+      const complete=rows.length===tab.revision-value.sinceRevision&&rows.every((row,index)=>row.revision===value.sinceRevision+index+1)&&rows.reduce((size,row)=>size+Buffer.byteLength(row.payload),0)<=480*1024;
+      return {tabId,revision:tab.revision,currentEntryId:tab.selectedEntryId,total,deltaSupported:true,...(complete?{delta:{baseRevision:value.sinceRevision,changes:rows.map(row=>JSON.parse(row.payload))}}:{reset:true})};
+    }
     const selectedPosition=this.db.prepare('SELECT position FROM nav_entries WHERE tab_id=? AND entry_id=?').get(tabId,tab.selectedEntryId)?.position || 0;
     const paging=value.cursor?decode(value.cursor):null;if(paging && (paging.tabId!==tabId || paging.revision!==tab.revision))throw new Error('Navigation changed while paging. Start from the first page.');
-    const position=paging?Number(paging.position):value.start===true?-1:Math.max(-1,selectedPosition-Math.floor(limit/2)-1);
+    let position=paging?Number(paging.position):value.start===true?-1:Math.max(-1,selectedPosition-Math.floor(limit/2)-1);
     if(!Number.isInteger(position)||position< -1)throw new Error('Invalid navigation cursor.');
-    const rows=this.db.prepare('SELECT position,payload FROM nav_entries WHERE tab_id=? AND position>? ORDER BY position LIMIT ?').all(tabId,position,limit+1);
-    const entries=rows.slice(0,limit).map(row=>{const entry=JSON.parse(row.payload);return {...entry,id:entry.entryId};});
+    const read=()=>{
+      const entries=[];let bytes=0,lastPosition=position,hasMore=false;
+      // Stop the SQLite iterator at the page boundary. Materializing limit+1
+      // rows first would allocate entire large stacks before the byte cap applies.
+      for(const row of this.db.prepare('SELECT position,payload FROM nav_entries WHERE tab_id=? AND position>? ORDER BY position LIMIT ?').iterate(tabId,position,limit+1)){
+        if(entries.length===limit){hasMore=true;break;}
+        const entry=JSON.parse(row.payload),value={...entry,id:entry.entryId},size=Buffer.byteLength(JSON.stringify(value))+1;
+        if(entries.length&&bytes+size>240*1024){hasMore=true;break;}
+        entries.push(value);bytes+=size;lastPosition=row.position;
+      }
+      return {entries,hasMore,lastPosition};
+    };
+    let page=read();
+    // Long URLs can exhaust the byte budget before the selected entry in a
+    // centered window. A normal descriptor must still identify its actual page.
+    if(!paging&&value.start!==true&&tab.selectedEntryId&&!page.entries.some(entry=>entry.id===tab.selectedEntryId)){position=selectedPosition-1;page=read();}
     const selected=tab.selectedEntryId?this.db.prepare('SELECT payload FROM nav_entries WHERE tab_id=? AND entry_id=?').get(tabId,tab.selectedEntryId):null;
-    const current=selected?JSON.parse(selected.payload):null;if(Buffer.byteLength(JSON.stringify(entries))>512*1024){const error=new Error('Navigation history requires paging. Request a smaller window.');error.code='HISTORY_PAGE_REQUIRED';throw error;}
-    return {offset:position+1,total,tabId,...tab,currentEntryId:tab.selectedEntryId,entries,history:{entries,index:entries.findIndex(entry=>entry.id===tab.selectedEntryId),currentEntryId:tab.selectedEntryId,revision:tab.revision},url:current?.url || '',title:current?.title || '',eventId:current?.eventId || null,hasMore:rows.length>limit,nextCursor:rows.length>limit?encode({tabId,revision:tab.revision,position:rows[limit-1].position}):null};
+    const current=selected?JSON.parse(selected.payload):null,{entries,hasMore,lastPosition}=page;
+    return {offset:position+1,total,tabId,...tab,currentEntryId:tab.selectedEntryId,entries,history:{entries,index:entries.findIndex(entry=>entry.id===tab.selectedEntryId),currentEntryId:tab.selectedEntryId,revision:tab.revision},deltaSupported:true,url:current?.url || '',title:current?.title || '',eventId:current?.eventId || null,hasMore,nextCursor:hasMore?encode({tabId,revision:tab.revision,position:lastPosition}):null};
   }
   seed(value={}) {
     return this.transaction(()=>{
       if(value.private===true || String(value.profileId || '').startsWith('private:'))throw new Error('Private browsing is excluded from shared navigation.');
       const tabId=identity(value.tabId,'tab');if(this.db.prepare('SELECT tab_id FROM nav_tabs WHERE tab_id=?').get(tabId))return this.navigationGet({tabId});
-      const input=value.history?.entries || (value.url?[{url:value.url,title:value.title}]:[]);if(!Array.isArray(input)||input.length>10000)throw new Error('Seed at most 10,000 navigation entries.');
+      const input=value.history?.entries || (value.url?[{url:value.url,title:value.title}]:[]);if(!Array.isArray(input))throw new Error('Choose a navigation entry list.');
       let selected=null;const entries=[];for(const [index,row] of input.entries()){const url=safeURL(row.url);if(!url)continue;const entry={entryId:identity(row.id || row.entryId || 'legacy-nav:'+fingerprint([tabId,index,row]),'entry'),url,title:String(row.title || '').slice(0,200),profileId:identity(value.profileId || 'default','profile'),...(safeURL(row.requestedURL)?{requestedURL:safeURL(row.requestedURL)}:{})};entries.push(entry);if((value.history?.currentEntryId && row.id===value.history.currentEntryId) || index===value.history?.index)selected=entry.entryId;}
       if(!selected)selected=entries.at(-1)?.entryId || null;
       entries.forEach((entry,index)=>this.db.prepare('INSERT INTO nav_entries VALUES(?,?,?,?)').run(tabId,entry.entryId,index,JSON.stringify(entry)));
@@ -219,6 +240,7 @@ export class BrowserHistoryStore {
       const revision=Math.max(original.revision,previous?.revision||0)+1;
       if(!Number.isSafeInteger(revision))throw new Error('Browser history revision limit reached.');
       this.db.prepare('DELETE FROM nav_entries WHERE tab_id=?').run(target);
+      this.db.prepare('DELETE FROM nav_changes WHERE tab_id=?').run(target);
       this.db.prepare('INSERT INTO nav_entries SELECT ?,entry_id,position,payload FROM nav_entries WHERE tab_id=?').run(target,source);
       this.db.prepare('INSERT INTO nav_tabs VALUES(?,?,?) ON CONFLICT(tab_id) DO UPDATE SET revision=excluded.revision,selected_entry_id=excluded.selected_entry_id').run(target,revision,original.selected_entry_id);
       // Retain the source and operation receipts for crash recovery/old retries.
@@ -244,22 +266,26 @@ export class BrowserHistoryStore {
         // entry/visit and append a stable new destination under the same receipt.
         if(url!==previous.url)value={...value,action:'navigate',entryId:'redirect-entry:'+fingerprint([operationId,previousId]),eventId:'redirect-visit:'+fingerprint([operationId,previousId]),profileId:previous.profileId,requestedURL:previous.url};
       }
-      let entry;
+      let entry,changePosition;
       if(value.action==='navigate'){
         const event=this.normalize({...value,eventId:value.eventId,visitedAt:value.visitedAt || new Date().toISOString(),entryId:identity(value.entryId,'entry')});
         const current=tab.selectedEntryId?this.db.prepare('SELECT position,payload FROM nav_entries WHERE tab_id=? AND entry_id=?').get(tabId,tab.selectedEntryId):null;
         if(current && JSON.parse(current.payload).profileId!==event.profileId)throw new Error('Open a separate tab to change browser profiles.');
-        const position=current?current.position+1:0;if(position>=10000)throw new Error('Navigation history is full. Open a separate tab to continue.');if(this.db.prepare('SELECT entry_id FROM nav_entries WHERE tab_id=? AND entry_id=?').get(tabId,event.entryId))throw new Error('Navigation entry ID was already used.');this.db.prepare('DELETE FROM nav_entries WHERE tab_id=? AND position>=?').run(tabId,position);
+        const position=current?current.position+1:0;if(!Number.isSafeInteger(position))throw new Error('Navigation history position limit reached.');changePosition=position;if(this.db.prepare('SELECT entry_id FROM nav_entries WHERE tab_id=? AND entry_id=?').get(tabId,event.entryId))throw new Error('Navigation entry ID was already used.');this.db.prepare('DELETE FROM nav_entries WHERE tab_id=? AND position>=?').run(tabId,position);
         entry={entryId:event.entryId,url:event.url,title:event.title,eventId:event.eventId,profileId:event.profileId,...(safeURL(value.requestedURL)?{requestedURL:safeURL(value.requestedURL)}:{})};this.db.prepare('INSERT INTO nav_entries VALUES(?,?,?,?)').run(tabId,event.entryId,position,JSON.stringify(entry));tab.selectedEntryId=entry.entryId;
         if(JSON.parse(this.meta('settings')).enabled)this.insert(event);
       } else if(value.action==='traverse' || value.action==='redirect') {
-        const entryId=identity(value.selectedEntryId || value.entryId,'entry'),row=this.db.prepare('SELECT payload FROM nav_entries WHERE tab_id=? AND entry_id=?').get(tabId,entryId);if(!row)throw new Error('Navigation entry is unavailable.');entry=JSON.parse(row.payload);if(value.profileId && entry.profileId!==value.profileId)throw new Error('Navigation entry belongs to another browser profile.');tab.selectedEntryId=entryId;
+        const entryId=identity(value.selectedEntryId || value.entryId,'entry'),row=this.db.prepare('SELECT position,payload FROM nav_entries WHERE tab_id=? AND entry_id=?').get(tabId,entryId);if(!row)throw new Error('Navigation entry is unavailable.');changePosition=row.position;entry=JSON.parse(row.payload);if(value.profileId && entry.profileId!==value.profileId)throw new Error('Navigation entry belongs to another browser profile.');tab.selectedEntryId=entryId;
         if(value.action==='redirect'){if(tab.selectedEntryId!==entryId || entryId!==(this.db.prepare('SELECT selected_entry_id FROM nav_tabs WHERE tab_id=?').get(tabId)?.selected_entry_id))throw new Error('Redirect belongs to a navigation entry that is no longer selected.');const url=safeURL(value.url);if(!url)throw new Error('Private authentication destinations stay local.');entry={...entry,requestedURL:entry.requestedURL||entry.url,url,title:String(value.title || entry.title).slice(0,200)};this.db.prepare('UPDATE nav_entries SET payload=? WHERE tab_id=? AND entry_id=?').run(JSON.stringify(entry),tabId,entryId);
           const visit=entry.eventId?this.db.prepare('SELECT payload FROM events WHERE event_id=?').get(entry.eventId):null;
           if(visit){const original=JSON.parse(visit.payload),aliases=[...new Set([...(original.aliases || []),original.url,url])];if(aliases.length>100)throw new Error('Too many redirected destinations for one navigation. Start a new navigation.');this.insert({...original,url,title:entry.title,aliases,updatedAt:new Date(Math.max(Date.now(),Date.parse(original.updatedAt)+1)).toISOString()},true);}}
         else if(value.eventId && JSON.parse(this.meta('settings')).enabled){this.insert(this.normalize({...value,...entry,eventId:value.eventId,visitedAt:value.visitedAt || new Date().toISOString()}));entry={...entry,eventId:value.eventId};this.db.prepare('UPDATE nav_entries SET payload=? WHERE tab_id=? AND entry_id=?').run(JSON.stringify(entry),tabId,entryId);}
       } else throw new Error('Unknown navigation operation.');
       tab.revision++;this.db.prepare('INSERT INTO nav_tabs VALUES(?,?,?) ON CONFLICT(tab_id) DO UPDATE SET revision=excluded.revision,selected_entry_id=excluded.selected_entry_id').run(tabId,tab.revision,tab.selectedEntryId);
+      this.db.prepare('INSERT INTO nav_changes VALUES(?,?,?)').run(tabId,tab.revision,JSON.stringify({revision:tab.revision,position:changePosition,truncate:value.action==='navigate',entry:{...entry,id:entry.entryId}}));
+      // This is a transport accelerator, not retained history. Older clients or
+      // longer gaps receive a verified paged snapshot of the complete stack.
+      this.db.prepare('DELETE FROM nav_changes WHERE tab_id=? AND revision<=?').run(tabId,tab.revision-256);
       // Receipts retain the exact operation acknowledgement, not a duplicated growing
       // navigation window. Callers hydrate the current list with navigationGet.
       const result={tabId,...tab,currentEntryId:tab.selectedEntryId,entry,url:entry.url,title:entry.title,eventId:value.eventId || entry.eventId || null,acknowledgedOperationId:operationId};this.db.prepare('INSERT INTO nav_receipts VALUES(?,?,?)').run(operationId,digest,JSON.stringify(result));return result;

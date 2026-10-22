@@ -38,13 +38,26 @@ class AppApiController extends Controller
     {
         $this->account($request);
         $user = $request->user();
+        $options = $request->validate(['view' => 'sometimes|in:bootstrap', 'include' => 'sometimes|string|max:150']);
+        $collections = ['browserProfiles' => 'browser-profiles', 'teamLists' => 'team-lists', 'links' => 'links', 'history' => 'history', 'notifications' => 'notifications', 'logs' => 'logs'];
+        $include = isset($options['include']) ? explode(',', $options['include']) : (isset($options['view']) ? [] : array_keys($collections));
+        abort_if(array_diff($include, array_keys($collections)), 422, 'Choose supported account collections.');
+        $result = ['protocol' => 1, 'accountId' => hash_hmac('sha256', 'proteus-life:'.$user->id, config('app.key')), 'workspaceId' => (string) $user->current_workspace_id, 'displayName' => $user->name, 'preferences' => $this->records->preferences($user), 'push' => $this->push->status()];
+        foreach (array_unique($include) as $key) {
+            $result[$key] = $this->records->all($user, $collections[$key]);
+        }
 
-        return $this->response(['protocol' => 1, 'accountId' => hash_hmac('sha256', 'proteus-life:'.$user->id, config('app.key')), 'workspaceId' => (string) $user->current_workspace_id, 'preferences' => $this->records->preferences($user), 'browserProfiles' => $this->records->all($user, 'browser-profiles'), 'teamLists' => $this->records->all($user, 'team-lists'), 'links' => $this->records->all($user, 'links'), 'history' => $this->records->all($user, 'history'), 'notifications' => $this->records->all($user, 'notifications'), 'logs' => $this->records->all($user, 'logs'), 'push' => $this->push->status()]);
+        return $this->response($result);
     }
 
     public function list(Request $request, string $kind): JsonResponse
     {
         $this->account($request);
+
+        $options = $request->validate(['page' => 'sometimes|integer|between:1,10000', 'pageSize' => 'sometimes|integer|between:1,100', 'expectedRevision' => 'sometimes|string|regex:/^[a-f0-9]{64}$/']);
+        if ($options) {
+            return $this->response($this->records->page($request->user(), $kind, $options['page'] ?? 1, $options['pageSize'] ?? 100, $options['expectedRevision'] ?? null));
+        }
 
         return $this->response(['items' => $this->records->all($request->user(), $kind)]);
     }
@@ -147,22 +160,18 @@ class AppApiController extends Controller
     public function destroy(Request $request, string $kind, string $id): JsonResponse
     {
         $this->account($request);
-        if ($kind === 'browser-profiles') {
-            $value = $request->validate(['expectedRevision' => 'required|integer|min:1']);
 
-            return DB::transaction(function () use ($request, $kind, $id, $value) {
-                User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
-                $old = $this->records->query($request->user(), $kind)->where('id', $id)->first();
-                abort_unless($old, 404);
-                abort_unless((int) $old->revision === $value['expectedRevision'], 409, 'This profile changed. Refresh before deleting.');
-                $this->records->query($request->user(), $kind)->where('id', $id)->delete();
+        return DB::transaction(function () use ($request, $kind, $id) {
+            User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
+            $old = $this->records->query($request->user(), $kind)->where('id', $id)->first();
+            abort_unless($old, 404);
+            $required = in_array($kind, ['browser-profiles', 'team-lists', 'links']) ? 'required' : 'sometimes';
+            $value = $request->validate(['expectedRevision' => $required.'|integer|min:1']);
+            abort_if(isset($value['expectedRevision']) && (int) $old->revision !== (int) $value['expectedRevision'], 409, 'This record changed. Refresh before deleting.');
+            $this->records->query($request->user(), $kind)->where('id', $id)->delete();
 
-                return $this->response(['removed' => true]);
-            });
-        }
-        abort_unless($this->records->query($request->user(), $kind)->where('id', $id)->delete(), 404);
-
-        return $this->response(['removed' => true]);
+            return $this->response(['removed' => true]);
+        });
     }
 
     public function subscribe(Request $request): JsonResponse

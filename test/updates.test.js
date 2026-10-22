@@ -26,7 +26,7 @@ function fixture(t){
  const inspect=bundle=>{const old=fs.readFileSync(path.join(bundle,'identity'),'utf8')==='old';return {bundle,executable:path.join(bundle,'Proteus'),sourceFingerprint:(old?'a':'b').repeat(64),buildRevision:old?'baseline':'candidate',version:'synthetic',signing:{kind:'synthetic'},...tree(bundle)};};
  const engine=new Engine(home),service={home,engine,catalogs:{},notify(){},windowCount:()=>1},calls=[];
  const controller=new Updates(service,{installation,browserHome:home,packaged:true,platform:'linux',inspect,test:async candidate=>({passed:true,hash:candidate.hash}),launchHelper:job=>calls.push(job),quit:()=>calls.push('quit')});
- t.after(async()=>{controller.close();await engine.close();fs.rmSync(root,{recursive:true,force:true,maxRetries:10});});
+ t.after(async()=>{await controller.close();await engine.close();fs.rmSync(root,{recursive:true,force:true,maxRetries:10});});
  atomic(controller.policyFile,{schemaVersion:1,home:controller.ownerHome,installation:controller.installation,auditedAt:new Date().toISOString(),generations:[]});
  const run=engine.createRun({schemaVersion:1,id:'update-chat',name:'Synthetic update',enabled:false,cron:'0 9 * * *',timezone:'UTC',provider:'rehearsal',model:'',workspace:{cwd:home,additionalDirectories:[]},misfire:'skip',prompt:'Synthetic; no model called.'},'chat',null,{deferStart:true});run.status='completed';delete run.deferredStart;engine.persist(run);
  return {root,home,installation,candidate,inspect,engine,service,controller,calls,run};
@@ -95,4 +95,22 @@ test('attention recovery can release ordinary work only from a verified desktop 
 });
 test('Linux supervised packaging uses the actual lowercase executable',t=>{
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-update-paths-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));fs.mkdirSync(path.join(root,'resources/app'),{recursive:true});fs.writeFileSync(path.join(root,'resources/app/package.json'),'{}');assert.equal(packagePaths(root,'linux').executable,path.join(root,'proteus'));
+});
+test('cancelled update staging retires before another preparation while receipts remain available',async t=>{
+ const f=fixture(t),job=await prepare(f),file=f.controller.file,bundle=readJob(file).candidate.bundle;
+ const cancelled=await f.controller.handle({action:'cancel',id:job.id,expectedRevision:job.revision});
+ assert.equal(cancelled.job.phase,'cancelled');assert.equal(fs.existsSync(bundle),false);assert.equal(fs.existsSync(file),true);assert.ok(readJob(file).stagingRetirement.at);
+ const next=await prepare(f);assert.notEqual(next.id,job.id);assert.equal(readJob(file).phase,'cancelled');
+ const inventory=await f.controller.handle({action:'storage'});assert.equal(inventory.dryRun,true);assert.equal(inventory.jobs.length,2);assert.equal(inventory.jobs.filter(row=>row.files>0).length,1);
+});
+test('cancellation does not race an in-flight helper readiness check',async t=>{
+ const f=fixture(t),job=await prepare(f);f.controller.busy=true;
+ await assert.rejects(f.controller.handle({action:'cancel',id:job.id,expectedRevision:job.revision}),/check is running/);
+ assert.equal(readJob(f.controller.file).phase,'prepared');assert.equal(fs.existsSync(readJob(f.controller.file).candidate.bundle),true);f.controller.busy=false;
+});
+test('package workers are bounded and shutdown waits for queued work without starting more',async t=>{
+ const f=fixture(t);f.controller.packageQueue=new Promise(resolve=>setTimeout(resolve,20));
+ const pending=Array.from({length:4},()=>f.controller.packageWork('inventoryStorage',f.controller.root,{home:f.home,installation:f.installation}).catch(error=>error.message));
+ await assert.rejects(f.controller.packageWork('inventoryStorage',f.controller.root),/busy/);
+ await f.controller.close();assert.deepEqual(await Promise.all(pending),Array(4).fill('The updater is closing.'));assert.equal(f.controller.packagePending,0);
 });

@@ -20,6 +20,24 @@ async function mutate(hostId,method,args){const key=hostId+':'+method+':'+(args.
 const providerLabel=id=>({copilot:'Copilot',codex:'Codex',claude:'Claude',rehearsal:'Local rehearsal'}[id]||id);
 const hostLabel=id=>peers.find(peer=>peer.hostId===id)?.label||'Paired computer';
 const documentViews=new Map(), dismissedPreviews=new Set();
+let pendingDocumentPosition;
+export function remoteDocumentPositionVersion(tabId,previewVersion){
+ const view=documentViews.get(tabId);
+ return view?.mediaType==='text/html'&&(previewVersion===undefined||view.previewVersion===previewVersion)?view.version:null;
+}
+async function applyPendingDocumentPosition(tabId){
+ const pending=pendingDocumentPosition,view=documentViews.get(tabId);
+ if(!pending||pending.tabId!==tabId)return;
+ if(!pending.current()){pendingDocumentPosition=null;return;}
+ if(view?.mediaType!=='text/html'||view.version!==pending.version||!view.previewVersion)return;
+ const result=await window.desktop.artifactPreview({action:'follow-scroll',tabId,version:view.previewVersion,positions:pending.positions});
+ if(pendingDocumentPosition===pending&&result?.applied)pendingDocumentPosition=null;
+}
+export function restoreRemoteDocumentPosition(tabId,version,positions,current=()=>true){
+ const pending={tabId,version,positions,current};pendingDocumentPosition=pending;
+ void applyPendingDocumentPosition(tabId).catch(error=>console.debug('Document position:',error.message));
+ return ()=>{if(pendingDocumentPosition===pending)pendingDocumentPosition=null;};
+}
 async function openRemoteDocument(hostId,run,source){
   const parentId=ui.selectedChatParent?.()||'peer:'+hostId+':'+run.id;
   const previous=ui.state.tabs.find(tab=>tab.type==='remote-document'&&tab.parentId===parentId&&tab.source===source);
@@ -30,7 +48,7 @@ async function openRemoteDocument(hostId,run,source){
   ui.openTab({id,type:'remote-document',parentId,hostId,runId:run.id,documentId:pending.documentId,label:pending.title,mediaType:pending.mediaType,source});
 }
 export function forgetRemoteConversation(hostId,runId){const key=hostId+':'+runId;runGeneration++;olderPages.delete(key);forgetConversation('peer:'+key);}
-export function forgetRemoteDocument(id){if(documentViews.get(id)?.preview)dismissedPreviews.add(id);documentViews.delete(id);void window.desktop?.artifactPreview?.({action:'hide'}).catch(()=>{});}
+export function forgetRemoteDocument(id){if(pendingDocumentPosition?.tabId===id)pendingDocumentPosition=null;if(documentViews.get(id)?.preview)dismissedPreviews.add(id);documentViews.delete(id);void window.desktop?.artifactPreview?.({action:'hide'}).catch(()=>{});}
 export async function renderRemoteDocument(tab,options={}){
   if(tab.workspaceId&&!tab.runId){(options.container||$('#main')).innerHTML='<section class="card"><h1>Workspace document</h1><p>This document remains on the workspace’s computer. Open it there, or attach it to a workspace chat to request approved remote viewing.</p></section>';return;}
   const main=options.container||$('#main'),active=options.active||(()=>ui.state.tab===tab.id);
@@ -77,7 +95,7 @@ function showDocument(tab,view,body,status){
     body.innerHTML='<div id="peer-artifact-area" role="document" aria-label="Isolated HTML preview"></div><div class="actions"><button id="peer-artifact-scripts">Enable scripts for this view</button></div><div id="peer-document-links"></div><details><summary>View HTML source</summary><pre id="peer-artifact-source"></pre></details>';
     $('#peer-artifact-source').textContent=view.content;
     const links=$('#peer-document-links');for(const item of view.links||[]){const button=document.createElement('button');button.textContent='Open linked document · '+item.title;button.onclick=()=>void openRelativeDocument(tab,view,item.source).catch(error=>ui.toast(error.message));links.append(button);}
-    const show=async()=>{if(!(view.active?.()??ui.state.tab===tab.id))return;const area=$('#peer-artifact-area');if(!area?.isConnected)return;view.previewHtml??=await preparedHtml(tab,view);const bytes=new TextEncoder().encode(view.previewHtml);if(bytes.length>4_000_000)throw new Error('Approved preview is too large. View the source instead.');const digest=await crypto.subtle.digest('SHA-256',bytes),previewVersion=[...new Uint8Array(digest)].map(byte=>byte.toString(16).padStart(2,'0')).join('');const rect=area.getBoundingClientRect();await window.desktop.artifactPreview({action:'show',html:view.previewHtml,version:previewVersion,enabled:view.enabled,bounds:{x:rect.x,y:rect.y,width:rect.width,height:rect.height}});};
+    const show=async()=>{if(!(view.active?.()??ui.state.tab===tab.id))return;const area=$('#peer-artifact-area');if(!area?.isConnected)return;view.previewHtml??=await preparedHtml(tab,view);const bytes=new TextEncoder().encode(view.previewHtml);if(bytes.length>4_000_000)throw new Error('Approved preview is too large. View the source instead.');const digest=await crypto.subtle.digest('SHA-256',bytes),previewVersion=[...new Uint8Array(digest)].map(byte=>byte.toString(16).padStart(2,'0')).join('');if(!(view.active?.()??ui.state.tab===tab.id)||documentViews.get(tab.id)!==view||!area.isConnected||area!==$('#peer-artifact-area'))return;const rect=area.getBoundingClientRect();await window.desktop.artifactPreview({action:'show',tabId:tab.id,html:view.previewHtml,version:previewVersion,enabled:view.enabled,bounds:{x:rect.x,y:rect.y,width:rect.width,height:rect.height}});if(!(view.active?.()??ui.state.tab===tab.id))return;view.previewVersion=previewVersion;await applyPendingDocumentPosition(tab.id);};
     $('#peer-artifact-scripts').onclick=()=>{view.enabled=true;$('#peer-artifact-scripts').hidden=true;void show().catch(error=>status.textContent=error.message);};
     void show().catch(error=>status.textContent=error.message);
   }else{body.innerHTML='<article class="card markdown-preview"></article><details><summary>View Markdown source</summary><pre id="peer-document-source"></pre></details>';$('#peer-document-source').textContent=view.content;ProteusMarkdown.mount(body.querySelector('article'),view.content,{copy:text=>window.desktop.copyText(text),allowExternalImages:false,link:source=>void openRelativeDocument(tab,view,source).catch(error=>ui.toast(error.message)),image:source=>verifiedDocumentImage(tab,view,source)});}

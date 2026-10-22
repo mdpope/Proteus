@@ -1,3 +1,24 @@
+## October 22 — stabilization and scoped follow-along
+
+Start with [the current architecture](architecture.md), [stabilization ledger](stabilization-plan.md),
+[project follow-along](project-follow.md), and [account services](account-services.md).
+This work builds on `b7701c0`, including the merged agent chat-control feature and 0.2.28 source.
+A fresh upstream-main check found no additional commits. The Windows installer/update work is
+still separate; preserve its platform-specific fixes when integrating it later. Likely overlap
+includes package provenance, updater helpers, build scripts, and release documentation.
+
+The implementation preserves local browser authentication, full navigation history, drafts,
+approvals, durable retries, and terminal ownership. Automatic follow applies only to the selected
+owner workspace/project. Terminal output remains owner-only by operator choice; the license
+also remains unchanged. Source validation is separate from physical-device installation,
+website deployment, Apple signing review, and actual provider continuation.
+
+Acceptance: 976 integrated Node tests and recursive static checks pass. Isolated encrypted
+two-desktop follow-along, native background-tab focus and link-menu behavior, native browser
+and HTML-preview scroll, retained long chat/browser histories, terminal lifecycle, narrow UI,
+account/Life and web checks passed. See the ledger for metrics and unverified live boundaries.
+No installed app or live backup was changed.
+
 ## October 22 — agent chat control integrated into current source
 
 The operator authorized implementation, demo/cross-device tests and integration of feature

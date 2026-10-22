@@ -8,6 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import { WebSocket } from 'ws';
+import { remoteTransportLimits } from './remote-transport.js';
 import QRCode from 'qrcode';
 import { atomicJSON, readJSON } from './files.js';
 import { revision } from './schedules.js';
@@ -27,28 +28,8 @@ const pick = (value, keys) => Object.fromEntries(keys.filter(key => value?.[key]
 const scheduleKeys = ['id', 'name', 'enabled', 'cron', 'timezone', 'provider', 'model', 'reasoningEffort', 'contextTier', 'serviceTier', 'workspace', 'misfire', 'prompt', 'revision', 'nextRuns', 'error', 'source', 'contextSelection', 'integration', 'notifications'];
 const runContext = run => ({...run.context,...run.schedule?.context});
 const runWorkspace = run => chatMembership(run);
-const chatActivityCache = new WeakMap();
-// Read-only projection: provider output and metadata saves never become user activity.
-// Cache the scalar so unchanged summary polls do not reload evicted durable histories.
-export function chatActivityAt(run) {
-  const cached=chatActivityCache.get(run);
-  // Active runs keep mutable event references; a delivery can settle within the
-  // same clock tick. Their histories are pinned already, so always inspect them.
-  if(cached&&!['queued','running','awaiting_input'].includes(run.status)&&cached.status===run.status&&cached.updatedAt===run.updatedAt&&cached.createdAt===run.createdAt)return cached.at;
-  let latest=Date.parse(run.createdAt)||0;
-  const events=run.events||[],unaccepted=new Set();
-  const accepted=delivery=>!delivery?.state||['queued','delivered','steered','removed'].includes(delivery.state);
-  const consider=value=>{const at=Date.parse(value);if(Number.isFinite(at)&&at>latest)latest=at;};
-  for(const event of events){
-    if(event.role!=='user')continue;
-    const delivery=event.data?.delivery;
-    if(accepted(delivery))consider(event.at);
-    else if(delivery?.id)unaccepted.add(delivery.id);
-  }
-  for(const message of run.queuedMessages||[])if(!unaccepted.has(message.id))consider(message.at);
-  const at=latest>0?new Date(latest).toISOString():null;
-  chatActivityCache.set(run,{status:run.status,updatedAt:run.updatedAt,createdAt:run.createdAt,at});return at;
-}
+import {chatActivityAt} from './run-activity.js';
+export {chatActivityAt} from './run-activity.js';
 export const runSummary = r => ({lastActivityAt:chatActivityAt(r),...pick(r,['id','title','titleKind','titleRevision','trigger','chatType','status','queueReason','createdAt','updatedAt','failureReviewedAt']),archivedAt:r.archivedAt||null,archived:!!r.archivedAt,failureEventAt:['failed','interrupted'].includes(r.status)?r.failureEventAt||r.updatedAt:null,attentionRequired:r.status==='awaiting_input'||(!r.archivedAt&&['failed','interrupted'].includes(r.status)&&!r.failureReviewedAt),provider:r.schedule.provider,...runWorkspace(r),scheduleName:r.trigger==='chat'?'':r.schedule.name});
 const entryKeys = ['id', 'name', 'description', 'kind', 'path', 'sources', 'roots', 'mode', 'scope', 'warnings', 'unsupportedAgentFields', 'error', 'missing', 'characters', 'transport', 'integrationStatus'];
 const remoteEntry = entry => ({ ...pick(entry, entryKeys), ...(entry.agent ? { userInvocable: entry.agent.userInvocable } : {}) });
@@ -57,10 +38,11 @@ const mutationMethods = new Set(['projects.update','sources.update','browser.liv
 const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
 export const ownerChatControls = (run,engine) => ({steering:typeof engine.providers[run.schedule.provider]?.steer==='function'});
 export function remoteRun(run, offset = 0, permissions, beforeEvent, chatControls) {
-  const end = Number.isSafeInteger(beforeEvent) && beforeEvent >= 0 ? Math.min(run.events.length, beforeEvent) : Math.max(0, run.events.length - offset); const start = Math.max(0, end - 100);
+  const events=run.events;
+  const end = Number.isSafeInteger(beforeEvent) && beforeEvent >= 0 ? Math.min(events.length, beforeEvent) : Math.max(0, events.length - offset); const start = Math.max(0, end - 100);
   const capturedContext=runContext(run), permissionSnapshot=permissions?.snapshot?.();
   return { ...runWorkspace(run),lastActivityAt:chatActivityAt(run),observedAt:new Date().toISOString(), ...(chatControls?{chatControls}:{}), ...(permissions ? { permissionContext: permissions.describeRun?.(run,permissionSnapshot) || permissions.describe(run.schedule,permissionSnapshot), permissionRevision: (permissionSnapshot?.value || permissions.get()).revision } : {}), agentName: agentName(run), ...pick(run, ['appCapabilities','turns','timingPartial','id', 'title', 'titleKind', 'titleRevision', 'trigger', 'chatType', 'status', 'queueReason', 'createdAt', 'updatedAt', 'failureReviewedAt', 'pending', 'usage', 'contextUsage', 'providerSessionId', 'nativeSessionPath', 'automaticApprovals', 'modelCapabilities', 'nextModelOptions', 'modelHistory']),archivedAt:run.archivedAt||null,archived:!!run.archivedAt,queuedMessages:(run.queuedMessages||[]).map(message=>({...pick(message,['id','prompt','at','modelOptions','editedAt']),hasAttachments:!!message.attachmentDispatch})),failureEventAt:['failed','interrupted'].includes(run.status)?run.failureEventAt||run.updatedAt:null,attentionRequired:run.status==='awaiting_input'||(!run.archivedAt&&['failed','interrupted'].includes(run.status)&&!run.failureReviewedAt),
-    events: run.events.slice(start, end).map(e=>e.data?.tool ? {...e,data:{...e.data,tool:{...e.data.tool,presentation:toolPresentation(e.data.tool)}}}:e), eventStart: start, eventCount: run.events.length, earlier: start, schedule: pick(run.schedule, scheduleKeys),
+    events: events.slice(start, end).map(e=>e.data?.tool ? {...e,data:{...e.data,tool:{...e.data.tool,presentation:toolPresentation(e.data.tool)}}}:e), eventStart: start, eventCount: events.length, earlier: start, schedule: pick(run.schedule, scheduleKeys),
     context: { ...pick(capturedContext, ['workspaceId', 'workspaceName', 'selectedIds', 'agentId', 'includeDefaults', 'baseWorkspace', 'capturedAt']), entries: (capturedContext.entries || []).map(remoteEntry) }, liveMessages: structuredClone(run.liveMessages || {}) };
 }
 // Explicit projection: native clients receive allowance metadata, never adapter internals.
@@ -90,7 +72,7 @@ export function remoteState(service) {
     runningChatCount: countRunningChats(visibleRuns),
     attentionCount: visibleRuns.filter(run=>run.status==='awaiting_input'||(['failed','interrupted'].includes(run.status)&&!run.failureReviewedAt)).length,
     context: { ...pick(context, ['revision', 'refreshedAt', 'rootStatus', 'defaultWorkspaceId', 'workspaces', 'universalFolders', 'libraryFolders', 'documents','modes','favorites', 'errors']), entries: context.entries.map(remoteEntry) },
-    defaults: pick(defaults, ['provider', 'model', 'reasoningEffort', 'contextTier', 'serviceTier', 'timezone', 'internetSearches']), providerStatus: service.catalog?.value || null, providerStatuses: Object.fromEntries(Object.entries(service.catalogs || {}).map(([id, catalog]) => [id, catalog.value])),attachmentMediaTypes:Object.fromEntries(['copilot','codex','claude'].map(id=>[id,service.engine.providers[id]?.acceptedMediaTypes||[]])),mcpStatusProviders:['copilot','codex','claude'].filter(id=>typeof service.engine.providers[id]?.mcpStatus==='function'),mcpLoginProviders:['copilot','codex','claude'].filter(id=>typeof service.engine.providers[id]?.mcpLogin==='function'),capabilities:['chat.agent-control.v1','chat.pages.v1','host.platform.v1',...(service.workspaceProjects?['projects.v1','projects.move.v1','source-library.v1']:[]),'chat.paths.v1','chat.export.v1','chat.previews.v1','content-tabs.v1','chat.index.v1','chat.queue-edit.v1','integrations.health.v1','chat.review.v1','chat.lifecycle.v1','chat.rename.v1','chat.internet.v1','workspaces.v1','chat.permissions.folders.v1','chat.permissions.chat.v1','chat.permissions.pending.v1','chat.documents.v1','chat.attachments.v1','notifications.v1','authenticated-revocation.v1','connection-self-revoke.v1',...(service.browserHistory?['browser.history.v1','browser.navigation.v1']:[]),...(service.liveBrowser?['browser.live.v1']:[]),...(service.resources?['resources.v1']:[])],protocol: 1 };
+    defaults: pick(defaults, ['provider', 'model', 'reasoningEffort', 'contextTier', 'serviceTier', 'timezone', 'internetSearches']), providerStatus: service.catalog?.value || null, providerStatuses: Object.fromEntries(Object.entries(service.catalogs || {}).map(([id, catalog]) => [id, catalog.value])),attachmentMediaTypes:Object.fromEntries(['copilot','codex','claude'].map(id=>[id,service.engine.providers[id]?.acceptedMediaTypes||[]])),mcpStatusProviders:['copilot','codex','claude'].filter(id=>typeof service.engine.providers[id]?.mcpStatus==='function'),mcpLoginProviders:['copilot','codex','claude'].filter(id=>typeof service.engine.providers[id]?.mcpLogin==='function'),capabilities:[...(service.projectFollow?['tabs.follow.v1']:[]),'chat.agent-control.v1','chat.pages.v1','host.platform.v1',...(service.workspaceProjects?['projects.v1','projects.move.v1','source-library.v1']:[]),'chat.paths.v1','chat.export.v1','chat.previews.v1','content-tabs.v1','chat.index.v1','chat.queue-edit.v1','integrations.health.v1','chat.review.v1','chat.lifecycle.v1','chat.rename.v1','chat.internet.v1','workspaces.v1','chat.permissions.folders.v1','chat.permissions.chat.v1','chat.permissions.pending.v1','chat.documents.v1','chat.attachments.v1','notifications.v1','authenticated-revocation.v1','connection-self-revoke.v1',...(service.browserHistory?['browser.history.v1','browser.navigation.v1']:[]),...(service.liveBrowser?['browser.live.v1']:[]),...(service.resources?['resources.v1']:[])],protocol: 1 };
   });
 }
 function validateRelayURL(value) {
@@ -108,7 +90,8 @@ export class RemoteHost {
     if(!fs.existsSync(this.file))this.save();
     this.peers = new Map(); this.journal = []; this.epoch = randomUUID(); this.sequence = 0; this.closed = false; this.status = 'disabled'; this.inflight = new Map();this.documents=new ChatDocumentApprovals({documentSource:(chatId,documentId)=>service.contentTabs.documentSource(chatId,documentId),currentRoots:run=>{const catalog=service.context.get(),id=run.schedule?.context?.workspaceId;const workspace=id?catalog.workspaces.find(item=>item.id===id):null;return workspace?[workspace.cwd,...(workspace.additionalDirectories||[]),...(workspace.universalFolders||[])]:[];}});this.attachmentConsents=new ChatAttachmentConsents(service.attachments);service.engine.attachmentConsents=this.attachmentConsents;
     this.commandJournal = new RemoteCommandJournal(service.home);
-    this.changed = () => { if (!this.changeTimer) this.changeTimer = setTimeout(() => { this.changeTimer = null; this.publish(); }, 150); };
+    this.runVersions=new Map();
+    this.changed = run => { if(run?.id&&[...this.peers.values()].some(peer=>peer.runId===run.id))this.runVersions.set(run.id,(this.runVersions.get(run.id)||0)+1);if (!this.changeTimer) this.changeTimer = setTimeout(() => { this.changeTimer = null; this.publish(); }, 150); };
     service.engine.on('change', this.changed);
     this.historyChanged=()=>this.broadcast('browser.history.changed',{});service.browserHistory?.on('changed',this.historyChanged);
     this.lifecycleChanged = result => { if (result.deleted) { for (const peer of this.peers.values()) if (peer.runId === result.id) peer.runId = null; this.documents.revokeChat?.(result.id); service.contentTabs?.removeChat(result.id); this.attachmentConsents.revokeChat(result.id); void service.attachments?.revokeChat?.(result.id); } this.broadcast('chat.lifecycle', result); this.changed(); };
@@ -149,12 +132,13 @@ export class RemoteHost {
     this.status = 'connecting';
     const base = this.config.mode === 'local' ? `ws://127.0.0.1:${this.config.port}` : this.config.relayURL;
     const ws = this.socket = new WebSocket(`${base}/socket?role=host&host=${this.config.hostId}`, { headers: { Authorization: `Bearer ${this.config.relayToken}` }, maxPayload: 8_000_000, handshakeTimeout: 8000 });
-    ws.on('open', () => { if (this.socket !== ws) return;this.status='online';this.error=null;const since=this.config.offlineSince;if(since){const elapsed=Math.max(0,Math.floor((Date.now()-Date.parse(since))/1000));this.service.activity?.add('device.reconnected',{hostId:this.config.hostId,offlineSeconds:elapsed});delete this.config.offlineSince;this.save();}this.service.activity?.log('info','transport.online','Connected to the relay.',{hostId:this.config.hostId}); });
+    ws.on('open', () => { if (this.socket !== ws) return;this.status='online';this.error=null;clearTimeout(this.stableConnectionTimer);this.stableConnectionTimer=setTimeout(()=>{this.reconnectAttempt=0;},30000);this.stableConnectionTimer.unref?.();const since=this.config.offlineSince;if(since){const elapsed=Math.max(0,Math.floor((Date.now()-Date.parse(since))/1000));this.service.activity?.add('device.reconnected',{hostId:this.config.hostId,offlineSeconds:elapsed});delete this.config.offlineSince;this.save();}this.service.activity?.log('info','transport.online','Connected to the relay.',{hostId:this.config.hostId}); });
     ws.on('error', error => { if (this.socket === ws) this.error = /Unexpected server response: (401|403)\b/.test(error.message) ? 'The relay rejected this computer’s registration. Check its relay registration token or whether this computer is already connected elsewhere. To connect to another computer, use that computer’s pairing code; incoming access here is not required.' : error.message; });
     ws.on('close', () => {
       if (this.socket !== ws) return;
-      this.peers.clear(); this.status = 'offline';this.config.offlineSince ||= new Date().toISOString();this.save();this.service.activity?.log('warning','transport.offline','Connection to the relay was interrupted.',{hostId:this.config.hostId});
-      if (!this.closed && this.config.enabled) this.reconnect = setTimeout(() => this.connect(), 3000);
+      for(const id of this.peers.keys())this.service.projectFollow?.removeActor(id);this.peers.clear(); this.status = 'offline';this.config.offlineSince ||= new Date().toISOString();this.save();this.service.activity?.log('warning','transport.offline','Connection to the relay was interrupted.',{hostId:this.config.hostId});
+      clearTimeout(this.stableConnectionTimer);
+      if (!this.closed && this.config.enabled) {const delay=Math.min(30000,1000*2**Math.min(this.reconnectAttempt||0,5))*(.75+Math.random()*.5);this.reconnectAttempt=(this.reconnectAttempt||0)+1;this.reconnect = setTimeout(() => this.connect(), delay);}
     });
     ws.on('message', bytes => {
       try {
@@ -162,12 +146,17 @@ export class RemoteHost {
         if (message.type === 'connect') {
           const peer = { id: message.clientId, challenge: secret(), incoming: 0, outgoing: 0, joined: Date.now() };
           this.peers.set(peer.id, peer); this.raw(peer, { type: 'challenge', challenge: peer.challenge });
-        } else if (message.type === 'disconnect') this.peers.delete(message.clientId);
-        else { const peer = this.peers.get(message.clientId); if (peer) void this.receive(peer, message.packet).catch(() => { this.peers.delete(peer.id); this.raw(peer, { type: 'rejected' }); }); }
+        } else if (message.type === 'disconnect') {this.service.projectFollow?.removeActor(message.clientId);this.peers.delete(message.clientId);}
+        else { const peer = this.peers.get(message.clientId); if (peer) void this.receive(peer, message.packet).catch(() => { this.service.projectFollow?.removeActor(peer.id);this.peers.delete(peer.id); this.raw(peer, { type: 'rejected' }); }); }
       } catch { /* Reject malformed routing frames without taking the host down. */ }
     });
   }
-  raw(peer, packet) { if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify({ clientId: peer.id, packet })); }
+  raw(peer, packet) {
+    if(this.socket?.readyState!==WebSocket.OPEN)return;
+    const payload=JSON.stringify({clientId:peer.id,packet}),bytes=Buffer.byteLength(payload);
+    if(bytes>remoteTransportLimits.packetBytes||this.socket.bufferedAmount+bytes>remoteTransportLimits.bufferedBytes){this.socket.close(1013,'Transport is busy; reconnect and refresh.');return;}
+    this.socket.send(payload);
+  }
   send(peer, value) { const seq = ++peer.outgoing; this.raw(peer, { type: 'data', seq, box: seal(peer.device.key, value, `${peer.prefix}:host:${seq}`) }); }
   async pairing(publicURL) {
     if (this.status !== 'online') throw new Error('Enable remote access and wait for the relay to connect.');
@@ -183,7 +172,7 @@ export class RemoteHost {
     this.attachmentConsents.revokeDevice(id);
     void this.service.attachments.revokeDevice(id);
     this.config.devices = this.config.devices.filter(d => d.id !== id); this.save();
-    for (const peer of this.peers.values()) if (peer.device?.id === id) { this.send(peer,{type:'revoked',deviceId:id});this.raw(peer, { type: 'revoked' }); this.peers.delete(peer.id); }
+    for (const peer of this.peers.values()) if (peer.device?.id === id) { this.send(peer,{type:'revoked',deviceId:id});this.raw(peer, { type: 'revoked' }); this.service.projectFollow?.removeActor(peer.id);this.peers.delete(peer.id); }
     return this.info();
   }
   setResourceAccess(id, enabled) {
@@ -362,6 +351,12 @@ export class RemoteHost {
     }
     if(method==='workspace.delete'){this.requireResourceAccess(peer);return this.service.tabManagement.handle({action:'delete-workspace',...args});}
     if(method==='tabs.list'||method==='tabs.manage'){if(method==='tabs.manage')this.requireResourceAccess(peer);const result=await this.service.tabManagement.handle(method==='tabs.list'?{...args,action:'list'}:args);return result;}
+    if(method==='tabs.follow'){
+      if((args.state?.tabId?.startsWith('document:')||args.state?.childTabId?.startsWith('document:')))this.requireDocumentAccess(peer);
+      const result=this.service.projectFollow.handle(args,peer.id);
+      if((result.state?.tabId?.startsWith('document:')||result.state?.childTabId?.startsWith('document:'))&&!this.config.devices.find(device=>device.id===peer.device.id)?.documentAccess)return {...result,state:null};
+      return result;
+    }
     if(method==='tabs.get'||method==='tabs.mutate'||method==='tabs.history'){
       if(args.scope==='project'){const snapshot=this.service.workspaceProjects.snapshot();this.service.workspaceProjects.projectFor({projectId:args.id},snapshot);for(const op of args.operations||[])if(op.action==='open'&&op.tab?.type==='chat'&&this.service.workspaceProjects.membership(engine.getRun(op.tab.chatId),snapshot.catalog).projectId!==args.id)throw new Error('This chat belongs to another project.');}
       if(args.scope==='chat')engine.getRun(args.id);
@@ -388,7 +383,7 @@ export class RemoteHost {
         }
         if((value.operations||[]).some(op=>op.action==='close'&&this.service.contentTabs.get(value.scope,value.id).tabs.some(tab=>tab.id===op.id&&tab.type==='terminal')))this.requireResourceAccess(peer);
         result=await this.service.mutateContentTabs(value);
-      }else result=await this.service.contentTabs.getAsync(args.scope,args.id);
+      }else result=await this.service.contentTabs.getAsync(args.scope,args.id,{historyLimit:args.historyLimit});
       return {...result,tabs:result.tabs.filter(tab=>tab.type!=='document'||canDocuments)};
     }
     if (method === 'chat.get') { const run = engine.getRun(args.id); if(args.watch!=='none'){peer.runId = run.id;peer.summaryOnly=args.watch==='summary';} const view={...remoteRun(run, Math.max(0, Math.floor(Number(args.offset) || 0)), engine.permissions, args.beforeEvent,ownerChatControls(run,engine)),...this.service.workspaceProjects?.membership(run)};return args.historyCursor?chatDelta(run,view,args.historyCursor):{...view,...(!args.offset&&args.beforeEvent===undefined?chatDelta(run,view):{})}; }
@@ -513,23 +508,34 @@ export class RemoteHost {
     const state = remoteState(this.service); const signature = timedSync(this.service.performanceDiagnostics, 'remote.publish.serialize', () => JSON.stringify(state));
     if (signature !== this.signature) { this.signature = signature; this.broadcast('state', state); }
     const watched = new Set([...this.peers.values()].filter(p => p.device).map(p => p.runId).filter(Boolean));
-    for(const id of this.runSignatures?.keys()||[])if(!watched.has(id))this.runSignatures.delete(id);
+    for(const id of this.runSignatures?.keys()||[])if(!watched.has(id)){this.runSignatures.delete(id);this.runVersions?.delete(id);}
     for (const id of watched) {
       if (!this.service.engine.runs.has(id)) continue;
+      const summaryOnly=[...this.peers.values()].filter(peer=>peer.device&&peer.runId===id).every(peer=>peer.summaryOnly);
+      if(summaryOnly){const source=this.service.engine.getRun(id),summary={...runSummary(source),version:this.runVersions?.get(id)||0},hash=JSON.stringify(summary);if(this.runSignatures?.get(id)===hash)continue;this.runSignatures??=new Map();this.runSignatures.set(id,hash);this.broadcast('run.changed',summary,id);continue;}
       const run = timedSync(this.service.performanceDiagnostics, 'remote.run.assemble', () => ({...remoteRun(this.service.engine.getRun(id), 0, this.service.engine.permissions,undefined,ownerChatControls(this.service.engine.getRun(id),this.service.engine)),...this.service.workspaceProjects?.membership(this.service.engine.getRun(id))})); const hash = timedSync(this.service.performanceDiagnostics, 'remote.run.serialize', () => createHash('sha256').update(JSON.stringify({...run,observedAt:undefined})).digest('hex'));
       if (this.runSignatures?.get(id) === hash) continue;
-      this.runSignatures ??= new Map(); this.runSignatures.set(id, hash);const summaryOnly=[...this.peers.values()].filter(peer=>peer.device&&peer.runId===id).every(peer=>peer.summaryOnly);this.broadcast(summaryOnly?'run.changed':'run',summaryOnly?{id,status:run.status,updatedAt:run.updatedAt}:run,id);
+      this.runSignatures ??= new Map(); this.runSignatures.set(id, hash);this.broadcast('run',run,id);
     }
     });
   }
+  broadcastFollow(data) {
+    // Presentation events are replaceable, scoped, and excluded from durable replay.
+    for(const peer of this.peers.values())if(peer.device&&this.service.projectFollow.subscribed(peer.id,data)){
+      if((data.state?.tabId?.startsWith('document:')||data.state?.childTabId?.startsWith('document:'))&&!this.config.devices.find(device=>device.id===peer.device.id)?.documentAccess)continue;
+      this.send(peer,{type:'event',event:'project-follow',data});
+    }
+  }
   broadcast(event, data, runId) {
     const value = { type: 'event', event, data, ...(runId ? { runId } : {}), cursor: `${this.epoch}:${++this.sequence}` };
-    this.journal.push(value); if (this.journal.length > 100) this.journal.shift();
+    const bytes=Buffer.byteLength(JSON.stringify(value));this.journalBytes=(this.journalBytes||0)+bytes;
+    this.journal.push(value);(this.journalSizes??=[]).push(bytes);
+    while(this.journal.length>100||this.journalBytes>8_000_000){this.journal.shift();this.journalBytes-=this.journalSizes.shift();}
     for (const peer of this.peers.values()) if (peer.device && (!runId || peer.runId === runId)) this.send(peer, value);
   }
   async stop() {
-    clearTimeout(this.reconnect); this.invite = null;this.documents.clear();
-    const socket = this.socket; this.socket = null; socket?.terminate(); this.peers.clear();
+    clearTimeout(this.reconnect);clearTimeout(this.stableConnectionTimer); this.invite = null;this.documents.clear();
+    const socket = this.socket; this.socket = null; socket?.terminate(); for(const id of this.peers.keys())this.service.projectFollow?.removeActor(id);this.peers.clear();
     if (this.relay) { await this.relay.close(); this.relay = null; }
     this.status = 'disabled';
   }

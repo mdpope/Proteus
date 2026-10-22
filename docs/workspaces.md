@@ -1,3 +1,10 @@
+## October 22 — selected-scope desktop following
+
+Paired desktops viewing the same owner project/workspace can follow tab selection/order, browser
+navigation, and supported reading positions. Each browser uses local profile data. Other scopes
+remain inactive until selected. Workspace/project identity is owner-bound; names do not establish
+identity. See [project follow-along](project-follow.md) for behavior, permissions, and validation.
+
 ## October 22 — native project destination identity
 
 A pushed project view observes the owner's current saved project selection directly. The content

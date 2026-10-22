@@ -3,6 +3,7 @@
 const fs=require('node:fs'),path=require('node:path'),os=require('node:os');
 const {spawn}=require('node:child_process');
 const {atomic,tree,inspectPackage,compatible,copyTree,spaceBudget,readJob,writeJob,recoveryPolicy,digest,excluded}=require('./update-package.cjs');
+const {copyRecovery}=require('./update-storage.cjs');
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const alive=pid=>{try{process.kill(pid,0);return true;}catch(error){if(error.code==='ESRCH')return false;throw error;}};
 async function until(check,timeout,label){const end=Date.now()+timeout;while(!await check()){if(Date.now()>=end)throw Error('Timed out: '+label);await sleep(250);}}
@@ -51,19 +52,19 @@ async function supervise(file,{inspect=inspectPackage,request=ownerRequest,launc
    await until(()=>!alive(job.ownerPid)&&!fs.existsSync(path.join(job.home,'runner.lock')),60000,'graceful app exit and runner lock release');
    const current=inspect(job.installation);compatible(current,candidate);if(current.hash!==job.previous.hash)throw Error('The installed application changed after acceptance.');
    const stat=fs.statfsSync(path.dirname(job.installation)),before=Number(stat.bavail)*Number(stat.bsize);
-   const roots=[...new Set([job.home,job.browserHome])].filter(root=>root&&![job.home,job.browserHome].some(parent=>parent&&parent!==root&&root.startsWith(parent+path.sep))),sizes=roots.map(root=>tree(root,{exclude:excluded}));
+   const roots=[...new Set([job.home,job.browserHome])].filter(root=>root&&![job.home,job.browserHome].some(parent=>parent&&parent!==root&&root.startsWith(parent+path.sep))),copyOptions=roots.map(root=>({recoveryCaches:job.recoveryCachePolicy===1&&!!job.browserHome&&(job.browserHome===root||job.browserHome.startsWith(root+path.sep)),cachePrefix:job.browserHome&&(job.browserHome===root||job.browserHome.startsWith(root+path.sep))?path.relative(root,job.browserHome).split(path.sep).join('/'):''})),sizes=roots.map((root,index)=>tree(root,{exclude:excluded,...copyOptions[index]}));
    if(roots.some(root=>path.dirname(file).startsWith(root+path.sep)))throw Error('Recovery journals must be outside the data snapshots.');
    if(!job.recovery)retire(job.recoveryPolicy,job);const recovery=job.recovery||path.join(job.recoveryRoot,job.id);fs.mkdirSync(recovery,{recursive:true,mode:0o700});
    const crossVolume=fs.statSync(path.dirname(job.installation)).dev!==fs.statSync(recovery).dev;
    const volumes=spaceBudget([{directory:recovery,bytes:sizes.reduce((sum,row)=>sum+row.bytes,0)+(crossVolume?current.bytes:0)},{directory:path.dirname(job.installation),bytes:candidate.bytes+(crossVolume?current.bytes:0)}]);
-   job=writeJob(file,{phase:'backing-up',recovery,freeSpaceBefore:job.freeSpaceBefore??before,volumeBudgets:volumes,recoveryData:roots.map((root,index)=>({root,...sizes[index]}))});
-   for(const [index,root]of roots.entries()){const destination=path.join(recovery,'data-'+index);if(!fs.existsSync(destination)||tree(destination,{exclude:excluded}).hash!==sizes[index].hash)copyTree(root,destination);if(tree(destination,{exclude:excluded}).hash!==sizes[index].hash)throw Error('Recovery data verification failed; the installation is unchanged.');}
+   job=writeJob(file,{phase:'backing-up',recovery,freeSpaceBefore:job.freeSpaceBefore??before,volumeBudgets:volumes,recoveryData:roots.map((root,index)=>({root,...sizes[index],recoveryCachePolicy:copyOptions[index].recoveryCaches?1:0,cachePrefix:copyOptions[index].cachePrefix}))});
+   for(const [index,root]of roots.entries())copyRecovery(root,path.join(recovery,'data-'+index),{manifestFile:path.join(recovery,'copy-'+index+'.json'),expectedHash:sizes[index].hash,...copyOptions[index]});
    const next=job.installation+'.next-'+job.id;if(!fs.existsSync(next))copyTree(candidate.bundle,next);if(inspect(next).hash!==candidate.hash)throw Error('Staged replacement differs from accepted bytes.');
    job=writeJob(file,{phase:'installing',replacement:next});
   }
   if(job.phase==='installing'){
    if(!job.recoveryData?.length)throw Error('The verified data recovery receipt is missing.');
-   for(const [index,row]of job.recoveryData.entries())if(tree(path.join(job.recovery,'data-'+index),{exclude:excluded}).hash!==row.hash)throw Error('A recovery data snapshot changed before replacement.');
+   for(const [index,row]of job.recoveryData.entries())if(tree(path.join(job.recovery,'data-'+index),{exclude:excluded,recoveryCaches:row.recoveryCachePolicy===1,cachePrefix:row.cachePrefix||''}).hash!==row.hash)throw Error('A recovery data snapshot changed before replacement.');
    const recoveryApp=path.join(job.recovery,'Proteus.app'),installed=fs.existsSync(job.installation)?inspect(job.installation):null;
    if(installed?.hash===job.previous.hash){
     if(!fs.existsSync(recoveryApp)){
@@ -114,4 +115,4 @@ async function supervise(file,{inspect=inspectPackage,request=ownerRequest,launc
 }
 
 module.exports={smoke,supervise,retire,retainGeneration,environment,ownerRequest,verifyLive};
-if(require.main===module){const [action,file]=process.argv.slice(2);if(!['arm','supervise'].includes(action)||!path.isAbsolute(file||''))throw Error('Use the bound update journal.');void (async()=>{if(action==='arm'){const job=readJob(file);if(job.phase!=='waiting-for-idle')throw Error('This update is not waiting for handoff.');process.send?.({ready:job.id});process.disconnect?.();await until(()=>{const phase=readJob(file).phase;if(['prepared','cancelled'].includes(phase))throw Error('The handoff was cancelled before shutdown.');return phase==='stopping';},60000,'host handoff');}return supervise(file);})().catch(error=>{console.error(error.message);process.exitCode=1;});}
+if(require.main===module){const [action,file]=process.argv.slice(2);if(!['arm','supervise'].includes(action)||!path.isAbsolute(file||''))throw Error('Use the bound update journal.');void (async()=>{if(action==='arm'){const job=readJob(file);if(job.phase!=='waiting-for-idle')throw Error('This update is not waiting for handoff.');writeJob(file,{helperPid:process.pid});process.send?.({ready:job.id});process.disconnect?.();await until(()=>{const phase=readJob(file).phase;if(['prepared','cancelled'].includes(phase))throw Error('The handoff was cancelled before shutdown.');return phase==='stopping';},60000,'host handoff');}return supervise(file);})().catch(error=>{console.error(error.message);process.exitCode=1;});}

@@ -17,15 +17,30 @@ export function mergeChatHistory(previous, incoming) {
 }
 
 // Presentation budget is independent of the host's transport/cache page size.
+const encoder=new TextEncoder();
 export function chatHistoryWindowStart(events, before=events.length) {
   const end=Math.min(events.length,Math.max(0,before));let start=end,bytes=0,rows=0,lastActivity=false;
   // Count collapsed activity as a single row. Tool output is mounted only on
   // expansion, so it must not consume the visible-message byte budget.
   while(start>0&&end-start<100){
     const event=events[start-1],activity=!!(event.data?.tool||event.data?.permission?.automatic);
-    const cost=activity&&lastActivity?0:1,size=activity?0:new TextEncoder().encode(String(event.text||'')).length;
+    const cost=activity&&lastActivity?0:1,size=activity?0:encoder.encode(String(event.text||'')).length;
     if(start<end&&(rows+cost>24||bytes+size>128*1024))break;
     bytes+=size;rows+=cost;lastActivity=activity;start--;
   }
   return start;
+}
+
+// Index once per update instead of scanning the entire preceding transcript for
+// every assistant message. A streaming reply shares its completed turn's timer.
+export function firstAssistantKeys(entries,events=[]) {
+  const completed=new Set(events.filter(event=>event.role==='assistant').map(event=>event.data?.turnId));
+  const seen=new Set(),keys=new Set();
+  for(const entry of entries){
+    if(entry.role!=='assistant')continue;
+    const id=entry.data?.turnId;
+    if(!seen.has(id)&&(!entry.streaming||!completed.has(id)))keys.add(entry.key);
+    seen.add(id);
+  }
+  return keys;
 }

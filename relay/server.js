@@ -4,9 +4,17 @@ import { timingSafeEqual } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { WebSocketServer, WebSocket } from 'ws';
 import { randomUUID } from 'node:crypto';
+import {remoteTransportLimits as limits,transportBudget} from './transport.mjs';
 
 const equal = (a, b) => typeof a === 'string' && Buffer.byteLength(a) === Buffer.byteLength(b) && timingSafeEqual(Buffer.from(a), Buffer.from(b));
-const send = (ws, value) => { if (ws?.readyState === WebSocket.OPEN) { if (ws.bufferedAmount > 8_000_000) ws.close(1013, 'Slow connection'); else ws.send(JSON.stringify(value)); } };
+export function sendRelayPacket(ws,value){
+  if(ws?.readyState!==WebSocket.OPEN)return false;
+  const encoded=JSON.stringify(value),bytes=Buffer.byteLength(encoded);
+  if(bytes>limits.packetBytes){ws.close(1009,'Message too large');return false;}
+  if(ws.bufferedAmount+bytes>limits.bufferedBytes){ws.close(1013,'Slow connection');return false;}
+  ws.send(encoded);return true;
+}
+const send=sendRelayPacket;
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 export function relayOrigins(values = []) {
   if (typeof values === 'string') values = values.split(',').map(value => value.trim()).filter(Boolean);
@@ -37,7 +45,7 @@ export async function startRelay({ port = 4318, bind = '127.0.0.1', token = proc
     res.writeHead(req.url === '/health' ? 200 : 404, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(req.url === '/health' ? { service: 'proteus-relay', protocol: 1 } : { error: 'Not found' }));
   });
-  const wss = new WebSocketServer({ noServer: true, maxPayload: 8_000_000, perMessageDeflate: false });
+  const wss = new WebSocketServer({ noServer: true, maxPayload: limits.packetBytes, perMessageDeflate: false });
   server.on('upgrade', (req, socket, head) => {
     let url; try { url = new URL(req.url, 'http://relay'); } catch { socket.destroy(); return; }
     const hostId = url.searchParams.get('host'); const role = url.searchParams.get('role');
@@ -50,10 +58,13 @@ export async function startRelay({ port = 4318, bind = '127.0.0.1', token = proc
       ws.alive = true; ws.on('pong', () => { ws.alive = true; }); ws.on('error', () => {});
       if (role === 'host') {
         hosts.set(hostId, ws);
+        const budget=transportBudget({packets:limits.hostWindowPackets,bytes:limits.hostWindowBytes});
         ws.on('message', bytes => {
+          if(!budget(bytes.length)){ws.close(1013,'Host traffic budget exceeded');return;}
           try {
             const message = JSON.parse(bytes); const client = clients.get(message.clientId);
             if (client?.hostId === hostId) {
+              if(!client.outboundBudget(bytes.length)){client.ws.close(1013,'Client traffic budget exceeded');return;}
               if (message.packet?.type === 'ready') clearTimeout(client.authenticationTimer);
               send(client.ws, message.packet);
               if (['rejected', 'revoked'].includes(message.packet?.type)) client.ws.close(1008, 'Device access ended');
@@ -65,15 +76,15 @@ export async function startRelay({ port = 4318, bind = '127.0.0.1', token = proc
       } else {
         const host = hosts.get(hostId); if (!host) { ws.close(1013, 'Host offline'); return; }
         const clientId = randomUUID(); const authenticationTimer = setTimeout(() => ws.close(1008, 'Pairing timed out'), 60_000);
-        clients.set(clientId, { ws, hostId, authenticationTimer });
-        send(host, { type: 'connect', clientId }); let budget = 0;
-        const timer = setInterval(() => { budget = 0; }, 10_000);
+        clients.set(clientId, { ws, hostId, authenticationTimer,outboundBudget:transportBudget({packets:limits.hostWindowPackets,bytes:limits.clientWindowBytes}) });
+        send(host, { type: 'connect', clientId });
+        const budget=transportBudget({packets:limits.clientWindowPackets,bytes:limits.clientWindowBytes});
         ws.on('message', bytes => {
-          if (++budget > 100) { ws.close(1008, 'Too many messages'); return; }
+          if (!budget(bytes.length)) { ws.close(1013, 'Client traffic budget exceeded'); return; }
           try { send(host, { type: 'message', clientId, packet: JSON.parse(bytes) }); }
           catch { ws.close(1008, 'Invalid message'); }
         });
-        ws.on('close', () => { clearInterval(timer); clearTimeout(authenticationTimer); clients.delete(clientId); send(hosts.get(hostId), { type: 'disconnect', clientId }); });
+        ws.on('close', () => { clearTimeout(authenticationTimer); clients.delete(clientId); send(hosts.get(hostId), { type: 'disconnect', clientId }); });
       }
     });
   });

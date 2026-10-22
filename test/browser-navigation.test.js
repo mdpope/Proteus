@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {browserDestination,browserDestinations} from '../src/browser-destinations.js';
-const {restoreNavigation,commitNavigation,traverseNavigation}=createRequire(import.meta.url)('../desktop/browser-navigation.cjs');
+const {restoreNavigation,commitNavigation,traverseNavigation,acknowledgesNavigation}=createRequire(import.meta.url)('../desktop/browser-navigation.cjs');
 
 test('logical traversal keeps Forward entries and a new address branches without mutating the old stack',()=>{
  const tab={};const first=commitNavigation(tab,'https://example.test/one','One');commitNavigation(tab,'https://example.test/two','Two');const third=commitNavigation(tab,'https://example.test/three','Three');
@@ -38,4 +38,13 @@ test('redirect chains and replacement URLs append entries without overwriting th
  for(const url of ['https://example.test/login?returnUrl=%2Fdocument%3Fid%3D7','https://example.test/oauth/callback?code=fixture','https://example.test/document?id=7&view=results'])commitNavigation(tab,url,'',{redirect:true});
  assert.equal(tab.logicalHistory.entries.length,4);assert.equal(tab.logicalHistory.entries[0].id,original.id);assert.equal(tab.logicalHistory.entries[0].url,'https://example.test/document?id=7');
  traverseNavigation(tab,0);tab.applyingShared=true;commitNavigation(tab,'https://example.test/login?new=1','Login',{redirect:true});assert.equal(tab.logicalHistory.entries.length,2);assert.equal(tab.logicalHistory.entries[0].id,original.id);assert.equal(tab.logicalHistory.entries[1].url,'https://example.test/login?new=1');
+});
+
+// A late B acknowledgement must not erase the newer Forward entry C after Back.
+test('navigation acknowledgement covers pending forward entries and URLs in their original order',()=>{
+ const entries=['A','B','C'].map(id=>({id,url:'https://example.test/'+id,title:id})),pending={entries,index:1,currentEntryId:'B',revision:1};
+ assert.equal(acknowledgesNavigation(pending,{entries:entries.slice(0,2),index:1,currentEntryId:'B',revision:2}),false);
+ assert.equal(acknowledgesNavigation(pending,{...pending,entries:[entries[0],entries[2],entries[1]],revision:3}),false);
+ assert.equal(acknowledgesNavigation(pending,{...pending,entries:entries.map(entry=>entry.id==='C'?{...entry,url:'https://example.test/stale'}:entry),revision:3}),false);
+ assert.equal(acknowledgesNavigation(pending,{...pending,entries:entries.map(entry=>({...entry,title:'Updated'})),revision:4}),true);
 });

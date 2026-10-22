@@ -3,7 +3,8 @@ import { _electron as electron } from 'playwright';
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import http from 'node:http';import assert from 'node:assert/strict';import {execFileSync} from 'node:child_process';
 import {LifeStore} from '../src/life.js';
 const root=process.cwd(),home=fs.mkdtempSync('/private/tmp/proteus-life-api-ui-'),output=path.join(home,'responses.json');
-execFileSync('php',['artisan','test','--compact','--filter=LifeApiTest::test_desktop_food_pages'],{cwd:path.join(root,'web'),env:{...process.env,PROTEUS_LIFE_API_FIXTURE:output},stdio:'pipe'});
+const phpTest=process.env.PROTEUS_PHPUNIT_BOOTSTRAP?['vendor/bin/phpunit','--do-not-cache-result','--bootstrap',process.env.PROTEUS_PHPUNIT_BOOTSTRAP,'--filter=LifeApiTest::test_desktop_food_pages','tests/Feature/LifeApiTest.php']:['artisan','test','--compact','--filter=LifeApiTest::test_desktop_food_pages'];
+execFileSync('php',phpTest,{cwd:path.join(root,'web'),env:{...process.env,PROTEUS_LIFE_API_FIXTURE:output},stdio:'pipe'});
 const f=JSON.parse(fs.readFileSync(output)),origin='https://synthetic.example.test';let credential={origin,clientId:'synthetic-public',accessToken:'synthetic-access',refreshToken:'synthetic-refresh',expiresAt:Date.now()+3600000,accountId:f.profile.accountId,workspaceId:f.profile.workspaceId};
 const calls=[],errors=[];let authURL,held;
 const vault={available(){},exists:()=>!!credential,load:()=>credential,save:c=>{credential=c;},clear:()=>{credential=null;}};
@@ -52,7 +53,7 @@ let app;try{
  await page.locator('#life-food-next').click();await page.getByText('26–50 of 56 foods · Page 2 of 3',{exact:true}).waitFor();
  await page.locator('#life-food-next').click();await page.getByText('51–56 of 56 foods · Page 3 of 3',{exact:true}).waitFor();assert.equal(await page.locator('[data-life-food]').count(),6);
  await page.locator('[data-life-food]').last().click();await page.getByRole('heading',{name:'Synthetic food 056 · version history'}).waitFor();assert.equal(await page.locator('#life-food-form-name').inputValue(),'Synthetic food 056');
- await page.locator('#life-food-form-calories').fill('125');await page.locator('#life-food-form button[type=submit]').click();await page.waitForFunction(()=>!document.querySelector('#life-food-form [type=submit]').disabled);
+ await page.locator('#life-food-form-calories').fill('125');await page.locator('#life-food-form button[type=submit]').click();await page.waitForFunction(()=>document.querySelector('#life-food-form [type=submit]')?.disabled===false);
  assert.equal(calls.find(c=>c.action==='food.save').expectedAccountId,f.profile.accountId);
  await page.locator('#life-food-back').click();await page.locator('#life-food-search-search').fill('056');await page.locator('#life-food-search button').click();await page.getByText('1–1 of 1 foods · Page 1 of 1',{exact:true}).waitFor();
  await page.locator('#life-food-search-search').fill('absent');await page.locator('#life-food-search button').click();await page.getByText('No matching foods · Page 1 of 1',{exact:true}).waitFor();

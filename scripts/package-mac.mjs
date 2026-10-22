@@ -8,8 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
-import { createDesktopSnapshot, verifyDesktopMetadata, fileDigest as digest, desktopPackageIgnore } from './desktop-build.mjs';
+import { createDesktopSnapshot, createProvenance, verifyDesktopMetadata, fileDigest as digest, desktopPackageIgnore } from './desktop-build.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const gitHead=execFileSync('git',['rev-parse','--short=12','HEAD'],{cwd:root,encoding:'utf8'}).trim();
 const unsigned=process.env.PROTEUS_MAC_UNSIGNED==='1';
@@ -39,9 +38,10 @@ await import('./build-terminal.mjs');
 const buildInputPaths=['package.json','package-lock.json','scripts/package-mac.mjs','scripts/desktop-build.mjs','scripts/build-terminal.mjs','scripts/prepare-pty.mjs','scripts/prepare-extensions.mjs','ios/Proteus/Assets.xcassets/AppIcon.appiconset/AppIcon.png'];
 const {runtimeFiles,buildInputs,verifySource,verifyCopied}=createDesktopSnapshot(root,buildInputPaths);
 const dirty=Boolean(execFileSync('git',['status','--porcelain','--',...Object.keys(runtimeFiles),...buildInputPaths],{cwd:root,encoding:'utf8'}).trim());
-const sourceFingerprint=createHash('sha256').update(JSON.stringify({runtimeFiles,buildInputs,gitHead,dirty,appBundleId})).digest('hex');
+const sourceIdentity=createProvenance({runtimeFiles,buildInputs,gitHead,dirty,appBundleId});
+const {sourceFingerprint}=sourceIdentity;
 const buildRevision=`${gitHead}+${dirty?'dirty.':'src.'}${sourceFingerprint.slice(0,12)}`;
-const provenance={schemaVersion:1,gitHead,dirty,sourceFingerprint,buildRevision,appBundleId,runtimeFiles,buildInputs};
+const provenance={...sourceIdentity,buildRevision};
 verifySource();
 const bundles = await packager({ dir: root, out: process.env.PROTEUS_PACKAGE_OUTPUT || path.join(root, 'dist',...(desktopPreview?['design-preview']:[])), overwrite: true,
   name: appName, executableName: appName, appBundleId,
@@ -68,15 +68,8 @@ const bundles = await packager({ dir: root, out: process.env.PROTEUS_PACKAGE_OUT
 for (const directory of bundles) {
   const bundle = path.join(directory, appName+'.app');
   verifySource();verifyCopied(path.join(bundle,'Contents/Resources/app'));
-  const embedded=JSON.parse(fs.readFileSync(path.join(bundle,'Contents/Resources/app/build-source.json'),'utf8'));
-  if(embedded.sourceFingerprint!==sourceFingerprint||embedded.buildRevision!==buildRevision)throw new Error('Packaged source provenance differs from build snapshot.');
-  const packageMetadata=JSON.parse(fs.readFileSync(path.join(bundle,'Contents/Resources/app/package.json'),'utf8'));
   const sourceMetadata=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
-  // Electron Packager removes development-only metadata after afterCopy.
-  const expectedMetadata=Object.fromEntries(Object.entries(sourceMetadata).filter(([key])=>!['private','scripts','devDependencies','overrides'].includes(key)));
-  expectedMetadata.buildRevision=buildRevision;
-  if(desktopPreview)expectedMetadata.desktopPreview=true;
-  if(JSON.stringify(packageMetadata)!==JSON.stringify(expectedMetadata))throw new Error('Packaged version or build metadata differs from source snapshot.');
+  verifyDesktopMetadata(path.join(bundle,'Contents/Resources/app'),{...sourceMetadata,...(desktopPreview?{desktopPreview:true}:{})},provenance);
   const storePackage=path.join(bundle,'Contents/Resources/app/node_modules/electron-chrome-web-store');
   const {createRequire}=await import('node:module');
   const storeRequire=createRequire(path.join(storePackage,'package.json'));

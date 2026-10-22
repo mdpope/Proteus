@@ -1,3 +1,18 @@
+## October 22 — authorized stabilization implemented in source
+
+The operator authorized the architecture/performance plan and selected-scope desktop follow-along.
+See [the acceptance ledger](stabilization-plan.md) for implementation and verification, and
+[follow-along](project-follow.md) for exact scope. Use independent local browser profiles; do not
+share credentials or remotely render pages. Preserve the beginning of browsing sessions. Clients
+on another workspace/project stay inactive and catch up when selected. Keep UI changes to minor
+spacing/wrapping. Interactive terminal output stays on its owner; no new license is selected.
+
+Implemented tracks include update provenance/storage, account/Life reads, renderer lifecycle,
+history deltas, bounded transport/cache work, and current contributor/architecture documentation.
+Deployment and signed installed-device acceptance remain separate from source completion.
+The earlier entries below are retained design/release history, not evidence that all queued items
+remain unimplemented or authorization to install a new build.
+
 ## October 22 — agent chat control integrated into current source
 
 The operator authorized implementation, demo/cross-device tests and integration of feature

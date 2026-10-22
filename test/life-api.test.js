@@ -7,6 +7,8 @@ import { createHash } from 'node:crypto';
 import { LifeStore } from '../src/life.js';
 import { BrowserProfiles } from '../src/browser-profiles.js';
 import { LifeAPI, LifeTokenVault, LIFE_CALLBACK, lifeOrigin } from '../src/life-api.js';
+import { AccountSession } from '../src/account-session.js';
+import { AppAccount } from '../src/app-account.js';
 const origin='https://life.example.test',accountId='a'.repeat(64),profile={accountId,workspaceId:'1',displayName:'Synthetic account',readOnly:false,capabilities:['nutrition.read','nutrition.add'],sections:['nutrition']};
 const credential=()=>({origin,clientId:'public',accessToken:'first-access',refreshToken:'first-refresh',expiresAt:Date.now()+3600000,accountId,workspaceId:'1'});
 const response=(value,status=200)=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json'}});
@@ -85,7 +87,7 @@ test('evidence is scoped, capped, converted to safe metadata without bearer disc
 });
 test('desktop query requests actual API desktop contract and rejects disabled operations',async t=>{
  let sent;const {store}=fixture(t,{vault:vault(credential()),fetch:async(url,options)=>{if(url.endsWith('/data'))sent=JSON.parse(options.body);return response({...profile,foods:[],foodPagination:{page:1,pageSize:25}});}});
- const s=store.get();store.save({schemaVersion:3,enabled:true},s.revision);await store.refresh();await store.data('nutrition',{tab:'foods',foodPage:2,search:'',from:''});assert.deepEqual(sent.query,{tab:'foods',foodPage:2,client:'desktop'});const identity=store.get().identity;store.save({schemaVersion:3,enabled:false},store.get().revision);await assert.rejects(store.action('food.save',{},'key',identity),/disabled/);
+ const s=store.get();store.save({schemaVersion:3,enabled:true},s.revision);await store.refresh();await store.data('nutrition',{tab:'foods',foodPage:2,search:'',from:''});assert.deepEqual(sent.query,{tab:'foods',foodPage:2,client:'desktop',projection:'tab'});const identity=store.get().identity;store.save({schemaVersion:3,enabled:false},store.get().revision);await assert.rejects(store.action('food.save',{},'key',identity),/disabled/);
 });
 test('cancel/logout and newer sign-in cannot resurrect a stale discovery or exchange',async t=>{
  const {home}=fixture(t);let release,entered,launched=0,url;const makeGate=()=>{let start;const ready=new Promise(r=>start=r),wait=new Promise(r=>release=r);entered=start;return {ready,wait};};
@@ -111,4 +113,28 @@ test('unreadable protected session can be explicitly forgotten without claiming 
 
 test('account refresh stays connected with Life disabled while Life reads remain gated',async t=>{
  const {store}=fixture(t,{vault:vault(credential()),fetch:async()=>response(profile)});await store.auth('refresh');assert.equal(store.get().enabled,false);assert.equal(store.get().ready,false);assert.equal(store.get().connected,true);await assert.rejects(store.data('nutrition'),/disabled/);store.save({schemaVersion:3,enabled:true},store.get().revision);store.save({schemaVersion:3,enabled:false},store.get().revision);assert.equal(store.get().connected,true);
+});
+
+test('shared account session authenticates and refreshes without Life endpoints or scopes',async()=>{
+ let launched;const paths=[],storage=vault();
+ const api=new AccountSession({vault:storage,openExternal:async url=>{launched=new URL(url);},fetch:async(url)=>{
+  paths.push(url);
+  if(url.endsWith('native-config'))return response({enabled:true,protocol:1,issuer:origin,clientId:'public',redirectUri:LIFE_CALLBACK,authorizationEndpoint:origin+'/oauth/authorize',tokenEndpoint:origin+'/oauth/token',appApiBase:origin+'/api/v1/app',appScopes:['app:read','app:write']});
+  if(url.endsWith('/oauth/token'))return response(tokens());
+  assert.equal(url,origin+'/api/v1/app?view=bootstrap');return response({accountId,workspaceId:'1',displayName:'Synthetic account',preferences:{}});
+ }});
+ await api.begin(origin);assert.equal(launched.searchParams.get('scope'),'app:read app:write');
+ await api.callback(LIFE_CALLBACK+'?state='+launched.searchParams.get('state')+'&code=synthetic');await api.refresh();
+ assert.equal(storage.read().accountId,accountId);assert.equal(paths.some(url=>url.endsWith('/api/v1/life')),false);
+});
+
+test('account collection reads are scoped, paged and independent of optional Life',async()=>{
+ const calls=[],api=new AccountSession({vault:vault(credential()),fetch:async(url,options)=>{calls.push({url,options});return response({accountId,workspaceId:'1',teamLists:[{id:'list',members:[{name:'A',mode:'fixed'}]}]});}});
+ const account=new AppAccount(api);const lists=await account.lists();assert.deepEqual(lists.teamLists[0].fixed,['A']);
+ assert.equal(calls[0].url,origin+'/api/v1/app?view=bootstrap&include=teamLists');
+ await account.request({path:'/logs',page:2,pageSize:25,collectionRevision:'c'.repeat(64)});assert.match(calls[1].url,/page=2&pageSize=25&expectedRevision=c+/);
+ await assert.rejects(account.request({path:'/logs',pageSize:101}),/page size/);
+ await assert.rejects(account.request({path:'/logs?token=secret'}),/Unsupported/);
+ await account.request({path:'/team-lists/'+ 'a'.repeat(36),method:'DELETE',body:{expectedRevision:2},identity:lists.identity});
+ const body=JSON.parse(calls[2].options.body);assert.equal(body.expectedRevision,2);assert.equal(body.expectedAccountId,accountId);assert.equal(body.expectedWorkspaceId,'1');
 });

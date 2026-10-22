@@ -22,9 +22,11 @@ export function atomicJSON(file, value) {
   let fd, created=false;
   try {
     fd = fs.openSync(temp, 'wx', 0o600);created=true;
-    fs.writeFileSync(fd, JSON.stringify(value, null, 2) + '\n'); fs.fsyncSync(fd);
+    const contents = JSON.stringify(value, null, 2) + '\n';
+    fs.writeFileSync(fd, contents); fs.fsyncSync(fd);
     fs.closeSync(fd); fd = undefined;
     fs.renameSync(temp, file);
+    return Buffer.byteLength(contents);
   } finally {
     if (fd !== undefined) try { fs.closeSync(fd); } catch {}
     if(created)try { fs.unlinkSync(temp); } catch {} // Cleanup must never mask the original save failure.

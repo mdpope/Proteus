@@ -60,8 +60,14 @@ export async function exerciseMessageActions(page, app, run) {
   await first.locator('.message-actions').screenshot({path:path.join(os.tmpdir(),'proteus-web-message-playback-mobile.png')});
   await page.setViewportSize(viewport);
   const cancellations=await page.evaluate(()=>messageActionTest.cancellations);
-  await first.evaluate(element=>element.dataset.beforeRefresh='yes');app.engine.persist(run);
-  await page.waitForFunction(()=>!document.querySelector('.remote-message[data-before-refresh]'));
+  async function refreshRetainingMessage(){
+    const revision=await page.locator('#remote-content').getAttribute('data-chat-render-revision');
+    await first.evaluate(element=>{window.messageActionRetainedRow=element;window.messageActionRetainedEditor=document.querySelector('#remote-composer textarea[name=prompt]');});app.engine.persist(run);
+    await page.waitForFunction(previous=>Number(document.querySelector('#remote-content').dataset.chatRenderRevision)>Number(previous),revision);
+    assert.equal(await first.evaluate(element=>element===window.messageActionRetainedRow),true,'Unchanged message DOM remains mounted across host refresh');
+    assert.equal(await page.evaluate(()=>document.querySelector('#remote-composer textarea[name=prompt]')===window.messageActionRetainedEditor),true,'The live draft editor survives host refresh');
+  }
+  await refreshRetainingMessage();
   assert.equal(await page.evaluate(()=>messageActionTest.cancellations),cancellations);
   assert.equal(await first.locator('[data-message-action=speak]').getAttribute('aria-label'),'Stop reading aloud');
 
@@ -71,8 +77,7 @@ export async function exerciseMessageActions(page, app, run) {
   await first.locator('[data-message-seek]').evaluate(element=>{element.value='600';element.dispatchEvent(new Event('input',{bubbles:true}));element.dispatchEvent(new Event('change',{bubbles:true}));});
   assert.equal(await page.evaluate(()=>messageActionTest.spoken.length),speechCount);
   await first.locator('[data-message-action=pause]').focus();
-  await first.evaluate(element=>element.dataset.beforeRefresh='yes');app.engine.persist(run);
-  await page.waitForFunction(()=>!document.querySelector('.remote-message[data-before-refresh]'));
+  await refreshRetainingMessage();
   assert.equal(await page.evaluate(()=>document.activeElement?.dataset.messageAction),'pause');
   assert.equal(await first.locator('[data-message-action=pause]').getAttribute('aria-label'),'Resume reading');
   await first.locator('[data-message-action=pause]').click();
@@ -80,8 +85,7 @@ export async function exerciseMessageActions(page, app, run) {
   assert.ok(!(await page.evaluate(()=>messageActionTest.spoken.at(-1).text)).startsWith('Local summary'));
   await first.locator('[data-message-seek]').focus();
   await first.locator('[data-message-seek]').evaluate(element=>{element.value='700';element.dispatchEvent(new Event('input',{bubbles:true}));});
-  await first.evaluate(element=>element.dataset.beforeRefresh='yes');app.engine.persist(run);
-  await page.waitForFunction(()=>!document.querySelector('.remote-message[data-before-refresh]'));
+  await refreshRetainingMessage();
   assert.equal(await page.evaluate(()=>document.activeElement?.hasAttribute('data-message-seek')),true);
   assert.equal(await first.locator('[data-message-seek]').inputValue(),'700');
   await first.locator('[data-message-seek]').evaluate(element=>element.dispatchEvent(new Event('change',{bubbles:true})));

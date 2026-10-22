@@ -57,9 +57,10 @@ try{
  // Setup stays at the operator's chosen expansion across unsolicited host updates.
  const setup=page.locator('[data-setup-disclosure]');await setup.waitFor();assert.equal(await setup.evaluate(node=>node.open),true);
  await setup.locator('summary').click();assert.equal(await setup.evaluate(node=>node.open),false);
- let oldForm=await page.locator('#remote-composer').elementHandle();apps[0].remote.signature='force-setup-fixture';apps[0].remote.changed();await page.waitForFunction(form=>!form.isConnected,oldForm);assert.equal(await setup.evaluate(node=>node.open),false);
+ async function refreshSetup(){const revision=await page.locator('#remote-content').getAttribute('data-chat-render-revision');apps[0].remote.signature='force-setup-fixture';apps[0].remote.changed();await page.waitForFunction(previous=>Number(document.querySelector('#remote-content').dataset.chatRenderRevision)>Number(previous),revision);}
+ await refreshSetup();assert.equal(await setup.evaluate(node=>node.open),false);
  await setup.locator('summary').click();await page.locator('#remote-composer [name=name]').fill('Retained setup name');
- for(let i=0;i<3;i++){oldForm=await page.locator('#remote-composer').elementHandle();apps[0].remote.signature='force-setup-fixture';apps[0].remote.changed();await page.waitForFunction(form=>!form.isConnected,oldForm);assert.equal(await setup.evaluate(node=>node.open),true);assert.equal(await page.locator('#remote-composer [name=name]').inputValue(),'Retained setup name');}
+ for(let i=0;i<3;i++){await refreshSetup();assert.equal(await setup.evaluate(node=>node.open),true);assert.equal(await page.locator('#remote-composer [name=name]').inputValue(),'Retained setup name');}
  await page.locator('#remote-composer [name=provider]').selectOption('rehearsal');assert.equal(await setup.evaluate(node=>node.open),true);
  await page.waitForFunction(()=>{const label=document.querySelector('.remote-chat-name');return label?.isConnected&&getComputedStyle(label).fontSize==='12px';});
  await page.screenshot({path:path.join(home,'proteus-web-setup-preview.png')});

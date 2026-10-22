@@ -87,3 +87,22 @@ test('remembered workspace project selection survives normalization without allo
  assert.equal(value.active,'inactive-terminal');assert.deepEqual(value.selectedChildren,{workspace:'project',project:'chat','peer-workspace':'foreign-project'});assert.ok(!value.tabs.find(tab=>tab.id==='project').parentId,'Top-level view identity remains unchanged');
  for(const id of ['foreign-project','other-project'])assert.equal(normalizeSession({tabs,selectedChildren:{workspace:id}}).selectedChildren.workspace,undefined);
 });
+
+test('pending local navigation survives a fresh session with every unsent stable entry and private redirect URL',()=>{
+ const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-pending-navigation-'));
+ try{
+  const entries=Array.from({length:140},(_,index)=>({id:'entry-'+index,url:'https://example.test/'+index,title:'Visit '+index,pageState:'PRIVATE_FORM'}));entries[2].url='https://example.test/oauth/callback?code=fixture#retained';entries[2].requestedURL='https://example.test/requested?return=%2Fdocument';
+  const history={entries,index:139,currentEntryId:'entry-139',revision:2},browser={id:'pending',type:'browser',url:entries.at(-1).url,history,navigationPending:true,unloaded:true};
+  new WorkspaceSession(home,{projects:true}).save({tabs:[browser],team:{tabs:[{...browser,id:'team-pending'}]}});
+  const saved=new WorkspaceSession(home,{projects:true}).get();
+  for(const restored of [saved.tabs.find(tab=>tab.id==='pending'),saved.team.tabs[0]]){assert.equal(restored.navigationPending,true);assert.equal(restored.history.entries.length,140);assert.equal(restored.history.entries[0].id,'entry-0');assert.equal(restored.history.entries[2].id,'entry-2');assert.equal(restored.history.entries[2].url,entries[2].url);assert.equal(restored.history.entries[2].requestedURL,entries[2].requestedURL);assert.equal(restored.history.currentEntryId,'entry-139');assert.equal(restored.history.revision,2);assert.doesNotMatch(JSON.stringify(restored),/PRIVATE_FORM|pageState/);}
+  const acknowledged=new WorkspaceSession(home,{projects:true}).save({tabs:[{...browser,navigationPending:false}]});assert.equal(acknowledged.tabs.find(tab=>tab.id==='pending').navigationPending,undefined);
+ }finally{fs.rmSync(home,{recursive:true,force:true});}
+});
+test('pending navigation requires a real stable logical stack and oversized pending data cannot replace the prior session',()=>{
+ const entry={id:'stable',url:'https://example.test/page',title:'Page'},history={entries:[entry],index:0,currentEntryId:'stable'};
+ for(const invalid of [{...history,currentEntryId:'wrong'},{...history,entries:[entry,entry]},{...history,entries:[{url:entry.url}]},{...history,revision:-1},{entries:[],index:-1,currentEntryId:null,revision:0},{...history,entries:[{...entry,url:'file:///secret'}]}]){const saved=normalizeSession({tabs:[{id:'browser',type:'browser',history:invalid,navigationPending:true}]},{projects:true});assert.equal(saved.tabs.find(tab=>tab.id==='browser')?.navigationPending,undefined);}
+ assert.equal(normalizeSession({tabs:[{id:'browser',type:'browser',history,navigationPending:'true'}]},{projects:true}).tabs.find(tab=>tab.id==='browser').navigationPending,undefined);
+ const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-pending-budget-'));
+ try{const store=new WorkspaceSession(home,{projects:true});store.save({tabs:[{id:'browser',type:'browser',history,navigationPending:true}]});const before=fs.readFileSync(store.file);const entries=Array.from({length:3000},(_,index)=>({id:'entry-'+index,url:'https://example.test/'+index+'?data='+'x'.repeat(3000)}));assert.throws(()=>store.save({tabs:[{id:'browser',type:'browser',navigationPending:true,history:{entries,index:2999,currentEntryId:'entry-2999',revision:1}}]}),/Pending browser history.*original record was preserved/);assert.deepEqual(fs.readFileSync(store.file),before);}finally{fs.rmSync(home,{recursive:true,force:true});}
+});

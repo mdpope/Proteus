@@ -427,3 +427,27 @@ chat/tab routing, resource-grant denial, sanitized source catalogs, encrypted ca
 revocation. History tests verify opt-in selected-profile sharing and idempotent event import.
 These tests do not establish installed cross-machine verification; that requires the accepted
 signed release on both owners and an explicit check of their saved history-sharing settings.
+
+## October 22 — bounded encrypted transport
+
+The shared browser/desktop transport bounds outstanding request count, queued encrypted-byte
+estimates and incoming work before parsing/decryption. It retains at most 128 outstanding actions,
+16 MB of queued sends, and 128/16 MB of queued incoming packets. Individual wire packets retain
+the existing 8 MB ceiling. Request arguments, issue time and retry ID are frozen when queued;
+later UI edits cannot change an already-submitted action. Count/byte throttling stays below the
+relay's budget, and disconnect cancels throttle waits and releases queued work. A queue-full
+error is `REMOTE_BUSY` before transmission; an interrupted sent action still requires checking
+the owner receipt/state before retrying. Congestion never deletes saved pairing or replays work.
+
+Relay output checks include the **next** packet in the 8 MB socket-backlog ceiling. Ten-second
+windows enforce 100 messages/32 MB per incoming client and 32 MB per outgoing client, with
+4,096 messages/128 MB across each authenticated host connection. Outgoing client packets use the
+host message ceiling because one command may produce several authenticated state events. A
+client exceeding its budget closes with transient code 1013 while sibling clients remain
+connected; host aggregate exhaustion closes that host transport for recovery. The relay remains
+opaque to encrypted contents and never stores or trims browser/chat history to fit these limits.
+
+Synthetic tests cover queue count/bytes, backlog boundaries, cancellable throttle waits,
+immutable retry payloads, bidirectional budget accounting, isolated over-budget clients, normal
+metadata bursts, pairing, reconnection and authenticated revocation. These bounds are implemented
+in source; measurements on installed devices and deployment of the relay are separate acceptance.

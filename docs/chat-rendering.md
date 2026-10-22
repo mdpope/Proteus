@@ -161,6 +161,43 @@ Implementation and device/deployment evidence are recorded separately in the rel
 
 ## Development
 
+### Renderer resource lifecycle
+
+Desktop history retains every loaded event and supports paging to the first event.
+Choosing **Jump to latest** releases older rendered rows and returns to the normal
+24-row/128-KiB presentation window; scrolling up can mount those cached rows again.
+Loaded reading ranges remain ordinary DOM so browser find, text selection and copy
+continue to work. This is not full transcript virtualization.
+
+Website host refreshes reuse unchanged message bodies, disclosure contents and the
+live draft editor within the same account, host and chat. Handlers are replaced or
+aborted before rebinding, preventing duplicate submissions and accumulated listeners.
+Changed host state still refreshes lifecycle and permission controls. Selected text,
+caret position, drafts and speech controls survive same-chat refreshes.
+
+Completed runtime labels no longer participate in a one-second scan. Only active
+turn/tool timers are scheduled, and their interval stops when the last binding is
+removed. Composer observers and global listeners are disposed when the view leaves
+the document; retained conversation speech controls reconnect when mounted again.
+
+`test/renderer-resources.test.js` covers active timer cleanup, linear assistant-turn
+indexing and bounded terminal output batching. `test/chat-history-ui.mjs` verifies
+all 2,507 mixed events are reachable, Jump to latest releases older rows, and keyed
+DOM preserves editor focus, selection and disclosure state across refreshes.
+
+Project-follow chat positions carry only a stable event key/index, pixel offset
+and follow-latest flag. Receivers use the same retained view and load earlier pages
+only when the requested anchor precedes their loaded window. A single pending restoration
+waits for the actual target event to mount, including remote loads longer than 2.5 seconds
+and events arriving after the initial render. A new follow request, changed active scope,
+human input, cancellation signal or detached view cancels the pending positioning and any
+wait for an in-flight history page. An already-started shared page request may finish, but
+cannot apply the cancelled position. Failed pages keep the existing explicit Retry control
+instead of creating a retry loop. An early anchor can
+require several sequential history pages; no model turn is restarted. Disclosure
+expansion remains local, so offsets inside differently expanded Activity groups
+are best effort.
+
 - Edit `src/markdown-renderer.js` and `public/markdown/style.css`, then run `npm run markdown:build`.
   Commit the bundled runtime and third-party notices so Xcode can build without Node installed.
 - `npm run ios:generate` refreshes the checked-in Xcode project. Its folder resource shares the

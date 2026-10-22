@@ -5,6 +5,16 @@ const clock = svg('<circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 3"/>');
 const icons = {send:arrow,queue:arrow+`<span class="queue-clock">${clock}</span>`,steer:svg('<path d="M6 20V5M2 9l4-4 4 4M6 15h8a5 5 0 0 0 5-5V5M15 9l4-4 3 4"/>'),stop:svg('<rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none"/>')};
 const mounts = new WeakMap();
 const live = new Map();
+let lifecycle;
+function releaseDetached(){for(const [node,dispose] of live)if(!node.isConnected)dispose();}
+function observeLifecycle(){
+ if(lifecycle)return;
+ lifecycle=new MutationObserver(records=>{if(records.some(record=>record.removedNodes.length))releaseDetached();});
+ lifecycle.observe(document.documentElement,{childList:true,subtree:true});
+ window.addEventListener('pagehide',disposeComposers);
+}
+function disposeComposers(){for(const dispose of [...live.values()])dispose();}
+export function disposeChatComposer(composer){mounts.get(composer)?.();}
 export function mountChatComposer(composer,{textarea,models,actions,active=false,pane}={}) {
   if(!composer)return;
   for(const [node,dispose] of live)if(!node.isConnected)dispose();
@@ -115,8 +125,9 @@ export function mountChatComposer(composer,{textarea,models,actions,active=false
   // host so adding, removing and restoring files always remeasures the editor.
   const attachments=new MutationObserver(schedule);for(const host of composer.querySelectorAll('.chat-attachment-picker,.remote-attachment-strip'))attachments.observe(host,{childList:true,subtree:true});
   decorate();cancelAnimationFrame(frame);resize();
-  const dispose=()=>{observer.disconnect();sizes.disconnect();attachments.disconnect();cancelAnimationFrame(frame);measure.remove();compact.remove();textarea.removeEventListener('input',schedule);composer.removeEventListener('change',updateSummary);composer.removeEventListener('keydown',dismiss);document.removeEventListener('pointerdown',dismiss);window.removeEventListener('resize',schedule);mounts.delete(composer);live.delete(composer);};
+  const dispose=()=>{observer.disconnect();sizes.disconnect();attachments.disconnect();cancelAnimationFrame(frame);measure.remove();compact.remove();textarea.removeEventListener('input',schedule);composer.removeEventListener('change',updateSummary);composer.removeEventListener('keydown',dismiss);document.removeEventListener('pointerdown',dismiss);window.removeEventListener('resize',schedule);mounts.delete(composer);live.delete(composer);if(!live.size){lifecycle?.disconnect();lifecycle=null;window.removeEventListener('pagehide',disposeComposers);}};
   mounts.set(composer,dispose);live.set(composer,dispose);
+  observeLifecycle();return dispose;
 }
 export function mountNewChatComposer(composer){
  if(!composer)return;const toolbar=composer.querySelector('.new-chat-toolbar');if(!toolbar)return;

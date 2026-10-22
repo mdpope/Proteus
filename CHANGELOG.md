@@ -1,3 +1,13 @@
+## Unreleased — stabilization and scoped desktop follow-along
+
+- Add Open Link in Background Tab below the foreground new-tab action; load in the source profile and placement while preserving selection/focus. Keep the unloaded option.
+- Follow selected project/workspace tabs, browser URLs, and reading positions across paired desktops using each device's local profile. Keep inactive scopes idle; preserve full session history and existing approvals. Terminal output stays on its owner.
+- Reduce repeated browser state broadcasts, offscreen conversation/terminal work, idle refresh traffic, transcript hydration, and duplicate persistence; bound transport and inactive history memory.
+- Add versioned updater provenance, bounded worker-based package inspection, safe staging retirement, resumable cache-aware recovery, and read-only storage accounting under the two-generation policy.
+- Separate shared-account authentication, add selective/paged reads and revision-protected deletes, and move Life filtering/aggregation into SQL without changing immutable food versions.
+- Correct narrow composer spacing/wrapping; retain existing navigation and controls. Add contributor/security guidance and current architecture; leave the license unchanged.
+- Implementation and synthetic acceptance are recorded in [the stabilization ledger](docs/stabilization-plan.md). No installed app, website deployment, signing identity, or live backup was changed.
+
 ## Unreleased — agent chat control (merged source; rollout held)
 
 - Add host-scoped conversation discovery, dispatch, read/wait, ordinary-question replies and cancellation to internal provider tools and trusted local MCP.

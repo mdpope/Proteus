@@ -21,7 +21,16 @@ if(teamTab==='browser'&&!teamBrowserOpen)teamTab='overview';
 const saveTeamTabs=()=>{try{localStorage.setItem(teamStorageKey,JSON.stringify({tabs:['overview','standup',...(teamBrowserOpen?['browser']:[])],active:teamTab,browser:teamBrowserOpen}));}catch{}};
 let showNotice;const notice=message=>{if(!message)return;const n=document.querySelector('#shared-notice');if(n){showNotice??=createToast(n);showNotice(message);}};
 const action=callback=>async event=>{event?.preventDefault();try{await callback(event);notice('');}catch(error){notice(error.message);}};
-async function reload(){state=await appRequest();window.proteusPreferences=state.preferences;render();}
+let accountReloadVersion=0;
+const engineCollections=()=>({preferences:['browserProfiles'],history:['browserProfiles'],notifications:['notifications'],logs:['logs']}[engineTab]||[]);
+async function reload(){
+    const version=++accountReloadVersion;
+    const collections=document.querySelector('#team-content')?['teamLists','links']:document.querySelector('#browser-home')?['links']:engineCollections();
+    const value=await appRequest('?view=bootstrap'+(collections.length?'&include='+collections.join(','):''));
+    if(version!==accountReloadVersion)return;
+    state={...state,...value};window.proteusPreferences=state.preferences;render();
+}
+function navigateEngine(){engineRenderVersion++;if(!state||engineCollections().some(key=>!Object.hasOwn(state,key)))void reload().catch(error=>notice(error.message));else void renderEngine();}
 function listLinks(links){return links.map(link=>`<p>${externalLink(link.url,link.title)} <button data-delete-link="${e(link.id)}" aria-label="Remove ${e(link.title)}">×</button></p>`).join('')||'<p>No shared links yet.</p>';}
 function dailyOrder(list){
     const day=new Intl.DateTimeFormat('en-CA',{timeZone:list.timezone||state.preferences.timezone,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
@@ -46,7 +55,7 @@ function renderTeam(){
         const members=values.members.split('\n').map(v=>v.trim()).filter(Boolean).map((text,index)=>{const mode=text.startsWith('!')?'fixed':'random',name=text.replace(/^!\s*/,'');return {id:current?.members.find(m=>m.name===name)?.id||crypto.randomUUID(),name,mode};});
         const saved=await appRequest('/team-lists'+(current?'/'+current.id:''),current?'PUT':'POST',{name:values.name,instructions:values.instructions,timezone:values.timezone,members,links:current?.links||[],...(current?{expectedRevision:current.revision}:{})});selectedList=saved.id;await reload();
     }));
-    host.querySelector('#team-delete')?.addEventListener('click',action(async()=>{await appRequest('/team-lists/'+list.id,'DELETE');selectedList='';await reload();}));
+    host.querySelector('#team-delete')?.addEventListener('click',action(async()=>{await appRequest('/team-lists/'+list.id,'DELETE',{expectedRevision:list.revision});selectedList='';await reload();}));
     host.querySelector('#standup-dock')?.addEventListener('click',()=>host.classList.toggle('standup-docked'));
     host.querySelector('#standup-popout')?.addEventListener('click',()=>window.open('/team?standup=1','_blank','noopener,noreferrer'));
     bindStandupLinks(host,list);
@@ -70,7 +79,7 @@ function bindStandupLinks(host,list){
         dialog.querySelector('form').onsubmit=async event=>{event.preventDefault();const v=Object.fromEntries(new FormData(event.target));try{await save(list.links.map(item=>item.id===link.id?{...item,title:v.title.trim(),url:v.url.trim()}:item));dialog.close();}catch(error){dialog.querySelector('[role=alert]').textContent=error.message;}};dialog.showModal();
     });
 }
-function bindDeleteLinks(host){host.querySelectorAll('[data-delete-link]').forEach(button=>button.onclick=action(async()=>{await appRequest('/links/'+button.dataset.deleteLink,'DELETE');await reload();}));}
+function bindDeleteLinks(host){host.querySelectorAll('[data-delete-link]').forEach(button=>button.onclick=action(async()=>{const link=state.links.find(item=>item.id===button.dataset.deleteLink);if(!link)throw new Error('This link changed. Refresh before deleting.');await appRequest('/links/'+link.id,'DELETE',{expectedRevision:link.revision});await reload();}));}
 function bindWebRecents(input){bindBrowserRecents(input,{inline:true,load:async()=>{const result=await defaultMacRequest('browser.history.query',{limit:100});return result.items||[];},navigate:url=>{input.value=url;input.form.requestSubmit();}});}
 async function renderBrowser(){
     if(!document.querySelector('#browser-home'))return;
@@ -139,9 +148,9 @@ if(document.querySelector('#team-tools,#browser-home,#engine-room')){
         engineTab=b.dataset.engineTab;
         const url=new URL(location.href);url.searchParams.set('tab',engineTab);
         if(url.href!==location.href)history.pushState(null,'',url);
-        void renderEngine();
+        navigateEngine();
     });
-    window.addEventListener('popstate',()=>{if(document.querySelector('#engine-room')){engineTab=engineTabFromURL();void renderEngine();}});
+    window.addEventListener('popstate',()=>{if(document.querySelector('#engine-room')){engineTab=engineTabFromURL();navigateEngine();}});
     document.querySelector('#history-search')?.addEventListener('input',renderBrowser);
     document.querySelector('#browser-open')?.addEventListener('submit',openWebBrowser);
     const address=document.querySelector('#browser-open [name=query]');if(address){bindWebRecents(address);address.focus({preventScroll:true});}
