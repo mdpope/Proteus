@@ -1,5 +1,15 @@
 ## October 22 — Windows chrome follow-up
 
+The Mac handoff is delivered and Windows build `windows.2cf4ad5cdad6` is now published at
+https://downloads.proteus.example/downloads/proteus/windows/ with its signed stable catalog. The Mac verifies all five
+public hashes, signature and full binary downloads. The actual installed Windows owner checks
+the catalog, and its installed feed client downloads all 393,649,640 bytes from the real endpoint,
+verifies/extracts the exact package and passes isolated renderer preparation. The already installed
+current build is not redundantly reinstalled. Windows relay registration and online transport
+preserve the existing identity/token; bidirectional/device pairing remains pending the supported
+live pairing UI. Registration alone is not pairing. Exact private deployment receipts remain in
+the deployment workspace. Earlier publication holds and unavailable-host notes below are historical.
+
 The operator requested Windows match Linux's frameless window controls and application menu.
 The shared host/renderer implementation now includes Windows; source UI acceptance verifies
 native minimize/maximize/restore, menu popup/F10, additional windows and sender ownership.

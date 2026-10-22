@@ -1,5 +1,13 @@
 # Windows desktop
 
+The Windows channel is live at https://downloads.proteus.example/downloads/proteus/windows/. All five public file
+hashes and the manifest signature verify. Actual installed-client acceptance downloads the entire
+393,649,640-byte final archive from the real WTB endpoint, verifies/extracts the package and cached
+installer, and passes isolated renderer startup. Its owner also checks the live catalog. The
+already installed current version is not redundantly reinstalled. Relay transport is online with
+preserved identity/token; cross-device pairing remains separate and pending. Earlier pending
+publication descriptions below record the pre-publication stage.
+
 Windows shares Linux's frameless shell: upper-left Close, Minimize and Maximize/Restore controls,
 plus the circled-dots application menu containing File, Edit, View and Window. F10 opens that menu;
 native shortcuts remain registered. The top tab strip is draggable and its buttons are excluded

@@ -1,5 +1,11 @@
 ## October 22 — Windows chrome follow-up
 
+WTB publication is live and all five public hashes/signature/full downloads verify. The actual
+installed Windows consumer checks the catalog, downloads the entire final archive, verifies and
+extracts its package, then passes isolated renderer startup. No redundant current-build reinstall.
+Relay registration/online transport preserves identity; device pairing remains pending a supported
+live interface. This supersedes the in-progress publication notes below.
+
 Windows now reuses the Linux frameless shell controls and circled-dots File/Edit/View/Window menu,
 with native shortcuts, F10 access and sender-bound actions. Source and exact packaged UI checks
 pass. Build `windows.2cf4ad5cdad6` passes 887 tests with two skips and static checks, then completes
