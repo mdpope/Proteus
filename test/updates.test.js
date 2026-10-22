@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -10,7 +11,7 @@ import {Updates} from '../src/updates.js';
 const {tree,atomic,readJob,writeJob,spaceBudget,packagePaths}=createRequire(import.meta.url)('../desktop/update-package.cjs');
 const {supervise}=createRequire(import.meta.url)('../desktop/update-helper.cjs');
 test('helper readiness releases IPC before handoff while the independent helper stays alive',async t=>{
- const root=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-helper-ipc-')),home=path.join(root,'data'),bundle=path.join(root,'candidate'),helper=path.join(bundle,'resources/app/desktop/update-helper.cjs'),job=path.join(root,'job.json');
+ const root=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-helper-ipc-')),home=path.join(root,'data'),bundle=path.join(root,'candidate'),helper=path.join(bundle,'resources/app/desktop/update-helper.cjs'),job=path.join(root,'job.json');
  fs.mkdirSync(home);fs.mkdirSync(path.dirname(helper),{recursive:true});
  fs.writeFileSync(helper,`const fs=require('node:fs');const file=process.argv[3];fs.writeFileSync(file+'.pid',String(process.pid));process.on('disconnect',()=>fs.writeFileSync(file+'.detached','yes'));process.send({ready:'synthetic-helper'});setInterval(()=>{},1000);`);
  let helperPid,parent;
@@ -21,7 +22,7 @@ test('helper readiness releases IPC before handoff while the independent helper 
  helperPid=Number(fs.readFileSync(job+'.pid','utf8'));assert.equal(code,0,errors);assert.equal(fs.readFileSync(job+'.detached','utf8'),'yes');assert.doesNotThrow(()=>process.kill(helperPid,0),'helper remains independent after the host closes');
 });
 function fixture(t){
- const root=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-updates-')),home=path.join(root,'data'),installation=path.join(root,'installed'),candidate=path.join(root,'candidate');
+ const root=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-updates-')),home=path.join(root,'data'),installation=path.join(root,'installed'),candidate=path.join(root,'candidate');
  for(const dir of [home,installation,candidate])fs.mkdirSync(dir);fs.writeFileSync(path.join(installation,'identity'),'old');fs.writeFileSync(path.join(candidate,'identity'),'new');
  const inspect=bundle=>{const old=fs.readFileSync(path.join(bundle,'identity'),'utf8')==='old';return {bundle,executable:path.join(bundle,'Proteus'),sourceFingerprint:(old?'a':'b').repeat(64),buildRevision:old?'baseline':'candidate',version:'synthetic',signing:{kind:'synthetic'},...tree(bundle)};};
  const engine=new Engine(home),service={home,engine,catalogs:{},notify(){},windowCount:()=>1},calls=[];
@@ -33,6 +34,17 @@ function fixture(t){
 }
 async function prepare(f){return (await f.controller.handle({action:'prepare',candidate:f.candidate,sourceFingerprint:'b'.repeat(64)},f.run.id)).job;}
 async function handoff(f,job){return f.controller.handle({action:'handoff',id:job.id,expectedRevision:job.revision,checkpoint:'Completed synthetic checks. Verify the restored app and remaining work.'},f.run.id);}
+
+test('Engine Room can update without a model chat and still waits for unrelated active work',async t=>{
+ const f=fixture(t),job=(await f.controller.handle({action:'prepare',candidate:f.candidate,sourceFingerprint:'b'.repeat(64)})).job;
+ await f.controller.handle({action:'handoff',id:job.id,expectedRevision:job.revision});assert.equal(f.controller.job().runId,null);
+ f.run.status='running';await f.controller.advance();assert.equal(f.calls.length,0);
+ f.run.status='completed';await f.controller.advance();assert.ok(f.calls.includes('quit'));
+ const saved=writeJob(f.controller.file,{phase:'verifying'}),before=JSON.stringify(f.run.events);
+ // A successful compatible rollback uses the original installed identity.
+ const result=await f.controller.recovery({action:'resume',id:saved.id,secret:saved.secret,outcome:'rollback'});
+ assert.equal(result.accepted,true);assert.equal(result.delivery.kind,'desktop');assert.equal(f.engine.updateBarrier,false);assert.equal(JSON.stringify(f.run.events),before);
+});
 test('handoff waits for a settled turn, records authorization and never quits inside the tool call',async t=>{
  const f=fixture(t),job=await prepare(f);f.run.status='running';f.engine.persist(f.run);await handoff(f,job);assert.equal(f.calls.length,0);await f.controller.advance();assert.equal(f.calls.length,0);assert.match(f.controller.status().job.blocker,/running/);
  f.run.status='completed';f.engine.persist(f.run);await f.controller.advance();assert.equal(f.calls.length,2);assert.equal(f.calls[0].phase,'waiting-for-idle');assert.equal(readJob(f.controller.file).phase,'stopping');assert.equal(f.calls[1],'quit');assert.equal(f.engine.updateBarrier,true);assert.ok(readJob(f.controller.file).authorization.at);
@@ -94,7 +106,7 @@ test('attention recovery can release ordinary work only from a verified desktop 
  f.service.updateUIHealth=async()=>true;await f.controller.handle({action:'resume-work',id:job.id,expectedRevision:job.revision});assert.equal(f.engine.updateBarrier,false);job=readJob(f.controller.file);assert.equal(job.phase,'attention');assert.ok(job.ordinaryWorkResumedAt);assert.equal(f.run.events.length,1);
 });
 test('Linux supervised packaging uses the actual lowercase executable',t=>{
- const root=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-update-paths-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));fs.mkdirSync(path.join(root,'resources/app'),{recursive:true});fs.writeFileSync(path.join(root,'resources/app/package.json'),'{}');assert.equal(packagePaths(root,'linux').executable,path.join(root,'proteus'));
+ const root=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-update-paths-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));fs.mkdirSync(path.join(root,'resources/app'),{recursive:true});fs.writeFileSync(path.join(root,'resources/app/package.json'),'{}');assert.equal(packagePaths(root,'linux').executable,path.join(root,'proteus'));
 });
 test('cancelled update staging retires before another preparation while receipts remain available',async t=>{
  const f=fixture(t),job=await prepare(f),file=f.controller.file,bundle=readJob(file).candidate.bundle;

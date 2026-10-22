@@ -1,4 +1,5 @@
 import {readMarkdownFile} from './file-metadata.js';
+import {ensurePrivateHome} from './private-paths.cjs';
 import {DesktopControl} from './desktop-control.js';
 import { DesktopPreview, desktopPreviewCodexHome } from './desktop-preview.js';
 import { WorkspaceProjects } from './workspace-projects.js';
@@ -55,7 +56,7 @@ export function seed(home, cwd = root) {
   });
 }
 function lock(home) {
-  fs.mkdirSync(home, { recursive: true, mode: 0o700 }); const file = path.join(home, 'runner.lock');
+  if(process.platform==='win32')ensurePrivateHome(home);else fs.mkdirSync(home, { recursive: true, mode: 0o700 }); const file = path.join(home, 'runner.lock');
   try { fs.writeFileSync(file, String(process.pid), { flag: 'wx', mode: 0o600 }); }
   catch (error) {
     if (error.code !== 'EEXIST') throw error;

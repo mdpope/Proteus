@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { hasPrivatePermissions } from './private-paths.cjs';
 import path from 'node:path';
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { atomicJSON } from './files.js';
@@ -13,7 +14,7 @@ const canonical = value => Buffer.isBuffer(value) ? { binary: value.toString('ba
 export function privateFile(file, maxSize = MAX_DUMP) {
     if (!path.isAbsolute(file || '')) throw new Error('Choose an absolute private backup path.');
     let info; try { info = fs.lstatSync(file); } catch { throw new Error('The private backup file is unavailable.'); }
-    if (!info.isFile() || info.mode & 0o077 || (process.getuid && info.uid !== process.getuid()) || info.size > maxSize) throw new Error('Backup inputs must be owner-only regular files within the supported size limit.');
+    if (!info.isFile() || !hasPrivatePermissions(file, info) || info.size > maxSize) throw new Error('Backup inputs must be owner-only regular files within the supported size limit.');
     return info;
 }
 export async function fileDigest(file) {

@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -9,7 +10,7 @@ import { once } from 'node:events';
 import { startServer } from '../src/server.js';
 
 for (const stalled of ['headers', 'body']) test(`shutdown drains idle keep-alive and incomplete HTTP ${stalled}, releasing runner ownership`, async t => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-shutdown-'));
+  const home = privateTemporaryDirectory(path.join(os.tmpdir(), 'proteus-shutdown-'));
   const fake = { status: async () => ({ available: true, models: [] }), run: async () => {}, close: async () => {} };
   const app = await startServer({ home, port: 0, timers: false, withSeed: false, providers: { copilot: fake } });
   const agent = new http.Agent({ keepAlive: true });

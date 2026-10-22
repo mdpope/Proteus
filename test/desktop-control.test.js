@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DesktopControl,desktopTools,desktopExecutable} from '../src/desktop-control.js';
@@ -8,7 +9,7 @@ const tools=['list_apps','list_windows','get_window_state','click','shell_execut
 function fixture(){const calls=[];let now=1000,reply;const client={request:async(method,args)=>{calls.push({method,args});if(method==='tools/list')return {tools};return reply?reply(args):{structuredContent:{pid:10,window_id:20},content:[{type:'text',text:'Synthetic window'},{type:'image',mimeType:'image/png',data:'aGVsbG8='}]};},close(){calls.push({close:true});}};const broker=new DesktopControl({locate:()=>'/synthetic/driver',connect:async()=>client,platform:'darwin',now:()=>now});return {broker,calls,setReply:fn=>reply=fn,advance:ms=>now+=ms};}
 const observe=broker=>broker.handle({action:'call',tool:'get_window_state',arguments:{pid:10,window_id:20}},'chat');
 test('a desktop launch finds the official user install without a shell PATH and honors explicit overrides',t=>{
- const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-control-discovery-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-control-discovery-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
  const binary=path.join(home,'.local/bin/cua-driver');fs.mkdirSync(path.dirname(binary),{recursive:true});fs.writeFileSync(binary,'#!/bin/sh\nexit 0\n',{mode:0o700});
  for(const platform of ['darwin','linux'])assert.equal(desktopExecutable('cua',{PATH:'/usr/bin:/bin'},{platform,home}),binary);
  assert.equal(desktopExecutable('cua',{PATH:'/usr/bin:/bin',PROTEUS_CUA_DRIVER_PATH:path.join(home,'missing')},{home}),null,'an explicit missing backend must not silently select another install');

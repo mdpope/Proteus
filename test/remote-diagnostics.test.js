@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -7,7 +8,7 @@ import {randomUUID} from 'node:crypto';
 import {startServer} from '../src/server.js';
 
 test('remote journal diagnostics are authenticated and contain only bounded counters',async()=>{
-  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-journal-diagnostics-'));
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-journal-diagnostics-'));
   let app;
   try{
     fs.writeFileSync(path.join(home,'settings.json'),JSON.stringify({schemaVersion:1,provider:'rehearsal',model:'',timezone:'UTC',workspace:{cwd:home,additionalDirectories:[]},skillDirectories:[],mcpServers:{}}));

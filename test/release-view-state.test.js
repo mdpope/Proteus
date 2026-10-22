@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -7,7 +8,7 @@ import {createRequire} from 'node:module';
 import {ContextStore} from '../src/context.js';
 import {SettingsStore} from '../src/settings.js';
 const require=createRequire(import.meta.url),{ViewPositions}=require('../desktop/view-positions.cjs'),{ThumbnailCache}=require('../desktop/thumbnail-cache.cjs');
-function home(t){const root=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-release-state-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));return root;}
+function home(t){const root=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-release-state-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));return root;}
 test('reading positions survive a fresh store, retain unrelated documents and unknown fields, and reject invalid replacements',t=>{
  const root=home(t),store=new ViewPositions(root),position=[['root',{top:420,left:0,anchor:{index:3,offset:-12,text:'Synthetic heading',key:null}}]];
  store.set('window-one:document-a',position);store.set('window-two:document-a',[['root',{top:900,left:0}]]);

@@ -1,10 +1,12 @@
+import {assertPrivate} from './helpers/permissions.js';
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import {randomBytes,createCipheriv,createDecipheriv} from 'node:crypto';
 import {DesktopPeers} from '../src/desktop-peers.js';import {startServer} from '../src/server.js';import {startRelay} from '../relay/server.js';import {atomicJSON} from '../src/files.js';import {secret} from '../src/remote-crypto.js';import {until} from './remote-client.mjs';
 const key=randomBytes(32);const safeStorage={isEncryptionAvailable:()=>true,encryptString:text=>{const iv=randomBytes(12),cipher=createCipheriv('aes-256-gcm',key,iv);return Buffer.concat([iv,cipher.update(text),cipher.final(),cipher.getAuthTag()]);},decryptString:box=>{const decipher=createDecipheriv('aes-256-gcm',key,box.subarray(0,12));decipher.setAuthTag(box.subarray(-16));return Buffer.concat([decipher.update(box.subarray(12,-16)),decipher.final()]).toString();}};
 const record={hostId:'11111111-1111-4111-8111-111111111111',deviceId:'22222222-2222-4222-8222-222222222222',relay:'wss://relay.example.test',key:'ab'.repeat(32),label:'Synthetic peer'};
 const pairingCode=()=>Buffer.from(JSON.stringify({version:1,hostId:record.hostId,relay:record.relay,key:record.key,expiresAt:new Date(Date.now()+60000).toISOString()})).toString('base64url');
 test('desktop workspace context inspection keeps the authenticated paired-host boundary',async t=>{
- const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-peer-context-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-peer-context-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
  const peers=new DesktopPeers(home,{safeStorage});peers.load();t.after(()=>peers.close());
  await assert.rejects(peers.request(record.hostId,'context.get',{workspaceId:'synthetic'}),/not paired/);
  peers.records.set(record.hostId,{...record,paused:true});await assert.rejects(peers.request(record.hostId,'context.get',{workspaceId:'synthetic'}),/paused/);
@@ -13,7 +15,7 @@ test('desktop workspace context inspection keeps the authenticated paired-host b
  await assert.rejects(peers.request(record.hostId,'context.arbitrary-write',{}),/Unsupported/);
 });
 test('pause is durable and hides cached incoming chats without deleting pairing',async t=>{
- const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-peer-pause-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-peer-pause-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
  fs.writeFileSync(path.join(home,'desktop-peers.enc'),safeStorage.encryptString(JSON.stringify([record])));
  let connects=0;const peers=new DesktopPeers(home,{safeStorage,clientFactory:()=>{connects++;throw new Error('Must not connect while paused');}});
  peers.load();peers.cache.set(record.hostId,{items:[{hostId:record.hostId,title:'Synthetic cached chat'}]});peers.saveCache();
@@ -25,7 +27,7 @@ test('pause is durable and hides cached incoming chats without deleting pairing'
 function forbiddenStorage(calls){return Object.fromEntries(['isEncryptionAvailable','getSelectedStorageBackend','encryptString','decryptString'].map(name=>[name,()=>{calls.push(name);throw new Error('Unexpected protected storage access');}]));}
 
 test('missing peer store lists and indexes repeatedly without protected storage or orphan cache access',async t=>{
-  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-peers-missing-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-peers-missing-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
   const cacheFile=path.join(home,'desktop-chat-index.enc'),orphan=safeStorage.encryptString(JSON.stringify({[record.hostId]:{items:[{title:'Orphan must stay private'}]}}));fs.writeFileSync(cacheFile,orphan);
   const originalRead=fs.readFileSync;t.mock.method(fs,'readFileSync',function(file,...args){assert.notEqual(file,cacheFile,'orphan cache must not be read');return originalRead.call(this,file,...args);});
   const calls=[],peers=new DesktopPeers(home,{safeStorage:forbiddenStorage(calls)});
@@ -34,7 +36,7 @@ test('missing peer store lists and indexes repeatedly without protected storage 
 });
 
 test('local chats API remains available with no peer store and no protected storage calls',async t=>{
-  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-peers-local-index-')),calls=[];
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-peers-local-index-')),calls=[];
   const app=await startServer({home,port:0,timers:false,providers:{}});app.peers=new DesktopPeers(home,{safeStorage:forbiddenStorage(calls)});
   t.after(async()=>{app.peers.close();await app.close();fs.rmSync(home,{recursive:true,force:true});});
   app.engine.runs.set('synthetic-local',{id:'synthetic-local',title:'Synthetic local chat',status:'completed',trigger:'chat',schedule:{provider:'rehearsal'},createdAt:'2026-01-01T00:00:00Z',updatedAt:'2026-01-01T00:00:00Z'});
@@ -43,7 +45,7 @@ test('local chats API remains available with no peer store and no protected stor
 });
 
 test('pairing preflights encryption before creating a client or consuming an invitation',async t=>{
-  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-peers-pair-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-peers-pair-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
   for(const storage of [{isEncryptionAvailable:()=>false},{...safeStorage,getSelectedStorageBackend:()=>'basic_text'}]){
     let clients=0;const peers=new DesktopPeers(home,{safeStorage:storage,clientFactory:()=>{clients++;throw new Error('must not connect');}});
     assert.deepEqual(peers.list(),[]);await assert.rejects(peers.pair(pairingCode(),'Synthetic'),/Unlock/);assert.equal(clients,0);assert.equal(peers.pairing.size,0);assert.equal(peers.records.size,0);assert.deepEqual(fs.readdirSync(home),[]);
@@ -51,7 +53,7 @@ test('pairing preflights encryption before creating a client or consuming an inv
 });
 
 test('existing denied, corrupt, oversized, invalid and non-file stores fail closed and parse transactionally',async t=>{
-  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-peers-storage-')),file=path.join(home,'desktop-peers.enc');t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-peers-storage-')),file=path.join(home,'desktop-peers.enc');t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
   fs.writeFileSync(file,safeStorage.encryptString(JSON.stringify([record])));const original=fs.readFileSync(file);
   for(const storage of [{isEncryptionAvailable:()=>false},{...safeStorage,getSelectedStorageBackend:()=>'basic_text'},{...safeStorage,decryptString:()=>{throw new Error('denied');}}]){const peers=new DesktopPeers(home,{safeStorage:storage});assert.throws(()=>peers.list(),/Unlock|preserved/);await assert.rejects(peers.index(),/Unlock|preserved/);assert.deepEqual(fs.readFileSync(file),original);assert.equal(peers.loaded,false);assert.equal(peers.records.size,0);}
   for(const bytes of [Buffer.from('bad'),Buffer.alloc(200001),safeStorage.encryptString('{}'),safeStorage.encryptString(JSON.stringify([record,{...record,hostId:'invalid'}])),safeStorage.encryptString(JSON.stringify([record,record]))]){fs.writeFileSync(file,bytes);const peers=new DesktopPeers(home,{safeStorage});assert.throws(()=>peers.list(),/preserved/);assert.throws(()=>peers.list(),/preserved/);assert.equal(peers.records.size,0);assert.equal(peers.loaded,false);assert.deepEqual(fs.readFileSync(file),bytes);}
@@ -59,18 +61,18 @@ test('existing denied, corrupt, oversized, invalid and non-file stores fail clos
 });
 
 test('existing unreadable pairing store remains closed without changing its bytes',t=>{
-  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-peers-unreadable-')),file=path.join(home,'desktop-peers.enc');t.after(()=>fs.rmSync(home,{recursive:true,force:true}));const bytes=safeStorage.encryptString(JSON.stringify([record]));fs.writeFileSync(file,bytes);
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-peers-unreadable-')),file=path.join(home,'desktop-peers.enc');t.after(()=>fs.rmSync(home,{recursive:true,force:true}));const bytes=safeStorage.encryptString(JSON.stringify([record]));fs.writeFileSync(file,bytes);
   const originalRead=fs.readFileSync;t.mock.method(fs,'readFileSync',function(target,...args){if(target===file)throw Object.assign(new Error('Denied'),{code:'EACCES'});return originalRead.call(this,target,...args);});
   const peers=new DesktopPeers(home,{safeStorage});assert.throws(()=>peers.list(),/preserved/);assert.equal(peers.loaded,false);assert.equal(peers.records.size,0);assert.deepEqual(originalRead(file),bytes);
 });
 
 test('authorized empty store decrypts once but repeated index reads do not encrypt a cache',async t=>{
-  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-peers-empty-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));fs.writeFileSync(path.join(home,'desktop-peers.enc'),safeStorage.encryptString('[]'));
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-peers-empty-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));fs.writeFileSync(path.join(home,'desktop-peers.enc'),safeStorage.encryptString('[]'));
   let encrypted=0,decrypted=0;const peers=new DesktopPeers(home,{safeStorage:{...safeStorage,encryptString:()=>{encrypted++;throw new Error('Unexpected write');},decryptString:box=>{decrypted++;return safeStorage.decryptString(box);}}});
   for(let i=0;i<3;i++)assert.deepEqual(await peers.index(),{items:[],hosts:[],partial:false});assert.equal(decrypted,1);assert.equal(encrypted,0);assert.equal(fs.existsSync(peers.cacheFile),false);
 });
 test('protected writes never fall back to plaintext after empty-store startup',async t=>{
-  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-peers-writes-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-peers-writes-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
   for(const storage of [{isEncryptionAvailable:()=>false},{...safeStorage,getSelectedStorageBackend:()=>'basic_text'},{...safeStorage,encryptString:()=>{throw new Error('Encryption denied');}}]){
     const peers=new DesktopPeers(home,{safeStorage:storage});assert.deepEqual(peers.list(),[]);peers.records.set(record.hostId,record);peers.cache.set(record.hostId,{items:[{title:'Synthetic private cache'}]});
     assert.throws(()=>peers.save(),/Unlock|Encryption denied/);assert.throws(()=>peers.saveCache(),/Unlock|Encryption denied/);assert.deepEqual(fs.readdirSync(home),[]);
@@ -78,13 +80,13 @@ test('protected writes never fall back to plaintext after empty-store startup',a
 });
 
 test('real peer index remains bounded and encrypted through offline restart',async t=>{
-  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-peers-bounded-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));fs.writeFileSync(path.join(home,'desktop-peers.enc'),safeStorage.encryptString(JSON.stringify([record])));
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-peers-bounded-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));fs.writeFileSync(path.join(home,'desktop-peers.enc'),safeStorage.encryptString(JSON.stringify([record])));
   class Client extends EventTarget{constructor(host){super();this.host=host;}async connect(){this.status='online';}async request(method){if(method==='sync')return {state:{hostName:record.label,runs:[]}};return Array.from({length:150},(_,i)=>({id:'synthetic-'+i,title:'Synthetic '+i,status:'completed'}));}close(){this.status='offline';}}
   const peers=new DesktopPeers(home,{safeStorage,clientFactory:host=>new Client(host)});await peers.index();await peers.indexPending;assert.equal((await peers.index()).items.length,100);const stored=fs.readFileSync(peers.cacheFile);assert.ok(!stored.includes(Buffer.from('Synthetic')));peers.close();
   const restarted=new DesktopPeers(home,{safeStorage,clientFactory:host=>Object.assign(new Client(host),{connect:async()=>{throw new Error('Synthetic offline');}})});const initial=await restarted.index();assert.equal(initial.items.length,100);await restarted.indexPending;const result=await restarted.index();assert.equal(result.items.length,100);assert.equal(result.partial,true);assert.equal(result.hosts[0].online,false);restarted.close();
 });
 test('host lifecycle event wins over an in-flight stale index and survives offline restart',async t=>{
-  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-peers-lifecycle-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-peers-lifecycle-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
   fs.writeFileSync(path.join(home,'desktop-peers.enc'),safeStorage.encryptString(JSON.stringify([record])));
   let client,release,hold=false;
   class Client extends EventTarget{constructor(host){super();this.host=host;}async connect(){this.status='online';}async request(method){if(method==='sync')return {state:{hostName:record.label,runs:[]}};if(hold)await new Promise(resolve=>release=resolve);return [{id:'synthetic-chat',title:'Synthetic',status:'completed',updatedAt:'2026-01-01T00:00:00Z'}];}close(){this.status='offline';}}
@@ -106,7 +108,7 @@ class NamingClient {
   close(){this.status='offline';}
 }
 function namingFixture(t){
-  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-peer-names-'));let client;
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-peer-names-'));let client;
   fs.writeFileSync(path.join(home,'desktop-peers.enc'),safeStorage.encryptString(JSON.stringify([record])));
   fs.writeFileSync(path.join(home,'desktop-chat-index.enc'),safeStorage.encryptString(JSON.stringify({[record.hostId]:{items:[{id:'synthetic-chat',hostId:record.hostId,destinationName:record.label}],lastSyncAt:'2026-01-01T00:00:00Z'}})));
   const peers=new DesktopPeers(home,{safeStorage,clientFactory:host=>client=new NamingClient(host)});
@@ -136,7 +138,7 @@ test('authenticated Mac and Linux metadata refreshes without changing protected 
 });
 
 test('private LAN desktop records reload with encrypted custody and no browser-policy relaxation',async t=>{
-  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-peer-lan-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-peer-lan-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
   const lan={...record,relay:'ws://192.168.1.25:4318'},code=Buffer.from(JSON.stringify({version:1,hostId:lan.hostId,relay:lan.relay,key:lan.key,expiresAt:new Date(Date.now()+60000).toISOString()})).toString('base64url');
   const peers=new DesktopPeers(home,{safeStorage,clientFactory:(host,options)=>({connect:()=>options.onCredential({...lan,label:host.label}),close(){}})});
   await peers.pair(code,'Synthetic LAN');peers.close();
@@ -166,26 +168,26 @@ test('pending connection metadata is ignored after explicit disconnect or remova
 });
 
 test('pairing adopts the destination capsule name instead of a caller alias',async t=>{
-  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-peer-capsule-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-peer-capsule-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
   const code=Buffer.from(JSON.stringify({version:1,hostId:record.hostId,relay:record.relay,key:record.key,label:'Destination-defined name',expiresAt:new Date(Date.now()+60000).toISOString()})).toString('base64url');
   const peers=new DesktopPeers(home,{safeStorage,clientFactory:(host,options)=>({connect:()=>options.onCredential({...record,label:host.label}),close(){}})});await peers.pair(code,'Ignored client alias');assert.equal(peers.list()[0].label,'Destination-defined name');assert.equal(new DesktopPeers(home,{safeStorage}).list()[0].label,'Destination-defined name');
 });
 
-test('two desktops isolate catalogs, runs and authorization across encrypted restart and revocation',async t=>{const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-peers-')),token=secret(),relay=await startRelay({port:0,token}),url=`ws://127.0.0.1:${relay.port}`,apps=[];let peers=new DesktopPeers(path.join(home,'client'),{safeStorage});t.after(async()=>{peers.close();for(const app of apps)await app.close();await relay.close();fs.rmSync(home,{recursive:true,force:true});});
+test('two desktops isolate catalogs, runs and authorization across encrypted restart and revocation',async t=>{const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-peers-')),token=secret(),relay=await startRelay({port:0,token}),url=`ws://127.0.0.1:${relay.port}`,apps=[];let peers=new DesktopPeers(path.join(home,'client'),{safeStorage});t.after(async()=>{peers.close();for(const app of apps)await app.close();await relay.close();fs.rmSync(home,{recursive:true,force:true});});
 for(const name of ['Alpha','Beta']){const h=path.join(home,name),cwd=path.join(h,'workspace');fs.mkdirSync(cwd,{recursive:true});fs.writeFileSync(path.join(cwd,'AGENTS.md'),'# '+name+' instructions');atomicJSON(path.join(h,'settings.json'),{schemaVersion:1,provider:'rehearsal',model:'',timezone:'UTC',workspace:{cwd,additionalDirectories:[]},skillDirectories:[],mcpServers:{}});const app=await startServer({home:h,port:0,timers:false});apps.push(app);await app.remote.configure({enabled:true,mode:'external',label:name,relayURL:url,publicURL:url,relayToken:token});await until(()=>app.remote.status==='online');await peers.pair((await app.remote.pairing()).code,name);}
-const [a,b]=apps.map(app=>app.remote.config.hostId);assert.deepEqual(peers.list().map(p=>p.label),['Alpha','Beta']);const stored=fs.readFileSync(peers.file);assert.ok(!stored.includes(Buffer.from('Alpha')));assert.equal(fs.statSync(peers.file).mode&0o777,0o600);assert.ok(!JSON.stringify(peers.list()).includes('deviceId'));assert.ok(!JSON.stringify(peers.list()).includes('key'));
+const [a,b]=apps.map(app=>app.remote.config.hostId);assert.deepEqual(peers.list().map(p=>p.label),['Alpha','Beta']);const stored=fs.readFileSync(peers.file);assert.ok(!stored.includes(Buffer.from('Alpha')));assertPrivate(peers.file,0o600);assert.ok(!JSON.stringify(peers.list()).includes('deviceId'));assert.ok(!JSON.stringify(peers.list()).includes('key'));
 await assert.rejects(peers.request(a,'chat.start',{prompt:'must not run'}),/Reconnecting/);await peers.connect(a);await peers.connect(b);const sa=(await peers.request(a,'sync')).state,sb=(await peers.request(b,'sync')).state;assert.ok(sa.context.workspaces[0].cwd.includes('Alpha'));assert.ok(sb.context.workspaces[0].cwd.includes('Beta'));assert.ok(!JSON.stringify(sa.context).includes('/Beta/'));
 const inventory=await peers.request(a,'integrations.list');assert.ok(Array.isArray(inventory.configurations));assert.ok(Array.isArray(inventory.consumers));await assert.rejects(peers.request(a,'integrations.check',{id:'unselected'}),/Unsupported desktop peer command/);await assert.rejects(peers.request(a,'integrations.recover',{id:'unselected'}),/Unsupported desktop peer command/);
 const {runId}=await peers.request(a,'chat.start',{prompt:'Synthetic Alpha only',provider:'rehearsal',workspaceId:sa.context.defaultWorkspaceId});await until(()=>apps[0].engine.getRun(runId).pending);assert.equal(apps[1].engine.listRuns().length,0);await assert.rejects(peers.request(b,'chat.get',{id:runId}),/not found|Unknown/);await assert.rejects(peers.request(a,'schedule.run',{id:'anything'}),/ENOENT|not found/);await assert.rejects(peers.request(a,'arbitrary.execute',{}),/Unsupported/);
 const run=await peers.request(a,'chat.get',{id:runId});await peers.request(a,'chat.reply',{id:runId,requestId:run.pending.id,answer:'Synthetic answer'});await until(()=>apps[0].engine.getRun(runId).status==='completed');
-await peers.index();await peers.indexPending;assert.ok((await peers.index()).items.some(item=>item.id===runId));const encryptedIndex=fs.readFileSync(peers.cacheFile);assert.ok(!encryptedIndex.includes(Buffer.from(runId)));assert.equal(fs.statSync(peers.cacheFile).mode&0o777,0o600);
+await peers.index();await peers.indexPending;assert.ok((await peers.index()).items.some(item=>item.id===runId));const encryptedIndex=fs.readFileSync(peers.cacheFile);assert.ok(!encryptedIndex.includes(Buffer.from(runId)));assertPrivate(peers.cacheFile,0o600);
 peers.close();peers=new DesktopPeers(path.join(home,'client'),{safeStorage});assert.equal(peers.list().length,2);assert.ok(peers.cache.get(a).items.some(item=>item.id===runId));assert.ok(peers.list().every(p=>p.status==='offline'));await peers.connect(a);assert.equal((await peers.request(a,'chat.get',{id:runId})).id,runId);await peers.connect(b);apps[0].remote.revoke(apps[0].remote.config.devices[0].id);await until(()=>peers.list().length===1);assert.equal(peers.list()[0].hostId,b);assert.equal(peers.cache.has(a),false);assert.equal(JSON.parse(safeStorage.decryptString(fs.readFileSync(peers.cacheFile)))[a],undefined);await assert.rejects(peers.request(a,'chat.resume',{id:runId,prompt:'not authorized'}),/not paired/);assert.equal((await peers.request(b,'sync')).state.runs.length,0);peers.remove(b);assert.equal(peers.list().length,0);assert.deepEqual(JSON.parse(safeStorage.decryptString(fs.readFileSync(peers.cacheFile))),{});assert.deepEqual(await peers.index(),{items:[],hosts:[],partial:false});
 });
 
 test('remote tab descriptors retain only explicit destination/run identity, with no cached content',async()=>{const {normalizeSession}=await import('../desktop/workspace-session.cjs');const hostId='11111111-1111-4111-8111-111111111111',runId='22222222-2222-4222-8222-222222222222';const value=normalizeSession({tabs:[{id:'one',type:'remote-run',hostId,runId,label:'Synthetic remote chat',key:'must disappear',prompt:'private draft',events:['private content']},{id:'two',type:'remote-run',hostId,runId},{id:'bad',type:'remote-run',hostId:'invalid',runId}],active:'one'});assert.equal(value.tabs.length,2);assert.deepEqual(value.tabs[1],{id:'peer:'+hostId+':'+runId,type:'remote-run',label:'Synthetic remote chat',hostId,runId});assert.ok(!JSON.stringify(value).includes('private'));});
 
 test('recovery retries one host independently, never replays mutations, and respects disconnect',async t=>{
-  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-recovery-'));
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-recovery-'));
   const second={...record,hostId:'33333333-3333-4333-8333-333333333333'};
   fs.writeFileSync(path.join(home,'desktop-peers.enc'),safeStorage.encryptString(JSON.stringify([record,second])));
   const clients=[],requests=[];let available=false;
@@ -212,7 +214,7 @@ test('recovery retries one host independently, never replays mutations, and resp
 });
 
 test('offline requests start recovery without replaying commands or defeating backoff',async t=>{
-  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-peer-demand-'));
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-peer-demand-'));
   fs.writeFileSync(path.join(home,'desktop-peers.enc'),safeStorage.encryptString(JSON.stringify([record])));
   let available=false,clients=0;const requests=[];
   class Client extends EventTarget{

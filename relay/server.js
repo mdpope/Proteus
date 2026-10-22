@@ -1,5 +1,6 @@
 import http from 'node:http';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import { timingSafeEqual } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { WebSocketServer, WebSocket } from 'ws';
@@ -16,6 +17,12 @@ export function sendRelayPacket(ws,value){
 }
 const send=sendRelayPacket;
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
+function hasPrivatePermissions(file, info) {
+  // The standalone Linux container has no desktop source tree. Only Windows
+  // needs the desktop ACL helper; Unix retains the owner and mode checks here.
+  if (process.platform === 'win32') return createRequire(import.meta.url)('../src/private-paths.cjs').hasPrivatePermissions(file, info);
+  return !(info.mode & 0o077) && (!process.getuid || info.uid === process.getuid());
+}
 export function relayOrigins(values = []) {
   if (typeof values === 'string') values = values.split(',').map(value => value.trim()).filter(Boolean);
   if (!Array.isArray(values)) throw new Error('Allowed client origins must be an exact-origin list.');
@@ -29,7 +36,7 @@ export function relayOrigins(values = []) {
 export function relayHostTokens(file) {
   if (!file) return null;
   const info = fs.lstatSync(file);
-  if (!info.isFile() || info.mode & 0o077 || (process.getuid && info.uid !== process.getuid()) || info.size > 64_000) throw new Error('Relay host tokens require an owner-only regular file (0600).');
+  if (!info.isFile() || !hasPrivatePermissions(file, info) || info.size > 64_000) throw new Error('Relay host tokens require an owner-only regular file (0600 on Unix; private ACL on Windows).');
   let values; try { values = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { throw new Error('Relay host token file must contain valid JSON.'); }
   if (!values || Array.isArray(values) || typeof values !== 'object' || !Object.keys(values).length || Object.entries(values).some(([hostId, value]) => !uuid.test(hostId) || !/^[a-f0-9]{64}$/.test(value))) throw new Error('Relay token file must map host UUIDs to distinct 64-character hex tokens.');
   if (new Set(Object.values(values)).size !== Object.keys(values).length) throw new Error('Each host needs a distinct registration token.');

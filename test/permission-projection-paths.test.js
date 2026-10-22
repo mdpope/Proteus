@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -6,7 +7,7 @@ import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { PermissionStore, canonicalPath, permissionContext } from '../src/permissions.js';
 
-const fixture = () => fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-permission-paths-'));
+const fixture = () => privateTemporaryDirectory(path.join(os.tmpdir(), 'proteus-permission-paths-'));
 const schedule = cwd => ({name:'Synthetic chat', provider:'fixture', workspace:{cwd, additionalDirectories:[]}, skillDirectories:[]});
 function observePaths(fn) {
   const lstat=fs.lstatSync,realpath=fs.realpathSync,counts={lstat:0,realpath:0};
@@ -71,7 +72,7 @@ test('new snapshots and direct authorization observe symlink retarget, deletion 
 test('retaining a display snapshot across a microtask cannot retain canonical paths or dangling-link results',async()=>{
   const home=fixture();
   try {
-    const target=path.join(home,'later'),link=path.join(home,'working');fs.symlinkSync(target,link);
+    const target=path.join(home,'later'),link=path.join(home,'working');fs.symlinkSync(target,link,'dir');
     const store=new PermissionStore(home),spec=schedule(link),snapshot=store.snapshot();
     assert.equal(store.describe(spec,snapshot).cwd,link);fs.mkdirSync(target);
     assert.equal(store.describe(spec,snapshot).cwd,link,'null canonical results are memoized during this projection only');

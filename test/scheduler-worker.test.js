@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -16,7 +17,7 @@ const waitUntil = async predicate => {
   throw new Error('Condition timed out.');
 };
 function setup({ writer, initialJournal } = {}) {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-scheduler-'));
+  const home = privateTemporaryDirectory(path.join(os.tmpdir(), 'proteus-scheduler-'));
   if (initialJournal) atomicJSON(path.join(home, 'scheduler.json'), initialJournal);
   let now = new Date(before), effects = 0;
   const provider = { async run() { effects++; } };

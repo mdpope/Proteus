@@ -1,8 +1,12 @@
+import {cleanupStack} from './helpers/cleanup.js';
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test'; import assert from 'node:assert/strict';
 import fs from 'node:fs'; import path from 'node:path'; import os from 'node:os';
 import { LogStore, logLimits } from '../src/log-store.js';
 import { ActivityStore } from '../src/activity.js';
-const home=t=>{const folder=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-logs-test-'));t.after(()=>fs.rmSync(folder,{recursive:true,force:true}));return folder;};
+const cleanups=new WeakMap();
+function cleanup(t,action){if(!cleanups.has(t))cleanups.set(t,cleanupStack(t));cleanups.get(t)(action);}
+const home=t=>{const folder=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-logs-test-'));cleanup(t,()=>fs.rmSync(folder,{recursive:true,force:true}));return folder;};
 const row=i=>({id:'synthetic-'+i,createdAt:'2026-10-13T12:00:00.000Z',level:'error',event:'synthetic.error',summary:'Synthetic '+i,message:'Synthetic full trace '+i+'\n    at fixture:42',details:{code:'E_REHEARSAL'}});
 test('log rotation keeps newest 2000, stable pages, targeted details and restart',t=>{
   const folder=home(t),store=new LogStore(folder);
@@ -25,7 +29,7 @@ test('legacy activity import is atomic, original preserved and never reimported 
   fs.writeFileSync(path.join(folder,'activity.json'),JSON.stringify({...legacy,logs:[row(2)]}));store=new LogStore(folder);assert.equal(store.query().total,1);assert.throws(()=>store.detail('synthetic-2'));store.close();
 });
 test('worker logging retains redacted stacks/causes, does not rewrite activity on each log, and drains close',async t=>{
-  const folder=home(t);let store=new ActivityStore(folder);t.after(async()=>await store.close());
+  const folder=home(t);let store=new ActivityStore(folder);cleanup(t,async()=>await store.close());
   await store.logs();const before=fs.readFileSync(path.join(folder,'activity.json'),'utf8');
   const cause=new Error('Rehearsal cause password=HIDDEN');const error=new Error('Rehearsal failure',{cause});error.stack+='\n'+('    at fixture\n'.repeat(400));
   const item=store.log('error','synthetic.failure',error,{chatId:'synthetic-chat',token:'DO_NOT_STORE',extra:{value:'https://example.test/error?secret=PRIVATE#hidden'}});

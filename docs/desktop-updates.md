@@ -404,3 +404,6 @@ helper locks, changed/missing recovery receipts, interrupted copy reuse, nested 
 and retained website/offline data. No live backup, cleanup, application install, signer check or
 provider continuation was performed for this checkpoint. Validate the signed package and live
 restored profile in the existing authorized deployment workflow before marking a target verified.
+## Windows distribution integration (acceptance in progress)
+
+See [Windows desktop](windows-app.md) for the authenticated signed-manifest distribution, cached NSIS installer, fresh-home recovery inventory and exact-package commands. Engine Room may hand off without selecting a chat; original-chat handoff still requires its checkpoint and retains its one durable continuation ID. Existing recovery inventories remain mandatory for established homes. Windows installer/update/rollback acceptance is tracked separately from earlier signed Mac/Linux acceptance.

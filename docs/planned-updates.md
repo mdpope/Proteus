@@ -1,3 +1,13 @@
+## October 22 — completed source integration authorized
+
+The operator requested PR, push, merge, and source synchronization for the completed desktop,
+Windows installer/release, and native pairing work. The integration preserves both branches'
+behavior, including shared-account streaming and Windows-aware resumable update recovery.
+All 1,000 runnable Node tests, static checks, 101 web tests (867 assertions), the web build,
+and isolated browser UI acceptance pass; one Node test is platform-skipped. This source-only
+integration supersedes the earlier separate-branch notes. Existing installed-app rollout holds
+and physical mobile camera acceptance remain separate from Git completion.
+
 ## October 22 — mobile pairing feedback and scanner correction
 
 The operator reports a false connection-refused message after successful iPhone pairing, silent
@@ -59,6 +69,43 @@ Temporary Linux pairing revoked and synthetic chats archived; existing owner sta
 Real local Copilot/Codex tool calls pass. Those real-provider/physical checks were not repeated
 for this merge; runtime and test files are byte-identical to the feature commit. Live Claude
 and installed-feature rollout remain unverified.
+## October 22 — Windows chrome follow-up
+
+WTB publication is live and all five public hashes/signature/full downloads verify. The actual
+installed Windows consumer checks the catalog, downloads the entire final archive, verifies and
+extracts its package, then passes isolated renderer startup. No redundant current-build reinstall.
+Relay registration/online transport preserves identity; device pairing remains pending a supported
+live interface. This supersedes the in-progress publication notes below.
+
+Windows now reuses the Linux frameless shell controls and circled-dots File/Edit/View/Window menu,
+with native shortcuts, F10 access and sender-bound actions. Source and exact packaged UI checks
+pass. Build `windows.2cf4ad5cdad6` passes 887 tests with two skips and static checks, then completes
+the actual installed signed-release update with healthy renderer, exact payload and identity/data
+preservation. One verified recovery generation remains. The restored Mac chat received the authorized
+handoff and is preparing WTB deployment while activation waits for the replacement artifacts.
+
+## October 22 — Windows WTB release acceptance
+
+The latest operator choice selects downloads.proteus.example Windows downloads, an unsigned conventional installer
+and signed update manifests. The Windows branch integrates upstream `5b8b708` (0.2.28). Build
+`windows.6e46560c3ce5` freezes 308 runtime files. Validation passes 886 of 888 tests with two existing
+POSIX skips and static checks. Exact packaged UI, native PTY, provider readiness, rehearsal
+persistence and restart pass. Real NSIS checks cover payload equality, URI registration, offline
+preparation/cancellation, active-app refusal and uninstall preservation. The final build passes a
+real Codex update with the original session automatically resumed once and history/receipts intact.
+Its packaged WTB client downloads and verifies the complete locally served publication archive.
+An injected health failure also passes compatible rollback with the same real session resumed once.
+The final installer is installed locally; the actual renderer, normal restart, stable host identity,
+single owner and disabled debugging are verified. The new browser profile inherited extra Windows
+ACL grants; after inspection its permissions were restricted without changing contents. The live
+home has no chats or enabled schedules and no recovery generations. The separate website service
+passes 27 focused release/Life/native-auth tests. See [Windows instructions](windows-app.md).
+
+WTB publication is authorized for this Windows scope and remains staged. The Windows host has no
+deployment workspace or signed-in Webmin session; the coordinating Mac chat is not addressable from
+its thread tools. The operator authorized the Mac handoff. Actual WTB endpoint/consumer acceptance
+and existing relay/device pairing still require the private deployment workflow and registration
+record. No Mac/iOS signing identity or existing device data is changed by this Windows work.
 
 ## October 22 — source review and repository checkpoint
 

@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -6,7 +7,7 @@ import path from 'node:path';
 import {BrowserProfiles,validateBrowserSettings} from '../src/browser-profiles.js';
 
 test('profile definitions require opt-in and current account isolation; partitions remain stable',async t=>{
- const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-profiles-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-profiles-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
  let identity={origin:'https://account.example',accountId:'synthetic-a'},offline=false;
  const profile={id:'87b334da-2fb8-49c9-8917-5728c7ee2668',name:'Research',revision:1,settings:{blockingEnabled:true}};
  const account={life:{api:{identity:()=>identity}},request:async()=>{if(offline)throw new Error('Offline');return {items:[profile]};}};
@@ -27,7 +28,7 @@ test('profile settings accept origins and metadata, never website secrets',()=>{
 });
 
 test('legacy PHP empty settings are normalized on refresh without admitting nonempty arrays',async t=>{
- const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-profiles-json-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-profiles-json-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
  let settings=[];const identity={origin:'https://account.example',accountId:'synthetic-a'},account={life:{api:{identity:()=>identity}},request:async()=>({items:[{id:'87b334da-2fb8-49c9-8917-5728c7ee2668',name:'Research',settings}]})};
  const store=new BrowserProfiles(home,account);await store.handle({action:'enable',enabled:true});assert.deepEqual(store.get('87b334da-2fb8-49c9-8917-5728c7ee2668').settings,{});settings=['unexpected'];await assert.rejects(store.refresh(),/Invalid browser settings/);assert.equal(store.list().items.length,2);
 });

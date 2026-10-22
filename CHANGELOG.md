@@ -1,3 +1,10 @@
+## Unreleased — integrated desktop and mobile source
+
+- Combine the Windows installer and signed WTB release channel with the current desktop stabilization, browser controls, and native pairing fixes.
+- Preserve asynchronous package inspection, versioned provenance, resumable recovery, and Windows atomic replacement together; stream authenticated release downloads through the shared account session.
+- Keep the relay's standalone Linux container independent of desktop source files and correct directory permissions in cross-platform test fixtures.
+- Integration acceptance: 1,000 Node tests pass with one platform skip, static checks pass, 101 web tests pass (867 assertions), the web build passes, and isolated browser UI checks pass. Installed-app rollout and physical mobile camera acceptance remain separate.
+
 ## Unreleased — mobile pairing completion
 
 - Keep the authenticated pairing transport when saving a computer, preserving other destinations and existing cached history.
@@ -31,6 +38,14 @@
 - Show task feedback in the conversation, allow concurrent MCP waits/replies and report complete owner paging beyond 1,000 chats.
 - Keep project-scoped mutations capability-gated on older owners. See [agent chat control](docs/agent-chat-control.md) for verification and integration boundaries.
 - Integrate feature commit `2a825a1` while preserving the current release work; rerun all 883 tests, static checks and isolated Electron feedback/peer-setup/message regressions. Installation and deployment remain held.
+## Unreleased — Windows installer and signed WTB desktop releases
+
+- Match Linux's frameless desktop shell on Windows, with the same upper-left window controls and circled-dots File/Edit/View/Window menu button, F10 access and native shortcuts.
+- Add a per-user Windows x64 NSIS installer, native PowerShell terminal startup/cleanup, provider executable discovery and owner-only data/credential ACL checks.
+- Retry transient Windows sharing violations during atomic state replacement without removing the previous durable file; preserve update-button gating after cancellation.
+- Add trusted signed release manifests, a pinned downloads.proteus.example Windows catalog/download channel, bounded verified offline/network staging, and registered Windows installer recovery through the existing protocol-1 helper. Keep the separately authenticated website service compatible without sending its account credentials to WTB.
+- Allow Engine Room updates without a chat while preserving exactly-once continuation for selected chats; initialize recovery inventory only for a genuinely new registered Windows data home.
+- Keep unsigned Windows packaging explicit, register per-user chat/sign-in links, preserve data on uninstall/rollback, and carry the current 0.2.28 shared source. Exact build, installed-update and cross-device acceptance are recorded separately in `docs/windows-app.md`.
 
 ## Unreleased — navigation and Apple identity review
 

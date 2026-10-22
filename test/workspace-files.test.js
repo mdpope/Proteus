@@ -1,3 +1,5 @@
+import {assertPrivate} from './helpers/permissions.js';
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -6,7 +8,7 @@ import path from 'node:path';
 import { WorkspaceFiles } from '../src/workspace-files.js';
 
 function fixture(t) {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(),'proteus-workspace-picker-'));
+  const home = privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-workspace-picker-'));
   t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
   const root=path.join(home,'workspace'),other=path.join(home,'other'),outside=path.join(home,'outside');for(const p of [root,other,outside])fs.mkdirSync(p);
   let workspaces=[{id:'primary',name:'Personal',cwd:root,additionalDirectories:[other]}];
@@ -24,7 +26,7 @@ test('new nested folders and Markdown use selected directory without overwriting
  const f=fixture(t);const folder=f.files.createFolder({rootId:f.id,name:'Notes'});assert.equal(folder.directory,'Notes');
  const nested=f.files.createFolder({rootId:f.id,directory:'Notes',name:'Trips'});assert.equal(nested.directory,'Notes/Trips');
  const created=f.files.createMarkdown({rootId:f.id,directory:nested.directory,name:'Plans',content:'# Plans\n\nDraft'});
- assert.equal(created.relativePath,'Notes/Trips/Plans.md');assert.equal(created.content,'# Plans\n\nDraft');assert.equal(fs.statSync(created.file).mode&0o777,0o600);
+ assert.equal(created.relativePath,'Notes/Trips/Plans.md');assert.equal(created.content,'# Plans\n\nDraft');assertPrivate(created.file,0o600);
  assert.equal(f.files.read({rootId:f.id,file:created.relativePath}).content,created.content);
  assert.throws(()=>f.files.createMarkdown({rootId:f.id,directory:nested.directory,name:'Plans.md',content:'overwrite'}),/already exists/);
  assert.equal(fs.readFileSync(created.file,'utf8'),created.content);assert.throws(()=>f.files.createFolder({rootId:f.id,name:'Notes'}),/already exists/);
@@ -64,7 +66,7 @@ test('listing pages are bounded and sorted; Markdown reads and writes reject ove
 });
 
 test('full context includes shared repositories and every-chat folders with live revocation',t=>{
- const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-all-roots-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-all-roots-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
  const primary=path.join(home,'primary'),shared=path.join(home,'shared'),universal=path.join(home,'universal');for(const p of [primary,shared,universal])fs.mkdirSync(p);
  fs.mkdirSync(path.join(shared,'Nested'));fs.writeFileSync(path.join(shared,'Nested','Shared.md'),'# Shared');
  let config={workspaces:[{id:'default',name:'Default',cwd:primary,additionalDirectories:[]}],libraryFolders:[shared],universalFolders:[shared,universal]};

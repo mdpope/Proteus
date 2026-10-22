@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -39,7 +40,7 @@ test('full redirect addresses retain login paths, queries and fragments while re
 
 test('closing a chat forgets local baseline so reopening restores saved children without deletes',async()=>{const scope={scope:'chat',id:'fixture'};let local=[],mutations=0;const tabs=[tab('a'),tab('b')];const sync=createTabSynchronizer({scopes:()=>[scope],readLocal:async()=>local,apply:async(_scope,value)=>local=value,request:async(_scope,action)=>{if(action!=='get')mutations++;return {revision:3,tabs};}});await sync.all();assert.equal(local.length,2);sync.forget(scope);local=[];await sync.all();assert.deepEqual(local,tabs);assert.equal(mutations,0);});
 
-function hostStore(t){const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-tab-sync-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));return new ContentTabs(home);}
+function hostStore(t){const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-tab-sync-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));return new ContentTabs(home);}
 test('repeated renderer roundtrips through the actual host omit unchanged mutations and writes',async t=>{
   let writes=0,mutations=0;const host=hostStore(t),write=host.write.bind(host);host.write=data=>{writes++;write(data);};
   const scope={scope:'chat',id:'roundtrip'};

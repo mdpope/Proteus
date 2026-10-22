@@ -1,4 +1,5 @@
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
+const {atomicRename}=require('../src/atomic-rename.cjs');
 const {atomic,tree,fileDigest,readJob,writeJob,recoveryPolicy,excluded}=require('./update-package.cjs');
 const processAlive=pid=>{if(!Number.isSafeInteger(pid)||pid<1)return false;try{process.kill(pid,0);return true;}catch(error){if(error.code==='ESRCH')return false;throw error;}};
 function ordinaryDirectory(directory,boundary){
@@ -38,7 +39,7 @@ function copyRecovery(source,destination,{manifestFile,expectedHash,recoveryCach
    try{
     if(mode==='link')fs.symlinkSync(hash,temporary);
     else {fs.copyFileSync(original,temporary);fs.chmodSync(temporary,mode);const fd=fs.openSync(temporary,'r');try{fs.fsyncSync(fd);}finally{fs.closeSync(fd);}if(fileDigest(temporary)!==hash)throw Error('A source file changed during recovery copying.');const info=fs.statSync(original);fs.utimesSync(temporary,info.atime,info.mtime);}
-    fs.renameSync(temporary,target);copied++;
+    atomicRename(temporary,target);copied++;
    }finally{try{fs.unlinkSync(temporary);}catch(error){if(error.code!=='ENOENT')throw error;}}
   }
   manifest.verified++;manifest.lastVerified=relative;

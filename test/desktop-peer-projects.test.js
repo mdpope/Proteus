@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -13,7 +14,7 @@ import {secret} from '../src/remote-crypto.js';
 import {until} from './remote-client.mjs';
 const key=randomBytes(32),safeStorage={isEncryptionAvailable:()=>true,encryptString:text=>{const iv=randomBytes(12),cipher=createCipheriv('aes-256-gcm',key,iv);return Buffer.concat([iv,cipher.update(text),cipher.final(),cipher.getAuthTag()]);},decryptString:box=>{const decipher=createDecipheriv('aes-256-gcm',key,box.subarray(0,12));decipher.setAuthTag(box.subarray(-16));return Buffer.concat([decipher.update(box.subarray(12,-16)),decipher.final()]).toString();}};
 const record={hostId:'11111111-1111-4111-8111-111111111111',deviceId:'22222222-2222-4222-8222-222222222222',relay:'wss://relay.example.test',key:'ab'.repeat(32),label:'Synthetic peer'};
-function fixture(t){const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-peer-projects-'));const peers=new DesktopPeers(home,{safeStorage,heartbeatMs:0});peers.load();t.after(()=>{peers.close();fs.rmSync(home,{recursive:true,force:true});});return {home,peers};}
+function fixture(t){const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-peer-projects-'));const peers=new DesktopPeers(home,{safeStorage,heartbeatMs:0});peers.load();t.after(()=>{peers.close();fs.rmSync(home,{recursive:true,force:true});});return {home,peers};}
 
 test('desktop project commands preserve pairing, pause, session and unknown-command boundaries',async t=>{
  const {peers}=fixture(t),methods=['projects.get','projects.update','sources.get','sources.update','chat.move','context.update','workspace.delete','tabs.manage'];
@@ -40,7 +41,7 @@ test('project catalog reconciliation preserves same-workspace moves through stal
 });
 
 test('paired desktop projects, sources, chat membership and project tabs use the real owner protocol',async t=>{
- const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-peer-project-owner-')),token=secret(),relay=await startRelay({port:0,token}),url=`ws://127.0.0.1:${relay.port}`,apps=[];
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-peer-project-owner-')),token=secret(),relay=await startRelay({port:0,token}),url=`ws://127.0.0.1:${relay.port}`,apps=[];
  const history=new BrowserHistory(path.join(home,'client'),{hostId:randomUUID()});
  let peers=new DesktopPeers(path.join(home,'client'),{safeStorage,heartbeatMs:0,browserHistory:history});
  t.after(async()=>{peers.close();for(const app of apps)await app.close();await relay.close();await history.close();fs.rmSync(home,{recursive:true,force:true});});

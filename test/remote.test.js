@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import {remoteState} from '../src/remote.js';
 import { LiveBrowser } from '../src/live-browser.js';
 import test from 'node:test';
@@ -15,7 +16,7 @@ import { RemoteClient, until } from './remote-client.mjs';
 import { hostPlatformMetadata } from '../src/host-platform.js';
 
 async function fixture(t, providers) {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-remote-')); const workspace = path.join(home, 'workspace'); fs.mkdirSync(workspace);
+  const home = privateTemporaryDirectory(path.join(os.tmpdir(), 'proteus-remote-')); const workspace = path.join(home, 'workspace'); fs.mkdirSync(workspace);
   fs.writeFileSync(path.join(workspace, 'AGENTS.md'), '# Synthetic instructions\nCheck evidence.');
   fs.mkdirSync(path.join(workspace, '.vscode')); atomicJSON(path.join(workspace, '.vscode', 'mcp.json'), { servers: { synthetic: { command: 'false', env: { TOKEN: 'SECRET_MUST_STAY_ON_MAC' } } } });
   atomicJSON(path.join(home, 'settings.json'), { schemaVersion: 1, provider: 'rehearsal', model: '', timezone: 'UTC', workspace: { cwd: workspace, additionalDirectories: [] }, skillDirectories: [], mcpServers: {} });
@@ -73,7 +74,7 @@ test('logs expose bounded summary pages and complete redacted details through lo
   const localDetail=await fetch(app.origin+'/api/logs?id='+target,{headers:{Authorization:`Bearer ${app.token}`}});assert.deepEqual(await localDetail.json(),detail);
 });
 test('failed legacy log migration preserves source and still releases the runner and listener on shutdown',async t=>{
-  const folder=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-log-recovery-'));t.after(()=>fs.rmSync(folder,{recursive:true,force:true}));
+  const folder=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-log-recovery-'));t.after(()=>fs.rmSync(folder,{recursive:true,force:true}));
   const original=JSON.stringify({version:1,logs:[{}],notifications:[],outbox:[],preferences:{custom:'preserved'}});fs.writeFileSync(path.join(folder,'activity.json'),original);
   const app=await startServer({home:folder,port:0,timers:false});await assert.rejects(app.activity.logs());
   await assert.rejects(app.close());assert.equal(fs.existsSync(path.join(folder,'connection.json')),false);assert.equal(fs.readFileSync(path.join(folder,'activity.legacy.json'),'utf8'),original);

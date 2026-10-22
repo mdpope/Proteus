@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -8,7 +9,7 @@ import { ScheduleStore } from '../src/schedules.js';
 import { runLocalProcess } from '../src/local-process.js';
 
 function fixture(t, options = {}) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-omi-test-')); t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const root = privateTemporaryDirectory(path.join(os.tmpdir(), 'proteus-omi-test-')); t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const state = path.join(root, 'native'), automationRoot = path.join(root, 'automations'), policyRoot = path.join(root, 'policy');
   fs.mkdirSync(state); fs.mkdirSync(automationRoot); fs.mkdirSync(policyRoot);
   for (const file of ['AGENTS.md','agent/transcript-intake.md','agent/omi-transcript-intake.md','plugins/milo/skills/transcript-intake/SKILL.md']) { fs.mkdirSync(path.dirname(path.join(policyRoot,file)), {recursive:true}); fs.writeFileSync(path.join(policyRoot,file), 'Synthetic policy only'); }

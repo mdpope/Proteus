@@ -1,3 +1,5 @@
+import {cleanupStack} from './helpers/cleanup.js';
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -8,9 +10,9 @@ import { openLifeDatabase, readLifeProfile } from '../src/life-database.js';
 import { verifyRestoredBackup, validateBackupReceipt, databaseSnapshot } from '../src/life-backup.js';
 import { evidenceStorage, evidenceStatus } from '../src/life-evidence.js';
 async function fixture(t) {
- const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-backup-')),store=new LifeStore(home);t.after(async()=>{await store.close();fs.rmSync(home,{recursive:true,force:true});});
+ const cleanup=cleanupStack(t);const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-backup-')),store=new LifeStore(home);cleanup(()=>fs.rmSync(home,{recursive:true,force:true}));cleanup(()=>store.close());
  const plan=await store.planSetup({mode:'local-new',ownerName:'Test',ownerEmail:'test@example.test'});await store.applySetup({planId:plan.planId,confirmation:'APPLY'});
- const profile=readLifeProfile(store.settings().profileFile),source=await openLifeDatabase(profile),restoreFile=path.join(home,'restored.sqlite');await source.backup(restoreFile);const restored=await openLifeDatabase({...profile,database:restoreFile});t.after(async()=>{await source.close();await restored.close();});const dumpFile=path.join(home,'backup.sql');fs.writeFileSync(dumpFile,'-- independently restored backup fixture\n',{mode:0o600});return {home,store,source,restored,dumpFile};
+ const profile=readLifeProfile(store.settings().profileFile),source=await openLifeDatabase(profile),restoreFile=path.join(home,'restored.sqlite');await source.backup(restoreFile);const restored=await openLifeDatabase({...profile,database:restoreFile});cleanup(async()=>{await source.close();await restored.close();});const dumpFile=path.join(home,'backup.sql');fs.writeFileSync(dumpFile,'-- independently restored backup fixture\n',{mode:0o600});return {home,store,source,restored,dumpFile};
 }
 test('restored backup receipt verifies independently and rejects tampering, age, wrong database and changing protected data',async t=>{
  const f=await fixture(t),now=Date.now();const verified=await verifyRestoredBackup({...f,home:f.store.home,now});f.source.profile.backupReceipt=verified.file;

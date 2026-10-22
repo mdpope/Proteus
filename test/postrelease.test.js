@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
@@ -10,7 +11,7 @@ import {chatActivityAt} from '../src/run-activity.js';
 import {Engine} from '../src/engine.js';
 
 test('atomic replacement preserves prior data and removes temp after every failed write stage',()=>{
- const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-atomic-')),file=path.join(home,'state.json');
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-atomic-')),file=path.join(home,'state.json');
  try{atomicJSON(file,{valid:true});for(const stage of ['openSync','writeFileSync','fsyncSync','renameSync']){
   const original=fs[stage];fs[stage]=()=>{throw Object.assign(new Error('disk full'),{code:'ENOSPC'});};
   try{assert.throws(()=>atomicJSON(file,{valid:false}),{code:'ENOSPC'});}finally{fs[stage]=original;}
@@ -26,7 +27,7 @@ test('history cursors deliver only changes, including edits at existing event po
  assert.equal(chatDelta({id:'another'},{...view,id:'another'},first.historyCursor).events.length,2);
 });
 test('summary state omits histories and storage failure diagnostics do not escape the scheduler handler',async()=>{
- const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-summary-'));let app;
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-summary-'));let app;
  try{app=await startServer({home,port:0,timers:false});
  const request=async route=>{const response=await fetch(app.url.split('/?')[0]+route,{headers:{Authorization:'Bearer '+app.token}});assert.equal(response.status,200);return response.json();};
  const run={id:'synthetic',title:'Synthetic',trigger:'chat',createdAt:new Date().toISOString(),status:'completed',schedule:{provider:'rehearsal',workspace:{cwd:home,additionalDirectories:[]}},usage:{observed:false},events:Array.from({length:600},(_,i)=>({role:'user',text:'message '+i}))};
@@ -42,7 +43,7 @@ test('summary state omits histories and storage failure diagnostics do not escap
 
 test('completed history cache reloads durable events and pins active references',async()=>{
  const {RunHistoryCache}=await import('../src/run-history-cache.js');
- const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-history-cache-'));
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-history-cache-'));
  try{const cache=new RunHistoryCache(id=>path.join(home,id+'.json'),2),runs=[];
  for(let i=0;i<6;i++){const run={id:String(i),status:i===0?'running':'completed',events:[{text:'event '+i}]};atomicJSON(path.join(home,i+'.json'),run);runs.push(run);cache.attach(run);}
  assert.equal([...cache.entries.values()].filter(e=>e.events).length,3);const active=runs[0].events;

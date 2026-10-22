@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {CopilotProvider} from '../src/copilot.js';
@@ -8,7 +9,7 @@ test('OAuth uses native runtime login and rejects unselected servers and unsafe 
 
 test('Mac OAuth endpoint and chat command open sign-in without persisting authorization URLs',async()=>{
  const fs=await import('node:fs');const os=await import('node:os');const path=await import('node:path');const {startServer}=await import('../src/server.js');
- const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-auth-api-'));const opened=[];let logins=0;
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-auth-api-'));const opened=[];let logins=0;
  const adapter={run:async()=>{},selectedMcp:()=>({atlassian:{type:'http'}}),mcpStatus:async()=>({servers:[{name:'atlassian',status:'needs-auth',remote:true}]}),mcpLogin:async()=>{logins++;return {server:'atlassian',status:'sign-in-required',authorizationUrl:'https://example.test/auth?state=PRIVATE_OAUTH_STATE'};}};
  const app=await startServer({home,port:0,timers:false,withSeed:false,providers:{copilot:adapter},openExternal:async url=>opened.push(url)});
  const post=async(route,value)=>{const res=await fetch(app.origin+route,{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${app.token}`},body:JSON.stringify(value)});const body=await res.json();assert.equal(res.status,200,body.error);return body;};

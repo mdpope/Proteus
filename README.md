@@ -4,9 +4,9 @@ A local control room for scheduled AI work: set the cadence, watch each run, and
 conversation when it needs you. Provider-independent scheduling and storage, with GitHub Copilot,
 Codex and Claude adapters, native Omi processing schedules, and optional native Life records.
 
-The desktop host runs on Linux and macOS. The website, iPhone and iPad connect to independently
+The desktop host runs on Windows, Linux and macOS. The website, iPhone and iPad connect to independently
 paired computers through the same encrypted protocol; provider credentials and execution stay
-on the selected host. See [Linux setup](docs/linux-app.md), [Mac setup](docs/mac-app.md) and
+on the selected host. See [Windows setup](docs/windows-app.md), [Linux setup](docs/linux-app.md), [Mac setup](docs/mac-app.md) and
 [mobile destinations](docs/mobile-destinations.md). Native portability changes are source-only
 until Mac/simulator and live-device acceptance; no new installation is implied.
 
@@ -29,7 +29,7 @@ on the designated build Mac without replacing signing settings. See [Apple build
 
 ## Run the desktop prototype
 
-Requires Node.js 22.16+, npm and a graphical Linux or macOS session.
+Requires Node.js 22.16+, npm and a graphical Windows, Linux or macOS session.
 
 ```sh
 npm ci
@@ -69,8 +69,8 @@ selects an available port. `PROTEUS_HOME` overrides the application-data directo
 The scheduler runs while the desktop app or server is open. Background service installation,
 automatic distribution/notarization and independent concurrent AI workspaces remain future work.
 Notification preferences and history are available; browser delivery requires notification permission.
-A locally signed, branded Mac bundle and separate Linux package are available. Closing the Mac
-window keeps its menu-bar host running; Linux minimizes by default. Sleep, logout or quitting the
+A locally signed, branded Mac bundle, Linux package and Windows per-user installer are available to build. Closing the Mac
+window keeps its menu-bar host running; Windows keeps its system-tray host running; Linux minimizes by default. Sleep, logout or quitting the
 host stops execution. No automatic background-service installation is provided.
 AI turns use one execution queue; a run waiting for feedback holds that
 queue until answered or stopped. Each managed Omi native job uses its own serial lane and native locks. Missed occurrences of an already-active schedule are skipped.
@@ -90,9 +90,11 @@ is not implemented. Persistent workspace and tool approvals support unattended e
 
 ## Schedule files
 
+Windows uses `%LOCALAPPDATA%\Proteus` for application data. The installer and uninstaller preserve this directory. `PROTEUS_HOME` overrides the data location on every platform.
+
 Default app data: `~/Library/Application Support/Proteus/` on macOS; `$XDG_DATA_HOME/proteus`
 on Linux, falling back to `~/.local/share/proteus` when XDG_DATA_HOME is missing or relative.
-`PROTEUS_HOME` overrides either location. It contains `schedules/*.json`,
+`PROTEUS_HOME` overrides these locations. It contains `schedules/*.json`,
 `runs/*.json`, scheduler state, and a private local connection file. Do not commit this directory.
 The provider's session storage and Electron browser profile are separate runtime-owned stores.
 

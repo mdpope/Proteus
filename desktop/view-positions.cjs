@@ -1,3 +1,4 @@
+const {atomicRename}=require('../src/atomic-rename.cjs');
 const fs=require('node:fs');
 const path=require('node:path');
 const MAX_BYTES=512*1024,MAX_ENTRIES=200;
@@ -18,7 +19,7 @@ class ViewPositions {
     const data=this.read(),position=normalizePosition(value);
     data.entries=data.entries.filter(row=>row[0]!==key);data.entries.push([key,position]);
     while(data.entries.length>MAX_ENTRIES||Buffer.byteLength(JSON.stringify(data))>MAX_BYTES){if(data.entries.length===1)throw Error('Reading position exceeds its bounded limit.');data.entries.shift();}
-    fs.mkdirSync(path.dirname(this.file),{recursive:true});const temp=this.file+'.tmp';fs.writeFileSync(temp,JSON.stringify(data)+'\n',{mode:0o600});fs.renameSync(temp,this.file);return {saved:true};
+    fs.mkdirSync(path.dirname(this.file),{recursive:true});const temp=this.file+'.tmp';fs.writeFileSync(temp,JSON.stringify(data)+'\n',{mode:0o600});atomicRename(temp,this.file);return {saved:true};
   }
 }
 module.exports={ViewPositions,normalizePosition};

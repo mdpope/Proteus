@@ -1,3 +1,5 @@
+import {assertPrivate} from './helpers/permissions.js';
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -12,7 +14,7 @@ import { RemoteHost } from '../src/remote.js';
 const now = () => new Date().toISOString();
 const homeCleanups = new Map();
 function home(t) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-journal-')), closers = [];
+  const dir = privateTemporaryDirectory(path.join(os.tmpdir(), 'proteus-journal-')), closers = [];
   homeCleanups.set(dir, closers);
   t.after(async () => { for (const close of closers) await close(); fs.rmSync(dir, { recursive: true, force: true }); homeCleanups.delete(dir); });
   return dir;
@@ -41,7 +43,7 @@ test('legacy migration is atomic, preserves bytes/unknown fields and never reimp
   assert.deepEqual((await journal.claim('new', 'n', 'expired')).previous.result, { ok: true });
   assert.equal((await journal.claim('uncertain', 'u', 'expired')).previous.pending, true);
   assert.equal((await journal.diagnostics()).records, 3);
-  for (const suffix of ['', '-wal', '-shm']) assert.equal(fs.statSync(path.join(dir, 'remote-commands.sqlite' + suffix)).mode & 0o777, 0o600);
+  for (const suffix of ['', '-wal', '-shm']) assertPrivate(path.join(dir, 'remote-commands.sqlite' + suffix),0o600);
   await journal.close();
 });
 

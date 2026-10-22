@@ -1,3 +1,5 @@
+import {assertPrivate} from './helpers/permissions.js';
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
@@ -23,7 +25,7 @@ test('Codex sends only synthetic image inputs through private turn-scoped files 
  const f=fixture(),bytes=Buffer.from('synthetic-image-fixture');try{
   assert.deepEqual(f.provider.acceptedMediaTypes,['image/png','image/jpeg','image/gif','image/webp','text/plain']);
   const task=f.provider.run({...f.args,attachments:[{bytes,name:'Fixture.png',mediaType:'image/png'}]});await until(()=>f.rpc.calls.some(c=>c.method==='turn/start'));
-  const input=f.rpc.calls.find(c=>c.method==='turn/start').params.input;assert.equal(input[0].type,'text');assert.equal(input[1].type,'localImage');assert.deepEqual(fs.readFileSync(input[1].path),bytes);assert.equal(fs.statSync(input[1].path).mode&0o777,0o600);
+  const input=f.rpc.calls.find(c=>c.method==='turn/start').params.input;assert.equal(input[0].type,'text');assert.equal(input[1].type,'localImage');assert.deepEqual(fs.readFileSync(input[1].path),bytes);assertPrivate(input[1].path,0o600);
   f.rpc.notice('turn/completed',{turn:{status:'completed'}});await task;assert.equal(fs.existsSync(input[1].path),false);
   const textTurn=f.provider.run({...f.args,attachments:[{bytes:Buffer.from('Synthetic note only'),name:'Fixture.txt',mediaType:'text/plain'}]});await until(()=>f.rpc.turn===2);assert.deepEqual(f.rpc.calls.findLast(c=>c.method==='turn/start').params.input,[{type:'text',text:'Hello'},{type:'text',text:'Attached plain text file: Fixture.txt\n\nSynthetic note only'}]);f.rpc.notice('turn/completed',{turn:{status:'completed'}});await textTurn;
   await assert.rejects(f.provider.run({...f.args,attachments:[{bytes,name:'Fixture.pdf',mediaType:'application/pdf'}]}),/can receive images/);
@@ -36,7 +38,7 @@ test('Codex missing executable fails promptly and close does not wait for an imp
 });
 
 function sandboxFixture(){
- const home=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'proteus-codex-policy-'))),cwd=path.join(home,'cwd'),extra=path.join(home,'extra'),outside=path.join(home,'outside');for(const root of [cwd,extra,outside])fs.mkdirSync(root);
+ const home=fs.realpathSync(privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-codex-policy-'))),cwd=path.join(home,'cwd'),extra=path.join(home,'extra'),outside=path.join(home,'outside');for(const root of [cwd,extra,outside])fs.mkdirSync(root);
  const f=fixture();f.run.schedule.workspace={cwd,additionalDirectories:[extra]};const store=new PermissionStore(home);f.args.permissionProfile=()=>store.describe(f.run.schedule);return {...f,home,cwd,extra,outside,store,dispose:async()=>{await f.provider.close();fs.rmSync(home,{recursive:true,force:true});}};
 }
 test('Codex Ask and Custom remain read-only; Trusted uses only canonical granted workspace roots',async()=>{

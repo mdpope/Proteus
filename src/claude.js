@@ -1,5 +1,7 @@
 import {chatControlTools} from './chat-control-tools.js';
 import {randomUUID} from 'node:crypto';
+import {privateTemporaryDirectory} from './private-paths.cjs';
+import {windowsProviderExecutable} from './windows-provider.js';
 import {browserTools} from './browser-tools.js';
 import {captureAppCapabilities} from './app-capabilities.js';
 import {accumulateClaudeUsage} from './claude-usage.js';
@@ -17,6 +19,7 @@ import { displayText, toolSummary } from './tool-activity.js';
 
 export function claudeExecutable() {
   if (process.env.PROTEUS_CLAUDE_PATH) return process.env.PROTEUS_CLAUDE_PATH;
+  if (process.platform === 'win32') return windowsProviderExecutable('claude');
   for (const file of [path.join(os.homedir(), '.local/bin/claude'), '/opt/homebrew/bin/claude', '/usr/local/bin/claude']) if (fs.existsSync(file)) return file;
   const root = path.join(os.homedir(), 'Library/Application Support/Claude/claude-code');
   try { for (const version of fs.readdirSync(root).sort((a,b)=>b.localeCompare(a,undefined,{numeric:true}))) for (const build of fs.readdirSync(path.join(root,version))) {
@@ -65,7 +68,7 @@ export function claudeMcpConfig(selected={},cwd,makeLauncher) {
   return {mcpServers};
 }
 function privateClaudeMcpConfig(selected,cwd){
-  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-claude-mcp-'));fs.chmodSync(directory,0o700);
+  const directory=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-claude-mcp-'));fs.chmodSync(directory,0o700);
   const file=path.join(directory,'mcp.json');
   try{
     let total=0;

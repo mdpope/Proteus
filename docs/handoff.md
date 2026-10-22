@@ -1,3 +1,19 @@
+## October 22 — desktop, Windows release, and mobile source integrated
+
+The operator requested all completed changes be pushed, reviewed through a PR, and synchronized
+to main. The integration combines the three local desktop/mobile commits through `b0cede3` with
+the Windows branch through `f532671`. Earlier notes describing those branches as separate are
+historical. The Windows release artifacts remain tied to their exact tested source; merging this
+source does not replace published installers or authorize the held desktop/mobile rollout.
+
+Conflict resolution retains worker-based update inspection, provenance checks, resumable recovery,
+Windows installation/atomic replacement, and streamed downloads through the shared account session.
+The relay retains its standalone Linux container boundary. Integration acceptance passes 1,000
+Node tests (one platform skip), static checks, 101 web tests with 867 assertions, the web build,
+and isolated browser UI checks including restart persistence. Native pairing source is unchanged
+from the previously tested mobile correction; physical installation and camera acceptance remain
+pending. Live pairing and release receipts stay in private operator records.
+
 ## October 22 — mobile pairing completion corrected in source
 
 The operator reports false refusal after successful phone pairing, silent iPad dismissal to Home,
@@ -69,6 +85,53 @@ Temporary Linux pairing revoked and synthetic chats archived; existing owner sta
 Real local Copilot/Codex tool calls pass. Those real-provider/physical checks were not repeated
 for this merge; runtime and test files are byte-identical to the feature commit. Live Claude
 and installed-feature rollout remain unverified.
+## October 22 — Windows chrome follow-up
+
+The Mac handoff is delivered and Windows build `windows.2cf4ad5cdad6` is now published at
+https://downloads.proteus.example/downloads/proteus/windows/ with its signed stable catalog. The Mac verifies all five
+public hashes, signature and full binary downloads. The actual installed Windows owner checks
+the catalog, and its installed feed client downloads all 393,649,640 bytes from the real endpoint,
+verifies/extracts the exact package and passes isolated renderer preparation. The already installed
+current build is not redundantly reinstalled. Windows relay registration and online transport
+preserve the existing identity/token; bidirectional/device pairing remains pending the supported
+live pairing UI. Registration alone is not pairing. Exact private deployment receipts remain in
+the deployment workspace. Earlier publication holds and unavailable-host notes below are historical.
+
+The operator requested Windows match Linux's frameless window controls and application menu.
+The shared host/renderer implementation now includes Windows; source UI acceptance verifies
+native minimize/maximize/restore, menu popup/F10, additional windows and sender ownership.
+The Mac connection is restored and the authorized handoff reached Proteus Windows Build.
+Publication activation waits for the replacement exact tested Windows artifact/source transfer.
+
+Replacement `windows.2cf4ad5cdad6` passes 887 of 889 tests (two existing POSIX skips), static
+checks and the same actual packaged chrome UI checks. Its official signed offline release was
+consumed by the existing installed owner: protocol-1 NSIS replacement and restarted renderer health
+pass, with exact installed payload, stable identity and current runs/schedules preserved. One
+verified recovery generation remains. Prior build6e real-chat update/rollback acceptance was not
+repeated for this chrome-only follow-up. Physical window dragging is not claimed.
+
+## October 22 — Windows WTB release acceptance
+
+The latest operator choice selects downloads.proteus.example Windows downloads, an unsigned conventional installer
+and signed update manifests. The Windows branch integrates upstream `5b8b708` (0.2.28). Build
+`windows.6e46560c3ce5` freezes 308 runtime files. Validation passes 886 of 888 tests with two existing
+POSIX skips and static checks. Exact packaged UI, native PTY, provider readiness, rehearsal
+persistence and restart pass. Real NSIS checks cover payload equality, URI registration, offline
+preparation/cancellation, active-app refusal and uninstall preservation. The final build passes a
+real Codex update with the original session automatically resumed once and history/receipts intact.
+Its packaged WTB client downloads and verifies the complete locally served publication archive.
+An injected health failure also passes compatible rollback with the same real session resumed once.
+The final installer is installed locally; the actual renderer, normal restart, stable host identity,
+single owner and disabled debugging are verified. The new browser profile inherited extra Windows
+ACL grants; after inspection its permissions were restricted without changing contents. The live
+home has no chats or enabled schedules and no recovery generations. The separate website service
+passes 27 focused release/Life/native-auth tests. See [Windows instructions](windows-app.md).
+
+WTB publication is authorized for this Windows scope and remains staged. The Windows host has no
+deployment workspace or signed-in Webmin session; the coordinating Mac chat is not addressable from
+its thread tools. The operator authorized the Mac handoff. Actual WTB endpoint/consumer acceptance
+and existing relay/device pairing still require the private deployment workflow and registration
+record. No Mac/iOS signing identity or existing device data is changed by this Windows work.
 
 ## October 22 — source review and repository checkpoint
 

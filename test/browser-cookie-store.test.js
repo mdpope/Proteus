@@ -1,3 +1,5 @@
+import {assertPrivate} from './helpers/permissions.js';
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -9,7 +11,7 @@ import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url);
 
 function fixture(t,{write=fs.promises.writeFile}={}){
-  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-cookie-async-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-cookie-async-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
   const cookies=new EventEmitter();let rows=[],reads=0;
   cookies.get=async()=>{reads++;return structuredClone(rows);};cookies.set=async item=>{rows.push({...item,domain:new URL(item.url).hostname,session:true});};
   const module={exports:{}};
@@ -28,7 +30,7 @@ test('cookie snapshot disk I/O yields, serializes overlapping saves and close fl
   while(!release)await new Promise(resolve=>setImmediate(resolve));
   assert.equal(fs.existsSync(f.store.file),false);assert.equal(f.cookies.listenerCount('changed'),1);
   f.rows([cookie('latest')]);const second=f.store.save();await new Promise(resolve=>setImmediate(resolve));assert.equal(writes,1);release();await Promise.all([first,second]);
-  assert.equal(writes,2);assert.equal(JSON.parse(fs.readFileSync(f.store.file))[0].value,'latest');assert.equal(fs.statSync(f.store.file).mode&0o777,0o600);
+  assert.equal(writes,2);assert.equal(JSON.parse(fs.readFileSync(f.store.file))[0].value,'latest');assertPrivate(f.store.file,0o600);
   f.rows([cookie('quit')]);f.cookies.emit('changed');await f.store.close();
   assert.equal(f.cookies.listenerCount('changed'),0);assert.equal(JSON.parse(fs.readFileSync(f.store.file))[0].value,'quit');assert.equal(fs.existsSync(f.store.file+'.tmp'),false);
 });

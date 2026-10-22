@@ -1,3 +1,5 @@
+import {assertPrivate} from './helpers/permissions.js';
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -6,7 +8,7 @@ import path from 'node:path';
 import { ProteusTmux } from '../src/terminal-tmux.js';
 
 test('tmux helper uses only its protected Proteus socket and exact managed session targets', () => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-tmux-test-'));
+  const home = privateTemporaryDirectory(path.join(os.tmpdir(), 'proteus-tmux-test-'));
   const calls = []; const sessions = new Map();
   const run = (binary, args, options) => {
     calls.push({ binary, args, options });
@@ -23,7 +25,7 @@ test('tmux helper uses only its protected Proteus socket and exact managed sessi
   };
   try {
     const tmux = new ProteusTmux(home, { binary: '/synthetic/tmux', run });
-    assert.equal(fs.statSync(tmux.root).mode & 0o777, 0o700);
+    assertPrivate(tmux.root,0o700);
     assert.deepEqual(tmux.sessions().managedSessions, []);
     const created = tmux.create({ id: 'work', cwd: home, shell: '/bin/zsh' });
     assert.deepEqual(tmux.sessions().managedSessions.map(item => item.id), ['work']);
@@ -44,7 +46,7 @@ test('tmux helper uses only its protected Proteus socket and exact managed sessi
 });
 
 test('async tmux inspection shares pending requests and measures only tagged session PIDs',async t=>{
-  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-tmux-async-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-tmux-async-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
   const calls=[];let release;
   const tmux=new ProteusTmux(home,{binary:'/synthetic/tmux',run:()=>{throw new Error('synchronous inspection must not run');},runAsync:async(binary,args,options)=>{
     calls.push({binary,args,options});
@@ -61,7 +63,7 @@ test('async tmux inspection shares pending requests and measures only tagged ses
 });
 
 test('async tmux inspection reports unavailable or an empty dedicated server without PID probes',async t=>{
-  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-tmux-empty-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));let installed=false,calls=0;
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-tmux-empty-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));let installed=false,calls=0;
   const tmux=new ProteusTmux(home,{runAsync:async(binary,args)=>{calls++;return args[0]==='-V'?{status:installed?0:1,error:installed?undefined:new Error('missing')}:{status:1,stderr:'no server'};}});
   assert.deepEqual(await tmux.statusAsync(),{available:false,managedSessions:[],managedPids:[]});assert.equal(calls,1);
   installed=true;assert.deepEqual(await tmux.statusAsync(),{available:true,managedSessions:[],managedPids:[]});assert.equal(calls,3);

@@ -1,3 +1,13 @@
+## October 22 — integrate Windows releases at existing service boundaries
+
+Keep release streaming and token refresh in AccountSession, so the extracted shared account
+service and its legacy Life alias use the same authenticated transport. Combine Windows installer
+recovery and atomic file replacement with the worker-based inspection and resumable recovery
+design, retaining strict versioned package provenance. The standalone Linux relay uses built-in
+owner/mode checks; load the Windows ACL helper only on Windows so its minimal container does not
+acquire a dependency on the desktop source tree. Source integration does not rebuild or republish
+the exact Windows artifact already accepted on the installed owner.
+
 ## October 22 — adopt the mobile pairing transport
 
 Promote the pending native RemoteStore into the saved destination after its credential/index
@@ -52,6 +62,29 @@ separate from external workflow success. Require owner capability for atomic pro
 mutations rather than weakening scope during mixed-version operation. Develop in isolation
 from concurrent source edits, integrate only the feature delta after review, and hold
 installation/deployment for operator review.
+## 2026-10-22 — Windows reuses Linux desktop chrome
+
+Use the existing shared frameless shell and native popup menu on Windows, including sender-bound
+window actions and menu command routing. Preserve native accelerators and F10 access instead of
+adding a separate menu implementation. macOS retains its native traffic lights and menu.
+
+## 2026-10-22 — Windows distribution and recovery use the existing owner protocol
+
+The operator selected a conventional per-user installer and an initially unsigned Windows
+executable. The latest distribution authorization selects downloads.proteus.example, superseding the initial
+proteus.example choice for Windows. Pin an independent Ed25519 publisher public key in the client;
+keep the private key outside checkout and server. Bind the WTB origin, exact archive, installer,
+platform/architecture and package/source identities in the signed manifest. Keep account OAuth
+credentials separate from the static WTB channel and reject redirects. Require explicit operator
+or chat handoff after download and isolated acceptance; do not add unattended updates. Preserve
+existing trust keys and compatible offline manifests; download channels cannot replace trust.
+
+Windows replacement uses the registered cached NSIS installer rather than renaming a running
+application directory. Keep one exact previous installer in each verified recovery application;
+restore application bytes without overwriting newer data or retry receipts. Preserve the existing
+protocol-1 idle barrier, helper journal and same-chat delivery ID. A standalone Engine Room update
+needs no model chat. New homes may initialize empty recovery policy; existing homes require the
+operator inventory and the established two-generation retention procedure.
 
 ## 2026-10-22 — Preserve Apple request continuity in Proteus
 
@@ -2138,3 +2171,10 @@ Explicit locking/sleep and OS policy remain in control. The setting is local to 
 restart/update returns to off. All 865 Node tests and syntax checks pass. Isolated Electron UI acceptance verifies the native
 macOS display-sleep assertion, background operation, toggle-off and quit cleanup. Packaging is
 in progress; installed apps are unchanged.
+## October 22 — bounded Windows atomic replacement
+
+Installed acceptance exposed a transient Windows sharing violation while replacing a chat-state
+document. Atomic state writers now share a bounded Windows-only rename retry (at most ten short
+waits). They retry the replacement operation without deleting the old document or weakening ACLs.
+Persistent denials still fail, and other platform/error behavior stays immediate. A real Windows
+reader-lock fixture verifies replacement after the reader releases the file.

@@ -1,3 +1,5 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {cleanupStack} from './helpers/cleanup.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -6,9 +8,9 @@ import os from 'node:os';
 import { BrowserHistory } from '../src/browser-history.js';
 import { ContentTabs } from '../src/content-tabs.js';
 async function setup(t) {
- const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-canonical-tabs-')),history=new BrowserHistory(home,{hostId:'owner'});await history.ready;
- let changed=0;const tabs=new ContentTabs(home,{history,onChange:()=>changed++});t.after(async()=>{await history.close();fs.rmSync(home,{recursive:true,force:true});});
- return {tabs,history,home,changed:()=>changed};
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-canonical-tabs-')),history=new BrowserHistory(home,{hostId:'owner'});await history.ready;
+ let changed=0;const tabs=new ContentTabs(home,{history,onChange:()=>changed++}),cleanup=cleanupStack(t);cleanup(()=>fs.rmSync(home,{recursive:true,force:true}));cleanup(()=>history.close());
+ return {tabs,history,home,cleanup,changed:()=>changed};
 }
 const scope={scope:'chat',id:'synthetic'},browser={id:'browser-one',type:'browser',title:'Example',url:'https://example.test/a'};
 const nav=(id,revision,extra={})=>({action:'browser-navigate',tabId:browser.id,operationId:id,entryId:id,baseRevision:revision,url:'https://example.test/'+id,visitedAt:'2026-10-12T12:00:00Z',...extra});
@@ -21,12 +23,12 @@ test('legacy descriptor migration is no-visit, polling emits nothing, and blank 
 });
 
 test('canonical operations persist through duplicate retry/restart, conflict preserves current, and Back retains Forward',async t=>{
- const {tabs,history,home,changed}=await setup(t);await tabs.mutateAsync({...scope,expectedRevision:0,operations:[{action:'open',tab:browser}]});
+ const {tabs,history,home,cleanup,changed}=await setup(t);await tabs.mutateAsync({...scope,expectedRevision:0,operations:[{action:'open',tab:browser}]});
  const operation=nav('b',0);let value=await tabs.mutateAsync({...scope,operations:[operation]});assert.equal(value.tabs[0].history.revision,1);const events=changed();
  await tabs.mutateAsync({...scope,operations:[operation]});assert.equal(changed(),events);assert.equal((await history.query()).total,1);
  const first=value.tabs[0].history.entries[0].id;value=await tabs.mutateAsync({...scope,operations:[nav('back',1,{action:'browser-traverse',entryId:first})]});assert.equal(value.tabs[0].history.index,0);assert.equal(value.tabs[0].history.entries.length,2);
  await assert.rejects(tabs.mutateAsync({...scope,operations:[nav('stale',1)]}),/Navigation changed/);assert.equal((await tabs.getAsync(scope.scope,scope.id)).tabs[0].history.index,0);
- await history.close();const restarted=new BrowserHistory(home,{hostId:'owner'});t.after(()=>restarted.close());const restored=new ContentTabs(home,{history:restarted});assert.equal((await restored.getAsync(scope.scope,scope.id)).tabs[0].history.index,0);assert.equal((await restarted.query()).total,2);
+ await history.close();const restarted=new BrowserHistory(home,{hostId:'owner'});cleanup(()=>restarted.close());const restored=new ContentTabs(home,{history:restarted});assert.equal((await restored.getAsync(scope.scope,scope.id)).tabs[0].history.index,0);assert.equal((await restarted.query()).total,2);
 });
 
 test('metadata snapshots cannot clear or replace authoritative navigation and closed tabs reject pending navigation',async t=>{

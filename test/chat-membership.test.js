@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import {chatResourcePlacement} from '../public/chat-resource-placement.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -6,7 +7,7 @@ import {Engine} from '../src/engine.js';
 import {chatMembership} from '../public/chat-membership.js';
 import {permissionContext} from '../src/permissions.js';
 test('moving an active chat preserves pending input, session, execution roots and approval identity across restart',async()=>{
- const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-membership-')),engine=new Engine(home);
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-membership-')),engine=new Engine(home);
  try{
   const schedule={schemaVersion:1,id:'fixture',name:'Fixture',enabled:false,cron:'0 9 * * *',timezone:'UTC',provider:'rehearsal',model:'',workspace:{cwd:home,additionalDirectories:[]},misfire:'skip',prompt:'Fixture',context:{workspaceId:'old',workspaceName:'Old',followsWorkspace:true,configurationRevision:'old',entries:[]}};
   const run=engine.createRun(schedule,'chat',null,{deferStart:true});run.status='awaiting_input';run.pending={id:'request',type:'question',question:'Continue?'};run.providerSessionId='session';run.chatPermission={contextId:permissionContext(run.schedule).id,mode:'autopilot',folders:[]};

@@ -4,13 +4,14 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
+const { hasPrivatePermissions } = require('./private-paths.cjs');
 
 const file = process.argv[2];
 if (process.argv.length !== 3 || !file || !path.isAbsolute(file)) process.exit(64);
 let spec;
 try {
-  const stat = fs.statSync(file);
-  if ((stat.mode & 0o077) !== 0 || stat.size > 512 * 1024) throw new Error('private spec required');
+  const stat = fs.lstatSync(file);
+  if (!stat.isFile() || !hasPrivatePermissions(file, stat) || stat.size > 512 * 1024) throw new Error('private spec required');
   spec = JSON.parse(fs.readFileSync(file, 'utf8'));
   if (!path.isAbsolute(spec.workingDirectory) || !fs.statSync(spec.workingDirectory).isDirectory() ||
       typeof spec.command !== 'string' || !spec.command || /[\r\n\0]/.test(spec.command) ||

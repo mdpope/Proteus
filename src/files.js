@@ -2,14 +2,19 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import {atomicRename} from './atomic-rename.cjs';
 
 export function applicationHome({ platform = process.platform, home = os.homedir(), env = process.env } = {}) {
   if (env.PROTEUS_HOME) return env.PROTEUS_HOME;
-  if (platform === 'linux') {
-    const base = env.XDG_DATA_HOME && path.isAbsolute(env.XDG_DATA_HOME) ? env.XDG_DATA_HOME : path.join(home, '.local', 'share');
-    return path.join(base, 'proteus');
+  if (platform === 'win32') {
+    const base = env.LOCALAPPDATA && path.win32.isAbsolute(env.LOCALAPPDATA) ? env.LOCALAPPDATA : path.win32.join(home, 'AppData', 'Local');
+    return path.win32.join(base, 'Proteus');
   }
-  return path.join(home, 'Library', 'Application Support', 'Proteus');
+  if (platform === 'linux') {
+    const base = env.XDG_DATA_HOME && path.posix.isAbsolute(env.XDG_DATA_HOME) ? env.XDG_DATA_HOME : path.posix.join(home, '.local', 'share');
+    return path.posix.join(base, 'proteus');
+  }
+  return path.posix.join(home, 'Library', 'Application Support', 'Proteus');
 }
 export const defaultHome = () => applicationHome();
 export const readJSON = (file, fallback) => {
@@ -25,7 +30,7 @@ export function atomicJSON(file, value) {
     const contents = JSON.stringify(value, null, 2) + '\n';
     fs.writeFileSync(fd, contents); fs.fsyncSync(fd);
     fs.closeSync(fd); fd = undefined;
-    fs.renameSync(temp, file);
+    atomicRename(temp, file);
     return Buffer.byteLength(contents);
   } finally {
     if (fd !== undefined) try { fs.closeSync(fd); } catch {}

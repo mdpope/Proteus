@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -72,7 +73,7 @@ test('create and resume pass effort and context tier to Copilot and revalidate a
   current={...raw,supportedReasoningEfforts:['low']};await assert.rejects(provider.run(args),/none is unavailable/);assert.equal(configs.length,2);
 });
 test('API and encrypted remote projections retain model options, defaults and external schedule edits', async () => {
-  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-options-test-'));
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-options-test-'));
   let calls=0;
   const app=await startServer({home,port:0,timers:false,withSeed:false,providers:{copilot:{status:async()=>{calls++;return{available:true,models:[copilotModel(raw)]};},run:async()=>{}}}});
   const headers={Authorization:`Bearer ${app.token}`,'Content-Type':'application/json'};
@@ -93,7 +94,7 @@ test('API and encrypted remote projections retain model options, defaults and ex
 });
 
 test('host startup refreshes capabilities without a client opening the provider panel', async () => {
-  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-catalog-start-'));let calls=0;
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-catalog-start-'));let calls=0;
   const app=await startServer({home,port:0,withSeed:false,providers:{copilot:{status:async()=>{calls++;return {available:true,models:[copilotModel(raw)]};}}}});
   try { await app.catalog.pending;assert.equal(calls,1);assert.equal(app.catalog.value.models[0].controls.reasoningEfforts[0],'none'); }
   finally {await app.close();fs.rmSync(home,{recursive:true,force:true});}

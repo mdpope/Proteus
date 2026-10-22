@@ -1,3 +1,4 @@
+const {atomicRename}=require('../src/atomic-rename.cjs');
 const fs=require('node:fs'),path=require('node:path');
 const {randomUUID,createHash}=require('node:crypto');
 const {BrowserWindow,dialog,nativeImage,app,screen,nativeTheme}=require('electron');
@@ -28,7 +29,7 @@ class BrowserExtensions {
   });
   host.ready=(async()=>{for(const row of rows)if(row.enabled){try{await session.extensions.loadExtension(path.join(folder,row.directory),{allowFileAccess:false});}catch(error){row.error=error.message;}}})();return host.ready;
  }
- save(host){fs.mkdirSync(host.folder,{recursive:true});const tmp=host.file+'.tmp';fs.writeFileSync(tmp,JSON.stringify(host.rows),{mode:0o600});fs.renameSync(tmp,host.file);host.listCache=null;const notice={type:'extensions-changed',profileId:host.profileId};if(this.browser.windowRegistry){for(const {window} of this.browser.windowRegistry.contexts.values())if(!window.isDestroyed())window.webContents.send('proteus:browser-action',notice);}else this.browser.actions.send(notice);}
+ save(host){fs.mkdirSync(host.folder,{recursive:true});const tmp=host.file+'.tmp';fs.writeFileSync(tmp,JSON.stringify(host.rows),{mode:0o600});atomicRename(tmp,host.file);host.listCache=null;const notice={type:'extensions-changed',profileId:host.profileId};if(this.browser.windowRegistry){for(const {window} of this.browser.windowRegistry.contexts.values())if(!window.isDestroyed())window.webContents.send('proteus:browser-action',notice);}else this.browser.actions.send(notice);}
  host(id){const host=this.profiles.get(id);if(!host)throw new Error('Open a tab in this browser profile first.');if(this.browser.sessionFor(id)!==host.session)throw new Error('The profile account changed.');return host;}
  storageOrigins(profileId,session){
   let rows=this.profiles.get(profileId)?.session===session?this.profiles.get(profileId).rows:null;
