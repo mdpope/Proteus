@@ -1,3 +1,17 @@
+## 2026-10-22 — host-owned agent chat authority and durable feedback
+
+Use one `ChatControl` service for internal provider tools and external local MCP, layered on
+existing encrypted peers and retry receipts. Pairing is transport trust, not an internal agent
+grant. Bind grants to origin chat/context and host/project/chat scope; leave destination tool
+approvals human. Use separate observer connections so old single-watch peer implementations
+do not replace the user's selected chat. Persist task identity and feedback delivery before
+returning acceptance. Explicit notification may queue a continuation, but never revive a
+stopped/interrupted origin. Treat all returned content as untrusted and model completion as
+separate from external workflow success. Require owner capability for atomic project-scoped
+mutations rather than weakening scope during mixed-version operation. Develop in isolation
+from concurrent source edits, integrate only the feature delta after review, and hold
+installation/deployment for operator review.
+
 ## 2026-10-22 — Preserve Apple request continuity in Proteus
 
 The operator requested all Apple links, form contents and steps in the Proteus project, then

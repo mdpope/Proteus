@@ -1,3 +1,4 @@
+import {chatControlTools} from './chat-control-tools.js';
 import {integrationTools} from './integration-tools.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -121,7 +122,7 @@ export class CodexProvider {
   }
   const roots=[run.schedule.workspace.cwd,...run.schedule.workspace.additionalDirectories];
   const sandbox=codexSandbox(run.schedule,permissionProfile?.(),{permissionControls:(this.options.permissionControls===true||this.options.desktopPreview===true)});
-  const currentBrowserTools=browserTools(this.browser,run.id),currentIntegrationTools=integrationTools(this.integrations,run.id);const browser=[...currentBrowserTools,...currentIntegrationTools];const items=new Map();const calls=new Map();
+  const currentBrowserTools=browserTools(this.browser,run.id),currentIntegrationTools=[...integrationTools(this.integrations,run.id),...chatControlTools(this.chatControl,run.id)];const browser=[...currentBrowserTools,...currentIntegrationTools];const items=new Map();const calls=new Map();
   const approvedBridgeCalls=new Map();
   captureAppCapabilities(run,browser,update);
   let resolveTurn,rejectTurn,settled=false,abortTimer;const completed=new Promise((resolve,reject)=>{resolveTurn=resolve;rejectTurn=reject;});completed.catch(()=>{});
@@ -137,6 +138,7 @@ export class CodexProvider {
   const invokeAppTool=async(tool,args,callId)=>{
    assertAppToolActive();
    if(active.recheckPermissions())throw new Error('Workspace permissions changed; this tool request was cancelled.');
+   if(tool.name==='proteus_chats')return tool.handler(args); // The host service owns scoped approval and rechecks.
    const key=JSON.stringify([tool.name,args]),approved=approvedBridgeCalls.get(key);approvedBridgeCalls.delete(key);
    const answer=approved&&approved.expires>Date.now()?'approve':await ask({type:'permission',question:'Allow Proteus app action?',details:{kind:'custom-tool',toolCallId:callId,toolName:tool.name,args,intention:tool.name==='proteus_open_document'?`Open Markdown tab: ${args?.path||''}`:`Browser ${args?.action||'action'}`}});
    assertPendingApprovalCurrent();assertAppToolActive();
@@ -215,7 +217,7 @@ export class CodexProvider {
    // The installed runtime accepts dynamic inputImage results but drops their
    // images before model delivery. Keep the fresh MCP path on new chats too.
    const resumedBrowserTools=currentBrowserTools.filter(tool=>tool.name!=='proteus_open_document'&&(run.providerSessionId||tool.name==='proteus_desktop')).map(tool=>({...tool,handler:args=>invokeAppTool(tool,args)}));
-   if(this.browser?.openDocument||this.integrations||resumedBrowserTools.length){
+   if(this.browser?.openDocument||this.integrations||this.chatControl||resumedBrowserTools.length){
     if(selected.proteus_app)throw new Error('The MCP name proteus_app is reserved for Proteus app tools.');
     appBridge=await documentBridge({openDocument:async(args,id)=>{
       if(active.recheckPermissions())throw new Error('Workspace permissions changed.');

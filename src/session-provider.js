@@ -28,10 +28,16 @@ export class SessionProvider {
     for (const entry of this.sessions.values()) entry.adapter.integrations = value;
   }
 
+  set chatControl(value) {
+    this.control=value;this.metadata.chatControl=value;
+    for(const entry of this.sessions.values())entry.adapter.chatControl=value;
+  }
+
   create() {
     if (this.closing) throw new Error('The provider is shutting down.');
     const adapter = this.factory();
     adapter.integrations = this.integrationHealth;
+    adapter.chatControl = this.control;
     return adapter;
   }
 

@@ -159,6 +159,7 @@ export function conversation(target, run, options) {
     node.firstChild.textContent = `${entry.data?.delivery ? ({queued:'Queued next',steered:'Steering',sending:'Sending steering',failed:'Not delivered',removed:'Removed from queue',delivered:'Queued message delivered'}[entry.data.delivery.state] || '') + ' · ' : ''}${entry.role === 'assistant' ? entry.agentName || agentName(run) : entry.role}${entry.streaming ? ' · streaming' : entry.at ? ' · ' + options.time(entry.at) : ''}`;
     if(entry.data?.question){node.classList.add('agent-question');node.firstChild.textContent=`${agentName(run)} · Question · ${entry.data.question.status||'pending'}${entry.at?' · '+options.time(entry.at):''}`;node.dataset.requestId=entry.data.question.id;}
     if(entry.data?.questionReply)node.dataset.requestId=entry.data.questionReply.requestId;
+    if(entry.data?.agentFeedback)node.firstChild.textContent=`Task feedback${entry.at?' · '+options.time(entry.at):''}`;
     if(entry.role==='assistant'){
       const turn=run.turns?.find(t=>t.id===entry.data?.turnId)||(entry.streaming?run.turns?.at(-1):null);
       const first=entry.streaming?!(run.events||[]).some(e=>e.role==='assistant'&&e.data?.turnId===turn?.id):!entries.some(e=>e.key!==entry.key&&e.role==='assistant'&&e.data?.turnId===turn?.id&&entries.indexOf(e)<entries.indexOf(entry));

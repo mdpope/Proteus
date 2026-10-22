@@ -1,4 +1,5 @@
 import {countRunningChats} from '../public/computer-identity.js';
+import {chatPage} from './chat-control.js';
 import { chatDelta } from './chat-deltas.js';
 import fs from 'node:fs';
 import { toolPresentation } from '../public/tool-presentation.js';
@@ -89,7 +90,7 @@ export function remoteState(service) {
     runningChatCount: countRunningChats(visibleRuns),
     attentionCount: visibleRuns.filter(run=>run.status==='awaiting_input'||(['failed','interrupted'].includes(run.status)&&!run.failureReviewedAt)).length,
     context: { ...pick(context, ['revision', 'refreshedAt', 'rootStatus', 'defaultWorkspaceId', 'workspaces', 'universalFolders', 'libraryFolders', 'documents','modes','favorites', 'errors']), entries: context.entries.map(remoteEntry) },
-    defaults: pick(defaults, ['provider', 'model', 'reasoningEffort', 'contextTier', 'serviceTier', 'timezone', 'internetSearches']), providerStatus: service.catalog?.value || null, providerStatuses: Object.fromEntries(Object.entries(service.catalogs || {}).map(([id, catalog]) => [id, catalog.value])),attachmentMediaTypes:Object.fromEntries(['copilot','codex','claude'].map(id=>[id,service.engine.providers[id]?.acceptedMediaTypes||[]])),mcpStatusProviders:['copilot','codex','claude'].filter(id=>typeof service.engine.providers[id]?.mcpStatus==='function'),mcpLoginProviders:['copilot','codex','claude'].filter(id=>typeof service.engine.providers[id]?.mcpLogin==='function'),capabilities:['host.platform.v1',...(service.workspaceProjects?['projects.v1','projects.move.v1','source-library.v1']:[]),'chat.paths.v1','chat.export.v1','chat.previews.v1','content-tabs.v1','chat.index.v1','chat.queue-edit.v1','integrations.health.v1','chat.review.v1','chat.lifecycle.v1','chat.rename.v1','chat.internet.v1','workspaces.v1','chat.permissions.folders.v1','chat.permissions.chat.v1','chat.permissions.pending.v1','chat.documents.v1','chat.attachments.v1','notifications.v1','authenticated-revocation.v1','connection-self-revoke.v1',...(service.browserHistory?['browser.history.v1','browser.navigation.v1']:[]),...(service.liveBrowser?['browser.live.v1']:[]),...(service.resources?['resources.v1']:[])],protocol: 1 };
+    defaults: pick(defaults, ['provider', 'model', 'reasoningEffort', 'contextTier', 'serviceTier', 'timezone', 'internetSearches']), providerStatus: service.catalog?.value || null, providerStatuses: Object.fromEntries(Object.entries(service.catalogs || {}).map(([id, catalog]) => [id, catalog.value])),attachmentMediaTypes:Object.fromEntries(['copilot','codex','claude'].map(id=>[id,service.engine.providers[id]?.acceptedMediaTypes||[]])),mcpStatusProviders:['copilot','codex','claude'].filter(id=>typeof service.engine.providers[id]?.mcpStatus==='function'),mcpLoginProviders:['copilot','codex','claude'].filter(id=>typeof service.engine.providers[id]?.mcpLogin==='function'),capabilities:['chat.agent-control.v1','chat.pages.v1','host.platform.v1',...(service.workspaceProjects?['projects.v1','projects.move.v1','source-library.v1']:[]),'chat.paths.v1','chat.export.v1','chat.previews.v1','content-tabs.v1','chat.index.v1','chat.queue-edit.v1','integrations.health.v1','chat.review.v1','chat.lifecycle.v1','chat.rename.v1','chat.internet.v1','workspaces.v1','chat.permissions.folders.v1','chat.permissions.chat.v1','chat.permissions.pending.v1','chat.documents.v1','chat.attachments.v1','notifications.v1','authenticated-revocation.v1','connection-self-revoke.v1',...(service.browserHistory?['browser.history.v1','browser.navigation.v1']:[]),...(service.liveBrowser?['browser.live.v1']:[]),...(service.resources?['resources.v1']:[])],protocol: 1 };
   });
 }
 function validateRelayURL(value) {
@@ -345,6 +346,7 @@ export class RemoteHost {
       return { state: remoteState(this.service), cursor: `${this.epoch}:${this.sequence}` };
       });
     }
+    if (method === 'runs.page') return chatPage(this.service,args);
     if (method === 'runs.list') { const offset = Math.max(0, Math.floor(Number(args.offset) || 0)),projectCatalog=this.service.workspaceProjects?.read(); return engine.visibleRuns(args.includeArchived===true).slice(offset, offset + 100).map(run=>({...runSummary(run),...this.service.workspaceProjects?.membership(run,projectCatalog)})); }
     if(method==='connection.revoke'){if(args.deviceId&&args.deviceId!==peer.device.id)throw new Error('Only this connection can be revoked here.');this.revoke(peer.device.id);return {ok:true};}
     if(method==='notifications.list')return this.service.activity?.notifications()||{items:[],preferences:{}};
@@ -389,7 +391,7 @@ export class RemoteHost {
       }else result=await this.service.contentTabs.getAsync(args.scope,args.id);
       return {...result,tabs:result.tabs.filter(tab=>tab.type!=='document'||canDocuments)};
     }
-    if (method === 'chat.get') { const run = engine.getRun(args.id); peer.runId = run.id;peer.summaryOnly=args.watch==='summary'; const view={...remoteRun(run, Math.max(0, Math.floor(Number(args.offset) || 0)), engine.permissions, args.beforeEvent,ownerChatControls(run,engine)),...this.service.workspaceProjects?.membership(run)};return args.historyCursor?chatDelta(run,view,args.historyCursor):{...view,...(!args.offset&&args.beforeEvent===undefined?chatDelta(run,view):{})}; }
+    if (method === 'chat.get') { const run = engine.getRun(args.id); if(args.watch!=='none'){peer.runId = run.id;peer.summaryOnly=args.watch==='summary';} const view={...remoteRun(run, Math.max(0, Math.floor(Number(args.offset) || 0)), engine.permissions, args.beforeEvent,ownerChatControls(run,engine)),...this.service.workspaceProjects?.membership(run)};return args.historyCursor?chatDelta(run,view,args.historyCursor):{...view,...(!args.offset&&args.beforeEvent===undefined?chatDelta(run,view):{})}; }
     if(method==='chat.previews.list'||method==='chat.previews.read'){
       this.requireDocumentAccess(peer);const run=engine.getRun(args.id);
       const result=await(method.endsWith('.list')?this.service.previews.list(run):this.service.previews.read(run,args.documentId));
@@ -475,6 +477,16 @@ export class RemoteHost {
       catch(error){await this.attachmentConsents.releaseProof(prepared.proofId).catch(()=>{});throw error;}
     }
     if (['chat.reply', 'chat.resume', 'chat.cancel', 'chat.send', 'chat.steer-queued','chat.edit-queued','chat.remove-queued'].includes(method)) {
+      if(args.agentControl){const run=engine.getRun(args.id),projectId=this.service.workspaceProjects?.membership(run)?.projectId||null;
+        if(Object.hasOwn(args,'expectedProjectId')&&args.expectedProjectId!==projectId)throw new Error('Destination project changed. Refresh the task scope.');
+        if(method==='chat.reply'&&(run.pending?.type!=='question'||run.pending.id!==args.requestId))throw new Error('Agent replies can answer only the current ordinary question.');
+        // Call the synchronous owner boundary directly so placement cannot change between validation and effect.
+        if(method==='chat.reply')engine.reply(args.id,args.answer,args.requestId);
+        else if(method==='chat.cancel')engine.cancel(args.id);
+        else if(method==='chat.send')await engine.send(args.id,args.prompt,args.mode,args.messageId);
+        else throw new Error('Unsupported agent mutation.');
+        return {runId:args.id};
+      }
       engine.getRun(args.id); const action = method.split('.')[1];
       await this.api(`/api/runs/${args.id}/${action}`, pick(args, ['answer', 'requestId', 'prompt', 'mode', 'messageId', 'modelOptions', 'expectedPrompt'])); return { runId: args.id };
     }

@@ -5,16 +5,16 @@ const home=import('./files.js').then(({defaultHome})=>process.env.PROTEUS_HOME||
 async function api(value,route='/api/tabs/manage'){
  const connection=JSON.parse(fs.readFileSync(path.join(await home,'connection.json'),'utf8')),url=new URL(connection.origin);
  if(url.protocol!=='http:'||url.hostname!=='127.0.0.1'||url.username||url.password||url.pathname!=='/'||!url.port||!connection.token)throw new Error('Proteus local service is unavailable.');
- const response=await fetch(new URL(route,url),{method:'POST',headers:{authorization:'Bearer '+connection.token,'content-type':'application/json'},body:JSON.stringify(value),signal:AbortSignal.timeout(30000)});
+ const response=await fetch(new URL(route,url),{method:'POST',headers:{authorization:'Bearer '+connection.token,'content-type':'application/json'},body:JSON.stringify(value),signal:AbortSignal.timeout(120000)});
  const result=await response.json();if(!response.ok)throw new Error(result.error||'Proteus operation failed.');return result;
 }
-const registrations=Promise.all([import('./tab-management.js'),import('./desktop-control.js'),import('./tool-results.js'),import('./updates.js')]).then(([{tabTools},{desktopTools},results,{updateTools}])=>({tools:[...tabTools(api),...desktopTools({handle:args=>api(args,'/api/desktop-control')}),...updateTools({handle:args=>api(args,'/api/updates')})],results}));
+const registrations=Promise.all([import('./tab-management.js'),import('./desktop-control.js'),import('./tool-results.js'),import('./updates.js'),import('./chat-control-tools.js')]).then(([{tabTools},{desktopTools},results,{updateTools},{chatControlTools}])=>({tools:[...tabTools(api),...desktopTools({handle:args=>api(args,'/api/desktop-control')}),...updateTools({handle:args=>api(args,'/api/updates')}),...chatControlTools({handle:args=>api(args,'/api/chat-control')})],results}));
 const tools=registrations.then(({tools})=>tools.map(({name,description,parameters})=>({name,description,inputSchema:parameters})));
-let requests=Promise.resolve();
-createInterface({input:process.stdin}).on('line',line=>{requests=requests.then(async()=>{
- let message;try{
+let inflight=0;
+createInterface({input:process.stdin}).on('line',async line=>{
+ let message,counted=false;try{
   if(line.length>64000)throw new Error('MCP request exceeds the supported limit.');
-  message=JSON.parse(line);if(message.id===undefined)return;let result;
+  message=JSON.parse(line);if(message.id===undefined)return;if(inflight>=32)throw new Error('Too many concurrent MCP requests.');inflight++;counted=true;let result;
   if(message.method==='initialize')result={protocolVersion:message.params?.protocolVersion||'2024-11-05',capabilities:{tools:{}},serverInfo:{name:'Proteus tab service',version:'1.0.0'}};
   else if(message.method==='ping')result={};
   else if(message.method==='tools/list')result={tools:await tools};
@@ -24,4 +24,5 @@ createInterface({input:process.stdin}).on('line',line=>{requests=requests.then(a
   }else throw new Error('Unsupported MCP method.');
   process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:message.id,result})+'\n');
  }catch(error){if(message?.id!==undefined)process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:message.id,error:{code:-32603,message:error.message}})+'\n');}
- }).catch(()=>{});});
+ finally{if(counted)inflight=Math.max(0,inflight-1);}
+});

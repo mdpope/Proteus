@@ -1,3 +1,4 @@
+import {chatControlTools} from './chat-control-tools.js';
 import { uniqueModels } from '../public/model-choices.js';
 import {integrationTools} from './integration-tools.js';
 import { safeToolError } from '../public/tool-presentation.js';
@@ -206,7 +207,7 @@ export class CopilotProvider {
     validateModelOptions(run.schedule, model);
     run.modelCapabilities = { capturedAt: new Date().toISOString(), id: model.id, controls: model.controls };
     const includeLegacy = snapshot?.includeDefaults !== false;
-    const appTools=[...browserTools(this.browser,run.id),...integrationTools(this.integrations,run.id)];captureAppCapabilities(run,appTools,update,managed?selectedAgentToolScope(managed):null);
+    const appTools=[...browserTools(this.browser,run.id),...integrationTools(this.integrations,run.id),...chatControlTools(this.chatControl,run.id)];captureAppCapabilities(run,appTools,update,managed?selectedAgentToolScope(managed):null);
     const config = {
       model: run.schedule.model, streaming: true,
       ...((run.schedule.reasoningEffort || model.controls.defaultReasoningEffort) ? { reasoningEffort: run.schedule.reasoningEffort || model.controls.defaultReasoningEffort } : {}),

@@ -34,7 +34,7 @@ export function normalizedTool(tool) {
  return {...tool,...(error?{error,status:'failed'}:{})};
 }
 export function isActivityEvent(event) {
- if(event?.data?.question)return false;
+ if(event?.data?.question||event?.data?.agentFeedback)return false;
  const role=event?.role||event?.type;
  return Boolean(event?.data?.tool||event?.data?.permission||role==='tool'||role==='system');
 }

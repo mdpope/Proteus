@@ -4,6 +4,7 @@ import { DesktopPreview, desktopPreviewCodexHome } from './desktop-preview.js';
 import { WorkspaceProjects } from './workspace-projects.js';
 import { hostPlatformMetadata } from './host-platform.js';
 import {TabManagement} from './tab-management.js';
+import {ChatControl} from './chat-control.js';
 import { PerformanceDiagnostics } from './performance-diagnostics.js';
 import {BrowserHistory,browserHistorySettings} from './browser-history.js';
 import {BrowserProfiles} from './browser-profiles.js';
@@ -255,6 +256,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         return json(404,{error:'Unknown project operation.'});
       }
       if(url.pathname==='/api/tabs/manage'&&req.method==='POST')return json(200,await service.tabManagement.handle(await body(req,64000)));
+      if(url.pathname==='/api/chat-control'&&req.method==='POST')return json(200,await service.chatControl.handle(await body(req,64000),'operator'));
       if(url.pathname==='/api/chat-workspace'&&req.method==='POST'){
         const value=await body(req,16000);
         if(preview&&value.projectId){const result=preview.projects({...value,chatId:value.id,action:'move-chat'},engine);await preview.reconcileContentTabs(service.contentTabs,engine);notify();remote.changed();return json(200,result);}
@@ -617,7 +619,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   atomicJSON(path.join(home, 'connection.json'), { origin, token, pid: process.pid });
   const timer = timers ? setInterval(() => { void performanceDiagnostics.measure('scheduler.tick', () => engine.tick()).catch(error => engine.emit('scheduler-error', { error: error.message, at: new Date().toISOString() })); }, 1000) : null;
   const service = { desktopControl,workspaceProjects:preview, desktopPreview:desktopPreview?preview:null, performanceDiagnostics, notify, desktopAttention:()=>[...(service.browserAttention?.()||[]),...remote.documents.list().filter(item=>!item.approvedAt).map(item=>({id:'document:'+item.requestId,kind:'document',title:item.deviceName+' requests '+item.title,requestId:item.requestId,path:item.path,at:new Date(Date.parse(item.expiresAt)-600000).toISOString()})),...service.attention()], attention:()=>[...integrations.consumers().filter(item=>['needs-auth','failed'].includes(item.connection)).map(item=>({id:'integration:'+item.id,kind:'connection',title:(item.profile.label||item.server)+' needs attention',section:'integrations',at:item.checkedAt})),...activity.notifications().items.filter(item=>!item.readAt).map(item=>({id:'notification:'+item.id,notificationId:item.id,kind:'notification',title:item.title,body:item.body,chatId:item.chatId,...(item.browserIssue?{browserIssue:item.browserIssue,silent:true}:{}),at:item.createdAt}))], browserProfiles, integrations, engine, settings, context, standup, omi, life, account, activity, workspaceFiles, attachments, buildChatSchedule, usage, catalog, catalogs, origin, token, home, url: `${origin}/?token=${token}`, async close() {
-    service.updates?.close();await desktopControl?.close();
+    service.updates?.close();await service.chatControl?.close();await desktopControl?.close();
     activity.log('info','app.stopping','Proteus is shutting down.');clearInterval(integrationTimer);await integrations.close(); if(activityTimer)clearInterval(activityTimer); if (timer) clearInterval(timer); if (catalogTimer) clearInterval(catalogTimer); await Promise.all(Object.values(catalogs).map(c => c.pending)); await providerAuth.close(); await remote.close(); let engineCloseError; try { await engine.close(); } catch (error) { engineCloseError=error; } await attachments.close(); await copilot.close(); await codex.close(); await claude.close(); await life.close?.(); await service.browserHistory?.close(); let activityCloseError; try { await activity.close(); } catch (error) { activityCloseError=error; }
     for (const client of eventClients) client.end(); eventClients.clear();
     await new Promise(resolve => {
@@ -642,6 +644,8 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   };
   service.previews=new ChatPreviews(service);
   remote = service.remote = new RemoteHost(service); activity.attach(engine,()=>remote.info().hostId); activity.log('info','app.started','Proteus started.'); await remote.start();
+  service.chatControl=new ChatControl(service);
+  for(const adapter of Object.values(adapters))adapter.chatControl=service.chatControl;
   const integrationTimer=timers?setInterval(()=>void integrations.tick(),300000):null;
   const activityTimer = timers ? setInterval(()=>void activity.flush(),60000) : null;
   if(desktopPreview&&catalogs.codex)preview.initializeProviderDefaults(settings,await catalogs.codex.get());

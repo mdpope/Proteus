@@ -1,3 +1,25 @@
+## October 22 — agent chat control integrated into current source
+
+The operator authorized implementation, demo/cross-device tests and integration of feature
+commit `2a825a1` into the current source. Installation and deployment remain held. This adds `proteus_chats`, scoped human grants, durable
+command/task identities, independent multi-chat observation, and visible/deduplicated feedback.
+Internal agents cannot approve destination tools. Automatic origin continuation is explicit
+and never resumes a deliberately stopped/interrupted conversation. New owner paging removes
+the silent 1,000-chat cutoff; legacy owners retain labeled pagination and project-scoped
+mutations require the new owner capability. See [agent chat control](agent-chat-control.md)
+for boundaries and tests. Only the feature commit was applied above source checkpoint
+`5b8b708`; newer release records are preserved. Installed apps have not been updated.
+
+Merged-source acceptance: all 883 Node tests and `npm run check` pass. Fresh isolated
+Electron checks pass for encrypted two-host dispatch/concurrent wait/replies/visible feedback,
+peer setup and destination drafts, and the existing message-edge styling. Screenshots inspected.
+
+Pre-merge acceptance: encrypted demo/UI tests and real Codex Mac-to-Linux task/feedback flow pass.
+Temporary Linux pairing revoked and synthetic chats archived; existing owner state preserved.
+Real local Copilot/Codex tool calls pass. Those real-provider/physical checks were not repeated
+for this merge; runtime and test files are byte-identical to the feature commit. Live Claude
+and installed-feature rollout remain unverified.
+
 ## October 22 — source review and repository checkpoint
 
 The operator authorized review, commit and push of the outstanding 0.2.28 work. Fresh validation:

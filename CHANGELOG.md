@@ -1,3 +1,11 @@
+## Unreleased — agent chat control (merged source; rollout held)
+
+- Add host-scoped conversation discovery, dispatch, read/wait, ordinary-question replies and cancellation to internal provider tools and trusted local MCP.
+- Persist scoped grants, retry identities and task feedback; preserve independent UI subscriptions, destination approvals and deliberate origin stops.
+- Show task feedback in the conversation, allow concurrent MCP waits/replies and report complete owner paging beyond 1,000 chats.
+- Keep project-scoped mutations capability-gated on older owners. See [agent chat control](docs/agent-chat-control.md) for verification and integration boundaries.
+- Integrate feature commit `2a825a1` while preserving the current release work; rerun all 883 tests, static checks and isolated Electron feedback/peer-setup/message regressions. Installation and deployment remain held.
+
 ## Unreleased — navigation and Apple identity review
 
 - Complete the private WTB Developer ID evaluation: app and DMG notarization/stapling, Gatekeeper, mounted browser acceptance, and complete downloads.proteus.example download verification passed. Record operator-submitted browser entitlement request **TGNRQJ22PP**, pending Apple review, with links/form/receipts in the ignored local operator record. This supersedes earlier preparation holds below.
