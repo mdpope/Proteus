@@ -1,3 +1,5 @@
+import {assertPrivate} from './helpers/permissions.js';
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -7,12 +9,12 @@ import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url);
 const {initializePreviewRoot,configureDesktopPreview,stageCodexAuthentication,preparePreviewFixtures}=require('../desktop/preview-runtime.cjs');
 const {normalizeSession}=require('../desktop/workspace-session.cjs');
-const fixture=t=>{const root=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-preview-runtime-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));return root;};
+const fixture=t=>{const root=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-preview-runtime-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));return root;};
 
 test('preview opt-in uses a distinct named profile and leaves ordinary launches alone',t=>{
   const root=fixture(t),calls=[],app={setName:v=>calls.push(['name',v]),setPath:(k,v)=>calls.push([k,v]),commandLine:{appendSwitch:v=>calls.push(['switch',v])}};
   assert.equal(configureDesktopPreview(app,{env:{},metadata:{}}),null);assert.equal(calls.length,0);
-  const result=configureDesktopPreview(app,{env:{PROTEUS_DESKTOP_PREVIEW:'1',PROTEUS_PREVIEW_HOME:path.join(root,'preview')},metadata:{}});
+  const result=configureDesktopPreview(app,{userHome:path.join(root,'synthetic-user'),env:{PROTEUS_DESKTOP_PREVIEW:'1',PROTEUS_PREVIEW_HOME:path.join(root,'preview')},metadata:{}});
   assert.equal(result.home,path.join(root,'preview/app-data'));
   assert.ok(calls.some(([k,v])=>k==='userData'&&v===path.join(root,'preview/electron')));
   assert.ok(calls.some(([k,v])=>k==='name'&&v==='Proteus Design Preview'));
@@ -36,7 +38,7 @@ test('preview copies only authentication, preserving existing private preview au
   fs.writeFileSync(path.join(userHome,'.codex/auth.json'),'synthetic-credential-fixture');fs.writeFileSync(path.join(userHome,'.codex/config.toml'),'do not import');
   const locations=initializePreviewRoot(path.join(root,'preview'),{userHome});
   assert.equal(stageCodexAuthentication(locations,{env:{},userHome}).available,true);
-  assert.deepEqual(fs.readdirSync(locations.codexHome),['auth.json']);assert.equal(fs.statSync(path.join(locations.codexHome,'auth.json')).mode&0o777,0o600);
+  assert.deepEqual(fs.readdirSync(locations.codexHome),['auth.json']);assertPrivate(path.join(locations.codexHome,'auth.json'),0o600);
   fs.writeFileSync(path.join(locations.codexHome,'auth.json'),'changed-preview-auth');stageCodexAuthentication(locations,{env:{},userHome});
   assert.equal(fs.readFileSync(path.join(locations.codexHome,'auth.json'),'utf8'),'changed-preview-auth');assert.equal(fs.readFileSync(path.join(userHome,'.codex/auth.json'),'utf8'),'synthetic-credential-fixture');
   const folders=preparePreviewFixtures(locations);fs.writeFileSync(path.join(folders[0].path,'README.md'),'keep user experiment');preparePreviewFixtures(locations);

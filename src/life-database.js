@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { hasPrivatePermissions } from './private-paths.cjs';
 import path from 'node:path';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
@@ -22,7 +23,7 @@ const ident = value => {if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)) throw new E
 export function readLifeProfile(file) {
   if (!path.isAbsolute(file)) throw new Error('Choose an absolute private connection profile path.');
   const info = fs.lstatSync(file);
-  if (!info.isFile() || (process.getuid && info.uid !== process.getuid()) || info.mode & 0o077 || info.size > 64_000) throw new Error('The connection profile must be an owner-only file (0600).');
+  if (!info.isFile() || !hasPrivatePermissions(file, info) || info.size > 64_000) throw new Error('The connection profile must be an owner-only file (0600 on Unix; private ACL on Windows).');
   const p = JSON.parse(fs.readFileSync(file,'utf8'));
   if (!['sqlite','mysql'].includes(p.driver)) throw new Error('Choose SQLite or MariaDB/MySQL.');
   if (!Number.isSafeInteger(p.userId) || p.userId < 1 || !Number.isSafeInteger(p.workspaceId) || p.workspaceId < 1) throw new Error('The private profile must bind one existing user and workspace.');

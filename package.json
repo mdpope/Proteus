@@ -29,7 +29,8 @@
     "terminal:build": "node scripts/build-terminal.mjs",
     "postinstall": "node scripts/prepare-pty.mjs && node scripts/prepare-extensions.mjs",
     "package:linux": "node scripts/package-linux.mjs",
-    "test:linux": "node test/linux-current.mjs"
+    "test:linux": "node test/linux-current.mjs",
+    "package:windows": "node scripts/package-windows.mjs"
   },
   "dependencies": {
     "@ghostery/adblocker-electron": "2.20.1",
@@ -47,6 +48,7 @@
     "node-pty": "1.1.0",
     "playwright": "1.64.0",
     "qrcode": "1.5.4",
+    "tar": "7.5.22",
     "ws": "8.22.0",
     "yaml": "2.9.1",
     "tldts-experimental": "7.4.18"
@@ -54,7 +56,8 @@
   "devDependencies": {
     "@electron/packager": "20.3.0",
     "@electron/rebuild": "4.2.0",
-    "electron": "44.5.1"
+    "electron": "44.5.1",
+    "electron-builder": "26.15.3"
   },
   "overrides": {
     "electron-chrome-web-store": {

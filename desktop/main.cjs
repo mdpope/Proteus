@@ -20,6 +20,7 @@ const showWindow = () => { const target=windows?.current()?.window;if(!target){i
 if(!desktopPreview)app.setName('Proteus');
 if (process.platform === 'linux') app.setDesktopName('proteus.desktop');
 process.env.PATH = launchPath(process.platform, require('node:os').homedir(), process.env.PATH);
+if(process.platform==='win32')require('../src/private-paths.cjs').ensurePrivateHome(app.getPath('userData'));
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   // CLI-driven updates and service stops use the same graceful shutdown as Quit.
@@ -43,6 +44,7 @@ else {
     const { startServer } = await import('../src/server.js');
     const { isWithin,defaultHome } = await import('../src/files.js');
     const {Updates,pendingUpdate}=await import('../src/updates.js');
+    const freshHome=!require('node:fs').existsSync(defaultHome());
     const installation=app.isPackaged?(process.platform==='darwin'?path.resolve(app.getAppPath(),'../../..'):path.resolve(app.getAppPath(),'../..')):null;
     const pendingRecovery=installation&&!desktopPreview?pendingUpdate(defaultHome(),installation):null;if(pendingRecovery)process.env.PROTEUS_UPDATE_JOB=pendingRecovery;
     const { CredentialBroker } = await import('../src/credentials.js');
@@ -298,7 +300,7 @@ else {
     windows.handle('proteus:copy-text', (event, text) => { trusted(event); if (typeof text !== 'string' || text.length > 1_000_000) throw new Error('Invalid clipboard text.'); clipboard.writeText(text); });
     windows.handle('proteus:choose-paths', async (event, options) => {
       trusted(event); const folder = options.kind === 'folder';
-      const result = await dialog.showOpenDialog(windows.current().window, { properties: [...(options.kind==='update-candidate'?['openFile','openDirectory','treatPackageAsDirectory']:[folder?'openDirectory':'openFile']), ...(options.multiple ? ['multiSelections'] : [])], ...(folder||options.kind==='update-candidate' ? {} : { filters: [{ name: options.kind === 'workspace' ? 'VS Code workspace' : options.kind === 'life-profile' ? 'Private database profile' : options.kind === 'life-backup' ? 'Private SQL backup' : 'Markdown', extensions: options.kind === 'workspace' ? ['code-workspace'] : options.kind === 'life-profile' ? ['json'] : options.kind === 'life-backup' ? ['sql'] : ['md'] }] }) });
+      const result = await dialog.showOpenDialog(windows.current().window, { properties: [...(options.kind==='update-candidate'?['openFile','openDirectory','treatPackageAsDirectory']:[folder?'openDirectory':'openFile']), ...(options.multiple ? ['multiSelections'] : [])], ...(folder||options.kind==='update-candidate' ? {} : { filters: [{ name: options.kind === 'workspace' ? 'VS Code workspace' : options.kind === 'update-release' ? 'Signed Proteus release' : options.kind === 'life-profile' ? 'Private database profile' : options.kind === 'life-backup' ? 'Private SQL backup' : 'Markdown', extensions: options.kind === 'workspace' ? ['code-workspace'] : ['life-profile','update-release'].includes(options.kind) ? ['json'] : options.kind === 'life-backup' ? ['sql'] : ['md'] }] }) });
       return result.canceled ? [] : result.filePaths;
     });
     windows.handle('proteus:browser', (event, value) => {
@@ -354,7 +356,7 @@ else {
     configureWindow(windows.contexts.get(firstRecord.id));
     service.updateUIHealth=async()=>{for(const ctx of windows.contexts.values()){if(ctx.window.isDestroyed()||ctx.window.webContents.isLoading()||!await ctx.window.webContents.executeJavaScript("!!(document.querySelector('#topbar-home')&&document.querySelector('#main')&&window.desktop)"))return false;}return windows.contexts.size>0;};
     service.windowCount=()=>[...windows.contexts.values()].filter(ctx=>!ctx.window.isDestroyed()&&!ctx.window.webContents.isLoading()).length;
-    service.updates=new Updates(service,{packaged:app.isPackaged&&!desktopPreview,installation,browserHome:app.getPath('userData'),quit:()=>app.quit(),blockers:()=>[...terminals.sessions.values()].filter(session=>session.child&&session.status==='running'&&session.persistence!=='tmux').map(()=> 'A local terminal process is still attached. Finish or detach it before updating.').concat([...browser.tabs.values()].some(tab=>tab.agentActions||tab.downloads?.size)?['A browser operation or download is active.']:[])});
+    service.updates=new Updates(service,{packaged:app.isPackaged&&!desktopPreview,installation,freshHome,browserHome:app.getPath('userData'),quit:()=>app.quit(),blockers:()=>[...terminals.sessions.values()].filter(session=>session.child&&session.status==='running'&&session.persistence!=='tmux').map(()=> 'A local terminal process is still attached. Finish or detach it before updating.').concat([...browser.tabs.values()].some(tab=>tab.agentActions||tab.downloads?.size)?['A browser operation or download is active.']:[])});
     service.onUpdateResumed=runId=>{const ctx=service.windowForChat(runId);if(ctx)windows.run(ctx.id,()=>{showWindow();ctx.window.webContents.send('proteus:notification-open',{runId});});};
     const mac = process.platform === 'darwin';
     const icon = nativeImage.createFromPath(path.join(__dirname, mac ? 'trayTemplate.png' : 'icon.png')).resize({ width: mac ? 18 : 24, height: mac ? 18 : 24 });

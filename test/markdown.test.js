@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -18,7 +19,7 @@ test('HTML, event handlers, unsafe schemes, and script-looking fenced code remai
   assert.ok(!render('[x](https://user:password@example.com)').includes('data-link="https://user:'));
 });
 test('image transport only reads referenced, bounded raster files within the captured workspace', t => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-image-')); t.after(() => fs.rmSync(home, { recursive: true, force: true }));
+  const home = privateTemporaryDirectory(path.join(os.tmpdir(), 'proteus-image-')); t.after(() => fs.rmSync(home, { recursive: true, force: true }));
   const workspace = path.join(home, 'workspace'); fs.mkdirSync(workspace);
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zc6sAAAAASUVORK5CYII=', 'base64');
   fs.writeFileSync(path.join(workspace, 'plot.png'), png); fs.writeFileSync(path.join(home, 'private.png'), png);

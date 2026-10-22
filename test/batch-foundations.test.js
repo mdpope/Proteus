@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -11,7 +12,7 @@ test('catalog normalization keeps current metadata without collapsing distinct m
  assert.deepEqual(uniqueModels([{id:'a',name:'Shared',controls:{reasoningEfforts:['low']}},{id:'b',name:'Shared'},{id:'a',name:'Latest',controls:{reasoningEfforts:['high']}},{}]),[{id:'a',name:'Latest',controls:{reasoningEfforts:['high']}},{id:'b',name:'Shared'}]);
 });
 test('optional history failures preserve disk state, bound memory and retry; explicit deletion reports failure',async t=>{
- const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-history-retry-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-history-retry-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
  let fail=false;const notices=[],writer=new HistoryWriter(path.join(home,'browsing-history.json'));
  const store=new BrowsingHistory(home,{writer:{save:async(...args)=>{if(fail)throw Object.assign(new Error('Disk full'),{code:'ENOSPC'});return writer.save(...args);},close:()=>writer.close()},onError:error=>notices.push(error),retryMs:20000});t.after(()=>store.close());
  store.visit('https://example.test/first','First');await store.flush();const original=fs.readFileSync(store.file,'utf8');fail=true;

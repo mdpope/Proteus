@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -7,7 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { startServer } from '../src/server.js';
 
 async function fixture(t) {
-  const root=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-integrations-api-'));
+  const root=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-integrations-api-'));
   const native=path.join(root,'native'),automations=path.join(root,'automations');fs.mkdirSync(native);fs.mkdirSync(automations);fs.mkdirSync(path.join(native,'logs'));
   fs.writeFileSync(path.join(native,'config.json'),JSON.stringify({state_dir:native}));fs.writeFileSync(path.join(native,'omi_worker.py'),'# Synthetic fixture only; never execute');
   const executions=[];

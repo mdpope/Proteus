@@ -1,3 +1,5 @@
+import {assertPrivate} from './helpers/permissions.js';
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -35,15 +37,15 @@ test('queued history preferences govern visits after commit and close flushes th
 });
 
 test('history worker preserves unknown document fields and original bytes across an actual atomic-write failure',async t=>{
-  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-history-worker-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-history-worker-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
   const store=new BrowsingHistory(home,{retryMs:20000});t.after(()=>store.close());store.data.extension={opaque:'preserved'};store.visit('https://example.test/first','First');await store.flush();const original=fs.readFileSync(store.file);
   fs.mkdirSync(store.file+'.tmp');store.visit('https://example.test/second','Second');await assert.rejects(store.flush());assert.deepEqual(fs.readFileSync(store.file),original);assert.equal(store.list().total,2);
-  fs.rmdirSync(store.file+'.tmp');await store.close();const saved=JSON.parse(fs.readFileSync(store.file));assert.deepEqual(saved.extension,{opaque:'preserved'});assert.equal(saved.items.length,2);assert.equal(fs.statSync(store.file).mode&0o777,0o600);assert.equal(fs.existsSync(store.file+'.tmp'),false);
+  fs.rmdirSync(store.file+'.tmp');await store.close();const saved=JSON.parse(fs.readFileSync(store.file));assert.deepEqual(saved.extension,{opaque:'preserved'});assert.equal(saved.items.length,2);assertPrivate(store.file,0o600);assert.equal(fs.existsSync(store.file+'.tmp'),false);
 });
 
 test('closing the history writer directly rejects outstanding saves instead of leaving their promises pending',async t=>{
   const {HistoryWriter}=await import('../desktop/browsing-history-writer.cjs');
-  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-history-close-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-history-close-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
   const writer=new HistoryWriter(path.join(home,'browsing-history.json'));
   const saving=writer.save({version:1,enabled:true,retentionDays:90,items:[]});const rejected=assert.rejects(saving,/closed before saving/);await writer.close();await rejected;
 });

@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -7,7 +8,7 @@ import { ContextStore } from '../src/context.js';
 import { revision } from '../src/schedules.js';
 
 function fixture(t) {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-mcp-batch-rehearsal-')));
+  const root = fs.realpathSync(privateTemporaryDirectory(path.join(os.tmpdir(), 'proteus-mcp-batch-rehearsal-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const context = Object.create(ContextStore.prototype);
   context.get = () => ({ modes: {}, entries: [] });

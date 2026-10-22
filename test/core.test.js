@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import { fakeSession } from './fake-copilot.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -9,7 +10,7 @@ import { atomicJSON, isWithin } from '../src/files.js';
 import { Engine } from '../src/engine.js';
 import { startServer } from '../src/server.js';
 
-const temp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-test-'));
+const temp = () => privateTemporaryDirectory(path.join(os.tmpdir(), 'proteus-test-'));
 const example = cwd => ({ schemaVersion:1,id:'sample',name:'Sample',enabled:false,cron:'0 9 * * 1-5',timezone:'America/Denver',provider:'rehearsal',model:'',workspace:{cwd,additionalDirectories:[]},misfire:'skip',prompt:'Check the workspace.' });
 const until = async predicate => { for(let i=0;i<100;i++){if(predicate())return;await new Promise(r=>setTimeout(r,10));}throw new Error('Condition timed out.'); };
 

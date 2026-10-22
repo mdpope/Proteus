@@ -1,3 +1,16 @@
+## October 22 — Windows integration in progress
+
+The operator selected a conventional installer, authenticated Proteus website distribution,
+unsigned Windows setup for now and Windows Developer Mode for tests. The Windows branch now
+integrates upstream `5b8b708` (0.2.28). Windows validation passes 883 of 885 tests with two
+existing POSIX skips and static checks. Packaged UI, native PTY, provider readiness, rehearsal
+persistence and restart checks pass. Real NSIS functional checks cover exact payload, registration,
+active-app refusal and data preservation. The release website passes 27 focused release/Life/
+native-auth tests. See [Windows build/update instructions](windows-app.md). Full packaged update/
+rollback/live-provider acceptance and device pairing remain in progress. Website deployment
+and relay registration require the existing private deployment record. No public publication,
+Mac signing migration, production workflow or existing device reset is authorized by this entry.
+
 ## October 22 — source review and repository checkpoint
 
 The operator authorized review, commit and push of the outstanding 0.2.28 work. Fresh validation:

@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 
 export const desktopRuntimeRoots = ['desktop', 'public', 'src', 'schemas', 'templates', 'relay'];
 export const desktopRuntimeFiles = ['.gitignore', 'AGENTS.md', 'CHANGELOG.md', 'README.md'];
-export const desktopPackageIgnore = [/(?:^|\/)\.DS_Store$/, /(?:^|\/)\._[^/]*$/, /^\/(?:web|ios|test|docs|scripts|extensions|dist|coverage|local-records|\.runtime|\.git|\.github|\.agents|\.codex|\.aws)(?:\/|$)/, /^\/\.env/, /\.(?:log|xcresult)$/];
+export const desktopPackageIgnore = [/(?:^|\/)\.DS_Store$/, /(?:^|\/)\._[^/]*$/, /^\/(?:web|ios|test|docs|scripts|extensions|dist|coverage|work|outputs|local-records|\.runtime|\.git|\.github|\.agents|\.codex|\.aws)(?:\/|$)/, /^\/\.env/, /\.(?:log|xcresult)$/];
 export const fileDigest = file => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 
 function collect(root, relative) {

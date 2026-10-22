@@ -1,3 +1,5 @@
+import {assertPrivate} from './helpers/permissions.js';
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -14,8 +16,8 @@ test('workspace validates URL schemes, credential URLs, paths, types and duplica
  assert.deepEqual(tabs.map(t=>t.id),['overview','x']);assert.equal(normalizeSession({active:'missing'}).active,'overview');
 });
 test('workspace survives fresh store, saves mode0600 and preserves unreadable record',()=>{
- const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-workspace-'));
- try {const store=new WorkspaceSession(home);assert.equal(store.get(),null);store.save({active:'feature-omi',tabs:[{id:'feature-omi',type:'omi'}]});assert.equal(new WorkspaceSession(home).get().active,'feature-omi');assert.equal(fs.statSync(store.file).mode&0o777,0o600);fs.writeFileSync(store.file,'invalid');assert.throws(()=>store.get(),/preserved/);assert.equal(fs.readFileSync(store.file,'utf8'),'invalid');}finally{fs.rmSync(home,{recursive:true,force:true});}
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-workspace-'));
+ try {const store=new WorkspaceSession(home);assert.equal(store.get(),null);store.save({active:'feature-omi',tabs:[{id:'feature-omi',type:'omi'}]});assert.equal(new WorkspaceSession(home).get().active,'feature-omi');assertPrivate(store.file,0o600);fs.writeFileSync(store.file,'invalid');assert.throws(()=>store.get(),/preserved/);assert.equal(fs.readFileSync(store.file,'utf8'),'invalid');}finally{fs.rmSync(home,{recursive:true,force:true});}
 });
 test('restored generated document retains stable identity but no read grant or content',()=>{
  const hostId='12345678-1234-4123-8123-123456789abc',runId='chat-1',documentId='a'.repeat(64),parentId=`peer:${hostId}:${runId}`;
@@ -25,7 +27,7 @@ test('restored generated document retains stable identity but no read grant or c
  assert.doesNotMatch(JSON.stringify(saved),/grant|secret|enabled/);
 });
 test('selected chat child survives restart only while its parent and child remain valid',()=>{
- const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-workspace-'));
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-workspace-'));
  try {
   const store=new WorkspaceSession(home),tabs=[{id:'chat-a',type:'run',label:'A'},{id:'child-a',type:'browser',parentId:'chat-a',url:'https://example.test/'},{id:'chat-b',type:'run',label:'B'},{id:'child-b',type:'browser',parentId:'chat-b',url:'https://example.test/other'}];
   store.save({tabs,active:'child-a',selectedChildren:{'chat-a':'child-a','chat-b':'child-b',missing:'child-a','child-a':'child-b'}});
@@ -55,7 +57,7 @@ test('agent terminal serialization preserves the actual chat independently of wo
 });
 
 test('workspace save returns its committed normalized descriptors without requiring a disk reread',()=>{
- const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-session-save-result-'));
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-session-save-result-'));
  try{
   const store=new WorkspaceSession(home),saved=store.save({active:'feature-omi',tabs:[{id:'feature-omi',type:'omi'}]});
   assert.deepEqual(saved,store.get());assert.deepEqual(store.save(saved),saved);
@@ -64,7 +66,7 @@ test('workspace save returns its committed normalized descriptors without requir
 });
 
 test('project migration retains more than one hundred tabs, selections and browser history identities',()=>{
- const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-project-session-'));
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-project-session-'));
  try{
   const project={id:'project:local:default',type:'workspace',workspaceId:'work',projectId:'default',label:'General'};
   const tabs=[project,...Array.from({length:130},(_,i)=>({id:'browser-'+i,type:'browser',parentId:project.id,url:'https://example.test/'+i,hidden:i===5,unloaded:true,history:{entries:[{id:'entry-'+i,url:'https://example.test/'+i,title:'Page '+i}],index:0,currentEntryId:'entry-'+i,revision:7}}))];

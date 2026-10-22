@@ -1,3 +1,4 @@
+const {atomicRename}=require('../src/atomic-rename.cjs');
 const {DownloadSpeed}=require('./download-speed.cjs');
 const fs=require('node:fs'),path=require('node:path');
 const {randomUUID}=require('node:crypto');
@@ -34,7 +35,7 @@ class BrowserDownloads {
   if(value.action==='downloads-list')return this.list(value);
   if(value.action==='downloads-panel')return require('./browser-download-panel.cjs').openDownloads({parent:this.browser.window,manager:this,owner:this.owner(),x:value.x,y:value.y,colors:value.colors});
   if(value.action==='downloads-folder'){fs.mkdirSync(this.settings().directory,{recursive:true});const error=await shell.openPath(this.settings().directory);if(error)throw new Error(error);return {opened:true};}
-  if(value.action==='downloads-settings'){if(typeof value.directory!=='string'||!path.isAbsolute(value.directory)||!fs.statSync(value.directory).isDirectory())throw new Error('Choose an existing download folder on this computer.');const temp=this.settingsFile+'.tmp';fs.writeFileSync(temp,JSON.stringify({directory:fs.realpathSync(value.directory)}),{mode:0o600});fs.renameSync(temp,this.settingsFile);return this.list();}
+  if(value.action==='downloads-settings'){if(typeof value.directory!=='string'||!path.isAbsolute(value.directory)||!fs.statSync(value.directory).isDirectory())throw new Error('Choose an existing download folder on this computer.');const temp=this.settingsFile+'.tmp';fs.writeFileSync(temp,JSON.stringify({directory:fs.realpathSync(value.directory)}),{mode:0o600});atomicRename(temp,this.settingsFile);return this.list();}
   const row=this.rows.find(row=>row.id===value.downloadId&&row.windowId===this.owner());if(!row)throw new Error('Download no longer exists in this window.');const item=this.active.get(row.id);
   if(value.action==='downloads-pause'){if(!item||row.state!=='progressing')throw Error('This download cannot be paused.');item.pause();this.speeds.get(row.id)?.reset(row.receivedBytes);row.state='paused';this.notify();return this.list();}
   if(value.action==='downloads-resume'){if(!item?.canResume())throw Error('This download cannot resume.');this.speeds.get(row.id)?.reset(row.receivedBytes);item.resume();row.state='progressing';this.notify();return this.list();}

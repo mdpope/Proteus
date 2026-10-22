@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -9,7 +10,7 @@ import {RemoteCommandStore} from '../src/remote-command-store.js';
 
 const scope={hostId:'synthetic-owner',scope:'workspace',id:'workspace'};
 const tab={id:'browser',type:'browser',title:'Synthetic page',url:'https://example.test/',openedAt:'2026-10-01T00:00:00.000Z',lastTouchedAt:'2026-10-14T12:00:00.000Z',favicon:'data:image/png;base64,YQ=='};
-function home(t,beforeRemove){const p=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-sync-capacity-'));t.after(async()=>{await beforeRemove?.();fs.rmSync(p,{recursive:true,force:true});});return p;}
+function home(t,beforeRemove){const p=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-sync-capacity-'));t.after(async()=>{await beforeRemove?.();fs.rmSync(p,{recursive:true,force:true});});return p;}
 function storage(){const values=new Map();return {values,getItem:k=>values.get(k),setItem:(k,v)=>values.set(k,v),removeItem:k=>values.delete(k)};}
 
 test('two clients with stale runtime metadata do not accumulate mutations or regress owner timestamps',async t=>{

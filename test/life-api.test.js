@@ -1,3 +1,5 @@
+import {assertPrivate} from './helpers/permissions.js';
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -12,12 +14,12 @@ const credential=()=>({origin,clientId:'public',accessToken:'first-access',refre
 const response=(value,status=200)=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json'}});
 const tokens=(suffix='next')=>({access_token:suffix+'-access',refresh_token:suffix+'-refresh',token_type:'Bearer',expires_in:3600});
 function vault(initial=null){let value=initial;return {available(){},exists:()=>!!value,load:()=>value,save:next=>{value=next;},clear:()=>{value=null;},read:()=>value};}
-function fixture(t,options={}){const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-life-api-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));return {home,store:new LifeStore(home,options)};}
+function fixture(t,options={}){const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-life-api-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));return {home,store:new LifeStore(home,options)};}
 test('legacy config is archived byte-for-byte, SQL never opens, API defaults preserve enable flag',async t=>{
- const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-life-api-migration-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-life-api-migration-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
  const original='{\n "schemaVersion":2, "enabled":true, "profileFile":"/must/not/be/read/private.json", "websiteUrl":"https://life.example.test"\n}\n';fs.writeFileSync(path.join(home,'life.json'),original);
  const store=new LifeStore(home,{vault:vault()});assert.equal(store.get().enabled,true);assert.equal(store.get().configured,false);assert.equal(store.get().connection.mode,'website-api');
- const archive=fs.readdirSync(path.join(home,'life')).find(f=>f.startsWith('legacy-config-'));assert.equal(fs.readFileSync(path.join(home,'life',archive),'utf8'),original);assert.equal(fs.statSync(path.join(home,'life',archive)).mode&0o777,0o600);
+ const archive=fs.readdirSync(path.join(home,'life')).find(f=>f.startsWith('legacy-config-'));assert.equal(fs.readFileSync(path.join(home,'life',archive),'utf8'),original);assertPrivate(path.join(home,'life',archive),0o600);
  assert.equal(store.get().websiteOrigin,origin);assert.ok(!JSON.stringify(store.get()).includes('/must/not'));await assert.rejects(store.data('nutrition'),/Sign in/);assert.equal(store.planSetup,undefined);
 });
 test('protected vault fails closed and never writes plaintext tokens',t=>{

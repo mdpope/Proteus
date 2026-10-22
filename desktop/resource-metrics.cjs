@@ -15,7 +15,6 @@ function createProcessSampler({run=execFile,platform=process.platform}={}) {
 }
 
 function trackedChildren(rootPid, knownPids = new Set(), psOutput = '') {
-  if (process.platform === 'win32') return [];
   const output=psOutput||'';
   const rows=output.split('\n').map(line=>{const match=line.trim().match(/^(\d+)\s+(\d+)\s+(\d+)\s+([\d.]+)\s+(.+)$/);return match?[Number(match[1]),Number(match[2]),Number(match[3]),Number(match[4]),match[5]]:null;}).filter(Boolean);
   const descendants=new Set([rootPid]),found=[];
@@ -25,7 +24,7 @@ function trackedChildren(rootPid, knownPids = new Set(), psOutput = '') {
   return found;
 }
 function trackedPids(entries, knownPids = new Set(), psOutput = '') {
-  if (process.platform === 'win32' || !Array.isArray(entries) || !entries.length) return [];
+  if (!Array.isArray(entries) || !entries.length) return [];
   const output=psOutput||'';
   const selected=new Map(entries.filter(item=>Number.isSafeInteger(item?.pid)&&item.pid>0).map(item=>[item.pid,item]));
   return output.split('\n').map(line=>{const match=line.trim().match(/^(\d+)\s+(\d+)\s+(\d+)\s+([\d.]+)\s+(.+)$/);if(!match)return null;const pid=Number(match[1]),entry=selected.get(pid);return entry&&!knownPids.has(pid)?{pid,type:'persistent-terminal',name:entry.role||'tmux',cpuPercent:Number(match[4]),memoryBytes:Number(match[3])*1024,tabIds:[],sessionId:entry.sessionId||null}:null;}).filter(Boolean);

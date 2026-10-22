@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -13,7 +14,7 @@ import {RemoteClient,until} from './remote-client.mjs';
 const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLytQAAAABJRU5ErkJggg==','base64');
 const sha256=createHash('sha256').update(png).digest('hex');
 test('explicit first-message and follow-up consent deliver only exact synthetic bytes to named provider',async t=>{
-  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-attachment-remote-'));
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-attachment-remote-'));
   atomicJSON(path.join(home,'settings.json'),{schemaVersion:1,provider:'copilot',model:'fixture',timezone:'UTC',workspace:{cwd:home,additionalDirectories:[]},skillDirectories:[],mcpServers:{}});
   const calls=[];
   const provider={acceptedMediaTypes:['image/png'],async run({attachments,prompt}){calls.push({attachments,prompt});},async status(){return {available:true,models:[{id:'fixture',name:'Fixture'}]};}};
@@ -40,7 +41,7 @@ test('explicit first-message and follow-up consent deliver only exact synthetic 
 });
 
 test('deferred draft cannot execute during an unrelated drain',async t=>{
-  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-attachment-deferred-'));
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-attachment-deferred-'));
   atomicJSON(path.join(home,'settings.json'),{schemaVersion:1,provider:'copilot',model:'fixture',timezone:'UTC',workspace:{cwd:home,additionalDirectories:[]},skillDirectories:[],mcpServers:{}});
   let calls=0;const app=await startServer({home,port:0,timers:false,providers:{copilot:{async run(){calls++;},async status(){return {available:true,models:[]};}}}});t.after(async()=>{await app.close();fs.rmSync(home,{recursive:true,force:true});});
   const run=app.engine.createRun(await app.buildChatSchedule({prompt:'Never run before consent',provider:'copilot',model:'fixture'}),'chat',null,{deferStart:true});

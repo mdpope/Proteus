@@ -1,3 +1,4 @@
+import {atomicRename} from './atomic-rename.cjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
@@ -114,7 +115,7 @@ export class ContentTabs {
       return {source:this.get(scope,id),destination:this.get(destination.scope,destination.id),tab};
     });this.asyncTail=task.catch(()=>{});return task;
   }
-  write(data){if(Object.keys(data.scopes).length>1000||Buffer.byteLength(JSON.stringify(data))>16_000_000)throw new Error('Content tab store exceeds its bounded limit.');fs.mkdirSync(path.dirname(this.file),{recursive:true});const temp=this.file+'.tmp';try{fs.writeFileSync(temp,JSON.stringify(data)+'\n',{mode:0o600});fs.chmodSync(temp,0o600);fs.renameSync(temp,this.file);}finally{try{fs.unlinkSync(temp);}catch{}}}
+  write(data){if(Object.keys(data.scopes).length>1000||Buffer.byteLength(JSON.stringify(data))>16_000_000)throw new Error('Content tab store exceeds its bounded limit.');fs.mkdirSync(path.dirname(this.file),{recursive:true});const temp=this.file+'.tmp';try{fs.writeFileSync(temp,JSON.stringify(data)+'\n',{mode:0o600});fs.chmodSync(temp,0o600);atomicRename(temp,this.file);}finally{try{fs.unlinkSync(temp);}catch{}}}
   mutate({scope,id,expectedRevision,operations}){
     const key=this.key(scope,id),data=this.read(),current=data.scopes[key]||{revision:0,tabs:[]};
     if(!Number.isSafeInteger(expectedRevision)||expectedRevision!==current.revision)throw new Error('Content tabs changed. Refresh before retrying this action.');
@@ -134,7 +135,7 @@ export class ContentTabs {
     if(current.revision>=Number.MAX_SAFE_INTEGER)throw new Error('Content tab revision limit reached.');const result={scope,id,revision:current.revision+1,tabs};data.scopes[key]={...current,revision:result.revision,tabs};this.write(data);this.onChange(result);return result;
   }
   documentSource(chatId,documentId,scope='chat'){if(!this.get(scope,chatId).tabs.some(tab=>tab.documentId===documentId)&&!(scope==='chat'&&this.list({type:'document'}).some(tab=>tab.documentId===documentId&&tab.chatId===chatId)))throw new Error('This document tab is no longer open.');let records;try{if(fs.statSync(this.sourcesFile).size>2_000_000)throw new Error();records=JSON.parse(fs.readFileSync(this.sourcesFile,'utf8'));}catch{throw new Error('This chat document is not available on its host.');}const row=records[documentId];const original=scope==='workspace'?row?.workspaceId===chatId:scope==='chat'?row?.chatId===chatId:row?.scope===scope&&row?.scopeId===chatId;const moved=row?.placements?.includes(this.key(scope,chatId));if((!original&&!moved)||typeof row?.file!=='string'||!path.isAbsolute(row.file))throw new Error('This document belongs to another chat or its source is unavailable.');return row.file;}
-  authorizeDocumentPlacement(documentId,scope,id){const key=this.key(scope,id),records=JSON.parse(fs.readFileSync(this.sourcesFile,'utf8')),row=records[documentId];if(!row)throw new Error('This viewer source is unavailable.');row.placements=[...new Set([...(row.placements||[]),key])];const temp=this.sourcesFile+'.tmp';fs.writeFileSync(temp,JSON.stringify(records)+'\n',{mode:0o600});fs.renameSync(temp,this.sourcesFile);}
+  authorizeDocumentPlacement(documentId,scope,id){const key=this.key(scope,id),records=JSON.parse(fs.readFileSync(this.sourcesFile,'utf8')),row=records[documentId];if(!row)throw new Error('This viewer source is unavailable.');row.placements=[...new Set([...(row.placements||[]),key])];const temp=this.sourcesFile+'.tmp';fs.writeFileSync(temp,JSON.stringify(records)+'\n',{mode:0o600});atomicRename(temp,this.sourcesFile);}
   rememberSources(session){
     let records={};try{if(fs.statSync(this.sourcesFile).size>2_000_000)throw new Error();records=JSON.parse(fs.readFileSync(this.sourcesFile,'utf8'));if(!records||typeof records!=='object'||Array.isArray(records))throw new Error();}catch(error){if(error.code!=='ENOENT')throw new Error('Saved document sources could not be read. The original file was preserved.');}
     for(const tab of [...(session?.tabs||[]),...(session?.team?.tabs||[])])if(tab.type==='markdown'&&!tab.hostId){
@@ -148,7 +149,7 @@ export class ContentTabs {
     }
     if(Object.keys(records).length>1000)throw new Error('Document source registry exceeds its bounded limit; the original registry was preserved.');
     if(Buffer.byteLength(JSON.stringify(records))>2_000_000)throw new Error('Document source registry exceeds its bounded limit.');
-    const temp=this.sourcesFile+'.tmp';fs.mkdirSync(path.dirname(this.sourcesFile),{recursive:true});try{fs.writeFileSync(temp,JSON.stringify(records)+'\n',{mode:0o600});fs.chmodSync(temp,0o600);fs.renameSync(temp,this.sourcesFile);}finally{try{fs.unlinkSync(temp);}catch{}}
+    const temp=this.sourcesFile+'.tmp';fs.mkdirSync(path.dirname(this.sourcesFile),{recursive:true});try{fs.writeFileSync(temp,JSON.stringify(records)+'\n',{mode:0o600});fs.chmodSync(temp,0o600);atomicRename(temp,this.sourcesFile);}finally{try{fs.unlinkSync(temp);}catch{}}
   }
   seedWorkspace(session){
     this.rememberSources(session);

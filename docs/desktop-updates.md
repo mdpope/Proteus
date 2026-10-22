@@ -330,3 +330,7 @@ work** only after current package/UI identity verification; it preserves the fai
 and never replays its ambiguous continuation. This is separate from the automatic healthy restart
 or compatible-rollback continuation. Twelve synthetic updater cases pass; signed supervisor and
 real-provider acceptance remain pending.
+
+## Windows distribution integration (acceptance in progress)
+
+See [Windows desktop](windows-app.md) for the authenticated signed-manifest distribution, cached NSIS installer, fresh-home recovery inventory and exact-package commands. Engine Room may hand off without selecting a chat; original-chat handoff still requires its checkpoint and retains its one durable continuation ID. Existing recovery inventories remain mandatory for established homes. Windows installer/update/rollback acceptance is tracked separately from earlier signed Mac/Linux acceptance.

@@ -1,3 +1,4 @@
+const {atomicRename}=require('../src/atomic-rename.cjs');
 const fs = require('node:fs');
 const {normalizeChatSetupDraft}=require('./chat-setup-draft.cjs');
 const path = require('node:path');
@@ -117,7 +118,7 @@ class WorkspaceSession {
     const clean=this.normalize(value), json=JSON.stringify(clean,null,2)+'\n';
     if(Buffer.byteLength(json)>MAX_SESSION_BYTES)throw new Error('Workspace record exceeds size limit.');
     if(json===this.last)return clean;
-    const temporary=this.file+'.tmp';fs.mkdirSync(path.dirname(this.file),{recursive:true});fs.writeFileSync(temporary,json,{mode:0o600});fs.chmodSync(temporary,0o600);fs.renameSync(temporary,this.file);this.last=json;return clean;
+    const temporary=this.file+'.tmp';fs.mkdirSync(path.dirname(this.file),{recursive:true});fs.writeFileSync(temporary,json,{mode:0o600});fs.chmodSync(temporary,0o600);atomicRename(temporary,this.file);this.last=json;return clean;
   }
 }
 module.exports={WorkspaceSession,normalizeSession};

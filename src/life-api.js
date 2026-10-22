@@ -1,3 +1,4 @@
+import {atomicRename} from './atomic-rename.cjs';
 import fs from 'node:fs';
 import { requireProtectedStorage } from './credential-storage.js';
 import path from 'node:path';
@@ -22,7 +23,7 @@ export class LifeTokenVault {
   try{return JSON.parse(this.safeStorage.decryptString(fs.readFileSync(this.file)));}
   catch(e){if(e.code==='ENOENT')return null;throw new Error('Life sign-in could not be read securely. Its protected file was preserved.');}
  }
- save(value){this.available();fs.mkdirSync(path.dirname(this.file),{recursive:true,mode:0o700});const temp=this.file+'.'+randomUUID()+'.tmp';try{fs.writeFileSync(temp,this.safeStorage.encryptString(JSON.stringify(value)),{flag:'wx',mode:0o600});fs.renameSync(temp,this.file);}finally{fs.rmSync(temp,{force:true});}}
+ save(value){this.available();fs.mkdirSync(path.dirname(this.file),{recursive:true,mode:0o700});const temp=this.file+'.'+randomUUID()+'.tmp';try{fs.writeFileSync(temp,this.safeStorage.encryptString(JSON.stringify(value)),{flag:'wx',mode:0o600});atomicRename(temp,this.file);}finally{fs.rmSync(temp,{force:true});}}
  clear(){fs.rmSync(this.file,{force:true});}
 }
 class LifeHTTPError extends Error {constructor(status,message){super(message);this.status=status;}}
@@ -34,12 +35,13 @@ export class LifeAPI {
  cancel(){this.authAttempt++;this.pending=null;this.changed();}
  invalidate(){this.generation++;this.authAttempt++;for(const c of this.controllers)c.abort();this.controllers.clear();this.pending=null;this.profile=null;}
  clear(){this.invalidate();this.credential=null;this.vault?.clear();this.loaded=true;this.changed();}
- async raw(origin,endpoint,{method='GET',body,form,token,binary=false}={}){
-  const controller=new AbortController();this.controllers.add(controller);const timer=setTimeout(()=>controller.abort(),this.timeout);
+ async raw(origin,endpoint,{method='GET',body,form,token,binary=false,download,timeout=this.timeout}={}){
+  const controller=new AbortController();this.controllers.add(controller);const timer=setTimeout(()=>controller.abort(),timeout);
   try{
    const headers={Accept:binary?'application/octet-stream':'application/json'};if(token)headers.Authorization='Bearer '+token;
    if(body!==undefined)headers['Content-Type']='application/json';if(form)headers['Content-Type']='application/x-www-form-urlencoded';
    const response=await this.fetch(origin+endpoint,{method,headers,body:form?new URLSearchParams(form):body===undefined?undefined:JSON.stringify(body),redirect:'error',signal:controller.signal});
+   if(download&&response.ok)return await download(response);
    const max=binary?20*1024*1024:30*1024*1024;let size=0;const parts=[];
    for await(const chunk of response.body||[]){size+=chunk.length;if(size>max){controller.abort();throw new Error('Life response exceeds the supported size.');}parts.push(Buffer.from(chunk));}
    const bytes=Buffer.concat(parts);let value=null;if(!binary)try{value=JSON.parse(bytes.toString('utf8'));}catch{}

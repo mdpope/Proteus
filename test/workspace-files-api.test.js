@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -6,7 +7,7 @@ import path from 'node:path';
 import { startServer } from '../src/server.js';
 
 async function fixture(t) {
-  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-workspace-api-'));
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-workspace-api-'));
   const workspace=path.join(home,'workspace'),additional=path.join(home,'additional'),outside=path.join(home,'outside');
   for(const dir of [workspace,additional,outside])fs.mkdirSync(dir);
   fs.mkdirSync(path.join(workspace,'Nested'));fs.writeFileSync(path.join(workspace,'Nested','Existing.md'),'# Keep this note');

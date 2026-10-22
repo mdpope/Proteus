@@ -1,3 +1,18 @@
+## 2026-10-22 — Windows distribution and recovery use the existing owner protocol
+
+The operator selected a conventional per-user installer, authenticated proteus.example releases and
+an initially unsigned Windows executable. Pin an independent Ed25519 publisher public key in
+client/server source; keep the private key outside checkout and server. Sign the exact archive,
+installer and package/source identities. Require explicit operator or chat handoff after download
+and isolated acceptance; do not add unattended updates. Website reads reuse app:read OAuth grants.
+
+Windows replacement uses the registered cached NSIS installer rather than renaming a running
+application directory. Keep one exact previous installer in each verified recovery application;
+restore application bytes without overwriting newer data or retry receipts. Preserve the existing
+protocol-1 idle barrier, helper journal and same-chat delivery ID. A standalone Engine Room update
+needs no model chat. New homes may initialize empty recovery policy; existing homes require the
+operator inventory and the established two-generation retention procedure.
+
 ## 2026-10-22 — Preserve Apple request continuity in Proteus
 
 The operator requested all Apple links, form contents and steps in the Proteus project, then
@@ -2083,3 +2098,10 @@ Explicit locking/sleep and OS policy remain in control. The setting is local to 
 restart/update returns to off. All 865 Node tests and syntax checks pass. Isolated Electron UI acceptance verifies the native
 macOS display-sleep assertion, background operation, toggle-off and quit cleanup. Packaging is
 in progress; installed apps are unchanged.
+## October 22 — bounded Windows atomic replacement
+
+Installed acceptance exposed a transient Windows sharing violation while replacing a chat-state
+document. Atomic state writers now share a bounded Windows-only rename retry (at most ten short
+waits). They retry the replacement operation without deleting the old document or weakening ACLs.
+Persistent denials still fail, and other platform/error behavior stays immediate. A real Windows
+reader-lock fixture verifies replacement after the reader releases the file.

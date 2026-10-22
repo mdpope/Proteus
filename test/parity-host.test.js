@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -10,7 +11,7 @@ import { AppAccount } from '../src/app-account.js';
 import history from '../desktop/browsing-history.cjs';
 import workspace from '../desktop/workspace-session.cjs';
 
-function home(t){const p=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-parity-test-'));t.after(()=>fs.rmSync(p,{recursive:true,force:true}));return p;}
+function home(t){const p=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-parity-test-'));t.after(()=>fs.rmSync(p,{recursive:true,force:true}));return p;}
 test('browser notifications stay local, deduplicate per owner and persist recovery references',async t=>{
   const folder=home(t),published=[],store=new ActivityStore(folder,{identity:()=>({accountId:'a',workspaceId:'w',origin:'https://example.test'}),publish:async item=>published.push(item)});
   let emitted=0;store.on('notification',()=>emitted++);

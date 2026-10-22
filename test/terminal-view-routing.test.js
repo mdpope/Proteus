@@ -7,7 +7,7 @@ test('workspace terminal aliases receive live events and dispose by their actual
   let listener;
   const sandbox={window:{desktop:{onTerminal:callback=>{listener=callback;return ()=>{};}}}};
   vm.createContext(sandbox);
-  const source=fs.readFileSync(new URL('../public/terminals.js',import.meta.url),'utf8').replace(/^import .*;\n/,'').replaceAll('export ','');
+  const source=fs.readFileSync(new URL('../public/terminals.js',import.meta.url),'utf8').replace(/^import .*;\r?\n/,'').replaceAll('export ','');
   vm.runInContext(source+'\nglobalThis.routing={views,initTerminals,disposeTerminalUi};',sandbox);
   const {views,initTerminals,disposeTerminalUi}=sandbox.routing;
   initTerminals({});

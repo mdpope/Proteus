@@ -1,3 +1,5 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {cleanupStack} from './helpers/cleanup.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -7,8 +9,10 @@ import { BrowserHistory } from '../src/browser-history.js';
 import { BrowserHistoryStore } from '../src/browser-history-store.js';
 import { DesktopPeers } from '../src/desktop-peers.js';
 const visit=(id,extra={})=>({eventId:id,url:'https://example.test/'+id,title:'Synthetic '+id,visitedAt:'2026-10-12T12:00:00Z',profileId:'default',sourceHostId:'owner',...extra});
-function directory(t){const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-browser-index-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));return home;}
-function store(t,options){const result=new BrowserHistoryStore(directory(t),options);t.after(()=>result.close());return result;}
+const cleanups=new WeakMap();
+function cleanup(t,action){if(!cleanups.has(t))cleanups.set(t,cleanupStack(t));cleanups.get(t)(action);}
+function directory(t){const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-browser-index-'));cleanup(t,()=>fs.rmSync(home,{recursive:true,force:true}));return home;}
+function store(t,options){const result=new BrowserHistoryStore(directory(t),options);cleanup(t,()=>result.close());return result;}
 
 test('history preference edits preserve unknown persisted fields and omit derived catalogs and peer runtime state',t=>{
  const history=store(t),peer={hostId:'owner-peer',enabled:true,backfill:'all',profileIds:['default'],future:{keep:true}};
@@ -19,7 +23,7 @@ test('history preference edits preserve unknown persisted fields and omit derive
 });
 
 test('worker history records full redirect URLs, retries by ID, validates collisions and excludes private profiles/userinfo',async t=>{
- const history=new BrowserHistory(directory(t),{hostId:()=> 'owner'});t.after(()=>history.close());
+ const history=new BrowserHistory(directory(t),{hostId:()=> 'owner'});cleanup(t,()=>history.close());
  assert.deepEqual((await history.record({visits:[visit('a'),visit('b',{profileId:'work'})]})).acknowledgedEventIds,['a','b']);
  assert.equal((await history.record({events:[visit('a')]})).inserted,0);
  assert.equal((await history.query({})).total,2);assert.equal((await history.query({profileId:'work'})).items[0].eventId,'b');
@@ -88,7 +92,7 @@ test('account legacy import uses original source IDs without URL heuristics and 
 
 test('configured peer replication retains last cursor on failure, resumes, and excludes unselected profiles',async t=>{
  const source=store(t),history=store(t),hostId='11111111-1111-4111-8111-111111111111';source.record({events:[visit('a')]});history.settings({peers:[{hostId,enabled:true,profileIds:['default'],backfill:'all'}]});
- const peers=new DesktopPeers(directory(t),{browserHistory:history});peers.loaded=true;peers.records.set(hostId,{hostId,paused:false});t.after(()=>peers.close());let fail=false;
+ const peers=new DesktopPeers(directory(t),{browserHistory:history});peers.loaded=true;peers.records.set(hostId,{hostId,paused:false});cleanup(t,()=>peers.close());let fail=false;
  peers.request=async()=>{if(fail)throw new Error('Synthetic offline');return source.sync({profileIds:['default']});};
  assert.equal((await peers.syncHistory()).results[0].inserted,1);const cursor=history.peerStatus()[0].cursor;fail=true;assert.match((await peers.syncHistory()).results[0].error,/offline/);assert.equal(history.peerStatus()[0].cursor,cursor);
  fail=false;assert.equal((await peers.syncHistory()).results[0].inserted,0);assert.equal(history.query().total,1);
@@ -96,21 +100,21 @@ test('configured peer replication retains last cursor on failure, resumes, and e
 });
 
 test('worker change notices are absent for duplicate record/replay/read/unchanged settings and migration retries',async t=>{
- const history=new BrowserHistory(directory(t),{hostId:'owner'});t.after(()=>history.close());let notices=0;history.on('changed',()=>notices++);
+ const history=new BrowserHistory(directory(t),{hostId:'owner'});cleanup(t,()=>history.close());let notices=0;history.on('changed',()=>notices++);
  await history.record({events:[visit('one')]});assert.equal(notices,1);await history.record({events:[visit('one')]});await history.query();await history.settings({action:'settings'});await history.settings({enabled:true,retentionDays:0});assert.equal(notices,1);
  const nav={action:'navigate',tabId:'tab',operationId:'nav',baseRevision:0,entryId:'entry',url:'https://example.test/nav',visitedAt:'2026-10-12T12:00:00Z'};
  await history.navigation(nav);assert.equal(notices,2);await history.navigation(nav);await history.navigation({action:'seed',tabId:'tab',url:'https://example.test/stale'});assert.equal(notices,2);
 });
 
 test('account import preserves cloud originals and retries an interrupted second batch without duplicate visits',async t=>{
- const history=new BrowserHistory(directory(t),{hostId:'owner'});t.after(()=>history.close());const rows=Array.from({length:250},(_,i)=>({...visit('a'+i),id:'record-'+i}));let requests=0,checks=0,interrupt=true;
+ const history=new BrowserHistory(directory(t),{hostId:'owner'});cleanup(t,()=>history.close());const rows=Array.from({length:250},(_,i)=>({...visit('a'+i),id:'record-'+i}));let requests=0,checks=0,interrupt=true;
  const identity={endpoint:'https://synthetic.test',accountId:'account',workspaceId:'workspace'},account={life:{api:{load(){},identity:()=>identity,assertIdentity(){if(interrupt && ++checks===3)throw Error('Synthetic account changed');}}},request:async({path})=>{assert.equal(path,'/history');requests++;return {items:rows};}};
  await assert.rejects(history.importAccount(account),/account changed/);assert.equal((await history.query()).total,200);
  interrupt=false;await history.importAccount(account);assert.equal((await history.query()).total,250);assert.equal((await history.importAccount(account)).alreadyImported,true);assert.equal(requests,2);assert.equal(rows.length,250);
 });
 
 test('retention maintenance drains multiple bounded worker batches while preserving navigation, deletion tombstones and retry receipts',async t=>{
- const history=new BrowserHistory(directory(t),{hostId:'owner'});t.after(()=>history.close());await history.ready;history.scheduleMaintenance=()=>{};await history.maintenance();await history.settings({retentionDays:90});
+ const history=new BrowserHistory(directory(t),{hostId:'owner'});cleanup(t,()=>history.close());await history.ready;history.scheduleMaintenance=()=>{};await history.maintenance();await history.settings({retentionDays:90});
  const now=Date.parse('2027-10-12T12:00:00Z'),navigation={action:'navigate',tabId:'retained-tab',entryId:'retained-entry',operationId:'protected-retry',baseRevision:0,...visit('retained-visit')};
  await history.navigation(navigation);await history.record({events:[visit('deleted-visit')]});await history.delete({eventIds:['deleted-visit']});
  for(let offset=0;offset<2400;offset+=200)await history.record({events:Array.from({length:200},(_,index)=>visit('expired-'+(offset+index)))});
@@ -162,7 +166,7 @@ test('earlier FTS row IDs migrate atomically and indexed deletes/updates preserv
 
 test('new stores and legacy imports without an explicit retention preference keep all history until the user chooses pruning',async t=>{
  const home=directory(t),file=path.join(home,'browsing-history.json'),old=visit('very-old',{id:'very-old',visitedAt:'2001-01-01T00:00:00Z'});fs.writeFileSync(file,JSON.stringify({items:[old]}));const original=fs.readFileSync(file);
- const history=new BrowserHistory(home,{hostId:'owner'});t.after(()=>history.close());await history.ready;await history.maintenance();assert.equal((await history.settings()).retentionDays,0);assert.equal((await history.query()).total,1);assert.deepEqual(fs.readFileSync(file),original);
+ const history=new BrowserHistory(home,{hostId:'owner'});cleanup(t,()=>history.close());await history.ready;await history.maintenance();assert.equal((await history.settings()).retentionDays,0);assert.equal((await history.query()).total,1);assert.deepEqual(fs.readFileSync(file),original);
  await history.settings({retentionDays:90});await history.maintenance();assert.equal((await history.query()).total,0);assert.deepEqual(fs.readFileSync(file),original);
 });
 

@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -14,7 +15,7 @@ import { SessionProvider } from '../src/session-provider.js';
 import { remoteState, RemoteHost } from '../src/remote.js';
 
 function fixture(t) {
-  const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-state-rehearsal-')));
+  const home = fs.realpathSync(privateTemporaryDirectory(path.join(os.tmpdir(), 'proteus-state-rehearsal-')));
   t.after(() => fs.rmSync(home, { recursive: true, force: true }));
   const workspace = path.join(home, 'workspace'); fs.mkdirSync(workspace);
   const settings = new SettingsStore(home, workspace), context = new ContextStore(home, settings);
@@ -95,7 +96,7 @@ test('precompiled discovery rules preserve nested globs, literal punctuation, in
   const write = relative => { const file = path.join(f.workspace,relative); fs.mkdirSync(path.dirname(file),{recursive:true}); fs.writeFileSync(file, '# Synthetic instructions'); };
   paths.forEach(write);
   f.context.mutate(c => { const profile = c.workspaces[0]; profile.discovery.exclusions = ['node_modules', 'cache.a', 'generated/**', 'hidden', 'scratch-*']; profile.discovery.inclusions = ['hidden/retained']; }, f.context.config().revision);
-  const discovered = f.context.get().entries.map(e => path.relative(f.workspace,e.path)).sort();
+  const discovered = f.context.get().entries.map(e => path.relative(f.workspace,e.path).split(path.sep).join('/')).sort();
   assert.deepEqual(discovered, ['cacheXa/AGENTS.md','hidden/retained/AGENTS.md','visible/AGENTS.md']);
   // A restored catalogue can include excluded historical selections. The
   // explicit modes/favorites/defaults rules retain them exactly as before.

@@ -2,8 +2,9 @@ const path = require('node:path');
 
 // Desktop launchers may not inherit an interactive shell's PATH.
 function launchPath(platform, home, current = '') {
-  if (platform === 'darwin') return [...new Set([path.join(home,'.local','bin'),'/opt/homebrew/bin', '/usr/local/bin', ...(current || '/usr/bin:/bin:/usr/sbin:/sbin').split(':')])].join(':');
-  if (platform === 'linux') return [...new Set([path.join(home, '.local', 'bin'), ...current.split(':').filter(Boolean), '/usr/local/bin', '/usr/bin', '/bin', '/snap/bin'])].join(':');
+  if (platform === 'darwin') return [...new Set([path.posix.join(home,'.local','bin'),'/opt/homebrew/bin', '/usr/local/bin', ...(current || '/usr/bin:/bin:/usr/sbin:/sbin').split(':')])].join(':');
+  if (platform === 'linux') return [...new Set([path.posix.join(home, '.local', 'bin'), ...current.split(':').filter(Boolean), '/usr/local/bin', '/usr/bin', '/bin', '/snap/bin'])].join(':');
+  if (platform === 'win32') return [...new Set([...current.split(';').filter(Boolean), path.win32.join(home, '.local', 'bin'), path.win32.join(home, 'AppData', 'Roaming', 'npm')])].join(';');
   return current;
 }
 const closeToTray = (platform, env = process.env) => platform !== 'linux' || env.PROTEUS_CLOSE_TO_TRAY === '1';

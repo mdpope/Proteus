@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import { fakeSession } from './fake-copilot.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -33,7 +34,7 @@ test('invalid declarations and unsupported controls remain visibly unavailable',
   assert.equal(agentMetadata(profile('user-invocable: false')).userInvocable, false);
 });
 test('selected agent restrictions reach Copilot on create and resume and survive captured source versions', async t => {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-agent-tools-')));
+  const root = fs.realpathSync(privateTemporaryDirectory(path.join(os.tmpdir(), 'proteus-agent-tools-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const file = path.join(root, '.github/agents/example.agent.md'); fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, profile('tools: [read, search]'));

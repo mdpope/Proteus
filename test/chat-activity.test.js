@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -28,7 +29,7 @@ test('active delivery settlement is observed even when the clock timestamp is un
  assert.equal(chatActivityAt(run),at(0));run.events[0].data.delivery.state='steered';assert.equal(chatActivityAt(run),at(5));
 });
 test('state, chat index and chat-view expose the same user activity timestamp',async t=>{
- const {startServer}=await import('../src/server.js');const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-chat-activity-'));
+ const {startServer}=await import('../src/server.js');const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-chat-activity-'));
  const app=await startServer({home,port:0,timers:false,withSeed:false,providers:{rehearsal:{async run(){}}}});
  t.after(async()=>{await app.close();fs.rmSync(home,{recursive:true,force:true});});
  const run=app.engine.createRun({schemaVersion:1,id:'activity',name:'Activity fixture',enabled:false,cron:'0 9 * * *',timezone:'UTC',provider:'rehearsal',model:'',workspace:{cwd:home,additionalDirectories:[]},misfire:'skip',prompt:'Synthetic activity test'},'chat',null,{deferStart:true});

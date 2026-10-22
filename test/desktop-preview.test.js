@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -9,7 +10,7 @@ import { ContextStore } from '../src/context.js';
 import { Engine } from '../src/engine.js';
 
 async function fixture(t){
- const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'proteus-preview-test-')));
+ const root=fs.realpathSync(privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-preview-test-')));
  const cleanup=[];
  t.after(async()=>{for(const close of cleanup.toReversed())await close();fs.rmSync(root,{recursive:true,force:true});});
  const home=path.join(root,'home'),a=path.join(root,'a'),b=path.join(root,'b'),library=path.join(root,'library');

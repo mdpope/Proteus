@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -63,7 +64,7 @@ test('remote project redirects preserve native identity and authorization while 
  assert.equal(remapPreviewProjectSession(next,catalog(),{hostId}),next);
 });
 test('WorkspaceSession get and stale saves remap before orphan filtering while production remains unchanged',t=>{
- const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-project-placement-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-project-placement-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
  const stale={tabs:[root('old'),{id:'chat-view',type:'run',runId:'chat',parentId:id('old')},{id:'terminal',type:'terminal',parentId:id('old'),terminal:{id:'pty',persistence:'tmux',tmuxSessionId:'shell',tmuxSessionTag:'tag'},hidden:true}],active:'chat-view',selectedChildren:{[id('old')]:'chat-view'},chatDrafts:{chat:'Retained draft'}};
  const file=path.join(home,'desktop-workspace.json');fs.writeFileSync(file,JSON.stringify(stale));const original=fs.readFileSync(file);
  const session=new WorkspaceSession(home,{preview:true,remap:value=>remapPreviewProjectSession(value,catalog())});

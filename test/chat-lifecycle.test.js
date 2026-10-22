@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -8,7 +9,7 @@ import {ActivityStore} from '../src/activity.js';
 
 const schedule=cwd=>({schemaVersion:1,id:'synthetic',name:'Synthetic chat',enabled:false,cron:'0 9 * * 1-5',timezone:'UTC',provider:'rehearsal',model:'',workspace:{cwd,additionalDirectories:[]},misfire:'skip',prompt:'Synthetic prompt'});
 test('archive preserves history, delete tombstones it across restart, and active work is guarded',async()=>{
-  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-chat-lifecycle-'));
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-chat-lifecycle-'));
   const generated=path.join(home,'generated.md');fs.writeFileSync(generated,'Synthetic generated document');
   const engine=new Engine(home);
   try{
