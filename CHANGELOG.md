@@ -1,3 +1,10 @@
+## 0.2.29 — combined October 22 release
+
+- Combine scoped desktop follow-along, resource/backup improvements, browser controls and the Home correction from the updates below.
+- Preserve independent browser profiles, complete navigation histories, chat state, approvals and durable retry receipts across the update.
+- Include native pairing completion and scanner-orientation fixes, Windows release/update support, portable recovery-copy durability and the patched Markdown renderer.
+- Rollout acceptance is tracked separately for each device and the web; a successful build does not imply installation or live verification.
+
 ## Unreleased — integrated desktop and mobile source
 
 - Combine the Windows installer and signed WTB release channel with the current desktop stabilization, browser controls, and native pairing fixes.

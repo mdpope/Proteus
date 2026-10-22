@@ -1,3 +1,17 @@
+## October 22 — 0.2.29 full rollout authorized
+
+After the Windows integration chat completed and PR #21 merged, the operator authorized
+reconciliation of remaining branches, final build/testing, and updates to both Macs, Windows,
+Linux, web, iPhone and iPad. This supersedes the earlier rollout holds for those targets.
+Version 0.2.29 and native build 2610.22.2 identify this combined release. Preserve existing
+signing/account identities, full browsing history, chats, approvals and retry receipts.
+
+Old open PRs #16–19 contain changes already represented on main and are closed as superseded.
+Historical transfer branches remain delivery records, not additional code to remerge. Linux
+acceptance documents are being reconciled separately from its already-integrated runtime fixes.
+Per-target installation and live verification remain pending and must be recorded separately;
+hosted CI remains unavailable because of account billing limits.
+
 ## October 22 — completed source integration authorized
 
 The operator requested PR, push, merge, and source synchronization for the completed desktop,
