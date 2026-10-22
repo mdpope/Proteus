@@ -5,6 +5,12 @@
 - Include native pairing completion and scanner-orientation fixes, Windows release/update support, portable recovery-copy durability and the patched Markdown renderer.
 - Rollout acceptance is tracked separately for each device and the web; a successful build does not imply installation or live verification.
 
+## Documentation — historical Linux acceptance reconciliation
+
+- Recover four artifact-specific Linux 0.2.27/0.2.28 acceptance reports, marking earlier installation and relay observations as historical.
+- Restore the bounded external native-transcript manual recovery procedure and its design decision while preserving newer Windows/mobile/updater documentation.
+- Keep final 0.2.29 artifact validation and unresolved receipt-growth investigation pending; no runtime or installed-app change is included.
+
 ## Unreleased — integrated desktop and mobile source
 
 - Combine the Windows installer and signed WTB release channel with the current desktop stabilization, browser controls, and native pairing fixes.

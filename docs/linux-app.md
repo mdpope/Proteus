@@ -2,6 +2,38 @@ Current cross-platform acceptance is recorded in [PR #20](https://github.com/mdp
 The dated/source-specific checkpoints below retain their original verification scope; later
 workflow results supersede their pending/failure status without changing the recorded artifacts.
 
+## October 22 — Linux acceptance evidence reconciled with main
+
+The four reports below retain the observed Linux 0.2.27/0.2.28 artifact identities, test
+scope and limitations. October 22 `linux.929eeeed2ab8` supersedes the earlier installed
+checkpoints; their disabled-relay and pending peer-gate statements are historical. These
+reports do not certify or install the forthcoming 0.2.29 release. The later main integration
+and its Windows/mobile documentation remain authoritative for current source behavior.
+
+Recovered from `linux/release-0.2.28-0e5c` at
+`d012d2711611d16bac90b972a94ca87af24427f3`; latest source commits for each document:
+
+| Document | Source commit |
+| --- | --- |
+| [2026-10-21-linux-027-install.md](2026-10-21-linux-027-install.md) | `0851ac4f7bcd2e7aab553f24194f07c8abecf230` |
+| [2026-10-21-linux-028-install.md](2026-10-21-linux-028-install.md) | `1556e50036788dc836c1b51eea6e5eda40aad8e6` |
+| [2026-10-21-linux-028-corrected.md](2026-10-21-linux-028-corrected.md) | `d012d2711611d16bac90b972a94ca87af24427f3` |
+| [2026-10-22-linux-028-install.md](2026-10-22-linux-028-install.md) | `d012d2711611d16bac90b972a94ca87af24427f3` |
+| [desktop-updates.md](desktop-updates.md) | `d012d2711611d16bac90b972a94ca87af24427f3` |
+
+For `desktop-updates.md`, only the bounded external transcript supplement and narrow
+preservation-evidence procedure were recovered; main's newer updater, cache, provenance and
+Windows instructions remain intact. The matching design decision is in
+[decisions](decisions.md#october-22--bounded-external-transcript-coverage-for-manual-linux-update).
+This is a manual deployment procedure, not automatic-helper provider-home backup support.
+
+The pre-0.2.29 content audit found no missing Linux runtime/build patch in main. Do not merge
+old source imports wholesale. Refresh `linux-upstream-source.json` only against the final
+frozen source supplied for the next independent Linux artifact; its older metadata is not
+current installed-build evidence. Repeated navigation/operation receipt growth remains an
+unresolved live observation. Main's anti-echo changes need isolated and live acceptance;
+updating alone does not make protected command receipts eligible for deletion.
+
 # Linux build of the current Mac source
 
 ## October 19 implementation checkpoint `c41ffa5` — Linux preparation
