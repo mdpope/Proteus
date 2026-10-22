@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import assert from 'node:assert/strict';
-import {spawn} from 'node:child_process';
+import {spawn,execFileSync} from 'node:child_process';
 import {_electron} from 'playwright';
 import windows from '../desktop/windows-installation.cjs';
 import packages from '../desktop/update-package.cjs';
@@ -20,6 +20,11 @@ const until=async check=>{const end=Date.now()+60000;while(!await check()){if(Da
 try{
  assert.equal(await execute(installer,['/S','/currentuser','/D='+installation]),0);
  windows.verifyRegistration(installation,candidate.version);
+ for(const scheme of ['proteus','proteus-desktop']){
+  const command=execFileSync(path.join(process.env.SystemRoot,'System32/reg.exe'),['query','HKCU\\Software\\Classes\\'+scheme+'\\shell\\open\\command','/ve'],{encoding:'utf8',windowsHide:true});
+  assert.ok(command.toLowerCase().includes(path.join(installation,'Proteus.exe').toLowerCase()));assert.ok(command.includes('"%1"'));
+ }
+ checks.push('per-user chat and sign-in URI handlers target the installed executable');
  const installed=packages.inspectPackage(installation);
  if(installed.hash!==candidate.hash){
   const inventory=base=>{const rows=new Map(),walk=relative=>{for(const item of fs.readdirSync(path.join(base,relative),{withFileTypes:true})){if(!relative&&windows.installationFiles.includes(item.name))continue;const name=path.join(relative,item.name),file=path.join(base,name);if(item.isDirectory())walk(name);else rows.set(name,JSON.stringify([fs.statSync(file).mode&0o777,packages.fileDigest(file)]));}};walk('');return rows;};
@@ -58,6 +63,7 @@ try{
  await app.close();app=null;
  assert.equal(await execute(path.join(installation,'Uninstall Proteus.exe'),['/S','/currentuser']),0);
  await until(()=>{try{return !windows.registration();}catch{return true;}});
+ for(const scheme of ['proteus','proteus-desktop'])assert.throws(()=>execFileSync(path.join(process.env.SystemRoot,'System32/reg.exe'),['query','HKCU\\Software\\Classes\\'+scheme],{windowsHide:true,stdio:'ignore'}),error=>error.status===1);
  assert.equal(fs.readFileSync(path.join(home,'synthetic-retry-receipt'),'utf8'),'REHEARSAL ONLY');
  checks.push('conventional uninstall preserves the separate application data');
  console.log(JSON.stringify({passed:true,buildRevision:candidate.buildRevision,checks,scope:'disposable Windows installer acceptance; no live installation or data'}));

@@ -1,10 +1,13 @@
 ## 2026-10-22 — Windows distribution and recovery use the existing owner protocol
 
-The operator selected a conventional per-user installer, authenticated proteus.example releases and
-an initially unsigned Windows executable. Pin an independent Ed25519 publisher public key in
-client/server source; keep the private key outside checkout and server. Sign the exact archive,
-installer and package/source identities. Require explicit operator or chat handoff after download
-and isolated acceptance; do not add unattended updates. Website reads reuse app:read OAuth grants.
+The operator selected a conventional per-user installer and an initially unsigned Windows
+executable. The latest distribution authorization selects downloads.proteus.example, superseding the initial
+proteus.example choice for Windows. Pin an independent Ed25519 publisher public key in the client;
+keep the private key outside checkout and server. Bind the WTB origin, exact archive, installer,
+platform/architecture and package/source identities in the signed manifest. Keep account OAuth
+credentials separate from the static WTB channel and reject redirects. Require explicit operator
+or chat handoff after download and isolated acceptance; do not add unattended updates. Preserve
+existing trust keys and compatible offline manifests; download channels cannot replace trust.
 
 Windows replacement uses the registered cached NSIS installer rather than renaming a running
 application directory. Keep one exact previous installer in each verified recovery application;

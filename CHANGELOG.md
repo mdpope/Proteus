@@ -1,10 +1,10 @@
-## Unreleased — Windows installer and authenticated desktop releases
+## Unreleased — Windows installer and signed WTB desktop releases
 
 - Add a per-user Windows x64 NSIS installer, native PowerShell terminal startup/cleanup, provider executable discovery and owner-only data/credential ACL checks.
 - Retry transient Windows sharing violations during atomic state replacement without removing the previous durable file; preserve update-button gating after cancellation.
-- Add trusted signed release manifests, authenticated website installer/catalog/download routes, bounded verified offline/network staging, and registered Windows installer recovery through the existing protocol-1 helper.
+- Add trusted signed release manifests, a pinned downloads.proteus.example Windows catalog/download channel, bounded verified offline/network staging, and registered Windows installer recovery through the existing protocol-1 helper. Keep the separately authenticated website service compatible without sending its account credentials to WTB.
 - Allow Engine Room updates without a chat while preserving exactly-once continuation for selected chats; initialize recovery inventory only for a genuinely new registered Windows data home.
-- Keep unsigned Windows packaging explicit, preserve data on uninstall/rollback, and carry the current 0.2.28 shared source. Full Windows installed-update and cross-device acceptance remain pending; see `docs/windows-app.md`.
+- Keep unsigned Windows packaging explicit, register per-user chat/sign-in links, preserve data on uninstall/rollback, and carry the current 0.2.28 shared source. Exact build, installed-update and cross-device acceptance are recorded separately in `docs/windows-app.md`.
 
 ## Unreleased — navigation and Apple identity review
 

@@ -18,9 +18,12 @@ export function verifyRelease(envelope,{platform=process.platform,arch=process.a
  const published=Date.parse(value.publishedAt),expires=Date.parse(value.expiresAt);
  if(!Number.isFinite(published)||!Number.isFinite(expires)||published>now+300000||expires<=now||expires<=published||expires-published>366*86400000)throw Error('The release manifest is expired or has invalid publication dates.');
  const a=value.artifact;
- if(!a||a.format!=='tar.gz'||!/^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.tar\.gz$/.test(a.filename||'')||!Number.isSafeInteger(a.bytes)||a.bytes<1||a.bytes>releaseLimits.archiveBytes||!Number.isSafeInteger(a.unpackedBytes)||a.unpackedBytes<1||a.unpackedBytes>releaseLimits.unpackedBytes||!/^[a-f0-9]{64}$/.test(a.sha256||'')||a.path!=='/api/v1/app/releases/'+value.id+'/artifact')throw Error('The signed release artifact is invalid.');
+ const hosted=value.distribution!==undefined;
+ if(hosted&&(value.platform!=='win32'||value.distribution?.kind!=='static'||value.distribution?.origin!==trust.windowsOrigin))throw Error('The signed release distribution origin is invalid.');
+ const releasePath=hosted?'/downloads/proteus/releases/'+value.id+'/':'/api/v1/app/releases/'+value.id+'/';
+ if(!a||a.format!=='tar.gz'||!/^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.tar\.gz$/.test(a.filename||'')||!Number.isSafeInteger(a.bytes)||a.bytes<1||a.bytes>releaseLimits.archiveBytes||!Number.isSafeInteger(a.unpackedBytes)||a.unpackedBytes<1||a.unpackedBytes>releaseLimits.unpackedBytes||!/^[a-f0-9]{64}$/.test(a.sha256||'')||a.path!==releasePath+(hosted?a.filename:'artifact'))throw Error('The signed release artifact is invalid.');
  const installer=value.installer;
- if(platform==='win32'&&(!installer||!/^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.exe$/.test(installer.filename||'')||!Number.isSafeInteger(installer.bytes)||installer.bytes<1||installer.bytes>releaseLimits.archiveBytes||!/^[a-f0-9]{64}$/.test(installer.sha256||'')||installer.path!=='/api/v1/app/releases/'+value.id+'/installer'))throw Error('The signed Windows installer is invalid.');
+ if(platform==='win32'&&(!installer||!/^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.exe$/.test(installer.filename||'')||!Number.isSafeInteger(installer.bytes)||installer.bytes<1||installer.bytes>releaseLimits.archiveBytes||!/^[a-f0-9]{64}$/.test(installer.sha256||'')||installer.path!==releasePath+(hosted?installer.filename:'installer')))throw Error('The signed Windows installer is invalid.');
  return {...value,verification:{keyId:key.id,signatureVerified:true}};
 }
 
@@ -73,3 +76,4 @@ export async function saveReleaseResponse(response,file,release){
 }
 
 export const releaseOrigin=trust.origin;
+export const windowsReleaseOrigin=trust.windowsOrigin;

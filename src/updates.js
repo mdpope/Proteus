@@ -1,4 +1,5 @@
 import {verifyRelease,extractRelease} from './desktop-releases.js';
+import {DesktopReleaseFeed} from './desktop-release-feed.js';
 import {initializeFreshRecovery} from './recovery-inventory.js';
 import {ensurePrivateHome} from './private-paths.cjs';
 import fs from 'node:fs';
@@ -18,6 +19,7 @@ const processAlive=pid=>{if(!Number.isSafeInteger(pid)||pid<1)return false;try{p
 export class Updates {
  constructor(service,{installation,browserHome,packaged=false,freshHome=false,quit=()=>{},blockers=()=>[],inspect=inspectPackage,test,launchHelper,platform=process.platform}={}){
   Object.assign(this,{service,installation,browserHome,packaged,quit,blockers,inspect,test,launchHelper,platform});
+  this.releaseClient=service.releaseClient||(platform==='win32'?new DesktopReleaseFeed():service.account);
   this.ownerHome=fs.realpathSync(service.home);if(installation)this.installation=fs.realpathSync(installation);if(browserHome&&fs.existsSync(browserHome))this.browserHome=fs.realpathSync(browserHome);
   this.root=path.join(path.dirname(this.ownerHome),'Proteus Updates',digest(this.ownerHome+'\0'+(this.installation||'source')).slice(0,24));this.pointer=path.join(this.root,'current.json');this.policyFile=path.join(this.root,'recovery-policy.json');
   this.sessionId=randomUUID();this.busy=false;
@@ -90,7 +92,7 @@ export class Updates {
  }
  async releases(channel='stable'){
   if(!this.packaged)throw Error('Install the desktop app to check published releases.');
-  const envelopes=await this.service.account.releases({channel,platform:this.platform,arch:process.arch});
+  const envelopes=await this.releaseClient.releases({channel,platform:this.platform,arch:process.arch});
   return {releases:envelopes.map(envelope=>{const release=verifyRelease(envelope,{channel,platform:this.platform});return {...release,manifestDigest:digest(JSON.stringify(envelope))};})};
  }
  async stageRelease(value,runId){
@@ -105,7 +107,7 @@ export class Updates {
     const stat=fs.lstatSync(value.manifest);if(!stat.isFile()||stat.size>128*1024)throw Error('The offline release manifest is invalid.');
     envelope=JSON.parse(fs.readFileSync(value.manifest,'utf8'));
    }else{
-    const envelopes=await this.service.account.releases({channel,platform:this.platform,arch:process.arch});
+    const envelopes=await this.releaseClient.releases({channel,platform:this.platform,arch:process.arch});
     envelope=envelopes.find(item=>{const release=verifyRelease(item,{channel,platform:this.platform});return release.id===value.releaseId;});
     if(!envelope||digest(JSON.stringify(envelope))!==value.manifestDigest)throw Error('The selected release changed. Check available releases again.');
    }
@@ -114,7 +116,7 @@ export class Updates {
    directory=path.join(this.root,'downloads',randomUUID());fs.mkdirSync(directory,{mode:0o700});
    const archive=path.join(directory,'release.tar.gz');this.download={phase:'downloading',version:release.version,buildRevision:release.buildRevision};this.service.notify?.();
    if(value.action==='import-release')fs.copyFileSync(path.join(path.dirname(value.manifest),release.artifact.filename),archive,fs.constants.COPYFILE_EXCL);
-   else await this.service.account.downloadRelease(release,archive);
+   else await this.releaseClient.downloadRelease(release,archive);
    this.download={...this.download,phase:'verifying'};this.service.notify?.();
    const candidate=await extractRelease(archive,path.join(directory,'application'),release);
    this.downloading=false;this.download={...this.download,phase:'testing'};

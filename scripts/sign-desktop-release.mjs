@@ -4,7 +4,7 @@ import {fileURLToPath} from 'node:url';
 import {createPrivateKey,createPublicKey,createHash,sign} from 'node:crypto';
 import packages from '../desktop/update-package.cjs';
 import {hasPrivatePermissions} from '../src/private-paths.cjs';
-import {verifyRelease} from '../src/desktop-releases.js';
+import {verifyRelease,windowsReleaseOrigin} from '../src/desktop-releases.js';
 
 const args=process.argv.slice(2),options={};
 for(let index=0;index<args.length;index+=2){if(!['--bundle','--archive','--installer','--key','--channel','--out'].includes(args[index])||!args[index+1])throw Error('Use --bundle, --archive, --installer (Windows), --key, --channel and --out.');options[args[index].slice(2)]=args[index+1];}
@@ -18,6 +18,9 @@ const release={schemaVersion:1,product:'org.proteusapp.proteus.desktop',id,chann
 if(process.platform==='win32'){
  if(!path.isAbsolute(options.installer||'')||packages.fileDigest(options.installer)!==candidate.installer?.sha256)throw Error('Supply the exact tested installer cached in this Windows application.');
  release.installer={filename:path.basename(options.installer),bytes:fs.statSync(options.installer).size,sha256:candidate.installer.sha256,path:'/api/v1/app/releases/'+id+'/installer',authenticode:'unsigned'};
+ release.distribution={kind:'static',origin:windowsReleaseOrigin};
+ release.artifact.path='/downloads/proteus/releases/'+id+'/'+release.artifact.filename;
+ release.installer.path='/downloads/proteus/releases/'+id+'/'+release.installer.filename;
 }
 const payload=Buffer.from(JSON.stringify(release)),envelope={schemaVersion:1,keyId,payload:payload.toString('base64url'),signature:sign(null,payload,key).toString('base64url')};
 verifyRelease(envelope,{channel:release.channel});fs.writeFileSync(options.out,JSON.stringify(envelope,null,2)+'\n',{flag:'wx',mode:0o600});

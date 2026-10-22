@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
-import {spawn} from 'node:child_process';
+import {spawn,execFileSync} from 'node:child_process';
 import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 const require=createRequire(import.meta.url),{inspectPackage,atomic,readJob}=require('../desktop/update-package.cjs');
 const mac=process.platform==='darwin',win=process.platform==='win32',identityLabel=mac?'signed':win?'signed release and exact installer':'hashed';
@@ -46,6 +46,13 @@ const cleanup=()=>cleanupPending??=(async()=>{
  for(const pid of helperPids)await stopOwned(pid);for(const pid of ownerPids)await stopOwned(pid);
  if(app){let timer;await Promise.race([app.close().catch(()=>{}),new Promise(resolve=>timer=setTimeout(resolve,3000))]);clearTimeout(timer);}
  if(win&&fs.existsSync(path.join(installation,'Uninstall Proteus.exe'))){assert.equal(await execute(path.join(installation,'Uninstall Proteus.exe'),['/S','/currentuser']),0);await wait(()=>{try{return !windows.registration();}catch{return true;}},'disposable uninstaller completion',60000);}
+ // A pre-release rollback baseline may predate URI-handler cleanup. Remove
+ // only handlers still owned by this exact disposable installation.
+ if(win)for(const scheme of ['proteus','proteus-desktop']){
+  const reg=path.join(process.env.SystemRoot,'System32','reg.exe'),key='HKCU\\Software\\Classes\\'+scheme;let command;
+  try{command=execFileSync(reg,['query',key+'\\shell\\open\\command','/ve'],{encoding:'utf8',windowsHide:true,stdio:['ignore','pipe','ignore']}).match(/REG_SZ\s+(.+)/)?.[1]?.trim();}catch(error){if(error.status===1)continue;throw error;}
+  if(command==='"'+path.join(installation,'Proteus.exe')+'" "%1"')execFileSync(reg,['delete',key,'/f'],{windowsHide:true,stdio:'ignore'});
+ }
 })();
 for(const signal of ['SIGINT','SIGTERM'])process.once(signal,()=>{atomic(path.join(receipt,'interrupted.json'),{signal,at:new Date().toISOString()});void cleanup().finally(()=>process.exit(130));});
 const request=async(route,body)=>{const c=JSON.parse(fs.readFileSync(path.join(home,'connection.json'))),response=await fetch(c.origin+route,{method:body?'POST':'GET',headers:{Authorization:'Bearer '+c.token,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(['prepare','import-release'].includes(body?.action)?240000:10000)});const result=await response.json();if(!response.ok)throw Error(result.error||'Owner request failed');return result;};
@@ -88,5 +95,8 @@ try{
  passed=true;console.log(JSON.stringify(acceptance));
 }catch(error){atomic(path.join(receipt,'failure.json'),{error:error.message,stack:error.stack});if(jobFile&&fs.existsSync(jobFile))fs.copyFileSync(jobFile,path.join(receipt,'failed-job-private.json'));console.error(error.stack,'ARTIFACTS',root);throw error;}finally{
  await cleanup();
- if(passed)for(const name of fs.readdirSync(root))if(name!=='receipt')fs.rmSync(path.join(root,name),{recursive:true,force:true,maxRetries:5,retryDelay:100});
+ if(passed)for(const name of fs.readdirSync(root))if(name!=='receipt'){
+  const target=path.resolve(root,name);if(!target.startsWith(root+path.sep))throw Error('Unexpected disposable fixture path.');
+  await wait(()=>{try{fs.rmSync(target,{recursive:true,force:true,maxRetries:2,retryDelay:100});return true;}catch(error){if(!['EPERM','EBUSY','ENOTEMPTY'].includes(error.code))throw error;return false;}},'disposable Windows process handles released',60000);
+ }
 }

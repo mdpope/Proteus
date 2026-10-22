@@ -1,15 +1,25 @@
-## October 22 — Windows integration in progress
+## October 22 — Windows WTB release acceptance
 
-The operator selected a conventional installer, authenticated Proteus website distribution,
-unsigned Windows setup for now and Windows Developer Mode for tests. The Windows branch now
-integrates upstream `5b8b708` (0.2.28). Windows validation passes 883 of 885 tests with two
-existing POSIX skips and static checks. Packaged UI, native PTY, provider readiness, rehearsal
-persistence and restart checks pass. Real NSIS functional checks cover exact payload, registration,
-active-app refusal and data preservation. The release website passes 27 focused release/Life/
-native-auth tests. See [Windows build/update instructions](windows-app.md). Full packaged update/
-rollback/live-provider acceptance and device pairing remain in progress. Website deployment
-and relay registration require the existing private deployment record. No public publication,
-Mac signing migration, production workflow or existing device reset is authorized by this entry.
+The latest operator choice selects downloads.proteus.example Windows downloads, an unsigned conventional installer
+and signed update manifests. The Windows branch integrates upstream `5b8b708` (0.2.28). Build
+`windows.6e46560c3ce5` freezes 308 runtime files. Validation passes 886 of 888 tests with two existing
+POSIX skips and static checks. Exact packaged UI, native PTY, provider readiness, rehearsal
+persistence and restart pass. Real NSIS checks cover payload equality, URI registration, offline
+preparation/cancellation, active-app refusal and uninstall preservation. The final build passes a
+real Codex update with the original session automatically resumed once and history/receipts intact.
+Its packaged WTB client downloads and verifies the complete locally served publication archive.
+An injected health failure also passes compatible rollback with the same real session resumed once.
+The final installer is installed locally; the actual renderer, normal restart, stable host identity,
+single owner and disabled debugging are verified. The new browser profile inherited extra Windows
+ACL grants; after inspection its permissions were restricted without changing contents. The live
+home has no chats or enabled schedules and no recovery generations. The separate website service
+passes 27 focused release/Life/native-auth tests. See [Windows instructions](windows-app.md).
+
+WTB publication is authorized for this Windows scope and remains staged. The Windows host has no
+deployment workspace or signed-in Webmin session; the coordinating Mac chat is not addressable from
+its thread tools. The operator authorized the Mac handoff. Actual WTB endpoint/consumer acceptance
+and existing relay/device pairing still require the private deployment workflow and registration
+record. No Mac/iOS signing identity or existing device data is changed by this Windows work.
 
 ## October 22 — source review and repository checkpoint
 

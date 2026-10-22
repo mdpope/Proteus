@@ -21,8 +21,25 @@
   CopyFiles /SILENT "$EXEPATH" "$INSTDIR\Proteus Setup.exe"
   WriteRegStr HKCU "Software\proteus\Proteus" "InstallLocation" "$INSTDIR"
   WriteRegStr HKCU "Software\proteus\Proteus" "Version" "${VERSION}"
+  ; NSIS does not consume electron-builder's macOS/AppX protocol metadata.
+  ; Register only our custom schemes for this user's installed executable.
+  WriteRegStr HKCU "Software\Classes\proteus" "" "URL:Proteus chat link"
+  WriteRegStr HKCU "Software\Classes\proteus" "URL Protocol" ""
+  WriteRegStr HKCU "Software\Classes\proteus\DefaultIcon" "" "$INSTDIR\Proteus.exe,0"
+  WriteRegStr HKCU "Software\Classes\proteus\shell\open\command" "" '"$INSTDIR\Proteus.exe" "%1"'
+  WriteRegStr HKCU "Software\Classes\proteus-desktop" "" "URL:Proteus desktop sign-in"
+  WriteRegStr HKCU "Software\Classes\proteus-desktop" "URL Protocol" ""
+  WriteRegStr HKCU "Software\Classes\proteus-desktop\DefaultIcon" "" "$INSTDIR\Proteus.exe,0"
+  WriteRegStr HKCU "Software\Classes\proteus-desktop\shell\open\command" "" '"$INSTDIR\Proteus.exe" "%1"'
 !macroend
 
 !macro customUnInstall
+  ; Leave handlers alone if another installation has taken ownership.
+  ReadRegStr $0 HKCU "Software\Classes\proteus\shell\open\command" ""
+  StrCmp $0 '"$INSTDIR\Proteus.exe" "%1"' 0 +2
+    DeleteRegKey HKCU "Software\Classes\proteus"
+  ReadRegStr $0 HKCU "Software\Classes\proteus-desktop\shell\open\command" ""
+  StrCmp $0 '"$INSTDIR\Proteus.exe" "%1"' 0 +2
+    DeleteRegKey HKCU "Software\Classes\proteus-desktop"
   DeleteRegKey HKCU "Software\proteus\Proteus"
 !macroend

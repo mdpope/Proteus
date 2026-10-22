@@ -6,7 +6,8 @@ import path from 'node:path';
 import {generateKeyPairSync,sign,createHash} from 'node:crypto';
 import {gzipSync} from 'node:zlib';
 import {c as createTar} from 'tar';
-import {verifyRelease,saveReleaseResponse,extractRelease,releaseOrigin} from '../src/desktop-releases.js';
+import {verifyRelease,saveReleaseResponse,extractRelease,releaseOrigin,windowsReleaseOrigin} from '../src/desktop-releases.js';
+import {DesktopReleaseFeed} from '../src/desktop-release-feed.js';
 import {LifeAPI} from '../src/life-api.js';
 import {AppAccount} from '../src/app-account.js';
 import packages from '../desktop/update-package.cjs';
@@ -15,7 +16,34 @@ const pair=generateKeyPairSync('ed25519'),keys=[{id:'fixture',publicKey:pair.pub
 const manifest=()=>({schemaVersion:1,product:'org.proteusapp.proteus.desktop',id:'synthetic-release',channel:'stable',platform:'win32',arch:process.arch,version:'1.2.3',buildRevision:'windows.fixture',sourceFingerprint:'a'.repeat(64),packageHash:'b'.repeat(64),publishedAt:new Date(Date.now()-1000).toISOString(),expiresAt:new Date(Date.now()+3600000).toISOString(),installer:{filename:'synthetic-setup.exe',bytes:1,sha256:'d'.repeat(64),path:'/api/v1/app/releases/synthetic-release/installer'},artifact:{format:'tar.gz',filename:'synthetic.tar.gz',bytes:10,unpackedBytes:1000,sha256:'c'.repeat(64),path:'/api/v1/app/releases/synthetic-release/artifact'}});
 const envelope=value=>{const payload=Buffer.from(JSON.stringify(value));return {schemaVersion:1,keyId:'fixture',payload:payload.toString('base64url'),signature:sign(null,payload,pair.privateKey).toString('base64url')};};
 const options={keys,platform:'win32',arch:process.arch,channel:'stable'};
+const hostedManifest=()=>{const value=manifest();value.distribution={kind:'static',origin:windowsReleaseOrigin};value.artifact.path='/downloads/proteus/releases/'+value.id+'/'+value.artifact.filename;value.installer.path='/downloads/proteus/releases/'+value.id+'/'+value.installer.filename;return value;};
 function directory(t){const root=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-release-test-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));return root;}
+
+test('WTB release signatures bind distribution, paths and target while preserving old offline trust',()=>{
+ const value=hostedManifest();assert.equal(verifyRelease(envelope(value),options).distribution.origin,'https://downloads.proteus.example');
+ assert.equal(verifyRelease(envelope(manifest()),options).verification.signatureVerified,true);
+ for(const change of [{distribution:{kind:'static',origin:'https://untrusted.example'}},{distribution:{kind:'account',origin:windowsReleaseOrigin}},{artifact:{...value.artifact,path:'/downloads/proteus/releases/other/file.tar.gz'}},{installer:{...value.installer,path:'//untrusted.example/setup.exe'}}])assert.throws(()=>verifyRelease(envelope({...value,...change}),options));
+});
+
+test('WTB catalog and artifact requests omit account credentials and reject redirects',async t=>{
+ const root=directory(t),bytes=Buffer.from('SYNTHETIC WTB RELEASE'),value=hostedManifest();value.artifact={...value.artifact,bytes:bytes.length,sha256:hash(bytes)};
+ const signed=envelope(value),calls=[],feed=new DesktopReleaseFeed({fetch:async(url,request)=>{
+  calls.push(url);assert.equal(request.credentials,'omit');assert.equal(request.redirect,'error');assert.equal(request.referrerPolicy,'no-referrer');assert.deepEqual(Object.keys(request.headers),['Accept']);
+  if(url.endsWith('.json'))return Response.json({schemaVersion:1,releases:[signed]});return new Response(bytes);
+ }});
+ const catalog=await feed.releases({platform:'win32',arch:process.arch});const release=verifyRelease(catalog[0],options),file=path.join(root,'download');await feed.downloadRelease(release,file);
+ assert.deepEqual(calls,[windowsReleaseOrigin+'/downloads/proteus/stable/win32-'+process.arch+'.json',windowsReleaseOrigin+value.artifact.path]);assert.deepEqual(fs.readFileSync(file),bytes);
+ await assert.rejects(feed.downloadRelease(verifyRelease(envelope(manifest()),options),path.join(root,'legacy')),/verified WTB/);assert.equal(calls.length,2);
+});
+
+test('WTB catalog limits and target validation fail before any artifact request',async()=>{
+ for(const response of [Response.json({schemaVersion:1,releases:Array(51).fill({})}),new Response('x'.repeat(1024*1024+1)),new Response('no',{status:404}),Response.json({schemaVersion:2,releases:[]}),new Response('bad JSON')]){
+  const feed=new DesktopReleaseFeed({fetch:async()=>response});await assert.rejects(feed.releases({platform:'win32',arch:process.arch}));
+ }
+ let fetched=false;const feed=new DesktopReleaseFeed({fetch:async()=>{fetched=true;throw Error('Unexpected network call');}});
+ for(const target of [{platform:'linux',arch:'x64'},{platform:'win32',arch:'../x64'},{platform:'win32',arch:'x64',channel:'../stable'}])await assert.rejects(feed.releases(target),/Unsupported/);
+ assert.equal(fetched,false);
+});
 
 function account(fetcher){
  let saved={origin:releaseOrigin,clientId:'synthetic-client',accessToken:'synthetic-old',refreshToken:'synthetic-refresh',expiresAt:Date.now()+3600000,accountId:'a'.repeat(64),workspaceId:'1'};
