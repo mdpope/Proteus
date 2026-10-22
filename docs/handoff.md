@@ -14,6 +14,13 @@ and isolated browser UI checks including restart persistence. Native pairing sou
 from the previously tested mobile correction; physical installation and camera acceptance remain
 pending. Live pairing and release receipts stay in private operator records.
 
+Windows validation additionally exposed a writable-handle requirement for recovery flushes,
+plus private-directory and CRLF assumptions in new fixtures. The correction preserves read-only
+file modes and registers fixture cleanup before setup awaits. The reported Markdown denial-of-
+service advisory is resolved with `markdown-it` 15.0.3 and a rebuilt shared browser/native runtime;
+the dependency audit is clear. GitHub Actions cannot start because of the account billing/spending
+limit, so local acceptance must be reported separately from hosted CI.
+
 ## October 22 — mobile pairing completion corrected in source
 
 The operator reports false refusal after successful phone pairing, silent iPad dismissal to Home,

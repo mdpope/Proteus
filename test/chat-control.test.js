@@ -12,18 +12,21 @@ import {DesktopPeers} from '../src/desktop-peers.js';
 import {ChatControl,chatPage} from '../src/chat-control.js';
 import {chatControlTools} from '../src/chat-control-tools.js';
 import {until} from './remote-client.mjs';
+import {privateTemporaryDirectory,ensurePrivateHome} from '../src/private-paths.cjs';
+import {cleanupStack} from './helpers/cleanup.js';
 
 const model={id:'fixture',name:'Synthetic model',controls:{reasoningEfforts:['low'],contextTiers:[{id:'default'}],serviceTiers:[]}};
 const safeStorage=()=>{const key=randomBytes(32);return {isEncryptionAvailable:()=>true,encryptString:text=>{const iv=randomBytes(12),cipher=createCipheriv('aes-256-gcm',key,iv);return Buffer.concat([iv,cipher.update(text),cipher.final(),cipher.getAuthTag()]);},decryptString:box=>{const decipher=createDecipheriv('aes-256-gcm',key,box.subarray(0,12));decipher.setAuthTag(box.subarray(-16));return Buffer.concat([decipher.update(box.subarray(12,-16)),decipher.final()]).toString();}};};
 async function fixture(t){
- const root=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-agent-chat-test-')),apps=[],token=secret(),relay=await startRelay({port:0,token}),url=`ws://127.0.0.1:${relay.port}`;
+ const cleanup=cleanupStack(t),root=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-agent-chat-test-')),token=secret();
+ cleanup(()=>fs.rmSync(root,{recursive:true,force:true,maxRetries:5,retryDelay:100}));
+ const relay=await startRelay({port:0,token}),url=`ws://127.0.0.1:${relay.port}`;cleanup(()=>relay.close());
  const provider={status:async()=>({available:true,models:[model]}),run:async({prompt,ask,emit,signal})=>{if(prompt.startsWith('hold'))emit('assistant','Synthetic answer: '+await ask({type:'question',question:'Synthetic checkpoint?'}));else if(prompt.startsWith('permission')){await ask({type:'permission',question:'Synthetic approval',details:{kind:'custom-tool',toolName:'fixture',managedApprovalRequired:true}});emit('assistant','Synthetic approved result');}else if(prompt.startsWith('slow'))await new Promise((resolve,reject)=>signal.addEventListener('abort',()=>reject(Error('Cancelled')),{once:true}));else emit('assistant','Synthetic result: '+prompt);}};
- const start=async home=>{const workspace=path.join(home,'workspace');fs.mkdirSync(workspace,{recursive:true});if(!fs.existsSync(path.join(home,'settings.json')))atomicJSON(path.join(home,'settings.json'),{schemaVersion:1,provider:'copilot',model:'fixture',timezone:'UTC',workspace:{cwd:workspace,additionalDirectories:[]},skillDirectories:[],mcpServers:{}});const app=await startServer({home,port:0,timers:false,withSeed:false,providers:{copilot:provider}});clearInterval(app.chatControl.timer);apps.push(app);return app;};
+ const start=async home=>{ensurePrivateHome(home);const workspace=path.join(home,'workspace');fs.mkdirSync(workspace,{recursive:true});if(!fs.existsSync(path.join(home,'settings.json')))atomicJSON(path.join(home,'settings.json'),{schemaVersion:1,provider:'copilot',model:'fixture',timezone:'UTC',workspace:{cwd:workspace,additionalDirectories:[]},skillDirectories:[],mcpServers:{}});const app=await startServer({home,port:0,timers:false,withSeed:false,providers:{copilot:provider}});cleanup(async()=>{app.peers?.close();await app.close();});clearInterval(app.chatControl.timer);return app;};
  const origin=await start(path.join(root,'origin')),owner=await start(path.join(root,'owner'));
  await owner.remote.configure({enabled:true,mode:'external',label:'Synthetic task owner',relayURL:url,publicURL:url,relayToken:token});await until(()=>owner.remote.status==='online');
  origin.peers=new DesktopPeers(origin.home,{safeStorage:safeStorage(),localHostId:origin.remote.config.hostId,heartbeatMs:0});await origin.peers.pair((await owner.remote.pairing()).code);
  const hostId=owner.remote.config.hostId,control=origin.chatControl;
- t.after(async()=>{origin.peers.close();for(const app of apps.reverse()){app.peers?.close();await app.close();}await relay.close();fs.rmSync(root,{recursive:true,force:true,maxRetries:5,retryDelay:100});});
  const create=async(service,prompt)=>service.engine.createRun(await service.buildChatSchedule({provider:'copilot',model:'fixture',prompt}),'chat');
  const caller=await create(origin,'hold origin');await until(()=>caller.pending);
  const grant=(actions=['read','dispatch','answer','cancel'],scope={})=>control.grant(caller.id,{hostId,actions,...scope});

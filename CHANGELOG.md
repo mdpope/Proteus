@@ -3,6 +3,8 @@
 - Combine the Windows installer and signed WTB release channel with the current desktop stabilization, browser controls, and native pairing fixes.
 - Preserve asynchronous package inspection, versioned provenance, resumable recovery, and Windows atomic replacement together; stream authenticated release downloads through the shared account session.
 - Keep the relay's standalone Linux container independent of desktop source files and correct directory permissions in cross-platform test fixtures.
+- Flush resumable recovery copies through a writable handle on Windows while preserving read-only source modes; make chat/follow fixtures portable and clean up partial setup failures.
+- Update Markdown rendering to the patched `markdown-it` 15.0.3 and rebuild the shared desktop/native runtime; dependency audit reports no known vulnerabilities.
 - Integration acceptance: 1,000 Node tests pass with one platform skip, static checks pass, 101 web tests pass (867 assertions), the web build passes, and isolated browser UI checks pass. Installed-app rollout and physical mobile camera acceptance remain separate.
 
 ## Unreleased — mobile pairing completion

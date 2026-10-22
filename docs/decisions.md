@@ -8,6 +8,10 @@ owner/mode checks; load the Windows ACL helper only on Windows so its minimal co
 acquire a dependency on the desktop source tree. Source integration does not rebuild or republish
 the exact Windows artifact already accepted on the installed owner.
 
+Flush copied recovery bytes through a writable temporary handle on every platform; Windows
+requires it. Temporarily make only the new copy owner-writable and restore the original file mode
+before snapshot verification. Never change the source permissions or skip the durability flush.
+
 ## October 22 — adopt the mobile pairing transport
 
 Promote the pending native RemoteStore into the saved destination after its credential/index

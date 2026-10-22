@@ -32,7 +32,7 @@ function renderer({peer,artifact,digest}={}){
     fileDatesText:()=>'',
   };
   vm.createContext(sandbox);
-  const source=fs.readFileSync(new URL('../public/remote-desktops.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'').replaceAll('export ','');
+  const source=fs.readFileSync(new URL('../public/remote-desktops.js',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'').replaceAll('export ','');
   vm.runInContext(source+'\nglobalThis.documentFollow={documentViews,remoteDocumentPositionVersion,restoreRemoteDocumentPosition,applyPendingDocumentPosition,renderRemoteDocument,forgetRemoteDocument,setUI:value=>ui=value};',sandbox);
   const api=sandbox.documentFollow;
   api.setUI({state,escape:value=>String(value),toast:error=>errors.push(error)});

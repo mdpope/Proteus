@@ -365,6 +365,10 @@ records logical bytes, filesystem-reported allocation and observed free-space ch
 helpers, provider-waiting continuations and attention states retain their dependencies; they
 are not silently declared complete to recover disk space.
 
+Recovery copies flush bytes through a writable temporary file handle on Windows and Unix, then
+restore the source mode before snapshot verification, including for read-only source files. Source
+permissions remain unchanged and durability is not skipped when Windows rejects a read-only flush.
+
 Recovery snapshots use a restartable copy manifest with source-tree identity, cache policy and
 bounded progress checkpoints. Retry hashes existing target files and reuses matching files;
 changed source generations, symbolic-link parent escapes and changed recovery bytes stop without

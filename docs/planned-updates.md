@@ -8,6 +8,11 @@ and isolated browser UI acceptance pass; one Node test is platform-skipped. This
 integration supersedes the earlier separate-branch notes. Existing installed-app rollout holds
 and physical mobile camera acceptance remain separate from Git completion.
 
+Windows integration validation requires writable handles for durable recovery flushes and portable
+private-directory/CRLF fixtures. Those corrections preserve read-only file modes and clean up failed
+fixture setup. The integration also takes the `markdown-it` 15.0.3 security patch and rebuilds its
+shared runtime. Hosted CI is blocked before job execution by account billing/spending limits.
+
 ## October 22 — mobile pairing feedback and scanner correction
 
 The operator reports a false connection-refused message after successful iPhone pairing, silent

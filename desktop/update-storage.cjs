@@ -38,7 +38,13 @@ function copyRecovery(source,destination,{manifestFile,expectedHash,recoveryCach
    const temporary=target+'.'+crypto.randomUUID()+'.copy';
    try{
     if(mode==='link')fs.symlinkSync(hash,temporary);
-    else {fs.copyFileSync(original,temporary);fs.chmodSync(temporary,mode);const fd=fs.openSync(temporary,'r');try{fs.fsyncSync(fd);}finally{fs.closeSync(fd);}if(fileDigest(temporary)!==hash)throw Error('A source file changed during recovery copying.');const info=fs.statSync(original);fs.utimesSync(temporary,info.atime,info.mtime);}
+    else {
+     fs.copyFileSync(original,temporary);
+     // Windows FlushFileBuffers requires a writable handle, including when the
+     // source was read-only. Restore its mode before verifying the snapshot.
+     fs.chmodSync(temporary,0o600);const fd=fs.openSync(temporary,'r+');try{fs.fsyncSync(fd);}finally{fs.closeSync(fd);}fs.chmodSync(temporary,mode);
+     if(fileDigest(temporary)!==hash)throw Error('A source file changed during recovery copying.');const info=fs.statSync(original);fs.utimesSync(temporary,info.atime,info.mtime);
+    }
     atomicRename(temporary,target);copied++;
    }finally{try{fs.unlinkSync(temporary);}catch(error){if(error.code!=='ENOENT')throw error;}}
   }

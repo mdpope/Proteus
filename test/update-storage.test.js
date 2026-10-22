@@ -18,6 +18,7 @@ test('ordinary recovery caches are an explicit profile-root allowlist, preservin
  const caches=['Cache/Cache_Data/entry','Code Cache/js/entry','GPUCache/entry','Partitions/work/Cache/entry','Default/DawnWebGPUCache/entry'];
  const durable=['Service Worker/CacheStorage/offline','Partitions/work/Service Worker/CacheStorage/offline','Cookies','Partitions/work/Local Storage/leveldb/data','Partitions/work/IndexedDB/data','Sessions/Session_1','Extensions/example/state','receipts/retry.json','projects/example/Cache/source','Default/Local Storage/data'];
  for(const name of [...caches,...durable,'runner.lock'])put(source,name);
+ fs.chmodSync(path.join(source,'receipts/retry.json'),0o400);
  for(const name of caches)assert.equal(recoveryCachePath(name),true);
  for(const name of durable)assert.equal(recoveryCachePath(name),false);
  const before=tree(source),expected=tree(source,{exclude:excluded,recoveryCaches:true});

@@ -1,3 +1,10 @@
+## October 22 — Markdown parser security patch
+
+The shared parser uses `markdown-it` 15.0.3, including the upstream fixes for quadratic parsing
+of multi-line references and inline HTML. Raw HTML remains disabled in Proteus. The checked-in
+desktop/native browser runtime is rebuilt from the locked dependency, and the web asset build
+uses that same parser source. This source correction does not claim installed-device rollout.
+
 ## October 22 — composer modes and message edges
 
 Native and web chats expose Chat | Live browser at the right of the existing composer status line,

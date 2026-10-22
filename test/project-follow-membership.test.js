@@ -7,6 +7,8 @@ import {ContentTabs,contentTabMembershipLimits} from '../src/content-tabs.js';
 import {fileStamp} from '../src/file-stamp.js';
 import {atomicJSON} from '../src/files.js';
 import {startServer} from '../src/server.js';
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {cleanupStack} from './helpers/cleanup.js';
 
 function fixture(t){const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-follow-membership-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));return {home,tabs:new ContentTabs(home)};}
 const browser=id=>({id,type:'browser',url:'https://example.test/',title:'Synthetic browser'});
@@ -48,9 +50,9 @@ test('membership cache bounds both scope count and retained tab identities',t=>{
 });
 
 test('owner follow hot path caches membership and scope checks but observes closure, deletion and current grants',async t=>{
- const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-follow-owner-')),workspace=path.join(home,'workspace');fs.mkdirSync(workspace);
+ const cleanup=cleanupStack(t),home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-follow-owner-')),workspace=path.join(home,'workspace');cleanup(()=>fs.rmSync(home,{recursive:true,force:true}));fs.mkdirSync(workspace);
  atomicJSON(path.join(home,'settings.json'),{schemaVersion:1,provider:'rehearsal',model:'',timezone:'UTC',workspace:{cwd:workspace,additionalDirectories:[]},skillDirectories:[],mcpServers:{}});
- const app=await startServer({home,port:0,timers:false,withSeed:false});t.after(async()=>{await app.close();fs.rmSync(home,{recursive:true,force:true});});
+ const app=await startServer({home,port:0,timers:false,withSeed:false});cleanup(()=>app.close());
  app.workspaceProjects.projects({action:'create',workspaceId:'default',name:'Synthetic follow scope',expectedRevision:app.workspaceProjects.read().revision},app.engine);
  const project=app.workspaceProjects.read().projects.at(-1),scope={scope:'project',id:project.id,clientId:'fixture'};
  app.contentTabs.mutate({...scope,expectedRevision:0,operations:[{action:'open',tab:{id:'chat:c',type:'chat',chatId:'c'}}]});
