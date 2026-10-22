@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -27,7 +28,7 @@ class PreviewRPC extends EventEmitter {
 }
 const until=async predicate=>{for(let i=0;i<400;i++){if(predicate())return;await new Promise(resolve=>setTimeout(resolve,5));}throw new Error('Synthetic transition timed out.');};
 function fixture(t,{preview=true}={}){
- const home=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'proteus-preview-permission-'))),cwd=path.join(home,'work'),extra=path.join(home,'extra'),other=path.join(home,'other');
+ const home=fs.realpathSync(privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-preview-permission-'))),cwd=path.join(home,'work'),extra=path.join(home,'extra'),other=path.join(home,'other');
  for(const folder of [cwd,extra,other])fs.mkdirSync(folder);
  const rpc=new PreviewRPC(),provider=new CodexProvider({desktopPreview:preview,clientFactory:()=>rpc});
  const engine=new Engine(path.join(home,'app'),{codex:provider},undefined,{desktopPreview:preview});
@@ -235,7 +236,7 @@ test('preview chat rule removal checks revision and pending identity and preserv
 
 test('preview permission HTTP saves independent read-only defaults, downgrades and removes only reviewed default folders',async t=>{
  const {seedDesktopPreview}=await import('../src/desktop-preview.js'),{startServer}=await import('../src/server.js');
- const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'proteus-preview-permission-api-'))),home=path.join(root,'app'),cwd=path.join(root,'work'),extra=path.join(root,'extra');fs.mkdirSync(cwd);fs.mkdirSync(extra);
+ const root=fs.realpathSync(privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-preview-permission-api-'))),home=path.join(root,'app'),cwd=path.join(root,'work'),extra=path.join(root,'extra');fs.mkdirSync(cwd);fs.mkdirSync(extra);
  seedDesktopPreview({home,workFolders:[{name:'Synthetic workspace',path:cwd}],sourceFolders:[]});
  const app=await startServer({home,port:0,timers:false,desktopPreview:true,providers:{rehearsal:{async run(){}}}});
  t.after(async()=>{await app.close();fs.rmSync(root,{recursive:true,force:true});});app.engine.drain=async()=>{};

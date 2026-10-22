@@ -1,3 +1,4 @@
+const {atomicRename}=require('../src/atomic-rename.cjs');
 const fs=require('node:fs');
 const path=require('node:path');
 const {randomUUID}=require('node:crypto');
@@ -13,7 +14,7 @@ function validate(value){
 class WindowLayouts{
  constructor(home){this.file=path.join(home,'window-layouts.json');this.directory=path.join(home,'window-layouts');}
  read(){try{if(fs.statSync(this.file).size>256*1024)throw Error();return validate(JSON.parse(fs.readFileSync(this.file,'utf8')));}catch(error){if(error.code==='ENOENT')return {schemaVersion:1,revision:0,names:{},layouts:[]};throw Error('Saved window sessions could not be read. The original record was preserved.');}}
- commit(data,expected){const current=this.read();if(current.revision!==expected)throw Error('Window sessions changed. Refresh and retry.');const next=validate({...data,revision:expected+1});if(Buffer.byteLength(JSON.stringify(next))>256*1024)throw Error('Window session metadata exceeds its limit.');fs.mkdirSync(path.dirname(this.file),{recursive:true,mode:0o700});const temporary=this.file+'.'+randomUUID()+'.tmp';try{fs.writeFileSync(temporary,JSON.stringify(next)+'\n',{mode:0o600,flag:'wx'});fs.renameSync(temporary,this.file);}finally{fs.rmSync(temporary,{force:true});}return next;}
+ commit(data,expected){const current=this.read();if(current.revision!==expected)throw Error('Window sessions changed. Refresh and retry.');const next=validate({...data,revision:expected+1});if(Buffer.byteLength(JSON.stringify(next))>256*1024)throw Error('Window session metadata exceeds its limit.');fs.mkdirSync(path.dirname(this.file),{recursive:true,mode:0o700});const temporary=this.file+'.'+randomUUID()+'.tmp';try{fs.writeFileSync(temporary,JSON.stringify(next)+'\n',{mode:0o600,flag:'wx'});atomicRename(temporary,this.file);}finally{fs.rmSync(temporary,{force:true});}return next;}
  name(id){return this.read().names?.[id]||'Untitled window';}
  rename(id,name,expected){if(!validId(id))throw Error('Choose a current window.');const data=this.read();if(data.revision!==expected)throw Error('Window sessions changed. Refresh and retry.');data.names={...data.names,[id]:title(name)};for(const row of data.layouts)if(row.windowId===id&&row.kind==='closed')row.name=title(name);return this.commit(data,expected);}
  renameLayout(id,name,expected){const data=this.read(),row=data.layouts.find(row=>row.id===id);if(!row)throw Error('Choose a saved window session.');row.name=title(name);return this.commit(data,expected);}
@@ -31,7 +32,7 @@ class WindowLayouts{
   const bytes=data.layouts.reduce((total,item)=>total+(item.id===id?Buffer.byteLength(encoded):fs.statSync(path.join(this.directory,item.id+'.json')).size),0);
   if(bytes>MAX_TOTAL)throw Error('Saved window sessions exceed 128 MiB. Remove an old session and retry.');
   fs.mkdirSync(this.directory,{recursive:true,mode:0o700});const file=path.join(this.directory,id+'.json'),temporary=file+'.tmp';
-  try{fs.writeFileSync(temporary,encoded,{mode:0o600,flag:'wx'});fs.renameSync(temporary,file);this.snapshot(id);this.commit(data,data.revision);}catch(error){fs.rmSync(file,{force:true});throw error;}finally{fs.rmSync(temporary,{force:true});}
+  try{fs.writeFileSync(temporary,encoded,{mode:0o600,flag:'wx'});atomicRename(temporary,file);this.snapshot(id);this.commit(data,data.revision);}catch(error){fs.rmSync(file,{force:true});throw error;}finally{fs.rmSync(temporary,{force:true});}
   for(const prior of old)if(!data.layouts.some(item=>item.id===prior.id))fs.rmSync(path.join(this.directory,prior.id+'.json'),{force:true});
   return row;
  }

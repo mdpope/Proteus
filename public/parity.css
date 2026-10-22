@@ -267,3 +267,7 @@ body.sidebar-minimized:has(#sidebar:hover) #workspace,body.sidebar-minimized:has
 .source-library-entry .filepath{white-space:normal;overflow-wrap:anywhere}
 .browserbar .browser-agent-toggle[role=img]{color:var(--accent);cursor:default;flex-shrink:0}
 .browserbar .browser-agent-toggle.controlling{background:var(--accent);color:var(--proteus-accent-ink)}
+
+/* Compact browser menu marks and optional extension actions preserve row heights. */
+.proteus-context-menu button{display:flex;align-items:center;gap:8px}.menu-icon{width:15px;height:15px;flex:0 0 15px;object-fit:contain}.menu-label{overflow:hidden;text-overflow:ellipsis}
+.browser-extension-pins{display:flex;align-items:center;flex:0 1 auto;min-width:0;max-width:30vw;overflow-x:auto;scrollbar-width:none}.browser-extension-pins:empty{display:none}.browser-extension-pins .menu-icon{width:20px;height:20px;flex-basis:20px}.browser-extension-pins .menu-label{display:none}.extension-preference-icon{width:20px;height:20px;object-fit:contain;flex:none}

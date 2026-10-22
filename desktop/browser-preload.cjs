@@ -1,8 +1,40 @@
 // Sandboxed, isolated-world preload. No API or Node capability is exposed to pages.
 const { ipcRenderer, contextBridge } = require('electron');
-// Only bounded notification text crosses this bridge. The main process verifies
-// the exact sender, current origin, profile and saved website permission again.
+// Only bounded notification text and numeric scroll metadata cross these bridges.
+// The main process verifies the exact sender and origin; notifications additionally
+// require the profile's saved website permission.
 if(process.isMainFrame){
+  let scrollTimer,scrollNode,suppressScrollUntil=0,humanScrollUntil=0,pendingScroll,scrollObserver,scrollFrame;
+  function stopFollowScroll(){pendingScroll=null;scrollObserver?.disconnect();scrollObserver=null;cancelAnimationFrame(scrollFrame);scrollFrame=null;}
+  function applyFollowScroll(){
+    scrollFrame=null;const pending=pendingScroll;if(!pending)return;
+    if(pending.url!==location.href){stopFollowScroll();return;}
+    const remaining=[];suppressScrollUntil=Date.now()+500;
+    for(const position of pending.positions){let node=document.documentElement;if(position.path!=='root')for(const index of position.path.split('.'))node=node?.children[Number(index)];
+      if(!node){remaining.push(position);continue;}
+      if(node.closest('input,textarea,[contenteditable=true]'))continue;
+      const height=Math.max(0,node.scrollHeight-node.clientHeight),width=Math.max(0,node.scrollWidth-node.clientWidth);
+      if(position.y>0&&!height||position.x>0&&!width){remaining.push(position);continue;}
+      node.scrollTop=position.y*height;node.scrollLeft=position.x*width;
+    }
+    if(remaining.length)pending.positions=remaining;else stopFollowScroll();
+  }
+  function scheduleFollowScroll(){if(pendingScroll&&scrollFrame==null)scrollFrame=requestAnimationFrame(applyFollowScroll);}
+  for(const type of ['wheel','pointerdown','keydown','touchstart'])window.addEventListener(type,event=>{if(event.isTrusted){stopFollowScroll();humanScrollUntil=Date.now()+2000;suppressScrollUntil=0;}},{capture:true,passive:true});
+  window.addEventListener('scroll',event=>{if(Date.now()<suppressScrollUntil||Date.now()>humanScrollUntil)return;scrollNode=event.target===document?document.scrollingElement:event.target;if(!(scrollNode instanceof Element)||scrollNode.closest('input,textarea,[contenteditable=true]'))return;if(scrollTimer)return;scrollTimer=setTimeout(()=>{scrollTimer=null;const node=scrollNode,root=document.documentElement,path=[];let cursor=node;while(cursor!==root){const parent=cursor.parentElement;if(!parent||path.length>=30)return;path.unshift([...parent.children].indexOf(cursor));cursor=parent;}ipcRenderer.send('proteus:browser-scroll',[{path:path.length?path.join('.'):'root',top:node.scrollTop,left:node.scrollLeft,x:Math.max(0,node.scrollLeft)/Math.max(1,node.scrollWidth-node.clientWidth),y:Math.max(0,node.scrollTop)/Math.max(1,node.scrollHeight-node.clientHeight)}]);},100);},{capture:true,passive:true});
+  ipcRenderer.on('proteus:follow-scroll',(_event,value)=>{
+    if(value?.url!==location.href||!Array.isArray(value.positions))return;
+    stopFollowScroll();clearTimeout(scrollTimer);scrollTimer=null;humanScrollUntil=0;
+    const positions=value.positions.slice(0,24).filter(position=>position&&/^(root|[0-9]+(?:\.[0-9]+){0,30})$/.test(position.path)&&Number.isFinite(position.x)&&Number.isFinite(position.y)).map(position=>({path:position.path,x:Math.max(0,Math.min(1,position.x)),y:Math.max(0,Math.min(1,position.y))}));
+    if(!positions.length)return;pendingScroll={url:value.url,positions};
+    // One observer and one animation frame cover at most 24 structural targets.
+    // Late application is invalidated by a new state, navigation or real input.
+    scrollObserver=new MutationObserver(scheduleFollowScroll);scrollObserver.observe(document,{childList:true,subtree:true,attributes:true,attributeFilter:['class','style','hidden']});applyFollowScroll();
+  });
+  window.addEventListener('load',scheduleFollowScroll,true);window.addEventListener('resize',scheduleFollowScroll);
+  ipcRenderer.on('proteus:gesture-reset',stopFollowScroll);
+  window.addEventListener('popstate',stopFollowScroll);window.addEventListener('hashchange',stopFollowScroll);
+  window.addEventListener('pagehide',()=>{clearTimeout(scrollTimer);stopFollowScroll();});
   let interactedAt=0;for(const type of ['pointerdown','wheel'])window.addEventListener(type,event=>{if(event.isTrusted&&Date.now()-interactedAt>=1000){interactedAt=Date.now();ipcRenderer.send('proteus:browser-interaction');}},{capture:true,passive:true});
   for(const type of ['click','keydown','submit'])window.addEventListener(type,event=>{if(event.isTrusted)ipcRenderer.send('proteus:navigation-intent');},true);
   window.addEventListener('message',event=>{if(event.source!==window)return;if(event.data?.type==='proteus-site-notification-close'){if(typeof event.data.id==='string'&&event.data.id.length<=64)ipcRenderer.send('proteus:site-notification',{close:event.data.id});return;}if(event.data?.type!=='proteus-site-notification')return;const value=event.data.value;if(!value||typeof value.title!=='string'||value.title.length>200||typeof value.body!=='string'||value.body.length>2000||typeof value.id!=='string'||value.id.length>64)return;ipcRenderer.send('proteus:site-notification',value);});
@@ -59,6 +91,7 @@ function draw() {
 // Observe gestures without making Chromium wait for the renderer on every wheel event.
 // Horizontal navigation starts only at a scroll boundary; all native scrolling stays intact.
 function pinchAttempt(delta){
+    if(document.fullscreenElement)return;
     const now=Date.now(),scale=window.visualViewport?.scale||1;
     if(now<cooldown)return;
     if(!overviewGate||!overviewGate.explicit&&now-overviewGate.last>240)overviewGate={started:now,last:now,delta:0,blocked:scale>1.001};
@@ -76,7 +109,7 @@ window.addEventListener('wheel', event=>{
     pinchAttempt(event.deltaY);
     return;
   }
-  if(!event.isTrusted||event.ctrlKey||event.shiftKey||event.deltaMode!==0||Date.now()<cooldown||(window.visualViewport?.scale||1)>1.01)return;
+  if(document.fullscreenElement||!event.isTrusted||event.ctrlKey||event.shiftKey||event.deltaMode!==0||Date.now()<cooldown||(window.visualViewport?.scale||1)>1.01)return;
   if(!direction) {
     if(Math.abs(event.deltaX)<3||Math.abs(event.deltaX)<Math.abs(event.deltaY)*1.5||canScroll(event,event.deltaX))return;
     direction=event.deltaX<0?'back':'forward';if(direction==='forward'&&!history.forward&&!canReopen){direction=null;return;}

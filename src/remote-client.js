@@ -1,5 +1,6 @@
 // Wire-compatible with src/remote-crypto.js and Apple CryptoKit AES.GCM.combined.
 // Conversation payloads stay on this encrypted wire. Account credential custody is a separate adapter.
+import {remoteTransportLimits as limits} from './remote-transport.js';
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', { fatal: true });
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
@@ -10,8 +11,11 @@ export async function importKey(hex) {
     return crypto.subtle.importKey('raw', Uint8Array.from(hex.match(/../g), value => parseInt(value, 16)), 'AES-GCM', false, ['encrypt', 'decrypt']);
 }
 export async function seal(key, value, aad) {
+    return sealText(key,JSON.stringify(value),aad);
+}
+async function sealText(key, text, aad) {
     const nonce = crypto.getRandomValues(new Uint8Array(12));
-    const encrypted = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce, additionalData: encoder.encode(aad), tagLength: 128 }, key, encoder.encode(JSON.stringify(value))));
+    const encrypted = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce, additionalData: encoder.encode(aad), tagLength: 128 }, key, encoder.encode(text)));
     const combined = new Uint8Array(nonce.length + encrypted.length); combined.set(nonce); combined.set(encrypted, nonce.length); return base64(combined);
 }
 export async function unseal(key, box, aad) {
@@ -44,7 +48,7 @@ export function parsePairing(code, options) {
 }
 export class BrowserRemoteClient extends EventTarget {
     constructor(host, { socketFactory = url => new WebSocket(url), name = 'Proteus browser', onPaired = async () => {}, onCredential = async () => {}, timeoutMs = 20_000 } = {}) {
-        super(); this.host = host; this.socketFactory = socketFactory; this.name = name; this.onPaired = onPaired; this.onCredential = onCredential; this.waiting = new Map(); this.outgoing = 0; this.incoming = 0; this.sendQueue = Promise.resolve(); this.receiveQueue = Promise.resolve(); this.status = 'disconnected'; this.timeoutMs=timeoutMs; this.stage='relay';
+        super(); this.host = host; this.socketFactory = socketFactory; this.name = name; this.onPaired = onPaired; this.onCredential = onCredential; this.waiting = new Map(); this.outgoing = 0; this.incoming = 0; this.sendQueue = Promise.resolve(); this.receiveQueue = Promise.resolve(); this.queuedSendBytes=0;this.queuedReceiveBytes=0;this.queuedReceivePackets=0;this.status = 'disconnected'; this.timeoutMs=timeoutMs; this.stage='relay';
     }
     event(type, detail) { this.dispatchEvent(new CustomEvent(type, { detail })); }
     progress(stage,message) { this.stage=stage;this.event('stage',{stage,message}); }
@@ -57,12 +61,26 @@ export class BrowserRemoteClient extends EventTarget {
             this.connected = { resolve, reject };
             this.timer = setTimeout(() => this.fail(this.stage==='account-save'?'Account save did not finish. Check website sign-in and retry; the computer may have consumed the invitation.':this.stage==='pairing'?'Pairing did not finish. Check the computer’s Connections page and create a fresh invitation.':'Computer authentication did not finish. Check that the computer is online and retry.'), this.timeoutMs);
             this.socket = this.socketFactory(`${this.host.relay}/socket?role=client&host=${encodeURIComponent(this.host.hostId)}`);
-            this.socket.addEventListener('message', event => { this.receiveQueue = this.receiveQueue.then(() => this.receive(JSON.parse(event.data))).catch(() => {this.event('recovery-blocked',{reason:'verification'});this.fail('Encrypted verification failed during '+this.stage+'. Reconnect or generate a fresh invitation.');}); });
+            this.socket.addEventListener('message', event => this.queueMessage(event.data));
             this.socket.addEventListener('error', () => this.fail('Could not reach the relay. Check the computer connection and relay origin settings.'));
             this.socket.addEventListener('close', event => {if(event.code===1008)this.event('recovery-blocked',{reason:'authentication'});this.fail(event.code === 1013 ? 'Computer is offline or the relay is busy. Connect the computer to the relay, then retry.' : event.code === 1012 ? 'Computer disconnected during '+this.stage+'. Reconnect when it is online.' : event.code === 1008 ? 'Relay refused the connection during '+this.stage+'. Check computer access and use a fresh invitation for pairing.' : 'Connection interrupted during '+this.stage+' (close '+event.code+'). Reconnect; pairing may require a fresh invitation.');});
         });
     }
-    raw(packet) { if (this.socket?.readyState !== 1) throw new Error('Computer is not connected.'); this.socket.send(JSON.stringify(packet)); }
+    queueMessage(data) {
+        if(this.status==='closed')return;
+        if(typeof data!=='string'||data.length>limits.packetBytes){this.fail('The relay sent an oversized or unsupported message. Reconnect before retrying.');return;}
+        const bytes=encoder.encode(data).length;
+        if(bytes>limits.packetBytes||this.queuedReceivePackets>=limits.queuedReceivePackets||this.queuedReceiveBytes+bytes>limits.queuedReceiveBytes){this.fail('The remote connection is receiving more data than it can process. Reconnect to refresh its state.');return;}
+        this.queuedReceivePackets++;this.queuedReceiveBytes+=bytes;
+        this.receiveQueue=this.receiveQueue.then(()=>{if(this.status!=='closed')return this.receive(JSON.parse(data));}).catch(()=>{if(this.status!=='closed'){this.event('recovery-blocked',{reason:'verification'});this.fail('Encrypted verification failed during '+this.stage+'. Reconnect or generate a fresh invitation.');}}).finally(()=>{this.queuedReceivePackets--;this.queuedReceiveBytes-=bytes;});
+    }
+    raw(packet) {
+        if(this.socket?.readyState!==1)throw new Error('Computer is not connected.');
+        const encoded=JSON.stringify(packet),bytes=encoder.encode(encoded).length;
+        if(bytes>limits.packetBytes||(this.socket.bufferedAmount||0)+bytes>limits.bufferedBytes)throw new Error('The remote connection cannot buffer more data. Reconnect to refresh its state.');
+        this.socket.send(encoded);
+    }
+    sendPause(ms){return new Promise(resolve=>{this.sendDelay={resolve,timer:setTimeout(()=>{this.sendDelay=null;resolve();},ms)};});}
     async authenticate() {
         if(this.status==='closed')return;this.progress('authentication','Authenticating this browser with the computer…');
         const bytes = crypto.getRandomValues(new Uint8Array(32)); const nonce = Array.from(bytes, value => value.toString(16).padStart(2, '0')).join(''); this.prefix = `${this.challenge}:${nonce}`;
@@ -96,21 +114,28 @@ export class BrowserRemoteClient extends EventTarget {
     request(method, args = {}, { id = crypto.randomUUID(), issuedAt = new Date().toISOString(), timeoutMs = 60_000 } = {}) {
         if (this.status !== 'online') return Promise.reject(new Error('Connect this computer first.'));
         if (this.waiting.has(id)) return Promise.reject(new Error('This action is already waiting for a response.'));
+        if(this.waiting.size>=limits.pendingRequests)return Promise.reject(Object.assign(new Error('Too many remote actions are pending. Wait for the current responses before retrying.'),{code:'REMOTE_BUSY'}));
+        let serialized,wireBytes;try{serialized=JSON.stringify({id,method,args,issuedAt});wireBytes=4*Math.ceil((encoder.encode(serialized).length+28)/3)+128;}catch(error){return Promise.reject(error);}
+        if(wireBytes>limits.packetBytes)return Promise.reject(new Error('This remote request exceeds the encrypted message limit.'));
+        if(this.queuedSendBytes+wireBytes>limits.queuedSendBytes)return Promise.reject(Object.assign(new Error('The remote send queue is full. Wait for the current requests before retrying.'),{code:'REMOTE_BUSY'}));
+        this.queuedSendBytes+=wireBytes;
         return new Promise((resolve, reject) => {
             const timer = setTimeout(() => { this.waiting.delete(id); reject(new Error('Response timed out. Refresh the computer state before retrying; the action may already have completed.')); }, Math.max(1000,Math.min(timeoutMs,60_000)));
             this.waiting.set(id, { resolve, reject, timer });
             this.sendQueue = this.sendQueue.then(async () => {
-                // Leave room for authentication within the relay's 100-packet/10-second budget.
-                this.sentAt ||= [];this.sentAt=this.sentAt.filter(at=>Date.now()-at<10_100);
-                if(this.sentAt.length>=80)await new Promise(resolve=>setTimeout(resolve,Math.max(1,10_100-(Date.now()-this.sentAt[0]))));
+                // Leave room for authentication and routing within relay windows.
                 if(this.status!=='online'||!this.waiting.has(id))return;
-                this.sentAt=this.sentAt.filter(at=>Date.now()-at<10_100);this.sentAt.push(Date.now());
-                const seq = ++this.outgoing; this.raw({ type: 'data', seq, box: await seal(this.host.key, { id, method, args, issuedAt }, `${this.prefix}:client:${seq}`) });
-            }).catch(() => this.fail('Could not send the encrypted request. Reconnect before retrying.'));
+                this.sentAt ||= [];
+                for(;;){this.sentAt=this.sentAt.filter(row=>Date.now()-row.at<10_100);if(this.sentAt.length<80&&this.sentAt.reduce((sum,row)=>sum+row.bytes,0)+wireBytes<24_000_000)break;await this.sendPause(Math.max(1,10_100-(Date.now()-this.sentAt[0].at)));if(this.status!=='online'||!this.waiting.has(id))return;}
+                if(this.status!=='online'||!this.waiting.has(id))return;
+                this.sentAt.push({at:Date.now(),bytes:wireBytes});
+                const seq = ++this.outgoing; this.raw({ type: 'data', seq, box: await sealText(this.host.key, serialized, `${this.prefix}:client:${seq}`) });
+            }).catch(() => this.fail('Could not send the encrypted request. Reconnect before retrying; check the owner state because the action may have completed.')).finally(()=>{this.queuedSendBytes-=wireBytes;});
         });
     }
     fail(message) {
         if (this.status === 'closed') return;
+        if(this.sendDelay){clearTimeout(this.sendDelay.timer);this.sendDelay.resolve();this.sendDelay=null;}
         clearTimeout(this.timer);if(this.credentialSaved&&this.status!=='online'&&!message.includes('Disconnected'))message+=' The account destination was saved; reconnect using it rather than reusing the invitation.'; this.status = 'closed'; this.connected?.reject(new Error(message)); this.connected = null;
         for (const pending of this.waiting.values()) { clearTimeout(pending.timer); pending.reject(new Error(message)); } this.waiting.clear();
         this.socket?.close(); this.inviteKey = null; delete this.host.inviteKey; this.event('status', 'offline'); this.event('failure', message);

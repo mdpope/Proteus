@@ -1,3 +1,4 @@
+const {atomicRename}=require('../src/atomic-rename.cjs');
 // Host-owned per-logical-tab pause state. A corrupt record fails closed without
 // overwriting it or preventing ordinary human browsing.
 const fs=require('node:fs'),path=require('node:path');
@@ -16,7 +17,7 @@ class BrowserAgentAccess {
   const key=this.key(id),keys=new Set(current.paused),shared=new Set(current.shared||[]);if(paused){keys.add(key);shared.delete(key);}else{keys.delete(key);shared.add(key);}if(keys.size>5000||shared.size>5000)throw Error('The saved agent-control preference limit has been reached.');
   if(keys.has(key)===current.paused.includes(key)&&shared.has(key)===(current.shared||[]).includes(key))return;
   const next={...current,revision:current.revision+1,paused:[...keys],shared:[...shared]},encoded=JSON.stringify(next)+'\n';if(Buffer.byteLength(encoded)>1024*1024)throw Error('Agent-control preferences exceed their storage limit.');fs.mkdirSync(path.dirname(this.file),{recursive:true,mode:0o700});const temporary=this.file+'.'+randomUUID()+'.tmp';
-  try{fs.writeFileSync(temporary,encoded,{flag:'wx',mode:0o600});fs.renameSync(temporary,this.file);this.document=next;}finally{fs.rmSync(temporary,{force:true});}
+  try{fs.writeFileSync(temporary,encoded,{flag:'wx',mode:0o600});atomicRename(temporary,this.file);this.document=next;}finally{fs.rmSync(temporary,{force:true});}
  }
 }
 module.exports={BrowserAgentAccess};

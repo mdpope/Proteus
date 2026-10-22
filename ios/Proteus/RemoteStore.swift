@@ -47,10 +47,11 @@ struct RemoteHostInfo: Equatable {
     // Keep the in-memory value current without invalidating the loaded transcript.
     private(set) var drafts: [String: JSON] = [:]
     var onPaired: ((DeviceConnection) throws -> Void)?
+    var onConnected: (() -> Void)?
     var onHostName: ((String) -> Void)?
     var onChatDeleted: ((String) -> Void)?
     var onAuthenticatedRevocation: (() -> Void)?
-    private let cacheRoot: URL?
+    private var cacheRoot: URL?
     private let legacyCredentials: Bool
     private(set) var connection: DeviceConnection?
     private var invite: JSON?
@@ -219,14 +220,18 @@ struct RemoteHostInfo: Equatable {
             guard let invite else { throw RemoteError(message: "Unexpected pairing response.") }
             let device = try RemoteCrypto.open(packet["box"].string, key: invite["key"].string, aad: "\(challenge):paired")
             let value = DeviceConnection(relay: invite["relay"].string, hostId: invite["hostId"].string, deviceId: device["id"].string, key: device["key"].string)
+            // The saved destination adopts this transport. Opening a replacement while
+            // this handshake is still running races authentication and sheet dismissal.
+            connection = value; paired = true
             do { if legacyCredentials { try DeviceKeychain.save(value) }; try onPaired?(value) } catch { self.error = error.localizedDescription; self.invite = nil; active = false; disconnect(); return }
-            connection = value; self.invite = nil; paired = true
+            self.invite = nil
             try await authenticate()
         case "ready":
             guard let connection else { return }
             let ready = try RemoteCrypto.open(packet["box"].string, key: connection.key, aad: "\(prefix):ready")
             guard ready["protocol"].int == 1 else { throw RemoteError(message: "Unsupported remote protocol.") }
             connected = true; status = "Connected"; error = nil
+            onConnected?()
             // Separate task: the receive loop must remain free to deliver these responses.
             Task { await refresh(); if let selectedChat { await openChat(selectedChat) }; await retryPending() }
         case "data":
@@ -464,6 +469,14 @@ struct RemoteHostInfo: Equatable {
         // Lifecycle flushes wait behind queued snapshots so an older write cannot win.
         cacheWriter.sync { Self.writeCache(payload, key: key, url: url) }
     }
+    func moveCache(to root: URL) {
+        cacheTimer?.cancel()
+        // Drain snapshots before changing the destination; no queued pending-pair
+        // write may recreate the temporary cache after it has been removed.
+        cacheWriter.sync {}
+        cacheRoot = root
+        flushCache()
+    }
     private func cachePayload() -> JSON {
         .object(["state": state, "chats": .object(chats), "allRuns": .array(Array(allRuns.prefix(500))), "cursor": .string(cursor), "drafts": .object(drafts)])
     }
@@ -513,12 +526,18 @@ private struct DestinationIndex: Codable {
     var destinations: [HostDestination] = []
 }
 
+struct PairingCompletion: Equatable {
+    let id = UUID()
+    let hostID: String
+}
+
 /// Credentials and cached records are independent even when every computer uses the same relay.
 @MainActor final class DestinationStore: ObservableObject {
     @Published private(set) var destinations: [HostDestination] = []
     @Published private(set) var selectedID: String?
     @Published private(set) var selected: RemoteStore?
     @Published var pairing: RemoteStore?
+    @Published private(set) var pairingCompletion: PairingCompletion?
     @Published var error: String?
     @Published var deletedChat: ChatDeletionEvent?
     private var stores: [String: RemoteStore] = [:]
@@ -616,12 +635,19 @@ private struct DestinationIndex: Codable {
         guard !name.isEmpty, name.count <= 80 else { throw RemoteError(message: "Enter a name for this computer (up to 80 characters).") }
         let candidate = RemoteStore(connection: nil, cacheRoot: root.appendingPathComponent("pending-pair"), legacyCredentials: false)
         candidate.onPaired = { [weak self, weak candidate] connection in
-            guard let self, let candidate else { throw RemoteError(message: "Pairing was cancelled.") }
+            guard let self, let candidate, self.pairing === candidate else { throw RemoteError(message: "Pairing was cancelled.") }
             let existingLabel = self.destinations.first { $0.id == connection.hostId }?.label
             let chosen = HostDestination.pairingName(requested: name, suggested: candidate.pairingLabel, existing: existingLabel)
             try self.register(connection, label: chosen, history: candidate)
         }
-        try candidate.pair(code); pairing?.suspend(); pairing = candidate
+        candidate.onConnected = { [weak self, weak candidate] in
+            guard let self, let candidate, self.pairing === candidate,
+                  self.selected === candidate, let id = candidate.connection?.hostId else { return }
+            candidate.onPaired = nil; candidate.onConnected = nil
+            self.pairing = nil
+            self.pairingCompletion = PairingCompletion(hostID: id)
+        }
+        try candidate.pair(code); pairing?.suspend(); pairingCompletion = nil; pairing = candidate
     }
     // Also exercised with synthetic credentials by migration/isolation tests.
     func register(_ connection: DeviceConnection, label: String, history: RemoteStore? = nil) throws {
@@ -640,13 +666,13 @@ private struct DestinationIndex: Codable {
             if let oldCredential { try? DeviceKeychain.save(oldCredential, hostID: id, service: service) } else { DeviceKeychain.clear(hostID: id, service: service) }; throw error
         }
         selected?.suspend()
-        let remote = RemoteStore(connection: connection, cacheRoot: cacheRoot(id), legacyCredentials: false)
+        let remote = history ?? RemoteStore(connection: connection, cacheRoot: cacheRoot(id), legacyCredentials: false)
         if let old = oldHistory { remote.copyHistory(from: old) }
-        else if let history { remote.copyHistory(from: history) }
+        if history != nil { remote.moveCache(to: cacheRoot(id)) }
         observeHostName(remote, id: id)
         stores[id] = remote; selected = remote; remote.flushCache()
-        // Finish the pairing handshake on the candidate, then use only the saved host instance.
-        Task { await Task.yield(); history?.suspend(); try? FileManager.default.removeItem(at: self.root.appendingPathComponent("pending-pair")); if self.pairing === history { self.pairing = nil }; if self.active && self.selected === remote { remote.activity(true) } }
+        try? FileManager.default.removeItem(at: root.appendingPathComponent("pending-pair"))
+        if active { remote.activity(true) }
     }
     func cancelPairing() { pairing?.suspend(); pairing = nil; try? FileManager.default.removeItem(at: root.appendingPathComponent("pending-pair")) }
     func forget(_ id: String) throws {

@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
 import history from '../desktop/browser-history.cjs';import workspace from '../desktop/workspace-session.cjs';
 const {normalizeHistory,safeHistoryURL,isAuthenticationURL,MAX_ENTRIES,MAX_HISTORY_BYTES}=history;
@@ -19,5 +20,5 @@ test('history limits entries, UTF8 size and title length while retaining current
 test('workspace caps total history, migrates URL-only tabs and preserves oversized source on refusal',()=>{
  const entries=Array.from({length:50},(_,i)=>({url:'https://example.test/'+i+'?q='+'x'.repeat(1000),title:'Title'}));const clean=workspace.normalizeSession({tabs:Array.from({length:300},(_,i)=>({id:'web'+i,type:'browser',url:'https://example.test/current',history:{entries,index:25}}))});
  assert.ok(clean.tabs.filter(t=>t.history).length<300);assert.ok(Buffer.byteLength(JSON.stringify(clean))<16*1024*1024);assert.equal(workspace.normalizeSession({tabs:[{id:'legacy',type:'browser',url:'https://example.test/legacy'}]}).tabs[1].url,'https://example.test/legacy');
- const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-history-limit-'));try{const store=new workspace.WorkspaceSession(home);fs.writeFileSync(store.file,' '.repeat(16*1024*1024+1));assert.throws(()=>store.get(),/preserved/);assert.equal(fs.statSync(store.file).size,16*1024*1024+1);}finally{fs.rmSync(home,{recursive:true,force:true});}
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-history-limit-'));try{const store=new workspace.WorkspaceSession(home);fs.writeFileSync(store.file,' '.repeat(16*1024*1024+1));assert.throws(()=>store.get(),/preserved/);assert.equal(fs.statSync(store.file).size,16*1024*1024+1);}finally{fs.rmSync(home,{recursive:true,force:true});}
 });

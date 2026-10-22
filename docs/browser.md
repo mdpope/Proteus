@@ -1,3 +1,70 @@
+## October 22 — browser review controls
+
+Home has no URL/search box. Proteus is its primary heading; normal browser tabs and their address bars remain the browsing entry points.
+
+Browser tab menus place **Hide browser tab** directly below Unload. Hide uses the existing
+visibility/lifecycle operation: unload first, preserve logical identity, profile, placement and
+full history, and then remove the navigation entry. Existing active-work/unsaved-form blockers
+remain. Restore stays available from the existing tab inventory. Main, project/chat/workspace
+and Team strips create a normal browser tab on a double click in blank space; existing tabs,
+buttons and reorder handles are excluded. The main strip's blank space is no longer a native
+drag region; the brand area remains available for moving the application window.
+
+The detached video player supports dragging its video surface after a small movement threshold,
+leaving buttons, sliders and native bottom playback controls usable. Trusted trackpad pinch
+(control-wheel events) proportionally resizes the current window, preserving its aspect ratio and
+clamping both axes to the display work area. No player, session or navigation is recreated.
+Script-generated gestures are ignored; host IPC is scoped to the active player's own frames.
+Escape/return-to-tab, navigation and disposal retain their existing cleanup. Platform code uses
+Electron work-area/bounds APIs on macOS, Windows and Linux. Physical Windows/Linux gestures remain
+release acceptance; native Wayland compositors can restrict programmatic move/resize (see
+[Electron window limits](https://www.electronjs.org/docs/latest/api/browser-window/)).
+
+Autoplay blocking remains a device-wide atomic `browser-media.json` preference under application
+data and is restored before browser pages are created. No new shared account setting is needed.
+Browser Preferences adds per-profile, device-local **Show in toolbar** controls and Move left /
+Move right ordering. The same installed-extension records preserve pins/order across restart and
+updates. Enabled pinned extensions appear between Go and the trailing controls; unpinned ones
+remain in the page menu. Extension popup/profile boundaries and permissions are unchanged.
+Installed icon files are bounded, resolved within the extension folder and rendered as small PNGs;
+a compact generic icon is used if no image exists. Lists are cached until extension changes, and
+all open app windows refresh their toolbar metadata. Downloads precedes the Page menu button.
+Tab/page menus use 15px vector/extension icons while retaining their 32px native menu rows.
+
+## October 22 — open links in a loaded background tab
+
+Native browser link menus now offer **Open Link in Background Tab** immediately after
+**Open Link in New Tab**. It loads an unhidden tab after the source in the same local profile
+and parent, including Team Tools, while preserving the current selection and focus. Typing in
+the current page remains available while the new page loads; a later address-bar or tab choice
+keeps its focus when loading finishes. The foreground action still selects
+its tab; **Open Link in Unloaded Tab** still creates a hidden tab without fetching the page.
+
+`test/browser-background-link.test.js` covers menu and renderer routing; the isolated
+`test/browser-background-link-ui.mjs` exercises native loading, profile/placement, selection,
+focus, drafts, delayed completion, Team mounting, and the existing foreground/unloaded actions.
+
+## October 22 — local-profile follow-along and complete incremental history
+
+Project/workspace follow-along keeps cookies and signed-in sessions local, synchronizes the shared
+URL and tab selection, and binds scroll to the observed navigation entry. Full browser history is
+retained, including sessions beyond 10,000 entries. Bounded descriptor windows and navigation deltas
+reduce ordinary transfer; they are not retention limits. Inactive scopes do not hydrate or load
+new pages. Database page reads stop at their byte/count budget with one continuation lookahead,
+so large histories do not allocate an entire requested stack before the transfer limit applies.
+See [project follow-along](project-follow.md) and the history acceptance tests.
+
+Unsynchronized local navigation persists its pending marker and complete stable-ID
+history across app restart, including Forward entries and Team browser tabs. Pending
+stacks bypass the legacy 50-entry startup window; exceeding the shared 8 MiB session
+history budget rejects the atomic save and preserves the prior file. Native restoration
+retains the marker until an owner acknowledgement covers every pending entry and its
+selected position. A late acknowledgement for the same selected page cannot erase newer
+Forward visits. Navigating from an unloaded tab retains the logical stack while loading
+only the new URL. `test/workspace-session.test.js`, `test/browser-navigation.test.js`, and
+the isolated `test/browser-resources-ui.mjs` verify persistence, limits, lifecycle and
+acknowledgement behavior without changing installed app data.
+
 ## October 22 — native browser chrome regression repair
 
 The iPhone bottom controls reserve their own safe-area space instead of competing with WebKit
@@ -1259,3 +1326,26 @@ of focus. Existing website-data, site-version, certificate, extension and Develo
 remain in the menu. The host binds actions to the captured page and validates its lifetime;
 the sandboxed menu has no website, credential or general application API. Preview validation and
 production deployment are recorded separately in desktop-preview.md.
+
+## Complete session history with incremental synchronization
+
+The desktop descriptor synchronizer requests bounded 200-entry navigation windows.
+An initial connection hydrates and verifies all pages once; subsequent navigation,
+Back/Forward and title changes apply contiguous owner revisions to the retained
+stack. A transport-only journal keeps the latest 256 deltas per tab. If that journal
+has expired or placement invalidates it, the client falls back to a complete verified
+paged snapshot. It never applies an incomplete stack or discards pending receipts.
+Renderer cache entries are replaced per tab and cleared when their scope/host is
+forgotten, rather than retaining a full copy for every navigation revision.
+
+The former 10,000-entry rejection is removed from canonical session navigation.
+History remains available back to the session's first page. Normal new navigation
+after Back still branches from the selected entry and replaces that tab's Forward
+branch, matching existing browser behavior; independently recorded visits follow
+the user's history retention setting. Long URLs use byte-bounded pages, including
+a selected-page fallback when a centered window exhausts its byte budget.
+
+`test/navigation-delta.test.js` verifies a 10,050-entry session, incremental append,
+Back/Forward, branching and title changes, stale-delta refusal, and complete
+long-URL paging below 512 KiB per history response. Existing clients keep the
+previous snapshot protocol; this is source validation, not a deployed update.

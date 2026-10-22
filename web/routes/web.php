@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\CaptureController;
+use App\Http\Controllers\DesktopReleaseController;
 use App\Http\Controllers\FuelController;
 use App\Http\Controllers\GarageController;
 use App\Http\Controllers\NutritionController;
@@ -19,6 +20,8 @@ Route::middleware('auth')->group(function () {
     Route::delete('/security/tokens/{token}', [SecurityController::class, 'revoke'])->middleware(['strong', 'password.confirm'])->name('security.revoke');
 });
 Route::middleware(['auth', 'strong'])->group(function () {
+    Route::get('/downloads', [DesktopReleaseController::class, 'page'])->name('desktop-releases');
+    Route::get('/downloads/{id}/{kind}', [DesktopReleaseController::class, 'download'])->where('id', '[A-Za-z0-9][A-Za-z0-9._-]{0,159}')->whereIn('kind', ['artifact', 'installer', 'manifest'])->middleware('throttle:20,1')->name('desktop-releases.download');
     Route::get('/home', function () {
         $releasePath = resource_path('release.json');
         $release = is_file($releasePath) ? json_decode(file_get_contents($releasePath), true) : [];

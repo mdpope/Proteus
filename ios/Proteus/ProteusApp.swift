@@ -23,6 +23,7 @@ struct ProteusRoot: View {
     @EnvironmentObject var life: LifeStore
     @EnvironmentObject var shared: SharedAppStore
     @State private var area = "macs"
+    @State private var incomingPairing = false
     @AppStorage("lifeEnabled") private var lifeEnabled = false
     private var showLife: Bool {
         #if DEBUG
@@ -44,7 +45,9 @@ struct ProteusRoot: View {
     }
     var body: some View {
             applicationContent.tint(NativeTheme.accent).foregroundStyle(NativePalette.shared.color("text")).preferredColorScheme(.dark)
-                .onOpenURL { url in if url.scheme == "proteus" && url.host == "pair" { area = "macs"; do { try destinations.add(url.absoluteString, label: "New computer") } catch { destinations.error = error.localizedDescription } } }
+                .onOpenURL { url in if url.scheme == "proteus" && url.host == "pair" { do { try destinations.add(url.absoluteString, label: "New computer"); incomingPairing = true } catch { destinations.error = error.localizedDescription } } }
+                .sheet(isPresented: $incomingPairing, onDismiss: { destinations.cancelPairing() }) { NavigationStack { PairView().toolbar { Button("Cancel") { incomingPairing = false } } } }
+                .onChange(of: destinations.pairingCompletion) { _, completion in if completion != nil { incomingPairing = false } }
                 .task {
                     #if DEBUG
                     if ProcessInfo.processInfo.arguments.contains("--reset-pairing") { destinations.resetForTesting() }
@@ -170,7 +173,7 @@ struct DestinationRoot: View {
         .sheet(isPresented: $setup) { NavigationStack { NativeSetupView() } }
         .sheet(isPresented: $adding, onDismiss: { destinations.cancelPairing() }) { NavigationStack { PairView().toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { destinations.cancelPairing(); adding = false } } } } }
         .sheet(isPresented: $managing) { NavigationStack { DestinationsView { managing = false; adding = true }.toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { managing = false } } } } }
-        .onChange(of: destinations.selectedID) { _, _ in adding = false }
+        .onChange(of: destinations.pairingCompletion) { _, completion in if completion != nil { adding = false; managing = true } }
         .onChange(of: destinations.pairing != nil) { _, pairing in if !pairing { adding = false } }
     }
 }
@@ -247,12 +250,13 @@ struct PairView: View {
     @State private var code = ""
     @State private var label = "My computer"
     @State private var scan = false
+    @State private var scannedCode: String?
     var body: some View {
         Form {
             Section {
                 Image(systemName: "point.3.connected.trianglepath.dotted").font(.system(size: 52)).foregroundStyle(.tint).frame(maxWidth: .infinity).padding()
                 Text("Add your computer").font(.title2.bold())
-                Text("Open Connections in Proteus on your Linux PC or Mac, then create a one-time pairing code. Each computer keeps its own chats, schedules and workspace context.").foregroundStyle(.secondary)
+                Text("Open Connections in Proteus on your computer, then create a one-time pairing code. Each computer keeps its own chats, schedules and workspace context.").foregroundStyle(.secondary)
             }
             Section("Add a computer") {
                 TextField("Computer name", text: $label).accessibilityIdentifier("destination-name")
@@ -265,7 +269,10 @@ struct PairView: View {
             if !destinations.destinations.isEmpty { Section("Saved computers") { ForEach(destinations.destinations) { destination in Button(destination.label) { do { try destinations.select(destination.id) } catch { destinations.error = error.localizedDescription } } } } }
             Section { Text("Computers can share the same encrypted relay address. Pair each computer separately; adding one does not replace another. Life remains your shared website database. Omi pendant capture remains in the separate Omi app.").font(.footnote).foregroundStyle(.secondary) }
         }.navigationTitle(destinations.destinations.isEmpty ? "Proteus" : "Add computer")
-            .sheet(isPresented: $scan) { QRScanner { value in scan = false; code = value; pair() }.ignoresSafeArea().overlay(alignment: .topTrailing) { Button("Cancel") { scan = false }.padding().buttonStyle(.borderedProminent) } }
+            .sheet(isPresented: $scan, onDismiss: {
+                // Finish dismissing the camera before success can dismiss its parent.
+                if let value = scannedCode { scannedCode = nil; code = value; pair() }
+            }) { QRScanner { value in scannedCode = value; scan = false }.ignoresSafeArea().overlay(alignment: .topTrailing) { Button("Cancel") { scannedCode = nil; scan = false }.padding().buttonStyle(.borderedProminent) } }
     }
     private func pair() { do { try destinations.add(code, label: label) } catch { destinations.error = error.localizedDescription } }
 }
@@ -282,6 +289,14 @@ struct DestinationsView: View {
     @State private var editingRelay: HostDestination?
     var body: some View {
         List {
+            if let completion = destinations.pairingCompletion,
+               let destination = destinations.destinations.first(where: { $0.id == completion.hostID }) {
+                Section {
+                    Label("Paired successfully with \(destination.label)", systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.green).accessibilityIdentifier("pairing-success")
+                    Text("The computer is saved. Its current connection status is shown below.").font(.caption).foregroundStyle(.secondary)
+                }
+            }
             Section("Saved computers") {
                 ForEach(destinations.destinations) { destination in
                     VStack(alignment: .leading, spacing: 9) {
@@ -336,7 +351,7 @@ struct ConnectionView: View {
         DestinationsView { adding = true }
             .safeAreaInset(edge: .bottom) { VStack(alignment: .leading, spacing: 7) { Text(destinations.selectedLabel).font(.headline); ConnectionStatus(); Text(store.connection?.relay ?? "").font(.caption).textSelection(.enabled); Button("Reconnect " + destinations.selectedLabel) { store.disconnect(); store.activity(true) } }.padding().frame(maxWidth: .infinity, alignment: .leading).background(.bar) }
             .sheet(isPresented: $adding, onDismiss: { destinations.cancelPairing() }) { NavigationStack { PairView().toolbar { Button("Cancel") { destinations.cancelPairing(); adding = false } } } }
-            .onChange(of: destinations.selectedID) { _, _ in adding = false }
+            .onChange(of: destinations.pairingCompletion) { _, completion in if completion != nil { adding = false } }
     }
 }
 func statusLabel(_ value: String) -> String { ["awaiting_input": "Needs feedback", "completed": "Turn complete", "running": "Working", "queued": "Queued", "interrupted": "Interrupted", "failed": "Failed", "cancelled": "Cancelled"][value] ?? value }

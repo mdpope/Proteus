@@ -18,6 +18,17 @@ class NutritionReport
 
     public function months(int $workspace, int $user, ?string $from = null, ?string $through = null): LengthAwarePaginator
     {
+        return $this->monthlyQuery($workspace, $user, $from, $through)->paginate(12)->withQueryString();
+    }
+
+    public function dailyQuery(int $workspace, int $user, ?string $from = null, ?string $through = null): Builder
+    {
+        return $this->range($this->dailyTotals($workspace, $user), $from, $through)
+            ->selectRaw("COUNT(DISTINCT CASE WHEN LOWER(meal_entries.meal) IN ('breakfast', 'lunch', 'dinner') THEN LOWER(meal_entries.meal) END) AS meal_count");
+    }
+
+    public function monthlyQuery(int $workspace, int $user, ?string $from = null, ?string $through = null): Builder
+    {
         $query = DB::query()->fromSub($this->range($this->completeDailyTotals($workspace, $user), $from, $through), 'days')
             ->selectRaw('SUBSTR(date, 1, 7) AS month, COUNT(*) AS complete_days, SUM(entry_count) AS entry_count')
             ->groupByRaw('SUBSTR(date, 1, 7)')->orderByDesc('month');
@@ -25,7 +36,7 @@ class NutritionReport
             $query->selectRaw("AVG({$macro}) AS {$macro}, SUM({$macro}) AS {$macro}_total");
         }
 
-        return $query->paginate(12)->withQueryString();
+        return $query;
     }
 
     public function summary(int $workspace, int $user, ?string $from = null, ?string $through = null): array

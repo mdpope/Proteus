@@ -1,3 +1,4 @@
+const {atomicRename}=require('../src/atomic-rename.cjs');
 const fs=require('node:fs');
 const path=require('node:path');
 const {createHash}=require('node:crypto');
@@ -20,7 +21,7 @@ class BrowserSiteSettings{
   this.data.pageScales={...previous,[key]:entries};try{this.flush({strict:true});}catch(error){this.data.pageScales=previous;throw error;}return entries[domain].percent;
  }
  remember(partition,url,changes={}){const origin=siteOrigin(url);if(!origin)return;const key=this.key(partition),entries=this.data.profiles[key]??={};const previous=entries[origin]||{},next={...previous,...changes};if(changes.favicon!==undefined)next.favicon=safeIcon(changes.favicon);if(JSON.stringify(previous)===JSON.stringify(next)&&entries[origin])return;entries[origin]=next;const origins=Object.keys(entries);while(origins.length>1000)delete entries[origins.shift()];clearTimeout(this.timer);this.timer=setTimeout(()=>this.flush(),100);this.timer.unref?.();}
- flush({strict=false}={}){clearTimeout(this.timer);if(!this.file)return;const temporary=this.file+'.tmp';try{const json=JSON.stringify(this.data);if(Buffer.byteLength(json)>8*1024*1024)throw Error('Website settings exceed their storage limit.');fs.mkdirSync(path.dirname(this.file),{recursive:true});fs.writeFileSync(temporary,json,{mode:0o600});fs.chmodSync(temporary,0o600);fs.renameSync(temporary,this.file);}catch(error){try{fs.unlinkSync(temporary);}catch{}if(strict)throw Error('Website scale could not be saved: '+error.message);}}
+ flush({strict=false}={}){clearTimeout(this.timer);if(!this.file)return;const temporary=this.file+'.tmp';try{const json=JSON.stringify(this.data);if(Buffer.byteLength(json)>8*1024*1024)throw Error('Website settings exceed their storage limit.');fs.mkdirSync(path.dirname(this.file),{recursive:true});fs.writeFileSync(temporary,json,{mode:0o600});fs.chmodSync(temporary,0o600);atomicRename(temporary,this.file);}catch(error){try{fs.unlinkSync(temporary);}catch{}if(strict)throw Error('Website scale could not be saved: '+error.message);}}
 
 }
 function siteUserAgent(mode,base,chromeVersion){const version=chromeVersion||'144.0.0.0';if(mode==='mobile')return `Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${version} Mobile Safari/537.36`;return base.replace(/\s(?:Electron|Proteus)\/[^\s]+/gi,'');}

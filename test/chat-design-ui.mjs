@@ -25,7 +25,9 @@ try{
  await page.screenshot({path:path.join(home,'desktop-wide.png')});
  await page.setViewportSize({width:580,height:850});await page.locator('.model-options').click();assert.equal(await page.locator('.model-options').getAttribute('aria-expanded'),'true');await page.keyboard.press('Escape');assert.equal(await page.locator('.model-options').getAttribute('aria-expanded'),'false');
  await page.locator('#followup').fill('Original queued design test');await page.locator('#continue').click();await page.locator('[data-edit-queued]').waitFor();
- await page.setViewportSize({width:1200,height:950});await page.locator('#tab-add-menu>summary').click();await page.locator('#new-chat').click();
+ // This renderer-only host has no desktop browser IPC for the new-tab launcher.
+ // Invoke its existing bound form action to exercise the production composer.
+ await page.setViewportSize({width:1200,height:950});await page.locator('#new-chat').evaluate(button=>button.click());
  await page.locator('#chat-provider').selectOption('copilot');await page.locator('#chat-model').selectOption('fixture');await page.locator('#chat-prompt').fill('Attachment layout rehearsal');
  const image=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lKkAAAAASUVORK5CYII=','base64');
  await page.locator('#chat-attachments input[type=file]').setInputFiles([1,2,3,4].map(i=>({name:'fixture-'+i+'.png',mimeType:'image/png',buffer:image})));

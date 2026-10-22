@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -10,7 +11,7 @@ import { ChatAttachmentConsents } from '../src/chat-attachment-consent.js';
 const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLytQAAAABJRU5ErkJggg==','base64');
 const sha256=createHash('sha256').update(png).digest('hex');
 test('explicit consent binds exact payload, peer, chat, message and provider until one send',async t=>{
-  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-consent-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-consent-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
   const store=new ChatAttachmentStore(home);t.after(()=>store.close());let now=Date.now();const grants=new ChatAttachmentConsents(store,{clock:()=>now});
   const owner={chatId:'chat-1',deviceId:'device-a',messageId:'message-1',providerId:'copilot'};
   const begun=await store.begin({...owner,name:'picture.png',mediaType:'image/png',size:png.length,sha256});
@@ -26,7 +27,7 @@ test('explicit consent binds exact payload, peer, chat, message and provider unt
 });
 
 test('draft consent cannot authorize a different first chat provider or device',async t=>{
-  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-consent-draft-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-consent-draft-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
   const store=new ChatAttachmentStore(home);t.after(()=>store.close());const grants=new ChatAttachmentConsents(store),draftId=randomUUID();
   const owner={chatId:'draft:'+draftId,deviceId:'device-a',messageId:'message-1',providerId:'codex'};
   const begun=await store.begin({...owner,name:'picture.png',mediaType:'image/png',size:png.length,sha256});await store.chunk({uploadId:begun.uploadId,deviceId:owner.deviceId,index:0,dataBase64:png.toString('base64')});const file=await store.finish({uploadId:begun.uploadId,deviceId:owner.deviceId});
@@ -35,7 +36,7 @@ test('draft consent cannot authorize a different first chat provider or device',
   await assert.rejects(grants.verify({draftId,deviceId:owner.deviceId,messageId:owner.messageId,providerId:'copilot',consentId:consent.consentId,attachmentIds:[file.attachmentId]}),/does not match/);
 });
 test('provider byte boundary requires exact one-use prepared proof and rechecks digest',async t=>{
-  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-consent-dispatch-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-consent-dispatch-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
   const store=new ChatAttachmentStore(home);t.after(()=>store.close());const grants=new ChatAttachmentConsents(store);
   const owner={chatId:'chat-1',deviceId:'device-a',messageId:'message-1',providerId:'copilot'};
   const begun=await store.begin({...owner,name:'picture.png',mediaType:'image/png',size:png.length,sha256});await store.chunk({uploadId:begun.uploadId,deviceId:owner.deviceId,index:0,dataBase64:png.toString('base64')});const file=await store.finish({uploadId:begun.uploadId,deviceId:owner.deviceId});
@@ -49,7 +50,7 @@ test('provider byte boundary requires exact one-use prepared proof and rechecks 
   await assert.rejects(store.read({...owner,attachmentId:file.attachmentId}),/unavailable/);
 });
 test('first-message prepared proof binds claimed chat and provider before any byte read',async t=>{
-  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-consent-first-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-consent-first-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
   const store=new ChatAttachmentStore(home);t.after(()=>store.close());const grants=new ChatAttachmentConsents(store),draftId=randomUUID();
   const owner={chatId:'draft:'+draftId,deviceId:'device-a',messageId:'message-1',providerId:'codex'};
   const begun=await store.begin({...owner,name:'picture.png',mediaType:'image/png',size:png.length,sha256});await store.chunk({uploadId:begun.uploadId,deviceId:owner.deviceId,index:0,dataBase64:png.toString('base64')});const file=await store.finish({uploadId:begun.uploadId,deviceId:owner.deviceId});
@@ -60,7 +61,7 @@ test('first-message prepared proof binds claimed chat and provider before any by
   await grants.releaseProof(prepared.proofId);
 });
 test('accepted queued proof survives host restart but cannot replay after provider read',async t=>{
-  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-consent-restart-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-consent-restart-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
   const store=new ChatAttachmentStore(home);t.after(()=>store.close());const first=new ChatAttachmentConsents(store);
   const owner={chatId:'chat-1',deviceId:'device-a',messageId:'message-1',providerId:'copilot'};
   const begun=await store.begin({...owner,name:'picture.png',mediaType:'image/png',size:png.length,sha256});await store.chunk({uploadId:begun.uploadId,deviceId:owner.deviceId,index:0,dataBase64:png.toString('base64')});const file=await store.finish({uploadId:begun.uploadId,deviceId:owner.deviceId});
@@ -73,7 +74,7 @@ test('accepted queued proof survives host restart but cannot replay after provid
 });
 
 test('a mid-batch accept failure removes earlier accepted bytes and consumes consent',async t=>{
-  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-consent-rollback-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-consent-rollback-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
   const store=new ChatAttachmentStore(home);t.after(()=>store.close());const grants=new ChatAttachmentConsents(store);
   const owner={chatId:'chat-1',deviceId:'device-a',messageId:'message-1',providerId:'copilot'},files=[];
   for(let index=0;index<2;index++){const begun=await store.begin({...owner,name:`picture-${index}.png`,mediaType:'image/png',size:png.length,sha256});await store.chunk({uploadId:begun.uploadId,deviceId:owner.deviceId,index:0,dataBase64:png.toString('base64')});files.push(await store.finish({uploadId:begun.uploadId,deviceId:owner.deviceId}));}
@@ -85,7 +86,7 @@ test('a mid-batch accept failure removes earlier accepted bytes and consumes con
 });
 
 test('consent rejects a 257-file declaration before any staged-byte reads', async t => {
-  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-consent-large-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-consent-large-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
   const store=new ChatAttachmentStore(home);t.after(()=>store.close());
   const grants=new ChatAttachmentConsents(store),owner={chatId:'chat-1',deviceId:'device-a',messageId:'message-1',providerId:'copilot'};
   const declared=Array.from({length:257},(_,index)=>({attachmentId:`synthetic-${index}`,name:`tiny-${index}.png`,mediaType:'image/png',size:1,sha256:'a'.repeat(64)}));

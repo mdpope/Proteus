@@ -34,6 +34,23 @@ class AppRecords
         return $this->query($user, $kind)->orderByDesc('updated_at')->orderByDesc('id')->limit(self::LIMITS[$kind])->get()->map(fn (object $row) => $this->decode($row))->all();
     }
 
+    /** Opt-in pages decrypt only the requested rows and reject a changed collection. */
+    public function page(User $user, string $kind, int $page, int $size, ?string $expectedRevision): array
+    {
+        return DB::transaction(function () use ($user, $kind, $page, $size, $expectedRevision) {
+            User::whereKey($user->id)->lockForUpdate()->firstOrFail();
+            $query = $this->query($user, $kind)->orderByDesc('updated_at')->orderByDesc('id');
+            $metadata = (clone $query)->limit(self::LIMITS[$kind])->get(['id', 'revision', 'updated_at']);
+            $revision = hash('sha256', $metadata->toJson());
+            abort_if($expectedRevision !== null && ! hash_equals($revision, $expectedRevision), 409, 'This collection changed. Refresh before continuing.');
+            $total = $metadata->count();
+            $ids = $metadata->slice(($page - 1) * $size, $size)->pluck('id');
+            $rows = (clone $query)->whereIn('id', $ids)->get();
+
+            return ['items' => $rows->map(fn (object $row) => $this->decode($row))->all(), 'page' => $page, 'pageSize' => $size, 'total' => $total, 'hasMore' => $page * $size < $total, 'collectionRevision' => $revision];
+        });
+    }
+
     public function preferences(User $user): array
     {
         $stored = $this->all($user, 'preferences')[0] ?? [];

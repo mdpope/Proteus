@@ -5,16 +5,16 @@ import { createRequire } from 'node:module';
 import { createWindowChrome } from '../public/window-chrome.js';
 const { windowChromeOptions, installWindowChrome } = createRequire(import.meta.url)('../desktop/window-chrome.cjs');
 
-test('custom chrome is Linux-only; Mac, Windows and website retain their existing UI', () => {
-  assert.deepEqual(windowChromeOptions('linux'), { frame: false });
-  for (const platform of ['darwin', 'win32']) {
+test('Linux and Windows share custom chrome; Mac and website retain their existing UI', () => {
+  for (const platform of ['linux', 'win32']) assert.deepEqual(windowChromeOptions(platform), { frame: false });
+  for (const platform of ['darwin']) {
     assert.deepEqual(windowChromeOptions(platform), {});
     assert.equal(createWindowChrome({ platform }).html, '');
   }
   assert.equal(createWindowChrome().html, '');
 });
 
-test('window controls use only the trusted owning window and reject unavailable actions', async () => {
+for (const platform of ['linux', 'win32']) test(platform+' window controls use only the trusted owning window and reject unavailable actions', async () => {
   const target = new EventEmitter(), sent = [];
   let maximized = false, fullscreen = false, closed = false, minimized = false, handler, popup, shuttingDown = false;
   Object.assign(target, {
@@ -24,7 +24,7 @@ test('window controls use only the trusted owning window and reject unavailable 
     setAutoHideMenuBar() {}, setMenuBarVisibility() {}, webContents: { send: (...args) => sent.push(args) }
   });
   const windows = { handle: (_channel, fn) => { handler = fn; }, current: () => ({ window: target }) };
-  const configure = installWindowChrome({ windows, platform: 'linux', trusted: event => { if (!event.trusted) throw Error('Untrusted renderer.'); }, isClosing: () => shuttingDown, Menu: { getApplicationMenu: () => ({ popup: options => { popup = options; options.callback(); } }) } });
+  const configure = installWindowChrome({ windows, platform, trusted: event => { if (!event.trusted) throw Error('Untrusted renderer.'); }, isClosing: () => shuttingDown, Menu: { getApplicationMenu: () => ({ popup: options => { popup = options; options.callback(); } }) } });
   configure(target);
   await assert.rejects(handler({}, { action: 'close' }), /Untrusted/);
   assert.equal(closed, false);

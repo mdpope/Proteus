@@ -1,12 +1,14 @@
+const {atomicRename}=require('../src/atomic-rename.cjs');
 const fs = require('node:fs');
 const {normalizeChatSetupDraft}=require('./chat-setup-draft.cjs');
 const path = require('node:path');
 const {normalizeHistory,safeHistoryURL,MAX_ENTRIES}=require('./browser-history.cjs');
+const {validPendingNavigation}=require('./browser-navigation.cjs');
 const MAX_SESSION_BYTES=16*1024*1024, MAX_TOTAL_HISTORY_BYTES=8*1024*1024, MAX_SESSION_TABS=1000;
 const safeFavicon=value=>typeof value==='string'&&value.length<=96*1024&&/^data:image\/png;base64,[A-Za-z0-9+/]+=*$/.test(value)?value:undefined;
 const text = (value, max = 4096) => typeof value === 'string' ? value.slice(0, max) : '';
 const engineSections=['desktop-control','updates','resources','providers','connections','security','account','settings','setup','preferences','integrations','usage','notifications','logs','source-library'];
-function normalizeTeam(value){
+function normalizeTeam(value,options={},historyBudget={bytes:0}){
   if(!value||typeof value!=='object')return undefined;
   const tabs=[],seen=new Set();
   for(const item of Array.isArray(value.tabs)?value.tabs.slice(0,50):[]){
@@ -17,7 +19,8 @@ function normalizeTeam(value){
     if(type==='remote-document'){if(!/^[a-f0-9-]{36}$/i.test(item.hostId||'')||!/^[a-f0-9]{64}$/i.test(item.documentId||''))continue;tabs.push({id,type,...common,title:text(item.title||item.label,200),hostId:item.hostId,runId:text(item.runId,128),workspaceId:text(item.workspaceId,128),projectId:text(item.projectId,128),documentId:item.documentId,mediaType:item.mediaType==='text/html'?'text/html':'text/markdown',preview:item.preview===true});continue;}
     if(type==='markdown') {const file=text(item.file||item.markdown?.file);if(!path.isAbsolute(file))continue;tabs.push({id,type,...common,file,label:text(item.label,200)||path.basename(file)});continue;}
     if(type==='terminal'){if(!item.terminal?.id)continue;tabs.push({id,type,...common,label:text(item.label,200)||'Terminal',terminal:Object.fromEntries(['id','profileId','rootId','directory','persistence','tmuxSessionId','tmuxSessionTag'].map(key=>[key,text(item.terminal[key])]))});continue;}
-    tabs.push({id,type,...common,persist:item.persist===true,...(Number.isFinite(Date.parse(item.openedAt))?{openedAt:new Date(item.openedAt).toISOString()}:{}),profileId:/^[a-f0-9-]{36}$/i.test(item.profileId||'')?item.profileId:'default',...(text(item.customTitle,200)?{customTitle:text(item.customTitle,200)}:{}),...(text(item.contentTabId,256)?{contentTabId:text(item.contentTabId,256)}:{}),...(safeFavicon(item.favicon)?{favicon:item.favicon}:{}),browserId:text(item.browserId,128),url,title:text(item.title,200),loaded:false,...(Number.isFinite(Date.parse(item.lastTouchedAt))?{lastTouchedAt:new Date(item.lastTouchedAt).toISOString()}:{})});
+    const savedNavigation=savedBrowserNavigation(item,options,historyBudget);
+    tabs.push({id,type,...common,...savedNavigation,persist:item.persist===true,...(Number.isFinite(Date.parse(item.openedAt))?{openedAt:new Date(item.openedAt).toISOString()}:{}),profileId:/^[a-f0-9-]{36}$/i.test(item.profileId||'')?item.profileId:'default',...(text(item.customTitle,200)?{customTitle:text(item.customTitle,200)}:{}),...(text(item.contentTabId,256)?{contentTabId:text(item.contentTabId,256)}:{}),...(safeFavicon(item.favicon)?{favicon:item.favicon}:{}),browserId:text(item.browserId,128),url,title:text(item.title,200),loaded:false,...(Number.isFinite(Date.parse(item.lastTouchedAt))?{lastTouchedAt:new Date(item.lastTouchedAt).toISOString()}:{})});
   }
   const orders={};
   for(const [id,item]of Object.entries(value.orders||{}).slice(0,32)){
@@ -42,9 +45,28 @@ function sessionHistory(value, {preview=false,projects=false}={}) {
   if(value.currentEntryId!==undefined&&value.currentEntryId!==selected[history.index].id)return history;
   return {...history,entries:history.entries.map((entry,index)=>({...entry,id:selected[index].id})),...(value.currentEntryId?{currentEntryId:value.currentEntryId}:{}),...(Number.isSafeInteger(value.revision)&&value.revision>=0?{revision:value.revision}:{})};
 }
+// A pending local stack has not yet reached the owner. Persist it whole, or
+// reject the atomic save: a bounded legacy window would lose unsent visits.
+function savedBrowserNavigation(item,options,budget){
+  let history,pending=false;
+  if(item.navigationPending===true&&validPendingNavigation(item.history)){
+    const entries=[];let bytes=0;
+    for(const source of item.history.entries){
+      const url=safeHistoryURL(source.url);if(!url){entries.length=0;break;}
+      const entry={id:source.id,url,title:text(source.title,200),...(safeHistoryURL(source.requestedURL)?{requestedURL:safeHistoryURL(source.requestedURL)}:{})};
+      bytes+=Buffer.byteLength(JSON.stringify(entry))+1;if(bytes>MAX_TOTAL_HISTORY_BYTES)throw Error('Pending browser history exceeds the workspace limit. The original record was preserved.');entries.push(entry);
+    }
+    if(entries.length===item.history.entries.length){history={entries,index:item.history.index,currentEntryId:item.history.currentEntryId,...(item.history.revision===undefined?{}:{revision:item.history.revision})};pending=true;}
+  }
+  history??=sessionHistory(item.history,options);
+  if(!history)return {};
+  const bytes=Buffer.byteLength(JSON.stringify(history));
+  if(budget.bytes+bytes>MAX_TOTAL_HISTORY_BYTES){if(pending)throw Error('Pending browser history exceeds the workspace limit. The original record was preserved.');return {};}
+  budget.bytes+=bytes;return {history,...(pending?{navigationPending:true}:{})};
+}
 function normalizeSession(value, options={}) {
   if(Array.isArray(value?.tabs)&&value.tabs.length>MAX_SESSION_TABS)throw new Error('Workspace has too many saved tabs. The original record was preserved.');
-  const tabs = [], seen = new Set();let historyBytes=0;
+  const tabs = [], seen = new Set(),historyBudget={bytes:0};
   for (const item of Array.isArray(value?.tabs) ? value.tabs : []) {
     if (!item || !['overview','schedule','run','markdown','browser','standup','omi','life','terminal','agent-terminal','remote-run','remote-document','team','engine','home','workspace'].includes(item.type)) continue;
     const tab = {id:text(item.id,256),type:item.type,label:text(item.label,200)};
@@ -85,10 +107,10 @@ function normalizeSession(value, options={}) {
       tab.profileId=/^[a-f0-9-]{36}$/i.test(item.profileId||'')?item.profileId:'default';
       if(item.remotePreviewURL&&safeHistoryURL(item.remotePreviewURL))tab.remotePreviewURL=safeHistoryURL(item.remotePreviewURL);
       if(safeFavicon(item.favicon))tab.favicon=item.favicon;
-      const history=sessionHistory(item.history,options), url=history?.entries[history.index]?.url || safeHistoryURL(item.url);
+      const savedNavigation=savedBrowserNavigation(item,options,historyBudget),history=savedNavigation.history,url=history?.entries[history.index]?.url || safeHistoryURL(item.url);
       if(item.url&&!url)continue;
       tab.url=url||'';if(!tab.url&&item.newChatDraft)tab.newChatDraft=normalizeChatSetupDraft(item.newChatDraft);tab.group=item.group==='team'?'team':'main';tab.unloaded=item.unloaded===true||item.loaded===false;if(Number.isFinite(Date.parse(item.lastTouchedAt)))tab.lastTouchedAt=new Date(item.lastTouchedAt).toISOString();
-      if(history){const bytes=Buffer.byteLength(JSON.stringify(history));if(historyBytes+bytes<=MAX_TOTAL_HISTORY_BYTES){tab.history=history;historyBytes+=bytes;}}
+      Object.assign(tab,savedNavigation);
     }
     if (tab.type === 'terminal') {
       if(item.hostId){if(!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(item.hostId))continue;tab.hostId=item.hostId;}
@@ -107,7 +129,8 @@ function normalizeSession(value, options={}) {
   const selectedChildren=Object.fromEntries(Object.entries(value?.selectedChildren&&typeof value.selectedChildren==='object'&&!Array.isArray(value.selectedChildren)?value.selectedChildren:{}).slice(0,MAX_SESSION_TABS).filter(([parentId,childId])=>typeof parentId==='string'&&parentId.length<=256&&typeof childId==='string'&&childId.length<=256&&validTabs.some(parent=>parent.id===parentId&&['run','remote-run','workspace'].includes(parent.type)&&validTabs.some(child=>child.id===childId&&(child.parentId===parentId||parent.type==='workspace'&&!parent.projectId&&child.type==='workspace'&&child.projectId&&child.workspaceId===parent.workspaceId&&(child.hostId||'')===(parent.hostId||''))))));
   const pages=['schedules','runs','attention','context','credentials','providers','remote','settings','team','engine','home','workspaces'];
   const chatDrafts={};let draftBytes=0;for(const [key,draftValue]of Object.entries(value?.chatDrafts&&typeof value.chatDrafts==='object'&&!Array.isArray(value.chatDrafts)?value.chatDrafts:{}).slice(-200)){if(!/^[a-zA-Z0-9_:.\-]{1,256}$/.test(key)||typeof draftValue!=='string')continue;const draft=draftValue.slice(0,100000),bytes=Buffer.byteLength(draft);if(draftBytes+bytes>500000)continue;chatDrafts[key]=draft;draftBytes+=bytes;}
-  return {schemaVersion:1,...(options.windowId?{windowId:options.windowId}:{}),...(options.sharedTeam?{sharedTeam:true}:{}),chatDrafts,tabs:validTabs,selectedChildren,active:validTabs.some(tab=>tab.id===value?.active&&!tab.hidden)?value.active:'overview',page:pages.includes(value?.page)?value.page:'home',...(normalizeTeam(value?.team)?{team:normalizeTeam(value.team)}:{}),...([...engineSections,'windows','palette'].includes(value?.engineSection)?{engineSection:value.engineSection}:{})};
+  const team=normalizeTeam(value?.team,options,historyBudget);
+  return {schemaVersion:1,...(options.windowId?{windowId:options.windowId}:{}),...(options.sharedTeam?{sharedTeam:true}:{}),chatDrafts,tabs:validTabs,selectedChildren,active:validTabs.some(tab=>tab.id===value?.active&&!tab.hidden)?value.active:'overview',page:pages.includes(value?.page)?value.page:'home',...(team?{team}:{}),...([...engineSections,'windows','palette'].includes(value?.engineSection)?{engineSection:value.engineSection}:{})};
 }
 class WorkspaceSession {
   constructor(home,options={}) { this.options=options;this.file=options.windowId&&options.windowId!=='main'?path.join(home,'window-sessions',options.windowId+'.json'):path.join(home,'desktop-workspace.json'); this.last=''; }
@@ -117,7 +140,7 @@ class WorkspaceSession {
     const clean=this.normalize(value), json=JSON.stringify(clean,null,2)+'\n';
     if(Buffer.byteLength(json)>MAX_SESSION_BYTES)throw new Error('Workspace record exceeds size limit.');
     if(json===this.last)return clean;
-    const temporary=this.file+'.tmp';fs.mkdirSync(path.dirname(this.file),{recursive:true});fs.writeFileSync(temporary,json,{mode:0o600});fs.chmodSync(temporary,0o600);fs.renameSync(temporary,this.file);this.last=json;return clean;
+    const temporary=this.file+'.tmp';fs.mkdirSync(path.dirname(this.file),{recursive:true});fs.writeFileSync(temporary,json,{mode:0o600});fs.chmodSync(temporary,0o600);atomicRename(temporary,this.file);this.last=json;return clean;
   }
 }
 module.exports={WorkspaceSession,normalizeSession};

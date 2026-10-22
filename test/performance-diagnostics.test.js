@@ -1,3 +1,5 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {assertPrivate} from './helpers/permissions.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -68,7 +70,7 @@ test('privacy labels, rolling samples, rings and error propagation are bounded',
 });
 
 test('private files rotate once and close flushes the final snapshot without leaking payloads', async () => {
-  const home = await fs.mkdtemp(path.join(os.tmpdir(), 'proteus-performance-'));
+  const home = privateTemporaryDirectory(path.join(os.tmpdir(), 'proteus-performance-'));
   try {
     const directory = path.join(home, 'diagnostics'); await fs.mkdir(directory);
     await fs.writeFile(path.join(directory, 'performance.json'), JSON.stringify({ version: 1, previous: true }));
@@ -78,7 +80,7 @@ test('private files rotate once and close flushes the final snapshot without lea
     const report = JSON.parse(await fs.readFile(path.join(directory, 'performance.json'), 'utf8'));
     assert.equal(report.closed, true); assert.equal(report.phases[0].name, 'context.get');
     assert.equal(JSON.parse(await fs.readFile(path.join(directory, 'performance.previous.json'), 'utf8')).previous, true);
-    assert.equal((await fs.stat(path.join(directory, 'performance.json'))).mode & 0o777, 0o600);
+    assertPrivate(path.join(directory, 'performance.json'));
     assert.deepEqual((await fs.readdir(directory)).sort(), ['performance.json', 'performance.previous.json']);
   } finally { await fs.rm(home, { recursive: true, force: true }); }
 });
@@ -110,7 +112,7 @@ test('a real blocked main loop records its completed sync fixture', async () => 
 });
 
 test('desktop peer cache separates serialization, encryption and synchronous disk work', async () => {
-  const home = await fs.mkdtemp(path.join(os.tmpdir(), 'proteus-peer-timings-'));
+  const home = privateTemporaryDirectory(path.join(os.tmpdir(), 'proteus-peer-timings-'));
   const f = fixture();
   const safeStorage = { isEncryptionAvailable: () => true, encryptString: value => { f.advance(75); return Buffer.from(value); } };
   const peers = new DesktopPeers(home, { safeStorage, diagnostics: f.diagnostics });

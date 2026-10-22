@@ -25,7 +25,7 @@ export class LifeStore {
  async refresh(){await this.api.refresh();return this.get();}
  async auth(action,value={}){if(action==='status')return this.get();if(action==='logout'){await this.api.logout();return this.get();}if(action==='upgrade'){this.api.load();await this.api.begin(this.api.credential?.origin||this.settings().websiteOrigin,{extend:true});return this.get();}if(action==='begin'){const origin=lifeOrigin(value.websiteOrigin||this.settings().websiteOrigin);await this.api.begin(origin);atomicJSON(this.file,{...this.settings(),websiteOrigin:origin});return this.get();}if(action==='refresh')return this.refresh();if(action==='cancel'){this.api.cancel();return this.get();}throw new Error('Unknown Life account action.');}
  async callback(value){await this.api.callback(value);return this.get();}
- async data(section,query={}){this.requireEnabled();if(!lifeSections.some(s=>s.id===section))throw new Error('Unknown Life section.');const clean=Object.fromEntries(Object.entries(query).filter(([,v])=>v!==''&&v!==undefined&&v!==null));return this.api.data(section,{...clean,client:'desktop'});}
+ async data(section,query={}){this.requireEnabled();if(!lifeSections.some(s=>s.id===section))throw new Error('Unknown Life section.');const clean=Object.fromEntries(Object.entries(query).filter(([,v])=>v!==''&&v!==undefined&&v!==null));return this.api.data(section,{...clean,client:'desktop',...(clean.tab?{projection:'tab'}:{})});}
  async action(action,input={},key,identity){this.requireEnabled();return this.api.action(action,input,key,identity);}
  async evidence(id,identity){this.requireEnabled();return this.api.evidence(id,identity);}
  async close(){this.api.close();}

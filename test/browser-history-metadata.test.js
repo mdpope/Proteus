@@ -1,3 +1,5 @@
+import {assertPrivate} from './helpers/permissions.js';
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -6,13 +8,13 @@ import path from 'node:path';
 import {BrowsingHistory} from '../desktop/browsing-history.cjs';
 import {historyTimestamp,historyDevice} from '../public/browser-home.js';
 const hostId='11111111-1111-4111-8111-111111111111';
-function home(t){const folder=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-visit-metadata-'));t.after(()=>fs.rmSync(folder,{recursive:true,force:true}));return folder;}
+function home(t){const folder=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-visit-metadata-'));t.after(()=>fs.rmSync(folder,{recursive:true,force:true}));return folder;}
 test('visit timestamp and configured device identity persist without rewriting older names',async t=>{
  t.mock.timers.enable({apis:['Date'],now:new Date('2026-10-05T00:00:00Z')});
  let name='Original Mac';const visits=[],folder=home(t),store=new BrowsingHistory(folder,{device:()=>({id:hostId,name}),onVisit:item=>visits.push({...item})});
  store.visit('https://example.test/first','First');const original={...store.list().items[0]};assert.equal(original.visitedAt,'2026-10-05T00:00:00.000Z');assert.equal(original.deviceName,name);assert.equal(original.hostId,hostId);assert.equal(original.deviceId,hostId);assert.equal(original.source,'desktop');
  name='Renamed Mac';t.mock.timers.setTime(Date.now()+1000);store.visit('https://example.test/first','Updated title');assert.equal(store.list().total,1);assert.equal(store.list().items[0].deviceName,'Original Mac');assert.equal(store.list().items[0].visitedAt,original.visitedAt);assert.equal(visits.length,1);
- t.mock.timers.setTime(Date.now()+1000);store.visit('https://example.test/second','Second');await store.flush();const restored=new BrowsingHistory(folder).list().items;assert.deepEqual(restored.map(item=>item.deviceName),['Renamed Mac','Original Mac']);assert.equal(restored[0].visitedAt,'2026-10-05T00:00:02.000Z');assert.equal(restored[1].id,original.id);assert.equal(restored[1].title,'Updated title');assert.deepEqual(restored.map(item=>item.hostId),[hostId,hostId]);assert.deepEqual(visits.map(item=>item.deviceName),['Original Mac','Renamed Mac']);assert.equal(fs.statSync(store.file).mode&0o777,0o600);await store.close();
+ t.mock.timers.setTime(Date.now()+1000);store.visit('https://example.test/second','Second');await store.flush();const restored=new BrowsingHistory(folder).list().items;assert.deepEqual(restored.map(item=>item.deviceName),['Renamed Mac','Original Mac']);assert.equal(restored[0].visitedAt,'2026-10-05T00:00:02.000Z');assert.equal(restored[1].id,original.id);assert.equal(restored[1].title,'Updated title');assert.deepEqual(restored.map(item=>item.hostId),[hostId,hostId]);assert.deepEqual(visits.map(item=>item.deviceName),['Original Mac','Renamed Mac']);assertPrivate(store.file,0o600);await store.close();
 });
 test('visit metadata bounds device names and rejects invalid device identity without retaining extra fields',async t=>{
  const folder=home(t),store=new BrowsingHistory(folder,{device:()=>({id:'not-a-uuid',name:' \u0000'+ 'N'.repeat(150)+'\n',secret:'not retained'})});store.visit('https://example.test/bounded','Bounded');await store.flush();const item=new BrowsingHistory(folder).list().items[0];assert.equal(item.deviceName.length,100);assert.doesNotMatch(item.deviceName,/[\x00-\x1f\x7f]/);assert.equal(item.hostId,undefined);assert.equal(item.deviceId,undefined);assert.equal(item.secret,undefined);assert.ok(Number.isFinite(Date.parse(item.visitedAt)));await store.close();

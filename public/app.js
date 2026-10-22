@@ -33,10 +33,11 @@ import {usageSidebar,usageDetails} from './provider-usage-view.js';
 import { bindDesktopBrowserRecents } from './browser-recents.js';
 import { mountHome } from './home.js';
 import { createTabSynchronizer, syncableTabURL } from './content-tab-sync.js';
+import { createProjectFollower, sharedScrollPosition, restoreSharedScroll } from './project-follow.js';
 import { browserTabIcon } from './browser-icons.js';
 import { setMessageActionsContext, stopMessageSpeech } from './message-actions.js';
 import { tabOverviewIcon, chatIconPaths, addTabMenuEntries, addTabMenuItems, setBrowserProfiles, browserProfileMenu } from './add-tab-menu.js';
-import { loadPeers, openWorkspaceChatDialog, initRemoteDesktops, attachChatDestinations, mountMachineHistory, renderRemoteRun, renderRemoteDocument, forgetRemoteDocument, forgetRemoteConversation, openRemoteChat, renameRemoteChat, mountRemoteSchedules } from './remote-desktops.js';
+import { loadPeers, openWorkspaceChatDialog, initRemoteDesktops, attachChatDestinations, mountMachineHistory, renderRemoteRun, renderRemoteDocument, remoteDocumentPositionVersion, restoreRemoteDocumentPosition, forgetRemoteDocument, forgetRemoteConversation, openRemoteChat, renameRemoteChat, mountRemoteSchedules } from './remote-desktops.js';
 import { initChatsIndex, renderChatsIndex, recentChats, runningChats, attentionChats, reconcileIndexedChat, openIndexedChat, loadChatsIndex } from './chats-index.js';
 import { initEngineRoom, engineSections, renderEngineRoom } from './engine-room.js';
 import { initTeamTools, renderTeamTools, canPreserveTeamBrowser, teamState, restoreTeamState, leaveTeamTools, ownsTeamBrowser, syncTeamBrowsers, teamBrowserBounds, selectTeamBrowser, forgetTeamBrowser, closeTeamTabById } from './team-tools.js';
@@ -52,12 +53,12 @@ import { initializeViewPositions, rememberView, restoreView, restoreDocumentView
 import { showContextMenu, copyContextText } from './context-menu.js';
 import { requestPresentation, mountStructured } from './tool-presentation.js';
 import { placeTabAfter,destinationSections } from './tab-placement.js';
-import { conversation, forgetConversation } from './conversation.js';
+import { conversation, forgetConversation, captureConversationPosition, restoreConversationPosition } from './conversation.js';
 import { mountAttachmentPicker, restoreSentAttachments, selectedAttachments, clearAttachments, prepareLocalAttachments } from './chat-attachments.js';
 import { renderProviderAuth } from './provider-auth.js';
 import { renderRemote } from './remote.js';
 import { initOmi, renderOmi } from './omi.js';
-import { initTerminals, renderTerminal, openTerminalDialog, openTerminalProfiles, disposeTerminalUi } from './terminals.js';
+import { initTerminals, renderTerminal, openTerminalDialog, openTerminalProfiles, disposeTerminalUi, captureTerminalScroll, applyTerminalScroll } from './terminals.js';
 import { initLife, renderLife, renderLifeSetup, selectLifeSection } from './life.js';
 import { initMarkdownPicker, openMarkdownPicker } from './markdown-picker.js';
 import { initFeatures, renderContext, renderStandup, renderCredentials, fillBrowserLogin, contextPicker, contextSelection, bindContextPicker, modelPicker, modelControls, modelSelection, contextSize, refreshModels, sessionDetails, bindSessionDetails, bindPaths } from './features.js';
@@ -114,17 +115,27 @@ async function reconcileRemoteProjectPlacement(hostId){
 function reorderVisibleTabs(source,target,after,parentId=null){const visible=state.tabs.filter(tab=>parentId?tab.parentId===parentId:!tab.parentId&&!['overview','omi','life','team','engine','home','standup'].includes(tab.type));if(!visible.some(tab=>tab.id===source)||!visible.some(tab=>tab.id===target))return;const ordered=visible.slice();if(!reorderById(ordered,source,target,after))return;const positions=state.tabs.map((tab,index)=>visible.includes(tab)?index:-1).filter(index=>index>=0);positions.forEach((position,index)=>state.tabs[position]=ordered[index]);saveWorkspace();if(parentId)renderChatSubtabs();else renderTabs();}
 const syncMessageContext=()=>setMessageActionsContext(JSON.stringify([state.data?.life?.identity?.accountId||'',state.data?.life?.identity?.workspaceId||'',state.data?.life?.identity?.origin||'',state.data?.life?.identity?.sessionId||'',state.tab,state.tabs.find(t=>t.id===state.tab)?.hostId||'local']));
 const lifeVisible = () => state.data?.life?.enabled === true;
-let applyingContentTabs=0, contentSyncTimer;
+let applyingContentTabs=0, contentSyncTimer, browserActivitySaveTimer;
 function saveWorkspace() {
   chatSetupTabs.capture();
   if(!workspaceReady || workspaceRestoring || workspaceClosing)return;
+  clearTimeout(browserActivitySaveTimer);browserActivitySaveTimer=null;
   reconcilePreviewProjects();
   if(!applyingContentTabs){clearTimeout(contentSyncTimer);contentSyncTimer=setTimeout(()=>void contentTabSync.all(),100);}
+  projectFollower.changed(true);
   const team=teamState();
-  const session={schemaVersion:1,windowId:desktopWindowId,active:state.tab,page:state.page,engineSection:state.engineSection,chatDrafts:state.chatDrafts||{},selectedChildren:Object.fromEntries(selectedChildren),team:{...team,tabs:team.tabs.map(tab=>({id:tab.id,type:tab.type||'browser',contentTabId:tab.contentTabId,customTitle:tab.customTitle,...contentTabMetadata(tab),...(tab.browserId?{browserId:tab.browserId,profileId:tab.profileId||'default',url:tab.url||'',title:tab.title||'',favicon:tab.favicon,lastTouchedAt:tab.lastTouchedAt,lastActivityAt:tab.lastActivityAt,openedAt:tab.openedAt,persist:tab.persist===true}:{}),...(tab.type==='terminal'?{label:tab.label,terminal:tab.terminal}:{}),...(tab.type==='markdown'?{label:tab.label,file:tab.file||tab.markdown?.file}:{}),...(['agent-terminal','remote-document'].includes(tab.type)?{runId:tab.runId,hostId:tab.hostId,documentId:tab.documentId,workspaceId:tab.workspaceId,projectId:tab.projectId,mediaType:tab.mediaType,preview:tab.preview}:{})}))},tabs:state.tabs.map(tab=>({id:tab.id,type:tab.type,label:tab.label,contentTabId:tab.contentTabId,customTitle:tab.customTitle,hidden:tab.hidden,navigationClosed:tab.navigationClosed,openedAt:tab.openedAt,lastTouchedAt:tab.lastTouchedAt,lastActivityAt:tab.lastActivityAt,...(tab.parentId?{parentId:tab.parentId}:{}),...(tab.type==='browser'?{associationChatId:tab.info?.associationChatId||tab.associationChatId,remotePreviewURL:tab.remotePreviewURL,profileId:tab.info?.profileId||tab.profileId||'default',url:tab.info?.url||'',history:tab.info?.history,unloaded:tab.info?.loaded===false,favicon:tab.info?.favicon,lastTouchedAt:tab.info?.lastTouchedAt,lastActivityAt:tab.info?.lastActivityAt||tab.lastActivityAt,openedAt:tab.info?.openedAt,persist:tab.info?.persist===true,pendingOpen:tab.pendingOpen===true,newChatDraft:tab.newChatDraft}:{}),...(tab.type==='markdown'?{file:tab.markdown?.file}:{}),...(tab.type==='terminal'?{terminal:tab.terminal,hostId:tab.hostId}:{}),...(['run','agent-terminal'].includes(tab.type)&&tab.runId?{runId:tab.runId}:{}),...(tab.type==='workspace'?{workspaceId:tab.workspaceId,hostId:tab.hostId,hostName:tab.hostName,workspacePage:tab.workspacePage,projectId:tab.projectId,workspaceName:tab.workspaceName,hidden:tab.hidden}:{}),...(['remote-run','remote-document'].includes(tab.type)?{hostId:tab.hostId,runId:tab.runId}:{}),...(tab.type==='remote-document'?{documentId:tab.documentId,workspaceId:tab.workspaceId,projectId:tab.projectId,mediaType:tab.mediaType,preview:tab.preview===true,previewTabId:tab.previewTabId}:{})}))};
-  const json=JSON.stringify(session);if(json===lastWorkspace)return workspaceSaving;lastWorkspace=json;
-  if(window.desktop?.workspaceSession){workspaceSaving=window.desktop.workspaceSession({action:'save',session}).catch(error=>{lastWorkspace='';toast(error.message);return {failed:true,error:error.message};});return workspaceSaving;}
-  else try{localStorage.setItem('proteus.workspace',json);}catch{}
+  const session={schemaVersion:1,windowId:desktopWindowId,active:state.tab,page:state.page,engineSection:state.engineSection,chatDrafts:state.chatDrafts||{},selectedChildren:Object.fromEntries(selectedChildren),team:{...team,tabs:team.tabs.map(tab=>({id:tab.id,type:tab.type||'browser',contentTabId:tab.contentTabId,customTitle:tab.customTitle,...contentTabMetadata(tab),...(tab.browserId?{browserId:tab.browserId,profileId:tab.profileId||'default',url:tab.url||'',history:tab.history,navigationPending:tab.navigationPending===true,title:tab.title||'',favicon:tab.favicon,lastTouchedAt:tab.lastTouchedAt,lastActivityAt:tab.lastActivityAt,openedAt:tab.openedAt,persist:tab.persist===true}:{}),...(tab.type==='terminal'?{label:tab.label,terminal:tab.terminal}:{}),...(tab.type==='markdown'?{label:tab.label,file:tab.file||tab.markdown?.file}:{}),...(['agent-terminal','remote-document'].includes(tab.type)?{runId:tab.runId,hostId:tab.hostId,documentId:tab.documentId,workspaceId:tab.workspaceId,projectId:tab.projectId,mediaType:tab.mediaType,preview:tab.preview}:{})}))},tabs:state.tabs.map(tab=>({id:tab.id,type:tab.type,label:tab.label,contentTabId:tab.contentTabId,customTitle:tab.customTitle,hidden:tab.hidden,navigationClosed:tab.navigationClosed,openedAt:tab.openedAt,lastTouchedAt:tab.lastTouchedAt,lastActivityAt:tab.lastActivityAt,...(tab.parentId?{parentId:tab.parentId}:{}),...(tab.type==='browser'?{associationChatId:tab.info?.associationChatId||tab.associationChatId,remotePreviewURL:tab.remotePreviewURL,profileId:tab.info?.profileId||tab.profileId||'default',url:tab.info?.url||'',history:tab.info?.history,navigationPending:tab.info?.navigationPending===true,unloaded:tab.info?.loaded===false,favicon:tab.info?.favicon,lastTouchedAt:tab.info?.lastTouchedAt,lastActivityAt:tab.info?.lastActivityAt||tab.lastActivityAt,openedAt:tab.info?.openedAt,persist:tab.info?.persist===true,pendingOpen:tab.pendingOpen===true,newChatDraft:tab.newChatDraft}:{}),...(tab.type==='markdown'?{file:tab.markdown?.file}:{}),...(tab.type==='terminal'?{terminal:tab.terminal,hostId:tab.hostId}:{}),...(['run','agent-terminal'].includes(tab.type)&&tab.runId?{runId:tab.runId}:{}),...(tab.type==='workspace'?{workspaceId:tab.workspaceId,hostId:tab.hostId,hostName:tab.hostName,workspacePage:tab.workspacePage,projectId:tab.projectId,workspaceName:tab.workspaceName,hidden:tab.hidden}:{}),...(['remote-run','remote-document'].includes(tab.type)?{hostId:tab.hostId,runId:tab.runId}:{}),...(tab.type==='remote-document'?{documentId:tab.documentId,workspaceId:tab.workspaceId,projectId:tab.projectId,mediaType:tab.mediaType,preview:tab.preview===true,previewTabId:tab.previewTabId}:{})}))};
+  const json=JSON.stringify(session);
+  if(json!==lastWorkspace){
+    lastWorkspace=json;
+    if(window.desktop?.workspaceSession)workspaceSaving=window.desktop.workspaceSession({action:'save',session}).catch(error=>{lastWorkspace='';toast(error.message);return {failed:true,error:error.message};});
+    else try{localStorage.setItem('proteus.workspace',json);}catch{}
+  }
+  // Send the saved history/pending marker before starting the local-only outbox
+  // checkpoint. Window shutdown waits for both without waiting for a remote host.
+  const checkpoint=checkpointDepartedContentScopes();
+  if(checkpoint)workspaceSaving=Promise.all([workspaceSaving,checkpoint]).then(results=>results.find(result=>result?.failed)||results[0]);
+  return workspaceSaving;
 }
 function openFeatureTab(type) { if(type==='life'&&!lifeVisible())return;state.page=type;state.tab='overview';render(); }
 function restoreFeatureTabs() {
@@ -154,7 +165,7 @@ async function restoreWorkspace() {
         if(!window.desktop)continue;
         // A renderer reload reuses the live view; an app restart creates a private tab.
         if(!tab.remotePreviewURL&&saved.tabs.some(parent=>parent.id===tab.parentId&&parent.type==='remote-run')&&isLoopbackPreview(tab.url))tab.remotePreviewURL=tab.url;const previous=tab.id;tab.contentTabId??=previous;let info=existingBrowser.find(info=>info.id===tab.id);
-        if(!info){info=await window.desktop.browser({action:'create',restore:true,contentTabId:tab.contentTabId||tab.id,profileId:tab.profileId,parentId:tab.parentId,unloaded:tab.hidden||saved.active!==previous,hidden:!!tab.hidden,url:tab.remotePreviewURL?'about:blank':tab.url,history:tab.remotePreviewURL?undefined:tab.history,title:tab.label,favicon:tab.favicon,lastTouchedAt:tab.lastTouchedAt,lastActivityAt:tab.lastActivityAt,associationChatId:tab.associationChatId,openedAt:tab.openedAt,persist:tab.persist===true});tab.info=info;tab.id=info.id;restoredBrowserIds.set(previous,tab.id);tabs.push(tab);if(saved.active===previous)saved.active=tab.id;continue;}
+        if(!info){info=await window.desktop.browser({action:'create',restore:true,contentTabId:tab.contentTabId||tab.id,profileId:tab.profileId,parentId:tab.parentId,unloaded:tab.hidden||saved.active!==previous,hidden:!!tab.hidden,url:tab.remotePreviewURL?'about:blank':tab.url,history:tab.remotePreviewURL?undefined:tab.history,navigationPending:!tab.remotePreviewURL&&tab.navigationPending===true,title:tab.label,favicon:tab.favicon,lastTouchedAt:tab.lastTouchedAt,lastActivityAt:tab.lastActivityAt,associationChatId:tab.associationChatId,openedAt:tab.openedAt,persist:tab.persist===true});tab.info=info;tab.id=info.id;restoredBrowserIds.set(previous,tab.id);tabs.push(tab);if(saved.active===previous)saved.active=tab.id;continue;}
         tab.info=info;
       }
       if(!tabs.some(other=>other.id===tab.id))tabs.push(tab);
@@ -276,12 +287,12 @@ async function loadRunView(id,before){
   })();if(before===undefined)historyRequests.set(id,task);
   try{return await task;}finally{if(historyRequests.get(id)===task)historyRequests.delete(id);}
 }
-let refreshing=null;
+let refreshing=null,lastStateRefresh=0;
 async function refresh(force=false){if(refreshing){if(!force)return refreshing;await refreshing;}refreshing=refreshState(force);try{return await refreshing;}finally{refreshing=null;}}
 async function refreshState(force = false) {
   if (!force && window.getSelection()?.isCollapsed === false) return;
   const settingsGeneration=appearanceSaveGeneration;
-  const data = await api('/api/state?summaries=1');
+  const data = await api('/api/state?summaries=1');lastStateRefresh=Date.now();
   const selected=state.tabs.find(tab=>tab.id===state.tab);if(selected?.type==='run'||selected?.type==='agent-terminal')await loadRunView(selected.type==='run'?(selected.runId||selected.id):agentTerminalRunId(selected));
   if(previewEnabled(state)&&settingsGeneration!==appearanceSaveGeneration)data.settings=state.data.settings;
   const signature = JSON.stringify(data);
@@ -416,7 +427,7 @@ function render({preserveTeamBrowser=false,sidebarOnly=false}={}) {
   const children=id=>previewEnabled(state)&&['runs','internet','schedules','attention'].includes(id)?previewFeatureChildren(id,['run','remote-run'].includes(chatTab?.type)?chatTab:null):id==='context'?(previewEnabled(state)?[]:recentWorkspaces()).map((w,i)=>`<button class="navchild" data-recent-workspace="${i}" title="${escape(w.name)}"><span>${escape(w.name)}</span><small>${escape(w.hostName)}</small></button>`).join(''):id==='attention'?attentionItems().slice(0,7).map(item=>`<button class="navchild" data-attention-item="${escape(item.id)}"><span>${escape(item.title)}</span></button>`).join(''):['runs','internet','schedules'].includes(id)?recentChats(data.runs).filter(r=>chatType(r)===(id==='internet'?'internet':id==='schedules'?'scheduled':'user')).slice(0,7).map((row,i)=>`<button class="navchild ${row.status==='running'?'chat-running':''}" data-recent-chat="${i}" data-recent-type="${id==='internet'?'internet':id==='schedules'?'scheduled':'user'}" title="${escape(row.title||'Chat')}"><span>${escape(row.title||'Chat')}</span><small>${escape(row.destinationName||computerName(data.hostName))}</small></button>`).join(''):id==='life'?['Overview','Nutrition','Garage','Fuel & mileage','Capture inbox','New capture','Account & security','Connections'].map((name,i)=>`<button class="navchild" data-life-section="${['overview','nutrition','garage','fuel','inbox','capture','security','connections'][i]}">${escape(name)}</button>`).join(''):id==='engine'?(previewEnabled(state)?[['source-library','Source Library'],...engineSections()]:engineSections()).map(([key,label])=>`<button class="navchild ${state.engineSection===key?'active':''}" data-engine-section="${key}">${escape(label)}</button>`).join(''):id==='team'?'<button class="navchild" data-team-section="overview">Overview</button><button class="navchild" data-team-section="standup">Standup</button>':' ';
   previewSidebarLayout.beforeRender();
   capturePreviewSidebar();
-  $('#sidebar').innerHTML = `<div class="brand"><span class="brandmark">⤨</span><span class="brand-text">Proteus</span><button id="sidebar-toggle" class="subtle" aria-label="Collapse sidebar" title="Collapse sidebar">‹</button></div><nav aria-label="Features">${nav.map(([id,icon,label,count])=>`${previewEnabled(state)&&activePage===id&&['runs','internet','schedules','attention','engine'].includes(id)?`<section class="preview-feature-group" data-preview-feature-group="${id}">`:''}<button class="navitem ${activePage===id?'active':''}" data-page="${id}"><span><span class="nav-icon">${icon}</span><span class="navlabel">${label}</span></span>${count!==''?`<span class="count${previewEnabled(state)&&id==='attention'&&Number(count)>0?' preview-attention-count':''}">${count}</span>`:''}</button>${activePage===id?`<div class="navchildren">${children(id)}</div>`:''}${previewEnabled(state)&&activePage===id&&['runs','internet','schedules','attention','engine'].includes(id)?'</section>':''}`).join('')}</nav><div class="sidebottom"><section id="provider-usage" aria-label="Provider allowance remaining"></section><div><span class="dot"></span>${escape(computerName(data.hostName))} · Connected</div><p>Prototype · v${data.version}<br>${data.scheduler.background ? 'Keeps running in the menu bar.' : 'Runs while the host is running.'}</p>${previewEnabled(state)?'':'<button class="subtle" id="data-folder">Open data folder ↗</button>'}</div>`;
+  $('#sidebar').innerHTML = `<div class="brand"><span class="brandmark">⤨</span><span class="brand-text">Proteus</span><button id="sidebar-toggle" class="subtle" aria-label="Collapse sidebar" title="Collapse sidebar">‹</button></div><nav aria-label="Features">${nav.map(([id,icon,label,count])=>`${previewEnabled(state)&&activePage===id&&['runs','internet','schedules','attention','engine'].includes(id)?`<section class="preview-feature-group" data-preview-feature-group="${id}">`:''}<button class="navitem ${activePage===id?'active':''}" data-page="${id}"><span><span class="nav-icon">${icon}</span><span class="navlabel">${label}</span></span>${count!==''?`<span class="count${previewEnabled(state)&&id==='attention'&&Number(count)>0?' preview-attention-count':''}">${count}</span>`:''}</button>${activePage===id?`<div class="navchildren">${children(id)}</div>`:''}${previewEnabled(state)&&activePage===id&&['runs','internet','schedules','attention','engine'].includes(id)?'</section>':''}`).join('')}</nav><div class="sidebottom"><section id="provider-usage" aria-label="Provider allowance remaining"></section><div><span class="dot"></span>${escape(computerName(data.hostName))} · Connected</div><p>Prototype · v${data.version}<br>${data.scheduler.background ? (data.hostPlatform==='darwin'?'Keeps running in the menu bar.':'Keeps running in the system tray.') : 'Runs while the host is running.'}</p>${previewEnabled(state)?'':'<button class="subtle" id="data-folder">Open data folder ↗</button>'}</div>`;
   $('#sidebar').querySelectorAll('[data-attention-item]').forEach(button=>button.onclick=()=>openAttentionItem(button.dataset.attentionItem));
   $('#sidebar').querySelectorAll('[data-recent-workspace]').forEach(b=>b.onclick=()=>openWorkspace(recentWorkspaces()[Number(b.dataset.recentWorkspace)]));
   bindPreviewSidebar();
@@ -470,20 +481,12 @@ function render({preserveTeamBrowser=false,sidebarOnly=false}={}) {
   $('#data-folder')?.addEventListener('click',() => window.desktop ? window.desktop.openPath(data.home) : toast(data.home));
   if (!sidebarOnly&&tab?.type!=='browser'&&activePage!=='team') window.desktop?.browser({action:'hide',...browserSurfaceIdentity()}).catch(e=>toast(e.message));
 }
-function mountHomeBrowserEntry(main){
-  if(!window.desktop)return;
-  const form=document.createElement('form');form.className='card';form.id='home-browser-entry';
-  form.innerHTML='<label for="home-browser-query">Browse the web</label><div class="row"><input id="home-browser-query" type="text" placeholder="Enter a website or search" autocomplete="off" spellcheck="false" style="flex:1;min-width:0"><button class="primary" type="submit">Open</button></div>';
-  form.onsubmit=async event=>{event.preventDefault();try{const url=browserTarget(form.querySelector('input').value),info=await window.desktop.browser({action:'create',url,profileId:'default',parentId:null});selectBrowserTab(info);}catch(error){toast(error.message);}};
-  main.prepend(form);
-}
 async function renderHome() {
   const main=$('#main');main.innerHTML='<p class="note">Loading Home…</p>';
   try {
     const value=await api('/api/home');if(state.page!=='home'||state.tab!=='overview')return;
     mountHome(main,value,{desktop:true,host:state.data,markdown:(target,source)=>ProteusMarkdown.mount(target,source,{allowExternalImages:false,link:source=>{if(ProteusMarkdown.linkKind(source)==='web')window.desktop?.openExternal(source).catch(error=>toast(error.message));},copy:text=>window.desktop?.copyText(text)}),navigate:page=>navigate(page==='chats'?'runs':page==='schedules'?'overview':page)});
-    mountHomeBrowserEntry(main);
-  } catch(error){if(state.page==='home'&&state.tab==='overview'){main.innerHTML=`<p class="banner">${escape(error.message)}</p>`;mountHomeBrowserEntry(main);}}
+  } catch(error){if(state.page==='home'&&state.tab==='overview'){main.innerHTML=`<p class="banner">${escape(error.message)}</p>`;}}
 }
 function renderOverview() {
   const data = state.data;
@@ -813,7 +816,13 @@ async function openMessageLink(source, cwd, originId=selectedChatParent()?.id) {
 }
 
 function renameContentTab(tab){showDialog(`<h2>Rename tab</h2><label>Tab name<input id="content-tab-title" maxlength="200" value="${escape(tab.label||'')}"></label><button id="close-dialog">Cancel</button><button id="dialog-submit">Save name</button>`,async()=>{const title=$('#content-tab-title').value.trim();if(!title)throw new Error('Enter a tab name.');tab.customTitle=title;tab.label=title;saveWorkspace();renderChatSubtabs();});}
-const scopeParent=scope=>scope.scope==='team'?{id:null,type:'team'}:scope.scope==='main'?{id:undefined,type:'main'}:state.tabs.find(tab=>scope.scope==='project'?tab.type==='workspace'&&tab.projectId===scope.id&&(tab.hostId||'')===(scope.hostId||''):scope.scope==='workspace'?tab.type==='workspace'&&!tab.projectId&&tab.workspaceId===scope.id&&(tab.hostId||'')===(scope.hostId||''):scope.hostId?tab.type==='remote-run'&&!tab.parentId&&tab.hostId===scope.hostId&&tab.runId===scope.id:tab.type==='run'&&!tab.parentId&&(tab.runId||tab.id)===scope.id);
+function scopeParent(scope){
+ if(scope.scope==='team')return {id:null,type:'team'};
+ if(scope.scope==='main')return {id:undefined,type:'main'};
+ const matches=state.tabs.filter(tab=>scope.scope==='project'?tab.type==='workspace'&&tab.projectId===scope.id&&(tab.hostId||'')===(scope.hostId||''):scope.scope==='workspace'?tab.type==='workspace'&&!tab.projectId&&tab.workspaceId===scope.id&&(tab.hostId||'')===(scope.hostId||''):scope.hostId?tab.type==='remote-run'&&tab.hostId===scope.hostId&&tab.runId===scope.id:tab.type==='run'&&(tab.runId||tab.id)===scope.id);
+ const visible=new Set();let current=state.tabs.find(tab=>tab.id===state.tab);while(current&&!visible.has(current.id)){visible.add(current.id);current=state.tabs.find(tab=>tab.id===current.parentId);}
+ return matches.find(tab=>tab.id===scope.parentId)||matches.find(tab=>visible.has(tab.id))||matches.find(tab=>!tab.parentId)||matches[0];
+}
 function sharedBrowserDescriptor(tab){
   const info=tab.info||tab,title=tab.customTitle||tab.label||tab.title||'New tab',browserURL=tab.remotePreviewURL||info.url||tab.url||'',entry=info.history?.entries?.[info.history.index];
   const privateLocal=info.privateLocal||syncableTabURL(browserURL)===null;
@@ -834,7 +843,7 @@ async function descriptorFor(tab,parent){
 }
 const contentTabSync=createTabSynchronizer({navigation:true,pendingStorage:desktopWindowId==='main'?localStorage:{getItem:key=>localStorage.getItem('window:'+desktopWindowId+':'+key),setItem:(key,value)=>localStorage.setItem('window:'+desktopWindowId+':'+key,value),removeItem:key=>localStorage.removeItem('window:'+desktopWindowId+':'+key)},
   preserveUntracked:(scope,tab)=>!!scope.hostId&&tab.type==='chat',
-  scopes:()=>window.desktop?[...state.tabs.filter(tab=>!tab.connectionPaused&&(tab.type==='workspace'&&(!tab.projectId||state.data.workspaceProjects)||!tab.parentId&&['run','remote-run'].includes(tab.type)&&!(previewEnabled(state)&&tab.type==='run'&&previewProjectForChat(state.data.runs.find(run=>run.id===(tab.runId||tab.id))||{})))).map(tab=>({scope:tab.type==='workspace'?(tab.projectId?'project':'workspace'):'chat',id:tab.type==='workspace'?(tab.projectId||tab.workspaceId):tab.runId||tab.id,...(tab.hostId?{hostId:tab.hostId}:{})})),{scope:'team',id:windowScopeId('team')},{scope:'main',id:windowScopeId('main')}]:[],
+  scopes:()=>visibleContentScopes(),
   readLocal:async scope=>{if(scope.scope==='team')return (await Promise.all(teamState().tabs.map(tab=>descriptorFor(tab,{type:'team',id:null})))).filter(Boolean);const parent=scopeParent(scope);if(!parent)return [];return (await Promise.all(state.tabs.filter(tab=>tab.parentId===parent.id).map(tab=>descriptorFor(tab,parent)))).filter(Boolean);},
   request:async(scope,action,args={},options)=>{
     if(!scope.hostId)return api('/api/content-tabs',{action,scope:scope.scope,id:scope.id,...args});
@@ -913,6 +922,73 @@ const contentTabSync=createTabSynchronizer({navigation:true,pendingStorage:deskt
     if((initialized||error.code==='JOURNAL_BUSY'||/Remote command history is busy/i.test(error.message))&&!/offline|closed|not paired|unavailable|not connected|reconnecting|connect the selected computer|disconnected|authentication in Connections/i.test(error.message))toast(error.message);
   }
 });
+let savedContentScopes=[];
+function checkpointDepartedContentScopes(){
+ const current=visibleContentScopes(),key=scope=>JSON.stringify([scope.hostId||'',scope.scope,scope.id]),active=new Set(current.map(key));
+ const departed=savedContentScopes.filter(scope=>!active.has(key(scope))&&scopeParent(scope));savedContentScopes=current;
+ if(!departed.length)return null;
+ return Promise.all(departed.map(scope=>contentTabSync.checkpoint(scope))).catch(error=>{toast(error.message);return {failed:true,error:error.message};});
+}
+function visibleContentScopes(){
+ if(!window.desktop||document.hidden)return [];
+ const scopes=[],seen=new Set();let tab=state.tabs.find(tab=>tab.id===state.tab);
+ while(tab&&!seen.has(tab.id)){seen.add(tab.id);if(tab.connectionPaused)break;if(tab.type==='workspace')scopes.push({scope:tab.projectId?'project':'workspace',id:tab.projectId||tab.workspaceId,...(tab.hostId?{hostId:tab.hostId}:{})});else if(['run','remote-run'].includes(tab.type))scopes.push({scope:'chat',id:tab.runId||tab.id,...(tab.hostId?{hostId:tab.hostId}:{})});tab=state.tabs.find(item=>item.id===tab.parentId);}
+ if(!scopes.length)scopes.push(state.page==='team'?{scope:'team',id:windowScopeId('team')}:{scope:'main',id:windowScopeId('main')});
+ return scopes;
+}
+function visibleFollowScope(){
+ if(!window.desktop||!workspaceReady||document.hidden)return null;
+ let tab=state.tabs.find(tab=>tab.id===state.tab);const seen=new Set();
+ while(tab&&!seen.has(tab.id)){seen.add(tab.id);if(tab.type==='workspace'&&!tab.connectionPaused)return {scope:tab.projectId?'project':'workspace',id:tab.projectId||tab.workspaceId,...(tab.hostId?{hostId:tab.hostId}:{})};tab=state.tabs.find(item=>item.id===tab.parentId);}
+ return null;
+}
+const followPositions=new Map(),followBrowserPositions=new Map(),followConversationPositions=new Map(),followDocumentPositions=new Map();let followScrollSuppressedUntil=0,followHumanUntil=0,stopFollowRestoration;
+function followPresentation(tab){
+ for(const map of [followPositions,followBrowserPositions,followConversationPositions,followDocumentPositions])for(const id of map.keys())if(!state.tabs.some(item=>item.id===id))map.delete(id);
+ if(['run','remote-run'].includes(tab.type)){const position=followConversationPositions.get(tab.id);return position?{conversation:position}:{};}
+ if(tab.type==='remote-document'&&followDocumentPositions.has(tab.id)){const saved=followDocumentPositions.get(tab.id),version=remoteDocumentPositionVersion(tab.id);if(!version||version===saved.documentVersion)return {...(followPositions.has(tab.id)?{positions:followPositions.get(tab.id)}:{}),...saved};followDocumentPositions.delete(tab.id);}
+ if(tab.type!=='browser')return followPositions.has(tab.id)?{positions:followPositions.get(tab.id)}:{};
+ const observation=followBrowserPositions.get(tab.id),entryId=tab.info?.history?.currentEntryId||'';
+ if(observation?.browser.url===tab.info?.url&&observation.browser.entryId===entryId)return observation;
+ followBrowserPositions.delete(tab.id);const url=syncableTabURL(tab.info?.url||'');return url?{browser:{url,entryId}}:{};
+}
+const projectFollower=createProjectFollower({
+ current:visibleFollowScope,
+ request:(scope,value)=>scope.hostId?window.desktop.peers({action:'request',hostId:scope.hostId,method:'tabs.follow',args:value}):api('/api/project-follow',value),
+ sync:async scope=>{const current=()=>JSON.stringify(visibleFollowScope())===JSON.stringify(scope);if(!current())return;for(const child of visibleContentScopes())if(child.scope==='chat'){if(!current())return;await contentTabSync.sync(child);}if(current())await contentTabSync.sync(scope);},
+ read:async scope=>{const parent=scopeParent(scope),selected=state.tabs.find(tab=>tab.id===state.tab);if(!parent||!selected)return {tabId:null};const direct=selected.parentId===parent.id?selected:state.tabs.find(tab=>tab.id===selected.parentId);const descriptor=selected===parent?null:await descriptorFor(direct,parent);const child=direct&&direct!==selected?await descriptorFor(selected,direct):null;return {tabId:descriptor?.id||null,...(child?{childTabId:child.id}:{}),page:parent.workspacePage,...followPresentation(selected),...(selected.type==='terminal'&&captureTerminalScroll(selected.id)?{terminal:captureTerminalScroll(selected.id)}:{})};},
+ apply:async(scope,value,{current})=>{
+   stopFollowRestoration?.();stopFollowRestoration=null;
+   const parent=scopeParent(scope);if(!parent)return;let selected=parent;
+   if(value.tabId){for(const tab of state.tabs.filter(tab=>tab.parentId===parent.id))if((await descriptorFor(tab,parent))?.id===value.tabId){selected=tab;break;}if(selected===parent)return;}
+   if(value.childTabId&&['run','remote-run'].includes(selected.type)){
+     const chat=selected;
+     const findChild=async()=>{for(const tab of state.tabs.filter(tab=>tab.parentId===chat.id))if((await descriptorFor(tab,chat))?.id===value.childTabId)return tab;};
+     let child=await findChild();
+     if(!current())return;
+     if(!child){await contentTabSync.sync({scope:'chat',id:chat.runId||chat.id,parentId:chat.id,...(scope.hostId?{hostId:scope.hostId}:{})});child=await findChild();}
+     if(!child)return;selected=child;
+   }
+   if(!current()||JSON.stringify(visibleFollowScope())!==JSON.stringify(scope))return;
+   followScrollSuppressedUntil=Date.now()+700;
+   const pageChanged=value.page&&parent.workspacePage!==value.page;if(value.page)parent.workspacePage=value.page;
+   if(state.tab!==selected.id||pageChanged&&selected===parent){state.tab=selected.id;state.selected=selected.id;if(selected.parentId)selectedChildren.set(selected.parentId,selected.id);if(selected.type==='browser')selectBrowserTab(selected.info);else render();revealSelectedTab();}
+   if(value.positions){if(selected.type==='browser'){if(value.browser?.url===selected.info?.url&&value.browser.entryId===(selected.info?.history?.currentEntryId||'')){followBrowserPositions.set(selected.id,{browser:value.browser,positions:value.positions});await window.desktop.browser({action:'follow-scroll',id:selected.id,url:value.browser.url,positions:value.positions});}}else{followPositions.set(selected.id,value.positions);stopFollowRestoration=restoreSharedScroll($('#main'),value.positions,()=>current()&&state.tab===selected.id);}}
+   if(value.documentPositions&&value.documentVersion&&selected.type==='remote-document'){followDocumentPositions.set(selected.id,{documentVersion:value.documentVersion,documentPositions:value.documentPositions});const stopView=stopFollowRestoration,stopDocument=restoreRemoteDocumentPosition(selected.id,value.documentVersion,value.documentPositions,()=>current()&&state.tab===selected.id);stopFollowRestoration=()=>{stopView?.();stopDocument();};}
+   if(!current())return;
+   if(value.terminal&&selected.type==='terminal')applyTerminalScroll(selected.id,value.terminal);
+   if(value.conversation&&['run','remote-run'].includes(selected.type)){followConversationPositions.set(selected.id,value.conversation);stopFollowRestoration=restoreConversationPosition($('#main'),value.conversation,{current:()=>current()&&state.tab===selected.id});}
+ },
+ onError:error=>{if(!/Unsupported|Unknown|reconnecting|offline|not paired|closed/i.test(error.message))console.debug('Project follow:',error.message);}
+});
+for(const type of ['pointerdown','wheel','touchstart','keydown'])document.addEventListener(type,event=>{if(event.isTrusted){stopFollowRestoration?.();stopFollowRestoration=null;followHumanUntil=Date.now()+2000;followScrollSuppressedUntil=0;projectFollower.human();}},{capture:true,passive:true});
+document.addEventListener('scroll',event=>{if(!visibleFollowScope()||stopFollowRestoration||projectFollower.applying||Date.now()<followScrollSuppressedUntil||Date.now()>followHumanUntil)return;if(event.target.matches?.('.conversation')){const position=captureConversationPosition($('#main'));if(position){followConversationPositions.set(state.tab,position);projectFollower.changed();}return;}const position=sharedScrollPosition($('#main'),event.target);if(!position)return;const prior=followPositions.get(state.tab)||[];followPositions.set(state.tab,[...prior.filter(row=>row.path!==position.path),position].slice(-24));projectFollower.changed();},{capture:true,passive:true});
+document.addEventListener('proteus:terminal-scroll',event=>{if(event.detail?.tabId===state.tab&&visibleFollowScope()&&!projectFollower.applying&&Date.now()>=followScrollSuppressedUntil&&Date.now()<=followHumanUntil)projectFollower.changed();});
+window.desktop?.onBrowserScroll(value=>{const selected=state.tabs.find(tab=>tab.id===state.tab);if(value.id!==state.tab||value.url!==selected?.info?.url||!syncableTabURL(value.url)||!visibleFollowScope())return;stopFollowRestoration?.();stopFollowRestoration=null;followBrowserPositions.set(value.id,{browser:{url:value.url,entryId:selected.info?.history?.currentEntryId||''},positions:value.positions});projectFollower.human();projectFollower.changed();});
+window.desktop?.onArtifactScroll?.(value=>{if(value.tabId!==state.tab||!visibleFollowScope())return;const documentVersion=remoteDocumentPositionVersion(value.tabId,value.version);if(!documentVersion)return;stopFollowRestoration?.();stopFollowRestoration=null;followDocumentPositions.set(value.tabId,{documentVersion,documentPositions:value.positions});projectFollower.human();projectFollower.changed();});
+window.desktop?.onPeer(event=>{if(event.event==='project-follow')void projectFollower.receive({...event.data,hostId:event.hostId},event.data);if(event.event==='tabs'){const scope={scope:event.data.scope,id:event.data.id,hostId:event.hostId};if(scope.scope==='chat'){if(visibleContentScopes().some(value=>value.scope===scope.scope&&value.id===scope.id&&value.hostId===scope.hostId))void contentTabSync.sync(scope);}else void projectFollower.refresh(scope);}if(event.recovered)projectFollower.reconnect(event.hostId);});
+document.addEventListener('visibilitychange',()=>{saveWorkspace();projectFollower.changed();if(!document.hidden)void refresh();});
+window.addEventListener('pagehide',()=>{stopFollowRestoration?.();projectFollower.dispose();});
 function selectedChatParent(){
  const selected=state.tabs.find(tab=>tab.id===state.tab),parent=state.tabs.find(tab=>tab.id===selected?.parentId);
  if(previewEnabled(state)&&selected?.type==='run'&&!selected.parentId){const canonical=previewResourceParent(state.data.runs.find(r=>r.id===(selected.runId||selected.id))||{});if(canonical)return canonical;}
@@ -1335,12 +1411,17 @@ async function manageWorkspaceTab(action,id,placement){const tab=state.tabs.find
 function selectedText(){return window.getSelection()?.toString()||'';}
 function selectContents(node){const range=document.createRange();range.selectNodeContents(node);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);}
 async function openContextLink(href,external=false,origin={}){if(parseChatLink(href))return openChatLink(href);const url=new URL(href,location.href);if(!['https:','http:'].includes(url.protocol))throw new Error('Only HTTP and HTTPS links can open as browser tabs.');if(external){await window.desktop.openLink(url.href);return;}const {parentId,afterId,group,profileId}=origin;const info=await window.desktop.browser({action:'create',url:url.href,parentId,group,profileId});if(group==='team'){selectTeamBrowser(info,afterId);openFeatureTab('team');}else openTab({id:info.id,type:'browser',label:info.title||url.host,info,...(parentId?{parentId}:{})},afterId);}
+document.addEventListener('dblclick',event=>{
+ const strip=event.target.closest('#tabs .tab-list,#chat-subtabs .chat-subtab-list');
+ if(event.button!==0||!strip||event.target!==strip)return;event.preventDefault();event.stopPropagation();
+ (strip.closest('#chat-subtabs')?.querySelector('[data-chat-add="browser"]')||document.querySelector('#tab-add-menu #browser'))?.click();
+});
 document.addEventListener('contextmenu',event=>{
   if(event.defaultPrevented||event.target.closest('#chat-context-menu,.proteus-context-menu'))return;
   const target=event.target,selection=selectedText();
   const tabNode=target.closest('[data-tab-container],.chat-subtab');
-  if(tabNode){const id=tabNode.dataset.tabContainer||tabNode.querySelector('[data-chat-subtab]')?.dataset.chatSubtab,tab=state.tabs.find(item=>item.id===id);if(!tab)return;const siblings=tab.parentId?state.tabs.filter(item=>item.parentId===tab.parentId):state.tabs.filter(item=>!item.parentId&&!['overview','omi','life','team','engine','home','standup'].includes(item.type));const index=siblings.findIndex(item=>item.id===id);const items=[{id:'add-left',label:'Add tab to left'},{id:'add-right',label:'Add tab to right'},{id:'move-tab',label:['run','remote-run'].includes(tab.type)?'Move chat to workspace…':'Send tab to workspace / chat / Team Tools…',enabled:['run','remote-run','browser','terminal','markdown','remote-document','agent-terminal'].includes(tab.type)},{id:'copy-tab',label:'Send a tab copy to workspace / chat / Team Tools…',enabled:tab.type==='browser'},...(tab.parentId?[{id:'rename-tab',label:'Rename tab…'}]:[]),{id:'close',label:'Close tab'},{id:'close-others',label:'Close other tabs',enabled:siblings.length>1},{id:'close-right',label:'Close tabs to the right',enabled:index<siblings.length-1}];if(['run','remote-run'].includes(tab.type))items.unshift({id:'copy-chat-link',label:'Copy chat link'},{id:'rename',label:'Rename chat…'},...(!tab.parentId?[{id:'send-workspace',label:'Show in assigned workspace'}]:[]));if(tab.type==='browser')items.unshift({id:'duplicate',label:'Duplicate tab'});if(tab.type==='browser')items.push({id:'persist',label:tab.info?.persist?'Do not persist tab':'Persist tab'},{id:'unload',label:'Unload browser tab'});
-    void showContextMenu(event,items,toast).then(async choice=>{if(choice==='duplicate')await duplicateBrowserTab(tab);else if(choice==='copy-chat-link')await copyChatLink(tab);else if(choice==='send-workspace')await sendChatToWorkspace({...tab,chatId:tab.runId||tab.id,local:tab.type==='run'});else if(choice==='add-left'||choice==='add-right')await addAdjacent(tab,choice==='add-right',event);else if(choice==='move-tab'||choice==='copy-tab')transferTabDialog(tab,choice==='copy-tab');else if(choice==='rename')renameChat({id:tab.id,chatId:tab.runId||tab.id,title:tab.chatTitle||tab.label,titleRevision:tab.titleRevision||state.data.runs.find(run=>run.id===(tab.runId||tab.id))?.titleRevision,hostId:tab.hostId,local:tab.type==='run'});else if(choice==='rename-tab')renameContentTab(tab);else if(choice==='close')await closeTabSet([tab]);else if(choice==='close-others')await closeTabSet(siblings.filter(item=>item.id!==id));else if(choice==='close-right')await closeTabSet(siblings.slice(index+1));else if(choice==='persist'){tab.info=await window.desktop.browser({action:'persist',id,enabled:!tab.info?.persist});saveWorkspace();}else if(choice==='unload'){await window.desktop.browser({action:'unload',id});tab.info.loaded=false;if(state.tab===id)renderBrowser();}}).catch(error=>toast(error.message));return;
+  if(tabNode){const id=tabNode.dataset.tabContainer||tabNode.querySelector('[data-chat-subtab]')?.dataset.chatSubtab,tab=state.tabs.find(item=>item.id===id);if(!tab)return;const siblings=tab.parentId?state.tabs.filter(item=>item.parentId===tab.parentId):state.tabs.filter(item=>!item.parentId&&!['overview','omi','life','team','engine','home','standup'].includes(item.type));const index=siblings.findIndex(item=>item.id===id);const items=[{id:'add-left',label:'Add tab to left'},{id:'add-right',label:'Add tab to right'},{id:'move-tab',label:['run','remote-run'].includes(tab.type)?'Move chat to workspace…':'Send tab to workspace / chat / Team Tools…',enabled:['run','remote-run','browser','terminal','markdown','remote-document','agent-terminal'].includes(tab.type)},{id:'copy-tab',label:'Send a tab copy to workspace / chat / Team Tools…',enabled:tab.type==='browser'},...(tab.parentId?[{id:'rename-tab',label:'Rename tab…'}]:[]),{id:'close',label:'Close tab'},{id:'close-others',label:'Close other tabs',enabled:siblings.length>1},{id:'close-right',label:'Close tabs to the right',enabled:index<siblings.length-1}];if(['run','remote-run'].includes(tab.type))items.unshift({id:'copy-chat-link',label:'Copy chat link'},{id:'rename',label:'Rename chat…'},...(!tab.parentId?[{id:'send-workspace',label:'Show in assigned workspace'}]:[]));if(tab.type==='browser')items.unshift({id:'duplicate',label:'Duplicate tab'});if(tab.type==='browser')items.push({id:'persist',label:tab.info?.persist?'Do not persist tab':'Persist tab'},{id:'unload',label:'Unload browser tab'},{id:'hide',label:'Hide browser tab'});
+    void showContextMenu(event,items,toast).then(async choice=>{if(choice==='duplicate')await duplicateBrowserTab(tab);else if(choice==='copy-chat-link')await copyChatLink(tab);else if(choice==='send-workspace')await sendChatToWorkspace({...tab,chatId:tab.runId||tab.id,local:tab.type==='run'});else if(choice==='add-left'||choice==='add-right')await addAdjacent(tab,choice==='add-right',event);else if(choice==='move-tab'||choice==='copy-tab')transferTabDialog(tab,choice==='copy-tab');else if(choice==='rename')renameChat({id:tab.id,chatId:tab.runId||tab.id,title:tab.chatTitle||tab.label,titleRevision:tab.titleRevision||state.data.runs.find(run=>run.id===(tab.runId||tab.id))?.titleRevision,hostId:tab.hostId,local:tab.type==='run'});else if(choice==='rename-tab')renameContentTab(tab);else if(choice==='close')await closeTabSet([tab]);else if(choice==='close-others')await closeTabSet(siblings.filter(item=>item.id!==id));else if(choice==='close-right')await closeTabSet(siblings.slice(index+1));else if(choice==='persist'){tab.info=await window.desktop.browser({action:'persist',id,enabled:!tab.info?.persist});saveWorkspace();}else if(choice==='hide'){await manageWorkspaceTab('hide',tab.id);render();}else if(choice==='unload'){await window.desktop.browser({action:'unload',id});tab.info.loaded=false;if(state.tab===id)renderBrowser();}}).catch(error=>toast(error.message));return;
   }
   if(target.closest('[data-chat-index],.terminal-canvas,#browser-url,#team-browser-url'))return;
   if(target.closest('#chat-rename,#peer-chat-rename,#peer-run-title,.chat-title-line h1')){const tab=state.tabs.find(item=>item.id===state.tab);if(tab&&['run','remote-run'].includes(tab.type)){void showContextMenu(event,[{id:'rename',label:'Rename chat…'}],toast).then(choice=>{if(choice==='rename')renameChat({id:tab.id,chatId:tab.runId||tab.id,title:tab.chatTitle||tab.label,titleRevision:tab.titleRevision||state.data.runs.find(run=>run.id===(tab.runId||tab.id))?.titleRevision,hostId:tab.hostId,local:tab.type==='run'});});return;}}
@@ -1357,7 +1438,7 @@ for(const type of ['pointerdown','keydown','wheel'])document.addEventListener(ty
  tab.lastTouchedAt=new Date().toISOString();const parent=state.tabs.find(item=>item.id===tab.parentId);if(parent)parent.lastTouchedAt=tab.lastTouchedAt;
  clearTimeout(interactionSave);interactionSave=setTimeout(saveWorkspace,250);
 },{capture:true,passive:true});
-window.desktop?.onShutdown?.(()=>{stopMessageSpeech();workspaceClosing=true;liveEvents.close();clearInterval(refreshInterval);clearInterval(usageInterval);clearInterval(attentionInterval);clearTimeout(liveRefreshTimer);});
+window.desktop?.onShutdown?.(()=>{stopMessageSpeech();workspaceClosing=true;liveEvents.close();clearInterval(refreshInterval);clearInterval(usageInterval);clearInterval(attentionInterval);clearTimeout(liveRefreshTimer);clearTimeout(browserActivitySaveTimer);clearTimeout(contentSyncTimer);});
 window.desktop?.onDocumentOpened?.(async value=>{
  const run=state.data.runs.find(r=>r.id===value.runId);if(!run)return;
  const originalPlacement=value.placement||{scope:'chat',id:run.id,parentId:run.id};
@@ -1368,8 +1449,13 @@ window.desktop?.onDocumentOpened?.(async value=>{
  const existing=state.tabs.find(tab=>tab.contentTabId==='document:'+value.documentId);
  openTab({...(existing||{}),id:existing?.id||'document-view:'+value.documentId,contentTabId:'document:'+value.documentId,type:'markdown',parentId:parent.id,associationChatId:run.id,label:existing?.customTitle||value.document.file.split('/').pop(),markdown:value.document},placement.afterId||null);
 });
+let browserContentSignature='';
 window.desktop?.onBrowserState(infos=>{
   if(workspaceRestoring||workspaceClosing||transferringTab)return;
+  // Activity timestamps remain fresh locally, but do not rewrite full saved
+  // histories and remote descriptors every second of reading or scrolling.
+  const signature=JSON.stringify(infos.map(info=>[info.id,info.parentId,info.destination,info.group,info.hidden,info.profileId,info.persist,info.url,info.title,info.favicon,info.associationChatId,info.loaded,info.privateLocal,info.history?.revision??info.history,info.history?.currentEntryId]));
+  const contentChanged=signature!==browserContentSignature;browserContentSignature=signature;
   const previousFind=pageFindNative();
   browserFindRevisions.clear();for(const info of infos)browserFindRevisions.set(info.id,info.findRevision??0);
   const currentBrowser=state.tabs.find(tab=>tab.id===state.tab&&tab.type==='browser');
@@ -1378,9 +1464,10 @@ window.desktop?.onBrowserState(infos=>{
   const ids=new Set(infos.map(info=>info.id));
   if(currentBrowser&&!ids.has(currentBrowser.id)){state.tab=tabToLeft(currentBrowser);if(currentBrowser.parentId)selectedChildren.set(currentBrowser.parentId,state.tab);}
   state.tabs=state.tabs.filter(tab=>tab.type!=='browser'||ids.has(tab.id));
-  syncTeamBrowsers(infos);
+  syncTeamBrowsers(infos,{persist:false});
   for(const info of infos.filter(info=>info.group!=='team'&&!ownsTeamBrowser(info.id))){const parent=ensureBrowserParent(info),tab=state.tabs.find(t=>t.id===info.id);if(tab){tab.info=info;if(Object.hasOwn(info,'hidden'))tab.hidden=info.hidden===true;tab.label=tab.customTitle||info.title||'New tab';if(parent)tab.parentId=parent.id;else if(info.destination?.type==='application')delete tab.parentId;}else state.tabs.push({id:info.id,type:'browser',label:info.title||'New tab',hidden:info.hidden===true,info,...(parent?{parentId:parent.id}:previewEnabled(state)&&info.parentId?.startsWith('project:local:')?{parentId:info.parentId}:{})});}
-  if(!state.tabs.some(tab=>tab.id===state.tab)){state.tab='overview';render();}else if(currentBrowser&&!ids.has(currentBrowser.id)){render();}else{renderTabs();renderChatSubtabs();updateBrowserControls();if(currentBrowser&&previousSurface!==`${!!currentBrowser.info?.url}:${currentBrowser.info?.loaded!==false}`)renderBrowser();}saveWorkspace();
+  if(!state.tabs.some(tab=>tab.id===state.tab)){state.tab='overview';render();}else if(currentBrowser&&!ids.has(currentBrowser.id)){render();}else{renderTabs();renderChatSubtabs();updateBrowserControls();if(currentBrowser&&previousSurface!==`${!!currentBrowser.info?.url}:${currentBrowser.info?.loaded!==false}`)renderBrowser();}
+  if(contentChanged)saveWorkspace();else if(!browserActivitySaveTimer)browserActivitySaveTimer=setTimeout(()=>{browserActivitySaveTimer=null;saveWorkspace();},15000);
   const nextFind=pageFindNative();
   if(nextFind&&(nextFind.id!==previousFind?.id||nextFind.revision!==previousFind.revision))pageFind.refresh();
 });
@@ -1444,6 +1531,13 @@ function ensureBrowserParent(info){
   if(!parent&&info.owner&&(!destination||destination.type==='chat')){const run=state.data.runs.find(r=>r.id===info.owner);parent={id:info.owner,type:'run',label:run?.title||'Chat'};state.tabs.push(parent);}
   return parent;
 }
+function addBackgroundBrowserTab(info,afterId=null){
+ if(info.group==='team'){selectTeamBrowser(info,afterId,{select:false});return;}
+ const parent=ensureBrowserParent(info);let tab=state.tabs.find(tab=>tab.id===info.id);
+ if(tab){tab.info=info;tab.label=tab.customTitle||info.title||'New tab';if(parent)tab.parentId=parent.id;}
+ else{tab={id:info.id,type:'browser',label:info.title||'New tab',info,...(parent?{parentId:parent.id}:{})};state.tabs.push(tab);}
+ placeTabAfter(state.tabs,tab.id,afterId);saveWorkspace();renderTabs();renderChatSubtabs();
+}
 function selectBrowserTab(info, afterId=null) {
   const parent=ensureBrowserParent(info);
   if(info.group==='team'){selectTeamBrowser(info,afterId);openFeatureTab('team');}
@@ -1478,10 +1572,12 @@ async function refreshCurrentTab(){
 window.desktop?.onBrowserAction?.(value=>{
   if(value.type==='refresh-current-tab'){void refreshCurrentTab().catch(error=>toast(error.message));return;}
   if(value.type==='downloads'){downloadsChanged();return;}
+  if(value.type==='extensions-changed'){document.dispatchEvent(new CustomEvent('proteus-extensions-changed',{detail:value}));return;}
   if(value.type==='tab-swipe')void swipeTab(value.direction,value.id);
   else if(value.type==='find')pageFind.open();
   else if(value.type==='overview')void showBrowserOverview(value.parentId||value.group);
   else if(value.type==='unloaded-tab'){saveWorkspace();renderTabs();renderChatSubtabs();toast('Link added as a hidden, unloaded tab.');}
+  else if(value.type==='background-tab')addBackgroundBrowserTab(value.info,value.afterId);
   else if(value.type==='select-tab')selectBrowserTab(value.info,value.afterId);
   else if(value.type==='chat-link'){const parent=selectedChatParent();if(parent?.type==='workspace')void newWorkspaceChat(parent,false,value.url);else void chatDialog(null,()=>{},{prompt:value.url});}
   else if(value.type==='site-permission'||value.type==='site-notification'){if(state.data){state.data.attention=[...(state.data.attention||[]).filter(item=>item.id!==value.item.id),value.item];announceAttention();}}
@@ -1531,7 +1627,7 @@ initBrowserNotifications({api,refresh,review:item=>{if(item.readAt)navigate('eng
 },browser:async(id,action)=>{const tab=[...state.tabs,...teamState().tabs].find(tab=>tab.id===id||tab.browserId===id||tab.contentTabId===id);if(!tab)throw Error('This browser tab is no longer open in its original window.');const native=tab.browserId||tab.id;if(action==='reload'){await window.desktop.browser({action:'reload',id:native});return;}selectOverview({id:tab.id,team:teamState().tabs.includes(tab)});}});
 initAttention({state,api,toast,refresh,openBrowser:info=>openTab({id:info.id,type:'browser',label:info.title||'Browser',parentId:info.parentId,info}),chats:()=>attentionChats(state.data?.runs||[]),openChat:openIndexedChat,renderChats:()=>renderChatsIndex(true),connections:section=>navigate('engine',section),openPage:()=>navigate('attention')});
 initChatsIndex({moveChat:moveChatToWorkspace,copyLink:copyChatLink,sendToWorkspace:sendChatToWorkspace,state,api,escape,toast,time,showDialog,openLocal:runTab,openRemote:openRemoteChat,onDeleted:reconcileDeletedChat,rename:renameChat,onIndexChanged:()=>{const running=$('[data-page="runs"] .count');if(running&&state.data)running.textContent=runningChats(state.data.runs);const count=$('[data-page="attention"] .count');if(count&&state.data)count.textContent=attentionItems().length;}});
-initTeamTools({state,api,escape,toast,time,lines,showDialog,browserTarget,fillBrowserLogin,timezone:()=>state.data.settings.timezone,onChange:saveWorkspace,transferTeamTab:(tab,copy)=>transferTabDialog({...tab,id:tab.browserId||tab.id,type:tab.browserId?'browser':tab.type,label:tab.title,customTitle:tab.customTitle,info:{url:tab.url,agentControlling:tab.agentControlling}},copy,tab),openTeamTerminal:(callback,guard)=>openTerminalDialog(null,callback,guard),renderTeamRemoteDocument:(tab,container)=>renderRemoteDocument(tab,{container,active:()=>container.isConnected&&teamState().active===tab.id}),renderTeamAgentTerminal:async(tab,container)=>{await loadRunView(tab.runId);if(container.isConnected&&teamState().active===tab.id)renderAgentTerminal(container,localHistories.get(tab.runId));},renderTeamTerminal:renderTerminal,disposeTeamTerminal:disposeTerminalUi,openTeamMarkdown:(callback,guard)=>openMarkdownPicker('open',null,callback,guard),openTeamLink:async(source,cwd)=>{try{const kind=ProteusMarkdown.linkKind(source);if(kind==='web'){const info=await window.desktop.browser({action:'create',url:source,group:'team'});selectTeamBrowser(info);renderTeamTools();}else if(kind==='file'){const file=decodeURIComponent(new URL(source,'file://'+cwd.replace(/\/$/,'')+'/').pathname);if(file.endsWith('.md')){const markdown=await api('/api/markdown',{file});const tab={id:'markdown:'+file,type:'markdown',label:file.split('/').pop(),file,markdown};const current=teamState();const old=current.tabs.find(item=>item.id===tab.id);if(old)Object.assign(old,tab);else current.tabs.push(tab);current.active=tab.id;saveWorkspace();renderTeamTools();}else await window.desktop.openPath(file);}else if(kind==='mail'){await navigator.clipboard.writeText(source.slice(7));toast('Email address copied.');}}catch(error){toast(error.message);}}});
+initTeamTools({hideTeamBrowser:async tab=>{await setTabVisibility(tab,true);await saveWorkspace();},state,api,escape,toast,time,lines,showDialog,browserTarget,fillBrowserLogin,timezone:()=>state.data.settings.timezone,onChange:saveWorkspace,transferTeamTab:(tab,copy)=>transferTabDialog({...tab,id:tab.browserId||tab.id,type:tab.browserId?'browser':tab.type,label:tab.title,customTitle:tab.customTitle,info:{url:tab.url,agentControlling:tab.agentControlling}},copy,tab),openTeamTerminal:(callback,guard)=>openTerminalDialog(null,callback,guard),renderTeamRemoteDocument:(tab,container)=>renderRemoteDocument(tab,{container,active:()=>container.isConnected&&teamState().active===tab.id}),renderTeamAgentTerminal:async(tab,container)=>{await loadRunView(tab.runId);if(container.isConnected&&teamState().active===tab.id)renderAgentTerminal(container,localHistories.get(tab.runId));},renderTeamTerminal:renderTerminal,disposeTeamTerminal:disposeTerminalUi,openTeamMarkdown:(callback,guard)=>openMarkdownPicker('open',null,callback,guard),openTeamLink:async(source,cwd)=>{try{const kind=ProteusMarkdown.linkKind(source);if(kind==='web'){const info=await window.desktop.browser({action:'create',url:source,group:'team'});selectTeamBrowser(info);renderTeamTools();}else if(kind==='file'){const file=decodeURIComponent(new URL(source,'file://'+cwd.replace(/\/$/,'')+'/').pathname);if(file.endsWith('.md')){const markdown=await api('/api/markdown',{file});const tab={id:'markdown:'+file,type:'markdown',label:file.split('/').pop(),file,markdown};const current=teamState();const old=current.tabs.find(item=>item.id===tab.id);if(old)Object.assign(old,tab);else current.tabs.push(tab);current.active=tab.id;saveWorkspace();renderTeamTools();}else await window.desktop.openPath(file);}else if(kind==='mail'){await navigator.clipboard.writeText(source.slice(7));toast('Email address copied.');}}catch(error){toast(error.message);}}});
 initEngineRoom({openBrowser:info=>openTab({id:info.id,type:'browser',label:info.title||'Browser',info}),state,api,escape,toast,time,manageMcp,providers:renderProviders,connections:()=>renderRemote({api,escape,toast}),setup:renderSettings,resourceChanged:(action,id)=>{if(action==='close')state.tabs=state.tabs.filter(tab=>tab.id!==id);saveWorkspace();},openAccount:()=>window.desktop?.openExternal(new URL('/security',state.data.life?.websiteOrigin||'https://proteus.example').href)});
 initTerminals({state,escape,toast,showDialog,openTab,onInput:tab=>recordPreviewActivity(tab)});
 initDesktopPreview({workspaceOwners,refreshWorkspaceOwners,loadWorkspaceOwnerTabs,openRemoteProject,openWorkspaceChat,syncContentTabs:scope=>contentTabSync.sync(scope),state,api,escape,toast,refresh,openTab,render,showDialog,openWorkspace,renderChats:renderChatsIndex,newChat:newWorkspaceChat,createWorkspace,deleteWorkspace,manageWorkspaceTab,manageWorkspaceTabs});
@@ -1544,9 +1640,9 @@ let rendererOverlayVisible=false;
 new MutationObserver(()=>{const visible=!!document.querySelector('dialog[open],.proteus-context-menu,#chat-context-menu');if(visible===rendererOverlayVisible)return;rendererOverlayVisible=visible;void window.desktop?.browser({action:'overlay',token:'renderer-overlays',visible}).catch(error=>toast(error.message));if(!visible)requestAnimationFrame(browserBounds);}).observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['open']});
 void window.desktop?.browser({action:'selection-init',...browserSurfaceIdentity()}).catch(error=>toast(error.message));
 refresh().then(restoreWorkspace).then(async()=>{await Promise.allSettled([refreshUsage(),loadChatsIndex()]);render();chatLinksReady=true;if(pendingChatLink){const target=pendingChatLink;pendingChatLink=null;await openChatLink(chatLink(target));}}).catch(e=>toast(e.message));
-let attentionPolling=false;const attentionInterval=setInterval(async()=>{if(!state.data||attentionPolling)return;attentionPolling=true;try{const result=await api('/api/attention');state.data.attention=result.items;announceAttention();}catch{}finally{attentionPolling=false;}},2000);
-const usageInterval=setInterval(() => refreshUsage(), 60_000);
-const refreshInterval=setInterval(()=>{if((!document.activeElement?.matches('input,textarea,select') || !!$('#conversation-host'))&&!$('#dialog').open)refresh().catch(()=>{});},1500);
+let attentionPolling=false;const attentionInterval=setInterval(async()=>{if(!state.data||attentionPolling||document.hidden||liveEvents.readyState===EventSource.OPEN&&Date.now()-lastStateRefresh<15000)return;attentionPolling=true;try{const result=await api('/api/attention');state.data.attention=result.items;announceAttention();}catch{}finally{attentionPolling=false;}},2000);
+const usageInterval=setInterval(() => {if(!document.hidden)void refreshUsage();}, 60_000);
+const refreshInterval=setInterval(()=>{if(document.hidden||liveEvents.readyState===EventSource.OPEN&&Date.now()-lastStateRefresh<15000)return;if((!document.activeElement?.matches('input,textarea,select') || !!$('#conversation-host'))&&!$('#dialog').open)refresh().catch(()=>{});},1500);
 
 window.desktop?.onRemote(() => navigate('engine','connections'));
 let liveRefreshTimer;
@@ -1555,7 +1651,8 @@ window.addEventListener('proteus:profiles-changed',()=>void refreshBrowserProfil
 document.addEventListener('click',event=>{const button=event.target.closest('[data-browser-profile]');if(!button)return;event.preventDefault();event.stopPropagation();button.closest('details')?.removeAttribute('open');const scope=button.dataset.profileScope,parent=scope==='chat'?selectedChatParent():null;void window.desktop.browser({action:'create',profileId:button.dataset.browserProfile,group:scope==='team'?'team':'main',parentId:parent?.id}).then(info=>{if(scope==='team'){selectTeamBrowser(info);renderTeamTools();}else openTab({id:info.id,type:'browser',label:info.title||'New tab',parentId:parent?.id,info});}).catch(error=>toast(error.message));},true);
 void refreshBrowserProfiles();
 const liveEvents = new EventSource('/api/events');
-liveEvents.addEventListener('change', () => { if (liveRefreshTimer) return; liveRefreshTimer = setTimeout(() => { liveRefreshTimer = null; if ((!document.activeElement?.matches('input,textarea,select') || !!$('#conversation-host')) && !$('#dialog').open) refresh().catch(() => {}); }, 120); });
+liveEvents.addEventListener('project-follow',event=>{try{const value=JSON.parse(event.data);void projectFollower.receive({scope:value.scope,id:value.id},value);}catch{}});
+liveEvents.addEventListener('change', () => { if (document.hidden||liveRefreshTimer) return; liveRefreshTimer = setTimeout(() => { liveRefreshTimer = null; if (!document.hidden&&(!document.activeElement?.matches('input,textarea,select') || !!$('#conversation-host')) && !$('#dialog').open) refresh().catch(() => {}); }, 120); });
 
 // A pinch that ever visits visual zoom above baseline cannot open overview.
 let overviewPinch=null,overviewPinchCooldown=0;

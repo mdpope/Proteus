@@ -142,7 +142,7 @@ async function connectBadgeClients(){
 }
 async function initSharedShell(){
     if(!account)return;
-    try{preferences=(await appRequest()).preferences;window.proteusPreferences=preferences;document.dispatchEvent(new CustomEvent('proteus:preferences',{detail:preferences}));}
+    try{preferences=(await appRequest('?view=bootstrap')).preferences;window.proteusPreferences=preferences;document.dispatchEvent(new CustomEvent('proteus:preferences',{detail:preferences}));}
     catch{connectionState('account','Account unavailable. Reload to retry.');return;}
     document.body.classList.toggle('rail-collapsed',preferences.sidebarCollapsed);
     const railToggle=document.querySelector('#shell-rail-toggle');

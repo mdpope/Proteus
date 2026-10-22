@@ -1,3 +1,4 @@
+const {atomicRename}=require('../src/atomic-rename.cjs');
 const fs=require('node:fs');
 const path=require('node:path');
 const {randomUUID}=require('node:crypto');
@@ -14,7 +15,7 @@ function windowBounds(value,areas){
 class WindowRegistry{
  constructor(home,{ipcMain,screen}={}){this.home=home;this.file=path.join(home,'desktop-windows.json');this.ipcMain=ipcMain;this.screen=screen;this.scope=new AsyncLocalStorage();this.contexts=new Map();this.handlers=new Set();this.closed=false;this.document=this.read();}
  read(){try{const stat=fs.statSync(this.file);if(stat.size>128*1024)throw Error();const data=JSON.parse(fs.readFileSync(this.file,'utf8'));if(data.schemaVersion!==1||!Array.isArray(data.windows)||data.windows.length>16||data.windows.some(row=>!validId(row.id))||new Set(data.windows.map(row=>row.id)).size!==data.windows.length)throw Error();return data;}catch(error){if(error.code==='ENOENT')return {schemaVersion:1,windows:[{id:'main'}]};throw Error('Saved windows could not be read. The original record was preserved.');}}
- save(){fs.mkdirSync(this.home,{recursive:true,mode:0o700});const temporary=this.file+'.tmp';fs.writeFileSync(temporary,JSON.stringify(this.document)+'\n',{mode:0o600});fs.renameSync(temporary,this.file);}
+ save(){fs.mkdirSync(this.home,{recursive:true,mode:0o700});const temporary=this.file+'.tmp';fs.writeFileSync(temporary,JSON.stringify(this.document)+'\n',{mode:0o600});atomicRename(temporary,this.file);}
  records(){return this.document.windows.length?this.document.windows.map(row=>({...row})):[{id:randomUUID()}];}
  current(){const id=this.scope.getStore();if(id!==undefined)return this.contexts.get(id);return [...this.contexts.values()].find(ctx=>ctx.window.isFocused?.())||this.contexts.get(this.focused)||this.contexts.values().next().value;}
  run(id,action){if(!this.contexts.has(id))throw Error('This app window is closed.');return this.scope.run(id,action);}

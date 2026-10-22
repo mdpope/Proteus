@@ -28,6 +28,18 @@ Workspace restoration saves a tab descriptor (session ID, profile ID, starting-r
 
 ## Building and verification
 
+The renderer coalesces visible output within a frame-sized 16-ms interval and
+hidden output within 250 ms. Each pending batch flushes at 512K code units
+(at most 1 MiB of UTF-16 text); it never drops a PTY chunk to meet that
+bound. Reattaching a tab immediately flushes its pending output. Hidden tabs keep
+their existing shell and renderer buffer; this does not change saved-history or
+scrollback retention. Closing the presentation cancels pending callbacks, and
+stale asynchronous setup cannot attach to a replacement view with the same tab ID.
+
+Selected-terminal follow state uses Ghostty's line position and follow-bottom flag.
+It does not contain output text or screenshots, and applying it only adjusts an
+already attached local viewer. It never opens a shell or replays startup commands.
+
 - `npm run terminal:build` bundles Ghostty JavaScript and WASM into `public/terminal/` and repairs the executable mode on the node-pty spawn helper. `postinstall` also applies the narrowly scoped helper-mode repair.
 - `npm run package:mac` rebuilds **only node-pty** for Electron in the packager's copied application before signing. It does not change the source checkout's Node ABI or rebuild/resign the vendor-owned Copilot binaries. Packaging verifies the Copilot signatures and byte identity afterward.
 - `node --test test/terminals.test.js test/terminal-tmux.test.js` covers profiles, root revocation, explicit startup versus resume, buffer/input/resize limits, local history, exact managed tmux socket/session identity, detach/end separation, read-only Ghostty import, and real interactive PTY exchange. The tmux lifecycle tests use synthetic processes and do not change existing Mac tmux sessions.

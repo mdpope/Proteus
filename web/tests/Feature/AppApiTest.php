@@ -43,12 +43,40 @@ class AppApiTest extends TestCase
         $created = $this->postJson('/api/v1/app/team-lists', $input)->assertCreated()->assertJsonPath('revision', 1)->assertJsonPath('links.0.url', 'https://example.test/board?view=team')->json();
         $this->putJson('/api/v1/app/team-lists/'.$created['id'], $input + ['expectedRevision' => 1])->assertOk()->assertJsonPath('revision', 2);
         $this->putJson('/api/v1/app/team-lists/'.$created['id'], $input + ['expectedRevision' => 1])->assertConflict();
+        $this->deleteJson('/api/v1/app/team-lists/'.$created['id'])->assertUnprocessable();
+        $this->deleteJson('/api/v1/app/team-lists/'.$created['id'], ['expectedRevision' => 1])->assertConflict();
         Passport::actingAs($this->owner(), ['app:read', 'app:write']);
         $this->getJson('/api/v1/app/team-lists')->assertExactJson(['items' => []]);
         $this->deleteJson('/api/v1/app/team-lists/'.$created['id'])->assertNotFound();
         $this->putJson('/api/v1/app/team-lists/'.$created['id'], $input + ['expectedRevision' => 2])->assertNotFound();
         $this->assertDatabaseCount('app_records', 1);
         $this->assertStringNotContainsString('Synthetic team', DB::table('app_records')->value('payload'));
+        Passport::actingAs($user, ['app:read', 'app:write']);
+        $this->deleteJson('/api/v1/app/team-lists/'.$created['id'], ['expectedRevision' => 2])->assertOk();
+        $this->assertDatabaseCount('app_records', 0);
+    }
+
+    public function test_bootstrap_excludes_collections_and_opt_in_pages_detect_changes(): void
+    {
+        $user = $this->owner();
+        Passport::actingAs($user, ['app:read', 'app:write']);
+        $records = app(AppRecords::class);
+        $links = [];
+        for ($i = 0; $i < 5; $i++) {
+            $links[] = $records->save($user, 'links', ['title' => 'Link '.$i, 'url' => 'https://example.test/'.$i]);
+        }
+        $bootstrap = $this->getJson('/api/v1/app?view=bootstrap')->assertOk()->assertJsonMissingPath('links')->assertJsonMissingPath('logs')->assertJsonPath('displayName', $user->name)->json();
+        $this->getJson('/api/v1/app?view=bootstrap&include=links')->assertOk()->assertJsonCount(5, 'links')->assertJsonMissingPath('history')->assertJsonPath('accountId', $bootstrap['accountId']);
+        $first = $this->getJson('/api/v1/app/links?pageSize=2')->assertOk()->assertJsonCount(2, 'items')->assertJsonPath('total', 5)->assertJsonPath('hasMore', true)->json();
+        $second = $this->getJson('/api/v1/app/links?pageSize=2&page=2&expectedRevision='.$first['collectionRevision'])->assertOk()->assertJsonCount(2, 'items')->json();
+        $this->assertEmpty(array_intersect(array_column($first['items'], 'id'), array_column($second['items'], 'id')));
+        $this->putJson('/api/v1/app/links/'.$links[0]['id'], ['title' => 'Changed', 'url' => $links[0]['url'], 'expectedRevision' => 1])->assertOk();
+        $this->getJson('/api/v1/app/links?pageSize=2&page=2&expectedRevision='.$first['collectionRevision'])->assertConflict();
+        $this->deleteJson('/api/v1/app/links/'.$links[0]['id'], ['expectedRevision' => 1])->assertConflict();
+        $this->deleteJson('/api/v1/app/links/'.$links[0]['id'], ['expectedRevision' => 2])->assertOk();
+        $this->getJson('/api/v1/app/links?pageSize=101')->assertUnprocessable();
+        $this->getJson('/api/v1/app?include=secret')->assertUnprocessable();
+        $this->getJson('/api/v1/app')->assertOk()->assertJsonCount(4, 'links')->assertJsonPath('history', []);
     }
 
     public function test_browser_profiles_require_scope_and_revisions_and_exclude_credentials(): void

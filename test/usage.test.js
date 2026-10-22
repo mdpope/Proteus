@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -107,7 +108,7 @@ test('Copilot missing or past reset is labeled as a monthly expectation without 
   assert.equal(nearNow.resetSource,'expected-monthly');assert.equal(nearNow.reportedResetAt,'2026-10-05T12:00:05.000Z');
 });
 test('agent identity uses captured main agent and survives later context changes and remote projection', async () => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-identity-')); const engine = new Engine(home); engine.drain = async () => {};
+  const home = privateTemporaryDirectory(path.join(os.tmpdir(), 'proteus-identity-')); const engine = new Engine(home); engine.drain = async () => {};
   try {
     const schedule = { schemaVersion: 1, id: 'identity', name: 'Identity', enabled: false, cron: '0 9 * * 1-5', timezone: 'UTC', provider: 'rehearsal', model: '', workspace: { cwd: home, additionalDirectories: [] }, misfire: 'skip', prompt: 'Hello', context: { agentId: 'a', entries: [{ id: 'a', kind: 'agent', name: 'Milo' }, { id: 'b', kind: 'agent', name: 'Atlas' }] } };
     const run = engine.createRun(schedule); engine.event(run, 'assistant', 'First response');

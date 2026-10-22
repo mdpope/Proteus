@@ -1,3 +1,5 @@
+import {assertPrivate} from './helpers/permissions.js';
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
@@ -31,29 +33,29 @@ test('Claude model labels reveal runtime-resolved aliases without inventing pinn
   assert.equal(claudeModel({value:'pinned-id',displayName:'Pinned',resolvedModel:'pinned-id'}).name,'Pinned');
 });
 test('Claude MCP configuration admits selected stdio and HTTPS only, preserving explicit scope',()=>{
-  const selected={local:{type:'stdio',command:'/usr/bin/false',args:['--synthetic'],env:{KEY:'SYNTHETIC_SECRET'},workingDirectory:'/tmp'},remote:{type:'http',url:'https://mcp.example.invalid/api',headers:{Authorization:'Bearer SYNTHETIC_SECRET'}}};
-  assert.deepEqual(claudeMcpConfig(selected,'/tmp').mcpServers,{local:{type:'stdio',command:'/usr/bin/false',args:['--synthetic'],env:{KEY:'SYNTHETIC_SECRET'}},remote:selected.remote});
-  assert.throws(()=>claudeMcpConfig({bad:{type:'http',url:'http://example.invalid',headers:{}}},'/tmp'),/HTTPS/);
-  assert.throws(()=>claudeMcpConfig({bad:{type:'stdio',command:'/usr/bin/false',workingDirectory:'/elsewhere'}},'/tmp'),/working directory is unavailable/);
-  assert.throws(()=>claudeMcpConfig({bad:{type:'stdio',command:'/usr/bin/false',workingDirectory:'relative'}},'/tmp'),/absolute working directory/);
-  assert.throws(()=>claudeMcpConfig({bad:{type:'stdio',command:'/usr/bin/false',tools:['read']}},'/tmp'),/cannot enforce/);
-  assert.throws(()=>claudeMcpConfig({bad:{type:'stdio',command:'/usr/bin/false',tools:[]}},'/tmp'),/cannot enforce/);
-  assert.deepEqual(claudeMcpConfig({allowed:{type:'stdio',command:'/usr/bin/false',tools:['*']}},'/tmp').mcpServers.allowed,{type:'stdio',command:'/usr/bin/false',args:[],env:{}});
+  const selected={local:{type:'stdio',command:'/usr/bin/false',args:['--synthetic'],env:{KEY:'SYNTHETIC_SECRET'},workingDirectory:fs.realpathSync(os.tmpdir())},remote:{type:'http',url:'https://mcp.example.invalid/api',headers:{Authorization:'Bearer SYNTHETIC_SECRET'}}};
+  assert.deepEqual(claudeMcpConfig(selected,fs.realpathSync(os.tmpdir())).mcpServers,{local:{type:'stdio',command:'/usr/bin/false',args:['--synthetic'],env:{KEY:'SYNTHETIC_SECRET'}},remote:selected.remote});
+  assert.throws(()=>claudeMcpConfig({bad:{type:'http',url:'http://example.invalid',headers:{}}},fs.realpathSync(os.tmpdir())),/HTTPS/);
+  assert.throws(()=>claudeMcpConfig({bad:{type:'stdio',command:'/usr/bin/false',workingDirectory:'/elsewhere'}},fs.realpathSync(os.tmpdir())),/working directory is unavailable/);
+  assert.throws(()=>claudeMcpConfig({bad:{type:'stdio',command:'/usr/bin/false',workingDirectory:'relative'}},fs.realpathSync(os.tmpdir())),/absolute working directory/);
+  assert.throws(()=>claudeMcpConfig({bad:{type:'stdio',command:'/usr/bin/false',tools:['read']}},fs.realpathSync(os.tmpdir())),/cannot enforce/);
+  assert.throws(()=>claudeMcpConfig({bad:{type:'stdio',command:'/usr/bin/false',tools:[]}},fs.realpathSync(os.tmpdir())),/cannot enforce/);
+  assert.deepEqual(claudeMcpConfig({allowed:{type:'stdio',command:'/usr/bin/false',tools:['*']}},fs.realpathSync(os.tmpdir())).mcpServers.allowed,{type:'stdio',command:'/usr/bin/false',args:[],env:{}});
 });
 test('Claude private stdio launcher preserves selected source cwd and env without shell or secret argv',async t=>{
-  const root=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-claude-mcp-fixture-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+  const root=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-claude-mcp-fixture-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
   const chat=path.join(root,'chat'),source=path.join(root,'source');fs.mkdirSync(chat);fs.mkdirSync(source);
   fs.writeFileSync(path.join(source,'server.cjs'),"process.stdout.write(JSON.stringify({cwd:process.cwd(),arg:process.argv[2],key:process.env.SYNTHETIC_KEY,electronNode:process.env.ELECTRON_RUN_AS_NODE||null}));");
   let config,configFile,spec,specMode,output;
   const p=new ClaudeProvider({clientFactory:options=>{
     configFile=options.mcpConfigPath;config=JSON.parse(fs.readFileSync(configFile,'utf8'));
-    const launched=config.mcpServers.local;const specFile=launched.args[1];spec=JSON.parse(fs.readFileSync(specFile,'utf8'));specMode=fs.statSync(specFile).mode&0o777;
+    const launched=config.mcpServers.local;const specFile=launched.args[1];spec=JSON.parse(fs.readFileSync(specFile,'utf8'));assertPrivate(specFile);
     output=JSON.parse(execFileSync(launched.command,launched.args,{encoding:'utf8',env:{...process.env,...launched.env}}));
     const client=new Fake(result);client.request=async()=>({mcpServers:[{name:'local',status:'connected'}]});return client;
   }});
   const a=runArgs();a.run.schedule.workspace.cwd=chat;a.run.schedule.mcpServers={local:{type:'stdio',command:process.execPath,args:['server.cjs','SYNTHETIC_ARG'],workingDirectory:source,env:{SYNTHETIC_KEY:'SYNTHETIC_ENV_SECRET'}}};
   await p.run(a);
-  assert.equal(specMode,0o600);assert.equal(spec.workingDirectory,fs.realpathSync(source));
+  assert.equal(spec.workingDirectory,fs.realpathSync(source));
   assert.equal(JSON.stringify(config).includes('SYNTHETIC_ENV_SECRET'),false);
   assert.equal(config.mcpServers.local.args.join(' ').includes('SYNTHETIC_ENV_SECRET'),false);
   assert.equal(config.mcpServers.local.env.ELECTRON_RUN_AS_NODE,'1');
@@ -70,14 +72,14 @@ test('Claude turn loads selected MCP servers from a private file and waits for c
   let configFile,config,mode,args,observedUserBeforeStatus=false,statusChecks=0;
   const provider=new ClaudeProvider({clientFactory:options=>{
     configFile=options.mcpConfigPath;args=options.args;
-    assert.ok(configFile);mode=fs.statSync(configFile).mode&0o777;config=JSON.parse(fs.readFileSync(configFile,'utf8'));
+    assert.ok(configFile);assertPrivate(configFile);config=JSON.parse(fs.readFileSync(configFile,'utf8'));
     const client=new Fake(result);client.request=async payload=>{assert.deepEqual(payload,{subtype:'mcp_status'});statusChecks++;return {mcpServers:[{name:'remote',status:'connected'},{name:'unselected',status:'connected'}]};};
     client.write=message=>{if(message.type==='user'){observedUserBeforeStatus=statusChecks===0;client.userMessage=message;queueMicrotask(()=>result(client));}};
     return client;
   }});
   const a=runArgs();a.run.schedule.mcpServers={remote:{type:'http',url:'https://mcp.example.invalid/api',headers:{Authorization:'Bearer SYNTHETIC_SECRET'}}};
   await provider.run(a);
-  assert.equal(mode,0o600);assert.deepEqual(Object.keys(config.mcpServers),['remote']);assert.equal(config.mcpServers.remote.headers.Authorization,'Bearer SYNTHETIC_SECRET');
+  assert.deepEqual(Object.keys(config.mcpServers),['remote']);assert.equal(config.mcpServers.remote.headers.Authorization,'Bearer SYNTHETIC_SECRET');
   assert.equal(args.join(' ').includes('SYNTHETIC_SECRET'),false);assert.equal(observedUserBeforeStatus,false);assert.equal(statusChecks,1);
   assert.equal(a.run.mcpConnections.remote.status,'connected');assert.equal(fs.existsSync(configFile),false);
 });
@@ -211,7 +213,7 @@ test('Claude refuses a runtime that does not confirm permission hooks',async()=>
   const c=new Fake();c.initialize=async()=>({models:[model]});const p=new ClaudeProvider({clientFactory:()=>c});await assert.rejects(p.run(runArgs()),/permission hooks/);assert.equal(c.closed,true);
 });
 test('Claude cancellation escalates against tool descendants after direct CLI exits', {skip:process.platform==='win32'}, async()=>{
-  const root=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-claude-kill-'));let client,pid;
+  const root=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-claude-kill-'));let client,pid;
   const alive=id=>{try{process.kill(id,0);return true;}catch{return false;}};
   try{
     const fixture=path.join(root,'fixture');fs.writeFileSync(fixture,`#!${process.execPath}\nconst {spawn}=require('node:child_process');const c=spawn(process.execPath,['-e','process.on("SIGTERM",()=>{});setInterval(()=>{},1000)'],{stdio:['ignore','ignore','ignore']});setTimeout(()=>console.log(JSON.stringify({type:'fixture_ready',pid:c.pid})),150);setInterval(()=>{},1000);\n`,{mode:0o700});

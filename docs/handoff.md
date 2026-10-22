@@ -1,3 +1,76 @@
+## October 22 — desktop, Windows release, and mobile source integrated
+
+The operator requested all completed changes be pushed, reviewed through a PR, and synchronized
+to main. The integration combines the three local desktop/mobile commits through `b0cede3` with
+the Windows branch through `f532671`. Earlier notes describing those branches as separate are
+historical. The Windows release artifacts remain tied to their exact tested source; merging this
+source does not replace published installers or authorize the held desktop/mobile rollout.
+
+Conflict resolution retains worker-based update inspection, provenance checks, resumable recovery,
+Windows installation/atomic replacement, and streamed downloads through the shared account session.
+The relay retains its standalone Linux container boundary. Integration acceptance passes 1,000
+Node tests (one platform skip), static checks, 101 web tests with 867 assertions, the web build,
+and isolated browser UI checks including restart persistence. Native pairing source is unchanged
+from the previously tested mobile correction; physical installation and camera acceptance remain
+pending. Live pairing and release receipts stay in private operator records.
+
+Windows validation additionally exposed a writable-handle requirement for recovery flushes,
+plus private-directory and CRLF assumptions in new fixtures. The correction preserves read-only
+file modes and registers fixture cleanup before setup awaits. The reported Markdown denial-of-
+service advisory is resolved with `markdown-it` 15.0.3 and a rebuilt shared browser/native runtime;
+the dependency audit is clear. GitHub Actions cannot start because of the account billing/spending
+limit, so local acceptance must be reported separately from hosted CI.
+
+## October 22 — mobile pairing completion corrected in source
+
+The operator reports false refusal after successful phone pairing, silent iPad dismissal to Home,
+and wrong landscape camera orientation. The pending native transport now becomes the saved
+destination without a socket replacement; authenticated completion closes Add computer and
+opens Connections with visible success. QR dismissal precedes pairing, and AVFoundation drives
+camera preview rotation. See [native acceptance](../ios/PARITY-VALIDATION.md) and
+[remote behavior](remote.md).
+
+Phone/tablet pairing UI, 12 destination tests, refusal-preservation, 979 Node tests and static
+checks pass. Physical installation and camera-image acceptance remain separate. Do not bundle
+the separately held desktop design-preview rollout into this mobile correction. Live Windows
+release and real-device pairing receipts remain in their private operator/deployment records.
+
+## October 22 — browser controls and Home correction ready for review
+
+The retained Design Preview is open at `0fdf5f9dc78c+dirty.19144eb051fb`, containing the
+stabilization/follow-along work below plus the operator's additional browser controls. Home's
+unrequested URL/search box is removed entirely; Proteus is the primary heading. See
+[browser behavior](browser.md) and [exact preview acceptance](desktop-preview.md).
+
+979 Node tests, static checks, exact-package Home/link, browser controls, video gestures and
+media/download/window checks pass. Existing preview chats, logical tabs, selection and full
+navigation/retry history are preserved; expected favorites migration/scan metadata changes are
+recorded separately. The verified snapshot was reused, and only the superseded generated preview
+app was retired. Production installation remains held for operator review; physical Windows/Linux
+gestures are not yet verified. A fresh upstream-main fetch found no additional changes. Preserve
+the separately pending Windows version/update work when integrating it later.
+
+## October 22 — stabilization and scoped follow-along
+
+Start with [the current architecture](architecture.md), [stabilization ledger](stabilization-plan.md),
+[project follow-along](project-follow.md), and [account services](account-services.md).
+This work builds on `b7701c0`, including the merged agent chat-control feature and 0.2.28 source.
+A fresh upstream-main check found no additional commits. The Windows installer/update work is
+still separate; preserve its platform-specific fixes when integrating it later. Likely overlap
+includes package provenance, updater helpers, build scripts, and release documentation.
+
+The implementation preserves local browser authentication, full navigation history, drafts,
+approvals, durable retries, and terminal ownership. Automatic follow applies only to the selected
+owner workspace/project. Terminal output remains owner-only by operator choice; the license
+also remains unchanged. Source validation is separate from physical-device installation,
+website deployment, Apple signing review, and actual provider continuation.
+
+Acceptance: 976 integrated Node tests and recursive static checks pass. Isolated encrypted
+two-desktop follow-along, native background-tab focus and link-menu behavior, native browser
+and HTML-preview scroll, retained long chat/browser histories, terminal lifecycle, narrow UI,
+account/Life and web checks passed. See the ledger for metrics and unverified live boundaries.
+No installed app or live backup was changed.
+
 ## October 22 — agent chat control integrated into current source
 
 The operator authorized implementation, demo/cross-device tests and integration of feature
@@ -19,6 +92,53 @@ Temporary Linux pairing revoked and synthetic chats archived; existing owner sta
 Real local Copilot/Codex tool calls pass. Those real-provider/physical checks were not repeated
 for this merge; runtime and test files are byte-identical to the feature commit. Live Claude
 and installed-feature rollout remain unverified.
+## October 22 — Windows chrome follow-up
+
+The Mac handoff is delivered and Windows build `windows.2cf4ad5cdad6` is now published at
+https://downloads.proteus.example/downloads/proteus/windows/ with its signed stable catalog. The Mac verifies all five
+public hashes, signature and full binary downloads. The actual installed Windows owner checks
+the catalog, and its installed feed client downloads all 393,649,640 bytes from the real endpoint,
+verifies/extracts the exact package and passes isolated renderer preparation. The already installed
+current build is not redundantly reinstalled. Windows relay registration and online transport
+preserve the existing identity/token; bidirectional/device pairing remains pending the supported
+live pairing UI. Registration alone is not pairing. Exact private deployment receipts remain in
+the deployment workspace. Earlier publication holds and unavailable-host notes below are historical.
+
+The operator requested Windows match Linux's frameless window controls and application menu.
+The shared host/renderer implementation now includes Windows; source UI acceptance verifies
+native minimize/maximize/restore, menu popup/F10, additional windows and sender ownership.
+The Mac connection is restored and the authorized handoff reached Proteus Windows Build.
+Publication activation waits for the replacement exact tested Windows artifact/source transfer.
+
+Replacement `windows.2cf4ad5cdad6` passes 887 of 889 tests (two existing POSIX skips), static
+checks and the same actual packaged chrome UI checks. Its official signed offline release was
+consumed by the existing installed owner: protocol-1 NSIS replacement and restarted renderer health
+pass, with exact installed payload, stable identity and current runs/schedules preserved. One
+verified recovery generation remains. Prior build6e real-chat update/rollback acceptance was not
+repeated for this chrome-only follow-up. Physical window dragging is not claimed.
+
+## October 22 — Windows WTB release acceptance
+
+The latest operator choice selects downloads.proteus.example Windows downloads, an unsigned conventional installer
+and signed update manifests. The Windows branch integrates upstream `5b8b708` (0.2.28). Build
+`windows.6e46560c3ce5` freezes 308 runtime files. Validation passes 886 of 888 tests with two existing
+POSIX skips and static checks. Exact packaged UI, native PTY, provider readiness, rehearsal
+persistence and restart pass. Real NSIS checks cover payload equality, URI registration, offline
+preparation/cancellation, active-app refusal and uninstall preservation. The final build passes a
+real Codex update with the original session automatically resumed once and history/receipts intact.
+Its packaged WTB client downloads and verifies the complete locally served publication archive.
+An injected health failure also passes compatible rollback with the same real session resumed once.
+The final installer is installed locally; the actual renderer, normal restart, stable host identity,
+single owner and disabled debugging are verified. The new browser profile inherited extra Windows
+ACL grants; after inspection its permissions were restricted without changing contents. The live
+home has no chats or enabled schedules and no recovery generations. The separate website service
+passes 27 focused release/Life/native-auth tests. See [Windows instructions](windows-app.md).
+
+WTB publication is authorized for this Windows scope and remains staged. The Windows host has no
+deployment workspace or signed-in Webmin session; the coordinating Mac chat is not addressable from
+its thread tools. The operator authorized the Mac handoff. Actual WTB endpoint/consumer acceptance
+and existing relay/device pairing still require the private deployment workflow and registration
+record. No Mac/iOS signing identity or existing device data is changed by this Windows work.
 
 ## October 22 — source review and repository checkpoint
 

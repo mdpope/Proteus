@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -9,7 +10,7 @@ import { runSummary, remoteRun } from '../src/remote.js';
 const schedule=(cwd,prompt,name='Workspace chat',manual=false)=>({schemaVersion:1,id:'synthetic-'+Math.random().toString(36).slice(2),name,chatTitleManual:manual,enabled:false,cron:'0 9 * * 1-5',timezone:'UTC',provider:'rehearsal',model:'',workspace:{cwd,additionalDirectories:[]},misfire:'skip',prompt});
 
 test('chat title revisions survive restart and reject stale edits',async()=>{
-  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-chat-title-'));let engine=new Engine(home);
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-chat-title-'));let engine=new Engine(home);
   try{
     const run=engine.createRun(schedule(home,'Please investigate the archive menu behavior in Team Tools'),'chat',null,{deferStart:true});
     assert.equal(run.title,'investigate the archive menu behavior in Team Tools');
@@ -36,7 +37,7 @@ test('chat title revisions survive restart and reject stale edits',async()=>{
 });
 
 test('chat-only approval is isolated, revocable, context-bound and keeps filesystem grants',async()=>{
-  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-chat-permissions-'));let engine=new Engine(home);
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-chat-permissions-'));let engine=new Engine(home);
   try{
     const one=engine.createRun(schedule(home,'One'),'chat',null,{deferStart:true});
     const two=engine.createRun(schedule(home,'Two'),'chat',null,{deferStart:true});
@@ -77,7 +78,7 @@ test('chat-only approval is isolated, revocable, context-bound and keeps filesys
 });
 
 test('queued edits preserve identity and attachments and reject processed, stale and steering messages',async()=>{
- const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-edit-queue-')),engine=new Engine(home);
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-edit-queue-')),engine=new Engine(home);
  try{const run=engine.createRun(schedule(home,'Initial'),'chat',null,{deferStart:true});await engine.send(run.id,'Original','queue','message-one');const queued=run.queuedMessages[0];queued.attachmentDispatch={proofId:'synthetic-proof'};const model=queued.modelOptions;
  engine.editQueued(run.id,'message-one','Revised','Original');assert.equal(queued.prompt,'Revised');assert.equal(queued.modelOptions,model);assert.equal(queued.attachmentDispatch.proofId,'synthetic-proof');assert.equal(run.events.find(e=>e.data?.delivery?.id==='message-one').text,'Revised');assert.equal(remoteRun(run).queuedMessages[0].hasAttachments,true);
  assert.throws(()=>engine.editQueued(run.id,'message-one','Lost','Original'),/changed/);engine.queuedSteers.set(run.id,Promise.resolve());assert.throws(()=>engine.editQueued(run.id,'message-one','Lost','Revised'),/steering/);engine.queuedSteers.clear();run.queuedMessages=[];assert.throws(()=>engine.editQueued(run.id,'message-one','Lost','Revised'),/delivered/);

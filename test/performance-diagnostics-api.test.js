@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -6,7 +7,7 @@ import path from 'node:path';
 import {startServer} from '../src/server.js';
 
 test('performance diagnostics require local authentication and retain no application payloads',async()=>{
- const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-performance-api-'));let app;
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-performance-api-'));let app;
  try {
   fs.writeFileSync(path.join(home,'settings.json'),JSON.stringify({schemaVersion:1,provider:'rehearsal',model:'',timezone:'UTC',workspace:{cwd:home,additionalDirectories:[]},skillDirectories:[],mcpServers:{}}));
   app=await startServer({home,port:0,timers:false});

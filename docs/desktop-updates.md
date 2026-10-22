@@ -330,3 +330,84 @@ work** only after current package/UI identity verification; it preserves the fai
 and never replays its ambiguous continuation. This is separate from the automatic healthy restart
 or compatible-rollback continuation. Twelve synthetic updater cases pass; signed supervisor and
 real-provider acceptance remain pending.
+
+## October 22 package and storage hardening (implemented; not deployed)
+
+Mac and Linux packaging now share the versioned source-provenance implementation. The updater
+accepts both historical schema-1 fingerprints: the original runtime/build-input encoding and
+the later Mac encoding that also included `appBundleId`. New `fingerprintVersion: 2` manifests
+retain the source digest expected by protocol-1 updaters and additionally bind the declared
+bundle identity in `identityFingerprint`. Unknown fingerprint versions fail closed. Package
+inspection verifies the runtime files and actual Mac signature; compatibility requires the
+candidate to retain the **installed** bundle ID and Apple team. A hardcoded legacy ID no longer
+rejects another valid installation, and this does not authorize switching identities or signers.
+
+An old installed updater that already rejects its own bundle-ID-bearing source manifest, or
+hardcodes a different application identity, cannot bootstrap itself from a candidate it never
+accepts. That initial transition uses the existing authorized external exact-artifact procedure.
+The new candidate's source digest is backward readable for otherwise compatible protocol-1
+baselines. Synthetic digest/identity tests do not prove a signed old-binary-to-new-binary update;
+that remains a real package acceptance gate.
+
+Package inspection, hashing, private candidate copying and storage enumeration run in a worker
+away from the service event loop. Each owner permits one active package operation and at most
+four pending operations, and shutdown waits for pending work to settle. Initial runtime identity
+can report `identityPending` while inspection runs. The independent post-exit helper continues
+to own recovery copying and replacement.
+
+Cancelled-before-replacement candidates and completed candidates with a registered verified
+recovery receipt are eligible for staging retirement. Retirement checks the helper PID/lock,
+preserves unresolved phases, verifies the registered recovery receipt and deletes only that
+job's `candidate` directory. Job/checkpoint/preservation receipts remain. Cancellation attempts
+during another updater transition must wait. Candidate cleanup also runs before another prepare,
+so abandoned cancelled generations cannot accumulate full app copies. The retirement receipt
+records logical bytes, filesystem-reported allocation and observed free-space change. Active
+helpers, provider-waiting continuations and attention states retain their dependencies; they
+are not silently declared complete to recover disk space.
+
+Recovery copies flush bytes through a writable temporary file handle on Windows and Unix, then
+restore the source mode before snapshot verification, including for read-only source files. Source
+permissions remain unchanged and durability is not skipped when Windows rejects a read-only flush.
+
+Recovery snapshots use a restartable copy manifest with source-tree identity, cache policy and
+bounded progress checkpoints. Retry hashes existing target files and reuses matching files;
+changed source generations, symbolic-link parent escapes and changed recovery bytes stop without
+overwriting the retained generation. Final verification checks both source and destination.
+There is no additional after-copy of live data, and no data is restored over post-update work.
+The two-full-generation policy above is unchanged.
+
+Cache policy 1 applies **only inside the configured browser home**, including when that home
+is nested inside the application-data root. At its root, `Default/`, and `Partitions/<profile>/`,
+the explicit ordinary-cache allowlist is `Cache`, `Code Cache`, `GPUCache`, `DawnCache`,
+`DawnGraphiteCache` and `DawnWebGPUCache`. All `Service Worker/CacheStorage`, cookies, IndexedDB,
+local storage, extensions, session/history files, approvals, credentials and retry receipts are
+retained. Identically named directories elsewhere in application data are retained. Existing
+journals without the new cache policy keep their original full-data verification contract.
+Only recovery copies omit these caches; live profile files are never cleaned by this mechanism.
+
+The desktop owner's `storage` update action is read-only. For a broader operator inventory,
+run the following against exact canonical targets, adding each known legacy/build/release root:
+
+```sh
+node scripts/update-storage.mjs --home /absolute/data-home --installation /absolute/app-directory \
+  --artifact-root /absolute/release-artifact-root
+```
+
+This command never deletes anything. It reports candidate/recovery/artifact logical and allocated
+bytes, matching staged-package hashes, eligibility and errors. Recovery accounting includes all
+generation directories registered in `recovery-policy.json`, including external roots. Explicit
+artifact roots are accounting-only; they are never automatic deletion targets. Unregistered
+roots must still be supplied/inventoried by the operator. Overlapping roots and APFS shared
+extents mean these totals are not unique physical disk usage; retirement receipts separately
+record the actual observed free-space difference. Keep the output private because it contains
+installation paths and receipt locations.
+
+Focused synthetic regressions cover historical/new provenance, production Linux-inspector byte
+checks, signer identity compatibility, nonblocking worker copies, bounded queues, cancellation,
+helper locks, changed/missing recovery receipts, interrupted copy reuse, nested cache boundaries
+and retained website/offline data. No live backup, cleanup, application install, signer check or
+provider continuation was performed for this checkpoint. Validate the signed package and live
+restored profile in the existing authorized deployment workflow before marking a target verified.
+## Windows distribution integration (acceptance in progress)
+
+See [Windows desktop](windows-app.md) for the authenticated signed-manifest distribution, cached NSIS installer, fresh-home recovery inventory and exact-package commands. Engine Room may hand off without selecting a chat; original-chat handoff still requires its checkpoint and retains its one durable continuation ID. Existing recovery inventories remain mandatory for established homes. Windows installer/update/rollback acceptance is tracked separately from earlier signed Mac/Linux acceptance.

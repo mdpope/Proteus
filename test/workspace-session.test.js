@@ -1,3 +1,5 @@
+import {assertPrivate} from './helpers/permissions.js';
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -14,8 +16,8 @@ test('workspace validates URL schemes, credential URLs, paths, types and duplica
  assert.deepEqual(tabs.map(t=>t.id),['overview','x']);assert.equal(normalizeSession({active:'missing'}).active,'overview');
 });
 test('workspace survives fresh store, saves mode0600 and preserves unreadable record',()=>{
- const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-workspace-'));
- try {const store=new WorkspaceSession(home);assert.equal(store.get(),null);store.save({active:'feature-omi',tabs:[{id:'feature-omi',type:'omi'}]});assert.equal(new WorkspaceSession(home).get().active,'feature-omi');assert.equal(fs.statSync(store.file).mode&0o777,0o600);fs.writeFileSync(store.file,'invalid');assert.throws(()=>store.get(),/preserved/);assert.equal(fs.readFileSync(store.file,'utf8'),'invalid');}finally{fs.rmSync(home,{recursive:true,force:true});}
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-workspace-'));
+ try {const store=new WorkspaceSession(home);assert.equal(store.get(),null);store.save({active:'feature-omi',tabs:[{id:'feature-omi',type:'omi'}]});assert.equal(new WorkspaceSession(home).get().active,'feature-omi');assertPrivate(store.file,0o600);fs.writeFileSync(store.file,'invalid');assert.throws(()=>store.get(),/preserved/);assert.equal(fs.readFileSync(store.file,'utf8'),'invalid');}finally{fs.rmSync(home,{recursive:true,force:true});}
 });
 test('restored generated document retains stable identity but no read grant or content',()=>{
  const hostId='12345678-1234-4123-8123-123456789abc',runId='chat-1',documentId='a'.repeat(64),parentId=`peer:${hostId}:${runId}`;
@@ -25,7 +27,7 @@ test('restored generated document retains stable identity but no read grant or c
  assert.doesNotMatch(JSON.stringify(saved),/grant|secret|enabled/);
 });
 test('selected chat child survives restart only while its parent and child remain valid',()=>{
- const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-workspace-'));
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-workspace-'));
  try {
   const store=new WorkspaceSession(home),tabs=[{id:'chat-a',type:'run',label:'A'},{id:'child-a',type:'browser',parentId:'chat-a',url:'https://example.test/'},{id:'chat-b',type:'run',label:'B'},{id:'child-b',type:'browser',parentId:'chat-b',url:'https://example.test/other'}];
   store.save({tabs,active:'child-a',selectedChildren:{'chat-a':'child-a','chat-b':'child-b',missing:'child-a','child-a':'child-b'}});
@@ -55,7 +57,7 @@ test('agent terminal serialization preserves the actual chat independently of wo
 });
 
 test('workspace save returns its committed normalized descriptors without requiring a disk reread',()=>{
- const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-session-save-result-'));
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-session-save-result-'));
  try{
   const store=new WorkspaceSession(home),saved=store.save({active:'feature-omi',tabs:[{id:'feature-omi',type:'omi'}]});
   assert.deepEqual(saved,store.get());assert.deepEqual(store.save(saved),saved);
@@ -64,7 +66,7 @@ test('workspace save returns its committed normalized descriptors without requir
 });
 
 test('project migration retains more than one hundred tabs, selections and browser history identities',()=>{
- const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-project-session-'));
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-project-session-'));
  try{
   const project={id:'project:local:default',type:'workspace',workspaceId:'work',projectId:'default',label:'General'};
   const tabs=[project,...Array.from({length:130},(_,i)=>({id:'browser-'+i,type:'browser',parentId:project.id,url:'https://example.test/'+i,hidden:i===5,unloaded:true,history:{entries:[{id:'entry-'+i,url:'https://example.test/'+i,title:'Page '+i}],index:0,currentEntryId:'entry-'+i,revision:7}}))];
@@ -86,4 +88,23 @@ test('remembered workspace project selection survives normalization without allo
  const value=normalizeSession({tabs,active:'inactive-terminal',selectedChildren:{workspace:'project',project:'chat','peer-workspace':'foreign-project'}});
  assert.equal(value.active,'inactive-terminal');assert.deepEqual(value.selectedChildren,{workspace:'project',project:'chat','peer-workspace':'foreign-project'});assert.ok(!value.tabs.find(tab=>tab.id==='project').parentId,'Top-level view identity remains unchanged');
  for(const id of ['foreign-project','other-project'])assert.equal(normalizeSession({tabs,selectedChildren:{workspace:id}}).selectedChildren.workspace,undefined);
+});
+
+test('pending local navigation survives a fresh session with every unsent stable entry and private redirect URL',()=>{
+ const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-pending-navigation-'));
+ try{
+  const entries=Array.from({length:140},(_,index)=>({id:'entry-'+index,url:'https://example.test/'+index,title:'Visit '+index,pageState:'PRIVATE_FORM'}));entries[2].url='https://example.test/oauth/callback?code=fixture#retained';entries[2].requestedURL='https://example.test/requested?return=%2Fdocument';
+  const history={entries,index:139,currentEntryId:'entry-139',revision:2},browser={id:'pending',type:'browser',url:entries.at(-1).url,history,navigationPending:true,unloaded:true};
+  new WorkspaceSession(home,{projects:true}).save({tabs:[browser],team:{tabs:[{...browser,id:'team-pending'}]}});
+  const saved=new WorkspaceSession(home,{projects:true}).get();
+  for(const restored of [saved.tabs.find(tab=>tab.id==='pending'),saved.team.tabs[0]]){assert.equal(restored.navigationPending,true);assert.equal(restored.history.entries.length,140);assert.equal(restored.history.entries[0].id,'entry-0');assert.equal(restored.history.entries[2].id,'entry-2');assert.equal(restored.history.entries[2].url,entries[2].url);assert.equal(restored.history.entries[2].requestedURL,entries[2].requestedURL);assert.equal(restored.history.currentEntryId,'entry-139');assert.equal(restored.history.revision,2);assert.doesNotMatch(JSON.stringify(restored),/PRIVATE_FORM|pageState/);}
+  const acknowledged=new WorkspaceSession(home,{projects:true}).save({tabs:[{...browser,navigationPending:false}]});assert.equal(acknowledged.tabs.find(tab=>tab.id==='pending').navigationPending,undefined);
+ }finally{fs.rmSync(home,{recursive:true,force:true});}
+});
+test('pending navigation requires a real stable logical stack and oversized pending data cannot replace the prior session',()=>{
+ const entry={id:'stable',url:'https://example.test/page',title:'Page'},history={entries:[entry],index:0,currentEntryId:'stable'};
+ for(const invalid of [{...history,currentEntryId:'wrong'},{...history,entries:[entry,entry]},{...history,entries:[{url:entry.url}]},{...history,revision:-1},{entries:[],index:-1,currentEntryId:null,revision:0},{...history,entries:[{...entry,url:'file:///secret'}]}]){const saved=normalizeSession({tabs:[{id:'browser',type:'browser',history:invalid,navigationPending:true}]},{projects:true});assert.equal(saved.tabs.find(tab=>tab.id==='browser')?.navigationPending,undefined);}
+ assert.equal(normalizeSession({tabs:[{id:'browser',type:'browser',history,navigationPending:'true'}]},{projects:true}).tabs.find(tab=>tab.id==='browser').navigationPending,undefined);
+ const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-pending-budget-'));
+ try{const store=new WorkspaceSession(home,{projects:true});store.save({tabs:[{id:'browser',type:'browser',history,navigationPending:true}]});const before=fs.readFileSync(store.file);const entries=Array.from({length:3000},(_,index)=>({id:'entry-'+index,url:'https://example.test/'+index+'?data='+'x'.repeat(3000)}));assert.throws(()=>store.save({tabs:[{id:'browser',type:'browser',navigationPending:true,history:{entries,index:2999,currentEntryId:'entry-2999',revision:1}}]}),/Pending browser history.*original record was preserved/);assert.deepEqual(fs.readFileSync(store.file),before);}finally{fs.rmSync(home,{recursive:true,force:true});}
 });

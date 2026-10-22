@@ -1,10 +1,63 @@
-import {chatHistoryWindowStart} from './chat-history.js';
-import {bindRuntimeTimer,formatDuration,turnDuration,runtimeTotal,toolDuration,groupDuration} from './runtime.js';
+import {chatHistoryWindowStart,firstAssistantKeys} from './chat-history.js';
+import {bindRuntimeTimer,refreshRuntimeTimers,disposeRuntimeTimers,formatDuration,turnDuration,runtimeTotal,toolDuration,groupDuration} from './runtime.js';
 import { mountMessageActions } from './message-actions.js';
 import { toolPresentation, mountStructured, normalizedTool, activitySummary, groupActivity, permissionToolCallId, toolEventTime } from './tool-presentation.js';
 import { agentName } from './agent-name.js';
 import { sentAttachmentPreview, openSentAttachmentPreview } from './chat-attachments.js';
 const views = new Map();
+const viewIn=root=>[...views.values()].find(view=>view.shell.isConnected&&(root===view.scroll||root===view.shell||root?.contains(view.scroll)));
+const eventIndex=key=>{const match=String(key||'').match(/^(?:activity-)?event-(\d+)$/);return match?Number(match[1]):null;};
+export function captureConversationPosition(root){
+ const view=viewIn(root);if(!view)return null;
+ const {scroll,messages}=view,top=scroll.getBoundingClientRect().top;
+ const node=[...messages.children].find(node=>node.getBoundingClientRect().bottom>top);
+ return {key:node?.dataset.key||'',...(node&&eventIndex(node.dataset.key)!==null?{index:eventIndex(node.dataset.key)}:{}),offset:node?node.getBoundingClientRect().top-top:0,follow:scroll.scrollHeight-scroll.clientHeight-scroll.scrollTop<40};
+}
+export async function applyConversationPosition(root,position,{current:isCurrent=()=>true,signal}={}){
+ const view=viewIn(root);if(!view||!position||!Number.isFinite(position.offset)||typeof position.key!=='string')return false;
+ const generation=view.followPositionGeneration=(view.followPositionGeneration||0)+1,controller=new AbortController();let cancelled=false;
+ const current=()=>!cancelled&&!signal?.aborted&&isCurrent()&&view.shell.isConnected&&viewIn(root)===view&&view.followPositionGeneration===generation;
+ const cancel=()=>{cancelled=true;controller.abort();};for(const type of ['wheel','touchstart','pointerdown','keydown'])view.scroll.addEventListener(type,cancel,{capture:true,passive:true,signal:controller.signal});
+ signal?.addEventListener('abort',cancel,{once:true,signal:controller.signal});
+ const wait=async work=>{
+  let abort;const cancelled=new Promise(resolve=>{abort=()=>resolve(false);controller.signal.addEventListener('abort',abort,{once:true});});
+  try{return await Promise.race([Promise.resolve(work).then(()=>true),cancelled]);}finally{controller.signal.removeEventListener('abort',abort);}
+ };
+ try{
+  if(!current())return false;
+  if(position.follow){view.following=true;view.position();return true;}
+  view.following=false;
+  const index=Number.isSafeInteger(position.index)&&position.index>=0?position.index:eventIndex(position.key);
+  while(current()&&index!==null&&index<view.eventStart){
+   if(view.paging||view.prefetching){await new Promise(resolve=>setTimeout(resolve,16));continue;}
+   const before=view.eventStart;if(!view.more||!view.fetchEarlier||view.pageError)return false;
+   if(!await wait(view.loadEarlier(true))||!current()||view.eventStart===before)return false;
+  }
+  if(!current())return false;
+  const nodes=[...view.messages.children];
+  const node=nodes.find(node=>node.dataset.key===position.key)||nodes.find(node=>{const start=eventIndex(node.dataset.key);return index!==null&&start!==null&&start<=index&&Number(node.dataset.eventEnd)>index;});
+  if(!node)return false;
+  view.updating=true;view.scroll.scrollTop+=node.getBoundingClientRect().top-view.scroll.getBoundingClientRect().top-position.offset;view.top=view.scroll.scrollTop;view.following=false;view.position();return true;
+ }finally{controller.abort();}
+}
+const positionRestorations=new WeakMap();
+export function restoreConversationPosition(root,position,{current=()=>true,signal}={}){
+ positionRestorations.get(root)?.();let stopped=false,applying=false,dirty=false,frame;
+ const controller=new AbortController(),active=()=>!stopped&&!signal?.aborted&&root.isConnected&&current();
+ const stop=()=>{if(stopped)return;stopped=true;cancelAnimationFrame(frame);observer.disconnect();controller.abort();if(positionRestorations.get(root)===stop)positionRestorations.delete(root);};
+ const schedule=()=>{if(!active()){stop();return;}dirty=true;if(applying||frame)return;frame=requestAnimationFrame(()=>{frame=null;void apply();});};
+ const apply=async()=>{
+  if(!active()){stop();return;}applying=true;dirty=false;
+  try{if(await applyConversationPosition(root,position,{current:active,signal:controller.signal}))stop();}
+  finally{applying=false;if(!active())stop();else if(dirty)schedule();}
+ };
+ // Watch lifetime as well as content readiness. Slow peer loads may finish long
+ // after tab selection; no timer may acknowledge an unapplied position.
+ const observer=new MutationObserver(records=>{if(!active()){stop();return;}if(records.some(record=>record.target===root||root.contains(record.target)))schedule();});
+ positionRestorations.set(root,stop);observer.observe(root.ownerDocument,{childList:true,subtree:true});
+ for(const type of ['wheel','touchstart','pointerdown','keydown'])root.addEventListener(type,stop,{capture:true,passive:true,signal:controller.signal});
+ signal?.addEventListener('abort',stop,{once:true,signal:controller.signal});schedule();return stop;
+}
 function readableOutput(value) {
   if (!value) return value;
   try {
@@ -62,7 +115,7 @@ export function conversation(target, run, options) {
     scroll.addEventListener('wheel', event => { if (event.deltaY < 0) {const now=Date.now();if(now-(view.lastHistoryGesture||0)>100){view.historyGestureAvailable=true;view.lastHistoryGesture=now;} view.updating = false; view.following = false; jump.hidden = false; void view.loadEarlier(); } }, { passive: true });
     scroll.addEventListener('touchstart',()=>{view.historyGestureAvailable=true;view.updating=false;view.following=false;},{passive:true});
     scroll.addEventListener('keydown',event=>{if(['ArrowUp','PageUp','Home'].includes(event.key)){view.historyGestureAvailable=true;view.updating=false;view.following=false;void view.loadEarlier();}});
-    jump.onclick = () => { view.following = true; position(); };
+    jump.onclick = () => { view.following = true;view.renderStart=(view.run.eventStart||0)+chatHistoryWindowStart(view.run.events);conversation(view.target,view.run,view.options); };
     view.observer = new ResizeObserver(position); view.observer.observe(messages); view.observer.observe(scroll);
   }
   view.run=run;view.options=options;view.target=target;
@@ -73,21 +126,23 @@ export function conversation(target, run, options) {
   const oldStart=view.eventStart,oldHeight=view.scroll.scrollHeight,oldTop=view.scroll.scrollTop;view.eventStart=view.renderStart;
   view.verified=run.runtimeVerified!==false;const receipt=Date.now(),hostAt=Date.parse(run.observedAt),now=()=>Number.isFinite(hostAt)?hostAt+Date.now()-receipt:Date.now();
   const durationText=value=>formatDuration(value)+(view.verified?'':' · offline, unverified');
-  bindRuntimeTimer(document.querySelector('[data-runtime-total]'),()=>durationText(runtimeTotal(run.turns,now(),view.verified))+((run.timingPartial||run.turns?.some(t=>t.incomplete))?' · partial':''));
+  bindRuntimeTimer(document.querySelector('[data-runtime-total]'),()=>durationText(runtimeTotal(run.turns,now(),view.verified))+((run.timingPartial||run.turns?.some(t=>t.incomplete))?' · partial':''),!!run.turns?.some(t=>t.activeSince));
   view.updating = true;
   if(view.shell.parentElement!==target)target.replaceChildren(view.shell);
   const entries = groupActivity([...run.events.slice(view.renderStart-transportStart).map((event, index) => ({ key: `event-${view.renderStart+index}`, ...event })), ...Object.entries(run.liveMessages || {}).map(([id, text]) => ({ key: `stream-${id}`, role: 'assistant', text, streaming: true,data:{turnId:run.turns?.at(-1)?.id} }))].filter(entry => entry.role !== 'assistant' || entry.text?.trim()));
   const nodes = new Map([...view.messages.children].map(node => [node.dataset.key, node]));
+  const firstAssistants=firstAssistantKeys(entries,run.events),turnsById=new Map((run.turns||[]).map(turn=>[turn.id,turn]));
   let next=view.messages.firstElementChild;
   const place=node=>{if(node===next)next=next.nextElementSibling;else view.messages.insertBefore(node,next);};
   for (const entry of entries) {
     let node = nodes.get(entry.key);
     if(entry.role==='activity'){
       if(!node){node=document.createElement('details');node.dataset.key=entry.key;node.className='activity-group';node.innerHTML='<summary></summary><div class="activity-group-items"></div>';}
+      node.dataset.eventEnd=String((eventIndex(entry.items.at(-1)?.key)??eventIndex(entry.key))+1);
       const tools=entry.items.filter(item=>item.data?.tool).map(item=>normalizedTool(item.data.tool)), approvals=entry.items.filter(item=>item.data?.permission?.automatic),decisions=entry.items.filter(item=>item.data?.permission&&!item.data.permission.automatic),systems=entry.items.filter(item=>!item.data?.tool&&!item.data?.permission&&item.role!=='tool');
       node.classList.toggle('running',tools.some(tool=>tool.status==='running'));
       node.classList.toggle('failed',tools.some(tool=>['failed','error','interrupted'].includes(tool.status)));
-      node.querySelector('summary').textContent=activitySummary(tools,approvals.length,decisions.length,systems.length);if(tools.length){const groupTimer=document.createElement('span');node.querySelector('summary').append(groupTimer);bindRuntimeTimer(groupTimer,()=>durationText(groupDuration(tools,now(),view.verified,run.turns)));}
+      node.querySelector('summary').textContent=activitySummary(tools,approvals.length,decisions.length,systems.length);if(tools.length){const groupTimer=document.createElement('span');node.querySelector('summary').append(groupTimer);bindRuntimeTimer(groupTimer,()=>durationText(groupDuration(tools,now(),view.verified,run.turns)),tools.some(tool=>tool.status==='running'&&!tool.finishedAt));}
       node.populateActivity=()=>{
         if(!node.open)return;
         const signature=JSON.stringify(entry.items.map(item=>[item.key,item.role,item.at,item.text,item.data]));
@@ -98,7 +153,7 @@ export function conversation(target, run, options) {
           if(item.data?.tool||item.role==='tool'){
             const tool=normalizedTool(item.data?.tool||{name:'Tool output',status:'output',output:item.text}),presentation=tool.presentation||toolPresentation(tool);row.classList.add(tool.status||'completed');
             const title=document.createElement('strong'),icon=document.createElement('span');icon.className='tool-icon'+(tool.status==='running'?' spinner':'');icon.setAttribute('aria-hidden','true');icon.textContent=tool.status==='running'?'':tool.status==='completed'?'✓':'!';title.append(icon,document.createTextNode(' '+(tool.summary||tool.name||'Tool')));row.append(title);
-            const status=document.createElement('div');status.className='note';const at=toolEventTime(tool,item);status.textContent=(tool.status==='running'?'Working…':tool.status==='failed'?'Failed':tool.status==='completed'?'Completed':tool.status)+(at?' · '+(options.activityTime||options.time)(at):' · Completion time unavailable');row.append(status);const timer=document.createElement('span');status.append(timer);bindRuntimeTimer(timer,()=>durationText(toolDuration(tool,now(),view.verified,run.turns)));
+            const status=document.createElement('div');status.className='note';const at=toolEventTime(tool,item);status.textContent=(tool.status==='running'?'Working…':tool.status==='failed'?'Failed':tool.status==='completed'?'Completed':tool.status)+(at?' · '+(options.activityTime||options.time)(at):' · Completion time unavailable');row.append(status);const timer=document.createElement('span');status.append(timer);bindRuntimeTimer(timer,()=>durationText(toolDuration(tool,now(),view.verified,run.turns)),tool.status==='running'&&!tool.finishedAt&&!Number.isFinite(tool.durationMs));
             if(tool.callId){const reference=document.createElement('div');reference.className='note tool-call-reference';reference.textContent='Tool call '+tool.callId;row.dataset.toolCallId=tool.callId;row.append(reference);}
             for(const fact of presentation.facts.filter(f=>f.label==='Pattern')){const line=document.createElement('div');line.className='tool-search-pattern';line.textContent='Pattern: '+fact.value;row.append(line);}
             if(presentation.error){const error=document.createElement('p');error.className='tool-error';error.textContent=presentation.error;row.append(error);}
@@ -133,7 +188,7 @@ export function conversation(target, run, options) {
       node.querySelector('.tool-icon').className = 'tool-icon' + (tool.status === 'running' ? ' spinner' : '');
       node.querySelector('.tool-icon').textContent = tool.status === 'running' ? '' : tool.status === 'completed' ? '✓' : '!';
       node.querySelector('.tool-summary').textContent = tool.summary;
-      node.querySelector('.tool-status').textContent = tool.status;const toolTimer=document.createElement('span');node.querySelector('.tool-status').append(toolTimer);bindRuntimeTimer(toolTimer,()=>durationText(toolDuration(tool,now(),view.verified,run.turns)));
+      node.querySelector('.tool-status').textContent = tool.status;const toolTimer=document.createElement('span');node.querySelector('.tool-status').append(toolTimer);bindRuntimeTimer(toolTimer,()=>durationText(toolDuration(tool,now(),view.verified,run.turns)),tool.status==='running'&&!tool.finishedAt&&!Number.isFinite(tool.durationMs));
       const content = node.querySelector('.tool-content');
       const presentation = toolPresentation(tool);
       const pattern=presentation.facts.find(f=>f.label==='Pattern');if(pattern)node.querySelector('.tool-summary').textContent=(tool.summary||tool.name)+' · '+pattern.value;
@@ -154,6 +209,7 @@ export function conversation(target, run, options) {
       place(node); nodes.delete(entry.key); continue;
     }
     if (!node) { node = document.createElement('div'); node.className = 'message'; node.dataset.key = entry.key; node.innerHTML = '<div class="role"></div><div class="text"></div>'; }
+    if(eventIndex(entry.key)!==null)node.dataset.eventEnd=String(eventIndex(entry.key)+1);
     node.messageMarkdown=entry.text||'';
     node.className = `message ${['user', 'assistant', 'tool', 'system'].includes(entry.role) ? entry.role : 'system'}`;
     node.firstChild.textContent = `${entry.data?.delivery ? ({queued:'Queued next',steered:'Steering',sending:'Sending steering',failed:'Not delivered',removed:'Removed from queue',delivered:'Queued message delivered'}[entry.data.delivery.state] || '') + ' · ' : ''}${entry.role === 'assistant' ? entry.agentName || agentName(run) : entry.role}${entry.streaming ? ' · streaming' : entry.at ? ' · ' + options.time(entry.at) : ''}`;
@@ -161,9 +217,8 @@ export function conversation(target, run, options) {
     if(entry.data?.questionReply)node.dataset.requestId=entry.data.questionReply.requestId;
     if(entry.data?.agentFeedback)node.firstChild.textContent=`Task feedback${entry.at?' · '+options.time(entry.at):''}`;
     if(entry.role==='assistant'){
-      const turn=run.turns?.find(t=>t.id===entry.data?.turnId)||(entry.streaming?run.turns?.at(-1):null);
-      const first=entry.streaming?!(run.events||[]).some(e=>e.role==='assistant'&&e.data?.turnId===turn?.id):!entries.some(e=>e.key!==entry.key&&e.role==='assistant'&&e.data?.turnId===turn?.id&&entries.indexOf(e)<entries.indexOf(entry));
-      if(first){const timer=document.createElement('span');node.firstChild.append(timer);bindRuntimeTimer(timer,()=>durationText(turnDuration(turn,now(),view.verified))+(turn?.incomplete?' · partial':''));}
+      const turn=turnsById.get(entry.data?.turnId)||(entry.streaming?run.turns?.at(-1):null);
+      if(firstAssistants.has(entry.key)){const timer=document.createElement('span');node.firstChild.append(timer);bindRuntimeTimer(timer,()=>durationText(turnDuration(turn,now(),view.verified))+(turn?.incomplete?' · partial':''),!!turn?.activeSince);}
     }
     if(entry.data?.permission&&!entry.data.permission.automatic){let details=node.querySelector('.permission-original');if(!details){details=document.createElement('details');details.className='permission-original';node.append(details);}details.replaceChildren();const summary=document.createElement('summary');summary.textContent=entry.data.permission.intention||'Original approval request';const pre=document.createElement('pre');pre.textContent=entry.data.permission.request||'Original request was not recorded by this version.';details.append(summary,pre);}
     const body=node.querySelector('.text');
@@ -191,6 +246,6 @@ export function conversation(target, run, options) {
   if(oldStart!==undefined&&view.eventStart<oldStart&&!view.following)view.top=oldTop+view.scroll.scrollHeight-oldHeight;
   view.position();requestAnimationFrame(()=>void view.loadEarlier());
 }
-export function forgetConversation(id) { const view = views.get(id); view?.observer.disconnect();view?.messages.querySelectorAll('.message').forEach(node=>node.messageActions?.destroy()); if (view) cancelAnimationFrame(view.frames); views.delete(id); }
+export function forgetConversation(id) { const view = views.get(id); view?.observer.disconnect();disposeRuntimeTimers(view?.shell);view?.messages.querySelectorAll('.message').forEach(node=>node.messageActions?.destroy()); if (view) cancelAnimationFrame(view.frames); views.delete(id); }
 
-export function setConversationVerified(id,verified){const view=views.get(id);if(view)view.verified=verified;}
+export function setConversationVerified(id,verified){const view=views.get(id);if(view){view.verified=verified;refreshRuntimeTimers(view.shell);refreshRuntimeTimers(document.querySelector('[data-runtime-total]')?.parentElement);}}

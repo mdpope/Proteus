@@ -1,3 +1,5 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {cleanupStack} from './helpers/cleanup.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -10,14 +12,15 @@ import {atomicJSON} from '../src/files.js';
 import {codexSandbox} from '../src/codex.js';
 
 function fixture(t){
- const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'proteus-project-migration-'))),home=path.join(root,'data'),cwd=path.join(root,'work'),library=path.join(root,'library');
+ const cleanup=cleanupStack(t);
+ const root=fs.realpathSync(privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-project-migration-'))),home=path.join(root,'data'),cwd=path.join(root,'work'),library=path.join(root,'library');
  fs.mkdirSync(cwd);fs.mkdirSync(library);fs.writeFileSync(path.join(library,'AGENTS.md'),'# Synthetic source\nPreserve selection.');
- t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+ cleanup(()=>fs.rmSync(root,{recursive:true,force:true}));
  const settings=new SettingsStore(home,cwd),context=new ContextStore(home,settings);
  context.mutate(config=>{config.workspaces[0].libraryFolders=[library];config.workspaces[0].universalFolders=[library];config.extension={retain:true};},context.config().revision);
  const entry=context.get().entries.find(entry=>entry.path===path.join(library,'AGENTS.md'));
  context.mutate(config=>{config.workspaces[0].defaults={selectedIds:[entry.id],includeDefaults:false};config.workspaces[0].favorites=[entry.id];config.workspaces[0].approvals={mode:'custom',folders:[{path:cwd,access:'read-write'}],rules:[],readOnlyTools:false};},context.config().revision);
- return {root,home,cwd,library,settings,context,entry};
+ return {root,home,cwd,library,settings,context,entry,cleanup};
 }
 
 test('production catalog migration is additive, idempotent and preserves source execution context and durable files',async t=>{
@@ -56,7 +59,7 @@ test('legacy chat placement gains a project without recreating resources or alte
 
 test('production owner API and remote adapter advertise projects, route creation and preserve preview isolation',async t=>{
  const f=fixture(t),{startServer}=await import('../src/server.js'),{remoteState}=await import('../src/remote.js');
- const app=await startServer({home:f.home,port:0,timers:false,withSeed:false,providers:{rehearsal:{async run(){}}}});t.after(()=>app.close());app.engine.drain=async()=>{};
+ const app=await startServer({home:f.home,port:0,timers:false,withSeed:false,providers:{rehearsal:{async run(){}}}});f.cleanup(()=>app.close());app.engine.drain=async()=>{};
  const call=async(route,value)=>{const response=await fetch(app.origin+route,{headers:{authorization:'Bearer '+app.token,'content-type':'application/json'},...(value?{method:'POST',body:JSON.stringify(value)}:{})});return {status:response.status,data:await response.json()};};
  const state=(await call('/api/state')).data;assert.equal(state.desktopPreview,undefined);assert.equal(state.workspaceProjects.enabled,true);assert.equal(app.desktopPreview,null);assert.equal(app.engine.permissions.preserveInheritedDefaults,true);
  assert.equal((await call('/api/desktop-preview')).status,404);let catalog=(await call('/api/workspace-projects')).data;

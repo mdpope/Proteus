@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -10,7 +11,7 @@ import { secret } from '../src/remote-crypto.js';
 import { RemoteClient, until } from './remote-client.mjs';
 
 test('remote documents allow one-time shares or direct device access with identity and revocation checks', async t=>{
-  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-doc-grant-'));
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-doc-grant-'));
   atomicJSON(path.join(home,'settings.json'),{schemaVersion:1,provider:'rehearsal',model:'',timezone:'UTC',workspace:{cwd:home,additionalDirectories:[]},skillDirectories:[],mcpServers:{}});
   const file=path.join(home,'brief.md');fs.writeFileSync(file,'# Approved bytes\n');
   const token=secret(),relay=await startRelay({port:0,token}),app=await startServer({home,port:0,timers:false});
@@ -38,7 +39,7 @@ test('remote documents allow one-time shares or direct device access with identi
 });
 
 test('remote document image and relative link stay inside one exact parent approval',async t=>{
-  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-doc-assets-'));
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-doc-assets-'));
   atomicJSON(path.join(home,'settings.json'),{schemaVersion:1,provider:'rehearsal',model:'',timezone:'UTC',workspace:{cwd:home,additionalDirectories:[]},skillDirectories:[],mcpServers:{}});
   const png=Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000b49444154789c636000020000050001a5f645400000000049454e44ae426082','hex');
   fs.writeFileSync(path.join(home,'chart.png'),png);fs.writeFileSync(path.join(home,'brief.md'),'# Brief\n![Chart](chart.png)\n[More](more.md)\n');fs.writeFileSync(path.join(home,'more.md'),'# Linked\n');

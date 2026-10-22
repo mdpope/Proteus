@@ -1,3 +1,5 @@
+import {assertPrivate} from './helpers/permissions.js';
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -11,7 +13,7 @@ const digest = value => createHash('sha256').update(value).digest('hex');
 const owner = { chatId: 'chat-1', deviceId: 'device-1', messageId: 'message-1', providerId: 'codex' };
 
 async function fixture(run) {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-attachments-test-'));
+  const home = privateTemporaryDirectory(path.join(os.tmpdir(), 'proteus-attachments-test-'));
   const store = new ChatAttachmentStore(home);
   try { await run(store, home); } finally { await store.close(); fs.rmSync(home, { recursive: true, force: true }); }
 }
@@ -29,8 +31,8 @@ test('stages bounded bytes under private paths and binds a finished image to its
   const resolved = await store.resolve({ attachmentId: finished.attachmentId, ...owner });
   assert.deepEqual(fs.readFileSync(resolved.path), png);
   assert.equal(path.dirname(path.dirname(resolved.path)), path.join(home, 'chat-attachments'));
-  assert.equal(fs.statSync(path.dirname(resolved.path)).mode & 0o777, 0o700);
-  assert.equal(fs.statSync(resolved.path).mode & 0o777, 0o600);
+  assertPrivate(path.dirname(resolved.path),0o700);
+  assertPrivate(resolved.path,0o600);
   assert.equal(await store.release({ attachmentId: finished.attachmentId, ...owner }), true);
   assert.equal(fs.existsSync(resolved.path), false);
 }));
@@ -57,7 +59,7 @@ test('rejects out-of-order, oversized, mismatched and disguised uploads', async 
 }));
 
 test('expires staged bytes and revokes every attachment owned by one device', async () => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-attachments-test-'));
+  const home = privateTemporaryDirectory(path.join(os.tmpdir(), 'proteus-attachments-test-'));
   let now = Date.now(); const store = new ChatAttachmentStore(home, { clock: () => now });
   try {
     const first = await store.begin({ ...owner, name: 'one.png', mediaType: 'image/png', size: png.length, sha256: digest(png) });
@@ -73,7 +75,7 @@ test('expires staged bytes and revokes every attachment owned by one device', as
 });
 
 test('accepted queued bytes survive staging TTL and restart until provider release', async () => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-attachments-test-'));
+  const home = privateTemporaryDirectory(path.join(os.tmpdir(), 'proteus-attachments-test-'));
   let now = Date.now(); let store = new ChatAttachmentStore(home, { clock: () => now });
   try {
     const begun = await store.begin({ ...owner, name: 'queued.png', mediaType: 'image/png', size: png.length, sha256: digest(png) });
@@ -152,7 +154,7 @@ test('one message accepts 256 tiny files but rejects a 257th and a 32 MiB aggreg
 }));
 
 test('active sequential upload refreshes earlier files but an idle batch expires', async () => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-attachments-sliding-'));
+  const home = privateTemporaryDirectory(path.join(os.tmpdir(), 'proteus-attachments-sliding-'));
   let now = Date.now(); const store = new ChatAttachmentStore(home, { clock: () => now });
   try {
     const first = await store.begin({ ...owner, name: 'first.png', mediaType: 'image/png', size: png.length, sha256: digest(png) });

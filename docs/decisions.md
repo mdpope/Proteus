@@ -1,3 +1,58 @@
+## October 22 — integrate Windows releases at existing service boundaries
+
+Keep release streaming and token refresh in AccountSession, so the extracted shared account
+service and its legacy Life alias use the same authenticated transport. Combine Windows installer
+recovery and atomic file replacement with the worker-based inspection and resumable recovery
+design, retaining strict versioned package provenance. The standalone Linux relay uses built-in
+owner/mode checks; load the Windows ACL helper only on Windows so its minimal container does not
+acquire a dependency on the desktop source tree. Source integration does not rebuild or republish
+the exact Windows artifact already accepted on the installed owner.
+
+Flush copied recovery bytes through a writable temporary handle on every platform; Windows
+requires it. Temporarily make only the new copy owner-writable and restore the original file mode
+before snapshot verification. Never change the source permissions or skip the durability flush.
+
+## October 22 — adopt the mobile pairing transport
+
+Promote the pending native RemoteStore into the saved destination after its credential/index
+write succeeds. Move its encrypted cache to the host-specific path after draining pending writes;
+retain the old destination's history on re-pair. Do not create a second socket or rely on a
+Task.yield handoff during authentication. Keep persisted pairing separate from authenticated
+connection success: an ephemeral completion event routes the UI only after `ready`, and ordinary
+reconnects cannot reissue that event. Failure still preserves durable keys and cached history.
+
+## October 22 — video gestures and extension placement
+
+Keep the existing native website WebContents in the detached video window. Isolated frame preloads
+forward only trusted numeric drag/pinch gestures; the host checks current player/frame/focus and
+applies bounded work-area geometry. Playback controls remain interactive. Do not mirror video or
+recreate the media stream. Keep pin/order preferences in the existing per-profile local extension
+registry, with cached icon metadata and explicit change notifications, rather than adding account
+sync or fetching installed files on every browser-state update. Hide reuses existing lifecycle
+operations, and new-tab gestures delegate to the existing scoped creation actions.
+
+The operator rejected the earlier Home URL/search entry. Remove it from both normal and error
+states, keep browsing in existing browser tabs, and make Proteus the primary Home heading.
+
+## 2026-10-22 — preserve durable state; synchronize visible presentation separately
+
+Keep durable tab/history ownership in ContentTabs and introduce a small ephemeral follow service
+for the selected owner project/workspace. Bind browser positions to navigation identity, use stable
+chat anchors, and coalesce replaceable gestures. Never transmit browser sessions or page contents.
+Join/read on entry; do not hydrate inactive scopes. Validate the existing document/resource boundary
+and avoid replaying old gestures after reconnect. The operator chose to keep terminal output local.
+
+Preserve full histories, native find, drafts, and selection: reduce layout work and reuse DOM instead
+of removing arbitrary loaded rows. Bound inactive history by count and serialized-byte estimate,
+while pinning active provider references. Keep atomic synchronous durability and remove only a
+proven duplicate save; do not introduce a new event format in a performance refactor.
+
+Use versioned updater provenance with installation-bound identity and worker I/O. Recovery follows
+two verified generations per installation/device, narrowly excludes disposable caches, and resumes
+verified partial copies. Storage accounting is read-only by default; cleanup retains active helper
+and unresolved recovery dependencies. Shared-account auth is independent of Life, preserving the
+existing vault/consent while adding optional projections. Leave the root license unchanged.
+
 ## 2026-10-22 — host-owned agent chat authority and durable feedback
 
 Use one `ChatControl` service for internal provider tools and external local MCP, layered on
@@ -11,6 +66,29 @@ separate from external workflow success. Require owner capability for atomic pro
 mutations rather than weakening scope during mixed-version operation. Develop in isolation
 from concurrent source edits, integrate only the feature delta after review, and hold
 installation/deployment for operator review.
+## 2026-10-22 — Windows reuses Linux desktop chrome
+
+Use the existing shared frameless shell and native popup menu on Windows, including sender-bound
+window actions and menu command routing. Preserve native accelerators and F10 access instead of
+adding a separate menu implementation. macOS retains its native traffic lights and menu.
+
+## 2026-10-22 — Windows distribution and recovery use the existing owner protocol
+
+The operator selected a conventional per-user installer and an initially unsigned Windows
+executable. The latest distribution authorization selects downloads.proteus.example, superseding the initial
+proteus.example choice for Windows. Pin an independent Ed25519 publisher public key in the client;
+keep the private key outside checkout and server. Bind the WTB origin, exact archive, installer,
+platform/architecture and package/source identities in the signed manifest. Keep account OAuth
+credentials separate from the static WTB channel and reject redirects. Require explicit operator
+or chat handoff after download and isolated acceptance; do not add unattended updates. Preserve
+existing trust keys and compatible offline manifests; download channels cannot replace trust.
+
+Windows replacement uses the registered cached NSIS installer rather than renaming a running
+application directory. Keep one exact previous installer in each verified recovery application;
+restore application bytes without overwriting newer data or retry receipts. Preserve the existing
+protocol-1 idle barrier, helper journal and same-chat delivery ID. A standalone Engine Room update
+needs no model chat. New homes may initialize empty recovery policy; existing homes require the
+operator inventory and the established two-generation retention procedure.
 
 ## 2026-10-22 — Preserve Apple request continuity in Proteus
 
@@ -2097,3 +2175,10 @@ Explicit locking/sleep and OS policy remain in control. The setting is local to 
 restart/update returns to off. All 865 Node tests and syntax checks pass. Isolated Electron UI acceptance verifies the native
 macOS display-sleep assertion, background operation, toggle-off and quit cleanup. Packaging is
 in progress; installed apps are unchanged.
+## October 22 — bounded Windows atomic replacement
+
+Installed acceptance exposed a transient Windows sharing violation while replacing a chat-state
+document. Atomic state writers now share a bounded Windows-only rename retry (at most ten short
+waits). They retry the replacement operation without deleting the old document or weakening ACLs.
+Persistent denials still fail, and other platform/error behavior stays immediate. A real Windows
+reader-lock fixture verifies replacement after the reader releases the file.

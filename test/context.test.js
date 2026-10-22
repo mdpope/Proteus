@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import { fakeSession } from './fake-copilot.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -12,7 +13,7 @@ import { CredentialBroker, BitwardenCLI } from '../src/credentials.js';
 import { exportTranscript } from '../src/transcripts.js';
 
 function fixture(t, beforeRemove) {
-  const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-context-test-')));
+  const home = fs.realpathSync(privateTemporaryDirectory(path.join(os.tmpdir(), 'proteus-context-test-')));
   t.after(async () => { await beforeRemove?.(); fs.rmSync(home, { recursive: true, force: true }); });
   const repo = path.join(home, 'project'); const library = path.join(home, 'library');
   fs.mkdirSync(repo); fs.mkdirSync(library);

@@ -1,6 +1,6 @@
 const icon = paths => `<svg viewBox="0 0 24 24" aria-hidden="true">${paths}</svg>`;
 export function createWindowChrome(desktop, notify) {
-  if (desktop?.platform !== 'linux') return { html: '', mount() {} };
+  if (!['linux', 'win32'].includes(desktop?.platform)) return { html: '', mount() {} };
   document.body.classList.add('linux-window-chrome');
   let root, menuOpen = false;
   const maximize = icon('<rect x="6" y="6" width="12" height="12" rx="1"/>');

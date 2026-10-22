@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {browserDestination,browserDestinations,previewChatResourcePlacement,previewContentSession} from '../src/browser-destinations.js';
@@ -13,7 +14,7 @@ test('preview legacy content seeding excludes project resources and retains dire
 test('document creation finishing after project deletion keeps source authorization and resolves its new project',async t=>{
  const fs=await import('node:fs'),os=await import('node:os'),path=await import('node:path');
  const {openChatDocument}=await import('../src/document-tools.js');
- const folder=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-preview-doc-delete-'));t.after(()=>fs.rmSync(folder,{recursive:true,force:true}));
+ const folder=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-preview-doc-delete-'));t.after(()=>fs.rmSync(folder,{recursive:true,force:true}));
  const file=path.join(folder,'sample.md');fs.writeFileSync(file,'Synthetic document.');
  const run={id:'chat',schedule:{workspace:{cwd:folder,additionalDirectories:[]}}},catalog={projects:[{id:'old',workspaceId:'w'},{id:'target',workspaceId:'w',name:'Target'}]},grants=[];let opened;
  const service={engine:{getRun:()=>run},workspaceFiles:{roots:()=>({roots:[{id:'root',available:true,path:folder}]}),read:()=>({file,content:'Synthetic document.'})},chatResourcePlacement:()=>({scope:'chat',id:'chat',parentId:'project:local:old',projectId:'old',projectName:'Old',workspaceId:'w'}),desktopPreview:{read:()=>catalog},contentTabs:{rememberSources(){},key(){},list:()=>[],authorizeDocumentPlacement:(...args)=>grants.push(args),get:()=>({revision:'fixture'}),mutateAsync:async()=>{catalog.projects=catalog.projects.filter(row=>row.id!=='old');catalog.projectRedirects={old:{workspaceId:'w',projectId:'target'}};}},onDocumentOpened:value=>opened=value};

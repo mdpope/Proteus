@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -8,7 +9,7 @@ import {ContextStore} from '../src/context.js';
 import {SettingsStore} from '../src/settings.js';
 import {workspaceCatalog,folderSourceModes} from '../public/workspace-ui.js';
 function fixture(t){
- const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'proteus-preview-sources-')));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+ const root=fs.realpathSync(privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-preview-sources-')));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
  const home=path.join(root,'home'),a=path.join(root,'a'),b=path.join(root,'b');fs.mkdirSync(a);fs.mkdirSync(b);
  seedDesktopPreview({home,workFolders:[{path:a,name:'A'},{path:b,name:'B'}]});const context=new ContextStore(home,new SettingsStore(home,a),{skipRefresh:true}),preview=new DesktopPreview(home,context);
  const write=(relative,text)=>{const file=path.join(root,relative);fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,text);return file;};

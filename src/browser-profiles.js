@@ -16,7 +16,7 @@ export function validateBrowserSettings(value){
 }
 export class BrowserProfiles {
   constructor(home,account){this.file=path.join(home,'browser-profiles.json');this.account=account;this.data=readJSON(this.file,{version:1,enabled:false,account:null,items:[],defaultSettings:{}});this.verified=false;this.error=null;}
-  identity(){this.account.life.api.load?.();return this.account.life.api.identity();}
+  identity(){const session=this.account.session||this.account.life.api;session.load?.();return session.identity();}
   key(identity=this.identity()){return identity?createHash('sha256').update(JSON.stringify([identity.origin,identity.accountId])).digest('hex'):null;}
   available(){return this.data.enabled&&!!this.identity()&&this.data.account===this.key();}
   list(){return {enabled:this.data.enabled,authenticated:!!this.identity(),available:this.available(),verified:this.verified,error:this.error,cached:this.available()&&!this.verified,items:[{id:'default',name:'Default',settings:this.data.defaultSettings||{}},...(this.available()?this.data.items:[])]};}

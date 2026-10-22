@@ -18,3 +18,5 @@
 #home-screen .home-guide{margin-top:18px;border-top:1px solid var(--proteus-line);padding-top:16px}#home-screen .home-guide[open]>summary{margin-bottom:20px}
 #home-screen .home-guide h1{font-size:23px}#home-screen .home-guide h2{margin-top:24px}#home-screen .home-guide pre{max-width:100%;overflow:auto}
 @media(max-width:420px){#home-screen .home-build{grid-template-columns:1fr;gap:12px;padding:18px}}
+
+#home-screen .home-heading .home-tagline{font-size:20px;line-height:1.4;color:var(--proteus-ink);margin:0 0 10px;font-weight:500}

@@ -1,12 +1,13 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createDesktopSnapshot, verifyDesktopMetadata, desktopRuntimeRoots, desktopRuntimeFiles, desktopPackageIgnore } from '../scripts/desktop-build.mjs';
+import { createDesktopSnapshot, createProvenance, verifyDesktopMetadata, desktopRuntimeRoots, desktopRuntimeFiles, desktopPackageIgnore } from '../scripts/desktop-build.mjs';
 
 test('Mac and Linux snapshots freeze runtime bytes and reject changed source or package extras', t => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-build-'));
+  const root = privateTemporaryDirectory(path.join(os.tmpdir(), 'proteus-build-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   for (const name of desktopRuntimeRoots) { fs.mkdirSync(path.join(root, name)); fs.writeFileSync(path.join(root, name, 'fixture.js'), '// synthetic'); }
   for (const name of desktopRuntimeFiles) fs.writeFileSync(path.join(root, name), 'synthetic');
@@ -36,10 +37,10 @@ test('both desktop packages exclude private configuration, web source, test stat
 });
 
 test('both desktop builds verify final version metadata and complete embedded provenance', t => {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-metadata-'));
+  const base = privateTemporaryDirectory(path.join(os.tmpdir(), 'proteus-metadata-'));
   t.after(() => fs.rmSync(base, { recursive: true, force: true }));
   const source = { name: 'synthetic', version: '1.2.3', buildRevision: 'source', private: true, scripts: { test: 'false' }, dependencies: { dependency: '1.0.0' } };
-  const provenance = { buildRevision: 'synthetic.123', sourceFingerprint: 'a'.repeat(64), runtimeFiles: { 'src/a.js': 'b'.repeat(64) } };
+  const provenance = createProvenance({ buildRevision: 'synthetic.123', runtimeFiles: { 'src/a.js': 'b'.repeat(64) }, buildInputs: {} });
   const metadata = { name: source.name, version: source.version, buildRevision: provenance.buildRevision, dependencies: source.dependencies };
   fs.writeFileSync(path.join(base, 'package.json'), JSON.stringify(metadata));
   fs.writeFileSync(path.join(base, 'build-source.json'), JSON.stringify(provenance));
@@ -50,3 +51,5 @@ test('both desktop builds verify final version metadata and complete embedded pr
   fs.writeFileSync(path.join(base, 'build-source.json'), JSON.stringify({ ...provenance, runtimeFiles: {} }));
   assert.throws(() => verifyDesktopMetadata(base, source, provenance), /source provenance/);
 });
+
+test('contributor and security documentation stay in the repository, outside app runtime',()=>{for(const file of ['/CONTRIBUTING.md','/SECURITY.md'])assert.ok(desktopPackageIgnore.some(pattern=>pattern.test(file)));});

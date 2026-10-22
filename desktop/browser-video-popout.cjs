@@ -1,12 +1,27 @@
 // Keep the actual Chromium player/WebContents alive. Never reload a media URL in
 // another profile: authenticated, streaming and DRM players own more than a URL.
-const {BrowserWindow,WebContentsView,ipcMain}=require('electron');
+const {BrowserWindow,WebContentsView,ipcMain,screen}=require('electron');
 const path=require('node:path');
+const {resizeVideoWindow,moveVideoWindow}=require('./video-window-geometry.cjs');
 class BrowserVideoPopout {
  constructor(browser){
   this.browser=browser;
   this.control=(event)=>{for(const tab of browser.tabs.values())if(tab.videoPopout?.controls.webContents===event.sender&&event.senderFrame===event.sender.mainFrame)this.close(tab);};
   this.activity=event=>{const tab=[...browser.tabs.values()].find(tab=>tab.view?.webContents===event.sender);if(tab?.videoPopout)this.wake(tab);};
+  this.gesture=(event,value)=>{
+   const tab=[...browser.tabs.values()].find(tab=>tab.view?.webContents===event.sender),item=tab?.videoPopout;
+   if(!item||item.window.isDestroyed()||!item.window.isFocused()||!event.sender.mainFrame.framesInSubtree.includes(event.senderFrame))return;
+   const bounds=item.window.getBounds();
+   if(value?.action==='drag-start'&&Number.isFinite(value.x)&&Number.isFinite(value.y)){item.drag={x:value.x,y:value.y,bounds,frame:event.senderFrame};return;}
+   if(value?.action==='drag-end'){item.drag=null;return;}
+   if(value?.action==='drag'&&item.drag?.frame===event.senderFrame&&Number.isFinite(value.x)&&Number.isFinite(value.y)){
+    const area=screen.getDisplayNearestPoint({x:Math.round(value.x),y:Math.round(value.y)}).workArea;
+    item.window.setBounds(moveVideoWindow(item.drag.bounds,area,value.x-item.drag.x,value.y-item.drag.y));
+   }else if(value?.action==='pinch'&&Number.isFinite(value.factor)&&value.factor>=.5&&value.factor<=2){
+    item.drag=null;item.window.setBounds(resizeVideoWindow(bounds,screen.getDisplayMatching(bounds).workArea,value.factor));
+   }
+  };
+  ipcMain.on('proteus:video-window-gesture',this.gesture);
   ipcMain.on('proteus:video-popout-close',this.control);ipcMain.on('proteus:video-activity',this.activity);
  }
  bind(tab){
@@ -37,6 +52,8 @@ class BrowserVideoPopout {
   const controls=new WebContentsView({webPreferences:{sandbox:true,contextIsolation:true,nodeIntegration:false,preload:path.join(__dirname,'browser-video-controls-preload.cjs')}});
   controls.setBackgroundColor('#00000000');
   tab.videoPopout={window,owner,controls,view};
+  for(const frame of view.webContents.mainFrame.framesInSubtree)try{frame.send('proteus:video-popout-state',true);}catch{}
+  window.on('blur',()=>{if(tab.videoPopout)tab.videoPopout.drag=null;});
   // Explicit removal also makes returning the view deterministic across platforms.
   owner.contentView.removeChildView(view);window.contentView.addChildView(view);window.contentView.addChildView(controls);
   const layout=()=>{if(window.isDestroyed())return;const {width,height}=window.getContentBounds();view.setBounds({x:0,y:0,width,height});controls.setBounds({x:0,y:0,width,height:44});};
@@ -49,6 +66,7 @@ class BrowserVideoPopout {
   const full=tab.websiteFullscreen;delete tab.websiteFullscreen;if(full&&!full.window.isDestroyed()){full.window.removeListener('resize',full.layout);if(!full.wasFullscreen)full.window.setFullScreen(false);this.browser.withTabWindow(tab,()=>this.browser.show(this.browser.active,this.browser.bounds));}
   const item=tab.videoPopout;if(!item){if(exit)this.exit(tab.view?.webContents);return;}
   delete tab.videoPopout;
+  if(!item.view.webContents.isDestroyed())for(const frame of item.view.webContents.mainFrame.framesInSubtree)try{frame.send('proteus:video-popout-state',false);}catch{}
   item.owner.removeListener('closed',item.ownerClosed);
   if(exit)this.exit(item.view.webContents);
   if(!item.window.isDestroyed())item.window.contentView.removeChildView(item.view);
@@ -59,6 +77,6 @@ class BrowserVideoPopout {
   if(!item.controls.webContents.isDestroyed())item.controls.webContents.close();
   if(!item.window.isDestroyed())item.window.destroy();
  }
- dispose(){for(const tab of this.browser.tabs.values())this.close(tab,false);ipcMain.removeListener('proteus:video-popout-close',this.control);ipcMain.removeListener('proteus:video-activity',this.activity);}
+ dispose(){for(const tab of this.browser.tabs.values())this.close(tab,false);ipcMain.removeListener('proteus:video-popout-close',this.control);ipcMain.removeListener('proteus:video-activity',this.activity);ipcMain.removeListener('proteus:video-window-gesture',this.gesture);}
 }
 module.exports={BrowserVideoPopout};

@@ -1,10 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import provenance from '../desktop/build-provenance.cjs';
+export const {createProvenance,validateProvenance}=provenance;
 
 export const desktopRuntimeRoots = ['desktop', 'public', 'src', 'schemas', 'templates', 'relay'];
 export const desktopRuntimeFiles = ['.gitignore', 'AGENTS.md', 'CHANGELOG.md', 'README.md'];
-export const desktopPackageIgnore = [/(?:^|\/)\.DS_Store$/, /(?:^|\/)\._[^/]*$/, /^\/(?:web|ios|test|docs|scripts|extensions|dist|coverage|local-records|\.runtime|\.git|\.github|\.agents|\.codex|\.aws)(?:\/|$)/, /^\/\.env/, /\.(?:log|xcresult)$/];
+export const desktopPackageIgnore = [/(?:^|\/)\.DS_Store$/, /(?:^|\/)\._[^/]*$/, /^\/(?:web|ios|test|docs|scripts|extensions|dist|coverage|work|outputs|local-records|\.runtime|\.git|\.github|\.agents|\.codex|\.aws)(?:\/|$)/, /^\/(?:CONTRIBUTING|SECURITY)\.md$/, /^\/\.env/, /\.(?:log|xcresult)$/];
 export const fileDigest = file => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 
 function collect(root, relative) {
@@ -21,7 +23,7 @@ function collect(root, relative) {
 export function createDesktopSnapshot(root, buildInputPaths, identity = {}) {
   const runtimeFiles = Object.fromEntries([...desktopRuntimeRoots.flatMap(name => collect(root, name)), ...desktopRuntimeFiles].sort().map(name => [name, fileDigest(path.join(root, name))]));
   const buildInputs = Object.fromEntries(buildInputPaths.map(name => [name, fileDigest(path.join(root, name))]));
-  const sourceFingerprint = createHash('sha256').update(JSON.stringify({ runtimeFiles, buildInputs, ...identity })).digest('hex');
+  const sourceFingerprint = createProvenance({runtimeFiles,buildInputs,...identity}).sourceFingerprint;
   const verifySource = () => {
     const current = [...desktopRuntimeRoots.flatMap(name => collect(root, name)), ...desktopRuntimeFiles].sort();
     if (JSON.stringify(current) !== JSON.stringify(Object.keys(runtimeFiles).sort())) throw new Error('Runtime source file-name set changed during packaging.');
@@ -40,6 +42,7 @@ export function createDesktopSnapshot(root, buildInputPaths, identity = {}) {
 }
 
 export function verifyDesktopMetadata(base, sourceMetadata, provenance) {
+  validateProvenance(provenance);
   const embedded = JSON.parse(fs.readFileSync(path.join(base, 'build-source.json'), 'utf8'));
   if (JSON.stringify(embedded) !== JSON.stringify(provenance)) throw new Error('Packaged source provenance differs from build snapshot.');
   const metadata = JSON.parse(fs.readFileSync(path.join(base, 'package.json'), 'utf8'));

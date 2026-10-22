@@ -58,6 +58,7 @@ class BrowserActions {
     try { browserName = app.getApplicationNameForProtocol('https://') || browserName; } catch {}
     return Menu.buildFromTemplate([
       {label:'Open Link in New Tab',...this.icon('NSAddTemplate'),click:run(async () => { const info = await this.browser.create(url,null,null,source); this.send({type:'select-tab',info,afterId:tab.id}); })},
+      {label:'Open Link in Background Tab',...this.icon('NSAddTemplate'),click:run(async()=>{const info=await this.browser.create(url,null,null,{...source,hidden:false,unloaded:false,background:true});this.send({type:'background-tab',info,afterId:tab.id});})},
       {label:'Open Link in Unloaded Tab',...this.icon('NSAddTemplate'),click:run(async()=>{const info=await this.browser.create(url,null,null,{...source,hidden:true,unloaded:true});this.send({type:'unloaded-tab',info,afterId:tab.id});})},
       {label:`Open Link in ${browserName.replace(/[\r\n]/g,' ').replace(/&/g,'&&')}`, ...this.icon('NSFollowLinkFreestandingTemplate'), click:run(() => shell.openExternal(url))},
       {type:'separator'},

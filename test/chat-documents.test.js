@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -6,7 +7,7 @@ import path from 'node:path';
 import { ChatDocumentApprovals } from '../src/chat-documents.js';
 
 test('one approved document version is readable only by its requesting device', t=>{
-  const root=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-chat-docs-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+  const root=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-chat-docs-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
   const file=path.join(root,'brief.md');fs.writeFileSync(file,'# First version\n');
   const run={id:'chat-1',schedule:{workspace:{cwd:root,additionalDirectories:[]}},events:[{role:'assistant',text:'Open [brief](brief.md) when ready.'}]};
   const engine={getRun:id=>{assert.equal(id,run.id);return run;}};
@@ -23,7 +24,7 @@ test('one approved document version is readable only by its requesting device', 
 });
 
 test('stable document ID re-requests a fresh approval after viewer restore',t=>{
-  const root=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-doc-stable-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+  const root=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-doc-stable-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
   fs.writeFileSync(path.join(root,'brief.md'),'# First\n');
   const run={id:'chat-stable',schedule:{workspace:{cwd:root,additionalDirectories:[]}},events:[{role:'assistant',text:'[brief](brief.md) and [section](brief.md#part)'}]};
   const engine={getRun:()=>run},approvals=new ChatDocumentApprovals({currentRoots:()=>[root]});
@@ -39,7 +40,7 @@ test('stable document ID re-requests a fresh approval after viewer restore',t=>{
 });
 
 test('linked anchors resolve to the same bounded file and grant revocation clears approvals',t=>{
-  const root=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-doc-anchor-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+  const root=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-doc-anchor-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
   fs.writeFileSync(path.join(root,'guide.md'),'# Guide\n');
   const run={id:'chat-2',schedule:{workspace:{cwd:root,additionalDirectories:[]}},events:[{role:'assistant',text:'See [section](guide.md#section).'}]};
   const engine={getRun:()=>run},approvals=new ChatDocumentApprovals();
@@ -51,7 +52,7 @@ test('linked anchors resolve to the same bounded file and grant revocation clear
 });
 
 test('deleting a chat revokes its pending and approved document requests only',t=>{
-  const root=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-doc-revoke-chat-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+  const root=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-doc-revoke-chat-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
   fs.writeFileSync(path.join(root,'brief.md'),'# Brief\n');
   const run=id=>({id,schedule:{workspace:{cwd:root,additionalDirectories:[]}},events:[{role:'assistant',text:'[brief](brief.md)'}]});
   const engine={getRun:id=>run(id)},approvals=new ChatDocumentApprovals();
@@ -64,7 +65,7 @@ test('deleting a chat revokes its pending and approved document requests only',t
 });
 
 test('removing a current workspace root or retargeting its symlink revokes reads',t=>{
-  const base=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-doc-root-'));t.after(()=>fs.rmSync(base,{recursive:true,force:true}));
+  const base=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-doc-root-'));t.after(()=>fs.rmSync(base,{recursive:true,force:true}));
   const first=path.join(base,'first'),second=path.join(base,'second'),root=path.join(base,'workspace');fs.mkdirSync(first);fs.mkdirSync(second);fs.symlinkSync(first,root);
   fs.writeFileSync(path.join(first,'brief.md'),'# Brief\n');fs.writeFileSync(path.join(second,'brief.md'),'# Brief\n');
   const run={id:'chat-root',schedule:{workspace:{cwd:root,additionalDirectories:[]}},events:[{role:'assistant',text:'See [brief](brief.md).'}]};
@@ -77,7 +78,7 @@ test('removing a current workspace root or retargeting its symlink revokes reads
 });
 
 test('linked HTML is bounded and exact-version approved without granting script execution',t=>{
-  const root=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-doc-html-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+  const root=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-doc-html-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
   const file=path.join(root,'preview.html');fs.writeFileSync(file,'<h1>Preview</h1><script>location.href="https://example.com"</script>');
   const run={id:'chat-html',schedule:{workspace:{cwd:root,additionalDirectories:[]}},events:[{role:'assistant',text:'Open [preview](preview.html).'}]};
   const engine={getRun:()=>run},approvals=new ChatDocumentApprovals({currentRoots:()=>[root]});
@@ -92,7 +93,7 @@ test('linked HTML is bounded and exact-version approved without granting script 
 });
 
 test('HTML manifest ignores fake image tags in script, comments and quoted attributes',t=>{
-  const root=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-doc-html-refs-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+  const root=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-doc-html-refs-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
   fs.writeFileSync(path.join(root,'preview.html'),`<!-- <img src="secret.png"> --><script>const fake = '<img src="secret.png">';</script><div data-fake='<img src="secret.png">'></div><p>Safe.</p>`);
   const run={id:'chat-html-refs',schedule:{workspace:{cwd:root,additionalDirectories:[]}},events:[{role:'assistant',text:'[preview](preview.html)'}]};
   const approvals=new ChatDocumentApprovals({currentRoots:()=>[root]});
@@ -100,7 +101,7 @@ test('HTML manifest ignores fake image tags in script, comments and quoted attri
 });
 
 test('approved raster manifest binds exact image bytes, device and composite version',t=>{
-  const root=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-doc-assets-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+  const root=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-doc-assets-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
   const png=Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000b49444154789c636000020000050001a5f645400000000049454e44ae426082','hex');
   fs.writeFileSync(path.join(root,'chart.png'),png);fs.writeFileSync(path.join(root,'brief.md'),'# Brief\n![Chart](chart.png)\n');
   const run={id:'chat-images',schedule:{workspace:{cwd:root,additionalDirectories:[]}},events:[{role:'assistant',text:'[brief](brief.md)'}]},engine={getRun:()=>run};
@@ -119,7 +120,7 @@ test('approved raster manifest binds exact image bytes, device and composite ver
 });
 
 test('relative document links require an approved parent and separate child approval',t=>{
-  const root=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-doc-links-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+  const root=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-doc-links-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
   fs.writeFileSync(path.join(root,'index.md'),'[Details](details.md)');fs.writeFileSync(path.join(root,'details.md'),'# Private details');
   const run={id:'chat-links',schedule:{workspace:{cwd:root,additionalDirectories:[]}},events:[{role:'assistant',text:'[index](index.md)'}]},engine={getRun:()=>run};
   const approvals=new ChatDocumentApprovals({currentRoots:()=>[root]});
@@ -137,7 +138,7 @@ test('relative document links require an approved parent and separate child appr
 });
 
 test('retargeting a relative link invalidates the approved parent manifest',t=>{
-  const root=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-doc-retarget-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+  const root=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-doc-retarget-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
   fs.writeFileSync(path.join(root,'index.md'),'[Details](details.md)');
   fs.writeFileSync(path.join(root,'first.md'),'# First');fs.writeFileSync(path.join(root,'second.md'),'# Second');
   fs.symlinkSync('first.md',path.join(root,'details.md'));
@@ -150,7 +151,7 @@ test('retargeting a relative link invalidates the approved parent manifest',t=>{
 });
 
 test('traversal, symlink escape, forged raster and image count fail before approval',t=>{
-  const base=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-doc-reject-'));t.after(()=>fs.rmSync(base,{recursive:true,force:true}));
+  const base=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-doc-reject-'));t.after(()=>fs.rmSync(base,{recursive:true,force:true}));
   const root=path.join(base,'root');fs.mkdirSync(root);fs.writeFileSync(path.join(base,'outside.png'),Buffer.from('89504e470d0a1a0a','hex'));
   const run={id:'chat-reject',schedule:{workspace:{cwd:root,additionalDirectories:[]}},events:[{role:'assistant',text:'[doc](doc.md)'}]};
   const approvals=new ChatDocumentApprovals({currentRoots:()=>[root]});

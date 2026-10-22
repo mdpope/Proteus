@@ -20,6 +20,7 @@ const showWindow = () => { const target=windows?.current()?.window;if(!target){i
 if(!desktopPreview)app.setName('Proteus');
 if (process.platform === 'linux') app.setDesktopName('proteus.desktop');
 process.env.PATH = launchPath(process.platform, require('node:os').homedir(), process.env.PATH);
+if(process.platform==='win32')require('../src/private-paths.cjs').ensurePrivateHome(app.getPath('userData'));
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   // CLI-driven updates and service stops use the same graceful shutdown as Quit.
@@ -43,6 +44,7 @@ else {
     const { startServer } = await import('../src/server.js');
     const { isWithin,defaultHome } = await import('../src/files.js');
     const {Updates,pendingUpdate}=await import('../src/updates.js');
+    const freshHome=!require('node:fs').existsSync(defaultHome());
     const installation=app.isPackaged?(process.platform==='darwin'?path.resolve(app.getAppPath(),'../../..'):path.resolve(app.getAppPath(),'../..')):null;
     const pendingRecovery=installation&&!desktopPreview?pendingUpdate(defaultHome(),installation):null;if(pendingRecovery)process.env.PROTEUS_UPDATE_JOB=pendingRecovery;
     const { CredentialBroker } = await import('../src/credentials.js');
@@ -96,7 +98,7 @@ else {
     // PTYs are desktop-only. Neither the HTTP API nor embedded web pages receive this bridge.
     terminals = new TerminalStore(service.home, { workspaceFiles: service.workspaceFiles });
     windows.handle('proteus:terminal', (event, value) => { trusted(event); if (event.senderFrame.parent !== null || event.senderFrame.routingId !== window.webContents.mainFrame.routingId || event.senderFrame.processId !== window.webContents.mainFrame.processId || closing) throw new Error('Terminal access is unavailable.'); return terminals.handle(value); });
-    windows.handle('proteus:artifact-preview', (event, value) => { trusted(event); if(event.senderFrame.parent!==null||event.senderFrame.routingId!==window.webContents.mainFrame.routingId||event.senderFrame.processId!==window.webContents.mainFrame.processId||closing)throw new Error('Document preview is unavailable.');if(value?.action==='hide')return preview.hide();if(value?.action==='show')return preview.show(value);throw new Error('Unknown document preview action.'); });
+    windows.handle('proteus:artifact-preview', (event, value) => { trusted(event); if(event.senderFrame.parent!==null||event.senderFrame.routingId!==window.webContents.mainFrame.routingId||event.senderFrame.processId!==window.webContents.mainFrame.processId||closing)throw new Error('Document preview is unavailable.');if(value?.action==='hide')return preview.hide();if(value?.action==='show')return preview.show(value);if(value?.action==='follow-scroll')return preview.followScroll(value);throw new Error('Unknown document preview action.'); });
     terminals.on('event', value => windows.broadcast('proteus:terminal-event',value));
     const { DesktopPeers } = await import('../src/desktop-peers.js');
     peers = new DesktopPeers(service.home, { safeStorage, localHostId: service.remote.info().hostId,browserHistory:service.browserHistory, diagnostics: service.performanceDiagnostics });
@@ -298,7 +300,7 @@ else {
     windows.handle('proteus:copy-text', (event, text) => { trusted(event); if (typeof text !== 'string' || text.length > 1_000_000) throw new Error('Invalid clipboard text.'); clipboard.writeText(text); });
     windows.handle('proteus:choose-paths', async (event, options) => {
       trusted(event); const folder = options.kind === 'folder';
-      const result = await dialog.showOpenDialog(windows.current().window, { properties: [...(options.kind==='update-candidate'?['openFile','openDirectory','treatPackageAsDirectory']:[folder?'openDirectory':'openFile']), ...(options.multiple ? ['multiSelections'] : [])], ...(folder||options.kind==='update-candidate' ? {} : { filters: [{ name: options.kind === 'workspace' ? 'VS Code workspace' : options.kind === 'life-profile' ? 'Private database profile' : options.kind === 'life-backup' ? 'Private SQL backup' : 'Markdown', extensions: options.kind === 'workspace' ? ['code-workspace'] : options.kind === 'life-profile' ? ['json'] : options.kind === 'life-backup' ? ['sql'] : ['md'] }] }) });
+      const result = await dialog.showOpenDialog(windows.current().window, { properties: [...(options.kind==='update-candidate'?['openFile','openDirectory','treatPackageAsDirectory']:[folder?'openDirectory':'openFile']), ...(options.multiple ? ['multiSelections'] : [])], ...(folder||options.kind==='update-candidate' ? {} : { filters: [{ name: options.kind === 'workspace' ? 'VS Code workspace' : options.kind === 'update-release' ? 'Signed Proteus release' : options.kind === 'life-profile' ? 'Private database profile' : options.kind === 'life-backup' ? 'Private SQL backup' : 'Markdown', extensions: options.kind === 'workspace' ? ['code-workspace'] : ['life-profile','update-release'].includes(options.kind) ? ['json'] : options.kind === 'life-backup' ? ['sql'] : ['md'] }] }) });
       return result.canceled ? [] : result.filePaths;
     });
     windows.handle('proteus:browser', (event, value) => {
@@ -354,7 +356,7 @@ else {
     configureWindow(windows.contexts.get(firstRecord.id));
     service.updateUIHealth=async()=>{for(const ctx of windows.contexts.values()){if(ctx.window.isDestroyed()||ctx.window.webContents.isLoading()||!await ctx.window.webContents.executeJavaScript("!!(document.querySelector('#topbar-home')&&document.querySelector('#main')&&window.desktop)"))return false;}return windows.contexts.size>0;};
     service.windowCount=()=>[...windows.contexts.values()].filter(ctx=>!ctx.window.isDestroyed()&&!ctx.window.webContents.isLoading()).length;
-    service.updates=new Updates(service,{packaged:app.isPackaged&&!desktopPreview,installation,browserHome:app.getPath('userData'),quit:()=>app.quit(),blockers:()=>[...terminals.sessions.values()].filter(session=>session.child&&session.status==='running'&&session.persistence!=='tmux').map(()=> 'A local terminal process is still attached. Finish or detach it before updating.').concat([...browser.tabs.values()].some(tab=>tab.agentActions||tab.downloads?.size)?['A browser operation or download is active.']:[])});
+    service.updates=new Updates(service,{packaged:app.isPackaged&&!desktopPreview,installation,freshHome,browserHome:app.getPath('userData'),quit:()=>app.quit(),blockers:()=>[...terminals.sessions.values()].filter(session=>session.child&&session.status==='running'&&session.persistence!=='tmux').map(()=> 'A local terminal process is still attached. Finish or detach it before updating.').concat([...browser.tabs.values()].some(tab=>tab.agentActions||tab.downloads?.size)?['A browser operation or download is active.']:[])});
     service.onUpdateResumed=runId=>{const ctx=service.windowForChat(runId);if(ctx)windows.run(ctx.id,()=>{showWindow();ctx.window.webContents.send('proteus:notification-open',{runId});});};
     const mac = process.platform === 'darwin';
     const icon = nativeImage.createFromPath(path.join(__dirname, mac ? 'trayTemplate.png' : 'icon.png')).resize({ width: mac ? 18 : 24, height: mac ? 18 : 24 });
@@ -379,12 +381,12 @@ else {
       tray.setContextMenu(hostMenu);
       tray.on(process.platform === 'linux' ? 'click' : 'double-click', showWindow);
     } catch (error) { if (process.platform !== 'linux') throw error; console.warn('System tray unavailable:', error.message); }
-    const menuWindow=action=>process.platform==='linux'?(_item,target)=>{const ctx=[...windows.contexts.values()].find(ctx=>ctx.window===target)||windows.current();if(ctx)return windows.run(ctx.id,action);}:action;
+    const menuWindow=action=>['linux','win32'].includes(process.platform)?(_item,target)=>{const ctx=[...windows.contexts.values()].find(ctx=>ctx.window===target)||windows.current();if(ctx)return windows.run(ctx.id,action);}:action;
     Menu.setApplicationMenu(Menu.buildFromTemplate([
       ...(process.platform==='darwin'?[{label:app.name,submenu:[{role:'about'},{type:'separator'},{role:'hide'},{role:'hideOthers'},{role:'unhide'},{type:'separator'},{role:'quit'}]}]:[]),
-      {label:'File',submenu:[{label:'New Window',accelerator:'CommandOrControl+N',click:()=>void createAppWindow()},{label:'New Tab',accelerator:'CommandOrControl+T',click:menuWindow(()=>browser.requestNewTab())},{type:'separator'},{label:'Close Window',accelerator:'CommandOrControl+Shift+W',click:menuWindow(()=>windows.current()?.window.close())},{label:'Close Tab',accelerator:'CommandOrControl+W',click:menuWindow(closeCurrentTab)},...(process.platform==='linux'?[{type:'separator'},{label:'Connections…',click:menuWindow(()=>window.webContents.send('proteus:remote'))},{type:'separator'},{label:'Quit Proteus and stop runs',accelerator:'Control+Q',click:()=>app.quit()}]:[])]},{role:'editMenu'},{label:'View',submenu:[{id:'refresh-current-tab',label:'Refresh Current Tab',accelerator:'CommandOrControl+R',click:menuWindow(()=>windows.current()?.window.webContents.send('proteus:browser-action',{type:'refresh-current-tab'}))},{id:'reload-window',label:'Reload Window',click:menuWindow(()=>windows.current()?.recovery.reload())},{role:'forceReload'},{role:'toggleDevTools'},{type:'separator'},{role:'resetZoom'},{role:'zoomIn'},{role:'zoomOut'},{type:'separator'},{role:'togglefullscreen'}]},{role:'windowMenu'}
+      {label:'File',submenu:[{label:'New Window',accelerator:'CommandOrControl+N',click:()=>void createAppWindow()},{label:'New Tab',accelerator:'CommandOrControl+T',click:menuWindow(()=>browser.requestNewTab())},{type:'separator'},{label:'Close Window',accelerator:'CommandOrControl+Shift+W',click:menuWindow(()=>windows.current()?.window.close())},{label:'Close Tab',accelerator:'CommandOrControl+W',click:menuWindow(closeCurrentTab)},...(['linux','win32'].includes(process.platform)?[{type:'separator'},{label:'Connections…',click:menuWindow(()=>window.webContents.send('proteus:remote'))},{type:'separator'},{label:'Quit Proteus and stop runs',accelerator:'Control+Q',click:()=>app.quit()}]:[])]},{role:'editMenu'},{label:'View',submenu:[{id:'refresh-current-tab',label:'Refresh Current Tab',accelerator:'CommandOrControl+R',click:menuWindow(()=>windows.current()?.window.webContents.send('proteus:browser-action',{type:'refresh-current-tab'}))},{id:'reload-window',label:'Reload Window',click:menuWindow(()=>windows.current()?.recovery.reload())},{role:'forceReload'},{role:'toggleDevTools'},{type:'separator'},{role:'resetZoom'},{role:'zoomIn'},{role:'zoomOut'},{type:'separator'},{role:'togglefullscreen'}]},{role:'windowMenu'}
     ]));
-    if(process.platform==='linux')for(const ctx of windows.contexts.values())ctx.window.setMenuBarVisibility(false);
+    if(['linux','win32'].includes(process.platform))for(const ctx of windows.contexts.values())ctx.window.setMenuBarVisibility(false);
     await firstWindow.loadURL(service.url).catch(()=>windows.contexts.get(firstRecord.id).recovery.failed('initial-load-failed'));if(firstRecord.maximized)firstWindow.maximize();
     for(const record of records.slice(1))await createAppWindow(record);
     externalLinksStarted=true;void externalURLs.drain();

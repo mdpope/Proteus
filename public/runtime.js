@@ -21,5 +21,20 @@ export function toolDuration(tool,now=Date.now(),verified=true){
 }
 export function groupDuration(tools,now=Date.now(),verified=true,turns){const intervals=toolIntervals(tools,now,verified);return intervals.length?activeOverlap(intervals,turns,now,verified):null;}
 const timers=new Map();
-export function bindRuntimeTimer(node,read){if(!node)return;timers.set(node,read);node.classList.add('runtime-timer');node.setAttribute('aria-live','off');node.textContent=read();}
-if(typeof document!=='undefined')setInterval(()=>{for(const [node,read]of timers){if(!node.isConnected){timers.delete(node);continue;}const value=read();if(node.textContent!==value)node.textContent=value;}},1000);
+const readers=new WeakMap();let timer=null;
+function paint(node,read){const value=read();if(node.textContent!==value)node.textContent=value;}
+function stopIdleTimer(){if(!timers.size&&timer!==null){clearInterval(timer);timer=null;}}
+// Completed values are painted once, not revisited every second for the lifetime
+// of a loaded transcript. The optional predicate also handles a running tool's
+// transition to a fixed duration without leaving an idle interval behind.
+export function bindRuntimeTimer(node,read,active=true){
+ if(!node)return;readers.set(node,read);node.classList.add('runtime-timer');node.setAttribute('aria-live','off');paint(node,read);
+ if(typeof active==='function'?active():active)timers.set(node,{read,active});else timers.delete(node);
+ if(timers.size&&timer===null)timer=setInterval(()=>{
+  for(const [node,binding]of timers){if(!node.isConnected){timers.delete(node);continue;}paint(node,binding.read);if(typeof binding.active==='function'&&!binding.active())timers.delete(node);}
+  stopIdleTimer();
+ },1000);
+ stopIdleTimer();
+}
+export function refreshRuntimeTimers(root){for(const node of root?.querySelectorAll('.runtime-timer')||[]){const read=readers.get(node);if(read)paint(node,read);}}
+export function disposeRuntimeTimers(root){for(const node of root?.querySelectorAll('.runtime-timer')||[])timers.delete(node);stopIdleTimer();}

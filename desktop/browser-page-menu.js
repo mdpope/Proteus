@@ -1,10 +1,11 @@
+import {appendMenuLabel} from '../public/menu-icons.js';
 const percent=document.getElementById('percent'),choices=document.getElementById('choices');
 function updateScale(value){percent.textContent=value+'%';percent.setAttribute('aria-label',`Page scale ${value}%. Reset to 100%`);document.getElementById('decrease').disabled=value<=25;document.getElementById('increase').disabled=value>=500;}
 window.pageMenu.onUpdate(value=>{
  if(value.action==='scale'){updateScale(value.percent);return;}
  if(value.action!=='init')return;document.querySelector('.scale').hidden=!Number.isFinite(value.percent);if(Number.isFinite(value.percent))updateScale(value.percent);
  for(const [key,color]of Object.entries(value.colors||{}))document.documentElement.style.setProperty('--'+key,color);
- for(const item of value.items){const button=document.createElement('button');button.type='button';button.setAttribute('role','menuitem');button.textContent=item.label;button.disabled=item.enabled===false;button.onclick=()=>window.pageMenu.choose(item.id);choices.append(button);}
+ for(const item of value.items){const button=document.createElement('button');button.type='button';button.setAttribute('role','menuitem');appendMenuLabel(button,item);button.disabled=item.enabled===false;button.onclick=()=>window.pageMenu.choose(item.id);choices.append(button);}
  (Number.isFinite(value.percent)?percent:choices.querySelector('button:not(:disabled)'))?.focus();
 });
 for(const direction of ['decrease','increase'])document.getElementById(direction).onclick=()=>window.pageMenu.scale(direction);

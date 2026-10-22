@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "origin": "https://proteus.example",
+  "windowsOrigin": "https://downloads.proteus.example",
+  "keys": [
+    {
+      "id": "92b49fc0e69763fbd06099e2",
+      "publicKey": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAwT+sxMklEnazH6XEJ3LUNvZ4qCiylAlyfKg5LxFyicU=\n-----END PUBLIC KEY-----\n"
+    }
+  ]
+}

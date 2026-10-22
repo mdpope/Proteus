@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -11,7 +12,7 @@ import { secret } from '../src/remote-crypto.js';
 import { RemoteClient, until } from './remote-client.mjs';
 
 test('resource access is a local per-device grant, checked before effects and cached replies', async t => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-resource-access-'));
+  const home = privateTemporaryDirectory(path.join(os.tmpdir(), 'proteus-resource-access-'));
   atomicJSON(path.join(home, 'settings.json'), {schemaVersion:1,provider:'rehearsal',model:'',timezone:'UTC',workspace:{cwd:home,additionalDirectories:[]},skillDirectories:[],mcpServers:{}});
   const token = secret(), relay = await startRelay({port:0,token});
   const app = await startServer({home,port:0,timers:false});

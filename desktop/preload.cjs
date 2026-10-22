@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('desktop', {
   onPeer: handler => { const listener = (_event, value) => handler(value); ipcRenderer.on('proteus:desktop-peer-event', listener); return () => ipcRenderer.removeListener('proteus:desktop-peer-event', listener); },
   terminal: value => ipcRenderer.invoke('proteus:terminal', value),
   artifactPreview: value => ipcRenderer.invoke('proteus:artifact-preview', value),
+  onArtifactScroll: handler => {const listener=(_event,value)=>handler(value);ipcRenderer.on('proteus:artifact-scroll',listener);return()=>ipcRenderer.removeListener('proteus:artifact-scroll',listener);},
   onTerminal: handler => { const listener = (_event, value) => handler(value); ipcRenderer.on('proteus:terminal-event', listener); return () => ipcRenderer.removeListener('proteus:terminal-event', listener); },
   workspaceSession: value => ipcRenderer.invoke('proteus:workspace-session', value),
   viewPositions:value=>ipcRenderer.invoke('proteus:view-positions',value),
@@ -41,5 +42,6 @@ contextBridge.exposeInMainWorld('desktop', {
   onBrowserAction: handler => { const listener = (_event, value) => handler(value); ipcRenderer.on('proteus:browser-action', listener); return () => ipcRenderer.removeListener('proteus:browser-action', listener); },
   onAddressFocus: handler => { const listener = () => handler(); ipcRenderer.on('proteus:focus-address', listener); return () => ipcRenderer.removeListener('proteus:focus-address', listener); },
   onBrowserState: handler => { const listener = (_event, value) => handler(value); ipcRenderer.on('proteus:browser-state', listener); return () => ipcRenderer.removeListener('proteus:browser-state', listener); },
+  onBrowserScroll: handler => { const listener=(_event,value)=>handler(value);ipcRenderer.on('proteus:browser-scroll',listener);return()=>ipcRenderer.removeListener('proteus:browser-scroll',listener); },
   onBrowserResize: handler => { const listener = () => handler(); ipcRenderer.on('proteus:browser-resize', listener); return () => ipcRenderer.removeListener('proteus:browser-resize', listener); }
 });

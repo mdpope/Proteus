@@ -1371,6 +1371,37 @@ final class DestinationTests: XCTestCase {
 }
 
 extension DestinationTests {
+    @MainActor func testPairingKeepsAuthenticatedTransportAndCompletesOnlyOnce() async throws {
+        let (root, service) = try fixture(); let destinations = DestinationStore(root: root, keychainService: service)
+        defer { destinations.resetForTesting(); try? FileManager.default.removeItem(at: root) }
+        destinations.activity(true)
+        let (data, _) = try await URLSession.shared.data(from: URL(string: "\(nativeFixtureHTTPOrigin)/pair")!)
+        let code = try JSONDecoder().decode(JSON.self, from: data)["code"].string
+        try destinations.add(code, label: "My computer")
+        let candidate = try XCTUnwrap(destinations.pairing)
+        XCTAssertNil(destinations.pairingCompletion)
+        try await destinationWait { destinations.pairingCompletion != nil && candidate.connected }
+        let completion = try XCTUnwrap(destinations.pairingCompletion)
+        XCTAssertTrue(destinations.selected === candidate, "Pairing must not replace the socket before authentication completes")
+        XCTAssertEqual(completion.hostID, candidate.connection?.hostId)
+        XCTAssertEqual(DeviceKeychain.load(hostID: completion.hostID, service: service)?.deviceId, candidate.connection?.deviceId)
+        XCTAssertNil(destinations.pairing); XCTAssertNil(candidate.error)
+        XCTAssertEqual(candidate.cacheURL.deletingLastPathComponent(), root.appendingPathComponent("hosts").appendingPathComponent(completion.hostID))
+        destinations.cancelPairing() // The sheet's onDismiss must not disconnect success.
+        XCTAssertTrue(candidate.connected)
+        await candidate.refresh()
+        XCTAssertNil(candidate.error); XCTAssertFalse(candidate.state.object.isEmpty)
+        candidate.activity(false); candidate.activity(true)
+        try await destinationWait { candidate.connected }
+        XCTAssertEqual(destinations.pairingCompletion, completion, "Reconnect is not a second pairing success")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: root.appendingPathComponent("pending-pair").path))
+        let restored = DestinationStore(root: root, keychainService: service)
+        defer { restored.activity(false) }
+        XCTAssertEqual(restored.selectedID, completion.hostID)
+        XCTAssertEqual(restored.selected?.connection?.deviceId, candidate.connection?.deviceId)
+        XCTAssertNil(restored.pairingCompletion, "Success is a current interaction, not a persisted stale banner")
+    }
+
     @MainActor func testTwoLiveSyntheticMacsShareRelayWithoutSharingRunsOrContext() async throws {
         let (root, service) = try fixture(); let destinations = DestinationStore(root: root, keychainService: service)
         defer { destinations.resetForTesting(); try? FileManager.default.removeItem(at: root) }

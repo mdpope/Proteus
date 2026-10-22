@@ -1,30 +1,42 @@
 // Revision-aware descriptor reconciliation. Cookies, selection and page contents stay local.
 import {safeContentTabURL,sameContentTab,mergeContentTabMetadata} from './content-tab-descriptor.js';
+import {applyNavigationDelta} from './navigation-history.js';
 export function syncableTabURL(value){return value?safeContentTabURL(value):'';}
 export function tabChanges(before,after,{navigation=false,seed=false}={}){
   const prior=new Map(before.map(tab=>[tab.id,tab])),next=new Map(after.map(tab=>[tab.id,tab])),operations=[];
+  const seedNavigation=tab=>{
+    const entries=tab.history?.entries?.length?tab.history.entries:[{url:tab.url,title:tab.title}],ids=[];
+    entries.forEach((entry,index)=>{const id=entry.id||crypto.randomUUID();ids.push(id);operations.push({action:'browser-navigate',tabId:tab.id,entryId:id,url:entry.url,title:entry.title,operationId:crypto.randomUUID(),visitedAt:new Date().toISOString(),baseRevision:index});});
+    const selected=tab.history?.index;if(Number.isSafeInteger(selected)&&selected>=0&&selected<entries.length-1)operations.push({action:'browser-traverse',tabId:tab.id,entryId:ids[selected],operationId:crypto.randomUUID(),visitedAt:new Date().toISOString(),baseRevision:entries.length});
+  };
   for(const tab of before)if(!next.has(tab.id))operations.push({action:'close',id:tab.id});
   for(const observed of after){
     const previous=prior.get(observed.id),tab=mergeContentTabMetadata(previous,observed);
     if(sameContentTab(previous,tab))continue;
     if(!previous&&navigation&&(!seed||tab.navigationPending)&&tab.type==='browser'&&tab.url){
       operations.push({action:'open',tab:{...tab,url:'',history:undefined}});
-      const entries=tab.history?.entries?.slice(0,tab.history.index+1)||[{url:tab.url,title:tab.title}];
-      entries.forEach((entry,index)=>{const id=entry.id||crypto.randomUUID();operations.push({action:'browser-navigate',tabId:tab.id,entryId:id,url:entry.url,title:entry.title,operationId:crypto.randomUUID(),visitedAt:new Date().toISOString(),baseRevision:index});});
+      seedNavigation(tab);
     }else if(navigation&&previous?.type==='browser'&&tab.type==='browser'&&!previous.url&&tab.url&&!Number.isSafeInteger(previous.history?.revision)){
-      const entries=tab.history?.entries?.slice(0,tab.history.index+1)||[{url:tab.url,title:tab.title}];
-      entries.forEach((entry,index)=>{const id=entry.id||crypto.randomUUID();operations.push({action:'browser-navigate',tabId:tab.id,entryId:id,url:entry.url,title:entry.title,operationId:crypto.randomUUID(),visitedAt:new Date().toISOString(),baseRevision:index});});
+      seedNavigation(tab);
       if(!sameContentTab({...previous,url:tab.url,history:tab.history},tab))operations.push({action:'open',tab:{...tab,url:previous.url,history:previous.history}});
     }else if(previous?.type==='browser'&&tab.type==='browser'&&Number.isSafeInteger(previous.history?.revision)){
       const old=previous.history,history=tab.history,selected=history?.entries?.[history.index];
-      if(selected&&selected.id!==old.currentEntryId){
-        const existing=old.entries.find(entry=>entry.id===selected.id);
-        if(existing)operations.push({action:'browser-traverse',tabId:tab.id,entryId:existing.id,operationId:crypto.randomUUID(),visitedAt:new Date().toISOString(),baseRevision:old.revision});
-        else {
-          const firstNew=history.entries.findIndex(entry=>!old.entries.some(prior=>prior.id===entry.id));
-          for(const [offset,entry]of history.entries.slice(Math.max(0,firstNew),history.index+1).entries())operations.push({action:'browser-navigate',tabId:tab.id,entryId:entry.id,url:entry.url,title:entry.title,operationId:crypto.randomUUID(),visitedAt:new Date().toISOString(),baseRevision:old.revision+offset});
-        }
-      }else if(selected&&(selected.url!==previous.url||selected.title!==old.entries.find(entry=>entry.id===selected.id)?.title))operations.push({action:'browser-redirect',tabId:tab.id,entryId:selected.id,url:selected.url,title:selected.title,operationId:crypto.randomUUID(),baseRevision:old.revision});
+      const oldEntries=new Map(old.entries.map(entry=>[entry.id,entry])),firstNew=history?.entries.findIndex(entry=>!oldEntries.has(entry.id))??-1,canNavigate=!navigation||tab.navigationPending!==false;
+      // Native views explicitly distinguish human navigation from a stale
+      // mirror. An application skipped during I/O is not an instruction to
+      // navigate the owner back on the next reconciliation.
+      if(selected&&firstNew>=0&&canNavigate){
+        // Visits made while offline remain meaningful after Back. Publish the
+        // whole new branch, then restore its selected entry instead of losing
+        // forward history or appending at the owner's previous selection.
+        let revision=old.revision,current=old.currentEntryId;
+        const traverse=id=>{if(id&&id!==current){operations.push({action:'browser-traverse',tabId:tab.id,entryId:id,operationId:crypto.randomUUID(),visitedAt:new Date().toISOString(),baseRevision:revision++});current=id;}};
+        traverse(history.entries[firstNew-1]?.id);
+        for(const entry of history.entries.slice(firstNew)){if(oldEntries.has(entry.id)){traverse(entry.id);continue;}operations.push({action:'browser-navigate',tabId:tab.id,entryId:entry.id,url:entry.url,title:entry.title,operationId:crypto.randomUUID(),visitedAt:new Date().toISOString(),baseRevision:revision++});current=entry.id;}
+        traverse(selected.id);
+      }else if(selected&&selected.id!==old.currentEntryId&&canNavigate){
+        operations.push({action:'browser-traverse',tabId:tab.id,entryId:selected.id,operationId:crypto.randomUUID(),visitedAt:new Date().toISOString(),baseRevision:old.revision});
+      }else if(selected&&selected.id===old.currentEntryId&&(selected.url!==previous.url||selected.title!==old.entries.find(entry=>entry.id===selected.id)?.title))operations.push({action:'browser-redirect',tabId:tab.id,entryId:selected.id,url:selected.url,title:selected.title,operationId:crypto.randomUUID(),baseRevision:old.revision});
       if(!sameContentTab({...previous,url:tab.url,history:tab.history},tab))operations.push({action:'open',tab:{...tab,url:previous.url,history:previous.history}});
     }else operations.push({action:'open',tab});
   }
@@ -61,12 +73,19 @@ export function createTabSynchronizer({scopes,readLocal,apply,request,onError=()
   const key=scope=>JSON.stringify([scope.hostId||'',scope.scope,scope.id]);
   async function hydrate(scope,remote){
     if(!navigation||!remote?.tabs)return remote;
-    const tabs=[];
+    const tabs=[],baselines=new Map((records.get(key(scope))?.baseline||[]).map(tab=>[tab.id,tab.history]));
     for(const tab of remote.tabs){
       const history=tab.history;
-      if(tab.type!=='browser'||!history||(history.offset||0)===0&&!history.hasMore&&(!history.total||history.total===history.entries.length)){tabs.push(tab);continue;}
-      const cacheKey=key(scope)+':'+tab.id+':'+history.revision+':'+history.currentEntryId;
-      let full=navigationCache.get(cacheKey);
+      if(tab.type!=='browser'||!history){tabs.push(tab);continue;}
+      const cacheKey=key(scope)+':'+tab.id,cached=navigationCache.get(cacheKey)||baselines.get(tab.id);
+      let full;
+      if((history.offset||0)===0&&!history.hasMore&&(!history.total||history.total===history.entries.length))full={entries:history.entries,index:history.index,currentEntryId:history.currentEntryId,revision:history.revision};
+      else if(cached?.revision===history.revision&&cached.currentEntryId===history.currentEntryId)full=cached;
+      else if(cached&&history.deltaSupported&&cached.revision<history.revision){
+        const response=await request(scope,'history',{tabId:tab.id,sinceRevision:cached.revision});
+        if(response.delta)full=applyNavigationDelta(cached,response,history);
+        else if(!response.reset)throw Error('Browser history delta is unavailable. The current page was preserved.');
+      }
       if(!full){
         const entries=[],seen=new Set();let cursor=null,total=null;
         do{
@@ -74,15 +93,17 @@ export function createTabSynchronizer({scopes,readLocal,apply,request,onError=()
           if((page.revision??page.history?.revision)!==history.revision||(page.currentEntryId||page.history?.currentEntryId)!==history.currentEntryId)throw Error('Browser navigation changed while loading history. Retry synchronization.');
           if(total===null)total=page.total;if(page.total!==total||entries.length!==(page.offset||0))throw Error('Browser history page coverage changed. Retry synchronization.');
           for(const entry of page.entries||page.history?.entries||[]){if(!entry.id||seen.has(entry.id))throw Error('Browser history contains duplicate entry identities.');seen.add(entry.id);entries.push(entry);}
-          if(entries.length>10000)throw Error('Browser history exceeds its supported navigation limit.');
           cursor=page.hasMore?page.nextCursor:null;if(page.hasMore&&!cursor)throw Error('Browser history paging is incomplete.');
+          if(page.hasMore&&!(page.entries||page.history?.entries||[]).length)throw Error('Browser history paging did not advance.');
         }while(cursor);
         const index=entries.findIndex(entry=>entry.id===history.currentEntryId);
         if(entries.length!==total||index<0)throw Error('Browser history is incomplete. The current page was preserved.');
-        full={entries,index,currentEntryId:history.currentEntryId,revision:history.revision};navigationCache.set(cacheKey,full);
-        while(navigationCache.size>64)navigationCache.delete(navigationCache.keys().next().value);
+        full={entries,index,currentEntryId:history.currentEntryId,revision:history.revision};
       }
-      tabs.push({...tab,history:full});
+      if(records.has(key(scope))){navigationCache.delete(cacheKey);navigationCache.set(cacheKey,full);while(navigationCache.size>64)navigationCache.delete(navigationCache.keys().next().value);}
+      // apply may hand these entries to mutable native views; keep the verified
+      // delta baseline private so local pending navigation cannot corrupt it.
+      tabs.push({...tab,history:structuredClone(full)});
     }
     return {...remote,tabs};
   }
@@ -98,6 +119,18 @@ export function createTabSynchronizer({scopes,readLocal,apply,request,onError=()
       }
     return [...unique.values()];
   }
+  async function checkpoint(scope){
+    // Leaving a visible scope must not hydrate it again just to retain intent.
+    // The workspace also saves native pending navigation, covering first reads
+    // and edits newer than an uncertain/in-flight outbox without replacing it.
+    const id=key(scope),record=records.get(id),baseline=record?.baseline;
+    if(!baseline||record.busy||record.pending||record.conflict||!pendingStorage)return false;
+    const local=(await snapshot(scope)).filter(tab=>!record.localAliases?.has(tab.id));
+    if(records.get(id)!==record||record.baseline!==baseline||record.busy||record.pending||record.conflict)return false;
+    const operations=tabChanges(baseline,local,{navigation});if(!operations.length)return false;
+    pendingStorage.setItem('proteus.navigation.pending:'+id,JSON.stringify(operations));
+    record.pending=operations;record.pendingSnapshot=structuredClone(local);return true;
+  }
   async function sync(scope){
     if((backoff.get(hostKey(scope))?.until||0)>now())return;
     const id=key(scope);let record=records.get(id);
@@ -108,7 +141,7 @@ export function createTabSynchronizer({scopes,readLocal,apply,request,onError=()
     const work=async()=>{
       let wrote=false;
       let local=await snapshot(scope);
-      let remote=await hydrate(scope,await request(scope,'get'));
+      let remote=await hydrate(scope,await request(scope,'get',{historyLimit:200}));
       if(records.get(id)!==record)return;
       // Older owners may never have registered these saved local chat aliases.
       // Preserve them without publishing a reopening or treating absence as close.
@@ -148,8 +181,11 @@ export function createTabSynchronizer({scopes,readLocal,apply,request,onError=()
         record.pending=operations;if(pendingStorage)pendingStorage.setItem(storageKey,JSON.stringify(operations));
         let rebased=rebaseTabChanges(operations,remote.tabs);
         const send=async changes=>{
-          const args={expectedRevision:remote.revision,operations:changes},signature=JSON.stringify(args);
+          let args={historyLimit:200,expectedRevision:remote.revision,operations:changes},signature=JSON.stringify(args);
           if(!record.request&&pendingStorage)try{record.request=JSON.parse(pendingStorage.getItem(requestKey)||'null');}catch{}
+          // Upgrading the response-window preference must not change an
+          // uncertain older request's bytes, timestamp or durable receipt ID.
+          if(record.request?.signature)try{const prior=JSON.parse(record.request.signature);if(JSON.stringify({expectedRevision:prior.expectedRevision,operations:prior.operations})===JSON.stringify({expectedRevision:args.expectedRevision,operations:args.operations})){args=prior;signature=record.request.signature;}}catch{}
           if(record.request?.signature!==signature)record.request={signature,id:crypto.randomUUID(),issuedAt:new Date().toISOString()};
           if(pendingStorage)pendingStorage.setItem(requestKey,JSON.stringify(record.request));
           remote=await hydrate(scope,await request(scope,'mutate',args,{id:record.request.id,issuedAt:record.request.issuedAt}));
@@ -158,7 +194,7 @@ export function createTabSynchronizer({scopes,readLocal,apply,request,onError=()
         };
         const submit=async changes=>{let metadata=[];const flush=async()=>{while(metadata.length)await send(metadata.splice(0,100));};for(const op of changes){if(op.action.startsWith('browser-')){await flush();await send([op]);}else metadata.push(op);}await flush();};
         try{await submit(rebased);}
-        catch(error){if(!/Content tabs changed/.test(error.message))throw error;remote=await hydrate(scope,await request(scope,'get'));if(records.get(id)!==record)return;rebased=rebaseTabChanges(operations,remote.tabs);await submit(rebased);}
+        catch(error){if(!/Content tabs changed/.test(error.message))throw error;remote=await hydrate(scope,await request(scope,'get',{historyLimit:200}));if(records.get(id)!==record)return;rebased=rebaseTabChanges(operations,remote.tabs);await submit(rebased);}
         record.pending=null;record.request=null;pendingStorage?.removeItem(storageKey);pendingStorage?.removeItem(requestKey);
       }
       // apply receives the captured snapshot, so it preserves additions made during I/O.
@@ -193,7 +229,7 @@ export function createTabSynchronizer({scopes,readLocal,apply,request,onError=()
   async function resolve(scope,{preserve}={}){
     const id=key(scope),record=records.get(id);if(!record?.conflict)return;
     if(record.busy)await record.busy;
-    const local=await readLocal(scope),remote=await hydrate(scope,await request(scope,'get'));
+    const local=await readLocal(scope),remote=await hydrate(scope,await request(scope,'get',{historyLimit:200}));
     if(records.get(id)!==record)return;
     const affected=new Set((record.pending||[]).filter(op=>op.action.startsWith('browser-')).map(op=>op.tabId));
     if(preserve){
@@ -212,5 +248,6 @@ export function createTabSynchronizer({scopes,readLocal,apply,request,onError=()
     record.pending=null;record.conflict=false;record.again=false;record.retry=null;record.baseline=structuredClone(remote.tabs);record.revision=remote.revision;
     record.request=null;pendingStorage?.removeItem('proteus.navigation.pending:'+id);pendingStorage?.removeItem('proteus.navigation.request:'+id);
   }
-  return {sync,resolve,hasConflict:scope=>records.get(key(scope))?.conflict===true,forget(scope){records.delete(key(scope));},forgetHost(hostId){backoff.delete(hostId);for(const id of records.keys())if(JSON.parse(id)[0]===hostId)records.delete(id);},async all(){const groups=new Map();for(const scope of scopes()){const owner=hostKey(scope);if(!groups.has(owner))groups.set(owner,[]);groups.get(owner).push(scope);}await Promise.all([...groups.values()].map(async group=>{for(const scope of group)await sync(scope);}));}};
+  function forgetKey(id){records.delete(id);for(const cacheKey of navigationCache.keys())if(cacheKey.startsWith(id+':'))navigationCache.delete(cacheKey);}
+  return {sync,checkpoint,resolve,hasConflict:scope=>records.get(key(scope))?.conflict===true,forget(scope){forgetKey(key(scope));},forgetHost(hostId){backoff.delete(hostId);for(const id of records.keys())if(JSON.parse(id)[0]===hostId)forgetKey(id);},async all(){const groups=new Map();for(const scope of scopes()){const owner=hostKey(scope);if(!groups.has(owner))groups.set(owner,[]);groups.get(owner).push(scope);}await Promise.all([...groups.values()].map(async group=>{for(const scope of group)await sync(scope);}));}};
 }

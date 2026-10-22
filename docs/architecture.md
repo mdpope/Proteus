@@ -1,107 +1,84 @@
 # Architecture
 
-**Queued supervised self-update — BF-2026-10-19-21:** add explicit runtime identity, a durable
-update checkpoint and a narrowly scoped independent helper/verifier that survives app shutdown.
-The current Electron-owned service aborts turns on quit; its scheduler worker is not a daemon.
-After exact-artifact installation and verified startup under the sole runner lock, automatically
-claim the authorized continuation in the original chat/provider session without replaying earlier
-effects or requiring Continue. Successful compatible rollback must also resume that chat; preserve
-handoff claims independently of restored data and test the recovery build's continuation boundary.
-Keep update health/recovery independent of model availability. A later independently hosted runner
-is optional; helper/handoff design does not require a second live runner. See the queued proposal
-in [desktop updates](desktop-updates.md#queued-self-update-and-chat-continuation--bf-2026-10-19-21).
-No helper, self-update tool or automatic continuation is implemented by this intake.
+Proteus has one host-owned service and runner per application-data home. Electron,
+the authenticated local HTTP interface, paired clients, internal tools, and external
+MCP act through service boundaries. The scheduler is provider-neutral; adapters own
+provider metadata, sessions, model configuration, and tool delivery.
 
-**Queued native desktop broker — BF-2026-10-19-22:** app/window-scoped native observation/input
-is separate from embedded browser control. The operator selects Cua Driver primary and Peekaboo
-as an on-demand Mac fallback, with Linux branch support through Cua and capability-gated Windows.
-Use a compact stable tool catalog/wrapper and lazy backend runtimes under one host authorization/
-target/control boundary across chats, internal tools, MCP and UI. Switch only after fresh observation
-and resolution of uncertain prior effects; never duplicate an action or bypass a denied scope.
-Separate schema/context loading, runtime lifetime and permission; stopping a backend cannot remove
-already-read tool results from model history. Verify actual provider image delivery and visible
-readiness/Stop controls. Exact package pins and integration are pending. This may support
-BF-21's UI verification without making deterministic update recovery depend on a model/UI grant.
-No backend installation or desktop-control tool is introduced by this queue-only review.
+## Durable ownership
 
-**Queued multiwindow boundary — BF-2026-10-19-11:** keep one host-owned service/runner per app-data
-home while adding independently identified presentation windows. Route IPC, approvals, browser/
-terminal/viewer surfaces and commands to the owning window; persist independent geometry,
-navigation and view positions without renderer saves overwriting peers. Explicit window Close
-and app Quit have different restoration semantics. This is next-release design scope, not an
-implemented second service or permission change; see [planned updates](planned-updates.md).
+Schedules are versioned JSON documents. Validation, atomic replacement, fresh disk
+reads, unknown-field preservation, and revision conflicts protect edits from competing
+clients. Run events and retry receipts remain durable; presentation caches are disposable.
+The runner isolates provider sessions and permits independent chats to execute while
+preventing concurrent turns in the same session. A model's completed turn is separate
+from completion of an external workflow.
 
-The opt-in desktop design preview uses the same boundaries with a separate data root and app
-identity. `desktop/preview-runtime.cjs` initializes only a fresh marked profile; `src/desktop-preview.js`
-owns experimental projects and discovery registrations. `public/desktop-preview.js` and
-`public/preview-permissions.js` gate presentation on the authenticated preview flag. Normal servers
-do not expose preview mutation routes. See [desktop preview](desktop-preview.md).
+`src/engine.js` owns execution; `src/run-history-cache.js` manages lazy history residency;
+`src/schedules.js` owns schedule validation; provider adapters live in `src/copilot.js`, `src/codex.js`, and `src/claude.js`.
+Active turns keep their required histories resident. Inactive history eviction does not
+remove durable events. `src/files.js` provides atomic storage primitives.
 
-Proteus has four boundaries: file-backed schedules, the runner, provider adapters, and clients.
-The scheduler has no model API knowledge. The desktop UI and VS Code companion use an authenticated
-loopback service. The Electron host stays in the menu bar when its window closes. Native iPhone/iPad clients connect through an encrypted relay protocol; see `remote.md`.
+## Desktop presentation
 
-The Electron shell hosts the trusted local interface and a separate sandboxed WebContentsView
-for remote browsing. Remote content never receives the app preload bridge. URLs in the app shell
-stay on its own origin; the browser only permits HTTP(S). User browser permissions are denied by
-default in this prototype. A browser must remain able to display authentication and hand control
-to its user before it can be used for scheduled authenticated workflows.
+`desktop/main.cjs` hosts the service and window registry. Each window owns its IPC
+presentation, browser views, terminal attachments, geometry, and selected content.
+`desktop/browser.cjs` owns embedded pages, profiles, history, navigation provenance,
+and scoped browser actions. Trusted-page input records navigation intent immediately;
+activity-only metadata is coalesced. Cookies and page sessions remain local.
 
-Schedule files are portable definitions with host-resolved workspace directories. The UI validates
-before saving and uses a revision hash to reject overwriting edits made by an editor or AI agent.
-Unknown fields survive a form edit. A run snapshots the schedule and is bound to its provider
-session ID. Resume reuses that ID and reapplies directories and tools; it does not follow a newly
-edited schedule accidentally. An explicit idle-chat context refresh preserves the initial schedule
-and prior context snapshots before replacing the effective context for the next turn.
+`public/app.js` composes surfaces. Conversation rendering preserves stable nodes,
+drafts, selection, and access to complete history while reducing offscreen layout work.
+Terminal presentation batches output and detaches hidden renderers without restarting
+shells or losing owner-side output. These lifecycle rules are documented in
+[chat rendering](chat-rendering.md) and [terminals](terminals.md).
 
-The runner serializes AI execution and takes a process lock for its data directory. Allowlisted Omi native jobs have independent per-job execution lanes and still use native worker locks. A saved run
-claims a scheduled occurrence even if the process stops before the scheduler journal is saved.
-Restart marks active work interrupted. Catch-up coalesces missed occurrences to at most one new
-run per schedule. Already-active schedules skip overlapping occurrences.
+## Tabs and follow-along
 
-Module map: [agent handoff](handoff.md). Rationale: [design decisions](decisions.md).
-Remaining work: [backlog](planned-updates.md). Live capabilities: [providers](providers.md).
+`src/content-tabs.js` owns durable descriptor identity, order, navigation, and revisions.
+`public/content-tab-sync.js` reconciles changes with durable pending operations and
+history conflicts. Browser histories retain the session beginning; small descriptor
+windows and incremental reads reduce transfer, not retention.
 
-General computer diagnostics use an independent worker-owned rotating SQLite log store with
-summary cursor pages and on-demand redacted details. Notifications/preferences/account outbox
-remain separate; diagnostic retention cannot expire execution receipts. See [logs](logs.md).
+`src/project-follow.js` owns bounded, ephemeral presentation state. A renderer subscribes
+only to its selected owner workspace/project. `public/project-follow.js` coordinates
+selection and position changes; tab order and URL changes use the existing tab service.
+Re-entry reads the latest scoped state. Browser pages load independently in each local
+profile. No remote page rendering, cookies, page text, or sign-in state is shared.
+Same display names do not identify the same project. Documents, resource permissions,
+private URLs, drafts, and provider approvals retain their existing boundaries.
 
-The initial app deliberately owns its generic schemas, templates, and client implementation.
-Operating-system repositories own their own schedules, workflow policy, and durable knowledge.
-Neither side imports the other's private operational content into its source repository.
+## Connections and shared services
 
-Embedded Playwright uses a per-tab Electron debugger bridge. Only the browser broker can select
-targets; provider tools cannot access the app window or arbitrary CDP methods. See `browser.md`.
-Settings defaults are captured into each new chat/schedule. Parallel provider permission requests
-are queued and shown one at a time; cancellation rejects both visible and queued requests.
+`src/remote.js`, `src/remote-client.js`, and `src/desktop-peers.js` implement authenticated
+paired connections. `relay/server.js` routes encrypted messages without interpreting
+application payloads. Packet, backlog, pending-request, and byte-rate limits bound
+transport work. Disconnects preserve pairing; uncertain mutations use durable command
+identities and receipts instead of blind replay. Follow events are replaceable and are
+not replayed as historical gestures. See [remote access](remote.md).
 
-Managed context discovery and exact source snapshots sit above provider adapters. Copilot automatic
-configuration/instruction loading is disabled for managed sessions; selected sources are supplied
-explicitly. Context changes cold-reconnect the provider for reliable MCP removal. The credential
-broker is a separate main-process boundary and has no agent/API entry point. See `workspaces.md`
-and `credentials.md` for persistence and authentication details.
+The website account is separate from peer transport and provider credentials. Shared
+account authentication lives in `src/account-session.js`; AppAccount and Life use that
+boundary while preserving existing encrypted credentials and consent. Website APIs
+support selective collections and revision-checked writes. Life read models filter,
+page, and aggregate in SQL while keeping immutable nutrition versions and totals.
 
-Remote access is opt-in. A relay can run locally, in Docker, or behind TLS on Linux. Only the Mac
-host executes tools and owns persistence. iOS uses a Keychain device credential, encrypted cache,
-versioned edits, deduplicated mutation IDs, and replay/snapshot recovery. Relay routes carry no
-provider credentials. Desktop IPC and the credential broker remain inaccessible to remote clients.
+## Updates and recovery
 
-Copilot, Codex and Claude implement the same event, input, approval, cancellation and persistence boundary, with provider-specific capabilities and explicit unsupported-feature errors. Model catalogs are keyed by provider. OAuth recovery is a host command separate from model turns; the provider owns token storage and its Mac loopback callback. See `mcp-auth.md` for remote-client behavior.
+The supervised updater has independent inspection/helper boundaries, durable checkpoints,
+installation-bound provenance, and preservation receipts. Expensive package work runs
+outside the main event loop. Recovery retains at most two verified full generations per
+installation/device; retries reuse valid state, ordinary caches are excluded narrowly,
+and protected storage remains included. See [desktop updates](desktop-updates.md) for
+compatibility, operator controls, and live acceptance requirements.
 
-The Omi adapter is opt-in and disabled by default. It bridges existing installed worker commands,
-not recording transport or Bluetooth. Native ownership and the persisted execution gate are
-checked on every run, including saved/resumed runs. Omi and Life occupy persistent, independent
-feature tabs, so opening them does not repurpose the schedules or chat tabs.
+## Validation and design history
 
-Life is opt-in and absent from navigation before setup. Native desktop and mobile screens use the
-same authenticated website API, independent of the selected execution Mac. The desktop service
-keeps OAuth credentials in main-process protected storage; its renderer receives scoped record
-DTOs, never tokens, database credentials or arbitrary SQL. PKCE, account/workspace binding,
-serialized refresh and draft identity guards preserve account boundaries. Website-only migrations
-require verified recovery and preserve immutable nutrition versions. Existing direct-database
-configuration is privately archived without opening it; there is no SQL fallback. Database admin
-code is separate from the app runtime, and no Life account tokens travel through the Mac relay.
+Run `npm test` and `npm run check`; interface changes also require isolated UI rehearsals.
+Platform CI, website tests, and Apple tests are described in [contributing](../CONTRIBUTING.md)
+and [handoff](handoff.md). Build, synthetic verification, physical-device verification,
+installation, and deployment are distinct states.
 
-Markdown creation is bound to configured workspace roots, revalidated for every operation. The
-folder picker rejects escaping links and traversal, creates files exclusively, and bounds reads.
-Native browser views are hidden while application dialogs are open.
+The [stabilization ledger](stabilization-plan.md) records current work and limitations.
+[Earlier architecture notes](history/architecture-before-2026-10-22.md) are retained as
+historical design context; their queued status does not override current feature docs.

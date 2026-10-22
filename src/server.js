@@ -1,4 +1,5 @@
 import {readMarkdownFile} from './file-metadata.js';
+import {ensurePrivateHome} from './private-paths.cjs';
 import {DesktopControl} from './desktop-control.js';
 import { DesktopPreview, desktopPreviewCodexHome } from './desktop-preview.js';
 import { WorkspaceProjects } from './workspace-projects.js';
@@ -39,6 +40,8 @@ import { readChatImage, readImage } from './chat-images.js';
 import { chatDelta } from './chat-deltas.js';
 import { RemoteHost, remoteRun, runSummary, chatActivityAt } from './remote.js';
 import { ContentTabs } from './content-tabs.js';
+import { ProjectFollow } from './project-follow.js';
+import { fileStamp } from './file-stamp.js';
 import { ChatAttachmentStore, chatAttachmentLimits } from './chat-attachments.js';
 import { ProviderAuthManager } from './provider-auth.js';
 
@@ -53,7 +56,7 @@ export function seed(home, cwd = root) {
   });
 }
 function lock(home) {
-  fs.mkdirSync(home, { recursive: true, mode: 0o700 }); const file = path.join(home, 'runner.lock');
+  if(process.platform==='win32')ensurePrivateHome(home);else fs.mkdirSync(home, { recursive: true, mode: 0o700 }); const file = path.join(home, 'runner.lock');
   try { fs.writeFileSync(file, String(process.pid), { flag: 'wx', mode: 0o600 }); }
   catch (error) {
     if (error.code !== 'EEXIST') throw error;
@@ -207,6 +210,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         eventClients.add(res); req.on('close', () => eventClients.delete(res)); return;
       }
       if (url.pathname === '/api/remote' && req.method === 'GET') return json(200, remote.info());
+      if (url.pathname === '/api/project-follow' && req.method === 'POST') return json(200, service.projectFollow.handle(await body(req)));
       // Local authenticated diagnostics expose counters only, never command payloads or keys.
       if (url.pathname === '/api/performance/diagnostics' && req.method === 'GET') return json(200, { ...performanceDiagnostics.snapshot(), scheduler: engine.schedulerWorker?.diagnostics() || {status:'not-started'} });
       if (url.pathname === '/api/remote/diagnostics' && req.method === 'GET') return json(200, await remote.commandDiagnostics());
@@ -222,7 +226,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         if (value.action === 'document-review') return json(200, remote.reviewDocument(value.requestId,value.approved));
         throw new Error('Unknown remote action.');
       }
-      if (url.pathname === '/api/content-tabs' && req.method === 'POST') { const value=await body(req); if(value.scope==='project'){const snapshot=preview.snapshot();preview.projectFor({projectId:value.id},snapshot);for(const op of value.operations||[])if(op.action==='open'&&op.tab?.type==='chat'&&preview.membership(engine.getRun(op.tab.chatId),snapshot.catalog).projectId!==value.id)throw new Error('This chat belongs to another project.');} if(value.scope==='chat')engine.getRun(value.id);if(value.scope==='workspace'){context.scope(value.id);for(const op of value.operations||[])if(op.action==='open'&&op.tab?.type==='chat'&&chatMembership(engine.getRun(op.tab.chatId)).workspaceId!==value.id)throw new Error('This chat belongs to another workspace.');} if(value.action==='document'){if(!service.contentTabDocument)throw new Error('Document is not available on this desktop.');return json(200,service.contentTabDocument(value));} if(value.action==='get')return json(200,await service.contentTabs.getAsync(value.scope,value.id)); if(value.action==='history')return json(200,await service.contentTabs.history(value)); if(value.action==='mutate')return json(200,await service.mutateContentTabs(value)); throw new Error('Unknown tab action.'); }
+      if (url.pathname === '/api/content-tabs' && req.method === 'POST') { const value=await body(req); if(value.scope==='project'){const snapshot=preview.snapshot();preview.projectFor({projectId:value.id},snapshot);for(const op of value.operations||[])if(op.action==='open'&&op.tab?.type==='chat'&&preview.membership(engine.getRun(op.tab.chatId),snapshot.catalog).projectId!==value.id)throw new Error('This chat belongs to another project.');} if(value.scope==='chat')engine.getRun(value.id);if(value.scope==='workspace'){context.scope(value.id);for(const op of value.operations||[])if(op.action==='open'&&op.tab?.type==='chat'&&chatMembership(engine.getRun(op.tab.chatId)).workspaceId!==value.id)throw new Error('This chat belongs to another workspace.');} if(value.action==='document'){if(!service.contentTabDocument)throw new Error('Document is not available on this desktop.');return json(200,service.contentTabDocument(value));} if(value.action==='get')return json(200,await service.contentTabs.getAsync(value.scope,value.id,{historyLimit:value.historyLimit})); if(value.action==='history')return json(200,await service.contentTabs.history(value)); if(value.action==='mutate')return json(200,await service.mutateContentTabs(value)); throw new Error('Unknown tab action.'); }
       if (url.pathname === '/api/app' && req.method === 'GET') {const result=await account.request();if(Array.isArray(result.history))void service.browserHistory.importAccount(account,{items:result.history,identity:result.identity}).catch(error=>activity.log('warning','browser.history-import',error.message));return json(200,result);}
       if (url.pathname === '/api/app' && req.method === 'POST') return json(200, await account.request(await body(req)));
       if (url.pathname === '/api/team/lists' && req.method === 'GET') return json(200, await account.lists());
@@ -619,7 +623,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   atomicJSON(path.join(home, 'connection.json'), { origin, token, pid: process.pid });
   const timer = timers ? setInterval(() => { void performanceDiagnostics.measure('scheduler.tick', () => engine.tick()).catch(error => engine.emit('scheduler-error', { error: error.message, at: new Date().toISOString() })); }, 1000) : null;
   const service = { desktopControl,workspaceProjects:preview, desktopPreview:desktopPreview?preview:null, performanceDiagnostics, notify, desktopAttention:()=>[...(service.browserAttention?.()||[]),...remote.documents.list().filter(item=>!item.approvedAt).map(item=>({id:'document:'+item.requestId,kind:'document',title:item.deviceName+' requests '+item.title,requestId:item.requestId,path:item.path,at:new Date(Date.parse(item.expiresAt)-600000).toISOString()})),...service.attention()], attention:()=>[...integrations.consumers().filter(item=>['needs-auth','failed'].includes(item.connection)).map(item=>({id:'integration:'+item.id,kind:'connection',title:(item.profile.label||item.server)+' needs attention',section:'integrations',at:item.checkedAt})),...activity.notifications().items.filter(item=>!item.readAt).map(item=>({id:'notification:'+item.id,notificationId:item.id,kind:'notification',title:item.title,body:item.body,chatId:item.chatId,...(item.browserIssue?{browserIssue:item.browserIssue,silent:true}:{}),at:item.createdAt}))], browserProfiles, integrations, engine, settings, context, standup, omi, life, account, activity, workspaceFiles, attachments, buildChatSchedule, usage, catalog, catalogs, origin, token, home, url: `${origin}/?token=${token}`, async close() {
-    service.updates?.close();await service.chatControl?.close();await desktopControl?.close();
+    await service.updates?.close();await service.chatControl?.close();await desktopControl?.close();
     activity.log('info','app.stopping','Proteus is shutting down.');clearInterval(integrationTimer);await integrations.close(); if(activityTimer)clearInterval(activityTimer); if (timer) clearInterval(timer); if (catalogTimer) clearInterval(catalogTimer); await Promise.all(Object.values(catalogs).map(c => c.pending)); await providerAuth.close(); await remote.close(); let engineCloseError; try { await engine.close(); } catch (error) { engineCloseError=error; } await attachments.close(); await copilot.close(); await codex.close(); await claude.close(); await life.close?.(); await service.browserHistory?.close(); let activityCloseError; try { await activity.close(); } catch (error) { activityCloseError=error; }
     for (const client of eventClients) client.end(); eventClients.clear();
     await new Promise(resolve => {
@@ -634,6 +638,16 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   } };
   service.browserHistory=new BrowserHistory(home,{hostId:()=>service.remote?.info().hostId});
   service.contentTabs=new ContentTabs(home,{history:service.browserHistory,onChange:result=>{notify();remote?.broadcast('tabs',{scope:result.scope,id:result.id,revision:result.revision},result.scope==='chat'?result.id:undefined);}});
+  service.projectFollow = new ProjectFollow({
+    validationStamp: () => fileStamp([context.file,preview.file]),
+    validate: value => { if(value.scope==='project')preview.projectFor({projectId:value.id},preview.snapshot());else context.scope(value.id); },
+    lookup: (value,id) => service.contentTabs.member(value.scope,value.id,id),
+    changed: value => {
+      const packet='event: project-follow\ndata: '+JSON.stringify(value)+'\n\n';
+      for(const client of eventClients)if(!client.destroyed){if(client.writableLength>262144)client.destroy();else client.write(packet);}
+      remote?.broadcastFollow(value);
+    }
+  });
   await preview.reconcileContentTabs(service.contentTabs,engine);
   service.tabManagement=new TabManagement(service);
   service.mutateContentTabs=async value=>{

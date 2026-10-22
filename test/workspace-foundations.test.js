@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -10,7 +11,7 @@ import { Engine } from '../src/engine.js';
 import { ContentTabs } from '../src/content-tabs.js';
 
 function setup(t, beforeRemove) {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'proteus-workspaces-')));
+  const root = fs.realpathSync(privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-workspaces-')));
   t.after(async () => { await beforeRemove?.(); fs.rmSync(root,{recursive:true,force:true}); });
   const home = path.join(root,'app'), one = path.join(root,'one'), two = path.join(root,'two');
   fs.mkdirSync(one);fs.mkdirSync(two);
@@ -53,9 +54,9 @@ test('one exhausted root does not block later roots and per-root refresh retains
 
 test('exclusions prune dependency trees and selection saves do not rescan',t=>{
  const f=setup(t);fs.mkdirSync(path.join(f.one,'vendor'));fs.writeFileSync(path.join(f.one,'vendor','AGENTS.md'),'# Dependency');
- const scanned=f.context.refresh();assert.ok(!scanned.entries.some(e=>e.path.includes('/vendor/')));const timestamp=scanned.refreshedAt;
+ const scanned=f.context.refresh();assert.ok(!scanned.entries.some(e=>e.path.split(path.sep).join('/').includes('/vendor/')));const timestamp=scanned.refreshedAt;
  f.context.mutate(c=>{c.modes[scanned.entries[0].id]='available';},f.context.config().revision);assert.equal(f.context.get().refreshedAt,timestamp);
- f.context.mutate(c=>{c.workspaces[0].discovery.exclusions=[];},f.context.config().revision);assert.ok(f.context.get().entries.some(e=>e.path.includes('/vendor/')));
+ f.context.mutate(c=>{c.workspaces[0].discovery.exclusions=[];},f.context.config().revision);assert.ok(f.context.get().entries.some(e=>e.path.split(path.sep).join('/').includes('/vendor/')));
 });
 
 test('cross-computer import maps source IDs and resets host-local grants',t=>{
@@ -114,7 +115,7 @@ test('scoped API mode changes, defaults, copy and chat index keep one owner and 
 test('inclusion paths traverse excluded parents while sibling dependencies remain excluded',t=>{
  const f=setup(t);for(const folder of ['vendor/owned','vendor/dependency']){fs.mkdirSync(path.join(f.one,folder),{recursive:true});fs.writeFileSync(path.join(f.one,folder,'AGENTS.md'),'# '+folder);}
  f.context.mutate(config=>{config.workspaces[0].discovery.inclusions=['vendor/owned'];},f.context.config().revision);
- assert.ok(f.context.get().entries.some(entry=>entry.path.includes('/vendor/owned/')));assert.ok(!f.context.get().entries.some(entry=>entry.path.includes('/vendor/dependency/')));
+ assert.ok(f.context.get().entries.some(entry=>entry.path.split(path.sep).join('/').includes('/vendor/owned/')));assert.ok(!f.context.get().entries.some(entry=>entry.path.split(path.sep).join('/').includes('/vendor/dependency/')));
 });
 
 test('workspace approval mode changes preserve fingerprint-specific rules and trusted grants',async t=>{

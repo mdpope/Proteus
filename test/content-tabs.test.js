@@ -1,3 +1,5 @@
+import {assertPrivate} from './helpers/permissions.js';
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -9,7 +11,7 @@ import {startRelay} from '../relay/server.js';
 import {RemoteClient,until} from './remote-client.mjs';
 import {secret} from '../src/remote-crypto.js';
 import {atomicJSON} from '../src/files.js';
-function store(t){const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-tabs-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));return {home,tabs:new ContentTabs(home)};}
+function store(t){const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-tabs-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));return {home,tabs:new ContentTabs(home)};}
 const browser={id:'browser-a',type:'browser',title:'Synthetic page',url:'https://example.test/one'};
 test('legacy browser-only main registry imports newly managed saved surfaces once and retains closed-tab authority',t=>{
  const {tabs,home}=store(t),session={tabs:[{id:'run-a',type:'run',label:'Saved chat'}, {...browser,label:'Stale browser title'}, {id:'term-view',type:'terminal',terminal:{id:'term-a'},label:'Saved terminal'}, {id:'viewer',type:'markdown',file:path.join(home,'fixture.md'),label:'Saved viewer'}, {id:'child-browser',type:'browser',parentId:'run-a',label:'Chat child',url:browser.url}]};
@@ -30,7 +32,7 @@ test('tab descriptors converge with atomic revisions, duplicate prevention and l
  const first=tabs.mutate({scope:'chat',id:'run-a',expectedRevision:0,operations:[{action:'open',tab:{...browser,cookies:'secret',selected:true,scroll:99,content:'private'}}]});assert.equal(first.revision,1);assert.deepEqual(first.tabs,[browser]);
  assert.equal(tabs.mutate({scope:'chat',id:'run-a',expectedRevision:1,operations:[{action:'open',tab:browser}]}).revision,1);
  assert.throws(()=>tabs.mutate({scope:'chat',id:'run-a',expectedRevision:0,operations:[{action:'close',id:browser.id}]}),/changed/);
- const second=new ContentTabs(home).mutate({scope:'chat',id:'run-a',expectedRevision:1,operations:[{action:'open',tab:{...browser,id:'browser-b'}},{action:'rename',id:browser.id,title:'Renamed'},{action:'reorder',ids:['browser-b','browser-a']}]});assert.equal(second.revision,2);assert.equal(second.tabs[1].title,'Renamed');assert.deepEqual(new ContentTabs(home).get('chat','run-a'),second);assert.equal(fs.statSync(tabs.file).mode&0o777,0o600);
+ const second=new ContentTabs(home).mutate({scope:'chat',id:'run-a',expectedRevision:1,operations:[{action:'open',tab:{...browser,id:'browser-b'}},{action:'rename',id:browser.id,title:'Renamed'},{action:'reorder',ids:['browser-b','browser-a']}]});assert.equal(second.revision,2);assert.equal(second.tabs[1].title,'Renamed');assert.deepEqual(new ContentTabs(home).get('chat','run-a'),second);assertPrivate(tabs.file,0o600);
  tabs.mutate({scope:'chat',id:'run-a',expectedRevision:2,operations:[{action:'close',id:'browser-b'},{action:'close',id:'browser-a'}]});tabs.seedWorkspace({tabs:[{id:'run-a',type:'run'},{...browser,type:'browser',parentId:'run-a',label:'Stale restore'}]});assert.equal(tabs.get('chat','run-a').tabs.length,0);
 });
 test('sync sanitizes private URLs, separates scopes and never exports terminals or source paths',t=>{
@@ -41,7 +43,7 @@ test('sync sanitizes private URLs, separates scopes and never exports terminals 
 });
 test('corrupt tab state is preserved rather than silently replaced',t=>{const {tabs}=store(t);fs.writeFileSync(tabs.file,'bad');assert.throws(()=>tabs.get('chat','run'),/preserved/);assert.equal(fs.readFileSync(tabs.file,'utf8'),'bad');});
 test('paired synthetic clients reconcile descriptors and enforce current document grants and revocation',async t=>{
- const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-tabs-protocol-'));const workspace=path.join(home,'workspace');fs.mkdirSync(workspace);atomicJSON(path.join(home,'settings.json'),{schemaVersion:1,provider:'rehearsal',model:'',timezone:'UTC',workspace:{cwd:workspace,additionalDirectories:[]},skillDirectories:[],mcpServers:{}});
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-tabs-protocol-'));const workspace=path.join(home,'workspace');fs.mkdirSync(workspace);atomicJSON(path.join(home,'settings.json'),{schemaVersion:1,provider:'rehearsal',model:'',timezone:'UTC',workspace:{cwd:workspace,additionalDirectories:[]},skillDirectories:[],mcpServers:{}});
  const token=secret(),relay=await startRelay({port:0,token}),app=await startServer({home,port:0,timers:false}),clients=[];
  t.after(async()=>{clients.forEach(c=>c.close());await app.close();await relay.close();fs.rmSync(home,{recursive:true,force:true});});
  const url=`ws://127.0.0.1:${relay.port}`;await app.remote.configure({enabled:true,mode:'external',relayURL:url,publicURL:url,relayToken:token});await until(()=>app.remote.status==='online');
@@ -77,7 +79,7 @@ test('paired synthetic clients reconcile descriptors and enforce current documen
 test('host-open document registry remains private and resolves only an open chat-bound descriptor',t=>{
  const {tabs}=store(t),session={tabs:[{id:'run-a',type:'run'},{id:'notes',type:'markdown',parentId:'run-a',file:'/tmp/synthetic-notes.md',label:'Notes'}]};
  tabs.seedWorkspace(session);const descriptor=tabs.get('chat','run-a').tabs[0];assert.doesNotMatch(JSON.stringify(descriptor),/\/tmp|source|content/);assert.equal(tabs.documentSource('run-a',descriptor.documentId),'/tmp/synthetic-notes.md');assert.throws(()=>tabs.documentSource('run-b',descriptor.documentId),/no longer open/);
- tabs.mutate({scope:'chat',id:'run-a',expectedRevision:1,operations:[{action:'close',id:descriptor.id}]});assert.throws(()=>tabs.documentSource('run-a',descriptor.documentId),/no longer open/);assert.equal(fs.statSync(tabs.sourcesFile).mode&0o777,0o600);
+ tabs.mutate({scope:'chat',id:'run-a',expectedRevision:1,operations:[{action:'close',id:descriptor.id}]});assert.throws(()=>tabs.documentSource('run-a',descriptor.documentId),/no longer open/);assertPrivate(tabs.sourcesFile,0o600);
  fs.writeFileSync(tabs.sourcesFile,'corrupt');assert.throws(()=>tabs.seedWorkspace(session),/preserved/);assert.equal(fs.readFileSync(tabs.sourcesFile,'utf8'),'corrupt');
 });
 test('shared browser history keeps full redirect URLs and excludes engine page state',t=>{

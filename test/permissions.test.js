@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -7,7 +8,7 @@ import { PermissionStore, permissionContext } from '../src/permissions.js';
 import { Engine } from '../src/engine.js';
 import { startServer } from '../src/server.js';
 
-const temp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-permissions-'));
+const temp = () => privateTemporaryDirectory(path.join(os.tmpdir(), 'proteus-permissions-'));
 const schedule = cwd => ({ schemaVersion:1,id:'permissions',name:'Permissions fixture',enabled:false,cron:'0 9 * * 1-5',timezone:'America/Denver',provider:'copilot',model:'fixture',workspace:{cwd,additionalDirectories:[]},prompt:'Fixture',misfire:'skip' });
 const until = async predicate => { for(let i=0;i<100;i++){if(predicate())return;await new Promise(resolve=>setTimeout(resolve,10));}throw new Error('Condition timed out.'); };
 

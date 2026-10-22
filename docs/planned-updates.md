@@ -1,3 +1,58 @@
+## October 22 — completed source integration authorized
+
+The operator requested PR, push, merge, and source synchronization for the completed desktop,
+Windows installer/release, and native pairing work. The integration preserves both branches'
+behavior, including shared-account streaming and Windows-aware resumable update recovery.
+All 1,000 runnable Node tests, static checks, 101 web tests (867 assertions), the web build,
+and isolated browser UI acceptance pass; one Node test is platform-skipped. This source-only
+integration supersedes the earlier separate-branch notes. Existing installed-app rollout holds
+and physical mobile camera acceptance remain separate from Git completion.
+
+Windows integration validation requires writable handles for durable recovery flushes and portable
+private-directory/CRLF fixtures. Those corrections preserve read-only file modes and clean up failed
+fixture setup. The integration also takes the `markdown-it` 15.0.3 security patch and rebuilds its
+shared runtime. Hosted CI is blocked before job execution by account billing/spending limits.
+
+## October 22 — mobile pairing feedback and scanner correction
+
+The operator reports a false connection-refused message after successful iPhone pairing, silent
+iPad dismissal to Home, and an incorrectly rotated landscape iPad camera. The focused source fix
+adopts the pending transport into the saved destination, emits success only after authenticated
+`ready`, routes both form factors to Connections with a visible receipt, and sequences camera
+dismissal before pairing. The preview follows AVFoundation camera rotation updates.
+
+Phone/tablet success and sheet dismissal, 12 destination cases, the actual-refusal preservation
+case, 979 Node tests and static checks pass. Existing pairings, optional grants, history and saved device
+keys remain intact. No physical installation or camera-image acceptance is claimed. This scope
+does not release the separately held desktop browser/design-preview changes.
+
+## October 22 — additional browser controls and retained preview
+
+The operator rejected the Home URL/search box added during earlier Apple browser preparation. Remove it entirely and make Proteus the primary Home heading; do not relocate the box elsewhere on Home.
+
+Implemented for the operator's next design-preview review: detached-video surface dragging and
+proportional work-area-bounded pinch resizing; Hide browser tab below Unload; scoped blank-strip
+double-click creation; persistent autoplay verification; optional ordered extension toolbar icons;
+Downloads/Page menu swap; compact tab/page-menu icons. Preserve the current player's WebContents,
+full histories, local profiles, existing permissions and retained preview data. Production builds
+and all-platform installation remain held pending operator review. See [browser behavior](browser.md)
+and [preview acceptance](desktop-preview.md).
+
+## October 22 — authorized stabilization implemented in source
+
+The operator authorized the architecture/performance plan and selected-scope desktop follow-along.
+See [the acceptance ledger](stabilization-plan.md) for implementation and verification, and
+[follow-along](project-follow.md) for exact scope. Use independent local browser profiles; do not
+share credentials or remotely render pages. Preserve the beginning of browsing sessions. Clients
+on another workspace/project stay inactive and catch up when selected. Keep UI changes to minor
+spacing/wrapping. Interactive terminal output stays on its owner; no new license is selected.
+
+Implemented tracks include update provenance/storage, account/Life reads, renderer lifecycle,
+history deltas, bounded transport/cache work, and current contributor/architecture documentation.
+Deployment and signed installed-device acceptance remain separate from source completion.
+The earlier entries below are retained design/release history, not evidence that all queued items
+remain unimplemented or authorization to install a new build.
+
 ## October 22 — agent chat control integrated into current source
 
 The operator authorized implementation, demo/cross-device tests and integration of feature
@@ -19,6 +74,43 @@ Temporary Linux pairing revoked and synthetic chats archived; existing owner sta
 Real local Copilot/Codex tool calls pass. Those real-provider/physical checks were not repeated
 for this merge; runtime and test files are byte-identical to the feature commit. Live Claude
 and installed-feature rollout remain unverified.
+## October 22 — Windows chrome follow-up
+
+WTB publication is live and all five public hashes/signature/full downloads verify. The actual
+installed Windows consumer checks the catalog, downloads the entire final archive, verifies and
+extracts its package, then passes isolated renderer startup. No redundant current-build reinstall.
+Relay registration/online transport preserves identity; device pairing remains pending a supported
+live interface. This supersedes the in-progress publication notes below.
+
+Windows now reuses the Linux frameless shell controls and circled-dots File/Edit/View/Window menu,
+with native shortcuts, F10 access and sender-bound actions. Source and exact packaged UI checks
+pass. Build `windows.2cf4ad5cdad6` passes 887 tests with two skips and static checks, then completes
+the actual installed signed-release update with healthy renderer, exact payload and identity/data
+preservation. One verified recovery generation remains. The restored Mac chat received the authorized
+handoff and is preparing WTB deployment while activation waits for the replacement artifacts.
+
+## October 22 — Windows WTB release acceptance
+
+The latest operator choice selects downloads.proteus.example Windows downloads, an unsigned conventional installer
+and signed update manifests. The Windows branch integrates upstream `5b8b708` (0.2.28). Build
+`windows.6e46560c3ce5` freezes 308 runtime files. Validation passes 886 of 888 tests with two existing
+POSIX skips and static checks. Exact packaged UI, native PTY, provider readiness, rehearsal
+persistence and restart pass. Real NSIS checks cover payload equality, URI registration, offline
+preparation/cancellation, active-app refusal and uninstall preservation. The final build passes a
+real Codex update with the original session automatically resumed once and history/receipts intact.
+Its packaged WTB client downloads and verifies the complete locally served publication archive.
+An injected health failure also passes compatible rollback with the same real session resumed once.
+The final installer is installed locally; the actual renderer, normal restart, stable host identity,
+single owner and disabled debugging are verified. The new browser profile inherited extra Windows
+ACL grants; after inspection its permissions were restricted without changing contents. The live
+home has no chats or enabled schedules and no recovery generations. The separate website service
+passes 27 focused release/Life/native-auth tests. See [Windows instructions](windows-app.md).
+
+WTB publication is authorized for this Windows scope and remains staged. The Windows host has no
+deployment workspace or signed-in Webmin session; the coordinating Mac chat is not addressable from
+its thread tools. The operator authorized the Mac handoff. Actual WTB endpoint/consumer acceptance
+and existing relay/device pairing still require the private deployment workflow and registration
+record. No Mac/iOS signing identity or existing device data is changed by this Windows work.
 
 ## October 22 — source review and repository checkpoint
 

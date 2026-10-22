@@ -1,3 +1,38 @@
+## Unreleased — integrated desktop and mobile source
+
+- Combine the Windows installer and signed WTB release channel with the current desktop stabilization, browser controls, and native pairing fixes.
+- Preserve asynchronous package inspection, versioned provenance, resumable recovery, and Windows atomic replacement together; stream authenticated release downloads through the shared account session.
+- Keep the relay's standalone Linux container independent of desktop source files and correct directory permissions in cross-platform test fixtures.
+- Flush resumable recovery copies through a writable handle on Windows while preserving read-only source modes; make chat/follow fixtures portable and clean up partial setup failures.
+- Update Markdown rendering to the patched `markdown-it` 15.0.3 and rebuild the shared desktop/native runtime; dependency audit reports no known vulnerabilities.
+- Integration acceptance: 1,000 Node tests pass with one platform skip, static checks pass, 101 web tests pass (867 assertions), the web build passes, and isolated browser UI checks pass. Installed-app rollout and physical mobile camera acceptance remain separate.
+
+## Unreleased — mobile pairing completion
+
+- Keep the authenticated pairing transport when saving a computer, preserving other destinations and existing cached history.
+- Dismiss Add computer after authentication, show explicit pairing success, and open Engine Room → Connections on phone and tablet.
+- Wait for the QR scanner to dismiss before pairing; rotate its camera preview with the device using AVFoundation's rotation coordinator.
+- Phone/tablet pairing UI, destination-preservation regressions, 979 Node tests and static checks pass. Physical app update and camera-image acceptance remain pending.
+
+## Unreleased — browser controls review
+
+- Remove the unrequested Home URL/search box; make Proteus the primary heading and retain browsing in browser tabs.
+- Drag detached video windows from the video surface and pinch to resize within the display work area, retaining the original player and controls.
+- Add Hide browser tab below Unload and double-click blank tab-strip space to create a scoped browser tab.
+- Add optional extension toolbar icons and per-profile ordering in Browser Preferences; show small extension/action icons in tab and page menus.
+- Place Downloads before the Page menu, and verify device-wide autoplay blocking across restart.
+- Refresh the retained isolated design preview for operator review; production/platform installation remains held. See [preview acceptance](docs/desktop-preview.md).
+
+## Unreleased — stabilization and scoped desktop follow-along
+
+- Add Open Link in Background Tab below the foreground new-tab action; load in the source profile and placement while preserving selection/focus. Keep the unloaded option.
+- Follow selected project/workspace tabs, browser URLs, and reading positions across paired desktops using each device's local profile. Keep inactive scopes idle; preserve full session history and existing approvals. Terminal output stays on its owner.
+- Reduce repeated browser state broadcasts, offscreen conversation/terminal work, idle refresh traffic, transcript hydration, and duplicate persistence; bound transport and inactive history memory.
+- Add versioned updater provenance, bounded worker-based package inspection, safe staging retirement, resumable cache-aware recovery, and read-only storage accounting under the two-generation policy.
+- Separate shared-account authentication, add selective/paged reads and revision-protected deletes, and move Life filtering/aggregation into SQL without changing immutable food versions.
+- Correct narrow composer spacing/wrapping; retain existing navigation and controls. Add contributor/security guidance and current architecture; leave the license unchanged.
+- Implementation and synthetic acceptance are recorded in [the stabilization ledger](docs/stabilization-plan.md). No installed app, website deployment, signing identity, or live backup was changed.
+
 ## Unreleased — agent chat control (merged source; rollout held)
 
 - Add host-scoped conversation discovery, dispatch, read/wait, ordinary-question replies and cancellation to internal provider tools and trusted local MCP.
@@ -5,6 +40,14 @@
 - Show task feedback in the conversation, allow concurrent MCP waits/replies and report complete owner paging beyond 1,000 chats.
 - Keep project-scoped mutations capability-gated on older owners. See [agent chat control](docs/agent-chat-control.md) for verification and integration boundaries.
 - Integrate feature commit `2a825a1` while preserving the current release work; rerun all 883 tests, static checks and isolated Electron feedback/peer-setup/message regressions. Installation and deployment remain held.
+## Unreleased — Windows installer and signed WTB desktop releases
+
+- Match Linux's frameless desktop shell on Windows, with the same upper-left window controls and circled-dots File/Edit/View/Window menu button, F10 access and native shortcuts.
+- Add a per-user Windows x64 NSIS installer, native PowerShell terminal startup/cleanup, provider executable discovery and owner-only data/credential ACL checks.
+- Retry transient Windows sharing violations during atomic state replacement without removing the previous durable file; preserve update-button gating after cancellation.
+- Add trusted signed release manifests, a pinned downloads.proteus.example Windows catalog/download channel, bounded verified offline/network staging, and registered Windows installer recovery through the existing protocol-1 helper. Keep the separately authenticated website service compatible without sending its account credentials to WTB.
+- Allow Engine Room updates without a chat while preserving exactly-once continuation for selected chats; initialize recovery inventory only for a genuinely new registered Windows data home.
+- Keep unsigned Windows packaging explicit, register per-user chat/sign-in links, preserve data on uninstall/rollback, and carry the current 0.2.28 shared source. Exact build, installed-update and cross-device acceptance are recorded separately in `docs/windows-app.md`.
 
 ## Unreleased — navigation and Apple identity review
 

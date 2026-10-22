@@ -1,3 +1,4 @@
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -7,7 +8,7 @@ import { SettingsStore } from '../src/settings.js';
 import { startServer } from '../src/server.js';
 
 test('state polling preserves captured scheduled-run permissions without recapturing a large history', async () => {
-  const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-state-captures-')));
+  const base = fs.realpathSync(privateTemporaryDirectory(path.join(os.tmpdir(), 'proteus-state-captures-')));
   const home = path.join(base, 'app'), root = path.join(base, 'work'), added = path.join(base, 'future');
   fs.mkdirSync(root); fs.mkdirSync(added);
   fs.writeFileSync(path.join(root, 'AGENTS.md'), '# Original captured guidance');

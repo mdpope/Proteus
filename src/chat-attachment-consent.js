@@ -1,3 +1,4 @@
+import {atomicRename} from './atomic-rename.cjs';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -10,7 +11,7 @@ const metadata=item=>Object.fromEntries(['attachmentId','name','mediaType','size
 /** One explicit sender action authorizes these exact staged bytes for one provider/chat/message. */
 export class ChatAttachmentConsents {
   constructor(store,{clock=()=>Date.now()}={}){this.store=store;this.clock=clock;this.grants=new Map();this.proofFile=path.join(store.base,'send-proofs.json');this.prepared=new Map();if(fs.existsSync(this.proofFile)){try{const saved=JSON.parse(fs.readFileSync(this.proofFile,'utf8'));if(saved.schemaVersion!==1||!Array.isArray(saved.items))throw new Error('invalid schema');for(const item of saved.items){if(typeof item?.proofId!=='string'||typeof item.chatId!=='string'||typeof item.providerId!=='string'||!Array.isArray(item.attachments)||item.used===true)continue;this.prepared.set(item.proofId,item);}}catch{throw new Error('Accepted attachment send proofs could not be read. The original record was preserved.');}}}
-  persistProofs(){const body=JSON.stringify({schemaVersion:1,items:[...this.prepared.entries()].map(([proofId,value])=>({proofId,...value}))});const tmp=this.proofFile+'.tmp';fs.writeFileSync(tmp,body,{mode:0o600});fs.chmodSync(tmp,0o600);fs.renameSync(tmp,this.proofFile);}
+  persistProofs(){const body=JSON.stringify({schemaVersion:1,items:[...this.prepared.entries()].map(([proofId,value])=>({proofId,...value}))});const tmp=this.proofFile+'.tmp';fs.writeFileSync(tmp,body,{mode:0o600});fs.chmodSync(tmp,0o600);atomicRename(tmp,this.proofFile);}
   prune(){const now=this.clock();for(const [id,grant]of this.grants)if(grant.expiresAt<=now)this.grants.delete(id);}
   revokeDevice(deviceId){for(const [id,grant]of this.grants)if(grant.deviceId===deviceId)this.grants.delete(id);for(const [id,grant]of this.prepared)if(grant.deviceId===deviceId)this.prepared.delete(id);this.persistProofs();}
   revokeChat(chatId){for(const [id,grant]of this.grants)if(grant.chatId===chatId)this.grants.delete(id);for(const [id,proof]of this.prepared)if(proof.chatId===chatId)this.prepared.delete(id);this.persistProofs();}

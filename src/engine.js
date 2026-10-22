@@ -24,7 +24,7 @@ export function suggestedChatTitle(prompt) {
 }
 export class Engine extends EventEmitter {
   constructor(home, providers = {}, clock = () => new Date(), { desktopPreview = false, permissionControls = desktopPreview, recoveryBarrier=false } = {}) {
-    super();this.updateBarrier=recoveryBarrier;this.historyCache=new RunHistoryCache(id=>path.join(home,'runs',id+'.json')); this.home = home; this.clock = clock;
+    super();this.updateBarrier=recoveryBarrier;this.historyCache=new RunHistoryCache(id=>path.join(home,'runs',id+'.json'),4,{isPinned:run=>this.running?.has(run.id)||[...(this.backgroundRuns?.values()||[])].some(slot=>slot.id===run.id)}); this.home = home; this.clock = clock;
     this.schedules = new ScheduleStore(path.join(home, 'schedules'));
     this.permissions = new PermissionStore(home, {preserveInheritedDefaults:permissionControls===true});
     this.runsDir = path.join(home, 'runs');
@@ -59,7 +59,7 @@ export class Engine extends EventEmitter {
   now() { return this.clock().toISOString(); }
   persist(run) { if(this.tombstones[run.id]||!this.runs.has(run.id))throw new Error('Deleted chat cannot be restored.');
     if(run.chatPermission && run.chatPermission.contextId !== permissionContext(run.schedule).id){run.chatPermission=null;run.chatPermissionRevision=randomUUID();}
-    run.updatedAt = this.now(); atomicJSON(path.join(this.runsDir, `${run.id}.json`), run); this.historyCache.attach(run);this.historyCache.trim(run.id);this.emit('change', run); }
+    run.updatedAt = this.now(); const bytes=atomicJSON(path.join(this.runsDir, `${run.id}.json`), run); this.historyCache.attach(run,bytes);this.emit('change', run); }
   event(run, role, text, data) {
     run.events.push({ role, text, ...(role === 'assistant' ? { agentName: agentName(run) } : {}), data:{...data,...(run.turns?.at(-1)&&['running','awaiting_input'].includes(run.status)?{turnId:run.turns.at(-1).id}:{})}, at: this.now() }); this.persist(run);
   }
@@ -363,7 +363,7 @@ export class Engine extends EventEmitter {
       });
       run.pending = { ...request, id: randomUUID() }; run.status = 'awaiting_input';pauseTurn(run,this.now(),run.pending.id);
       if(request.type!=='permission'){const question={id:run.pending.id,text:String(request.question||''),choices:request.choices||[],options:request.optionDetails||request.choices||[],providerQuestionId:request.providerQuestionId||null,status:'pending',askedAt:this.now()};this.event(run,'system','**Question**\n\n'+question.text+(question.choices.length?'\n\n'+question.options.map(choice=>'• '+(typeof choice==='string'?choice:(choice.label||choice.title||'')+(choice.description?' — '+choice.description:''))).join('\n'):''),{question});}
-      this.persist(run);
+      else this.persist(run);
     });
   }
   recordAutomaticPermission(run, request, decision) {
@@ -439,7 +439,7 @@ export class Engine extends EventEmitter {
         const next = run.queuedMessages.shift(); if (next.modelOptions) this.applyModelOptions(run, next.modelOptions); run.nextPrompt = next.prompt;run.nextAttachmentDispatch=next.attachmentDispatch; run.status = 'queued';
         const event=run.events.find(e=>e.data?.delivery?.id===next.id);if(event)event.data.delivery.state='delivered';
       }
-      this.persist(run); if (lane) this.backgroundRuns.delete(lane); else this.running.delete(run.id);
+      this.persist(run); if (lane) this.backgroundRuns.delete(lane); else this.running.delete(run.id);this.historyCache.trim();
       queueMicrotask(() => this.drain());
     }
   }

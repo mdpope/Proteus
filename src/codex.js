@@ -1,4 +1,6 @@
 import {chatControlTools} from './chat-control-tools.js';
+import {privateTemporaryDirectory} from './private-paths.cjs';
+import {windowsProviderExecutable} from './windows-provider.js';
 import {integrationTools} from './integration-tools.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -15,7 +17,7 @@ import { canonicalPath, effectivePermissionMode } from './permissions.js';
 import { validateModelOptions } from './model-catalog.js';
 const proteusVersion=JSON.parse(fs.readFileSync(new URL('../package.json',import.meta.url),'utf8')).version;
 
-export const codexExecutable = () => process.env.PROTEUS_CODEX_PATH || ['/opt/homebrew/bin/codex','/usr/local/bin/codex','/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex','/Applications/Codex.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex','/Applications/ChatGPT.app/Contents/Resources/codex','/Applications/Codex.app/Contents/Resources/codex'].find(p=>fs.existsSync(p)) || 'codex';
+export const codexExecutable = () => process.env.PROTEUS_CODEX_PATH || (process.platform==='win32'?windowsProviderExecutable('codex'):['/opt/homebrew/bin/codex','/usr/local/bin/codex','/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex','/Applications/Codex.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex','/Applications/ChatGPT.app/Contents/Resources/codex','/Applications/Codex.app/Contents/Resources/codex'].find(p=>fs.existsSync(p)) || 'codex');
 export function codexModel(model) {
  const efforts=(model.supportedReasoningEfforts||[]).map(e=>typeof e==='string'?e:e.reasoningEffort);
  return {id:model.model||model.id,name:model.displayName||model.id,isDefault:model.isDefault,description:model.description,controls:{reasoningEfforts:efforts,reasoningSupported:efforts.length>0,defaultReasoningEffort:model.defaultReasoningEffort||null,contextTiers:[{id:'default',promptTokens:null,totalTokens:null}],maxOutputTokens:null,serviceTiers:(model.serviceTiers||[]).map(t=>({id:t.id||t.serviceTier,name:t.displayName||t.name||t.id||t.serviceTier})).filter(t=>t.id)}};
@@ -237,7 +239,7 @@ export class CodexProvider {
    if(signal.aborted)throw new Error('Cancelled');
    if(active.recheckPermissions())throw new Error('Workspace permissions changed before the Codex turn started.');
    const input=[{type:'text',text:prompt}];
-   if(attachments.some(item=>item.mediaType.startsWith('image/'))){imageDir=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-codex-image-'));}
+   if(attachments.some(item=>item.mediaType.startsWith('image/'))){imageDir=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-codex-image-'));}
    if(attachments.length){
     const extensions={'image/png':'png','image/jpeg':'jpg','image/gif':'gif','image/webp':'webp'};
     for(const [index,item] of attachments.entries()){

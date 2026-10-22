@@ -4,6 +4,7 @@ const svg=name=>`<svg viewBox="0 0 24 24" width="18" height="18" fill="none" str
 const handles=new Set(),mounts=new WeakMap();
 let active=null,context='',observer;
 const synthesis=()=>globalThis.speechSynthesis;
+function setIcon(button,name){if(button.messageActionIcon===name)return;button.messageActionIcon=name;button.innerHTML=svg(name);}
 function localVoice(){
  const voices=synthesis()?.getVoices?.().filter(v=>v.localService===true)||[];
  const lang=document.documentElement.lang||navigator.language||'en',locale=navigator.language||lang;
@@ -27,14 +28,14 @@ export function readableMessageText(rendered){
 function display(handle){
  const owner=active?.handle===handle?active:null,available=!!localVoice();
  handle.speak.disabled=!owner&&!available;
- handle.speak.innerHTML=svg(owner?'stop':'speak');
+ setIcon(handle.speak,owner?'stop':'speak');
  handle.speak.setAttribute('aria-label',owner?'Stop reading aloud':available?'Read aloud':'Read aloud unavailable: no local system voice');
  handle.speak.setAttribute('aria-pressed',String(!!owner));
  handle.speak.title=owner?'Stop reading aloud':available?'Read aloud':'Read aloud unavailable: no local system voice';
  handle.playback.hidden=!owner;
  if(owner){
   const position=owner.seekPreview??Math.round(owner.index/owner.content.length*1000),percent=Math.round(position/10);
-  handle.pause.innerHTML=svg(owner.paused?'resume':'pause');handle.pause.setAttribute('aria-label',owner.paused?'Resume reading':'Pause reading');handle.pause.title=owner.paused?'Resume reading':'Pause reading';
+  setIcon(handle.pause,owner.paused?'resume':'pause');handle.pause.setAttribute('aria-label',owner.paused?'Resume reading':'Pause reading');handle.pause.title=owner.paused?'Resume reading':'Pause reading';
   handle.seek.value=String(position);handle.position.textContent=percent+'%';handle.seek.setAttribute('aria-valuetext',percent+' percent through message text');
  }
 }
@@ -54,11 +55,14 @@ function feedback(handle,message){handle.status.textContent=message;handle.notif
 function reconcile(){
  for(const handle of handles)if(!handle.container.isConnected){handles.delete(handle);clearTimeout(handle.copyTimer);}
  if(active&&!active.handle.container.isConnected)stopMessageSpeech();
+ releaseObserver();
 }
+function voicesChanged(){for(const handle of handles)display(handle);}
+function releaseObserver(){if(handles.size)return;observer?.disconnect();observer=null;synthesis()?.removeEventListener?.('voiceschanged',voicesChanged);globalThis.removeEventListener('pagehide',stopMessageSpeech);}
 function observe(){
  if(observer||!document.documentElement)return;
- observer=new MutationObserver(reconcile);observer.observe(document.documentElement,{childList:true,subtree:true});
- synthesis()?.addEventListener?.('voiceschanged',()=>{for(const handle of handles)display(handle);});
+ observer=new MutationObserver(records=>{if(records.some(record=>record.removedNodes.length))reconcile();});observer.observe(document.documentElement,{childList:true,subtree:true});
+ synthesis()?.addEventListener?.('voiceschanged',voicesChanged);
  globalThis.addEventListener('pagehide',stopMessageSpeech);
 }
 function wordStart(text,index){
@@ -105,7 +109,7 @@ export function mountMessageActions(container,{key,text,rendered,copy,notify}={}
  container.innerHTML=button('copy','Copy message','copy')+button('speak','Read aloud','speak')+`<div class="message-playback" hidden>${button('pause','Pause reading','pause')}${button('stop','Stop reading aloud','stop')}<input type="range" data-message-seek min="0" max="1000" step="1" value="0" aria-label="Reading position" title="Position in message text"><output class="message-playback-position">0%</output></div><span class="message-action-status" role="status" aria-live="polite"></span>`;
  handle={container,key,text:String(text??''),rendered,copy,notify,copyButton:container.querySelector('[data-message-action="copy"]'),speak:container.querySelector('[data-message-action="speak"]'),pause:container.querySelector('[data-message-action="pause"]'),playback:container.querySelector('.message-playback'),seek:container.querySelector('[data-message-seek]'),position:container.querySelector('.message-playback-position'),status:container.querySelector('.message-action-status'),copyTimer:null,destroyed:false,seeking:false};
  handle.update=value=>{const next=String(value.text??'');if(active?.handle===handle&&handle.text!==next)stopMessageSpeech();Object.assign(handle,{...value,text:next});display(handle);};
- handle.destroy=()=>{if(active?.handle===handle)stopMessageSpeech();clearTimeout(handle.copyTimer);handles.delete(handle);mounts.delete(container);handle.destroyed=true;container.replaceChildren();};
+ handle.destroy=()=>{if(active?.handle===handle)stopMessageSpeech();clearTimeout(handle.copyTimer);handles.delete(handle);mounts.delete(container);handle.destroyed=true;container.replaceChildren();releaseObserver();};
  handle.copyButton.onclick=async()=>{
   try{
    const copyText=handle.copy||((value)=>navigator.clipboard.writeText(value));await copyText(handle.text);
@@ -134,5 +138,5 @@ export function mountMessageActions(container,{key,text,rendered,copy,notify}={}
  handle.seek.onchange=()=>seekTo(handle,Number(handle.seek.value)/1000);
  // Whole-page web renders may replace the active toolbar in the same event turn.
  if(active?.handle.key===key){if(active.handle.text===handle.text)active.handle=handle;else stopMessageSpeech();}
- mounts.set(container,handle);handles.add(handle);display(handle);return handle;
+ mounts.set(container,handle);handles.add(handle);observe();display(handle);return handle;
 }

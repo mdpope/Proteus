@@ -721,7 +721,7 @@ struct MainBrowserSelectionRequest: Equatable {
         saveDocumentTabs()
     }
     func selectChatChild(_ id: String, for chatKey: String) { chatSelectedChildren[chatKey] = id; saveDocumentTabs() }
-    func refresh(_ life: LifeStore) async {
+    func refresh(_ life: LifeStore, collections: [String]? = nil) async {
         if NativeDesignPreview.fixtureService {
             do { snapshot = try await fixtureAppRequest(); error = nil } catch { self.error = error.localizedDescription }
             return
@@ -739,7 +739,7 @@ struct MainBrowserSelectionRequest: Equatable {
         reset(for: life.accountIdentity); let expected = life.accountIdentity
         guard life.credential?.appAuthorized == true else { accountConnected = false; profilesVerified = false; for tab in browserTabs where tab.profileId != "default" { unload(tab.id) }; return }
         busy = true; defer { busy = false }
-        do { let value = try await life.appRequest(); guard expected == life.accountIdentity else { return }; snapshot = value; accountConnected = true; profilesVerified = true; saveBrowsers(); for tab in browserTabs where !profileAvailable(tab.profileId) { unload(tab.id) }; error = nil }
+        do { let value = try await life.appRequest(collections: collections); guard expected == life.accountIdentity else { return }; snapshot = .object(snapshot.object.merging(value.object) { _, new in new }); accountConnected = true; if value.object["browserProfiles"] != nil { profilesVerified = true; saveBrowsers(); for tab in browserTabs where !profileAvailable(tab.profileId) { unload(tab.id) } }; error = nil }
         catch { accountConnected = false; self.error = life.display(error) }
     }
     @discardableResult func mutate(_ life: LifeStore, path: String, method: String = "POST", body: JSON) async -> JSON? {
@@ -761,7 +761,13 @@ struct MainBrowserSelectionRequest: Equatable {
         }
         #endif
         let expected = life.accountIdentity
-        do { let result = try await life.appRequest(path, method: method, body: body); guard expected == life.accountIdentity else { return nil }; await refresh(life); return result }
+        do {
+            let result = try await life.appRequest(path, method: method, body: body); guard expected == life.accountIdentity else { return nil }
+            let kind = path.split(separator: "/").first.map(String.init) ?? ""
+            let keys = ["browser-profiles": "browserProfiles", "team-lists": "teamLists", "links": "links", "history": "history", "notifications": "notifications", "logs": "logs"]
+            let collections: [String]? = keys[kind].map { [$0] } ?? (kind == "preferences" || kind == "push-subscriptions" ? [] : nil)
+            await refresh(life, collections: collections); return result
+        }
         catch { self.error = life.display(error); return nil }
     }
     /// Debug simulator rehearsal of the existing website API. Never routes real account records.
