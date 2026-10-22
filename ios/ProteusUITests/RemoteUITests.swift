@@ -42,6 +42,38 @@ private let nativeFixtureRelayOrigin = ProcessInfo.processInfo.environment["PROT
     return app
 }
 final class RemoteUITests: XCTestCase {
+    @MainActor func testPairingShowsSuccessInConnectionsAndDismissesAddComputer() async throws {
+        func invitation(_ suffix: String = "") async throws -> String {
+            let request = URLRequest(url: URL(string: "\(nativeFixtureHTTPOrigin)/pair" + suffix)!, cachePolicy: .reloadIgnoringLocalCacheData)
+            let (data, _) = try await URLSession.shared.data(for: request)
+            return try XCTUnwrap((JSONSerialization.jsonObject(with: data) as? [String: Any])?["code"] as? String)
+        }
+        let first = try await invitation()
+        let app = nativeFixtureApplication(); app.launchArguments = ["--reset-pairing"]; app.launch()
+        let link = app.descendants(matching: .any).matching(identifier: "pairing-link").firstMatch
+        func submit(_ code: String) {
+            XCTAssertTrue(link.waitForExistence(timeout: 15)); link.tap(); link.typeText(code)
+            let keyboard = app.buttons["Hide keyboard"]
+            if keyboard.exists { keyboard.tap() }
+            let pair = app.buttons["pair-mac"]
+            for _ in 0..<4 where !pair.exists || !pair.isHittable { app.swipeUp() }
+            XCTAssertTrue(pair.waitForExistence(timeout: 5)); pair.tap()
+        }
+        submit(first)
+        let success = app.descendants(matching: .any).matching(identifier: "pairing-success").firstMatch
+        XCTAssertTrue(success.waitForExistence(timeout: 25))
+        XCTAssertTrue(app.buttons["Add computer"].exists, "Success must land on Connections")
+        let second = try await invitation("?host=second")
+        app.buttons["Add computer"].tap()
+        submit(second)
+        XCTAssertTrue(success.waitForExistence(timeout: 25))
+        let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: link)
+        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 10), .completed)
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "relay refused")).firstMatch.exists)
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "select-")).count, 2)
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Pairing success and retained computers in Connections"; shot.lifetime = .keepAlways; add(shot)
+    }
+
     @MainActor func testNativeProjectsOwnerLifecycleAndScopedTabs() async throws {
         let (data, _) = try await URLSession.shared.data(from: URL(string: "\(nativeFixtureHTTPOrigin)/pair?projects=1")!)
         let fixture = try JSONSerialization.jsonObject(with: data) as! [String: Any]

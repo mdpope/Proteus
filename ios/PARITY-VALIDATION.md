@@ -1,3 +1,21 @@
+## October 22 — pairing transport and explicit completion
+
+The pending RemoteStore is retained as the saved destination through authenticated `ready`.
+Twelve destination tests pass on iPhone, including same-transport identity, durable registration,
+sheet-dismissal preservation, reconnect without duplicate success, multi-host/cache isolation
+and re-pair history retention. The existing unauthenticated-refusal test also passes: real refusal
+still preserves saved keys and history. The transport-completion case passes independently on iPad.
+
+The new native UI flow passes on phone and tablet: pair an initial host, land on Connections,
+add a second host, show explicit success and dismiss Add computer while preserving both rows.
+Final screenshots are reviewed. The first iPad attempt stopped at its keyboard-obscured Pair
+button; the corrected interaction dismisses the keyboard and scrolls if needed. A separate
+landscape precondition failed because the simulator retained portrait bounds after rotation was
+requested. Do not call the portrait UI screenshots or that attempted run landscape acceptance.
+979 Node tests and static checks pass. The camera uses AVFoundation's camera-specific rotation
+coordinator and compiles, but physical camera pixels and QR scanning remain unverified. No physical
+app, data container, pairing, signing profile or recovery generation was changed by these tests.
+
 ## October 22, 2026 — project, browser and composer regressions
 
 All 139 native unit tests passed on iPhone and iPad simulator runs. Repeated project switching

@@ -1,3 +1,16 @@
+## October 22 — mobile pairing feedback and scanner correction
+
+The operator reports a false connection-refused message after successful iPhone pairing, silent
+iPad dismissal to Home, and an incorrectly rotated landscape iPad camera. The focused source fix
+adopts the pending transport into the saved destination, emits success only after authenticated
+`ready`, routes both form factors to Connections with a visible receipt, and sequences camera
+dismissal before pairing. The preview follows AVFoundation camera rotation updates.
+
+Phone/tablet success and sheet dismissal, 12 destination cases, the actual-refusal preservation
+case, 979 Node tests and static checks pass. Existing pairings, optional grants, history and saved device
+keys remain intact. No physical installation or camera-image acceptance is claimed. This scope
+does not release the separately held desktop browser/design-preview changes.
+
 ## October 22 — additional browser controls and retained preview
 
 The operator rejected the Home URL/search box added during earlier Apple browser preparation. Remove it entirely and make Proteus the primary Home heading; do not relocate the box elsewhere on Home.

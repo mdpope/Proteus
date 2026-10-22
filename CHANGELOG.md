@@ -1,3 +1,10 @@
+## Unreleased — mobile pairing completion
+
+- Keep the authenticated pairing transport when saving a computer, preserving other destinations and existing cached history.
+- Dismiss Add computer after authentication, show explicit pairing success, and open Engine Room → Connections on phone and tablet.
+- Wait for the QR scanner to dismiss before pairing; rotate its camera preview with the device using AVFoundation's rotation coordinator.
+- Phone/tablet pairing UI, destination-preservation regressions, 979 Node tests and static checks pass. Physical app update and camera-image acceptance remain pending.
+
 ## Unreleased — browser controls review
 
 - Remove the unrequested Home URL/search box; make Proteus the primary heading and retain browsing in browser tabs.

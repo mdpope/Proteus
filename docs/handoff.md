@@ -1,3 +1,17 @@
+## October 22 — mobile pairing completion corrected in source
+
+The operator reports false refusal after successful phone pairing, silent iPad dismissal to Home,
+and wrong landscape camera orientation. The pending native transport now becomes the saved
+destination without a socket replacement; authenticated completion closes Add computer and
+opens Connections with visible success. QR dismissal precedes pairing, and AVFoundation drives
+camera preview rotation. See [native acceptance](../ios/PARITY-VALIDATION.md) and
+[remote behavior](remote.md).
+
+Phone/tablet pairing UI, 12 destination tests, refusal-preservation, 979 Node tests and static
+checks pass. Physical installation and camera-image acceptance remain separate. Do not bundle
+the separately held desktop design-preview rollout into this mobile correction. Live Windows
+release and real-device pairing receipts remain in their private operator/deployment records.
+
 ## October 22 — browser controls and Home correction ready for review
 
 The retained Design Preview is open at `0fdf5f9dc78c+dirty.19144eb051fb`, containing the

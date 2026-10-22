@@ -56,6 +56,7 @@ struct EngineRoomView: View {
                 .toolbar { if ["Resources", "MCP connections", "Notifications", "Logs"].contains(page) { Button("Refresh", systemImage: "arrow.clockwise") { Task { await load() } } } }
                 .task(id: page + (destinations.selectedID ?? "")) { await load() }
                 .sheet(isPresented: $adding, onDismiss: { destinations.cancelPairing() }) { NavigationStack { PairView().toolbar { Button("Cancel") { adding = false } } } }
+                .onChange(of: destinations.pairingCompletion) { _, completion in if completion != nil { adding = false; page = "Connections" } }
         }
     }
     private var mcpConnections: some View {

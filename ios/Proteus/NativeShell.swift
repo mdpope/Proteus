@@ -469,7 +469,11 @@ struct NativeShell: View {
         .onChange(of: opened) { _, _ in saveNavigation() }
         .onChange(of: selectedTab) { _, value in if value != nil { restoredSelection = nil }; saveNavigation() }
         .onChange(of: area) { _, _ in saveNavigation() }
-        .onChange(of: destinations.pairing != nil) { _, pairing in if pairing { area = .home } }
+        .onChange(of: destinations.pairingCompletion) { _, completion in
+            guard completion != nil else { return }
+            selectedTab = nil; enginePage = "Connections"; area = .engine
+            phoneChrome.drawer = false
+        }
         .onChange(of: life.accountIdentity) { _, identity in MessageSpeech.shared.stop(); shared.reset(for: identity); if NativeDesignPreview.enabled { phoneChrome.reset(); phoneChrome.cacheNamespace = identity } }
         .onChange(of: destinations.selectedID) { _, _ in MessageSpeech.shared.stop() }
         .task(id: destinations.selectedID) {

@@ -1,3 +1,12 @@
+## October 22 — adopt the mobile pairing transport
+
+Promote the pending native RemoteStore into the saved destination after its credential/index
+write succeeds. Move its encrypted cache to the host-specific path after draining pending writes;
+retain the old destination's history on re-pair. Do not create a second socket or rely on a
+Task.yield handoff during authentication. Keep persisted pairing separate from authenticated
+connection success: an ephemeral completion event routes the UI only after `ready`, and ordinary
+reconnects cannot reissue that event. Failure still preserves durable keys and cached history.
+
 ## October 22 — video gestures and extension placement
 
 Keep the existing native website WebContents in the detached video window. Isolated frame preloads

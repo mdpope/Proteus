@@ -2,6 +2,21 @@ Current cross-platform acceptance is recorded in [PR #20](https://github.com/mdp
 The dated/source-specific checkpoints below retain their original verification scope; later
 workflow results supersede their pending/failure status without changing the recorded artifacts.
 
+## October 22 — native pairing completion
+
+The native destination adopts the pending connection after durable credential/index storage,
+then completes authentication on that same transport. Only authenticated `ready` produces the
+current-interaction success receipt. Add computer dismisses to Engine Room → Connections with
+the saved computer and its current connection status visible. Reconnects do not repeat the
+success receipt; real relay refusals remain visible and retain pairing keys/history.
+
+QR scan completion first dismisses the camera, then starts pairing, avoiding nested sheet
+dismissal races. The preview uses the camera-specific AVFoundation rotation coordinator and
+stops observation/capture on dismissal. See [Apple's rotation coordinator](https://developer.apple.com/documentation/avfoundation/avcapturedevice/rotationcoordinator).
+Phone/tablet pairing UI and destination-preservation regressions pass, alongside 979 Node tests
+and static checks. Landscape camera pixels require physical-device checks; no physical update
+is included in this source checkpoint.
+
 ## 0.2.20 receipt-capacity correction
 
 At source `b73c655`, all 626 local Node tests/static checks and hosted Linux/Mac desktop and web
