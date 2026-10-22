@@ -102,7 +102,7 @@ test('precompiled discovery rules preserve nested globs, literal punctuation, in
   const entries = paths.map((relative,i) => ({ id: 'synthetic-'+i, kind: 'instruction', name: relative, path: path.join(f.workspace,relative), roots: [f.workspace], defaultMode: 'available' }));
   f.context.catalog.entries = entries;
   let config = JSON.parse(fs.readFileSync(f.context.file,'utf8'));
-  config.workspaces[0].modes[entries[1].id] = 'disabled'; config.workspaces[0].favorites = [entries[2].id]; config.workspaces[0].defaults.selectedIds = [entries[4].id];
+  config.workspaces[0].modes[entries[1].id] = 'disabled'; config.favorites = [entries[2].id]; config.workspaces[0].defaults.selectedIds = [entries[4].id];
   sameMetadataWrite(f.context.file, JSON.stringify(config));
   assert.deepEqual(f.context.get().entries.map(e => e.id), [0,1,2,3,4,7].map(i => entries[i].id));
   config.workspaces[0].discovery.inclusions = ['hidden/item']; sameMetadataWrite(f.context.file, JSON.stringify(config));

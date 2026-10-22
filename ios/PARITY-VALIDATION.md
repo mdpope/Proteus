@@ -1,3 +1,93 @@
+## October 22, 2026 — project, browser and composer regressions
+
+All 139 native unit tests passed on iPhone and iPad simulator runs. Repeated project switching
+within an already-open project destination passed on both form factors. The iPhone nested-scroll
+website fixture verified visible/hittable bottom controls, top-navigation hiding on downward
+reading and recovery on reverse scrolling. Final computer-action layout acceptance passed on
+iPhone; the selected host is explicitly labeled and buttons do not break words across lines.
+
+Final Chat / Live browser tests passed on phone and tablet, with one editor in the selected mode,
+mode links aligned beside Connected and both unsent drafts preserved across switches. Reviewed
+screenshots confirm the compact mode row and readable computer layout. The left message accent
+is implemented natively and the desktop/web palette has corresponding tested changes. These are
+synthetic simulator results, not physical-device installation or live-host acceptance. No device
+container, pairing, Keychain, provisioning profile or installed application changed in this round.
+
+## October 21 — 0.2.28 / 2610.21.1 source build
+
+Native Markdown file-date display, capability-gated steering and same-ID moved-project selection
+cleanup compile successfully for iPhone 17 Pro Simulator. No physical device installation or new
+native UI/live-owner acceptance is claimed. Desktop source and exact signed-package UI acceptance,
+web asset build, 855 host tests and remaining external workflow checks are in
+[the 0.2.28 ledger](../docs/2026-10-21-browser-chat-release.md).
+
+## October 21 — 0.2.27 / 2610.20.6 installed
+
+Both paid device apps are updated in place and process-launch verified. Fresh/reused verified cold
+captures preserve 73 phone and 215 tablet protected files exactly before launch, including app
+preferences, pairings, web stores and saved palettes. This build adds iPad's independent App tab
+overview, every newly inserted strip tab reveal, persistent mirrored-history redirect protection
+with trusted SPA intent and the compact iPhone browser footer. Actual phone footer geometry,
+swipe/chrome recovery and three focused native duplicate-history/SPA/redirect cases pass.
+The broader run's existing profile-store timeout and previous speech-audio timeout prevent a
+full-native-suite success claim. Physical gestures/autofill remain separate. Retain the two newest
+verified device recovery generations (2610.20.4 and 2610.20.6) after final rotation. HC is held.
+
+## October 20 — 0.2.27 / 2610.20.4 installed
+
+Both paid device apps are updated in place with their existing identity, profile, pairing and
+current user data; all 74 phone and 214 tablet protected-file hashes match before launch and both
+processes launch. The final follow-up expands workspace/project sections when their name is
+selected, including full-width touch targets around short labels. Separate chevrons still collapse.
+The actual phone and iPad UI workflows verify name selection, explicit collapse and reopening by
+name (25.682 and 13.533 seconds). Existing paid team/certificate/profile remain unchanged. The
+follow-up fixes browser rendering from a restored container selection, lower-tab underlines,
+workspace spacing/divider and plain Engine Room sidebar/drawer/overview options. Actual iPad
+restored-selection and repeated cached-page switching, plus desktop-origin chat-browser switching,
+pass. Updated phone Engine Room palette save/discard passes; tablet palette passes too.
+137 broader unit cases passed, while the existing system-speech progress case timed out in native
+simulator audio and prevents a full-suite success claim. Palette/domain and unattended autoplay
+cases pass separately. These are simulator workflow checks and physical data/process acceptance,
+not automated physical gesture or credential autofill verification.
+Recovery retains the two newest verified full generations per physical device (2610.20.3 and
+2610.20.4), with exact prior signed apps and fresh protected data; only older payloads and duplicate
+staging apps were retired. Native Mac wrapper/security confirmation and the unidentified system
+extension investigation remain explicitly deferred. Work Mac is held; no update or chat interruption.
+
+## October 20 — 0.2.27 native parity in progress
+
+Source adds real Engine Room Colors with local save/import/export; root-domain page scale using
+the pinned offline public/private suffix runtime; global device video-autoplay preference; current
+WKWebView certificate chain inspection; download KB/s and session-only history. Files and chosen
+folder persist. Main navigation remains on this device and can contain mixed connected owners;
+there is no mobile multiwindow/window-session feature. Earlier label/Team/pinch/44-point repairs
+remain included. Initial native compilation passes; unit/UI and physical acceptance are pending.
+
+## October 20 — Apple Passwords AutoFill settings
+
+The shared WKWebView browser keeps system Password AutoFill for Apple Passwords and third-party
+providers. Browser settings now has a public `ASSettingsHelper` provider-settings shortcut and
+version-aware guidance. It is independent of Proteus account authorization; profile sync remains
+account-owned. A separate simulator-only app identity passes the actual settings-open/return UI
+case on both iPhone 17 Pro and iPad Pro/iOS 26.5. No provider selection, pairing code, credential,
+biometric approval or physical device is changed. These checks do not establish actual password
+fill/save, iCloud passkey behavior or Electron helper compatibility.
+
+## October 20 — window-design follow-up simulator acceptance
+
+The operator authorizes the isolated preview incorporating BF-2026-10-20-42–45. Separate simulator
+app/test identities pass 137 native unit cases and all three TabletDesignPreviewUITests scenarios.
+Coverage includes Home full-label width, chat pinch into a populated/selectable overview, browser
+pinch and rotation/foreground return, 44-point Team navigation, selected roster settings, numbered
+Standup/dock and shared link editing with a multiline URL input. The initial rotation timeout
+passes unchanged on the next isolated run; a test now measures the actual three-line input rather
+than its padded wrapper. A chat’s active card remains visible while project owner scopes load.
+
+The separate iPad simulator preview is built/installed/launched with its synthetic account/owner.
+No physical iPhone/iPad, native Mac wrapper, production account, permission or list data is changed.
+These fixtures do not establish the availability of the operator’s real website account/lists or
+physical-device gesture smoothness. Preserve that distinction during release acceptance.
+
 ## October 19 — final Standup/browser/sidebar simulator follow-up accepted
 
 Both separate preview apps are built, installed and relaunched on their existing OS 26.5

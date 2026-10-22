@@ -1,3 +1,4 @@
+import {sourceKindIcon} from './source-icons.js';
 import {proteusOrientation} from './proteus-orientation.js';
 import {previewApprovalDetails} from './preview-permissions.js';
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -29,7 +30,7 @@ export function bindRemoteDetails(root,{run,request,mutate=request,refresh,notif
  const contextButton=root.querySelector('[id$="refresh-context"]');
  if(contextButton){contextButton.disabled=['queued','running','awaiting_input'].includes(run.status);contextButton.onclick=()=>{
   const selected=new Set(run.context?.selectedIds||run.schedule?.context?.selectedIds||[]);
-  const view=dialog(`<h2>Refresh chat context</h2><label><input type="checkbox" data-defaults ${run.context?.includeDefaults!==false?'checked':''}> Include workspace defaults</label>${(context.entries||[]).filter(entry=>!entry.missing&&entry.mode!=='disabled').map(entry=>`<label><input type="checkbox" data-source="${esc(entry.id)}" ${selected.has(entry.id)?'checked':''}> ${esc(entry.name)}<span class="filepath">${esc(entry.path)}</span></label>`).join('')}<button type="button" data-apply>Apply context</button>`);
+  const view=dialog(`<h2>Refresh chat context</h2><label><input type="checkbox" data-defaults ${run.context?.includeDefaults!==false?'checked':''}> Include workspace defaults</label>${(context.entries||[]).filter(entry=>!entry.missing&&entry.mode!=='disabled').map(entry=>`<label class="source-refresh-option"><input type="checkbox" data-source="${esc(entry.id)}" ${selected.has(entry.id)?'checked':''}>${sourceKindIcon(entry.kind)}<span>${esc(entry.name)}<span class="filepath">${esc(entry.path)}</span></span></label>`).join('')}<button type="button" data-apply>Apply context</button>`);
   view.querySelector('[data-apply]').onclick=()=>act(async()=>{await mutate('chat.context',{id:run.id,selectedIds:[...view.querySelectorAll('[data-source]:checked')].map(input=>input.dataset.source),agentId:run.context?.agentId||run.schedule?.context?.agentId||'',includeDefaults:view.querySelector('[data-defaults]').checked});view.close();await refresh();});
  };}
  const mcpButton=root.querySelector('[id$="mcp-connections"]');if(mcpButton)mcpButton.onclick=()=>act(async()=>{const result=await request('mcp.status',{id:run.id});dialog('<h2>MCP connections</h2><pre>'+esc(JSON.stringify(result,null,2))+'</pre>');});

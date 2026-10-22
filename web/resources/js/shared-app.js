@@ -1,3 +1,4 @@
+import './palette.js';
 import {observeRunningChats as updateRunningChats} from './running-chats.js';
 import {createWorkspaceTree} from './workspace-tree.js';
 const ownerStates=new Map(),ownerLabels=new Map();let globalWorkspaceTree;

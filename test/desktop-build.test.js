@@ -31,7 +31,7 @@ test('Mac and Linux snapshots freeze runtime bytes and reject changed source or 
 });
 
 test('both desktop packages exclude private configuration, web source, test state and metadata sidecars', () => {
-  for (const file of ['/.env', '/.aws', '/.codex', '/.agents', '/.runtime', '/.git', '/web', '/test', '/public/._app.js', '/desktop/.DS_Store']) assert.ok(desktopPackageIgnore.some(pattern => pattern.test(file)), file);
+  for (const file of ['/local-records', '/local-records/apple-browser-review/README.md', '/.env', '/.aws', '/.codex', '/.agents', '/.runtime', '/.git', '/web', '/test', '/public/._app.js', '/desktop/.DS_Store']) assert.ok(desktopPackageIgnore.some(pattern => pattern.test(file)), file);
   for (const file of ['/public/host-platform.js', '/src/credential-storage.js', '/desktop/platform.cjs']) assert.equal(desktopPackageIgnore.some(pattern => pattern.test(file)), false, file);
 });
 

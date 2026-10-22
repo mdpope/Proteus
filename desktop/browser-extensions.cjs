@@ -1,6 +1,6 @@
 const fs=require('node:fs'),path=require('node:path');
 const {randomUUID,createHash}=require('node:crypto');
-const {BrowserWindow,dialog,nativeImage,app,screen}=require('electron');
+const {BrowserWindow,dialog,nativeImage,app,screen,nativeTheme}=require('electron');
 const {extensionName}=require('./extension-metadata.cjs');
 const {ElectronChromeExtensions}=require('electron-chrome-extensions');
 const {downloadExtension}=require('electron-chrome-web-store');
@@ -18,9 +18,13 @@ class BrowserExtensions {
   const host={session,folder,file,rows,adapter:null};this.profiles.set(profileId,host);
   host.adapter=new ElectronChromeExtensions({license:'GPL-3.0',session,
    createTab:async details=>{if(String(details.url||'').startsWith('chrome-extension:')){const popup=this.openPage(host,details.url);return [popup.webContents,popup];}const info=await this.browser.create(details.url||'',null,null,{profileId});const tab=this.browser.get(info.id);if(details.active!==false)this.browser.actions.send({type:'select-tab',info});return [tab.view.webContents,this.browser.window];},
-   selectTab:wc=>{const tab=[...this.browser.tabs.values()].find(tab=>tab.view?.webContents===wc);if(tab)this.browser.actions.send({type:'select-tab',info:this.browser.state(tab)});},
+   selectTab:wc=>{if(host.reflectingSelection)return;const tab=[...this.browser.tabs.values()].find(tab=>tab.view?.webContents===wc);if(tab)this.browser.actions.send({type:'select-tab',info:this.browser.state(tab)});},
    removeTab:wc=>{const tab=[...this.browser.tabs.values()].find(tab=>tab.view?.webContents===wc);if(tab)void this.browser.close(tab.id);},
    requestPermissions:async(extension,permissions)=>(await dialog.showMessageBox(this.browser.window,{type:'question',title:extension.name,message:'Allow additional extension permissions?',detail:[...(permissions.permissions||[]),...(permissions.origins||[])].join('\n'),buttons:['Deny','Allow'],defaultId:0,cancelId:0})).response===1
+  });
+  require('./extension-permissions.cjs').installExtensionPermissions(host,()=>this.save(host),(extension)=>{
+   host.nativeFailures??=new Map();const last=host.nativeFailures.get(extension.id)||0;if(Date.now()-last<30000)return;host.nativeFailures.set(extension.id,Date.now());
+   this.browser.actions.send({type:'notice',message:extension.name+' could not connect to its desktop app. Open and unlock that app, check browser integration, then retry in this profile.'});
   });
   host.ready=(async()=>{for(const row of rows)if(row.enabled){try{await session.extensions.loadExtension(path.join(folder,row.directory),{allowFileAccess:false});}catch(error){row.error=error.message;}}})();return host.ready;
  }
@@ -34,26 +38,43 @@ class BrowserExtensions {
  }
  hasEnabled(profileId){return this.profiles.get(profileId)?.rows.some(row=>row.enabled)===true;}
  list(profileId){const host=this.host(profileId);return host.rows.map(row=>{let icon='';try{const base=path.join(host.folder,row.directory),manifest=JSON.parse(fs.readFileSync(path.join(base,'manifest.json'),'utf8')),relative=Object.values(manifest.icons||{})[0];if(relative){const file=path.resolve(base,relative);if(file.startsWith(base+path.sep)&&fs.statSync(file).size<250000){const image=nativeImage.createFromPath(file);if(!image.isEmpty())icon=image.resize({width:20,height:20}).toDataURL();}}}catch{}return {id:row.id,name:row.name,version:row.version,enabled:row.enabled,store:row.store===true,icon,error:row.error||null};});}
- addTab(profileId,wc){this.profiles.get(profileId)?.adapter.addTab(wc,this.browser.window);}
- selectTab(profileId,wc){this.profiles.get(profileId)?.adapter.selectTab(wc);}
+ // The adapter calls selectTab for both host bookkeeping and extension requests.
+ // Reflecting host state must not enqueue a second, potentially stale UI selection.
+ reflectSelection(profileId,update){const host=this.profiles.get(profileId);if(!host)return;host.reflectingSelection=(host.reflectingSelection||0)+1;try{return update(host.adapter);}finally{host.reflectingSelection--;}}
+ addTab(profileId,wc){this.reflectSelection(profileId,adapter=>adapter.addTab(wc,this.browser.window));}
+ selectTab(profileId,wc){this.reflectSelection(profileId,adapter=>adapter.selectTab(wc));}
+ closePages(host,id){for(const window of this.windows)if(!window.isDestroyed()&&window.webContents.session===host.session&&new URL(window.extensionURL).hostname===id)window.destroy();}
  openPage(host,url,{x,y,options=false}={}){
   const target=new URL(url),extension=host.session.extensions.getExtension(target.hostname);
   if(target.protocol!=='chrome-extension:'||!extension)throw new Error('Choose an installed extension page.');
-  const existing=[...this.windows].find(window=>!window.isDestroyed()&&window.extensionURL===target.href);
+  const applePopup=!options&&target.hostname==='pejdijmoenmkgeppbflobdenhhabjlaj'&&target.pathname==='/page_popup.html';
+  if(applePopup)target.searchParams.set('popupWindow','1');
+  const existing=[...this.windows].find(window=>!window.isDestroyed()&&window.extensionURL===target.href&&window.webContents.session===host.session&&window.getParentWindow()===this.browser.window);
   if(existing){existing.close();return existing;}
   const parent=this.browser.window.getBounds(),area=screen.getDisplayMatching(parent).workArea;
-  const width=Math.min(options?760:420,area.width),height=Math.min(options?650:600,area.height);
+  const width=Math.min(options?760:applePopup?400:420,area.width),height=Math.min(options?650:applePopup?220:260,area.height);
   const popup=new BrowserWindow({parent:this.browser.window,title:extension.name+' · '+(options?'Options':'Extension'),
    width,height,x:Math.round(Math.max(area.x,Math.min(area.x+area.width-width,parent.x+(Number.isFinite(x)?x:parent.width-width)))),
    y:Math.round(Math.max(area.y,Math.min(area.y+area.height-height,parent.y+(Number.isFinite(y)?y:90)))),
-   show:true,frame:true,closable:true,minimizable:false,maximizable:false,fullscreenable:false,resizable:options,
-   webPreferences:{session:host.session,sandbox:true,contextIsolation:true,nodeIntegration:false}});
+   show:false,backgroundColor:applePopup?'#243128':nativeTheme.shouldUseDarkColors?'#292a2d':'#ffffff',frame:true,closable:true,minimizable:false,maximizable:false,fullscreenable:false,resizable:options,
+   webPreferences:{session:host.session,sandbox:true,contextIsolation:true,nodeIntegration:false,enablePreferredSizeMode:!options}});
   popup.extensionURL=target.href;this.windows.add(popup);
   popup.on('closed',()=>{this.windows.delete(popup);if(!this.browser.window.isDestroyed())this.browser.window.focus();});
   popup.webContents.setWindowOpenHandler(()=>({action:'deny'}));
+  if(!options)popup.webContents.on('preferred-size-changed',(_event,size)=>{
+   if(popup.isDestroyed()||!Number.isFinite(size.width)||!Number.isFinite(size.height))return;
+   const width=Math.max(280,Math.min(Math.ceil(size.width),760,area.width)),height=Math.max(120,Math.min(Math.ceil(size.height),650,area.height-40));
+   popup.setContentSize(width,height);
+   const bounds=popup.getBounds();popup.setPosition(Math.round(Math.max(area.x,Math.min(bounds.x,area.x+area.width-bounds.width))),Math.round(Math.max(area.y,Math.min(bounds.y,area.y+area.height-bounds.height))));
+  });
+  popup.webContents.on('dom-ready',async()=>{
+   if(popup.isDestroyed())return;
+   if(applePopup)await popup.webContents.insertCSS(`:root,body.dark{--background-color:#243128!important;--text-color:#e8eee8!important;--separator-color:#3d4b40!important;--table-cell-hover-color:#3b4c3e!important;--pin-input-background-color:#1c2921!important;--pin-input-border-color:#748476!important;--need-to-pair-message-color:#d3dfd2!important;--from-icloud-passwords-background-color:#2e3c31!important;--from-icloud-passwords-text-color:#e8eee8!important;--dismiss-button-color:#d3dfd2!important}html{background:#243128!important;color-scheme:dark!important}body.popup{width:376px!important;box-sizing:border-box!important;margin:0!important;padding:18px 16px!important;min-height:120px!important}body.popup.popupWindow{padding-top:18px!important}body.popup div,body.popup #iCloudIconId{animation:none!important}button:empty,.titleline:empty,.messageline:empty{display:none!important}#divPIN:has(#divPINTitle:empty){display:none!important}`,{cssOrigin:'user'}).catch(()=>{});
+   if(!popup.isDestroyed())popup.show();
+  });
   popup.webContents.on('before-input-event',(event,input)=>{if(input.key==='Escape'){event.preventDefault();popup.close();}});
   popup.webContents.on('will-navigate',(event,next)=>{try{const url=new URL(next);if(url.protocol!==target.protocol||url.hostname!==target.hostname)event.preventDefault();}catch{event.preventDefault();}});
-  const load=()=>popup.loadURL(target.href).catch(async()=>{if(popup.isDestroyed())return;const {response}=await dialog.showMessageBox(popup,{type:'error',message:'This extension could not open.',detail:'You can retry or close this window. Your extension and website data are preserved.',buttons:['Close','Retry'],defaultId:0,cancelId:0});if(!popup.isDestroyed()){if(response===1)void load();else popup.close();}});
+  const load=()=>popup.loadURL(target.href).catch(async()=>{if(popup.isDestroyed())return;popup.show();const {response}=await dialog.showMessageBox(popup,{type:'error',message:'This extension could not open.',detail:'You can retry or close this window. Your extension and website data are preserved.',buttons:['Close','Retry'],defaultId:0,cancelId:0});if(!popup.isDestroyed()){if(response===1)void load();else popup.close();}});
   void load();return popup;
  }
  async installStore(profileId,host,value){
@@ -67,13 +88,13 @@ class BrowserExtensions {
    if(manifest.manifest_version!==3)throw new Error('This extension requires an unsupported manifest version. Choose a Manifest V3 extension.');
    if(row?.version===manifest.version){this.browser.actions.send({type:'notice',message:row.name+' is up to date.'});return;}
    const permissions=[...(manifest.permissions||[]),...(manifest.host_permissions||[])];
-   const confirm=await dialog.showMessageBox(this.browser.window,{type:'question',message:(row?'Update ':'Install ')+name+'?',detail:'Version '+manifest.version+' from Chrome Web Store. Review its permissions below. '+'Agents can use website tabs in this profile. Extensions may place data into those pages.'+'\n\n'+permissions.join('\n')+'\n\nSome Chrome APIs, including native messaging and passkeys, may not be supported.',buttons:['Cancel',row?'Update':'Install'],defaultId:0,cancelId:0});
+   const confirm=await dialog.showMessageBox(this.browser.window,{type:'question',message:(row?'Update ':'Install ')+name+'?',detail:'Version '+manifest.version+' from Chrome Web Store. Review its permissions below. '+'Agents can use website tabs in this profile. Extensions may place data into those pages.'+'\n\n'+permissions.join('\n')+'\n\nNative messaging requires the extension’s desktop application and your local approval. Some Chrome APIs and passkeys may not be supported.',buttons:['Cancel',row?'Update':'Install'],defaultId:0,cancelId:0});
    if(confirm.response!==1)return;this.host(profileId);
    const directory=row?.directory||randomUUID(),destination=path.join(host.folder,directory),backup=destination+'.rollback-'+randomUUID(),before=row?{...row}:null;
    let installed,backedUp=false;host.installing=true;
    try{
     
-    if(row){host.session.extensions.removeExtension(id);fs.renameSync(destination,backup);backedUp=true;}
+    if(row){this.closePages(host,id);host.session.extensions.removeExtension(id);fs.renameSync(destination,backup);backedUp=true;}
     fs.renameSync(downloaded,destination);
     installed=await host.session.extensions.loadExtension(destination,{allowFileAccess:false});
     if(installed.id!==id)throw new Error('Downloaded extension identity does not match the store link.');
@@ -103,19 +124,19 @@ class BrowserExtensions {
   }else{
    const row=host.rows.find(row=>row.id===value.extensionId);if(!row)throw new Error('Extension is unavailable.');
    if(value.action==='extensions-open'||value.action==='extensions-options'){const extension=host.session.extensions.getExtension(row.id);if(!extension)throw new Error('Enable this extension first.');const manifest=extension.manifest;const page=value.action==='extensions-options'?(manifest.options_ui?.page||manifest.options_page):(manifest.action?.default_popup||manifest.browser_action?.default_popup);if(!page)throw new Error('This extension has no '+(value.action==='extensions-options'?'options page':'popup')+'.');this.openPage(host,new URL(page,'chrome-extension://'+row.id+'/').href,{x:value.x,y:value.y,options:value.action==='extensions-options'});}
-   else if(value.action==='extensions-enable'){if(typeof value.enabled!=='boolean')throw new Error('Choose extension state.');const previous=row.enabled;host.installing=value.enabled;try{if(value.enabled){await host.session.extensions.loadExtension(path.join(host.folder,row.directory),{allowFileAccess:false});}else host.session.extensions.removeExtension(row.id);row.enabled=value.enabled;this.save(host);}catch(error){row.enabled=previous;if(previous)await host.session.extensions.loadExtension(path.join(host.folder,row.directory),{allowFileAccess:false}).catch(()=>{});else host.session.extensions.removeExtension(row.id);throw error;}finally{host.installing=false;}}
-   else if(value.action==='extensions-remove'){const before=host.rows;host.rows=host.rows.filter(item=>item!==row);try{this.save(host);}catch(error){host.rows=before;throw error;}host.session.extensions.removeExtension(row.id);}
+   else if(value.action==='extensions-enable'){if(typeof value.enabled!=='boolean')throw new Error('Choose extension state.');const previous=row.enabled;host.installing=value.enabled;try{if(value.enabled){await host.session.extensions.loadExtension(path.join(host.folder,row.directory),{allowFileAccess:false});}else{this.closePages(host,row.id);host.session.extensions.removeExtension(row.id);}row.enabled=value.enabled;this.save(host);}catch(error){row.enabled=previous;if(previous)await host.session.extensions.loadExtension(path.join(host.folder,row.directory),{allowFileAccess:false}).catch(()=>{});else host.session.extensions.removeExtension(row.id);throw error;}finally{host.installing=false;}}
+   else if(value.action==='extensions-remove'){const before=host.rows;host.rows=host.rows.filter(item=>item!==row);try{this.save(host);}catch(error){host.rows=before;throw error;}this.closePages(host,row.id);host.session.extensions.removeExtension(row.id);}
    else if(value.action==='extensions-update'){
     const selected=await dialog.showOpenDialog(this.browser.window,{title:'Update '+row.name+' from an unpacked extension folder',properties:['openDirectory']});if(selected.canceled)return this.list(profileId);
     const source=selected.filePaths[0],manifestFile=path.join(source,'manifest.json');if(fs.lstatSync(manifestFile).isSymbolicLink()||fs.statSync(manifestFile).size>1024*1024)throw new Error('Invalid extension manifest.');const manifest=JSON.parse(fs.readFileSync(manifestFile,'utf8'));if(![2,3].includes(manifest.manifest_version)||typeof manifest.name!=='string')throw new Error('Choose a Chrome extension folder.');
     let size=0,count=0;const scan=(folder,depth=0)=>{if(depth>30)throw new Error('Extension folder is too deep.');for(const name of fs.readdirSync(folder)){const file=path.join(folder,name),stat=fs.lstatSync(file);if(stat.isSymbolicLink()||!stat.isDirectory()&&!stat.isFile())throw new Error('Extension contains unsupported files.');if(stat.isDirectory())scan(file,depth+1);else{size+=stat.size;if(size>150*1024*1024||++count>15000)throw new Error('Extension is too large.');}}};scan(source);
     const confirm=await dialog.showMessageBox(this.browser.window,{type:'question',message:'Update '+row.name+' to '+manifest.version+'?',detail:'Review this version’s permissions. Website and vault data stay in the same profile.\n\n'+[...(manifest.permissions||[]),...(manifest.host_permissions||[])].join('\n'),buttons:['Cancel','Update'],defaultId:0,cancelId:0});if(confirm.response!==1)return this.list(profileId);this.host(profileId);
     const destination=path.join(host.folder,row.directory),staged=path.join(host.folder,randomUUID()),backup=destination+'.rollback-'+randomUUID(),before={...row};fs.cpSync(source,staged,{recursive:true});host.installing=true;
-    try{host.session.extensions.removeExtension(row.id);fs.renameSync(destination,backup);fs.renameSync(staged,destination);const updated=await host.session.extensions.loadExtension(destination,{allowFileAccess:false});if(updated.id!==row.id){host.session.extensions.removeExtension(updated.id);throw new Error('The update has a different extension identity.');}Object.assign(row,{name:updated.name,version:updated.version,error:null});if(!row.enabled)host.session.extensions.removeExtension(row.id);this.save(host);fs.rmSync(backup,{recursive:true,force:true});}
+    try{this.closePages(host,row.id);host.session.extensions.removeExtension(row.id);fs.renameSync(destination,backup);fs.renameSync(staged,destination);const updated=await host.session.extensions.loadExtension(destination,{allowFileAccess:false});if(updated.id!==row.id){host.session.extensions.removeExtension(updated.id);throw new Error('The update has a different extension identity.');}Object.assign(row,{name:updated.name,version:updated.version,error:null});if(!row.enabled)host.session.extensions.removeExtension(row.id);this.save(host);fs.rmSync(backup,{recursive:true,force:true});}
     catch(error){host.session.extensions.removeExtension(row.id);if(fs.existsSync(backup)){fs.rmSync(destination,{recursive:true,force:true});fs.renameSync(backup,destination);}Object.assign(row,before);if(row.enabled)await host.session.extensions.loadExtension(destination,{allowFileAccess:false}).catch(()=>{});throw error;}
     finally{host.installing=false;fs.rmSync(staged,{recursive:true,force:true});}
    }
-   else if(value.action==='extensions-reload'){if(!row.enabled)throw new Error('Enable this extension first.');host.session.extensions.removeExtension(row.id);await host.session.extensions.loadExtension(path.join(host.folder,row.directory),{allowFileAccess:false});}
+   else if(value.action==='extensions-reload'){if(!row.enabled)throw new Error('Enable this extension first.');this.closePages(host,row.id);host.session.extensions.removeExtension(row.id);await host.session.extensions.loadExtension(path.join(host.folder,row.directory),{allowFileAccess:false});}
    else throw new Error('Unsupported extension action.');
   }
   for(const tab of this.browser.tabs.values())if(tab.profileId===profileId)tab.captureRevision=(tab.captureRevision||0)+1;

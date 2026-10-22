@@ -37,15 +37,15 @@ struct NativeTabOverviewIcon: View {
 
 /// The grouped desktop sidebar palette, kept separate from content and tab chrome.
 enum NativeSidebarStyle {
-    static let ink = Color(red: 184/255, green: 193/255, blue: 184/255)
-    static let muted = Color(red: 132/255, green: 142/255, blue: 133/255)
-    static let strong = Color(red: 234/255, green: 239/255, blue: 232/255)
-    static let button = Color(red: 29/255, green: 35/255, blue: 30/255)
-    static let group = Color(red: 24/255, green: 29/255, blue: 25/255)
-    static let selected = Color(red: 49/255, green: 57/255, blue: 44/255)
-    static let selectedInk = Color(red: 212/255, green: 231/255, blue: 182/255)
-    static let border = Color(red: 37/255, green: 43/255, blue: 38/255)
-    static let activeBorder = Color(red: 49/255, green: 58/255, blue: 50/255)
+    static var ink: Color { NativePalette.shared.color("sidebarText") }
+    static var muted: Color { NativePalette.shared.color("sidebarMuted") }
+    static var strong: Color { NativePalette.shared.color("sidebarStrong") }
+    static var button: Color { NativePalette.shared.color("sidebarButton") }
+    static var group: Color { NativePalette.shared.color("sidebarGroup") }
+    static var selected: Color { NativePalette.shared.color("sidebarSelected") }
+    static var selectedInk: Color { NativePalette.shared.color("accent") }
+    static var border: Color { NativePalette.shared.color("sidebarBorder") }
+    static var activeBorder: Color { NativePalette.shared.color("sidebarBorder") }
 }
 
 /// Desktop workspace/folder/team/collapse paths, rather than platform substitutions.
@@ -86,7 +86,7 @@ struct NativeFeatureHeading: View {
     let title: String
     var body: some View {
         Text(title).font(NativePhonePreview.enabled ? .subheadline.weight(.semibold) : .title2.weight(.semibold))
-            .lineLimit(1).foregroundStyle(.primary).accessibilityIdentifier("feature-page-label")
+            .lineLimit(1).fixedSize(horizontal: true, vertical: false).layoutPriority(1).foregroundStyle(.primary).accessibilityIdentifier("feature-page-label")
     }
 }
 enum NativeAddressSwipe {
@@ -250,10 +250,11 @@ struct NativePhoneTab: Identifiable {
 /// A weak capture hook for the visible surface; cached captures never load another page.
 struct NativePhoneSurface: UIViewRepresentable {
     let chrome: NativePhoneChrome
+    var overviewEnabled = false
     func makeCoordinator() -> InteractionObserver { InteractionObserver() }
     func makeUIView(context: Context) -> UIView { let view = UIView(); view.isUserInteractionEnabled = false; return view }
     func updateUIView(_ view: UIView, context: Context) {
-        context.coordinator.chrome = chrome; context.coordinator.surface = view
+        context.coordinator.chrome = chrome; context.coordinator.surface = view; context.coordinator.overviewEnabled = overviewEnabled
         DispatchQueue.main.async { [weak observer = context.coordinator] in observer?.install() }
         chrome.snapshot = { [weak view] in
             guard let view, let window = view.window, view.bounds.width > 20, view.bounds.height > 20 else { return nil }
@@ -269,6 +270,7 @@ struct NativePhoneSurface: UIViewRepresentable {
     final class InteractionObserver: NSObject, UIGestureRecognizerDelegate {
         weak var chrome: NativePhoneChrome?
         weak var surface: UIView?
+        var overviewEnabled = false
         private weak var host: UIWindow?
         private var gestures: [UIGestureRecognizer] = []
         func install() {
@@ -276,10 +278,18 @@ struct NativePhoneSurface: UIViewRepresentable {
             remove(); host = window
             let tap = UITapGestureRecognizer(target: self, action: #selector(interacted(_:)))
             let pan = UIPanGestureRecognizer(target: self, action: #selector(interacted(_:)))
-            gestures = [tap, pan]
+            let pinch = UIPinchGestureRecognizer(target: self, action: #selector(pinched(_:)))
+            gestures = [tap, pan, pinch]
             for gesture in gestures { gesture.cancelsTouchesInView = false; gesture.delaysTouchesBegan = false; gesture.delaysTouchesEnded = false; gesture.delegate = self; window.addGestureRecognizer(gesture) }
         }
         func remove() { for gesture in gestures { host?.removeGestureRecognizer(gesture) }; gestures = []; host = nil }
+        @objc private func pinched(_ gesture: UIPinchGestureRecognizer) {
+            guard overviewEnabled, let chrome else { return }
+            if gesture.state == .began || gesture.state == .changed { if gesture.scale < 0.98 { chrome.pinch(gesture.scale) } }
+            else if gesture.state == .ended, chrome.overview { chrome.finishPinch(committed: gesture.scale < 0.75) }
+            else if gesture.state == .cancelled || gesture.state == .failed, chrome.overview { chrome.finishPinch(committed: false) }
+        }
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool { !(gestureRecognizer is UIPinchGestureRecognizer) || overviewEnabled }
         @objc private func interacted(_ gesture: UIGestureRecognizer) { if gesture.state == .ended { chrome?.scheduleCapture() } }
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool { guard let surface else { return false }; return surface.bounds.contains(touch.location(in: surface)) }
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool { true }
@@ -339,6 +349,9 @@ private struct PhonePopBridge: UIViewControllerRepresentable {
 struct NativePhoneOverview: View {
     @ObservedObject var chrome: NativePhoneChrome
     let items: [NativePhoneTab]
+    var title = "Tabs"
+    var selectedID: String? = nil
+    var accessibilityID = "phone-tab-overview"
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var targets: [String: CGRect] = [:]
     private var sections: [(id: String, title: String, items: [NativePhoneTab])] {
@@ -346,14 +359,15 @@ struct NativePhoneOverview: View {
         for item in items { let id = item.sectionID.isEmpty ? item.section : item.sectionID; if let index = result.indices.last, result[index].id == id { result[index].items.append(item) } else { result.append((id, item.section, [item])) } }
         return result
     }
-    private var current: NativePhoneTab? { items.first { $0.id == chrome.currentID } }
+    private var activeID: String { selectedID ?? chrome.currentID }
+    private var current: NativePhoneTab? { items.first { $0.id == activeID } }
     var body: some View {
         GeometryReader { geometry in
             let p = chrome.overviewProgress
             ZStack(alignment: .topLeading) {
                 VStack(spacing: 0) {
                     HStack {
-                        Text("Tabs").font(.title2.bold()); Spacer()
+                        Text(title).font(.title2.bold()); Spacer()
                         Button("Done") { chrome.closeOverview() }.frame(minWidth: 44, minHeight: 44)
                     }.padding(.horizontal, 20)
                     ScrollView {
@@ -368,7 +382,7 @@ struct NativePhoneOverview: View {
                                             if let image = item.preview { Image(uiImage: image).resizable().scaledToFill().frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top).clipped() }
                                             else { VStack(spacing: 12) { Image(systemName: item.symbol).font(.title); Text("Preview unavailable").font(.caption) }.frame(maxWidth: .infinity, maxHeight: .infinity).background(NativeTheme.surface) }
                                         }.frame(height: 225).clipShape(RoundedRectangle(cornerRadius: 15))
-                                            .overlay { RoundedRectangle(cornerRadius: 15).stroke(item.id == chrome.currentID ? NativeTheme.accent : NativeTheme.line, lineWidth: 1) }
+                                            .overlay { RoundedRectangle(cornerRadius: 15).stroke(item.id == activeID ? NativeTheme.accent : NativeTheme.line, lineWidth: 1) }
                                             .background(GeometryReader { tile in Color.clear.preference(key: PhoneTabRects.self, value: [item.id: tile.frame(in: .named("phone-overview"))]) })
                                         Label(item.title, systemImage: item.symbol).font(.caption).lineLimit(2)
                                         Text(item.detail).font(.caption2).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -381,14 +395,14 @@ struct NativePhoneOverview: View {
                     }
                 }.background(NativeTheme.background).opacity(reduceMotion ? p : max(0, (p - 0.12) / 0.88))
                 if !reduceMotion, p < 0.999, let image = current?.preview {
-                    let rect = targets[chrome.currentID] ?? CGRect(x: 18, y: 70, width: (geometry.size.width - 48) / 2, height: 225)
+                    let rect = targets[activeID] ?? CGRect(x: 18, y: 70, width: (geometry.size.width - 48) / 2, height: 225)
                     Image(uiImage: image).resizable().scaledToFill()
                         .frame(width: geometry.size.width + (rect.width - geometry.size.width) * p, height: geometry.size.height + (rect.height - geometry.size.height) * p, alignment: .top)
                         .clipped().clipShape(RoundedRectangle(cornerRadius: 15 * p))
                         .offset(x: rect.minX * p, y: rect.minY * p).allowsHitTesting(false)
                 }
             }.coordinateSpace(name: "phone-overview").onPreferenceChange(PhoneTabRects.self) { targets = $0 }
-        }.background(NativeTheme.background.opacity(chrome.overviewProgress)).accessibilityElement(children: .contain).accessibilityIdentifier("phone-tab-overview")
+        }.background(NativeTheme.background.opacity(chrome.overviewProgress)).accessibilityElement(children: .contain).accessibilityIdentifier(accessibilityID)
     }
 }
 private struct PhoneTabRects: PreferenceKey {

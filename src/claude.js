@@ -1,3 +1,4 @@
+import {randomUUID} from 'node:crypto';
 import {browserTools} from './browser-tools.js';
 import {captureAppCapabilities} from './app-capabilities.js';
 import {accumulateClaudeUsage} from './claude-usage.js';
@@ -125,7 +126,7 @@ export async function stopClaudeProcess(child, {platform=process.platform,signal
 export class ClaudeRPC extends EventEmitter {
   constructor({command=claudeExecutable(),args=[],cwd=os.tmpdir(),env=process.env,mcpConfigPath=null}={}) {
     super(); this.pending=new Map(); this.sequence=0; this.ended=false;
-    this.child=spawn(command,['--print','--input-format','stream-json','--output-format','stream-json','--verbose','--include-partial-messages',
+    this.child=spawn(command,['--print','--input-format','stream-json','--output-format','stream-json','--verbose','--include-partial-messages','--replay-user-messages',
       '--permission-prompt-tool','stdio','--permission-mode','default','--setting-sources','','--strict-mcp-config','--mcp-config',mcpConfigPath||'{"mcpServers":{}}',
       '--disable-slash-commands','--no-chrome',...args],{cwd,env:{...env,CLAUDE_CODE_DISABLE_AUTO_MEMORY:'1'},detached:process.platform!=='win32',stdio:['pipe','pipe','pipe']});
     // Runtime stderr may contain private prompt/credential material. Do not persist it in errors.
@@ -210,12 +211,13 @@ export class ClaudeProvider {
     try{
       const result=await client.initialize();const account=result.account||{};
       const available=claudeAccountAvailable(account);
-      status={provider:'claude',authenticationCommand,available,models:(result.models||[]).map(m=>claudeModel(m,result)),error:available?null:'Sign in to Claude Code on this computer with claude auth login. The Claude app account is separate.',capabilities:{steering:false,context:'Selected instructions and skills; native Claude sessions; tool approvals through Proteus.'}};
+      status={provider:'claude',authenticationCommand,available,models:(result.models||[]).map(m=>claudeModel(m,result)),error:available?null:'Sign in to Claude Code on this computer with claude auth login. The Claude app account is separate.',capabilities:{steering:true,steeringMode:'interrupt-and-continue',context:'Selected instructions and skills; native Claude sessions; tool approvals through Proteus.'}};
     }catch(error){status={provider:'claude',authenticationCommand,available:false,models:[],error:error.message};}
     try{await client.close();}catch(error){this.cleanupClients.add(client);this.cleanupError=error;status={...status,available:false,error:error.message};}
     if(this.cleanupError)status={...status,available:false,error:this.cleanupError.message};
     return status;
   }
+  async steer(run,prompt){if(this.activeRunId!==run.id||!this.activeSteer)throw Error('Claude is still starting or this turn ended. Queue this message.');return this.activeSteer(prompt);}
   async quota(){
     if(this.quotaPending)return this.quotaPending;
     this.quotaPending=this.readQuota().finally(()=>{this.quotaPending=null;});return this.quotaPending;
@@ -270,7 +272,7 @@ export class ClaudeProvider {
     let client;try{client=this.client(args,run.schedule.workspace.cwd,mcpConfig?.file||null);}catch(error){mcpConfig?.dispose();await bridge?.close();throw error;}
     this.active=client;this.activeRunId=run.id;
     let resolve,reject;const done=new Promise((a,b)=>{resolve=a;reject=b;});done.catch(()=>{});
-    const calls=new Map();let currentId='claude',resultSeen=false;const approved=new Map();
+    const calls=new Map();let currentId='claude',resultSeen=false,steering=null,accepting=false;const approved=new Map();
     let remaining=this.options.timeoutMs??30*60*1000,started=performance.now(),timer,pauses=0,finished=false;
     const arm=()=>{if(finished||pauses)return;started=performance.now();timer=setTimeout(()=>reject(new Error('Claude exceeded the active execution time limit. Waiting for input was excluded.')),Math.max(0,remaining));};
     const askUser=async request=>{if(pauses++===0){clearTimeout(timer);remaining-=performance.now()-started;}try{return await ask(request);}finally{if(--pauses===0)arm();}};
@@ -290,7 +292,25 @@ export class ClaudeProvider {
       }else if(r.subtype==='can_use_tool')client.respond(m.request_id,approved.get(permissionKey(r.tool_use_id,r.tool_name,r.input||{}))||await permit(r.tool_name,r.input||{},r.tool_use_id));
       else client.respond(m.request_id,{behavior:'deny',message:'Unsupported Claude control request.'});
     }catch(error){if(!client.ended)client.respond(m.request_id,{behavior:'deny',message:error.message});}};
+    const steerWait=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});promise.catch(()=>{});return {promise,resolve,reject};};
+    const steer=async prompt=>{
+      if(!accepting||finished||resultSeen||signal.aborted||steering)throw Error('Claude cannot accept steering at this moment. Queue this message.');
+      const pending={id:randomUUID(),boundary:steerWait(),ack:steerWait()};steering=pending;
+      const timeout=setTimeout(()=>{const error=new Error('Claude steering acknowledgment timed out. Delivery is unconfirmed; inspect the chat before resending.');pending.boundary.reject(error);pending.ack.reject(error);reject(error);},this.options.steerTimeoutMs??15000);
+      try{
+        await client.request({subtype:'interrupt'},this.options.steerTimeoutMs??15000);
+        await pending.boundary.promise;
+        if(signal.aborted||finished||client.ended)throw Error('Claude stopped before accepting steering.');
+        // Only after the old result is drained can a second input own the result.
+        resultSeen=false;pending.sent=true;
+        client.write({type:'user',uuid:pending.id,session_id:run.providerSessionId||'',message:{role:'user',content:prompt},parent_tool_use_id:null});
+        await pending.ack.promise;
+        emit('system','Claude acknowledged steering after interrupting the previous response.');
+      }catch(error){reject(error);throw error;}finally{clearTimeout(timeout);if(steering===pending)steering=null;}
+    };
     const message=m=>{
+      if(m.type==='user'&&steering?.sent&&m.uuid===steering.id){steering.acknowledged=true;steering.ack.resolve();}
+
       if(m.session_id){run.providerSessionId=m.session_id;run.providerHome=process.env.CLAUDE_CONFIG_DIR||path.join(os.homedir(),'.claude');update();}
       if(m.type==='stream_event'){const event=m.event;if(event?.type==='message_start')currentId=event.message.id;if(event?.type==='content_block_delta'&&event.delta?.type==='text_delta')stream(currentId,event.delta.text);}
       if(m.type==='assistant'){
@@ -304,9 +324,9 @@ export class ClaudeProvider {
         const q=m.rate_limit_info||m.rateLimitInfo||{},id=q.rateLimitType||q.rate_limit_type;
         if(id){this.rateLimits??=new Map();this.rateLimitsObservedAt=new Date().toISOString();const reset=q.resetsAt??q.resets_at;this.rateLimits.set(id,{id,label:id.replaceAll('_',' '),remainingPercent:Number.isFinite(q.utilization)?Math.max(0,Math.min(100,100-q.utilization*100)):null,resetAt:Number.isFinite(reset)?new Date(reset*1000).toISOString():null,status:q.status,unlimited:false});}
       }
-      if(m.type==='result'){if(resultSeen)return;resultSeen=true;if(m.usage)run.usage=accumulateClaudeUsage(run.usage,m.usage);run.contextUsage=m.modelUsage||null;update();m.is_error||m.subtype!=='success'?reject(new Error((m.errors||[]).join('\n')||`Claude ${m.subtype}`)):resolve();}
+      if(m.type==='result'){if(resultSeen)return;resultSeen=true;if(m.usage)run.usage=accumulateClaudeUsage(run.usage,m.usage);run.contextUsage=m.modelUsage||null;update();if(steering&&!steering.sent){steering.boundary.resolve();return;}if(steering?.sent&&!steering.acknowledged){const error=new Error('Claude completed without acknowledging steering. Delivery is unconfirmed.');steering.ack.reject(error);reject(error);return;}m.is_error||m.subtype!=='success'?reject(new Error((m.errors||[]).join('\n')||`Claude ${m.subtype}`)):resolve();}
     };
-    const closed=e=>{if(!resultSeen)reject(e);};const abort=()=>{void client.close().then(()=>reject(new Error('Cancelled')),error=>reject(error));};
+    const closed=e=>{steering?.boundary.reject(e);steering?.ack.reject(e);if(!resultSeen||steering)reject(e);};const abort=()=>{void client.close().then(()=>reject(new Error('Cancelled')),error=>reject(error));};
     client.on('message',message);client.on('request',request);client.on('closed',closed);signal.addEventListener('abort',abort,{once:true});
     try {let result;
       try{result=await client.initialize({PreToolUse:[{matcher:'.*',hookCallbackIds:['proteus_permission']}]});}
@@ -328,9 +348,9 @@ export class ClaudeProvider {
       // Fast mode requires both model support and runtime opt-in. Do not silently ignore a selection.
       if(run.schedule.serviceTier==='fast'&&result.fast_mode_disabled_reason)throw new Error(`Claude fast mode unavailable: ${result.fast_mode_disabled_reason}. Choose Provider default.`);
       run.modelCapabilities={id:model.id,controls:model.controls,capturedAt:new Date().toISOString()};if(snapshot){snapshot.suppliedAt=new Date().toISOString();snapshot.delivery='Claude explicit system prompt accepted';}update();
-      if(signal.aborted)throw new Error('Cancelled');client.write({type:'user',session_id:run.providerSessionId||'',message:{role:'user',content},parent_tool_use_id:null});await done;
+      if(signal.aborted)throw new Error('Cancelled');accepting=true;this.activeSteer=steer;client.write({type:'user',session_id:run.providerSessionId||'',message:{role:'user',content},parent_tool_use_id:null});await done;
     }finally{
-      finished=true;clearTimeout(timer);signal.removeEventListener('abort',abort);let cleanupError;
+      finished=true;accepting=false;this.activeSteer=null;steering?.boundary.reject(new Error('Claude turn ended.'));steering?.ack.reject(new Error('Claude turn ended.'));clearTimeout(timer);signal.removeEventListener('abort',abort);let cleanupError;
       try{await client.close();}catch(error){cleanupError=error;this.cleanupError=error;this.cleanupClients.add(client);}
       finally{client.off('message',message);client.off('request',request);client.off('closed',closed);mcpConfig?.dispose();await bridge?.close();if(!cleanupError){this.active=null;this.activeRunId=null;}for(const tool of calls.values())if(tool.status==='running')tool.status='interrupted';update();}
       if(cleanupError)throw cleanupError;

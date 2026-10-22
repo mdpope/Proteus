@@ -281,3 +281,16 @@ test('Claude quota cleanup denial blocks repeated process creation',async()=>{
 test('Claude provider shutdown closes an in-flight quota probe',async()=>{
   const probe=new Fake();let reject;probe.initialize=()=>new Promise((_,r)=>{reject=r;});probe.close=async()=>{probe.closed=true;reject?.(new Error('Closed'));};const p=new ClaudeProvider({clientFactory:()=>probe});const pending=p.quota();await p.close();await pending;assert.equal(probe.closed,true);assert.equal(p.quotaClient,null);
 });
+
+test('Claude steering drains interruption and requires matching replay acknowledgment without losing the next result',async()=>{
+ let client,inputs=0;const p=new ClaudeProvider({clientFactory:()=>{client=new Fake(c=>{inputs++;if(inputs===1)c.emit('message',{type:'system',session_id:'native-test'});else c.emit('message',{...c.userMessage,session_id:'native-test'});});client.request=async r=>{assert.equal(r.subtype,'interrupt');result(client);return {};};return client;}});
+ const args=runArgs(),task=p.run(args);for(let i=0;i<100&&!inputs;i++)await new Promise(r=>setTimeout(r,2));
+ const steer=p.steer(args.run,'Synthetic correction');await steer;assert.equal(inputs,2);assert.equal(client.closed,undefined);assert.equal(client.userMessage.message.content,'Synthetic correction');assert.ok(client.userMessage.uuid);
+ result(client);await task;assert.equal(client.closed,true);assert.equal(args.run.usage.inputTokens,20);await assert.rejects(p.steer(args.run,'Too late'),/ended/);
+});
+
+test('Claude steering timeout is an explicit unconfirmed failure, never success or automatic resend',async()=>{
+ let client,inputs=0;const p=new ClaudeProvider({steerTimeoutMs:25,clientFactory:()=>{client=new Fake(()=>{inputs++;});client.request=async()=>{result(client);return {};};return client;}});
+ const args=runArgs(),task=p.run(args);task.catch(()=>{});for(let i=0;i<100&&!inputs;i++)await new Promise(r=>setTimeout(r,2));
+ await assert.rejects(p.steer(args.run,'Unacknowledged correction'),/unconfirmed/);await assert.rejects(task,/unconfirmed/);assert.equal(inputs,2);assert.equal(client.closed,true);
+});

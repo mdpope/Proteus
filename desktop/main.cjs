@@ -1,11 +1,17 @@
-const { app, BrowserWindow, ipcMain, shell, dialog, clipboard, Tray, Menu, nativeImage, screen, safeStorage, Notification, powerMonitor } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, clipboard, Tray, Menu, nativeImage, screen, safeStorage, Notification, powerMonitor, powerSaveBlocker } = require('electron');
 const path = require('node:path');
 const { BrowserTabs } = require('./browser.cjs');
 const { launchPath, closeToTray, protocolURL } = require('./platform.cjs');
+const {ExternalURLs,webURL}=require('./external-urls.cjs');
+const { windowChromeOptions, installWindowChrome } = require('./window-chrome.cjs');
 const { WorkspaceSession } = require('./workspace-session.cjs');
 const {HistoryService}=require('./history-service.cjs');
 const { createProcessSampler, trackedChildren, trackedPids, resourceTotals } = require('./resource-metrics.cjs');
 const { ArtifactPreview } = require('./artifact-preview.cjs');
+const {RendererRecovery}=require('./renderer-recovery.cjs');
+const {KeepAwake}=require('./keep-awake.cjs');
+const keepAwake=new KeepAwake(powerSaveBlocker);
+let hostMenu;
 const {configureDesktopPreview,stageCodexAuthentication,preparePreviewFixtures}=require('./preview-runtime.cjs');
 const desktopPreview=configureDesktopPreview(app);
 let service, window, browser, preview, credentials, terminals, peers, tray, standupWindow, windows, createAppWindow, closing = false;
@@ -18,12 +24,17 @@ if (!app.requestSingleInstanceLock()) app.quit();
 else {
   // CLI-driven updates and service stops use the same graceful shutdown as Quit.
   for (const signal of ['SIGTERM', 'SIGINT']) process.once(signal, () => app.quit());
-  let lifeCallback,chatLink,authWindowId;
+  let lifeCallback,chatLink,authWindowId,externalLinksStarted=false;
+  const externalURLs=new ExternalURLs({
+    target:async()=>{if(!externalLinksStarted||closing)return null;if(!windows.current())await createAppWindow();const ctx=windows.current();return ctx?.externalURLReady&&!ctx.closing?ctx:null;},
+    open:async(ctx,url)=>windows.run(ctx.id,async()=>{const info=await browser.create(url,null,null,{profileId:'default',explicitParent:true});ctx.window.webContents.send('proteus:browser-action',{type:'select-tab',info});showWindow();}),
+    onError:error=>{console.error('Opening website link: '+error.message);if(window&&!window.isDestroyed())window.webContents.send('proteus:browser-action',{type:'error',message:'Could not open an incoming website link. '+error.message});}
+  });
   const returnToAuthWindow=()=>{const ctx=windows?.contexts.get(authWindowId)||windows?.current();if(ctx)windows.run(ctx.id,showWindow);else showWindow();};
-  const receiveURL=raw=>{const url=protocolURL([raw]);if(!url)return;const value=new URL(url);if(value.protocol==='proteus:'){chatLink=url;if(window&&!window.isDestroyed()){window.webContents.send('proteus:open-chat-link',url);chatLink=null;}showWindow();return;}if(service)void service.life.callback(url).catch(()=>{});else lifeCallback=url;returnToAuthWindow();};
-  app.on('second-instance',(_event,argv)=>{const url=protocolURL(argv);if(url)receiveURL(url);else showWindow();});
+  const receiveURL=raw=>{if(externalURLs.receive(raw))return;const url=protocolURL([raw]);if(!url)return;const value=new URL(url);if(value.protocol==='proteus:'){chatLink=url;if(window&&!window.isDestroyed()){window.webContents.send('proteus:open-chat-link',url);chatLink=null;}showWindow();return;}if(service)void service.life.callback(url).catch(()=>{});else lifeCallback=url;returnToAuthWindow();};
+  app.on('second-instance',(_event,argv)=>{const urls=argv.filter(raw=>webURL(raw)||protocolURL([raw]));if(urls.length)urls.forEach(receiveURL);else showWindow();});
   app.on('open-url',(event,url)=>{event.preventDefault();receiveURL(url);});
-  if(process.platform!=='darwin')receiveURL(protocolURL(process.argv));
+  if(process.platform!=='darwin')process.argv.filter(raw=>webURL(raw)||protocolURL([raw])).forEach(receiveURL);
   app.on('activate', showWindow);
   app.whenReady().then(async () => {
     const updateBridge={handle:(value,runId)=>service.updates?.handle(value,runId)||Promise.reject(Error('Supervised updates are not ready.'))};
@@ -50,18 +61,21 @@ else {
     service = await startServer({updateRecovery:!!pendingRecovery, ...(desktopPreview?{home:desktopPreview.home,port:0,desktopPreview:{codexHome:desktopPreview.codexHome},withSeed:false}:{port:Number(process.env.PORT || 4317)}), openExternal: url => shell.openExternal(url), browser: {updates:updateBridge, projects:true,preview:!!desktopPreview,manageTabs:(args,runId)=>service.tabManagement.handle(args),agent:async(value,runId)=>{if(!windows?.contexts.size)await createAppWindow();const ctx=service.windowForChat?.(runId)||windows.current();return windows.run(ctx.id,()=>browser.agent(value,runId));}, openDocument:async(args,runId)=>(await import('../src/document-tools.js')).openChatDocument(service,args,runId) }, background: true, lifeOptions: { safeStorage, Notification, powerMonitor,client:'desktop',callbackURL:'proteus-desktop://life-oauth/callback',openExternal:async url=>{authWindowId=windows?.current()?.id;if(service.settings.get().preferences?.clickedLinks==='system')return shell.openExternal(url);const info=await browser.create(url);browser.actions.send({type:'select-tab',info});} } });
     if (lifeCallback) { const value=lifeCallback; lifeCallback=null; void service.life.callback(value).catch(()=>{}); }
     windows=new (require('./windows.cjs').WindowRegistry)(service.home,{ipcMain,screen});
+    service.contentTabs.migrateWindowTeams();
     const records=windows.records(),firstRecord=records[0];
-    const makeWindow=record=>new BrowserWindow({ ...windows.bounds(record), minWidth: 850, minHeight: 650, title: desktopPreview?.name||'Proteus', icon: appIcon, backgroundColor: '#111716',
-      webPreferences: { additionalArguments:['--proteus-window-id='+record.id],preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
+    const makeWindow=record=>new BrowserWindow({ ...windows.bounds(record), ...windowChromeOptions(), minWidth: 850, minHeight: 650, title: desktopPreview?.name||'Proteus', icon: appIcon, backgroundColor: '#121512',
+      ...(process.platform==='darwin'?{titleBarStyle:'hidden',trafficLightPosition:{x:15,y:19}}:{}),
+      webPreferences: { additionalArguments:['--proteus-window-id='+record.id,'--proteus-window-preview'],preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
     const firstWindow=makeWindow(firstRecord);windows.attach(firstWindow,firstRecord.id);window=windows.proxy();
     if(desktopPreview)window.on('page-title-updated',event=>{event.preventDefault();window.setTitle(desktopPreview.name);});
     const browsingHistory=new HistoryService(service.browserHistory,{onError:error=>window.webContents.send('proteus:browser-action',{type:'error',message:error.message})});
     const {browserDestination,browserDestinations,previewChatResourcePlacement}=await import('../src/browser-destinations.js');
     const projects=service.workspaceProjects||service.desktopPreview;
-    const {remapPreviewProjectSession,resolvePreviewProject}=await import('../public/preview-project-placement.js');
+    const {remapPreviewProjectSession,resolvePreviewProject,remapPreviewBrowserPlacement}=await import('../public/preview-project-placement.js');
+    const {reconcileWindowSession}=await import('../public/window-session-reconcile.js');
     const resolvePreviewPlacement=value=>projects.remapBrowserPlacement(value);
     await service.browserProfiles.refresh().catch(()=>{});
-    browser = new BrowserTabs(firstWindow, service.origin,{windowRegistry:windows,newWindow:()=>createAppWindow?.(),projects:true,preview:!!desktopPreview,resolvePreviewPlacement,home:service.home,handleCallback:url=>{if(!url.startsWith('proteus-desktop://life-oauth/callback?'))return false;void service.life.callback(url).catch(error=>browser.actions.send({type:'error',message:error.message}));returnToAuthWindow();return true;},diagnostics:service.performanceDiagnostics,history:browsingHistory,agentDestination:(runId,value)=>browserDestination(service,runId,value,{preview:!!projects}),agentDestinations:runId=>browserDestinations(service,runId,{preview:!!projects}),profiles:service.browserProfiles,onLoadError:({error,url,detail,tabId})=>{return service.activity.log('warning','browser.load-failed',`${error}\n${url||''}`,{hostId:service.remote.info().hostId,tabId,error:detail,url});}});
+    browser = new BrowserTabs(firstWindow, service.origin,{windowRegistry:windows,newWindow:()=>createAppWindow?.(),projects:true,preview:!!desktopPreview,resolvePreviewPlacement,home:service.home,handleCallback:url=>{if(!url.startsWith('proteus-desktop://life-oauth/callback?'))return false;void service.life.callback(url).catch(error=>browser.actions.send({type:'error',message:error.message}));returnToAuthWindow();return true;},diagnostics:service.performanceDiagnostics,history:browsingHistory,agentDestination:(runId,value)=>browserDestination(service,runId,value,{preview:!!projects}),agentDestinations:runId=>browserDestinations(service,runId,{preview:!!projects}),profiles:service.browserProfiles,onLoadError:({error,url,detail,tabId,windowId})=>{const log=service.activity.log('warning','browser.load-failed',`${error}\n${url||''}`,{hostId:service.remote.info().hostId,tabId,error:detail,url});let site='this page';try{site=new URL(url).host;}catch{}const item=service.activity.browserIssue({kind:'load-error',windowId,tabId,logId:log.id,title:'Could not load '+site,body:error});service.notify();return {...log,notificationId:item.id};}});
     service.previewAllowed=tab=>browser.profileAvailable({profileId:tab.profileId||'default'});
     service.browserAttention=()=>browser.permissions.list();
     const closeCurrentTab=()=>{const ctx=windows.current();if(ctx&&!closing)ctx.window.webContents.send('proteus:close-current-tab');};
@@ -70,8 +84,11 @@ else {
     windows.current().preview=new ArtifactPreview(firstWindow);preview=windows.proxy('preview');
     credentials = new CredentialBroker(service.home);
     const trusted = event => { if (new URL(event.senderFrame.url).origin !== service.origin || event.sender !== window.webContents) throw new Error('Untrusted renderer.'); };
+    const configureWindowChrome=installWindowChrome({windows,trusted,Menu,isClosing:()=>closing});
     const notices=new Map();
     windows.handle('proteus:notice',(event,value)=>{trusted(event);if(event.senderFrame!==window.webContents.mainFrame||closing)throw new Error('Notification access unavailable.');return (()=>{const ctx=windows.current();if(!notices.has(ctx.id))notices.set(ctx.id,new (require('./notice-window.cjs').NoticeWindow)(ctx.window));return notices.get(ctx.id).show(value);})();});
+    const openBrowserNotification=(item,intent='review')=>{const issue=item?.browserIssue;if(!issue)throw Error('Browser notification not found.');const actions=issue.kind==='history-conflict'?['review','keep-history','open-copy']:['review','open-tab','reload','logs'];if(!actions.includes(intent))throw Error('Choose an available notification action.');const ctx=windows.contexts.get(issue.windowId);if(!ctx||ctx.window.isDestroyed())throw Error('Restore the original window in Engine Room → Windows before reviewing this browser issue.');windows.run(ctx.id,()=>{ctx.window.show();ctx.window.focus();ctx.window.webContents.send('proteus:notification-open',{browserIssueId:item.id,issueAction:intent});});return {dispatched:true};};
+    windows.handle('proteus:browser-notification',(event,value)=>{trusted(event);if(event.senderFrame!==window.webContents.mainFrame||closing)throw Error('Browser notification access unavailable.');if(value?.action==='record'){const item=service.activity.browserIssue({...value,windowId:windows.current().id});service.notify();return item;}if(value?.action==='act'){const item=service.activity.notifications().items.find(item=>item.id===value.id&&item.type==='browser.issue');return openBrowserNotification(item,value.intent);}throw Error('Choose a browser notification action.');});
     windows.handle('proteus:default-browser',event=>{trusted(event);return app.getApplicationNameForProtocol('https:')||null;});
     windows.handle('proteus:open-link',(event,value)=>{trusted(event);if(event.senderFrame.parent!==null)throw new Error('Untrusted frame.');const url=new URL(value);if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw new Error('Use an HTTP or HTTPS link without credentials.');return shell.openExternal(url.href);});
     windows.handle('proteus:open-external',(event,value)=>{trusted(event);if(event.senderFrame.parent!==null)throw new Error('Untrusted frame.');const url=new URL(value);if(url.protocol!=='https:'||url.username||url.password)throw new Error('Use an HTTPS website address.');return shell.openExternal(url.href);});
@@ -102,9 +119,31 @@ else {
     });
 
     powerMonitor.on('resume',()=>peers?.resumeConnections());
-    const makeSession=id=>new WorkspaceSession(service.home,{windowId:id,projects:true,remap:value=>projects.remapSession(value)});
+    const makeSession=id=>new WorkspaceSession(service.home,{windowId:id,projects:true,sharedTeam:true,remap:value=>projects.remapSession(value)});
     windows.current().session=makeSession(firstRecord.id);const workspaceSession=windows.proxy('session');
     const tabActions=new Map();
+    const windowLayouts=new (require('./window-layouts.cjs').WindowLayouts)(service.home);
+    const checkpointWindow=ctx=>ctx.recovery?.restoring||ctx.window.webContents.isCrashed()?Promise.resolve():new Promise((resolve,reject)=>{const requestId=require('node:crypto').randomUUID();const timer=setTimeout(()=>{tabActions.delete(requestId);reject(Error('The window did not finish saving. Try again after it responds.'));},10000);tabActions.set(requestId,{resolve,reject,timer,windowId:ctx.id});ctx.window.webContents.send('proteus:tab-management',{action:'window-checkpoint',requestId});});
+    const windowPositions=id=>{const prefix='window:'+id+':';return viewPositions.get().flatMap(([key,position])=>key.startsWith(prefix)?[[key.slice(prefix.length),position]]:id==='main'&&!key.startsWith('window:')?[[key,position]]:[]);};
+    const captureWindow=(ctx,kind,name,expectedRevision)=>windowLayouts.capture({windowId:ctx.id,session:ctx.session.get(),positions:windowPositions(ctx.id),bounds:ctx.window.getNormalBounds(),maximized:ctx.window.isMaximized(),kind,name},expectedRevision);
+    if(windowLayouts)windows.checkpointForQuit=async()=>{for(const ctx of windows.contexts.values()){ctx.checkpointing=true;try{await checkpointWindow(ctx);captureWindow(ctx,'previous');}finally{ctx.checkpointing=false;}}};
+    windows.handle('proteus:window-layouts',async(event,value)=>{
+      trusted(event);if(!windowLayouts)throw Error('Window sessions are available in the design preview.');
+      if(value?.action==='list')return windowLayouts.list(windows);
+      if(value?.action==='new'){await createAppWindow();return windowLayouts.list(windows);}
+      if(value?.action==='rename'){if(!windows.contexts.has(value.id))throw Error('Choose an open window.');windowLayouts.rename(value.id,value.name,value.expectedRevision);}
+      else if(value?.action==='rename-session')windowLayouts.renameLayout(value.id,value.name,value.expectedRevision);
+      else if(value?.action==='save'){const ctx=windows.contexts.get(value.id);if(!ctx)throw Error('Choose an open window.');await checkpointWindow(ctx);captureWindow(ctx,'named',value.name,value.expectedRevision);}
+      else if(value?.action==='focus'){const ctx=windows.contexts.get(value.id);if(!ctx)throw Error('The window is closed. Refresh the list.');ctx.window.show();ctx.window.focus();}
+      else if(value?.action==='restore'){
+        const data=windowLayouts.read();if(data.revision!==value.expectedRevision)throw Error('Window sessions changed. Refresh and retry.');const row=data.layouts.find(row=>row.id===value.id);if(!row)throw Error('This saved session is unavailable.');
+        const open=windows.contexts.get(row.windowId);if(open){open.window.show();open.window.focus();return windowLayouts.list(windows);}
+        const snapshot=windowLayouts.snapshot(row.id),session=reconcileWindowSession(snapshot.session,(scope,id)=>service.contentTabs.get(scope,id));makeSession(row.windowId).save({...session,windowId:row.windowId});for(const [key,position]of snapshot.positions)viewPositions.set('window:'+row.windowId+':'+key,position);
+        await createAppWindow({id:row.windowId,bounds:row.bounds,maximized:row.maximized});
+      }else if(value?.action==='remove')windowLayouts.remove(value.id,value.expectedRevision);
+      else if(value?.action!=='rename')throw Error('Choose a window-session action.');
+      return windowLayouts.list(windows);
+    });
     windows.handle('proteus:tab-action-result',(event,value)=>{trusted(event);const pending=tabActions.get(value?.requestId);if(!pending)return;if(pending.windowId!==windows.current().id)throw Error('This action belongs to another app window.');clearTimeout(pending.timer);tabActions.delete(value.requestId);if(value.error)pending.reject(new Error(String(value.error).slice(0,1000)));else pending.resolve(value.result);});
     const reconcileWindowProjects=async()=>{
       // The catalog redirect is the durable commit. Normalize every session
@@ -122,7 +161,7 @@ else {
     if(projects)service.reconcileWorkspaceProjects=service.reconcilePreviewProjects=async()=>{for(const ctx of windows.contexts.values())await windows.run(ctx.id,reconcileWindowProjects);};
     const runtimeIdentity=(tab,saved)=>{
       if(tab.contentTabId)return tab.contentTabId;
-      if(tab.type==='markdown'&&tab.file){const parent=saved.tabs?.find(item=>item.id===tab.parentId),owner=parent?.type==='workspace'?'workspace:'+parent.workspaceId:parent?.type==='run'?parent.runId||parent.id:windows.current().id==='main'?(saved.team?.tabs?.includes(tab)?'team':'main'):'window:'+windows.current().id;return 'document:'+require('node:crypto').createHash('sha256').update(owner+'\0'+tab.file).digest('hex');}
+      if(tab.type==='markdown'&&tab.file){const parent=saved.tabs?.find(item=>item.id===tab.parentId),owner=parent?.type==='workspace'?'workspace:'+parent.workspaceId:parent?.type==='run'?parent.runId||parent.id:saved.team?.tabs?.includes(tab)?'team':windows.current().id==='main'?(saved.team?.tabs?.includes(tab)?'team':'main'):'window:'+windows.current().id;return 'document:'+require('node:crypto').createHash('sha256').update(owner+'\0'+tab.file).digest('hex');}
       if(tab.type==='terminal'&&tab.terminal?.id)return 'terminal:'+tab.terminal.id;
       if(['run','workspace-chat'].includes(tab.type))return 'chat:'+(tab.runId||tab.id);
       return tab.id;
@@ -132,7 +171,7 @@ else {
       const records=[...(saved.tabs||[]),...(saved.team?.tabs||[])].filter(tab=>!tab.navigationClosed).map(tab=>({
         id:runtimeIdentity(tab,saved),runtimeId:tab.id,
         manageable:!['overview','omi','life','team','engine','home','standup'].includes(tab.type),type:tab.type==='workspace'?'workspace':['run','remote-run'].includes(tab.type)?'chat':tab.type==='markdown'||tab.type==='remote-document'?'document':tab.type==='browser'?'browser':['terminal','agent-terminal'].includes(tab.type)?'terminal':'viewer',
-        scope:'shell',scopeId:'shell',browserId:tab.type==='browser'?tab.browserId||tab.id:undefined,location:(()=>{const parent=saved.tabs?.find(item=>item.id===tab.parentId);return parent?.type==='workspace'?{scope:parent.projectId?'project':'workspace',id:parent.projectId||parent.workspaceId,hostId:parent.hostId||null}:['run','remote-run'].includes(parent?.type)?{scope:'chat',id:parent.runId||parent.id,hostId:parent.hostId||null}:{scope:saved.team?.tabs?.includes(tab)?'team':'main',id:windows.current().id==='main'?(saved.team?.tabs?.includes(tab)?'team':'main'):'window:'+windows.current().id};})(),group:saved.team?.tabs?.includes(tab)?'team':'main',liveSession:tab.type==='agent-terminal',parentId:tab.parentId||null,title:tab.customTitle||tab.label||tab.title||'Tab',
+        scope:'shell',scopeId:'shell',browserId:tab.type==='browser'?tab.browserId||tab.id:undefined,location:(()=>{const parent=saved.tabs?.find(item=>item.id===tab.parentId);return parent?.type==='workspace'?{scope:parent.projectId?'project':'workspace',id:parent.projectId||parent.workspaceId,hostId:parent.hostId||null}:['run','remote-run'].includes(parent?.type)?{scope:'chat',id:parent.runId||parent.id,hostId:parent.hostId||null}:{scope:saved.team?.tabs?.includes(tab)?'team':'main',id:saved.team?.tabs?.includes(tab)?'team':windows.current().id==='main'?(saved.team?.tabs?.includes(tab)?'team':'main'):'window:'+windows.current().id};})(),group:saved.team?.tabs?.includes(tab)?'team':'main',liveSession:tab.type==='agent-terminal',parentId:tab.parentId||null,title:tab.customTitle||tab.label||tab.title||'Tab',
         url:tab.type==='browser'?require('./browser-history.cjs').safeHistoryURL(tab.url)||null:tab.type==='markdown'&&tab.file?require('node:url').pathToFileURL(tab.file).href:null,
         openedAt:tab.openedAt||null,lastTouchedAt:tab.lastTouchedAt||null,...(projects?{lastActivityAt:tab.lastActivityAt||null}:{}),hidden:tab.hidden===true,persist:tab.persist===true,
         ...(tab.workspaceId?{workspaceId:tab.workspaceId}:{}),...(tab.hostId?{hostId:tab.hostId}:{}),...(tab.terminal?.id?{terminalId:tab.terminal.id}:{}),...(tab.runId||tab.type==='run'?{chatId:tab.runId||tab.id}:{}),...(tab.favicon?{favicon:tab.favicon}:{})
@@ -221,9 +260,9 @@ else {
         return service.resources.list();
       }
     };
-    service.activity.on('notification',item=>{const p=service.activity.data.preferences;if(!p.systemEnabled||p[item.type]===false||!Notification.isSupported())return;const notification=new Notification({title:item.title,body:item.body,silent:false});notification.on('click',()=>{const ctx=service.windowForChat(item.runId);if(ctx)windows.run(ctx.id,()=>{showWindow();ctx.window.webContents.send('proteus:notification-open',item);});else showWindow();});notification.show();});
+    service.activity.on('notification',item=>{const p=service.activity.data.preferences;if(!p.systemEnabled||p[item.type]===false||!Notification.isSupported())return;const notification=new Notification({title:item.title,body:item.body,silent:false});notification.on('click',()=>{if(item.browserIssue){try{openBrowserNotification(item);}catch{showWindow();}return;}const ctx=service.windowForChat(item.runId);if(ctx)windows.run(ctx.id,()=>{showWindow();ctx.window.webContents.send('proteus:notification-open',item);});else showWindow();});notification.show();});
 
-    windows.handle('proteus:workspace-session', async (event, value) => { trusted(event); if(value?.action==='reconcile-peer-projects'&&!closing){const hostId=value.hostId;if(!/^[a-f0-9-]{36}$/i.test(hostId||''))throw new Error('Choose a paired computer.');const catalog=await peers.request(hostId,'projects.get',{});const prefix='project:'+hostId+':';const current=workspaceSession.get();if(current)workspaceSession.save(remapPreviewProjectSession(current,catalog,{hostId}));browser.reparentPreviewProjects(placement=>{if(!placement.parentId?.startsWith(prefix))return placement;const id=placement.parentId.slice(prefix.length),target=resolvePreviewProject(catalog,id);return target&&target.id!==id?{...placement,parentId:prefix+target.id}:placement;});return {catalog};} if(value?.action==='get')return workspaceSession.get(); if(value?.action==='save'&&!closing){const saved=service.performanceDiagnostics.measureSync('desktop.session.save',()=>workspaceSession.save(value.session));service.contentTabs.seedWorkspace(saved);return;} });
+    windows.handle('proteus:workspace-session', async (event, value) => { trusted(event); if(value?.action==='reconcile-peer-projects'&&!closing){const hostId=value.hostId;if(!/^[a-f0-9-]{36}$/i.test(hostId||''))throw new Error('Choose a paired computer.');const catalog=await peers.request(hostId,'projects.get',{});const prefix='project:'+hostId+':';const current=workspaceSession.get();if(current)workspaceSession.save(remapPreviewProjectSession(current,catalog,{hostId}));browser.reparentPreviewProjects(placement=>{if(!placement.parentId?.startsWith(prefix))return placement;return remapPreviewBrowserPlacement(placement,catalog,{hostId});});return {catalog};} if(value?.action==='get'){const saved=workspaceSession.get(),recovery=windows.current().recovery;return saved?{...saved,rendererRecovery:recovery?.restoring===true,recoveryGeneration:recovery?.generation||0}:saved;}if(value?.action==='ready'){const ctx=windows.current();const recovered=ctx.recovery?.ready(value.generation)===true;if(recovered){ctx.externalURLReady=true;void externalURLs.drain();}return recovered;} if(value?.action==='save'&&(!closing||windows.current()?.checkpointing)){const saved=service.performanceDiagnostics.measureSync('desktop.session.save',()=>workspaceSession.save(value.session));service.contentTabs.seedWorkspace(saved);return;} });
     const viewPositions=new (require('./view-positions.cjs').ViewPositions)(service.home);
     windows.handle('proteus:view-positions',(event,value)=>{trusted(event);const prefix='window:'+windows.current().id+':';if(value?.action==='get')return viewPositions.get().flatMap(([key,position])=>key.startsWith(prefix)?[[key.slice(prefix.length),position]]:windows.current().id==='main'&&!key.startsWith('window:')?[[key,position]]:[]);if(value?.action==='set')return viewPositions.set(prefix+value.key,value.position);throw Error('Choose a reading-position action.');});
     const pendingThumbnails=new Map();
@@ -284,10 +323,15 @@ else {
     ipcMain.handle('proteus:standup-close', event => { trustedStandup(event); standupWindow.close(); });
     const configureWindow=ctx=>{
       const target=ctx.window,id=ctx.id;
+      configureWindowChrome(target);
+      ctx.recovery=new RendererRecovery(target,{url:service.url,closing:()=>closing||ctx.closing===true,prepare:windows.bind(id,()=>{
+        ctx.externalURLReady=false;browser.invalidateRendererSelection();void ctx.preview.hide().catch(()=>{});
+        for(const [key,pending]of tabActions)if(pending.windowId===id){clearTimeout(pending.timer);tabActions.delete(key);pending.reject(Error('The window renderer restarted. Refresh the owner inventory before retrying; the action was not replayed.'));}
+      }),log:detail=>service.activity.log(detail.reason==='recovered'?'info':'warning','desktop.renderer-recovery','Window renderer recovery',{windowId:id,...detail})});
       if(desktopPreview)target.on('page-title-updated',event=>{event.preventDefault();target.setTitle(desktopPreview.name);});
       target.webContents.setWindowOpenHandler(()=>({action:'deny'}));
       target.webContents.on('will-navigate',(event,url)=>{if(new URL(url).origin!==service.origin)event.preventDefault();});
-      target.webContents.on('did-start-navigation',windows.bind(id,details=>{if(details.isMainFrame&&!details.isSameDocument)browser.invalidateRendererSelection();}));
+      target.webContents.on('did-start-navigation',windows.bind(id,details=>{if(details.isMainFrame&&!details.isSameDocument){ctx.externalURLReady=false;browser.invalidateRendererSelection();}}));
       target.webContents.on('did-finish-load',windows.bind(id,()=>{if(chatLink){target.webContents.send('proteus:open-chat-link',chatLink);chatLink=null;}}));
       target.webContents.on('before-input-event',windows.bind(id,(event,input)=>{
         if(input.type!=='keyDown'||!(input.meta||input.control)||input.shift||input.alt)return;
@@ -299,14 +343,13 @@ else {
       target.on('resize',()=>target.webContents.send('proteus:browser-resize'));
       target.on('close',event=>{
         if(closing||ctx.finishedClose)return;event.preventDefault();if(ctx.closing)return;ctx.closing=true;
-        target.webContents.send('proteus:shutdown');
-        void windows.run(id,async()=>{await ctx.preview.hide();await browser.closeWindow(id);windows.forget(id);ctx.finishedClose=true;notices.delete(id);target.destroy();}).catch(error=>{ctx.closing=false;console.error('Window close: '+error.message);});
+        void windows.run(id,async()=>{if(windowLayouts){await checkpointWindow(ctx);captureWindow(ctx,'closed');}target.webContents.send('proteus:shutdown');await ctx.preview.hide();await browser.closeWindow(id);windows.forget(id);ctx.finishedClose=true;notices.delete(id);target.destroy();}).catch(error=>{ctx.closing=false;console.error('Window close: '+error.message);target.webContents.send('proteus:browser-action',{type:'error',message:error.message});});
       });
     };
     createAppWindow=async(record={id:require('node:crypto').randomUUID()})=>{
       if(closing)throw Error('Proteus is shutting down.');
       const target=makeWindow(record),ctx=windows.attach(target,record.id);browser.addWindow(target,record.id);ctx.session=makeSession(record.id);ctx.preview=new ArtifactPreview(target);configureWindow(ctx);
-      await target.loadURL(service.url);if(record.maximized)target.maximize();return target;
+      await target.loadURL(service.url).catch(()=>ctx.recovery.failed('initial-load-failed'));if(record.maximized)target.maximize();return target;
     };
     configureWindow(windows.contexts.get(firstRecord.id));
     service.updateUIHealth=async()=>{for(const ctx of windows.contexts.values()){if(ctx.window.isDestroyed()||ctx.window.webContents.isLoading()||!await ctx.window.webContents.executeJavaScript("!!(document.querySelector('#topbar-home')&&document.querySelector('#main')&&window.desktop)"))return false;}return windows.contexts.size>0;};
@@ -316,41 +359,49 @@ else {
     const mac = process.platform === 'darwin';
     const icon = nativeImage.createFromPath(path.join(__dirname, mac ? 'trayTemplate.png' : 'icon.png')).resize({ width: mac ? 18 : 24, height: mac ? 18 : 24 });
     if (mac) icon.setTemplateImage(true);
-    const hostMenu = [
+    const hostMenuTemplate = [
       { label: 'Open '+(desktopPreview?.name||'Proteus'), click: showWindow },
       { label: 'Connections…', click: () => { showWindow(); window.webContents.send('proteus:remote'); } },
+      { id:'keep-screen-awake', label:'Keep Screen Awake', type:'checkbox', checked:false, click:item=>{
+        try { keepAwake.setEnabled(item.checked); }
+        catch(error) { dialog.showErrorBox('Keep Screen Awake unavailable', error.message); }
+        item.checked=keepAwake.enabled;
+        tray?.setContextMenu(hostMenu);
+        tray?.setToolTip(keepAwake.enabled?'Proteus — keeping screen awake':desktopPreview?'Proteus Design Preview — synthetic data':'Proteus — schedules and chats');
+      } },
       { type: 'separator' },
       { label: closeToTray(process.platform) ? 'Closing a window keeps the host running' : 'Closing the window minimizes; the host keeps running', enabled: false },
       { label: 'Quit Proteus and stop runs', click: () => app.quit() }
     ];
+    hostMenu=Menu.buildFromTemplate(hostMenuTemplate);
     try {
       tray = new Tray(icon); tray.setToolTip(desktopPreview?'Proteus Design Preview — synthetic data':'Proteus — schedules and chats');
-      tray.setContextMenu(Menu.buildFromTemplate(hostMenu));
+      tray.setContextMenu(hostMenu);
       tray.on(process.platform === 'linux' ? 'click' : 'double-click', showWindow);
     } catch (error) { if (process.platform !== 'linux') throw error; console.warn('System tray unavailable:', error.message); }
-    if (process.platform === 'linux') Menu.setApplicationMenu(Menu.buildFromTemplate([
-      { label: 'File', submenu: [...hostMenu.slice(0, 2), { type: 'separator' }, { label: 'Quit Proteus and stop runs', accelerator: 'Control+Q', click: () => app.quit() }] },
-      { role: 'editMenu' }, { role: 'viewMenu' }
-    ]));
+    const menuWindow=action=>process.platform==='linux'?(_item,target)=>{const ctx=[...windows.contexts.values()].find(ctx=>ctx.window===target)||windows.current();if(ctx)return windows.run(ctx.id,action);}:action;
     Menu.setApplicationMenu(Menu.buildFromTemplate([
       ...(process.platform==='darwin'?[{label:app.name,submenu:[{role:'about'},{type:'separator'},{role:'hide'},{role:'hideOthers'},{role:'unhide'},{type:'separator'},{role:'quit'}]}]:[]),
-      {label:'File',submenu:[{label:'New Window',accelerator:'CommandOrControl+N',click:()=>void createAppWindow()},{label:'New Tab',accelerator:'CommandOrControl+T',click:()=>browser.requestNewTab()},{type:'separator'},{label:'Close Window',accelerator:'CommandOrControl+Shift+W',click:()=>windows.current()?.window.close()},{label:'Close Tab',accelerator:'CommandOrControl+W',click:closeCurrentTab}]},{role:'editMenu'},{role:'viewMenu'},{role:'windowMenu'}
+      {label:'File',submenu:[{label:'New Window',accelerator:'CommandOrControl+N',click:()=>void createAppWindow()},{label:'New Tab',accelerator:'CommandOrControl+T',click:menuWindow(()=>browser.requestNewTab())},{type:'separator'},{label:'Close Window',accelerator:'CommandOrControl+Shift+W',click:menuWindow(()=>windows.current()?.window.close())},{label:'Close Tab',accelerator:'CommandOrControl+W',click:menuWindow(closeCurrentTab)},...(process.platform==='linux'?[{type:'separator'},{label:'Connections…',click:menuWindow(()=>window.webContents.send('proteus:remote'))},{type:'separator'},{label:'Quit Proteus and stop runs',accelerator:'Control+Q',click:()=>app.quit()}]:[])]},{role:'editMenu'},{label:'View',submenu:[{id:'refresh-current-tab',label:'Refresh Current Tab',accelerator:'CommandOrControl+R',click:menuWindow(()=>windows.current()?.window.webContents.send('proteus:browser-action',{type:'refresh-current-tab'}))},{id:'reload-window',label:'Reload Window',click:menuWindow(()=>windows.current()?.recovery.reload())},{role:'forceReload'},{role:'toggleDevTools'},{type:'separator'},{role:'resetZoom'},{role:'zoomIn'},{role:'zoomOut'},{type:'separator'},{role:'togglefullscreen'}]},{role:'windowMenu'}
     ]));
-    await firstWindow.loadURL(service.url).catch(error=>{if(error.code!=='ERR_ABORTED'&&error.errno!==-3)throw error;});if(firstRecord.maximized)firstWindow.maximize();
+    if(process.platform==='linux')for(const ctx of windows.contexts.values())ctx.window.setMenuBarVisibility(false);
+    await firstWindow.loadURL(service.url).catch(()=>windows.contexts.get(firstRecord.id).recovery.failed('initial-load-failed'));if(firstRecord.maximized)firstWindow.maximize();
     for(const record of records.slice(1))await createAppWindow(record);
+    externalLinksStarted=true;void externalURLs.drain();
   }).catch(error => { console.error(error.message); app.quit(); });
   app.on('window-all-closed', () => {});
   app.on('before-quit', event => {
+    keepAwake.dispose();
     if (closing || !service) return;
     event.preventDefault(); closing = true;
-    windows?.prepareQuit();browser?.prepareShutdown();windows?.broadcast('proteus:shutdown');
-    (async () => { credentials?.close(); peers?.close(); await Promise.all([...windows.contexts.values()].map(ctx=>ctx.preview.hide())); await terminals?.dispose(); await browser?.dispose(); await service.close(); })().catch(error => { console.error('Proteus shutdown: ' + error.message); }).finally(() => { tray?.destroy(); app.quit(); });
+    (async () => { if(windows?.checkpointForQuit)try{await windows.checkpointForQuit();}catch(error){console.error('Window session checkpoint: '+error.message);}windows?.prepareQuit();browser?.prepareShutdown();windows?.broadcast('proteus:shutdown');credentials?.close(); peers?.close(); await Promise.all([...windows.contexts.values()].map(ctx=>ctx.preview.hide())); await terminals?.dispose(); await browser?.dispose(); await service.close(); })().catch(error => { console.error('Proteus shutdown: ' + error.message); }).finally(() => { tray?.destroy(); app.quit(); });
   });
 }
 // Main-process integration tests use the same broker as the provider adapter.
 module.exports.getBrowser = () => browser;
 module.exports.getService = () => service;
 module.exports.getTray = () => tray;
+module.exports.getHostMenu = () => hostMenu;
 
 module.exports.getTerminals = () => terminals;
 

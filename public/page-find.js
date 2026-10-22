@@ -54,8 +54,8 @@ export function installPageFind({scope=()=>document.querySelector('#main-content
     observer?.disconnect();observer=new MutationObserver(()=>{clearTimeout(timer);timer=setTimeout(()=>void search(0,false),120);});
     const root=scope();if(root)observer.observe(root,{subtree:true,childList:true,characterData:true});
   }
-  input.oninput=()=>void search();panel.querySelector('[data-prev]').onclick=()=>void search(-1);panel.querySelector('[data-next]').onclick=()=>void search(1);panel.querySelector('[data-find-close]').onclick=close;
-  input.onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();void search(event.shiftKey?-1:1);}if(event.key==='Escape'){event.preventDefault();close();}};
+  input.oninput=()=>{epoch++;clearTimeout(timer);timer=setTimeout(()=>void search(),120);};panel.querySelector('[data-prev]').onclick=()=>{clearTimeout(timer);void search(-1);};panel.querySelector('[data-next]').onclick=()=>{clearTimeout(timer);void search(1);};panel.querySelector('[data-find-close]').onclick=close;
+  input.onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();clearTimeout(timer);void search(event.shiftKey?-1:1);}if(event.key==='Escape'){event.preventDefault();close();}};
   document.addEventListener('keydown',event=>{if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='f'){event.preventDefault();open();}});
   return {open,close,refresh:({documentChanged=false}={})=>{if(!panel.hidden){onLayout(true);void search(0,false,documentChanged);}}};
 }

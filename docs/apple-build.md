@@ -1,3 +1,14 @@
+## October 22 — separate Apple browser evaluation distribution
+
+The private `org.proteusapp.review.proteus.desktop` candidate uses WTB team `TEAMID0000` and Developer ID
+Application certificate `59LW4N2UBA`, SHA-1 `92A416F10956AA668EA46325C0F6B45C557856EA`.
+The explicit App ID is registered. The hardened timestamped app passed notarization, stapling and
+Gatekeeper; the final DMG also passed notarization, stapling, Gatekeeper and mounted browser acceptance. Existing installed app identities and
+shared certificates are preserved. Use [the Apple request record](apple-browser-authorization-request.md)
+for current distribution state and operator-submitted browser request **TGNRQJ22PP**.
+The ignored local operator record has exact links, the last observed form and step-by-step commands;
+credentials remain in Keychain and the protected WTB website project.
+
 ## October 20 — 0.2.26 physical update and native Mac launch gate
 
 Paid iPhone and iPad are updated in place to **0.2.26 / 2610.19.1** with the same paid bundle,

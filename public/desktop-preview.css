@@ -165,3 +165,50 @@ body.desktop-preview.sidebar-minimized:not(.preview-sidebar-overlay-open) #sideb
 .desktop-preview .preview-other-computers>.preview-computer-heading{color:var(--preview-sidebar-ink)}
 .desktop-preview .preview-computer-group>.preview-workspace-tree{margin-left:4px}
 body.desktop-preview.sidebar-minimized:not(.preview-sidebar-overlay-open) #sidebar .preview-other-computers{display:none}
+
+/* Unified window design shared by normal builds and the isolated preview. */
+body.window-design-preview{--window-title-height:52px}
+body.window-design-preview #tabs{height:var(--window-title-height);display:flex;align-items:stretch;padding:0 6px 0 74px;gap:0;background:#121512;-webkit-app-region:drag;app-region:drag}
+body.window-design-preview #tabs button,body.window-design-preview #tabs details,body.window-design-preview #tabs summary,body.window-design-preview #tabs .tabitem{-webkit-app-region:no-drag;app-region:no-drag}
+body.window-design-preview #tabs #topbar-home{flex:0 0 138px;min-width:138px;max-width:138px;width:138px;padding:0 12px;justify-content:center;align-self:stretch;gap:8px;border:0;font-size:17px;-webkit-app-region:drag;app-region:drag;user-select:none;cursor:default}
+body.window-design-preview #tabs #topbar-home .brandmark{font-size:25px}
+body.window-design-preview #tabs #topbar-home strong{font-size:17px;font-weight:600}
+body.window-design-preview #tabs .tab-list{padding-top:11px;flex:1;gap:0;min-width:80px}
+body.window-design-preview #tabs .tabitem{border-top:1px solid var(--line);border-right:1px solid var(--line);border-bottom:2px solid transparent;height:40px}
+body.window-design-preview #tabs .tabitem:first-child{border-left:1px solid var(--line)}
+body.window-design-preview #tabs .tab-actions{height:40px;margin-bottom:1px;padding-top:0;background:transparent;margin-left:auto;align-items:center;align-self:flex-end}
+body.window-design-preview #tabs #all-tabs-overview{display:flex}
+body.window-design-preview #sidebar{top:var(--window-title-height);padding-top:4px}
+body.window-design-preview #sidebar>.brand{display:flex}
+body.window-design-preview #workspace{top:var(--window-title-height)}
+body.window-design-preview #chat-subtabs,body.window-design-preview #team-subtabs{height:40px;min-height:40px;display:flex;align-items:stretch;border-bottom:1px solid var(--line);background:#121512;margin:0;padding:0;flex-shrink:0}
+body.window-design-preview :is(#tabs,#chat-subtabs,#team-subtabs){user-select:none}
+body.window-design-preview #tabs .tab-actions{gap:0}
+body.window-design-preview :is(#all-tabs-overview,.universal-tab-overview,.universal-new-tab,#tab-add-menu>summary,#chat-subtabs>.chat-tab-add>summary,#team-subtabs>.chat-tab-add>summary){display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;width:28px;min-width:28px;height:34px;margin:0;padding:0;border:0;border-radius:0;background:transparent;color:var(--preview-sidebar-ink);font-size:22px;line-height:1;flex:none;align-self:center}
+body.window-design-preview :is(#all-tabs-overview,.universal-tab-overview) svg{width:16px;height:16px;vertical-align:middle}
+body.window-design-preview :is(#chat-subtabs,#team-subtabs)>.chat-tab-add{margin-right:6px;display:flex;align-items:center}
+body.window-design-preview #chat-subtabs .chat-subtab-list,body.window-design-preview #team-subtabs .team-subtab-list{flex:1;min-width:0}
+body.window-design-preview #browser-overview,body.window-design-preview #team-browser-overview{display:none}
+body.window-design-preview .window-session-list{margin:18px 0}
+body.window-design-preview .window-session-list input{max-width:320px}
+
+body.window-design-preview #tabs .tabitem.selected{border-bottom-color:var(--accent)}
+
+/* October 20: lift dark green surfaces while retaining the established bright accents. */
+body.desktop-preview{--bg:var(--proteus-bg);--panel:var(--proteus-panel);--line:var(--proteus-line);--soft:var(--proteus-muted);--proteus-bg:#19231d;--proteus-sidebar:#1c2820;--proteus-panel:#243128;--proteus-line:#3d4b40;--proteus-control:#2e3c31;--proteus-control-hover:#3b4c3e;--proteus-input:#1c2921;--preview-sidebar-bg:#1b251d;--preview-sidebar-inactive:#1b251d;--preview-sidebar-group:#243025;--preview-sidebar-button:#29372b;--preview-sidebar-project:#29372b;--preview-sidebar-selected:#3b4833;--preview-sidebar-border:#344135;--preview-sidebar-active-border:#405140;--preview-chat-assistant-bg:#2a382d;--preview-chat-user-bg:#33412d}
+body.desktop-preview #main,body.desktop-preview #workspace{background:var(--proteus-bg)}
+body.desktop-preview :is(input,textarea,select){background-color:var(--proteus-input)}
+body.desktop-preview .adaptive-composer{background:var(--proteus-control)!important}
+body.desktop-preview .context-preview{background:var(--proteus-input)}
+
+/* The setup card lives in the selected tab; navigation remains available. */
+body.desktop-preview #main.new-chat-main{display:block;overflow:auto;padding:28px clamp(16px,4vw,64px);background:var(--proteus-bg)}
+.new-chat-tab-panel{box-sizing:border-box;width:min(100%,1066px);margin:0 auto;padding:24px;background:var(--panel);border:1px solid var(--line);border-radius:16px;color:var(--ink);max-height:none;overflow:visible}
+.new-chat-tab-panel h2{margin:0 0 20px;font-size:22px}
+.new-chat-tab-panel .new-chat-grid{display:flex;gap:16px}.new-chat-tab-panel .new-chat-grid>label{flex:1;min-width:0}
+.new-chat-tab-panel .new-chat-toolbar{display:flex;gap:12px;align-items:end;flex-wrap:wrap}.new-chat-tab-panel .new-chat-toolbar>label{flex:1;min-width:110px}
+.new-chat-tab-panel .new-chat-composer{margin-top:18px}.new-chat-tab-panel .new-chat-composer textarea{min-height:138px}
+@media(max-width:600px){.new-chat-tab-panel{padding:12px}.new-chat-tab-panel .new-chat-grid{flex-wrap:wrap}.new-chat-tab-panel .new-chat-grid>label{flex-basis:100%}}
+.new-chat-tab-panel .actions{margin-top:16px}.new-chat-tab-panel [hidden]{display:none!important}
+body.desktop-preview .preview-window-header,body.desktop-preview #tabs,body.desktop-preview #chat-subtabs,body.desktop-preview #team-subtabs,body.desktop-preview #window-content-tabs{background:var(--preview-sidebar-bg)}
+body.desktop-preview{--proteus-muted:#a1b1a5;--preview-sidebar-ink:#b7c4b7;--preview-sidebar-muted:#879489;--preview-sidebar-project-border:#344135}

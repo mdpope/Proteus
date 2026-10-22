@@ -1,3 +1,4 @@
+import {fileDates,assertSameFileSnapshot} from './file-metadata.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
@@ -93,7 +94,8 @@ export class WorkspaceFiles {
       while (total < buffer.length && (read = fs.readSync(fd, buffer, total, buffer.length - total, null))) total += read;
       if (total > MAX_BYTES) throw new Error('Markdown file is larger than 1 MB.');
       const content = contentText(buffer.subarray(0,total).toString('utf8'));
-      return { file: target.resolved, content, rootId: id, relativePath: file };
+      assertSameFileSnapshot(stat,fs.fstatSync(fd));
+      return { file: target.resolved, content, rootId: id, relativePath: file, ...fileDates(stat) };
     } finally { fs.closeSync(fd); }
   }
   createMarkdown({ rootId: id, directory = '', name, content = '' } = {}) {

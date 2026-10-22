@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { atomicJSON, readJSON } from './files.js';
 import { RemoteCommandJournal } from './remote-command-journal.js';
 
-const types = new Set(['chat.completed', 'review.required', 'schedule.completed', 'device.added', 'device.reconnected']);
+const types = new Set(['chat.completed', 'review.required', 'schedule.completed', 'device.added', 'device.reconnected', 'browser.issue']);
 const sharedLogTypes=new Set(['chat.queued','chat.running','chat.awaiting_input','chat.completed','chat.failed','chat.cancelled','chat.interrupted','chat.deleted','transport.online','transport.offline','transport.device_added','browser.open','browser.unload','app.started','app.stopping','api.failed']);
 const limits = { notifications: 1000, outbox: 500 };
 export function safeLog(value, limit = 1000) {
@@ -50,6 +50,24 @@ export class ActivityStore extends EventEmitter {
     const item = this.data.notifications.find(item => item.id === id); if (!item) throw new Error('Notification not found.');
     item.readAt ||= this.clock().toISOString(); this.save(); return { ok: true };
   }
+  browserIssue(detail = {}) {
+    const {kind,windowId}=detail;
+    if(!['load-error','history-conflict'].includes(kind)||typeof windowId!=='string'||!windowId||windowId.length>128)throw Error('Choose a browser notification and its original window.');
+    const issue={kind,windowId};
+    for(const key of ['tabId','logId'])if(detail[key]!==undefined){if(typeof detail[key]!=='string'||!detail[key]||detail[key].length>512)throw Error('Invalid browser notification reference.');issue[key]=detail[key];}
+    if(kind==='history-conflict'){
+      const scope=detail.scope;
+      if(!scope||!['main','team','workspace','project','chat'].includes(scope.scope)||typeof scope.id!=='string'||!scope.id||scope.id.length>256||scope.hostId!==undefined&&(typeof scope.hostId!=='string'||scope.hostId.length>128))throw Error('Choose the original browser history scope.');
+      issue.scope={scope:scope.scope,id:scope.id,...(scope.hostId?{hostId:scope.hostId}:{})};
+    }else if(!issue.tabId)throw Error('Choose the browser tab.');
+    const existing=this.data.notifications.find(item=>!item.readAt&&item.type==='browser.issue'&&item.browserIssue?.kind===kind&&item.browserIssue.windowId===windowId&&JSON.stringify(item.browserIssue.scope||item.browserIssue.tabId)===JSON.stringify(issue.scope||issue.tabId));
+    const title=safeLog(detail.title||'Browser needs attention',240),body=safeLog(detail.body||'Open Notifications to review this browser issue.',1500);
+    if(existing){if(existing.title!==title||existing.body!==body||existing.browserIssue.logId!==issue.logId){Object.assign(existing,{title,body,browserIssue:issue,updatedAt:this.clock().toISOString()});this.save();}return existing;}
+    const item={id:randomUUID(),type:'browser.issue',title,body,browserIssue:issue,silent:true,createdAt:this.clock().toISOString()};
+    this.data.notifications.push(item);this.data.notifications=this.data.notifications.slice(-limits.notifications);this.save();this.emit('notification',item);
+    // Browser recovery references belong to this host/window; do not publish them to account activity.
+    return item;
+  }
   log(level, event, message, extra = {}) {
     if (!['info', 'warning', 'error'].includes(level) || !/^[a-z][a-z0-9_.-]{0,79}$/.test(event || '')) throw new Error('Invalid log event.');
     const full = message instanceof Error ? message.stack || message.message : String(message || '');
@@ -68,6 +86,7 @@ export class ActivityStore extends EventEmitter {
   }
   add(type, detail = {}) {
     if (!types.has(type)) throw new Error('Unknown notification type.');
+    if(type==='browser.issue')return this.browserIssue(detail);
     const title = { 'chat.completed': 'Chat completed', 'review.required': 'Review required', 'schedule.completed': 'Schedule completed', 'device.added': 'New device connected', 'device.reconnected': 'Computer reconnected' }[type];
     const offlineSeconds = Math.max(0, Math.floor(Number(detail.offlineSeconds) || 0));
     const body = type === 'device.reconnected' ? `Connected to the relay after approximately ${offlineSeconds < 60 ? offlineSeconds + ' seconds' : Math.round(offlineSeconds / 60) + ' minutes'} offline.` : 'Open Proteus to view the details.';

@@ -514,6 +514,8 @@ private struct ChatDocumentTab: Identifiable {
     var assetDataURLs: [String: String] = [:]
     var parentID: String? = nil
     var relativePath: String? = nil
+    var fileCreatedAt = ""
+    var fileModifiedAt = ""
 }
 
 @MainActor final class NativeReplyDraft: ObservableObject {
@@ -597,7 +599,6 @@ struct ChatView: View {
     @EnvironmentObject var shared: SharedAppStore
     @EnvironmentObject private var phoneChrome: NativePhoneChrome
     @Environment(\.nativePhoneAreaActive) private var phoneAreaActive
-    @State private var phoneLiveOpened = false
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
@@ -751,16 +752,6 @@ struct ChatView: View {
             if NativePhonePreview.enabled {
                 if !phoneChrome.controlsHidden { childTabs }
             } else if workspaceBrowserScope == nil { childTabs }
-            else if !documents.isEmpty || store.state["capabilities"].array.contains(.string("browser.live.v1")) {
-                HStack {
-                    Spacer()
-                    Menu("Chat tools") {
-                        Button("Conversation", systemImage: "bubble.left.and.bubble.right") { selectedChild = "chat" }
-                        if store.state["capabilities"].array.contains(.string("browser.live.v1")) { Button("Live Browser", systemImage: "rectangle.on.rectangle") { selectedChild = "live" } }
-                        ForEach(documents) { document in Button(document.title, systemImage: "doc") { selectedChild = document.id } }
-                    }
-                }.padding(.horizontal, 12).padding(.vertical, 6)
-            }
             if selectedChild == "chat" && pageSearch.visible { HStack { Spacer(minLength: 0); NativePageFindBar(search: pageSearch, loadedOnly: true) }.padding(8) }
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--history-diagnostics") {
@@ -779,9 +770,9 @@ struct ChatView: View {
             Divider()
             if let documentNotice { HStack { ProgressView().controlSize(.small); Text(documentNotice).font(.caption); Spacer(); Button("Cancel") { documentTask?.cancel(); self.documentNotice = nil } }.padding(8).background(NativeTheme.surface) }
             if selectedChild == "chat" { conversation }
-            else if selectedChild == "live" { LiveBrowserView(chatID: id).environmentObject(store) }
+            else if selectedChild == "live" { LiveBrowserView(chatID: id, modeStatus: AnyView(composerStatus)).environmentObject(store) }
             else if let tab = shared.browserTabs.first(where: { $0.id == selectedChild && $0.scope == chatBrowserScope }) {
-                TeamBrowserView(scope: chatBrowserScope, showTabs: false, onBackToList: returnToChats, newTabOptions: [NativeNewTabAction(title: "Live Browser", symbol: "rectangle.on.rectangle", enabled: store.state["capabilities"].array.contains(.string("browser.live.v1")), run: { phoneLiveOpened = true; selectedChild = "live"; shared.selectChatChild("live", for: chatBrowserScope) })]).environment(\.nativeTabStep, { direction in
+                TeamBrowserView(scope: chatBrowserScope, showTabs: false, tabID: tab.id, onBackToList: returnToChats).environment(\.nativeTabStep, { direction in
                     let ids = ["chat"] + shared.orderedChatChildren(in: chatBrowserScope, documentIDs: documents.map(\.id))
                     guard let index = ids.firstIndex(of: selectedChild), ids.indices.contains(index + direction) else { return }
                     selectedChild = ids[index + direction]; shared.selectChatChild(selectedChild, for: chatBrowserScope)
@@ -802,10 +793,7 @@ struct ChatView: View {
         }.environment(\.nativeBrowserContainer, workspaceBrowserScope ?? chatBrowserScope).onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in let available = max(160, height - 88); if abs(composerAvailableHeight - available) > 1 { composerAvailableHeight = available } }.background(NativeTheme.background).navigationBarBackButtonHidden(true).toolbar(.hidden, for: .navigationBar)
         .modifier(NativePhoneBackNavigation())
         .simultaneousGesture(TapGesture(count: 2).onEnded { if NativePhonePreview.enabled && !composerHasFocus && !shared.tabs(in: chatBrowserScope).contains(where: { $0.id == selectedChild }) { phoneChrome.toggleControls() } })
-        .background { if NativeDesignPreview.enabled && phoneAreaActive { NativePhoneSurface(chrome: phoneChrome) } }
-        .simultaneousGesture(MagnificationGesture().onChanged { scale in
-            if NativeDesignPreview.enabled, !shared.tabs(in: chatBrowserScope).contains(where: { $0.id == selectedChild }), scale < 0.98 { phoneChrome.pinch(scale) }
-        }.onEnded { scale in if NativeDesignPreview.enabled, phoneChrome.overview { phoneChrome.finishPinch(committed: scale < 0.75) } }, including: NativeDesignPreview.enabled ? .all : .none)
+        .background { if NativeDesignPreview.enabled && phoneAreaActive { NativePhoneSurface(chrome: phoneChrome, overviewEnabled: !shared.tabs(in: chatBrowserScope).contains(where: { $0.id == selectedChild })) } }
         .onChange(of: selectedChild) { _, _ in if NativeDesignPreview.enabled { registerPhoneTab() } }
         .onChange(of: phoneAreaActive) { _, active in if NativePhonePreview.enabled && active { phoneChrome.browserOwnsBack = false; registerPhoneTab() } }
         .modifier(NativePageSwipe(enabled: !NativePhonePreview.enabled && !shared.tabs(in: chatBrowserScope).contains(where: { $0.id == selectedChild }), back: returnToChats))
@@ -823,7 +811,6 @@ struct ChatView: View {
             if NativeDesignPreview.enabled { registerPhoneTab() }
             documents = restoredDocumentTabs()
             let saved = shared.chatSelectedChildren[chatBrowserScope] ?? shared.selected(in: chatBrowserScope) ?? "chat"
-            if NativePhonePreview.enabled { phoneLiveOpened = saved == "live" }
             selectedChild = saved == "chat" || saved == "live" || shared.tabs(in: chatBrowserScope).contains(where: { $0.id == saved }) || documents.contains(where: { $0.id == saved }) ? saved : "chat"
         }
             .onDisappear { documentTask?.cancel(); documents = [] }
@@ -875,7 +862,7 @@ struct ChatView: View {
         shared.documents(in: chatBrowserScope).map { descriptor in
             let existing = documents.first { $0.id == descriptor.id }
             let session = shared.documentSession(for: descriptor.id, in: chatBrowserScope)
-            return ChatDocumentTab(id: descriptor.id, title: descriptor.title, version: session?.version ?? existing?.version ?? "", content: shared.content(for: descriptor.id, in: chatBrowserScope) ?? existing?.content, mediaType: descriptor.mediaType, readAt: session?.readAt ?? existing?.readAt ?? "", requestID: session?.requestID ?? existing?.requestID ?? (descriptor.previewSource == nil ? "" : "preview:" + descriptor.id), assets: session?.assets ?? existing?.assets ?? [], links: session?.links ?? existing?.links ?? [], assetDataURLs: session?.assetDataURLs ?? existing?.assetDataURLs ?? [:], parentID: descriptor.parentID, relativePath: descriptor.relativePath)
+            return ChatDocumentTab(id: descriptor.id, title: descriptor.title, version: session?.version ?? existing?.version ?? "", content: shared.content(for: descriptor.id, in: chatBrowserScope) ?? existing?.content, mediaType: descriptor.mediaType, readAt: session?.readAt ?? existing?.readAt ?? "", requestID: session?.requestID ?? existing?.requestID ?? (descriptor.previewSource == nil ? "" : "preview:" + descriptor.id), assets: session?.assets ?? existing?.assets ?? [], links: session?.links ?? existing?.links ?? [], assetDataURLs: session?.assetDataURLs ?? existing?.assetDataURLs ?? [:], parentID: descriptor.parentID, relativePath: descriptor.relativePath, fileCreatedAt: session?.fileCreatedAt ?? existing?.fileCreatedAt ?? "", fileModifiedAt: session?.fileModifiedAt ?? existing?.fileModifiedAt ?? "")
         }
     }
     private func registerPhoneTab() {
@@ -883,7 +870,8 @@ struct ChatView: View {
         let host = store.connection?.hostId ?? "", chatID = id, child = selectedChild
         if shared.tabs(in: chatBrowserScope).contains(where: { $0.id == child }) { return }
         let document = documents.first { $0.id == child }
-        phoneChrome.register(NativePhoneTab(id: child == "chat" ? "chat:" + host + ":" + chatID : "document:" + host + ":" + child, title: document?.title ?? (child == "live" ? "Live Browser" : run["title"].string), symbol: child == "chat" ? "bubble.left.and.bubble.right" : child == "live" ? "rectangle.on.rectangle" : "doc.text", detail: store.displayName, preview: nil, select: {
+        let chatMode = child == "chat" || child == "live"
+        phoneChrome.register(NativePhoneTab(id: chatMode ? "chat:" + host + ":" + chatID : "document:" + host + ":" + child, title: document?.title ?? run["title"].string, symbol: chatMode ? "bubble.left.and.bubble.right" : "doc.text", detail: store.displayName, preview: nil, select: {
             shared.selectChatChild(child, for: chatBrowserScope)
             phoneChrome.activateArea?("Chats")
             NotificationCenter.default.post(name: Notification.Name("ProteusPhoneSelectChat"), object: nil, userInfo: ["hostID": host, "chatID": chatID])
@@ -896,6 +884,7 @@ struct ChatView: View {
             if NativePhonePreview.enabled { Button { phoneChrome.drawer = true } label: { Image(systemName: "sidebar.left").frame(width: 44, height: 44) }.accessibilityLabel("App navigation").accessibilityIdentifier("phone-app-navigation") }
             Text(run["title"].string.isEmpty ? "Conversation" : run["title"].string).font(.subheadline.weight(.medium)).lineLimit(1).truncationMode(.tail).frame(maxWidth: .infinity, alignment: .leading).accessibilityIdentifier("chat-header-title")
             Menu {
+                ForEach(documents) { document in Button(document.title, systemImage: "doc") { selectedChild = document.id; shared.selectChatChild(document.id, for: chatBrowserScope) } }
                 Button("Copy chat link", systemImage: "link") { UIPasteboard.general.url = NativeChatLink.url(host: store.connection?.hostId ?? "", id: id) }
                 if store.state["capabilities"].array.contains(.string("chat.rename.v1")) { Button("Rename", systemImage: "pencil") { showRename = true } }
                 if lifecycleEnabled {
@@ -914,12 +903,6 @@ struct ChatView: View {
                 .contextMenu { Button("Copy chat link", systemImage: "link") { UIPasteboard.general.url = NativeChatLink.url(host: store.connection?.hostId ?? "", id: id) }; if store.state["capabilities"].array.contains(.string("chat.rename.v1")) { Button("Rename", systemImage: "pencil") { showRename = true } } }
             Divider().frame(height: 24)
 NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs: documents.map(\.id)), selection: selectedChild) { HStack(spacing: 0) {
-            if store.state["capabilities"].array.contains(.string("browser.live.v1")) && (!NativePhonePreview.enabled || phoneLiveOpened) {
-                Button { selectedChild = "live"; shared.selectChatChild("live", for: chatBrowserScope) } label: { Label("Live Browser", systemImage: "rectangle.on.rectangle") }
-                    .padding(12).accessibilityIdentifier("chat-live-browser")
-                    .overlay(alignment: .bottom) { Rectangle().fill(selectedChild == "live" ? NativeTheme.accent : .clear).frame(height: 2) }
-                Divider().frame(height: 24)
-            }
             ForEach(shared.orderedChatChildren(in: chatBrowserScope, documentIDs: documents.map(\.id)), id: \.self) { childID in
                 HStack {
                     if let tab = shared.tabs(in: chatBrowserScope).first(where: { $0.id == childID }) {
@@ -1311,11 +1294,29 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
                     }
         }
     }
+    private func modeLink(_ title: String, mode: String, identifier: String) -> some View {
+        Button { composerHasFocus = false; selectedChild = mode; shared.selectChatChild(mode, for: chatBrowserScope) } label: {
+            Text(title).foregroundStyle(selectedChild == mode ? NativeTheme.accent : .secondary).fixedSize()
+        }.accessibilityIdentifier(identifier).accessibilityAddTraits(selectedChild == mode ? .isSelected : [])
+    }
+    private var composerStatus: some View {
+            HStack(spacing: 8) {
+                ConnectionStatus().accessibilityIdentifier("chat-composer-connection-status")
+                if !documents.isEmpty {
+                    Menu { ForEach(documents) { document in Button(document.title) { selectedChild = document.id; shared.selectChatChild(document.id, for: chatBrowserScope) } } } label: { Image(systemName: "doc") }.accessibilityLabel("Chat documents")
+                }
+                if store.state["capabilities"].array.contains(.string("browser.live.v1")) {
+                    modeLink("Chat", mode: "chat", identifier: "chat-mode-conversation")
+                    Text("|").foregroundStyle(.secondary)
+                    modeLink("Live browser", mode: "live", identifier: "chat-live-browser")
+                }
+            }.font(.caption).buttonStyle(.plain)
+    }
     private var composerContent: some View {
         VStack(spacing: 8) {
-            ConnectionStatus().accessibilityIdentifier("chat-composer-connection-status")
+            composerStatus
             ForEach(run["queuedMessages"].array, id: \.self) { message in
-                HStack { Text(message["prompt"].string).lineLimit(1).font(.caption); Spacer(); if run["status"].string == "running" && !message["hasAttachments"].bool { Button("Steer now") { act("chat.steer-queued", ["messageId":message["id"]]) }.font(.caption) }; if store.state["capabilities"].array.contains(.string("chat.queue-edit.v1")) { Button("Edit") { queuedEdit = message; showQueuedEdit = true }.font(.caption) }; Button("Remove") { act("chat.remove-queued", ["messageId":message["id"]]) }.font(.caption) }
+                HStack { Text(message["prompt"].string).lineLimit(1).font(.caption); Spacer(); if run["status"].string == "running" && run["chatControls"]["steering"].bool && !message["hasAttachments"].bool { Button("Steer now") { act("chat.steer-queued", ["messageId":message["id"]]) }.font(.caption) }; if store.state["capabilities"].array.contains(.string("chat.queue-edit.v1")) { Button("Edit") { queuedEdit = message; showQueuedEdit = true }.font(.caption) }; Button("Remove") { act("chat.remove-queued", ["messageId":message["id"]]) }.font(.caption) }
             }
             VStack(alignment: .leading, spacing: 8) {
                 if showsComposerActions && hasDraftAttachments { composerAttachmentSection }
@@ -1343,7 +1344,7 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
                             .disabled(busy)
                     }
                     if run["schedule"]["provider"].string != "rehearsal" { ComposerModelPicker(model: $model, effort: $effort, contextTier: $contextTier, serviceTier: $serviceTier, provider: run["schedule"]["provider"].string).frame(maxWidth: .infinity, alignment: .leading) } else { Spacer(minLength: 0) }
-                    if active {
+                    if active && run["chatControls"]["steering"].bool {
                         Button { send("steer") } label: { Image(systemName: "arrow.triangle.branch").frame(width: 44, height: 44).background(NativeTheme.accent.opacity(0.1), in: Circle()) }.buttonStyle(.plain).accessibilityLabel("Steer current turn").disabled(cannotSend || run["status"].string != "running" || !attachments.isEmpty).accessibilityIdentifier("steer-message")
                     }
                     Button { submitReply() } label: {
@@ -1361,7 +1362,7 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
             }.padding(NativePhonePreview.enabled && !composerExpanded ? 4 : 12).background(Color.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 16))
                 .accessibilityElement(children: .contain).accessibilityIdentifier("reply-composer-card")
 
-        }.padding(.horizontal).padding(.vertical, 8).background(NativeTheme.surface)
+        }.padding(.horizontal).padding(.vertical, 8).background(NativePalette.shared.color("composer"))
     }
     private var stopButton: some View {
         Button(role: .destructive) { act("chat.cancel", [:]) } label: {
@@ -1577,10 +1578,10 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
                     assetURLs[asset["source"].string] = "data:\(mediaType);base64,\(response["dataBase64"].string)"
                 }
                 let title = result["title"].string.isEmpty ? "Document" : result["title"].string
-                let tab = ChatDocumentTab(id: stableID, title: title, version: result["version"].string, content: result["content"].string, mediaType: mediaType, readAt: result["readAt"].string, requestID: requestID, assets: assets, links: result["links"].array, assetDataURLs: assetURLs, parentID: parentID, relativePath: relativePath)
+                let tab = ChatDocumentTab(id: stableID, title: title, version: result["version"].string, content: result["content"].string, mediaType: mediaType, readAt: result["readAt"].string, requestID: requestID, assets: assets, links: result["links"].array, assetDataURLs: assetURLs, parentID: parentID, relativePath: relativePath, fileCreatedAt: result["fileCreatedAt"].string, fileModifiedAt: result["fileModifiedAt"].string)
                 if let index = documents.firstIndex(where: { $0.id == stableID }) { documents[index] = tab } else { documents.append(tab) }
                 shared.rememberDocument(NativeDocumentDescriptor(id: tab.id, chatKey: chatBrowserScope, title: tab.title, mediaType: tab.mediaType, parentID: parentID, relativePath: relativePath), content: result["content"].string)
-                shared.rememberDocumentSession(NativeDocumentSession(requestID: requestID, version: tab.version, readAt: tab.readAt, assets: assets, links: tab.links, assetDataURLs: assetURLs), for: stableID, in: chatBrowserScope)
+                shared.rememberDocumentSession(NativeDocumentSession(requestID: requestID, version: tab.version, readAt: tab.readAt, assets: assets, links: tab.links, assetDataURLs: assetURLs, fileCreatedAt: tab.fileCreatedAt, fileModifiedAt: tab.fileModifiedAt), for: stableID, in: chatBrowserScope)
                 selectedChild = tab.id
             } catch is CancellationError { }
             catch { store.error = error.localizedDescription }
@@ -1605,6 +1606,7 @@ private struct ChatDocumentReader: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 Text(document.title).font(.title2.bold())
+                Text("Created: \(document.fileCreatedAt.isEmpty ? "Unknown" : document.fileCreatedAt) · Modified: \(document.fileModifiedAt.isEmpty ? "Unknown" : document.fileModifiedAt)").font(.caption).foregroundStyle(.secondary)
                 if !document.version.isEmpty { Text("Version \(document.version) · Last read \(document.readAt.isEmpty ? "this session" : document.readAt)").font(.caption).foregroundStyle(.secondary) }
                 if let content = document.content {
                     if !store.connected { Text("Offline · showing the version read earlier in this session.").font(.caption).foregroundStyle(.orange) }
@@ -1836,7 +1838,7 @@ struct MessageView: View {
             guard let viewport, viewport.width > 0 else { return true }
             return geometry.frame(in: .global).intersects(viewport.insetBy(dx: 0, dy: -max(600, viewport.height * 1.5)))
         } action: { visible in richVisible = visible }
-        .padding().background(role == "user" ? NativeTheme.accent.opacity(0.13) : role == "system" ? NativeTheme.background : NativeTheme.surface, in: RoundedRectangle(cornerRadius: 16)).padding(.leading, role == "user" ? 20 : 0).padding(.trailing, actionID != nil || role.contains("streaming") ? 20 : 0)
+        .padding().background(role == "user" ? NativePalette.shared.color("user") : role == "system" ? NativeTheme.background : NativePalette.shared.color("assistant"), in: RoundedRectangle(cornerRadius: 16)).overlay(alignment: .leading) { Rectangle().fill(NativePalette.shared.color(role == "user" ? "userEdge" : "assistantEdge")).frame(width: 3) }.clipShape(RoundedRectangle(cornerRadius: 16)).padding(.leading, role == "user" ? 20 : 0).padding(.trailing, actionID != nil || role.contains("streaming") ? 20 : 0)
     }
 }
 
@@ -2228,6 +2230,7 @@ struct LiveBrowserView: View {
     @EnvironmentObject var store: RemoteStore
     @Environment(\.scenePhase) private var scenePhase
     let chatID: String
+    var modeStatus: AnyView? = nil
     @State private var tabs: [JSON] = []
     @State private var selected = ""
     @State private var frame: JSON = .null
@@ -2266,10 +2269,11 @@ struct LiveBrowserView: View {
                     ForEach(pending["permissionChoices"].array, id: \.self) { choice in Button(choice["label"].string) { decision(choice["value"].string) } }
                 }.disabled(sending || !store.connected) }
             }
+            if let modeStatus { modeStatus }
             TextField("Tell the agent what to do…", text: $text, axis: .vertical).accessibilityIdentifier("live-browser-instruction").lineLimit(2...5).textFieldStyle(.roundedBorder)
             HStack {
                 Button("Queue") { send("queue") }.buttonStyle(.borderedProminent).foregroundStyle(NativeTheme.background)
-                if (store.chats[chatID]?["status"].string ?? "") == "running" { Button("Steer") { send("steer") }.buttonStyle(.bordered) }
+                if (store.chats[chatID]?["status"].string ?? "") == "running" && (store.chats[chatID]?["chatControls"]["steering"].bool ?? false) { Button("Steer") { send("steer") }.buttonStyle(.bordered) }
                 if pending["type"].string == "question" { Button("Answer") { send("answer") }.buttonStyle(.bordered) }
             }.disabled(sending || frame == .null || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !store.connected)
         }.padding(12).background(NativeTheme.background)

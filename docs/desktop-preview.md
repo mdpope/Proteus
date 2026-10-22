@@ -1,3 +1,246 @@
+## October 21 — renderer recovery preview open
+
+Current preview is `4338f058a3f7+dirty.e9e22a05e82d` from
+`dist/design-preview-0.2.27-recovery-accepted`, fingerprint
+`e9e22a05e82d71d911c4ef719022232b468058deff9569509ed06ccb5122fd1e` (281 files).
+All nine chat records and thirteen protected configuration/source records match fresh pre-restart
+hashes. Original selection restores visibly; the strip seeds its restored inventory before new-tab
+reveal tracking. Brand mark/name are centered in the fixed 74–212px gap without moving the first
+tab or following sidebar width. Existing compact row/control geometry remains unchanged.
+
+844 runtime/static/diff checks pass. Actual source and exact signed crashes in main-browser and
+Team Tools windows preserve host/scheduler execution, native page processes/form state, saved
+navigation/drafts/reading positions and pending approval; the same two synthetic turns finish
+exactly once. Bounded fallback, trusted-bridge rejection and actual native View retry pass. No real
+provider is called. Signed normal app/source are frozen privately and e9e2 is now installed and
+live-verified on Build Mac. Physical devices are confirmed current at 2610.20.6 without another
+install. HC's hold was superseded by the operator's both-Mac/Linux rollout request; after direct
+approval in its selected destination chat, exact e9e2 is installed/live-verified with protected
+chats/views/receipts retained. Direct operator cleanup approval resolved its retention review;
+exactly two verified full recoveries remain, with 3,156,262,912 bytes of actual free-space increase.
+Linux live continuation/restart passes and its accepted source/report is published; final receipts
+and remaining qualifications are in the release ledger.
+Retain this and immediately prior 8cfc preview; older generated bundles are retired without
+touching user data.
+
+## October 21 — corrected compact preview open
+
+Current preview is `4338f058a3f7+dirty.e03601640bf2` from `dist/design-preview-0.2.27-selection`.
+All nine histories and thirteen protected settings/context/source records match fresh pre-restart
+hashes. Actual browser ↔ workspace switching is verified. Main pages/standalone browser tabs have
+no synthetic lower label/control row; real scoped navigation retains its overview/+. Host extension
+bookkeeping no longer echoes stale selections, and content text selection cannot block tab clicks.
+The 52-pixel title strip, 40-pixel rows, first-tab left border and smaller matching trailing controls
+pass exact signed geometry and visual inspection. All 840 runtime/static and focused exact-package
+checks pass. Normal e036 is installed locally; HC remains held. Retain this and immediately prior
+d5b preview; older generated bundles are retired without touching preview user data.
+
+## October 20 — permanent palette preview open; normal Mac release installed
+
+The corrected retained preview is open at Engine Room → Colors from `dist/design-preview-0.2.27-csp`,
+build `4338f058a3f7+dirty.7d78ff0ece36`, fingerprint
+`7d78ff0ece36e2d88c4ae1a69087b2eeb7043f516105fcb480bf28d590041abb` (278 runtime files).
+Actual pickers, lightness/saturation sliders and Save/Discard/Defaults/Import/Export appear in the
+application. Bundled `palette.css` preserves the strict CSP; rendered grid/swatches and save,
+other-window propagation and restart pass exact-package tests. All nine retained histories and
+four protected configuration records match their before hashes; no model turn was sent.
+The same corrected normal desktop build is installed and twice launched on this Mac with protected
+data/history/retry receipts intact. Work Mac is held explicitly with its existing chats untouched;
+its corrected packet remains staged. See the [release ledger](2026-10-20-palette-release.md).
+Earlier preview-only holds and package locations below are historical for this rollout.
+
+## October 20 — browser controls preview open; tab repair deferred to next release
+
+Current isolated preview is open from `dist/design-preview-browser-controls-final`:
+`4338f058a3f7+dirty.7d66eb68c37e`, source fingerprint
+`7d66eb68c37ef0ffc44707c17c00c1ea03623b8b743c5010afc4a27dfa2f4d13`, 273 runtime files.
+All 834 runtime cases/static/diff checks pass. Exact-package real media, explicit sharing/consent,
+window-private downloads/pause/resume/restart/nonblanking popup/restart, background screenshot/input/MCP
+and root-domain scale/menu acceptance pass. Source Team Find/redirect/draft/mount and wrong-tab
+navigation tests pass. The retained preview is reopened with all nine protected histories and
+permission/service/context files plus project/source semantics matching private before/after hashes.
+The palette draft has independent color pickers and surface lightness/saturation controls; its
+288px content fits a 320px viewport. It does not silently change installed colors.
+
+A separate minimal repair starts from exact installed `e350395` runtime (254/254 initial hashes
+match). Its signed candidate is `e350395cd6a8+dirty.8e65f01f2fa7`, source fingerprint
+`8e65f01f2fa7270705785526dedfed2dd6c414b1f6c2f49f894e5752d9bc13b4`, tree hash
+`1e7e46b70425b72aecdb9bdd3fed0c682291691ceb7f9c3fb3b4b501b19ae0a5`.
+All 817 baseline cases/static checks and exact signed race/Team/native Find UI checks pass;
+full signature and current source hashes verify. The installed-code test reproduces a delayed
+navigation reply overwriting another selected tab; corrected source/package pass that same test.
+The precise operator flashing/reload sequence is not fully reproduced by that test.
+
+The operator explicitly deferred the installed-Mac repair to the next release and said not to
+touch the current Proteus instance. No production app/data/setting/grant was changed or stopped.
+The fixes/tests are in this next-release checkout. The separate reproduction worktree is
+archived recoverably; its generated app is retired and corresponding source/acceptance evidence
+is retained privately. Do not interpret the candidate verification above as permission to install.
+No live-data backup was taken. The existing two production recovery generations remain unchanged.
+
+Final acceptance also exercises a real native Close and saved-window Restore with the same window
+ID: its old download metadata is absent and fresh downloads work. Retire pending linked-file
+download grants for a closed window and reset the download lifetime when that ID is reopened.
+All 834 final runtime/static/diff checks and four final exact-package suites (controls/media/downloads/
+sharing + restored downloads, background direct/MCP, full window/header/Team sessions, domain scale)
+pass. Retained preview histories/configuration still match all private before-receipt hashes.
+Keep Final + Continuity; both Followup and the intermediate Browser Controls build are retired,
+with measured free-space increases of 631,861,248 and 631,361,536 bytes for those cleanup steps. HC/native/mobile remain unchanged.
+Mac Apple credential fill and account-specific YouTube acceptance remain separate.
+
+## October 20 — continuity and Apple Passwords popup preview accepted
+
+The separate preview is open from `dist/design-preview-continuity`, revision
+`4338f058a3f7+dirty.e9367e201c68`, fingerprint
+`e9367e201c684bc82278feae7cd8d4e0e134c7e6d82b181f2c2334a6bb3152fb`.
+All 267 runtime files and frozen build inputs match source and bundle. This is unsigned local
+staging with vendor bytes preserved. It is exact-package accepted and reopened with the retained
+preview data. Production/HC/physical installations are unchanged.
+
+This iteration opens adjacent unified tabs directly; uses compact tab/Ghostery menus above the
+native website; hosts separate local/paired New chat setup forms inside their selected tabs;
+retains unsent text/configuration across navigation/restart; and converts the exact position to a
+normal chat on submission. Draft contents stay private to their window. Acceptance exposed an
+older synchronization acknowledgement that could erase a newer replacement: pending snapshots
+now retain their own captured identities, and stale owner responses cannot recreate locally closed
+items. Canonical owner acknowledgement is verified separately from cached chat presentation.
+
+Page scale uses registrable domains and account-owned browser partitions, updates matching live
+views and survives paths/new windows/restart, including 120%. Public/private suffix rules preserve
+hosted-tenant isolation. Pinch uses visual zoom only and requires a new gesture after reaching the
+baseline; URL captions preserve actual casing. Dark green surfaces, aliases and custom menus are
+lighter while retaining bright accents. Existing accepted header geometry is unchanged.
+
+Background agent screenshots contain actual hidden-page pixels, and coordinate/direct/Playwright
+MCP actions continue while another project stays selected. An agent turn now retains the same page
+between tool calls, avoiding automatic unloading/throttling; completion or human pause releases it.
+BF-48’s original operator dropout remains unreproduced. Large legacy shell overlays still hide the
+native view: Electron’s native website sits above renderer DOM, so compact child popup windows
+solve those specific menus without implying a universal renderer-overlay compositor. Codex’s
+private implementation is not established by similar observed behavior.
+
+Apple Passwords setup uses the official extension and ordinary per-profile permission review.
+Its popup has a readable scoped green palette, compact/preferred sizing, no duplicate content title
+and no empty/fading loading controls. Disabling/removing/reloading an extension closes only its
+owned profile popups before unloading their renderer. The extension installs and opens its setup UI, but Mac autofill is
+**unverified**: macOS kills Apple’s helper with a code-signature error even on a direct empty-input
+launch outside Electron; on-disk signature verification passes. Do not bypass signing protections
+or claim that a signed Proteus build necessarily repairs the helper. Pairing/fill/save/iCloud passkeys
+remain separate. No real credentials or verification code is entered. The Apple compatibility UI
+check terminates only its disposable process after presentation assertions; it does not establish
+graceful authenticated-extension shutdown.
+
+Native Browser settings uses the public AutoFill-provider settings shortcut, outside account-gated
+profile sync. Actual settings-open/return UI checks pass on separate iPhone and iPad simulator app
+identities/iOS 26.5, without changing provider selections. Existing WKWebView handles system AutoFill;
+actual credential fill/save and physical-device verification remain separate.
+
+All 831 runtime tests and static/diff checks pass. Ten focused exact-package UI suites pass:
+local chat setup; paired chat setup; source icons; root-domain scale; unified menus; background
+browser/direct/MCP controls; header/Enter; shared-Team/window layouts; Apple setup/popup; and
+ordinary extension install/popup/disable/update. The Apple test’s initial visibility wait was
+corrected to wait for its exact popup/document before checking styles; the generic extension
+fixture now bootstraps the separate preview identity. Neither fixture failure is counted as a
+runtime pass. The final Apple pixels are inspected with full-opacity text and no excess panel.
+
+The actual retained preview is gracefully quit/reopened, its palette and Apple setup/experimental
+note are inspected through native UI, and the previous project/browser selection is restored.
+All nine run status/session/history/approval records, protected permission/service/context files,
+project identities/defaults and source registration semantics match the private before-receipt.
+Existing authenticated browsing remains available. No model turn, verification code or credential
+submission is sent. Both standard separate phone/pad simulator previews are also rebuilt, installed
+and launched against the existing synthetic owner; physical devices remain untouched.
+
+Retain Continuity and the immediate prior Followup bundles. Retired the inactive Windows generated
+bundle (611,483,786 regular-file bytes); actual available-space change is +630,419,456 bytes, measured
+from 140,095,520,768 to 140,725,940,224 bytes amid APFS/concurrent activity. No live-data backup was
+created. The steady state is two generated preview bundles.
+
+## October 20 — final keyboard, browser controls and source-icon preview
+
+The final separate preview is open from `dist/design-preview-followup`, revision
+`4338f058a3f7+dirty.8e32907009d5`, fingerprint
+`8e32907009d5871022c9c42274f397f6865caf7c2d4dcea5534160803b7bcd31`.
+All 264 runtime files and frozen build inputs match both source and bundle. This is unsigned
+local staging with original vendor bytes preserved; production/HC/physical mobile are unchanged.
+The initial receipt below describes the superseded first window-preview revision.
+
+The header is now 56 pixels: an 11-pixel upper drag gap above 44-pixel tabs and the bottom border.
+Its fixed brand slot is a noninteractive drag region, has no vertical separator and stays put
+when the sidebar changes width. The previous sidebar chevron is restored. Upper and lower selected
+underlines are both 2 pixels, with the upper underline fully inside its scroll clip. Overview
+keeps its existing mark at the right of the universal secondary row beside Add.
+
+New Project accepts Enter with duplicate-submit protection. The browser robot pauses/resumes
+actual host page access, preserving default access across profiles and persistent human pauses
+by logical tab identity. The … menu has a live − / current percentage / + page-scale row; clicking
+the percentage resets to 100%, repeated changes keep it open and shell scale stays unchanged.
+Its sandboxed child surface remains above the native website and keeps existing page actions.
+Chat source Favorites/Other, refresh selection and workspace source tables now use distinct leading
+document, sparkle, robot and plug icons. Text labels, loading rules, drafts and controls remain.
+
+All 823 runtime tests, static checks and diff checks pass. The exact final package passes five
+isolated Electron suites: header/Enter; main/Team scale controls; source icons/Favorites/narrow
+wrapping; background browser/direct and Playwright MCP/robot controls; and shared Team URL/Close,
+named capture/restore/current-owner protection, geometry and reading positions. A strengthened
+window case explicitly unloads the second native view and verifies that a shared URL refreshes
+its address without fetching the website. Acceptance exposed a missing state notification in
+that unloaded-history path; the host now emits it just as for a loaded page. The actual retained
+preview's … menu is also opened via desktop UI and visibly reports Page scale 100%.
+
+BF-2026-10-20-48's reported loss of browser control after switching to chat remains queued for
+normal-build investigation: synthetic repeated switching/reconnection passes, without establishing
+the operator's real failing sequence. Local Enter acceptance does not claim an actual paired-host
+project creation. Physical HC/iPad gestures, native drag/fullscreen feel and production rollout
+remain separate from fixture/package success.
+
+Restart preservation verifies all nine chat status/session/history/approval records, permission
+and service-credential files, context, project identities/defaults and source registrations against
+the private before-receipt. Authentication remains available and refreshes normally; source scan
+metadata may update. No provider turn was sent. Retain this Followup bundle and the immediate prior
+Windows bundle. Retired the inactive Controls generated bundle (611,186,807 logical bytes);
+measured free-space change was 0 bytes amid APFS sharing/concurrent activity. No live-data backup
+was created, and the steady state is two generated preview bundles.
+
+## October 20 — initial integrated window preview
+
+The operator authorizes building/opening BF-2026-10-20-39–45 for exploration. The new separate
+bundle is under `dist/design-preview-windows`, revision `4338f058a3f7+dirty.2201b8f29af0`,
+fingerprint `2201b8f29af05d2d660c01b80f9fe28c9819275b3e16720ab40e7056db3950c6`.
+All 258 runtime files and frozen build inputs verify; this is unsigned local staging, with vendor
+bytes preserved. The prior Controls preview and its private data remain independently retained.
+
+The title bar has one centered brand, native controls, a 20-pixel drag margin above the existing
+44-pixel rectangular tabs, top borders/dividers/close controls and selection underline. The sidebar
+joins it directly. Overview keeps the existing overlapping rectangles mark and moves to the right
+of the universal 44-pixel content strip beside New tab; it leaves the URL bar and main strip.
+
+Engine Room → Windows supports names, Save session, closed/previous layouts, Restore/Focus and
+explicit snapshot removal. A snapshot restores presentation against current shared contents.
+Team tabs now share one host registry across windows; asynchronous creation reuses their logical
+identity. Address handlers bind before IPC, preventing early Enter from reloading the application;
+same-tab URL updates retain the address field. Distinct URLs/titles are not used as identity.
+
+All 821 runtime tests, static checks, baseline two-window IPC/reading-position/Quit restoration
+and final exact-package integrated-header/shared-Team/session/geometry/reading-position checks pass.
+Native source passes 137 units and three iPad simulator UI scenarios, including real chat pinch
+with a selectable card, browser pinch/rotation, full labels, Team information/roster/link editing
+and 44-point rows. The companion separate iPad simulator preview is built and launched using the
+synthetic owner. Physical devices, HC and production installations are not updated by this preview.
+See [window management](window-management.md) for retention, ownership and remaining acceptance.
+
+The final preview is running from the exact Windows bundle and its native title bar is visually
+inspected. All nine retained chat status/history/approval records, permissions, service credentials
+and context configuration match the private before-receipt. Existing Codex authentication remains
+available and refreshes normally; the old project catalog normalizes on startup. No model turn is
+sent by acceptance. The older October 18 package script stops at its obsolete per-workspace
+computer-label selector; current computer grouping differs, so it is not claimed as a complete
+pass. The focused current package checks and preservation receipt above are the acceptance here.
+
+Retained the accepted Windows bundle and immediate prior Controls bundle. Retired the inactive
+older Project-delete generated bundle: 611,163,073 logical bytes; measured free-space increase
+1,466,368 bytes amid APFS sharing/concurrent activity. No live-data backup was created.
+
 **October 18 production promotion:** The operator authorized the reviewed feature set for
 production desktop and web. The isolated preview remains supported for future design experiments;
 its data and pending approval are retained independently. Historical preview-only status below

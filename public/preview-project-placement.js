@@ -1,5 +1,3 @@
-const prefix='project:local:';
-const projectId=id=>typeof id==='string'&&id.startsWith(prefix)?id.slice(prefix.length):null;
 const own=(object,key)=>Object.prototype.hasOwnProperty.call(object||{},key);
 
 // Redirects are durable organizational aliases, never execution/access grants.
@@ -10,7 +8,9 @@ export function resolvePreviewProject(catalog,id,workspaceId){
  while(id&&!seen.has(id)){
   seen.add(id);
   const project=projects.find(row=>row.id===id),hasRedirect=own(catalog?.projectRedirects,id),redirect=hasRedirect?catalog.projectRedirects[id]:null;
-  if(project){if(workspace!==undefined&&project.workspaceId!==workspace)return null;workspace??=project.workspaceId;}
+  const moves=catalog?.projectMoves?.[id];
+  if(workspace!==undefined&&moves?.some(move=>move.from===workspace))workspace=project?.workspaceId||moves.at(-1).to;
+  if(project){if(workspace!==undefined&&project.workspaceId!==workspace&&!catalog.projectMoves?.[id]?.some(move=>move.from===workspace))return null;workspace??=project.workspaceId;}
   if(hasRedirect){
    if(!redirect||typeof redirect!=='object')return null;
    if(typeof redirect.workspaceId!=='string'||!redirect.workspaceId||typeof redirect.projectId!=='string'||!redirect.projectId)return null;
@@ -22,12 +22,14 @@ export function resolvePreviewProject(catalog,id,workspaceId){
  return null;
 }
 
-export function remapPreviewBrowserPlacement(value,catalog){
+export function remapPreviewBrowserPlacement(value,catalog,{hostId}={}){
+ const prefix='project:'+(hostId||'local')+':';
+ const projectId=id=>typeof id==='string'&&id.startsWith(prefix)?id.slice(prefix.length):null;
  if(!value||typeof value!=='object')return value;
  // Agent open responses wrap the route under destination; native state stores
  // the inner {type:'project',id,workspaceId} destination directly.
  const wrapped=value.destination?.destination?.type==='project'&&!value.destination.type;
- const route=wrapped?remapPreviewBrowserPlacement(value.destination,catalog):value.destination;
+ const route=wrapped?remapPreviewBrowserPlacement(value.destination,catalog,{hostId}):value.destination;
  const destination=value.destination?.type==='project'?value.destination:null;
  const workspace=value.workspaceId??destination?.workspaceId??(wrapped?route.workspaceId:undefined);
  const parent=projectId(value.parentId),target=parent&&resolvePreviewProject(catalog,parent,workspace);
@@ -35,10 +37,10 @@ export function remapPreviewBrowserPlacement(value,catalog){
  let next=route!==value.destination?{...value,destination:route}:value;
  const set=(key,data)=>{if(next[key]===data)return;if(next===value)next={...value};next[key]=data;};
  if(target&&target.id!==parent)set('parentId',prefix+target.id);
- if(destinationTarget&&destinationTarget.id!==destination.id)set('destination',{...destination,id:destinationTarget.id,workspaceId:destinationTarget.workspaceId});
+ if(destinationTarget&&(destinationTarget.id!==destination.id||destinationTarget.workspaceId!==destination.workspaceId))set('destination',{...destination,id:destinationTarget.id,workspaceId:destinationTarget.workspaceId});
  const metadata=typeof value.projectId==='string'&&resolvePreviewProject(catalog,value.projectId,workspace);
  const metadataTarget=target||destinationTarget||metadata;
- if(metadataTarget&&((metadata&&metadata.id!==value.projectId&&metadata.id===metadataTarget.id)||next!==value)){
+ if(metadataTarget&&((metadata&&metadata.id!==value.projectId&&metadata.id===metadataTarget.id)||next!==value||metadataTarget.workspaceId!==workspace)){
   if(own(value,'projectId')&&metadata?.id===metadataTarget.id)set('projectId',metadataTarget.id);
   if(own(value,'projectName'))set('projectName',metadataTarget.name);
   if(own(value,'workspaceId'))set('workspaceId',metadataTarget.workspaceId);
@@ -56,7 +58,7 @@ export function remapPreviewProjectSession(value,catalog,{hostId}={}){
   const target=resolvePreviewProject(catalog,tab.projectId,tab.workspaceId);
   if(!target)continue;
   const targetId=prefix+target.id;
-  if(target.id===tab.projectId)roots.set(targetId,tab);
+  if(target.id===tab.projectId&&target.workspaceId===tab.workspaceId)roots.set(targetId,tab);
   else {parents.set(tab.id,targetId);replacements.set(tab,target);required.set(targetId,target);}
  }
  // A peer upgrade introduces project membership after this desktop saved its
@@ -79,17 +81,27 @@ export function remapPreviewProjectSession(value,catalog,{hostId}={}){
   const replacement=replacements.get(tab);
   if(replacement){
    const id=prefix+replacement.id;if(roots.has(id))continue;
-   tab={...tab,id,projectId:replacement.id,workspaceId:replacement.workspaceId,label:replacement.name};
+   tab={...tab,id,projectId:replacement.id,workspaceId:replacement.workspaceId,workspaceName:catalog.workspaces?.find(workspace=>workspace.id===replacement.workspaceId)?.name||replacement.workspaceId,label:replacement.name};
    if(own(tab,'projectName'))tab.projectName=replacement.name;
    roots.set(id,tab);
   }
+  // Organization metadata applies to every child kind; viewer origin and
+  // terminal descriptors remain untouched. New-chat configuration is recaptured.
+  const moved=tab.projectId&&resolvePreviewProject(catalog,tab.projectId,tab.workspaceId);
+  if(moved&&moved.workspaceId!==tab.workspaceId)tab={...tab,workspaceId:moved.workspaceId,projectId:moved.id};
+  if(tab.newChatDraft){
+   const root=projectId(tab.parentId),target=root&&resolvePreviewProject(catalog,root,tab.newChatDraft.workspaceId);
+   if(target&&catalog.projectMoves?.[root]?.length&&tab.newChatDraft.workspaceId!==target.workspaceId){
+    const draft={...tab.newChatDraft,workspaceId:target.workspaceId,projectId:target.id,configurationReset:target.workspaceId},form={...draft.form};
+    for(const key of Object.keys(form))if(/^(?:peer-)?(?:workspace|project|cwd|roots|agent|defaults)$/.test(key))delete form[key];
+    draft.form=form;delete draft.selection;delete draft.peerSources;delete draft.details;tab={...tab,newChatDraft:draft};
+   }
+  }
   const parent=chatParents.get(tab.id)||parents.get(tab.parentId);
   if(parent)tab={...tab,parentId:parent};
-  if(tab.type==='browser'&&!hostId){
-   tab=remapPreviewBrowserPlacement(tab,catalog);
-   if(tab.info){const info=remapPreviewBrowserPlacement(tab.info,catalog);if(info!==tab.info)tab={...tab,info};}
-  }else if(tab.type==='browser'&&parents.has(tab.info?.parentId)){
-   tab={...tab,info:{...tab.info,parentId:parents.get(tab.info.parentId)}};
+  if(tab.type==='browser'){
+   tab=remapPreviewBrowserPlacement(tab,catalog,{hostId});
+   if(tab.info){const info=remapPreviewBrowserPlacement(tab.info,catalog,{hostId});if(info!==tab.info)tab={...tab,info};}
   }
   tabs.push(tab);
  }

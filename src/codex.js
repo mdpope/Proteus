@@ -164,7 +164,8 @@ export class CodexProvider {
    if(method==='item/commandExecution/outputDelta'){const tool=calls.get(p.itemId);if(tool){tool.output=displayText((tool.output||'')+p.delta);update();}}
    if(method==='turn/completed'){settled=true;clearTimeout(abortTimer);if(active.permissionRevoked)rejectTurn(new Error((this.options.permissionControls===true||this.options.desktopPreview===true)?'Permissions changed and this turn was stopped. Choose Continue to resume this chat with the current permissions. No actions were automatically retried.':'Workspace permissions changed during the Codex turn. Its tools were interrupted; continue with the current permissions.'));else if(p.turn.status==='completed')resolveTurn();else rejectTurn(new Error(p.turn.error?.message||'Codex turn '+p.turn.status));}
   };
-  const onRequest=async msg=>{const p=msg.params||{};if(p.threadId&&p.threadId!==run.providerSessionId||p.turnId&&active.turnId&&p.turnId!==active.turnId)return client.respond(msg.id,msg.method==='mcpServer/elicitation/request'?{action:'decline',content:null}:{decision:'decline'});try{
+  const handledRequests=new Set();
+  const onRequest=async msg=>{if(handledRequests.has(msg.id))return;handledRequests.add(msg.id);const p=msg.params||{};if(p.threadId&&p.threadId!==run.providerSessionId||p.turnId&&active.turnId&&p.turnId!==active.turnId)return client.respond(msg.id,msg.method==='mcpServer/elicitation/request'?{action:'decline',content:null}:{decision:'decline'});try{
    if(active.recheckPermissions())throw new Error('Workspace permissions changed; this tool request was cancelled.');
    if(msg.method==='item/tool/call'){
      const tool=browser.find(t=>t.name===p.tool);if(!tool)throw new Error('Unknown Proteus tool.');
@@ -185,7 +186,23 @@ export class CodexProvider {
        assertPendingApprovalCurrent();assertAppToolActive();const allowed=['approve','approve-auto'].includes(answer);
        if(allowed){if(approvedBridgeCalls.size>=16)approvedBridgeCalls.clear();approvedBridgeCalls.set(JSON.stringify([name,args]),{expires:Date.now()+15000});}
        client.respond(msg.id,{action:allowed?'accept':'decline',content:allowed?{}:null});
-     }else client.respond(msg.id,{action:'decline',content:null});
+     }else if(p.mode==='form'&&meta?.codex_approval_kind==='mcp_tool_call'){
+       // Codex's native approval envelope identifies the server separately and embeds
+       // the original tool name in its generated question. Never normalize across servers.
+       const definition=Object.hasOwn(selected,p.serverName)?selected[p.serverName]:null;
+       const expected=name&&`Allow the ${p.serverName} MCP server to run tool "${name}"?`;
+       if(!definition||!mcp[p.serverName]?.enabled){emit('system','MCP approval rejected by adapter: server is not selected.');client.respond(msg.id,{action:'decline',content:null});return;}
+       if(!name||p.message!==expected||!meta.tool_params||typeof meta.tool_params!=='object'||Array.isArray(meta.tool_params)||p.requestedSchema?.type!=='object'||Object.keys(p.requestedSchema.properties||{}).length||!p.threadId||!p.turnId||p.turnId!==active.turnId)throw new Error('Unsupported or stale MCP tool approval envelope. No user decision was requested.');
+       if(definition.tools?.length&&!definition.tools.includes('*')&&!definition.tools.includes(name))throw new Error('This MCP tool is outside the selected tool set.');
+       assertAppToolActive();
+       const beforeApproval=JSON.stringify(permissionProfile?.());
+       const answer=await ask({type:'permission',question:`Allow ${p.serverName} ${name}?`,details:{kind:'mcp',serverName:p.serverName,toolName:name,args:meta.tool_params,toolCallId:p.itemId||String(msg.id),intention:`${p.serverName} ${name}`,readOnly:false}});
+       assertPendingApprovalCurrent();assertAppToolActive();
+       if(answer==='approve-auto'&&JSON.stringify(permissionProfile?.())!==beforeApproval)throw new Error('Saved permissions changed before the MCP approval could be delivered.');
+       if(p.turnId!==active.turnId)throw new Error('MCP approval belongs to an ended turn.');
+       const allowed=['approve','approve-auto'].includes(answer);
+       client.respond(msg.id,{action:allowed?'accept':'decline',content:allowed?{}:null});
+     }else throw new Error('Unsupported MCP elicitation form or URL request. Proteus did not ask the user or record a refusal.');
    }
    else client.write({id:msg.id,error:{code:-32601,message:'Unsupported approval or tool request: '+msg.method}});
   }catch(e){client.write({id:msg.id,error:{code:-32000,message:e.message}});}};

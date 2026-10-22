@@ -12,7 +12,8 @@ const IDENTITY_CACHE_LIMIT=1024;
 // This registry stores metadata, never credentials. A consumer includes its run/session:
 // equal aliases/configurations do not prove that two sessions share a credential owner.
 export class IntegrationHealth {
-  constructor(home,{engine,onChange=()=>{},now=()=>Date.now()}={}) {
+  constructor(home,{engine,context,onChange=()=>{},now=()=>Date.now()}={}) {
+    this.context=context;
     this.file=path.join(home,'integration-health.json');this.engine=engine;this.onChange=onChange;this.now=now;this.pending=new Map();this.closed=false;this.identities=new Map();
     this.data=readJSON(this.file,{schemaVersion:1,profiles:{},observations:{}});
     if(this.data.schemaVersion!==1||!this.data.profiles||!this.data.observations)throw new Error('Invalid integration health registry.');
@@ -53,7 +54,8 @@ export class IntegrationHealth {
         });
         const metadata=this.data.profiles[id]||{},observation=this.data.observations[id]||{};
         const stale=!observation.checkedAt||this.now()-Date.parse(observation.checkedAt)>600000;
-        rows.push({id,runId:run.id,chatTitle:run.title,provider:run.schedule.provider,server,profile:metadata,...observation,stale,
+        const source=run.schedule.context?.entries?.find(entry=>entry.kind==='mcp'&&entry.key===server);
+        rows.push({id,configurationId:source?hash([source.id,source.hash]):hash(['legacy',server,config]),sourceId:source?.id||null,sourceHash:source?.hash||null,sourcePath:source?.path||null,transport:config.type||'stdio',runId:run.id,chatTitle:run.title,provider:run.schedule.provider,server,profile:metadata,...observation,stale,
           connection:observation.connection||'unknown',authentication:observation.authentication||'unverified',access:observation.access||'unverified',
           identity:observation.identity||null,expiresAt:observation.expiresAt||null,
           canCheck:!!provider?.mcpStatus,canRecover:!!provider?.mcpRecover,canLogin:!!provider?.mcpLogin&&['http','sse'].includes(config.type),
@@ -63,7 +65,25 @@ export class IntegrationHealth {
     }
     return rows;
   }
-  snapshot(runId) {return {revision:revision(this.data),observedAt:new Date(this.now()).toISOString(),consumers:this.consumers(runId),monitoring:'Passive checks every five minutes; recovery only through supported adapters. Unknown expiry is not estimated.'};}
+  configurations(consumers=this.consumers(),{selectedOnly=false}={}) {
+    const groups=new Map(),config=this.context?.config();
+    if(!selectedOnly)for(const entry of this.context?.catalog?.entries||[]){
+      if(entry.kind!=='mcp')continue;
+      const id=hash([entry.id,entry.hash]);groups.set(id,{id,sourceId:entry.id,sourceHash:entry.hash,name:entry.name,path:entry.path,transport:entry.transport,favorite:config?.favorites?.includes(entry.id)||false,discovered:true,consumers:[]});
+    }
+    for(const row of consumers){let group=groups.get(row.configurationId);if(!group){group={id:row.configurationId,sourceId:row.sourceId,sourceHash:row.sourceHash,name:row.server,path:row.sourcePath,transport:row.transport,discovered:false,favorite:false,consumers:[]};groups.set(group.id,group);}group.consumers.push(row);}
+    return [...groups.values()].map(group=>{
+      const current=group.consumers.filter(row=>!row.stale),issues=current.filter(row=>['failed','needs-auth'].includes(row.connection)||row.authentication==='needs-auth'||row.access==='denied');
+      return {...group,sessionCount:group.consumers.length,issueCount:issues.length,summary:issues.length?'Needs attention':current.some(row=>row.connection==='connected')?'Connected in some sessions':group.consumers.length?'No recent connection evidence':'Not connected in a chat'};
+    }).sort((a,b)=>Number(b.favorite)-Number(a.favorite)||a.name.localeCompare(b.name)||String(a.path).localeCompare(String(b.path)));
+  }
+  decorateCatalog(catalog){
+    // Persisted observations only: ordinary page rendering never signs in, starts
+    // runtimes, reads a vault or asks a provider to probe a service.
+    const rows=this.configurations();const summaries=new Map(rows.filter(row=>row.discovered).map(row=>[row.sourceId,row.summary]));
+    return {...catalog,entries:catalog.entries.map(entry=>entry.kind==='mcp'?{...entry,integrationStatus:summaries.get(entry.id)||'Not connected in a chat'}:entry)};
+  }
+  snapshot(runId) {const consumers=this.consumers(runId);return {revision:revision(this.data),observedAt:new Date(this.now()).toISOString(),sourceRevision:this.context?.config().revision,sourceRefreshedAt:this.context?.catalog?.refreshedAt,configurations:this.configurations(consumers,{selectedOnly:!!runId}),consumers,monitoring:'Status is observed on this computer. Authentication and connections remain specific to the provider and session. Refresh reads saved observations; Check connection probes a selected session.'};}
   save(id,profile,expectedRevision) {
     if(revision(this.data)!==expectedRevision)throw new Error('Integration profiles changed. Refresh before saving.');
     if(!this.consumers().some(row=>row.id===id))throw new Error('This connection configuration changed. Refresh it.');

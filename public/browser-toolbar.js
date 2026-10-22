@@ -12,13 +12,15 @@ export function browserSurfaceIdentity(selectionRevision = selectedSurfaceRevisi
 }
 
 export function browserAddress(prefix, label) {
-  return `<div class="browser-address"><span data-browser-profile-label class="browser-profile-label" hidden></span><input id="${prefix}-url" aria-label="${label}" placeholder="Enter a website address" autocomplete="off" spellcheck="false"><span id="${prefix}-share" class="browser-agent-toggle" role="img" aria-label="Agent browser tools available" title="Agents can use this tab in any browser profile.">${robot}</span><button type="button" data-browser-shield class="browser-shield" aria-label="Browser privacy"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6z"/></svg><span>0</span></button></div>`;
+  return `<div class="browser-address"><span data-browser-profile-label class="browser-profile-label" hidden></span><input id="${prefix}-url" aria-label="${label}" placeholder="Enter a website address" autocomplete="off" spellcheck="false"><button type="button" id="${prefix}-share" class="browser-agent-toggle" aria-label="Share this tab with agents" aria-pressed="false" title="Share this tab with agents">${robot}</button><button type="button" data-browser-shield class="browser-shield" aria-label="Browser privacy"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6z"/></svg><span>0</span></button></div>`;
 }
 
 export function updateAgentAccess(button, info = {}) {
   if (!button) return;
   const fill=button.closest('.browserbar')?.querySelector('[id$="fill-login"]');if(fill){fill.hidden=info.extensionsEnabled===true;fill.title='Advanced: fill with configured CLI broker';}
-  button.title=info.agentControlling?'An agent is using this tab.':'Agents can use this tab in any browser profile.';
+  button.title=info.agentPaused?'Share this tab with agents':info.agentControlling?'An agent is using this tab. Click to stop sharing.':'Stop sharing this tab with agents';
+  button.setAttribute('aria-pressed',String(!info.agentPaused));button.classList.toggle('paused',info.agentPaused===true);
+  button.onclick=async()=>{if(!info.id||button.disabled)return;button.disabled=true;try{await window.desktop.browser({action:'agent-access',id:info.id,paused:!info.agentPaused,expectedRevision:info.agentAccessRevision});}catch(error){document.dispatchEvent(new CustomEvent('proteus-notice',{detail:error.message}));}finally{if(button.isConnected)button.disabled=false;}};
   button.setAttribute('aria-label',button.title);
   button.classList.toggle('controlling',info.agentControlling===true);
   const label=button.parentElement?.querySelector('[data-browser-profile-label]');if(label){label.hidden=!info.profileId||info.profileId==='default';label.textContent=info.profileName||'Profile';}

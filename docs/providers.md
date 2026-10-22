@@ -1,5 +1,24 @@
 # Provider boundary
 
+## 0.2.28 — MCP approval routing and Claude steering
+
+Codex now recognizes selected third-party native MCP tool approvals and uses the ordinary MCP
+permission path, preserving eligible saved rules, Ask, selected-tool restrictions and revocation.
+It validates the native envelope and active thread/turn, answers each request once and leaves
+execution to the native runtime. This is generic across selected stdio/HTTP servers, including
+same-named tools on different servers. Unsupported elicitation produces an explicit adapter error.
+See [permissions](permissions.md) for policy boundaries; the repair does not reset server sign-in.
+
+Claude uses its private native Code process's bidirectional stream-json/control protocol. Steer
+interrupts the current response, drains that result, then sends one UUID-tagged user input in the
+same session. With --replay-user-messages enabled, the adapter waits for the matching native replay
+before acknowledging delivery. Result usage from both legs is retained. Missing replay times out
+as unconfirmed delivery without automatic resend or concurrent turns. This is interrupt-and-continue,
+not a claim of identical Copilot steering semantics. Client controls use actual owner capability.
+
+Synthetic real-adapter/fake-runtime regressions pass for both changes. Real Claude and HC MCP
+execution remain live acceptance. See the [release ledger](2026-10-21-browser-chat-release.md).
+
 **Queued October 19 — BF-2026-10-19-29:** Work Mac's New Chat lists only Codex/Local rehearsal
 despite the operator having Copilot and Claude. A matching renderer defect is reproduced from
 checkout and installed Personal code: `previewEnabled()` includes normal production projects,

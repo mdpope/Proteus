@@ -43,7 +43,7 @@ struct ProteusRoot: View {
         } else { NativeShell() }
     }
     var body: some View {
-            applicationContent.tint(NativeTheme.accent).preferredColorScheme(.dark)
+            applicationContent.tint(NativeTheme.accent).foregroundStyle(NativePalette.shared.color("text")).preferredColorScheme(.dark)
                 .onOpenURL { url in if url.scheme == "proteus" && url.host == "pair" { area = "macs"; do { try destinations.add(url.absoluteString, label: "New computer") } catch { destinations.error = error.localizedDescription } } }
                 .task {
                     #if DEBUG
@@ -285,15 +285,15 @@ struct DestinationsView: View {
             Section("Saved computers") {
                 ForEach(destinations.destinations) { destination in
                     VStack(alignment: .leading, spacing: 9) {
-                        HStack { Label(destination.label, systemImage: "desktopcomputer").font(.headline); Spacer(); if destination.id == destinations.selectedID { Image(systemName: "checkmark.circle.fill").foregroundStyle(.tint) } }
+                        HStack { Label(destination.label, systemImage: "desktopcomputer").font(.headline); Spacer(); if destination.id == destinations.selectedID { HStack(spacing: 4) { Image(systemName: "checkmark.circle.fill"); Text("Selected") }.font(.caption).foregroundStyle(.tint).fixedSize() } }.fixedSize(horizontal: false, vertical: true)
                         if let remote = destinations.remote(for: destination.id) { PairingStatus(remote: remote) } else { Text("Saved · not connected").font(.caption).foregroundStyle(.secondary) }
-                        HStack {
-                            Button("Use computer") { do { try destinations.select(destination.id) } catch { destinations.error = error.localizedDescription } }.disabled(destination.id == destinations.selectedID).accessibilityIdentifier("select-" + destination.id)
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 112), alignment: .leading)], alignment: .leading, spacing: 8) {
+                            Button(destination.id == destinations.selectedID ? "Selected" : "Use computer") { do { try destinations.select(destination.id) } catch { destinations.error = error.localizedDescription } }.disabled(destination.id == destinations.selectedID).accessibilityIdentifier("select-" + destination.id)
                             Button("Reconnect") { destinations.remote(for: destination.id)?.activity(true) }
                             Button("Rename") { renameID = destination.id; renameLabel = destination.label }.accessibilityIdentifier("rename-" + destination.id)
                             Button("Edit relay") { editingRelay = destination }.accessibilityIdentifier("edit-relay-" + destination.id)
                             Button("Forget", role: .destructive) { forgetID = destination.id }.accessibilityIdentifier("forget-" + destination.id)
-                        }.buttonStyle(.bordered)
+                        }.buttonStyle(.bordered).font(.subheadline).lineLimit(1)
                     }.padding(.vertical, 5)
                 }
             }
@@ -365,7 +365,13 @@ private func nativeActivityFixtureEvents() -> [JSON] {
                                 .object(["id": .string("fixture-terminal"), "type": .string("terminal"), "title": .string("Synthetic terminal")]),
                                 .object(["id": .string("document:fixture-document"), "documentId": .string("fixture-document"), "type": .string("document"), "title": .string("Synthetic document"), "mediaType": .string("text/markdown")])
                             ])]), scope: scope)
-                            shared.open(nil, title: "Synthetic browser", scope: scope)
+                            if ProcessInfo.processInfo.arguments.contains("--synthetic-workspace-browser-selection") {
+                                let first = shared.open(URL(string: nativeFixtureHTTPOrigin + "/browser/one"), title: "First browser page", scope: scope)
+                                shared.open(URL(string: nativeFixtureHTTPOrigin + "/browser/three"), title: "Third browser page", scope: scope)
+                                // Simulate opening a saved project/sidebar child while another
+                                // browser was the last scoped selection.
+                                remote.setDraft("workspace-navigation:" + workspaceID, .object(["chats": .array([.string("long-chat")]), "selected": .string(first ?? "workspace")]))
+                            } else { shared.open(nil, title: "Synthetic browser", scope: scope) }
                             shared.browserTabs.append(BrowserDescriptor(id: "fixture-local-recents", title: "Local recent across scopes", url: nil, scope: "fixture-history", history: BrowserTabHistory(entries: [BrowserHistoryEntry(url: "https://example.test/local", title: "Local recent across scopes")], index: 0)))
 }
 #endif

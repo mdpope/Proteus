@@ -1,3 +1,211 @@
+## Unreleased — navigation and Apple identity review
+
+- Complete the private WTB Developer ID evaluation: app and DMG notarization/stapling, Gatekeeper, mounted browser acceptance, and complete downloads.proteus.example download verification passed. Record operator-submitted browser entitlement request **TGNRQJ22PP**, pending Apple review, with links/form/receipts in the ignored local operator record. This supersedes earlier preparation holds below.
+
+- Preserve private Apple records outside Git and explicitly exclude `local-records` from desktop packages; keep the superseded review-page template under documentation rather than the web public directory. Document the Apple response, passkey integration, helper inclusion and deployment checklist.
+- Use `org.proteusapp.review.proteus.desktop` for the registered Apple evaluation identity while retaining installed update/Keychain identities pending a verified migration.
+- Keep iPhone browser controls in the bottom safe area and observe vertical gestures over nested web scrollers.
+- Observe the selected project inside the pushed native destination, replacing its content identity when the sidebar selects another project.
+- Replace the standalone Chat tools row and Live Browser tab with Chat | Live browser links in the existing composer status row on native and web clients, retaining drafts and capability gating.
+- Restore colored left message edges across desktop, web and native; use responsive saved-computer actions and an explicit Selected label.
+
+## Unreleased — Apple browser review preparation
+
+- Register HTTP/HTTPS URL schemes for the macOS desktop. Queue incoming links until restored UI is ready; open separate human-owned tabs without agent access, including when all windows were closed. Preserve existing custom callback schemes.
+- Add a website/search entry to desktop Home, including its error state.
+- Add isolated Electron WebAuthn registration/assertion and external-link acceptance tests. Synthetic CTAP2 verification does not establish iCloud passkey or Touch ID compatibility.
+- Initial Apple preparation is completed by the submitted/notarized evaluation recorded above. Real iCloud passkey and Passwords helper acceptance remains pending; the evaluation package does not migrate installed app identities.
+
+## October 21 — peer integrations acceptance correction
+
+HC live acceptance of the initial 0.2.28 package found the read-only Other computers inventory
+blocked by the desktop peer method allowlist. Added only `integrations.list`; recovery/check
+mutations stay unavailable through this informational peer view. The paired-host regression now
+exercises the actual encrypted peer request and verifies mutation commands remain rejected.
+This correction supersedes the aa0b52aee873 desktop package; replacement acceptance is pending.
+The preceding package's menu bar keep-awake, local preservation, global favorites, project move,
+iPhone installation and web deployment passed their stated checks.
+
+## October 21 — menu bar Keep Screen Awake
+
+The operator requested a tray-controlled idle keep-awake feature. The desktop host now offers
+**Keep Screen Awake**, off on launch, using Electron's native `prevent-display-sleep` assertion.
+It remains active with windows closed and stops on toggle-off or application quit. It does not
+move the pointer, require Accessibility input permission, or change system sleep preferences.
+Native protection starts immediately, so it also covers sleep timeouts shorter than a few minutes.
+Explicit locking/sleep and OS policy remain in control. The setting is local to this process;
+restart/update returns to off. All 865 Node tests and syntax checks pass. Isolated Electron UI acceptance verifies the native
+macOS display-sleep assertion, background operation, toggle-off and quit cleanup. Packaging is
+in progress; installed apps are unchanged.
+
+## 0.2.28 follow-up source changes (installation pending)
+
+- Shared source favorites merge each owner's legacy lists and carry across new workspaces.
+- MCP inventory groups source configurations with expandable session evidence, search, favorites,
+  explicit source refresh and informational Other computers views; source pickers show status.
+- Duplicate browser tabs preserve history/profile/placement with independent identity; link menus
+  put Open Link in New Tab first and editing actions above Inspect Element.
+- Sidebar state loads before capture/save, preserving expanded workspaces/projects across reload.
+- Video fullscreen opens the existing player over the originating window at its exact size and
+  position; idle controls fade, and Close/Escape returns without restarting playback.
+
+## Queued — browser duplication and navigation preservation
+
+- Add Duplicate tab to browser-tab context menus, preserving full history/current position,
+  profile, placement and relevant settings with an independent new tab.
+- Preserve workspace/project expansion, paging and picker/navigation state across all page,
+  feature, tab and Engine Room loads, including asynchronous updates and restoration.
+- Refine MCP status design using the updated external OAuth/vault helpers. No runtime change
+  or build in this intake; the release remains held for confirmation.
+
+## Queued — awaiting build confirmation
+
+- Put Open Link in New Tab first in browser link menus; move Copy/Select immediately
+  above Inspect Element.
+- Explicitly include HC's own favorites union and preservation checks during its upgrade.
+- Analyze configuration-centered MCP setup, authentication, health and picker status.
+  No integrations redesign, menu implementation, build or live authentication change in
+  this intake. See docs/integrations-design.md.
+
+## Unreleased — shared source favorites
+
+- Merge existing workspace favorites into one list for every workspace on the owning
+  computer, including newly created workspaces. Star/unstar updates the shared list.
+- Keep bookmarks separate from source loading, default chat context and tool approvals.
+- Accounts & Integrations inventory redesign is under discussion; no new connection or
+  cross-computer authentication capability is claimed. See docs/integrations-design.md.
+
+## 0.2.28 — browser, project and provider repairs
+
+- Keep webpages visible beneath URL-bar suggestions; route Command/Ctrl+R to the selected tab.
+- Move whole projects between same-owner workspaces with stable chats/tabs, resumable membership
+  receipts, preserved existing configuration/approvals and destination defaults for new chats.
+- Make New chat contents 30% wider and its message box 15% taller, constrained in small windows.
+- Preserve full browser history while removing repeated base64 favicon bytes from agent output.
+- Contain native-messaging pipe failures, persist optional extension grants per profile, isolate
+  same-URL extension popups by session/window, and explain Bitwarden desktop biometric setup.
+- Add acknowledged Claude interrupt-and-continue steering and capability-aware client controls.
+- Show source-file Created/Modified dates in authorized Markdown viewers.
+- Route all selected third-party Codex MCP tool approvals through existing saved-policy handling,
+  preserving server/tool/action scope, Ask, revocation and selected tools.
+- The reported project assignment predates the latest update in retained evidence. The requested
+  live move, Touch ID, Apple Passwords pairing, original Social-profile issue and actual provider/
+  HC acceptance remain separate from source/build tests. See the [release ledger](docs/2026-10-21-browser-chat-release.md).
+
+## 0.2.27 desktop renderer recovery
+
+- Detect a lost app renderer and recover only that window using its saved tabs, drafts, selection and reading positions. Keep the host, scheduler, active turns and live browser pages running; do not replay interrupted UI actions.
+- Bound automatic retries and show a local recovery page when the window cannot initialize. View → Reload Window retries the known app surface; it does not restart the host. Clear stale shell overlay/overview state during reload.
+- Center the Proteus brand in the available gap between the native window controls and the first tab, retaining its drag area and fixed tab position.
+
+## 0.2.27 notification and navigation follow-up
+
+- Keep the lower tab strip only for actual workspace/project/chat or Team content. Standalone app tabs and feature pages no longer gain a duplicate label/control row.
+- Keep tab selection responsive when content text is selected, and prevent extension bookkeeping from echoing old selections back to the UI.
+- Restore saved palettes independently per desktop installation, native device and web browser/account. Web Engine Room Colors saves browser-local validated JSON without changing a connected host's palette.
+- Keep browser load failures and history conflicts in Notifications/Needs attention with tab, reload, log and explicit recovery actions; remove the page-covering popup/tray. Pending navigation and retry receipts remain preserved until an explicit resolution.
+- Preserve shared URL and forward history through device-local iPad redirect chains and repeated WebKit observations. Deliberate address, link, form, history and trusted SPA actions still publish navigation.
+- Reveal the complete newly opened tab, including its close control, in either navigation row for browser links, chat and background tool opens. Background opens retain focus; metadata refreshes retain manual scrolling.
+- Remove the iPhone browser footer's extra bottom padding and duplicate nested safe-area gap while retaining its existing touch targets.
+- Bound the first top tab with a left divider matching its top/right borders, without adding a divider through the title-bar brand area.
+- Shorten both desktop tab rows by four pixels and use matching smaller overview/+ controls with the same color and compact spacing.
+
+## 0.2.27 app navigation follow-up
+
+- Restore the existing app-navigation overview button immediately left of the top-row +. Its App tab overview contains this window's top-level tabs; the lower overview remains scoped to workspace/project or Team content. Keep the existing overlapping-tabs icon.
+- Add the matching independent main-tab overview to iPad's top strip. It lists the device's main roots across connected hosts, separately from content/pinch overview.
+- Native 2610.20.4 expands workspace/project sections on name selection and gives the whole label row a touch target. Chevron collapse remains explicit; 2610.20.5 includes the additional iPad app overview.
+
+## 0.2.27 follow-up acceptance corrections
+
+- Load the permanent palette layout/surface stylesheet as a bundled resource under the existing strict content policy; verify rendered swatch dimensions and grid, in addition to saved values.
+- iOS follow-up build 2610.20.3 binds browser content to the containing navigation strip's selected tab, restores the missing workspace/project active underline, adds four pixels between workspace groups and places their divider below the Workspaces feature.
+- iOS Engine Room uses plain vertical options and nested sidebar/drawer navigation instead of boxed horizontal option buttons.
+
+## 0.2.27 — integrated navigation, palette and browser controls
+
+- Promote the accepted unified title strip, matching tab underlines, universal secondary-strip overview and named/closed/previous window sessions into the normal desktop app. Shared project and Team contents stay synchronized; top-level navigation remains window-local.
+- Add permanent Engine Room → Colors controls: live color pickers, surface lightness/saturation, named saved palette, discard/reset and portable JSON import/export. Native iPhone/iPad keeps its own device palette and navigation; no mobile window tracking.
+- Show a recent download rate in KB/s. Keep desktop downloads in their nonblocking window-private popup and native downloads in a session-only list, preserving downloaded files.
+- Repair certificate observation before navigation, retain certificates through subframe/same-document navigation, share the existing debugger safely and display observed Chromium certificate chains without overriding trust decisions or fetching a different connection.
+- Include the accepted browser/Find stability fixes, background agent control, explicit tab sharing, page-menu autoplay preference, domain page scale, tab-hosted desktop chat setup and source-kind icons.
+- Bring relevant native features into line: palette controls, root-domain page scale with private-suffix isolation, global device autoplay preference, certificate inspection and download speed. Existing Apple AutoFill settings remain; Mac helper fill/save is still experimental.
+
+Implementation and validation/install status are recorded in the release ledger; build success alone does not establish live acceptance.
+
+## October 20 — browser controls preview and targeted Mac stability repair
+
+- Keep navigation replies bound to the tab that initiated them and reject stale owner history updates. Team browser mounting tracks the surface kind rather than every URL; deduplicate unchanged bounds updates. Find skips blank/unloaded setup surfaces, debounces typing and cancels superseded native searches.
+- Replace modal Downloads with a sandboxed child popup above the native website, file-type icons, separators, progress, pause/resume, supported URL restart and folder actions. Download metadata lasts only for its window; files and folder preferences remain.
+- Add a persistent all-window video-autoplay preference in the page menu. Website-frame preload blocks declarative and script-started video before human activation; manual playback remains available. No credential or provider action is needed.
+- Human-opened browser tabs now require explicit sharing. Agent-created tabs start shared; every page backend observes revocation. Agents can request a native human decision, which defaults to declining and rechecks tab/profile/navigation/preferences before granting. This supersedes the October 18 default-access rule.
+- Add an adjustable palette design draft. New functionality is in the isolated preview; the separate installed-baseline Mac repair is staged/tested independently. See the current preview and hotfix acceptance notes before inferring installation.
+
+## October 20 — Apple Passwords popup presentation
+
+- Close extension popups when their profile disables/removes/reloads the extension, avoiding stale blank windows.
+- Size extension popups to their contents and show after DOM readiness. Give Apple Passwords
+  readable green surfaces/inputs, hide empty loading controls and remove its duplicate content title.
+- Keep Mac autofill experimental: this Mac kills Apple’s helper even outside Electron; pairing,
+  fill/save and passkeys are not claimed by a successful extension setup screen.
+
+## October 20 — Apple Passwords preview setup
+
+- Add per-profile Apple Passwords setup/open controls using Apple’s official extension and existing
+  permission review. Apple owns pairing and unlock; no vault import or agent vault interface.
+- Explain system Apple Passwords AutoFill on native iPhone/iPad and add the public provider-settings
+  shortcut. Actual pairing/fill/save and physical-device acceptance remain separate.
+
+## October 20 — preview tab continuity and browser presentation
+
+- Open unified tabs directly to the left/right; use compact child menus above the live website
+  for tab/Ghostery actions instead of hiding the native browser.
+- Host New chat setup in its tab, retaining separate drafts across navigation/reload/restart;
+  submit one local/paired chat into the same position. Keep destination catalogs and form IDs isolated.
+- Save page scale by root domain/browser account partition, including 120%, and reuse it in new
+  tabs/windows and after restart. Keep page scale independent of visual pinch zoom and app scale.
+- Lower the fresh-pinch overview threshold while preserving the separate-gesture requirement.
+  Lighten dark green preview surfaces and preserve bright accents; display overview URLs without title case.
+- Keep an agent-controlled page unthrottled/loaded between tools until the turn ends or human pause.
+  Synthetic hidden screenshots and coordinate/direct/MCP actions work while another project is selected;
+  the original operator dropout remains unproven. Production and physical-device rollout remain separate.
+
+## October 20 — preview keyboard, agent-control and chrome follow-up
+
+- Add a live − / current percentage / + page-scale row to the browser … menu. Clicking the
+  percentage resets to 100%; scale changes keep the menu open and leave application scale alone.
+- Add leading document, skill, agent and MCP icons to chat source selectors, Favorites and
+  workspace source tables, retaining type labels, loading choices and accessible controls.
+- Notify the owning window when shared navigation updates an unloaded native browser descriptor,
+  keeping its address controls current without loading the website.
+- Submit local/paired New Project forms with Enter; prevent duplicate submissions while saving.
+- Restore a working robot pause/resume button in main and Team browser bars. Ordinary tabs stay
+  available by default. Persist explicit pauses by stable logical identity and enforce them at
+  the host for direct page tools and both MCP backends; listing/organization remain available.
+- Make the preview brand a noninteractive window drag region. Restore the original sidebar
+  chevron, use a fixed brand width independent of sidebar resizing, remove the brand separator,
+  shorten the upper gap to 11 pixels and keep the full 2-pixel upper underline visible.
+- Keep the reported browser/chat agent-control dropout queued for normal-build investigation:
+  repeated synthetic switches, direct/MCP clicks, same-page reuse and reconnection pass, so no
+  root cause or repair is claimed for the operator's actual failure.
+
+## October 20 — window and iPad design preview
+
+- Build the selected integrated title bar in the isolated desktop preview: extra drag space,
+  single centered brand, current tab ×/underline/dividers plus top border, connected sidebar and
+  universal secondary-row overview/New tab actions. Remove duplicate address-bar overview.
+- Share Team content across windows and correct duplicate local entries during asynchronous
+  creation. Keep top-level navigation and each window’s selection independent.
+- Add Engine Room → Windows with names, closed/named/previous-session snapshots, restore/focus
+  and bounded private storage. Restore current shared content instead of stale tab membership.
+- Implement iPad chat pinch observation, intrinsic-width page headings, consistent 44-point
+  navigation rows, a separate Team account sheet, explicit loading/account/empty states and a
+  larger multiline link editor. Preserve nonbrowser owner descriptors in mobile tab projection;
+  rebase incomplete reorder retries without expanding permissions.
+- Source desktop acceptance and all 821 runtime/static checks pass. Native/device and packaged
+  acceptance are tracked in [window management](docs/window-management.md). This is an isolated
+  preview; existing production installations and private operator screenshots remain unchanged.
+
 ## 0.2.26 — rollout in progress
 
 - Incorporate the Linux branch and its verified signed-out secure-storage startup repair.

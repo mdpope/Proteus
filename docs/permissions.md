@@ -1,3 +1,17 @@
+## 0.2.28 — selected third-party Codex MCP approvals
+
+The adapter now routes recognized native tool-approval envelopes for every selected third-party
+MCP server through the normal permission handler. Existing eligible saved chat/workspace rules
+match exact server/tool/action identities without being reset or widened. Ask suspends those
+grants as before; active thread/turn, selected tools and revocation are checked before replying.
+No native tool is executed again by this approval handler. The existing proteus_app bridge stays
+separate; generic form/URL elicitation remains unsupported with an explicit adapter error.
+
+Server enablement is distinct from operation approval. Unsupported/stale approval data does not
+become a human refusal, and same-named tools on different servers do not share approval. Synthetic
+stdio/HTTP selected-server and persisted-rule regressions pass; actual HC servers remain live
+acceptance. See [BF-85 release evidence](2026-10-21-browser-chat-release.md).
+
 ## Production permission controls — October 18 candidate
 
 The tested independent chat mode/read-only/folder/action controls now run in the production host.
@@ -44,8 +58,9 @@ questions still pause. Access additions leave a running narrower turn intact; re
 unknown/mixed changes stop it and require explicit Continue, without replay. Revocation cannot
 undo an operation already underway.
 
-Codex selection of an MCP server makes its available tools usable for that turn; Proteus does not
-receive individual-call approval control for that server. Providers may also perform native reads
+Codex selection of an MCP server enables its selected tools for that turn, but native runtimes can
+also issue per-tool approval elicitations. The current adapter's third-party routing gap is queued
+through the BF-2026-10-21-85 path above; server approval alone does not guarantee execution. Providers may also perform native reads
 without issuing a request. These controls describe supported adapter decisions, not identical
 OS containment across providers. This iteration remains preview-only; new real-Codex and exact-
 package acceptance are recorded separately in [desktop preview](desktop-preview.md).

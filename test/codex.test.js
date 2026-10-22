@@ -114,7 +114,7 @@ test('resumed Codex chats receive current browser/tab schemas through a turn-bou
   const second=f.provider.run(f.args);await until(()=>f.rpc.turn===2);const resume=f.rpc.calls.findLast(c=>c.method==='thread/resume').params;
   assert.equal(resume.dynamicTools,undefined);assert.match(resume.developerInstructions,/fresh tools published by the proteus_app MCP server/);
   const env=resume.config.mcp_servers.proteus_app.env;const listed=await bridge(env,{action:'list'});assert.equal(listed.status,200);
-  const browser=listed.value.find(t=>t.name==='proteus_browser'),tabs=listed.value.find(t=>t.name==='proteus_tabs');assert.ok(browser&&tabs);assert.ok(browser.inputSchema.properties.action.enum.includes('load'));assert.equal(browser.inputSchema.properties.hidden.type,'boolean');assert.equal(browser.inputSchema.properties.unloaded.type,'boolean');assert.match(browser.description,/no per-tab sharing/);
+  const browser=listed.value.find(t=>t.name==='proteus_browser'),tabs=listed.value.find(t=>t.name==='proteus_tabs');assert.ok(browser&&tabs);assert.ok(browser.inputSchema.properties.action.enum.includes('load'));assert.equal(browser.inputSchema.properties.hidden.type,'boolean');assert.equal(browser.inputSchema.properties.unloaded.type,'boolean');assert.match(browser.description,/human-opened tabs require explicit sharing/);assert.ok(browser.inputSchema.properties.action.enum.includes('request-access'));
   const args={action:'open',url:'https://fixture.invalid',hidden:true,unloaded:true,profileId:'fixture'};
   const denied=await bridge(env,{action:'call',name:'proteus_browser',arguments:args});assert.equal(denied.value.resultType,'failure');assert.equal(calls.length,0);
   answer='approve';const opened=await bridge(env,{action:'call',name:'proteus_browser',arguments:args});assert.equal(opened.status,200);assert.deepEqual(calls,[{args,id:'run'}]);assert.equal(approvals.at(-1).details.toolName,'proteus_browser');assert.equal(approvals.at(-1).details.kind,'custom-tool');
@@ -147,4 +147,20 @@ test('resumed browser approval cannot perform an action after its turn ends',asy
   const pending=fetch(env.PROTEUS_DOCUMENT_ENDPOINT,{method:'POST',headers:{authorization:env.PROTEUS_DOCUMENT_CAPABILITY},body:JSON.stringify({action:'call',name:'proteus_browser',arguments:{action:'close',tabId:'fixture'}})});pending.catch(()=>{});await until(()=>approve);
   f.rpc.notice('turn/completed',{turn:{status:'completed'}});await task;approve('approve');await new Promise(resolve=>setTimeout(resolve,10));assert.equal(calls,0);await assert.rejects(pending);
  }finally{await f.provider.close();}
+});
+
+test('all selected MCP servers use saved scoped rules across transports and preserve Ask',async t=>{
+ const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-mcp-approval-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+ const f=fixture(),selected={tracker:{command:'/synthetic/not-executed',tools:['items']},knowledge:{type:'http',url:'https://synthetic.invalid/mcp',tools:['items']}};
+ f.provider.context.providerContext=()=>({instructionText:'',customAgents:[],disabledLegacyMcp:[],disabledSkills:[],mcpServers:selected});f.run.schedule.workspace={cwd:home,additionalDirectories:[]};
+ const oldStore=new PermissionStore(home),query={kind:'mcp',serverName:'tracker',toolName:'items',args:{action:'get'}};
+ oldStore.remember(f.run.schedule,query,'always-tool');const store=new PermissionStore(home),bytes=fs.readFileSync(store.file);const requests=[];
+ f.args.ask=async request=>{if(request.details.toolName==='*')return 'approve';requests.push(request);return store.decide(f.run.schedule,request.details).allowed?'approve-auto':'decline';};
+ const task=f.provider.run(f.args);await until(()=>f.rpc.turn===1);
+ const approval=(id,serverName,action='get',tool='items')=>({id,method:'mcpServer/elicitation/request',params:{threadId:'thread',turnId:'turn-1',serverName,mode:'form',message:`Allow the ${serverName} MCP server to run tool "${tool}"?`,_meta:{codex_approval_kind:'mcp_tool_call',tool_params:{action}},requestedSchema:{type:'object',properties:{}}}});
+ for(const [id,server,action,expected]of [[100,'tracker','get','accept'],[101,'knowledge','get','decline'],[102,'tracker','delete','decline'],[103,'unselected','get','decline']]){f.rpc.emit('request',approval(id,server,action));await until(()=>f.rpc.responses.some(r=>r.id===id));assert.equal(f.rpc.responses.find(r=>r.id===id).result.action,expected);}
+ assert.equal(requests.length,3);f.rpc.emit('request',approval(100,'tracker'));await new Promise(r=>setTimeout(r,10));assert.equal(f.rpc.responses.filter(r=>r.id===100).length,1);
+ assert.deepEqual(fs.readFileSync(store.file),bytes,'existing rules remain byte-for-byte unchanged');
+ store.setMode(f.run.schedule,'ask');f.rpc.emit('request',approval(104,'tracker'));await until(()=>f.rpc.responses.some(r=>r.id===104));assert.equal(f.rpc.responses.find(r=>r.id===104).result.action,'decline');
+ f.rpc.notice('turn/completed',{turn:{status:'completed'}});await task;await f.provider.close();
 });

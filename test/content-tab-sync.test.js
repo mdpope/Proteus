@@ -236,3 +236,10 @@ test('a chat first exposed by its seed acknowledgement retains owner-close seman
  const options={scopes:()=>[scope],preserveUntracked:(_scope,tab)=>tab.type==='chat',pendingStorage:{getItem:key=>storage.get(key),setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},readLocal:async()=>structuredClone(local),request:async(_scope,action)=>{if(action!=='get')remote={revision:1,tabs:[chat]};return structuredClone(remote);},apply:async(_scope,tabs,captured)=>{local=[...local.filter(tab=>!captured.some(item=>item.id===tab.id)),...tabs];},onError:error=>errors.push(error)};
  await createTabSynchronizer(options).all();remote={revision:2,tabs:[]};await createTabSynchronizer(options).all();assert.deepEqual(local,[]);assert.deepEqual(errors,[]);
 });
+
+test('an older pending acknowledgement preserves a newer local replacement until its own synchronization',async()=>{
+ const scope={scope:'project',id:'pending-replacement'};let clock=0,fail=false,local=[tab('a')],remote={revision:1,tabs:[tab('a')]};
+ const apply=async(_scope,tabs,captured)=>{const capturedIds=new Set(captured.map(t=>t.id)),ids=new Set(tabs.map(t=>t.id));local=local.filter(t=>ids.has(t.id)||!capturedIds.has(t.id));for(const t of tabs)if(!local.some(v=>v.id===t.id)&&!capturedIds.has(t.id))local.push(t);};
+ const sync=createTabSynchronizer({now:()=>clock,scopes:()=>[scope],readLocal:async()=>structuredClone(local),apply,request:async(_scope,action,args)=>{if(action==='get')return structuredClone(remote);if(fail){fail=false;throw Error('synthetic acknowledgement lost');}for(const op of args.operations){if(op.action==='open')remote.tabs.push(op.tab);if(op.action==='close')remote.tabs=remote.tabs.filter(t=>t.id!==op.id);if(op.action==='reorder')remote.tabs=op.ids.map(id=>remote.tabs.find(t=>t.id===id));}remote.revision++;return structuredClone(remote);}});
+ await sync.all();local.push(tab('b'));fail=true;await sync.all();local=[tab('a'),tab('c')];clock=1000;await sync.all();assert.deepEqual(local.map(t=>t.id),['a','c']);await sync.all();assert.deepEqual(remote.tabs.map(t=>t.id),['a','c']);
+});

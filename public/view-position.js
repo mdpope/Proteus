@@ -1,6 +1,8 @@
 const positions = new Map();
 const observed=new WeakMap(),liveViews=new Set(),storageKey='proteus.view-positions.v1';
 let initialized=false,initializing;
+const writes=new Set();
+export async function flushViewPositions(){for(const {root,key}of liveViews)if(root.isConnected&&(!root.dataset.viewKey||root.dataset.viewKey===key))rememberView(root,key);await Promise.all([...writes]);}
 export function initializeViewPositions(){
   if(initializing)return initializing;
   initializing=(async()=>{const rows=globalThis.window?.desktop?.viewPositions?await window.desktop.viewPositions({action:'get'}):JSON.parse(globalThis.localStorage?.getItem(storageKey)||'[]');for(const [key,value]of rows||[])if(typeof key==='string'&&Array.isArray(value))positions.set(key,new Map(value));initialized=true;})();return initializing;
@@ -8,7 +10,7 @@ export function initializeViewPositions(){
 function persist(key,values){
   if(!initialized)return;
   while(positions.size>200)positions.delete(positions.keys().next().value);
-  if(globalThis.window?.desktop?.viewPositions)void window.desktop.viewPositions({action:'set',key,position:[...values]}).catch(error=>document.dispatchEvent(new CustomEvent('proteus-notice',{detail:error.message})));
+  if(globalThis.window?.desktop?.viewPositions){const work=window.desktop.viewPositions({action:'set',key,position:[...values]});writes.add(work);void work.catch(error=>document.dispatchEvent(new CustomEvent('proteus-notice',{detail:error.message}))).finally(()=>writes.delete(work));}
   else try{localStorage.setItem(storageKey,JSON.stringify([...positions].map(([key,map])=>[key,[...map]])));}catch{}
 }
 function observe(root,key){

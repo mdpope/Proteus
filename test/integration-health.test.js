@@ -9,3 +9,13 @@ test('health checks serialize provider work, do not resume from a timer, and pre
 test('agent contexts are run-scoped and unsupported switching fails without changing defaults',async t=>{const f=fixture(t),view=f.health.snapshot(),id=view.consumers[1].id;await assert.rejects(f.health.agent('one',{action:'verify',consumerId:id}),/already selected/);const one=view.consumers[0].id;f.health.save(one,{contexts:[{label:'A',tenant:'tenant-a'}]},view.revision);const row=(await f.health.agent('one',{action:'list'})).consumers[0];await assert.rejects(f.health.agent('one',{action:'select',consumerId:one,contextId:row.profile.contexts[0].id}),/cannot isolate/);});
 test('background recovery is bounded and never restarts while tools are active',async t=>{const f=fixture(t);let repairs=0;f.provider.hasMcpSession=()=>true;f.provider.mcpStatus=async()=>({servers:[{name:'service',status:'failed'}]});f.provider.mcpRecover=async()=>{repairs++;return {servers:[{name:'service',status:'failed'}]};};f.engine.running.set('one',{id:'one'});await f.health.tick();assert.equal(repairs,0);f.engine.running.clear();for(let i=0;i<6;i++){f.advance(3600000);await f.health.tick();}assert.equal(repairs,6); // Three attempts per distinct session/consumer.
 });
+test('inventory includes unused sources, groups sessions by exact source revision and keeps authentication separate',t=>{
+ const f=fixture(t),entry={id:'source-one',hash:'revision-one',name:'Service',key:'service',kind:'mcp',path:'/synthetic/.mcp.json',transport:'http'};
+ f.health.context={config:()=>({revision:'catalog-one',favorites:['source-one']}),catalog:{entries:[entry,{...entry,id:'unused',name:'Unused'}]}};
+ for(const run of f.runs)run.schedule.context={entries:[entry]};
+ f.health.observe(f.runs[0],[{name:'service',status:'connected'}]);
+ let snapshot=f.health.snapshot();assert.equal(snapshot.configurations.length,2);const group=snapshot.configurations.find(row=>row.sourceId==='source-one');assert.equal(group.sessionCount,2);assert.equal(group.favorite,true);assert.equal(group.summary,'Connected in some sessions');assert.equal(group.consumers[0].authentication,'unverified');assert.ok(!JSON.stringify(snapshot).includes('SYNTHETIC_SECRET'));
+ const scoped=f.health.snapshot('one');assert.equal(scoped.configurations.length,1);assert.equal(scoped.consumers.length,1);
+ f.health.context.catalog.entries=[{...entry,hash:'revision-two'}];snapshot=f.health.snapshot();assert.equal(snapshot.configurations.length,2);assert.equal(snapshot.configurations.find(row=>row.discovered).sessionCount,0);
+ const decorated=f.health.decorateCatalog({entries:f.health.context.catalog.entries});assert.equal(decorated.entries[0].integrationStatus,'Not connected in a chat');
+});

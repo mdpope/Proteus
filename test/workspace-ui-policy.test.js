@@ -7,3 +7,7 @@ function fixture(){return {defaultWorkspaceId:'one',workspaceId:'one',entries:[e
 test('workspace projection retains explicit source aliases and universal roots without leaking another workspace mode',()=>{const catalog=workspaceCatalog(fixture(),'two');assert.deepEqual(catalog.entries.map(e=>e.id),['chosen','universal','other']);assert.equal(catalog.entries.find(e=>e.id==='other').mode,'available');});
 test('workspace plan inherits selected source defaults but explicit empty selections override them',()=>{const catalog=fixture();assert.deepEqual(contextPlan(catalog,{workspaceId:'two'}).entries.map(e=>e.id),['chosen']);assert.deepEqual(contextPlan(catalog,{workspaceId:'two',selectedIds:[]}).entries,[]);});
 test('already scoped catalog retains discovered aliases whose original source root has moved',()=>{const catalog=fixture();catalog.workspaceId='two';catalog.entries.push(entry('alias','/previous-location'));assert.ok(workspaceCatalog(catalog,'two').entries.some(e=>e.id==='alias'));});
+test('projecting shared favorites into another workspace does not copy an automatic loading mode',()=>{
+ const catalog=fixture();catalog.entries[0].defaultMode='universal';catalog.entries[0].mode='universal';catalog.workspaces[1].modes={};catalog.workspaces[1].defaults={includeDefaults:true};
+ const projected=workspaceCatalog(catalog,'two');assert.equal(projected.entries.find(e=>e.id==='chosen').mode,'available');assert.deepEqual(contextPlan(catalog,{workspaceId:'two'}).entries,[]);
+});

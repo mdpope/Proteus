@@ -49,7 +49,7 @@ export function chatActivityAt(run) {
   chatActivityCache.set(run,{status:run.status,updatedAt:run.updatedAt,createdAt:run.createdAt,at});return at;
 }
 export const runSummary = r => ({lastActivityAt:chatActivityAt(r),...pick(r,['id','title','titleKind','titleRevision','trigger','chatType','status','queueReason','createdAt','updatedAt','failureReviewedAt']),archivedAt:r.archivedAt||null,archived:!!r.archivedAt,failureEventAt:['failed','interrupted'].includes(r.status)?r.failureEventAt||r.updatedAt:null,attentionRequired:r.status==='awaiting_input'||(!r.archivedAt&&['failed','interrupted'].includes(r.status)&&!r.failureReviewedAt),provider:r.schedule.provider,...runWorkspace(r),scheduleName:r.trigger==='chat'?'':r.schedule.name});
-const entryKeys = ['id', 'name', 'description', 'kind', 'path', 'sources', 'roots', 'mode', 'scope', 'warnings', 'unsupportedAgentFields', 'error', 'missing', 'characters'];
+const entryKeys = ['id', 'name', 'description', 'kind', 'path', 'sources', 'roots', 'mode', 'scope', 'warnings', 'unsupportedAgentFields', 'error', 'missing', 'characters', 'transport', 'integrationStatus'];
 const remoteEntry = entry => ({ ...pick(entry, entryKeys), ...(entry.agent ? { userInvocable: entry.agent.userInvocable } : {}) });
 const remoteProjects = service => { const value=service.workspaceProjects.get(service.engine);return {...value,sourceEntries:value.sourceEntries.map(remoteEntry)}; };
 const mutationMethods = new Set(['projects.update','sources.update','browser.live.instruct','browser.history.record','browser.history.delete','browser.history.settings','tabs.mutate','tabs.manage','workspace.delete','chat.start', 'chat.reply', 'chat.resume', 'chat.cancel', 'chat.send', 'chat.steer-queued','chat.edit-queued','chat.remove-queued', 'chat.review', 'chat.archive', 'chat.move', 'chat.delete', 'chat.rename', 'chat.promote', 'chat.documents.request', 'chat.attachments.begin', 'chat.attachments.chunk', 'chat.attachments.finish', 'chat.attachments.authorize', 'schedule.run', 'schedule.save', 'context.update', 'context.refresh', 'context.mode', 'context.favorite', 'context.addFolders', 'chat.context', 'chat.permissions', 'mcp.login','integrations.check','integrations.recover', 'notifications.read', 'resources.action', 'connection.revoke']);
@@ -76,7 +76,7 @@ export function remoteUsage(value) {
 }
 export function remoteState(service) {
   return timedSync(service.performanceDiagnostics, 'remote.state', () => {
-  const context = timedSync(service.performanceDiagnostics,'remote.state.context',()=>service.context.get()); const defaults = service.settings.get();
+  const context = timedSync(service.performanceDiagnostics,'remote.state.context',()=>service.integrations?service.integrations.decorateCatalog(service.context.get()):service.context.get()); const defaults = service.settings.get();
   const runs = timedSync(service.performanceDiagnostics,'remote.state.runs',()=>service.engine.listRuns());
   const visibleRuns = runs.filter(run=>!run.archivedAt);
   const workspaceProjects=service.workspaceProjects?remoteProjects(service):null;
@@ -89,7 +89,7 @@ export function remoteState(service) {
     runningChatCount: countRunningChats(visibleRuns),
     attentionCount: visibleRuns.filter(run=>run.status==='awaiting_input'||(['failed','interrupted'].includes(run.status)&&!run.failureReviewedAt)).length,
     context: { ...pick(context, ['revision', 'refreshedAt', 'rootStatus', 'defaultWorkspaceId', 'workspaces', 'universalFolders', 'libraryFolders', 'documents','modes','favorites', 'errors']), entries: context.entries.map(remoteEntry) },
-    defaults: pick(defaults, ['provider', 'model', 'reasoningEffort', 'contextTier', 'serviceTier', 'timezone', 'internetSearches']), providerStatus: service.catalog?.value || null, providerStatuses: Object.fromEntries(Object.entries(service.catalogs || {}).map(([id, catalog]) => [id, catalog.value])),attachmentMediaTypes:Object.fromEntries(['copilot','codex','claude'].map(id=>[id,service.engine.providers[id]?.acceptedMediaTypes||[]])),mcpStatusProviders:['copilot','codex','claude'].filter(id=>typeof service.engine.providers[id]?.mcpStatus==='function'),mcpLoginProviders:['copilot','codex','claude'].filter(id=>typeof service.engine.providers[id]?.mcpLogin==='function'),capabilities:['host.platform.v1',...(service.workspaceProjects?['projects.v1','source-library.v1']:[]),'chat.paths.v1','chat.export.v1','chat.previews.v1','content-tabs.v1','chat.index.v1','chat.queue-edit.v1','integrations.health.v1','chat.review.v1','chat.lifecycle.v1','chat.rename.v1','chat.internet.v1','workspaces.v1','chat.permissions.folders.v1','chat.permissions.chat.v1','chat.permissions.pending.v1','chat.documents.v1','chat.attachments.v1','notifications.v1','authenticated-revocation.v1','connection-self-revoke.v1',...(service.browserHistory?['browser.history.v1','browser.navigation.v1']:[]),...(service.liveBrowser?['browser.live.v1']:[]),...(service.resources?['resources.v1']:[])],protocol: 1 };
+    defaults: pick(defaults, ['provider', 'model', 'reasoningEffort', 'contextTier', 'serviceTier', 'timezone', 'internetSearches']), providerStatus: service.catalog?.value || null, providerStatuses: Object.fromEntries(Object.entries(service.catalogs || {}).map(([id, catalog]) => [id, catalog.value])),attachmentMediaTypes:Object.fromEntries(['copilot','codex','claude'].map(id=>[id,service.engine.providers[id]?.acceptedMediaTypes||[]])),mcpStatusProviders:['copilot','codex','claude'].filter(id=>typeof service.engine.providers[id]?.mcpStatus==='function'),mcpLoginProviders:['copilot','codex','claude'].filter(id=>typeof service.engine.providers[id]?.mcpLogin==='function'),capabilities:['host.platform.v1',...(service.workspaceProjects?['projects.v1','projects.move.v1','source-library.v1']:[]),'chat.paths.v1','chat.export.v1','chat.previews.v1','content-tabs.v1','chat.index.v1','chat.queue-edit.v1','integrations.health.v1','chat.review.v1','chat.lifecycle.v1','chat.rename.v1','chat.internet.v1','workspaces.v1','chat.permissions.folders.v1','chat.permissions.chat.v1','chat.permissions.pending.v1','chat.documents.v1','chat.attachments.v1','notifications.v1','authenticated-revocation.v1','connection-self-revoke.v1',...(service.browserHistory?['browser.history.v1','browser.navigation.v1']:[]),...(service.liveBrowser?['browser.live.v1']:[]),...(service.resources?['resources.v1']:[])],protocol: 1 };
   });
 }
 function validateRelayURL(value) {
@@ -134,7 +134,7 @@ export class RemoteHost {
       next.publicURL = validateRelayURL(value.publicURL || next.publicURL || next.relayURL);
       if (value.relayToken) { if (!/^[a-f0-9]{64}$/.test(value.relayToken)) throw new Error('Relay token must be 64 hex characters.'); next.relayToken = value.relayToken; }
     }
-    await this.stop(); this.config = next; this.save(); if (next.enabled) await this.start(); return this.info();
+    await this.stop(); this.config = next; this.error = null; this.save(); if (next.enabled) await this.start(); return this.info();
   }
   async start() {
     if (!this.config.enabled || this.closed) return;
@@ -145,11 +145,11 @@ export class RemoteHost {
   }
   connect() {
     if (!this.config.enabled || this.closed) return;
-    this.status = 'connecting'; this.error = null;
+    this.status = 'connecting';
     const base = this.config.mode === 'local' ? `ws://127.0.0.1:${this.config.port}` : this.config.relayURL;
     const ws = this.socket = new WebSocket(`${base}/socket?role=host&host=${this.config.hostId}`, { headers: { Authorization: `Bearer ${this.config.relayToken}` }, maxPayload: 8_000_000, handshakeTimeout: 8000 });
-    ws.on('open', () => { if (this.socket !== ws) return;this.status='online';const since=this.config.offlineSince;if(since){const elapsed=Math.max(0,Math.floor((Date.now()-Date.parse(since))/1000));this.service.activity?.add('device.reconnected',{hostId:this.config.hostId,offlineSeconds:elapsed});delete this.config.offlineSince;this.save();}this.service.activity?.log('info','transport.online','Connected to the relay.',{hostId:this.config.hostId}); });
-    ws.on('error', error => { if (this.socket === ws) this.error = error.message; });
+    ws.on('open', () => { if (this.socket !== ws) return;this.status='online';this.error=null;const since=this.config.offlineSince;if(since){const elapsed=Math.max(0,Math.floor((Date.now()-Date.parse(since))/1000));this.service.activity?.add('device.reconnected',{hostId:this.config.hostId,offlineSeconds:elapsed});delete this.config.offlineSince;this.save();}this.service.activity?.log('info','transport.online','Connected to the relay.',{hostId:this.config.hostId}); });
+    ws.on('error', error => { if (this.socket === ws) this.error = /Unexpected server response: (401|403)\b/.test(error.message) ? 'The relay rejected this computer’s registration. Check its relay registration token or whether this computer is already connected elsewhere. To connect to another computer, use that computer’s pairing code; incoming access here is not required.' : error.message; });
     ws.on('close', () => {
       if (this.socket !== ws) return;
       this.peers.clear(); this.status = 'offline';this.config.offlineSince ||= new Date().toISOString();this.save();this.service.activity?.log('warning','transport.offline','Connection to the relay was interrupted.',{hostId:this.config.hostId});
@@ -439,7 +439,7 @@ export class RemoteHost {
     if (method === 'provider.status') return this.api('/api/provider', pick(args, ['force', 'provider']));
     if (method === 'projects.get'||method === 'sources.get') return remoteProjects(this.service);
     if (method === 'projects.update'||method === 'sources.update') { await this.api('/api/workspace-projects/'+(method==='projects.update'?'projects':'sources'),args);this.changed();return remoteProjects(this.service); }
-    if (method === 'context.get') return this.service.context.get(args.workspaceId);
+    if (method === 'context.get') {const catalog=this.service.context.get(args.workspaceId);return this.service.integrations?.decorateCatalog(catalog)||catalog;}
     if (method === 'context.update') { const result = await this.api('/api/context', args); this.changed(); return result; }
     if (method === 'context.refresh') { const result = await this.service.context.refreshAsync({workspaceId:args.workspaceId,root:args.root}); this.changed(); return result; }
     if (method === 'schedule.preview') return this.api('/api/preview', pick(args, ['cron', 'timezone']));

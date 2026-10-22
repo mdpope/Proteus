@@ -1,7 +1,10 @@
 import SwiftUI
+import AuthenticationServices
+import Observation
+import UniformTypeIdentifiers
 
 struct EngineRoomView: View {
-    static let pages = ["Overview", "Source library", "Resources", "Connections", "Account & Security", "App Setup", "Browser settings", "Browser history", "Usage", "Notifications", "Logs"]
+    static let pages = ["Overview", "Colors", "Source library", "MCP connections", "Resources", "Connections", "Account & Security", "App Setup", "Browser settings", "Browser history", "Usage", "Notifications", "Logs"]
     @EnvironmentObject var destinations: DestinationStore
     @EnvironmentObject var life: LifeStore
     @EnvironmentObject var shared: SharedAppStore
@@ -17,10 +20,15 @@ struct EngineRoomView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                ScrollView(.horizontal) { HStack { ForEach(Self.pages, id: \.self) { name in Button(name) { page = name }.buttonStyle(.bordered).tint(page == name ? .accentColor : .secondary) } }.padding(8) }.scrollIndicators(.hidden).accessibilityIdentifier("engine-sections")
-                Divider()
+                if page != "Overview" {
+                    HStack {
+                        Button { page = "Overview" } label: { Label("Engine Room", systemImage: "chevron.left") }.buttonStyle(.plain)
+                        Text(page).fontWeight(.semibold); Spacer()
+                    }.foregroundStyle(NativeTheme.accent).padding(.horizontal, 20).frame(minHeight: 44)
+                }
                 Group {
                     switch page {
+                    case "Colors": NativePaletteView()
                     case "App Setup": NativeSetupView()
                     case "Browser settings": NativeDownloadPreferences()
                     case "Browser history": NativeBrowserHistoryView()
@@ -28,16 +36,50 @@ struct EngineRoomView: View {
                     case "Connections": DestinationsView { adding = true }
                     case "Usage": if let remote = destinations.selected { ProviderUsageDetails(store: remote) } else { ContentUnavailableView("Choose a computer", systemImage: "desktopcomputer") }
                     case "Source library": if let remote = destinations.selected { NativeSourceLibraryView().environmentObject(remote) } else { ContentUnavailableView("Choose a computer", systemImage: "desktopcomputer") }
+                    case "MCP connections": mcpConnections
                     case "Resources": resources
                     case "Notifications": activity
                     case "Logs": logs
-                    default: NativeList { Section { Text("Manage your connections, account, usage and running resources."); Text("Providers are configured on the desktop host.").foregroundStyle(.secondary) }; ForEach(Self.pages.dropFirst(), id: \.self) { item in Button(item) { page = item } } }
+                    default: ScrollView {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Manage your connections, account, usage and running resources.")
+                            Text("Providers are configured on the desktop host.").foregroundStyle(.secondary).font(.caption).padding(.bottom, 12)
+                            ForEach(Self.pages.dropFirst(), id: \.self) { item in
+                                Button(item) { page = item }.buttonStyle(.plain).foregroundStyle(NativeTheme.accent)
+                                    .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+                            }
+                        }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
+                    }.accessibilityIdentifier("engine-sections")
                     }
                 }
             }.background(NativeTheme.background).navigationTitle(NativeDesignPreview.enabled ? "" : "Engine Room").navigationBarTitleDisplayMode(.inline).nativeFeaturePage("Engine Room")
-                .toolbar { if ["Resources", "Notifications", "Logs"].contains(page) { Button("Refresh", systemImage: "arrow.clockwise") { Task { await load() } } } }
+                .toolbar { if ["Resources", "MCP connections", "Notifications", "Logs"].contains(page) { Button("Refresh", systemImage: "arrow.clockwise") { Task { await load() } } } }
                 .task(id: page + (destinations.selectedID ?? "")) { await load() }
                 .sheet(isPresented: $adding, onDismiss: { destinations.cancelPairing() }) { NavigationStack { PairView().toolbar { Button("Cancel") { adding = false } } } }
+        }
+    }
+    private var mcpConnections: some View {
+        NativeList {
+            Section("Other computers · " + destinations.selectedLabel) {
+                Text("Informational only. Manage sign-in and recovery on the owning computer. A saved login does not prove this chat is connected.").font(.caption).foregroundStyle(.secondary)
+                if let failure { Text(failure).foregroundStyle(.orange) }
+            }
+            ForEach(value["configurations"].array, id: \.self) { configuration in
+                DisclosureGroup(configuration["name"].string + " · " + configuration["summary"].string) {
+                    Text(configuration["path"].string).font(.caption.monospaced()).textSelection(.enabled)
+                    Text("\(configuration["sessionCount"].int) chat sessions").font(.caption)
+                    ForEach(configuration["consumers"].array.prefix(20), id: \.self) { session in
+                        VStack(alignment: .leading) {
+                            Text(session["chatTitle"].string).font(.headline)
+                            Text(session["provider"].string + " · " + session["connection"].string)
+                            Text("Authentication: " + session["authentication"].string + " · Resource access: " + session["access"].string).font(.caption)
+                            Text("Last checked: " + session["checkedAt"].string + (session["stale"].bool ? " · Stale" : "")).font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    if configuration["sessionCount"].int > 20 { Text("Showing 20 sessions. Open the owning desktop for the complete list.").font(.caption) }
+                }
+            }
+            if value["configurations"].array.isEmpty && failure == nil { Text("No source inventory available. Refresh sources on the owning computer or update that desktop.").foregroundStyle(.secondary) }
         }
     }
     private var resources: some View {
@@ -106,12 +148,12 @@ struct EngineRoomView: View {
         let requestedPage = page, requestedHost = destinations.selectedID
         value = .null; failure = nil
         logCursor = ""; logPrevious = []; accountLogPage = 0; logsLoading = false
-        guard ["Resources", "Notifications", "Logs"].contains(requestedPage) else { return }
-        if requestedPage != "Resources" { await shared.refresh(life) }
+        guard ["Resources", "MCP connections", "Notifications", "Logs"].contains(requestedPage) else { return }
+        if !["Resources", "MCP connections"].contains(requestedPage) { await shared.refresh(life) }
         guard !Task.isCancelled, page == requestedPage, destinations.selectedID == requestedHost else { return }
         guard let remote = destinations.selected else { failure = "Choose a computer to inspect host activity."; return }
         guard remote.connected else { failure = "\(remote.displayName) is offline. Reconnect to refresh " + requestedPage.lowercased() + "."; return }
-        let method = requestedPage == "Resources" ? "resources.list" : requestedPage == "Logs" ? "logs.list" : "notifications.list"
+        let method = requestedPage == "MCP connections" ? "integrations.list" : requestedPage == "Resources" ? "resources.list" : requestedPage == "Logs" ? "logs.list" : "notifications.list"
         do {
             let result = try await remote.request(method)
             guard !Task.isCancelled, page == requestedPage, destinations.selectedID == requestedHost else { return }
@@ -214,7 +256,7 @@ struct NativeBrowserProfilePreferences: View {
             if shared.profilesEnabled && shared.profilesVerified {
                 Button("Add profile") { selected = .null; name = ""; renaming = true }
             }
-            Text("Use iOS Password AutoFill for Bitwarden. Desktop browser extensions and Ghostery filters do not run inside the native browser.").font(.caption).foregroundStyle(.secondary)
+            Text("Apple Passwords and Bitwarden use system Password AutoFill. Open Browser settings to configure AutoFill; desktop browser extensions do not run in the native browser.").font(.caption).foregroundStyle(.secondary)
         }
         .alert(selected == .null ? "New browser profile" : "Rename profile", isPresented: $renaming) {
             TextField("Profile name", text: $name)
@@ -468,6 +510,22 @@ struct NativeHistorySynchronizationView: View {
     }
 }
 
+struct NativePasswordAutoFillPreferences: View {
+    @State private var autofillError: String?
+    var body: some View {
+        Section("Password AutoFill") {
+            Text("Apple Passwords and Bitwarden use system Password AutoFill in website sign-in fields. On iPhone or iPad, enable AutoFill Passwords and Passkeys in Settings → General → AutoFill & Passwords, and select Passwords. On earlier iOS versions, look under Settings → Passwords → Password Options. Apple handles credential selection and Face ID or Touch ID. Desktop browser extensions and Ghostery filters do not run inside the native browser.").font(.caption).foregroundStyle(.secondary)
+            Button("Open Password AutoFill settings") {
+                Task {
+                    do { try await ASSettingsHelper.openCredentialProviderAppSettings(); autofillError = nil }
+                    catch { autofillError = error.localizedDescription }
+                }
+            }.accessibilityIdentifier("password-autofill-settings")
+            if let autofillError { Text(autofillError).font(.caption).foregroundStyle(.secondary) }
+        }
+    }
+}
+
 struct NativeDownloadPreferences: View {
     @EnvironmentObject var shared: SharedAppStore
     @State private var choosing = false
@@ -479,5 +537,112 @@ struct NativeDownloadPreferences: View {
         Button("Use default Downloads folder") { shared.chooseDownloadDirectory(nil) }
         Button("Open downloads folder") { if let folder = try? shared.downloadDirectory() { try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true); var parts = URLComponents(url: folder, resolvingAgainstBaseURL: false); parts?.scheme = "shareddocuments"; if let url = parts?.url { UIApplication.shared.open(url) } } }
         Button("Download history") { showing = true }
-    } }.sheet(isPresented: $choosing) { NativeDownloadFolderPicker { shared.chooseDownloadDirectory($0); choosing = false } }.sheet(isPresented: $showing) { NativeDownloadsView() } }
+    }; NativePasswordAutoFillPreferences() }.sheet(isPresented: $choosing) { NativeDownloadFolderPicker { shared.chooseDownloadDirectory($0); choosing = false } }.sheet(isPresented: $showing) { NativeDownloadsView() } }
+}
+
+
+struct NativePaletteValue: Codable, Equatable {
+    var version = 1
+    var name = "Proteus green"
+    var colors: [String: String] = NativePalette.defaults
+    var brightness: Double = 0
+    var saturation: Double = 0
+    func validated() throws -> Self {
+        guard version == 1, name.count <= 80, colors.count <= 100, colors.values.allSatisfy({ $0.range(of: "^#[a-fA-F0-9]{6}$", options: .regularExpression) != nil }), brightness.isFinite, saturation.isFinite, (-30...30).contains(brightness), (-30...30).contains(saturation) else { throw RemoteError(message: "Choose a valid Proteus palette.") }
+        return self
+    }
+}
+@Observable final class NativePalette {
+    static let shared = NativePalette()
+    static let defaults: [String: String] = ["background": "#19231d", "panel": "#243128", "text": "#edf2ec", "muted": "#8e9e95", "border": "#3d4b40", "accent": "#c2e8a0", "control": "#2e3c31", "hover": "#3b4c3e", "input": "#1c2921", "title": "#1b251d", "tab": "#1b251d", "selectedTab": "#29372b", "tabText": "#b9c5bd", "selectedText": "#ffffff", "sidebar": "#1b251d", "sidebarGroup": "#243025", "sidebarButton": "#29372b", "sidebarSelected": "#3b4833", "sidebarText": "#a8b1a8", "sidebarStrong": "#eaefe8", "sidebarMuted": "#6e786f", "sidebarBorder": "#344135", "chat": "#243128", "user": "#33412d", "assistant": "#2a382d", "composer": "#2e3c31", "userEdge": "#acd58b", "assistantEdge": "#83b6b8", "menu": "#243128", "menuHover": "#2e3c31", "menuText": "#edf2ec", "menuMuted": "#8e9e95", "menuBorder": "#3d4b40", "menuAccent": "#c2e8a0", "progressTrack": "#364639"]
+    static let groups: [(String, [(String, String)])] = [
+        ("Application", [("background", "Page background"), ("panel", "Panels"), ("text", "Text"), ("muted", "Secondary text"), ("border", "Dividers"), ("accent", "Highlights"), ("control", "Controls"), ("hover", "Hover"), ("input", "Input fields")]),
+        ("Title bar and tabs", [("title", "Title bar"), ("tab", "Tab strip"), ("selectedTab", "Selected tab"), ("tabText", "Tab text"), ("selectedText", "Selected tab text")]),
+        ("Sidebar", [("sidebar", "Background"), ("sidebarGroup", "Groups"), ("sidebarButton", "Active feature"), ("sidebarSelected", "Selected item"), ("sidebarText", "Text"), ("sidebarStrong", "Titles"), ("sidebarMuted", "Counts and secondary text"), ("sidebarBorder", "Dividers")]),
+        ("Chat", [("chat", "Chat panel"), ("user", "Your messages"), ("assistant", "Assistant messages"), ("composer", "Composer"), ("userEdge", "Your message border"), ("assistantEdge", "Assistant border")]),
+        ("Menus and downloads", [("menu", "Background"), ("menuHover", "Hover"), ("menuText", "Text"), ("menuMuted", "Secondary text"), ("menuBorder", "Dividers"), ("menuAccent", "Icons and progress"), ("progressTrack", "Progress track")])
+    ]
+    private static let surfaces = Set("background panel border control hover input title tab selectedTab sidebar sidebarGroup sidebarButton sidebarSelected sidebarBorder chat user assistant composer menu menuHover menuBorder progressTrack".split(separator: " ").map(String.init))
+    // OS-owned controls/menu hover/traffic lights have no app color override.
+    static let visibleKeys = Set("background panel text muted border accent input tab selectedTab tabText sidebar sidebarGroup sidebarButton sidebarSelected sidebarText sidebarStrong sidebarMuted sidebarBorder user assistant composer userEdge assistantEdge menu menuText menuMuted menuBorder menuAccent".split(separator: " ").map(String.init))
+    var value: NativePaletteValue { didSet { status = value == saved ? "Saved palette" : "Unsaved changes" } }
+    var saved: NativePaletteValue
+    var status = "Saved palette"
+    init(defaults: UserDefaults = .standard) {
+        let stored = defaults.data(forKey: "proteus.palette.v1").flatMap { try? JSONDecoder().decode(NativePaletteValue.self, from: $0).validated() } ?? NativePaletteValue()
+        value = stored; saved = stored
+    }
+    static func uiColor(_ hex: String) -> UIColor {
+        let bits = UInt32(hex.dropFirst(), radix: 16) ?? 0
+        return UIColor(red: CGFloat((bits >> 16) & 255) / 255, green: CGFloat((bits >> 8) & 255) / 255, blue: CGFloat(bits & 255) / 255, alpha: 1)
+    }
+    func color(_ key: String, adjusted: Bool = true) -> Color {
+        let color = Self.uiColor(value.colors[key] ?? Self.defaults[key] ?? "#ffffff")
+        guard adjusted, Self.surfaces.contains(key) else { return Color(uiColor: color) }
+        var h: CGFloat = 0, s: CGFloat = 0, l: CGFloat = 0, a: CGFloat = 0
+        // Match desktop HSL sliders rather than UIKit's HSV brightness control.
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0
+        color.getRed(&r, green: &g, blue: &b, alpha: &a)
+        let hi = max(r, g, b), lo = min(r, g, b), d = hi - lo
+        l = (hi + lo) / 2; s = d == 0 ? 0 : d / (1 - abs(2 * l - 1))
+        if d != 0 { h = hi == r ? ((g - b) / d).truncatingRemainder(dividingBy: 6) : hi == g ? (b - r) / d + 2 : (r - g) / d + 4 }; h = (h * 60 + 360).truncatingRemainder(dividingBy: 360)
+        l = min(1, max(0, l + value.brightness / 100)); s = min(1, max(0, s + value.saturation / 100))
+        let c = (1 - abs(2 * l - 1)) * s, x = c * (1 - abs((h / 60).truncatingRemainder(dividingBy: 2) - 1)), m = l - c / 2
+        let rgb: (CGFloat, CGFloat, CGFloat) = h < 60 ? (c,x,0) : h < 120 ? (x,c,0) : h < 180 ? (0,c,x) : h < 240 ? (0,x,c) : h < 300 ? (x,0,c) : (c,0,x)
+        return Color(red: rgb.0 + m, green: rgb.1 + m, blue: rgb.2 + m)
+    }
+    func set(_ color: Color, key: String) {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(color).getRed(&r, green: &g, blue: &b, alpha: &a)
+        value.colors[key] = String(format: "#%02x%02x%02x", Int((r*255).rounded()), Int((g*255).rounded()), Int((b*255).rounded())); status = "Unsaved changes"
+    }
+    func save(defaults: UserDefaults = .standard) throws { let data = try JSONEncoder().encode(value.validated()); defaults.set(data, forKey: "proteus.palette.v1"); saved = value; status = "Palette saved on this device" }
+    var export: String { let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]; return (try? String(decoding: encoder.encode(value), as: UTF8.self)) ?? "" }
+}
+struct NativePaletteExport: Transferable {
+    let value: NativePaletteValue
+    static var transferRepresentation: some TransferRepresentation {
+        DataRepresentation(exportedContentType: .json) { item in let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]; return try encoder.encode(item.value) }.suggestedFileName("Proteus palette.json")
+    }
+}
+struct NativePaletteView: View {
+    @State private var palette = NativePalette.shared
+    @State private var importing = false
+    @State private var failure: String?
+    var body: some View {
+        @Bindable var editor = palette
+        NativeList {
+            Section {
+                Text("Tune the actual app. Save keeps this palette on this device. Export or import a palette to use the same colors on another device.")
+                TextField("Palette name", text: $editor.value.name).accessibilityIdentifier("palette-name")
+                Text("Surface lightness \(Int(palette.value.brightness))%")
+                Slider(value: $editor.value.brightness, in: -30...30, step: 1).accessibilityIdentifier("palette-lightness")
+                Text("Surface saturation \(Int(palette.value.saturation))%")
+                Slider(value: $editor.value.saturation, in: -30...30, step: 1).accessibilityIdentifier("palette-saturation")
+                Text("Sliders leave bright text, icons and highlights at their selected colors.").font(.caption).foregroundStyle(.secondary)
+            }
+            ForEach(NativePalette.groups, id: \.0) { group in
+                Section(group.0) { ForEach(group.1.filter { NativePalette.visibleKeys.contains($0.0) }, id: \.0) { item in
+                    ColorPicker(item.1, selection: Binding(get: { palette.color(item.0, adjusted: false) }, set: { palette.set($0, key: item.0) }), supportsOpacity: false).accessibilityIdentifier("palette-" + item.0)
+                } }
+            }
+            Section {
+                ShareLink("Export palette", item: NativePaletteExport(value: palette.value), preview: SharePreview(palette.value.name))
+                Button("Import palette") { importing = true }
+                Text(palette.status).font(.caption).accessibilityIdentifier("palette-status")
+                if let failure { Text(failure).foregroundStyle(.orange) }
+            }
+        }.scrollDismissesKeyboard(.interactively).safeAreaInset(edge: .bottom) {
+            VStack(spacing: 6) {
+                Text(palette.status).font(.caption).accessibilityIdentifier("palette-save-status")
+                HStack {
+                    Button("Save palette") { do { try palette.save() } catch { failure = error.localizedDescription } }.buttonStyle(.borderedProminent).accessibilityIdentifier("palette-save")
+                    Button("Discard changes") { palette.value = palette.saved; palette.status = "Saved palette" }.buttonStyle(.bordered)
+                    Button("Proteus defaults") { palette.value = NativePaletteValue(); palette.status = "Unsaved changes" }.buttonStyle(.bordered)
+                }.font(.caption).frame(minHeight: 44)
+            }.padding(8).frame(maxWidth: .infinity).background(NativeTheme.surface)
+        }.fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
+            do { let url = try result.get(); let access = url.startAccessingSecurityScopedResource(); defer { if access { url.stopAccessingSecurityScopedResource() } }; let data = try Data(contentsOf: url); guard data.count <= 32768 else { throw RemoteError(message: "Choose a palette smaller than 32 KB.") }; palette.value = try JSONDecoder().decode(NativePaletteValue.self, from: data).validated(); palette.status = "Unsaved changes" } catch { failure = error.localizedDescription }
+        }
+    }
 }

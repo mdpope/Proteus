@@ -1,5 +1,14 @@
 # Workspace Markdown picker
 
+## 0.2.28 — source-file dates
+
+Markdown viewers display Created and Modified from the owning source file's birth/modified
+metadata, returned with the same validated content snapshot. Local, Team, paired desktop, web
+and native readers retain their existing root/version/approval boundaries. Unknown creation time
+stays Unknown; ctime/frontmatter/cache/tab dates are not substituted. Content refresh rereads dates,
+and reading never writes source metadata. Native values retain explicit ISO UTC; browser clients
+format the source instant with date, time and timezone. See [release evidence](2026-10-21-browser-chat-release.md).
+
 ## Next release intake — October 19, queued only
 
 BF-2026-10-19-19 in [planned updates](planned-updates.md) records the reported jump to the top

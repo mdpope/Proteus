@@ -1,3 +1,291 @@
+## October 22 — native browser chrome regression repair
+
+The iPhone bottom controls reserve their own safe-area space instead of competing with WebKit
+inside the page stack. A simultaneous, non-cancelling vertical gesture observer on the WebKit view
+handles both document scrolling and nested overflow panels; horizontal navigation and pinch remain
+separate. Top controls hide on upward swipes and return on downward swipes; bottom controls stay
+available. Desktop Apple review packaging uses the proposed `com.wtbtech.proteus.desktop` identity;
+installed browser/update identities are unchanged until migration is verified.
+
+## Apple browser review preparation — October 22, 2026
+
+The macOS package now declares HTTP and HTTPS alongside the existing custom callback schemes.
+OS website links wait for workspace restoration and open new default-profile human tabs. Repeated
+links remain separate tabs; credential URLs/non-web schemes are rejected. Opening a link with all
+windows closed creates a window. No default-browser preference or agent grant is changed.
+Desktop Home provides a URL/search entry without changing restored workspace selections.
+
+`node test/browser-webauthn-ui.mjs` exercises actual embedded Chromium with a disposable CTAP2
+USB authenticator: credential creation, assertion, cryptographic signature, challenge/origin/RP hash,
+user presence/verification and rejection of an unrelated RP. It does not exercise physical security
+keys, Touch ID, iCloud Keychain or Apple's restricted entitlement. `PROTEUS_TEST_EXECUTABLE` selects
+an exact packaged candidate. `node test/external-urls-ui.mjs` checks host open events, repeated links,
+second-instance events, background window creation and Home navigation with synthetic data.
+
+Bitwarden's installed inline menu was verified on the reported KSL form on October 22: the blue
+shield and matching-account suggestion appeared, with no fill or login submitted. Its existing
+“Display suggestions when icon is selected” preference explains why field focus alone did not
+open the list. No extension setting or vault data was changed. Apple Passwords remains a separate
+helper-authorization issue.
+
+## October 21 — iCloud Passwords remains blocked by Apple helper launch policy
+
+The installed 0.2.28 browser still cannot pair with iCloud Passwords. The latest local helper crash
+report identifies Proteus as parent/responsible process and records `SIGKILL (Code Signature Invalid)`.
+Read-only `codesign -d -vvvv` inspection of Apple's installed helper shows parent launch constraints:
+an approved browser signing-identity/team pair or the restricted
+`com.apple.developer.web-browser.public-key-credential` entitlement. The installed Proteus identity
+is absent from those constraints and its signed entitlements do not contain the alternative grant.
+This explains helper termination despite a valid on-disk Apple signature. The EPIPE lifecycle repair
+prevents the uncaught main-process exception; it does not grant Apple helper compatibility.
+
+Apple documents the browser inclusion process and OS-delivered constraints in
+[Password Manager Resources](https://github.com/apple/password-manager-resources#how-apple-uses-web-browser-extension-distribution-information).
+Its [browser credential entitlement](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.web-browser.public-key-credential)
+requires a request by the Account Holder of an organization developer account. Supported remediation
+requires Apple inclusion or an approved/provisioned entitlement, followed by actual pairing/fill
+acceptance. No Apple request was submitted, browser identity spoofed, helper modified or signing
+team changed. Installing the extension is not proof of working Apple Passwords support.
+
+Follow-up UI should report the observed compatibility limitation instead of suggesting repeated
+installation can repair it. This diagnosis changes documentation only; the tested 80115ff176d2
+release remains unchanged and Apple Passwords remains unverified/unavailable on this Mac.
+
+## October 21 source update — video fullscreen pop-out (BF-90)
+
+Website video fullscreen now uses a resizable always-on-top Electron window at the originating
+Proteus window's exact x/y/width/height. The actual Chromium WebContentsView is temporarily moved,
+so playback, cookies, profile, player state and history remain on the same tab. The player retains
+its website/native video controls; a host-owned close/drag strip fades after idle. Close or Escape
+returns the player to its original tab without reloading. Switching shell pages/overlays does not
+hide the pop-out. Tab navigation, destruction and owner-window close clean it up. Pop-out tabs
+cannot be unloaded until returned. Ordinary non-video fullscreen remains a full-window view.
+
+The permission handler previously rejected fullscreen wholesale. Fullscreen now requires an
+available profile and the selected tab (or its current pop-out); Chromium still enforces its own
+fullscreen activation policy. No camera, microphone, filesystem or other permission is widened.
+This uses built-in Electron/Chromium support, with no extension or video URL extraction. Native
+Chromium PiP remains a separate web API with browser-managed size/control limits; exact window
+coverage uses Electron. The synthetic player verifies exact bounds, fading, active playback and
+same-view/history return. Actual YouTube/DRM, Linux and installed acceptance remain separate.
+
+BF-88/89 are now implemented in source: link opening first, editing above Inspect, and Duplicate
+tab with independent identity/history, original profile/placement and fresh per-tab grants.
+
+## Queued October 21 — Duplicate tab (BF-89)
+
+Browser-tab context menus need an in-place Duplicate tab action. Preserve full history/active
+index, original profile and placement, applicable presentation and persistence choices, with a
+fresh independent tab identity. Use the latest owner state; keep source live state intact and
+avoid replaying submissions or duplicating tab-specific permissions. Exact restored page/form
+state has browser limits and must be verified rather than promised. See planned-updates.md for
+scope and loaded/unloaded, profile, history, concurrency and restart acceptance. No implementation
+or build in this intake; the confirmation hold remains active.
+
+## Queued October 21 — browser menu ordering (BF-88)
+
+For link targets, Open Link in New Tab is always first. Copy Selection/Copy and Select All
+move immediately above Inspect Element near the bottom; Copy Link stays among link actions.
+Preserve editable actions, source selection, profile/tab ownership and non-link behavior.
+Queue only: the operator requires build confirmation and this intake changes no menu code.
+
+## 0.2.28 — browser menus, refresh, icons and extension recovery
+
+Address suggestions now use a sandboxed, owner-bound child window instead of hiding the
+underlying native webpage. The address field retains keyboard editing/selection; Escape, blur
+and toolbar disposal close the suggestions. Command/Ctrl+R refreshes the selected tab in its
+originating window; View → Reload Window remains an explicit application recovery operation.
+
+Agent browser/tab observations replace base64 favicon bytes with content-hash identities. Actual
+icons remain in the host/UI, and full history remains where the existing action returned it.
+Hashes are metadata, not new fetch permissions. Identical icons share a hash; similar URLs are
+not assumed to have the same icon. Screenshot image delivery is unchanged.
+
+The pinned extension adapter now contains native pipe/child failures per connection, handles
+UTF-8/partial/multiple frames, bounds queued work and settles timeout/disconnect paths. Profile
+optional grants persist and control native messaging; unload/revocation close the relevant pipes.
+Popup identity includes session and parent window, preventing identical extension URLs from
+reusing another profile's popup. Setup guidance covers Bitwarden desktop biometric integration.
+
+Synthetic Electron/native tests pass. Actual Bitwarden Touch ID, Apple Passwords pairing and the
+original Social blank-screen trigger remain live acceptance; OS helper/signing failures are not
+bypassed. See the [0.2.28 ledger](2026-10-21-browser-chat-release.md) for BF-74/78–82 evidence.
+
+## October 21 — browser continuity during window renderer recovery
+
+If an app-shell renderer exits unexpectedly, the host recovers that window independently. Existing
+native website WebContents/processes, loaded forms and background agent pages remain alive; the
+replacement shell attaches to their stable IDs. Recovery clears only stale shell overview/overlay
+state and skips ordinary background-page unloading. It neither navigates those pages again nor
+restarts the host, scheduler, provider turn or terminal session. An incomplete UI acknowledgement
+fails without automatic replay. See [window recovery](window-management.md) for bounded retries,
+the local fallback and native View → Reload Window. The original reported SIGTRAP remains unknown.
+
+## October 21 — browser issue notifications and device-local loads
+
+Desktop browser load errors and shared-history conflicts appear in Notifications/Needs attention,
+with existing notification preferences. They do not create a page overlay or toast. Recovery
+references remain local to their original host/window and are not published as account activity.
+Unread repeats deduplicate per window and tab/scope. Explicit actions focus the original window;
+closed windows require restoration in Engine Room. Load issues offer Open tab, Reload and View
+logs; history issues offer Keep saved history or preserve pending pages in new tabs. Stale or
+unavailable recovery stays unread, with its durable outbox and retry receipts retained.
+
+A mirrored native WebKit load keeps its guard through redirect chains and duplicate observations.
+Device-local login redirects do not rewrite shared URL/history or truncate Forward. Deliberate
+address, link/form/history actions release the guard, as do SPA changes following recent trusted
+input from the isolated main-frame script. Page scripts cannot synthesize that trusted intent.
+
+iPhone browser navigation retains 48-point controls and removes the extra footer padding and
+nested container safe-area gap; keyboard safe-area handling remains enabled. Tab insertions reveal
+their complete control in either row, including link/chat/tool opens without selecting background
+tabs. Desktop measures after right-side overview control layout; ordinary refresh/reorder preserves
+manual strip scrolling. See the release ledger for source, simulator and installed acceptance.
+
+Standalone top-level pages do not receive a synthetic secondary label/control row. The lower
+strip appears only for actual workspace/project/chat or Team content. The top App overview and
++ remain available. Explicit tab selection is never blocked by a content text selection.
+Extension bookkeeping reflects host selection without requesting it again; extension-initiated
+activation remains supported through the existing host-owned path.
+
+## October 20 — 0.2.27 palette, rate and certificate follow-up
+
+Engine Room → Colors edits the actual app. An unsaved desktop draft is private to its window;
+Save uses current settings revision protection and applies the named palette to other windows
+and future launches. Reset is a draft until saved; Discard restores the saved palette. JSON
+import/export shares only colors/name/slider values, never accounts or browser data. Surface
+lightness/saturation excludes bright text, icons and highlight colors. Native palette storage is
+local to each device, with the same portable format. Native window controls remain OS-owned.
+Desktop saves to its application-data settings file; native saves its app preferences. Web Colors
+uses versioned JSON in this browser profile, scoped to the signed-in account and restored before
+rendering on relaunch. Separate browser profiles/devices retain separate palettes. Saving in a web
+tab does not change any connected computer's palette; another web tab observes the saved revision.
+
+Download rates use recent received-byte deltas, shown in KB/s (1 KB = 1,000 bytes), with paused
+and completed rates removed and stalled rates dropping to zero. Desktop history remains private
+to its window; mobile has one in-memory app-session list, no window/session manager and no durable
+download history. Existing downloaded files and destination preferences remain intact.
+
+The certificate observer registers Security/Network observation before the first load and invalidates only on
+main-document replacement, preserving the chain through iframe and same-document navigation.
+A bounded per-partition Chromium verification observer can supply a chain whose subject/validity
+matches the current document TLS details. It always returns Electron's -3 default-verification
+result: no trust bypass, Certificate Transparency override or second network connection. A viewer
+query borrows the owned debugger without detaching other clients; foreign debugger ownership is
+preserved. HTTP, failed and unloaded pages report unavailable information honestly. Native uses
+the current WKWebView serverTrust chain. Exact release verification is in the release ledger.
+
+## October 20 — browser controls preview contract
+
+Human-opened tabs now start unshared. Use the robot button to share/revoke page access; an agent can call request-access for an explicit native human decision. Agent-created tabs start shared. Legacy implicit availability is not a grant. The host persists logical-tab choices across recreation/window aliases, fails closed on unreadable preferences and gates every page backend. Shared pages remain controllable while another project/chat is selected. Listing and tab organization remain separate. This supersedes the October 18 no-sharing wording retained below as history.
+
+The page menu includes one persistent Block video autoplay in all tabs setting, spanning windows/profiles. It blocks script/declarative video before document activation and leaves manual Play available; live toggles do not reload forms. The preference is not an adversarial-content security boundary. Disposable real-media acceptance is separate from account-specific YouTube verification.
+
+Downloads open a native child popup over the website with file icons, separators and trailing pause/resume/restart/folder actions. Resume depends on Electron/server support; restart is a fresh safe URL request in its original profile, not a replayed form. Metadata lasts until its owning window closes, is not written as download history, and old history metadata is retired without deleting files. Saved folder preferences remain. Item commands cannot act on another window's list.
+
+Navigation replies update the initiating tab, not the current selection; redirect results are authoritative. The host rejects a shared-history response when native URL/entry changed after capture. Find uses renderer content on blank/setup tabs, debounces typing and cancels older native searches. Team surfaces retain identity as URL changes and skip identical bounds updates. Exact installed-code wrong-tab race is reproduced; the full operator flashing sequence remains separately qualified.
+
+## October 20 — Apple Passwords preview integration
+
+Engine Room → Browser Preferences offers Apple Passwords setup/open on Mac for each profile.
+It downloads only Apple’s official iCloud Passwords extension (`pejdijmoenmkgeppbflobdenhhabjlaj`)
+through the existing Chrome Web Store installer and permission review. Installation is optional;
+cancel leaves the profile unchanged. Apple’s native helper handles pairing/unlock. Proteus does not
+import the vault, and its browser tools do not offer an extension-background or vault endpoint.
+Passwords deliberately filled into an ordinary website are still part of that website; do not
+promise that extension installation makes filled fields inaccessible to an authorized page agent.
+
+iPhone/iPad’s persistent WKWebView browser uses system Password AutoFill. Native Browser settings
+now explains Apple Passwords and offers Apple’s public `ASSettingsHelper` provider-settings shortcut.
+The operator chooses Passwords and approves Face ID/Touch ID in the system UI. iOS 17 remains the
+minimum; settings names differ on older systems. No Chrome/Safari extension injection is implied.
+Apple documents [WKWebView password handling](https://developer.apple.com/documentation/authenticationservices/password-use-in-web-browsers)
+and [Password AutoFill setup](https://support.apple.com/en-us/120758).
+
+The official extension installs and presents its unpaired setup screen. On this Mac, its helper
+startup fails: macOS records `SIGKILL (Code Signature Invalid)`, while an on-disk signature check
+passes. A direct empty-input launch outside Electron is also killed. This is an observed OS/helper
+execution blocker, not proof of an Electron limitation or a repaired autofill flow. Retest a healthy
+helper with the signed normal build. Pairing, actual fill/save and physical devices remain unverified.
+The preview labels this integration experimental. Disabling/removing/reloading an extension closes
+its own profile popups before their renderer is unloaded. Popups now size to content; the Apple popup uses
+its own supported window mode plus a scoped readable green palette, preserving vendor contents. Electron’s optional
+[Touch ID WebAuthn configuration](https://www.electronjs.org/docs/latest/api/app#appconfigurewebauthnoptions)
+creates device-bound keys; iCloud passkeys need separate browser API integration/acceptance.
+
+## October 20 — background control, menus, scale and overview
+
+Switching tabs/projects hides presentation only. It must preserve the same native page, browser
+partition and scoped automation connection. Active agent turns keep controlled pages unthrottled
+and protect them from retention between calls; completion and human pause release that protection.
+Unloading is distinct from selection and rejects active turns. Synthetic acceptance includes actual
+hidden screenshot pixels, coordinate input, direct/Playwright MCP actions, reconnection and no
+selection/focus stealing. The operator's original exact failure is still unreproduced.
+
+Native WebContentsView pages and shell HTML are different compositing surfaces. Legacy shell
+overlays explicitly hide the native page, which explains their white/blank backdrop; CSS z-index
+alone cannot place shell HTML above it. Compact popup clients now use a sandboxed child BrowserWindow
+above the website, including Ghostery and tab menus. Inline New chat removes another modal path.
+Large remaining shell dialogs still use the legacy hide behavior; a general native overlay surface
+is a possible later change, not a current requirement to rewrite the browser engine.
+
+Page scale persists in private browser-sites storage by hashed account-owned partition and
+registrable domain, with private suffix boundaries. It applies across paths/subdomains/schemes,
+all matching loaded views, new windows and restart. Local/IP fallback keys retain ports. Empty or
+nonwebsite pages do not overwrite a domain preference. Store only domain/percent/update metadata,
+never complete URLs, queries, credentials or page contents. Menu failures preserve the last valid
+preference. Browser visual pinch remains separate: at baseline a fresh small outward gesture may
+open overview; a gesture that reaches baseline from zoomed content must end first. Remove CSS title
+casing from overview captions so path case remains intact. See desktop-preview.md for acceptance.
+
+## October 20 — explicit robot pause and background-control report
+
+The desktop robot is a working per-tab pause/resume button again, retaining ordinary default
+agent access across profiles. Host-owned private pause preferences use stable logical identity,
+atomic revision-checked persistence and fail closed on unreadable records. Pause disconnects owned
+automation sessions, blocks direct and both MCP page routes and survives unload/recreation;
+Resume reuses existing page/session/history. Listing and organization remain independent. Agents
+must respect agentPaused and cannot resume it themselves. Main/Team UI and ordinary named/default
+profile/extension fixtures pass. Existing October 18 status-only wording below is historical.
+
+BF-2026-10-20-48 retains the operator's reported control loss after browser/chat switches for the
+normal build. Repeated synthetic switches and real direct/MCP clicks/snapshots/reconnection pass
+without replacing the native page or losing the chat draft. No actual failure cause or fix is
+claimed. Capture the real host/tab/tool error and lifecycle before changing loading/authorization.
+
+## October 20 — functional isolated preview
+
+The operator authorizes the current window preview and associated iPad repair source.
+See [window management](window-management.md) for current implementation, ownership and validation;
+earlier chat-only/pending-implementation entries below describe historical intake. Preview Team
+content is canonical across windows; top-level navigation and selection stay independent. The
+existing overview icon now lives at the right of the universal secondary strip, beside New tab,
+instead of the address bar. Named window recovery resolves current shared contents before restore.
+Native source fixes chat pinch observation, readable headings, 44-point navigation rows, Team
+account/editor layout and preservation of mixed-type tab descriptors. Production/physical-device
+acceptance remains separate.
+
+## October 20 — reported iPad chat pinch-to-overview regression
+
+BF-2026-10-20-42 reports that zoom-out pinch does not open tab overview from an iPad chat tab.
+Reproduce on the chat surface and restore the gesture while retaining ordinary zoom/scroll and
+correct owner/container/card selection. Browser-only acceptance does not cover this regression.
+Earlier simulator/package success does not establish the current physical workflow. This is
+next-release intake; no native change or device test occurred. The subsequent supplied iPad
+screenshots identify 0.2.26 (2610.20.1) on Home and document other layout symptoms; static images
+cannot verify this gesture failure or repair. See [planned updates](planned-updates.md).
+
+## October 20 — multiwindow shared content and integrated title-bar intake
+
+BF-2026-10-20-39 clarifies shared browser identity/URL/history and Close across windows viewing
+the same Team Tools/workspace/project/chat container, while top-level standalone browser tabs
+and each window's selection stay independent. The secondary-window Team Tools duplicate/wrong-tab
+report remains unreproduced; source review finds window-specific Team scope IDs that contradict
+the clarified contract. Preserve stable identities and revision/retry protection; do not remove
+matching-URL tabs as an assumed repair. BF-40 adds named window recovery; BF-41 selects Unified
+strip with existing close/underline/divider styling for the revised chat draft before a Proteus demo. Runtime and live acceptance remain
+pending. See [window management](window-management.md) for the ownership/restore contract.
+
 ## Queued X filtering compatibility and Developer tools menu fixes
 
 BF-2026-10-19-27 in [planned updates](planned-updates.md) records a live installed-0.2.25
@@ -960,3 +1248,14 @@ restores them; double tap and More remain available. Horizontal drags on the une
 address select adjacent visible container tabs in their current order, with no wrap or history
 traversal. Browser snapshots wait for scrolling/deceleration/zoom to stop and coalesce; thumbnail
 encoding, writes and retention run on a serial utility queue. Current acceptance is in the ledger.
+
+## Browser page scale
+
+The desktop browser … menu includes Page scale with −, its current percentage and +. Clicking
+the percentage resets to 100%. The controls read and change the native website's zoom factor;
+they leave the application interface scale unchanged. Chromium retains its normal origin/profile
+zoom behavior. The popup stays open for repeated adjustments and dismisses with Escape or loss
+of focus. Existing website-data, site-version, certificate, extension and Developer tools actions
+remain in the menu. The host binds actions to the captured page and validates its lifetime;
+the sandboxed menu has no website, credential or general application API. Preview validation and
+production deployment are recorded separately in desktop-preview.md.

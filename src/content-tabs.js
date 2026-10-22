@@ -32,12 +32,20 @@ export function workspaceContentScopes(session){
   const scopes=[];
   for(const parent of session?.tabs||[])if(!parent.hostId&&['run','workspace'].includes(parent.type))scopes.push(make(parent.type==='workspace'?(parent.projectId?'project':'workspace'):'chat',parent.projectId||parent.workspaceId||parent.runId||parent.id,session.tabs.filter(child=>child.parentId===parent.id),parent.type==='workspace'?(parent.projectId?'project:'+parent.projectId:'workspace:'+parent.workspaceId):parent.runId||parent.id));
   scopes.push(make('main',session?.windowId&&session.windowId!=='main'?'window:'+session.windowId:'main',(session?.tabs||[]).filter(tab=>!tab.parentId&&!['workspace'].includes(tab.type)),'main'));
-  scopes.push(make('team',session?.windowId&&session.windowId!=='main'?'window:'+session.windowId:'team',session?.team?.tabs||[],'team'));
+  scopes.push(make('team',session?.sharedTeam?'team':session?.windowId&&session.windowId!=='main'?'window:'+session.windowId:'team',session?.team?.tabs||[],'team'));
   return scopes;
 }
 /** Host-owned descriptors only. Selection, page state and document approval never enter this store. */
 export class ContentTabs {
   constructor(home,{onChange=()=>{},history}={}){this.file=path.join(home,'content-tabs.json');this.sourcesFile=path.join(home,'content-tab-sources.json');this.onChange=onChange;this.historyStore=history;this.asyncTail=Promise.resolve();}
+  migrateWindowTeams(){
+    const data=this.read();if(data.sharedTeamWindowsVersion===1)return;
+    const current=data.scopes['team:team'],tabs=(current?.tabs||[]).map(contentTab);
+    for(const key of Object.keys(data.scopes).sort())if(/^team:window:[a-f0-9-]{36}$/i.test(key))for(const raw of data.scopes[key].tabs){const tab=contentTab(raw);if(!tabs.some(existing=>existing.id===tab.id))tabs.push(tab);}
+    if(tabs.length>1000)throw Error('Shared Team navigation exceeds its limit. Original scopes were preserved.');
+    if(tabs.length||current)data.scopes['team:team']={...current,revision:(current?.revision||0)+1,tabs,desktopSeedVersion:2};
+    data.sharedTeamWindowsVersion=1;this.write(data);
+  }
   navigationKey(scope,id,tabId){this.key(scope,id);if(!ID.test(tabId||''))throw new Error('Choose an existing browser tab.');return `${scope}:${id}:${tabId}`;}
   async history({scope,id,tabId,...query}){const tab=this.get(scope,id).tabs.find(tab=>tab.id===tabId&&tab.type==='browser');if(!tab){const error=new Error('This browser tab is no longer open.');error.code='NAVIGATION_TAB_CLOSED';throw error;}return this.historyStore.navigationGet({...query,tabId:this.navigationKey(scope,id,tabId)});}
   async getAsync(scope,id){

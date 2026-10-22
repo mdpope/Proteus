@@ -22,7 +22,7 @@ function fixture(t,{query='needle',native=true,find}={}) {
     return {...captured,find:(query,direction)=>{calls.push({...captured,query,direction});scroll=direction?scroll+10:0;return find?find(calls.at(-1)):{activeMatchOrdinal:direction===1?2:1,matches:8};},stop:()=>{stops.push(captured.id);}};
   }});
   t.after(()=>{for(const [key,descriptor] of saved){if(descriptor)Object.defineProperty(globalThis,key,descriptor);else delete globalThis[key];}});
-  return {...api,input,count,panel,calls,stops,next:()=>buttons.get('[data-next]').onclick(),prev:()=>buttons.get('[data-prev]').onclick(),type:value=>{input.value=value;input.oninput();},setTarget:value=>{target=value;},setText:value=>{text=value;},manualScroll:value=>{scroll=value;},get scroll(){return scroll;},get reveals(){return reveals;},mutate:()=>{observers.at(-1).callback();const queued=[...timers.values()];timers.clear();for(const callback of queued)callback();}};
+  return {...api,input,count,panel,calls,stops,next:()=>buttons.get('[data-next]').onclick(),prev:()=>buttons.get('[data-prev]').onclick(),type:value=>{input.value=value;input.oninput();const queued=[...timers.values()];timers.clear();for(const callback of queued)callback();},setTarget:value=>{target=value;},setText:value=>{text=value;},manualScroll:value=>{scroll=value;},get scroll(){return scroll;},get reveals(){return reveals;},mutate:()=>{observers.at(-1).callback();const queued=[...timers.values()];timers.clear();for(const callback of queued)callback();}};
 }
 
 test('unrelated native mutations preserve manual scroll and a later match without more find/stop calls',async t=>{

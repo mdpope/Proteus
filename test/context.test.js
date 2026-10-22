@@ -272,3 +272,51 @@ test('only-selected Copilot configuration removes legacy MCP/skill discovery and
   assert.equal(config.skipCustomInstructions, true); assert.equal(config.enableConfigDiscovery, false); assert.equal(config.enableOnDemandInstructionDiscovery, false);
   assert.match(config.systemMessage.content, /Selected instructions/);
 });
+
+test('legacy favorites merge once for every workspace; new workspaces and restart keep global removals', t => {
+  const f = fixture(t);
+  f.write(path.join(f.repo, 'skills', 'one', 'SKILL.md'), '# One');
+  f.write(path.join(f.repo, 'skills', 'two', 'SKILL.md'), '# Two');
+  const entries = f.context.refresh().entries, [one, two] = entries.map(e => e.id);
+  const file = f.context.file, legacy = JSON.parse(fs.readFileSync(file));
+  delete legacy.favoritesConfigurationVersion;
+  legacy.favorites = [one]; legacy.workspaces[0].favorites = [one];
+  legacy.workspaces.push({...structuredClone(legacy.workspaces[0]), id:'second', name:'Second', favorites:[two, one]});
+  legacy.extensionField = {preserve:true};
+  fs.writeFileSync(file, JSON.stringify(legacy));
+  const store = new ContextStore(path.join(f.home,'app'), f.settings);
+  assert.deepEqual(store.get('second').favorites, [one,two]);
+  assert.ok(store.config().workspaces.every(w => JSON.stringify(w.favorites) === JSON.stringify([one,two])));
+  assert.deepEqual(store.config().extensionField,{preserve:true});
+  const before = store.config();
+  store.favorite(one,false,before.revision,'second');
+  assert.throws(() => store.favorite(two,false,before.revision), /changed/);
+  store.mutate(c => c.workspaces.push({...structuredClone(c.workspaces[0]),id:'third',name:'Third',favorites:[]}),store.config().revision);
+  assert.deepEqual(store.get('third').favorites,[two]);
+  store.deleteWorkspace('second',store.config().revision);
+  const restarted = new ContextStore(path.join(f.home,'app'),f.settings);
+  assert.deepEqual(restarted.get().favorites,[two]);
+  restarted.mutate(c => { c.workspaces[0].favorites = []; }, restarted.config().revision);
+  assert.ok(restarted.config().workspaces.every(w => w.favorites.length === 0));
+  assert.equal(restarted.capture().entries.length,0);
+});
+
+test('a global favorite from another workspace never imports automatic loading or grants', t => {
+  const f = fixture(t);
+  f.write(path.join(f.library,'AGENTS.md'),'# Library instructions');
+  f.context.mutate(c => {
+    c.workspaces.push({...structuredClone(c.workspaces[0]),id:'other',name:'Other',cwd:f.library,universalFolders:[f.library]});
+  },f.context.config().revision);
+  // Exercise a catalog entry discovered as automatic in its source scope.
+  f.context.catalog.entries.find(e => e.path === path.join(f.library,'AGENTS.md')).defaultMode = 'universal';
+  const source = f.context.get('other').entries.find(e => e.path === path.join(f.library,'AGENTS.md'));
+  assert.equal(source.mode,'universal');
+  const before = f.context.capture(), approvals = structuredClone(f.context.scope().approvals);
+  f.context.favorite(source.id,true,f.context.config().revision,'other');
+  assert.deepEqual(f.context.get().favorites,[source.id]);
+  assert.equal(f.context.get().entries.find(e=>e.id===source.id).mode,'available');
+  assert.deepEqual(f.context.capture().entries,before.entries);
+  assert.deepEqual(f.context.capture().workspace,before.workspace);
+  assert.deepEqual(f.context.scope().approvals,approvals);
+  assert.equal(f.context.capture({workspaceId:'other'}).entries.length,1,'Original workspace default still loads');
+});

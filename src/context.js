@@ -10,7 +10,7 @@ import { agentMetadata } from './agent-tools.js';
 const hash = value => createHash('sha256').update(value).digest('hex');
 const modes = new Set(['universal', 'workspace', 'available', 'disabled']);
 export const discoveryExclusions = ['.git', 'node_modules', '.venv', 'venv', '__pycache__', '.next', 'bin', 'obj', 'dist', 'build', '.obsidian', '.trash', 'vendor', '.cache', '.build', 'DerivedData', '.swiftpm', 'Pods', 'Carthage'];
-const scopedKeys = ['libraryFolders', 'universalFolders', 'documents', 'modes', 'favorites', 'workspaceFiles', 'defaults', 'discovery', 'approvals'];
+const scopedKeys = ['libraryFolders', 'universalFolders', 'documents', 'modes', 'workspaceFiles', 'defaults', 'discovery', 'approvals'];
 // Compile this operation's current policy once, rather than constructing each
 // expression again for every source path. No matcher survives a settings read.
 const exclusionMatcher = (patterns, inclusions = []) => {
@@ -70,14 +70,24 @@ export class ContextStore {
       for (const profile of data.workspaces) for (const key of scopedKeys) profile[key] ??= structuredClone(data[key] ?? emptyScope()[key]);
       data.workspaceConfigurationVersion = 1; atomicJSON(this.file, data);
     }
+    // Merge legacy bookmarks once. Later removals must not be resurrected by
+    // stale workspace copies; the root list is authoritative after migration.
+    if (!data.favoritesConfigurationVersion) {
+      const lists = [data.favorites ?? [], ...data.workspaces.map(w => w.favorites ?? [])];
+      if (lists.some(list => !Array.isArray(list) || list.some(id => typeof id !== 'string'))) throw new Error('Favorites must be source IDs.');
+      data.favorites = unique(lists.flat()); data.favoritesConfigurationVersion = 1;
+      for (const profile of data.workspaces) profile.favorites = [...data.favorites];
+      atomicJSON(this.file, data);
+    }
     if (!skipRefresh) this.refresh();
   }
   config() {
-    const data = readJSON(this.file);
+    const data = readJSON(this.file), diskRevision = revision(data);
     if (data.schemaVersion !== 1 || !Array.isArray(data.workspaces) || !data.workspaces.length || !data.modes || !Array.isArray(data.libraryFolders) || !Array.isArray(data.documents) || !Array.isArray(data.workspaceFiles)) throw new Error('Invalid context.json.');
     if (data.favorites !== undefined && (!Array.isArray(data.favorites) || data.favorites.some(id => typeof id !== 'string'))) throw new Error('Favorites must be source IDs.');
+    for (const workspace of data.workspaces) workspace.favorites = [...(data.favorites || [])];
     const profile = data.workspaces.find(w => w.id === data.defaultWorkspaceId);
-    return { ...data, ...Object.fromEntries(scopedKeys.map(key => [key, structuredClone(profile?.[key] ?? data[key] ?? emptyScope()[key])])), file: this.file, revision: revision(data) };
+    return { ...data, ...Object.fromEntries(scopedKeys.map(key => [key, structuredClone(profile?.[key] ?? data[key] ?? emptyScope()[key])])), file: this.file, revision: diskRevision };
   }
   roots(config = this.config()) { return unique(config.workspaces.flatMap(w => [w.cwd, ...(w.additionalDirectories || []), ...(w.libraryFolders || []), ...(w.universalFolders || [])])); }
   scope(workspaceId, config = this.config()) { const profile = config.workspaces.find(w => w.id === (workspaceId || config.defaultWorkspaceId)); if (!profile) throw new Error('Workspace not found.'); return profile; }
@@ -87,7 +97,8 @@ export class ContextStore {
     const config = this.scopedConfig(workspaceId,options);
     const profile = options.execution?this.executionScope(workspaceId,config):this.scope(workspaceId,config), roots = [profile.cwd,...profile.additionalDirectories,...profile.libraryFolders,...profile.universalFolders];
     const excluded = exclusionMatcher(profile.discovery.exclusions,profile.discovery.inclusions);
-    return { ...config, ...this.catalog, approvalProfiles: this.permissionStore?.get().workspaces.filter(item => item.workspaceId === profile.id) || [], entries: this.catalog.entries.filter(entry => config.documents.some(doc => doc.path === entry.path) || config.workspaceFiles.includes(entry.path) || entry.roots.some(root => roots.includes(root) && !excluded(entry.path,root)) || Object.hasOwn(config.modes,entry.id) || config.favorites.includes(entry.id) || (profile.defaults.selectedIds||[]).includes(entry.id)).map(entry => ({ ...entry, mode: config.modes[entry.id] || entry.defaultMode })) };
+    const localSource = entry => config.documents.some(doc => doc.path === entry.path) || config.workspaceFiles.includes(entry.path) || entry.roots.some(root => roots.includes(root) && !excluded(entry.path,root));
+    return { ...config, ...this.catalog, approvalProfiles: this.permissionStore?.get().workspaces.filter(item => item.workspaceId === profile.id) || [], entries: this.catalog.entries.filter(entry => config.documents.some(doc => doc.path === entry.path) || config.workspaceFiles.includes(entry.path) || entry.roots.some(root => roots.includes(root) && !excluded(entry.path,root)) || Object.hasOwn(config.modes,entry.id) || config.favorites.includes(entry.id) || (profile.defaults.selectedIds||[]).includes(entry.id)).map(entry => ({ ...entry, defaultMode: localSource(entry) ? entry.defaultMode : entry.kind === 'mcp' ? 'disabled' : 'available', mode: config.modes[entry.id] || (localSource(entry) ? entry.defaultMode : entry.kind === 'mcp' ? 'disabled' : 'available') })) };
   }
   save(value, expectedRevision) {
     if (this.config().revision !== expectedRevision) throw new Error('Workspace settings changed. Refresh before saving.');
@@ -96,6 +107,12 @@ export class ContextStore {
     const existingRoots = new Set(this.roots(previous));
     const existingDocuments = new Set(previous.workspaces.flatMap(profile => profile.documents || []).map(doc => doc.path));
     const validateFolder = folder => { try { return directory(folder); } catch (error) { if (existingRoots.has(folder)) return folder; throw error; } };
+    // Honor explicit legacy scoped edits, but never let a new workspace's empty
+    // initialization or unchanged copies replace the shared list.
+    const edits = config.workspaces.filter(w => previous.workspaces.some(old => old.id === w.id) && w.favorites !== undefined && revision(w.favorites) !== revision(previous.favorites)).map(w => w.favorites);
+    if (revision(config.favorites) !== revision(previous.favorites)) edits.push(config.favorites);
+    if (new Set(edits.map(value => revision(value))).size > 1) throw new Error('Conflicting shared favorites. Refresh before saving.');
+    config.favorites = edits[0] ?? previous.favorites;
     const defaultProfile = config.workspaces.find(w => w.id === config.defaultWorkspaceId);
     // Legacy callers edit the top-level projection. Explicit scoped callers edit profiles.
     for (const key of scopedKeys) if (revision(config[key]) !== revision(previous[key])) defaultProfile[key] = structuredClone(config[key]);
@@ -113,6 +130,7 @@ export class ContextStore {
       if (!Number.isInteger(workspace.discovery.maxFolders) || workspace.discovery.maxFolders < 1 || workspace.discovery.maxFolders > 1000000) throw new Error('Invalid folder scan budget.');
       if (!['ask','custom','trusted','autopilot'].includes(workspace.approvals.mode) || !Array.isArray(workspace.approvals.folders) || !Array.isArray(workspace.approvals.rules)) throw new Error('Invalid workspace approvals.');
       for (const grant of workspace.approvals.folders) { grant.path = directory(grant.path); if (!['read','read-write'].includes(grant.access)) throw new Error('Invalid folder access.'); }
+      workspace.favorites ??= [];
       if (!Array.isArray(workspace.favorites) || workspace.favorites.some(id => typeof id !== 'string')) throw new Error('Favorites must be source IDs.');
       if (workspace.defaults.includeDefaults !== undefined && typeof workspace.defaults.includeDefaults !== 'boolean' || workspace.defaults.selectedIds !== undefined && (!Array.isArray(workspace.defaults.selectedIds) || workspace.defaults.selectedIds.some(id => typeof id !== 'string'))) throw new Error('Invalid workspace chat defaults.');
       for (const rule of workspace.approvals.rules) if (!['shell','mcp','custom-tool','url'].includes(rule.kind)) throw new Error('Invalid saved approval rule.');
@@ -126,6 +144,8 @@ export class ContextStore {
     for (const mode of Object.values(config.modes)) if (!modes.has(mode)) throw new Error('Invalid context selection mode.');
     if (!Array.isArray(config.favorites || []) || (config.favorites || []).some(id => typeof id !== 'string')) throw new Error('Favorites must be source IDs.');
     config.favorites = unique(config.favorites || []);
+    config.favoritesConfigurationVersion = 1;
+    for (const workspace of config.workspaces) workspace.favorites = [...config.favorites];
     for (const key of scopedKeys) config[key] = structuredClone(defaultProfile[key]);
     atomicJSON(this.file, config);
     const scanShape = value => value.workspaces.map(w => [w.cwd, w.additionalDirectories, w.libraryFolders, w.universalFolders, w.documents, w.workspaceFiles, w.discovery]);
@@ -149,9 +169,9 @@ export class ContextStore {
     if (typeof enabled !== 'boolean' || !this.get(workspaceId).entries.some(e => e.id === id)) throw new Error('Choose an existing context source.');
     const config = this.config();
     if (config.revision !== expectedRevision) throw new Error('Workspace settings changed. Refresh before saving.');
-    const profile = this.scope(workspaceId, config);
-    profile.favorites = profile.favorites.filter(value => value !== id);
-    if (enabled) profile.favorites.push(id);
+    config.favorites = config.favorites.filter(value => value !== id);
+    if (enabled) config.favorites.push(id);
+    for (const profile of config.workspaces) profile.favorites = [...config.favorites];
     delete config.file; delete config.revision; atomicJSON(this.file, config); return this.get(workspaceId);
   }
   mutate(change, expectedRevision) {
@@ -194,7 +214,7 @@ export class ContextStore {
     profile.favorites = (configuration.favorites || []).map(source => ids.get(source)).filter(Boolean);
     const defaults = configuration.defaults || {};
     profile.defaults = { ...Object.fromEntries(['includeDefaults','provider','model','reasoningEffort','contextTier','serviceTier'].filter(key => Object.hasOwn(defaults,key)).map(key => [key,defaults[key]])), selectedIds:(defaults.selectedIds || []).map(source => ids.get(source)).filter(Boolean), agentId:ids.get(defaults.agentId) || null };
-    this.mutate(config => config.workspaces.push(profile), expectedRevision);
+    this.mutate(config => { config.favorites = unique([...config.favorites, ...profile.favorites]); config.workspaces.push(profile); }, expectedRevision);
     return { ...this.get(id), copiedWorkspaceId:id };
   }
   async refreshAsync(options = {}) {

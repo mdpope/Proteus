@@ -3,6 +3,7 @@ import SwiftUI
 import UIKit
 import WebKit
 import CryptoKit
+import JavaScriptCore
 import Security
 import ImageIO
 #if DEBUG
@@ -96,12 +97,39 @@ struct MainBrowserSelectionRequest: Equatable {
     @Published private(set) var browserNavigation: [String: BrowserNavigationState] = [:]
     @Published var linkChatDraft: BrowserChatDraft?
     @Published var exportFile: BrowserExportFile?
+    @Published var blockVideoAutoplay = UserDefaults.standard.bool(forKey: "proteus.block-video-autoplay")
+    @Published private(set) var pageScales = UserDefaults.standard.dictionary(forKey: "proteus.page-scales.v1") as? [String: Int] ?? [:]
+    private static let domainContext: JSContext? = {
+        guard let url = Bundle.main.url(forResource: "domain-runtime", withExtension: "js", subdirectory: "markdown"), let script = try? String(contentsOf: url, encoding: .utf8), let context = JSContext() else { return nil }
+        context.evaluateScript(script); return context
+    }()
+    static func pageScaleDomain(_ url: URL) -> String? {
+        guard ["http", "https"].contains(url.scheme), let host = url.host?.lowercased(), url.user == nil, url.password == nil else { return nil }
+        let result = domainContext?.objectForKeyedSubscript("tldts")?.invokeMethod("getDomain", withArguments: [host, ["allowPrivateDomains": true]])
+        return result?.isString == true ? result?.toString() : host
+    }
+    private func pageScaleKey(_ tab: BrowserDescriptor, url: URL) -> String? { Self.pageScaleDomain(url).map { account + "|" + tab.profileId + "|" + $0 } }
+    func pageScale(_ tab: BrowserDescriptor) -> Int { guard let url = tab.url.flatMap(URL.init(string:)), let key = pageScaleKey(tab, url: url) else { return 100 }; return pageScales[key] ?? 100 }
+    func applyPageScale(_ id: String, url: URL) { guard let tab = browserTabs.first(where: { $0.id == id }), let key = pageScaleKey(tab, url: url) else { return }; browserViews[id]?.pageZoom = CGFloat(pageScales[key] ?? 100) / 100 }
+    func adjustPageScale(_ id: String, delta: Int) {
+        guard let tab = browserTabs.first(where: { $0.id == id }), let url = tab.url.flatMap(URL.init(string:)), let key = pageScaleKey(tab, url: url) else { return }
+        pageScales[key] = delta == 0 ? 100 : min(500, max(25, pageScale(tab) + delta)); UserDefaults.standard.set(pageScales, forKey: "proteus.page-scales.v1")
+        for row in browserTabs where row.url.flatMap(URL.init(string:)).flatMap({ pageScaleKey(row, url: $0) }) == key { if let url = row.url.flatMap(URL.init(string:)) { applyPageScale(row.id, url: url) } }
+    }
+    private func videoScript() -> String { """
+        (()=>{const key=Symbol.for('proteus.video-autoplay'),enabled=\(blockVideoAutoplay ? "true" : "false");if(window[key]){window[key].enabled=enabled;return;}const policy={enabled,activated:false};Object.defineProperty(window,key,{value:policy});for(const type of ['pointerdown','touchend','keydown'])document.addEventListener(type,event=>{if(event.isTrusted)policy.activated=true;},true);const allowed=media=>!policy.enabled||media.tagName!=='VIDEO'||policy.activated||navigator.userActivation?.hasBeenActive;const original=HTMLMediaElement.prototype.play;HTMLMediaElement.prototype.play=function(...args){return allowed(this)?original.apply(this,args):Promise.reject(new DOMException('Press Play to start the video.','NotAllowedError'));};document.addEventListener('play',event=>{if(event.target instanceof HTMLMediaElement&&!allowed(event.target))event.target.pause();},true);})();
+        """ }
+    private func installVideoPolicy(_ view: WKWebView) { view.configuration.userContentController.addUserScript(WKUserScript(source: videoScript(), injectionTime: .atDocumentStart, forMainFrameOnly: false)) }
+    func setBlockVideoAutoplay(_ value: Bool) {
+        blockVideoAutoplay = value; UserDefaults.standard.set(value, forKey: "proteus.block-video-autoplay")
+        for view in browserViews.values { let controller = view.configuration.userContentController; let scripts = controller.userScripts.filter { !$0.source.contains("Symbol.for('proteus.video-autoplay')") }; controller.removeAllUserScripts(); for script in scripts { controller.addUserScript(script) }; installVideoPolicy(view); if let native = view as? NativeLinkWebView { native.updateVideoPolicy(videoScript()) } else { view.evaluateJavaScript(videoScript(), completionHandler: nil) } }
+    }
     @Published var downloadError: String?
     @Published var downloads: [UUID: NativeLinkDownload] = [:]
-    @Published var downloadHistory: [NativeDownloadRecord] = (UserDefaults.standard.data(forKey: "proteus.download-history").flatMap { try? JSONDecoder().decode([NativeDownloadRecord].self, from: $0) } ?? []).map { row in var value = row; if value.state == "downloading" { value.state = "interrupted" }; return value }
+    @Published var downloadHistory: [NativeDownloadRecord] = []
     @Published var downloadFolderName: String = UserDefaults.standard.string(forKey: "proteus.download-folder-name") ?? "Downloads in Proteus"
-    func saveDownloadHistory() { if let data = try? JSONEncoder().encode(Array(downloadHistory.prefix(1000))) { UserDefaults.standard.set(data, forKey: "proteus.download-history") } }
-    func downloadChanged(_ row: NativeDownloadRecord) { if let index = downloadHistory.firstIndex(where: { $0.id == row.id }) { downloadHistory[index] = row } else { downloadHistory.insert(row, at: 0) }; saveDownloadHistory() }
+
+    func downloadChanged(_ row: NativeDownloadRecord) { if let index = downloadHistory.firstIndex(where: { $0.id == row.id }) { downloadHistory[index] = row } else { downloadHistory.insert(row, at: 0) } }
     func downloadDirectory() throws -> URL {
         if let bookmark = UserDefaults.standard.data(forKey: "proteus.download-folder") { var stale = false; let url = try URL(resolvingBookmarkData: bookmark, options: [], bookmarkDataIsStale: &stale); if stale { throw NSError(domain: "Proteus", code: 1, userInfo: [NSLocalizedDescriptionKey: "Choose the download folder again in Browser settings."]) }; return url }
         return FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("Downloads", isDirectory: true)
@@ -144,9 +172,9 @@ struct MainBrowserSelectionRequest: Equatable {
     private var historyRefreshing = Set<String>()
     private var historyRefreshed: [String: Date] = [:]
     private var insertionOrigins: [String: String] = [:]
-    init() { loadDocumentTabs(); loadHistoryCache() }
+    init() { UserDefaults.standard.removeObject(forKey: "proteus.download-history"); loadDocumentTabs(); loadHistoryCache() }
     static func isOrganizationalScope(_ scope: String) -> Bool { scope.hasPrefix("workspace:") || scope.hasPrefix("project:") }
-    private func localContentTabs(_ scope: String) -> [JSON] {
+    func localContentTabs(_ scope: String) -> [JSON] {
         let browsers = tabs(in: scope).compactMap { tab -> JSON? in
             guard tab.url == nil || Self.historyURL(tab.url ?? "") != nil else { return nil }
             let sharedTitle = tab.history.flatMap { $0.entries.indices.contains($0.index) ? $0.entries[$0.index].title : nil }
@@ -162,8 +190,11 @@ struct MainBrowserSelectionRequest: Equatable {
             if let customTitle = tab.customTitle { value["customTitle"] = .string(customTitle) }; if value["url"]?.string.isEmpty == false, let history = Self.safeBrowserHistory(tab.history), let data = try? JSONEncoder().encode(history), let json = try? JSONDecoder().decode(JSON.self, from: data) { value["history"] = json }; return .object(value)
         }
         let docs = documents(in: scope).filter { $0.previewSource == nil }.map { tab -> JSON in var value: [String: JSON] = ["id": .string("document:" + tab.id), "type": .string("document"), "documentId": .string(tab.id), "title": .string(tab.title), "mediaType": .string(tab.mediaType)]; if let customTitle = tab.customTitle { value["customTitle"] = .string(customTitle) }; if let prior = contentSnapshots[scope]?["tabs"].array.first(where: { $0["id"].string == "document:" + tab.id }) { for (key, field) in prior.object where value[key] == nil && key != "customTitle" { value[key] = field } }; return .object(value) }
-        let retained = Self.isOrganizationalScope(scope) ? (workspaceContentDescriptors[scope] ?? []).filter { ["chat", "terminal"].contains($0["type"].string) } : []
-        let all = browsers + docs + retained, order = scope == "team" ? [] : (chatChildOrder[scope] ?? [])
+        // Keep owner descriptors that this view cannot render. Omitting them would
+        // synthesize Close operations and incomplete browser-only reorder payloads.
+        let known = Self.isOrganizationalScope(scope) ? (workspaceContentDescriptors[scope] ?? []) : (contentSnapshots[scope]?["tabs"].array ?? [])
+        let retained = known.filter { !["browser", "document"].contains($0["type"].string) }
+        let all = browsers + docs + retained, order = chatChildOrder[scope] ?? []
         return order.compactMap { id in all.first { tab in tab["id"].string == id || tab["documentId"].string == id || tabs(in: scope).contains(where: { $0.id == id && ($0.contentTabId ?? $0.id) == tab["id"].string }) } } + all.filter { tab in !order.contains(tab["id"].string) && !order.contains(tab["documentId"].string) && !tabs(in: scope).contains(where: { browser in order.contains(browser.id) && (browser.contentTabId ?? browser.id) == tab["id"].string }) }
     }
     private func contentTabsChanged() {
@@ -491,7 +522,7 @@ struct MainBrowserSelectionRequest: Equatable {
             var response: JSON
             do { response = try await submit(["scope": .string(config.kind), "id": .string(config.id), "expectedRevision": snapshot["revision"], "operations": .array(operations)]) }
             catch {
-                guard (error.localizedDescription.contains("Content tabs changed") || error.localizedDescription.contains("Navigation changed")) else { throw error }
+                guard (error.localizedDescription.contains("Content tabs changed") || error.localizedDescription.contains("Navigation changed") || error.localizedDescription.contains("Reorder must contain each visible browser tab exactly once")) else { throw error }
                 let fresh = try await config.remote.request("tabs.get", ["scope": .string(config.kind), "id": .string(config.id)])
                 if operations.contains(where: { $0["action"].string.hasPrefix("browser-") }) {
                     preserveBrowserNavigationConflict(scope: scope, operations: operations, pending: contentPending[scope] ?? [], fresh: fresh)
@@ -985,6 +1016,7 @@ struct MainBrowserSelectionRequest: Equatable {
               let index = browserTabs.firstIndex(where: { $0.id == id }) else { return false }
         if browserTabs[index].url == url.absoluteString, browserTabs[index].history != nil { refreshBrowser(id); return true }
         serverRedirectedBrowsers.remove(id); originalBrowserLoads[id] = url.absoluteString
+        mirroredBrowserLoads.remove(id)
         explicitBrowserNavigations.insert(id)
         browserTabs[index].url = url.absoluteString
         historyNavigation.removeValue(forKey: id)
@@ -1135,6 +1167,7 @@ struct MainBrowserSelectionRequest: Equatable {
         guard let index = browserTabs.firstIndex(where: { $0.id == id }), let history = browserTabs[index].history else { return }
         let target = item.entryId.flatMap { selected in history.entries.firstIndex { $0.id == selected } } ?? (item.entryId == nil ? item.index : -1)
         guard history.entries.indices.contains(target), target != history.index, history.entries[target].url == item.url.absoluteString else { return }
+        mirroredBrowserLoads.remove(id)
         let item = BrowserHistoryItem(index: target, url: item.url, title: item.title, entryId: history.entries[target].id)
         queueBrowserOperation(browserTabs[index], action: "browser-traverse", entry: history.entries[item.index])
         browserTabs[index].history?.revision += 1
@@ -1162,8 +1195,16 @@ struct MainBrowserSelectionRequest: Equatable {
     }
     private var serverRedirectedBrowsers = Set<String>()
     private var originalBrowserLoads: [String: String] = [:]
-    func prepareBrowserLoad(_ url: URL, in id: String) { pendingBrowserLoads[id] = url.absoluteString; if originalBrowserLoads[id] == nil { originalBrowserLoads[id] = url.absoluteString } }
+    func prepareBrowserLoad(_ url: URL, in id: String, userInitiated: Bool = false) {
+        if userInitiated { mirroredBrowserLoads.remove(id); explicitBrowserNavigations.insert(id); originalBrowserLoads[id] = url.absoluteString }
+        applyPageScale(id, url: url); pendingBrowserLoads[id] = url.absoluteString
+        if originalBrowserLoads[id] == nil { originalBrowserLoads[id] = url.absoluteString }
+    }
     func markBrowserRedirect(_ id: String, url: URL? = nil) {
+        if mirroredBrowserLoads.contains(id), !explicitBrowserNavigations.contains(id) {
+            if let url { completeBrowserNavigation(url, title: "", in: id) }
+            return
+        }
         if let requested = originalBrowserLoads[id], let original = Self.historyURL(requested), browserTabs.first(where: { $0.id == id })?.history?.entries.last?.url != requested {
             completeBrowserNavigation(original, title: "Originally requested page", in: id)
         }
@@ -1189,7 +1230,7 @@ struct MainBrowserSelectionRequest: Equatable {
         pendingBrowserLoads.removeValue(forKey: id); historyNavigation.removeValue(forKey: id)
         // Engine failures and authentication overlays are local lifecycle states.
         // Keep the last accepted logical destination and all forward entries.
-        mirroredBrowserLoads.remove(id)
+        // A failed mirrored load remains local until the user deliberately navigates.
         if explicitBrowserNavigations.remove(id) != nil, let index = browserTabs.firstIndex(where: { $0.id == id }), let history = browserTabs[index].history, history.entries.indices.contains(history.index) { let priorApplying = applyingContent; applyingContent = true; browserTabs[index].url = history.entries[history.index].url; applyingContent = priorApplying }
     }
     func completeBrowserNavigation(_ url: URL, title: String, in id: String, nativePosition: Int? = nil, sameDocumentObservation: Bool = false) {
@@ -1206,13 +1247,21 @@ struct MainBrowserSelectionRequest: Equatable {
         pendingBrowserLoads.removeValue(forKey: id)
         let prior = browserTabs[index]
         let explicit = explicitBrowserNavigations.remove(id) != nil
-        let mirrored = mirroredBrowserLoads.remove(id) != nil && !explicit
+        // SPA history changes can follow a real button click without a WebKit
+        // link/form navigation callback. A short trusted-input intent releases
+        // the mirror guard; passive redirects and repeated observations do not.
+        if explicit || prior.url != url.absoluteString && (browserViews[id] as? NativeLinkWebView)?.hasRecentNavigationIntent == true { mirroredBrowserLoads.remove(id) }
+        let mirrored = mirroredBrowserLoads.contains(id) && !explicit
         if mirrored, let history = prior.history {
             if let nativePosition { nativeHistoryPosition[id] = nativePosition }
             historyNavigation[id] = nil
             var state = browserNavigation[id] ?? BrowserNavigationState(); state.url = url.absoluteString; state.title = title; state.isLoading = false; state.canGoBack = history.index > 0; state.canGoForward = history.index + 1 < history.entries.count; browserNavigation[id] = state
             return
         }
+        // A legacy/new local descriptor without saved history has no canonical
+        // Forward list to protect. Suppress its initial visit once, then allow
+        // ordinary WebKit history observations (including SPA pushState).
+        if mirrored { mirroredBrowserLoads.remove(id) }
         var tab = prior
         tab.url = url.absoluteString; tab.title = tab.customTitle ?? title
         var history = tab.history ?? BrowserTabHistory(entries: [], index: 0)
@@ -1285,14 +1334,16 @@ struct MainBrowserSelectionRequest: Equatable {
         let storeKey = account + ":" + tab.profileId
         if profileStores[storeKey] == nil { profileStores[storeKey] = tab.profileId == "default" ? .default() : WKWebsiteDataStore(forIdentifier: Self.persistentProfileStoreID(account: account, id: tab.profileId)) }
         configuration.websiteDataStore = profileStores[storeKey]!
+        configuration.mediaTypesRequiringUserActionForPlayback = []
         let view = NativeLinkWebView(frame: .zero, configuration: configuration)
+        installVideoPolicy(view)
         // Proteus owns the full content-relative edge gesture. Native gesture
         // recognition has different thresholds and must not race that handler.
         // goBrowserHistory still reuses matching native page instances via go(to:).
         view.allowsBackForwardNavigationGestures = false; view.isFindInteractionEnabled = true
         browserViews[tab.id] = view
         browserObservations[tab.id] = [observeBrowser(view, id: tab.id, keyPath: \.canGoBack), observeBrowser(view, id: tab.id, keyPath: \.canGoForward), observeBrowser(view, id: tab.id, keyPath: \.isLoading), observeBrowser(view, id: tab.id, keyPath: \.url), observeBrowser(view, id: tab.id, keyPath: \.title)]
-        if let text = tab.url, let url = URL(string: text) { mirroredBrowserLoads.insert(tab.id); pendingBrowserLoads[tab.id] = url.absoluteString; view.load(URLRequest(url: url)) }
+        if let text = tab.url, let url = URL(string: text) { mirroredBrowserLoads.insert(tab.id); pendingBrowserLoads[tab.id] = url.absoluteString; applyPageScale(tab.id, url: url); view.load(URLRequest(url: url)) }
         return view
     }
     private func observeBrowser<Value>(_ view: WKWebView, id: String, keyPath: KeyPath<WKWebView, Value>) -> NSKeyValueObservation {
@@ -1369,6 +1420,8 @@ struct NativeDocumentSession {
     let assets: [JSON]
     let links: [JSON]
     let assetDataURLs: [String: String]
+    var fileCreatedAt = ""
+    var fileModifiedAt = ""
 }
 struct NativeDraftAttachment: Identifiable {
     let id: String

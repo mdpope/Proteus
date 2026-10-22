@@ -11,6 +11,22 @@ import history from '../desktop/browsing-history.cjs';
 import workspace from '../desktop/workspace-session.cjs';
 
 function home(t){const p=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-parity-test-'));t.after(()=>fs.rmSync(p,{recursive:true,force:true}));return p;}
+test('browser notifications stay local, deduplicate per owner and persist recovery references',async t=>{
+  const folder=home(t),published=[],store=new ActivityStore(folder,{identity:()=>({accountId:'a',workspaceId:'w',origin:'https://example.test'}),publish:async item=>published.push(item)});
+  let emitted=0;store.on('notification',()=>emitted++);
+  const issue={kind:'history-conflict',windowId:'main',scope:{scope:'project',id:'project',hostId:'host'},title:'History needs attention',body:'Bearer HIDDEN https://example.test/path?token=PRIVATE'};
+  const first=store.add('browser.issue',issue);
+  const again=store.browserIssue({...issue,scope:{hostId:'host',id:'project',scope:'project'},body:'Updated pending action'});
+  assert.equal(again.id,first.id);assert.equal(emitted,1);assert.equal(again.silent,true);assert.deepEqual(again.browserIssue.scope,issue.scope);
+  assert.equal(store.data.outbox.length,0);assert.deepEqual(published,[]);
+  assert.notEqual(store.browserIssue({...issue,windowId:'second'}).id,first.id);
+  assert.notEqual(store.browserIssue({kind:'load-error',windowId:'main',tabId:'browser',logId:'log',body:issue.body}).id,first.id);
+  const load=store.notifications().items[0];assert.doesNotMatch(load.body,/HIDDEN|PRIVATE/);assert.match(load.body,/example.test\/path/);
+  store.read(first.id);assert.notEqual(store.browserIssue(issue).id,first.id);
+  store.preferences({'browser.issue':false});assert.equal(store.notifications().preferences['browser.issue'],false);
+  for(const invalid of [{...issue,windowId:''},{...issue,scope:{scope:'arbitrary',id:'project'}},{kind:'load-error',windowId:'main'}])assert.throws(()=>store.browserIssue(invalid));
+  await store.close();const reopened=new ActivityStore(folder);assert.deepEqual(reopened.notifications().items,store.notifications().items);await reopened.close();
+});
 test('activity records transitions once and requires schedule completion opt in',async t=>{
   const engine=new EventEmitter(),old={id:'old',status:'completed',trigger:'chat',schedule:{}};engine.listRuns=()=>[old];
   const store=new ActivityStore(home(t));store.attach(engine,()=> 'host');

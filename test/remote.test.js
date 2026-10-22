@@ -36,6 +36,21 @@ test('AES-GCM authenticates the payload and routing context', () => {
   assert.throws(() => unseal(secret(), box, 'connection:client:1'));
   const corrupt = Buffer.from(box, 'base64'); corrupt[14] ^= 1; assert.throws(() => unseal(key, corrupt.toString('base64'), 'connection:client:1'));
 });
+test('relay registration rejection remains actionable during retry and clears after a successful connection', async t => {
+  const { app } = await fixture(t);
+  const token = app.remote.config.relayToken;
+  await app.remote.configure({ enabled: true, relayToken: secret() });
+  await until(() => app.remote.status === 'offline');
+  const error = app.remote.info().error;
+  assert.match(error, /rejected this computer’s registration/);
+  assert.match(error, /pairing code; incoming access here is not required/);
+  app.remote.connect();
+  assert.equal(app.remote.info().error, error, 'A retry must not erase the explanation.');
+  await until(() => app.remote.status === 'offline');
+  await app.remote.configure({ enabled: true, relayToken: token });
+  await until(() => app.remote.status === 'online');
+  assert.equal(app.remote.info().error, null);
+});
 test('protocol v1 mobile peers discover this host platform, reconnect and retain device grants',async t=>{
   const {app,connect}=await fixture(t);const invitation=RemoteClient.capsule((await app.remote.pairing()).code),first=await connect(invitation);
   const state=(await first.request('sync')).state,metadata=hostPlatformMetadata();

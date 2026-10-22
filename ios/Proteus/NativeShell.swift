@@ -1,16 +1,17 @@
 import SwiftUI
 import UIKit
 enum NativeTheme {
-    static let accent = Color(red: 190/255, green: 220/255, blue: 147/255)
-    static let background = Color(red: 15/255, green: 23/255, blue: 19/255)
-    static let surface = Color(red: 26/255, green: 37/255, blue: 30/255)
-    static let rail = Color(red: 18/255, green: 21/255, blue: 18/255)
-    static let line = Color(red: 53/255, green: 70/255, blue: 57/255)
-    static let tabBackground = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 20/255, green: 27/255, blue: 24/255, alpha: 1) : UIColor(red: 235/255, green: 241/255, blue: 235/255, alpha: 1) })
-    static let tabText = Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 167/255, green: 182/255, blue: 172/255, alpha: 1) : UIColor(red: 62/255, green: 82/255, blue: 68/255, alpha: 1) })
+    static var accent: Color { NativePalette.shared.color("accent") }
+    static var background: Color { NativePalette.shared.color("background") }
+    static var surface: Color { NativePalette.shared.color("panel") }
+    static var rail: Color { NativePalette.shared.color("sidebar") }
+    static var line: Color { NativePalette.shared.color("border") }
+    static var tabBackground: Color { NativePalette.shared.color("tab") }
+    static var tabText: Color { NativePalette.shared.color("tabText") }
 }
+
 extension View {
-    func nativeTabBar() -> some View { font(.system(size: 14, weight: .medium)).foregroundStyle(NativeTheme.tabText).background(NativeTheme.tabBackground) }
+    func nativeTabBar() -> some View { frame(height: 44).font(.system(size: 14, weight: .medium)).foregroundStyle(NativeTheme.tabText).background(NativeTheme.tabBackground) }
 }
 enum NativeTabSymbol {
     static func name(kind: String, chatType: String = "", mediaType: String = "") -> String {
@@ -84,20 +85,15 @@ struct NativeTabStrip<Content: View>: View {
     let ids: [String]
     let selection: String?
     @ViewBuilder var content: () -> Content
-    @State private var additions = Set<String>()
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal) { content() }
                 .onChange(of: ids) { old, new in
-                    additions = Set(new).subtracting(old)
-                    if let selection, additions.contains(selection) {
-                        additions.removeAll()
-                        Task { @MainActor in await Task.yield(); proxy.scrollTo(selection, anchor: .trailing) }
-                    }
+                    guard let added = new.last(where: { !old.contains($0) }) else { return }
+                    Task { @MainActor in await Task.yield(); proxy.scrollTo(added, anchor: .trailing) }
                 }
                 .onChange(of: selection) { _, selected in
-                    guard let selected else { additions.removeAll(); return }
-                    additions.removeAll()
+                    guard let selected else { return }
                     Task { @MainActor in await Task.yield(); proxy.scrollTo(selected, anchor: .center) }
                 }
         }
@@ -221,6 +217,7 @@ struct NativeShell: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var area: NativeArea = .home
     @StateObject private var phoneChrome = NativePhoneChrome()
+    @StateObject private var mainOverviewChrome = NativePhoneChrome()
     @State private var phoneVisited: Set<NativeArea> = [.home]
     @State private var phoneWorkspace: NativeWorkspaceIdentity?
     @AppStorage("nativeSidebarExpanded") private var sidebar = true
@@ -247,7 +244,7 @@ struct NativeShell: View {
     @State private var attentionPreferredTab = "chats"
     @ObservedObject private var notifications = NativeNotifications.shared
     private var tablet: Bool { sizeClass == .regular && !NativePhonePreview.enabled }
-    private let tabAccent = NativeTheme.accent
+    private var tabAccent: Color { NativeTheme.accent }
     private func count(for item: NativeArea) -> Int? {
         if item == .schedules { return destinations.selected.flatMap { $0.connected ? NativeNavigationCounts.schedules([$0.state]) : nil } }
         if item == .chats {
@@ -329,6 +326,7 @@ struct NativeShell: View {
                                         Button("Delete chat", systemImage: "trash", role: .destructive) { shellDelete = entry }.disabled(chatHasPendingWork(entry.run))
                                     } label: { Image(systemName: "ellipsis.circle") }.padding(12).accessibilityLabel("Chat actions")
                                 }
+                                Button { mainOverviewChrome.openOverview() } label: { NativeTabOverviewIcon().frame(width: 44, height: 44) }.buttonStyle(.plain).accessibilityLabel("App tab overview").accessibilityIdentifier("main-tab-overview-button")
                                 Button { shared.open(nil, scope: "main") } label: { Image(systemName: "plus") }.padding(12).accessibilityLabel("New tab").accessibilityIdentifier("new-main-browser-tab")
                         }.nativeTabBar()
                         Divider(); if let selected = opened.first(where: { $0.id == selectedTab }) { contentTab(selected) } else { content(area) }
@@ -353,6 +351,15 @@ struct NativeShell: View {
         shellLayout
         .scrollContentBackground(.hidden)
         .overlay { if NativePadPreview.enabled && phoneChrome.overview { NativePhoneOverview(chrome: phoneChrome, items: phoneOverviewItems).zIndex(3) } }
+        .overlay { if tablet && mainOverviewChrome.overview { NativePhoneOverview(chrome: mainOverviewChrome, items: homeTabs, title: "App tabs", selectedID: selectedTab ?? "", accessibilityID: "main-tab-overview").zIndex(4) } }
+        .task(id: phoneChrome.overview) {
+            guard phoneChrome.overview, let owner = overviewWorkspace, let remote = destinations.remote(for: owner.host) else { return }
+            for project in remote.projectCatalog.projects(in: owner.workspace) {
+                guard !Task.isCancelled else { return }
+                let id = project["id"].string
+                await shared.refreshContentTabs(scope: "project:" + owner.host + ":" + id, remote: remote, kind: "project", id: id)
+            }
+        }
         .overlay(alignment: .top) { NativeNoticeBanner().padding(.top, 8) }
         .background(NativeTheme.background)
         .environmentObject(phoneChrome)
@@ -502,7 +509,7 @@ struct NativeShell: View {
     }
     private func shellTab(_ tab: NativeContentTab) -> some View {
                                     HStack { Button { selectContent(tab) } label: { NativeContentTabLabel(title: title(for: tab), symbol: NativeTabSymbol.name(kind: tab.kind, chatType: chatEntry(for: tab)?.run["chatType"].string ?? "")) }.lineLimit(1).accessibilityIdentifier("shell-tab-" + tab.id).accessibilityLabel(title(for: tab)).accessibilityValue(selectedTab == tab.id ? "Active" : "Inactive"); Button { closeContent(tab) } label: { Image(systemName: "xmark").font(.caption2) }.accessibilityLabel("Close " + title(for: tab)) }
-                                        .padding(12).background(selectedTab == tab.id ? tabAccent.opacity(0.08) : Color.clear)
+                                        .padding(12).background(selectedTab == tab.id ? NativePalette.shared.color("selectedTab") : Color.clear)
                                         .overlay(alignment: .bottom) { Rectangle().fill(selectedTab == tab.id ? tabAccent : .clear).frame(height: 2) }.id(tab.id)
                                         .draggable(tab.id).dropDestination(for: String.self) { ids, _ in guard let source = ids.first else { return false }; return moveContent(source, before: tab.id) }
                                         .contextMenu {
@@ -591,10 +598,10 @@ struct NativeShell: View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack { Text("⤨").foregroundStyle(NativeTheme.accent); Text("Proteus").font(.title2.bold()); Spacer(); Button { withAnimation { phoneChrome.drawer = false } } label: { Image(systemName: "xmark").frame(width: 44, height: 44) }.accessibilityLabel("Close navigation") }.padding(.horizontal, 10)
                 ForEach(NativeArea.allCases.filter { $0 != .workspaces && $0 != .engine }) { item in phoneDrawerRow(item) }
-                Divider().padding(.vertical, 8)
                 NativeWorkspaceTree(activeWorkspace: area == .workspaces ? phoneWorkspace?.id : nil, onOpen: openWorkspace, onBrowse: { choosePhoneArea(.workspaces) })
                 Divider().padding(.vertical, 8)
                 phoneDrawerRow(.engine)
+                if activeArea == .engine { engineOptions(phone: true) }
                 Divider().padding(.vertical, 8)
                 Text("Open tabs").font(.caption.weight(.semibold)).foregroundStyle(.secondary).padding(.horizontal, 12).padding(.top, 4)
                 Text("Main navigation tabs").font(.caption2).foregroundStyle(.secondary).padding(.horizontal, 12).padding(.bottom, 8)
@@ -626,6 +633,21 @@ struct NativeShell: View {
         }.buttonStyle(.plain).accessibilityIdentifier("phone-nav-" + item.rawValue)
     }
     private func choosePhoneArea(_ item: NativeArea) { phoneChrome.browserOwnsBack = false; phoneChrome.currentID = ""; phoneVisited.insert(item); area = item; selectedTab = nil; phoneChrome.controlsHidden = false; withAnimation { phoneChrome.drawer = false } }
+    private func engineOptions(phone: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            ForEach(EngineRoomView.pages, id: \.self) { name in
+                Button {
+                    enginePage = name; area = .engine; selectedTab = nil
+                    if phone { phoneChrome.drawer = false }
+                } label: {
+                    Text(name).font(.subheadline).fontWeight(enginePage == name ? .semibold : .regular)
+                        .foregroundStyle(enginePage == name ? NativeTheme.accent : NativeSidebarStyle.ink)
+                        .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading).padding(.leading, 34)
+                }.buttonStyle(.plain).accessibilityIdentifier("engine-option-" + name)
+                    .accessibilityValue(enginePage == name ? "Active" : "Inactive")
+            }
+        }
+    }
     private var overviewWorkspace: (host: String, workspace: String, project: String)? {
         if let tab = shared.browserTabs.first(where: { "browser:" + $0.id == phoneChrome.currentID }) {
             for destination in destinations.destinations {
@@ -689,6 +711,9 @@ struct NativeShell: View {
                 let known = Set(result.map(\.id))
                 result += shared.tabs(in: scope).filter { !$0.hidden && !known.contains("browser:" + $0.id) }.map { overviewBrowser($0, section: caption, sectionID: scope) }
             }
+            // The currently displayed chat can be a top-level view rather than
+            // an open child in the project registry. It must remain selectable.
+            if !result.contains(where: { $0.id == phoneChrome.currentID }), let current = phoneChrome.visited.first(where: { $0.id == phoneChrome.currentID }) { result.insert(current, at: 0) }
             var seen = Set<String>(); return result.filter { seen.insert($0.id).inserted }
         }
         let scope = activeArea == .team ? "team" : "main"
@@ -734,7 +759,7 @@ struct NativeShell: View {
                 HStack(spacing: 7) { Text("⤨").foregroundStyle(tabAccent); Text("Proteus") }.font(.title2.bold())
                 ForEach(NativeArea.allCases.filter { !NativePadPreview.enabled || $0 != .workspaces }) { item in
                     if item == .engine {
-                        NativeWorkspaceTree(activeWorkspace: opened.first { $0.id == selectedTab && $0.kind == "workspace" }?.id, onOpen: openWorkspace, onBrowse: { area = .workspaces; selectedTab = nil }).padding(.vertical, 8).overlay(alignment: .top) { Rectangle().fill(NativeSidebarStyle.border).frame(height: 1) }.overlay(alignment: .bottom) { Rectangle().fill(NativeSidebarStyle.border).frame(height: 1) }.listRowInsets(EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4)).listRowBackground(Color.clear).listRowSeparator(.hidden)
+                        NativeWorkspaceTree(activeWorkspace: opened.first { $0.id == selectedTab && $0.kind == "workspace" }?.id, onOpen: openWorkspace, onBrowse: { area = .workspaces; selectedTab = nil }).padding(.vertical, 8).overlay(alignment: .bottom) { Rectangle().fill(NativeSidebarStyle.border).frame(height: 1) }.listRowInsets(EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4)).listRowBackground(Color.clear).listRowSeparator(.hidden)
                     }
                     Button { area = item; selectedTab = nil; hover = false } label: {
                         HStack { sidebarFeatureLabel(item).fontWeight(activeArea == item ? .semibold : .regular); Spacer(minLength: 4); if let value = count(for: item) { sidebarCount(value, attention: item == .attention).accessibilityLabel("\(value) \(item.rawValue.lowercased())").accessibilityIdentifier("nav-count-" + item.id) } }.accessibilityElement(children: .contain)
@@ -748,6 +773,7 @@ struct NativeShell: View {
                     .accessibilityIdentifier("sidebar-" + item.id)
                     .accessibilityValue(activeArea == item ? "Active" : "Inactive")
                     .accessibilityAddTraits(activeArea == item ? .isSelected : [])
+                    if NativeDesignPreview.enabled && item == .engine && activeArea == .engine { engineOptions(phone: false).listRowSeparator(.hidden).listRowBackground(Color.clear) }
                     if !NativePadPreview.enabled && activeArea == item && (item == .chats || item == .internet || item == .schedules) {
                         ForEach(recentChats) { entry in
                             Button { openChat(entry) }
@@ -882,7 +908,7 @@ struct NativeShell: View {
         else { _ = moveContent(opened[index + offset].id, before: id) }
     }
     @ViewBuilder private func contentTab(_ tab: NativeContentTab) -> some View {
-        if tab.kind == "browser" { TeamBrowserView(scope: "main", showTabs: false, onBackToList: { selectedTab = nil; area = .chats }).onAppear { shared.select(tab.id, in: "main", activateMainBrowser: false) } }
+        if tab.kind == "browser" { TeamBrowserView(scope: "main", showTabs: false, tabID: tab.id, onBackToList: { selectedTab = nil; area = .chats }) }
         else if let hostID = tab.hostID, let remote = destinations.remote(for: hostID) {
             if tab.kind == "workspace" {
                 NativeWorkspaceView(workspaceID: String(tab.id.dropFirst("workspace:\(hostID):".count)), onOpenMain: openChat).environmentObject(remote).id(tab.id)

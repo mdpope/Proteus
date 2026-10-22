@@ -1,3 +1,4 @@
+import {fileDates,assertSameFileSnapshot} from './file-metadata.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
@@ -23,6 +24,7 @@ function linkedSources(run){
   return [...sources];
 }
 const stableId=(run,file)=>createHash('sha256').update(run.id+'\0'+file).digest('hex');
+const fileDatesFromSnapshot=({fileCreatedAt,fileModifiedAt})=>({fileCreatedAt,fileModifiedAt});
 const publicAssets=items=>items.map(({assetId,source,mediaType,size,version})=>({assetId,source,mediaType,size,version}));
 function snapshot(run,source,currentRoots,verifiedLink=false){
   if(!verifiedLink&&!linkedSources(run).includes(source))throw new Error('This document is not linked in the chat.');
@@ -60,7 +62,8 @@ function snapshot(run,source,currentRoots,verifiedLink=false){
     }
     const documentHash=createHash('sha256').update(buffer.subarray(0,size)).digest('hex');
     const version=createHash('sha256').update(documentHash+'\0'+assets.map(asset=>asset.source+'\0'+asset.file+'\0'+asset.version).join('\0')+'\0'+links.map(link=>link.source+'\0'+link.documentId).join('\0')).digest('hex');
-    return {file,documentId:stableId(run,file),title:path.basename(file),size,mediaType,version,content,assets,links};
+    assertSameFileSnapshot(stat,fs.fstatSync(handle));
+    return {...fileDates(stat),file,documentId:stableId(run,file),title:path.basename(file),size,mediaType,version,content,assets,links};
   }finally{fs.closeSync(handle);}
 }
 export class ChatDocumentApprovals {
@@ -106,7 +109,7 @@ export class ChatDocumentApprovals {
     this.prune();const item=this.requests.get(requestId);if(!item||item.deviceId!==deviceId||!item.approvedAt)throw new Error('This document has not been approved on the host computer.');
     const run=engine.getRun(item.chatId),current=snapshot(run,item.source,this.currentRoots,item.verifiedLink);
     if(current.file!==item.file||current.documentId!==item.documentId||current.version!==item.version)throw new Error('This document changed. Ask the host to approve the new version.');
-    return {requestId,documentId:item.documentId,title:item.title,version:item.version,size:item.size,mediaType:item.mediaType,content:current.content,assets:publicAssets(current.assets),links:current.links,readAt:new Date().toISOString()};
+    return {requestId,documentId:item.documentId,title:item.title,version:item.version,size:item.size,mediaType:item.mediaType,content:current.content,...fileDatesFromSnapshot(current),assets:publicAssets(current.assets),links:current.links,readAt:new Date().toISOString()};
   }
   asset(requestId,assetId,deviceId,engine){
     this.prune();const item=this.requests.get(requestId);

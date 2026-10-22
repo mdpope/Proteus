@@ -1,6 +1,6 @@
 {
   "name": "proteus",
-  "version": "0.2.26",
+  "version": "0.2.28",
   "buildRevision": "source",
   "private": true,
   "description": "A local control room for scheduled AI work and resumable conversations.",
@@ -27,7 +27,7 @@
     "ios:build": "node scripts/apple-build.mjs build",
     "ios:test": "node scripts/apple-build.mjs test",
     "terminal:build": "node scripts/build-terminal.mjs",
-    "postinstall": "node scripts/prepare-pty.mjs",
+    "postinstall": "node scripts/prepare-pty.mjs && node scripts/prepare-extensions.mjs",
     "package:linux": "node scripts/package-linux.mjs",
     "test:linux": "node test/linux-current.mjs"
   },
@@ -48,7 +48,8 @@
     "playwright": "1.64.0",
     "qrcode": "1.5.4",
     "ws": "8.22.0",
-    "yaml": "2.9.1"
+    "yaml": "2.9.1",
+    "tldts-experimental": "7.4.18"
   },
   "devDependencies": {
     "@electron/packager": "20.3.0",

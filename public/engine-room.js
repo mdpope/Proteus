@@ -1,4 +1,7 @@
+import {renderPalette} from './palette.js';
+import {mountBrowserIssueActions} from './browser-notifications.js';
 import {renderUpdates} from './updates.js';
+import {renderWindowLayouts} from './window-layouts.js';
 import {previewEnabled} from './desktop-preview.js';
 import {mountBrowserHistory} from './browser-history-panel.js';
 import {mountLogPanel,pagedAccountLogs} from './log-panel.js';
@@ -9,29 +12,32 @@ import {renderIntegrations} from './integrations.js';
 import {renderInternetDefaults} from './internet-search.js';
 let ui;
 const $ = selector => document.querySelector(selector);
-const sections = [['resources','Resources'],['providers','Providers'],['connections','Computer Connections'],['integrations','Accounts & Integrations'],['account','Proteus Account & Security'],['internet-searches','Internet Searches'],['updates','Updates'],['desktop-control','Desktop Control'],['preferences','Browser Preferences'],['website-data','Website data'],['history','Browser history'],['setup','App Setup'],['usage','Usage'],['notifications','Notifications'],['logs','Logs']];
+const sections = [['palette','Colors'],['resources','Resources'],['providers','Providers'],['connections','Computer Connections'],['integrations','Accounts & Integrations'],['account','Proteus Account & Security'],['internet-searches','Internet Searches'],['updates','Updates'],['desktop-control','Desktop Control'],['preferences','Browser Preferences'],['website-data','Website data'],['history','Browser history'],['setup','App Setup'],['usage','Usage'],['notifications','Notifications'],['logs','Logs']];
 export function initEngineRoom(options){ui=options;}
 async function activity(kind){const local=await ui.api('/api/'+kind);if(!ui.state.data.life?.identity)return local;try{const account=await ui.api('/api/app'),merged=new Map((local.items||[]).map(item=>[item.id,{...item,localId:item.id}]));for(const item of account[kind]||[]){const key=item.eventId||item.id,previous=merged.get(key);merged.set(key,{...previous,...item,localId:previous?.localId,shared:true,identity:account.identity});}return {...local,items:[...merged.values()].sort((a,b)=>Date.parse(b.createdAt||b.at)-Date.parse(a.createdAt||a.at))};}catch{return {...local,sharedUnavailable:true};}}
 
-export function engineSections(){return previewEnabled(ui?.state)?sections.map(([key,label])=>[key,key==='setup'?'App settings':label]):sections;}
+export function engineSections(){const result=previewEnabled(ui?.state)?sections.map(([key,label])=>[key,key==='setup'?'App settings':label]):sections;return window.desktop?.windowPreview?[['windows','Windows'],...result]:result;}
 export function renderEngineRoom(section='resources',force=false){
   const main=$('#main');
   if(!force&&main.querySelector('#engine-content')?.dataset.section===section)return;
   if(section==='providers')return ui.providers();
   if(section==='connections')return ui.connections();
   if(section==='setup')return ui.setup();
-  const title=sections.find(([id])=>id===section)?.[1]||'Engine Room';
+  const title=engineSections().find(([id])=>id===section)?.[1]||'Engine Room';
   main.innerHTML=`<div class="heading"><div><div class="eyebrow">Engine Room</div><h1>${title}</h1></div></div><div id="engine-content"><p class="note">Loading…</p></div>`;
   const mounted=$('#engine-content');mounted.dataset.section=section;
   const active=()=>ui.state.page==='engine'&&ui.state.engineSection===section&&$('#engine-content')===mounted;
   const render=async()=>{
     try{
-      if(section==='updates'){await renderUpdates(mounted,ui,active);
+      if(section==='palette'){renderPalette(mounted,ui);
+      } else if(section==='windows'){await renderWindowLayouts(mounted,{...ui,active});
+      } else if(section==='updates'){await renderUpdates(mounted,ui,active);
       } else if(section==='desktop-control'){await renderDesktopControl(mounted,active);
       } else if(section==='history'){const peers=await window.desktop?.peers({action:'list'})||[];const profiles=await ui.api('/api/browser-profiles');if(!active())return;await mountBrowserHistory(mounted,{hosts:[{hostId:ui.state.data.hostId,label:ui.state.data.hostName||'This computer'},...(Array.isArray(peers)?peers:peers.items||peers.peers||[]).filter(peer=>!peer.paused)],profiles:profiles.items,defaultHostId:ui.state.data.hostId,timezone:ui.state.data.settings.timezone,active,notify:ui.toast,request:(host,action,args)=>host===ui.state.data.hostId?ui.api('/api/browser-history',{...args,action}):window.desktop.peers({action:'request',hostId:host,method:'browser.history.'+action,args}),open:async(item)=>{const info=await window.desktop.browser({action:'create',url:item.url,profileId:item.profileId||'default'});ui.openBrowser?.(info);}});
       } else if(section==='internet-searches'){await renderInternetDefaults(ui,$('#engine-content'),active);
       } else if(section==='integrations'){
         const panel=document.createElement('div');$('#engine-content').replaceChildren(panel);await renderIntegrations(panel,{request:(action,args)=>action==='list'?ui.api('/api/integrations'):ui.api('/api/integrations',{action,...args}),notify:ui.toast,signIn:row=>{const run=ui.state.data.runs.find(r=>r.id===row.runId);if(run)ui.manageMcp(run);}});
+        if(!active())return;const others=document.createElement('details');others.innerHTML='<summary>Other computers</summary><div data-computers></div>';mounted.append(others);let loaded=false;others.ontoggle=async()=>{if(!others.open||loaded)return;loaded=true;try{const result=await window.desktop?.peers({action:'list'})||[];for(const peer of (Array.isArray(result)?result:result.items||result.peers||[]).filter(peer=>!peer.paused)){const section=document.createElement('details'),summary=document.createElement('summary'),body=document.createElement('div');summary.textContent=peer.name||peer.label||peer.hostId;section.append(summary,body);others.querySelector('[data-computers]').append(section);let shown=false;section.ontoggle=()=>{if(!section.open||shown)return;shown=true;void renderIntegrations(body,{readOnly:true,notify:ui.toast,request:()=>window.desktop.peers({action:'request',hostId:peer.hostId,method:'integrations.list',args:{}})});};}}catch(error){ui.toast(error.message);loaded=false;}};
       } else if(section==='website-data'){
         await mountWebsiteData(mounted,{escape:ui.escape,toast:ui.toast,filter:ui.state.siteDataFilter});
       } else if(section==='preferences'){
@@ -50,7 +56,8 @@ export function renderEngineRoom(section='resources',force=false){
       } else if(section==='notifications'){
         const value=await activity('notifications');if(!active())return;
         const p=value.preferences||{};
-        $('#engine-content').innerHTML=`<section class="card"><h2>Preferences</h2><label class="checkbox-row"><input id="notify-system" type="checkbox" ${p.systemEnabled?'checked':''}>Enable system notifications</label><label><input id="notify-schedule" type="checkbox" ${p['schedule.completed']!==false?'checked':''}> Notify when a schedule completes</label><p class="note">Chat completion and requests for review remain visible in notification history.</p></section><section class="card"><h2>History</h2>${value.sharedUnavailable?'<p class="note">Shared history unavailable. Showing this computer’s history; authorize shared features in App Setup.</p>':''}${(value.items||[]).map(n=>`<article class="resource-row"><div><strong>${ui.escape(n.title||n.event||'Notification')}</strong><p>${ui.escape(n.message||n.body||'')}</p><small>${ui.escape(ui.time(n.at||n.createdAt))}</small></div>${n.read||n.readAt?'':`<button data-notification-read="${ui.escape(n.id)}">Mark read</button>`}</article>`).join('')||'<p class="empty">No notifications yet.</p>'}</section>`;
+        $('#engine-content').innerHTML=`<section class="card"><h2>Preferences</h2><label class="checkbox-row"><input id="notify-system" type="checkbox" ${p.systemEnabled?'checked':''}>Enable system notifications</label><label><input id="notify-schedule" type="checkbox" ${p['schedule.completed']!==false?'checked':''}> Notify when a schedule completes</label><p class="note">Chat completion and requests for review remain visible in notification history.</p></section><section class="card"><h2>History</h2>${value.sharedUnavailable?'<p class="note">Shared history unavailable. Showing this computer’s history; authorize shared features in App Setup.</p>':''}${(value.items||[]).map(n=>`<article class="resource-row" data-browser-notification="${ui.escape(n.localId||n.id)}"><div><strong>${ui.escape(n.title||n.event||'Notification')}</strong><p>${ui.escape(n.message||n.body||'')}</p><small>${ui.escape(ui.time(n.at||n.createdAt))}</small></div>${n.read||n.readAt?'':`<button data-notification-read="${ui.escape(n.id)}">Mark read</button>`}</article>`).join('')||'<p class="empty">No notifications yet.</p>'}</section>`;
+        for(const item of value.items||[]){if(item.browserIssue){const card=mounted.querySelector('[data-browser-notification="'+CSS.escape(item.localId||item.id)+'"]');if(card)mountBrowserIssueActions(card,item);}}
         $('#notify-system').onchange=async event=>{try{await ui.api('/api/notifications',{action:'preferences',preferences:{systemEnabled:event.target.checked}});p.systemEnabled=event.target.checked;}catch(error){ui.toast(error.message);event.target.checked=!event.target.checked;}};
         $('#notify-schedule').onchange=async event=>{try{await ui.api('/api/notifications',{action:'preferences',preferences:{'schedule.completed':event.target.checked}});p['schedule.completed']=event.target.checked;}catch(error){ui.toast(error.message);event.target.checked=!event.target.checked;}};
         document.querySelectorAll('[data-notification-read]').forEach(button=>button.onclick=async()=>{try{const item=value.items.find(n=>n.id===button.dataset.notificationRead);if(item.shared)await ui.api('/api/app',{path:'/notifications/'+item.id,method:'PATCH',body:{read:true},identity:item.identity});if(item.localId||!item.shared)await ui.api('/api/notifications',{action:'read',id:item.localId||item.id});render();}catch(error){ui.toast(error.message);}});

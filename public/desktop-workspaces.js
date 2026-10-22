@@ -21,7 +21,7 @@ async function loadPeerCatalog(hostId,hostName){
  try{snapshot=(await request(hostId,'sync')).state;}catch(error){if(!/unsupported|unknown|unexpected/i.test(error.message))throw error;}
  const value={context,hostId,hostName:hostName||snapshot?.hostName||catalogs.get(hostId)?.hostName||hostId,online:true,capabilities:snapshot?.capabilities||[],runs:snapshot?.runs||catalogs.get(hostId)?.runs||[],projectTabs:catalogs.get(hostId)?.projectTabs||{},workspaceProjects:snapshot?.capabilities?.includes('projects.v1')?snapshot.workspaceProjects:undefined};
  catalogs.set(hostId,value);
- if(value.workspaceProjects&&ui.state.tabs.some(tab=>tab.hostId===hostId&&(value.workspaceProjects.projectRedirects?.[tab.projectId]||tab.type==='remote-run'&&value.workspaceProjects.memberships?.[tab.runId]?.projectId&&ui.state.tabs.some(parent=>parent.id===tab.parentId&&parent.type==='workspace'&&!parent.projectId)))){
+ if(value.workspaceProjects&&ui.state.tabs.some(tab=>tab.hostId===hostId&&(value.workspaceProjects.projects.some(project=>project.id===tab.projectId&&project.workspaceId!==tab.workspaceId)||value.workspaceProjects.projectRedirects?.[tab.projectId]||tab.type==='remote-run'&&value.workspaceProjects.memberships?.[tab.runId]?.projectId&&ui.state.tabs.some(parent=>parent.id===tab.parentId&&parent.type==='workspace'&&!parent.projectId)))){
   const reconciled=await ui.reconcileRemoteProjectPlacement?.(hostId,value.workspaceProjects);if(reconciled)value.workspaceProjects=reconciled;
  }
  return value;
@@ -143,7 +143,7 @@ async function updateRemoteProjects(owner,args){
 }
 function remoteProjectDialog(owner,workspaceId,project){
  const expectedRevision=owner.workspaceProjects.revision;let busy=false;
- ui.showDialog(`<h2>${project?'Rename project':'New project'}</h2><p class="note">On ${esc(owner.hostName)}</p><label>Name<input id="peer-project-name" maxlength="200" value="${esc(project?.name||'')}"></label><button id="close-dialog">Cancel</button><button id="dialog-submit">${project?'Rename':'Create project'}</button>`,async()=>{
+ ui.showDialog(`<form data-dialog-submit><h2>${project?'Rename project':'New project'}</h2><p class="note">On ${esc(owner.hostName)}</p><label>Name<input id="peer-project-name" maxlength="200" value="${esc(project?.name||'')}"></label><button type="button" id="close-dialog">Cancel</button><button type="submit" id="dialog-submit">${project?'Rename':'Create project'}</button></form>`,async()=>{
   if(busy)throw Error('Project update is already in progress.');const name=$('#peer-project-name').value.trim();if(!name)throw Error('Enter a project name.');busy=true;
   try{const before=new Set(owner.workspaceProjects.projects.map(row=>row.id)),next=await updateRemoteProjects(owner,{action:project?'rename':'create',workspaceId,...(project?{projectId:project.id}:{}),name,expectedRevision});const created=project?next.projects.find(row=>row.id===project.id):next.projects.find(row=>row.workspaceId===workspaceId&&!before.has(row.id));if(created)openRemoteProject(owner.hostId,created);}
   finally{busy=false;}
@@ -154,6 +154,13 @@ function deleteRemoteProject(owner,project){
  ui.showDialog(`<h2>Delete ${esc(project.name)}?</h2><p>Its chats and tabs move to ${esc(target.name)} on ${esc(owner.hostName)}. Chat history, files and access are preserved.</p><button id="close-dialog">Cancel</button><button id="dialog-submit" class="danger">Delete project</button>`,async()=>{
   if(busy)throw Error('Project deletion is already in progress.');busy=true;
   try{const next=await updateRemoteProjects(owner,{action:'delete',workspaceId:project.workspaceId,projectId:project.id,expectedRevision:catalog.revision});openRemoteProject(owner.hostId,next.projects.find(row=>row.id===target.id));}finally{busy=false;}
+ });
+}
+function moveRemoteProject(owner,project){
+ const revision=owner.workspaceProjects.revision,chatCount=Object.values(owner.workspaceProjects.memberships||{}).filter(member=>member.projectId===project.id).length;let busy=false;
+ ui.showDialog(`<h2>Move ${esc(project.name)}</h2><p>On ${esc(owner.hostName)}, from ${esc(owner.context.workspaces.find(workspace=>workspace.id===project.workspaceId)?.name||project.workspaceId)}. ${chatCount} chats and all their tabs move with this project. ${owner.workspaceProjects.defaultProjectIds[project.workspaceId]===project.id?'A new General project will remain as the source workspace’s default.':''} Existing chats keep their settings and permissions; new chats use the destination workspace defaults.</p><label>Destination workspace<select id="peer-project-destination">${owner.context.workspaces.filter(workspace=>workspace.id!==project.workspaceId).map(workspace=>`<option value="${esc(workspace.id)}">${esc(workspace.name)}</option>`).join('')}</select></label><button id="close-dialog">Cancel</button><button id="dialog-submit">Move project</button>`,async()=>{
+  if(busy)throw Error('Project movement is already in progress.');busy=true;
+  try{const next=await updateRemoteProjects(owner,{action:'move-project',projectId:project.id,workspaceId:$('#peer-project-destination').value,expectedRevision:revision});openRemoteProject(owner.hostId,next.projects.find(row=>row.id===project.id));}finally{busy=false;}
  });
 }
 async function renderRemoteWorkspace(tab){
@@ -173,9 +180,10 @@ async function renderRemoteWorkspace(tab){
  let project=tab.projectId&&catalog.projects.find(row=>row.id===tab.projectId),workspace=owner.context.workspaces.find(row=>row.id===tab.workspaceId);
  if(!workspace||tab.projectId&&!project){marker.innerHTML='<p class="banner">This workspace or project changed on its owning computer. Open its workspace list to refresh the location.</p>';return true;}
  tab.hostName=owner.hostName;const page=tab.workspacePage||(project?'chats':'projects');
- marker.innerHTML=`<div class="heading"><div>${project?'<button data-peer-parent class="subtle">'+esc(workspace.name)+' ›</button>':''}<h1>${esc(project?.name||workspace.name)}</h1><p class="note">${esc(owner.hostName)}</p></div><div class="actions">${project?'<button data-peer-project-rename>Rename project</button>':'<button data-peer-project-create>＋ New project</button>'}<button data-peer-new-chat>＋ New chat</button></div></div><div class="actions">${(project?['chats','tabs']:['projects','chats','tabs','configuration']).map(value=>`<button data-peer-page="${value}" class="${page===value?'primary':''}">${value[0].toUpperCase()+value.slice(1)}</button>`).join('')}</div><section data-peer-workspace-body></section>`;
+ marker.innerHTML=`<div class="heading"><div>${project?'<button data-peer-parent class="subtle">'+esc(workspace.name)+' ›</button>':''}<h1>${esc(project?.name||workspace.name)}</h1><p class="note">${esc(owner.hostName)}</p></div><div class="actions">${project?(owner.capabilities.includes('projects.move.v1')?'<button data-peer-project-move>Move project…</button>':'')+'<button data-peer-project-rename>Rename project</button>':'<button data-peer-project-create>＋ New project</button>'}<button data-peer-new-chat>＋ New chat</button></div></div><div class="actions">${(project?['chats','tabs']:['projects','chats','tabs','configuration']).map(value=>`<button data-peer-page="${value}" class="${page===value?'primary':''}">${value[0].toUpperCase()+value.slice(1)}</button>`).join('')}</div><section data-peer-workspace-body></section>`;
  marker.querySelector('[data-peer-parent]')?.addEventListener('click',()=>openWorkspace({...workspace,hostId:owner.hostId,hostName:owner.hostName},'projects'));
  marker.querySelector('[data-peer-project-create]')?.addEventListener('click',()=>remoteProjectDialog(owner,workspace.id));marker.querySelector('[data-peer-project-rename]')?.addEventListener('click',()=>remoteProjectDialog(owner,workspace.id,project));
+ marker.querySelector('[data-peer-project-move]')?.addEventListener('click',()=>moveRemoteProject(owner,project));
  marker.querySelector('[data-peer-new-chat]').onclick=()=>ui.newChat({...tab,projectId:project?.id||catalog.defaultProjectIds[workspace.id]});
  marker.querySelectorAll('[data-peer-page]').forEach(button=>button.onclick=()=>{tab.workspacePage=button.dataset.peerPage;ui.render();});const area=marker.querySelector('[data-peer-workspace-body]');
  if(page==='projects'){

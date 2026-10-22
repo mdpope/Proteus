@@ -92,12 +92,14 @@ struct MarkdownView: UIViewRepresentable {
     @MainActor final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         var parent: MarkdownView
         var loaded = false
+        var painted: [String: String]?
         var rendered: String?
         var searched: String?
         var selection = -2
         init(_ parent: MarkdownView) { self.parent = parent }
         func update(_ web: WKWebView) {
             guard loaded else { return }
+            paint(web)
             if rendered == parent.text { updateSearch(web); return }
             rendered = parent.text; searched = nil; selection = -2
             // Pass Markdown as data, never interpolate model content into JavaScript or HTML.
@@ -108,8 +110,19 @@ struct MarkdownView: UIViewRepresentable {
                 guard let self, self.rendered == text else { return }
                 if case .success(let value) = result, let height = value as? Double { self.resize(height) }
                 if case .failure = result { self.rendered = nil }
+                self.paint(web, force: true)
                 self.updateSearch(web)
             }
+        }
+        private func paint(_ web: WKWebView, force: Bool = false) {
+            let palette = NativePalette.shared
+            let colors = Dictionary(uniqueKeysWithValues: ["text", "muted", "accent", "border"].map { key in
+                var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+                UIColor(palette.color(key)).getRed(&r, green: &g, blue: &b, alpha: &a)
+                return (key, String(format: "#%02x%02x%02x", Int((r*255).rounded()), Int((g*255).rounded()), Int((b*255).rounded())))
+            })
+            guard force || painted != colors else { return }; painted = colors
+            web.callAsyncJavaScript("document.body.style.color=colors.text; for(const node of document.querySelectorAll('.rich-text a'))node.style.color=colors.accent; for(const node of document.querySelectorAll('.rich-text blockquote')){node.style.color=colors.muted;node.style.borderColor=colors.border}", arguments: ["colors": colors], in: nil, in: .page, completionHandler: nil)
         }
         private func updateSearch(_ web: WKWebView) {
             guard let search = parent.search else { return }

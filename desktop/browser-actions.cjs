@@ -42,6 +42,7 @@ class BrowserActions {
     }
     const inspect=tab.view?.webContents?{label:'Inspect Element',click:run(()=>this.browser.command({action:'devtools',id:tab.id,x:params.x,y:params.y}))}:null;
     if(!url){
+      const editing=items.splice(0);
       const wc=tab.view?.webContents;
       if(wc){
         if(items.length)items.push({type:'separator'});
@@ -49,13 +50,13 @@ class BrowserActions {
           {label:'Forward',enabled:wc.navigationHistory.canGoForward(),click:run(()=>this.browser.command({action:'forward',id:tab.id}))},
           {label:'Reload',click:run(()=>this.browser.command({action:'reload',id:tab.id}))});
       }
+      if(editing.length){if(items.length)items.push({type:'separator'});items.push(...editing);}
       if(inspect){if(items.length)items.push({type:'separator'});items.push(inspect);}
       return items.length?Menu.buildFromTemplate(items):null;
     }
     let browserName = 'Default Browser';
     try { browserName = app.getApplicationNameForProtocol('https://') || browserName; } catch {}
-    if(items.length)items.push({type:'separator'});
-    return Menu.buildFromTemplate([...items,
+    return Menu.buildFromTemplate([
       {label:'Open Link in New Tab',...this.icon('NSAddTemplate'),click:run(async () => { const info = await this.browser.create(url,null,null,source); this.send({type:'select-tab',info,afterId:tab.id}); })},
       {label:'Open Link in Unloaded Tab',...this.icon('NSAddTemplate'),click:run(async()=>{const info=await this.browser.create(url,null,null,{...source,hidden:true,unloaded:true});this.send({type:'unloaded-tab',info,afterId:tab.id});})},
       {label:`Open Link in ${browserName.replace(/[\r\n]/g,' ').replace(/&/g,'&&')}`, ...this.icon('NSFollowLinkFreestandingTemplate'), click:run(() => shell.openExternal(url))},
@@ -64,6 +65,7 @@ class BrowserActions {
       {label:'Download Linked File As…',...this.icon('NSTouchBarDownloadTemplate'),click:run(() => this.download(url,tab.profileId))},
       {type:'separator'},
       {label:'Start New Chat with Link',...this.icon('NSTouchBarComposeTemplate'),click:run(() => this.send({type:'chat-link',url}))},
+      ...(items.length?[{type:'separator'},...items]:[]),
       ...(inspect?[{type:'separator'},inspect]:[]),
     ]);
   }
@@ -72,10 +74,14 @@ class BrowserActions {
     try { filename = path.basename(decodeURIComponent(new URL(url).pathname)).replace(/[\x00-\x1f/\\:]/g,'_').slice(0,180) || filename; } catch {}
     const result = await dialog.showSaveDialog(this.browser.window,{title:'Save link as',defaultPath:path.join(this.downloadManager?.settings().directory||app.getPath('downloads'),filename),buttonLabel:'Save'});
     if (result.canceled || !result.filePath || this.browser.shuttingDown) return;
+    return this.startDownload(url,profileId,result.filePath);
+  }
+  startDownload(url,profileId,file,options={}) {
+    if(!this.link(url)||!this.browser.profileAvailable({profileId}))throw Error('This download source or profile is unavailable.');
     // A page cannot consume this grant: only a new, never-navigated webContents may download.
     const view = new WebContentsView({webPreferences:{session:this.browser.sessionFor(profileId),nodeIntegration:false,contextIsolation:true,sandbox:true}});
     const wc = view.webContents;
-    this.downloads.set(wc.id,{view,url,profileId,file:result.filePath,claimed:false,timer:setTimeout(() => this.disposeDownload(wc.id),60000)});
+    this.downloads.set(wc.id,{view,url,profileId,file,windowId:this.browser.windowId?.()||'main',...options,claimed:false,timer:setTimeout(() => this.disposeDownload(wc.id),60000)});
     try { wc.downloadURL(url); } catch (error) { this.disposeDownload(wc.id); throw error; }
   }
   disposeDownload(id) { const grant = this.downloads.get(id); if (!grant) return; this.downloads.delete(id); clearTimeout(grant.timer); if (!grant.view.webContents.isDestroyed()) grant.view.webContents.close(); }

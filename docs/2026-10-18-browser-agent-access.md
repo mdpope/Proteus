@@ -1,3 +1,15 @@
+## October 20 supersession — explicit human sharing
+
+Human-opened tabs now require an explicit persisted logical-tab grant; agent-created tabs start shared. The robot button grants/revokes. request-access presents a native default-decline human prompt and verifies fresh tab/profile/URL/preference revision. Direct and MCP page backends share the same gate; background control continues on granted tabs. Old implicit access is not a grant. The historical default-access and pause-only entries below no longer describe the current preview contract.
+
+## October 20 preview supersession — explicit human pause
+
+The operator now requests a working robot switch. Default availability remains unchanged, while
+an explicit human pause blocks that logical tab's page automation at the common host boundary.
+The button controls pause/resume; listing/organization, profile separation and existing permission
+checks remain independent. Persist pause across view recreation and respect it from every page
+backend. The status-only description below documents the earlier October 18 design.
+
 # Browser agent access and Engine Room spacing
 
 The operator authorized removing profile/tab access barriers on October 18. Browser extensions,

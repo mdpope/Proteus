@@ -1,3 +1,4 @@
+import {readMarkdownFile} from './file-metadata.js';
 import {DesktopControl} from './desktop-control.js';
 import { DesktopPreview, desktopPreviewCodexHome } from './desktop-preview.js';
 import { WorkspaceProjects } from './workspace-projects.js';
@@ -107,7 +108,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   engine.permissions.migrateWorkspaces(context.config());
   context.permissionStore = engine.permissions;
   engine.permissions.workspaceDefaults = id => id ? context.executionScope(id).approvals : undefined;
-  const integrations=new IntegrationHealth(home,{engine,onChange:()=>{notify();remote?.changed();}});
+  const integrations=new IntegrationHealth(home,{engine,context,onChange:()=>{notify();remote?.changed();}});
   for(const adapter of Object.values(adapters)){adapter.integrations=integrations;adapter.onIdle=()=>queueMicrotask(()=>engine.drain());}
   engine.on('change',run=>{try{integrations.capture(run);}catch(error){activity.log('warning','integrations.storage','Connection health could not be saved.',{error});}});
   const providerAuth = new ProviderAuthManager({adapters,settings,activeTurn:providerId=>[...engine.running.values(),...engine.backgroundRuns.values()].filter(Boolean).some(slot=>engine.getRun(slot.id).schedule.provider===providerId),onTerminal:()=>queueMicrotask(()=>engine.drain())});
@@ -249,7 +250,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         if(url.pathname.startsWith('/api/desktop-preview')&&!desktopPreview)return json(404,{error:'Desktop preview is disabled.'});
         const projectPath=url.pathname.replace('/api/workspace-projects','/api/desktop-preview');
         if(projectPath==='/api/desktop-preview'&&req.method==='GET')return json(200,preview.get(engine));
-        if(projectPath==='/api/desktop-preview/projects'&&req.method==='POST'){const value=await body(req);preview.projects(value,engine);await preview.reconcileContentTabs(service.contentTabs,engine);if(value.action==='delete')await (service.reconcileWorkspaceProjects||service.reconcilePreviewProjects)?.();notify();remote.changed();return json(200,preview.get(engine));}
+        if(projectPath==='/api/desktop-preview/projects'&&req.method==='POST'){const value=await body(req);preview.projects(value,engine);await preview.reconcileContentTabs(service.contentTabs,engine);if(['delete','move-project'].includes(value.action))await (service.reconcileWorkspaceProjects||service.reconcilePreviewProjects)?.();notify();remote.changed();return json(200,preview.get(engine));}
         if(projectPath==='/api/desktop-preview/sources'&&req.method==='POST'){const result=await preview.sources(await body(req),engine);notify();remote.changed();return json(200,result);}
         return json(404,{error:'Unknown project operation.'});
       }
@@ -286,14 +287,14 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       }
       if (url.pathname === '/api/state') {
         const state=performanceDiagnostics.measureSync('http.state.assemble', () => {
-        const projectSnapshot=preview.snapshot(),workspaceProjects=preview.get(engine,projectSnapshot),contextCatalog=context.get();
+        const projectSnapshot=preview.snapshot(),workspaceProjects=preview.get(engine,projectSnapshot),contextCatalog=integrations.decorateCatalog(context.get());
         const permissionSnapshot=engine.permissions.snapshot({workspaceDefaults:id=>id?context.executionScope(id,projectSnapshot.config).approvals:undefined});
         return {
         hostName:remote.info().label,hostId:remote.info().hostId,
         workspaceProjects,
         ...(desktopPreview?{desktopPreview:workspaceProjects}:{}),
         attention:service.desktopAttention(),updates:service.updates?.status()||null,
-        schedules: engine.schedules.list(), runs: engine.listRuns().map(run => url.searchParams.has('summaries') ? {...runSummary(run),...workspaceProjects.memberships[run.id],trigger:run.trigger,usage:run.usage,schedule:{id:run.schedule.id,name:run.schedule.name,provider:run.schedule.provider,model:run.schedule.model,workspace:run.schedule.workspace},permissionContext:engine.permissions.describeRun(run,permissionSnapshot)} : ({ ...run, ...workspaceProjects.memberships[run.id], storage: storagePaths(home, run), permissionContext: engine.permissions.describeRun(run,permissionSnapshot) })), providerStatus: catalog.value, providerStatuses: providerStatuses(),attachmentMediaTypes:Object.fromEntries(['copilot','codex','claude'].map(id=>[id,adapters[id]?.acceptedMediaTypes||[]])),mcpStatusProviders:['copilot','codex','claude'].filter(id=>typeof adapters[id]?.mcpStatus==='function'),mcpLoginProviders:['copilot','codex','claude'].filter(id=>typeof adapters[id]?.mcpLogin==='function'),
+        schedules: engine.schedules.list(), runs: engine.listRuns().map(run => url.searchParams.has('summaries') ? {...runSummary(run),...workspaceProjects.memberships[run.id],trigger:run.trigger,usage:run.usage,schedule:{id:run.schedule.id,name:run.schedule.name,provider:run.schedule.provider,model:run.schedule.model,workspace:run.schedule.workspace},permissionContext:engine.permissions.describeRun(run,permissionSnapshot)} : ({ ...run, ...workspaceProjects.memberships[run.id], storage: storagePaths(home, run), permissionContext: engine.permissions.describeRun(run,permissionSnapshot) })), providerSteering:Object.fromEntries(Object.entries(engine.providers).map(([id,provider])=>[id,typeof provider.steer==='function'])),providerStatus: catalog.value, providerStatuses: providerStatuses(),attachmentMediaTypes:Object.fromEntries(['copilot','codex','claude'].map(id=>[id,adapters[id]?.acceptedMediaTypes||[]])),mcpStatusProviders:['copilot','codex','claude'].filter(id=>typeof adapters[id]?.mcpStatus==='function'),mcpLoginProviders:['copilot','codex','claude'].filter(id=>typeof adapters[id]?.mcpLogin==='function'),
         permissions: permissionSnapshot.value, permissionWorkspaces: engine.permissions.describeMany([
           { ...settings.get(), name: 'Default workspace', ref: { defaults: true } },
           ...engine.schedules.list().filter(schedule => !schedule.error).map(schedule => ({ ...schedule, ref: { scheduleId: schedule.id } })),
@@ -340,7 +341,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         }
         return json(200, saved);
       }
-      if (url.pathname === '/api/context' && req.method === 'GET') return json(200, context.get(url.searchParams.get('workspaceId') || undefined));
+      if (url.pathname === '/api/context' && req.method === 'GET') return json(200, integrations.decorateCatalog(context.get(url.searchParams.get('workspaceId') || undefined)));
       if (url.pathname === '/api/context/preview' && req.method === 'POST') { const value = await body(req); return json(200, contextPlan(context.get(value.workspaceId), value)); }
       if (url.pathname === '/api/context/refresh' && req.method === 'POST') { const value = await body(req); const result = await context.refreshAsync({workspaceId:value.workspaceId,root:value.root}); notify(); return json(200,result); }
       if (url.pathname === '/api/context' && req.method === 'POST') {
@@ -557,6 +558,8 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (url.pathname === '/api/integrations') {
         if(req.method==='GET')return json(200,integrations.snapshot());
         const value=await body(req);
+        if(value.action==='favorite'){const workspace=context.config().workspaces.find(row=>context.get(row.id).entries.some(entry=>entry.id===value.id));if(!workspace)throw Error('This source is no longer in the source library.');context.favorite(value.id,value.enabled,value.expectedRevision,workspace.id);notify();return json(200,integrations.snapshot());}
+        if(value.action==='refresh-sources'){await context.refreshAsync({});notify();return json(200,integrations.snapshot());}
         if(value.action==='save')return json(200,integrations.save(value.id,value.profile,value.expectedRevision));
         if(['check','recover'].includes(value.action))return json(200,await integrations.check(value.id,{recover:value.action==='recover'}));
         throw new Error('Unknown integration action.');
@@ -592,9 +595,8 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         const { file, image } = await body(req);
         const roots = [...context.roots(), ...context.config().documents.map(doc => path.dirname(doc.path)), settings.get().workspace.cwd, ...settings.get().workspace.additionalDirectories, ...engine.schedules.list().filter(s => !s.error).flatMap(s => [s.workspace.cwd, ...s.workspace.additionalDirectories])];
         if (typeof file !== 'string' || !/\.md$/i.test(file) || !isWithin(file, roots)) throw new Error('Choose a Markdown file inside a configured workspace.');
-        if (fs.statSync(file).size > 1_000_000) throw new Error('Markdown file is too large.');
-        const content = fs.readFileSync(file, 'utf8');
-        return json(200, image ? readImage({ source: image, texts: [content], cwd: path.dirname(file), roots }) : { file, content });
+        const document=readMarkdownFile(file);
+        return json(200, image ? readImage({ source: image, texts: [document.content], cwd: path.dirname(file), roots }) : document);
       }
       const assets = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'], '/features.js': ['features.js', 'text/javascript'], '/remote.js': ['remote.js', 'text/javascript'] };
       for (const file of ['runtime.js', 'style.css']) assets['/markdown/' + file] = ['markdown/' + file, file.endsWith('.css') ? 'text/css' : 'text/javascript'];
@@ -614,7 +616,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   origin = `http://127.0.0.1:${server.address().port}`;
   atomicJSON(path.join(home, 'connection.json'), { origin, token, pid: process.pid });
   const timer = timers ? setInterval(() => { void performanceDiagnostics.measure('scheduler.tick', () => engine.tick()).catch(error => engine.emit('scheduler-error', { error: error.message, at: new Date().toISOString() })); }, 1000) : null;
-  const service = { desktopControl,workspaceProjects:preview, desktopPreview:desktopPreview?preview:null, performanceDiagnostics, notify, desktopAttention:()=>[...(service.browserAttention?.()||[]),...remote.documents.list().filter(item=>!item.approvedAt).map(item=>({id:'document:'+item.requestId,kind:'document',title:item.deviceName+' requests '+item.title,requestId:item.requestId,path:item.path,at:new Date(Date.parse(item.expiresAt)-600000).toISOString()})),...service.attention()], attention:()=>[...integrations.consumers().filter(item=>['needs-auth','failed'].includes(item.connection)).map(item=>({id:'integration:'+item.id,kind:'connection',title:(item.profile.label||item.server)+' needs attention',section:'integrations',at:item.checkedAt})),...activity.notifications().items.filter(item=>!item.readAt).map(item=>({id:'notification:'+item.id,notificationId:item.id,kind:'notification',title:item.title,body:item.body,chatId:item.chatId,at:item.createdAt}))], browserProfiles, integrations, engine, settings, context, standup, omi, life, account, activity, workspaceFiles, attachments, buildChatSchedule, usage, catalog, catalogs, origin, token, home, url: `${origin}/?token=${token}`, async close() {
+  const service = { desktopControl,workspaceProjects:preview, desktopPreview:desktopPreview?preview:null, performanceDiagnostics, notify, desktopAttention:()=>[...(service.browserAttention?.()||[]),...remote.documents.list().filter(item=>!item.approvedAt).map(item=>({id:'document:'+item.requestId,kind:'document',title:item.deviceName+' requests '+item.title,requestId:item.requestId,path:item.path,at:new Date(Date.parse(item.expiresAt)-600000).toISOString()})),...service.attention()], attention:()=>[...integrations.consumers().filter(item=>['needs-auth','failed'].includes(item.connection)).map(item=>({id:'integration:'+item.id,kind:'connection',title:(item.profile.label||item.server)+' needs attention',section:'integrations',at:item.checkedAt})),...activity.notifications().items.filter(item=>!item.readAt).map(item=>({id:'notification:'+item.id,notificationId:item.id,kind:'notification',title:item.title,body:item.body,chatId:item.chatId,...(item.browserIssue?{browserIssue:item.browserIssue,silent:true}:{}),at:item.createdAt}))], browserProfiles, integrations, engine, settings, context, standup, omi, life, account, activity, workspaceFiles, attachments, buildChatSchedule, usage, catalog, catalogs, origin, token, home, url: `${origin}/?token=${token}`, async close() {
     service.updates?.close();await desktopControl?.close();
     activity.log('info','app.stopping','Proteus is shutting down.');clearInterval(integrationTimer);await integrations.close(); if(activityTimer)clearInterval(activityTimer); if (timer) clearInterval(timer); if (catalogTimer) clearInterval(catalogTimer); await Promise.all(Object.values(catalogs).map(c => c.pending)); await providerAuth.close(); await remote.close(); let engineCloseError; try { await engine.close(); } catch (error) { engineCloseError=error; } await attachments.close(); await copilot.close(); await codex.close(); await claude.close(); await life.close?.(); await service.browserHistory?.close(); let activityCloseError; try { await activity.close(); } catch (error) { activityCloseError=error; }
     for (const client of eventClients) client.end(); eventClients.clear();

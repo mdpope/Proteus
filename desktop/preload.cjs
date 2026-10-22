@@ -1,9 +1,15 @@
 const { contextBridge, ipcRenderer } = require('electron');
 const windowId=process.argv.find(value=>value.startsWith('--proteus-window-id='))?.slice(20)||'main';
 contextBridge.exposeInMainWorld('desktop', {
+  platform:process.platform,
+  windowChrome:value=>ipcRenderer.invoke('proteus:window-chrome',value),
+  onWindowChromeState:handler=>{const listener=(_event,value)=>handler(value);ipcRenderer.on('proteus:window-chrome-state',listener);return()=>ipcRenderer.removeListener('proteus:window-chrome-state',listener);},
   windowId,
+  windowPreview:process.argv.includes('--proteus-window-preview'),
+  windowLayouts:value=>ipcRenderer.invoke('proteus:window-layouts',value),
   onNewTab:handler=>{const listener=()=>handler();ipcRenderer.on('proteus:new-tab',listener);return()=>ipcRenderer.removeListener('proteus:new-tab',listener);},
   notice:value=>ipcRenderer.invoke('proteus:notice',value),
+  browserNotification:value=>ipcRenderer.invoke('proteus:browser-notification',value),
   onNoticeAction:handler=>{const listener=(_event,value)=>handler(value);ipcRenderer.on('proteus:notice-action',listener);return()=>ipcRenderer.removeListener('proteus:notice-action',listener);},
   defaultBrowser:()=>ipcRenderer.invoke('proteus:default-browser'),
   openLink:value=>ipcRenderer.invoke('proteus:open-link',value),
@@ -30,7 +36,7 @@ contextBridge.exposeInMainWorld('desktop', {
   copyText: text => ipcRenderer.invoke('proteus:copy-text', text),
   choosePaths: options => ipcRenderer.invoke('proteus:choose-paths', options),
   openPath: file => ipcRenderer.invoke('proteus:open-path', file),
-  browser: value => ipcRenderer.invoke('proteus:browser', value),
+  browser: value => {if(['popup-menu','page-menu','address-suggestions'].includes(value?.action)){const style=getComputedStyle(document.body||document.documentElement);value={...value,colors:Object.fromEntries([['background','--palette-menu'],['text','--palette-menuText'],['border','--palette-menuBorder'],['hover','--palette-menuHover'],['accent','--palette-menuAccent']].map(([key,name])=>[key,style.getPropertyValue(name).trim()]))};}return ipcRenderer.invoke('proteus:browser', value);},
   onDocumentOpened: handler => {const listener=(_event,value)=>handler(value);ipcRenderer.on('proteus:open-document',listener);return ()=>ipcRenderer.removeListener('proteus:open-document',listener);},
   onBrowserAction: handler => { const listener = (_event, value) => handler(value); ipcRenderer.on('proteus:browser-action', listener); return () => ipcRenderer.removeListener('proteus:browser-action', listener); },
   onAddressFocus: handler => { const listener = () => handler(); ipcRenderer.on('proteus:focus-address', listener); return () => ipcRenderer.removeListener('proteus:focus-address', listener); },

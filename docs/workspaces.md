@@ -1,3 +1,125 @@
+## October 22 — native project destination identity
+
+A pushed project view observes the owner's current saved project selection directly. The content
+identity includes computer, workspace and project, so selecting a sibling from the drawer restores
+that project's own tabs/page rather than retaining the previously captured destination. No chat,
+webview history, workspace expansion or source configuration is recreated by selecting a project.
+
+## October 21 follow-up — navigation must survive all page/feature loading
+
+BF-2026-10-19-06 now explicitly covers every tab/feature/page/Engine Room section, async successes
+and failures, refresh/reconnect and restoration. Preserve expanded/collapsed branches, nested
+project state, paging, sidebar position and picker selections. Explicit name navigation may expand
+its own branch; only explicit collapse controls collapse. The operator's intermittent recurrence
+is not reproduced or diagnosed. Queue-only under the renewed build-confirmation hold.
+
+## October 21 upgrade requirement — HC favorites
+
+BF-86 must merge favorites on each upgraded owner independently, including Work Mac.
+Union that owner's legacy root and active-workspace lists through ContextStore migration;
+never replace them with another computer's source IDs. Verify shared favorites in existing
+and new workspaces while preserving loading defaults, modes and approvals. HC migration
+has not been executed or verified. The latest release build is held pending confirmation.
+
+## 0.2.28 — whole-project movement
+
+Move project changes a stable project's workspace on its owning computer, including all chat
+memberships and project resources. Local and supported paired desktop project pages offer the
+operation; UI, tools and remote requests reach the same revision-checked owner service.
+A durable catalog receipt records affected chats before membership reconciliation, so partial
+failures/retries converge. Archived chats are included; browser/terminal/viewer identities,
+execution hosts, profile/history and authorization origins remain intact.
+
+Existing chats retain captured execution configuration and approvals. New chats adopt destination
+workspace defaults; saved New chat drafts keep text/attachments while workspace choices reset.
+Moving the source default creates a replacement General in the same catalog commit and leaves
+the destination default unchanged. Schedule files and activation are not rewritten.
+
+Saved desktop/peer project roots now reconcile same-ID workspace changes. Web active project views
+follow owner metadata; native stale workspace selection clears while stable project resource
+scopes remain available in the destination. Older clients need this update for saved-view
+reconciliation; project movement does not install software on other computers.
+
+BF-75's read-only investigation found the reported assignment already present in both retained
+pre-update snapshots and the chat's creation context. The latest update is not shown to have
+moved it; the original cause remains unknown. The requested live one-time move is pending an
+updated installed owner, with no direct data edits. See the [release ledger](2026-10-21-browser-chat-release.md).
+
+## October 20 — native workspace/project selection follow-up
+
+Selecting a workspace or project name also expands its sidebar/drawer section. Selecting a
+project expands its parent workspace and that project's recent items. The separate chevron still
+collapses explicitly; background refreshes do not force a collapsed section open. Plain label rows
+have full rectangular touch targets, including whitespace beside short names. Phone and iPad UI
+acceptance verifies name selection, explicit collapse and reopening by name. Workspace groups
+use eight-point gaps, with the horizontal divider below the Workspaces feature.
+
+The content pane renders the exact browser identity selected by its containing strip; restoring
+another remembered scope selection cannot show the wrong page. Repeated selection reuses the
+cached WebKit view/history. Native main navigation remains device-owned and mixes connected hosts;
+no iOS window manager or desktop main-tab mirroring is introduced. See the [release ledger](2026-10-20-palette-release.md).
+
+## October 20 — tab-hosted New chat setup
+
+The unified blank tab's New chat action hosts its existing setup content in the selected tab.
+Navigation remains usable; separate forms use unique DOM/model/attachment keys and remain mounted
+while inactive. Unsent text/configuration, source choices and expanded sections restore with the
+window. Attachment objects stay in memory during tab switches and require reselection after restart.
+Draft text/configuration is window-private, separate from shared content membership; never copy
+unsent prompts into shared descriptors. Pending explicit tab creation is retained until its owner
+acknowledges it, without reopening unrelated remotely closed tabs. Starting a chat changes the same
+position to its normal local/paired chat and preserves the effective destination/context boundary.
+
+## October 20 — project creation keyboard support
+
+Local and paired New Project dialogs are semantic forms. Enter submits from the name field,
+using the same validation/owner mutation as Create project. One pending submission prevents
+rapid Enter/click from creating duplicates. Cancellation does not submit the form. The isolated
+local preview UI verifies Enter creates exactly one project; paired owner writes are unchanged.
+
+## October 20 — functional isolated preview
+
+The operator authorizes the current window preview and associated iPad repair source.
+See [window management](window-management.md) for current implementation, ownership and validation;
+earlier chat-only/pending-implementation entries below describe historical intake. Preview Team
+content is canonical across windows; top-level navigation and selection stay independent. The
+existing overview icon now lives at the right of the universal secondary strip, beside New tab,
+instead of the address bar. Named window recovery resolves current shared contents before restore.
+Native source fixes chat pinch observation, readable headings, 44-point navigation rows, Team
+account/editor layout and preservation of mixed-type tab descriptors. Production/physical-device
+acceptance remains separate.
+
+## October 20 — reported iOS page-label and Team Tools regressions
+
+BF-2026-10-20-43/44 queues readable page labels instead of single-letter ellipses, restoration of
+Team Tools information/list access, and a usable link editor. Preserve existing team/list/roster,
+links/order/generated Standup and account state; missing UI is not proof of deleted data. Check
+phone/tablet widths, rotation, sidebar and keyboard states against actual owner data. These are
+operator reports for the next release; causes, repairs and device acceptance remain pending.
+Supplied iPad landscape screenshots identify 0.2.26 (2610.20.1) on Home and show Home/Schedules/
+project Chats headings truncated despite available width. Team Tools exposes Create team list
+without populated list information, a clipped account/control area and a reorder-validation error;
+Standup has no visible list name/order and shows 0 people. This confirms the displayed symptoms,
+not owner-data deletion or an authentication failure. Preserve existing data and inspect the
+actual owner response plus layout/reorder scope. Original private screenshots stay outside Git.
+BF-2026-10-20-45 adds iPad navigation-height consistency: the Team secondary strip looks taller
+than the app strip in the screenshots, and source mixes 46-point Team labels with content/padding
+main-tab sizing. Normalize compact row geometry across supported second-layer scopes while
+preserving controls/hit targets; exact rendered measurements and repair acceptance remain pending.
+See [planned updates](planned-updates.md).
+
+## October 20 — shared content and named window recovery follow-up
+
+BF-2026-10-20-39–41 clarifies that all windows showing the same owner Team Tools/workspace/project
+must see one content-tab set, including shared Close and URL/history changes. Selection, reading
+state and top-level navigation stay independent per window. Add Engine Room window sessions with
+names and restoration after individual Close or prior app sessions, superseding BF-19-11's
+close-forgets rule. Restore current owner contents rather than stale tab/URL snapshots. Source
+review and synthetic in-chat header alternatives are complete; runtime repair, selected Proteus
+demo and actual recovery/synchronization acceptance remain pending. Unified strip is selected
+with current close buttons, underline and divider styling; the revised chat draft precedes the
+Proteus demo. See [window management](window-management.md).
+
 ## Queued P1 — navigation continuity during workspace/project moves
 
 BF-2026-10-19-23/24/25 in [planned updates](planned-updates.md) record reported installed-0.2.25
@@ -518,3 +640,8 @@ actual project-aware session in isolated and production modes. Visibility action
 the owner management boundary to avoid a first-sync race reverting local Hide before Move.
 Multiple-window broker/unit and real Electron restart/close tests pass. This is source/fixture
 acceptance; no new production installation or physical native workflow is claimed.
+
+October 21 follow-up: sidebar saved expansion state is loaded before capture/save, avoiding an
+empty in-memory tree overwriting the restored session. The isolated UI regression retains expanded
+workspace/project rows through Engine Room pages and shell reload. MCP source rows show owner
+connection evidence separately from each workspace's enabled/default/off choice.

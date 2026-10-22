@@ -8,8 +8,8 @@ settings:
     SWIFT_VERSION: '5.0'
     TARGETED_DEVICE_FAMILY: '1,2'
     CODE_SIGN_STYLE: Automatic
-    MARKETING_VERSION: '0.2.26'
-    CURRENT_PROJECT_VERSION: '2610.19.1'
+    MARKETING_VERSION: '0.2.28'
+    CURRENT_PROJECT_VERSION: '2610.22.1'
 targets:
   ProteusMobile:
     type: application

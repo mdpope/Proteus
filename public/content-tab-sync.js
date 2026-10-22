@@ -86,6 +86,18 @@ export function createTabSynchronizer({scopes,readLocal,apply,request,onError=()
     }
     return {...remote,tabs};
   }
+  async function snapshot(scope){
+    const local=structuredClone(await readLocal(scope));
+      // Multiple native views can share one owner descriptor. Reconcile that
+      // identity once; apply still keeps each distinct local view and its order.
+      const unique=new Map();
+      for(const tab of local){
+        const prior=unique.get(tab.id);
+        if(prior?.navigationPending&&tab.navigationPending&&(prior.url!==tab.url||JSON.stringify(prior.history)!==JSON.stringify(tab.history)))throw Error('Two local views have different pending navigation for one shared tab. Resolve their navigation before synchronizing.');
+        if(!prior||tab.navigationPending&&!prior.navigationPending)unique.set(tab.id,tab);
+      }
+    return [...unique.values()];
+  }
   async function sync(scope){
     if((backoff.get(hostKey(scope))?.until||0)>now())return;
     const id=key(scope);let record=records.get(id);
@@ -95,16 +107,7 @@ export function createTabSynchronizer({scopes,readLocal,apply,request,onError=()
     if(!record){record={baseline:null,revision:0};records.set(id,record);}
     const work=async()=>{
       let wrote=false;
-      let local=structuredClone(await readLocal(scope));
-      // Multiple native views can share one owner descriptor. Reconcile that
-      // identity once; apply still keeps each distinct local view and its order.
-      const unique=new Map();
-      for(const tab of local){
-        const prior=unique.get(tab.id);
-        if(prior?.navigationPending&&tab.navigationPending&&(prior.url!==tab.url||JSON.stringify(prior.history)!==JSON.stringify(tab.history)))throw Error('Two local views have different pending navigation for one shared tab. Resolve their navigation before synchronizing.');
-        if(!prior||tab.navigationPending&&!prior.navigationPending)unique.set(tab.id,tab);
-      }
-      local=[...unique.values()];
+      let local=await snapshot(scope);
       let remote=await hydrate(scope,await request(scope,'get'));
       if(records.get(id)!==record)return;
       // Older owners may never have registered these saved local chat aliases.
@@ -133,8 +136,15 @@ export function createTabSynchronizer({scopes,readLocal,apply,request,onError=()
       const requestKey='proteus.navigation.request:'+id;
       if(!record.pending&&pendingStorage)try{record.pending=JSON.parse(pendingStorage.getItem(storageKey)||'null');}catch{}
       const initial=remote.revision===0?tabChanges([],local,{navigation,seed:true}):tabChanges(remote.tabs,[...remote.tabs.map(tab=>local.find(item=>item.id===tab.id&&item.navigationPending)||tab),...local.filter(tab=>tab.navigationPending&&!remote.tabs.some(item=>item.id===tab.id))],{navigation});
+      const retrying=!!record.pending;
       const operations=record.pending||(record.baseline===null?initial:tabChanges(record.baseline,local,{navigation}));
+      let captured=local;
       if(operations.length){
+        // Do not publish a close computed before the user replaced/moved a tab.
+        if(!retrying&&JSON.stringify((await snapshot(scope)).filter(tab=>!record.localAliases?.has(tab.id)))!==JSON.stringify(local)){record.again=true;return;}
+        if(!retrying)record.pendingSnapshot=structuredClone(local);
+        if(!record.pendingSnapshot){const known=new Map((record.baseline||[]).map(tab=>[tab.id,tab]));for(const op of operations){const tab=op.tab||remote.tabs.find(tab=>tab.id===(op.tabId||op.id));if(tab)known.set(tab.id,tab);}record.pendingSnapshot=[...known.values()].map(tab=>local.find(item=>item.id===tab.id)||tab);}
+        captured=record.pendingSnapshot;
         record.pending=operations;if(pendingStorage)pendingStorage.setItem(storageKey,JSON.stringify(operations));
         let rebased=rebaseTabChanges(operations,remote.tabs);
         const send=async changes=>{
@@ -154,7 +164,7 @@ export function createTabSynchronizer({scopes,readLocal,apply,request,onError=()
       // apply receives the captured snapshot, so it preserves additions made during I/O.
       if(records.get(id)!==record)return;
       rememberOwner(); // Mutation acknowledgements also prove owner participation.
-      await apply(scope,remote.tabs,local);
+      await apply(scope,remote.tabs,captured);record.pendingSnapshot=null;
       record.baseline=structuredClone(remote.tabs);record.revision=remote.revision;record.retry=null;if(wrote)backoff.delete(hostKey(scope));
     };
     record.busy=work().catch(error=>{
@@ -202,5 +212,5 @@ export function createTabSynchronizer({scopes,readLocal,apply,request,onError=()
     record.pending=null;record.conflict=false;record.again=false;record.retry=null;record.baseline=structuredClone(remote.tabs);record.revision=remote.revision;
     record.request=null;pendingStorage?.removeItem('proteus.navigation.pending:'+id);pendingStorage?.removeItem('proteus.navigation.request:'+id);
   }
-  return {sync,resolve,forget(scope){records.delete(key(scope));},forgetHost(hostId){backoff.delete(hostId);for(const id of records.keys())if(JSON.parse(id)[0]===hostId)records.delete(id);},async all(){const groups=new Map();for(const scope of scopes()){const owner=hostKey(scope);if(!groups.has(owner))groups.set(owner,[]);groups.get(owner).push(scope);}await Promise.all([...groups.values()].map(async group=>{for(const scope of group)await sync(scope);}));}};
+  return {sync,resolve,hasConflict:scope=>records.get(key(scope))?.conflict===true,forget(scope){records.delete(key(scope));},forgetHost(hostId){backoff.delete(hostId);for(const id of records.keys())if(JSON.parse(id)[0]===hostId)records.delete(id);},async all(){const groups=new Map();for(const scope of scopes()){const owner=hostKey(scope);if(!groups.has(owner))groups.set(owner,[]);groups.get(owner).push(scope);}await Promise.all([...groups.values()].map(async group=>{for(const scope of group)await sync(scope);}));}};
 }

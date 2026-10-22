@@ -1,3 +1,53 @@
+## October 21 — favorites shared across workspaces
+
+Favorites are bookmarks in the owning computer's canonical context configuration,
+independent of per-workspace modes, defaults, folder grants and MCP permissions.
+`favoritesConfigurationVersion: 1` marks an additive one-time union of root and active
+workspace lists. Unknown configuration fields survive. Removed favorites stay removed
+through restart; new workspaces inherit the list. Existing remote clients receive matching
+workspace projections and use the same revision-checked owner favorite operation.
+Explicit configuration imports merge mapped favorite IDs into the target owner's list.
+Archived execution snapshots remain preserved; independent computers do not acquire each
+other's machine-local source IDs or credentials. Source Library registration is also
+owner-global across workspaces, not automatic account-wide synchronization.
+
+Sources revealed only by a shared bookmark default to available (MCP disabled), never
+another workspace's automatic loading mode. Explicit workspace selections retain priority.
+Source and isolated-UI verification do not install the change into the running application.
+
+## Queued October 21 — browser tool context without repeated decorative bytes
+
+BF-2026-10-21-80 preserves full navigation history for agent context while removing repeated base64
+favicon text from ordinary browser results. Scope icon references/cache access to the owning
+account/profile; keep website content and actual screenshot images available through their normal
+tool paths. Page history and appearance assets are separate from optional workspace sources.
+
+Lossless history baseline/revision/delta delivery is a proposed additional optimization, not a
+default latest-entry-only view. It requires full-history resync/paging and recovery after context
+compaction, provider/session change, missing deltas or restart. A host-side sent flag is not proof
+that the agent can still see the baseline. Preserve exact safe navigation entries and current
+position; retain full-history behavior until the context guarantee is verified. Queue only under
+**do not build yet**; no context-delivery/runtime change or token saving is claimed.
+
+## Queued October 21 — defaults after moving a project
+
+BF-2026-10-21-76 queues whole-project movement between same-owner workspaces. Existing chats keep
+their effective configuration, active/queued-turn captures, drafts and approvals. New chats in the
+moved project use the destination workspace's current defaults and ordinary source/permission
+validation. A retained New chat setup must preserve unsent text/attachments while explicitly
+rebasing workspace-owned folder/source/agent/MCP/default choices; stale source-workspace responses
+must not restore old defaults. Changing placement grants no resource or tool access. This is queued
+scope only under **do not build yet**; current inheritance behavior has not changed.
+
+## October 20 — independent setup forms
+
+Each tab-hosted setup keeps its own workspace catalog snapshot, source selection, agent/default
+choice, provider/model controls and attachments key. Navigating another project or mounting a
+second setup cannot substitute that form's catalog or overwrite its IDs. Explicit source refresh
+and favorite mutations update the originating form's snapshot. Paired destination switches keep
+message/title but reset destination-owned catalogs and selections; stale responses cannot cross
+that boundary. Only the submitted selection is sent to the selected owner.
+
 ## October 18 — Source Library clarity and spacing
 
 The operator authorized incorporating BF-2026-10-18-03/04 from “Queue source spacing fix”. Desktop
@@ -22,7 +72,7 @@ are separate acceptance gates. Installed desktops remain 0.2.22.
 
 Required core orientation version 2 and provider tool schemas now explain all-type tab inventories,
 revision checks, hidden/unloaded creation, background page use and Load/Unload/Close distinctions.
-Ordinary browser tabs need no sharing/profile opt-in. This guidance is always supplied independently
+Human-opened browser tabs require explicit sharing; agent-opened tabs start shared. Agents may request a native human decision with request-access, and must respect a refusal. Profile extension opt-ins are not required. This guidance is always supplied independently
 of optional workspace sources. See [browser agent access](2026-10-18-browser-agent-access.md).
 
 ## Production source library — October 18 candidate
@@ -267,3 +317,11 @@ owned-connection cleanup. Both signed Mac backends pass native input/image adapt
 on a disposable app with explicit OS grants. A fresh backend process/window receipt and single-use
 observation bind every input; Stop rotates Cua lifecycle names and cleans both backend connections.
 Actual provider image delivery and Linux runtime acceptance remain separate gates.
+
+## Source icons
+
+Chat source selection, Favorites, refresh selection and workspace source tables share leading
+icons for instructions/files (document), skills (sparkle), agents (robot) and MCPs (plug). The
+icons supplement text type labels and accessible checkbox/selector names. Their appearance does
+not indicate that a source is selected, loaded, authorized or connected; those states continue
+to use the existing loading controls and status text.

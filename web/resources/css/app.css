@@ -1,3 +1,5 @@
+@import '../../../public/palette.css';
+@import './palette.css';
 @import '../../../public/toast.css';
 @import "../../../public/provider-usage.css";
 @import "../../../public/standup-links.css";
@@ -96,3 +98,12 @@ body[data-browser-account] .remote-message.remote-activity.failed{background:#33
 .workspace-tab-title { border:0; background:transparent; padding:0; margin:0; width:100%; text-align:left; font-weight:700; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; justify-content:flex-start; cursor:pointer; }
 .workspace-tab-title:hover { text-decoration:underline; }
 .workspace-tab-title:focus-visible { outline:2px solid var(--accent,#b8df91); outline-offset:3px; }
+
+/* Mode links occupy the existing composer label/status line. */
+.chat-composer-status{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;font-weight:400;color:var(--muted)}
+.chat-mode-links{display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+:is(#remote-composer,#remote-live-composer) .chat-mode-links button{font:inherit;color:inherit;border:0;padding:0;min-height:0;background:none}
+:is(#remote-composer,#remote-live-composer) .chat-mode-links button[aria-pressed=true]{color:var(--palette-accent,var(--green))}
+body[data-browser-account] .remote-message:is(.user,.assistant){border-top-color:transparent;border-right-color:transparent;border-bottom-color:transparent}
+
+.chat-prompt-label{display:grid;gap:6px;min-width:0}

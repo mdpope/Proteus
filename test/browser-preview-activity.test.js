@@ -13,7 +13,7 @@ function fixture(preview=true){
  class Clock extends Date {static now(){return now;}}
  class Contents extends EventEmitter {
   constructor(){super();this.url='';this.title='Synthetic';this.mainFrame={};this.entries=[];this.index=-1;this.navigationHistory={getAllEntries:()=>this.entries,getActiveIndex:()=>this.index,canGoBack:()=>this.index>0,canGoForward:()=>this.index<this.entries.length-1,goBack:()=>this.index--,goForward:()=>this.index++,restore:async history=>{this.entries=history.entries;this.index=history.index;this.url=this.entries[this.index].url;}};}
-  setZoomMode(){} setVisualZoomLevelLimits(){return Promise.resolve();} setWindowOpenHandler(){} send(){} isDestroyed(){return !!this.destroyed;} getURL(){return this.url;} getTitle(){return this.title;} isLoading(){return false;} getOSProcessId(){return 123;} isCurrentlyAudible(){return !!this.audible;}
+  getZoomFactor(){return this.zoom||1;} setZoomFactor(value){this.zoom=value;} setZoomMode(){} setVisualZoomLevelLimits(){return Promise.resolve();} setWindowOpenHandler(){} send(){} isDestroyed(){return !!this.destroyed;} getURL(){return this.url;} getTitle(){return this.title;} isLoading(){return false;} getOSProcessId(){return 123;} isCurrentlyAudible(){return !!this.audible;}
   loadURL(url){this.url=url;this.entries.push({url,title:this.title});this.index=this.entries.length-1;return Promise.resolve();} reload(){this.reloads=(this.reloads||0)+1;} stop(){}
   getBackgroundThrottling(){return true;} setBackgroundThrottling(){}
   close(){if(this.unsaved){this.emit('will-prevent-unload');return;}this.destroyed=true;this.emit('destroyed');}
@@ -23,7 +23,7 @@ function fixture(preview=true){
  const dependency=name=>name==='electron'?{WebContentsView:View}:name.startsWith('node:')||['./browser-history.cjs','./browser-navigation.cjs','./navigation.cjs'].includes(name)?desktopRequire(name):{};
  vm.runInNewContext(source,{module,exports:module.exports,require:dependency,__dirname:new URL('../desktop/',import.meta.url).pathname,Date:Clock,URL,Buffer,structuredClone,setTimeout,clearTimeout,setInterval,clearInterval});
  const browser=Object.create(module.exports.BrowserTabs.prototype),partition={};
- Object.assign(browser,{options:{projects:preview},appOrigin:'http://app.test',tabs:new Map(),reloading:new Map(),cookieStores:new Map(),overlays:new Set(),window:{contentView:{addChildView(){},removeChildView(){}},getContentBounds:()=>({width:800,height:600}),isDestroyed:()=>false,webContents:{send(){}}},actions:{send(){}},profile:()=>({settings:{blockingEnabled:false}}),sessionFor:()=>partition,profileAvailable:()=>true,changed(){},disconnect:async()=>{}});
+ Object.assign(browser,{videoPopout:{bind(){},close(){}},options:{projects:preview},appOrigin:'http://app.test',tabs:new Map(),reloading:new Map(),cookieStores:new Map(),overlays:new Set(),window:{contentView:{addChildView(){},removeChildView(){}},getContentBounds:()=>({width:800,height:600}),isDestroyed:()=>false,webContents:{send(){}}},actions:{send(){}},profile:()=>({settings:{blockingEnabled:false}}),sessionFor:()=>partition,profileAvailable:()=>true,changed(){},disconnect:async()=>{}});
  return {browser,tick(){now+=1000;},views:()=>views};
 }
 
@@ -182,4 +182,10 @@ test('one browser owner isolates simultaneous window selection, overlays and clo
  await assert.rejects(registry.run('main',()=>b.command({action:'show',id:two.id})),/another app window/);
  const firstList=await registry.run('main',()=>b.command({action:'list'}));assert.deepEqual(Array.from(firstList,row=>row.id),[one.id]);
  await b.closeWindow('main');assert.equal(b.tabs.has(one.id),false);assert.equal(b.get(two.id).view.webContents,original);assert.equal(original.isDestroyed(),false);
+});
+
+test('duplicate publishes completed independent history/profile state without inheriting tab grants',async()=>{
+ const {browser:b}=fixture();const first=await b.create('https://example.test/one');await b.navigate(first.id,'https://example.test/two');const original=b.get(first.id);original.shared=true;original.owner='old-agent';original.view.webContents.setZoomFactor(1.2);
+ const copy=await b.command({action:'duplicate',id:first.id});assert.notEqual(copy.id,first.id);assert.equal(b.get(copy.id).owner,null);assert.equal(b.get(copy.id).shared,false);assert.equal(b.get(copy.id).view.webContents.getZoomFactor(),1.2);assert.deepEqual(copy.history.entries.map(e=>e.url),b.state(original,true).history.entries.map(e=>e.url));assert.ok(b.list(true).some(row=>row.id===copy.id));
+ await b.unload(copy.id);const unloaded=await b.command({action:'duplicate',id:copy.id});assert.equal(unloaded.loaded,false);assert.deepEqual(unloaded.history.entries.map(e=>e.url),copy.history.entries.map(e=>e.url));
 });

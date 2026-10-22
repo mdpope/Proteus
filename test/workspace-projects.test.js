@@ -184,3 +184,34 @@ test('request-local project snapshots retain revision checks and observe disk ch
  const context=f.context.config();context.workspaces[0].name='New owner name';delete context.revision;atomicJSON(f.context.file,context);
  assert.equal(service.get(engine).workspaces[0].name,'New owner name');
 });
+
+test('whole-project move retains sessions, approval origin, archived chats and replays only unfinished membership receipts',async t=>{
+ const f=fixture(t),service=new WorkspaceProjects(f.home,f.context);f.context.mutate(config=>{config.workspaces.push({...structuredClone(config.workspaces[0]),id:'destination',name:'Destination',defaults:{selectedIds:[],includeDefaults:true}});},f.context.config().revision);service.ensureProjects();
+ const catalog=service.read(),project=catalog.projects[0],snapshot=f.context.capture();const runs=[false,true].map((archived,i)=>({id:'move-'+i,projectId:project.id,workspaceId:project.workspaceId,providerSessionId:'native-'+i,archivedAt:archived?'2026-01-01T00:00:00Z':null,pending:{id:'approval-'+i},schedule:{provider:'codex',workspace:snapshot.workspace,context:structuredClone(snapshot)},events:[],draft:{text:'retain'}}));
+ let writes=0;const engine={listRuns:()=>runs,getRun:id=>runs.find(r=>r.id===id),persist:()=>{writes++;}};
+ const before=runs.map(r=>({session:r.providerSessionId,pending:structuredClone(r.pending),cwd:r.schedule.workspace.cwd,origin:r.schedule.context.workspaceId,archivedAt:r.archivedAt}));
+ const value={action:'move-project',projectId:project.id,workspaceId:'destination',expectedRevision:catalog.revision};service.projects(value,engine);
+ assert.equal(service.read().projects.find(p=>p.id===project.id).workspaceId,'destination');assert.notEqual(service.read().defaultProjectIds.default,project.id);assert.equal(writes,2);
+ for(const [i,run]of runs.entries()){assert.equal(run.workspaceId,'destination');assert.equal(run.projectId,project.id);assert.equal(run.schedule.context.followsWorkspace,false);assert.deepEqual({session:run.providerSessionId,pending:run.pending,cwd:run.schedule.workspace.cwd,origin:run.schedule.context.workspaceId,archivedAt:run.archivedAt},before[i]);}
+ service.projects(value,engine);assert.equal(writes,2,'lost acknowledgments must not duplicate membership writes');assert.throws(()=>service.projects({...value,workspaceId:'default'},engine),/changed/);
+ const saved=service.read(),session={tabs:[{id:'project:local:'+project.id,type:'workspace',projectId:project.id,workspaceId:'default'},{id:'terminal',type:'terminal',parentId:'project:local:'+project.id,terminal:{id:'same-pty',cwd:f.cwd}},{id:'draft',type:'browser',parentId:'project:local:'+project.id,newChatDraft:{workspaceId:'default',projectId:project.id,form:{prompt:'keep',workspace:'default',cwd:f.cwd},selection:{selectedIds:['old']}}}]};
+ const remapped=service.remapSession(session);assert.equal(remapped.tabs[0].workspaceId,'destination');assert.deepEqual(remapped.tabs[1].terminal,session.tabs[1].terminal);assert.equal(remapped.tabs[2].newChatDraft.workspaceId,'destination');assert.equal(remapped.tabs[2].newChatDraft.form.prompt,'keep');assert.equal(remapped.tabs[2].newChatDraft.selection,undefined);
+ assert.equal(saved.projectMoves[project.id][0].chatIds.length,2);
+});
+
+test('paired saved project views follow a same-ID move without changing resource or authorization identity',async()=>{
+ const {remapPreviewProjectSession,remapPreviewBrowserPlacement,resolvePreviewProject}=await import('../public/preview-project-placement.js');
+ const catalog={projects:[{id:'project',workspaceId:'gaming',name:'Game'}],workspaces:[{id:'gaming',name:'Gaming'}],projectMoves:{project:[{from:'video',to:'gaming'}]}};
+ const hostId='paired-host',parentId='project:'+hostId+':project';
+ const route={parentId,destination:{type:'project',id:'project',workspaceId:'video'}};
+ const browser={id:'browser-stable',type:'browser',hostId,parentId,info:{...route,profileId:'social',history:{entries:[{id:'history',url:'https://example.test'}]}}};
+ const doc={id:'document-stable',type:'remote-document',hostId,parentId,runId:'origin-chat',documentId:'approved-document',source:'source.md'};
+ const session={active:browser.id,selectedChildren:{[parentId]:browser.id},tabs:[{id:parentId,type:'workspace',hostId,projectId:'project',workspaceId:'video'},browser,doc]};
+ const next=remapPreviewProjectSession(session,catalog,{hostId});
+ assert.equal(next.tabs[0].workspaceId,'gaming');assert.equal(next.tabs[0].workspaceName,'Gaming');assert.equal(next.active,browser.id);assert.equal(next.selectedChildren[parentId],browser.id);
+ assert.deepEqual(next.tabs[2],doc);assert.deepEqual(next.tabs[1].info.history,browser.info.history);assert.equal(next.tabs[1].info.profileId,'social');assert.equal(next.tabs[1].info.destination.workspaceId,'gaming');
+ assert.equal(remapPreviewBrowserPlacement(route,catalog,{hostId}).destination.workspaceId,'gaming');
+ assert.equal(resolvePreviewProject(catalog,'project','unrelated'),null);
+ const deleted={...catalog,projects:[{id:'default',workspaceId:'gaming',name:'General'}],projectRedirects:{project:{workspaceId:'gaming',projectId:'default'}}};
+ assert.equal(resolvePreviewProject(deleted,'project','video').id,'default','A subsequent deletion resolves the prior move before its same-workspace redirect');
+});

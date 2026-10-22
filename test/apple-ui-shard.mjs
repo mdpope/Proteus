@@ -40,7 +40,7 @@ function declarationsOnly(source) {
 export function discoverAppleUIInventory(source) {
   const declarations = declarationsOnly(source);
   const classes = [...declarations.matchAll(/\bclass\s+(\w+)\s*:\s*XCTestCase\b/g)].map(match => match[1]);
-  if (!classes.includes('RemoteUITests') || classes.some(name=>! /^(?:RemoteUITests|NativeReleaseFollowupUITests|(?:Phone|Tablet)(?:Design|Feature|Sidebar|Composer)PreviewUITests)$/.test(name))) throw new Error('UI test classes changed; update shard discovery before running a partial suite.');
+  if (!classes.includes('RemoteUITests') || classes.some(name=>! /^(?:RemoteUITests|NativeReleaseFollowupUITests|PasswordAutoFillPreviewUITests|(?:Phone|Tablet)(?:Design|Feature|Sidebar|Composer)PreviewUITests)$/.test(name))) throw new Error('UI test classes changed; update shard discovery before running a partial suite.');
   const names = [], owners = new Map();
   for (const container of declarations.matchAll(/\b(?:class|extension)\s+(\w+)\b[^{}]*\{/g)) {
     if(!classes.includes(container[1]))continue;

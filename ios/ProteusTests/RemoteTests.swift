@@ -13,6 +13,69 @@ private actor PreviewRequestCounter {
 }
 
 final class RemoteTests: XCTestCase {
+    @MainActor func testNativeBrowserAutoplayUpdatesExistingFrames() async throws {
+        let original = UserDefaults.standard.object(forKey: "proteus.block-video-autoplay")
+        let shared = SharedAppStore()
+        defer { shared.unloadBrowsers(); if let original { UserDefaults.standard.set(original, forKey: "proteus.block-video-autoplay") } else { UserDefaults.standard.removeObject(forKey: "proteus.block-video-autoplay") } }
+        shared.setBlockVideoAutoplay(true)
+        let id = try XCTUnwrap(shared.open(nil, scope: "main"))
+        let tab = try XCTUnwrap(shared.browserTabs.first { $0.id == id })
+        let view = shared.webView(tab)
+        // Spy on the platform play boundary so no audio/decoder service is required.
+        let controller = view.configuration.userContentController, scripts = view.configuration.userContentController.userScripts.map { $0 }
+        controller.removeAllUserScripts()
+        // WebKit's native evaluation APIs grant user activation. Keep this fixture
+        // unattended so that querying it cannot authorize the play being tested.
+        controller.addUserScript(WKUserScript(source: "Object.defineProperty(navigator,'userActivation',{value:{hasBeenActive:false}});HTMLMediaElement.prototype.play=function(){return Promise.resolve()}", injectionTime: .atDocumentStart, forMainFrameOnly: false))
+        for script in scripts { controller.addUserScript(script) }
+        view.loadHTMLString("<video></video><iframe srcdoc='<video></video>'></iframe>", baseURL: nil)
+        for _ in 0..<100 { try await Task.sleep(for: .milliseconds(50)); if !view.isLoading, (try? await view.evaluateJavaScript("!!document.querySelector('iframe')?.contentDocument?.querySelector('video')")) as? Bool == true { break } }
+        let script = "return await Promise.all([window,document.querySelector('iframe').contentWindow].map(w=>w.document.querySelector('video').play().then(()=>'played',e=>e.name)))"
+        func results() async throws -> [String] {
+            let value: Any = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Any, Error>) in
+                view.callAsyncJavaScript(script, arguments: [:], in: nil, in: .page) { continuation.resume(with: $0) }
+            }
+            return value as? [String] ?? []
+        }
+        let before = try await results()
+        XCTAssertEqual(before, ["NotAllowedError", "NotAllowedError"])
+        shared.setBlockVideoAutoplay(false); try await Task.sleep(for: .milliseconds(150))
+        let allowed = try await results()
+        XCTAssertEqual(allowed, ["played", "played"])
+        shared.setBlockVideoAutoplay(true); try await Task.sleep(for: .milliseconds(150))
+        let blocked = try await results()
+        XCTAssertEqual(blocked, ["NotAllowedError", "NotAllowedError"])
+    }
+
+    @MainActor func testNativePalettePersistenceAndDomainScaleIdentity() throws {
+        let suite = "proteus.synthetic.palette." + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let palette = NativePalette(defaults: defaults)
+        palette.value.name = "Synthetic green"; palette.value.colors["background"] = "#284c35"; palette.value.brightness = 5
+        let highlight = palette.color("accent")
+        try palette.save(defaults: defaults)
+        let restored = NativePalette(defaults: defaults)
+        XCTAssertEqual(restored.value.name, "Synthetic green"); XCTAssertEqual(restored.value.colors["background"], "#284c35")
+        restored.value.brightness = 20; XCTAssertEqual(restored.color("accent"), highlight)
+        restored.value.colors["background"] = "url(bad)"; XCTAssertThrowsError(try restored.value.validated())
+        XCTAssertEqual(SharedAppStore.pageScaleDomain(URL(string: "https://www.news.example.test/story/1")!), "news.example.test")
+        XCTAssertEqual(SharedAppStore.pageScaleDomain(URL(string: "https://news.example.co.uk/path")!), "example.co.uk")
+        XCTAssertEqual(SharedAppStore.pageScaleDomain(URL(string: "https://first.github.io/path")!), "first.github.io")
+        XCTAssertEqual(SharedAppStore.pageScaleDomain(URL(string: "https://second.github.io/path")!), "second.github.io")
+        XCTAssertNil(SharedAppStore.pageScaleDomain(URL(string: "file:///private/test")!))
+    }
+
+    @MainActor func testMobileBrowserProjectionPreservesNonbrowserOwnerSlots() {
+        let shared = SharedAppStore(), scope = "team:projection-test"
+        let chat: JSON = .object(["id": .string("chat:retained"), "type": .string("chat"), "chatId": .string("retained"), "title": .string("Retained chat")])
+        let terminal: JSON = .object(["id": .string("terminal:retained"), "type": .string("terminal"), "terminalId": .string("retained"), "title": .string("Retained terminal")])
+        let browser: JSON = .object(["id": .string("browser-one"), "type": .string("browser"), "title": .string("Page"), "url": .string("https://example.test/")])
+        shared.applyContentTabs(.object(["revision": .number(1), "tabs": .array([chat, browser, terminal])]), scope: scope)
+        XCTAssertEqual(shared.localContentTabs(scope).map { $0["id"] }, [chat["id"], browser["id"], terminal["id"]])
+        XCTAssertEqual(shared.localContentTabs(scope).filter { $0["type"].string != "browser" }, [chat, terminal])
+    }
+
     @MainActor func testPrivateThumbnailCacheSurvivesMemoryLossAndSeparatesScopes() async throws {
         let key = "synthetic-cache:" + UUID().uuidString, other = key + ":other-account"
         defer { NativeThumbnailCache.remove(key); NativeThumbnailCache.remove(other) }
@@ -203,6 +266,22 @@ final class RemoteTests: XCTestCase {
         let before = shared.historyOutbox.count
         shared.completeBrowserNavigation(URL(string: entries[2].url)!, title: "Device redirect", in: "mirror")
         XCTAssertEqual(shared.browserTabs[0].url, entries[1].url); XCTAssertEqual(shared.browserTabs[0].history?.entries, entries); XCTAssertEqual(shared.browserTabs[0].history?.index, 1); XCTAssertEqual(shared.historyOutbox.count, before)
+        shared.prepareBrowserLoad(URL(string: entries[1].url)!, in: "mirror")
+        shared.markBrowserRedirect("mirror", url: URL(string: "\(nativeFixtureHTTPOrigin)/browser/device-signin")!)
+        shared.markBrowserRedirect("mirror", url: URL(string: "\(nativeFixtureHTTPOrigin)/browser/device-session")!)
+        for _ in 0..<3 { shared.completeBrowserNavigation(URL(string: "\(nativeFixtureHTTPOrigin)/browser/device-session")!, title: "Device session", in: "mirror", sameDocumentObservation: true) }
+        XCTAssertEqual(shared.browserTabs[0].url, entries[1].url)
+        XCTAssertEqual(shared.browserTabs[0].history?.entries, entries, "Redirect chains and duplicate KVO/finish callbacks must not replace shared history")
+        XCTAssertEqual(shared.historyOutbox.count, before)
+        let spa = URL(string: "\(nativeFixtureHTTPOrigin)/browser/chosen-by-button")!
+        (shared.webView(shared.browserTabs[0], allowLocalNavigation: true) as? NativeLinkWebView)?.noteNavigationIntent()
+        shared.completeBrowserNavigation(spa, title: "Chosen by button", in: "mirror", sameDocumentObservation: true)
+        XCTAssertEqual(shared.browserTabs[0].url, spa.absoluteString, "A trusted SPA button action releases the mirrored-load guard")
+        XCTAssertEqual(shared.historyOutbox.count, before + 1)
+        let chosen = URL(string: "\(nativeFixtureHTTPOrigin)/browser/chosen")!
+        XCTAssertTrue(shared.navigate(chosen, in: "mirror")); shared.completeBrowserNavigation(chosen, title: "Chosen page", in: "mirror")
+        XCTAssertEqual(shared.browserTabs[0].url, chosen.absoluteString)
+        XCTAssertEqual(shared.historyOutbox.count, before + 2, "A deliberate navigation still creates its own visit")
     }
     @MainActor func testNativeURLPolicyExcludesSignedCookiesAndCanonicalOverlength() {
         for key in ["cookie", "signedCookie", "signed_cookie", "signed-cookie", "X-Amz-Credential", "X-Amz-Signature", "X-Amz-Security-Token", "X-Goog-Credential", "X-Goog-Signature", "X-Goog-Security-Token", "Key-Pair-Id"] {

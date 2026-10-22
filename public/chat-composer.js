@@ -51,7 +51,7 @@ export function mountChatComposer(composer,{textarea,models,actions,active=false
       const kind=/steer/.test(identity)?'steer':/cancel|stop/.test(identity)?'stop':active?'queue':'send';
       if(button.dataset.iconKind!==kind){button.innerHTML=icons[kind];button.dataset.iconKind=kind;}
       button.classList.add('icon-action',kind==='steer'?'steer-action':kind==='stop'?'stop-action':'send-action');
-      const label=button.hasAttribute('data-search-provider')?originalLabel:{send:'Send message',queue:'Queue message',steer:'Steer current turn',stop:'Stop current turn'}[kind];
+      const label=button.dataset.steerMode==='interrupt-and-continue'?'Interrupt and steer Claude':button.hasAttribute('data-search-provider')?originalLabel:{send:'Send message',queue:'Queue message',steer:'Steer current turn',stop:'Stop current turn'}[kind];
       button.setAttribute('aria-label',label);button.title=label;
     }
     updateSummary();schedule();
@@ -97,7 +97,7 @@ export function mountChatComposer(composer,{textarea,models,actions,active=false
       }
       const style=pane?getComputedStyle(pane):null;
       const padding=style?(parseFloat(style.paddingTop)||0)+(parseFloat(style.paddingBottom)||0):0;
-      minimum=Math.min(cap,Math.max(100,available-occupied-padding-chrome));
+      minimum=pane?.matches('.new-chat-tab-panel')?Math.min(cap,138):Math.min(cap,Math.max(100,available-occupied-padding-chrome));
     }
     const needed=Math.max(minimum,measure.scrollHeight+(parseFloat(computed.borderTopWidth)||0)+(parseFloat(computed.borderBottomWidth)||0));
     const next=Math.min(needed,cap)+'px';if(textarea.style.height!==next)textarea.style.height=next;
@@ -120,8 +120,8 @@ export function mountChatComposer(composer,{textarea,models,actions,active=false
 }
 export function mountNewChatComposer(composer){
  if(!composer)return;const toolbar=composer.querySelector('.new-chat-toolbar');if(!toolbar)return;
- const send=composer.querySelector('#dialog-submit');let actions=toolbar.querySelector('.composer-actions');
+ const send=composer.querySelector('#dialog-submit,[data-chat-setup-submit]');let actions=toolbar.querySelector('.composer-actions');
  if(send&&!actions){actions=document.createElement('div');actions.className='composer-actions';toolbar.append(actions);actions.append(send);}
- let models=toolbar.querySelector('.composer-models');if(!models){models=document.createElement('div');models.className='composer-models';const fields=[...toolbar.children].filter(child=>child.matches('label,.model-controls,.row,#peer-model-controls'));if(fields.length){fields[0].before(models);for(const field of fields)models.append(field);}}
- mountChatComposer(composer,{models,actions,pane:composer.closest('dialog')});
+ let models=toolbar.querySelector('.composer-models');if(!models){models=document.createElement('div');models.className='composer-models';const fields=[...toolbar.children].filter(child=>child.matches('label,.model-controls,.row,#peer-model-controls,[id$="-peer-model-controls"]'));if(fields.length){fields[0].before(models);for(const field of fields)models.append(field);}}
+ mountChatComposer(composer,{models,actions,pane:composer.closest('dialog,.new-chat-tab-panel')});
 }

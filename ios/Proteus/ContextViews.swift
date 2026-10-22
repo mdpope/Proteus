@@ -357,6 +357,7 @@ struct ContextView: View {
             HStack { Text(entry["name"].string).font(.headline); Spacer(); Button { command("context.favorite", ["workspaceId": .string(workspace), "id": entry["id"], "enabled": .bool(!context["favorites"].array.contains(entry["id"])), "expectedRevision": context["revision"]]) } label: { Image(systemName: context["favorites"].array.contains(entry["id"]) ? "star.fill" : "star") }.buttonStyle(.borderless).accessibilityLabel("Favorite " + entry["name"].string) }
             Text(entry["path"].string).font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
             Text(entry["kind"].string + (entry["missing"].bool ? " · missing" : "")).font(.caption).foregroundStyle(.secondary)
+            if entry["kind"].string == "mcp" { Text(entry["integrationStatus"].string.isEmpty ? "Connection not checked on owner" : entry["integrationStatus"].string).font(.caption).foregroundStyle(.secondary) }
             if !entry["unsupportedAgentFields"].array.isEmpty { Text(entry["unsupportedAgentFields"].array.map(\.string).joined(separator: "; ")).font(.caption).foregroundStyle(.orange) }
             Picker("Load in", selection: Binding(get: { entry["mode"].string }, set: { mode in command("context.mode", ["workspaceId": .string(workspace), "id": entry["id"], "mode": .string(mode), "expectedRevision": context["revision"]]) })) { ForEach(contextModes, id: \.0) { Text($0.1).tag($0.0) } }.disabled(busy || !store.connected)
         }.padding(.vertical, 5)
@@ -546,7 +547,7 @@ struct NativeWorkspaceContentView: View {
             } else if selected.hasPrefix("chat:") { ChatView(id: String(selected.dropFirst(5)), onBack: { selected = "workspace" }, workspaceBrowserScope: scope).environmentObject(store).id(selected) }
             else if selected.hasPrefix("remote:") {
                 ContentUnavailableView("Available on \(store.displayName)", systemImage: "desktopcomputer", description: Text("This saved terminal or host document tab remains on \(store.displayName). Open it there to reconnect to the terminal; chat documents can be requested through their chat’s approved document controls.")).frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else { TeamBrowserView(scope: scope, showTabs: false, onBackToList: { selected = "workspace" }, newTabOptions: [NativeNewTabAction(title: "New chat", symbol: "bubble.left.and.bubble.right", enabled: store.connected, run: { internet = false; newChat = true }), NativeNewTabAction(title: "Internet Search", symbol: "magnifyingglass", enabled: store.connected, run: { internet = true; newChat = true })]) }
+            } else { TeamBrowserView(scope: scope, showTabs: false, tabID: selected, onBackToList: { selected = "workspace" }, newTabOptions: [NativeNewTabAction(title: "New chat", symbol: "bubble.left.and.bubble.right", enabled: store.connected, run: { internet = false; newChat = true }), NativeNewTabAction(title: "Internet Search", symbol: "magnifyingglass", enabled: store.connected, run: { internet = true; newChat = true })]) }
         }.environment(\.nativeTabStep, { direction in
             let ids = orderedChildren.map { $0["id"].string }
             guard let index = ids.firstIndex(of: selected), ids.indices.contains(index + direction) else { return }
@@ -575,13 +576,13 @@ struct NativeWorkspaceContentView: View {
     private var workspaceTabStrip: some View {
         HStack(spacing: 0) {
             if let projectID {
-                Button { selected = "workspace" } label: { Label(store.projectCatalog.project(id: projectID, workspaceID: workspaceID)?["name"].string ?? "Project", systemImage: "folder").padding(12).background(selected == "workspace" ? NativeTheme.accent.opacity(0.12) : .clear) }.accessibilityIdentifier("project-pinned-tab")
+                Button { selected = "workspace" } label: { Label(store.projectCatalog.project(id: projectID, workspaceID: workspaceID)?["name"].string ?? "Project", systemImage: "folder").padding(12).background(selected == "workspace" ? NativeTheme.accent.opacity(0.12) : .clear) }.overlay(alignment: .bottom) { Rectangle().fill(selected == "workspace" ? NativeTheme.accent : .clear).frame(height: 2) }.accessibilityIdentifier("project-pinned-tab")
                 Divider().frame(height: 24)
             }
             NativeTabStrip(ids: workspacePageNames.map { "page:" + $0 } + orderedChildren.map { $0["id"].string }, selection: selected == "workspace" ? "page:" + page : selected) {
                 HStack(spacing: 0) {
                     ForEach(workspacePageNames, id: \.self) { name in
-                        Button(name) { selected = "workspace"; page = name }.padding(.horizontal, 10).padding(.vertical, 12).background(selected == "workspace" && page == name ? NativeTheme.accent.opacity(0.12) : .clear).accessibilityIdentifier("workspace-page-" + name).id("page:" + name)
+                        Button(name) { selected = "workspace"; page = name }.padding(.horizontal, 10).padding(.vertical, 12).background(selected == "workspace" && page == name ? NativeTheme.accent.opacity(0.12) : .clear).overlay(alignment: .bottom) { Rectangle().fill(selected == "workspace" && page == name ? NativeTheme.accent : .clear).frame(height: 2) }.accessibilityIdentifier("workspace-page-" + name).id("page:" + name)
                         Divider().frame(height: 24)
                     }
                     ForEach(orderedChildren, id: \.self) { child in workspaceChild(child); Divider().frame(height: 24) }
@@ -599,7 +600,7 @@ struct NativeWorkspaceContentView: View {
                 else { mutateTabs([.object(["action": .string("close"), "id": child["sortId"]])]) }
                 if selected == child["id"].string { selected = "workspace" }
             } label: { Image(systemName: "xmark").font(.caption2) }.accessibilityLabel("Close " + child["title"].string)
-        }.padding(12).background(selected == child["id"].string ? NativeTheme.accent.opacity(0.12) : .clear).id(child["id"].string)
+        }.padding(12).background(selected == child["id"].string ? NativeTheme.accent.opacity(0.12) : .clear).overlay(alignment: .bottom) { Rectangle().fill(selected == child["id"].string ? NativeTheme.accent : .clear).frame(height: 2) }.id(child["id"].string)
             .contextMenu {
                 if child["type"].string == "chat" { Button("Copy chat link", systemImage: "link") { UIPasteboard.general.url = NativeChatLink.url(host: hostID, id: child["chatId"].string) } }
                 if child["type"].string == "chat", let onOpenMain { Button("Open in main navigation") { onOpenMain(AggregateChat(hostID: hostID, hostName: destinations.destinations.first { $0.id == hostID }?.label ?? "Computer", run: run(child["chatId"].string))) } }

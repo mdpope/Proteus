@@ -80,8 +80,8 @@ async function connectPage(contents, onInput = () => {}, {external=false}={}) {
     const endpoint=`ws://127.0.0.1:${server.address().port}/${secret}`;
     if(external)return {endpoint,get closed(){return disposed||!lease.active;},async close(){cleanup();}};
     browser = await chromium.connectOverCDP(endpoint, { timeout: 15000 });
-    const page = browser.contexts()[0].pages()[0];
-    if (!page) throw new Error('Embedded page did not attach.');
+    const context=browser.contexts()[0];if(!context)throw new Error('Embedded browser context did not attach.');
+    const page=context.pages()[0]||await context.waitForEvent('page',{timeout:10000});
     page.setDefaultTimeout(10000);
     return { page, get closed() { return disposed || !browser.isConnected() || !lease.active; }, async close() { try { await browser.close(); } finally { cleanup(); } } };
   } catch (error) { cleanup(); throw error; }

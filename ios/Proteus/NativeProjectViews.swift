@@ -6,14 +6,14 @@ struct NativeWorkspaceView: View {
     @EnvironmentObject var shared: SharedAppStore
     let workspaceID: String
     var onOpenMain: ((AggregateChat) -> Void)? = nil
-    @State private var selectedProject = ""
+    private var selectedProject: String { selection }
     private var selection: String { store.draft("workspace-selected-project:" + workspaceID).string }
     var body: some View {
         VStack(spacing: 0) {
             if NativePhonePreview.enabled {
                 NativeWorkspaceContentView(workspaceID: workspaceID, onOpenProject: select, onOpenMain: onOpenMain).environmentObject(store)
-                    .navigationDestination(isPresented: Binding(get: { !selectedProject.isEmpty }, set: { if !$0 { select("") } })) {
-                        NativeWorkspaceContentView(workspaceID: workspaceID, projectID: selectedProject, onOpenMain: onOpenMain).environmentObject(store).id(selectedProject).modifier(NativePhoneBackNavigation())
+                    .navigationDestination(isPresented: Binding(get: { !selection.isEmpty }, set: { if !$0 { select("") } })) {
+                        NativeSelectedProjectView(workspaceID: workspaceID, onOpenMain: onOpenMain).environmentObject(store).modifier(NativePhoneBackNavigation())
                     }
             } else if !selectedProject.isEmpty, store.projectCatalog.project(id: selectedProject, workspaceID: workspaceID) != nil {
                 if !NativePadPreview.enabled { HStack { Button { select("") } label: { Label("Workspace", systemImage: "chevron.left") }; Spacer() }.padding(.horizontal).padding(.vertical, 8) }
@@ -21,12 +21,13 @@ struct NativeWorkspaceView: View {
             } else {
                 NativeWorkspaceContentView(workspaceID: workspaceID, onOpenProject: select, onOpenMain: onOpenMain).id(workspaceID)
             }
-        }.onAppear { reconcile(); selectedProject = selection }.onChange(of: selection) { _, value in selectedProject = value }
+        }.onAppear { reconcile() }
         .onChange(of: store.state["workspaceProjects"]) { _, _ in reconcile() }
     }
     private func reconcile() {
         guard store.supportsProjects else { return }
         shared.reconcileProjectScopes(catalog: store.projectCatalog, hostID: store.connection?.hostId ?? "")
+        if !selection.isEmpty, let project = store.projectCatalog.project(id: selection), project["workspaceId"].string != workspaceID { select("") }
         if !selection.isEmpty, let target = store.projectCatalog.project(id: selection, workspaceID: workspaceID), target["id"].string != selection { select(target["id"].string) }
         let legacy = store.draft("workspace-navigation:" + workspaceID)
         var migrated = Set<String>()
@@ -46,7 +47,20 @@ struct NativeWorkspaceView: View {
             store.setDraft("workspace-navigation:" + workspaceID, .object(remaining))
         }
     }
-    private func select(_ id: String) { selectedProject = id; store.setDraft("workspace-selected-project:" + workspaceID, .string(id)) }
+    private func select(_ id: String) { store.setDraft("workspace-selected-project:" + workspaceID, .string(id)) }
+}
+
+// A pushed destination must observe the owner's selection itself. A captured project
+// value in navigationDestination otherwise stays stale when the drawer selects a sibling.
+private struct NativeSelectedProjectView: View {
+    @EnvironmentObject var store: RemoteStore
+    let workspaceID: String
+    var onOpenMain: ((AggregateChat) -> Void)?
+    private var projectID: String { store.draft("workspace-selected-project:" + workspaceID).string }
+    var body: some View {
+        NativeWorkspaceContentView(workspaceID: workspaceID, projectID: projectID, onOpenMain: onOpenMain)
+            .id((store.connection?.hostId ?? "") + ":" + workspaceID + ":" + projectID)
+    }
 }
 
 struct NativeProjectsView: View {
@@ -142,8 +156,9 @@ struct NativeWorkspaceTree: View {
     @State private var otherComputers = false
     private var workspaces: [NativeWorkspaceIdentity] { NativeWorkspaceIdentity.all(destinations) }
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 8) {
             HStack { if NativeDesignPreview.enabled, let onBrowse { Button(action: onBrowse) { Label { Text("Workspaces") } icon: { NativeSidebarIcon(kind: "grid").foregroundStyle(NativeSidebarStyle.muted) }.font(.body).frame(minHeight: 44).contentShape(Rectangle()) } } else { Text("Workspaces").font(.caption).foregroundStyle(.secondary) }; Spacer(); Button { expanded.removeAll(); projectExpanded.removeAll(); limits.removeAll(); otherComputers = false } label: { NativeSidebarIcon(kind: "collapse").foregroundStyle(NativeSidebarStyle.muted).frame(width: NativeDesignPreview.enabled ? 44 : nil, height: NativeDesignPreview.enabled ? 44 : nil).contentShape(Rectangle()) }.accessibilityLabel("Collapse all workspaces") }.padding(.horizontal, 8).padding(.vertical, 6)
+            Rectangle().fill(NativeSidebarStyle.border).frame(height: 1).padding(.bottom, 4)
             ForEach(workspaces.filter { $0.hostID == destinations.selectedID }) { workspace in workspaceRow(workspace) }
             if destinations.destinations.contains(where: { $0.id != destinations.selectedID }) {
                 Divider().padding(.vertical, 5)
@@ -168,10 +183,10 @@ struct NativeWorkspaceTree: View {
         if let remote = destinations.remote(for: workspace.hostID) {
             VStack(spacing: 2) {
                 HStack(spacing: 6) {
-                    Button { remote.setDraft("workspace-selected-project:" + workspace.workspaceID, .string("")); onOpen(workspace) } label: {
-                        HStack(spacing: 7) { NativeSidebarIcon(kind: "workspace").foregroundStyle(activeWorkspace == workspace.id ? NativeTheme.accent : NativeSidebarStyle.muted); VStack(alignment: .leading, spacing: 2) { Text(workspace.profile["name"].string).font(.system(size: 14, weight: .medium)).lineLimit(2); if !remote.connected { Text("Offline").font(.caption2).foregroundStyle(.secondary) } }; Spacer(minLength: 2); if remote.supportsProjects { Text(String(remote.projectCatalog.projects(in: workspace.workspaceID).count)).font(.caption2).foregroundStyle(activeWorkspace == workspace.id ? NativeSidebarStyle.selectedInk : NativeSidebarStyle.muted) } }
-                    }.buttonStyle(.plain)
-                    Button { if !expanded.insert(workspace.id).inserted { expanded.remove(workspace.id); for project in remote.projectCatalog.projects(in: workspace.workspaceID) { limits[workspace.hostID + ":" + project["id"].string] = nil } } } label: { Image(systemName: expanded.contains(workspace.id) ? "chevron.down" : "chevron.right").font(.caption).frame(width: 32, height: 40) }.accessibilityLabel((expanded.contains(workspace.id) ? "Collapse " : "Expand ") + workspace.profile["name"].string)
+                    Button { expanded.insert(workspace.id); remote.setDraft("workspace-selected-project:" + workspace.workspaceID, .string("")); onOpen(workspace) } label: {
+                        HStack(spacing: 7) { NativeSidebarIcon(kind: "workspace").foregroundStyle(activeWorkspace == workspace.id ? NativeTheme.accent : NativeSidebarStyle.muted); VStack(alignment: .leading, spacing: 2) { Text(workspace.profile["name"].string).font(.system(size: 14, weight: .medium)).lineLimit(2); if !remote.connected { Text("Offline").font(.caption2).foregroundStyle(.secondary) } }; Spacer(minLength: 2); if remote.supportsProjects { Text(String(remote.projectCatalog.projects(in: workspace.workspaceID).count)).font(.caption2).foregroundStyle(activeWorkspace == workspace.id ? NativeSidebarStyle.selectedInk : NativeSidebarStyle.muted) } }.frame(minHeight: 40).contentShape(Rectangle())
+                    }.buttonStyle(.plain).accessibilityIdentifier("workspace-tree-open-" + workspace.id)
+                    Button { if !expanded.insert(workspace.id).inserted { expanded.remove(workspace.id); for project in remote.projectCatalog.projects(in: workspace.workspaceID) { limits[workspace.hostID + ":" + project["id"].string] = nil } } } label: { Image(systemName: expanded.contains(workspace.id) ? "chevron.down" : "chevron.right").font(.caption).frame(width: 32, height: 40) }.accessibilityLabel((expanded.contains(workspace.id) ? "Collapse " : "Expand ") + workspace.profile["name"].string).accessibilityIdentifier("workspace-tree-toggle-" + workspace.id).accessibilityValue(expanded.contains(workspace.id) ? "Expanded" : "Collapsed")
                 }.padding(.leading, 8).foregroundStyle(activeWorkspace == workspace.id ? NativeSidebarStyle.strong : NativeSidebarStyle.ink)
                 if expanded.contains(workspace.id) {
                     ForEach(remote.projectCatalog.projects(in: workspace.workspaceID), id: \.self) { project in projectGroup(project, workspace: workspace, remote: remote) }
@@ -194,8 +209,8 @@ struct NativeWorkspaceTree: View {
         let selected = activeWorkspace == workspace.id && remote.draft("workspace-selected-project:" + workspace.workspaceID).string == project["id"].string
         return VStack(spacing: 2) {
             HStack(spacing: 6) {
-                Button { open(project, workspace: workspace, remote: remote) } label: { HStack(spacing: 7) { NativeSidebarIcon(kind: "folder").foregroundStyle(selected ? NativeTheme.accent : NativeSidebarStyle.muted); Text(project["name"].string).font(.system(size: 14)).lineLimit(2); Spacer(minLength: 0); Text(countLabel(items, scope: scope, remote: remote)).font(.caption2).foregroundStyle(selected ? NativeSidebarStyle.selectedInk : NativeSidebarStyle.muted) } }
-                Button { if !projectExpanded.insert(key).inserted { projectExpanded.remove(key); limits[key] = nil } } label: { Image(systemName: projectExpanded.contains(key) ? "chevron.down" : "chevron.right").font(.caption).frame(width: 32, height: 40) }.accessibilityLabel((projectExpanded.contains(key) ? "Collapse " : "Expand ") + project["name"].string)
+                Button { open(project, workspace: workspace, remote: remote) } label: { HStack(spacing: 7) { NativeSidebarIcon(kind: "folder").foregroundStyle(selected ? NativeTheme.accent : NativeSidebarStyle.muted); Text(project["name"].string).font(.system(size: 14)).lineLimit(2); Spacer(minLength: 0); Text(countLabel(items, scope: scope, remote: remote)).font(.caption2).foregroundStyle(selected ? NativeSidebarStyle.selectedInk : NativeSidebarStyle.muted) }.frame(minHeight: 40).contentShape(Rectangle()) }.accessibilityIdentifier("project-tree-open-" + key)
+                Button { if !projectExpanded.insert(key).inserted { projectExpanded.remove(key); limits[key] = nil } } label: { Image(systemName: projectExpanded.contains(key) ? "chevron.down" : "chevron.right").font(.caption).frame(width: 32, height: 40) }.accessibilityLabel((projectExpanded.contains(key) ? "Collapse " : "Expand ") + project["name"].string).accessibilityIdentifier("project-tree-toggle-" + key).accessibilityValue(projectExpanded.contains(key) ? "Expanded" : "Collapsed")
             }.padding(.leading, NativeDesignPreview.enabled ? 9 : 10).foregroundStyle(selected ? NativeSidebarStyle.strong : NativeSidebarStyle.ink)
             if projectExpanded.contains(key) {
                 ForEach(Array(items.prefix(limits[key] ?? 7)), id: \.self) { item in
@@ -238,6 +253,7 @@ struct NativeWorkspaceTree: View {
     }
     private func age(_ item: JSON, now: Date) -> String { guard let date = NativeProjectActivity.date(item) else { return "" }; let minutes = max(0, Int(now.timeIntervalSince(date) / 60)); return minutes == 0 ? "<1m" : minutes < 60 ? "\(minutes)m" : minutes < 1440 ? "\(minutes / 60)h" : "\(minutes / 1440)d" }
     private func open(_ project: JSON, workspace: NativeWorkspaceIdentity, remote: RemoteStore, item: JSON = .null) {
+        expanded.insert(workspace.id); projectExpanded.insert(workspace.hostID + ":" + project["id"].string)
         remote.setDraft("workspace-selected-project:" + workspace.workspaceID, project["id"])
         if item["type"].string == "chat" { NativeWorkspaceNavigation.openChat(item["chatId"].string, workspaceID: workspace.workspaceID, projectID: project["id"].string, remote: remote) }
         else if item != .null {

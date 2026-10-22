@@ -14,8 +14,11 @@ MCP entry point. Inspect the actual inventory before acting. Use `list` with opt
 `delete-workspace` preserves chats and closes the affected tabs. The file itself installs no MCP.
 Browser content uses `proteus_browser` and `proteus_playwright`; `proteus_developer` starts its
 single-tab backend on demand. Agents can use ordinary website tabs in every configured profile,
-including profiles with extensions, without per-tab sharing or extension opt-ins. Legacy sharing
-and allowExtensionAgents flags do not block access. Real unavailable-account/profile/backend
+including profiles with extensions. Human-opened tabs require explicit sharing; agent-opened tabs
+start shared. Use the human robot button or proteus_browser request-access for an explicit human
+decision. Respect agentPaused and never bypass a refusal. Legacy allowExtensionAgents flags do not
+replace the host sharing gate. Inventory and organization remain
+separate from page access. Real unavailable-account/profile/backend
 errors remain possible; inspect them instead of suggesting a no-extension profile. The file itself
 installs no tool. Never edit application-data files as a substitute for owner operations.
 

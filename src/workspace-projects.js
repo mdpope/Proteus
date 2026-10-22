@@ -64,7 +64,23 @@ export class WorkspaceProjects {
   }
   write(value){const clean=structuredClone(value);delete clean.revision;this.validate(clean);atomicJSON(this.file,clean);return this.read();}
   remapBrowserPlacement(value){return remapPreviewBrowserPlacement(value,this.read());}
+  reconcileProjectMoves(engine){
+    const catalog=this.read();
+    for(const [id,moves] of Object.entries(catalog.projectMoves||{})){
+      const project=catalog.projects.find(row=>row.id===id);if(!project)continue;
+      for(const move of moves)for(const runId of move.chatIds||[]){
+        let run;try{run=engine.getRun(runId);}catch{continue;}
+        if(run.projectId&&run.projectId!==id||chatMembership(run).workspaceId!==move.from||run.projectMoveReceipts?.includes(move.id))continue;
+        run.initialSchedule??=structuredClone(run.schedule);
+        if(run.schedule.context)run.schedule.context={...run.schedule.context,followsWorkspace:false};
+        run.workspaceMoves??=[];run.workspaceMoves.push({from:move.from,to:move.to,fromProjectId:id,toProjectId:id,at:move.at});
+        run.projectMoveReceipts=[...(run.projectMoveReceipts||[]),move.id];
+        run.projectId=id;run.projectName=project.name;run.workspaceId=move.to;run.workspaceName=move.workspaceName;engine.persist(run);
+      }
+    }
+  }
   async reconcileContentTabs(tabs,engine){
+    this.reconcileProjectMoves(engine);
     const catalog=this.read();
     // Durable catalog redirects are the retry receipt. A failed relocation can be
     // resumed on restart without reopening a resource or replaying a terminal.
@@ -172,6 +188,7 @@ export class WorkspaceProjects {
   projects(value,engine){
     // A retry after a lost renderer acknowledgement resumes the same committed
     // reassignment. A different stale review still fails the normal revision check.
+    if(value.action==='move-project'){const moves=this.read().projectMoves?.[value.projectId]||[];if(moves.some(move=>move.expectedRevision===value.expectedRevision&&move.to===value.workspaceId)){this.reconcileProjectMoves(engine);return this.get(engine);}}
     const receipt=value.action==='delete'&&this.read().projectRedirects?.[value.projectId];
     if(receipt&&receipt.expectedRevision===value.expectedRevision&&(!value.workspaceId||value.workspaceId===receipt.workspaceId))return this.get(engine);
     const catalog=this.check(value.expectedRevision);
@@ -201,7 +218,18 @@ export class WorkspaceProjects {
       }
     }else{
       const project=catalog.projects.find(item=>item.id===value.projectId);if(!project)throw new Error('Project not found.');
-      if(value.action==='rename')project.name=validName(value.name);
+      if(value.action==='move-project'){
+        const destination=this.context.scope(value.workspaceId);if(destination.id===project.workspaceId)return this.get(engine);
+        const from=project.workspaceId,at=new Date().toISOString();
+        const chatIds=engine.listRuns().filter(run=>this.membership(run,catalog).projectId===project.id).map(run=>run.id);
+        // Commit one catalog receipt first. Run membership and all saved view
+        // writers reconcile this receipt on retry/startup; execution context stays put.
+        catalog.projectMoves??={};catalog.projectMoves[project.id]??=[];
+        catalog.projectMoves[project.id].push({id:randomUUID(),from,to:destination.id,workspaceName:destination.name,at,chatIds,expectedRevision:value.expectedRevision});
+        project.workspaceId=destination.id;
+        if(catalog.defaultProjectIds[from]===project.id){const replacement={id:randomUUID(),workspaceId:from,name:'General',createdAt:at};catalog.projects.push(replacement);catalog.defaultProjectIds[from]=replacement.id;}
+      }
+      else if(value.action==='rename')project.name=validName(value.name);
       else if(value.action==='default')catalog.defaultProjectIds[project.workspaceId]=project.id;
       else if(value.action==='delete'){
         if(value.workspaceId&&value.workspaceId!==project.workspaceId)throw new Error('Project does not belong to this workspace.');
@@ -216,7 +244,7 @@ export class WorkspaceProjects {
       }
       else throw new Error('Unknown project action.');
     }
-    this.write(catalog);return this.get(engine);
+    this.write(catalog);this.reconcileProjectMoves(engine);return this.get(engine);
   }
   async sources(value,engine){
     const catalog=this.check(value.expectedRevision);

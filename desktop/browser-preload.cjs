@@ -20,9 +20,9 @@ if(process.isMainFrame){
   }});
 }
 let history={back:false,forward:false}, amount=0, direction=null, timer, cooldown=0, overlay;
-let overviewGate=null,canReopen=false,drawFrame=null,pageZoom=1;
-ipcRenderer.on('proteus:pinch-boundary',(_event,value)=>{pageZoom=value.zoom||1;if(value.type==='gesturePinchBegin')overviewGate={started:Date.now(),last:Date.now(),delta:0,blocked:pageZoom>1.001||(window.visualViewport?.scale||1)>1.001};else overviewGate=null;});
-window.visualViewport?.addEventListener('resize',()=>{if(overviewGate&&(window.visualViewport.scale>1.001||pageZoom>1.001))overviewGate.blocked=true;});
+let overviewGate=null,canReopen=false,drawFrame=null;
+ipcRenderer.on('proteus:pinch-boundary',(_event,value)=>{if(value.type==='gesturePinchBegin')overviewGate={started:Date.now(),last:Date.now(),delta:0,explicit:true,blocked:(window.visualViewport?.scale||1)>1.001};else{overviewGate=null;cooldown=Math.max(cooldown,Date.now()+80);}});
+window.visualViewport?.addEventListener('resize',()=>{if(overviewGate&&window.visualViewport.scale>1.001)overviewGate.blocked=true;});
 let hoverHost, hoverText;
 function hoverStatus(url) {
   if(!url){hoverHost?.remove();hoverHost=null;hoverText=null;return;}
@@ -61,16 +61,16 @@ function draw() {
 function pinchAttempt(delta){
     const now=Date.now(),scale=window.visualViewport?.scale||1;
     if(now<cooldown)return;
-    if(!overviewGate||now-overviewGate.last>420)overviewGate={started:now,last:now,delta:0,blocked:scale>1.001||pageZoom>1.001};
+    if(!overviewGate||!overviewGate.explicit&&now-overviewGate.last>240)overviewGate={started:now,last:now,delta:0,blocked:scale>1.001};
     overviewGate.last=now;
     // Once zoomed during a gesture, reaching 100% cannot open overview. Only
     // a new pinch, after pinch-end (or a quiet gap), can attempt it again.
-    if(scale>1.001||pageZoom>1.001||delta<=0)overviewGate.blocked=true;
+    if(scale>1.001||delta<=0)overviewGate.blocked=true;
     if(overviewGate.blocked)return;
     overviewGate.delta+=Math.abs(delta);
-    if(now-overviewGate.started>=180&&overviewGate.delta>=65){overviewGate=null;cooldown=now+900;ipcRenderer.send('proteus:browser-gesture','overview');}
+    if(now-overviewGate.started>=35&&overviewGate.delta>=12){overviewGate=null;cooldown=now+900;ipcRenderer.send('proteus:browser-gesture','overview');}
 }
-ipcRenderer.on('proteus:pinch-update',(_event,value)=>{pageZoom=value.zoom||1;pinchAttempt(value.direction==='out'?30:-30);});
+ipcRenderer.on('proteus:pinch-update',(_event,value)=>{pinchAttempt(value.direction==='out'?30:-30);});
 window.addEventListener('wheel', event=>{
   if(event.isTrusted&&event.ctrlKey){
     pinchAttempt(event.deltaY);

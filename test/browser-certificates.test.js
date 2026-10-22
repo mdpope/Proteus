@@ -1,0 +1,9 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {rootCertificates} from 'node:tls';import {X509Certificate} from 'node:crypto';import {createRequire} from 'node:module';
+const {BrowserCertificates}=createRequire(import.meta.url)('../desktop/browser-certificates.cjs');
+test('certificate metadata observer always preserves Chromium verification and binds partition/document details',()=>{
+ const store=new BrowserCertificates(),session={setCertificateVerifyProc(fn){this.verify=fn;}},other={setCertificateVerifyProc(fn){this.verify=fn;}};store.install(session);store.install(other);const cert=new X509Certificate(rootCertificates[0]),certificate={data:rootCertificates[0]};certificate.issuerCert=certificate;
+ const result=[];session.verify({hostname:'fixture.example',certificate,verificationResult:'net::OK',errorCode:0},value=>result.push(value));assert.deepEqual(result,[-3]);
+ const detail={subjectName:cert.toLegacyObject().subject.CN||'',validFrom:Date.parse(cert.validFrom)/1000,validTo:Date.parse(cert.validTo)/1000};const observed=store.get(session,'https://fixture.example/path',detail);assert.equal(observed.chain.length,1);assert.equal(observed.chain[0].fingerprint256,cert.fingerprint256);assert.equal(store.get(other,'https://fixture.example/path',detail),null);assert.equal(store.get(session,'https://different.example/',detail),null);assert.equal(store.get(session,'https://fixture.example/',{...detail,validTo:detail.validTo+1}),null);
+ session.verify({hostname:'fixture.example',certificate,verificationResult:'net::ERR_CERT_DATE_INVALID',errorCode:-201},value=>result.push(value));assert.equal(result.at(-1),-3);assert.equal(store.get(session,'https://fixture.example/',detail),null);
+ session.verify({hostname:'fixture.example',certificate:{data:'invalid'}},value=>result.push(value));assert.equal(result.at(-1),-3);
+});

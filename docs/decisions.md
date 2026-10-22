@@ -1,3 +1,212 @@
+## 2026-10-22 — Preserve Apple request continuity in Proteus
+
+The operator requested all Apple links, form contents and steps in the Proteus project, then
+submitted the restored browser request personally. Apple confirmed **TGNRQJ22PP**. Keep a tracked
+process/status record and an ignored owner-only `local-records/apple-browser-review/` receipt with
+the private URL, last observed narrative and confirmation screenshot. This preserves operator
+continuity without committing the bearer link or credentials. Canonical hosting, protected signing
+material and deployment recovery remain in the WTB website project. Mirror the receipt there.
+Do not submit a duplicate request or treat submission/notarization as entitlement approval.
+
+## 2026-10-22 — Separate signing authorization from browser entitlement review
+
+The operator explicitly authorized Developer ID issuance, explicit App ID registration and
+notarization of the private evaluation package. Complete these distribution prerequisites and
+verify the exact hosted artifact before final review. Keep the browser entitlement request
+unsubmitted. Preserve all existing certificates and installed app identities. Signing credentials
+remain in the protected WTB delivery project and local Keychain, never source or hosted payload.
+Earlier signing/registration holds below are superseded by this authorization.
+
+## 2026-10-22 — Private evaluation delivery belongs to the WTB website
+
+The operator chose downloads.proteus.example rather than proteus.example. Keep the expiring, unlisted read-only route
+separate from public navigation and application accounts. Anyone possessing its private link can
+read the five review files; this is capability-link access, not authenticated Apple-only access.
+Canonical delivery/configuration and protected URL/signing preparation live in the WTB website
+project. Do not store the access token or signing key in Proteus source. Prepare signing with
+existing identities intact, and retain operator review before Apple issuance/registration,
+notarization and entitlement submission. Development/hardening acceptance is distinct from final
+Developer ID distribution and genuine iCloud integration acceptance.
+
+## 2026-10-22 — Private Apple evaluation and domain-aligned browser identity
+
+The operator selected `org.proteusapp.review.proteus.desktop` for the Apple browser application, matching the owned
+domain and native identifier. Keep that development evaluation candidate separate from existing
+installed signing and Keychain identities until migration is independently verified. The request
+form permits protected evaluation access, so a public launch/download website is deferred. A usable
+Apple-accessible evaluation route is still required before submission. No development-only exemption
+is assumed. Registration, entitlement submission and notarization remain held for operator review.
+
+## October 22 — identity review and native navigation
+
+Prepare `com.wtbtech.proteus.desktop` in the Apple forms and a separately named output directory via
+an explicit review packaging flag. Do not rename historical IDs or weaken updater identity checks:
+a bundle/team migration needs OS permission, Keychain and update acceptance before live rollout.
+The selected-computer indicator describes routing selection, independently of transport readiness
+or computer-control support. Native project destinations must observe selection at the rendered
+boundary, not rely on a captured presentation closure. Browser chrome follows a simultaneous
+one-finger vertical gesture, including nested website scroll containers.
+
+## 2026-10-22 — Browser eligibility and Apple review evidence
+
+Use the existing host browser service for OS website links, with a bounded startup queue and a
+renderer-restoration readiness signal. Preserve callback URL handling, independent tab history,
+existing workspace selection and default browser preferences; external URLs grant no agent access.
+Expose browsing on desktop Home instead of replacing restored chats/workspaces at startup.
+
+Keep synthetic Chromium WebAuthn evidence separate from native iCloud integration. Hold Apple
+entitlement/account/distribution submissions for the operator; stage a development candidate and
+review page without implying that development signing passes Gatekeeper distribution assessment.
+Do not migrate installed apps' signing team as part of review preparation.
+
+## October 21 — preserve player and configuration ownership
+
+Video fullscreen uses a temporary Electron window containing the original Chromium view. This
+meets exact source-window geometry without extracting media URLs, copying credentials or relying
+on Chrome's PiP size clamps. The host owns its close/drag overlay; website controls remain native
+to the player. Session identity and history are unchanged when the player returns.
+
+MCP configuration grouping is presentation only. Each provider/chat retains its existing approval,
+account evidence and recovery identity. Other-computer displays are informational; source-owned
+vault/OAuth helpers remain external and are not automatically executed by refresh/status views.
+
+## October 21 — owner-global source favorites
+
+Use one canonical root favorite list with an explicit migration marker and compatibility
+workspace projections. Merge active legacy lists once, rather than unioning on every read,
+so removing a favorite cannot resurrect it from a stale workspace copy. Workspace imports
+explicitly merge remapped IDs; new empty scopes do not replace the shared list. Keep loading
+policy scoped, including when a shared favorite exposes a source from another workspace.
+
+Integration inventory versus connection evidence remains a design proposal, documented in
+integrations-design.md. Display grouping must retain per-owner/session/account verification;
+no remote credential sharing or combined-view default has been selected by the operator.
+
+## October 21 — implemented BF-74–85 design choices
+
+Whole-project movement changes organization while preserving execution/authorization identity.
+A catalog move receipt precedes per-chat membership writes and is replayable after interruption.
+Moving a source default atomically creates a new General project rather than requiring a separate
+replacement-selection mutation; the UI explains this and leaves destination defaults unchanged.
+New-chat workspace choices reset while text/attachments remain. Schedule source is untouched.
+
+Native extension recovery is connection-local, with bounded framing/queues and lifecycle handlers,
+not a global uncaught-exception suppressor. Patch the pinned adapter reproducibly in source and
+packaging, failing closed when its version changes. Optional consent is profile-local; popup identity
+includes profile/session and parent. No signing, vault or biometric boundary is bypassed.
+
+Browser observations strip decorative image bytes into content hashes without changing host/UI
+icons or full history. No model-visible asset-fetch API or history-delta protocol is introduced.
+Claude steering explicitly uses interrupt-and-continue and UUID replay acknowledgment; unconfirmed
+input is never automatically resent. Codex selected-server tool approvals use existing saved-policy
+identities through the normal permission path, without duplicating tool execution.
+
+See the [0.2.28 release ledger](2026-10-21-browser-chat-release.md) for validation and live limits.
+
+## October 21 — window renderer recovery, independent of host execution
+
+A shell renderer failure is a window presentation failure, not a host/session restart. Subscribe
+per app WebContents to Electron's renderer-loss event; defer reload until after teardown and use
+only the known local app URL. Preserve the BrowserWindow/window ID, atomic saved session, owner
+history/receipts, native browser WebContents and active provider/terminal lifetimes. Do not retry
+or replay an unacknowledged tab-management operation; reject its window-local waiter explicitly.
+The original operator EXC_BREAKPOINT/SIGTRAP trigger is unknown; recovery does not diagnose it.
+
+Require a current-generation readiness acknowledgement after workspace restoration. Skip ordinary
+background-page unloading during crash recovery, clear dead renderer overlay/overview state and
+retain all live page/form state. Limit automatic attempts to three until a stable minute; failures
+then show a local, script-free recovery document whose preload calls fail the existing origin
+checks. Native View → Reload Window resets the retry budget and retries the original app URL.
+An unresponsive report alone does not force-kill a possibly shared process. Close/Quit can use the
+last saved checkpoint for an unavailable renderer. Never activate or duplicate a turn on reload.
+
+The brand's fixed slot starts just after the native controls (74px) and ends at the unchanged
+first-tab boundary (212px), placing its visual center at 143px independently of sidebar width.
+Restored tab inventories seed reveal tracking without creating insertion events. Reveal the saved
+selection after strip layout; ordinary new background tabs still reveal without changing selection.
+
+## October 21 — passive browser loads and actionable inbox records
+
+Browser errors and history conflicts use the existing notification store and preferences. Keep
+recovery IDs local to their original window; do not publish them as account activity or place
+recovery controls over a website. Explicit actions recheck the original owner and pending state.
+An unavailable or stale action stays unresolved; do not discard receipts or silently replay it.
+
+Native mirrored loads with saved history retain their guard through redirects and repeated
+observations. Real link/form/history/address actions and recent trusted main-frame SPA input
+release it. Legacy local descriptors without saved history suppress only their initial visit;
+there is no canonical forward stack to protect. Main navigation stays device-owned.
+
+New tab reveal belongs to the strip's identity inventory, covering every creation path. Wait
+for right-side chrome layout before measuring the full tab wrapper. Metadata/reorders preserve
+manual scrolling and background insertions do not change selection. Follow a newly inserted tab's
+initial title-width changes briefly, stopping on manual strip input; do not recreate a resize
+observer on its own callback. iPhone browser controls
+remove redundant bottom padding/container insets while retaining keyboard avoidance/touch targets.
+
+Top-level content without a real child scope has no secondary label/control row. Top App overview
+and + remain available. Text selection in content is independent of explicit tab selection.
+The extension adapter calls its selection callback for host bookkeeping as well as extension API
+requests; suppress only synchronous host reflection so it cannot enqueue stale selections back
+to the renderer. Genuine extension-initiated activation keeps the normal host-owned action path.
+
+Saved palette ownership is installation-local: desktop atomic settings, native app preferences,
+and versioned browser-local web JSON scoped to the signed-in account. Web revision checks and
+storage events handle concurrent tabs; web editing never writes a connected desktop's settings.
+
+## October 20 — native selected content and stylesheet delivery
+
+A container's selected browser identity is the rendering authority. Pass it directly to the browser
+pane in main navigation, project/workspace, chat and Team containers; scoped remembered selection
+is reconciled to it rather than deciding which unrelated page is displayed during restoration.
+Preserve the cached WKWebView and its own coordinator/history. Native Engine Room choices reuse
+plain vertical desktop-style hierarchy; device navigation remains independent.
+
+Workspace/project name selection expands the selected tree path; chevrons remain explicit toggles.
+Give plain sidebar buttons a rectangular touch shape across the label row so a short title does
+not leave untappable spacing. Expansion belongs to user navigation, not background polling.
+
+Palette CSS is an ordinary bundled self-origin stylesheet. The strict content policy stays in
+place; successful CSS-variable persistence alone is insufficient visual acceptance. Test actual
+grid/swatches and inspect the rendered app in addition to preference round trips.
+
+## 2026-10-20 — permanent local palette and read-only certificate observation
+
+Keep palette editing in Engine Room and apply it to the real UI. Save one named device/host
+palette in normal validated preferences; retain desktop unsaved drafts only in that window.
+Use portable versioned JSON for explicit transfer rather than implicitly changing other devices.
+Only surfaces receive global lightness/saturation adjustments. Preserve OS traffic-light colors.
+
+Capture TLS metadata before navigation and preserve Chromium's default verification (-3) in a
+bounded observer. Do not open a second TLS connection, override trust, detach a foreign debugger,
+or present a hostname cache without matching the current document's subject and validity.
+
+Desktop windows own presentation and download-list lifetime; mobile devices own their single
+main navigation and session-only downloads. Shared container content remains service-owned.
+
+## October 20 — browser reply ownership, ephemeral downloads and explicit sharing
+
+Navigation completion belongs to its captured tab, independent of the UI selection at reply time. The renderer preserves actual redirected URL/history, and native shared-history writes compare the navigation the caller observed before applying an owner response. Find cancellation and layout deduplication do not replace that ownership check.
+
+Downloads use a sandboxed, sender/frame-bound child window rather than hiding the embedded native website for a renderer dialog. File/history operations stay in the same host-owned download manager, scoped to the owning window. Metadata is ephemeral; file retention and saved destination preferences are separate. Restart is an explicit new HTTP(S) download, not POST replay.
+
+The operator reverses implicit browser access: persisted explicit logical-tab grants and revocations replace default access for human tabs. Agent-created tabs receive a host-created grant. A native consent request is separate from model/workflow approval and must receive an actual human decision; a pending or declined request cannot turn access on. Background automation continues on shared pages without changing UI selection.
+
+Global autoplay uses a website-frame preload, so turning it off can take effect on already-loaded pages without changing profiles or reloading forms. It blocks video before activation but permits user playback; it is not an enforcement boundary against malicious website scripts.
+
+## October 20 — Apple-owned Passwords integration
+
+Use the official iCloud Passwords extension on Electron Mac, with Apple’s existing native messaging
+host and ordinary per-profile extension installation/permission review. Keep pairing and unlock in
+Apple’s UI. Do not export credentials or substitute an app-owned password vault. Offer system AutoFill
+settings on native iPhone/iPad, whose WKWebView already handles website credential challenges.
+Do not describe Electron’s local Secure Enclave Touch ID credentials as iCloud passkey support.
+Validate helper compatibility independently of a successful extension install. On this Mac the
+Apple helper is killed with a code-signature error even outside Electron, although its on-disk
+signature verifies. Do not bypass that protection or infer that re-signing Proteus fixes it.
+Native AutoFill settings belong in device Browser settings outside account-gated profile sync.
+Human credential fill/save, biometric approval and physical-device acceptance remain separate.
+
 ## October 19 — verify desktop image delivery at the real provider boundary
 
 Keep Cua/Peekaboo host ownership and permission checks independent of provider transport. The
@@ -1779,3 +1988,98 @@ journal independently. Error/timeout paths release the same channel. A subproces
 verifies disconnection while the independent helper remains alive; the forced-health test's
 injected helper follows the same contract. This hardens independence; final exact signed
 update/rollback acceptance remains required after an earlier fixture exit timeout.
+
+## October 20 — Shared container content with recoverable window presentation
+
+The operator clarifies one canonical content-tab set per Team Tools/workspace/project/chat owner
+across windows: Close and same-tab navigation synchronize, while each window independently keeps
+its top-level navigation, selection and geometry. Window identity scopes presentation; it must not
+create a separate Team content registry. Native view IDs remain separate from stable logical tabs.
+The secondary-window duplicate/wrong-selection cause is not established by this design choice.
+
+Individually closed windows must now be recoverable and nameable in Engine Room, superseding
+October 19's discard-on-Close policy. Restore saved window presentation against the current owner
+contents rather than restoring old project tabs/URLs, permissions or terminal execution. Repeated
+restore focuses an existing open instance. Keep one host/runner and current revision/receipt
+protection. The operator selects the integrated Unified strip, retaining its darker background
+and the current navigation style: top-level close ×, selected underline and dividers. Revise the
+chat draft with those controls before the Proteus demo. Further operator refinement adds a thin
+top tab boundary matching dividers, retains the existing overlapping rectangles overview button,
+and keeps overview/+ controls at the right of each strip. The sidebar joins the title bar and spans
+beside secondary tabs, without a blank segment above it. Keep overview distinct from Engine Room
+window-session management. These are next-release requirements,
+not implemented or live-verified behavior. See [window management](window-management.md).
+
+
+## October 20 — Functional isolated window exploration
+
+The operator authorizes the selected design in Proteus Design Preview and the associated iPad
+repair source. Keep the existing overview icon in the universal secondary content row, beside
+New tab at the right, rather than coupling it to a URL field. The main integrated strip reserves
+20 pixels above 44-pixel tabs for drag space and centers one brand beside native window controls.
+
+Window snapshots own presentation, drafts and reading positions; canonical content registries
+own shared membership/navigation. Restore against current owner state before mounting views and
+focus an already-open instance. Use private revision-checked atomic metadata and bounded snapshot
+files. Merge legacy Team registries once by stable identity, never URL. Recheck local identity
+after asynchronous native creation so synchronization cannot append a duplicate entry.
+
+For native chat pinch, observe UIKit gestures at the current content surface; SwiftUI’s nested
+magnification recognizer can lose to scroll/text views. Leave browser-page pinch to its existing
+handler. Keep unsupported owner tab descriptors in mobile projection rather than generating
+accidental closes or incomplete reorder payloads. Preserve current authorization boundaries;
+empty-looking Team UI is not evidence that its website data was deleted.
+
+
+## October 20 — Stable drag brand and explicit human pause
+
+The latest preview uses the brand area for window dragging, without Home navigation. Keep its
+width independent of the sidebar and restore the original sidebar chevron. The 56-pixel header
+fits an 11-pixel margin, 44-pixel tabs and a bottom border, preventing selection-line clipping.
+
+Default agent page access still needs no sharing/profile opt-in. The operator additionally wants
+a real robot switch: interpret Off as an explicit human pause for that logical tab. Persist it
+at the host, independent of native view lifetime or presentation moves, and gate all page backends
+at the same boundary. Do not add an agent route that resumes itself. Organizational inventory and
+lifecycle remain separate from page access; pausing does not recreate a session or clear history.
+
+## October 20 — page scale in the browser page menu
+
+Use an owner-bound sandboxed child window for the browser … menu so one compact − / percentage /
++ row can remain open above the native website while changing scale. A native Electron Menu
+cannot render this interactive row. Read the website's actual zoom factor on each opening and
+after adjustment, preserve Chromium's origin/profile behavior, and keep shell zoom separate.
+The menu receives only validated labels, theme colors and a numeric percentage; its preload can
+choose a captured action, adjust scale or close. The host checks sender/frame and captured page
+lifetime. Preserve existing menu dispatch through toolbar redraws and dismiss on blur/Escape.
+
+## October 20 — independent setup and browser presentation lifetimes
+
+Keep New chat setup mounted in the tab with unique form/provider/attachment identities, rather
+than a modal that blocks navigation. Save bounded window-private draft data without attachment
+bytes; share only the existing canonical blank-tab descriptor. Record explicit pending-open
+intent until authoritative ownership acknowledges creation, while preserving revision conflicts.
+Keep each form's source catalog independent of whichever project the renderer is now displaying.
+
+Reuse the sandboxed page-menu child surface for compact popup clients. Native page rendering and
+shell HTML do not share CSS stacking; legacy hiding was a workaround, not an Electron requirement
+that agent pages disappear when unselected. Preserve page/debugger identity across selection and
+keep an active turn's automation lease between calls, releasing it on completion/human pause.
+Do not claim this lifetime hardening reproduces the original reported dropout.
+
+Use registrable-domain/private-suffix rules for page-scale preferences, isolated by the existing
+account-owned partition. Persist before applying, update matching live views, and keep layout
+scale independent from visual pinch. Gesture eligibility is measured at the start of a fresh
+pinch and permanently blocked for that gesture once zoomed; a small baseline attempt may open overview.
+
+## October 21 — menu bar Keep Screen Awake
+
+The operator requested a tray-controlled idle keep-awake feature. The desktop host now offers
+**Keep Screen Awake**, off on launch, using Electron's native `prevent-display-sleep` assertion.
+It remains active with windows closed and stops on toggle-off or application quit. It does not
+move the pointer, require Accessibility input permission, or change system sleep preferences.
+Native protection starts immediately, so it also covers sleep timeouts shorter than a few minutes.
+Explicit locking/sleep and OS policy remain in control. The setting is local to this process;
+restart/update returns to off. All 865 Node tests and syntax checks pass. Isolated Electron UI acceptance verifies the native
+macOS display-sleep assertion, background operation, toggle-off and quit cleanup. Packaging is
+in progress; installed apps are unchanged.

@@ -1,4 +1,5 @@
 import {mountSourceLibrary} from './source-library.js';
+import {renderWebPalette} from './palette.js';
 import {computerDescription} from '../../../public/computer-identity.js';
 import {mountBrowserHistory} from '../../../public/browser-history-panel.js';
 import {mountLogPanel,pagedAccountLogs} from '../../../public/log-panel.js';
@@ -9,7 +10,9 @@ import { standupLinksMarkup, bindStandupOrder } from '../../../public/standup-li
 import {appRequest,escapeHTML as e,externalLink,dateTime,localDateTime,recordBrowserVisit,browserHistoryRequest,defaultMacRequest,ownerRequest,defaultMacStatus,updateDefaultMac,retryDefaultMac} from './shared-app.js';
 import {BrowserDestinationStore} from './remote-client.js';
 import {usagePanel} from './remote-usage.js';
-const engineTabs=['sources','resources','connections','integrations','setup','preferences','history','usage','notifications','logs'];
+const engineTabs=['palette','sources','resources','connections','integrations','setup','preferences','history','usage','notifications','logs'];
+const engineNavigation=document.querySelector('.shell-subitems [data-engine-tab]')?.parentElement;
+if(engineNavigation&&!engineNavigation.querySelector('[data-engine-tab="palette"]')){const colors=document.createElement('a');colors.dataset.engineTab='palette';colors.href='/engine-room?tab=palette';colors.textContent='Colors';engineNavigation.prepend(colors);}
 const engineTabFromURL=()=>{const tab=new URLSearchParams(location.search).get('tab');return engineTabs.includes(tab)?tab:'resources';};
 const teamStorageKey='proteus.team-child-tabs.v1.'+document.body.dataset.browserAccount;
 let savedTeam={};try{savedTeam=JSON.parse(localStorage.getItem(teamStorageKey)||'{}');}catch{}
@@ -86,6 +89,7 @@ async function renderEngine(){
     const heading=document.querySelector('#engine-title');if(heading)heading.textContent=({sources:'Source library',resources:'Resources',connections:'Computer Connections',integrations:'Accounts & Integrations',setup:'App settings',preferences:'Browser settings',history:'Browser history',usage:'Usage',notifications:'Notifications',logs:'Logs'})[engineTab];
     const host=document.querySelector('#engine-content');if(!host)return;
     const version=++engineRenderVersion;
+    if(engineTab==='palette'){if(heading)heading.textContent='Colors';renderWebPalette(host,{escape:e,notify:notice});return;}
     if(!state){host.innerHTML='<p>Loading Engine Room…</p>';return;}
     const pref=state.preferences;
     if(engineTab==='sources'){const store=new BrowserDestinationStore(document.body.dataset.browserAccount);try{const hosts=await store.list();if(version!==engineRenderVersion)return;await mountSourceLibrary(host,{hosts,defaultHostId:pref.defaultMacId,request:ownerRequest,escape:e,notify:notice,active:()=>version===engineRenderVersion});}catch(error){notice(error.message);}finally{store.close();}return;}
@@ -122,6 +126,7 @@ async function renderEngine(){
 }
 function render(){renderTeam();renderBrowser();void renderEngine();}
 if(document.querySelector('#team-tools,#browser-home,#engine-room')){
+    if(engineTab==='palette'&&document.querySelector('#engine-room'))void renderEngine();
     const teamStrip=document.querySelector('.team-tabs');const updateTeamFade=()=>{if(!teamStrip)return;teamStrip.classList.toggle('fade-left',teamStrip.scrollLeft>2);teamStrip.classList.toggle('fade-right',teamStrip.scrollLeft+teamStrip.clientWidth<teamStrip.scrollWidth-2);};teamStrip?.addEventListener('scroll',updateTeamFade,{passive:true});window.addEventListener('resize',updateTeamFade);requestAnimationFrame(updateTeamFade);
     const requestedTeamTab=new URLSearchParams(location.search).get('tab');
     if(['overview','standup','browser'].includes(requestedTeamTab))teamTab=requestedTeamTab==='browser'&&teamBrowserOpen?'browser':requestedTeamTab==='browser'?'overview':requestedTeamTab;

@@ -1,4 +1,5 @@
 const fs = require('node:fs');
+const {normalizeChatSetupDraft}=require('./chat-setup-draft.cjs');
 const path = require('node:path');
 const {normalizeHistory,safeHistoryURL,MAX_ENTRIES}=require('./browser-history.cjs');
 const MAX_SESSION_BYTES=16*1024*1024, MAX_TOTAL_HISTORY_BYTES=8*1024*1024, MAX_SESSION_TABS=1000;
@@ -51,6 +52,7 @@ function normalizeSession(value, options={}) {
     for(const field of ['openedAt','lastTouchedAt','lastActivityAt'])if(Number.isFinite(Date.parse(item[field])))tab[field]=new Date(item[field]).toISOString();
     if(item.hidden===true)tab.hidden=true;
     if(item.navigationClosed===true)tab.navigationClosed=true;
+    if(item.pendingOpen===true)tab.pendingOpen=true;
     if(item.type==='browser')tab.persist=item.persist===true;
     if(text(item.customTitle,200))tab.customTitle=text(item.customTitle,200);
     if(text(item.contentTabId,256))tab.contentTabId=text(item.contentTabId,256);
@@ -79,12 +81,13 @@ function normalizeSession(value, options={}) {
     }
     if (tab.type === 'markdown') { tab.file=text(item.file); if (!path.isAbsolute(tab.file)) continue; }
     if (tab.type === 'browser') {
+      if(item.pendingOpen===true)tab.pendingOpen=true;
       tab.profileId=/^[a-f0-9-]{36}$/i.test(item.profileId||'')?item.profileId:'default';
       if(item.remotePreviewURL&&safeHistoryURL(item.remotePreviewURL))tab.remotePreviewURL=safeHistoryURL(item.remotePreviewURL);
       if(safeFavicon(item.favicon))tab.favicon=item.favicon;
       const history=sessionHistory(item.history,options), url=history?.entries[history.index]?.url || safeHistoryURL(item.url);
       if(item.url&&!url)continue;
-      tab.url=url||'';tab.group=item.group==='team'?'team':'main';tab.unloaded=item.unloaded===true||item.loaded===false;if(Number.isFinite(Date.parse(item.lastTouchedAt)))tab.lastTouchedAt=new Date(item.lastTouchedAt).toISOString();
+      tab.url=url||'';if(!tab.url&&item.newChatDraft)tab.newChatDraft=normalizeChatSetupDraft(item.newChatDraft);tab.group=item.group==='team'?'team':'main';tab.unloaded=item.unloaded===true||item.loaded===false;if(Number.isFinite(Date.parse(item.lastTouchedAt)))tab.lastTouchedAt=new Date(item.lastTouchedAt).toISOString();
       if(history){const bytes=Buffer.byteLength(JSON.stringify(history));if(historyBytes+bytes<=MAX_TOTAL_HISTORY_BYTES){tab.history=history;historyBytes+=bytes;}}
     }
     if (tab.type === 'terminal') {
@@ -104,7 +107,7 @@ function normalizeSession(value, options={}) {
   const selectedChildren=Object.fromEntries(Object.entries(value?.selectedChildren&&typeof value.selectedChildren==='object'&&!Array.isArray(value.selectedChildren)?value.selectedChildren:{}).slice(0,MAX_SESSION_TABS).filter(([parentId,childId])=>typeof parentId==='string'&&parentId.length<=256&&typeof childId==='string'&&childId.length<=256&&validTabs.some(parent=>parent.id===parentId&&['run','remote-run','workspace'].includes(parent.type)&&validTabs.some(child=>child.id===childId&&(child.parentId===parentId||parent.type==='workspace'&&!parent.projectId&&child.type==='workspace'&&child.projectId&&child.workspaceId===parent.workspaceId&&(child.hostId||'')===(parent.hostId||''))))));
   const pages=['schedules','runs','attention','context','credentials','providers','remote','settings','team','engine','home','workspaces'];
   const chatDrafts={};let draftBytes=0;for(const [key,draftValue]of Object.entries(value?.chatDrafts&&typeof value.chatDrafts==='object'&&!Array.isArray(value.chatDrafts)?value.chatDrafts:{}).slice(-200)){if(!/^[a-zA-Z0-9_:.\-]{1,256}$/.test(key)||typeof draftValue!=='string')continue;const draft=draftValue.slice(0,100000),bytes=Buffer.byteLength(draft);if(draftBytes+bytes>500000)continue;chatDrafts[key]=draft;draftBytes+=bytes;}
-  return {schemaVersion:1,...(options.windowId?{windowId:options.windowId}:{}),chatDrafts,tabs:validTabs,selectedChildren,active:validTabs.some(tab=>tab.id===value?.active&&!tab.hidden)?value.active:'overview',page:pages.includes(value?.page)?value.page:'home',...(normalizeTeam(value?.team)?{team:normalizeTeam(value.team)}:{}),...(engineSections.includes(value?.engineSection)?{engineSection:value.engineSection}:{})};
+  return {schemaVersion:1,...(options.windowId?{windowId:options.windowId}:{}),...(options.sharedTeam?{sharedTeam:true}:{}),chatDrafts,tabs:validTabs,selectedChildren,active:validTabs.some(tab=>tab.id===value?.active&&!tab.hidden)?value.active:'overview',page:pages.includes(value?.page)?value.page:'home',...(normalizeTeam(value?.team)?{team:normalizeTeam(value.team)}:{}),...([...engineSections,'windows','palette'].includes(value?.engineSection)?{engineSection:value.engineSection}:{})};
 }
 class WorkspaceSession {
   constructor(home,options={}) { this.options=options;this.file=options.windowId&&options.windowId!=='main'?path.join(home,'window-sessions',options.windowId+'.json'):path.join(home,'desktop-workspace.json'); this.last=''; }

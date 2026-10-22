@@ -26,3 +26,5 @@ test('persisted tabs do not consume any of the six normal retained slots',()=>{
  for(let i=0;i<8;i++)tabs.unshift({id:'persist-'+i,view,persist:true,lastTouchedAt:now-i});
  assert.deepEqual(retirementCandidates(tabs,now,null).map(t=>t.id),['normal-6','normal-7','normal-8']);
 });
+
+test('a page controlled by a running turn remains loaded between individual tool calls',()=>{const now=1_000_000_000,view={webContents:{isCurrentlyAudible:()=>false}},tabs=Array.from({length:9},(_,i)=>({id:String(i),view,lastTouchedAt:now-RECENT_MS-1000-i}));tabs[7].automationRuns=new Set(['active-turn']);tabs[8].agentActions=1;assert.deepEqual(retirementCandidates(tabs,now,null).map(t=>t.id),['6']);tabs[7].automationRuns.clear();assert.deepEqual(retirementCandidates(tabs,now,null).map(t=>t.id),['6','7']);});

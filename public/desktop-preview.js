@@ -11,7 +11,7 @@ const expandedWorkspaces=new Set(),expandedProjects=new Set(),expandedComputers=
 let otherComputersOpen=false,ownersRefreshedAt=0,ownersRefreshing=null;
 const chatLimits=new Map(),projectLimits=new Map();
 let sidebarLoaded=false,sidebarScroll=0,sidebarFocus=null,sidebarSaveTimer;
-function saveSidebar(){clearTimeout(sidebarSaveTimer);sidebarSaveTimer=undefined;try{sessionStorage.setItem(sidebarSessionKey,JSON.stringify({workspaces:[...expandedWorkspaces],projects:[...expandedProjects],computers:[...expandedComputers],otherComputersOpen,chatLimits:[...chatLimits],projectLimits:[...projectLimits],scroll:sidebarScroll}));}catch{}}
+function saveSidebar(){loadSidebar();clearTimeout(sidebarSaveTimer);sidebarSaveTimer=undefined;try{sessionStorage.setItem(sidebarSessionKey,JSON.stringify({workspaces:[...expandedWorkspaces],projects:[...expandedProjects],computers:[...expandedComputers],otherComputersOpen,chatLimits:[...chatLimits],projectLimits:[...projectLimits],scroll:sidebarScroll}));}catch{}}
 // Scroll observations are frequent; coalesce disk-backed storage writes without
 // rebuilding navigation or losing the last position at lifecycle boundaries.
 function saveSidebarScroll(){clearTimeout(sidebarSaveTimer);sidebarSaveTimer=setTimeout(saveSidebar,200);}
@@ -29,6 +29,7 @@ function loadSidebar(){
 }
 export function capturePreviewSidebar(){
  if(!previewEnabled(ui?.state))return;
+ loadSidebar();
  const sidebar=document.querySelector('#sidebar'),nav=sidebar?.querySelector('nav.preview-sidebar-scroll');
  if(nav){sidebarScroll=nav.scrollTop;saveSidebar();}
  const focused=document.activeElement;sidebarFocus=null;
@@ -196,7 +197,11 @@ export function bindPreviewSidebar(){
  nav.addEventListener('scroll',()=>{if(restoring)return;sidebarScroll=nav.scrollTop;saveSidebarScroll();},{passive:true});
 }
 export async function mutatePreview(args){const next=await ui.api(projectAPI()+'/projects',{...args,expectedRevision:args.expectedRevision??catalog().revision});setWorkspaceProjectsCatalog(ui.state,next);await ui.refresh(true);return next;}
-function projectDialog(workspaceId,project){ui.showDialog(`<h2>${project?'Rename project':'New project'}</h2><label>Name<input id="preview-project-name" maxlength="200" value="${esc(project?.name||'')}" autofocus></label><p class="note">Projects organize chats and tabs. Working folders, sources and defaults belong to the workspace.</p><div class="actions"><button id="close-dialog">Cancel</button><button id="dialog-submit">${project?'Rename':'Create project'}</button></div>`,async()=>{const name=$('#preview-project-name').value.trim();if(!name)throw Error('Enter a project name.');const next=await mutatePreview({action:project?'rename':'create',workspaceId,projectId:project?.id,name});if(project)openPreviewProject(next.projects.find(p=>p.id===project.id));else openPreviewProject(next.projects.find(p=>p.workspaceId===workspaceId&&p.name===name));});}
+function moveProjectDialog(project){
+ const revision=catalog().revision,chatCount=Object.values(catalog().memberships||{}).filter(member=>member.projectId===project.id).length;
+ ui.showDialog(`<h2>Move ${esc(project.name)}</h2><p>From ${esc(workspace(project.workspaceId)?.name||project.workspaceId)} · ${chatCount} chats and all their tabs. ${catalog().defaultProjectIds[project.workspaceId]===project.id?'A new General project will remain as the source workspace’s default.':''}</p><label>Destination workspace<select id="project-destination">${ui.state.data.context.workspaces.filter(w=>w.id!==project.workspaceId).map(w=>`<option value="${esc(w.id)}">${esc(w.name)}</option>`).join('')}</select></label><p>All chats and tabs move with this project. Existing chats keep their settings and permissions. New chats use the destination workspace defaults.</p><div class="actions"><button id="close-dialog">Cancel</button><button id="dialog-submit">Move project</button></div>`,async()=>{const next=await mutatePreview({action:'move-project',projectId:project.id,workspaceId:$('#project-destination').value,expectedRevision:revision});openPreviewProject(next.projects.find(p=>p.id===project.id));});
+}
+function projectDialog(workspaceId,project){ui.showDialog(`<form data-dialog-submit><h2>${project?'Rename project':'New project'}</h2><label>Name<input id="preview-project-name" maxlength="200" value="${esc(project?.name||'')}" autofocus></label><p class="note">Projects organize chats and tabs. Working folders, sources and defaults belong to the workspace.</p><div class="actions"><button type="button" id="close-dialog">Cancel</button><button type="submit" id="dialog-submit">${project?'Rename':'Create project'}</button></div></form>`,async()=>{const name=$('#preview-project-name').value.trim();if(!name)throw Error('Enter a project name.');const next=await mutatePreview({action:project?'rename':'create',workspaceId,projectId:project?.id,name});if(project)openPreviewProject(next.projects.find(p=>p.id===project.id));else openPreviewProject(next.projects.find(p=>p.workspaceId===workspaceId&&p.name===name));});}
 function deleteProjectDialog(workspaceId,project){
  const value=catalog(),destination=value.projects.find(item=>item.id===value.defaultProjectIds?.[workspaceId]&&item.workspaceId===workspaceId);
  if(!destination||destination.id===project.id){ui.toast('Choose another default project before deleting this project.');return;}
@@ -212,9 +217,10 @@ export function renderPreviewCollection(){const area=$('#main');area.innerHTML=`
 export function renderPreviewWorkspace(tab){
  if(tab.workspacePage==='configuration'&&!tab.projectId)return false;
  const main=$('#main'),profile=workspace(tab.workspaceId),project=previewProjects().find(p=>p.id===tab.projectId),page=tab.workspacePage||(project?'chats':'projects');
- main.innerHTML=`<div class="heading"><div>${project?`<button class="subtle preview-breadcrumb" data-preview-parent>${workspaceIcon}${esc(profile?.name)} ›</button>`:'<div class="eyebrow">Workspace</div>'}<h1>${esc(project?.name||profile?.name||tab.label)}</h1><p class="muted">${project?'Chats and tabs · working setup from '+esc(profile?.name):'Projects, conversations and your working setup'}</p></div><div class="actions">${project?'<button data-preview-rename>Rename</button>':'<button data-preview-new-project>＋ New project</button>'}<button data-preview-new-chat class="primary">＋ New chat</button></div></div>${project?`<div class="actions preview-project-pages">${['chats','tabs'].map(p=>`<button data-preview-project-page="${p}" class="${page===p?'primary':''}">${p==='chats'?'Chats':'Tabs'}</button>`).join('')}<button data-preview-config>Workspace configuration ↗</button></div>`:''}<section id="workspace-page"></section>`;
+ main.innerHTML=`<div class="heading"><div>${project?`<button class="subtle preview-breadcrumb" data-preview-parent>${workspaceIcon}${esc(profile?.name)} ›</button>`:'<div class="eyebrow">Workspace</div>'}<h1>${esc(project?.name||profile?.name||tab.label)}</h1><p class="muted">${project?'Chats and tabs · working setup from '+esc(profile?.name):'Projects, conversations and your working setup'}</p></div><div class="actions">${project?'<button data-preview-move>Move project…</button><button data-preview-rename>Rename</button>':'<button data-preview-new-project>＋ New project</button>'}<button data-preview-new-chat class="primary">＋ New chat</button></div></div>${project?`<div class="actions preview-project-pages">${['chats','tabs'].map(p=>`<button data-preview-project-page="${p}" class="${page===p?'primary':''}">${p==='chats'?'Chats':'Tabs'}</button>`).join('')}<button data-preview-config>Workspace configuration ↗</button></div>`:''}<section id="workspace-page"></section>`;
  main.querySelector('[data-preview-new-chat]').onclick=()=>ui.newChat(tab);
  main.querySelector('[data-preview-new-project]')?.addEventListener('click',()=>projectDialog(tab.workspaceId));
+ main.querySelector('[data-preview-move]')?.addEventListener('click',()=>moveProjectDialog(project));
  main.querySelector('[data-preview-rename]')?.addEventListener('click',()=>projectDialog(tab.workspaceId,project));
  main.querySelector('[data-preview-parent]')?.addEventListener('click',()=>ui.openWorkspace(profile,'projects'));
  main.querySelector('[data-preview-config]')?.addEventListener('click',()=>ui.openWorkspace(profile,'configuration'));

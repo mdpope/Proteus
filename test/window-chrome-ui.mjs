@@ -1,0 +1,79 @@
+// Synthetic desktop UI acceptance, separate from the installed app and provider accounts.
+import { _electron as electron } from 'playwright';
+import assert from 'node:assert/strict';
+import path from 'node:path';
+import fs from 'node:fs';
+import os from 'node:os';
+const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-window-chrome-ui-'));
+const workspace = path.join(temporary, 'workspace'); fs.mkdirSync(workspace);
+fs.writeFileSync(path.join(temporary, 'settings.json'), JSON.stringify({ schemaVersion: 1, provider: 'rehearsal', model: '', timezone: 'UTC', workspace: { cwd: workspace, additionalDirectories: [] }, skillDirectories: [], mcpServers: {} }));
+const inherited = ['PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'LANG', 'LC_ALL', 'DISPLAY', 'WAYLAND_DISPLAY', 'XAUTHORITY', 'XDG_RUNTIME_DIR', 'DBUS_SESSION_BUS_ADDRESS', 'TMPDIR', 'TMP', 'TEMP'];
+const env = Object.fromEntries(inherited.filter(key => process.env[key] !== undefined).map(key => [key, process.env[key]]));
+Object.assign(env, { PROTEUS_HOME: temporary, PORT: '0', COPILOT_HOME: path.join(temporary, 'copilot'), COPILOT_CLI_PATH: path.join(temporary, 'unavailable-copilot'), PROTEUS_CODEX_PATH: path.join(temporary, 'unavailable-codex'), PROTEUS_CLAUDE_PATH: path.join(temporary, 'unavailable-claude'), CLAUDE_CONFIG_DIR: path.join(temporary, 'claude') });
+let app;
+const errors = [], checks = [];
+const until = async (fn, label) => { for (let n = 0; n < 150; n++) { if (await fn()) return; await new Promise(resolve => setTimeout(resolve, 100)); } throw Error('Timed out: ' + label); };
+const main = (fn, value) => app.evaluate(({ app }, { code, value }) => new Function('main', 'value', 'return (' + code + ')(main,value)')(process.mainModule.require(app.getAppPath() + '/desktop/main.cjs'), value), { code: fn.toString(), value });
+try {
+  const executablePath = process.env.PROTEUS_TEST_EXECUTABLE;
+  app = await electron.launch({ ...(executablePath ? { executablePath } : {}), args: [...(executablePath ? [] : ['.']), '--password-store=basic', '--user-data-dir=' + path.join(temporary, 'browser')], env, timeout: 60000 });
+  const page = await app.firstWindow();
+  page.on('pageerror', error => errors.push(error.message));
+  await page.locator('#linux-window-controls').waitFor();
+  const primaryId = await page.evaluate(() => window.desktop.windowId);
+  const control = action => page.locator(`[data-window-action="${action}"]`);
+  const native = fn => main((main, { id, code }) => new Function('target', 'return (' + code + ')(target)')(main.getWindows().contexts.get(id).window), { id: primaryId, code: fn.toString() });
+  assert.equal(await native(target => target.isMenuBarVisible()), false);
+  assert.deepEqual(await native(target => target.getContentBounds()), await native(target => target.getBounds()), 'No separate native title bar or menu row');
+  assert.deepEqual(await app.evaluate(({ Menu }) => Menu.getApplicationMenu().items.map(item => item.label)), ['File', 'Edit', 'View', 'Window']);
+  const geometry = await page.evaluate(() => {
+    const controls = document.querySelector('#linux-window-controls'), tabs = document.querySelector('#tabs'), home = document.querySelector('#topbar-home');
+    return { left: controls.getBoundingClientRect().left, right: controls.getBoundingClientRect().right, home: home.getBoundingClientRect().left, top: tabs.getBoundingClientRect().top, drag: getComputedStyle(tabs).webkitAppRegion, buttonDrag: getComputedStyle(controls.querySelector('button')).webkitAppRegion, overflow: document.documentElement.scrollWidth > innerWidth };
+  });
+  assert.equal(geometry.top, 0); assert.ok(geometry.left < 16); assert.ok(geometry.right <= geometry.home); assert.equal(geometry.drag, 'drag'); assert.equal(geometry.buttonDrag, 'no-drag'); assert.equal(geometry.overflow, false);
+  checks.push('Linux controls at upper left, title strip drag regions and hidden native menu bar');
+  await control('toggle-maximize').click(); await until(() => native(target => target.isMaximized()), 'maximize');
+  await page.getByRole('button', { name: 'Restore window', exact: true }).waitFor();
+  await control('toggle-maximize').click(); await until(async () => !await native(target => target.isMaximized()), 'restore');
+  await control('minimize').click(); await until(() => native(target => target.isMinimized()), 'minimize');
+  await native(target => { target.restore(); target.show(); target.focus(); });
+  checks.push('real native maximize, restore, minimize and restore from taskbar');
+  // Observe the actual native popup opening; close it through its native lifecycle.
+  await app.evaluate(({ Menu }) => { global.__chromePopup = 0; Menu.getApplicationMenu().on('menu-will-show', () => global.__chromePopup++); });
+  await control('menu').click();
+  await until(() => app.evaluate(() => global.__chromePopup === 1), 'native menu opens');
+  assert.equal(await control('menu').getAttribute('aria-expanded'), 'true');
+  await app.evaluate(({ Menu }) => Menu.getApplicationMenu().closePopup());
+  await until(async () => await control('menu').getAttribute('aria-expanded') === 'false', 'native menu closes');
+  await page.keyboard.press('F10'); await until(() => app.evaluate(() => global.__chromePopup === 2), 'F10 native menu access');
+  await app.evaluate(({ Menu }) => Menu.getApplicationMenu().closePopup());
+  await until(async () => await control('menu').getAttribute('aria-expanded') === 'false', 'F10 menu dismissal');
+  await page.bringToFront();
+  checks.push('circled-dots native menu opens/closes and F10 keyboard access');
+  const created = app.waitForEvent('window');
+  await app.evaluate(({ Menu, BrowserWindow }) => {
+    const command = Menu.getApplicationMenu().items.find(item => item.label === 'File').submenu.items.find(item => item.label === 'New Window');
+    if (command.accelerator !== 'CommandOrControl+N') throw Error('New Window shortcut was lost.');
+    command.click(command, BrowserWindow.getFocusedWindow());
+  });
+  const second = await created;
+  second.on('pageerror', error => errors.push(error.message)); await second.locator('#linux-window-controls').waitFor();
+  const secondId = await second.evaluate(() => window.desktop.windowId);
+  assert.equal(await main((main, id) => main.getWindows().contexts.get(id).window.isMenuBarVisible(), secondId), false);
+  await page.bringToFront();
+  // Deliberately focus the other window: renderer IPC must still control its sender.
+  await second.evaluate(() => window.desktop.windowChrome({ action: 'toggle-maximize' }));
+  await until(() => main((main, id) => main.getWindows().contexts.get(id).window.isMaximized(), secondId), 'owning second window maximized');
+  assert.equal(await native(target => target.isMaximized()), false);
+  await second.locator('[data-window-action="close"]').click();
+  await until(() => main(main => main.getWindows().contexts.size === 1), 'only second window closes');
+  assert.equal(await native(target => target.isDestroyed()), false);
+  checks.push('File New Window action and shortcut registration; additional windows inherit hidden frame/menu; controls target their sender and Close preserves sibling');
+  await native(target => target.setSize(850, 650));
+  await page.waitForTimeout(300);
+  assert.equal(await page.evaluate(() => document.querySelector('#linux-window-controls').getBoundingClientRect().right <= document.querySelector('#topbar-home').getBoundingClientRect().left), true);
+  await page.evaluate(() => document.activeElement?.blur());
+  const screenshot = path.resolve('dist/linux-window-chrome.png'); fs.mkdirSync(path.dirname(screenshot), { recursive: true }); await page.screenshot({ path: screenshot });
+  assert.deepEqual(errors, []);
+  console.log(JSON.stringify({ passed: true, synthetic: true, checks, screenshot }));
+} finally { await app?.close(); fs.rmSync(temporary, { recursive: true, force: true }); }

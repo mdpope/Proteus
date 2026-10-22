@@ -1,3 +1,22 @@
+## October 22 — composer modes and message edges
+
+Native and web chats expose Chat | Live browser at the right of the existing composer status line,
+opposite connection status, with matching caption size and the selected mode in the light accent.
+The mode control requires the actual `browser.live.v1` capability; it creates no additional tab or
+standalone Chat tools toolbar. Each mode shows one editor with the same status/switch row; unsent chat/browser
+instructions remain separate retained drafts. Native documents remain accessible through existing
+child tabs and chat actions. Role colors apply only to the left message edge, including web/mobile.
+
+**0.2.28 — New chat and steering:** Tab-hosted setup uses a 1,066px width cap (30% wider)
+and a 138px ordinary message-entry minimum (15% taller), bounded by the available pane with
+responsive gutters and adaptive height. Draft and attachment identity is retained.
+
+Steer controls on desktop, web and native clients use the owning provider's current capability.
+Claude's supported mode is interrupt-and-continue; the desktop label states this. Delivery is
+acknowledged only after matching native input replay, and an uncertain receipt is not resent
+automatically. Queue next remains a distinct action. See [release evidence](2026-10-21-browser-chat-release.md)
+for synthetic protocol/UI checks and remaining real-provider acceptance.
+
 **October 14 question history:**
 
 Questions are first-class chronological messages outside collapsed Activity, with complete

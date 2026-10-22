@@ -3,6 +3,7 @@
 import { packager } from '@electron/packager';
 import { rebuild } from '@electron/rebuild';
 import { preparePty } from './prepare-pty.mjs';
+import { prepareExtensions } from './prepare-extensions.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,6 +14,10 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const gitHead=execFileSync('git',['rev-parse','--short=12','HEAD'],{cwd:root,encoding:'utf8'}).trim();
 const unsigned=process.env.PROTEUS_MAC_UNSIGNED==='1';
 const desktopPreview=process.env.PROTEUS_DESKTOP_PREVIEW==='1';
+// A separate candidate identity; installed releases retain their update/Keychain identity until migration is approved.
+const appleReview=process.env.PROTEUS_APPLE_REVIEW==='1';
+if(appleReview&&desktopPreview)throw new Error('Choose Apple review or design preview, not both.');
+const appBundleId=desktopPreview?'org.proteusapp.proteus.design-preview':appleReview?'org.proteusapp.review.proteus.desktop':'org.proteusapp.proteus.desktop';
 const appName=desktopPreview?'Proteus Design Preview':'Proteus';
 const signingIdentity = process.env.PROTEUS_MAC_SIGN_IDENTITY || '-';
 if (process.platform !== 'darwin') throw new Error('Build the Mac application on macOS.');
@@ -31,17 +36,17 @@ for (const size of [16, 32, 128, 256, 512]) for (const scale of [1, 2]) {
 const icon = path.join(root, 'dist/Proteus.icns');
 execFileSync('iconutil', ['-c', 'icns', iconset, '-o', icon]);
 await import('./build-terminal.mjs');
-const buildInputPaths=['package.json','package-lock.json','scripts/package-mac.mjs','scripts/desktop-build.mjs','scripts/build-terminal.mjs','scripts/prepare-pty.mjs','ios/Proteus/Assets.xcassets/AppIcon.appiconset/AppIcon.png'];
+const buildInputPaths=['package.json','package-lock.json','scripts/package-mac.mjs','scripts/desktop-build.mjs','scripts/build-terminal.mjs','scripts/prepare-pty.mjs','scripts/prepare-extensions.mjs','ios/Proteus/Assets.xcassets/AppIcon.appiconset/AppIcon.png'];
 const {runtimeFiles,buildInputs,verifySource,verifyCopied}=createDesktopSnapshot(root,buildInputPaths);
 const dirty=Boolean(execFileSync('git',['status','--porcelain','--',...Object.keys(runtimeFiles),...buildInputPaths],{cwd:root,encoding:'utf8'}).trim());
-const sourceFingerprint=createHash('sha256').update(JSON.stringify({runtimeFiles,buildInputs,gitHead,dirty})).digest('hex');
+const sourceFingerprint=createHash('sha256').update(JSON.stringify({runtimeFiles,buildInputs,gitHead,dirty,appBundleId})).digest('hex');
 const buildRevision=`${gitHead}+${dirty?'dirty.':'src.'}${sourceFingerprint.slice(0,12)}`;
-const provenance={schemaVersion:1,gitHead,dirty,sourceFingerprint,buildRevision,runtimeFiles,buildInputs};
+const provenance={schemaVersion:1,gitHead,dirty,sourceFingerprint,buildRevision,appBundleId,runtimeFiles,buildInputs};
 verifySource();
 const bundles = await packager({ dir: root, out: process.env.PROTEUS_PACKAGE_OUTPUT || path.join(root, 'dist',...(desktopPreview?['design-preview']:[])), overwrite: true,
-  name: appName, executableName: appName, appBundleId: desktopPreview?'org.proteusapp.proteus.design-preview':'org.proteusapp.proteus.desktop',
+  name: appName, executableName: appName, appBundleId,
   platform: 'darwin', arch: process.arch, icon, asar: false,
-  protocols: desktopPreview?[]:[{ name: 'Proteus Life sign-in', schemes: ['proteus','proteus-desktop'] }],
+  protocols: desktopPreview?[]:[{ name: 'Websites', schemes: ['http','https'] },{ name: 'Proteus Life sign-in', schemes: ['proteus','proteus-desktop'] }],
   // Rebuild only our PTY in the copied app. Preserve source Node ABI and vendor signatures.
   afterCopy: [async ({buildPath, electronVersion, arch}) => {
     verifySource();verifyCopied(buildPath);
@@ -54,6 +59,7 @@ const bundles = await packager({ dir: root, out: process.env.PROTEUS_PACKAGE_OUT
     fs.writeFileSync(path.join(buildPath,'build-source.json'),JSON.stringify(provenance,null,2)+'\n');
     await rebuild({buildPath, electronVersion, arch, onlyModules:['node-pty'], force:true});
     preparePty(buildPath);
+    prepareExtensions(buildPath);
   }],
   // Keep runtime files and dependencies; never ship tests, worktrees or local configuration.
   ignore: desktopPackageIgnore,
