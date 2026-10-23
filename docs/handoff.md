@@ -3,8 +3,9 @@
 The correction now also brackets explicit asynchronous address navigation, so a pre-navigation
 no-op observation cannot consume its input. Final runtime fingerprint `b2ac0ff930f4` is signed
 with the existing local Mac identity and matches all source runtime/build-input hashes.
-1,055 Node tests pass (one platform skip), and static checks pass. Exact-package acceptance
-is recorded separately; activation is held while a local chat is running. No live-data backup
+1,055 Node tests pass (one platform skip), and static checks pass. Exact-package 400 ms acceptance passes, including chat stability through refresh/lease renewal,
+new remote input, history and scope boundaries. One traffic-budget failure and its unchanged
+passing repeat remain distinct. Activation is held while a local chat is running. No live-data backup
 or application replacement was performed for the build/test-only work.
 
 The additional native-link/reverse-address probe also fails on the original release. It is

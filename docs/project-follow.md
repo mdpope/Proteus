@@ -115,3 +115,17 @@ probe pass. This broader history race is not claimed fixed by the input-authorit
 Run `PROTEUS_FOLLOW_NATIVE_ACK_PROBE=1` with the normal UI fixture to reproduce it separately.
 The required idle chat-selection, normal bidirectional address, scope, history and scroll checks
 remain unconditional in that fixture.
+
+## Fresh-input correction acceptance
+
+The signed Mac candidate `187d67b1f284+dirty.b2ac0ff930f4` matches all 328 runtime files
+and build inputs and the existing installed signer. 1,055 Node tests pass, one platform skip;
+static checks pass. Exact-package 400 ms acceptance preserves the chat through passive refresh
+and a lease renewal, then follows a new actual remote click. Ordinary bidirectional addresses,
+independent cookies, complete history beginning, scope inactivity/catch-up and delayed scroll pass.
+One run exceeded the descriptor budget by one request (seven); the unchanged bounded repeat
+passes with five per direction, 47/51 visible updates and 1,295/434 ms maximum progress gaps.
+Both receipts remain retained; the passing repeat does not erase the first failure.
+Activation is separate and remains held while local work is running. No recovery capture or
+installed replacement is claimed by this source/build acceptance. Other desktop clients need
+the input-authority correction too; an older idle publisher is not certified by updating one client.
