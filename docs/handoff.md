@@ -1,3 +1,14 @@
+## October 22 — duplicate redirect metadata correction awaits artifact acceptance
+
+Two clients can observe the same title and submit different redirect operation IDs against
+one navigation revision. The shared renderer now settles an already-satisfied selected-entry
+metadata intent locally. An explicit stale redirect conflict may hydrate once to prove exact
+entry ID/URL/title convergence. It never resubmits that stale operation or fabricates its receipt;
+navigation/traversal batches and divergent metadata retain strict conflicts. See
+[browser history](browser.md#convergent-selected-entry-metadata) and the latest design decision.
+Source tests and packaged acceptance remain separate. The held candidate and installed app
+are unchanged; this correction creates no recovery generation.
+
 ## October 22 — follow latency correction awaits integrated artifact acceptance
 
 A shared follower source correction addresses deterministic passive-read/remote-position ordering

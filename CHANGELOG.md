@@ -1,3 +1,8 @@
+## Unreleased — convergent browser metadata
+
+- Settle a duplicate browser redirect/title intent only when the owner's selected entry already has the exact entry ID, URL and title. A stale redirect conflict gets one fresh read, without resubmitting or inventing a receipt.
+- Preserve strict navigation revisions, divergent metadata conflicts, original uncertain request identities and complete Back/Forward history.
+
 ## Unreleased — follow presentation ordering under latency
 
 - Apply a pending owner position before publishing passive local changes for the same presentation identity, while preserving newer human input and changed navigation.

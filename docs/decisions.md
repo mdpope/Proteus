@@ -1,3 +1,21 @@
+## October 22 — selected-entry metadata intent can converge without execution
+
+A browser title observation is satisfied when the authoritative currently selected entry has
+the exact intended entry ID, URL and title. Dropping that redundant local intent does not assert
+that its operation executed or has a durable server receipt. Reconciliation may skip it before
+dispatch, including after an uncertain reply. For an explicit `NAVIGATION_CONFLICT` on a single
+redirect request, hydrate once and test the same condition; do not retry or rewrite the operation.
+This recovery applies only to one redirect, optional metadata opens for that same browser tab
+and profile, and optional reorder. Navigation/traversal intent cannot be certified by matching
+present metadata. Rebase only the unsubmitted metadata tail against the fresh snapshot, preserving
+concurrent tab additions/closures, then use the normal request protocol. Do not replay an
+acknowledged prefix. Preserve original pending/request state when proof fails.
+
+Keep server revision and operation-digest validation strict. A pending Back/Forward operation,
+different selected entry/URL/title, closed tab, operation-ID collision, journal refusal or uncertain
+transport response cannot use this stale-conflict recovery. Do not create a server receipt for
+an operation that was only settled locally. Full history, visits and existing receipts are retained.
+
 ## October 22 — follow input freshness across descriptor latency
 
 Treat a pending owner presentation and a passive local read as different sources of authority.
