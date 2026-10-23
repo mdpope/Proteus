@@ -284,6 +284,20 @@ Distinguish evidence captured at a stated time from current opaque cache inspect
 
 ## Two generation backup retention
 
+For website delivery, apply the same ceiling to inactive code and local package/build copies.
+Count failed/incomplete extraction directories. Block another build when prior package copies
+remain unresolved; keep the accepted current/previous code, resolve a temporary third after live
+acceptance, and preserve the failed transaction rather than resetting its retry receipt.
+
+October 23 operator clarification: two means the latest verified recovery plus **one previous**,
+per installation/service and per applicable local/server location. Do not accumulate additional
+historical payloads through calendar tiers, old migration pins, retry folders or transport copies.
+The owning website project uses this same ceiling; its former three-generation and permanent
+migration-pin exceptions are superseded. Do not transfer expired generations merely to retire
+them. Keep minimal evidence after cleanup; any extra full exception requires fresh operator
+approval with a reason, size and deletion condition. A working service alone is not verification
+of its backup: check the retained recovery manifests before retiring older known project sets.
+
 The operator requires only a couple of full recovery backups at one time. This policy applies
 to Proteus updates on each distinct installation/data home and each physical device. Desktop
 Electron, native Mac, iPhone and iPad have different data; do not replace one target's recovery

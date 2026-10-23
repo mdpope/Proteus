@@ -1789,6 +1789,26 @@ attachment content scroll, including when a waiting question occupies space. Pre
 delivery/consent, draft state and model metadata; this correction does not redesign chat ownership.
 Build/test first and hold website/Work Mac deployment as requested.
 
+## October 23, 2026 — Apply the two-backup ceiling to server and local website recovery
+
+The operator explicitly chose the latest verified backup plus one previous backup in each
+applicable location and rejected accumulating older release/migration copies. This supersedes
+the website's former three-generation/calendar and historical migration-pin exceptions. Verify
+the retained pair, retire older known project payloads, retain minimal receipts, and do not import
+obsolete generations solely to delete them. Additional full retention requires a fresh named,
+size-bounded, time-bounded operator exception. Temporary third generations resolve immediately
+after acceptance. Preserve unknown/unrelated data and existing review/access boundaries.
+
+The website deployment helper applies that ceiling to inactive code generations as well as
+full recovery sets. Count failed/incomplete extraction directories before permitting the next
+in-flight generation. Retain the failed job/transaction and minimal manifests; storage cleanup
+must not turn a failed activation into a replayable success. After a failed extraction caused
+by storage pressure, reuse the verified recovery and exact tested artifact with a distinct,
+recorded deployment transaction after resolving the storage condition. No new recovery capture
+or application rebuild is justified solely by the retry.
+The local code builder also refuses accumulated archives and prior unresolved build payloads;
+that preflight performs no deletion and does not create a live-data backup.
+
 ## October 14, 2026 — Bound app update recovery to two full generations
 
 The operator rejected release-by-release backup sprawl. Limit full recovery to two accepted

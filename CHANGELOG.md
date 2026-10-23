@@ -1,7 +1,10 @@
 ## Unreleased — October 23 local corrections; desktop rollout resumed
 
+- Document the operator's two-backup ceiling: latest verified plus one previous in each applicable local/server location; retire obsolete website release/migration payloads after verifying the retained pair. No runtime rebuild.
+- Enforce the website deployment limit across complete and incomplete recovery/code generations; keep failed transaction receipts and prevent retained code copies from accumulating without review. Deployment helper changes require no application rebuild.
 - Acknowledge each native browser navigation receipt before a following metadata batch can race another desktop's address edit. Preserve exact selection, complete history and profile guards.
 - Bring explicit chat recovery and supported attached steering to the web client. Native recovery keeps plain system failures visible and rechecks the host/active turn before attached steering.
+- Accept the live website correction after ordinary recovery restore, exact deployed/served hashes, fourteen endpoint checks and authenticated Home/Connections verification; retain only latest and previous website recoveries/code copies.
 - Verify phone/tablet recovery and local typing work for long messages and 100/1,000-event histories; preserve every typed character with no history traversal during entry. Physical-device performance and live acceptance remain separate.
 - Install mobile build 2610.23.1 on phone and tablet with cold data preservation, connected Home/live build verification and two verified recoveries each. Physical CPU/frame-rate profiling remains unverified.
 - Use normal Playwright Quit for restart fixtures so its debugger detaches; preserve the same complete-history assertions and require actual clean process exit. No application runtime change.
