@@ -1,9 +1,11 @@
-## October 23 — desktop hold; local URL correction and web/mobile work
+## October 23 — desktop rollout resumed; local URL correction and web/mobile work
 
-Latest operator direction holds all desktop updates, including Windows, while local fixes and iOS
-performance are checked. Build Mac/Linux/HC already run the prior accepted correction; do not
-reinstall them. The URL-follow race now reproduces and passes with a source correction; see
-[follow verification](project-follow.md). No new desktop package/install is accepted yet.
+The operator has now requested finishing needed desktop/web updates and deleting expired backups,
+releasing the earlier desktop hold. Package and verify the tested URL-follow correction before
+replacing the prior accepted Build Mac/Linux/HC builds; Windows needs the same current runtime.
+See [follow verification](project-follow.md). Fresh owner/work, recovery and review gates still
+apply; this authorization does not bypass the separate Windows cleanup rejection. No new desktop
+package/install is accepted yet.
 
 Web recovery/attachment steering is implemented locally and passes focused authenticated UI
 checks including a real 60-second retry. Native source compiles, 141 units pass and standalone

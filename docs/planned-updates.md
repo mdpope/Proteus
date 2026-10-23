@@ -1,9 +1,10 @@
-## October 23 — local URL-follow fix and web/native parity; desktop hold
+## October 23 — local URL-follow fix and web/native parity; desktop rollout resumed
 
 The operator requested iOS performance checks and reported project tab selection following while
-its changed page URL did not. All further desktop installations, including Windows, are held
-pending combined review. Existing accepted Build Mac/Linux/HC installations are not repeated;
-Windows still has its separate unresolved recovery-retirement review blocker.
+its changed page URL did not. After local verification, the operator requested finishing needed
+desktop/web updates and retiring expired backups, releasing the earlier desktop hold. Deliver the
+new tested correction to each desktop; do not reinstall the older unchanged artifacts. Windows
+still has its separate unresolved recovery-retirement review blocker.
 
 A two-desktop test reproduces native-link/immediate reverse-address reversion at 400 ms latency.
 Source now acknowledges each navigation's exact saved branch before later metadata I/O can race
