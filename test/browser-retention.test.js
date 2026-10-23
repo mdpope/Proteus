@@ -4,6 +4,15 @@ import { createRequire } from 'node:module';
 const require=createRequire(import.meta.url);
 const { retirementCandidates, RECENT_MS }=require('../desktop/browser-retention.cjs');
 
+test('configured budget ignores unloaded records and protects selections in every window',()=>{
+ const now=1_000_000_000,view={webContents:{isCurrentlyAudible:()=>false}};
+ const tabs=Array.from({length:5},(_,i)=>({id:String(i),view,lastTouchedAt:now-RECENT_MS-1000-i}));
+ tabs.unshift({id:'unloaded',lastTouchedAt:now});
+ assert.deepEqual(retirementCandidates(tabs,now,new Set(['3']),2).map(t=>t.id),['2','4']);
+ assert.deepEqual(retirementCandidates(tabs,now,null,10),[]);
+ assert.throws(()=>retirementCandidates(tabs,now,null,0),/limit/);
+});
+
 test('browser retention keeps latest six and all tabs touched within an hour across groups',()=>{
   const now=1_000_000_000;
   const tab=(id,age,extra={})=>({id,lastTouchedAt:now-age,view:{webContents:{isCurrentlyAudible:()=>false}},...extra});

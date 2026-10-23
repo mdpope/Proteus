@@ -17,3 +17,6 @@ xcuserdata/
 
 # Private Apple evaluation access and operator submission receipts
 /local-records/apple-browser-review/
+
+# Isolated local validation fixtures and receipts
+/.runtime-tests/

@@ -3338,8 +3338,8 @@ that a previous conversation is available to the next agent.
 | Workspace context, source delivery and tool scopes | `src/context.js`, `src/agent-tools.js`, `public/context-plan.js` |
 | Live tool grants and workspace authorization | `src/permissions.js` |
 | Mac forms, tabs, chat and shared controls | `public/app.js`, `public/features.js`, `public/conversation.js` |
-| Tool event normalization and rendering | `src/tool-activity.js`, `public/tool-presentation.js`, `ios/Proteus/ToolActivityView.swift` |
-| Shared Markdown | `src/markdown-renderer.js`, `public/markdown/`, `ios/Proteus/MarkdownView.swift` |
+| Tool event normalization and rendering | `src/tool-activity.js`, `public/tool-presentation.js`, `ios/Proteus/Features/Chats/Views/ToolActivityView.swift` |
+| Shared Markdown | `src/markdown-renderer.js`, `public/markdown/`, `ios/Proteus/Shared/Views/MarkdownView.swift` |
 | Electron lifecycle, menu bar and browser bridge | `desktop/main.cjs`, `desktop/browser.cjs`, `src/browser-tools.js` |
 | Credential fill | `src/credentials.js` (desktop-only boundary) |
 | Encrypted remote protocol and relay | `src/remote.js`, `src/remote-crypto.js`, `relay/` |

@@ -21,3 +21,5 @@ test('document creation finishing after project deletion keeps source authorizat
  const result=await openChatDocument(service,{path:file},run.id);
  assert.equal(result.projectId,'target');assert.equal(opened.placement.parentId,'project:local:target');assert.equal(opened.placement.projectName,'Target');assert.equal(opened.placement.scope,'chat');assert.equal(opened.placement.id,'chat');assert.deepEqual(grants,[[result.documentId,'chat','chat']]);assert.equal(fs.readFileSync(file,'utf8'),'Synthetic document.');
 });
+
+test('scheduled browser tabs default to their own chat even when captured workspace membership exists',()=>{const {service,run}=fixture();run.trigger='scheduled';assert.deepEqual(browserDestinations(service,'chat',{preview:true}).defaultDestination,{type:'chat',id:'chat'});assert.equal(browserDestination(service,'chat',undefined,{preview:true}).parentId,'chat');});

@@ -23,7 +23,7 @@ function fixture(preview=true){
  const dependency=name=>name==='electron'?{WebContentsView:View}:name.startsWith('node:')||['./browser-history.cjs','./browser-navigation.cjs','./browser-background-focus.cjs','./navigation.cjs'].includes(name)?desktopRequire(name):{};
  vm.runInNewContext(source,{module,exports:module.exports,require:dependency,__dirname:new URL('../desktop/',import.meta.url).pathname,Date:Clock,URL,Buffer,structuredClone,setTimeout,clearTimeout,setInterval,clearInterval});
  const browser=Object.create(module.exports.BrowserTabs.prototype),partition={};
- Object.assign(browser,{videoPopout:{bind(){},close(){}},options:{projects:preview},appOrigin:'http://app.test',tabs:new Map(),reloading:new Map(),cookieStores:new Map(),overlays:new Set(),window:{contentView:{addChildView(){},removeChildView(){}},getContentBounds:()=>({width:800,height:600}),isDestroyed:()=>false,webContents:{send(){}}},actions:{send(){}},profile:()=>({settings:{blockingEnabled:false}}),sessionFor:()=>partition,profileAvailable:()=>true,changed(){},disconnect:async()=>{}});
+ Object.assign(browser,{videoPopout:{bind(){},close(){}},options:{projects:preview},appOrigin:'http://app.test',tabs:new Map(),reloading:new Map(),cookieStores:new Map(),overlays:new Set(),window:{contentView:{addChildView(){},removeChildView(){}},getContentBounds:()=>({width:800,height:600}),isFocused:()=>false,isDestroyed:()=>false,webContents:{send(){}}},actions:{send(){}},profile:()=>({settings:{blockingEnabled:false}}),sessionFor:()=>partition,profileAvailable:()=>true,changed(){},disconnect:async()=>{}});
  return {browser,tick(){now+=1000;},views:()=>views};
 }
 
@@ -38,14 +38,16 @@ test('preview browser selection, reading and restore do not advance meaningful a
  f.tick();await b.command({action:'back',id});assert.ok(b.state(b.get(id)).lastActivityAt>refreshed.lastActivityAt);
 });
 
-test('preview Hide unloads Persist and shared tabs; Restore retains identity/history and stays unloaded until selected',async()=>{
+test('Hide retains Persisted pages but unloads ordinary shared pages, preserving identity and history',async()=>{
+ for(const persist of [false,true]){
  const f=fixture(),b=f.browser,info=await b.create('https://example.test/first'),id=info.id;
  await b.navigate(id,'https://example.test/second');const history=JSON.stringify(b.state(b.get(id),true).history),activity=b.state(b.get(id)).lastActivityAt;
- b.get(id).persist=true;b.get(id).shared=true;b.show(id,{x:0,y:0,width:800,height:600});
- const hidden=await b.command({action:'visibility',id,hidden:true});assert.equal(hidden.loaded,false);assert.equal(hidden.hidden,true);assert.equal(hidden.persist,true);assert.equal(hidden.id,id);
+ b.get(id).persist=persist;b.get(id).shared=true;b.show(id,{x:0,y:0,width:800,height:600});
+ const hidden=await b.command({action:'visibility',id,hidden:true});assert.equal(hidden.loaded,persist);assert.equal(hidden.hidden,true);assert.equal(hidden.persist,persist);assert.equal(hidden.id,id);
  const views=f.views();b.show(id);assert.equal(f.views(),views);await assert.rejects(b.command({action:'activate',id}),/Restore this hidden browser/);
- const restored=await b.command({action:'visibility',id,hidden:false});assert.equal(restored.loaded,false);assert.equal(f.views(),views);assert.equal(restored.lastActivityAt,activity);assert.equal(JSON.stringify(restored.history),history);
+ const restored=await b.command({action:'visibility',id,hidden:false});assert.equal(restored.loaded,persist);assert.equal(f.views(),views);assert.equal(restored.lastActivityAt,activity);assert.equal(JSON.stringify(restored.history),history);
  f.tick();const selected=await b.command({action:'activate',id});assert.equal(selected.loaded,true);assert.equal(selected.id,id);assert.equal(selected.profileId,info.profileId);assert.equal(selected.lastActivityAt,activity);assert.equal(JSON.stringify(b.state(b.get(id),true).history),history);
+ }
 });
 
 test('preview Hide refuses active work and restores native visibility on failure',async()=>{
@@ -57,20 +59,20 @@ test('preview Hide refuses active work and restores native visibility on failure
  }
 });
 
-test('preview restore keeps saved activity or opened time, never old selection recency; hidden Persist restores without a view',async()=>{
+test('preview restore keeps saved activity or opened time, never old selection recency; hidden Persist restores its live page',async()=>{
  const f=fixture(),b=f.browser,openedAt='2026-10-10T12:00:00.000Z',lastTouchedAt='2026-10-16T12:00:00.000Z';
  const restored=await b.command({action:'create',restore:true,unloaded:true,hidden:true,persist:true,url:'https://example.test/',openedAt,lastTouchedAt});
- assert.equal(restored.lastActivityAt,openedAt);assert.equal(restored.loaded,false);assert.equal(f.views(),0);
+ assert.equal(restored.lastActivityAt,openedAt);assert.equal(restored.loaded,true);assert.equal(f.views(),1);
  const saved='2026-10-11T12:00:00.000Z';await b.command({action:'sync-metadata',id:restored.id,lastActivityAt:saved,lastTouchedAt});assert.equal(b.state(b.get(restored.id)).lastActivityAt,saved);
  const unknown=await b.command({action:'create',restore:true,unloaded:true,url:'https://example.test/',lastTouchedAt});assert.equal(unknown.lastActivityAt,null);
- const visiblePersist=await b.command({action:'create',restore:true,unloaded:true,persist:true,url:'https://example.test/',lastActivityAt:saved});assert.equal(visiblePersist.loaded,false);assert.equal(visiblePersist.lastActivityAt,saved);
+ const visiblePersist=await b.command({action:'create',restore:true,unloaded:true,persist:true,url:'https://example.test/',lastActivityAt:saved});assert.equal(visiblePersist.loaded,true);assert.equal(visiblePersist.lastActivityAt,saved);
 });
 
 test('legacy broker without project capability does not expose activity/visibility and keeps Persist restore loading',async()=>{
  const f=fixture(false),b=f.browser,info=await b.command({action:'create',restore:true,unloaded:true,persist:true,url:'https://example.test/'});
  assert.equal(info.loaded,true);assert.equal(Object.hasOwn(info,'lastActivityAt'),false);assert.equal(Object.hasOwn(info,'hidden'),false);
  await assert.rejects(b.command({action:'visibility',id:info.id,hidden:true}),/visibility control is unavailable/);
- b.get(info.id).shared=true;assert.equal((await b.unload(info.id)).loaded,false);
+ b.get(info.id).shared=true;await assert.rejects(b.unload(info.id),/Turn off Persisted/);await b.command({action:'persist',id:info.id,enabled:false});assert.equal((await b.unload(info.id)).loaded,false);
 });
 
 

@@ -17,6 +17,7 @@ import { agentName } from '../public/agent-name.js';
 import { ChatAttachmentConsents } from './chat-attachment-consent.js';
 import {ChatRecovery} from './chat-recovery.js';
 import {capacityFailure} from '../public/chat-recovery-state.js';
+import {startProgress,providerProgress,checkProgress} from './run-progress.js';
 
 const active = new Set(['queued', 'running', 'awaiting_input']);
 export function suggestedChatTitle(prompt) {
@@ -64,9 +65,11 @@ export class Engine extends EventEmitter {
     if(run.chatPermission && run.chatPermission.contextId !== permissionContext(run.schedule).id){run.chatPermission=null;run.chatPermissionRevision=randomUUID();}
     run.updatedAt = this.now(); const bytes=atomicJSON(path.join(this.runsDir, `${run.id}.json`), run); this.historyCache.attach(run,bytes);this.emit('change', run); }
   event(run, role, text, data) {
+    if(role!=='user'&&run.status==='running')providerProgress(run,this.now(),{observable:true});
     run.events.push({ role, text, ...(role === 'assistant' ? { agentName: agentName(run) } : {}), data:{...data,...(run.turns?.at(-1)&&['running','awaiting_input'].includes(run.status)?{turnId:run.turns.at(-1).id}:{})}, at: this.now() }); this.persist(run);
   }
   stream(run, messageId, text) {
+    if(text)providerProgress(run,this.now(),{observable:true});
     run.liveMessages ??= {}; run.liveMessages[messageId] = (run.liveMessages[messageId] || '') + text;
     this.emit('change', run);
   }
@@ -323,11 +326,17 @@ export class Engine extends EventEmitter {
     const event=run.events.find(e=>e.data?.delivery?.id===messageId);if(event)event.data.delivery.state='removed';
     this.persist(run);return run;
   }
-  reply(id, answer, requestId) {
+  reply(id, answer, requestId, attachmentDispatch=null) {
     const run = this.getRun(id); const pending = this.pending.get(id);
     if (!pending || run.pending?.id !== requestId) throw new Error('This request is no longer waiting for an answer.');
     if (typeof answer !== 'string' || !answer.trim()) throw new Error('A reply is required.');
     const isPermission = run.pending.type === 'permission';
+    let questionFiles=[];
+    if(attachmentDispatch){
+      if(isPermission)throw Error('Tool approvals cannot contain attachments.');
+      questionFiles=this.attachmentConsents.assertPrepared({...attachmentDispatch,chatId:id,providerId:run.schedule.provider});
+      run.questionAttachmentReplies??={};run.questionAttachmentReplies[requestId]={...attachmentDispatch,providerId:run.schedule.provider};
+    }
     const questionEvent=run.events.find(event=>event.data?.question?.id===requestId);
     if(questionEvent){Object.assign(questionEvent.data.question,{status:'answered',answer,answeredAt:this.now()});}
     if (isPermission) {
@@ -347,11 +356,21 @@ export class Engine extends EventEmitter {
       }
       this.event(run, 'system', answer === 'deny' ? 'Permission denied.' : `Permission approved: ${answer}.`, { permission: { kind: run.pending.details?.kind, intention:displayText(run.pending.details?.intention||run.pending.question||'Tool permission',240), request:displayText(run.pending.details||{},12000), decision: answer, automatic: false, ...(typeof run.pending.details?.toolCallId === 'string' ? { toolCallId: run.pending.details.toolCallId.slice(0,128) } : {}) } });
     }
-    this.pending.delete(id); run.pending = null; run.status = 'running';resumeTurn(run,this.now());
-    if (!isPermission) this.event(run, 'user', answer, {questionReply:{requestId}}); else this.persist(run);
-    pending.resolve(isPermission && !['approve','deny'].includes(answer) ? 'approve' : answer);
+    this.pending.delete(id); run.pending = null; run.status = 'running';resumeTurn(run,this.now());providerProgress(run,this.now(),{observable:true});
+    if (!isPermission) this.event(run, 'user', answer, {questionReply:{requestId},...(attachmentDispatch?{attachments:questionFiles,delivery:{id:attachmentDispatch.messageId,questionReplyDigest:attachmentDispatch.signature}}:{})}); else this.persist(run);
+    const providerAnswer=attachmentDispatch?answer+`\nThe user attached ${questionFiles.length} file(s). Call proteus_question_attachments with requestId ${requestId} to view the images/text before continuing.`:answer;
+    pending.resolve(isPermission && !['approve','deny'].includes(answer) ? 'approve' : providerAnswer);
     if (isPermission) this.recheckPermissions();
     return run;
+  }
+  async readQuestionAttachments(id,requestId){
+    const run=this.getRun(id),slot=this.running.get(id),dispatch=run.questionAttachmentReplies?.[requestId];
+    if(!slot||slot.controller.signal.aborted||!dispatch||dispatch.providerId!==run.schedule.provider)throw Error('These question attachments are not available to this active chat/provider.');
+    this.questionAttachmentCache??=new Map();const key=id+':'+requestId;
+    if(!this.questionAttachmentCache.has(key))this.questionAttachmentCache.set(key,this.attachmentConsents.readForProvider({...dispatch,chatId:id,providerId:run.schedule.provider}));
+    const files=await this.questionAttachmentCache.get(key);
+    if(this.running.get(id)!==slot||slot.controller.signal.aborted)throw Error('This turn ended before the attachments could be delivered.');
+    return files;
   }
   ask(run, request, signal) {
     const previous = this.questionQueues.get(run.id) || Promise.resolve();
@@ -364,7 +383,9 @@ export class Engine extends EventEmitter {
   askNext(run, request, signal) {
     if (signal.aborted) return Promise.reject(new Error('Cancelled'));
     if (request.type === 'permission') {
-      const decision = this.decidePermission(run, request.details || {});
+      const details=request.details||{},questionDispatch=run.questionAttachmentReplies?.[details.args?.requestId];
+      if(!details.managedApprovalRequired&&!details.requestSandboxBypass&&['proteus_question_attachments','mcp__proteus_app__proteus_question_attachments'].includes(details.toolName)&&questionDispatch?.providerId===run.schedule.provider)return Promise.resolve('approve-auto');
+      const decision = this.decidePermission(run, details);
       if (decision.allowed) { this.recordAutomaticPermission(run, request.details, decision); return Promise.resolve('approve-auto'); }
       request = { ...request, ...(this.permissions.preserveInheritedDefaults ? {permissionContextId:this.permissions.describe(run.schedule).id} : {}), permissionChoices: this.permissions.choices(run.schedule, request.details || {}), permissionReason: decision.reason };
     }
@@ -418,7 +439,7 @@ export class Engine extends EventEmitter {
     }
   }
   async execute(run, controller, lane) {
-    run.status = 'running';startTurn(run,this.now()); const prompt = run.nextPrompt,dispatch=run.nextAttachmentDispatch; delete run.nextPrompt; this.persist(run);
+    run.status = 'running';startTurn(run,this.now());startProgress(run,this.now()); const prompt = run.nextPrompt,dispatch=run.nextAttachmentDispatch; delete run.nextPrompt; this.persist(run);
     try {
       await this.beforeTurn?.(run);
       await this.beforeRun?.(run.schedule);
@@ -432,13 +453,14 @@ export class Engine extends EventEmitter {
         permissionProfile: () => this.describePermissions(run),
         emit: (role, text, data) => this.event(run, role, text, data),
         stream: (id, text) => this.stream(run, id, text),
-        update: () => this.persist(run),
+        update: () => {providerProgress(run,this.now());this.persist(run);},
         ask: request => this.ask(run, request, controller.signal)
       });
+      if(controller.progressTimeout)throw Error(controller.progressTimeout);
       run.status = controller.signal.aborted ? (this.stopping ? 'interrupted' : 'cancelled') : 'completed';
     } catch (error) {
-      run.status = controller.signal.aborted ? (this.stopping ? 'interrupted' : 'cancelled') : 'failed';
-      this.event(run, 'system', error.message,{failure:{kind:capacityFailure(error.message)?'capacity':'error'}});
+      run.status = controller.progressTimeout?'failed':controller.signal.aborted ? (this.stopping ? 'interrupted' : 'cancelled') : 'failed';
+      this.event(run, 'system', controller.progressTimeout||error.message,{failure:{kind:controller.progressTimeout?'stalled':capacityFailure(error.message)?'capacity':'error'}});
     } finally {
       // Provider errors/timeouts can leave permission promises pending. Settle them
       // before another turn reuses this run's serialized question queue.
@@ -448,6 +470,11 @@ export class Engine extends EventEmitter {
       if(['failed','interrupted'].includes(run.status)){run.failureEventAt=this.now();delete run.failureReviewedAt;}
       this.pending.delete(run.id); run.pending = null; delete run.liveMessages;delete run.nextAttachmentDispatch;
       if(dispatch)await this.attachmentConsents.releaseProof(dispatch.proofId).catch(()=>{});
+      for(const [requestId,questionDispatch] of Object.entries(run.questionAttachmentReplies||{})){
+        await this.attachmentConsents.releaseProof(questionDispatch.proofId).catch(()=>{});
+        this.questionAttachmentCache?.delete(run.id+':'+requestId);
+      }
+      delete run.questionAttachmentReplies;
       await this.queuedSteers.get(run.id)?.catch(()=>{});
       if (run.status === 'completed' && run.queuedMessages?.length && !this.stopping) {
         const next = run.queuedMessages.shift(); if (next.modelOptions) this.applyModelOptions(run, next.modelOptions); run.nextPrompt = next.prompt;run.nextAttachmentDispatch=next.attachmentDispatch; run.status = 'queued';
@@ -466,6 +493,15 @@ export class Engine extends EventEmitter {
     else { run.status = 'cancelled'; delete run.nextPrompt;if(run.nextAttachmentDispatch)void this.attachmentConsents?.releaseProof(run.nextAttachmentDispatch.proofId).catch(()=>{});delete run.nextAttachmentDispatch;this.persist(run); }
   }
   tick() {
+    for(const slot of [...this.running.values(),...this.backgroundRuns.values()]){
+      const run=this.runs.get(slot.id);if(!run)continue;
+      const state=checkProgress(run,this.now());
+      if(state?.changed)this.persist(run);
+      if(state?.timedOut&&!slot.controller.signal.aborted){
+        slot.controller.progressTimeout='No observable provider/tool progress for 30 minutes. The turn was interrupted; inspect unfinished operations before continuing. Queued messages were preserved.';
+        slot.controller.abort();
+      }
+    }
     if (this.stopping||this.updateBarrier) return Promise.resolve();
     const now = this.clock().toISOString();
     if (!this.pendingSchedulerTime || now > this.pendingSchedulerTime) this.pendingSchedulerTime = now;

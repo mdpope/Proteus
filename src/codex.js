@@ -1,3 +1,4 @@
+import {questionAttachmentTools} from './question-attachments.js';
 import {attachmentText} from './provider-attachment-input.js';
 import {chatControlTools} from './chat-control-tools.js';
 import {privateTemporaryDirectory} from './private-paths.cjs';
@@ -26,6 +27,19 @@ export function codexModel(model) {
 // Filesystem grants never imply approval of a shell command. Keep native untrusted
 // approval routing; the engine applies the user's separate saved operation rules.
 export function codexSandbox(schedule, profile, { desktopPreview = false, permissionControls = desktopPreview } = {}) {
+ if(permissionControls&&profile?.workingFolders?.length){
+  const cwd=canonicalPath(schedule.workspace.cwd,schedule.workspace.cwd);
+  if(!cwd)throw Error('The working folder is unavailable.');
+  const grants=[...profile.workingFolders,...(profile.mode==='ask'?[]:profile.folders||[])];
+  const roots=[...new Set([cwd,...(schedule.workspace.additionalDirectories||[]),...grants.map(folder=>folder.path)].map(root=>canonicalPath(root,cwd)).filter(Boolean))].sort();
+  const filesystem={':root':'read',':tmpdir':'read',':slash_tmp':'read',':workspace_roots':{'.':'read','.git':'read','.agents':'read','.codex':'read','.aws':'read'}};
+  for(const folder of grants.toSorted((a,b)=>a.path.length-b.path.length||Number(a.access==='read')-Number(b.access==='read'))){
+   if(canonicalPath(folder.path,cwd)!==folder.path)throw Error('A working-folder grant changed on disk. Refresh permissions.');
+   filesystem[folder.path]=folder.access==='read-write'?'write':'read';
+  }
+  const name='proteus-workspace';
+  return {cwd,sandbox:'workspace-write',runtimeWorkspaceRoots:roots,managedProfile:name,policy:{networkAccess:false},config:{default_permissions:name,permissions:{[name]:{extends:':workspace',filesystem,network:{enabled:false}}}}};
+ }
  const roots=[...new Set([schedule.workspace.cwd,...(schedule.workspace.additionalDirectories||[]),...(profile?.chatFolders||[]).filter(folder=>!permissionControls || (profile.mode !== 'ask' && (profile.folders||[]).some(active=>active.path===folder.path))).map(folder=>folder.path),...(permissionControls && profile?.mode !== 'ask' ? profile?.folders || [] : []).map(folder=>folder.path)])];
  const readOnly={cwd:schedule.workspace.cwd,sandbox:'read-only',runtimeWorkspaceRoots:roots,policy:{type:'readOnly',networkAccess:false},config:{}};
  if(!(permissionControls ? ['custom','trusted','autopilot'] : ['trusted','autopilot']).includes(effectivePermissionMode(profile)))return readOnly;
@@ -41,6 +55,7 @@ export function codexSandbox(schedule, profile, { desktopPreview = false, permis
 // Permission transition check. The already-started native sandbox stays fixed;
 // only a proven addition may wait until the next turn. Unknown or reduced bounds stop.
 export function codexSandboxPreservesAccess(original, current) {
+ if(original?.managedProfile||current?.managedProfile)return original?.managedProfile===current?.managedProfile&&JSON.stringify(original)===JSON.stringify(current);
  const contains=(root,target)=>{const relative=path.relative(root,target);return relative===''||(!relative.startsWith('..'+path.sep)&&relative!=='..'&&!path.isAbsolute(relative));};
  const normalized=value=>{
   if(!value||!['read-only','workspace-write'].includes(value.sandbox)||typeof value.cwd!=='string'||!path.isAbsolute(value.cwd)||!Array.isArray(value.runtimeWorkspaceRoots)||value.policy?.networkAccess!==false)return null;
@@ -64,6 +79,10 @@ export function codexSandboxPreservesAccess(original, current) {
  }catch{return false;}
 }
 export function verifyCodexSandbox(thread, expected, cwd) {
+ if(expected.managedProfile){
+  if(thread.cwd!==cwd||thread.approvalPolicy!=='untrusted'||thread.approvalsReviewer!=='user'||thread.activePermissionProfile?.id!==expected.managedProfile||thread.activePermissionProfile?.extends!==':workspace'||thread.sandbox?.networkAccess!==false||JSON.stringify([...(thread.runtimeWorkspaceRoots||[])].sort())!==JSON.stringify(expected.runtimeWorkspaceRoots))throw Error('Codex did not confirm the selected filesystem permission profile. No turn was started.');
+  return;
+ }
  if(expected.sandbox!=='workspace-write')return;
  const sandbox=thread.sandbox;
  const actual=[...new Set([thread.cwd,...(sandbox?.writableRoots||[])])].sort();
@@ -138,7 +157,7 @@ export class CodexProvider {
   }
   const roots=[run.schedule.workspace.cwd,...run.schedule.workspace.additionalDirectories];
   const sandbox=codexSandbox(run.schedule,permissionProfile?.(),{permissionControls:(this.options.permissionControls===true||this.options.desktopPreview===true)});
-  const currentBrowserTools=browserTools(this.browser,run.id),currentIntegrationTools=[...integrationTools(this.integrations,run.id),...chatControlTools(this.chatControl,run.id)];const browser=[...currentBrowserTools,...currentIntegrationTools];const items=new Map();const calls=new Map();
+  const currentBrowserTools=browserTools(this.browser,run.id),currentIntegrationTools=[...integrationTools(this.integrations,run.id),...chatControlTools(this.chatControl,run.id)];const browser=[...questionAttachmentTools(this,run.id),...currentBrowserTools,...currentIntegrationTools];const items=new Map();const calls=new Map();
   const approvedBridgeCalls=new Map();
   captureAppCapabilities(run,browser,update);
   let resolveTurn,rejectTurn,settled=false,abortTimer;const completed=new Promise((resolve,reject)=>{resolveTurn=resolve;rejectTurn=reject;});completed.catch(()=>{});
@@ -246,7 +265,7 @@ export class CodexProvider {
    }
    const instructions=`${appInstructions}${resumedBrowserTools.length?'\nUse the fresh tools published by the proteus_app MCP server. Native desktop control uses its proteus_desktop tool so screenshots arrive as images. For browser and tab operations in resumed chats, also prefer that fresh catalog: older unprefixed dynamic schemas may be stale. The fresh catalog supports hidden/unloaded lifecycle actions and every available profile; normal workflow approvals still apply.':''}\nYou are working inside Proteus. Use only the selected sources below. Workspace folders:\n${roots.join('\n')}\n${managed?.instructionText||''}\n${(managed?.customAgents||[]).map(a=>`Agent: ${a.displayName}${a.name===managed.agent?' (main identity)':''}\n${a.prompt}`).join('\n\n')}\nEditor context: ${JSON.stringify(run.schedule.editorContext||null)}`;
    const config={...sandbox.config,project_doc_max_bytes:0,developer_instructions:instructions,mcp_servers:mcp,features:{skip_host_skill_discovery:true,skill_mcp_dependency_install:false,enable_mcp_apps:false,multi_agent:false},plugins:Object.fromEntries(Object.keys(plugins).map(name=>[name,{enabled:false}])),apps:{_default:{enabled:false}},web_search:'disabled'};
-   const params={model:run.schedule.model,cwd:sandbox.cwd,runtimeWorkspaceRoots:sandbox.runtimeWorkspaceRoots,approvalPolicy:'untrusted',approvalsReviewer:'user',sandbox:sandbox.sandbox,developerInstructions:instructions,config};
+   const params={model:run.schedule.model,cwd:sandbox.cwd,runtimeWorkspaceRoots:sandbox.runtimeWorkspaceRoots,approvalPolicy:'untrusted',approvalsReviewer:'user',...(sandbox.managedProfile?{}:{sandbox:sandbox.sandbox}),developerInstructions:instructions,config};
    const thread=run.providerSessionId?await client.request('thread/resume',{...params,threadId:run.providerSessionId}):await client.request('thread/start',{...params,dynamicTools:browser.filter(t=>!['proteus_open_document','proteus_desktop'].includes(t.name)).map(t=>({type:'function',name:t.name,description:t.description,inputSchema:t.parameters}))});
    verifyCodexSandbox(thread,sandbox,sandbox.cwd);
    run.providerSessionId=thread.thread.id;run.providerHome=this.options.env?.CODEX_HOME||process.env.CODEX_HOME||path.join(os.homedir(),'.codex');run.nativeSessionPath=thread.thread.path||null;run.modelCapabilities={id:model.id,controls:model.controls,capturedAt:new Date().toISOString()};run.explicitProviderContext={mcpNames:Object.keys(selected),skillDirectories:[],disabledSkills:managed?.disabledSkills||[]};if(snapshot){snapshot.suppliedAt=new Date().toISOString();snapshot.delivery='Codex thread configuration accepted';}update();
@@ -265,7 +284,7 @@ export class CodexProvider {
       const file=path.join(imageDir,`image-${index}.${extensions[item.mediaType]}`);fs.writeFileSync(file,item.bytes,{mode:0o600,flag:'wx'});input.push({type:'localImage',path:file});
     }
    }
-   const result=await client.request('turn/start',{threadId:run.providerSessionId,sandboxPolicy:sandbox.policy,approvalPolicy:'untrusted',approvalsReviewer:'user',runtimeWorkspaceRoots:sandbox.runtimeWorkspaceRoots,input,effort:run.schedule.reasoningEffort||model.controls.defaultReasoningEffort||null,serviceTier:run.schedule.serviceTier||null});active.turnId=result.turn.id;if(signal.aborted||active.permissionRevoked){clearTimeout(abortTimer);abortTimer=null;abort();}await completed;
+   const result=await client.request('turn/start',{threadId:run.providerSessionId,...(sandbox.managedProfile?{}:{sandboxPolicy:sandbox.policy}),approvalPolicy:'untrusted',approvalsReviewer:'user',runtimeWorkspaceRoots:sandbox.runtimeWorkspaceRoots,input,effort:run.schedule.reasoningEffort||model.controls.defaultReasoningEffort||null,serviceTier:run.schedule.serviceTier||null});active.turnId=result.turn.id;if(signal.aborted||active.permissionRevoked){clearTimeout(abortTimer);abortTimer=null;abort();}await completed;
   }finally{if(appBridge)await appBridge.close();clearTimeout(abortTimer);if(active.turnId&&!settled)await client.close();signal.removeEventListener('abort',abort);client.off('notification',onNotification);client.off('request',onRequest);client.off('closed',closed);for(const tool of calls.values())if(tool.status==='running')tool.status='interrupted';if(this.active===active)this.active=null;if(imageDir)fs.rmSync(imageDir,{recursive:true,force:true});for(const directory of active.steeringImageDirs||[])fs.rmSync(directory,{recursive:true,force:true});update();}
  }
  recheckPermissions(){this.active?.recheckPermissions?.();}

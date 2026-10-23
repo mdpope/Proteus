@@ -1,0 +1,25 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
+import {startServer} from '../src/server.js';
+import {atomicJSON} from '../src/files.js';
+import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {updateCoordinatorConfiguration,updateCoordinatorPrompt} from '../src/update-coordinator.js';
+const model={id:'fixture',name:'Synthetic model',controls:{reasoningEfforts:['high'],serviceTiers:[{id:'priority'}],contextTiers:[{id:'default'}]}};
+test('update defaults are explicit and validated against current provider metadata',async()=>{
+ const saved={provider:'codex',model:'fixture',reasoningEffort:'high',serviceTier:'priority'},catalogs={codex:{get:async()=>({models:[model]})}};
+ assert.deepEqual(await updateCoordinatorConfiguration({updateCoordinator:saved},catalogs,{}),saved);
+ await assert.rejects(updateCoordinatorConfiguration({},catalogs,{}),/Configure/);
+ await assert.rejects(updateCoordinatorConfiguration({updateCoordinator:saved},catalogs,{provider:'claude',model:'fixture'}),/unavailable/);
+ await assert.rejects(updateCoordinatorConfiguration({updateCoordinator:saved},catalogs,{...saved,reasoningEffort:'invented'}),/unavailable/);
+ await assert.rejects(updateCoordinatorConfiguration({updateCoordinator:saved},{codex:{get:async()=>({models:[model],stale:true})}},{}),/unavailable/);
+ assert.match(updateCoordinatorPrompt('Synthetic release'),/same chat after restart/);
+});
+for(const provider of ['codex','copilot','claude'])test(provider+' coordinator creation is unassigned and retains captured defaults',async t=>{
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-update-chat-'));const defaults={provider,model:'fixture',reasoningEffort:'high',serviceTier:'priority'};
+ atomicJSON(path.join(home,'settings.json'),{schemaVersion:1,provider:'rehearsal',model:'',timezone:'UTC',workspace:{cwd:home,additionalDirectories:[]},skillDirectories:[],mcpServers:{},updateCoordinator:defaults});
+ const app=await startServer({home,port:0,timers:false,providers:{[provider]:{status:async()=>({available:true,models:[model]}),run:async()=>{}}}});app.engine.drain=async()=>{};
+ t.after(async()=>{await app.close();fs.rmSync(home,{recursive:true,force:true});});
+ const response=await fetch(app.origin+'/api/chat',{method:'POST',headers:{authorization:'Bearer '+app.token,'content-type':'application/json'},body:JSON.stringify({purpose:'update',prompt:'Prepare the synthetic requested release'})});const run=await response.json();assert.equal(response.status,200,JSON.stringify(run));
+ assert.equal(run.schedule.purpose,'update');assert.equal(run.schedule.context.workspaceId,null);assert.equal(run.schedule.context.agentId,null);assert.deepEqual(run.schedule.context.entries,[]);assert.equal(run.schedule.provider,provider);assert.equal(run.schedule.model,'fixture');assert.equal(run.schedule.serviceTier,'priority');assert.equal(run.projectId??null,null);assert.equal(app.workspaceProjects.get(app.engine).memberships[run.id]?.projectId??null,null);
+ app.settings.save({...app.settings.get(),updateCoordinator:{...defaults,reasoningEffort:''}},app.settings.get().revision);assert.equal(app.engine.getRun(run.id).schedule.reasoningEffort,'high');
+});

@@ -45,6 +45,7 @@ struct ProteusRoot: View {
     }
     var body: some View {
             applicationContent.tint(NativeTheme.accent).foregroundStyle(NativePalette.shared.color("text")).preferredColorScheme(.dark)
+                .onChange(of: phase) { _, next in if next != .active { NativeDescriptorCacheWriter.shared.flush() } }
                 .onOpenURL { url in if url.scheme == "proteus" && url.host == "pair" { do { try destinations.add(url.absoluteString, label: "New computer"); incomingPairing = true } catch { destinations.error = error.localizedDescription } } }
                 .sheet(isPresented: $incomingPairing, onDismiss: { destinations.cancelPairing() }) { NavigationStack { PairView().toolbar { Button("Cancel") { incomingPairing = false } } } }
                 .onChange(of: destinations.pairingCompletion) { _, completion in if completion != nil { incomingPairing = false } }

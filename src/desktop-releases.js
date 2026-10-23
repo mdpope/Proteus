@@ -19,7 +19,7 @@ export function verifyRelease(envelope,{platform=process.platform,arch=process.a
  if(!Number.isFinite(published)||!Number.isFinite(expires)||published>now+300000||expires<=now||expires<=published||expires-published>366*86400000)throw Error('The release manifest is expired or has invalid publication dates.');
  const a=value.artifact;
  const hosted=value.distribution!==undefined;
- if(hosted&&(value.platform!=='win32'||value.distribution?.kind!=='static'||value.distribution?.origin!==trust.windowsOrigin))throw Error('The signed release distribution origin is invalid.');
+ if(hosted&&(!['win32','darwin','linux'].includes(value.platform)||value.distribution?.kind!=='static'||value.distribution?.origin!==trust.windowsOrigin))throw Error('The signed release distribution origin is invalid.');
  const releasePath=hosted?'/downloads/proteus/releases/'+value.id+'/':'/api/v1/app/releases/'+value.id+'/';
  if(!a||a.format!=='tar.gz'||!/^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.tar\.gz$/.test(a.filename||'')||!Number.isSafeInteger(a.bytes)||a.bytes<1||a.bytes>releaseLimits.archiveBytes||!Number.isSafeInteger(a.unpackedBytes)||a.unpackedBytes<1||a.unpackedBytes>releaseLimits.unpackedBytes||!/^[a-f0-9]{64}$/.test(a.sha256||'')||a.path!==releasePath+(hosted?a.filename:'artifact'))throw Error('The signed release artifact is invalid.');
  const installer=value.installer;

@@ -1,3 +1,4 @@
+import {questionAttachmentTools} from './question-attachments.js';
 import {claudeMessageContent} from './provider-attachment-input.js';
 import {chatControlTools} from './chat-control-tools.js';
 import {randomUUID} from 'node:crypto';
@@ -262,7 +263,7 @@ export class ClaudeProvider {
     if(run.providerSessionId)args.push('--resume',run.providerSessionId);
     // Additional roots are conveyed to the native permission system, with skills disabled.
     for(const root of new Set([...(run.schedule.workspace.additionalDirectories||[]),...(permissionProfile?.().chatFolders||[]).map(folder=>folder.path)]))args.push('--add-dir',root);
-    const appTools=[...browserTools(this.browser,run.id),...integrationTools(this.integrations,run.id),...chatControlTools(this.chatControl,run.id)];captureAppCapabilities(run,appTools,update);
+    const appTools=[...questionAttachmentTools(this,run.id),...browserTools(this.browser,run.id),...integrationTools(this.integrations,run.id),...chatControlTools(this.chatControl,run.id)];captureAppCapabilities(run,appTools,update);
     const bridge=await documentBridge(this.browser,run.id,appTools.filter(tool=>tool.name!=='proteus_open_document'));
     const configured={...selected,...(bridge?{proteus_app:bridge.config}:{})};
     let mcpConfig;try{mcpConfig=Object.keys(configured).length?privateClaudeMcpConfig(configured,run.schedule.workspace.cwd):null;}catch(error){await bridge?.close();throw error;}

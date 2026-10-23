@@ -1,3 +1,4 @@
+import {mountUpdateCoordinatorDefaults} from './update-coordinator-preferences.js';
 export async function renderUpdates(container,ui,active){
  const esc=ui.escape;let releases=[];
  container.innerHTML=`<section class="card"><h2>Updates</h2><div data-update-status role="status">Checking this installation…</div><div data-update-controls hidden>
@@ -26,6 +27,7 @@ export async function renderUpdates(container,ui,active){
  find('[data-update-import]').onclick=action(async()=>{const [manifest]=await window.desktop.choosePaths({kind:'update-release'});if(manifest)await ui.api('/api/updates',{action:'import-release',manifest,channel:'stable'});});
  find('[data-update-handoff]').onclick=action(async()=>{const {job}=await refresh();await ui.api('/api/updates',{action:'handoff',id:job.id,expectedRevision:job.revision,runId:find('[data-update-chat]').value,checkpoint:find('[data-update-checkpoint]').value});});
  find('[data-update-cancel]').onclick=action(async()=>{const {job}=await refresh();await ui.api('/api/updates',{action:'cancel',id:job.id,expectedRevision:job.revision});});
+ await mountUpdateCoordinatorDefaults(container,ui,active);
  await refresh();const poll=()=>setTimeout(async()=>{if(!active())return;try{await refresh();}catch{}poll();},2000);poll();
 }
 export function renderUpdateCard(root,status,runId,escape,open){

@@ -260,7 +260,7 @@ class BrowserTabs {
     // Guard show/activate before unload emits state: renderer polling must not
     // recreate the selected view while the owner is acknowledging Hide.
     tab.hidden=hidden;
-    try { if(hidden)await this.unload(id,{hiding:true}); }
+    try { if(hidden&&!tab.persist)await this.unload(id,{hiding:true}); }
     catch(error){this.get(id).hidden=previous;this.changed();throw error;}
     this.get(id).hidden=hidden;
     if(hidden&&this.active===id)this.show(null);
@@ -276,13 +276,13 @@ class BrowserTabs {
     if(this.shuttingDown||this.retentionBusy)return;
     this.retentionBusy=true;
     try {
-      for(const tab of retirementCandidates(this.tabs.values(),now,this.active)) {
+      for(const tab of retirementCandidates(this.tabs.values(),now,this.windowRegistry?new Set([...this.windowRegistry.contexts.values()].map(ctx=>ctx.browserFields?.active)):this.active,this.options.retainedTabs?.()??6)) {
         try { await this.unload(tab.id); } catch(error) { tab.error=error.message; }
       }
     } finally { this.retentionBusy=false; }
   }
   async create(url, owner = null, savedHistory = null, descriptor = {}) {
-    if(this.options.projects&&descriptor.hidden===true&&!descriptor.background)descriptor.unloaded=true;else if(descriptor.restore&&descriptor.persist&&!this.options.projects)descriptor.unloaded=false;const profileId=descriptor.profileId||'default';if(!/^default$|^[a-f0-9-]{36}$/i.test(profileId))throw new Error('Choose a browser profile.');let partition;try{partition=this.sessionFor(profileId);}catch(error){if(!descriptor.restore)throw error;descriptor.unloaded=true;}if(partition){await this.cookieStores.get(profileId)?.ready;await this.extensions?.initialize(profileId,partition);}
+    if(descriptor.persist){descriptor.unloaded=false;if(descriptor.hidden)descriptor.background=true;}else if(this.options.projects&&descriptor.hidden===true&&!descriptor.background)descriptor.unloaded=true;const profileId=descriptor.profileId||'default';if(!/^default$|^[a-f0-9-]{36}$/i.test(profileId))throw new Error('Choose a browser profile.');let partition;try{partition=this.sessionFor(profileId);}catch(error){if(!descriptor.restore)throw error;descriptor.unloaded=true;}if(partition){await this.cookieStores.get(profileId)?.ready;await this.extensions?.initialize(profileId,partition);}
     if(descriptor.unloaded===true){
       const logicalHistory=restoreNavigation(savedHistory,this.appOrigin),history=logicalHistory||normalizeHistory(savedHistory,this.appOrigin), address=history?.entries[history.index]?.url||safeHistoryURL(url,this.appOrigin)||'';
       const tab={logicalHistory,navigationPending:descriptor.navigationPending===true&&validPendingNavigation(savedHistory)&&!!logicalHistory,...(this.options.projects?{hidden:descriptor.hidden===true,destination:descriptor.destination,workspaceName:descriptor.workspaceName,lastActivityAt:Date.parse(descriptor.lastActivityAt)||Date.parse(descriptor.openedAt)||(descriptor.restore||descriptor.recreating?null:Date.now())}:{}),associationChatId:descriptor.associationChatId||owner||null,resumeOwner:owner||descriptor.resumeOwner||null,persist:descriptor.persist===true,openedAt:Date.parse(descriptor.openedAt)||(descriptor.restore||descriptor.recreating?null:Date.now()),profileId,parentId:typeof descriptor.parentId==='string'?descriptor.parentId.slice(0,256):null,id:descriptor.id||randomUUID(),group:descriptor.group==='team'?'team':'main',shared:false,owner:null,view:null,lastTouchedAt:Date.parse(descriptor.lastTouchedAt)||(descriptor.restore||descriptor.recreating?null:Date.now()),snapshot:{favicon:safeFavicon(descriptor.favicon),url:address,title:descriptor.title|| (address?new URL(address).hostname:'New tab'),history,canGoBack:(history?.index||0)>0,canGoForward:!!history&&history.index<history.entries.length-1,error:null}};
@@ -474,7 +474,7 @@ class BrowserTabs {
     // A restored view exists before its history/navigation promise completes.
     // Wait for that exact restore before taking a snapshot or closing the view.
     await this.reloading.get(id);
-    const tab=this.get(id);if(!tab.view)return this.state(tab,true);if(tab.videoPopout)throw new Error('Close the video pop-out before unloading this tab.');
+    const tab=this.get(id);if(tab.persist)throw new Error('Turn off Persisted before unloading this tab.');if(!tab.view)return this.state(tab,true);if(tab.videoPopout)throw new Error('Close the video pop-out before unloading this tab.');
     if(tab.agentActions||tab.automationRuns?.size&&!this.agentStatus(tab).agentPaused||tab.downloads?.size)throw new Error('Wait for the active browser turn or download before unloading this tab.');
     const wc=tab.view.webContents;if(wc.isCurrentlyAudible())throw new Error('Stop audio before unloading this tab.');
     tab.snapshot=this.state(tab,true);this.transition?.cancel();await this.disconnect(tab);
@@ -573,7 +573,7 @@ class BrowserTabs {
     if(this.windowRegistry&&id&&this.tabs.has(id)&&!this.ownsWindow(this.tabs.get(id)))throw Error('This browser tab belongs to another app window.');
     if(action==='follow-scroll'){const tab=this.get(id),wc=tab.view?.webContents;if(wc&&!wc.isDestroyed()&&wc.getURL()===value.url&&JSON.stringify(value.positions||[]).length<=8192)wc.send('proteus:follow-scroll',{url:value.url,positions:value.positions});return {ok:true};}
     if(action.startsWith('site-data-'))return this.siteData.command(value);
-    if(action==='create-unloaded-link'){const info=await this.create(value.url,null,null,{group:value.group,profileId:value.profileId,parentId:value.parentId,hidden:true,unloaded:true});this.actions.send({type:'unloaded-tab',info});return info;}
+    if(action==='create-unloaded-link'){const info=await this.create(value.url,null,null,{group:value.group,profileId:value.profileId,parentId:value.parentId,hidden:true,unloaded:true,title:String(value.title||'').trim().slice(0,200)});this.actions.send({type:'unloaded-tab',info});return info;}
     if(action==='site-mode'){const tab=this.get(id),url=this.state(tab).url,origin=siteOrigin(url);if(!origin||!['default','desktop','mobile'].includes(value.mode))throw new Error('Choose a website and site mode.');const partition=this.sessionNames.get(tab.profileId);this.siteSettings.remember(partition,url,{mode:value.mode});const next=presentationURL(url,value.mode);this.siteSettings.remember(partition,next,{mode:value.mode});if(tab.view){await this.applySiteMode(tab,next);if(next!==url)await tab.view.webContents.loadURL(next);else await this.navigate(id,next);}else{tab.snapshot.url=next;}this.changed();return this.state(tab,true);}
     if(action==='media-settings'){if(value.blockVideoAutoplay===undefined)return {blockVideoAutoplay:this.media.blocked};const result=this.media.set(value.blockVideoAutoplay);for(const tab of this.tabs.values()){const wc=tab.view?.webContents;if(wc&&!wc.isDestroyed())for(const frame of wc.mainFrame.framesInSubtree){try{frame.send('proteus:video-autoplay',this.media.blocked);}catch{}}}this.changed();return result;}
     if(action.startsWith('downloads-')){if(!this.actions.downloadManager)throw new Error('Downloads require a desktop owner.');return this.actions.downloadManager.command(value);}
@@ -708,7 +708,7 @@ class BrowserTabs {
       const info=await this.create(value.restore===true?safeHistoryURL(value.url,this.appOrigin):value.url,null,value.restore===true?value.history:null,{contentTabId:value.contentTabId,hidden:value.restore===true&&value.hidden===true,lastActivityAt:value.restore===true?value.lastActivityAt:undefined,associationChatId:value.restore===true?value.associationChatId:undefined,persist:value.persist===true,openedAt:value.restore===true?value.openedAt:undefined,restore:value.restore===true,navigationPending:value.restore===true&&value.navigationPending===true,profileId:value.profileId,group:value.group,parentId:value.parentId,unloaded:value.restore===true&&value.unloaded===true,title:String(value.title||'').slice(0,200),favicon:value.restore===true?value.favicon:undefined,lastTouchedAt:value.restore===true?value.lastTouchedAt:undefined});
       return this.state(this.get(info.id),true);
     }
-    if(action==='persist'){const tab=this.get(id);if(typeof value.enabled!=='boolean')throw new Error('Choose whether to persist this tab.');tab.persist=value.enabled;if(tab.persist&&!tab.view&&!(this.options.projects&&tab.hidden))await this.reload(tab.id);this.changed();return this.state(tab,true);}
+    if(action==='persist'){const tab=this.get(id);if(typeof value.enabled!=='boolean')throw new Error('Choose whether to persist this tab.');tab.persist=value.enabled;if(tab.persist&&!tab.view)await this.reload(tab.id,true,{background:tab.hidden===true});this.changed();return this.state(tab,true);}
     if(action==='sync-metadata'){
       const tab=this.get(id);let changed=false;
       if(!tab.openedAt&&Number.isFinite(Date.parse(value.openedAt))){tab.openedAt=Date.parse(value.openedAt);changed=true;}
@@ -790,7 +790,7 @@ class BrowserTabs {
     if(value.action==='destinations')return {...(this.options.agentDestinations?.(runId)||{destinations:[{type:'chat',id:runId}]}),defaultProfileId:'default',profiles:(this.options.profiles?.list().items||[{id:'default',name:'Default'}]).map(({id,name})=>({id,name,available:this.profileAvailable({profileId:id})}))};
     if (value.action === 'open') {
       const destination=await this.options.agentDestination?.(runId,value.destination)||{parentId:runId};
-      const created=await this.create(this.address(value.url),runId,null,{...destination,...(value.profileId?{profileId:value.profileId}:{}),hidden:value.hidden===true,unloaded:value.unloaded===true});
+      const created=await this.create(this.address(value.url),runId,null,{...destination,...(value.profileId?{profileId:value.profileId}:{}),hidden:value.hidden===true,unloaded:value.unloaded===true,title:String(value.title||'').trim().slice(0,200)});
       // Return the current placement even if project deletion occurred while the
       // page loaded. Preserve unrelated route metadata and the public response shape.
       return {...created,destination:this.options.projects?{...this.resolvePreviewRoute(destination),parentId:created.parentId,destination:created.destination}:destination};

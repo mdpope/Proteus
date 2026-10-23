@@ -104,3 +104,7 @@
 .preview-permissions li{margin:10px 0}
 .preview-permissions li>.filepath,.preview-permissions li>small{display:block}
 .preview-permissions li>small{color:var(--muted);margin:4px 0}
+
+/* Inline workspace setup uses the same attachment row as the dialog composer. */
+.new-chat-tab-panel .adaptive-composer .new-chat-toolbar.composer-footer{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center}
+.new-chat-tab-panel .adaptive-composer .new-chat-toolbar>.chat-attachment-picker{display:contents}

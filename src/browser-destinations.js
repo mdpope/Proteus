@@ -9,7 +9,7 @@ export function browserDestinations(service,runId,{preview=false}={}){
  const run=service.engine.getRun(runId),{workspaceId}=chatMembership(run);
  const workspaces=service.context.get().workspaces||[],projects=previewProjects(service,preview),member=service.workspaceProjects?service.workspaceProjects.membership(run):preview&&service.desktopPreview?service.desktopPreview.membership(run):null;
  const project=projects.find(row=>row.id===member?.projectId&&row.workspaceId===workspaceId);
- return {defaultDestination:project?{type:'project',id:project.id}:workspaceId?{type:'workspace',id:workspaceId}:{type:'chat',id:runId},destinations:[{type:'application',name:'Application tabs'},{type:'chat',id:runId,name:'This chat'},...workspaces.map(row=>({type:'workspace',id:row.id,name:row.name})),...projects.map(row=>({type:'project',id:row.id,name:row.name,workspaceId:row.workspaceId,workspaceName:workspaces.find(workspace=>workspace.id===row.workspaceId)?.name}))]};
+ return {defaultDestination:['scheduled','manual','schedule'].includes(run.trigger)?{type:'chat',id:runId}:project?{type:'project',id:project.id}:workspaceId?{type:'workspace',id:workspaceId}:{type:'chat',id:runId},destinations:[{type:'application',name:'Application tabs'},{type:'chat',id:runId,name:'This chat'},...workspaces.map(row=>({type:'workspace',id:row.id,name:row.name})),...projects.map(row=>({type:'project',id:row.id,name:row.name,workspaceId:row.workspaceId,workspaceName:workspaces.find(workspace=>workspace.id===row.workspaceId)?.name}))]};
 }
 export function browserDestination(service,runId,requested,options={}){
  const available=browserDestinations(service,runId,options),value=requested||available.defaultDestination;

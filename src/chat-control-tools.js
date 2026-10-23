@@ -7,6 +7,7 @@ export function chatControlTools(control, runId) {
     parameters: {type:'object',properties:{
       action:{type:'string',enum:['computers','projects','models','list','read','request-access','create','send','reply','cancel','tasks','retry','wait','access',...(!runId?['grant','revoke']:[])]},
       hostId:{type:'string'}, chatId:{type:'string'}, projectId:{type:'string'}, workspaceId:{type:'string'},
+      purpose:{type:'string',enum:['update'],description:'For create: an unassigned update coordinator using saved Engine Room defaults, validated on the target.'},
       provider:{type:'string'}, model:{type:'string'}, reasoningEffort:{type:'string'}, contextTier:{type:'string'}, serviceTier:{type:'string'},
       name:{type:'string'}, prompt:{type:'string'}, answer:{type:'string'}, requestId:{type:'string'},
       mode:{type:'string',enum:['queue','steer']}, operationId:{type:'string'}, taskId:{type:'string'},

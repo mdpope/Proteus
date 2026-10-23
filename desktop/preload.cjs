@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('desktop', {
   browserNotification:value=>ipcRenderer.invoke('proteus:browser-notification',value),
   onNoticeAction:handler=>{const listener=(_event,value)=>handler(value);ipcRenderer.on('proteus:notice-action',listener);return()=>ipcRenderer.removeListener('proteus:notice-action',listener);},
   defaultBrowser:()=>ipcRenderer.invoke('proteus:default-browser'),
+  linkRouting:value=>ipcRenderer.invoke('proteus:link-routing',value),
   openLink:value=>ipcRenderer.invoke('proteus:open-link',value),
   openExternal:value=>ipcRenderer.invoke('proteus:open-external',value),
   onCloseTool:handler=>{const listener=(_event,id)=>handler(id);ipcRenderer.on('proteus:close-tool',listener);return()=>ipcRenderer.removeListener('proteus:close-tool',listener);},

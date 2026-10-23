@@ -1706,6 +1706,22 @@ final class NativeParityTests: XCTestCase {
         XCTAssertEqual(result.count, 20); XCTAssertEqual(result.first?["id"].string, "latest"); XCTAssertEqual(result.first?["deviceName"].string, "iPad")
         XCTAssertEqual(result[1]["url"].string, "https://example.test/24"); XCTAssertEqual(Set(result.map { $0["url"].string }).count, 20)
     }
+    @MainActor func testPersistedBrowserCreatesAndRetainsLiveViewUntilUnpersisted() throws {
+        let shared = SharedAppStore()
+        shared.open(nil, title: "Synthetic resident page", scope: "main")
+        let id = try XCTUnwrap(shared.selectedMainBrowser)
+        XCTAssertFalse(shared.isBrowserLoaded(id))
+        shared.persistBrowser(id, enabled: true)
+        XCTAssertTrue(shared.isBrowserLoaded(id))
+        shared.unload(id)
+        XCTAssertTrue(shared.isBrowserLoaded(id))
+        shared.pruneBrowsers(now: Date().addingTimeInterval(7200))
+        XCTAssertTrue(shared.isBrowserLoaded(id))
+        shared.persistBrowser(id, enabled: false); shared.unload(id)
+        XCTAssertFalse(shared.isBrowserLoaded(id))
+        shared.close(id)
+        XCTAssertFalse(shared.browserTabs.contains { $0.id == id })
+    }
     @MainActor func testBrowserScopesAndOneHourSixTabRetention() throws {
         let shared = SharedAppStore()
         shared.open(nil, title: "Main", scope: "main")

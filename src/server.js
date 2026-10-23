@@ -1,3 +1,4 @@
+import {replyWithAttachments,questionAttachmentMediaTypes} from './question-attachments.js';
 import {readMarkdownFile} from './file-metadata.js';
 import {ensurePrivateHome} from './private-paths.cjs';
 import {DesktopControl} from './desktop-control.js';
@@ -105,13 +106,18 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   const performanceDiagnostics = new PerformanceDiagnostics({home});
   engine.performanceDiagnostics = performanceDiagnostics;
   activity.performanceDiagnostics=performanceDiagnostics;attachments.performanceDiagnostics=performanceDiagnostics;
+  for(const adapter of Object.values(adapters))adapter.questionInputs=(id,requestId)=>engine.readQuestionAttachments(id,requestId);
   for (const [target, method, phase] of [[engine.schedules,'list','scheduler.list'],[context,'get','context.get'],[engine,'persist','run.persist']]) {
     const original = target[method];
     target[method] = function (...args) { return performanceDiagnostics.measureSync(phase, () => original.apply(this,args)); };
   }
   engine.permissions.migrateWorkspaces(context.config());
   context.permissionStore = engine.permissions;
-  engine.permissions.workspaceDefaults = id => id ? context.executionScope(id).approvals : undefined;
+  const workspacePermissionDefaults = (id,config) => {
+    const scope=id?context.executionScope(id,config):settings.get().workspace;
+    return {...scope.approvals,workingRoots:[scope.cwd,...(scope.additionalDirectories||[])]};
+  };
+  engine.permissions.workspaceDefaults = workspacePermissionDefaults;
   const integrations=new IntegrationHealth(home,{engine,context,onChange:()=>{notify();remote?.changed();}});
   for(const adapter of Object.values(adapters)){adapter.integrations=integrations;adapter.onIdle=()=>queueMicrotask(()=>engine.drain());}
   engine.on('change',run=>{try{integrations.capture(run);}catch(error){activity.log('warning','integrations.storage','Connection health could not be saved.',{error});}});
@@ -172,6 +178,12 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   }
   async function buildChatSchedule(value){
     const defaults=settings.get();
+    const updateCoordinator=value.purpose==='update';
+    if(updateCoordinator&&value.chatType==='internet')throw Error('Update coordinators require an ordinary unassigned chat.');
+    if(updateCoordinator){
+      const {updateCoordinatorConfiguration,updateCoordinatorPrompt}=await import('./update-coordinator.js');
+      value={...value,...await updateCoordinatorConfiguration(defaults,catalogs,value),workspaceId:null,projectId:null,includeDefaults:false,selectedIds:[],agentId:null,skillDirectories:[],mcpServers:{},workspace:defaults.workspace,prompt:updateCoordinatorPrompt(value.prompt||'Check and install the explicitly requested release after required validation.')};
+    }
     if(value.workspaceId){ const profile = context.scope(value.workspaceId); value = {...profile.defaults,...value}; }
     if(value.chatType==='internet'){
       const provider=value.provider,configured=defaults.internetSearches?.[provider];
@@ -182,8 +194,9 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       value={chatType:'internet',provider,...configured,workspaceId:value.workspaceId||context.get().defaultWorkspaceId,prompt:value.prompt,includeDefaults:true,selectedIds:[],skillDirectories:[],mcpServers:{}};
     }
     const snapshot=context.capture({workspaceId:value.workspaceId,workspace:value.workspace||(!value.workspaceId?defaults.workspace:undefined),selectedIds:value.selectedIds,agentId:value.agentId,includeDefaults:value.includeDefaults});
+    if(updateCoordinator)Object.assign(snapshot,{workspaceId:null,workspaceName:null,workspace:structuredClone(defaults.workspace),baseWorkspace:structuredClone(defaults.workspace),includeDefaults:false,selectedIds:[],agentId:null,entries:[]});
     const chatTitle=typeof value.name==='string'?value.name.trim():'';
-    return validateSchedule({schemaVersion:1,id:`chat-${Date.now()}-${randomBytes(4).toString('hex')}`,name:chatTitle||'Workspace chat',chatType:value.chatType==='internet'?'internet':'user',chatTitleManual:!!chatTitle,enabled:false,cron:'0 9 * * 1-5',timezone:value.timezone||defaults.timezone,provider:value.provider||defaults.provider,model:value.model||defaults.model,reasoningEffort:value.reasoningEffort??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.reasoningEffort:undefined),contextTier:value.contextTier??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.contextTier:undefined),serviceTier:value.serviceTier??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.serviceTier:undefined),workspace:snapshot.workspace,context:snapshot,skillDirectories:value.skillDirectories||defaults.skillDirectories,mcpServers:value.mcpServers||defaults.mcpServers,editorContext:value.editorContext,misfire:'skip',prompt:value.prompt});
+    return validateSchedule({schemaVersion:1,id:`chat-${Date.now()}-${randomBytes(4).toString('hex')}`,name:chatTitle||'Workspace chat',chatType:value.chatType==='internet'?'internet':'user',chatTitleManual:!!chatTitle,...(updateCoordinator?{purpose:'update'}:{}),enabled:false,cron:'0 9 * * 1-5',timezone:value.timezone||defaults.timezone,provider:value.provider||defaults.provider,model:value.model||defaults.model,reasoningEffort:value.reasoningEffort??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.reasoningEffort:undefined),contextTier:value.contextTier??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.contextTier:undefined),serviceTier:value.serviceTier??((value.model||defaults.model)===defaults.model&&(value.provider||defaults.provider)===defaults.provider?defaults.serviceTier:undefined),workspace:snapshot.workspace,context:snapshot,skillDirectories:value.skillDirectories||defaults.skillDirectories,mcpServers:value.mcpServers||defaults.mcpServers,editorContext:value.editorContext,misfire:'skip',prompt:value.prompt});
   }
   const token = randomBytes(32).toString('hex'); let origin; let remote; const schedulerErrors = []; const eventClients = new Set();
   const notify = () => { for (const client of eventClients) client.write('event: change\ndata: {}\n\n'); };
@@ -294,13 +307,13 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (url.pathname === '/api/state') {
         const state=performanceDiagnostics.measureSync('http.state.assemble', () => {
         const projectSnapshot=preview.snapshot(),workspaceProjects=preview.get(engine,projectSnapshot),contextCatalog=integrations.decorateCatalog(context.get());
-        const permissionSnapshot=engine.permissions.snapshot({workspaceDefaults:id=>id?context.executionScope(id,projectSnapshot.config).approvals:undefined});
+        const permissionSnapshot=engine.permissions.snapshot({workspaceDefaults:id=>workspacePermissionDefaults(id,projectSnapshot.config)});
         return {
         hostName:remote.info().label,hostId:remote.info().hostId,
         workspaceProjects,
         ...(desktopPreview?{desktopPreview:workspaceProjects}:{}),
         attention:service.desktopAttention(),updates:service.updates?.status()||null,
-        schedules: engine.schedules.list(), runs: engine.listRuns().map(run => url.searchParams.has('summaries') ? {...runSummary(run),...workspaceProjects.memberships[run.id],trigger:run.trigger,usage:run.usage,schedule:{id:run.schedule.id,name:run.schedule.name,provider:run.schedule.provider,model:run.schedule.model,workspace:run.schedule.workspace},permissionContext:engine.permissions.describeRun(run,permissionSnapshot)} : ({ ...run, ...workspaceProjects.memberships[run.id], storage: storagePaths(home, run), permissionContext: engine.permissions.describeRun(run,permissionSnapshot) })), providerSteeringMediaTypes:Object.fromEntries(Object.entries(engine.providers).map(([id,provider])=>[id,provider.acceptedSteeringMediaTypes||[]])),providerSteering:Object.fromEntries(Object.entries(engine.providers).map(([id,provider])=>[id,typeof provider.steer==='function'])),providerStatus: catalog.value, providerStatuses: providerStatuses(),attachmentMediaTypes:Object.fromEntries(['copilot','codex','claude'].map(id=>[id,adapters[id]?.acceptedMediaTypes||[]])),mcpStatusProviders:['copilot','codex','claude'].filter(id=>typeof adapters[id]?.mcpStatus==='function'),mcpLoginProviders:['copilot','codex','claude'].filter(id=>typeof adapters[id]?.mcpLogin==='function'),
+        schedules: engine.schedules.list(), runs: engine.listRuns().map(run => url.searchParams.has('summaries') ? {...runSummary(run),...workspaceProjects.memberships[run.id],trigger:run.trigger,usage:run.usage,schedule:{id:run.schedule.id,name:run.schedule.name,provider:run.schedule.provider,model:run.schedule.model,workspace:run.schedule.workspace},permissionContext:engine.permissions.describeRun(run,permissionSnapshot)} : ({ ...run, ...workspaceProjects.memberships[run.id], storage: storagePaths(home, run), permissionContext: engine.permissions.describeRun(run,permissionSnapshot) })), providerSteeringMediaTypes:Object.fromEntries(Object.entries(engine.providers).map(([id,provider])=>[id,provider.acceptedSteeringMediaTypes||[]])),providerSteering:Object.fromEntries(Object.entries(engine.providers).map(([id,provider])=>[id,typeof provider.steer==='function'])),providerStatus: catalog.value, providerStatuses: providerStatuses(),questionAttachmentMediaTypes:Object.fromEntries(['copilot','codex','claude'].map(id=>[id,questionAttachmentMediaTypes.filter(type=>adapters[id]?.acceptedMediaTypes?.includes(type))])),attachmentMediaTypes:Object.fromEntries(['copilot','codex','claude'].map(id=>[id,adapters[id]?.acceptedMediaTypes||[]])),mcpStatusProviders:['copilot','codex','claude'].filter(id=>typeof adapters[id]?.mcpStatus==='function'),mcpLoginProviders:['copilot','codex','claude'].filter(id=>typeof adapters[id]?.mcpLogin==='function'),
         permissions: permissionSnapshot.value, permissionWorkspaces: engine.permissions.describeMany([
           { ...settings.get(), name: 'Default workspace', ref: { defaults: true } },
           ...engine.schedules.list().filter(schedule => !schedule.error).map(schedule => ({ ...schedule, ref: { scheduleId: schedule.id } })),
@@ -334,6 +347,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (url.pathname === '/api/workspace-files/create' && req.method === 'POST') return json(200, workspaceFiles.createMarkdown(await body(req)));
       if (url.pathname === '/api/settings' && req.method === 'POST') {
         const value = await body(req); const old = settings.get();
+        if(value.settings?.updateCoordinator&&JSON.stringify(value.settings.updateCoordinator)!==JSON.stringify(old.updateCoordinator))await (await import('./update-coordinator.js')).updateCoordinatorConfiguration(value.settings,catalogs);
         for(const [provider,options] of Object.entries(value.settings?.internetSearches||{})){
           if(JSON.stringify(old.internetSearches?.[provider])===JSON.stringify(options))continue;
           const metadata=await catalogs[provider]?.get(),model=metadata?.models?.find(m=>m.id===options.model);
@@ -492,19 +506,19 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       }
       if (url.pathname === '/api/chat' && req.method === 'POST') {
         let value = await body(req);
-        const project=preview?.projectFor(value);if(project&&(desktopPreview||value.projectId||value.workspaceId))value={...value,workspaceId:project.workspaceId};
+        const project=value.purpose==='update'?null:preview?.projectFor(value);if(project&&(desktopPreview||value.projectId||value.workspaceId))value={...value,workspaceId:project.workspaceId};
         const schedule=await buildChatSchedule(value),files=Array.isArray(value.attachments)?value.attachments:[];
-        if(!files.length){const run=engine.createRun(schedule,'chat');if(preview)preview.associate(run,project,engine);return json(200,run);}
+        if(!files.length){const run=engine.createRun(schedule,'chat');if(project)preview.associate(run,project,engine);return json(200,run);}
         if(files.length>chatAttachmentLimits.maxBatchFiles||!value.consentId||!value.draftId||!value.messageId||value.providerId!==schedule.provider)throw new Error('Review the exact files and named provider before sending.');
         await remote.attachmentConsents.verify({consentId:value.consentId,draftId:value.draftId,messageId:value.messageId,providerId:schedule.provider,deviceId:'local-desktop',attachmentIds:files});
-        const run=engine.createRun(schedule,'chat',null,{deferStart:true});if(preview)preview.associate(run,project,engine);let prepared;
+        const run=engine.createRun(schedule,'chat',null,{deferStart:true});if(project)preview.associate(run,project,engine);let prepared;
         try{prepared=await remote.attachmentConsents.prepareSend({consentId:value.consentId,draftId:value.draftId,chatId:run.id,messageId:value.messageId,providerId:schedule.provider,deviceId:'local-desktop',attachmentIds:files});engine.startDeferredRun(run.id,{proofId:prepared.proofId,attachmentIds:files,messageId:value.messageId});return json(200,run);}
         catch(error){if(prepared)await remote.attachmentConsents.releaseProof(prepared.proofId).catch(()=>{});engine.discardDeferredRun(run.id);throw error;}
       }
       const match = url.pathname.match(/^\/api\/runs\/([a-f0-9-]+)\/(reply|resume|cancel|send|edit-queued|remove-queued|steer-queued|recover)$/);
       if (match && req.method === 'POST') {
         const value = await body(req); const [, id, action] = match;
-        if (action === 'reply') return json(200, engine.reply(id, value.answer, value.requestId));
+        if (action === 'reply') return json(200, await replyWithAttachments(engine,id,value,'local-desktop'));
         if (action === 'send' && typeof value.prompt === 'string' && /^\/mcp\s+auth(?:\s|$)/i.test(value.prompt.trim())) {
           const run = engine.getRun(id); const provider = engine.providers[run.schedule.provider];
           if (!provider?.mcpLogin) throw new Error('This provider does not support MCP sign-in through Proteus. Sign in on the owning computer, then refresh connections.');

@@ -13,32 +13,18 @@ let nativeFixtureRelayOrigin = ProcessInfo.processInfo.environment["PROTEUS_TEST
 let nativeFixtureHTTPOrigin = ""
 let nativeFixtureRelayOrigin = ""
 #endif
-struct NativeChatScrollLocation {
-    var anchor: Int?
-    var inset: CGFloat
-    var offset: CGFloat
-    var eventStart: Int? = nil
-    var contentHeight: CGFloat = 0
-    var anchorHeight: CGFloat = 0
-    var viewportWidth: CGFloat = 0
-    var eventRevision: String = ""
-}
-struct MainBrowserSelectionRequest: Equatable {
-    let token = UUID()
-    let tabID: String
-}
-
 /// Account-scoped app data uses its own explicit OAuth consent, never a host's credentials.
 @MainActor final class SharedAppStore: ObservableObject {
     @Published var snapshot: JSON = .null
     @Published var error: String?
     @Published var busy = false
-    @Published var profilesEnabled = false { didSet { if !restoring { UserDefaults.standard.set(profilesEnabled, forKey: profilePreferenceKey); for tab in browserTabs where !profileAvailable(tab.profileId) { unload(tab.id) } } } }
+    @Published var profilesEnabled = false { didSet { if !restoring { UserDefaults.standard.set(profilesEnabled, forKey: profilePreferenceKey); for tab in browserTabs where !profileAvailable(tab.profileId) { unload(tab.id, force: true) } } } }
     @Published private(set) var accountConnected = false
     @Published private(set) var profilesVerified = false
     private var profilePreferenceKey: String { "proteus.browser-profiles." + SHA256.hash(data: Data(account.utf8)).map { String(format: "%02x", $0) }.joined() }
     var browserProfiles: [JSON] { [.object(["id": .string("default"), "name": .string("Default")])] + (profilesEnabled && profilesVerified ? snapshot["browserProfiles"].array.filter { UUID(uuidString: $0["id"].string) != nil } : []) }
     func profileAvailable(_ id: String) -> Bool { browserProfiles.contains { $0["id"].string == id } }
+    func browserLabel(_ tab: BrowserDescriptor) -> String { (tab.customTitle ?? (tab.title.isEmpty ? "New tab" : tab.title)) + " [" + profileName(tab.profileId) + "]" }
     func profileName(_ id: String) -> String { browserProfiles.first { $0["id"].string == id }?["name"].string ?? "Unavailable profile" }
     static func persistentProfileStoreID(account: String, id: String) -> UUID { let bytes = Array(SHA256.hash(data: Data((account + "\0" + id).utf8)).prefix(16)); return UUID(uuid: (bytes[0],bytes[1],bytes[2],bytes[3],bytes[4],bytes[5],bytes[6],bytes[7],bytes[8],bytes[9],bytes[10],bytes[11],bytes[12],bytes[13],bytes[14],bytes[15])) }
 
@@ -229,7 +215,7 @@ struct MainBrowserSelectionRequest: Equatable {
         let ids = Set(incoming.filter { $0["type"].string == "browser" }.map { $0["id"].string })
         let existingBrowsers = tabs(in: scope)
         let privateLocal = existingBrowsers.filter { $0.url != nil && Self.safeURL($0.url ?? "") == nil }
-        for old in existingBrowsers where !privateLocal.contains(old) && !ids.contains(old.contentTabId ?? old.id) { unload(old.id); unloadedBrowsers.remove(old.id) }
+        for old in existingBrowsers where !privateLocal.contains(old) && !ids.contains(old.contentTabId ?? old.id) { unload(old.id, force: true); unloadedBrowsers.remove(old.id) }
         for tab in incoming where tab["type"].string == "browser" {
             if let existing = existingBrowsers.first(where: { ($0.contentTabId ?? $0.id) == tab["id"].string }), !privateLocal.contains(existing), !explicitBrowserNavigations.contains(existing.id), browserViews[existing.id]?.url.map({ Self.safeURL($0.absoluteString) == nil }) != true, existing.url ?? "" != tab["url"].string, let url = Self.safeURL(tab["url"].string) { if profileAvailable(existing.profileId) && (tab["profileId"].string.isEmpty ? "default" : tab["profileId"].string) == existing.profileId, let view = browserViews[existing.id] { mirroredBrowserLoads.insert(existing.id); pendingBrowserLoads[existing.id] = url.absoluteString; view.load(URLRequest(url: url)) } }
         }
@@ -267,11 +253,12 @@ struct MainBrowserSelectionRequest: Equatable {
             let incomingTouch = tab["lastTouchedAt"].string
             descriptor.lastTouchedAt = (existing?.lastTouchedAt.flatMap(ProviderAllowance.date) ?? .distantPast) > (ProviderAllowance.date(incomingTouch) ?? .distantPast) ? existing?.lastTouchedAt : (incomingTouch.isEmpty ? existing?.lastTouchedAt : incomingTouch)
             descriptor.ownerHostId = contentHosts[scope] ?? (scope.hasPrefix("main:") || scope.hasPrefix("team:") ? String(scope.dropFirst(5)) : nil) ?? existing?.ownerHostId ?? (Self.isOrganizationalScope(scope) ? scope.split(separator: ":", maxSplits: 2).dropFirst().first.map(String.init) : nil)
-            if existing?.profileId != descriptor.profileId { unload(localID) }; nextBrowsers.append(descriptor)
+            if existing?.profileId != descriptor.profileId { unload(localID, force: true) }; nextBrowsers.append(descriptor)
             if descriptor.url != nil && !isBrowserLoaded(descriptor.id) && !preservesLocalNavigation { unloadedBrowsers.insert(descriptor.id) }
         }
         // Publish one coherent list so a selected child never temporarily disappears.
         browserTabs = nextBrowsers
+        for tab in browserTabs where tab.persist && profileAvailable(tab.profileId) { reload(tab.id); _ = webView(tab) }
         let docIDs = Set(incoming.filter { $0["type"].string == "document" }.map { $0["documentId"].string })
         for old in documents(in: scope) where old.previewSource == nil && !docIDs.contains(old.id) { documentContents.removeValue(forKey: scope + ":" + old.id); documentSessions.removeValue(forKey: scope + ":" + old.id) }
         documentTabs.removeAll { $0.chatKey == scope && $0.previewSource == nil }
@@ -326,7 +313,7 @@ struct MainBrowserSelectionRequest: Equatable {
     func revokeContentHost(_ host: String) {
         contentBackoff[host] = nil
         browserConflicts.removeAll { $0.tab.ownerHostId == host || $0.scope.hasPrefix("chat:" + host + ":") || $0.scope.hasPrefix("workspace:" + host + ":") || $0.scope.hasPrefix("project:" + host + ":") };
-        for tab in browserTabs where tab.ownerHostId == host { unload(tab.id) }; browserTabs.removeAll { $0.ownerHostId == host }
+        for tab in browserTabs where tab.ownerHostId == host { unload(tab.id, force: true) }; browserTabs.removeAll { $0.ownerHostId == host }
         historyOutbox.removeAll { $0["ownerHostId"].string == host }; historyCache = historyCache.filter { !$0.key.hasPrefix(host + "|") }; historyStatus[host] = nil; saveHistoryCache()
         let affected = Set(contentSnapshots.keys.filter { $0.hasPrefix("project:" + host + ":") || $0.hasPrefix("workspace:" + host + ":") || $0.hasPrefix("chat:" + host + ":") } + contentHosts.filter { $0.value == host }.map(\.key) + browserTabs.filter { ($0.scope.hasPrefix("chat:" + host + ":") || $0.scope.hasPrefix("workspace:" + host + ":") || $0.scope.hasPrefix("project:" + host + ":")) }.map(\.scope) + documentTabs.filter { $0.chatKey.hasPrefix("chat:" + host + ":") || $0.chatKey.hasPrefix("workspace:" + host + ":") || $0.chatKey.hasPrefix("project:" + host + ":") }.map(\.chatKey))
         applyingContent = true; defer { applyingContent = false }
@@ -565,6 +552,7 @@ struct MainBrowserSelectionRequest: Equatable {
     var lists: [JSON] { snapshot["teamLists"].array }
     func reset(for identity: String) {
         guard account != identity else { return }
+        NativeDescriptorCacheWriter.shared.flush()
         mainBrowserSelectionRequest = nil
         flushDocumentScrollPositions()
         saveBrowsers(); for download in Array(downloads.values) { download.cancel() }; exportFile?.cleanup(); exportFile = nil; linkChatDraft = nil; restoring = true; contentSync = [:]; contentRequests = [:]; contentBackoff = [:]; workspaceContentDescriptors = contentSnapshots.filter { Self.isOrganizationalScope($0.key) }.mapValues { $0["tabs"].array }; account = identity; snapshot = .null; accountConnected = false; error = nil; browserPreviews = [:]; browserFavicons = [:]; faviconAttempts = [:]; unloadBrowsers(); browserTabs = []; unloadedBrowsers = []; selectedBrowser = nil; selectedMainBrowser = nil; scopedSelection = [:]; browserTouched = [:]; standupOrders = [:]; standupCompleted = [:]; documentContents = [:]; documentSessions = [:]; previewVersions = [:]; profileStores = [:]; draftAttachments = [:]; chatScrollLocations = [:]; documentScrollOffsets = [:]; draftMessageIDs = [:]; draftSessionIDs = [:]
@@ -585,21 +573,18 @@ struct MainBrowserSelectionRequest: Equatable {
         let name = SHA256.hash(data: Data(account.utf8)).map { String(format: "%02x", $0) }.joined()
         return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Proteus/browsers/" + name + ".enc")
     }
+    private var descriptorCacheKey: String?
     private func saveBrowsers() {
-        guard !restoring, let cacheURL, let key = BrowserCacheKeychain.key() else { return }
+        guard !restoring, let cacheURL else { return }
+        if descriptorCacheKey == nil { descriptorCacheKey = BrowserCacheKeychain.key() }
+        guard let key = descriptorCacheKey else { return }
         let safe = browserTabs.suffix(100).compactMap(Self.retainedDescriptor)
-        do {
-            let tabs = try JSONDecoder().decode(JSON.self, from: JSONEncoder().encode(safe))
-            var selections: [String: JSON] = scopedSelection.mapValues(JSON.string)
-            if let selectedBrowser { selections["team"] = .string(selectedBrowser) }
-            if let selectedMainBrowser { selections["main"] = .string(selectedMainBrowser) }
-            let payload: JSON = .object(["tabs": tabs, "selections": .object(selections), "accountSnapshot": snapshot])
-            let encrypted = try RemoteCrypto.seal(payload, key: key, aad: account)
-            try FileManager.default.createDirectory(at: cacheURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try Data(encrypted.utf8).write(to: cacheURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
-            var file = cacheURL; var values = URLResourceValues(); values.isExcludedFromBackup = true; try file.setResourceValues(values)
-        } catch { /* A descriptor cache failure never changes account data. */ }
+        var selections = scopedSelection.mapValues(JSON.string)
+        if let selectedBrowser { selections["team"] = .string(selectedBrowser) }
+        if let selectedMainBrowser { selections["main"] = .string(selectedMainBrowser) }
+        NativeDescriptorCacheWriter.shared.save(tabs: safe, selections: selections, snapshot: snapshot, key: key, account: account, url: cacheURL)
     }
+
     private var shellCacheURL: URL { FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Proteus/navigation.enc") }
     func saveShellNavigation(_ value: JSON) {
         guard let key = BrowserCacheKeychain.key() else { return }
@@ -737,9 +722,9 @@ struct MainBrowserSelectionRequest: Equatable {
         }
         #endif
         reset(for: life.accountIdentity); let expected = life.accountIdentity
-        guard life.credential?.appAuthorized == true else { accountConnected = false; profilesVerified = false; for tab in browserTabs where tab.profileId != "default" { unload(tab.id) }; return }
+        guard life.credential?.appAuthorized == true else { accountConnected = false; profilesVerified = false; for tab in browserTabs where tab.profileId != "default" { unload(tab.id, force: true) }; return }
         busy = true; defer { busy = false }
-        do { let value = try await life.appRequest(collections: collections); guard expected == life.accountIdentity else { return }; snapshot = .object(snapshot.object.merging(value.object) { _, new in new }); accountConnected = true; if value.object["browserProfiles"] != nil { profilesVerified = true; saveBrowsers(); for tab in browserTabs where !profileAvailable(tab.profileId) { unload(tab.id) } }; error = nil }
+        do { let value = try await life.appRequest(collections: collections); guard expected == life.accountIdentity else { return }; snapshot = .object(snapshot.object.merging(value.object) { _, new in new }); accountConnected = true; if value.object["browserProfiles"] != nil { profilesVerified = true; saveBrowsers(); for tab in browserTabs where !profileAvailable(tab.profileId) { unload(tab.id, force: true) } }; error = nil }
         catch { accountConnected = false; self.error = life.display(error) }
     }
     @discardableResult func mutate(_ life: LifeStore, path: String, method: String = "POST", body: JSON) async -> JSON? {
@@ -982,7 +967,7 @@ struct MainBrowserSelectionRequest: Equatable {
     func selectChatChild(_ id: String, in scope: String) { guard scope.hasPrefix("chat:") && (id == "chat" || tabs(in: scope).contains(where: { $0.id == id })) else { return }; scopedSelection[scope] = id; saveBrowsers() }
     func select(_ id: String, in scope: String, activateMainBrowser: Bool = true) { guard browserTabs.contains(where: { $0.id == id && $0.scope == scope }) else { return }; if scope == "main" { selectedMainBrowser = id; if activateMainBrowser { mainBrowserSelectionRequest = MainBrowserSelectionRequest(tabID: id) } } else if scope == "team" { selectedBrowser = id; if let host = currentTeamOwner { scopedSelection["team:" + host] = id } } else { scopedSelection[scope] = id }; reload(id); touch(id); saveBrowsers() }
     func touch(_ id: String) { scheduleBrowserPreview(id); browserTouched[id] = Date(); if let index = browserTabs.firstIndex(where: { $0.id == id }) { browserTabs[index].lastTouchedAt = ISO8601DateFormatter().string(from: Date()) }; pruneBrowsers() }
-    func persistBrowser(_ id: String, enabled: Bool) { guard let index = browserTabs.firstIndex(where: { $0.id == id }) else { return }; browserTabs[index].persist = enabled; if enabled { reload(id) }; saveBrowsers() }
+    func persistBrowser(_ id: String, enabled: Bool) { guard let index = browserTabs.firstIndex(where: { $0.id == id }) else { return }; browserTabs[index].persist = enabled; if enabled { reload(id); _ = webView(browserTabs[index]) }; saveBrowsers() }
     func pruneBrowsers(now: Date = Date()) {
         let recent = Set(browserTouched.filter { item in browserTabs.first(where: { $0.id == item.key })?.persist != true }.sorted { $0.value > $1.value }.prefix(6).map(\.key))
         for id in Array(browserViews.keys) where browserTabs.first(where: { $0.id == id })?.persist != true && !recent.contains(id) && now.timeIntervalSince(browserTouched[id] ?? .distantPast) >= 3600 { unload(id) }
@@ -1312,8 +1297,9 @@ struct MainBrowserSelectionRequest: Equatable {
     func refreshBrowser(_ id: String) { if let view = browserViews[id] { view.reload() } else { reload(id) } }
     func stopBrowser(_ id: String) { if let view = browserViews[id] { failBrowserNavigation(id, currentURL: view.url); view.stopLoading() } }
     func renameBrowser(_ id: String, title: String) { guard let index = browserTabs.firstIndex(where: { $0.id == id }) else { return }; browserTabs[index].title = String(title.prefix(200)); browserTabs[index].customTitle = String(title.prefix(200)) }
-    func close(_ id: String) { if let tab = browserTabs.first(where: { $0.id == id }) { NativeThumbnailCache.remove(thumbnailKey(tab)) }; let scope = browserTabs.first(where: { $0.id == id })?.scope ?? "team"; unload(id); unloadedBrowsers.remove(id); browserTouched.removeValue(forKey: id); browserTabs.removeAll { $0.id == id }; browserPreviews[id] = nil; browserFavicons[id] = nil; faviconAttempts[id] = nil; if selected(in: scope) == id { if scope == "main" { selectedMainBrowser = tabs(in: scope).last?.id } else if scope == "team" { selectedBrowser = tabs(in: scope).last?.id } else { scopedSelection[scope] = tabs(in: scope).last?.id } } }
-    func unload(_ id: String) {
+    func close(_ id: String) { if let tab = browserTabs.first(where: { $0.id == id }) { NativeThumbnailCache.remove(thumbnailKey(tab)) }; let scope = browserTabs.first(where: { $0.id == id })?.scope ?? "team"; unload(id, force: true); unloadedBrowsers.remove(id); browserTouched.removeValue(forKey: id); browserTabs.removeAll { $0.id == id }; browserPreviews[id] = nil; browserFavicons[id] = nil; faviconAttempts[id] = nil; if selected(in: scope) == id { if scope == "main" { selectedMainBrowser = tabs(in: scope).last?.id } else if scope == "team" { selectedBrowser = tabs(in: scope).last?.id } else { scopedSelection[scope] = tabs(in: scope).last?.id } } }
+    func unload(_ id: String, force: Bool = false) {
+        guard force || browserTabs.first(where: { $0.id == id })?.persist != true else { error = "Turn off Persist before unloading this tab."; return }
         historyNavigation.removeValue(forKey: id)
         mirroredBrowserLoads.remove(id)
         pendingBrowserLoads.removeValue(forKey: id); nativeHistoryPosition.removeValue(forKey: id)
@@ -1323,7 +1309,7 @@ struct MainBrowserSelectionRequest: Equatable {
         unloadedBrowsers.insert(id)
     }
     func reload(_ id: String) { unloadedBrowsers.remove(id) }
-    func unloadBrowsers() { for id in Array(browserViews.keys) { unload(id) } }
+    func unloadBrowsers() { for id in Array(browserViews.keys) { unload(id, force: true) } }
     func isBrowserLoaded(_ id: String) -> Bool { browserViews[id] != nil }
     func isCurrentBrowserView(_ view: WKWebView, id: String) -> Bool { browserViews[id] === view }
     func webView(_ tab: BrowserDescriptor, allowLocalNavigation: Bool = false) -> WKWebView {
@@ -1375,92 +1361,4 @@ struct MainBrowserSelectionRequest: Equatable {
             }
         }
     }
-}
-struct BrowserNavigationState: Equatable {
-    var url = ""
-    var title = ""
-    var canGoBack = false
-    var canGoForward = false
-    var isLoading = false
-}
-struct BrowserHistoryEntry: Codable, Equatable {
-    var id: String = UUID().uuidString; var url: String; var title: String; var requestedURL: String? = nil
-    enum CodingKeys: String, CodingKey { case id, url, title, requestedURL }
-    init(id: String = UUID().uuidString, url: String, title: String, requestedURL: String? = nil) { self.id = id; self.url = url; self.title = title; self.requestedURL = requestedURL }
-    init(from decoder: Decoder) throws { let c = try decoder.container(keyedBy: CodingKeys.self); id = try c.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString; url = try c.decode(String.self, forKey: .url); title = try c.decode(String.self, forKey: .title); requestedURL = try c.decodeIfPresent(String.self, forKey: .requestedURL) }
-}
-struct BrowserTabHistory: Codable, Equatable {
-    var entries: [BrowserHistoryEntry]; var index: Int; var currentEntryId: String? = nil; var revision: Int = 0
-    enum CodingKeys: String, CodingKey { case entries, index, currentEntryId, revision }
-    init(entries: [BrowserHistoryEntry], index: Int, currentEntryId: String? = nil, revision: Int = 0) { self.entries = entries; self.index = index; self.currentEntryId = currentEntryId; self.revision = revision }
-    init(from decoder: Decoder) throws { let c = try decoder.container(keyedBy: CodingKeys.self); entries = try c.decode([BrowserHistoryEntry].self, forKey: .entries); currentEntryId = try c.decodeIfPresent(String.self, forKey: .currentEntryId); index = try c.decodeIfPresent(Int.self, forKey: .index) ?? 0; revision = try c.decodeIfPresent(Int.self, forKey: .revision) ?? 0; if let currentEntryId, let selected = entries.firstIndex(where: { $0.id == currentEntryId }) { index = selected } }
-}
-struct BrowserHistoryItem: Hashable { var index: Int; var url: URL; var title: String?; var entryId: String? = nil }
-struct BrowserDescriptor: Identifiable, Codable, Equatable {
-    var id: String; var title: String; var url: String?; var scope: String; var customTitle: String?; var contentTabId: String?; var history: BrowserTabHistory?; var profileId: String; var ownerHostId: String? = nil
-    var hidden = false; var persist = false; var openedAt: String?; var lastTouchedAt: String?; var lastActivityAt: String?
-    init(id: String, title: String, url: String?, scope: String = "team", customTitle: String? = nil, contentTabId: String? = nil, history: BrowserTabHistory? = nil, profileId: String = "default") { self.profileId = profileId; self.history = history; self.id = id; self.title = title; self.url = url; self.scope = scope; self.customTitle = customTitle; self.contentTabId = contentTabId }
-    enum CodingKeys: String, CodingKey { case id, title, url, scope, customTitle, contentTabId, history, profileId, ownerHostId, hidden, persist, openedAt, lastTouchedAt, lastActivityAt }
-    init(from decoder: Decoder) throws { let values = try decoder.container(keyedBy: CodingKeys.self); id = try values.decode(String.self, forKey: .id); title = try values.decode(String.self, forKey: .title); url = try values.decodeIfPresent(String.self, forKey: .url); scope = try values.decodeIfPresent(String.self, forKey: .scope) ?? "team"; customTitle = try values.decodeIfPresent(String.self, forKey: .customTitle); contentTabId = try values.decodeIfPresent(String.self, forKey: .contentTabId); history = try values.decodeIfPresent(BrowserTabHistory.self, forKey: .history); profileId = try values.decodeIfPresent(String.self, forKey: .profileId) ?? "default"; ownerHostId = try values.decodeIfPresent(String.self, forKey: .ownerHostId); hidden = try values.decodeIfPresent(Bool.self, forKey: .hidden) ?? false; persist = try values.decodeIfPresent(Bool.self, forKey: .persist) ?? false; openedAt = try values.decodeIfPresent(String.self, forKey: .openedAt); lastTouchedAt = try values.decodeIfPresent(String.self, forKey: .lastTouchedAt); lastActivityAt = try values.decodeIfPresent(String.self, forKey: .lastActivityAt) }
-}
-struct NativeDocumentDescriptor: Identifiable, Codable, Equatable {
-    let id: String
-    var chatKey: String
-    let title: String
-    let mediaType: String
-    var parentID: String? = nil
-    var relativePath: String? = nil
-    var customTitle: String? = nil
-    var previewSource: String? = nil
-    var previewTabID: String? = nil
-    var previewVersion: String? = nil
-    // Contents and consent do not survive a cold launch; publish the first fresh read even
-    // when its hash matches the persisted descriptor. Keep this state out of CodingKeys.
-    var previewLoaded = false
-    enum CodingKeys: String, CodingKey { case id, chatKey, title, mediaType, parentID, relativePath, customTitle, previewSource, previewTabID, previewVersion }
-}
-struct NativeDocumentSession {
-    let requestID: String
-    let version: String
-    let readAt: String
-    let assets: [JSON]
-    let links: [JSON]
-    let assetDataURLs: [String: String]
-    var fileCreatedAt = ""
-    var fileModifiedAt = ""
-}
-struct NativeDraftAttachment: Identifiable {
-    let id: String
-    let name: String
-    let mediaType: String
-    let bytes: Data
-    var image: UIImage? { mediaType.hasPrefix("image/") ? UIImage(data: bytes) : nil }
-}
-
-private enum BrowserCacheKeychain {
-    static func key() -> String? {
-        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: "org.proteusapp.proteus.mobile.browser", kSecAttrAccount as String: "cache-key"]
-        var read = query; read[kSecReturnData as String] = true; read[kSecMatchLimit as String] = kSecMatchLimitOne
-        var item: CFTypeRef?
-        let status = SecItemCopyMatching(read as CFDictionary, &item)
-        if status == errSecSuccess, let data = item as? Data { return String(data: data, encoding: .utf8) }
-        guard status == errSecItemNotFound else { return nil }
-        let key = RemoteCrypto.random(); var save = query; save[kSecValueData as String] = Data(key.utf8); save[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
-        return SecItemAdd(save as CFDictionary, nil) == errSecSuccess ? key : nil
-    }
-}
-
-struct BrowserChatDraft: Identifiable { let id: UUID; let hostID: String; let hostName: String }
-struct BrowserExportFile: Identifiable {
-    let id: UUID
-    let url: URL
-    func cleanup() { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
-}
-
-struct NativeBrowserNavigationConflict: Identifiable, Codable, Equatable {
-    var id: String
-    var scope: String
-    var tabID: String
-    var tab: BrowserDescriptor
-    var operations: [JSON]
 }

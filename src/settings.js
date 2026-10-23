@@ -8,6 +8,11 @@ import { revision } from './schedules.js';
 export function validateSettings(value) {
   if (value?.schemaVersion !== 1) throw new Error('Settings schemaVersion must be 1.');
   validateModelOptionShape(value);
+  if(value.updateCoordinator!==undefined){
+    const options=value.updateCoordinator;
+    if(!options||!['codex','claude','copilot'].includes(options.provider)||typeof options.model!=='string'||!options.model.trim()||options.model==='auto'||Object.keys(options).some(key=>!['provider','model','reasoningEffort','serviceTier','contextTier'].includes(key)))throw Error('Choose explicit update-coordinator provider and model defaults.');
+    validateModelOptionShape(options);
+  }
   if(value.internetSearches!==undefined){
     if(!value.internetSearches||typeof value.internetSearches!=='object'||Array.isArray(value.internetSearches))throw new Error('Internet Search defaults must be a provider map.');
     for(const [provider,options] of Object.entries(value.internetSearches)){
@@ -17,6 +22,9 @@ export function validateSettings(value) {
     }
   }
   if(value.preferences!==undefined&&(!value.preferences||typeof value.preferences!=='object'||Array.isArray(value.preferences)||value.preferences.clickedLinks!==undefined&&!['in-app','system'].includes(value.preferences.clickedLinks)))throw new Error('Choose in-app or system browser for clicked links.');
+  if(value.preferences?.keepScreenAwake!==undefined&&typeof value.preferences.keepScreenAwake!=='boolean')throw new Error('Keep Screen Awake must be a boolean.');
+  if(value.browser!==undefined&&(!value.browser||typeof value.browser!=='object'||Array.isArray(value.browser)))throw new Error('Browser preferences must be an object.');
+  if(value.browser?.loadedTabLimit!==undefined&&(!Number.isInteger(value.browser.loadedTabLimit)||value.browser.loadedTabLimit<1||value.browser.loadedTabLimit>256))throw new Error('Loaded tab limit must be an integer from 1 to 256.');
   if(value.appearance!==undefined&&(!value.appearance||typeof value.appearance!=='object'||Array.isArray(value.appearance)||(['showProviderUsage','providerUsageCollapsed','sidebarCollapsed'].some(key=>value.appearance[key]!==undefined&&typeof value.appearance[key]!=='boolean'))))throw new Error('Appearance settings must contain boolean usage preferences.');
   if(value.appearance?.palette!==undefined)validatePalette(value.appearance.palette);
   if(value.appearance?.sidebarWidth!==undefined&&(!Number.isInteger(value.appearance.sidebarWidth)||value.appearance.sidebarWidth<220||value.appearance.sidebarWidth>520))throw new Error('Sidebar width must be an integer between 220 and 520 pixels.');

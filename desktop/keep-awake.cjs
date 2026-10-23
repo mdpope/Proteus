@@ -1,6 +1,6 @@
-// Process-local: quitting/restarting Proteus always restores normal idle sleep.
+// The OS assertion is process-local; the saved preference survives its release.
 class KeepAwake {
-  constructor(powerSaveBlocker) { this.blocker = powerSaveBlocker; this.id = null; }
+  constructor(powerSaveBlocker) { this.blocker = powerSaveBlocker; this.id = null; this.onChange = null; }
   get enabled() { return this.id !== null && this.blocker.isStarted(this.id); }
   setEnabled(value) {
     if (value) {
@@ -9,8 +9,9 @@ class KeepAwake {
       this.blocker.stop(this.id);
       this.id = null;
     }
+    this.onChange?.(this.enabled);
     return this.enabled;
   }
-  dispose() { this.setEnabled(false); }
+  dispose() { if(this.id!==null){this.blocker.stop(this.id);this.id=null;} }
 }
 module.exports = { KeepAwake };

@@ -204,6 +204,12 @@ export class ChatControl {
       if(args.action==='reply'&&(run.pending?.type!=='question'||run.pending.id!==args.requestId))throw Error('Only the current ordinary question may be answered. Tool approvals require the human.');
       if(args.action==='send'&&args.mode==='steer'&&!run.chatControls?.steering)throw Error('This destination provider does not support steering.');
     }
+    if(args.action==='create'&&args.purpose==='update'){
+      if(args.workspaceId||args.projectId)throw Error('Update coordinator chats must be unassigned.');
+      if(args.hostId!==this.localId()&&!(await this.connection(args.hostId)).capabilities.includes('chat.update-coordinator.v1'))throw Error('This computer needs update-coordinator support before this workflow is available.');
+      const configured=this.service.settings?.get().updateCoordinator;
+      if(!args.provider&&!args.model){if(!configured)throw Error('Configure update coordinator defaults in Engine Room → Updates first.');args={...args,...structuredClone(configured)};}
+    }
     if(args.action==='create')await this.validateModel(args.hostId,{...args,model:args.model??''});
     this.assertAccess(actor,args.hostId,actionScope,args.chatId,projectId);
     const task={schemaVersion:1,id:randomUUID(),operationId:args.operationId,actor,originChatId,hostId:args.hostId,chatId:args.chatId||null,projectId:actualProjectId,args:structuredClone(args),digest:signature,action:args.action,state:'prepared',status:'dispatching',baseline,notify:args.notify===true,createdAt:new Date().toISOString(),issuedAt:new Date().toISOString()};
@@ -218,7 +224,7 @@ export class ChatControl {
     this.assertAccess(task.actor,task.hostId,scope,task.args.chatId,task.projectId);
     if(task.state==='accepted'){await this.authorizeTask(task);return this.taskView(task);}
     const args=task.args,method={create:'chat.start',send:'chat.send',reply:'chat.reply',cancel:'chat.cancel'}[task.action];
-    const payload=task.action==='create'?{...pick(args,['name','prompt','provider','model','reasoningEffort','contextTier','serviceTier','workspaceId','projectId','selectedIds','includeDefaults','agentId']),reasoningEffort:args.reasoningEffort||'',contextTier:args.contextTier||'default',serviceTier:args.serviceTier||''}:
+    const payload=task.action==='create'?{...pick(args,['purpose','name','prompt','provider','model','reasoningEffort','contextTier','serviceTier','workspaceId','projectId','selectedIds','includeDefaults','agentId']),reasoningEffort:args.reasoningEffort||'',contextTier:args.contextTier||'default',serviceTier:args.serviceTier||''}:
       task.action==='send'?{id:task.chatId,prompt:args.prompt,mode:args.mode||'queue',messageId:task.id}:
       task.action==='reply'?{id:task.chatId,answer:args.answer,requestId:args.requestId}:{id:task.chatId};
     if(task.action!=='create'){payload.agentControl=true;payload.expectedProjectId=task.projectId||null;}

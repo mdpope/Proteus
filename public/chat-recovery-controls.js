@@ -1,7 +1,7 @@
 import {chatRecoveryState} from './chat-recovery-state.js';
 import {bindRuntimeTimer,disposeRuntimeTimers} from './runtime.js';
 export function mountChatRecovery(node,entry,run,options){
- const state=chatRecoveryState(run),show=options.recover&&run.trigger==='chat'&&state&&entry.role==='system'&&entry.at===state.eventAt&&entry.text===state.eventText;
+ const state=chatRecoveryState(run),show=options.recover&&['chat','manual','scheduled','schedule'].includes(run.trigger)&&state&&entry.role==='system'&&entry.at===state.eventAt&&entry.text===state.eventText;
  let controls=node.querySelector('.chat-recovery-controls');
  if(!show){if(controls){disposeRuntimeTimers(controls);controls.remove();}return;}
  if(!controls){controls=document.createElement('section');controls.className='chat-recovery-controls';node.append(controls);}

@@ -50,15 +50,28 @@ struct NativeWorkspaceTabsView: View {
     private var scopeID: String { projectID ?? workspaceID }
     private var scope: String { "\(scopeKind):\(store.connection?.hostId ?? ""):\(scopeID)" }
     private var rows: [JSON] { snapshot["tabs"].array }
+    private var filterKey: String { "tab-filter:" + scope }
+    private var query: String { store.draft(filterKey)["query"].string }
+    private var type: String { store.draft(filterKey)["type"].string }
+    private var matchingRows: [(offset: Int, element: JSON)] { Array(rows.enumerated()).filter { row in
+        (type.isEmpty || row.element["type"].string == type) && (query.isEmpty || (row.element["title"].string + " " + row.element["url"].string).localizedCaseInsensitiveContains(query))
+    } }
+    private func setFilter(_ name: String, _ value: String) { var fields = store.draft(filterKey).object; fields[name] = .string(value); store.setDraft(filterKey, .object(fields)) }
+    private func label(_ tab: JSON) -> String { tab["title"].string + (tab["type"].string == "browser" && !tab["profileName"].string.isEmpty ? " [" + tab["profileName"].string + "]" : "") }
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 12) {
                 Text("Open tabs").font(.title2.bold()); if !store.connected { Text("Offline · cached tabs").font(.caption).foregroundStyle(.orange) }; Text("Hidden tabs remain open.").font(.caption).foregroundStyle(.secondary)
-                ForEach(Array(rows.enumerated()), id: \.element) { index, tab in
+                HStack {
+                    Picker("Type", selection: Binding(get: { type }, set: { setFilter("type", $0) })) { Text("All types").tag(""); Text("Browser").tag("browser"); Text("Chats").tag("chat"); Text("Documents").tag("document"); Text("Terminal").tag("terminal") }
+                    TextField("Filter tabs", text: Binding(get: { query }, set: { setFilter("query", $0) })).textInputAutocapitalization(.never).autocorrectionDisabled().accessibilityIdentifier("workspace-tabs-filter")
+                }
+                Text("\(matchingRows.count) of \(rows.count) tabs").font(.caption).foregroundStyle(.secondary)
+                ForEach(matchingRows, id: \.element) { index, tab in
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             if let encoded = tab["favicon"].string.split(separator: ",", maxSplits: 1).last, tab["favicon"].string.hasPrefix("data:image/png;base64,"), let bytes = Data(base64Encoded: String(encoded)), let image = UIImage(data: bytes) { Image(uiImage: image).resizable().scaledToFit().frame(width: 20, height: 20) } else { Image(systemName: tab["type"].string == "browser" ? "globe" : tab["type"].string == "terminal" ? "terminal" : tab["type"].string == "chat" ? "bubble.left.and.bubble.right" : "doc.text").frame(width: 24) }
-                            Button { open(tab) } label: { Text(tab["title"].string).font(.headline).lineLimit(1) }.buttonStyle(.plain).accessibilityIdentifier("workspace-managed-title-" + tab["id"].string).disabled(tab["hidden"].bool && !store.connected)
+                            Button { open(tab) } label: { Text(label(tab)).font(.headline).lineLimit(1) }.buttonStyle(.plain).accessibilityIdentifier("workspace-managed-title-" + tab["id"].string).disabled(tab["hidden"].bool && !store.connected)
                             Text(tab["url"].string).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail).frame(maxWidth: .infinity, alignment: .leading)
                         }
                         HStack { if !tab["projectName"].string.isEmpty { Text(tab["projectName"].string) }; Text("Opened: " + date(tab["openedAt"].string)); Text("Last interaction: " + date(tab["lastTouchedAt"].string)) }.font(.caption).foregroundStyle(.secondary)
@@ -291,7 +304,11 @@ struct ContextView: View {
                     Picker("Starting folder", selection: Binding(get: { profile["cwd"].string }, set: { starting($0) })) { ForEach(roots, id: \.self) { Text($0).tag($0) } }.disabled(busy || !store.connected)
                     Text("Commands start here. Other workspace folders remain available.").font(.caption).foregroundStyle(.secondary)
                     ForEach(roots, id: \.self) { path in
-                        VStack(alignment: .leading, spacing: 6) { Text(path).font(.caption.monospaced()).textSelection(.enabled); HStack { if path == profile["cwd"].string { Text("Starting folder").font(.caption).foregroundStyle(.secondary) }; Spacer(); Button("Refresh") { refresh(path) }.disabled(busy || !store.connected) } }
+                        VStack(alignment: .leading, spacing: 6) { Text(path).font(.caption.monospaced()).textSelection(.enabled)
+                            if ([profile["cwd"].string] + profile["additionalDirectories"].array.map(\.string)).contains(path) {
+                                Picker("Access", selection: Binding(get: { profile["approvals"]["folders"].array.first { $0["path"].string == path }?["access"].string ?? "read-write" }, set: { access in folderAccess(path, access) })) { Text("Read / write").tag("read-write"); Text("Read").tag("read") }.disabled(busy || !store.connected)
+                            }
+                            HStack { if path == profile["cwd"].string { Text("Starting folder").font(.caption).foregroundStyle(.secondary) }; Spacer(); Button("Refresh") { refresh(path) }.disabled(busy || !store.connected) } }
                     }
                     Text("Folder paths belong to \(store.displayName). Add or remove folders using its desktop configuration.").font(.caption).foregroundStyle(.secondary)
                 }
@@ -361,6 +378,11 @@ struct ContextView: View {
             if !entry["unsupportedAgentFields"].array.isEmpty { Text(entry["unsupportedAgentFields"].array.map(\.string).joined(separator: "; ")).font(.caption).foregroundStyle(.orange) }
             Picker("Load in", selection: Binding(get: { entry["mode"].string }, set: { mode in command("context.mode", ["workspaceId": .string(workspace), "id": entry["id"], "mode": .string(mode), "expectedRevision": context["revision"]]) })) { ForEach(contextModes, id: \.0) { Text($0.1).tag($0.0) } }.disabled(busy || !store.connected)
         }.padding(.vertical, 5)
+    }
+    private func folderAccess(_ folder: String, _ access: String) {
+        var approvals = profile["approvals"].object
+        approvals["folders"] = .array(profile["approvals"]["folders"].array.filter { $0["path"].string != folder } + [.object(["path": .string(folder), "access": .string(access)])])
+        command("context.update", ["action": .string("save-workspace"), "workspaceId": .string(workspace), "configuration": .object(["approvals": .object(approvals)]), "replaceApprovalFolders": .bool(true), "expectedRevision": context["revision"]])
     }
     private func starting(_ folder: String) { let folders = Array(Set([profile["cwd"].string] + profile["additionalDirectories"].array.map(\.string))); save(["cwd": .string(folder), "additionalDirectories": .array(folders.filter { $0 != folder }.map(JSON.string))]) }
     private func save(_ config: [String: JSON]) { retainDraft(); var draft = store.draft("workspace-config:" + workspace).object; for key in config.keys { draft.removeValue(forKey: key) }; store.setDraft("workspace-config:" + workspace, .object(draft)); command("context.update", ["action": .string("save-workspace"), "workspaceId": .string(workspace), "configuration": .object(config), "expectedRevision": context["revision"]]) }

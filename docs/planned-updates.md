@@ -1616,8 +1616,8 @@ grants and data; do not enable document access, bypass validation or recreate li
 navigation. In IMG_0124/0125, the Team Tools/Standup strip is visibly taller than the app-tab row
 above it. Treat this separately from page-heading truncation and Team data/control layout.
 
-Source review finds the Team feature strip in `ios/Proteus/TeamToolsView.swift` sets section/browser
-labels and Add to 46 points, whereas top app tabs in `ios/Proteus/NativeShell.swift` size from their
+Source review finds the Team feature strip in `ios/Proteus/Features/Browser/Views/TeamToolsView.swift` sets section/browser
+labels and Add to 46 points, whereas top app tabs in `ios/Proteus/Shared/Navigation/NativeShell.swift` size from their
 content plus padding. Workspace/project and chat strips also mix padding, fixed and minimum-height
 controls in `ContextViews.swift` and `ChatViews.swift`. This establishes different sizing rules;
 the exact on-device point delta and behavior across every scope have not been measured here.
@@ -5908,7 +5908,7 @@ Expected: present the system photo picker, then stage selected images in the cur
 The report does not establish whether this occurs in an existing chat, New chat or Internet Search,
 or identify the installed build/iPadOS version; capture those during reproduction.
 
-Source lead: both New chat and existing-chat attachment menus in `ios/Proteus/ChatViews.swift`
+Source lead: both New chat and existing-chat attachment menus in `ios/Proteus/Features/Chats/Views/ChatViews.swift`
 embed `PhotosPicker` directly inside a SwiftUI `Menu`. Investigate picker presentation and menu
 dismissal on iPad, including other active sheets; this source pattern is not a confirmed diagnosis.
 Distinguish a picker that never opens from selection/import failing after it opens.
@@ -5932,7 +5932,7 @@ conversation. Move them to the bottom of the chat, after the latest message/stre
 and above the composer, on both iPhone and iPad.
 
 Source confirms the run-status row is the first element of the conversation `VStack` in
-`ios/Proteus/ChatViews.swift`; it displays `ProgressView` for `running`, which `statusLabel` maps
+`ios/Proteus/Features/Chats/Views/ChatViews.swift`; it displays `ProgressView` for `running`, which `statusLabel` maps
 to **Working**. This is the chat-level indicator; retain activity-specific progress in tool groups.
 
 Acceptance: a running chat shows one chat-level **Working** message and spinner at the bottom,
@@ -5956,7 +5956,7 @@ more room for the model controls. Reduce unnecessary inset while preserving safe
 and a usable touch target.
 
 Source confirms `ComposerModelPicker` is rendered before a separate action `HStack` containing
-the attachment menu in `ios/Proteus/ChatViews.swift`. Rework this shared native composer layout;
+the attachment menu in `ios/Proteus/Features/Chats/Views/ChatViews.swift`. Rework this shared native composer layout;
 keep attachment previews and Send/Queue/Steer/Stop controls accessible.
 
 Acceptance: attach and model selection share a row on iPhone and iPad in portrait/landscape,
@@ -6375,7 +6375,7 @@ detects history availability through the removed button's DOM selector.
 
 Current source differs by surface: local desktop renders an explicit earlier button in `public/app.js`;
 remote desktop includes near-top and underfill loading in `public/remote-desktops.js`; native has a
-near-top trigger alongside its earlier button in `ios/Proteus/ChatViews.swift`; web has its own paging
+near-top trigger alongside its earlier button in `ios/Proteus/Features/Chats/Views/ChatViews.swift`; web has its own paging
 path in `web/resources/js/remote.js`. Existing partial automation is not proof of consistent behavior.
 Unify the expected behavior and audit scroll-container detection and repeated underfill completion.
 

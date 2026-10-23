@@ -229,3 +229,8 @@ html,body{height:100%;overflow:hidden}#app{height:100dvh;min-height:0;overflow:h
   #main.run-main .chat-pane>.pending{padding:10px 8px}
   #main.run-main .jump-latest{max-width:calc(100% - 12px);padding:8px;font-size:11px;white-space:nowrap}
 }
+
+/* Attachments occupy their own row; controls must never compete with chip widths. */
+.browser-unloaded{width:100%;height:100%;background:var(--palette-background,var(--bg));color:var(--palette-text,var(--ink));display:flex;flex-direction:column;align-items:center;justify-content:center}
+.browser-unloaded button{background:var(--palette-control,var(--panel));color:var(--palette-accent,var(--accent));border:1px solid var(--palette-border,var(--line))}
+.workspace-tab-filters{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin-bottom:12px}.workspace-tab-filters label{margin:0}.workspace-tab-filters input{min-width:180px}

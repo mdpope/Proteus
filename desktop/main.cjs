@@ -25,10 +25,10 @@ if (!app.requestSingleInstanceLock()) app.quit();
 else {
   // CLI-driven updates and service stops use the same graceful shutdown as Quit.
   for (const signal of ['SIGTERM', 'SIGINT']) process.once(signal, () => app.quit());
-  let lifeCallback,chatLink,authWindowId,externalLinksStarted=false;
+  let lifeCallback,chatLink,authWindowId,linkRouter,externalLinksStarted=false;
   const externalURLs=new ExternalURLs({
     target:async()=>{if(!externalLinksStarted||closing)return null;if(!windows.current())await createAppWindow();const ctx=windows.current();return ctx?.externalURLReady&&!ctx.closing?ctx:null;},
-    open:async(ctx,url)=>windows.run(ctx.id,async()=>{const info=await browser.create(url,null,null,{profileId:'default',explicitParent:true});ctx.window.webContents.send('proteus:browser-action',{type:'select-tab',info});showWindow();}),
+    open:async(ctx,url)=>linkRouter?linkRouter.route(url):windows.run(ctx.id,async()=>{const info=await browser.create(url,null,null,{profileId:'default',explicitParent:true});ctx.window.webContents.send('proteus:browser-action',{type:'select-tab',info});showWindow();}),
     onError:error=>{console.error('Opening website link: '+error.message);if(window&&!window.isDestroyed())window.webContents.send('proteus:browser-action',{type:'error',message:'Could not open an incoming website link. '+error.message});}
   });
   const returnToAuthWindow=()=>{const ctx=windows?.contexts.get(authWindowId)||windows?.current();if(ctx)windows.run(ctx.id,showWindow);else showWindow();};
@@ -60,8 +60,10 @@ else {
       stageCodexAuthentication(desktopPreview);
     }
     // The provider only receives this bounded interface, never Electron or a CDP endpoint.
-    service = await startServer({updateRecovery:!!pendingRecovery, ...(desktopPreview?{home:desktopPreview.home,port:0,desktopPreview:{codexHome:desktopPreview.codexHome},withSeed:false}:{port:Number(process.env.PORT || 4317)}), openExternal: url => shell.openExternal(url), browser: {updates:updateBridge, projects:true,preview:!!desktopPreview,manageTabs:(args,runId)=>service.tabManagement.handle(args),agent:async(value,runId)=>{if(!windows?.contexts.size)await createAppWindow();const ctx=service.windowForChat?.(runId)||windows.current();return windows.run(ctx.id,()=>browser.agent(value,runId));}, openDocument:async(args,runId)=>(await import('../src/document-tools.js')).openChatDocument(service,args,runId) }, background: true, lifeOptions: { safeStorage, Notification, powerMonitor,client:'desktop',callbackURL:'proteus-desktop://life-oauth/callback',openExternal:async url=>{authWindowId=windows?.current()?.id;if(service.settings.get().preferences?.clickedLinks==='system')return shell.openExternal(url);const info=await browser.create(url);browser.actions.send({type:'select-tab',info});} } });
+    service = await startServer({updateRecovery:!!pendingRecovery, ...(desktopPreview?{home:desktopPreview.home,port:0,desktopPreview:{codexHome:desktopPreview.codexHome},withSeed:false}:{port:Number(process.env.PORT || 4317)}), openExternal:url=>require('./link-routing/preferred-browser.cjs').openPreferredBrowser(url,{preference:service?.settings.get().preferences?.clickedLinks,system:value=>shell.openExternal(value),embedded:browser?async value=>{authWindowId=windows.current()?.id;const info=await browser.create(value,null,null,{explicitParent:true});browser.actions.send({type:'select-tab',info});showWindow();}:null}), browser: {updates:updateBridge, projects:true,preview:!!desktopPreview,manageTabs:(args,runId)=>service.tabManagement.handle(args),agent:async(value,runId)=>{if(!windows?.contexts.size)await createAppWindow();const ctx=service.windowForChat?.(runId)||windows.current();return windows.run(ctx.id,()=>browser.agent(value,runId));}, openDocument:async(args,runId)=>(await import('../src/document-tools.js')).openChatDocument(service,args,runId) }, background: true, lifeOptions: { safeStorage, Notification, powerMonitor,client:'desktop',callbackURL:'proteus-desktop://life-oauth/callback',openExternal:async url=>{authWindowId=windows?.current()?.id;if(service.settings.get().preferences?.clickedLinks==='system')return shell.openExternal(url);const info=await browser.create(url);browser.actions.send({type:'select-tab',info});} } });
     if (lifeCallback) { const value=lifeCallback; lifeCallback=null; void service.life.callback(value).catch(()=>{}); }
+    keepAwake.onChange=enabled=>{const saved=service.settings.get();service.settings.save({...saved,preferences:{...saved.preferences,keepScreenAwake:enabled}},saved.revision);};
+    try{keepAwake.setEnabled(service.settings.get().preferences?.keepScreenAwake===true);}catch(error){console.warn('Keep Screen Awake: '+error.message);}
     windows=new (require('./windows.cjs').WindowRegistry)(service.home,{ipcMain,screen});
     service.contentTabs.migrateWindowTeams();
     const records=windows.records(),firstRecord=records[0];
@@ -77,7 +79,7 @@ else {
     const {reconcileWindowSession}=await import('../public/window-session-reconcile.js');
     const resolvePreviewPlacement=value=>projects.remapBrowserPlacement(value);
     await service.browserProfiles.refresh().catch(()=>{});
-    browser = new BrowserTabs(firstWindow, service.origin,{windowRegistry:windows,newWindow:()=>createAppWindow?.(),projects:true,preview:!!desktopPreview,resolvePreviewPlacement,home:service.home,handleCallback:url=>{if(!url.startsWith('proteus-desktop://life-oauth/callback?'))return false;void service.life.callback(url).catch(error=>browser.actions.send({type:'error',message:error.message}));returnToAuthWindow();return true;},diagnostics:service.performanceDiagnostics,history:browsingHistory,agentDestination:(runId,value)=>browserDestination(service,runId,value,{preview:!!projects}),agentDestinations:runId=>browserDestinations(service,runId,{preview:!!projects}),profiles:service.browserProfiles,onLoadError:({error,url,detail,tabId,windowId})=>{const log=service.activity.log('warning','browser.load-failed',`${error}\n${url||''}`,{hostId:service.remote.info().hostId,tabId,error:detail,url});let site='this page';try{site=new URL(url).host;}catch{}const item=service.activity.browserIssue({kind:'load-error',windowId,tabId,logId:log.id,title:'Could not load '+site,body:error});service.notify();return {...log,notificationId:item.id};}});
+    browser = new BrowserTabs(firstWindow, service.origin,{windowRegistry:windows,newWindow:()=>createAppWindow?.(),projects:true,preview:!!desktopPreview,resolvePreviewPlacement,retainedTabs:()=>service.settings.get().browser?.loadedTabLimit??6,home:service.home,handleCallback:url=>{if(!url.startsWith('proteus-desktop://life-oauth/callback?'))return false;void service.life.callback(url).catch(error=>browser.actions.send({type:'error',message:error.message}));returnToAuthWindow();return true;},diagnostics:service.performanceDiagnostics,history:browsingHistory,agentDestination:(runId,value)=>browserDestination(service,runId,value,{preview:!!projects}),agentDestinations:runId=>browserDestinations(service,runId,{preview:!!projects}),profiles:service.browserProfiles,onLoadError:({error,url,detail,tabId,windowId})=>{const log=service.activity.log('warning','browser.load-failed',`${error}\n${url||''}`,{hostId:service.remote.info().hostId,tabId,error:detail,url});let site='this page';try{site=new URL(url).host;}catch{}const item=service.activity.browserIssue({kind:'load-error',windowId,tabId,logId:log.id,title:'Could not load '+site,body:error});service.notify();return {...log,notificationId:item.id};}});
     service.previewAllowed=tab=>browser.profileAvailable({profileId:tab.profileId||'default'});
     service.browserAttention=()=>browser.permissions.list();
     const closeCurrentTab=()=>{const ctx=windows.current();if(ctx&&!closing)ctx.window.webContents.send('proteus:close-current-tab');};
@@ -354,6 +356,10 @@ else {
       await target.loadURL(service.url).catch(()=>ctx.recovery.failed('initial-load-failed'));if(record.maximized)target.maximize();return target;
     };
     configureWindow(windows.contexts.get(firstRecord.id));
+    if(process.platform==='darwin'){
+      linkRouter=new (require('./link-routing/controller.cjs').LinkRouter)({service,windows,browser,createWindow:()=>createAppWindow(),app,preview:!!desktopPreview});
+      windows.handle('proteus:link-routing',(event,value)=>{trusted(event);if(closing)throw Error('Proteus is shutting down.');return linkRouter.preferences(value);});
+    }
     service.updateUIHealth=async()=>{for(const ctx of windows.contexts.values()){if(ctx.window.isDestroyed()||ctx.window.webContents.isLoading()||!await ctx.window.webContents.executeJavaScript("!!(document.querySelector('#topbar-home')&&document.querySelector('#main')&&window.desktop)"))return false;}return windows.contexts.size>0;};
     service.windowCount=()=>[...windows.contexts.values()].filter(ctx=>!ctx.window.isDestroyed()&&!ctx.window.webContents.isLoading()).length;
     service.updates=new Updates(service,{packaged:app.isPackaged&&!desktopPreview,installation,freshHome,browserHome:app.getPath('userData'),quit:()=>app.quit(),blockers:()=>[...terminals.sessions.values()].filter(session=>session.child&&session.status==='running'&&session.persistence!=='tmux').map(()=> 'A local terminal process is still attached. Finish or detach it before updating.').concat([...browser.tabs.values()].some(tab=>tab.agentActions||tab.downloads?.size)?['A browser operation or download is active.']:[])});
@@ -364,7 +370,7 @@ else {
     const hostMenuTemplate = [
       { label: 'Open '+(desktopPreview?.name||'Proteus'), click: showWindow },
       { label: 'Connections…', click: () => { showWindow(); window.webContents.send('proteus:remote'); } },
-      { id:'keep-screen-awake', label:'Keep Screen Awake', type:'checkbox', checked:false, click:item=>{
+      { id:'keep-screen-awake', label:'Keep Screen Awake', type:'checkbox', checked:keepAwake.enabled, click:item=>{
         try { keepAwake.setEnabled(item.checked); }
         catch(error) { dialog.showErrorBox('Keep Screen Awake unavailable', error.message); }
         item.checked=keepAwake.enabled;
@@ -393,7 +399,7 @@ else {
   }).catch(error => { console.error(error.message); app.quit(); });
   app.on('window-all-closed', () => {});
   app.on('before-quit', event => {
-    keepAwake.dispose();
+    keepAwake.dispose();linkRouter?.close();
     if (closing || !service) return;
     event.preventDefault(); closing = true;
     (async () => { if(windows?.checkpointForQuit)try{await windows.checkpointForQuit();}catch(error){console.error('Window session checkpoint: '+error.message);}windows?.prepareQuit();browser?.prepareShutdown();windows?.broadcast('proteus:shutdown');credentials?.close(); peers?.close(); await Promise.all([...windows.contexts.values()].map(ctx=>ctx.preview.hide())); await terminals?.dispose(); await browser?.dispose(); await service.close(); })().catch(error => { console.error('Proteus shutdown: ' + error.message); }).finally(() => { tray?.destroy(); app.quit(); });

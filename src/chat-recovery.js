@@ -17,7 +17,7 @@ export class ChatRecovery {
   if(action==='stop-retry')return this.stop(id)||run;
   if(this.engine.stopping||this.engine.updateBarrier)throw Error('Wait for the current application update before continuing.');this.engine.updateGuard?.();
   const state=this.state(run,expectedFailureEventAt);
-  if(run.archivedAt||run.trigger!=='chat')throw Error('Open an ordinary chat before continuing.');
+  if(run.archivedAt||!['chat','manual','scheduled','schedule'].includes(run.trigger))throw Error('Open an eligible conversation before continuing.');
   if(action==='continue'){
    this.stop(id,false);if(modelOptions)this.engine.applyModelOptions(run,modelOptions);
    return this.engine.resume(id,continuation);

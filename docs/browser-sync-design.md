@@ -14,7 +14,7 @@ The subsequent approval covers implementation and rollout; see the release ledge
 - `src/content-tabs.js` / `src/remote.js`: owner-computer tab descriptors synchronize through
   paired remote methods, including URL/profile and bounded navigation history/index. Updates
   can replace whole descriptors.
-- `ios/Proteus/SharedAppStore.swift`: incoming URLs trigger WebKit loads; saved and live engine
+- `ios/Proteus/Services/State/SharedAppStore.swift`: incoming URLs trigger WebKit loads; saved and live engine
   navigation lists are reconciled separately. Gesture availability depends on their alignment.
   This may contribute to inconsistencies; the Gmail failure's cause remains unproven.
 - `desktop/browsing-history.cjs`: local JSON visit history, normally 90 days/up to 10,000 entries,

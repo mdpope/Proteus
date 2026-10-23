@@ -240,3 +240,18 @@ test('remote run projection shares its permission context and revision read',asy
   store.setMode(run.schedule,'autopilot');reads=0;assert.equal(remoteRun(run,0,store).permissionContext.mode,'autopilot');assert.equal(reads,1);
  }finally{fs.rmSync(home,{recursive:true,force:true});}
 });
+
+test('managed workspace folders default to write while nested Read and outside/source-only paths remain gated',()=>{
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-working-default-'));
+ try{
+ const workspace=path.join(home,'workspace'),nested=path.join(workspace,'reference'),source=path.join(home,'sources');for(const dir of [workspace,nested,source])fs.mkdirSync(dir,{recursive:true});
+ const store=new PermissionStore(home,{preserveInheritedDefaults:true}),spec={...schedule(workspace),workspace:{cwd:workspace,additionalDirectories:[nested,source]},context:{workspaceId:'fixture'}};
+ store.workspaceDefaults=()=>({mode:'ask',workingRoots:[workspace,nested],folders:[{path:nested,access:'read'}],rules:[]});
+ assert.equal(store.decide(spec,{kind:'write',fileName:path.join(workspace,'new.txt')}).allowed,true);
+ assert.equal(store.decide(spec,{kind:'read',path:path.join(nested,'notes.txt')}).allowed,true);
+ assert.equal(store.decide(spec,{kind:'write',fileName:path.join(nested,'notes.txt')}).allowed,false);
+ assert.equal(store.decide(spec,{kind:'write',fileName:path.join(source,'notes.txt')}).allowed,false);
+ assert.equal(store.decide(spec,{kind:'shell',fullCommandText:'arbitrary command'}).allowed,false);
+ assert.equal(store.decide(spec,{kind:'write',fileName:path.join(workspace,'file'),requestSandboxBypass:true}).allowed,false);
+ }finally{fs.rmSync(home,{recursive:true,force:true});}
+});

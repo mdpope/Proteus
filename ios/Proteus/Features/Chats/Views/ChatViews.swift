@@ -630,18 +630,19 @@ struct ChatView: View {
     @State private var scrollCommand: NativeScrollCommand?
     @State private var fixtureScrollID: UUID?
     @State private var fixtureScrollStep = 0
-    @State private var conversationOffset: CGFloat = 0
-    @State private var conversationContentHeight: CGFloat = 0
+    @State private var scrollMeasurements = NativeChatScrollMeasurements()
+    private var conversationOffset: CGFloat { get { scrollMeasurements.offset } nonmutating set { scrollMeasurements.offset = newValue } }
+    private var conversationContentHeight: CGFloat { get { scrollMeasurements.contentHeight } nonmutating set { scrollMeasurements.contentHeight = newValue } }
     @State private var conversationViewportWidth: CGFloat = 0
     @State private var conversationViewportTop: CGFloat = 0
-    @State private var visibleAnchor: NativeChatScrollLocation?
+    private var visibleAnchor: NativeChatScrollLocation? { get { scrollMeasurements.visibleAnchor } nonmutating set { scrollMeasurements.visibleAnchor = newValue } }
     @State private var restoringConversation = false
     @State private var pendingAnchorRestore: NativeChatScrollLocation?
     @State private var pendingHistoryRestore: NativeChatScrollLocation?
     @State private var historyWindowChanged = false
     @State private var pendingInitialRestore: NativeChatScrollLocation?
     @State private var restoreID: UUID?
-    @State private var eventFrames: [Int: (start: Int, frame: CGRect)] = [:]
+    private var eventFrames: [Int: (start: Int, frame: CGRect)] { get { scrollMeasurements.eventFrames } nonmutating set { scrollMeasurements.eventFrames = newValue } }
     @State private var scrollTrace: [String] = []
     @State private var userReadingGesture = false
     @State private var loadingEarlier = false
@@ -665,6 +666,7 @@ struct ChatView: View {
     @State private var previewAttachment: NativeDraftAttachment?
     @State private var confirmAttachmentSend = false
     @State private var attachmentSendMode = "queue"
+    @State private var questionAttachmentSubmission: JSON = .null
     @State private var confirmDelete = false
     @State private var renameChildID: String?
     @State private var renameChildTitle = ""
@@ -739,13 +741,22 @@ struct ChatView: View {
     }
     private var pending: JSON { run["pending"] }
     private var desiredDraftKey: String { pending["type"].string == "question" ? "answer:" + id + ":" + pending["id"].string : "reply:" + id }
+    private func stallMessage(now: Date) -> String {
+        let progress = run["progress"]
+        let last = ProviderAllowance.date(progress["lastProgressAt"].string) ?? now
+        let seconds = max(0, Int(now.timeIntervalSince(last)))
+        let tools = progress["waitingTools"].array.map { $0["name"].string }.joined(separator: ", ")
+        let stage = tools.isEmpty ? "the provider" : tools
+        return "No observable progress for \(seconds / 60)m \(seconds % 60)s. Waiting for " + stage + ". Stop this turn to interrupt it, then inspect unfinished work before continuing. Queued messages are preserved."
+    }
     private var nativeRun: Bool { run["schedule"]["provider"].string == "local-process" }
     private var active: Bool { ["running", "queued", "awaiting_input"].contains(run["status"].string) }
     private var chatBrowserScope: String { "chat:\(store.connection?.hostId ?? "local"):\(id)" }
-    private var attachmentDraftKey: String { "reply-attachments:" + id }
-    private var supportedAttachmentTypes: [String] { store.state["attachmentMediaTypes"][run["schedule"]["provider"].string].array.map(\.string) }
+    private var attachmentDraftKey: String { pending["type"].string == "question" ? "question-attachments:" + id + ":" + pending["id"].string : "reply-attachments:" + id }
+    private var attachmentScope: String { pending["type"].string == "question" ? chatBrowserScope + ":" + pending["id"].string : chatBrowserScope }
+    private var supportedAttachmentTypes: [String] { store.state[pending["type"].string == "question" ? "questionAttachmentMediaTypes" : "attachmentMediaTypes"][run["schedule"]["provider"].string].array.map(\.string) }
     private var attachmentsEnabled: Bool { store.state["capabilities"].array.contains(.string("chat.attachments.v1")) && !supportedAttachmentTypes.isEmpty }
-    private var attachments: [NativeDraftAttachment] { shared.draftAttachments[chatBrowserScope] ?? [] }
+    private var attachments: [NativeDraftAttachment] { shared.draftAttachments[attachmentScope] ?? [] }
     private var canSteerAttachments: Bool { let types = run["chatControls"]["steeringMediaTypes"].array.map(\.string); return attachments.allSatisfy { types.contains($0.mediaType) } }
     private var missingAttachments: [JSON] { missingAttachmentRecords(store: store, draftKey: attachmentDraftKey, items: attachments) }
     var body: some View {
@@ -938,7 +949,7 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
             Button { shared.open(nil, scope: chatBrowserScope); selectedChild = shared.selected(in: chatBrowserScope) ?? "chat"; shared.selectChatChild(selectedChild, for: chatBrowserScope) } label: { Image(systemName: "plus") }.padding(12).accessibilityLabel("Add chat tab")
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--show-scroll-fixture-controls") {
-                Text(String(Int(conversationOffset))).font(.caption2.monospacedDigit()).frame(width: 54).accessibilityIdentifier("chat-scroll-offset")
+                TimelineView(.periodic(from: .now, by: 0.2)) { _ in Text(String(Int(conversationOffset))).font(.caption2.monospacedDigit()).frame(width: 54).accessibilityIdentifier("chat-scroll-offset") }
                 Text(String(visibleAnchor?.anchor ?? -1) + ":" + String(Int(visibleAnchor?.inset ?? 0)))
                     .font(.caption2.monospacedDigit()).frame(width: 72).accessibilityIdentifier("chat-scroll-anchor")
                 Button("Read long message") {
@@ -973,7 +984,7 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
         return run["events"].array.contains { $0["role"].string == "assistant" && $0["data"]["turnId"].string == turn["id"].string && !$0["text"].string.isEmpty } ? .null : turn
     }
     private var conversation: some View {
-        let recovery = run["trigger"].string == "chat" && run["chatControls"]["recovery"].bool ? NativeChatRecoveryState.read(run) : nil
+        let recovery = ["chat", "scheduled", "manual", "schedule"].contains(run["trigger"].string) && run["chatControls"]["recovery"].bool ? NativeChatRecoveryState.read(run) : nil
         return ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
@@ -1049,6 +1060,11 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
                             ForEach(pending["permissionChoices"].array, id: \.self) { choice in Button(choice["label"].string) { answer(choice["value"].string) } }
                         }
                     }.padding().background(Color.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 16)).disabled(busy || !store.connected)
+                }
+                if run["progress"]["stalled"].bool {
+                    TimelineView(.periodic(from: .now, by: 1)) { timeline in
+                        Text(stallMessage(now: timeline.date)).font(.caption).foregroundStyle(.orange)
+                    }
                 }
                 HStack { if run["status"].string == "running" { ProgressView().controlSize(.small) }; Text(statusLabel(run["status"].string)).font(.subheadline).foregroundStyle(.secondary); Spacer() }.accessibilityIdentifier("chat-bottom-status")
                 DisclosureGroup("Chat details & loaded context") {
@@ -1248,7 +1264,7 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
     }
     private func submitReply() {
         guard !cannotSend else { return }
-        if pending["type"].string == "question" { answer(text) } else { send("queue") }
+        if pending["type"].string == "question" { if attachments.isEmpty { answer(text) } else { attachmentSendMode = "answer"; confirmAttachmentSend = true } } else { send("queue") }
     }
     private var replyPlaceholder: String {
         pending["type"].string == "question" ? "Add your feedback…" : active ? "Add an update while this runs…" : "Continue this conversation…"
@@ -1377,7 +1393,7 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
             Image(systemName: "stop.fill").font(.system(size: 14)).frame(width: 44, height: 44).contentShape(Circle()).background(Color.red.opacity(0.12), in: Circle()).overlay(Circle().stroke(Color.red.opacity(0.4), lineWidth: 1))
         }.buttonStyle(.plain).disabled(busy || !store.connected).accessibilityLabel("Stop current turn").accessibilityIdentifier("stop-turn")
     }
-    private var cannotSend: Bool { busy || !store.connected || !missingAttachments.isEmpty || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    private var cannotSend: Bool { busy || !store.connected || !missingAttachments.isEmpty || (text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && attachments.isEmpty) }
     private func send(_ mode: String) {
         guard missingAttachments.isEmpty else { store.error = "Remove or reattach the missing files before sending."; return }
         if !attachments.isEmpty {
@@ -1396,7 +1412,7 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
         defer { busy = false }
         let mode = attachmentSendMode
         guard mode != "steer" || (run["status"].string == "running" && canSteerAttachments) else { store.error = "The active turn or supported attachment types changed. Review the message again."; return }
-        let key = chatBrowserScope
+        let key = attachmentScope
         let messageID = shared.draftMessageIDs[key] ?? UUID().uuidString
         shared.draftMessageIDs[key] = messageID
         let selectedFiles = attachments
@@ -1404,6 +1420,8 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
         let providerID = run["schedule"]["provider"].string
         let hostID = store.connection?.hostId
         let turnID = run["turns"].array.last?["id"] ?? .null
+        let questionID = pending["id"]
+        let questionSignature = JSON.array([questionID, .string(submittedPrompt), .string(providerID), .array(selectedFiles.map { .string($0.id) })])
         func verifySteering() async throws {
             guard store.connected, store.connection?.hostId == hostID else { throw RemoteError(message: "The destination changed. Review the files again.") }
             guard mode == "steer" else { return }
@@ -1415,6 +1433,12 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
         }
         do {
             try await verifySteering()
+            if mode == "answer", questionAttachmentSubmission["signature"] == questionSignature {
+                _ = try await store.request("chat.reply", questionAttachmentSubmission["payload"].object)
+                shared.draftAttachments[key] = []; shared.draftMessageIDs[key] = nil
+                store.setDraft(attachmentDraftKey, .null); questionAttachmentSubmission = .null
+                text = ""; composerHasFocus = false; await store.openChat(id); return
+            }
             var attachmentIDs: [JSON] = []
             var attachmentClaims: [JSON] = []
             for item in selectedFiles {
@@ -1440,7 +1464,13 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
             if mode == "queue" && run["schedule"]["provider"].string != "rehearsal" {
                 values["modelOptions"] = .object(["model": .string(model), "reasoningEffort": .string(effort), "contextTier": .string(contextTier), "serviceTier": .string(serviceTier)])
             }
-            _ = try await store.request("chat.send", values)
+            if mode == "answer" {
+                values.removeValue(forKey: "prompt"); values.removeValue(forKey: "mode")
+                values["answer"] = .string(submittedPrompt); values["requestId"] = questionID
+                questionAttachmentSubmission = .object(["signature": questionSignature, "payload": .object(values)])
+            }
+            _ = try await store.request(mode == "answer" ? "chat.reply" : "chat.send", values)
+            questionAttachmentSubmission = .null
             shared.draftAttachments[key] = []
             shared.draftMessageIDs[key] = nil
             store.setDraft(attachmentDraftKey, .null)
@@ -1452,15 +1482,16 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
         guard !busy else { return false }
         guard attachmentsEnabled else { store.error = "\(store.displayName) has not enabled approved attachments for this provider yet."; return false }
         guard supportedAttachmentTypes.contains(mediaType) else { store.error = "\(providerName) does not accept this file type through Proteus."; return false }
+        if pending["type"].string == "question", attachments.count >= 4 { store.error = "Question replies accept up to four files."; return false }
         if let reason = NativeAttachmentBudget.rejection(existingCount: attachments.count, existingBytes: attachments.reduce(0) { $0 + $1.bytes.count }, incomingBytes: data.count) { store.error = reason; return false }
         let item = NativeDraftAttachment(id: UUID().uuidString, name: String(name.prefix(120)), mediaType: mediaType, bytes: data)
-        shared.draftAttachments[chatBrowserScope, default: []].append(item)
+        shared.draftAttachments[attachmentScope, default: []].append(item)
         appendAttachmentRecord(store: store, draftKey: attachmentDraftKey, item: item)
         return true
     }
     private func removeAttachment(_ attachmentID: String) {
         guard !busy else { return }
-        shared.draftAttachments[chatBrowserScope]?.removeAll { $0.id == attachmentID }
+        shared.draftAttachments[attachmentScope]?.removeAll { $0.id == attachmentID }
         removeAttachmentRecord(store: store, draftKey: attachmentDraftKey, id: attachmentID)
     }
     private func removeMissingAttachments() {

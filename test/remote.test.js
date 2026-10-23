@@ -133,7 +133,7 @@ test('paired chat archive and delete synchronize without resurrecting cached his
 test('a paired client can apply permissions to the current waiting chat and receive tool details', async t => {
   const { app, connect, workspace } = await fixture(t, { copilot: { run: async ({ ask, emit }) => {
     emit('tool', 'Read fixture', { tool: { callId: 'fixture-read', name: 'view', summary: 'Read fixture', status: 'running', arguments: '{"path":"fixture.md"}', output: 'Visible progress' } });
-    await ask({ type: 'permission', details: { kind: 'read', path: workspace } });
+    await ask({ type: 'permission', details: { kind: 'mcp', serverName: 'synthetic', toolName: 'read_only', readOnly: true } });
     await ask({ type: 'question', question: 'Keep this result?' });
     emit('assistant', 'Complete final response');
   } } });

@@ -98,11 +98,19 @@ export class PermissionStore {
   }
   describeContext(context, snapshot) {
     let saved = snapshot.profiles.get(context.id);
-    if (!saved && snapshot.workspaceDefaults) {
+    if (snapshot.workspaceDefaults) {
       if (!snapshot.defaults.has(context.workspaceId)) snapshot.defaults.set(context.workspaceId, snapshot.workspaceDefaults(context.workspaceId));
-      saved = snapshot.defaults.get(context.workspaceId);
+      saved ||= snapshot.defaults.get(context.workspaceId);
     }
-    return { ...context, mode: effectivePermissionMode(saved), readOnlyTools: saved?.readOnlyTools === true, folders: saved?.folders || [], rules: saved?.rules || [] };
+    const defaults=snapshot.defaults.get(context.workspaceId),workingFolders=[];
+    if(this.preserveInheritedDefaults&&defaults?.workingRoots){
+      for(const root of context.roots){
+        if(!defaults.workingRoots.some(base=>{const resolved=canonicalPath(base,context.cwd);return resolved&&within(root,resolved);}))continue;
+        const configured=[...(defaults.folders||[]),...(saved?.folders||[])].map(folder=>({...folder,path:canonicalPath(folder.path,context.cwd)})).filter(folder=>folder.path&&within(root,folder.path)).sort((a,b)=>b.path.length-a.path.length||Number(a.access==='read-write')-Number(b.access==='read-write'))[0];
+        workingFolders.push({path:root,access:configured?.access||'read-write'});
+      }
+    }
+    return { ...context, workingFolders, mode: effectivePermissionMode(saved), readOnlyTools: saved?.readOnlyTools === true, folders: saved?.folders || [], rules: saved?.rules || [] };
   }
   describe(schedule, snapshot) {
     const context = snapshot ? projectionContext(schedule, snapshot) : permissionContext(schedule);
@@ -244,6 +252,12 @@ export class PermissionStore {
   }
   decide(schedule, request, profile = this.describe(schedule)) {
     if (protectedRequest(request)) return { allowed: false, reason: 'Enterprise policy or sandbox escape requires a direct response.' };
+    if(this.preserveInheritedDefaults&&['read','write'].includes(request.kind)){
+      const target=requestedPath(request,profile);
+      const folders=[...(profile.workingFolders||[]),...(profile.folders||[])].filter(folder=>canonicalPath(folder.path,profile.cwd)===folder.path&&target&&within(target,folder.path)).sort((a,b)=>b.path.length-a.path.length||Number(a.access==='read-write')-Number(b.access==='read-write'));
+      const matched=folders[0];
+      if(matched)return {allowed:request.kind==='read'||matched.access==='read-write',reason:matched.access==='read'?'Read-only working folder':'Workspace folder access',mode:profile.mode,resolvedTarget:target,matchedRoot:matched.path,source:'workspace'};
+    }
     if (profile.mode === 'ask') return { allowed: false, reason: 'Ask for approval' };
     if (['read','write'].includes(request.kind)) {
       const target = requestedPath(request, profile);

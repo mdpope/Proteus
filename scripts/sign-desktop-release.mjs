@@ -15,6 +15,8 @@ const key=createPrivateKey(fs.readFileSync(options.key));if(key.asymmetricKeyTyp
 const publicKey=createPublicKey(key),keyId=createHash('sha256').update(publicKey.export({type:'spki',format:'der'})).digest('hex').slice(0,24);
 const candidate=packages.inspectPackage(options.bundle),archiveInfo=fs.statSync(options.archive),now=Date.now(),id=[candidate.version,candidate.buildRevision,process.platform,process.arch].join('-');
 const release={schemaVersion:1,product:'org.proteusapp.proteus.desktop',id,channel:options.channel||'stable',platform:process.platform,arch:process.arch,version:candidate.version,buildRevision:candidate.buildRevision,sourceFingerprint:candidate.sourceFingerprint,packageHash:candidate.hash,publishedAt:new Date(now).toISOString(),expiresAt:new Date(now+90*86400000).toISOString(),artifact:{format:'tar.gz',filename:path.basename(options.archive),bytes:archiveInfo.size,unpackedBytes:candidate.bytes,sha256:packages.fileDigest(options.archive),path:'/api/v1/app/releases/'+id+'/artifact'}};
+release.distribution={kind:'static',origin:windowsReleaseOrigin};
+release.artifact.path='/downloads/proteus/releases/'+id+'/'+release.artifact.filename;
 if(process.platform==='win32'){
  if(!path.isAbsolute(options.installer||'')||packages.fileDigest(options.installer)!==candidate.installer?.sha256)throw Error('Supply the exact tested installer cached in this Windows application.');
  release.installer={filename:path.basename(options.installer),bytes:fs.statSync(options.installer).size,sha256:candidate.installer.sha256,path:'/api/v1/app/releases/'+id+'/installer',authenticode:'unsigned'};

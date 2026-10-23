@@ -1,3 +1,4 @@
+import {stageDesktopRelease} from '../src/desktop-release-staging.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -42,7 +43,7 @@ test('WTB catalog limits and target validation fail before any artifact request'
   const feed=new DesktopReleaseFeed({fetch:async()=>response});await assert.rejects(feed.releases({platform:'win32',arch:process.arch}));
  }
  let fetched=false;const feed=new DesktopReleaseFeed({fetch:async()=>{fetched=true;throw Error('Unexpected network call');}});
- for(const target of [{platform:'linux',arch:'x64'},{platform:'win32',arch:'../x64'},{platform:'win32',arch:'x64',channel:'../stable'}])await assert.rejects(feed.releases(target),/Unsupported/);
+ for(const target of [{platform:'unsupported',arch:'x64'},{platform:'win32',arch:'../x64'},{platform:'win32',arch:'x64',channel:'../stable'}])await assert.rejects(feed.releases(target),/Unsupported/);
  assert.equal(fetched,false);
 });
 
@@ -115,4 +116,16 @@ test('a verified offline archive extracts the exact application and cached insta
  value.packageHash=candidate.hash;value.installer={...value.installer,bytes:fs.statSync(path.join(bundle,'Proteus Setup.exe')).size,sha256:candidate.installer.sha256};value.artifact={...value.artifact,bytes:fs.statSync(file).size,unpackedBytes:candidate.bytes,sha256:packages.fileDigest(file)};
  const verified=verifyRelease(envelope(value),options),extracted=await extractRelease(file,path.join(root,'out'),verified);
  assert.equal(extracted.hash,candidate.hash);assert.equal(extracted.installer.sha256,candidate.installer.sha256);
+});
+
+for(const platform of ['darwin','linux','win32'])test(platform+' signed catalog download and public staging use the common WTB protocol',async t=>{
+ const root=directory(t),input=path.join(root,'input'),output=path.join(root,'public');fs.mkdirSync(input);
+ const bytes=Buffer.from('Synthetic archive'),value=hostedManifest();value.platform=platform;value.artifact.bytes=bytes.length;value.artifact.sha256=hash(bytes);
+ if(platform!=='win32')delete value.installer;else {value.installer.bytes=bytes.length;value.installer.sha256=hash(bytes);fs.writeFileSync(path.join(input,value.installer.filename),bytes);}
+ const signed=envelope(value);fs.writeFileSync(path.join(input,'release.json'),JSON.stringify(signed));fs.writeFileSync(path.join(input,value.artifact.filename),bytes);fs.writeFileSync(path.join(input,'private-receipt.txt'),'Must not publish');
+ const requests=[],feed=new DesktopReleaseFeed({fetch:async(url,args)=>{requests.push(url);assert.equal(args.credentials,'omit');return url.endsWith('.json')?Response.json({schemaVersion:1,releases:[signed]}):new Response(bytes);}});
+ const catalog=await feed.releases({platform,arch:process.arch}),release=verifyRelease(catalog[0],{...options,platform});await feed.downloadRelease(release,path.join(root,'download'));
+ assert.equal(requests[0],windowsReleaseOrigin+'/downloads/proteus/stable/'+platform+'-'+process.arch+'.json');
+ const staged=stageDesktopRelease(input,output,{keys});assert.ok(staged.files.some(file=>file.path.endsWith(platform+'-'+process.arch+'.json')));assert.equal(staged.files.some(file=>file.path.includes('private-receipt')),false);
+ assert.throws(()=>stageDesktopRelease(input,output,{keys}),/exists/);
 });

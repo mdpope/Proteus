@@ -20,7 +20,7 @@ const processAlive=pid=>{if(!Number.isSafeInteger(pid)||pid<1)return false;try{p
 export class Updates {
  constructor(service,{installation,browserHome,packaged=false,freshHome=false,quit=()=>{},blockers=()=>[],inspect=inspectPackage,test,launchHelper,platform=process.platform}={}){
   Object.assign(this,{service,installation,browserHome,packaged,quit,blockers,inspect,test,launchHelper,platform});
-  this.releaseClient=service.releaseClient||(platform==='win32'?new DesktopReleaseFeed():service.account);
+  this.releaseClient=service.releaseClient||new DesktopReleaseFeed();
   this.ownerHome=fs.realpathSync(service.home);if(installation)this.installation=fs.realpathSync(installation);if(browserHome&&fs.existsSync(browserHome))this.browserHome=fs.realpathSync(browserHome);
   this.root=path.join(path.dirname(this.ownerHome),'Proteus Updates',digest(this.ownerHome+'\0'+(this.installation||'source')).slice(0,24));this.pointer=path.join(this.root,'current.json');this.policyFile=path.join(this.root,'recovery-policy.json');
   this.sessionId=randomUUID();this.busy=false;

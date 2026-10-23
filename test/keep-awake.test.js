@@ -20,3 +20,12 @@ test('failed keep-awake activation stays off and can be retried', () => {
   fail = false; assert.equal(controller.setEnabled(true), true);
   controller.dispose(); assert.equal(controller.enabled, false);
 });
+
+test('shutdown releases the assertion without erasing the saved enabled preference',()=>{
+  let saved=false,next=0;const live=new Set();
+  const blocker={start:()=>{live.add(next);return next++;},stop:id=>live.delete(id),isStarted:id=>live.has(id)};
+  const first=new KeepAwake(blocker);first.onChange=value=>{saved=value;};first.setEnabled(true);first.dispose();
+  assert.equal(saved,true);assert.equal(live.size,0);
+  const relaunched=new KeepAwake(blocker);relaunched.onChange=value=>{saved=value;};relaunched.setEnabled(saved);
+  assert.equal(relaunched.enabled,true);relaunched.setEnabled(false);relaunched.dispose();assert.equal(saved,false);
+});

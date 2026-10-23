@@ -32,3 +32,10 @@ chrome-devtools-mcp 1.10.1
 Copyright Google LLC and contributors. Apache-2.0 license and bundled third-party
 notices retained in node_modules/chrome-devtools-mcp. Starts only for developer mode.
 Source: https://github.com/ChromeDevTools/chrome-devtools-mcp
+
+External link routing
+The keyboard interaction and URL matching behavior in desktop/link-routing/picker.js
+and rules.cjs are adapted from SafariSelector (SafariSelector contributors),
+licensed under GPL-3.0-or-later. The license is included at
+docs/licenses/SafariSelector-GPL-3.0.txt. Proteus uses its own workspace/project
+catalog and existing owner process; no Safari extension or separate daemon is included.
