@@ -16,13 +16,25 @@ pairing/draft/polling behavior. Attachment UI exposes and corrects a narrow pend
 overflow and stale chips after successful input; the unchanged footer geometry assertions pass.
 The native image-steering source compiles for simulator; actual native delivery/UI remains separate.
 
-No new runtime artifact is frozen yet. Earlier 7290ff3 packages retain their exact acceptance
-evidence but are superseded for the upcoming final install. Windows confirms installation and
-oldest-generation retirement have not started. The local active-chat hold remains. Its reported
+Runtime source `ef05d03` is frozen as signed Mac build `ef05d03a1cee+src.c5930b5d16bf`.
+All 1,070 Node tests pass (one platform skip), static checks pass, and exact-package recovery,
+navigation/restart/history, responsive layout/attachments, activity, notice, passive-save and
+unchanged two-desktop 400 ms follow acceptance pass. Earlier packages retain their exact evidence
+but are superseded for installation. Private signed/source transfer is pinned and verified;
+destination acceptance and installation remain separate. The originally held local chat finished
+naturally; a new running chat now prevents a restart. Preserve the same idle-safe policy. Its reported
 default-profile Claude sign-out is real according to that CLI despite an extant Keychain item;
 cause and restored live sign-in remain unverified. Do not clear credentials or claim the custom
 environment fix resolves that separate observation. License, terminal visibility and history
 retention preferences remain unchanged.
+
+The operator also reaffirmed automatic sharing for agent-created tabs and explicit grants for
+human-created tabs. The existing runtime already implements this. A focused exact-package test
+verifies loaded/unloaded creation without another sharing prompt, refusal, revocation, release,
+recreation and persisted choices through app restart. No runtime change is necessary. A separate
+temporary correction of the older broad access fixture exposes a zero-size background viewport
+and click timeout on both the candidate and original installed release. That baseline issue
+remains unresolved; the focused sharing pass does not certify background pointer interaction.
 
 ## October 22 — passive-save descriptor feedback correction
 

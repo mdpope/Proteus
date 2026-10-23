@@ -255,6 +255,13 @@ the current WKWebView serverTrust chain. Exact release verification is in the re
 
 Human-opened tabs now start unshared. Use the robot button to share/revoke page access; an agent can call request-access for an explicit native human decision. Agent-created tabs start shared. Legacy implicit availability is not a grant. The host persists logical-tab choices across recreation/window aliases, fails closed on unreadable preferences and gates every page backend. Shared pages remain controllable while another project/chat is selected. Listing and tab organization remain separate. This supersedes the October 18 no-sharing wording retained below as history.
 
+The operator reaffirmed this policy on October 22: agents do not need to request sharing for
+tabs they create. Exact signed-package verification with `test/browser-agent-sharing-ui.mjs`
+covers loaded and unloaded creation without another sharing prompt, human-tab refusal/grant,
+release/unload/recreation, explicit revocation and persisted decisions through an actual restart.
+This verifies the existing policy; it introduces no new grant or runtime change. General tool
+approval and authorization for external writes remain separate from a tab's page-access grant.
+
 The page menu includes one persistent Block video autoplay in all tabs setting, spanning windows/profiles. It blocks script/declarative video before document activation and leaves manual Play available; live toggles do not reload forms. The preference is not an adversarial-content security boundary. Disposable real-media acceptance is separate from account-specific YouTube verification.
 
 Downloads open a native child popup over the website with file icons, separators and trailing pause/resume/restart/folder actions. Resume depends on Electron/server support; restart is a fresh safe URL request in its original profile, not a replayed form. Metadata lasts until its owning window closes, is not written as download history, and old history metadata is retired without deleting files. Saved folder preferences remain. Item commands cannot act on another window's list.

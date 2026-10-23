@@ -1,4 +1,4 @@
-## October 22 — new requested corrections implemented; final freeze/install pending
+## October 22 — combined corrections frozen and signed; installation pending
 
 See the latest [planning entry](planned-updates.md), [provider behavior](providers.md),
 [workspace memory](workspaces.md) and [Connections layout](remote.md). Source now combines
@@ -6,9 +6,25 @@ system visibility/explicit chat recovery, per-workspace deep restoration, suppor
 attachments, custom provider-location preservation, and minor Connections/composer layout fixes.
 Real desktop checks cover a full minute of retry, one queued follow-up, draft preservation,
 workspace return/restart, legacy browser histories and measured responsive Connections widths.
-Native steering composition compiles; physical/native delivery remains separate. Retain the local
-running-chat hold, HC unlock requirement and scoped Windows recovery approval. No new source pin
-or artifact has been frozen yet; do not install earlier candidates. The default-profile Mac Claude
+Native steering composition compiles; physical/native delivery remains separate. Runtime source
+`ef05d03` is frozen in signed Mac build `ef05d03a1cee+src.c5930b5d16bf`. All 1,070 Node tests pass
+(one platform skip), static checks pass, and the exact package passes recovery, workspace return,
+legacy history, Connections, attachments, activity, passive-save, notices and unchanged 400 ms
+two-desktop follow acceptance. Follow records 47/50 visible updates, 1,293/434 ms maximum gaps and
+three descriptor reads each direction. The source and exact signed app are privately transferred
+with pinned server-verified digests; destination acceptance remains separate.
+
+The operator reaffirmed agent-created tabs are automatically shared. A focused exact-package
+regression verifies immediate access, human refusal/grant, revocation, recreation and real restart;
+no runtime change or rebuild is needed. The older broad access UI fixture still assumes implicit
+human sharing and, after correcting that fixture in a temporary diagnostic, exposes a zero-size
+background page viewport/click timeout on both this candidate and the original installed release.
+Keep that baseline issue separate; do not claim the broad fixture passes or relax its assertions.
+
+The originally held chat finished naturally, but fresh local owner/UI preflight now finds another
+running chat. Wait for natural idleness and preserve its draft/queued work; do not restart it.
+Retain the HC unlock requirement and scoped Windows recovery approval. Do not install earlier
+candidates. No new local installation or live-data recovery was made. The default-profile Mac Claude
 sign-out remains under investigation; the existing native Keychain store/signer was preserved.
 
 ## October 22 — redundant descriptor traffic correction accepted on Mac; rollout separate

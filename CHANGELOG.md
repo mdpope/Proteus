@@ -6,6 +6,7 @@
 - Preserve custom provider profile/executable locations on supervised update and rollback. This addresses a restart-environment defect; the reported default-profile Mac Claude sign-in failure remains under investigation.
 - Align Connections cards, spacing and wrapping; keep desktop actions grouped at wide and narrow sizes.
 - Keep the composer footer visible when many attachments and a pending question share a narrow pane; immediately clear accepted attachment chips in retained composers.
+- Verify existing automatic sharing for agent-created browser tabs, including unload/recreation and restart, while preserving explicit human-tab grants and revocation. No runtime policy change.
 
 ## Unreleased — passive workspace saves
 
