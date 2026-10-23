@@ -22,7 +22,10 @@ operations, and retry receipts retain their existing ownership.
 
 Only fresh human input may publish a selection/position change, apart from initially seeding
 an empty scope. Native local browser entry changes count as input through the host pending-
-navigation signal. Passive saving, descriptor reconciliation, layout and lease renewal never
+navigation signal. An explicitly submitted address holds input authority until native navigation completes, so
+an unchanged pre-navigation read cannot consume it or apply a queued old page. The guard is
+released on success or failure, and newer scope/selection still wins.
+Passive saving, descriptor reconciliation, layout and lease renewal never
 take presentation control. Identical normalized owner state renews its lease without a new
 revision or broadcast. A new actual change on another desktop still follows immediately.
 
@@ -101,3 +104,14 @@ keep their existing tab behavior; follow is retried after connection recovery.
 
 These are source and synthetic acceptance checks. Installed physical-device rollout
 is separate and must use the exact verified artifact and the desktop update workflow.
+
+## Separate native-link acknowledgement observation
+
+An additional native-link then immediate reverse-address probe reproduces an older pending-entry
+acknowledgement problem on the unchanged `20791699cc10` release as well as the correction.
+The idle source can republish a traversal to its already-committed native entry. Original logs
+and command traces are retained privately; no strict history guard was weakened to make the
+probe pass. This broader history race is not claimed fixed by the input-authority correction.
+Run `PROTEUS_FOLLOW_NATIVE_ACK_PROBE=1` with the normal UI fixture to reproduce it separately.
+The required idle chat-selection, normal bidirectional address, scope, history and scroll checks
+remain unconditional in that fixture.

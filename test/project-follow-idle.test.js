@@ -37,3 +37,14 @@ test('unchanged owner presentations renew leases without new revisions or broadc
  assert.equal(duplicate.revision,first.revision);assert.equal(events.length,1);
  now+=30000;assert.equal(store.subscribed('actor',scope),true,'an unchanged update still renews its lease');
 });
+
+test('an asynchronous human navigation cannot be consumed as no-op input before its native result',async t=>{
+ const scope={scope:'project',id:'synthetic-async'},initial={tabId:'browser',browser:{url:'https://fixture.invalid/one',entryId:'one'}},next={tabId:'browser',browser:{url:'https://fixture.invalid/two',entryId:'two'}},updates=[];
+ let state=initial,joined=false;
+ const follower=createProjectFollower({current:()=>scope,read:async()=>state,sync:async()=>{},apply:async(_scope,value,{current})=>{if(current())state=value;},request:async(_scope,value)=>{if(value.action==='leave')return {ok:true};if(value.action==='join'){joined=true;return {epoch:'async',revision:1,state:initial};}updates.push(value.state);return {epoch:'async',revision:3,state:value.state};}});
+ t.after(()=>follower.dispose());follower.changed(true);await until(()=>joined);await pause(100);
+ const finish=follower.beginHuman();follower.changed(true);await pause(100);
+ await follower.receive(scope,{epoch:'async',revision:2,state:initial});await pause(100);assert.equal(updates.length,0);
+ state=next;finish();finish();await until(()=>updates.length===1);
+ assert.deepEqual(state,next);assert.deepEqual(updates,[next],'the completed human navigation supersedes a queued older snapshot');
+});

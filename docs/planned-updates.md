@@ -10120,3 +10120,17 @@ the same native session and original events without tools. Configuration/history
 tabs/drafts and ended-terminal history are preserved. Two verified full recoveries remain after
 eligible retirement. Native Wayland Cua control and unchanged disabled remote access are distinct
 from these passes. See the [Linux follow-up ledger](2026-10-19-linux-followup-e350395.md).
+
+## October 22 — separate native-link history acknowledgement race
+
+A new diagnostic probe (native page link, then a client address submission under 400 ms descriptor
+latency) fails on the unchanged `20791699cc10` release and on the input-authority correction.
+An idle owner retains its prior native entry as pending, rejects the newer peer entry under the
+strict full-stack guard, then republishes a traversal. Do not weaken `acknowledgesNavigation`,
+discard pending history, fabricate receipts or classify the added entry as a user Back action.
+A future correction needs a proven acknowledgement of the original operation before accepting
+later owner navigation, with complete Forward history and uncertain-request identities preserved.
+`PROTEUS_FOLLOW_NATIVE_ACK_PROBE=1` retains the failing probe independently of the unconditional
+idle chat-selection regression. No implementation or installed correction of this separate race
+is claimed here. Source and private original/candidate traces distinguish observed evidence from
+unverified hypotheses about the precise acknowledgement path.

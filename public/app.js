@@ -1165,7 +1165,7 @@ function renderBrowser() {
   $('#browser-fill-login').insertAdjacentHTML('afterend','<button type="button" id="browser-overview" aria-label="Show all browser tabs" title="Tab overview · Ctrl/Cmd+Shift+\\">'+tabOverviewIcon+'</button>');
   $('#browser-overview').onclick=()=>void showBrowserOverview(selectedChatParent()?.id||'main');
   bindBrowserAddressMenu($('#browser-url'),state.tab,{showDialog,toast});
-  const navigateBrowser=async raw=>{try{const info=await window.desktop.browser({action:'navigate',id:tab.id,url:browserTarget(raw)});if(state.tabs.includes(tab)){tab.info=info;if(state.tab===tab.id)renderBrowser();}}catch(error){toast(error.message);}};
+  const navigateBrowser=async raw=>{const finish=projectFollower.beginHuman();try{const info=await window.desktop.browser({action:'navigate',id:tab.id,url:browserTarget(raw)});if(state.tabs.includes(tab)){tab.info=info;if(state.tab===tab.id)renderBrowser();}}catch(error){toast(error.message);}finally{finish();}};
   $('#browser-form').onsubmit=event=>{event.preventDefault();void navigateBrowser($('#browser-url').value);$('#browser-url').blur();};
   bindDesktopBrowserRecents($('#browser-url'),{api,navigate:navigateBrowser,toast,profileId:tab.info?.profileId||tab.profileId||'default'});
   for (const direction of ['back', 'forward']) {

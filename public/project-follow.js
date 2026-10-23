@@ -2,7 +2,7 @@
 // metadata only; navigation still uses the revision-aware content-tab service.
 export function createProjectFollower({ current, read, apply, request, sync, now=Date.now, clientId=crypto.randomUUID(), onError=()=>{} }) {
   let active=null, generation=0, sequence=0, revision=0, epoch=null, signature='', timer, lease, busy=false, dirty=false, applying=false, disposed=false, intent=0,settledIntent=0, pendingEvent=null,pendingIntent=0,lastPresentation=0,seed=false;
-  const unsupported=new Set();
+  const unsupported=new Set(),humanOperations=new Set();
   const key=scope=>scope?JSON.stringify([scope.hostId||'',scope.scope,scope.id]):'';
   const call=(scope,action,extra={})=>request(scope,{...scope,hostId:undefined,action,clientId,...extra});
   const identity=state=>JSON.stringify([state?.tabId,state?.childTabId,state?.page,state?.browser?.url,state?.browser?.entryId]);
@@ -11,17 +11,17 @@ export function createProjectFollower({ current, read, apply, request, sync, now
   // Unpublished human input still takes precedence over that remote snapshot.
   const pendingPresentation=state=>pendingEvent?.state&&identity(pendingEvent.state)===identity(state)&&pendingIntent===intent&&settledIntent===intent&&(pendingEvent.epoch!==epoch||pendingEvent.revision>revision);
   async function accept(value, scope=active, expectedIntent=intent) {
-    if(disposed||expectedIntent!==intent||!scope||key(scope)!==key(active)||key(current())!==key(active)||!value?.state)return;
+    if(disposed||humanOperations.size||expectedIntent!==intent||!scope||key(scope)!==key(active)||key(current())!==key(active)||!value?.state)return;
     if(value.epoch===epoch&&value.revision<=revision)return;
     epoch=value.epoch;revision=value.revision;
     const appliedGeneration=generation;
-    const isCurrent=()=>!disposed&&appliedGeneration===generation&&expectedIntent===intent&&key(current())===key(scope)&&key(active)===key(scope)&&epoch===value.epoch&&revision===value.revision;
+    const isCurrent=()=>!disposed&&!humanOperations.size&&appliedGeneration===generation&&expectedIntent===intent&&key(current())===key(scope)&&key(active)===key(scope)&&epoch===value.epoch&&revision===value.revision;
     applying=true;
     try { await apply(scope,value.state,{current:isCurrent});if(isCurrent()){const state=await read(scope);if(isCurrent()){signature=JSON.stringify(state);settledIntent=expectedIntent;}} }
     finally { applying=false; }
   }
   async function flush() {
-    clearTimeout(timer);timer=null;if(disposed||busy||applying)return;
+    clearTimeout(timer);timer=null;if(disposed||busy||applying||humanOperations.size)return;
     busy=true;dirty=false;let workGeneration=generation;
     try {
       const scope=current();
@@ -43,14 +43,14 @@ export function createProjectFollower({ current, read, apply, request, sync, now
       if(disposed||!active||key(current())!==key(active))return;
       const readScope=active,readGeneration=generation;let readIntent=intent;
       let state=await read(readScope), next=JSON.stringify(state);
-      if(disposed||readGeneration!==generation||readIntent!==intent||key(current())!==key(readScope)||key(active)!==key(readScope)){dirty=!disposed;return;}
+      if(disposed||humanOperations.size||readGeneration!==generation||readIntent!==intent||key(current())!==key(readScope)||key(active)!==key(readScope)){dirty=!disposed;return;}
       if(next===signature)settledIntent=readIntent;
       // Saving, hydration and layout refreshes are observations, not a person
       // taking control. Only fresh input (or the first empty-scope seed) may
       // publish a presentation. Keep the passive baseline without echoing it.
       if(next!==signature&&!pendingPresentation(state)){
         const scope=active;if(needsSync(state))await sync(scope);
-        if(disposed||readGeneration!==generation||key(active)!==key(scope)||key(current())!==key(scope)){dirty=!disposed;return;}
+        if(disposed||humanOperations.size||readGeneration!==generation||key(active)!==key(scope)||key(current())!==key(scope)){dirty=!disposed;return;}
         if(readIntent!==intent){
           // Continuous scroll can outlast descriptor I/O. Reuse that barrier
           // only for a fresh position on the same hydrated presentation.
@@ -77,6 +77,10 @@ export function createProjectFollower({ current, read, apply, request, sync, now
   return {
     changed:schedule,
     human(){intent++;},
+    beginHuman(){
+      const operation={};humanOperations.add(operation);intent++;pendingEvent=null;
+      return ()=>{if(!humanOperations.delete(operation)||disposed)return;intent++;pendingEvent=null;schedule(true);};
+    },
     async receive(scope,value){if(key(scope)!==key(active)||key(current())!==key(active))return;pendingEvent=value;pendingIntent=intent;schedule(needsSync(value.state));},
     async refresh(scope){if(key(scope)!==key(active)||key(current())!==key(active))return;await sync(scope);},
     reconnect(hostId){for(const scope of unsupported)if(JSON.parse(scope)[0]===hostId)unsupported.delete(scope);if(active?.hostId!==hostId&&current()?.hostId!==hostId)return;generation++;active=null;clearInterval(lease);schedule(true);},

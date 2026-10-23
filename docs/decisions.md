@@ -5,6 +5,8 @@ The follow controller keeps that passive baseline locally and publishes only aft
 or once to seed an empty owner scope. Native pending-entry changes bridge actual browser
 navigation outside the shell document. No-op input settles without authorizing later passive
 changes. The owner suppresses identical normalized updates while renewing sequence and lease.
+An explicit asynchronous address submission holds authority through native completion and
+releases on success/failure; stale pre-navigation observations cannot consume that action.
 Existing pending-position precedence, human cancellation, full-history and scope boundaries apply.
 This prevents an idle desktop from repeatedly taking selection control; a new remote interaction
 still applies. Source, exact-package and installed acceptance remain distinct.
