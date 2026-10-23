@@ -65,9 +65,12 @@ hardware/desktop combination are not inferred from automated gesture/window test
   393,760,707-byte archive, verifies signature/hash, extracts and passes renderer smoke;
   the already-current build is not redundantly reinstalled.
 - Linux: installed and live verified after normal restart without debug flags. Relay is online
-  and Codex available. Retention acceptance is recorded separately. Original strict comparison
+  and Codex available. Both retained recovery generations are independently rehashed, and
+  the installed tree remains exact after cleanup. Original strict comparison
   is retained: catalog changes
-  are scan timestamps and one refreshed cookie keeps its identity/security attributes.
+  are scan timestamps and refreshed cookies retain their identity/security attributes.
+  Website reissuance is an inference from stored evidence, not an observed response; see the
+  [Linux-specific acceptance and limits](2026-10-22-linux-029-install.md).
 - Web: deployed, authenticated Connections and Home verified; no Home URL box. All 9,221
   deployed hashes, nine served assets and 14 endpoint checks pass. Bounded logs show no new
   application/relay errors. Recovery used the existing capture-state verifier after the normal
@@ -109,7 +112,11 @@ transcript references were already missing before the update; persisted app hist
 
 Windows retains exactly two verified generations. Its post-update free-space delta was
 -807,530,496 bytes (cold helper window -810,704,896). Automatic approval review blocked deletion
-of two old generated build folders; both remain and that cleanup reclaimed zero bytes.
+of two old generated build folders; both remain (2,646,902,047 logical bytes /
+2,664,357,888 allocated bytes across 10,688 files), and that cleanup reclaimed zero bytes.
+The operator explicitly approved those exact two folders again; automatic review still rejected
+the normal deletion attempt as “blocked by policy.” Both remain unchanged; no alternate deletion
+mechanism was attempted. The installed app and two recovery generations were reverified.
 
 The Windows publication transport and duplicate extracted payloads were rehashed then retired,
 retaining canonical downloads/source/private transfer. Listed payloads removed total 1,092,643,724
@@ -118,6 +125,11 @@ claimed. The completed catalog recovery pin was released; no website backup gene
 removed, and the unrelated Apple recovery pin remains. Production filesystem free space after
 publication was 2,154,094,592 bytes; its decline includes the newly retained release and concurrent
 activity. No quota or retention exception was silently created.
+
+Linux retains two independently rehashed recovery generations. After filesystem synchronization,
+its cleanup increased available space by 1,755,447,296 bytes; the complete build/update workflow
+changed available space by -961,118,208 bytes. These are separate measurements, not a promise
+that all deleted logical bytes became newly available on Btrfs.
 
 Navigation receipt growth remains a separate investigation. Protected Linux pending claims must
 not be pruned to manufacture a storage improvement. Known missing external transcripts at preflight
