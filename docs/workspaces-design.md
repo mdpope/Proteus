@@ -68,7 +68,7 @@ devices. Configuration mutations use revision conflicts instead of silently over
 
 ## Preserve configuration, labels and semantics
 
-The current UI in `public/features.js` is the baseline. The preview must not replace its modes
+The current UI in `public/shared/ui/features.js` is the baseline. The preview must not replace its modes
 with invented binary availability settings or discard existing controls. Keep these in each
 workspace's complete configuration, while incorporating accepted BF-12 folder sections:
 

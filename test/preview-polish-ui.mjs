@@ -74,7 +74,7 @@ try{
  const restored=await page.evaluate(()=>window.desktop.workspaceSession({action:'get'}));const restoredRows=restored.tabs.filter(tab=>tab.parentId==='project:local:'+projectId);assert.deepEqual(restoredRows.map(tab=>tab.runId||tab.url||tab.label),saved.tabs.filter(tab=>tab.parentId==='project:local:'+projectId).map(tab=>tab.runId||tab.url||tab.label));
  // Exercise the reusable table's ordinary-mode compatibility and anchor guard in a disposable rendered fixture.
  await page.evaluate(async()=>{
-  const {mountWorkspaceTabs}=await import('/workspace-tabs.js');
+  const {mountWorkspaceTabs}=await import('/features/workspaces/workspace-tabs.js');
   const dialog=document.createElement('dialog');dialog.id='polish-table-fixture';dialog.style.width='1200px';dialog.innerHTML='<section></section>';document.body.append(dialog);dialog.showModal();
   const tabs=[{id:'fixture-a',parentId:'fixture-owner',type:'browser',title:'Synthetic A',url:'https://example.invalid/a'},{id:'fixture-b',parentId:'fixture-owner',type:'browser',title:'Synthetic B',url:'https://example.invalid/b'}];
   window.polishFixture={tabs,actions:[],moves:[],links:0,mount:preview=>mountWorkspaceTabs(dialog.firstElementChild,{tabs,preview,act:async action=>window.polishFixture.actions.push(action),refresh:()=>tabs,...(preview?{reorder:async(...args)=>window.polishFixture.moves.push(args)}:{})})};window.polishFixture.mount(false);

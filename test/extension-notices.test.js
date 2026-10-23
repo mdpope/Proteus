@@ -6,8 +6,8 @@ import path from 'node:path';
 import vm from 'node:vm';
 import {createRequire} from 'node:module';
 
-const require=createRequire(import.meta.url);
-const source=fs.readFileSync(new URL('../desktop/browser-extensions.cjs',import.meta.url),'utf8');
+const require=createRequire(import.meta.url),desktopRequire=createRequire(new URL('../desktop/browser/browser-extensions.cjs',import.meta.url));
+const source=fs.readFileSync(new URL('../desktop/browser/browser-extensions.cjs',import.meta.url),'utf8');
 function launch(home){
  const callbacks=new Map(),notices=[],module={exports:{}};
  let now=100000;
@@ -17,7 +17,7 @@ function launch(home){
   if(name==='electron-chrome-extensions')return {ElectronChromeExtensions:class{}};
   if(name==='electron-chrome-web-store')return {};
   if(name==='./extension-permissions.cjs')return {installExtensionPermissions(host,_save,notify){callbacks.set(host.profileId,notify);}};
-  if(name.startsWith('.'))return require('../desktop/'+name);
+  if(name.startsWith('.'))return desktopRequire(name);
   return require(name);
  }});
  const browser={actions:{send:value=>notices.push(value)}};

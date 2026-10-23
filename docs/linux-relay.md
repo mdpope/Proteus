@@ -8,7 +8,7 @@ client protocol; it does not install a Codex integration or register a new host.
 The shared-client API described here is available on
 `codex/oct-7-implementation` at commit
 `ec8b213d382ed24c649ca5a49a5711dca37f4758`. At the time this guide was added,
-`main` did not contain `src/remote-client.js`, `src/desktop-peers.js` or
+`main` did not contain `src/services/remote/remote-client.js`, `src/services/remote/desktop-peers.js` or
 `docs/web-remote.md`. Adding this guide does not merge those implementations.
 Use the pinned source links below to inspect that version when preparing the
 Linux integration; do not assume the files exist in a checkout of `main`.
@@ -32,7 +32,7 @@ to expose its operations as Codex tools.
    invitation expires after five minutes and can pair one device. Treat the
    invitation as a credential; do not commit it or print it in logs.
 2. Reuse `parsePairing`, `BrowserRemoteClient` and `importKey` from
-   `src/remote-client.js`. Parse the invitation and construct a host record with
+   `src/services/remote/remote-client.js`. Parse the invitation and construct a host record with
    `hostId: capsule.hostId`, `relay: capsule.relay`, `inviteKey: capsule.key`,
    `expiresAt: capsule.expiresAt` and a label.
 3. Import `WebSocket` from `ws` and supply
@@ -105,7 +105,7 @@ performed for this documentation handoff.
 Related source and documentation, pinned to the baseline above:
 
 - [Remote setup and protocol](https://github.com/mdpope/Proteus/blob/ec8b213d382ed24c649ca5a49a5711dca37f4758/docs/remote.md)
-- [Shared client](https://github.com/mdpope/Proteus/blob/ec8b213d382ed24c649ca5a49a5711dca37f4758/src/remote-client.js)
-- [Desktop client integration](https://github.com/mdpope/Proteus/blob/ec8b213d382ed24c649ca5a49a5711dca37f4758/src/desktop-peers.js)
+- [Shared client](https://github.com/mdpope/Proteus/blob/ec8b213d382ed24c649ca5a49a5711dca37f4758/src/services/remote/remote-client.js)
+- [Desktop client integration](https://github.com/mdpope/Proteus/blob/ec8b213d382ed24c649ca5a49a5711dca37f4758/src/services/remote/desktop-peers.js)
 - [Relay registration and website configuration](https://github.com/mdpope/Proteus/blob/ec8b213d382ed24c649ca5a49a5711dca37f4758/docs/web-remote.md)
 - [Relay server](https://github.com/mdpope/Proteus/blob/ec8b213d382ed24c649ca5a49a5711dca37f4758/relay/server.js)

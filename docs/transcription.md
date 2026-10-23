@@ -119,9 +119,9 @@ of installation. The actual cutover and real processing acceptance remain unveri
 
 ## API and modules
 
-`src/transcription.js` exports `TranscriptionIntegration` and
+`src/services/tools/transcription.js` exports `TranscriptionIntegration` and
 `isTranscriptionSchedule` as compatibility aliases for existing Omi engine hooks.
-`public/transcription.js` exports `initTranscription` and `renderTranscription`.
+`public/features/tools/transcription.js` exports `initTranscription` and `renderTranscription`.
 Existing Omi module exports remain available.
 
 Authenticated routes `/api/transcription`, `/api/transcription/settings`,

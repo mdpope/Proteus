@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {reorderWorkspaceTabSiblings} from '../public/workspace-tabs.js';
+import {reorderWorkspaceTabSiblings} from '../public/features/workspaces/workspace-tabs.js';
 
 const rows=()=>[
  {id:'project',type:'workspace'},

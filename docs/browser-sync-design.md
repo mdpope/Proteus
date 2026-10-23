@@ -11,19 +11,19 @@ The subsequent approval covers implementation and rollout; see the release ledge
 
 ## Baseline inspected before implementation
 
-- `src/content-tabs.js` / `src/remote.js`: owner-computer tab descriptors synchronize through
+- `src/services/workspaces/content-tabs.js` / `src/services/remote/remote.js`: owner-computer tab descriptors synchronize through
   paired remote methods, including URL/profile and bounded navigation history/index. Updates
   can replace whole descriptors.
 - `ios/Proteus/Services/State/SharedAppStore.swift`: incoming URLs trigger WebKit loads; saved and live engine
   navigation lists are reconciled separately. Gesture availability depends on their alignment.
   This may contribute to inconsistencies; the Gmail failure's cause remains unproven.
-- `desktop/browsing-history.cjs`: local JSON visit history, normally 90 days/up to 10,000 entries,
+- `desktop/browser/browsing-history.cjs`: local JSON visit history, normally 90 days/up to 10,000 entries,
   with persistence already in a worker. A separate website recent-history feed is capped at
   500 records (`web/app/Services/AppRecords.php`). Shared recording currently uses Default only.
-- `src/browser-profiles.js`: additional profile definitions/settings use the account API and
+- `src/services/browser/browser-profiles.js`: additional profile definitions/settings use the account API and
   local cache. Default and website sessions remain local. Account records do not own workspace
   tab navigation.
-- `src/life.js`: account refresh explicitly requires Life enabled. This dependency is confirmed;
+- `src/services/life/life.js`: account refresh explicitly requires Life enabled. This dependency is confirmed;
   the separate invalid-browser-settings failure is not yet diagnosed.
 - Native long-press context-menu code exists, but operator testing reports no visible menus.
   Code presence is not physical acceptance.

@@ -1698,6 +1698,15 @@ extension DestinationTests {
 }
 
 final class NativeParityTests: XCTestCase {
+    func testMoveDestinationsGroupProjectsWithTheirWorkspaceAndKeepOwnersDistinct() {
+        let context: JSON = .object(["workspaces": .array([.object(["id": .string("w"), "name": .string("Workspace")])])])
+        let projects: JSON = .object(["projects": .array([.object(["id": .string("p"), "workspaceId": .string("w"), "name": .string("Project")])])])
+        let shared = NativeMoveLocations.groups(context: context, projects: projects, containersOnly: true)
+        XCTAssertEqual(shared.first?.label, "Workspace")
+        XCTAssertEqual(shared.first?.locations.map(\.id), ["project:p"])
+        let owned = NativeMoveLocations.groups(context: context, projects: projects, hostID: "owner", roots: false)
+        XCTAssertEqual(owned.first?.locations.map(\.id), ["workspace:owner:w", "project:owner:p"])
+    }
     @MainActor func testAddressRecentsUseLatestVisitDeviceAndTwentyUniqueURLs() {
         var items: [JSON] = (0..<25).map { number in .object(["id": .string("v\(number)"), "url": .string("https://example.test/\(number)"), "visitedAt": .string(String(format: "2026-10-07T00:%02d:00Z", number)), "deviceName": .string("Mac")]) }
         items.append(.object(["id": .string("latest"), "url": .string("https://example.test/0"), "visitedAt": .string("2026-10-07T01:00:00Z"), "deviceName": .string("iPad")]))

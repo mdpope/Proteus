@@ -1,7 +1,7 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {CopilotProvider} from '../src/copilot.js';
+import {CopilotProvider} from '../src/providers/copilot.js';
 const run={id:'test',providerSessionId:'session',schedule:{mcpServers:{atlassian:{type:'http',url:'https://example.test/mcp'}}}};
 const fixture=()=>{const calls=[];const provider=new CopilotProvider();provider.sessions.set('test',{rpc:{mcp:{list:async()=>({servers:[{name:'atlassian',status:'needs-auth',config:{headers:{Authorization:'secret'}}}]}),oauth:{login:async params=>{calls.push(params);return {authorizationUrl:'https://example.test/oauth?state=private'};}}}}});return {provider,calls};};
 test('MCP status exposes selected connection metadata without server credentials',async()=>{const {provider}=fixture();const result=await provider.mcpStatus(run);assert.equal(result.servers[0].status,'needs-auth');assert.ok(!JSON.stringify(result).includes('secret'));assert.equal(result.servers.length,1);});

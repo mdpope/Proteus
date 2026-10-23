@@ -1,4 +1,4 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -6,8 +6,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { once } from 'node:events';
 import { Engine } from '../src/engine.js';
-import { SchedulerWorker } from '../src/scheduler-client.js';
-import { atomicJSON, readJSON } from '../src/files.js';
+import { SchedulerWorker } from '../src/services/scheduling/scheduler-client.js';
+import { atomicJSON, readJSON } from '../src/shared/files.js';
 
 const schedule = cwd => ({ schemaVersion: 1, id: 'sample', name: 'Sample', enabled: true, cron: '* * * * *', timezone: 'UTC', provider: 'rehearsal', model: '', workspace: { cwd, additionalDirectories: [] }, misfire: 'coalesce', prompt: 'Synthetic test.' });
 const before = '2026-09-30T14:59:59.000Z', due = '2026-09-30T15:00:00.000Z';

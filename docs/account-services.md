@@ -1,6 +1,6 @@
 # Shared account service and bounded Life reads
 
-The common desktop OAuth/session boundary is `src/account-session.js`. It owns PKCE,
+The common desktop OAuth/session boundary is `src/services/remote/account-session.js`. It owns PKCE,
 encrypted credentials, token rotation, cancellation, identity binding and bounded HTTP
 responses. Optional Life operations extend that boundary through `LifeAPI`; shared
 account operations accept the common session directly. Existing integrations retain a

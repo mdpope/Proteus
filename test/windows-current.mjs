@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import assert from 'node:assert/strict';
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 
 if(process.platform!=='win32'||!process.argv[2])throw new Error('Supply an exact packaged Windows executable.');
 const executablePath=fs.realpathSync(process.argv[2]),bundle=path.dirname(executablePath),root=path.join(bundle,'resources','app');

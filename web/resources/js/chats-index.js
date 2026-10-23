@@ -1,5 +1,5 @@
-import {chatLink} from '../../../public/chat-links.js';
-import {chatTypes,chatType} from '../../../public/chat-types.js';
+import {chatLink} from '../../../public/features/chats/chat-links.js';
+import {chatTypes,chatType} from '../../../public/features/chats/chat-types.js';
 export const selectChatType=type=>saved.type=type;
 export const selectedChatType=()=>saved.type;
 // The website mirrors the desktop Chats index while retaining host-scoped routing.

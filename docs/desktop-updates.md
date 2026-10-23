@@ -1,3 +1,22 @@
+## October 23 next release — common signed feed and local coordinators
+
+The candidate supports a common signed downloads.proteus.example release catalog/staging contract for macOS,
+Linux and Windows, with local trusted publisher keys, target/architecture/hash/compatibility
+checks and no credential-bearing redirects. The local staging helper is
+`scripts/stage-desktop-release.mjs`; it prepares signed allowlisted website artifacts and does
+not publish them. No new release was built, uploaded or installed for this queue.
+
+Engine Room → Updates configures the coordinator provider, model, intensity, speed and context
+from fresh provider metadata. On an authorized push, `proteus_chats create` with `purpose:update`
+captures those defaults, validates support/model availability on the destination and creates an
+unassigned coordinator without workspace/project sources. Stable operation IDs prevent duplicate
+dispatch. Each target uses its own updater, performs required local tests/migrations/preflight,
+checkpoints remaining work before restart, and resumes the same chat after restart/rollback.
+The initiating chat monitors durable task feedback; dispatch/model completion is not acceptance.
+Missing capability, unavailable model, active work or approval blockers remain explicit.
+iOS retains the guided Mac process. No destination coordinator has been dispatched for this queue.
+The previous release's operational workflow and backup/acceptance rules remain below.
+
 # Desktop updates through a destination Codex chat
 
 Use this workflow when the operator authorizes updating Proteus on another computer. The
@@ -336,7 +355,7 @@ rather than asking again for the same routine retention action.
 
 ## October 19 helper implementation checkpoint (not deployed)
 
-`src/updates.js` and the independent `desktop/update-helper.cjs` implement protocol-1 preparation,
+`src/services/updates/updates.js` and the independent `desktop/updates/update-helper.cjs` implement protocol-1 preparation,
 isolated candidate UI smoke acceptance, a turn/terminal/download idle barrier and helper-readiness
 acknowledgement before graceful Quit. The signed staged Electron runtime survives target replacement;
 source checkouts report unavailable rather than restarting a source process as an installed update.

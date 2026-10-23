@@ -16,11 +16,11 @@ Today, a workspace is a named reusable execution/context configuration: a starti
 additional accessible folders, and source discovery/loading settings. Chats capture their own
 context snapshots. A workspace does not own a persistent collection of chats and browser tabs.
 Source modes are partly global, not a complete independent per-project policy. See
-`src/context.js`, `docs/workspaces.md` and `docs/context-loading.md`.
+`src/services/workspaces/context.js`, `docs/workspaces.md` and `docs/context-loading.md`.
 
 The earlier Projects discussion explicitly deferred a new schema (`docs/decisions.md`).
 BF-2026-10-07-13 implemented browser transfer while deferring project destinations until their
-relationship to Workspaces was resolved. Current `src/content-tabs.js` supports chat/team
+relationship to Workspaces was resolved. Current `src/services/workspaces/content-tabs.js` supports chat/team
 descriptor scopes only. Existing tab persistence/remote sharing are foundations, not proof of
 project support or account-wide project synchronization.
 

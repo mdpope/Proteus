@@ -4,11 +4,11 @@ import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
-import { atomicJSON, readJSON } from './files.js';
-import { revision } from './schedules.js';
-import { SettingsStore } from './settings.js';
-import { ContextStore, discoveryExclusions } from './context.js';
-import { WorkspaceProjects } from './workspace-projects.js';
+import { atomicJSON, readJSON } from './shared/files.js';
+import { revision } from './services/scheduling/schedules.js';
+import { SettingsStore } from './services/settings/settings.js';
+import { ContextStore, discoveryExclusions } from './services/workspaces/context.js';
+import { WorkspaceProjects } from './services/workspaces/workspace-projects.js';
 
 const markerName = 'desktop-preview.json';
 const scope = () => ({libraryFolders:[],universalFolders:[],documents:[],modes:{},favorites:[],workspaceFiles:[],defaults:{includeDefaults:false,selectedIds:[]},discovery:{exclusions:[...discoveryExclusions],inclusions:[],maxFolders:60000},approvals:{mode:'ask',folders:[],rules:[],readOnlyTools:false}});

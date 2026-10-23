@@ -1,12 +1,12 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {ContentTabs} from '../src/content-tabs.js';
-import {createTabSynchronizer,tabChanges,rebaseTabChanges} from '../public/content-tab-sync.js';
-import {RemoteCommandStore} from '../src/remote-command-store.js';
+import {ContentTabs} from '../src/services/workspaces/content-tabs.js';
+import {createTabSynchronizer,tabChanges,rebaseTabChanges} from '../public/models/content-tab-sync.js';
+import {RemoteCommandStore} from '../src/services/remote/remote-command-store.js';
 
 const scope={hostId:'synthetic-owner',scope:'workspace',id:'workspace'};
 const tab={id:'browser',type:'browser',title:'Synthetic page',url:'https://example.test/',openedAt:'2026-10-01T00:00:00.000Z',lastTouchedAt:'2026-10-14T12:00:00.000Z',favicon:'data:image/png;base64,YQ=='};

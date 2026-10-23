@@ -110,7 +110,7 @@ main agent, the label identifies the provider (Copilot or Rehearsal).
 ## Website parity gap: October 5 review
 
 The earlier rendering description is the desktop/native baseline, not full website acceptance.
-`public/conversation.js` removes automatic permission notices from the main timeline and renders
+`public/features/chats/conversation.js` removes automatic permission notices from the main timeline and renders
 structured tool details; `web/resources/js/remote.js` currently maps all persisted events into
 message articles and prints their generic role. This explains website “assistant” labels and
 standalone “Auto-approved write: Trusted folder” messages even though the remote payload already
@@ -205,7 +205,7 @@ require several sequential history pages; no model turn is restarted. Disclosure
 expansion remains local, so offsets inside differently expanded Activity groups
 are best effort.
 
-- Edit `src/markdown-renderer.js` and `public/markdown/style.css`, then run `npm run markdown:build`.
+- Edit `src/shared/markdown-renderer.js` and `public/markdown/style.css`, then run `npm run markdown:build`.
   Commit the bundled runtime and third-party notices so Xcode can build without Node installed.
 - `npm run ios:generate` refreshes the checked-in Xcode project. Its folder resource shares the
   actual renderer assets with the desktop app. Signing team IDs stay outside the repository.

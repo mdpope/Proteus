@@ -12,7 +12,7 @@ function fixture(){
  class Scroll{constructor(){this.starting=deferred();starts.push(this);}start(){return this.starting.promise;}async dispose(){this.closed=true;}async apply(){return true;}}
  const partition={setPermissionRequestHandler(){},setPermissionCheckHandler(){},webRequest:{onBeforeRequest(){}},on(){}};
  const window={contentView:{addChildView:view=>children.add(view),removeChildView:view=>children.delete(view)},getContentBounds:()=>({width:800,height:600}),isDestroyed:()=>false,webContents:{send(){}}};
- const module={exports:{}};vm.runInNewContext(readFileSync(new URL('../desktop/artifact-preview.cjs',import.meta.url),'utf8'),{require:name=>name==='electron'?{WebContentsView:View,session:{fromPartition:()=>partition}}:name==='node:crypto'?{createHash,randomUUID}:{ArtifactScroll:Scroll},module,Buffer});
+ const module={exports:{}};vm.runInNewContext(readFileSync(new URL('../desktop/documents/artifact-preview.cjs',import.meta.url),'utf8'),{require:name=>name==='electron'?{WebContentsView:View,session:{fromPartition:()=>partition}}:name==='node:crypto'?{createHash,randomUUID}:{ArtifactScroll:Scroll},module,Buffer});
  const preview=new module.exports.ArtifactPreview(window),data=html=>({html,version:createHash('sha256').update(html).digest('hex'),tabId:'document',bounds:{x:0,y:0,width:600,height:400}});
  return {preview,views,children,starts,data};
 }

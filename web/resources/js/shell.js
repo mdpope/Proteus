@@ -1,7 +1,7 @@
 import {navIcon} from './navigation-icons.js';
-import {chatLink} from '../../../public/chat-links.js';
+import {chatLink} from '../../../public/features/chats/chat-links.js';
 // The sidebar owns sections. The top strip contains only content the user opened.
-import {mount as mountMarkdown} from '../../../src/markdown-renderer.js';
+import {mount as mountMarkdown} from '../../../src/shared/markdown-renderer.js';
 import {openContextMenu} from './context-menu.js';
 export function initShell(document=globalThis.document,window=globalThis.window) {
     const strip=document.querySelector('#shell-tabs'),account=document.body.dataset.browserAccount;

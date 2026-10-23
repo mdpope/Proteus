@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {BrowserRemoteClient,importKey,unseal} from '../src/remote-client.js';
-import {remoteTransportLimits as limits,transportBudget} from '../src/remote-transport.js';
+import {BrowserRemoteClient,importKey,unseal} from '../src/services/remote/remote-client.js';
+import {remoteTransportLimits as limits,transportBudget} from '../src/services/remote/remote-transport.js';
 import {sendRelayPacket} from '../relay/server.js';
 import fs from 'node:fs';
 import path from 'node:path';

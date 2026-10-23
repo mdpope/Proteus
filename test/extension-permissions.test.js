@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {EventEmitter} from 'node:events';import {createRequire} from 'node:module';
-const {installExtensionPermissions}=createRequire(import.meta.url)('../desktop/extension-permissions.cjs');
+const {installExtensionPermissions}=createRequire(import.meta.url)('../desktop/browser/extension-permissions.cjs');
 function host(rows){
  const extension={id:'fixture',manifest:{permissions:['tabs'],optional_permissions:['nativeMessaging']}},events=new EventEmitter();events.getAllExtensions=()=>[extension];const permissionMap=new Map([[extension.id,{permissions:['tabs'],origins:[]}]]);const handlers=new Map();
  handlers.set('permissions.request',{callback:async(_event,value)=>{permissionMap.get(extension.id).permissions.push(...value.permissions);return true;}});handlers.set('permissions.remove',{});

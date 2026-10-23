@@ -2,9 +2,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createPrivateKey,createPublicKey,createHash,sign} from 'node:crypto';
-import packages from '../desktop/update-package.cjs';
-import {hasPrivatePermissions} from '../src/private-paths.cjs';
-import {verifyRelease,windowsReleaseOrigin} from '../src/desktop-releases.js';
+import packages from '../desktop/updates/update-package.cjs';
+import {hasPrivatePermissions} from '../src/shared/private-paths.cjs';
+import {verifyRelease,windowsReleaseOrigin} from '../src/services/updates/desktop-releases.js';
 
 const args=process.argv.slice(2),options={};
 for(let index=0;index<args.length;index+=2){if(!['--bundle','--archive','--installer','--key','--channel','--out'].includes(args[index])||!args[index+1])throw Error('Use --bundle, --archive, --installer (Windows), --key, --channel and --out.');options[args[index].slice(2)]=args[index+1];}

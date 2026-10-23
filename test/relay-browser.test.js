@@ -1,11 +1,11 @@
 import {makeReadableByOthers} from './helpers/permissions.js';
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
 import { randomUUID } from 'node:crypto';import { WebSocket } from 'ws';
 import { startRelay, relayOrigins } from '../relay/server.js';
-import { secret, seal as nodeSeal, unseal as nodeUnseal } from '../src/remote-crypto.js';
+import { secret, seal as nodeSeal, unseal as nodeUnseal } from '../src/services/remote/remote-crypto.js';
 import { importKey, seal, unseal, parsePairing } from '../web/resources/js/remote-client.js';
 const open=(url,headers={})=>new Promise((resolve,reject)=>{const ws=new WebSocket(url,{headers});ws.once('open',()=>resolve(ws));ws.once('error',reject);});
 const next=ws=>new Promise(resolve=>ws.once('message',bytes=>resolve(JSON.parse(bytes))));

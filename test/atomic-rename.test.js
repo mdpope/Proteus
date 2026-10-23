@@ -4,9 +4,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {spawn} from 'node:child_process';
-import {atomicRename} from '../src/atomic-rename.cjs';
-import {atomicJSON} from '../src/files.js';
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {atomicRename} from '../src/shared/atomic-rename.cjs';
+import {atomicJSON} from '../src/shared/files.js';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 
 test('Windows atomic replacement retries sharing violations without removing the durable file',t=>{
  const root=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-atomic-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));

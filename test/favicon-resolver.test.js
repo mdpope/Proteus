@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url);
-const {FaviconResolver,finishIconResponse}=require('../desktop/favicon-resolver.cjs');
+const {FaviconResolver,finishIconResponse}=require('../desktop/browser/favicon-resolver.cjs');
 function fixture(){let next=0;const jobs=new Map();const resolver=new FaviconResolver({timers:{setTimeout:callback=>{jobs.set(++next,callback);return next;},clearTimeout:id=>jobs.delete(id)}});return {resolver,jobs,fire:async()=>{const [id,callback]=jobs.entries().next().value;jobs.delete(id);callback();await resolver.generation.pending;}};}
 test('favicon resolver coalesces overlapping and callback-triggered network completions',async()=>{
  const {resolver,jobs}=fixture();let calls=0,release,nested;

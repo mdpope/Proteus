@@ -1,16 +1,16 @@
 import {assertPrivate} from './helpers/permissions.js';
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {ContentTabs,contentTab,workspaceContentScopes} from '../src/content-tabs.js';
+import {ContentTabs,contentTab,workspaceContentScopes} from '../src/services/workspaces/content-tabs.js';
 import {startServer} from '../src/server.js';
 import {startRelay} from '../relay/server.js';
 import {RemoteClient,until} from './remote-client.mjs';
-import {secret} from '../src/remote-crypto.js';
-import {atomicJSON} from '../src/files.js';
+import {secret} from '../src/services/remote/remote-crypto.js';
+import {atomicJSON} from '../src/shared/files.js';
 function store(t){const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-tabs-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));return {home,tabs:new ContentTabs(home)};}
 const browser={id:'browser-a',type:'browser',title:'Synthetic page',url:'https://example.test/one'};
 test('legacy browser-only main registry imports newly managed saved surfaces once and retains closed-tab authority',t=>{
@@ -51,7 +51,7 @@ test('paired synthetic clients reconcile descriptors and enforce current documen
  assert.ok((await first.request('sync')).state.capabilities.includes('content-tabs.v1'));
  const started=await first.request('chat.start',{prompt:'Synthetic descriptor fixture',provider:'rehearsal'}),id=started.runId;
  let state=await first.request('tabs.get',{scope:'chat',id});assert.equal(state.revision,0);
- state=await first.request('tabs.mutate',{scope:'chat',id,expectedRevision:0,operations:[{action:'open',tab:browser}]});assert.equal(state.revision,1);const mirrored=(await second.request('tabs.get',{scope:'chat',id})).tabs;assert.deepEqual(mirrored.map(({history,...tab})=>tab),[browser]);assert.equal(mirrored[0].history.entries[mirrored[0].history.index].url,browser.url);assert.ok(mirrored[0].history.currentEntryId);assert.equal(mirrored[0].history.revision,0);
+ state=await first.request('tabs.mutate',{scope:'chat',id,expectedRevision:0,operations:[{action:'open',tab:browser}]});assert.equal(state.revision,1);const mirrored=(await second.request('tabs.get',{scope:'chat',id})).tabs;assert.deepEqual(mirrored.map(({history,...tab})=>tab),[{...browser,profileName:'Default'}]);assert.equal(mirrored[0].history.entries[mirrored[0].history.index].url,browser.url);assert.ok(mirrored[0].history.currentEntryId);assert.equal(mirrored[0].history.revision,0);
  await assert.rejects(second.request('tabs.mutate',{scope:'chat',id,expectedRevision:0,operations:[{action:'close',id:browser.id}]}),/changed/);
  const entryA=mirrored[0].history.currentEntryId,operationId='77777777-7777-4777-8777-777777777777',navArgs={scope:'chat',id,operations:[{action:'browser-navigate',tabId:browser.id,entryId:'entry-b',operationId,baseRevision:0,url:'https://example.test/two',visitedAt:'2026-10-12T12:00:00Z'}]};
  let navigated=await first.request('tabs.mutate',navArgs);assert.equal(navigated.tabs[0].history.revision,1);assert.equal((await second.request('tabs.get',{scope:'chat',id})).tabs[0].url,'https://example.test/two');
@@ -99,4 +99,12 @@ test('desktop seed retains private browser identities and skips remote-owned sco
  const bytes=fs.readFileSync(tabs.file);new ContentTabs(home).seedWorkspace(session);assert.deepEqual(fs.readFileSync(tabs.file),bytes);
  const closed=tabs.mutate({scope:'workspace',id:'one',expectedRevision:local.revision,operations:[{action:'close',id:'private-local-browser'}]});
  new ContentTabs(home).seedWorkspace(session);assert.deepEqual(tabs.get('workspace','one'),closed,'Explicit close remains authoritative across stale restore');
+});
+
+test('profile names decorate read projections without changing raw titles, history or revisions',()=>{
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-profile-title-'));
+ try{let name='Social';const profileId='abcdef01-1234-4567-8901-abcdef123456',tabs=new ContentTabs(home,{profiles:()=>[{id:profileId,name}]});
+ tabs.mutate({scope:'chat',id:'fixture',expectedRevision:0,operations:[{action:'open',tab:{id:'browser',type:'browser',title:'Actual title',url:'https://example.test',profileId}}]});
+ const first=tabs.get('chat','fixture');assert.equal(first.tabs[0].profileName,'Social');name='Research';const second=tabs.get('chat','fixture');assert.equal(second.tabs[0].profileName,'Research');assert.equal(second.tabs[0].title,'Actual title');assert.equal(second.revision,first.revision);assert.equal(JSON.stringify(tabs.read()).includes('profileName'),false);
+ }finally{fs.rmSync(home,{recursive:true,force:true});}
 });

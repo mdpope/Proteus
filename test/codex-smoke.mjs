@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import assert from 'node:assert/strict';
-import { CodexProvider } from '../src/codex.js';
+import { CodexProvider } from '../src/providers/codex.js';
 import { Engine } from '../src/engine.js';
 const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-codex-smoke-'));
 const workspace=path.join(home,'workspace');fs.mkdirSync(workspace);

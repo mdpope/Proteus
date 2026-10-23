@@ -1,6 +1,6 @@
 import {webPaletteConfig} from './palette-config.js';
 // Browser/PWA installation configuration. Never write a connected desktop's palette.
-import {syncPalette,renderPalette} from '../../../public/palette.js';
+import {syncPalette,renderPalette} from '../../../public/shared/ui/palette.js';
 
 const account=typeof document==='undefined'?null:document.body.dataset.browserAccount;
 const config=account?webPaletteConfig(account):null;

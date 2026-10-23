@@ -1,10 +1,10 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {chatActivityAt,runSummary,remoteRun} from '../src/remote.js';
+import {chatActivityAt,runSummary,remoteRun} from '../src/services/remote/remote.js';
 
 const at=minute=>`2026-10-17T12:${String(minute).padStart(2,'0')}:00.000Z`;
 const fixture=()=>({id:'synthetic',trigger:'chat',status:'completed',createdAt:at(0),updatedAt:at(20),events:[],schedule:{provider:'rehearsal',name:'Synthetic',workspace:{cwd:'/synthetic',additionalDirectories:[]}}});

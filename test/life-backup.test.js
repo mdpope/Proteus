@@ -1,14 +1,14 @@
 import {cleanupStack} from './helpers/cleanup.js';
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { LifeStore } from '../src/life-admin.js';
-import { openLifeDatabase, readLifeProfile } from '../src/life-database.js';
-import { verifyRestoredBackup, validateBackupReceipt, databaseSnapshot } from '../src/life-backup.js';
-import { evidenceStorage, evidenceStatus } from '../src/life-evidence.js';
+import { LifeStore } from '../src/services/life/life-admin.js';
+import { openLifeDatabase, readLifeProfile } from '../src/services/life/life-database.js';
+import { verifyRestoredBackup, validateBackupReceipt, databaseSnapshot } from '../src/services/life/life-backup.js';
+import { evidenceStorage, evidenceStatus } from '../src/services/life/life-evidence.js';
 async function fixture(t) {
  const cleanup=cleanupStack(t);const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-backup-')),store=new LifeStore(home);cleanup(()=>fs.rmSync(home,{recursive:true,force:true}));cleanup(()=>store.close());
  const plan=await store.planSetup({mode:'local-new',ownerName:'Test',ownerEmail:'test@example.test'});await store.applySetup({planId:plan.planId,confirmation:'APPLY'});

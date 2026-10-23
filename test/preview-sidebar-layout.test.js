@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {previewSidebarBounds,previewSidebarWidth} from '../public/preview-sidebar-layout.js';
+import {previewSidebarBounds,previewSidebarWidth} from '../public/shared/navigation/preview-sidebar-layout.js';
 
 test('preview sidebar width uses application preference with bounded viewport display and no preference mutation',()=>{
  assert.equal(previewSidebarWidth(undefined,1280),230);

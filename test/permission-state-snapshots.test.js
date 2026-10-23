@@ -1,10 +1,10 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { SettingsStore } from '../src/settings.js';
+import { SettingsStore } from '../src/services/settings/settings.js';
 import { startServer } from '../src/server.js';
 
 test('state polling preserves captured scheduled-run permissions without recapturing a large history', async () => {

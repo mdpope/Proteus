@@ -1,3 +1,29 @@
+## October 23 follow-up — open chats at their associated home
+
+Opening an associated chat from global lists, attention, notifications, links or creation selects
+it inside its current project/workspace. Create missing navigation roots and reuse the existing
+chat view; do not create a separate global quick-view tab. Restoration rehomes saved aliases using
+current owner membership while preserving chat IDs, child-resource origins, drafts and active
+sessions. Canonical main-list aliases are retired atomically without changing child registries.
+Unassigned chats can remain top-level. This supersedes the earlier global-quick-view design below.
+
+## October 23 — shared move menu and working-folder defaults
+
+Chat, browser, terminal, document and bulk-tab move entry points use the shared destination
+menu, grouped by workspace/project and initially selecting the current location. Unopened
+projects remain available. Owner-specific valid destinations and revision checks remain enforced;
+chat membership moves retain the captured provider/session, folders, sources, approvals and drafts.
+
+Configured working folders default to read/write. Explicit read-only overrides, protected
+metadata and enforced organization restrictions win. The folder section exposes a Read /
+Read-write selector. Source/instruction selection does not grant filesystem access, and moving
+a tab or chat never grants access to another workspace. Codex's named filesystem profile is
+verified against the running native thread/turn; provider tool hooks retain ordinary approval.
+
+Keep Screen Awake is persisted across app restarts; quitting releases its OS assertion without
+clearing the saved preference. The baseline deep selection memory restores the last valid
+project and child tab when returning to a workspace, including after restart.
+
 ## October 22 — return to the remembered workspace page
 
 Top-level workspace navigation restores its deepest valid remembered project/chat/resource

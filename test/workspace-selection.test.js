@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {rememberTabSelection,restoreTabSelection} from '../public/workspace-selection.js';
+import {rememberTabSelection,restoreTabSelection} from '../public/features/workspaces/workspace-selection.js';
 const fixture=()=>[
  {id:'w1',type:'workspace',workspaceId:'one'},
  {id:'p1',type:'workspace',workspaceId:'one',projectId:'project-one',workspacePage:'tabs'},

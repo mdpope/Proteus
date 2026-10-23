@@ -1,6 +1,6 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import {EventEmitter} from 'node:events';import {createRequire} from 'node:module';
-const {WindowRegistry,windowBounds}=createRequire(import.meta.url)('../desktop/windows.cjs');
+const {WindowRegistry,windowBounds}=createRequire(import.meta.url)('../desktop/windows/windows.cjs');
 class Window extends EventEmitter{constructor(bounds){super();this.bounds=bounds;this.webContents={mainFrame:{},send(){}};}isDestroyed(){return false;}getNormalBounds(){return this.bounds;}isFocused(){return false;}}
 test('window Quit restores open geometry; explicit Close forgets only that window and retains unknown metadata',async t=>{
  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-windows-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));const handlers=new Map(),registry=new WindowRegistry(home,{ipcMain:{handle:(key,fn)=>handlers.set(key,fn)}}),other='22222222-2222-4222-8222-222222222222';

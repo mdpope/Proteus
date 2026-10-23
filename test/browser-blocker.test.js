@@ -1,6 +1,6 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import {createRequire} from 'node:module';
-const require=createRequire(import.meta.url);const {BrowserBlocker}=require('../desktop/browser-blocker.cjs');const {ElectronBlocker}=require('@ghostery/adblocker-electron');
+const require=createRequire(import.meta.url);const {BrowserBlocker}=require('../desktop/browser/browser-blocker.cjs');const {ElectronBlocker}=require('@ghostery/adblocker-electron');
 test('filter refresh coalesces, activates only after atomic cache replacement, retains prior filters on failure',async()=>{
  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-filter-update-')),original=ElectronBlocker.fromPrebuiltAdsAndTracking;let release,calls=0;
  const engine={serialize:()=>new Uint8Array([1,2,3]),onBeforeRequest(_details,callback){callback({cancel:true});}};

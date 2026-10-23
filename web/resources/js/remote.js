@@ -1,27 +1,28 @@
-import {mountQuestionAttachments} from '../../../public/question-attachments.js';
+import {moveMenuMarkup,projectMoveGroups} from '../../../public/shared/navigation/move-menu.js';
+import {mountQuestionAttachments} from '../../../public/features/chats/question-attachments.js';
 import {recentItemMarkup} from './navigation-icons.js';
 import {bindWebChatPermissions} from './chat-permissions.js';
-import {chatLink} from '../../../public/chat-links.js';
-import {mountChatRecovery} from '../../../public/chat-recovery-controls.js';
-import {authenticatedComputerMetadata,computerDescription} from '../../../public/computer-identity.js';
+import {chatLink} from '../../../public/features/chats/chat-links.js';
+import {mountChatRecovery} from '../../../public/features/chats/chat-recovery-controls.js';
+import {authenticatedComputerMetadata,computerDescription} from '../../../public/services/remote/computer-identity.js';
 import {observeRunningChats} from './running-chats.js';
 import {createWebWorkspaces} from './workspaces.js';
-import {refreshChatPreviews,isLoopbackPreview,verifyPreview} from '../../../public/chat-previews.js';
-import {createToast} from '../../../public/toast.js';
-import {mountLiveBrowser} from '../../../public/live-browser.js';
+import {refreshChatPreviews,isLoopbackPreview,verifyPreview} from '../../../public/features/chats/chat-previews.js';
+import {createToast} from '../../../public/shared/ui/toast.js';
+import {mountLiveBrowser} from '../../../public/features/browser/live-browser.js';
 import '../../../public/live-browser.css';
-import {bindRuntimeTimer,formatDuration,turnDuration,runtimeTotal,toolDuration,groupDuration} from '../../../public/runtime.js';
-import { mergeChatHistory, chatHistoryWindowStart } from '../../../public/chat-history.js';
-import { toolPresentation, normalizedTool, activitySummary, isActivityEvent, permissionToolCallId, toolEventTime } from '../../../public/tool-presentation.js';
-import {chatType} from '../../../public/chat-types.js';
-import {internetProviders,providerLabel} from '../../../public/internet-search.js';
+import {bindRuntimeTimer,formatDuration,turnDuration,runtimeTotal,toolDuration,groupDuration} from '../../../public/features/chats/runtime.js';
+import { mergeChatHistory, chatHistoryWindowStart } from '../../../public/features/chats/chat-history.js';
+import { toolPresentation, normalizedTool, activitySummary, isActivityEvent, permissionToolCallId, toolEventTime } from '../../../public/features/chats/tool-presentation.js';
+import {chatType} from '../../../public/features/chats/chat-types.js';
+import {internetProviders,providerLabel} from '../../../public/features/settings/internet-search.js';
 import {renderChatIndex,chatIndexShowsArchived,selectChatType,selectedChatType} from './chats-index.js';
 import {saveChatIndex,loadChatIndex,clearChatIndex,saveChatDrafts,loadChatDrafts,clearChatDrafts} from './remote-cache.js';
 import {appRequest,dateTime,recordBrowserVisit} from './shared-app.js';
-import { mount as mountMarkdown } from '../../../src/markdown-renderer.js';
+import { mount as mountMarkdown } from '../../../src/shared/markdown-renderer.js';
 import { PairingStore, AccountPairingStore, BrowserDestinationStore, BrowserRemoteClient, parsePairing } from './remote-client.js';
 import { usagePanel } from './remote-usage.js';
-import { mountMessageActions, setMessageActionsContext, stopMessageSpeech } from '../../../public/message-actions.js';
+import { mountMessageActions, setMessageActionsContext, stopMessageSpeech } from '../../../public/features/chats/message-actions.js';
 import { openContextMenu } from './context-menu.js';
 const root = document.querySelector('#remote-workspace');
 const updateSubtabFade=strip=>{if(!strip)return;strip.classList.toggle('fade-left',strip.scrollLeft>2);strip.classList.toggle('fade-right',strip.scrollLeft+strip.clientWidth<strip.scrollWidth-2);};
@@ -834,9 +835,9 @@ root.addEventListener('keydown',event=>{if(event.key!=='Enter'||event.shiftKey||
 function attentionRows(){return [...sessions.values()].flatMap(current=>(current.state?.attention||[]).map(item=>({...item,hostId:current.host.hostId,hostLabel:current.host.label}))).sort((a,b)=>String(b.at||'').localeCompare(String(a.at||'')));}
 function attentionTabs(target){const tabs=document.createElement('div');tabs.className='actions attention-tabs';for(const name of ['chats','notifications']){const button=document.createElement('button');button.textContent=name==='chats'?'Chats':'Notifications · '+attentionRows().length;button.className=attentionPanel===name?'primary':'';button.onclick=()=>{attentionPanel=name;render();};tabs.append(button);}target.prepend(tabs);}
 function renderAttentionNotifications(){const target=$('remote-content');target.innerHTML='<h2>Needs attention</h2>';attentionTabs(target);for(const item of attentionRows()){const card=document.createElement('section');card.className='card';const heading=document.createElement('h3');heading.textContent=item.title;const body=document.createElement('p');body.textContent=item.hostLabel+(item.body?' · '+item.body:'');card.append(heading,body);const actions=document.createElement('div');actions.className='actions';if(item.kind==='connection'){const link=document.createElement('a');link.href='/engine-room?tab=integrations';link.className='button';link.textContent='Open connections';actions.append(link);}if(item.chatId){const button=document.createElement('button');button.textContent='Open chat';button.onclick=()=>void openChat(item.chatId,item.hostId).catch(error=>notice(error.message));actions.append(button);}if(item.notificationId){const button=document.createElement('button');button.textContent='Mark read';button.onclick=async()=>{try{await commandForHost(sessions.get(item.hostId),'notifications.read',{id:item.notificationId});await refreshAggregate(true);render();}catch(error){notice(error.message);}};actions.append(button);}card.append(actions);target.append(card);}if(!attentionRows().length)target.insertAdjacentHTML('beforeend','<p>No notifications need action.</p>');}
-import {replaceChatMarkup} from '../../../public/chat-dom.js';
-import {mountChatComposer} from '../../../public/chat-composer.js';
-import {renderRunDetails,approvalDetails,bindRemotePaths,bindRemoteDetails} from '../../../public/chat-details.js';
+import {replaceChatMarkup} from '../../../public/features/chats/chat-dom.js';
+import {mountChatComposer} from '../../../public/features/chats/chat-composer.js';
+import {renderRunDetails,approvalDetails,bindRemotePaths,bindRemoteDetails} from '../../../public/features/chats/chat-details.js';
 
 let previewsBusy=false;
 setInterval(async()=>{
@@ -861,7 +862,8 @@ async function moveWebsiteChat(current,run){
  const supportsProjects=current.state?.capabilities?.includes('projects.v1');
  const [catalog,projectCatalog,fresh]=await Promise.all([commandForHost(current,'context.get',{}),supportsProjects?commandForHost(current,'projects.get',{}):null,commandForHost(current,'chat.get',{id:run.id})]);
  const dialog=document.createElement('dialog');dialog.className='remote-rename-dialog';
- dialog.innerHTML=`<form><h2>Move chat</h2><label>Workspace<select name="workspace">${catalog.workspaces.map(row=>`<option value="${escape(row.id)}" ${row.id===fresh.workspaceId?'selected':''}>${escape(row.name)}</option>`).join('')}</select></label>${supportsProjects?'<label>Project<select name="project"></select></label>':''}<p>Run options, folders, approvals and the current session stay as configured.</p><p data-error></p><button type="button">Cancel</button><button>Move</button></form>`;
- const select=dialog.querySelector('[name=workspace]'),drawProjects=()=>{if(supportsProjects)dialog.querySelector('[name=project]').innerHTML=projectCatalog.projects.filter(p=>p.workspaceId===select.value).map(p=>`<option value="${escape(p.id)}" ${p.id===(select.value===fresh.workspaceId?fresh.projectId:projectCatalog.defaultProjectIds[select.value])?'selected':''}>${escape(p.name)}</option>`).join('');};select.onchange=drawProjects;drawProjects();
- dialog.querySelector('[type=button]').onclick=()=>dialog.close();dialog.onclose=()=>dialog.remove();dialog.querySelector('form').onsubmit=async event=>{event.preventDefault();try{const workspaceId=select.value,projectId=dialog.querySelector('[name=project]')?.value;await commandForHost(current,'chat.move',{id:run.id,workspaceId,...(supportsProjects?{projectId,expectedUpdatedAt:fresh.updatedAt,expectedRevision:projectCatalog.revision}:{})});await refreshAggregate(true);dialog.close();await workspaces.enter({hostId:current.host.hostId,id:workspaceId,projectId});await workspaces.openChat(run.id,run.title);render();}catch(error){dialog.querySelector('[data-error]').textContent=error.message;}};document.body.append(dialog);dialog.showModal();
+ const groups=projectMoveGroups(catalog.workspaces,projectCatalog?.projects||[],{workspaceOnly:!supportsProjects});
+ dialog.innerHTML=`<form><h2>Move tab</h2>${moveMenuMarkup({groups,current:supportsProjects?fresh.projectId:fresh.workspaceId,escape,application:false})}<p>Choose where this tab belongs. Its session and history are preserved.</p><p data-error></p><button type="button">Cancel</button><button>Move tab</button></form>`;
+ const select=dialog.querySelector('[data-move-destination]');
+ dialog.querySelector('[type=button]').onclick=()=>dialog.close();dialog.onclose=()=>dialog.remove();dialog.querySelector('form').onsubmit=async event=>{event.preventDefault();try{const projectId=supportsProjects?select.value:undefined,workspaceId=supportsProjects?projectCatalog.projects.find(project=>project.id===projectId)?.workspaceId:select.value;if((supportsProjects?projectId===fresh.projectId:workspaceId===fresh.workspaceId)){dialog.close();return;}await commandForHost(current,'chat.move',{id:run.id,workspaceId,...(supportsProjects?{projectId,expectedUpdatedAt:fresh.updatedAt,expectedRevision:projectCatalog.revision}:{})});await refreshAggregate(true);dialog.close();await workspaces.enter({hostId:current.host.hostId,id:workspaceId,projectId});await workspaces.openChat(run.id,run.title);render();}catch(error){dialog.querySelector('[data-error]').textContent=error.message;}};document.body.append(dialog);dialog.showModal();
 }

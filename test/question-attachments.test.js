@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
 import {Engine} from '../src/engine.js';
-import {ChatAttachmentStore} from '../src/chat-attachments.js';
-import {ChatAttachmentConsents} from '../src/chat-attachment-consent.js';
-import {replyWithAttachments,questionAttachmentTools} from '../src/question-attachments.js';
-import {codexToolContent,mcpToolResult} from '../src/tool-results.js';
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {ChatAttachmentStore} from '../src/services/chats/chat-attachments.js';
+import {ChatAttachmentConsents} from '../src/services/chats/chat-attachment-consent.js';
+import {replyWithAttachments,questionAttachmentTools} from '../src/services/chats/question-attachments.js';
+import {codexToolContent,mcpToolResult} from '../src/shared/tool-results.js';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLytQAAAABJRU5ErkJggg==','base64');
 const until=async fn=>{for(let index=0;index<200;index++){if(fn())return;await new Promise(resolve=>setTimeout(resolve,5));}throw Error('Synthetic question did not settle.');};
 for(const providerId of ['copilot','codex','claude'])test(providerId+' question reply carries consented image results and cannot cross chat/device or replay a different answer',async t=>{

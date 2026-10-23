@@ -1,10 +1,10 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { PermissionStore, permissionContext } from '../src/permissions.js';
+import { PermissionStore, permissionContext } from '../src/services/settings/permissions.js';
 import { Engine } from '../src/engine.js';
 import { startServer } from '../src/server.js';
 
@@ -234,7 +234,7 @@ test('projection snapshots do not cache authorization, revisions or inherited de
 test('remote run projection shares its permission context and revision read',async()=>{
  const home=temp();
  try{
-  const {remoteRun}=await import('../src/remote.js'),store=new PermissionStore(home),run={id:'synthetic',schedule:schedule(home),events:[],createdAt:new Date().toISOString()};
+  const {remoteRun}=await import('../src/services/remote/remote.js'),store=new PermissionStore(home),run={id:'synthetic',schedule:schedule(home),events:[],createdAt:new Date().toISOString()};
   const get=store.get.bind(store);let reads=0;store.get=()=>{reads++;return get();};
   const view=remoteRun(run,0,store);assert.equal(reads,1);assert.equal(view.permissionContext.mode,'ask');assert.equal(view.permissionRevision,get().revision);
   store.setMode(run.schedule,'autopilot');reads=0;assert.equal(remoteRun(run,0,store).permissionContext.mode,'autopilot');assert.equal(reads,1);

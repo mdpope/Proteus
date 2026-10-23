@@ -40,7 +40,7 @@ try{
  assert.equal(result.menuParent,'chat-a');assert.equal(result.popupParent,'chat-b');assert.equal(result.transferParent,'chat-a');assert.ok(result.hover.height<35);assert.ok(result.hover.width<=result.hover.viewport-19);
  if(result.extension){assert.equal(result.extension.disabled,true);assert.equal(result.extension.reEnabled,true);assert.equal(result.extension.rollback,true);}
  const recents=await page.evaluate(async()=>{
-  const {bindBrowserRecents}=await import('/browser-recents.js'),{setBrowserDefaultEngine}=await import('/browser-home.js');setBrowserDefaultEngine('duckduckgo');
+  const {bindBrowserRecents}=await import('/features/browser/browser-recents.js'),{setBrowserDefaultEngine}=await import('/features/browser/browser-home.js');setBrowserDefaultEngine('duckduckgo');
   document.body.insertAdjacentHTML('beforeend','<form id="fixture-form" style="position:fixed;top:100px;left:200px;z-index:99999;background:white"><input id="fixture-address"></form>');const field=document.querySelector('#fixture-address');let navigate=null;
   const visits=Array.from({length:40},(_,i)=>({url:'https://fixture.test/'+i,title:i===0?'Older needle':'Recent '+i,visitedAt:new Date(10000+i).toISOString()}));
   bindBrowserRecents(field,{load:async()=>{await new Promise(r=>setTimeout(r,40));return visits;},navigate:url=>navigate=url});field.focus();field.value='needle';field.dispatchEvent(new Event('input'));await new Promise(r=>setTimeout(r,180));const older=document.getElementById(field.getAttribute('aria-controls')).textContent;

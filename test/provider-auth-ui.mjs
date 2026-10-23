@@ -3,10 +3,10 @@ import http from 'node:http';
 import fs from 'node:fs';
 import { chromium } from 'playwright';
 
-const moduleSource = fs.readFileSync(new URL('../public/provider-auth.js', import.meta.url));
+const moduleSource = fs.readFileSync(new URL('../public/features/settings/provider-auth.js', import.meta.url));
 const server = http.createServer((request, response) => {
   response.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; connect-src 'self'");
-  if (request.url === '/provider-auth.js') { response.setHeader('Content-Type', 'text/javascript'); response.end(moduleSource); }
+  if (request.url === '/features/settings/provider-auth.js') { response.setHeader('Content-Type', 'text/javascript'); response.end(moduleSource); }
   else { response.setHeader('Content-Type', 'text/html'); response.end('<!doctype html><html><body><div id="auth"></div></body></html>'); }
 });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -18,7 +18,7 @@ try {
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${address.port}/`);
   await page.evaluate(async () => {
-    const { renderProviderAuth } = await import('/provider-auth.js');
+    const { renderProviderAuth } = await import('/features/settings/provider-auth.js');
     window.calls = []; window.opened = []; window.connected = 0;
     window.flow = { providerId: 'copilot', state: 'idle' };
     window.api = async (_route, body) => {

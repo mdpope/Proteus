@@ -10,4 +10,4 @@ fs.fsyncSync = fd => {
   if (workerData.failFirstWrite && writes === 1) throw Object.assign(new Error('Injected checkpoint write failure'), { code: 'EIO' });
   return sync(fd);
 };
-await import('../../src/scheduler-worker.js');
+await import('../../src/services/scheduling/scheduler-worker.js');

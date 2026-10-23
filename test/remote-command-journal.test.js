@@ -1,5 +1,5 @@
 import {assertPrivate} from './helpers/permissions.js';
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -7,9 +7,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
-import { RemoteCommandStore } from '../src/remote-command-store.js';
-import { RemoteCommandJournal } from '../src/remote-command-journal.js';
-import { RemoteHost } from '../src/remote.js';
+import { RemoteCommandStore } from '../src/services/remote/remote-command-store.js';
+import { RemoteCommandJournal } from '../src/services/remote/remote-command-journal.js';
+import { RemoteHost } from '../src/services/remote/remote.js';
 
 const now = () => new Date().toISOString();
 const homeCleanups = new Map();

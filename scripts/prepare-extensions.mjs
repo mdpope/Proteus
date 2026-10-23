@@ -12,7 +12,7 @@ export function prepareExtensions(root=path.resolve(path.dirname(fileURLToPath(i
  if(!text.includes(marker)){
   const start=text.indexOf('var NativeMessagingHost = class {'),end=text.indexOf('// src/browser/api/runtime.ts',start);
   if(start<0||end<start)throw Error('Native messaging patch target changed.');
-  text=text.slice(0,start)+marker+"\nvar NativeMessagingHost = require('../../../../desktop/native-messaging-host.cjs').createNativeMessagingHost({readConfig:readNativeMessagingHostConfig,spawn:import_node_child_process.spawn});\n\n"+text.slice(end);
+  text=text.slice(0,start)+marker+"\nvar NativeMessagingHost = require('../../../../desktop/services/native-messaging-host.cjs').createNativeMessagingHost({readConfig:readNativeMessagingHostConfig,spawn:import_node_child_process.spawn});\n\n"+text.slice(end);
  }
  fs.writeFileSync(file,text);
 }

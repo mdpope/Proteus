@@ -1,8 +1,8 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {browserDestination,browserDestinations,previewChatResourcePlacement,previewContentSession} from '../src/browser-destinations.js';
-import {browserTools} from '../src/browser-tools.js';
+import {browserDestination,browserDestinations,previewChatResourcePlacement,previewContentSession} from '../src/services/browser/browser-destinations.js';
+import {browserTools} from '../src/services/browser/browser-tools.js';
 const fixture=()=>{const run={id:'chat',workspaceId:'new-workspace',projectId:'current-project',schedule:{context:{workspaceId:'old-workspace'}}};return {run,service:{engine:{getRun:()=>run},context:{get:()=>({workspaces:[{id:'new-workspace',name:'New workspace'},{id:'old-workspace',name:'Original workspace'}]})},desktopPreview:{get:()=>({projects:[{id:'current-project',workspaceId:'new-workspace',name:'Current project'},{id:'other-project',workspaceId:'old-workspace',name:'Original project'}]}),membership:value=>({projectId:value.projectId})}}};};
 test('preview browser placement follows current project membership and preserves explicit destinations',()=>{const {service}=fixture();const options={preview:true};assert.deepEqual(browserDestinations(service,'chat',options).defaultDestination,{type:'project',id:'current-project'});const target=browserDestination(service,'chat',undefined,options);assert.equal(target.parentId,'project:local:current-project');assert.equal(target.workspaceId,'new-workspace');assert.equal(browserDestination(service,'chat',{type:'workspace',id:'old-workspace'},options).parentId,'workspace:local:old-workspace');assert.equal(browserDestination(service,'chat',{type:'application'},options).parentId,null);assert.equal(browserDestination(service,'chat',{type:'chat'},options).parentId,'chat');assert.equal(browserDestination(service,'chat',{type:'project',id:'other-project'},options).parentId,'project:local:other-project');assert.throws(()=>browserDestination(service,'chat',{type:'project',id:'missing'},options),/not available/);});
 test('ordinary tools and destinations retain the existing boundary even when a catalog is present',()=>{const {service}=fixture();assert.deepEqual(browserDestinations(service,'chat').defaultDestination,{type:'workspace',id:'new-workspace'});assert.ok(browserDestinations(service,'chat').destinations.every(row=>row.type!=='project'));assert.throws(()=>browserDestination(service,'chat',{type:'project',id:'current-project'}),/Choose/);for(const preview of [false,true]){const tool=browserTools({preview,agent:async()=>[]},'chat').find(tool=>tool.name==='proteus_browser');assert.equal(tool.parameters.properties.destination.properties.type.enum.includes('project'),preview);assert.equal(tool.parameters.properties.action.enum.includes('move'),false);}});
@@ -13,7 +13,7 @@ test('preview legacy content seeding excludes project resources and retains dire
 
 test('document creation finishing after project deletion keeps source authorization and resolves its new project',async t=>{
  const fs=await import('node:fs'),os=await import('node:os'),path=await import('node:path');
- const {openChatDocument}=await import('../src/document-tools.js');
+ const {openChatDocument}=await import('../src/services/chats/document-tools.js');
  const folder=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-preview-doc-delete-'));t.after(()=>fs.rmSync(folder,{recursive:true,force:true}));
  const file=path.join(folder,'sample.md');fs.writeFileSync(file,'Synthetic document.');
  const run={id:'chat',schedule:{workspace:{cwd:folder,additionalDirectories:[]}}},catalog={projects:[{id:'old',workspaceId:'w'},{id:'target',workspaceId:'w',name:'Target'}]},grants=[];let opened;

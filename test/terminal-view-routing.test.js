@@ -7,13 +7,13 @@ test('workspace terminal aliases receive live events and dispose by their actual
   let listener;
   const sandbox={window:{desktop:{onTerminal:callback=>{listener=callback;return ()=>{};}}},cancelAnimationFrame(){}};
   vm.createContext(sandbox);
-  const source=fs.readFileSync(new URL('../public/terminals.js',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'').replaceAll('export ','');
+  const source=fs.readFileSync(new URL('../public/features/tools/terminals.js',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'').replaceAll('export ','');
   vm.runInContext(source+'\nglobalThis.routing={views,initTerminals,disposeTerminalUi};',sandbox);
   const {views,initTerminals,disposeTerminalUi}=sandbox.routing;
   initTerminals({});
   const output=[],disposed=[];
   const status={textContent:''};
-  const view={id:'workspace:local:one:terminal:shell',tab:{terminal:{id:'shell'}},loading:false,seq:1,host:{querySelector:()=>status},output:{push:data=>output.push(data),dispose:()=>disposed.push('output')},term:{dispose:()=>disposed.push('term')},resize:{disconnect:()=>disposed.push('resize')}};
+  const view={id:'workspace:local:one:terminal:shell',tab:{terminal:{id:'shell'}},loading:false,seq:1,host:{querySelector:selector=>selector==='[data-terminal-share]'?null:status},output:{push:data=>output.push(data),dispose:()=>disposed.push('output')},term:{dispose:()=>disposed.push('term')},resize:{disconnect:()=>disposed.push('resize')}};
   views.set(view.id,view);
   const remote={...view,id:'workspace:remote:one:terminal:shell',tab:{terminal:{id:'shell'},hostId:'remote'},output:{push:()=>assert.fail('remote identity must not receive local events')}};
   views.set(remote.id,remote);

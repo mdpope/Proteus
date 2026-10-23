@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {groupActivity,isActivityEvent,activitySummary,permissionToolCallId,toolEventTime} from '../public/tool-presentation.js';
-import {toolDuration,groupDuration} from '../public/runtime.js';
-import {remoteRun,ownerChatControls} from '../src/remote.js';
-import {workingMessage} from '../public/chat-working.js';
+import {groupActivity,isActivityEvent,activitySummary,permissionToolCallId,toolEventTime} from '../public/features/chats/tool-presentation.js';
+import {toolDuration,groupDuration} from '../public/features/chats/runtime.js';
+import {remoteRun,ownerChatControls} from '../src/services/remote/remote.js';
+import {workingMessage} from '../public/features/chats/chat-working.js';
 
 test('plain system messages remain visible while tools and decisions retain chronological groups',()=>{
  const events=[{role:'user'},{role:'tool',data:{tool:{callId:'a'}}},{role:'system',text:'A warning'}, {role:'system',data:{permission:{automatic:false,decision:'deny'}}},{role:'assistant',text:'Response'},{role:'system',text:'Another warning'},{role:'user',text:'Continue'}].map((event,index)=>({...event,key:'event-'+index}));

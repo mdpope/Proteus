@@ -1,5 +1,5 @@
 import {assertPrivate} from './helpers/permissions.js';
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -17,7 +17,7 @@ function fixture(t,{write=fs.promises.writeFile}={}){
   const module={exports:{}};
   const safeStorage={isEncryptionAvailable:()=>true,getSelectedStorageBackend:()=> 'keychain',encryptString:value=>Buffer.from(value),decryptString:value=>value.toString()};
   const io={...fs,promises:{...fs.promises,writeFile:write},statSync:()=>{throw new Error('synchronous disk read');},readFileSync:()=>{throw new Error('synchronous disk read');},mkdirSync:()=>{throw new Error('synchronous disk write');},writeFileSync:()=>{throw new Error('synchronous disk write');},renameSync:()=>{throw new Error('synchronous disk write');}};
-  vm.runInThisContext('(function(require,module){'+fs.readFileSync(new URL('../desktop/browser-cookie-store.cjs',import.meta.url),'utf8')+'\n})')(name=>name==='electron'?{safeStorage}:name==='node:fs'?io:require(name),module);
+  vm.runInThisContext('(function(require,module){'+fs.readFileSync(new URL('../desktop/browser/browser-cookie-store.cjs',import.meta.url),'utf8')+'\n})')(name=>name==='electron'?{safeStorage}:name==='node:fs'?io:require(name),module);
   const session={storagePath:path.join(home,'chromium'),cookies};
   const Store=module.exports.BrowserCookieStore,store=new Store(home,session);
   return {home,store,Store,session,cookies,rows:value=>{rows=value;},reads:()=>reads};

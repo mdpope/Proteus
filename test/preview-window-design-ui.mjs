@@ -22,7 +22,7 @@ try{
  const logical=await first.evaluate(()=>window.desktop.workspaceSession({action:'get'}).then(row=>row.team.tabs[0].contentTabId));
  await second.locator('.team-tab [data-team-tab]').click();await second.locator('#team-browser-url').waitFor();
  const secondBrowser=await second.evaluate(async()=>{const tabs=await window.desktop.browser({action:'list'});return tabs.find(tab=>tab.group==='team').id;});
- await until(()=>second.evaluate(async()=>(await import('/team-tools.js')).canPreserveTeamBrowser()),'mirrored Team surface finishes mounting');
+ await until(()=>second.evaluate(async()=>(await import('/features/tools/team-tools.js')).canPreserveTeamBrowser()),'mirrored Team surface finishes mounting');
  await second.evaluate(id=>window.desktop.browser({action:'unload',id}),secondBrowser);await second.locator('#team-load-tab').waitFor();
  await first.locator('#team-browser-url').fill(f.origin+'/shared-next');await first.locator('#team-browser-url').press('Enter');
  await until(()=>second.locator('#team-browser-url').inputValue().then(value=>value===f.origin+'/shared-next'),'same Team URL synchronizes');
@@ -50,7 +50,7 @@ try{
  for(const page of app?.windows()||[])try{
   const diagnostic=await page.evaluate(async()=>({
    owner:await fetch('/api/content-tabs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'get',scope:'team',id:'team'})}).then(r=>r.json()),
-   tabs:(await import('/team-tools.js')).teamState().tabs,
+   tabs:(await import('/features/tools/team-tools.js')).teamState().tabs,
    browsers:await window.desktop.browser({action:'list'}),
    outbox:Object.fromEntries(Object.entries(localStorage).filter(([key])=>key.includes('navigation.pending')))
   }));console.error('Synthetic diagnostic',JSON.stringify(diagnostic));

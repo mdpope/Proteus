@@ -1,4 +1,4 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -6,8 +6,8 @@ import os from 'node:os';
 import path from 'node:path';
 import {EventEmitter} from 'node:events';
 import {Engine} from '../src/engine.js';
-import {PermissionStore} from '../src/permissions.js';
-import {CodexProvider,codexSandbox,codexSandboxPreservesAccess} from '../src/codex.js';
+import {PermissionStore} from '../src/services/settings/permissions.js';
+import {CodexProvider,codexSandbox,codexSandboxPreservesAccess} from '../src/providers/codex.js';
 
 class PreviewRPC extends EventEmitter {
  constructor(){super();this.calls=[];this.responses=[];this.turns=0;}

@@ -1,23 +1,23 @@
-import {displayText} from './tool-activity.js';
-import { RunHistoryCache } from './run-history-cache.js';
-import {startTurn,pauseTurn,resumeTurn,finishTurn,interruptTiming} from './run-timing.js';
+import {displayText} from './shared/tool-activity.js';
+import { RunHistoryCache } from './services/chats/run-history-cache.js';
+import {startTurn,pauseTurn,resumeTurn,finishTurn,interruptTiming} from './services/chats/run-timing.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
-import { atomicJSON, jsonFiles, readJSON } from './files.js';
-import { ScheduleStore, revision, validateSchedule } from './schedules.js';
-import { SchedulerWorker } from './scheduler-client.js';
-import { RehearsalProvider } from './rehearsal.js';
-import { PermissionStore, permissionContext, canonicalPath, operationRule, permissionRuleId } from './permissions.js';
-import {chatMembership} from '../public/chat-membership.js';
+import { atomicJSON, jsonFiles, readJSON } from './shared/files.js';
+import { ScheduleStore, revision, validateSchedule } from './services/scheduling/schedules.js';
+import { SchedulerWorker } from './services/scheduling/scheduler-client.js';
+import { RehearsalProvider } from './providers/rehearsal.js';
+import { PermissionStore, permissionContext, canonicalPath, operationRule, permissionRuleId } from './services/settings/permissions.js';
+import {chatMembership} from '../public/features/chats/chat-membership.js';
 
-import { chatModelOptions } from './model-catalog.js';
-import { agentName } from '../public/agent-name.js';
-import { ChatAttachmentConsents } from './chat-attachment-consent.js';
-import {ChatRecovery} from './chat-recovery.js';
-import {capacityFailure} from '../public/chat-recovery-state.js';
-import {startProgress,providerProgress,checkProgress} from './run-progress.js';
+import { chatModelOptions } from './models/model-catalog.js';
+import { agentName } from '../public/features/chats/agent-name.js';
+import { ChatAttachmentConsents } from './services/chats/chat-attachment-consent.js';
+import {ChatRecovery} from './services/chats/chat-recovery.js';
+import {capacityFailure} from '../public/features/chats/chat-recovery-state.js';
+import {startProgress,providerProgress,checkProgress} from './services/chats/run-progress.js';
 
 const active = new Set(['queued', 'running', 'awaiting_input']);
 export function suggestedChatTitle(prompt) {

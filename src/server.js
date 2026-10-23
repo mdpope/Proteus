@@ -1,52 +1,57 @@
-import {replyWithAttachments,questionAttachmentMediaTypes} from './question-attachments.js';
-import {readMarkdownFile} from './file-metadata.js';
-import {ensurePrivateHome} from './private-paths.cjs';
-import {DesktopControl} from './desktop-control.js';
+import {publicAssets} from './shared/public-assets.js';
+import {replyWithAttachments,questionAttachmentMediaTypes} from './services/chats/question-attachments.js';
+import {readMarkdownFile} from './shared/file-metadata.js';
+import {ensurePrivateHome} from './shared/private-paths.cjs';
+import {DesktopControl} from './services/remote/desktop-control.js';
 import { DesktopPreview, desktopPreviewCodexHome } from './desktop-preview.js';
-import { WorkspaceProjects } from './workspace-projects.js';
-import { hostPlatformMetadata } from './host-platform.js';
-import {TabManagement} from './tab-management.js';
-import {ChatControl} from './chat-control.js';
-import { PerformanceDiagnostics } from './performance-diagnostics.js';
-import {BrowserHistory,browserHistorySettings} from './browser-history.js';
-import {BrowserProfiles} from './browser-profiles.js';
-import { SessionProvider } from './session-provider.js';
-import { IntegrationHealth } from './integrations.js';
-import { ActivityStore } from './activity.js';
-import { AppAccount } from './app-account.js';
-import { ModelCatalog, chatModelOptions, validateModelOptions } from './model-catalog.js';
+import { WorkspaceProjects } from './services/workspaces/workspace-projects.js';
+import { hostPlatformMetadata } from './shared/host-platform.js';
+import {TabManagement} from './services/workspaces/tab-management.js';
+import {ChatControl} from './services/chats/chat-control.js';
+import { PerformanceDiagnostics } from './services/telemetry/performance-diagnostics.js';
+import {BrowserHistory,browserHistorySettings} from './services/browser/browser-history.js';
+import {BrowserProfiles} from './services/browser/browser-profiles.js';
+import { SessionProvider } from './providers/session-provider.js';
+import { IntegrationHealth } from './services/integrations/integrations.js';
+import { ActivityStore } from './services/telemetry/activity.js';
+import { AppAccount } from './services/remote/app-account.js';
+import { ModelCatalog, chatModelOptions, validateModelOptions } from './models/model-catalog.js';
 import http from 'node:http';
-import { contextPlan } from '../public/context-plan.js';
-import {chatMembership} from '../public/chat-membership.js';
-import { agentName } from '../public/agent-name.js';
-import { ProviderUsageCache } from './usage.js';
+import { contextPlan } from '../public/features/workspaces/context-plan.js';
+import {chatMembership} from '../public/features/chats/chat-membership.js';
+import { agentName } from '../public/features/chats/agent-name.js';
+import { ProviderUsageCache } from './services/telemetry/usage.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { randomBytes } from 'node:crypto';
 import { Engine } from './engine.js';
-import { CopilotProvider } from './copilot.js';
-import { CodexProvider } from './codex.js';
-import { ClaudeProvider } from './claude.js';
-import { OmiIntegration, isOmiSchedule } from './omi.js';
-import { LifeStore } from './life.js';
-import { WorkspaceFiles } from './workspace-files.js';
-import { SettingsStore } from './settings.js';
-import { ContextStore } from './context.js';
-import { StandupStore } from './standup.js';
-import { storagePaths, exportTranscript } from './transcripts.js';
-import { atomicJSON, defaultHome, readJSON, isWithin } from './files.js';
-import { nextRuns, revision, validateSchedule } from './schedules.js';
-import { readChatImage, readImage } from './chat-images.js';
-import { chatDelta } from './chat-deltas.js';
-import { RemoteHost, remoteRun, runSummary, chatActivityAt } from './remote.js';
-import { ContentTabs } from './content-tabs.js';
-import { ProjectFollow } from './project-follow.js';
-import { fileStamp } from './file-stamp.js';
-import { ChatAttachmentStore, chatAttachmentLimits } from './chat-attachments.js';
-import { ProviderAuthManager } from './provider-auth.js';
+import { CopilotProvider } from './providers/copilot.js';
+import { CodexProvider } from './providers/codex.js';
+import { ClaudeProvider } from './providers/claude.js';
+import { OmiIntegration, isOmiSchedule } from './services/tools/omi.js';
+import { LifeStore } from './services/life/life.js';
+import { WorkspaceFiles } from './services/workspaces/workspace-files.js';
+import { SettingsStore } from './services/settings/settings.js';
+import { ContextStore } from './services/workspaces/context.js';
+import { StandupStore } from './services/tools/standup.js';
+import { storagePaths, exportTranscript } from './services/tools/transcripts.js';
+import { atomicJSON, defaultHome, readJSON, isWithin } from './shared/files.js';
+import { nextRuns, revision, validateSchedule } from './services/scheduling/schedules.js';
+import { readChatImage, readImage } from './services/chats/chat-images.js';
+import { chatDelta } from './services/chats/chat-deltas.js';
+import { RemoteHost, remoteRun, runSummary, chatActivityAt } from './services/remote/remote.js';
+import { ContentTabs } from './services/workspaces/content-tabs.js';
+import { ProjectFollow } from './services/workspaces/project-follow.js';
+import { fileStamp } from './shared/file-stamp.js';
+import { ChatAttachmentStore, chatAttachmentLimits } from './services/chats/chat-attachments.js';
+import { ProviderAuthManager } from './providers/provider-auth.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const assets=publicAssets(path.join(root,'public'));
+assets['/remote.js']=['services/remote/remote.js','text/javascript'];
+assets['/features.js']=['shared/ui/features.js','text/javascript'];
+assets['/terminal/ghostty-vt.wasm']=['terminal/ghostty-vt.wasm','application/wasm'];
 export function seed(home, cwd = root) {
   const file = path.join(home, 'schedules', 'workspace-pulse.json');
   if (!fs.existsSync(file)) atomicJSON(file, {
@@ -181,7 +186,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
     const updateCoordinator=value.purpose==='update';
     if(updateCoordinator&&value.chatType==='internet')throw Error('Update coordinators require an ordinary unassigned chat.');
     if(updateCoordinator){
-      const {updateCoordinatorConfiguration,updateCoordinatorPrompt}=await import('./update-coordinator.js');
+      const {updateCoordinatorConfiguration,updateCoordinatorPrompt}=await import('./services/updates/update-coordinator.js');
       value={...value,...await updateCoordinatorConfiguration(defaults,catalogs,value),workspaceId:null,projectId:null,includeDefaults:false,selectedIds:[],agentId:null,skillDirectories:[],mcpServers:{},workspace:defaults.workspace,prompt:updateCoordinatorPrompt(value.prompt||'Check and install the explicitly requested release after required validation.')};
     }
     if(value.workspaceId){ const profile = context.scope(value.workspaceId); value = {...profile.defaults,...value}; }
@@ -272,6 +277,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         if(projectPath==='/api/desktop-preview/sources'&&req.method==='POST'){const result=await preview.sources(await body(req),engine);notify();remote.changed();return json(200,result);}
         return json(404,{error:'Unknown project operation.'});
       }
+      if(url.pathname==='/api/terminal-agent'&&req.method==='POST'){if(!service.terminalAgent)throw Error('Terminal agent access requires the host desktop.');return json(200,await service.terminalAgent(await body(req,128000),'operator'));}
       if(url.pathname==='/api/tabs/manage'&&req.method==='POST')return json(200,await service.tabManagement.handle(await body(req,64000)));
       if(url.pathname==='/api/chat-control'&&req.method==='POST')return json(200,await service.chatControl.handle(await body(req,64000),'operator'));
       if(url.pathname==='/api/chat-workspace'&&req.method==='POST'){
@@ -347,7 +353,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (url.pathname === '/api/workspace-files/create' && req.method === 'POST') return json(200, workspaceFiles.createMarkdown(await body(req)));
       if (url.pathname === '/api/settings' && req.method === 'POST') {
         const value = await body(req); const old = settings.get();
-        if(value.settings?.updateCoordinator&&JSON.stringify(value.settings.updateCoordinator)!==JSON.stringify(old.updateCoordinator))await (await import('./update-coordinator.js')).updateCoordinatorConfiguration(value.settings,catalogs);
+        if(value.settings?.updateCoordinator&&JSON.stringify(value.settings.updateCoordinator)!==JSON.stringify(old.updateCoordinator))await (await import('./services/updates/update-coordinator.js')).updateCoordinatorConfiguration(value.settings,catalogs);
         for(const [provider,options] of Object.entries(value.settings?.internetSearches||{})){
           if(JSON.stringify(old.internetSearches?.[provider])===JSON.stringify(options))continue;
           const metadata=await catalogs[provider]?.get(),model=metadata?.models?.find(m=>m.id===options.model);
@@ -623,13 +629,6 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         const document=readMarkdownFile(file);
         return json(200, image ? readImage({ source: image, texts: [document.content], cwd: path.dirname(file), roots }) : document);
       }
-      const assets = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'], '/features.js': ['features.js', 'text/javascript'], '/remote.js': ['remote.js', 'text/javascript'] };
-      for (const file of ['runtime.js', 'style.css']) assets['/markdown/' + file] = ['markdown/' + file, file.endsWith('.css') ? 'text/css' : 'text/javascript'];
-      for (const file of ['conversation.js', 'tool-presentation.js', 'agent-name.js', 'usage.js', 'context-plan.js', 'transcription.js', 'omi.js', 'life.js', 'markdown-picker.js', 'terminals.js', 'remote-desktops.js']) assets['/' + file] = [file, 'text/javascript'];
-      assets['/terminal/ghostty.js'] = ['terminal/ghostty.js', 'text/javascript'];
-      assets['/terminal/ghostty-vt.wasm'] = ['terminal/ghostty-vt.wasm', 'application/wasm'];
-      for (const file of ['proteus-theme.css', 'omi.css', 'life.css', 'markdown-picker.css', 'terminals.css', 'remote-desktops.css']) assets['/' + file] = [file, 'text/css'];
-      for(const file of fs.readdirSync(path.join(root,'public')).filter(name=>/^[a-z0-9-]+\.(js|css)$/.test(name))) assets['/'+file]=[file,file.endsWith('.css')?'text/css':'text/javascript'];
       if (req.method === 'GET' && assets[url.pathname]) {
         const [file, type] = assets[url.pathname]; res.writeHead(200, { 'Content-Type': type }); res.end(fs.readFileSync(path.join(root, 'public', file))); return;
       }
@@ -656,7 +655,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
     if (activityCloseError) throw activityCloseError;
   } };
   service.browserHistory=new BrowserHistory(home,{hostId:()=>service.remote?.info().hostId});
-  service.contentTabs=new ContentTabs(home,{history:service.browserHistory,onChange:result=>{notify();remote?.broadcast('tabs',{scope:result.scope,id:result.id,revision:result.revision},result.scope==='chat'?result.id:undefined);}});
+  service.contentTabs=new ContentTabs(home,{history:service.browserHistory,profiles:()=>browserProfiles.list().items,onChange:result=>{const metadata={scope:result.scope,id:result.id,revision:result.revision};for(const client of eventClients)client.write('event: content-tabs\ndata: '+JSON.stringify(metadata)+'\n\n');notify();remote?.broadcast('tabs',metadata,result.scope==='chat'?result.id:undefined);}});
   service.projectFollow = new ProjectFollow({
     validationStamp: () => fileStamp([context.file,preview.file]),
     validate: value => { if(value.scope==='project')preview.projectFor({projectId:value.id},preview.snapshot());else context.scope(value.id); },
@@ -693,4 +692,4 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   console.log(`Proteus: ${app.url}\nData: ${app.home}`);
   for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, async () => { await app.close(); process.exit(0); });
 }
-import {ChatPreviews} from './chat-previews.js';
+import {ChatPreviews} from './services/chats/chat-previews.js';

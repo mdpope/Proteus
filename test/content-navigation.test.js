@@ -1,12 +1,12 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import {cleanupStack} from './helpers/cleanup.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { BrowserHistory } from '../src/browser-history.js';
-import { ContentTabs } from '../src/content-tabs.js';
+import { BrowserHistory } from '../src/services/browser/browser-history.js';
+import { ContentTabs } from '../src/services/workspaces/content-tabs.js';
 async function setup(t) {
  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-canonical-tabs-')),history=new BrowserHistory(home,{hostId:'owner'});await history.ready;
  let changed=0;const tabs=new ContentTabs(home,{history,onChange:()=>changed++}),cleanup=cleanupStack(t);cleanup(()=>fs.rmSync(home,{recursive:true,force:true}));cleanup(()=>history.close());
@@ -98,7 +98,7 @@ test('an empty relocated stack retains its authoritative revision for the first 
  await tabs.moveAsync({...source,tabId:browser.id,expectedRevision:tabs.get(source.scope,source.id).revision,destination:{...destination,expectedRevision:0}});
  const owner=await tabs.getAsync(destination.scope,destination.id),before=owner.tabs[0];
  assert.equal(before.history.revision,1);assert.deepEqual(before.history.entries,[]);assert.equal(before.history.index,-1);
- const {tabChanges}=await import('../public/content-tab-sync.js'),entry={id:'first-after-move',url:'https://example.test/first',title:'First'};
+ const {tabChanges}=await import('../public/models/content-tab-sync.js'),entry={id:'first-after-move',url:'https://example.test/first',title:'First'};
  const operations=tabChanges(owner.tabs,[{...before,url:entry.url,navigationPending:true,history:{...before.history,entries:[entry],index:0,currentEntryId:entry.id}}],{navigation:true});
  const op=operations.find(item=>item.action==='browser-navigate');assert.equal(op.baseRevision,1);
  const committed=await tabs.mutateAsync({...destination,operations:[op]});assert.equal(committed.tabs[0].history.revision,2);assert.equal(committed.tabs[0].url,entry.url);

@@ -1,13 +1,13 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import {cleanupStack} from './helpers/cleanup.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { BrowserHistory } from '../src/browser-history.js';
-import { BrowserHistoryStore } from '../src/browser-history-store.js';
-import { DesktopPeers } from '../src/desktop-peers.js';
+import { BrowserHistory } from '../src/services/browser/browser-history.js';
+import { BrowserHistoryStore } from '../src/services/browser/browser-history-store.js';
+import { DesktopPeers } from '../src/services/remote/desktop-peers.js';
 const visit=(id,extra={})=>({eventId:id,url:'https://example.test/'+id,title:'Synthetic '+id,visitedAt:'2026-10-12T12:00:00Z',profileId:'default',sourceHostId:'owner',...extra});
 const cleanups=new WeakMap();
 function cleanup(t,action){if(!cleanups.has(t))cleanups.set(t,cleanupStack(t));cleanups.get(t)(action);}

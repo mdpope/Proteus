@@ -1,15 +1,22 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {createRequire} from 'node:module';
-import {resolvePreviewProject,remapPreviewProjectSession,remapPreviewBrowserPlacement} from '../public/preview-project-placement.js';
-const {WorkspaceSession}=createRequire(import.meta.url)('../desktop/workspace-session.cjs');
+import {resolvePreviewProject,remapPreviewProjectSession,remapPreviewBrowserPlacement} from '../public/features/workspaces/preview-project-placement.js';
+const {WorkspaceSession}=createRequire(import.meta.url)('../desktop/windows/workspace-session.cjs');
 const id=value=>'project:local:'+value;
 const catalog=()=>({projects:[{id:'default',workspaceId:'w',name:'Default'},{id:'other',workspaceId:'other-w',name:'Other'}],projectRedirects:{old:{workspaceId:'w',projectId:'middle',deletedAt:'synthetic'},middle:{workspaceId:'w',projectId:'default',deletedAt:'synthetic'}}});
 const root=(projectId,extra={})=>({id:id(projectId),type:'workspace',workspaceId:'w',projectId,label:projectId,workspacePage:'tabs',...extra});
+
+for(const hostId of [undefined,'remote-owner'])test('associated global chat restores inside its owner project: '+(hostId||'local'),()=>{
+ const chat={id:'saved-view',type:hostId?'remote-run':'run',runId:'chat',...(hostId?{hostId}:{})},child={id:'existing-terminal',type:'terminal',parentId:chat.id,terminal:{id:'same-pty'}},unassigned={id:'unassigned',type:chat.type,runId:'unassigned',...(hostId?{hostId}:{})};
+ const value={tabs:[chat,child,unassigned],active:child.id,selectedChildren:{[chat.id]:child.id},chatDrafts:{chat:'Keep this draft'}},owner={...catalog(),workspaces:[{id:'w',name:'Workspace'}],memberships:{chat:{workspaceId:'w',projectId:'default'},unassigned:{workspaceId:null,projectId:null}}};
+ const next=remapPreviewProjectSession(value,owner,{hostId}),project='project:'+(hostId||'local')+':default',workspace='workspace:'+(hostId||'local')+':w';
+ assert.equal(next.tabs.find(tab=>tab.id===chat.id).parentId,project);assert.equal(next.tabs.find(tab=>tab.id===child.id),child);assert.equal(next.tabs.find(tab=>tab.id===unassigned.id),unassigned);assert.equal(next.active,child.id);assert.equal(next.selectedChildren[workspace],project);assert.equal(next.selectedChildren[project],chat.id);assert.equal(next.chatDrafts,value.chatDrafts);assert.equal(remapPreviewProjectSession(next,owner,{hostId}),next);
+});
 
 test('project resolution follows fixed same-workspace redirects and rejects cycles and foreign targets',()=>{
  const value=catalog();assert.equal(resolvePreviewProject(value,'old','w'),value.projects[0]);assert.equal(resolvePreviewProject(value,'default','w'),value.projects[0]);assert.equal(resolvePreviewProject(value,'old','other-w'),null);assert.equal(resolvePreviewProject(value,'missing'),null);
@@ -78,13 +85,14 @@ test('unrelated, current, unknown and cyclic placement remains unchanged',()=>{
  const invalid=catalog();invalid.projectRedirects.middle.projectId='old';const orphan={tabs:[root('old'),{id:'b',type:'browser',parentId:id('old')}],active:id('old')};assert.equal(remapPreviewProjectSession(orphan,invalid),orphan);
 });
 
-test('peer upgrade moves legacy workspace chat aliases into owner projects without recreating children or root quick views',()=>{
+test('peer upgrade rehomes legacy workspace and global chat views without recreating their children',()=>{
  const hostId='aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',workspace='workspace:'+hostId+':w',project='project:'+hostId+':default';
  const owner={...catalog(),memberships:{chat:{workspaceId:'w',projectId:'default'}}};
  const root={id:workspace,type:'workspace',hostId,workspaceId:'w'},alias={id:'saved-peer-view',type:'remote-run',hostId,runId:'chat',parentId:workspace},child={id:'native-browser',type:'browser',contentTabId:'shared-browser',parentId:alias.id,url:'https://example.test/',history:{entries:[{id:'entry',url:'https://example.test/'}],index:0}},duplicate={...child,id:'second-native-browser'},quick={id:'peer:'+hostId+':chat',type:'remote-run',hostId,runId:'chat'},direct={id:'workspace-browser',type:'browser',parentId:workspace};
  const value={tabs:[root,alias,child,duplicate,quick,direct],active:child.id,selectedChildren:{[workspace]:alias.id,[alias.id]:child.id},chatDrafts:{chat:'Unsent'}};
  const next=remapPreviewProjectSession(value,owner,{hostId});assert.equal(next.tabs.find(tab=>tab.id===alias.id).parentId,project);assert.ok(next.tabs.some(tab=>tab.id===project));
- for(const tab of [root,child,duplicate,quick,direct])assert.equal(next.tabs.find(row=>row.id===tab.id),tab);
+ for(const tab of [root,child,duplicate,direct])assert.equal(next.tabs.find(row=>row.id===tab.id),tab);
+ assert.equal(next.tabs.find(tab=>tab.id===quick.id).parentId,project);
  assert.equal(next.active,child.id);assert.equal(next.selectedChildren[alias.id],child.id);assert.equal(next.selectedChildren[project],alias.id);assert.equal(next.chatDrafts,value.chatDrafts);
  assert.equal(remapPreviewProjectSession(next,owner,{hostId}),next);
 });

@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
-import {BrowserHistoryStore} from '../src/browser-history-store.js';
-import {ContentTabs} from '../src/content-tabs.js';
-import {createTabSynchronizer,rebaseTabChanges} from '../public/content-tab-sync.js';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
+import {BrowserHistoryStore} from '../src/services/browser/browser-history-store.js';
+import {ContentTabs} from '../src/services/workspaces/content-tabs.js';
+import {createTabSynchronizer,rebaseTabChanges} from '../public/models/content-tab-sync.js';
 
 const clone=value=>structuredClone(value);
 const scope={scope:'project',id:'redirect-convergence'};

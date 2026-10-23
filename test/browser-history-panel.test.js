@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {historyPeerChoices,historySettingsPatch} from '../public/browser-history-panel.js';
+import {historyPeerChoices,historySettingsPatch} from '../public/features/browser/browser-history-panel.js';
 test('history controls use owner pairings, including an authoritative empty list',()=>{
  const viewer=[{hostId:'viewer',label:'Viewer'},{hostId:'owner',label:'Owner'},{hostId:'viewer-peer',label:'Viewer peer'}];
  assert.deepEqual(historyPeerChoices({availablePeers:[{hostId:'owner-peer',label:'Owner peer'}]},viewer,'owner').map(peer=>peer.hostId),['owner-peer']);

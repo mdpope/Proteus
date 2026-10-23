@@ -1,8 +1,8 @@
 // Synthetic data only, prepared before its disposable Electron profile is opened.
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
 import {randomUUID} from 'node:crypto';import {createRequire} from 'node:module';import {createServer} from 'node:http';
-import {seedDesktopPreview} from '../src/desktop-preview.js';import {atomicJSON} from '../src/files.js';import {revision} from '../src/schedules.js';
-const require=createRequire(import.meta.url),{initializePreviewRoot,preparePreviewFixtures}=require('../desktop/preview-runtime.cjs'),{WorkspaceSession}=require('../desktop/workspace-session.cjs');
+import {seedDesktopPreview} from '../src/desktop-preview.js';import {atomicJSON} from '../src/shared/files.js';import {revision} from '../src/services/scheduling/schedules.js';
+const require=createRequire(import.meta.url),{initializePreviewRoot,preparePreviewFixtures}=require('../desktop/preview-runtime.cjs'),{WorkspaceSession}=require('../desktop/windows/workspace-session.cjs');
 export async function sidebarFixture(){
  const temporary=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'proteus-sidebar-ui-'))),locations=initializePreviewRoot(path.join(temporary,'preview')),auth=path.join(temporary,'empty-codex');fs.mkdirSync(auth);
  const requests=[];const server=createServer((request,response)=>{requests.push(request.url);response.writeHead(200,{'Content-Type':'text/html'});response.end('<!doctype html><title>Synthetic sidebar browser</title><h1>Disposable sidebar browser</h1>');});await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));

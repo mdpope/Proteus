@@ -1,4 +1,4 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -7,8 +7,8 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { startServer } from '../src/server.js';
 import { startRelay } from '../relay/server.js';
-import { atomicJSON } from '../src/files.js';
-import { secret } from '../src/remote-crypto.js';
+import { atomicJSON } from '../src/shared/files.js';
+import { secret } from '../src/services/remote/remote-crypto.js';
 import { RemoteClient, until } from './remote-client.mjs';
 
 test('resource access is a local per-device grant, checked before effects and cached replies', async t => {

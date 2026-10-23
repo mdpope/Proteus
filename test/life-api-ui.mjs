@@ -1,7 +1,7 @@
 // Real Laravel-controller response fixtures rendered by the desktop Life API facade.
 import { _electron as electron } from 'playwright';
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import http from 'node:http';import assert from 'node:assert/strict';import {execFileSync} from 'node:child_process';
-import {LifeStore} from '../src/life.js';
+import {LifeStore} from '../src/services/life/life.js';
 const root=process.cwd(),home=fs.mkdtempSync('/private/tmp/proteus-life-api-ui-'),output=path.join(home,'responses.json');
 const phpTest=process.env.PROTEUS_PHPUNIT_BOOTSTRAP?['vendor/bin/phpunit','--do-not-cache-result','--bootstrap',process.env.PROTEUS_PHPUNIT_BOOTSTRAP,'--filter=LifeApiTest::test_desktop_food_pages','tests/Feature/LifeApiTest.php']:['artisan','test','--compact','--filter=LifeApiTest::test_desktop_food_pages'];
 execFileSync('php',phpTest,{cwd:path.join(root,'web'),env:{...process.env,PROTEUS_LIFE_API_FIXTURE:output},stdio:'pipe'});
@@ -23,7 +23,7 @@ const store=new LifeStore(home,{vault,openExternal:async url=>{authURL=new URL(u
 }});
 store.save({schemaVersion:3,enabled:true,websiteOrigin:origin,legacyArchived:true},store.get().revision);await store.refresh();
 const html=`<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/life.css"><style>body{padding:16px}#main{height:auto}#life-setup{max-width:1100px;margin:auto}</style><div id="life-setup"></div><main id="main"></main><script type="module">
-import {initLife,renderLife,renderLifeSetup} from '/life.js';
+import {initLife,renderLife,renderLifeSetup} from '/features/tools/life.js';
 const api=async(url,value)=>{const r=await fetch(url,{method:value===undefined?'GET':'POST',headers:{'Content-Type':'application/json'},body:value===undefined?undefined:JSON.stringify(value)});const v=await r.json();if(!r.ok)throw new Error(v.error);return v;};
 window.desktop={lifeAccount:value=>api('/test/auth',value)};
 window.state={data:{life:await api('/api/life')}};window.refreshLife=async()=>{state.data.life=await api('/api/life');renderLifeSetup('#life-setup');if(document.querySelector('#life-page'))renderLife();};window.showSetup=()=>{document.querySelector('#life-setup')?.remove();document.querySelector('#main').innerHTML='<section id=setup-sentinel><div id=life-setup></div></section>';renderLifeSetup('#life-setup');};
@@ -31,7 +31,7 @@ initLife({state,api,escape:v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':
 </script>`;
 const server=http.createServer(async(req,res)=>{try{
  if(req.url==='/'){res.setHeader('Content-Type','text/html');res.end(html);return;}
- if(['/life.js','/life.css','/style.css','/proteus-theme.css'].includes(req.url)){res.setHeader('Content-Type',req.url.endsWith('.js')?'text/javascript':'text/css');res.end(fs.readFileSync(path.join(root,'public',req.url.slice(1))));return;}
+ if(['/features/tools/life.js','/life.css','/style.css','/proteus-theme.css'].includes(req.url)){res.setHeader('Content-Type',req.url.endsWith('.js')?'text/javascript':'text/css');res.end(fs.readFileSync(path.join(root,'public',req.url.slice(1))));return;}
  let text='';for await(const b of req)text+=b;const v=text?JSON.parse(text):{};let result;
  if(req.url==='/api/life')result=req.method==='GET'?store.get():store.save(v.settings,v.expectedRevision);
  else if(req.url==='/api/life/data')result=await store.data(v.section,v.query);

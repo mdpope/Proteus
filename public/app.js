@@ -1,71 +1,73 @@
-import {workingMessage} from './chat-working.js';
-import {mountQuestionAttachments} from './question-attachments.js';
-import {browserLabel} from './browser-label.js';
-import {fileDatesText} from './file-dates.js';
-import {syncPalette} from './palette.js';
-import {createChatSetupTabs} from './chat-setup-tabs.js';
-import {renderUpdateCard} from './updates.js';
-import {createWindowChrome} from './preview-window-chrome.js';
-import {createWindowChrome as createLinuxWindowChrome} from './window-chrome.js';
-import {createPreviewSidebarLayout} from './preview-sidebar-layout.js';
-import {remapPreviewProjectSession,remapPreviewBrowserPlacement} from './preview-project-placement.js';
-import {reorderWorkspaceTabSiblings} from './workspace-tabs.js';
-import {workspaceProjectsCatalog,setWorkspaceProjectsCatalog,initDesktopPreview,previewEnabled,projectIcon,previewTopId,reconcilePreviewChatPlacement,previewContentDescriptors,ensurePreviewProject,previewProjects,previewProjectForChat,previewResourceParent,capturePreviewSidebar,bindPreviewSidebar,resetPreviewProjectPaging,openPreviewChat,previewChatBreadcrumb,bindPreviewChatBreadcrumb,renderPreviewSources} from './desktop-preview.js';
-import {rememberTabSelection,restoreTabSelection} from './workspace-selection.js';
-import {previewRelativeAge,previewChatActivity} from './preview-navigation.js';
-import {previewApprovalChoices,previewPermissionNames,previewPermissionHelp,previewFolderDialog,previewRememberDialog,previewRememberEffect,previewPermissionChoiceLabel} from './preview-permissions.js';
-import {downloadsChanged} from './browser-downloads.js';
-import {normalizeContentTabHistory,contentTabMetadata,acknowledgesBrowserNavigation} from './content-tab-descriptor.js';
-import {chatLink,parseChatLink} from './chat-links.js';
-import {computerName} from './computer-identity.js';
-import {initWorkspaces,renderWorkspaces,renderWorkspace,openWorkspace,openWorkspaceChat,openRemoteProject,workspaceOwners,refreshWorkspaceOwners,loadWorkspaceOwnerTabs,recentWorkspaces,sendChatToWorkspace,moveChatToWorkspace,createWorkspace,deleteWorkspace} from './desktop-workspaces.js';
-import {workspaceIcon,workspaceCatalog} from './workspace-ui.js';
-import {isLoopbackPreview} from './chat-previews.js';
-import {initAttention,attentionItems,announceAttention,openAttentionItem,renderAttention} from './attention.js';
-import {initBrowserNotifications,recordBrowserIssue} from './browser-notifications.js';
-import { installTabSwipe } from './tab-swipe.js';
-import { installPageFind } from './page-find.js';
-import {chatType} from './chat-types.js';
-import {mountChatComposer,mountNewChatComposer} from './chat-composer.js';
-import {renderRunDetails,approvalDetails,bindChatFolderTrust} from './chat-details.js';
-import {createToast} from './toast.js';
-import {internetSearchDialog} from './internet-search.js';
-import {selectChatType} from './chats-index.js';
-import { mergeChatHistory } from './chat-history.js';
-import { renderAgentTerminal } from './agent-terminal.js';
-import {usageSidebar,usageDetails} from './provider-usage-view.js';
-import { bindDesktopBrowserRecents } from './browser-recents.js';
-import { mountHome } from './home.js';
-import { createTabSynchronizer, syncableTabURL } from './content-tab-sync.js';
-import { createProjectFollower, sharedScrollPosition, restoreSharedScroll } from './project-follow.js';
-import { browserTabIcon } from './browser-icons.js';
-import { setMessageActionsContext, stopMessageSpeech } from './message-actions.js';
-import { tabOverviewIcon, chatIconPaths, addTabMenuEntries, addTabMenuItems, setBrowserProfiles, browserProfileMenu } from './add-tab-menu.js';
-import { loadPeers, openWorkspaceChatDialog, initRemoteDesktops, attachChatDestinations, mountMachineHistory, renderRemoteRun, renderRemoteDocument, remoteDocumentPositionVersion, restoreRemoteDocumentPosition, forgetRemoteDocument, forgetRemoteConversation, openRemoteChat, renameRemoteChat, mountRemoteSchedules } from './remote-desktops.js';
-import { initChatsIndex, renderChatsIndex, recentChats, runningChats, attentionChats, reconcileIndexedChat, openIndexedChat, loadChatsIndex } from './chats-index.js';
-import { initEngineRoom, engineSections, renderEngineRoom } from './engine-room.js';
-import { initTeamTools, renderTeamTools, canPreserveTeamBrowser, teamState, restoreTeamState, leaveTeamTools, ownsTeamBrowser, syncTeamBrowsers, teamBrowserBounds, selectTeamBrowser, forgetTeamBrowser, closeTeamTabById } from './team-tools.js';
-import {tabOverviewGroups} from './tab-overview-model.js';
-import {showBrowserCertificate} from './browser-address-menu.js';
-import { initBrowserOverview, showBrowserOverview, isBrowserOverviewOpen } from './browser-overview.js';
-import { browserTarget, renderBrowserHome } from './browser-home.js';
-import {beginNewTabInput,withNewTabInput} from './new-tab-input.js';
-import { browserAddress, updateAgentAccess, bindBrowserHistoryButton, browserSurfaceIdentity, browserSurfaceRevision, selectBrowserSurface } from './browser-toolbar.js';
-import { bindBrowserAddressMenu } from './browser-address-menu.js';
-import { bindTabEdges, bindTabReorder, reorderById, revealNewTabs, revealWholeTab, resetTabReveals } from './tab-interactions.js';
-import { initializeViewPositions, rememberView, restoreView, restoreDocumentView, flushViewPositions } from './view-position.js';
-import { showContextMenu, copyContextText } from './context-menu.js';
-import { requestPresentation, mountStructured } from './tool-presentation.js';
-import { placeTabAfter,destinationSections } from './tab-placement.js';
-import { conversation, forgetConversation, captureConversationPosition, restoreConversationPosition } from './conversation.js';
-import { mountAttachmentPicker, restoreSentAttachments, selectedAttachments, clearAttachments, prepareLocalAttachments } from './chat-attachments.js';
-import { renderProviderAuth } from './provider-auth.js';
-import { renderRemote } from './remote.js';
-import { initOmi, renderOmi } from './omi.js';
-import { initTerminals, renderTerminal, openTerminalDialog, openTerminalProfiles, disposeTerminalUi, captureTerminalScroll, applyTerminalScroll } from './terminals.js';
-import { initLife, renderLife, renderLifeSetup, selectLifeSection } from './life.js';
-import { initMarkdownPicker, openMarkdownPicker } from './markdown-picker.js';
-import { initFeatures, renderContext, renderStandup, renderCredentials, fillBrowserLogin, contextPicker, contextSelection, bindContextPicker, modelPicker, modelControls, modelSelection, contextSize, refreshModels, sessionDetails, bindSessionDetails, bindPaths } from './features.js';
+import {showMoveMenu} from './shared/navigation/move-menu.js';
+import {refreshMountedWorkspaceTabs} from './features/workspaces/workspace-tabs.js';
+import {workingMessage} from './features/chats/chat-working.js';
+import {mountQuestionAttachments} from './features/chats/question-attachments.js';
+import {browserLabel} from './features/browser/browser-label.js';
+import {fileDatesText} from './shared/ui/file-dates.js';
+import {syncPalette} from './shared/ui/palette.js';
+import {createChatSetupTabs} from './features/chats/chat-setup-tabs.js';
+import {renderUpdateCard} from './features/settings/updates.js';
+import {createWindowChrome} from './shared/navigation/preview-window-chrome.js';
+import {createWindowChrome as createLinuxWindowChrome} from './shared/navigation/window-chrome.js';
+import {createPreviewSidebarLayout} from './shared/navigation/preview-sidebar-layout.js';
+import {remapPreviewProjectSession,remapPreviewBrowserPlacement} from './features/workspaces/preview-project-placement.js';
+import {reorderWorkspaceTabSiblings} from './features/workspaces/workspace-tabs.js';
+import {workspaceProjectsCatalog,setWorkspaceProjectsCatalog,initDesktopPreview,previewEnabled,projectIcon,previewTopId,reconcilePreviewChatPlacement,previewContentDescriptors,ensurePreviewProject,previewProjects,previewProjectForChat,previewResourceParent,capturePreviewSidebar,bindPreviewSidebar,resetPreviewProjectPaging,openPreviewChat,previewChatBreadcrumb,bindPreviewChatBreadcrumb,renderPreviewSources} from './shared/navigation/desktop-preview.js';
+import {rememberTabSelection,restoreTabSelection} from './features/workspaces/workspace-selection.js';
+import {previewRelativeAge,previewChatActivity} from './shared/navigation/preview-navigation.js';
+import {previewApprovalChoices,previewPermissionNames,previewPermissionHelp,previewFolderDialog,previewRememberDialog,previewRememberEffect,previewPermissionChoiceLabel} from './shared/navigation/preview-permissions.js';
+import {downloadsChanged} from './features/browser/browser-downloads.js';
+import {normalizeContentTabHistory,contentTabMetadata,acknowledgesBrowserNavigation} from './models/content-tab-descriptor.js';
+import {chatLink,parseChatLink} from './features/chats/chat-links.js';
+import {computerName} from './services/remote/computer-identity.js';
+import {initWorkspaces,renderWorkspaces,renderWorkspace,openWorkspace,openWorkspaceChat,openRemoteProject,workspaceOwners,refreshWorkspaceOwners,loadWorkspaceOwnerTabs,recentWorkspaces,sendChatToWorkspace,moveChatToWorkspace,createWorkspace,deleteWorkspace} from './features/workspaces/desktop-workspaces.js';
+import {workspaceIcon,workspaceCatalog} from './features/workspaces/workspace-ui.js';
+import {isLoopbackPreview} from './features/chats/chat-previews.js';
+import {initAttention,attentionItems,announceAttention,openAttentionItem,renderAttention} from './features/chats/attention.js';
+import {initBrowserNotifications,recordBrowserIssue} from './features/browser/browser-notifications.js';
+import { installTabSwipe } from './shared/navigation/tab-swipe.js';
+import { installPageFind } from './shared/ui/page-find.js';
+import {chatType} from './features/chats/chat-types.js';
+import {mountChatComposer,mountNewChatComposer} from './features/chats/chat-composer.js';
+import {renderRunDetails,approvalDetails,bindChatFolderTrust} from './features/chats/chat-details.js';
+import {createToast} from './shared/ui/toast.js';
+import {internetSearchDialog} from './features/settings/internet-search.js';
+import {selectChatType} from './features/chats/chats-index.js';
+import { mergeChatHistory } from './features/chats/chat-history.js';
+import { renderAgentTerminal } from './features/tools/agent-terminal.js';
+import {usageSidebar,usageDetails} from './features/settings/provider-usage-view.js';
+import { bindDesktopBrowserRecents } from './features/browser/browser-recents.js';
+import { mountHome } from './shared/ui/home.js';
+import { createTabSynchronizer, syncableTabURL } from './models/content-tab-sync.js';
+import { createProjectFollower, sharedScrollPosition, restoreSharedScroll } from './features/workspaces/project-follow.js';
+import { browserTabIcon } from './features/browser/browser-icons.js';
+import { setMessageActionsContext, stopMessageSpeech } from './features/chats/message-actions.js';
+import { tabOverviewIcon, chatIconPaths, addTabMenuEntries, addTabMenuItems, setBrowserProfiles, browserProfileMenu } from './shared/navigation/add-tab-menu.js';
+import { loadPeers, openWorkspaceChatDialog, initRemoteDesktops, attachChatDestinations, mountMachineHistory, renderRemoteRun, renderRemoteDocument, remoteDocumentPositionVersion, restoreRemoteDocumentPosition, forgetRemoteDocument, forgetRemoteConversation, openRemoteChat, renameRemoteChat, mountRemoteSchedules } from './services/remote/remote-desktops.js';
+import { initChatsIndex, renderChatsIndex, recentChats, runningChats, attentionChats, reconcileIndexedChat, openIndexedChat, loadChatsIndex } from './features/chats/chats-index.js';
+import { initEngineRoom, engineSections, renderEngineRoom } from './features/settings/engine-room.js';
+import { initTeamTools, renderTeamTools, canPreserveTeamBrowser, teamState, restoreTeamState, leaveTeamTools, ownsTeamBrowser, syncTeamBrowsers, teamBrowserBounds, selectTeamBrowser, forgetTeamBrowser, closeTeamTabById } from './features/tools/team-tools.js';
+import {tabOverviewGroups} from './shared/navigation/tab-overview-model.js';
+import {showBrowserCertificate} from './features/browser/browser-address-menu.js';
+import { initBrowserOverview, showBrowserOverview, isBrowserOverviewOpen } from './features/browser/browser-overview.js';
+import { browserTarget, renderBrowserHome } from './features/browser/browser-home.js';
+import {beginNewTabInput,withNewTabInput} from './features/browser/new-tab-input.js';
+import { browserAddress, updateAgentAccess, bindBrowserHistoryButton, browserSurfaceIdentity, browserSurfaceRevision, selectBrowserSurface } from './features/browser/browser-toolbar.js';
+import { bindBrowserAddressMenu } from './features/browser/browser-address-menu.js';
+import { bindTabEdges, bindTabReorder, reorderById, revealNewTabs, revealWholeTab, resetTabReveals } from './shared/navigation/tab-interactions.js';
+import { initializeViewPositions, rememberView, restoreView, restoreDocumentView, flushViewPositions } from './shared/navigation/view-position.js';
+import { showContextMenu, copyContextText } from './features/workspaces/context-menu.js';
+import { requestPresentation, mountStructured } from './features/chats/tool-presentation.js';
+import { placeTabAfter,destinationSections } from './shared/navigation/tab-placement.js';
+import { conversation, forgetConversation, captureConversationPosition, restoreConversationPosition } from './features/chats/conversation.js';
+import { mountAttachmentPicker, restoreSentAttachments, selectedAttachments, clearAttachments, prepareLocalAttachments } from './features/chats/chat-attachments.js';
+import { renderProviderAuth } from './features/settings/provider-auth.js';
+import { renderRemote } from './services/remote/remote.js';
+import { initOmi, renderOmi } from './features/tools/omi.js';
+import { initTerminals, renderTerminal, openTerminalDialog, openTerminalProfiles, disposeTerminalUi, captureTerminalScroll, applyTerminalScroll } from './features/tools/terminals.js';
+import { initLife, renderLife, renderLifeSetup, selectLifeSection } from './features/tools/life.js';
+import { initMarkdownPicker, openMarkdownPicker } from './shared/ui/markdown-picker.js';
+import { initFeatures, renderContext, renderStandup, renderCredentials, fillBrowserLogin, contextPicker, contextSelection, bindContextPicker, modelPicker, modelControls, modelSelection, contextSize, refreshModels, sessionDetails, bindSessionDetails, bindPaths } from './shared/ui/features.js';
 const browserFindRevisions=new Map();
 const pageFindNative=()=>{
   const tab=state.tabs.find(tab=>tab.id===state.tab),team=teamState(),selected=document.querySelector('#browser-area')&&tab?.type==='browser'?{...tab.info,id:tab.id}:document.querySelector('#team-browser-area')?team.tabs.find(tab=>tab.id===team.active):null;
@@ -319,6 +321,7 @@ async function refreshState(force = false) {
   }
 }
 function openTab(tab, afterId=null) {
+  if(tab.type==='run'&&!tab.parentId&&!tab.hostId){const run=state.data?.runs?.find(run=>run.id===(tab.runId||tab.id));if(run&&previewEnabled(state)&&openPreviewChat(run))return;if(run?.workspaceId&&!previewEnabled(state))return void sendChatToWorkspace({...run,local:true});}
   if(tab.parentId&&!state.tabs.some(parent=>parent.id===tab.parentId&&['run','remote-run','workspace'].includes(parent.type)))delete tab.parentId;
   if(tab.parentId){const parent=state.tabs.find(item=>item.id===tab.parentId);if(parent?.type==='workspace'){parent.hidden=false;parent.navigationClosed=false;}}
   const existing = state.tabs.find(item => item.id === tab.id);
@@ -931,7 +934,7 @@ const contentTabSync=createTabSynchronizer({navigation:true,pendingStorage:deskt
       const latestOrder=[];for(const tab of full)if(scope.scope==='team'||tab.parentId===parent.id){const id=await descriptorId(tab);if(id)latestOrder.push(id);}
       const orderChangedDuringApply=latestOrder.join('\0')!==currentOrder.filter(id=>ids.has(id)).concat(descriptors.filter(item=>!currentOrder.includes(item.id)).map(item=>item.id)).join('\0');
       if(!orderChangedDuringRequest&&!orderChangedDuringApply&&positions.some((position,index)=>full[position]!==ordered[index])){positions.forEach((position,index)=>full[position]=ordered[index]);changed=true;}
-      if(changed){saveWorkspace();renderTabs();renderChatSubtabs();if(state.page==='team'&&state.tab==='overview')renderTeamTools({preserveBrowser:true});}
+      if(changed){saveWorkspace();renderTabs();renderChatSubtabs();void refreshMountedWorkspaceTabs().catch(error=>console.debug('Tab list refresh:',error.message));if(state.page==='team'&&state.tab==='overview')renderTeamTools({preserveBrowser:true});}
     }finally{applyingContentTabs--;}
   },
   onError:(error,scope,initialized,pending=[])=>{
@@ -972,7 +975,12 @@ function followPresentation(tab){
  if(observation?.browser.url===tab.info?.url&&observation.browser.entryId===entryId)return observation;
  followBrowserPositions.delete(tab.id);const url=syncableTabURL(tab.info?.url||'');return url?{browser:{url,entryId}}:{};
 }
+const followClientId=crypto.randomUUID();
 const projectFollower=createProjectFollower({
+ clientId:followClientId,
+ // Local windows share content, but each keeps its own selection/reading state.
+ // Paired computers retain their explicit same-scope follow behavior.
+ acceptPresentation:(value,scope)=>!!scope.hostId||!value?.actor?.startsWith('local:')||value.actor==='local:'+followClientId,
  current:visibleFollowScope,
  request:(scope,value)=>scope.hostId?window.desktop.peers({action:'request',hostId:scope.hostId,method:'tabs.follow',args:value}):api('/api/project-follow',value),
  sync:async scope=>{const current=()=>JSON.stringify(visibleFollowScope())===JSON.stringify(scope);if(!current())return;for(const child of visibleContentScopes())if(child.scope==='chat'){if(!current())return;await contentTabSync.sync(child);}if(current())await contentTabSync.sync(scope);},
@@ -1149,10 +1157,13 @@ function browserBounds() {
   }
   if(previousFeature==='team')teamBrowserBounds();
 }
+const browserAddressDrafts=new Map();
 function updateBrowserControls() {
   const tab=state.tabs.find(t=>t.id===state.tab);if(tab?.type!=='browser'||!$('#browser-url'))return;
   const info=tab.info||{};
-  if(document.activeElement!==$('#browser-url'))$('#browser-url').value=info.url||'';
+  const draft=browserAddressDrafts.get(tab.id);
+  if(draft!==undefined)$('#browser-url').value=draft;
+  else if(document.activeElement!==$('#browser-url'))$('#browser-url').value=info.url||'';
   $('#browser-back').disabled=!info.canGoBack;$('#browser-forward').disabled=!info.canGoForward;
   $('#browser-reload').textContent=info.loading?'×':'↻';$('#browser-reload').title=info.loading?'Stop loading':'Reload';
   updateAgentAccess($('#browser-share'), info);
@@ -1185,7 +1196,9 @@ function renderBrowser() {
   $('#browser-fill-login').insertAdjacentHTML('afterend','<button type="button" id="browser-overview" aria-label="Show all browser tabs" title="Tab overview · Ctrl/Cmd+Shift+\\">'+tabOverviewIcon+'</button>');
   $('#browser-overview').onclick=()=>void showBrowserOverview(selectedChatParent()?.id||'main');
   bindBrowserAddressMenu($('#browser-url'),state.tab,{showDialog,toast});
-  const navigateBrowser=async raw=>{const finish=projectFollower.beginHuman();try{const info=await window.desktop.browser({action:'navigate',id:tab.id,url:browserTarget(raw)});if(state.tabs.includes(tab)){tab.info=info;if(state.tab===tab.id)renderBrowser();}}catch(error){toast(error.message);}finally{finish();}};
+  $('#browser-url').addEventListener('input',event=>{browserAddressDrafts.set(tab.id,event.target.value);});
+  $('#browser-url').addEventListener('keydown',event=>{if(event.key==='Escape'){browserAddressDrafts.delete(tab.id);event.target.value=tab.info?.url||'';}});
+  const navigateBrowser=async raw=>{const finish=projectFollower.beginHuman();try{const info=await window.desktop.browser({action:'navigate',id:tab.id,url:browserTarget(raw)});if(browserAddressDrafts.get(tab.id)===raw)browserAddressDrafts.delete(tab.id);if(state.tabs.includes(tab)){tab.info=info;if(state.tab===tab.id)renderBrowser();}}catch(error){toast(error.message);}finally{finish();}};
   $('#browser-form').onsubmit=event=>{event.preventDefault();void navigateBrowser($('#browser-url').value);$('#browser-url').blur();};
   bindDesktopBrowserRecents($('#browser-url'),{api,navigate:navigateBrowser,toast,profileId:tab.info?.profileId||tab.profileId||'default'});
   for (const direction of ['back', 'forward']) {
@@ -1333,9 +1346,9 @@ function transferTabDialog(tab,copy=false,teamSource=null){
   if(state.data.desktopPreview?.enabled&&!state.data.workspaceProjects&&!copy&&!['run','remote-run'].includes(tab.type)&&state.tabs.find(parent=>parent.id===tab.parentId)?.projectId){toast('Moving project resources between locations is not available in this desktop preview. Their existing sessions and access stay in place.');return;}
   if(!copy&&['run','remote-run'].includes(tab.type))return void moveChatToWorkspace({...tab,chatId:tab.runId||tab.id,local:tab.type==='run'}).catch(error=>toast(error.message));
   if(copy&&tab.type!=='browser')throw new Error('Only browser tabs can be copied. Move a terminal or viewer to preserve its existing session.');
-  const groups=destinationSections(state.data.workspaceProjects?state.tabs:previewEnabled(state)?state.tabs.filter(item=>!item.projectId):state.tabs,{excludeId:tab.parentId,runs:state.data.runs,catalog:workspaceProjectsCatalog(state),workspaces:state.data.context.workspaces}),destinations=groups.flatMap(group=>group.tabs);
-  showDialog(`<h2>${copy?'Send a tab copy':'Send tab'}</h2><label>Destination<select id="tab-destination"><option value="main">Application tabs</option><option value="team">Team Tools</option>${groups.map(group=>`<optgroup label="${escape(group.label)}">${group.tabs.map(t=>`<option value="${escape(t.id)}">${escape(t.label)}</option>`).join('')}</optgroup>`).join('')}</select></label><p class="note">Browser tabs stay on this computer. Copies are independent, unloaded pages. Moving preserves the current page and revokes its old agent access. Workspace and chat destinations keep this browser on the current computer. Live terminals and protected documents retain their owner.</p><div class="actions"><button id="close-dialog">Cancel</button><button id="dialog-submit">${copy?'Copy tab':'Move tab'}</button></div>`,async()=>{
-    if(teamSource?!teamState().tabs.includes(teamSource):!state.tabs.includes(tab))throw new Error('The source tab was closed.');const target=$('#tab-destination').value;let parent=destinations.find(t=>t.id===target);
+  const groups=destinationSections(state.data.workspaceProjects?state.tabs:previewEnabled(state)?state.tabs.filter(item=>!item.projectId):state.tabs,{runs:state.data.runs,catalog:workspaceProjectsCatalog(state),workspaces:state.data.context.workspaces}),destinations=groups.flatMap(group=>group.tabs);
+  showMoveMenu({showDialog,escape,groups,current:copy?null:teamSource?'team':tab.parentId||'main',title:copy?'Copy tab':'Move tab',button:copy?'Copy tab':'Move tab',note:copy?'The copy is an independent unloaded browser page.':'Choose a destination. The existing session, history and access stay with this tab.',submit:async target=>{
+    if(teamSource?!teamState().tabs.includes(teamSource):!state.tabs.includes(tab))throw new Error('The source tab was closed.');let parent=destinations.find(t=>t.id===target);
     if(parent?.projectId&&!parent.hostId&&!state.tabs.includes(parent)){const fresh=await api('/api/workspace-projects'),project=fresh.projects.find(project=>project.id===parent.projectId);if(!project)throw Error('The destination project changed. Refresh before moving.');parent=ensurePreviewProject(project);}
     if(!['main','team'].includes(target)&&(!parent||!state.tabs.includes(parent)))throw new Error('The destination chat was closed.');
     if(tab.type!=='browser'||!copy){if(['run','remote-run'].includes(tab.type)){if(parent?.type!=='workspace')throw new Error('Choose a workspace for a chat.');await moveChatToWorkspace({...tab,chatId:tab.runId||tab.id,local:tab.type==='run'});return;}const actual=teamSource||tab;
@@ -1361,7 +1374,7 @@ function transferTabDialog(tab,copy=false,teamSource=null){
       else{state.tabs.push(next);if(wasActive&&!copy)state.tab=next.id;}
       saveWorkspace();render();
     }finally{transferringTab=false;}
-  });
+  }});
 }
 async function moveManagedWorkspaceTab(tab,target,parent){
  if(!state.tabs.includes(tab))throw Error('The source tab was closed.');
@@ -1409,10 +1422,11 @@ async function manageWorkspaceTabs(action,rows){
  const groups=destinationSections(state.tabs,{runs:state.data.runs,catalog:workspaceProjectsCatalog(state),workspaces:state.data.context.workspaces}),destinations=groups.flatMap(group=>group.tabs);
  return new Promise(resolve=>{
   let settled=false;const finish=result=>{if(!settled){settled=true;resolve(result);}};
-  showDialog(`<h2>Move ${ids.length} tabs</h2><label>Destination<select id="bulk-tab-destination"><option value="main">Application tabs</option><option value="team">Team Tools</option>${groups.map(group=>`<optgroup label="${escape(group.label)}">${group.tabs.map(tab=>`<option value="${escape(tab.id)}">${escape(tab.label)}</option>`).join('')}</optgroup>`).join('')}</select></label><p class="note">Chats move to a project. Existing browser, terminal and document sessions keep their identity and permissions. Failed items stay selected for review.</p><div class="actions"><button id="close-dialog">Cancel</button><button id="dialog-submit">Move tabs</button></div>`,async()=>{
-   const target=$('#bulk-tab-destination').value,button=$('#dialog-submit');button.disabled=true;
+  const sourceParents=[...new Set(ids.map(id=>state.tabs.find(tab=>tab.id===id)?.parentId||'main'))];
+  showMoveMenu({showDialog,escape,groups,current:sourceParents.length===1?sourceParents[0]:null,id:'bulk-tab-destination',title:'Move '+ids.length+' tabs',button:'Move tabs',submit:async target=>{
+   const button=$('#dialog-submit');button.disabled=true;
    try{finish(await perform(target,destinations.find(tab=>tab.id===target)));}finally{button.disabled=false;}
-  });
+  }});
   $('#dialog').addEventListener('close',()=>finish({cancelled:true}),{once:true});
  });
 }
@@ -1487,7 +1501,7 @@ window.desktop?.onBrowserState(infos=>{
   const currentBrowser=state.tabs.find(tab=>tab.id===state.tab&&tab.type==='browser');
   const previousSurface=currentBrowser?`${!!currentBrowser.info?.url}:${currentBrowser.info?.loaded!==false}`:null;
   if(previewEnabled(state)&&infos.some(info=>state.tabs.find(tab=>tab.id===info.id)?.info?.lastActivityAt!==info.lastActivityAt))schedulePreviewActivityRender();
-  const ids=new Set(infos.map(info=>info.id));
+  const ids=new Set(infos.map(info=>info.id));for(const id of browserAddressDrafts.keys())if(!ids.has(id))browserAddressDrafts.delete(id);
   if(currentBrowser&&!ids.has(currentBrowser.id)){state.tab=tabToLeft(currentBrowser);if(currentBrowser.parentId)selectedChildren.set(currentBrowser.parentId,state.tab);}
   state.tabs=state.tabs.filter(tab=>tab.type!=='browser'||ids.has(tab.id));
   syncTeamBrowsers(infos,{persist:false});
@@ -1625,7 +1639,7 @@ window.addEventListener('keydown',event=>{if(event.key==='F5'){event.preventDefa
 window.addEventListener('keydown',event=>{if((event.metaKey||event.ctrlKey)&&event.shiftKey&&event.code==='Backslash'){event.preventDefault();void showBrowserOverview(previousFeature==='team'?'team':selectedChatParent()?.id||'main');}});
 function overviewGroups(browserTabs,scope='main'){
   const previews=new Map(browserTabs.map(tab=>[tab.id,tab]));
-  const item=(tab,team=false,locked=false)=>{const preview=previews.get(team?tab.browserId:tab.id),kind=tab.type||'browser';return {id:tab.id,selected:team?(state.page==='team'&&state.tab==='overview'&&(teamState().active===tab.id||tab.id==='team-'+teamState().active)):state.tab===tab.id,title:tab.label||tab.title||preview?.title||'New tab',kind,url:tab.info?.url||tab.url||preview?.url||'',thumbnail:preview?.thumbnail,loaded:preview?.loaded??tab.loaded,icon:({browser:'◎',terminal:'⌘',markdown:'▤',run:'☷','remote-run':'☷','remote-document':'▤',schedule:'◷',workspace:'□',overview:'☷',standup:'☷'})[kind]||'▤',closable:!locked,parentId:tab.parentId||null,team};};
+  const item=(tab,team=false,locked=false)=>{const preview=previews.get(team?tab.browserId:tab.id),kind=tab.type||'browser';return {id:tab.id,selected:team?(state.page==='team'&&state.tab==='overview'&&(teamState().active===tab.id||tab.id==='team-'+teamState().active)):state.tab===tab.id,title:kind==='browser'?browserLabel({...tab,type:kind}):tab.label||tab.title||preview?.title||'New tab',kind,url:tab.info?.url||tab.url||preview?.url||'',thumbnail:preview?.thumbnail,loaded:preview?.loaded??tab.loaded,icon:({browser:'◎',terminal:'⌘',markdown:'▤',run:'☷','remote-run':'☷','remote-document':'▤',schedule:'◷',workspace:'□',overview:'☷',standup:'☷'})[kind]||'▤',closable:!locked,parentId:tab.parentId||null,team};};
   const selected=state.tabs.find(tab=>tab.id===state.tab),owner=state.tabs.find(tab=>tab.id===scope)?.hostId,groups=tabOverviewGroups({tabs:state.tabs,catalog:owner?workspaceOwners().find(row=>row.hostId===owner)?.workspaceProjects:workspaceProjectsCatalog(state),scope,selectedId:state.tab,topId:previewTopId(selected,state),team:teamState()});
   return groups.map(group=>({...group,items:group.tabs.map(tab=>{const value=item(tab,group.team);value.selected=group.selectedId===tab.id;const run=state.data?.runs?.find(run=>run.id===(tab.runId||tab.id));return {...value,parentId:tab.parentId||null,kind:tab.type||'browser',working:['running','starting'].includes(run?.status)};})}));
 }
@@ -1654,7 +1668,7 @@ async function closeOverview(item){
   const tab=state.tabs.find(entry=>entry.id===item.id);if(!tab)return;if(tab.parentId)await closeChildTab(tab);else await closeTopTab(tab.id);
 }
 initBrowserOverview({escape,toast,overviewGroups,selectOverview,closeOverview,loadCached:async scope=>{if(!window.desktop?.thumbnails)return [];const rows=overviewGroups([],scope).flatMap(group=>group.items).filter(item=>['run','remote-run'].includes(item.kind)).map(item=>({id:item.id,key:chatThumbnailKey(state.tabs.find(tab=>tab.id===item.id)||item)}));const cached=await window.desktop.thumbnails({action:'get',keys:rows.map(row=>row.key)});return rows.map(row=>({id:row.id,...cached.find(item=>item.key===row.key)}));},reorder:(source,target,after)=>{if(source.team||target.team){if(!source.team||!target.team)throw Error('Reorder tabs within the same section.');const tabs=teamState().tabs;if(reorderById(tabs,source.id,target.id,after))saveWorkspace();return;}if(source.parentId!==target.parentId)throw Error('Reorder tabs within their current owner.');reorderVisibleTabs(source.id,target.id,after,source.parentId);},restore:()=>render()});
-initRemoteDesktops({moveChat:moveChatToWorkspace,selectedChatParent:()=>selectedChatParent()?.id,saveWorkspace,state,escape,toast,showDialog,openTab,time,refresh,openMessageLink,renderChatSubtabs,syncContentTabs:()=>contentTabSync.all(),revokeHostContent,replaceChatContent,onDeleted:reconcileDeletedChat,rename:renameChat,rememberView:()=>rememberView($('#main'),$('#main').dataset.viewKey),restoreView:()=>restoreView($('#main'),$('#main').dataset.viewKey)});
+initRemoteDesktops({openAssociatedChat:sendChatToWorkspace,moveChat:moveChatToWorkspace,selectedChatParent:()=>selectedChatParent()?.id,saveWorkspace,state,escape,toast,showDialog,openTab,time,refresh,openMessageLink,renderChatSubtabs,syncContentTabs:()=>contentTabSync.all(),revokeHostContent,replaceChatContent,onDeleted:reconcileDeletedChat,rename:renameChat,rememberView:()=>rememberView($('#main'),$('#main').dataset.viewKey),restoreView:()=>restoreView($('#main'),$('#main').dataset.viewKey)});
 initBrowserNotifications({api,refresh,review:item=>{if(item.readAt)navigate('engine','notifications');else openAttentionItem('notification:'+item.id);},logs:id=>openEventLogs({logId:id}),resolve:async(scope,preserve)=>{
  if(!contentTabSync.hasConflict(scope)){await contentTabSync.sync(scope);if(!contentTabSync.hasConflict(scope))throw Error('This scope has no active history conflict. Its pending data was preserved; reopen the original tab to refresh its status.');}
  await contentTabSync.resolve(scope,{...(preserve?{preserve:async tabs=>{for(const tab of tabs){if(!tab.url)continue;const info=await window.desktop.browser({action:'create',url:tab.url,profileId:tab.profileId||'default',group:'main'});openTab({id:info.id,type:'browser',label:info.title||tab.title||'Browser',info});}}}:{})});
@@ -1685,6 +1699,9 @@ window.addEventListener('proteus:profiles-changed',()=>void refreshBrowserProfil
 document.addEventListener('click',event=>{const button=event.target.closest('[data-browser-profile]');if(!button)return;event.preventDefault();event.stopPropagation();button.closest('details')?.removeAttribute('open');const scope=button.dataset.profileScope,parent=scope==='chat'?selectedChatParent():null;void window.desktop.browser({action:'create',profileId:button.dataset.browserProfile,group:scope==='team'?'team':'main',parentId:parent?.id}).then(info=>{if(scope==='team'){selectTeamBrowser(info);renderTeamTools();}else openTab({id:info.id,type:'browser',label:info.title||'New tab',parentId:parent?.id,info});}).catch(error=>toast(error.message));},true);
 void refreshBrowserProfiles();
 const liveEvents = new EventSource('/api/events');
+// Tab-list convergence is passive and must continue while another window owns
+// focus or this window has an unfinished address/composer draft.
+liveEvents.addEventListener('content-tabs',event=>{if(!workspaceReady||workspaceRestoring||workspaceClosing)return;try{const value=JSON.parse(event.data),scope=visibleContentScopes().find(scope=>!scope.hostId&&scope.scope===value.scope&&scope.id===value.id);if(scope)void contentTabSync.sync(scope);}catch{}});
 liveEvents.addEventListener('project-follow',event=>{try{const value=JSON.parse(event.data);void projectFollower.receive({scope:value.scope,id:value.id},value);}catch{}});
 liveEvents.addEventListener('change', () => { if (document.hidden||liveRefreshTimer) return; liveRefreshTimer = setTimeout(() => { liveRefreshTimer = null; if (!document.hidden&&(!document.activeElement?.matches('input,textarea,select') || !!$('#conversation-host')) && !$('#dialog').open) refresh().catch(() => {}); }, 120); });
 

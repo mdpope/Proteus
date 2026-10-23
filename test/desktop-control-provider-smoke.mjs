@@ -1,8 +1,8 @@
 // Live provider acceptance. Only an explicitly created canvas window is observed.
 import {_electron} from 'playwright';
-import {CodexProvider} from '../src/codex.js';
+import {CodexProvider} from '../src/providers/codex.js';
 import {Engine} from '../src/engine.js';
-import {DesktopControl} from '../src/desktop-control.js';
+import {DesktopControl} from '../src/services/remote/desktop-control.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';

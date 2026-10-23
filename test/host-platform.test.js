@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { hostPlatformMetadata, readHostPlatformMetadata } from '../src/host-platform.js';
-import { parsePairing, pairingRelayOrigin } from '../src/remote-client.js';
+import { hostPlatformMetadata, readHostPlatformMetadata } from '../src/shared/host-platform.js';
+import { parsePairing, pairingRelayOrigin } from '../src/services/remote/remote-client.js';
 
 test('host metadata describes Mac, Linux and Windows without inferring features or paths', () => {
   for (const [platform, label, architecture] of [['darwin', 'macOS', 'arm64'], ['linux', 'Linux', 'x64'], ['win32', 'Windows', 'arm64']]) {

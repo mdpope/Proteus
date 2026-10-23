@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {rootCertificates} from 'node:tls';import {X509Certificate} from 'node:crypto';import {createRequire} from 'node:module';
-const {BrowserCertificates}=createRequire(import.meta.url)('../desktop/browser-certificates.cjs');
+const {BrowserCertificates}=createRequire(import.meta.url)('../desktop/browser/browser-certificates.cjs');
 test('certificate metadata observer always preserves Chromium verification and binds partition/document details',()=>{
  const store=new BrowserCertificates(),session={setCertificateVerifyProc(fn){this.verify=fn;}},other={setCertificateVerifyProc(fn){this.verify=fn;}};store.install(session);store.install(other);const cert=new X509Certificate(rootCertificates[0]),certificate={data:rootCertificates[0]};certificate.issuerCert=certificate;
  const result=[];session.verify({hostname:'fixture.example',certificate,verificationResult:'net::OK',errorCode:0},value=>result.push(value));assert.deepEqual(result,[-3]);

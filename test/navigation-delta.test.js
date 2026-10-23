@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {BrowserHistory} from '../src/browser-history.js';
-import {BrowserHistoryStore} from '../src/browser-history-store.js';
-import {ContentTabs} from '../src/content-tabs.js';
-import {createTabSynchronizer} from '../public/content-tab-sync.js';
-import {applyNavigationDelta} from '../public/navigation-history.js';
+import {BrowserHistory} from '../src/services/browser/browser-history.js';
+import {BrowserHistoryStore} from '../src/services/browser/browser-history-store.js';
+import {ContentTabs} from '../src/services/workspaces/content-tabs.js';
+import {createTabSynchronizer} from '../public/models/content-tab-sync.js';
+import {applyNavigationDelta} from '../public/shared/navigation/navigation-history.js';
 const entry=i=>({id:'entry-'+i,url:'https://example.test/'+i,title:'Page '+i});
 
 test('complete 10,050-entry session hydrates once; append, Back, branch and title refresh use bounded deltas',async t=>{

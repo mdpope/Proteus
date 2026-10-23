@@ -2,8 +2,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {createRequire} from 'node:module';
-const {digest}=createRequire(import.meta.url)('../desktop/update-package.cjs');
-const {inventoryStorage}=createRequire(import.meta.url)('../desktop/update-storage.cjs');
+const {digest}=createRequire(import.meta.url)('../desktop/updates/update-package.cjs');
+const {inventoryStorage}=createRequire(import.meta.url)('../desktop/updates/update-storage.cjs');
 const options={artifactRoots:[]},args=process.argv.slice(2);
 for(let index=0;index<args.length;index++){
  const flag=args[index],value=args[++index];

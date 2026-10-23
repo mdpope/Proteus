@@ -1,6 +1,6 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
-import history from '../desktop/browser-history.cjs';import workspace from '../desktop/workspace-session.cjs';
+import history from '../desktop/browser/browser-history.cjs';import workspace from '../desktop/windows/workspace-session.cjs';
 const {normalizeHistory,safeHistoryURL,isAuthenticationURL,MAX_ENTRIES,MAX_HISTORY_BYTES}=history;
 test('browser history preserves selected index and forward entries; strips engine page/form/header data',()=>{
  const input={index:1,entries:['a','b','c'].map(name=>({url:'https://example.test/'+name,title:name,pageState:'PRIVATE_FORM_POST',postData:'PRIVATE_BODY',headers:{Authorization:'PRIVATE_AUTH'}}))};

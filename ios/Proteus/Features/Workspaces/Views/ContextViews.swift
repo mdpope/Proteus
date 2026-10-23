@@ -8,22 +8,34 @@ struct NativeChatWorkspaceMoveView: View {
     @State private var catalog: JSON = .null
     @State private var workspace = ""
     @State private var project = ""
+    @State private var destination = ""
     @State private var busy = false
     @State private var message = ""
     var body: some View {
         NavigationStack {
             Form {
-                Picker("Workspace", selection: $workspace) { ForEach(catalog["workspaces"].array, id: \.self) { Text($0["name"].string).tag($0["id"].string) } }
-                if store.supportsProjects { Picker("Project", selection: $project) { ForEach(store.projectCatalog.projects(in: workspace), id: \.self) { Text($0["name"].string).tag($0["id"].string) } } }
+                NativeMoveDestinationPicker(groups: NativeMoveLocations.groups(context: catalog, projects: store.projectCatalog.raw, containersOnly: true), selection: $destination)
                 Text("Run options, folders, approvals and the current session stay as configured.").font(.caption)
                 if !message.isEmpty { Text(message).foregroundStyle(.orange) }
-            }.navigationTitle("Move chat").toolbar {
+            }.navigationTitle("Move tab").toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("Move") { move() }.disabled(busy || workspace.isEmpty || !store.connected) }
-            }.onChange(of: workspace) { _, _ in project = store.projectCatalog.defaultProject(in: workspace)?["id"].string ?? "" }.task { do { catalog = try await store.request("context.get", [:]); workspace = NativeWorkspaceIdentity.workspaceID(store.chats[chatID] ?? .null); if !catalog["workspaces"].array.contains(where: { $0["id"].string == workspace }) { workspace = catalog["workspaces"].array.first?["id"].string ?? "" }; project = store.projectCatalog.defaultProject(in: workspace)?["id"].string ?? "" } catch { message = error.localizedDescription } }
+                ToolbarItem(placement: .confirmationAction) { Button("Move") { move() }.disabled(busy || destination.isEmpty || !store.connected) }
+            }.task { do {
+                catalog = try await store.request("context.get", [:])
+                let chat = try await store.request("chat.get", ["id": .string(chatID)])
+                workspace = NativeWorkspaceIdentity.workspaceID(chat)
+                project = store.projectCatalog.membership(for: chat)["projectId"].string
+                destination = project.isEmpty ? "workspace:" + workspace : "project:" + project
+            } catch { message = error.localizedDescription } }
+
         }
     }
-    private func move() { busy = true; Task { defer { busy = false }; do {
+    private func move() {
+        let parts = destination.split(separator: ":", maxSplits: 1).map(String.init)
+        guard parts.count == 2 else { return }
+        if parts[0] == "project", let target = store.projectCatalog.project(id: parts[1]) { project = parts[1]; workspace = target["workspaceId"].string }
+        else { workspace = parts[1]; project = store.projectCatalog.defaultProject(in: workspace)?["id"].string ?? "" }
+        busy = true; Task { defer { busy = false }; do {
         if store.supportsProjects {
             let chat = try await store.request("chat.get", ["id": .string(chatID)])
             _ = try await store.moveChatToProject(id: chatID, workspaceID: workspace, projectID: project, expectedUpdatedAt: chat["updatedAt"].string)
@@ -87,12 +99,7 @@ struct NativeWorkspaceTabsView: View {
         .onChange(of: shared.workspaceContentDescriptors[scope]) { _, _ in Task { await load() } }
         .sheet(isPresented: $moving) {
             NavigationStack { Form {
-                Picker("Destination", selection: $destination) {
-                    Text("Application tabs").tag("main:main"); Text("Team Tools").tag("team:team")
-                    Section("Workspaces") { ForEach(catalog["workspaces"].array.filter { $0["id"].string != workspaceID }, id: \.self) { Text($0["name"].string).tag("workspace:" + $0["id"].string) } }
-                    Section("Projects") { ForEach(store.state["workspaceProjects"]["projects"].array, id: \.self) { project in Text((catalog["workspaces"].array.first { $0["id"] == project["workspaceId"] }?["name"].string ?? "Workspace") + " · " + project["name"].string).tag("project:" + project["id"].string) } }
-                    Section("Chats") { ForEach(store.state["runs"].array, id: \.self) { Text($0["title"].string).tag("chat:" + $0["id"].string) } }
-                }
+                NativeMoveDestinationPicker(groups: NativeMoveLocations.groups(context: catalog, projects: store.projectCatalog.raw, chats: store.state["runs"].array, containersOnly: moveTab["type"].string == "chat"), selection: $destination)
             }.navigationTitle("Move tab").toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { moving = false } }; ToolbarItem(placement: .confirmationAction) { Button("Move") { move() } } } }
         }
     }
@@ -103,7 +110,7 @@ struct NativeWorkspaceTabsView: View {
         }
         Button(tab["hidden"].bool ? "Restore" : "Hide") { mutate([.object(["action": .string("visibility"), "id": tab["id"], "hidden": .bool(!tab["hidden"].bool)])], tab: tab) }
         if tab["type"].string == "browser" { Button(tab["persist"].bool ? "Unpersist" : "Persist") { command(["action": .string("persist"), "scope": .string(scopeKind), "id": .string(scopeID), "tabId": tab["id"], "expectedRevision": snapshot["revision"], "enabled": .bool(!tab["persist"].bool)]) } }
-        Button("Move") { moveTab = tab; destination = "main:main"; Task { catalog = (try? await store.request("context.get", [:])) ?? .null; moving = true } }
+        Button("Move") { moveTab = tab; destination = (tab["ownerScope"].string.isEmpty ? scopeKind : tab["ownerScope"].string) + ":" + (tab["ownerID"].string.isEmpty ? scopeID : tab["ownerID"].string); Task { catalog = (try? await store.request("context.get", [:])) ?? .null; moving = true } }
         Button("Close", role: .destructive) { command(["action": .string("close"), "scope": .string(scopeKind), "id": .string(scopeID), "tabId": tab["id"], "expectedRevision": snapshot["revision"]]) }
     }
     private func date(_ value: String) -> String { ProviderAllowance.date(value)?.formatted(date: .abbreviated, time: .shortened) ?? "—" }
@@ -709,23 +716,31 @@ struct NativeBrowserTransferView: View {
         NavigationStack {
             Form {
                 Text(tab.title).font(.headline)
-                Picker("Destination", selection: $destination) { Text("Main navigation · " + destinations.selectedLabel).tag("main"); ForEach(NativeWorkspaceIdentity.all(destinations)) { entry in Text(entry.profile["name"].string + " · " + entry.hostName).tag(entry.id) } }
+                NativeMoveDestinationPicker(groups: browserMoveGroups, selection: $destination)
+
                 Toggle("Make a copy", isOn: $copy)
                 Text("Browser sessions stay on this device. A copy opens the address in the same browser profile; it does not copy a remote computer’s sign-in.").font(.caption).foregroundStyle(.secondary)
-            }.navigationTitle("Send tab").toolbar {
+            }.navigationTitle("Move tab").toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) { Button(copy ? "Copy tab" : "Move tab") { transfer() }.disabled(busy || (!copy && destination == tab.scope)) }
-            }
+            }.onAppear { destination = tab.scope.hasPrefix("main") ? "main" : tab.scope.hasPrefix("team") ? "team" : tab.scope }
+        }
+    }
+    private var browserMoveGroups: [NativeMoveGroup] {
+        [NativeMoveGroup(id: "application", label: "Application", locations: [NativeMoveLocation(id: "main", label: "Application tabs"), NativeMoveLocation(id: "team", label: "Team Tools")])] + destinations.destinations.flatMap { owner in
+            guard let remote = destinations.remote(for: owner.id) else { return [NativeMoveGroup]() }
+            return NativeMoveLocations.groups(context: remote.state["context"], projects: remote.projectCatalog.raw, hostID: owner.id, roots: false).map { NativeMoveGroup(id: $0.id, label: $0.label + " · " + owner.label, locations: $0.locations) }
         }
     }
     private func transfer() {
         busy = true
         Task { defer { busy = false }
-            if let target = NativeWorkspaceIdentity.all(destinations).first(where: { $0.id == destination }), let remote = destinations.remote(for: target.hostID) {
+            let parts = destination.split(separator: ":", maxSplits: 2).map(String.init)
+            let owner = parts.count == 3 ? parts[1] : (destinations.selectedID ?? tab.ownerHostId ?? "")
+            if parts.count == 3, let remote = destinations.remote(for: owner) {
                 guard remote.connected else { remote.error = "Connect the destination computer before sending this tab."; return }
-                await shared.refreshContentTabs(scope: destination, remote: remote, kind: "workspace", id: target.workspaceID)
+                await shared.refreshContentTabs(scope: destination, remote: remote, kind: parts[0], id: parts[2])
             }
-            let owner = NativeWorkspaceIdentity.all(destinations).first { $0.id == destination }?.hostID ?? destinations.selectedID
             shared.transferBrowser(tab.id, to: destination, copy: copy, ownerHostID: owner); dismiss()
         }
     }

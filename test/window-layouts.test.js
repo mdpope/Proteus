@@ -1,7 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import {createRequire} from 'node:module';
-import {reconcileWindowSession} from '../public/window-session-reconcile.js';
-import {ContentTabs,workspaceContentScopes} from '../src/content-tabs.js';
-const {WindowLayouts}=createRequire(import.meta.url)('../desktop/window-layouts.cjs');
+import {reconcileWindowSession} from '../public/shared/navigation/window-session-reconcile.js';
+import {ContentTabs,workspaceContentScopes} from '../src/services/workspaces/content-tabs.js';
+const {WindowLayouts}=createRequire(import.meta.url)('../desktop/windows/window-layouts.cjs');
 const setup=t=>{const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-window-layouts-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));return {home,store:new WindowLayouts(home)};};
 const sample={tabs:[{id:'overview',type:'overview'},{id:'project',type:'workspace',workspaceId:'workspace',projectId:'project'},{id:'view',contentTabId:'logical',type:'browser',parentId:'project',url:'https://example.test/old'}],active:'view',page:'context',chatDrafts:{chat:'Unsent draft'}};
 test('window layouts preserve names, position, geometry, drafts and unknown metadata with conflict protection',t=>{

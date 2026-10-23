@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {computerName,computerPlatformLabel,computerDescription,authenticatedComputerMetadata,countRunningChats,hostRunningChatCount} from '../public/computer-identity.js';
+import {computerName,computerPlatformLabel,computerDescription,authenticatedComputerMetadata,countRunningChats,hostRunningChatCount} from '../public/services/remote/computer-identity.js';
 test('configured name wins over stale host metadata without altering actual configured Mac names',()=>{
  assert.equal(computerName('Build Mac','workstation.example.test'),'Build Mac');
  assert.equal(computerName('',null,'  Office PC  '),'Office PC');

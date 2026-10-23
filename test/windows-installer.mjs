@@ -5,9 +5,9 @@ import os from 'node:os';
 import assert from 'node:assert/strict';
 import {spawn,execFileSync} from 'node:child_process';
 import {_electron} from 'playwright';
-import windows from '../desktop/windows-installation.cjs';
-import packages from '../desktop/update-package.cjs';
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import windows from '../desktop/updates/windows-installation.cjs';
+import packages from '../desktop/updates/update-package.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 if(process.platform!=='win32'||!process.argv[2]||!process.argv[3])throw Error('Supply exact setup and unpacked application paths.');
 let existing;try{existing=windows.registration();}catch{}
 if(existing)throw Error('A live Windows installation is registered. Use a disposable test account for installer acceptance.');

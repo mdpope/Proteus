@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';import http from 'node:http';
-import {bundlePreview,ChatPreviews,localPreviewURL} from '../src/chat-previews.js';
+import {bundlePreview,ChatPreviews,localPreviewURL} from '../src/services/chats/chat-previews.js';
 
 test('local preview bundles modules, CSS imports, images and fonts without forwarding arbitrary requests',async()=>{
  let color='lime',apiReads=0;

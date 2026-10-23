@@ -1,4 +1,4 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import {assertPrivate} from './helpers/permissions.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -7,8 +7,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { performance } from 'node:perf_hooks';
-import { PerformanceDiagnostics, performancePhaseNames } from '../src/performance-diagnostics.js';
-import { DesktopPeers } from '../src/desktop-peers.js';
+import { PerformanceDiagnostics, performancePhaseNames } from '../src/services/telemetry/performance-diagnostics.js';
+import { DesktopPeers } from '../src/services/remote/desktop-peers.js';
 
 function fixture(options = {}) {
   let mono = 0, wall = 1_000_000, next = 0;

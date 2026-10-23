@@ -5,10 +5,10 @@ import os from 'node:os';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {createRequire} from 'node:module';
-import {packageOperation} from '../src/update-package-worker.js';
+import {packageOperation} from '../src/services/updates/update-package-worker.js';
 const require=createRequire(import.meta.url);
-const {copyRecovery,inventoryStorage,retireStaging,stagingStatus}=require('../desktop/update-storage.cjs');
-const {tree,atomic,writeJob,fileDigest,excluded,recoveryCachePath}=require('../desktop/update-package.cjs');
+const {copyRecovery,inventoryStorage,retireStaging,stagingStatus}=require('../desktop/updates/update-storage.cjs');
+const {tree,atomic,writeJob,fileDigest,excluded,recoveryCachePath}=require('../desktop/updates/update-package.cjs');
 function fixture(t){const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'proteus-update-storage-')));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));return root;}
 function put(root,name,value=name){const file=path.join(root,name);fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,value);return file;}
 function journal(root,phase){const id=randomUUID(),directory=path.join(root,'jobs',id),file=path.join(directory,'job.json'),candidate=path.join(directory,'candidate','Proteus');put(candidate,'runtime','synthetic');const job={schemaVersion:1,id,file,revision:1,phase,home:path.join(root,'home'),installation:path.join(root,'installation'),recoveryRoot:path.join(root,'recoveries'),recoveryPolicy:path.join(root,'recovery-policy.json'),candidate:{bundle:candidate,sourceFingerprint:'a'.repeat(64)},continuationId:'synthetic',secret:'synthetic'};atomic(file,job);return job;}

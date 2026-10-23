@@ -1,3 +1,30 @@
+## October 23 — residency, titles, routing and shared destinations
+
+Persisted pages stay loaded, including hidden pages and restored project tabs. Ordinary memory
+eviction excludes them. Explicit Unload requires Unpersist first; Close still closes the page.
+Engine Room → Browser configures the per-machine ordinary recent-page budget from 1–256,
+default 6. Active/protected pages can exceed it; changing the setting does not eagerly load
+ordinary hidden tabs. The older Hide description below now applies to non-Persisted pages.
+
+Display browser titles with `[Profile name]` without changing saved page titles/history.
+Hidden links use source link text as a provisional title until loading supplies the real title;
+agents can supply a provisional `title` when opening a tab. Project Tabs combines text/title/URL
+filtering with the existing type filter. Unloaded pages use the new-tab palette.
+
+macOS installed builds declare HTTP/HTTPS handlers and provide Engine Room registration/default
+and scoped repair controls. A green link picker groups all available projects by workspace,
+supports filtering/keyboard selection, and routes to the window displaying that project, then
+its workspace, then Main. Ordered host/glob/path rules can skip the picker; missing destinations
+return to selection. Preview builds cannot register. Apple's recorded pending browser/passkey
+entitlement request is separate from LaunchServices registration; no duplicate request was made.
+SafariSelector-derived matcher/picker behavior retains its GPL notice in `docs/licenses/`.
+
+Scheduled agents open their own needed tabs beside their chat rather than adopting unrelated
+application tabs. Required core guidance and the host sign-in launcher honor the configured
+browser preference without requiring an optional Proteus agent. Third-party CLI authentication
+flows that independently require a system browser remain a platform/provider limitation.
+All resource moves use the [shared destination menu](workspaces.md).
+
 ## October 22 — browser review controls
 
 Home has no URL/search box. Proteus is its primary heading; normal browser tabs and their address bars remain the browsing entry points.
@@ -412,7 +439,7 @@ BF-2026-10-19-20 in [planned updates](planned-updates.md) replaces the desktop/w
 Page/More menu's three diagonal slashes with the supplied iOS-style mark: a thin outlined circle
 around three horizontal dots. Match toolbar size/theme states, preserve menu actions/placement,
 accessible names and hit targets, and use the same geometry across supported browser scopes.
-The current desktop mark is created in `public/browser-extensions-toolbar.js`. This icon is
+The current desktop mark is created in `public/features/browser/browser-extensions-toolbar.js`. This icon is
 separate from BF-10's overlapping-rectangles overview mark. Reference reviewed; no implementation,
 native preview change, UI acceptance or build in this intake.
 
@@ -969,7 +996,7 @@ See `release-validation.md` for receipts and the distinction between simulator a
 New tabs show a search/URL entry, explicit DuckDuckGo/Google/Bing choices, saved account links,
 shared recent visits and retained local Proteus history. Address-bar terms search Google. Only
 HTTP(S) destinations are accepted; credentials/auth callbacks and local paths are excluded.
-`desktop/browsing-history.cjs` retains up to 10,000 visits, default 90 days, with search, pagination,
+`desktop/browser/browsing-history.cjs` retains up to 10,000 visits, default 90 days, with search, pagination,
 clear/delete and recording/retention controls. History is separate from open-tab restoration.
 Main and Team browser homes start at the top of their scroll area, with width-bounded titles and
 URLs. Local and shared history initially show 25 entries, followed by **More** beneath each list.

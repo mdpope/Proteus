@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {initWorkspaces,sendChatToWorkspace,moveChatToWorkspace,openWorkspaceChat,workspaceViewClosure} from '../public/desktop-workspaces.js';
+import {initWorkspaces,sendChatToWorkspace,moveChatToWorkspace,openWorkspaceChat,workspaceViewClosure} from '../public/features/workspaces/desktop-workspaces.js';
 
 function fixture(t,{legacy=false,failMove=false}={}){
  const globals={window:globalThis.window,localStorage:globalThis.localStorage,document:globalThis.document};t.after(()=>Object.assign(globalThis,globals));
@@ -8,7 +8,7 @@ function fixture(t,{legacy=false,failMove=false}={}){
  const run={id:'chat',workspaceId:'same-workspace',projectId:'remote-default',updatedAt:'run-version',title:'Synthetic remote chat'};
  const state={data:{hostName:'Local',runs:[],context,workspaceProjects:{enabled:true,projects:[{id:'local-project',workspaceId:'same-workspace'}],defaultProjectIds:{'same-workspace':'local-project'}}},tabs:[{id:'peer:remote:chat',type:'remote-run',hostId:'remote',runId:'chat'},{id:'remote-viewer',type:'remote-document',hostId:'remote',runId:'chat',documentId:'same',parentId:'peer:remote:chat'}]};
  let submit,fail=failMove;
- globalThis.localStorage={getItem:()=>null,setItem:()=>{}};globalThis.document={querySelector:selector=>selector==='#peer-chat-project'?{value:'remote-second'}:null};
+ const destination={value:'remote-second'},button={};globalThis.localStorage={getItem:()=>null,setItem:()=>{}};globalThis.document={getElementById:id=>id==='dialog-submit'?button:destination,querySelector:()=>null};
  globalThis.window={desktop:{peers:async value=>{calls.push(structuredClone(value));switch(value.method){case 'context.get':return context;case 'sync':return {state:{capabilities:legacy?[]:['projects.v1'],workspaceProjects:legacy?undefined:projects}};case 'runs.list':return [run];case 'projects.get':return projects;case 'chat.move':if(fail){fail=false;throw Error('Synthetic lost acknowledgement');}Object.assign(run,{projectId:value.args.projectId,workspaceId:value.args.workspaceId});projects.memberships.chat={workspaceId:run.workspaceId,projectId:run.projectId};return structuredClone(projects);default:throw Error('Unexpected method '+value.method);}},browser:async()=>{throw Error('Organizational project change must not transfer browser grants');}}};
  initWorkspaces({state,escape:String,api:()=>{throw Error('Remote ownership must not use local API');},render:()=>{},toast:error=>errors.push(error),showDialog:(html,handler)=>{submit=handler;},reconcileRemoteProjectPlacement:async host=>{calls.push({reconcile:host});return projects;},openTab:tab=>{const old=state.tabs.find(item=>item.id===tab.id);if(old)Object.assign(old,tab);else state.tabs.push(tab);state.tab=tab.id;}});
  return {state,calls,errors,projects,submit:()=>submit()};
@@ -19,7 +19,7 @@ test('production project navigation resolves the remote catalog without capturin
  assert.ok(f.state.tabs.some(tab=>tab.id==='peer:remote:chat'));assert.equal(f.state.tabs.find(tab=>tab.id==='remote-viewer').parentId,'peer:remote:chat');
  assert.ok(!f.state.tabs.some(tab=>tab.projectId==='local-project'));
  openWorkspaceChat(f.state.tabs.find(tab=>tab.id==='project:remote:remote-default'),{...f.projects.memberships.chat,id:'chat'});
- assert.equal(f.state.tabs.filter(tab=>tab.id==='project:remote:remote-default:chat:chat').length,1);
+ assert.equal(f.state.tabs.filter(tab=>tab.type==='remote-run'&&tab.runId==='chat').length,1);
 });
 test('remote project movement carries owner/chat revisions and reuses its identity after an unknown outcome',async t=>{
  const f=fixture(t,{failMove:true});await moveChatToWorkspace({hostId:'remote',chatId:'chat'});

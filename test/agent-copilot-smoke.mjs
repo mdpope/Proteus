@@ -4,9 +4,9 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { CopilotClient } from '@github/copilot-sdk';
-import { ContextStore } from '../src/context.js';
-import { SettingsStore } from '../src/settings.js';
-import { selectedAgentToolScope } from '../src/agent-tools.js';
+import { ContextStore } from '../src/services/workspaces/context.js';
+import { SettingsStore } from '../src/services/settings/settings.js';
+import { selectedAgentToolScope } from '../src/services/chats/agent-tools.js';
 
 if (!process.argv.includes('--run-live')) { console.log('Use --run-live for an isolated Copilot agent compatibility check.'); process.exit(0); }
 const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-agent-live-')));

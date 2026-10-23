@@ -1,13 +1,17 @@
-import {defaultTerminalShell,terminalShellArgs} from '../src/terminal-shell.js';
+import {defaultTerminalShell,terminalShellArgs} from '../src/services/tools/terminal-shell.js';
 import {assertPrivate} from './helpers/permissions.js';
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {TerminalStore,importGhosttyProfile} from '../src/terminals.js';
-import {WorkspaceFiles} from '../src/workspace-files.js';
+import {TerminalStore,importGhosttyProfile} from '../src/services/tools/terminals.js';
+import {WorkspaceFiles} from '../src/services/workspaces/workspace-files.js';
+import {randomUUID} from 'node:crypto';
+import {terminalTools} from '../src/services/tools/terminal-agent.js';
+import {browserTools} from '../src/services/browser/browser-tools.js';
+import {codexToolContent,mcpToolResult} from '../src/shared/tool-results.js';
 function fixture(t,options={}){const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-terminal-test-')),workspace=path.join(home,'workspace');fs.mkdirSync(workspace);let config={workspaces:[{id:'test',name:'Test',cwd:workspace,additionalDirectories:[]}],libraryFolders:[]};const calls=[],children=[],signals=[];const spawnPty=(shell,args,settings)=>{calls.push({shell,args,settings});let data,exit;const child={pid:900000+children.length,writes:[],sizes:[],onData:handler=>{data=handler;return {dispose(){data=null;}};},onExit:handler=>{exit=handler;return {dispose(){exit=null;}};},write(value){this.writes.push(value);},resize(cols,rows){this.sizes.push([cols,rows]);},kill(signal){exit?.({exitCode:0,signal});},data:value=>data?.(value),exit:value=>exit?.(value)};children.push(child);return child;};const store=new TerminalStore(home,{workspaceFiles:new WorkspaceFiles(()=>config),spawnPty,killGroup:(...args)=>signals.push(args),...options});t.after(async()=>{await store.dispose();fs.rmSync(home,{recursive:true,force:true});});return {home,workspace,store,calls,children,signals,roots:()=>store.workspaceFiles.roots().roots,revoke:()=>{config.workspaces=[];}};}
 
 test('terminal profiles are private, revision guarded and validate command/color/size boundaries',async t=>{const f=fixture(t),value=f.store.profiles();assert.equal(fs.existsSync(f.store.file),false);const saved=f.store.saveProfiles([{...value.profiles[0],command:'printf synthetic',theme:{background:'#001122'}}],value.revision);assertPrivate(f.store.file,0o600);assert.equal(saved.profiles[0].command,'printf synthetic');assert.throws(()=>f.store.saveProfiles(saved.profiles,value.revision),/changed/);assert.throws(()=>f.store.saveProfiles([{...saved.profiles[0],fontSize:100}],saved.revision),/Font size/);assert.throws(()=>f.store.saveProfiles([{...saved.profiles[0],theme:{background:'url(secret)'}}],saved.revision),/hex colors/);assert.throws(()=>f.store.saveProfiles([saved.profiles[0],saved.profiles[0]],saved.revision),/unique/);});
@@ -47,4 +51,33 @@ test('terminal history restores as inactive and never restarts a shell',async t=
  const f=fixture(t),session=await f.store.create({});f.children[0].data('SYNTHETIC LOCAL HISTORY');assert.equal(f.store.snapshot(session.id).live,true);await f.store.dispose();
  const reopened=new TerminalStore(f.home,{workspaceFiles:f.store.workspaceFiles,spawnPty:()=>{throw new Error('must not spawn during restore');},killGroup:()=>{}});
  try{const restored=reopened.snapshot(session.id);assert.equal(restored.live,false);assert.equal(restored.session.status,'closed');assert.equal(restored.data,'SYNTHETIC LOCAL HISTORY');assert.equal(reopened.list().length,1);}finally{await reopened.dispose();}
+});
+
+test('terminal agent sharing gates output and input, deduplicates delivery, and revokes old observations',async t=>{
+ const f=fixture(t),session=await f.store.create({}),access=f.store.agentAccess;
+ let active=true,now=1000;access.active=()=>active;access.now=()=>now;
+ f.children[0].data('\u001b[32mPRIVATE_SYNTHETIC_OUTPUT\u001b[0m');
+ assert.equal(access.handle({action:'list'},'chat-a').terminals[0].shared,false);
+ assert.throws(()=>access.handle({action:'snapshot',terminalId:session.id},'chat-a'),/not shared/);
+ const shared=access.set(session.id,true,0);assert.equal(shared.agentShared,true);
+ assert.throws(()=>access.set(session.id,false,0),/changed/);
+ const snapshot=access.handle({action:'snapshot',terminalId:session.id},'chat-a');assert.equal(snapshot.output,'PRIVATE_SYNTHETIC_OUTPUT');
+ const input={action:'write',terminalId:session.id,data:'printf SYNTHETIC\\n\r',operationId:randomUUID(),observationId:snapshot.observationId};
+ assert.throws(()=>access.handle(input,'chat-b'),/fresh snapshot/);
+ assert.equal(access.handle(input,'chat-a').delivered,true);access.handle(input,'chat-a');assert.equal(f.children[0].writes.length,1);
+ assert.throws(()=>access.handle({...input,data:'different'},'chat-a'),/different input/);
+ now+=120001;assert.throws(()=>access.handle({...input,operationId:randomUUID()},'chat-a'),/fresh snapshot/);
+ access.set(session.id,false,shared.agentAccessRevision);assert.throws(()=>access.handle(input,'chat-a'),/not shared/);
+ access.set(session.id,true,2);assert.equal(access.handle(input,'chat-a').delivered,true);assert.equal(f.children[0].writes.length,1);assert.throws(()=>access.handle({...input,operationId:randomUUID()},'chat-a'),/fresh snapshot/);
+ active=false;assert.throws(()=>access.handle({action:'snapshot',terminalId:session.id},'chat-a'),/active/);active=true;
+ await f.store.close(session.id);assert.equal(access.shared(session.id),false);assert.throws(()=>access.handle(input,'chat-a'),/not shared/);
+ assert.equal(f.calls.length,1,'agent actions never create or restart a shell');f.store.saveHistory();assert.equal(fs.readFileSync(f.store.historyFile,'utf8').includes('agentShared'),false);
+});
+
+for(const provider of ['copilot','codex','claude'])test(provider+' receives the same bounded shared-terminal tool result',async t=>{
+ const f=fixture(t),session=await f.store.create({});f.store.agentAccess.set(session.id,true,0);f.children[0].data('SYNTHETIC_COMMAND_OUTPUT');
+ const terminal=(args,owner)=>f.store.agentAccess.handle(args,owner),tool=browserTools({terminal,agent:()=>{}},'run').find(tool=>tool.name==='proteus_terminal');
+ assert.ok(tool);const result=await tool.handler({action:'snapshot',terminalId:session.id});
+ const text=provider==='codex'?codexToolContent(result)[0].text:mcpToolResult(result).content[0].text;
+ assert.equal(JSON.parse(text).output,'SYNTHETIC_COMMAND_OUTPUT');assert.equal(terminalTools(null,'run').length,0);
 });

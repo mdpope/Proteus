@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { recentBrowserVisits } from '../public/browser-recents.js';
+import { recentBrowserVisits } from '../public/features/browser/browser-recents.js';
 test('recent address suggestions keep the latest device for each URL and cap at 20',()=>{
  const visits=Array.from({length:25},(_,i)=>({url:`https://example.test/${i}`,visitedAt:new Date(Date.UTC(2026,9,7,0,i)).toISOString(),deviceName:'Mac'}));
  visits.push({url:'https://example.test/0',visitedAt:'2026-10-07T02:00:00Z',deviceName:'iPad'});

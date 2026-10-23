@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { loadURLWithTimeout, cancelNavigation } from '../desktop/navigation.cjs';
+import { loadURLWithTimeout, cancelNavigation } from '../desktop/windows/navigation.cjs';
 
 class Page extends EventEmitter {
   stopped = 0;

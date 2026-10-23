@@ -1,3 +1,12 @@
+## October 23 — required guidance and folder authority
+
+Required Proteus core guidance remains loaded independently of selected optional agents and
+sources. It directs schedules to open their own browser tabs beside their chat, honors the
+browser preference for authentication where supported, explains explicit terminal sharing, and
+describes unassigned update coordinators. Optional source selection cannot disable these rules.
+Configured working folders default to read/write; source/library folders alone grant no writes.
+Explicit read-only/protected metadata restrictions and the active provider boundary still apply.
+
 ## October 21 — favorites shared across workspaces
 
 Favorites are bookmarks in the owning computer's canonical context configuration,

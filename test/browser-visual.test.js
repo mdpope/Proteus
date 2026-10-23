@@ -1,6 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {createRequire} from 'node:module';
-import {modelToolResult,codexToolContent,mcpToolResult} from '../src/tool-results.js';
-const {validateCapture}=createRequire(import.meta.url)('../desktop/browser-visual.cjs');
+import {modelToolResult,codexToolContent,mcpToolResult} from '../src/shared/tool-results.js';
+const {validateCapture}=createRequire(import.meta.url)('../desktop/browser/browser-visual.cjs');
 test('coordinate observations reject changed navigation, scale, resize, expiry and out-of-bounds input',()=>{
  const viewport={width:800,height:600,dpr:2,url:'https://example.test'},capture={...viewport,id:'capture',at:1000,revision:3},value={captureId:'capture',x:30,y:40};
  assert.deepEqual(validateCapture(capture,value,viewport,{revision:3,now:2000}),{x:30,y:40});

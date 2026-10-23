@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { requireProtectedStorage, resolveSystemCredential, validateCredentialReference } from '../src/credential-storage.js';
+import { requireProtectedStorage, resolveSystemCredential, validateCredentialReference } from '../src/services/integrations/credential-storage.js';
 
 test('all desktop token stores require a protected OS backend and refuse basic_text', () => {
   for (const backend of ['gnome_libsecret', 'kwallet6', 'keychain', undefined]) assert.doesNotThrow(() => requireProtectedStorage({ isEncryptionAvailable: () => true, getSelectedStorageBackend: () => backend }));

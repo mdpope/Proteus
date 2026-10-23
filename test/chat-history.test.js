@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mergeChatHistory, chatHistoryWindowStart } from '../public/chat-history.js';
-import { remoteRun } from '../src/remote.js';
+import { mergeChatHistory, chatHistoryWindowStart } from '../public/features/chats/chat-history.js';
+import { remoteRun } from '../src/services/remote/remote.js';
 const page=(first,last,count=last+1)=>({id:'chat',eventStart:first,eventCount:count,earlier:first,events:Array.from({length:last-first+1},(_,i)=>({text:String(first+i)}))});
 test('history survives live refresh, sparse reconnect and stable prepend without duplicates',()=>{
  let run=mergeChatHistory(page(100,199),page(0,99));run=mergeChatHistory(run,page(101,200));

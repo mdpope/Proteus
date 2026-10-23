@@ -1,7 +1,7 @@
 // Real Electron interface and external stdio MCP, isolated data homes, encrypted loopback peers.
 import {_electron as electron} from 'playwright';
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import assert from 'node:assert/strict';import {randomUUID} from 'node:crypto';import {spawn} from 'node:child_process';import {createInterface} from 'node:readline';
-import {startServer} from '../src/server.js';import {startRelay} from '../relay/server.js';import {atomicJSON} from '../src/files.js';import {secret} from '../src/remote-crypto.js';import {until} from './remote-client.mjs';
+import {startServer} from '../src/server.js';import {startRelay} from '../relay/server.js';import {atomicJSON} from '../src/shared/files.js';import {secret} from '../src/services/remote/remote-crypto.js';import {until} from './remote-client.mjs';
 const root=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-chat-control-ui-')),localHome=path.join(root,'local'),token=secret(),relay=await startRelay({port:0,token}),relayURL=`ws://127.0.0.1:${relay.port}`,owners=[],errors=[];let app,child;
 function settings(home){const cwd=path.join(home,'workspace');fs.mkdirSync(cwd,{recursive:true});atomicJSON(path.join(home,'settings.json'),{schemaVersion:1,provider:'rehearsal',model:'',timezone:'UTC',workspace:{cwd,additionalDirectories:[]},skillDirectories:[],mcpServers:{}});}
 try{

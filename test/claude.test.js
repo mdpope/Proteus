@@ -1,5 +1,5 @@
 import {assertPrivate} from './helpers/permissions.js';
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
@@ -8,9 +8,9 @@ import os from 'node:os';
 import path from 'node:path';
 import {once} from 'node:events';
 import {execFileSync} from 'node:child_process';
-import {ClaudeProvider,ClaudeRPC,claudeModel,claudeMcpConfig,stopClaudeProcess,claudeAccountAvailable,claudeQuota} from '../src/claude.js';
-import {normalizeProviderUsage,ProviderUsageCache} from '../src/usage.js';
-import {providerUsageSummary} from '../public/usage.js';
+import {ClaudeProvider,ClaudeRPC,claudeModel,claudeMcpConfig,stopClaudeProcess,claudeAccountAvailable,claudeQuota} from '../src/providers/claude.js';
+import {normalizeProviderUsage,ProviderUsageCache} from '../src/services/telemetry/usage.js';
+import {providerUsageSummary} from '../public/features/settings/usage.js';
 const model={value:'test',displayName:'Synthetic',supportedEffortLevels:['low','high'],supportsFastMode:true};
 class Fake extends EventEmitter {
   constructor(action){super();this.action=action;this.responses=[];}

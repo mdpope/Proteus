@@ -1,10 +1,10 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {BrowserProfiles,validateBrowserSettings} from '../src/browser-profiles.js';
+import {BrowserProfiles,validateBrowserSettings} from '../src/services/browser/browser-profiles.js';
 
 test('profile definitions require opt-in and current account isolation; partitions remain stable',async t=>{
  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-profiles-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));

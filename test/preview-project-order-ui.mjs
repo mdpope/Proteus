@@ -3,7 +3,7 @@ import {_electron as electron} from 'playwright';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {sidebarFixture} from './preview-sidebar-fixture.mjs';
-const require=createRequire(import.meta.url),{WorkspaceSession}=require('../desktop/workspace-session.cjs');
+const require=createRequire(import.meta.url),{WorkspaceSession}=require('../desktop/windows/workspace-session.cjs');
 const fixture=await sidebarFixture(),errors=[];let app,page;
 const store=new WorkspaceSession(fixture.locations.home),session=store.get();
 const otherProject=fixture.projects.find(project=>project.workspaceId===fixture.personal.id),otherRoot='project:local:'+otherProject.id;
@@ -50,7 +50,7 @@ try{
  // Close while a project chat is active; repeated passive reconciliation must not reopen it.
  await showProjects();await page.locator(`[data-preview-open-project="${fixture.project.id}"]`).click();await page.locator('.chat-index-row').first().click();await page.locator('#followup').waitFor();await page.locator('#followup').fill('Synthetic project order draft retained');
  await page.locator(`[data-close="${fixture.workspaceId}"]`).click();await page.waitForFunction(id=>!document.querySelector(`[data-tab="${id}"]`),fixture.workspaceId);
- await page.evaluate(async()=>{const preview=await import('/desktop-preview.js');for(let i=0;i<4;i++)preview.reconcilePreviewChatPlacement();});
+ await page.evaluate(async()=>{const preview=await import('/shared/navigation/desktop-preview.js');for(let i=0;i<4;i++)preview.reconcilePreviewChatPlacement();});
  await page.locator('[data-page=runs]').click();assert.equal(await page.locator(`[data-tab="${fixture.workspaceId}"]`).count(),0);
  const closed=await page.evaluate(()=>window.desktop.workspaceSession({action:'get'}));assert.equal(closed.tabs.find(tab=>tab.id===fixture.workspaceId).navigationClosed,true);
  // Explicit project navigation restores the same workspace, project, chat and draft.

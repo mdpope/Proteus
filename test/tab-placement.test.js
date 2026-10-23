@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {placeTabAfter} from '../public/tab-placement.js';
+import {placeTabAfter} from '../public/shared/navigation/tab-placement.js';
 test('new tabs are inserted immediately after the captured source without reordering other tabs',()=>{
  for(const parentId of [null,'chat','workspace','team'])for(const sourceId of ['a','b','c']){
   const tabs=['a','b','c','new'].map(id=>({id,parentId,profileId:'work'}));

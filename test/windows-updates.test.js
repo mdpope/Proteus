@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import helper from '../desktop/update-helper.cjs';
-import packages from '../desktop/update-package.cjs';
-import windows from '../desktop/windows-installation.cjs';
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
-import {initializeFreshRecovery} from '../src/recovery-inventory.js';
+import helper from '../desktop/updates/update-helper.cjs';
+import packages from '../desktop/updates/update-package.cjs';
+import windows from '../desktop/updates/windows-installation.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
+import {initializeFreshRecovery} from '../src/services/updates/recovery-inventory.js';
 
 test('Windows installer recovery reuses one verified app and data remains outside replacement',async t=>{
  const root=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-windows-update-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));

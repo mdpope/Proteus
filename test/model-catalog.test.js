@@ -1,13 +1,13 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { copilotModel, validateModelOptions, ModelCatalog } from '../src/model-catalog.js';
-import { CopilotProvider } from '../src/copilot.js';
+import { copilotModel, validateModelOptions, ModelCatalog } from '../src/models/model-catalog.js';
+import { CopilotProvider } from '../src/providers/copilot.js';
 import { startServer } from '../src/server.js';
-import { remoteState, remoteRun } from '../src/remote.js';
+import { remoteState, remoteRun } from '../src/services/remote/remote.js';
 import { fakeSession } from './fake-copilot.js';
 const raw = { id: 'fixture', supportedReasoningEfforts: ['none', 'low', 'medium', 'high', 'xhigh', 'max'], capabilities: { supports: { reasoningEffort: true }, limits: { max_prompt_tokens: 872000, max_context_window_tokens: 1000000, max_output_tokens: 128000 } }, billing: { tokenPrices: { maxPromptTokens: 272000, longContext: { maxPromptTokens: 872000 } } } };
 test('Copilot maps provider prompt budgets separately from total windows, with no invented defaults', () => {

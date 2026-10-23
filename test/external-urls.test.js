@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import external from '../desktop/external-urls.cjs';
+import external from '../desktop/services/external-urls.cjs';
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 test('OS website URLs exclude credentials, non-web schemes and control characters',()=>{
  for(const raw of ['javascript:alert(1)','file:///etc/passwd','https://user:secret@example.com','https://example.com\n','proteus://chat/a',null])assert.equal(external.webURL(raw),null);

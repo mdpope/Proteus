@@ -1,3 +1,13 @@
+## October 23 — isolated next-release implementation
+
+The separate `codex/oct23-next-release` branch implements the 25-item intake, including the
+terminal clipboard/agent-access additions, shared move menu, associated-chat routing and
+window/project synchronization fixes. See
+[implementation and validation](2026-10-23-next-release.md) and [source organization](code-organization.md).
+This candidate is based on the ongoing update chat's latest committed source; its release
+packaging, installation, OS defaults, publishing and rollout remain held. The earlier rollout
+records below describe the previous release and do not release this candidate's hold.
+
 ## October 23 — local URL-follow fix and web/native parity; desktop rollout resumed
 
 The operator requested iOS performance checks and reported project tab selection following while
@@ -561,7 +571,7 @@ editable field semantics (cut/paste/undo), selection and captured tab/profile ow
 Inspect Element remains last. No invented open-link action for non-link targets.
 Acceptance: link with/without selected text, editable link target, ordinary page selection,
 no-link page and inspect availability; verify keyboard actions and current browser view.
-Source confirms the leading selection/edit group in desktop/browser-actions.cjs;
+Source confirms the leading selection/edit group in desktop/browser/browser-actions.cjs;
 only documentation changed at intake, with no runtime/menu edits or UI test claim.
 
 ### BF-2026-10-21-86 follow-up — merge HC favorites during upgrade
@@ -636,7 +646,7 @@ its private runtime log was not independently read in this intake.
 
 The operator reports Work Mac's Codex chat repeatedly fails ADO MCP use despite recorded approval:
 `mcpServer/elicitation/request` accepts only the `proteus_app` approval shape and otherwise returns
-`{action:'decline',content:null}`. Source matches this account at `src/codex.js`'s elicitation branch;
+`{action:'decline',content:null}`. Source matches this account at `src/providers/codex.js`'s elicitation branch;
 the inspected local installed adapter matches source bytes. Before execution, the adapter separately
 asks to enable each selected MCP server. That approval does not prevent the later blanket decline.
 
@@ -744,7 +754,7 @@ and an in-memory provider-interface diagnostic only. No native Claude runtime/mo
 chat interruption, SDK/package change, runtime implementation, build or installation performed.
 
 The operator reports Claude chats say steering does not work and asks whether this is a Proteus
-bug or an upstream limitation. Source matches installed `src/claude.js`: `ClaudeProvider` has no
+bug or an upstream limitation. Source matches installed `src/providers/claude.js`: `ClaudeProvider` has no
 `steer` method and its status explicitly advertises `capabilities.steering:false`. The per-chat
 `SessionProvider` exposes steering only if its adapter implements it. `Engine.send` rejects active
 steering before provider delivery when no method exists. An in-memory construction of the real
@@ -752,7 +762,7 @@ adapter/wrapper confirms both lack that method, without executing Claude. This i
 Proteus integration, not evidence that the model ignored a delivered steering message.
 
 The local and paired-desktop reply/queued-message controls in `public/app.js` and
-`public/remote-desktops.js` offer Steer based on running status without checking provider steering
+`public/services/remote/remote-desktops.js` offer Steer based on running status without checking provider steering
 support. That is a confirmed capability/UI mismatch. Remote owner responses already expose
 `ownerChatControls.steering` derived from the actual provider method. Use authoritative current
 owner/provider capability for every applicable desktop/web/native/remote Steer and Steer queued
@@ -886,7 +896,7 @@ wants tab history retained for agent context. Do not adopt latest-entry-only his
 history by default as the solution. Reduce repeated decorative image bytes first; investigate
 lossless history delivery separately, preserving both stored history and usable model context.
 
-Source findings match the installed `desktop/browser.cjs` and `src/browser-tools.js` bytes:
+Source findings match the installed `desktop/browser/browser.cjs` and `src/services/browser/browser-tools.js` bytes:
 `BrowserTabs.state` includes inline favicon data and includes logical history whenever present,
 even with `includeHistory=false`; unloaded state can carry saved history. Most open/navigation/
 load/snapshot/action results reuse that state. The agent `list` path explicitly removes history
@@ -946,7 +956,7 @@ no shortcut/runtime changes, live refresh, UI test, build, packaging or installa
 The operator reports Command+R reloads the Electron application instead of refreshing the current
 tab. Source confirms View → Reload Window in `desktop/main.cjs` explicitly binds
 `CommandOrControl+R` to `recovery.reload()`. Embedded pages already intercept Command/Ctrl+R and
-F5 in `desktop/browser.cjs` for their own native reload. Shell focus and native page focus therefore
+F5 in `desktop/browser/browser.cjs` for their own native reload. Shell focus and native page focus therefore
 have competing refresh paths; the menu accelerator must not reload the shell for ordinary refresh.
 
 Bind Command+R to Refresh current tab in the initiating window, using its selected content tab
@@ -1036,7 +1046,7 @@ not its text, toolbar or the entire application. Keep adaptive shrinking/scrolli
 very small windows so setup fields, attachments, model controls and Send remain reachable.
 
 The message editor is sized by both `.new-chat-tab-panel .new-chat-composer textarea` and the
-shared `mountChatComposer` measurement in `public/chat-composer.js`. Apply the 15% increase to
+shared `mountChatComposer` measurement in `public/features/chats/chat-composer.js`. Apply the 15% increase to
 the actual rendered normal-size baseline, including the sizing logic; changing a CSS minimum
 alone is not proof of the requested result. Scope it to tab-hosted New chat, covering local and
 paired-destination setup, while preserving drafts, attachments, source choices, focus and normal
@@ -1140,8 +1150,8 @@ browsing suggestions, matching the compact menus already corrected in BF-2026-10
 anchored suggestions may cover their own footprint; opening them must not hide/blank the rest of
 the browser, navigate/reload it or discard its scroll/form state.
 
-Source inspection: `public/browser-recents.js` still mounts the desktop list in the shell and
-`bindDesktopBrowserRecents` sends an `address-recents-*` overlay token. In `desktop/browser.cjs`,
+Source inspection: `public/features/browser/browser-recents.js` still mounts the desktop list in the shell and
+`bindDesktopBrowserRecents` sends an `address-recents-*` overlay token. In `desktop/browser/browser.cjs`,
 `BrowserTabs.setOverlay` hides the native page while that token is active. Queue migration to the
 existing owner-bound compact popup approach; CSS stacking alone cannot overlay a native page.
 Keep URL editing focus, history filtering/search choices, visit metadata, Arrow/Enter selection,
@@ -1518,7 +1528,7 @@ snapshot. Do not resurrect closed shared tabs, deleted containers or stale grant
 already-open session on repeated restore. Keep private versioned/revision-checked atomic state,
 unknown fields, bounded automatic history, explicit retention/removal and named-session persistence.
 Window Close remains distinct from chat archive/delete/cancel and terminal resource lifetime.
-`desktop/windows.cjs` and `desktop/main.cjs` currently explicitly forget closed-window records;
+`desktop/windows/windows.cjs` and `desktop/main.cjs` currently explicitly forget closed-window records;
 the operator's lost window has not been recovered. See [window management](window-management.md).
 
 ### BF-2026-10-20-41 — Integrate navigation and the Proteus brand into the title bar
@@ -1603,7 +1613,7 @@ operator intentionally selected an empty list. The screenshot's clipped region i
 identify the previously reported squished link field conclusively; inspect both account controls
 and the link editor during reproduction.
 
-Source trace only: the exact error text appears in `src/remote.js` in `tabs.mutate` reorder
+Source trace only: the exact error text appears in `src/services/remote/remote.js` in `tabs.mutate` reorder
 projection for a client without document access. That path validates the current non-document
 descriptor set against the supplied order. Inspect actual scope/revision/IDs and mixed-type or
 hidden-tab projection before changing the validator. No request payload, device permission or
@@ -1712,7 +1722,7 @@ remain separate.
 **Status: queued for the next release; do not implement or build until the operator authorizes it.**
 This chat collects the next release's future updates and fixes. The operator reports that
 Inspect Element appears at the top of the browser's right-click link menu and requests it at
-the bottom. The current native menu in `desktop/browser-actions.cjs` adds Inspect Element before
+the bottom. The current native menu in `desktop/browser/browser-actions.cjs` adds Inspect Element before
 the link actions, confirming the source ordering.
 
 When implementation is authorized, place Inspect Element as the final actionable item in the
@@ -1732,10 +1742,10 @@ the site's `force_cold_boot=1` query. Do not store its workplace URL, identifier
 in this repository. HC's exact navigation event sequence and installed artifact were not inspected
 in this investigation; its specific trigger remains inferred from the matching reproduction.
 
-Source finding: `desktop/browser.cjs` filters code -3 in `did-fail-load`, but `navigate()` catches
+Source finding: `desktop/browser/browser.cjs` filters code -3 in `did-fail-load`, but `navigate()` catches
 the rejected `loadURLWithTimeout()` promise and calls `reportLoadError()` without classifying
 the abort. The history-restore catch also reports errors without that classification.
-`desktop/navigation.cjs` forwards Electron's rejection. A page-initiated replacement does not
+`desktop/windows/navigation.cjs` forwards Electron's rejection. A page-initiated replacement does not
 advance the broker's `tab.navigation` token, so the old load can still set `tab.error` and emit
 the whole-page failure notification. Successful destination completion does not clear that
 late error in this path. Electron 44.5.1's load promise explicitly rejects with code -3 when a
@@ -1791,7 +1801,7 @@ turn name selection into an accordion. Expand only the explicitly selected branc
 existing project-page destination and manual chevron behavior. The earlier workspace-only scope
 is superseded by this follow-up. All changes remain queued under the explicit build hold.
 
-Source orientation: the workspace-name handler in `public/desktop-preview.js` currently calls
+Source orientation: the workspace-name handler in `public/shared/navigation/desktop-preview.js` currently calls
 `openWorkspace(...,'projects')`; the chevron separately updates the expansion set. This follow-up
 queues combining navigation with explicit expansion for workspace and project name actions, not replacing the
 independent manual expansion control or introducing an accordion that closes siblings.
@@ -1864,7 +1874,7 @@ and owners. A nonhidden browser may be unloaded and still appear in navigation: 
 truthful unloaded card without fetching it. Hidden resources remain discoverable through Tabs
 management. Do not move resources or rewrite project/chat membership to repair presentation.
 
-Source findings in `public/tab-overview-model.js`: expanding a project-scoped request to the
+Source findings in `public/shared/navigation/tab-overview-model.js`: expanding a project-scoped request to the
 current workspace's projects is intended. However, the comparator puts the current project
 first without alphabetizing the others: a synthetic stored Zulu/General/Alpha catalog returns
 General/Zulu/Alpha when General is current. Legacy direct workspace descendants use the selected
@@ -1901,7 +1911,7 @@ for a batch of real-time captures. Icons remain the fallback when no usable imag
 BF-08 still governs membership: all current-workspace projects, current first then others by name,
 with hidden tabs excluded. Having a cached image does not make a hidden tab eligible for overview.
 
-Confirmed source issue: `desktop/browser-actions.cjs` takes the first 30 entries from the global
+Confirmed source issue: `desktop/browser/browser-actions.cjs` takes the first 30 entries from the global
 browser list **before** checking whether they are loaded or relevant. Hidden/unloaded/unrelated
 saved descriptors can consume that limit. A synthetic fixture with 35 sleeping descriptors then
 three loaded relevant browsers makes zero captures; putting those same loaded browsers first
@@ -2013,8 +2023,8 @@ BF-08's workspace overview scope and BF-09's stable content-thumbnail identities
 
 Source baseline: `desktop/main.cjs` currently holds one primary window and browser broker,
 creates it at fixed dimensions, binds trusted renderer checks to that one webContents and hides
-it on Close. `desktop/workspace-session.cjs` stores the existing session; renderer view positions
-in `public/view-position.js` are an in-memory map. Existing selected-tab restoration is not proof
+it on Close. `desktop/windows/workspace-session.cjs` stores the existing session; renderer view positions
+in `public/shared/navigation/view-position.js` are an in-memory map. Existing selected-tab restoration is not proof
 of persistent multiwindow geometry or complete reading-position restoration across app restart.
 
 Pending acceptance: create two or more windows with distinct positions, workspaces, selected
@@ -2066,9 +2076,9 @@ queued request does not authorize changes to the currently running native previe
 the shared presentation to corresponding web new-tab controls where they already exist, without
 claiming native window management or unsupported resources in a web client.
 
-Source baseline: `public/browser-home.js` currently renders separate address and history-filter
+Source baseline: `public/features/browser/browser-home.js` currently renders separate address and history-filter
 inputs plus an Open website button. `public/app.js` focuses the top URL field for blank browsers.
-`public/add-tab-menu.js` defines desktop scope-dependent options; main/scoped/Team and native
+`public/shared/navigation/add-tab-menu.js` defines desktop scope-dependent options; main/scoped/Team and native
 entry points use menus. Reuse these actual action inventories rather than hardcoding a reduced
 set. BF-11 owns Command+T/window routing; BF-10 owns the overview icon, not the new-tab + action.
 
@@ -2087,7 +2097,7 @@ acceptance distinct; all implementation and validation remain pending under the 
 **Status: source diagnosis and synthetic saved-account reproduction complete; next-release fix
 queued. No live account access, sign-in, settings change, runtime implementation or build.**
 The operator reports Engine Room → Browser Preferences → Enable additional profiles and sync
-settings is disabled without an obvious account-enablement route. `public/browser-preferences.js`
+settings is disabled without an obvious account-enablement route. `public/features/browser/browser-preferences.js`
 disables it when `/api/browser-profiles` reports `authenticated:false`. Its note refers to App Setup
 without a link, although the current workspace/projects UI names that section **App settings**.
 The account settings/security website button is not the app-connection flow.
@@ -2250,7 +2260,7 @@ drafts, approvals, histories and active turns. It does not rename/move project f
 resources or change which workspace is default. Workspace order is separate from project order
 and BF-08's current-first/alphabetical project sections in overview; those requirements remain.
 
-Source orientation: `renderPreviewCollection()` in `public/desktop-preview.js` maps the current
+Source orientation: `renderPreviewCollection()` in `public/shared/navigation/desktop-preview.js` maps the current
 context workspace array into cards without workspace-card reorder controls. Its existing project
 reorder is a separate operation and does not establish workspace reorder support. Determine the
 authoritative workspace-order contract before future implementation; do not edit live app-data
@@ -2291,7 +2301,7 @@ access. Copy retains its existing independent/unloaded browser behavior and supp
 This is picker/target-selection scope: do not migrate legacy direct-workspace resources, alter
 default projects, change chat membership implicitly or add unsupported cross-computer moves.
 
-Source orientation: `public/tab-placement.js` currently returns separate Workspaces, Projects
+Source orientation: `public/shared/navigation/tab-placement.js` currently returns separate Workspaces, Projects
 and Chats sections from open view tabs; `transferTabDialog()` in `public/app.js` renders each
 as an optgroup whose project options contain only the tab label. Use real workspace/project
 associations and default-project metadata for the future grouped model, with fresh destination
@@ -2338,9 +2348,9 @@ ownership, drafts, approvals and effective settings. Do not promise atomic all-o
 the owner only supports per-item completion; show actual successes/blockers/failures, keep
 unsuccessful items selected for correction/retry and avoid redoing completed operations.
 
-Source orientation: `public/workspace-tabs.js` currently provides single-row Hide/Restore,
+Source orientation: `public/features/workspaces/workspace-tabs.js` currently provides single-row Hide/Restore,
 Move and Close actions without multi-selection. The project-page action row is built in
-`public/desktop-preview.js` beside Workspace configuration. Reuse the real row/action inventory,
+`public/shared/navigation/desktop-preview.js` beside Workspace configuration. Reuse the real row/action inventory,
 not a browser-only subset or direct app-data edits. This request does not introduce new tool
 availability or authorize managing any real selected tabs during queue-only intake.
 
@@ -2366,7 +2376,7 @@ Source inspection: `public/app.js` records the outgoing view through `rememberVi
 `renderMarkdown()` replaces the main content and mounts Markdown again. That local document
 path never invokes `restoreView`; the existing callback is wired to remote conversation
 rendering instead. The approved remote-document rendering path also replaces its content
-without calling the helper. `public/view-position.js` keeps its positions in an in-memory Map,
+without calling the helper. `public/shared/navigation/view-position.js` keeps its positions in an in-memory Map,
 which cannot survive renderer reload or app restart. These identify restoration/persistence
 gaps; the operator's exact live sequence has not been reproduced in this intake.
 
@@ -2408,7 +2418,7 @@ toolbar size, stroke weight and theme states. Apply consistently wherever that s
 appears across supported browser scopes; retain accessible menu names, keyboard access and hit
 targets. This changes the icon presentation, preserving existing menu actions and placement.
 
-Source orientation: `public/browser-extensions-toolbar.js` creates the desktop Page menu button
+Source orientation: `public/features/browser/browser-extensions-toolbar.js` creates the desktop Page menu button
 with an SVG path drawing three diagonal slashes, shared through the browser toolbar. Inventory
 corresponding web controls during implementation and use the same circled-ellipsis geometry;
 do not claim a missing web action is now available. Native iOS already supplies the requested
@@ -2541,8 +2551,8 @@ never terminate a separately user-owned daemon or a process still used by anothe
 always-on screenshot loops, duplicated planners, heavyweight perception/model downloads or one
 full native daemon per chat. Show actual backend/process resources and idle/active status.
 
-Source orientation: `public/proteus-orientation.js` and `src/app-capabilities.js` provide required
-guidance and a captured inventory. `src/browser-tools.js` already exposes compact list/call wrappers
+Source orientation: `public/shared/ui/proteus-orientation.js` and `src/services/chats/app-capabilities.js` provide required
+guidance and a captured inventory. `src/services/browser/browser-tools.js` already exposes compact list/call wrappers
 whose backend can start on use. Provider handling differs: Codex persists native dynamic schemas
 and supplies fresh resumed catalogs through MCP; Copilot context/server removal uses cold reconnect.
 Do not claim universal mid-turn tool unloading from a `defer` marker. Independently control schema
@@ -2614,10 +2624,10 @@ was reported unconfirmed; this intake records the report and does not dispatch a
 Keep private chat identities, machine data and detailed operational receipts outside this checkout.
 
 Reported chain: `BrowserHistoryStore.relocateNavigation` increments the target stack's revision even
-when empty (`src/browser-history-store.js:209`); `ContentTabs.getAsync` exposes history only when a
-selected entry exists (`src/content-tabs.js:43–52`). An empty authoritative stack at revision 1 thus
+when empty (`src/services/browser/browser-history-store.js:209`); `ContentTabs.getAsync` exposes history only when a
+selected entry exists (`src/services/workspaces/content-tabs.js:43–52`). An empty authoritative stack at revision 1 thus
 becomes a descriptor with undefined history. `tabChanges` constructs the first pending navigation
-using its revision-0/index default (`public/content-tab-sync.js:10–16`), and the owner correctly
+using its revision-0/index default (`public/models/content-tab-sync.js:10–16`), and the owner correctly
 rejects the stale base with `NAVIGATION_CONFLICT`.
 
 The report reproduces this with the installed store, ContentTabs and synchronizer in a temporary
@@ -2642,7 +2652,7 @@ is grouped with BF-24/25 below and remains held.
 
 **Status: queued P1; same operator-supplied installed-build report/evidence boundary as BF-23.
 No implementation, live repair, build or restart in this intake.**
-The native apply-history command returns early for an empty URL (`desktop/browser.cjs:628–632`),
+The native apply-history command returns early for an empty URL (`desktop/browser/browser.cjs:628–632`),
 leaving `navigationPending` set. `createTabSynchronizer.resolve` clears its outbox and adopts the
 empty remote baseline; the next sync then regenerates a revision-0 operation and conflicts again.
 The report reproduced this using the actual installed command method, synchronizer and temporary
@@ -2666,7 +2676,7 @@ both existing recovery choices and repeated retries without recurring conflicts 
 or implemented fix in this intake. Uses BF-23's exact 0.2.25 build baseline.**
 The report traces a document-body conflict panel/global `navigation-conflicts` overlay in
 `public/app.js:846–852`. `BrowserTabs.setOverlay` hides every native browser
-(`desktop/browser.cjs:424–429`), while `BrowserTabs.show` returns before retaining a new selection
+(`desktop/browser/browser.cjs:424–429`), while `BrowserTabs.show` returns before retaining a new selection
 and bounds when that overlay is open (`371–372`). Reported assertions: old page active; overlay
 opens; select a new page; both pages remain hidden and old selection stays active; close overlay;
 the old page returns while the newly selected page stays hidden.
@@ -2747,7 +2757,7 @@ The detached window itself is expected: the current native command uses
 `openDevTools({mode:'detach'})`. Do not classify that presentation as a separate external-browser
 launch defect or confuse this with BF-04's requested context-menu action ordering.
 
-Source candidate, not a proven root cause: `public/browser-extensions-toolbar.js` awaits the
+Source candidate, not a proven root cause: `public/features/browser/browser-extensions-toolbar.js` awaits the
 native popup and then silently returns if its original toolbar control is no longer connected.
 Periodic toolbar replacement can invalidate that control; Inspect Element instead calls the
 native command directly. Also verify native popup close/result ordering and command result/error
@@ -2769,7 +2779,7 @@ that explains the missing options without any provider authentication or catalog
 
 `public/app.js` initially adds all three provider options, then its `previewEnabled(state)` branch
 removes every option except Codex/rehearsal, selects Codex and loads that catalog. The helper in
-`public/desktop-preview.js` now recognizes the production `workspaceProjects` catalog as well as
+`public/shared/navigation/desktop-preview.js` now recognizes the production `workspaceProjects` catalog as well as
 `desktopPreview`; `WorkspaceProjects.get()` returns `enabled:true` for the ordinary project UI.
 Consequently the old isolated-preview restriction also executes in production. Server adapter
 restriction still uses the actual `desktopPreview` option, so this renderer branch confuses project
@@ -3243,7 +3253,7 @@ surface and in-page toast presentation, including actionable alerts. Preserve ma
 and existing actions. Hiding an alert must not resolve its underlying pending request or change
 an independent authorization expiry; retained Logs/Needs attention entries remain available.
 
-Read-only source confirmation: `public/toast.js` currently defaults to 15,000 milliseconds and
+Read-only source confirmation: `public/shared/ui/toast.js` currently defaults to 15,000 milliseconds and
 uses that timer for both desktop notices and in-page toasts. No runtime change has been made.
 
 Future acceptance: verify ordinary and actionable alerts disappear five seconds after each is
@@ -3394,9 +3404,9 @@ extra profile preference as the desired behavior. Apply ordinary tab ownership/s
 authorization consistently across profiles, including BF-07's unloaded/hidden imports and later
 explicit activation. An extension or legacy private/profile setting must not independently veto it.
 
-Read-only source confirmation: `desktop/browser-extensions.cjs` gates extension profiles on
-`allowExtensionAgents`; `desktop/browser.cjs` rejects agent-owned creation/sharing and filters
-allowed tabs through that protection; `public/browser-toolbar.js` retains extension/private
+Read-only source confirmation: `desktop/browser/browser-extensions.cjs` gates extension profiles on
+`allowExtensionAgents`; `desktop/browser/browser.cjs` rejects agent-owned creation/sharing and filters
+allowed tabs through that protection; `public/features/browser/browser-toolbar.js` retains extension/private
 wording. These are Proteus policy paths. The installed host/profile and exact flag behind this
 report have not been independently inspected.
 
@@ -4091,9 +4101,9 @@ extension-enabled tabs. No current profile grants/settings changed or implementa
   tab, extension policy and missing tool/backend. Agents should reuse eligible signed-in tabs,
   not open duplicate profiles or ask for login merely because an inaccessible tab was filtered.
 
-Read-only baseline: desktop/browser-extensions.cjs protected() returns true for installation or
+Read-only baseline: desktop/browser/browser-extensions.cjs protected() returns true for installation or
 any enabled extension; its comment cites possibly autofilled credentials. protectProfile revokes
-sharing/run ownership and disconnects automation. desktop/browser.cjs rejects creating agent-owned
+sharing/run ownership and disconnects automation. desktop/browser/browser.cjs rejects creating agent-owned
 tabs or enabling sharing in such profiles, and excludes them from allowed() even if shared. This
 is a Proteus policy, not an inherent Chromium/Playwright limit. Normal human-created tabs separately
 start private and can use Agent access; the current extension-wide block prevents that override.
@@ -4203,7 +4213,7 @@ Playwright integration and current embedded tabs, not a separate browser-agent f
   Remote-desktop interaction remains within the user's task authorization; do not broaden the
   session's work or infer permission to execute remote operations merely from seeing its screen.
 
-Read-only evidence: desktop/browser.cjs returns body.ariaSnapshot() truncated to 40,000 characters;
+Read-only evidence: desktop/browser/browser.cjs returns body.ariaSnapshot() truncated to 40,000 characters;
 proteus_browser has no screenshot or coordinate parameters and click calls locator.click().
 The private Playwright bridge already attaches to the same embedded tab. The remote-desktop
 visibility gap is consistent with this text-only surface; the particular Zoho session's rendering
@@ -4285,10 +4295,10 @@ handling as well as visible download management; existing right-click support is
   app on Mac. Current native flow uses a protected temporary file and export, not unrestricted
   access to a desktop user's Downloads folder; present actual supported platform behavior.
 
-Read-only baseline: desktop/browser-actions.cjs has a download-grant map and Save As link action.
+Read-only baseline: desktop/browser/browser-actions.cjs has a download-grant map and Save As link action.
 Its will-download handler prevents downloads without a matching explicit helper-view grant, so
 ordinary page downloads are blocked by that path. It picks a filename but no configured Downloads
-folder. desktop/browser.cjs tracks active items only to avoid retention unload; no general popup/
+folder. desktop/browser/browser.cjs tracks active items only to avoid retention unload; no general popup/
 history/cancel/settings surface was found. Native SharedAppStore starts one linked-file WKDownload
 at a time, exposes cancellation and hands a temporary file to export; it is not full download UI.
 
@@ -4573,7 +4583,7 @@ Status: Queued for a future update. No runtime implementation, build or installa
   WKWebViews, review application-managed unload/background/profile/view-restoration paths and
   platform lifecycle limits before claiming guarantees beyond Proteus's own unloading policy.
 
-Read-only baseline: desktop/browser-retention.cjs retains the six newest tab records and retires
+Read-only baseline: desktop/browser/browser-retention.cjs retains the six newest tab records and retires
 older loaded views after one hour of inactivity, excluding selected, agent-owned/shared, downloading
 and audible tabs. The newest set is selected before filtering unload candidates, so merely adding
 a persistence exclusion at the end would still consume the ordinary quota. Desktop native state/
@@ -4616,7 +4626,7 @@ build or installation is authorized.
 
 Read-only baseline: public/app.js transferTabDialog builds a flat destinations array from open
 top-level run/remote-run/workspace tabs and emits options in state.tabs order. Workspace recency
-already exists independently in public/desktop-workspaces.js; chat recent-activity metadata can
+already exists independently in public/features/workspaces/desktop-workspaces.js; chat recent-activity metadata can
 come from existing owner chat records. The current chooser has no Workspaces/Chats group headers.
 
 Future acceptance: visible section headers, correct grouping/recent-first ordering, deterministic
@@ -4673,7 +4683,7 @@ Read-only baseline: desktop/web/native already expose archive/delete actions and
 representations. Existing Send to workspace resolves the chat's current membership and opens or
 focuses that workspace child; it does not choose a new workspace or reassign membership.
 `engine.beforeTurn` in `src/server.js` refreshes contexts that follow their captured workspace,
-and `src/permissions.js` includes workspace identity in approval context. These links make the
+and `src/services/settings/permissions.js` includes workspace identity in approval context. These links make the
 preserve-options requirement more than a tab-parent or workspace-ID-only change.
 
 Future acceptance: desktop, web, iPhone and iPad action style/order and destination picker;
@@ -4809,7 +4819,7 @@ or pushState) has not been captured or reproduced.
   Preserve IDs, profile/privacy boundaries, unknown metadata, pending operations, retry receipts
   and revision protection.
 
-Read-only code findings: `desktop/browser.cjs` routes main-frame did-navigate-in-page events to
+Read-only code findings: `desktop/browser/browser.cjs` routes main-frame did-navigate-in-page events to
 `commitNavigation` without distinguishing replacement, push or traversal. The helper generally
 appends when the URL differs. Normal clicked redirects already have partial grouping through
 `inflightEntryId`, but portable Back/Forward and menu traversal set `applyingShared` and replay
@@ -4880,7 +4890,7 @@ does not authorize building this item. No full interface redesign is requested.
 
 Current verified baseline:
 
-- `src/document-tools.js` defines `appInstructions`; Copilot, Codex and Claude adapters append
+- `src/services/chats/document-tools.js` defines `appInstructions`; Copilot, Codex and Claude adapters append
   this compact app guidance outside selected workspace instruction bodies. It explains document
   tabs, existing-browser reuse, integration evidence and authorization boundaries. Including the
   Proteus folder can add repository instructions/code awareness, but is not what supplies this core.
@@ -4997,7 +5007,7 @@ The findings and original proposal below record the intake baseline, not current
   Keep alert-banner View logs able to reveal its related entry outside the initial page.
 - Apply equivalent behavior to desktop, web and native Logs views while respecting their
   existing layouts and the distinction between account events and owner-computer diagnostics.
-- Read-only findings: `src/activity.js` stores general local activity in `activity.json` under
+- Read-only findings: `src/services/telemetry/activity.js` stores general local activity in `activity.json` under
   the configured application-data directory. It keeps 2,000 log entries, rewrites the complete
   activity document synchronously on save, and returns the latest 200 by default (maximum 1,000)
   without a cursor. `safeLog()` redacts credentials and truncates messages to 1,000 characters;
@@ -5069,8 +5079,8 @@ Status: Implemented; live Chromium workspace/default/explicit-application placem
 
 - Operator report: asking an agent in a workspace chat to open browser tabs places them in
   the application's top navigation instead of that workspace's navigation.
-- Confirmed code gap: `src/browser-tools.js` exposes no destination/scope argument on
-  `proteus_browser`. `desktop/browser.cjs` routes agent `open` to `create(url, runId)`;
+- Confirmed code gap: `src/services/browser/browser-tools.js` exposes no destination/scope argument on
+  `proteus_browser`. `desktop/browser/browser.cjs` routes agent `open` to `create(url, runId)`;
   creation defaults parentId to the run ID rather than resolving workspace membership.
   This establishes missing workspace-aware routing, not a complete live reproduction of
   the reported top-navigation fallback.
@@ -5116,9 +5126,9 @@ Status: Identity projection corrected; encrypted relay tests passed. Operator sc
 computers, but its chat list has two entries on its owner and no entries on the viewing computer.
 The chats were initiated from different clients; initiation device must not affect membership.
 
-Confirmed code defect: `src/remote.js` run summaries include `workspaceId`, but the
-`src/desktop-peers.js` `index()` projection retains `workspaceName` and drops `workspaceId`.
-`public/chats-index.js` filters a workspace view by workspace ID plus owning host, so projected
+Confirmed code defect: `src/services/remote/remote.js` run summaries include `workspaceId`, but the
+`src/services/remote/desktop-peers.js` `index()` projection retains `workspaceName` and drops `workspaceId`.
+`public/features/chats/chats-index.js` filters a workspace view by workspace ID plus owning host, so projected
 peer rows cannot match. This explains the screenshot discrepancy; no live HC patch/test performed.
 
 Preserve workspace identity end-to-end in peer indexes and caches, refresh existing cached rows,
@@ -5350,7 +5360,7 @@ Status: Implemented in 0.2.12 source; verification and rollout tracked in the cu
 
 Selecting **Browser Preferences** in the browser's Ghostery shield menu reportedly opens
 **Resources** instead. Expected: open Engine Room directly to Browser Preferences.
-Source lead: `public/browser-toolbar.js` dispatches `proteus-browser-preferences`;
+Source lead: `public/features/browser/browser-toolbar.js` dispatches `proteus-browser-preferences`;
 `public/app.js` sets `state.engineSection='preferences'` and calls `navigate('engine')`.
 Investigate whether navigation resets the section; this is a lead, not a reproduced diagnosis.
 
@@ -5364,7 +5374,7 @@ Status: Implemented in 0.2.12 source; verification and rollout tracked in the cu
 missing progress/completion feedback remains unconfirmed.
 
 Selecting **Update Ghostery filters** reportedly has no visible effect. The toolbar awaits
-`filters-update` without explicit success/progress feedback; `desktop/browser.cjs` calls the
+`filters-update` without explicit success/progress feedback; `desktop/browser/browser.cjs` calls the
 blocker's update and returns status. Investigate the installed command path, network/cache
 errors and visible feedback before concluding filters were not updated.
 
@@ -5418,8 +5428,8 @@ site `window.open` requests. Browsing inside a chat must keep every such new tab
 chat. Top-level and Team sources retain their own navigation area. Explicit external-browser
 actions continue to follow the user's chosen destination.
 
-Source leads: `desktop/browser-actions.cjs` creates context-menu link tabs with profile/group
-but omits `parentId`. The `setWindowOpenHandler` in `desktop/browser.cjs` already passes the
+Source leads: `desktop/browser/browser-actions.cjs` creates context-menu link tabs with profile/group
+but omits `parentId`. The `setWindowOpenHandler` in `desktop/browser/browser.cjs` already passes the
 source `parentId`; inspect the complete registration/selection path and all entry points rather
 than assuming every link path is broken. Installed reproduction remains unverified.
 
@@ -5443,7 +5453,7 @@ correction under the new hold. No runtime changes or performance traces collecte
 The operator asks whether Proteus interferes with scrolling or schedules work on the wrong threads.
 Cause, regression point and affected site/device remain unconfirmed.
 
-Source lead: `desktop/browser-preload.cjs` installs a window-level wheel listener with
+Source lead: `desktop/browser/browser-preload.cjs` installs a window-level wheel listener with
 `capture:true, passive:false` for navigation swipes and pinch overview. It can cancel events;
 horizontal gesture detection reads computed styles and scroll geometry, and gesture drawing
 mutates the page DOM. Ordinary vertical events generally return early, but the listener itself
@@ -5521,8 +5531,8 @@ Reported action: **Send tab → destination Internet Search chat → Move tab** 
 Electron's **A JavaScript error occurred in the main process** dialog. Both screenshots show
 `TypeError: Cannot read properties of undefined (reading 'id')` inside `Array.find`:
 
-- First trace: `desktop/browser.cjs:82:506`, called from `82:475` — `onBeforeRequest`.
-- Second trace: `desktop/browser.cjs:78:260`, called from `78:229` — `onHeadersReceived`.
+- First trace: `desktop/browser/browser.cjs:82:506`, called from `82:475` — `onBeforeRequest`.
+- Second trace: `desktop/browser/browser.cjs:78:260`, called from `78:229` — `onHeadersReceived`.
 
 Source inspection, including the installed bundle's first reported line, confirms both request
 handlers use `tab.view?.webContents.id` when finding a tab by request `webContentsId`. This
@@ -5554,7 +5564,7 @@ page content. Limit it to one line. Allow long addresses to use the full availab
 width within the existing edge margins, then truncate the overflowing end with `…`. Short URLs
 can retain a compact popup; do not wrap long paths/query strings or enlarge the popup vertically.
 
-Source lead: `hoverStatus` in `desktop/browser-preload.cjs` currently sets
+Source lead: `hoverStatus` in `desktop/browser/browser-preload.cjs` currently sets
 `overflow-wrap:anywhere;white-space:normal` on the popup text. Plan single-line overflow/ellipsis
 styling with a correctly bounded host/text width. Keep the actual link destination unchanged;
 ellipsis affects presentation only. Do not save the screenshot's full URL/query string here.
@@ -5573,9 +5583,9 @@ provider documentation and a read-only usage-only check of the affected saved ru
 the new hold; no implementation, build, installation or deployment. Actual usage values, session
 identifiers, model observations and screenshot conversation content remain outside this repository.
 
-`src/claude.js` accumulates only `m.usage.input_tokens` into `run.usage.inputTokens`, alongside
+`src/providers/claude.js` accumulates only `m.usage.input_tokens` into `run.usage.inputTokens`, alongside
 output tokens, and drops `cache_read_input_tokens` and `cache_creation_input_tokens` from that
-normalized record. `public/chat-details.js` labels this incomplete figure **Input tokens**.
+normalized record. `public/features/chats/chat-details.js` labels this incomplete figure **Input tokens**.
 [Anthropic's prompt-caching documentation](https://platform.claude.com/docs/en/build-with-claude/prompt-caching)
 defines total input as uncached input + cache-read input + cache-creation input; `input_tokens`
 alone is only the portion after the last cache breakpoint. This explains why the displayed input
@@ -5608,9 +5618,9 @@ Typing into the desktop chat message box makes the history viewport scroll up an
 and rapidly. The transcript must remain visually steady while editing a draft. Composer growth
 may adjust available transcript space, but must not cause repeated position oscillation.
 
-Source leads: `public/chat-composer.js` schedules resize on every input, temporarily sets textarea
+Source leads: `public/features/chats/chat-composer.js` schedules resize on every input, temporarily sets textarea
 height to zero, measures `scrollHeight`, then restores the calculated height. Its ResizeObserver
-watches the pane/footer. `public/conversation.js` separately observes transcript/scroller resize
+watches the pane/footer. `public/features/chats/conversation.js` separately observes transcript/scroller resize
 and writes `scrollTop` to follow the bottom or restore a saved position. Inspect interactions among
 these observers, intermediate layout/caret scrolling, browser scroll anchoring and background chat
 refresh. These are plausible leads, not a confirmed cause. Coordinate with BF-06 bottom docking;
@@ -5673,8 +5683,8 @@ Use the same default wherever the browser address bar submits a search; expose/p
 selection if the current configuration does not already provide it. This is browser web search,
 distinct from starting a provider-driven Internet Search chat.
 
-Source leads: `public/browser-recents.js` loads and caps recent visits, then its input listener
-only clears selection rather than filtering/repainting. `public/browser-home.js` already classifies
+Source leads: `public/features/browser/browser-recents.js` loads and caps recent visits, then its input listener
+only clears selection rather than filtering/repainting. `public/features/browser/browser-home.js` already classifies
 multiword input as search and supports Google/DuckDuckGo/Bing targets, defaulting to Google in
 the helper. Existing helpers do not establish that the operator has a configurable saved default.
 Reconcile all address submission paths when implementing; do not filter only the already capped
@@ -5736,9 +5746,9 @@ BF-2026-10-07-13 now has this design proposal; the implementation hold remains a
 Status: Implemented in 0.2.12 source, including proactive chat-only grants and revocation.
 The original investigation below explains the reported scope gap; release evidence is in the ledger.
 
-Original gap: `src/permissions.js` offered **Always allow reads / reads and writes in [folder]**
+Original gap: `src/services/settings/permissions.js` offered **Always allow reads / reads and writes in [folder]**
 for eligible pending structured file requests. `remember(..., 'trust-folder')` saves the grant to
-the shared workspace permission profile. It is not chat-only. `public/chat-details.js` and
+the shared workspace permission profile. It is not chat-only. `public/features/chats/chat-details.js` and
 `public/app.js` list authorized folders but do not provide a proactive per-chat folder grant editor.
 The chat-only Auto-approve option changes approval mode within existing resource grants; it does
 not add a folder authorization. Thus the existing controls do not satisfy the requested scope.
@@ -5766,7 +5776,7 @@ remain deferred until implementation is authorized.
 ### BF-2026-10-10-16 — Reconcile chat folders, source discovery and misleading scan limits
 
 Status: Implemented in 0.2.12 source; verification and rollout tracked in the current release ledger.
-Installed and checkout `src/context.js` match. No live configuration/catalog or application changes.
+Installed and checkout `src/services/workspaces/context.js` match. No live configuration/catalog or application changes.
 Private filesystem measurements and temporary catalogs remain outside the repository.
 
 Operator follow-up: accepted configurable exclusions, independent root limits and the other
@@ -6374,7 +6384,7 @@ state when exhausted. Preserve loaded-history find semantics and update any find
 detects history availability through the removed button's DOM selector.
 
 Current source differs by surface: local desktop renders an explicit earlier button in `public/app.js`;
-remote desktop includes near-top and underfill loading in `public/remote-desktops.js`; native has a
+remote desktop includes near-top and underfill loading in `public/services/remote/remote-desktops.js`; native has a
 near-top trigger alongside its earlier button in `ios/Proteus/Features/Chats/Views/ChatViews.swift`; web has its own paging
 path in `web/resources/js/remote.js`. Existing partial automation is not proof of consistent behavior.
 Unify the expected behavior and audit scroll-container detection and repeated underfill completion.
@@ -6396,7 +6406,7 @@ website sessions from provider CLI, MCP and Proteus account credentials if inves
 Determine whether full reload means renderer reload, normal Quit/relaunch, update or forced termination,
 and which sites/host are affected before asserting a common cause.
 
-`desktop/browser.cjs` already uses `session.fromPartition('persist:proteus-browser')` for all embedded
+`desktop/browser/browser.cjs` already uses `session.fromPartition('persist:proteus-browser')` for all embedded
 tabs. Source search found no intentional browser cookie/storage wipe in startup/shutdown. Current
 shutdown closes browser views and the service without an explicit cookie/storage flush; absence of an
 explicit flush alone does not prove data loss, since Electron ordinarily manages persistence. Electron's
@@ -6434,7 +6444,7 @@ refers to **Instructions changed. Refresh context before starting: [source name]
 schedule warning in BF-2026-10-09-17. Retain the earlier distinct save/run report, but do not conflate
 these errors or claim this corrected image shows an enabled/paused mismatch.
 
-`src/context.js` capture reads selected source files and compares their current content hashes to
+`src/services/workspaces/context.js` capture reads selected source files and compares their current content hashes to
 the context catalog entry hashes. A mismatch raises this warning to prevent capture from stale
 metadata. Saving schedules can invoke capture validation as well as starting runs. Saving schedule
 JSON does not itself refresh the source catalog. The existing recovery is to expand **Instructions,
@@ -6520,7 +6530,7 @@ existing pairing, refresh current state and restore visibility without replaying
 focus. An in-flight operation may already have executed remotely; do not claim pause cancelled it or
 automatically retry it. Ignore late responses for visible paused-host content and guard resume generations.
 
-Current evidence: `src/desktop-peers.js` already has outgoing `disconnect()` with in-memory recovery
+Current evidence: `src/services/remote/desktop-peers.js` already has outgoing `disconnect()` with in-memory recovery
 `suspended` state, suppressing automatic reconnect/request attempts. However, pairing records do not
 persist a pause flag, and `index()` still returns cached rows from disconnected hosts. Therefore ordinary
 disconnect is not the requested persisted pause-and-hide behavior. Extend peer state, all aggregation
@@ -6541,8 +6551,8 @@ including pauses between browser tool calls. Animate movement between observed c
 possible instead of flashing/disappearing and jumping. Preserve a distinct click pulse and field-focus
 feedback without replacing the persistent cursor with a field rectangle. Respect reduced motion.
 
-Current behavior: `desktop/browser.cjs` schedules pointer removal 1,200 ms after each browser operation
-ends; `desktop/browser-preload.cjs` removes and recreates the overlay on every point event. The bridge
+Current behavior: `desktop/browser/browser.cjs` schedules pointer removal 1,200 ms after each browser operation
+ends; `desktop/browser/browser-preload.cjs` removes and recreates the overlay on every point event. The bridge
 already forwards actual mouse input coordinates, making visual interpolation feasible. Track a tab's
 active agent-use lifecycle separately from the count of in-flight tool calls; merely sharing a tab
 must not imply that an agent is currently controlling it. Clear stale ownership/pointers when the run
@@ -6624,7 +6634,7 @@ control. Keep website-supplied text distinct from Proteus approval/system messag
 must target its original tab/profile or an explicit replacement in that same profile. Coordinate any
 optional OS fallback with shared delivery preferences to prevent duplicate banners.
 
-Evidence and implementation boundary: `desktop/browser.cjs` currently denies every permission request
+Evidence and implementation boundary: `desktop/browser/browser.cjs` currently denies every permission request
 and check. Electron documents `notifications` in its
 [session permission handlers](https://www.electronjs.org/docs/latest/api/session), so integrating the
 permission prompt and allowlist is straightforward. Its
@@ -6661,7 +6671,7 @@ Status: Reported and source-traced; queued only. No implementation/build/deploym
 Source findings: `public/parity.css` leaves `#chat-subtabs` with `gap:4px` after pinning Chat outside
 the scrollable list. It also gives chat summaries `font-size:12px`, while later shared add-control
 rules align box dimensions without normalizing glyph size. Exact rendered parity remains a UI check.
-`public/page-find.js` binds its X using `[data-close]`; `renderTabs()` in `public/app.js` subsequently
+`public/shared/ui/page-find.js` binds its X using `[data-close]`; `renderTabs()` in `public/app.js` subsequently
 rebinds every document-wide `[data-close]` to `closeTopTab(button.dataset.close)`. The find X has an
 empty value, so that handler returns without closing the panel. Scope tab-close binding to its strip
 and give find controls distinct selectors; audit other generic close selectors for collisions.
@@ -6704,9 +6714,9 @@ fair scheduling among new chats, scheduled work and queued continuations. Audit 
 context changes, permissions, browser ownership and shared workspace/tool resource contention;
 changing or cancelling one session must not interrupt or grant authority to another.
 
-This needs adapter work as well as scheduler changes: `src/codex.js` stores a single `this.active`
+This needs adapter work as well as scheduler changes: `src/providers/codex.js` stores a single `this.active`
 for steering/permission handling and may close its shared client on unfinished-turn cleanup;
-`src/claude.js` explicitly rejects a second active turn and stores one active client/run ID. Replace
+`src/providers/claude.js` explicitly rejects a second active turn and stores one active client/run ID. Replace
 these with isolated per-session lifecycle/routing before admitting parallel same-provider turns.
 Do not merely remove the engine guard. Validate actual provider runtime support through independent
 sessions/processes as appropriate without sharing mutable turn state.
@@ -6773,7 +6783,7 @@ option IDs and raw catalog contents on the affected Mac have not yet been captur
 of this specific incident remains unconfirmed.
 
 `CopilotProvider.models()` maps every RPC/SDK model through `copilotModel` without deduplicating IDs.
-`modelOptions()` in `public/features.js` likewise renders every entry. An isolated synthetic check
+`modelOptions()` in `public/shared/ui/features.js` likewise renders every entry. An isolated synthetic check
 using these actual functions confirms that four catalog records containing two repeated IDs produce
 four model options. This establishes a missing duplicate guard, not proof that HC's provider returned
 duplicate IDs. `refreshModels()` replaces `innerHTML` instead of appending; repeated refresh alone
@@ -6799,7 +6809,7 @@ case separately on the affected host before claiming it resolved.
 Status: Investigated and reproduced with existing modules in an isolated browser; queued only.
 No application code, build or deployment. Cross-reference notification work BF-2026-10-09-06.
 
-The reported new-chat screenshot shows **Select provider first**. In `public/chat-attachments.js`,
+The reported new-chat screenshot shows **Select provider first**. In `public/features/chats/chat-attachments.js`,
 `accepted()` returns an empty array for an empty provider. The paste listener still intercepts file
 items and prevents the default paste; `add()` rejects them with the unsupported-provider message.
 For a synthetic PNG, the exact message is ` cannot receive image/png.` (empty provider prefix),
@@ -6855,8 +6865,8 @@ ongoing broad access and clears outstanding grants; a later explicit one-time ap
 share a document. Paired devices must not approve their own access. Update all client capability
 checks, document-tab discovery and toggle copy so the off-state one-time path is actually reachable.
 
-Current evidence: `src/remote.js` gates request/status/read/asset on `documentAccess`, then
-`src/chat-documents.js` separately requires `approvedAt` for every document/version. The current
+Current evidence: `src/services/remote/remote.js` gates request/status/read/asset on `documentAccess`, then
+`src/services/chats/chat-documents.js` separately requires `approvedAt` for every document/version. The current
 setting promises only requests. Queue changes to both gates and client discovery, not just copy.
 Validate on/off, changed versions/assets, linked documents, same-device/chat binding, revocation,
 stale requests and immediate remote delivery after approval. Use synthetic document names in tests
@@ -7036,7 +7046,7 @@ content and private links outside this repository.
 Pre-fix source findings: `public/app.js` rendered the local pending `#answer` textarea empty and did not
 bind it to a draft store. The ordinary `#followup` composer saves input in `state.chatDrafts[id]`
 and restores it during rendering. This supports a pending-answer retention gap; it does not
-certify the installed app or every navigation path. `public/remote-desktops.js` already saves
+certify the installed app or every navigation path. `public/services/remote/remote-desktops.js` already saves
 ordinary composer drafts by host/chat and pending answers by host/chat/request. Verify those
 paths rather than assuming parity from the local code or from the existing storage alone.
 
@@ -7062,7 +7072,7 @@ existing tab activity indicator.
 The existing Playwright/Electron stack can support a custom visual overlay; no library replacement
 is proposed. Playwright's documented mouse indicator is part of Inspector/Trace Viewer, not a
 ready-made Proteus page cursor. See [Playwright Mouse](https://playwright.dev/docs/api/class-mouse).
-Integrate with the current authorized browser-action path in `desktop/browser.cjs` and its private
+Integrate with the current authorized browser-action path in `desktop/browser/browser.cjs` and its private
 CDP bridge. This feasibility finding does not establish live rendering or remote-client parity.
 
 Acceptance: show only the relevant tab's actual agent actions; the overlay must not intercept
@@ -7302,8 +7312,8 @@ Requested flow: “Look at the X tab for context” should find the existing bro
 navigation, read it and interact with it through the existing browser tool, without opening a
 duplicate page merely because the tab is nested under a chat.
 
-Source evidence: `src/browser-tools.js` exposes `proteus_browser` list and interaction actions.
-`desktop/browser.cjs` lists tabs across its registry and filters agent results by explicit sharing
+Source evidence: `src/services/browser/browser-tools.js` exposes `proteus_browser` list and interaction actions.
+`desktop/browser/browser.cjs` lists tabs across its registry and filters agent results by explicit sharing
 or ownership by the current run, not by main-versus-chat placement. State includes title, URL,
 tab ID and parent ID. Thus eligible chat children appear supported in source; installed/provider
 end-to-end discoverability and natural-language selection have not been verified by this intake.
@@ -7361,7 +7371,7 @@ Status: Queued reliability fix; highest priority in this intake.
 
 Reported while the new-chat dialog was open. The screenshot explicitly shows `ENOSPC: no space
 left on device` opening `scheduler-errors.json.<id>.tmp` in application data. The stack passes
-through `atomicJSON` (`src/files.js:14`) and the scheduler-error listener (`src/server.js:126`),
+through `atomicJSON` (`src/shared/files.js:14`) and the scheduler-error listener (`src/server.js:126`),
 then a timer callback. This identifies a failed error-log write, not proof that the composer
 caused the storage exhaustion or that any particular folder should be deleted.
 
@@ -7527,12 +7537,12 @@ Private chat contents, hostnames, URLs, usage figures, and the original screensh
 
 Read-only source inspection found:
 
-- `src/desktop-peers.js` rejects a request when the destination is absent or its client is not
+- `src/services/remote/desktop-peers.js` rejects a request when the destination is absent or its client is not
   online. Its aggregate index attempts connections when refreshed, so some opportunistic
   reconnection already exists.
-- `src/remote-client.js` closes failed connections and rejects pending requests. The inspected
+- `src/services/remote/remote-client.js` closes failed connections and rejects pending requests. The inspected
   transport does not schedule reconnection itself.
-- `public/remote-desktops.js` directs users to reopen a remote tab or reconnect manually after
+- `public/services/remote/remote-desktops.js` directs users to reopen a remote tab or reconnect manually after
   a disconnect. Automatic restoration must include the open conversation, not only its socket.
 - The installed app differs from this checkout. Inspect and reconcile the current implementation
   before editing; this checkout is not proof of the latest installed behavior.
@@ -7579,8 +7589,8 @@ Distinguish the local runner's health from remote destination connectivity.
 
 Primary scope is desktop-to-Mac recovery and the related Chats UI. Inspect the shared transport
 and existing website/native recovery paths for regressions; broader client redesign is not
-implicitly part of this item. Likely owners are `src/desktop-peers.js`, `src/remote-client.js`,
-`public/remote-desktops.js`, `public/chats-index.js`, and desktop lifecycle integration.
+implicitly part of this item. Likely owners are `src/services/remote/desktop-peers.js`, `src/services/remote/remote-client.js`,
+`public/services/remote/remote-desktops.js`, `public/features/chats/chats-index.js`, and desktop lifecycle integration.
 
 The installed desktop bundle's designated requirement uses an Apple Development identity.
 That establishes the signing identity, not which physical Mac produced it or whether this Mac
@@ -9985,9 +9995,9 @@ Keep those protections while unifying the clients.
 | --- | --- | --- |
 | SEC-01 | `RemoteDestinationController::credential` releases a long-lived Mac key after strong web sign-in; encrypted database storage is decryptable with APP_KEY. Website compromise can impersonate the enrolled account device. | Explicitly review custody; prefer account enrollment with distinct, scoped, revocable device/session credentials or host-validated short-lived grants. Model recovery/rotation, server compromise and host-offline behavior before selecting a protocol. MFA does not remove server-custody risk. |
 | SEC-02 | `RequireStrongAuthentication` checks a verified session, with no recent-auth check on destination credential release/enrollment/removal. `destroy` only deletes the website row; host commands authenticate the device key independently of web logout. | Add recent strong-auth for sensitive connection/security changes, session inventory and host-enforced revocation/expiry. Keep forget/sign-out/revoke scopes truthful. A stolen or previously released key is not invalidated merely by deleting cookies or the account row. |
-| SEC-03 | `src/remote-client.js` emits revocation for unencrypted relay `revoked`/`rejected` packets; `src/desktop-peers.js` then deletes its protected pairing. Web preserves its account record; iOS stops/requires re-pair guidance. | Promote authenticated end-to-end revocation from deferred backlog. Unauthenticated notices may disconnect, never destructively erase trusted enrollment. Add forged-notice regression coverage across all clients. This is an availability/enrollment-integrity issue, not evidence that ciphertext is decryptable. |
+| SEC-03 | `src/services/remote/remote-client.js` emits revocation for unencrypted relay `revoked`/`rejected` packets; `src/services/remote/desktop-peers.js` then deletes its protected pairing. Web preserves its account record; iOS stops/requires re-pair guidance. | Promote authenticated end-to-end revocation from deferred backlog. Unauthenticated notices may disconnect, never destructively erase trusted enrollment. Add forged-notice regression coverage across all clients. This is an availability/enrollment-integrity issue, not evidence that ciphertext is decryptable. |
 | SEC-04 | Paired devices currently share the broad host command surface, and account browser sessions share one device credential. Host sync can expose more than a summary index. | Design host-enforced least-privilege scopes, client/session identity, audit trails and separately authorized chat disclosure/schedule/resource actions. Do not treat a renderer allowlist or account membership as the host security boundary. |
-| SEC-05 | Desktop peer `methods` excludes `schedule.run`, `schedule.save`, `schedule.preview` and some chat/context/approval capabilities already in `src/remote.js`; its test explicitly expects schedule.run rejection. | Build a reviewed capability matrix and extend desktop controls deliberately; preserve schedule ownership, revision guards and operation UUIDs. Current peer support is not full remote control. |
+| SEC-05 | Desktop peer `methods` excludes `schedule.run`, `schedule.save`, `schedule.preview` and some chat/context/approval capabilities already in `src/services/remote/remote.js`; its test explicitly expects schedule.run rejection. | Build a reviewed capability matrix and extend desktop controls deliberately; preserve schedule ownership, revision guards and operation UUIDs. Current peer support is not full remote control. |
 | SEC-06 | New shared caches/history/team rosters/URLs create new sensitive stores; existing browser history intentionally omits forms and auth callbacks. | Threat-model these stores, enforce account/host/domain boundaries, retention and purge rules, protect URL secrets and validate untrusted content. Review organizational approval before storing real work rosters/boards on a personal service. |
 
 Additional review gates: account recovery and password/email/factor changes versus all sessions,

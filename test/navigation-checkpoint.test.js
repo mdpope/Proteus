@@ -4,10 +4,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {createRequire} from 'node:module';
-import {ContentTabs} from '../src/content-tabs.js';
-import {BrowserHistory} from '../src/browser-history.js';
-import {createTabSynchronizer} from '../public/content-tab-sync.js';
-const {acknowledgesNavigation}=createRequire(import.meta.url)('../desktop/browser-navigation.cjs');
+import {ContentTabs} from '../src/services/workspaces/content-tabs.js';
+import {BrowserHistory} from '../src/services/browser/browser-history.js';
+import {createTabSynchronizer} from '../public/models/content-tab-sync.js';
+const {acknowledgesNavigation}=createRequire(import.meta.url)('../desktop/browser/browser-navigation.cjs');
 
 const scope={scope:'chat',id:'checkpoint'};
 const entry=id=>({id,url:'https://example.test/'+id,title:id});

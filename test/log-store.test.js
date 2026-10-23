@@ -1,9 +1,9 @@
 import {cleanupStack} from './helpers/cleanup.js';
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test'; import assert from 'node:assert/strict';
 import fs from 'node:fs'; import path from 'node:path'; import os from 'node:os';
-import { LogStore, logLimits } from '../src/log-store.js';
-import { ActivityStore } from '../src/activity.js';
+import { LogStore, logLimits } from '../src/services/telemetry/log-store.js';
+import { ActivityStore } from '../src/services/telemetry/activity.js';
 const cleanups=new WeakMap();
 function cleanup(t,action){if(!cleanups.has(t))cleanups.set(t,cleanupStack(t));cleanups.get(t)(action);}
 const home=t=>{const folder=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-logs-test-'));cleanup(t,()=>fs.rmSync(folder,{recursive:true,force:true}));return folder;};

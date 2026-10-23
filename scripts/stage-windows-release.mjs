@@ -1,8 +1,8 @@
 // Emit only public release files. Deployment remains owned by the WTB workspace.
 import fs from 'node:fs';
 import path from 'node:path';
-import {verifyRelease,windowsReleaseOrigin} from '../src/desktop-releases.js';
-import packages from '../desktop/update-package.cjs';
+import {verifyRelease,windowsReleaseOrigin} from '../src/services/updates/desktop-releases.js';
+import packages from '../desktop/updates/update-package.cjs';
 
 const [input,output]=process.argv.slice(2);
 if(!path.isAbsolute(input||'')||!path.isAbsolute(output||''))throw Error('Supply absolute release and new publication staging folders.');

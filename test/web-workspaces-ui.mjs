@@ -1,11 +1,11 @@
 import {exerciseWebPreview} from './preview-ui.mjs';
-import {LiveBrowser} from '../src/live-browser.js';
+import {LiveBrowser} from '../src/services/browser/live-browser.js';
 // Full Laravel login + browser WebCrypto + two disposable desktop hosts. No production data.
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import net from 'node:net';import {randomBytes} from 'node:crypto';import {spawn,execFileSync} from 'node:child_process';import {chromium} from 'playwright';import assert from 'node:assert/strict';
 import {exerciseChatIndex} from './web-chat-index-ui.mjs';
 import {exerciseConnections} from './web-connections-ui.mjs';
 import {installMessageActionFakes,exerciseMessageActions} from './web-message-actions.mjs';
-import {startServer} from '../src/server.js';import {startRelay} from '../relay/server.js';import {secret} from '../src/remote-crypto.js';import {atomicJSON} from '../src/files.js';import {until} from './remote-client.mjs';
+import {startServer} from '../src/server.js';import {startRelay} from '../relay/server.js';import {secret} from '../src/services/remote/remote-crypto.js';import {atomicJSON} from '../src/shared/files.js';import {until} from './remote-client.mjs';
 const root=path.resolve(import.meta.dirname,'..'),home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-web-browser-')),storage=path.join(home,'storage');
 for(const folder of ['app/private','framework/cache/data','framework/sessions','framework/views','framework/testing','logs'])fs.mkdirSync(path.join(storage,folder),{recursive:true});
 const port=await new Promise(resolve=>{const server=net.createServer();server.listen(0,'127.0.0.1',()=>{const port=server.address().port;server.close(()=>resolve(port));});});

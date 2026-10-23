@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {CopilotProvider} from '../src/copilot.js';
+import {CopilotProvider} from '../src/providers/copilot.js';
 test('Copilot immediate messages carry supported blobs without starting or replacing its session',async()=>{
  const provider=new CopilotProvider(),calls=[];provider.sessions.set('synthetic',{send:async args=>calls.push(args)});
  const bytes=Buffer.from('Synthetic PDF bytes');await provider.steer({id:'synthetic'},'Correction',[{name:'notes.pdf',mediaType:'application/pdf',bytes}]);

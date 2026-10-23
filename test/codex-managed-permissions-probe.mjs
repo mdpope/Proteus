@@ -1,6 +1,6 @@
 // Local app-server configuration probe only. Never starts a model turn.
 import fs from 'node:fs';import path from 'node:path';import os from 'node:os';
-import {CodexRPC,codexSandbox,verifyCodexSandbox} from '../src/codex.js';
+import {CodexRPC,codexSandbox,verifyCodexSandbox} from '../src/providers/codex.js';
 import {spawnSync} from 'node:child_process';import assert from 'node:assert/strict';
 const root=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-permission-probe-'));
 const cwd=path.join(root,'work'),home=path.join(root,'codex');fs.mkdirSync(cwd);fs.mkdirSync(home);

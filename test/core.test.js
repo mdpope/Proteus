@@ -1,12 +1,12 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import { fakeSession } from './fake-copilot.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { nextRuns, validateSchedule, ScheduleStore, lastDue, revision } from '../src/schedules.js';
-import { atomicJSON, isWithin } from '../src/files.js';
+import { nextRuns, validateSchedule, ScheduleStore, lastDue, revision } from '../src/services/scheduling/schedules.js';
+import { atomicJSON, isWithin } from '../src/shared/files.js';
 import { Engine } from '../src/engine.js';
 import { startServer } from '../src/server.js';
 
@@ -96,7 +96,7 @@ test('loopback API enforces authentication, origin, duplicate IDs, and paused im
 });
 
 test('settings persist defaults, preserve extensions, and reject stale or unavailable paths', async () => {
-  const { SettingsStore }=await import('../src/settings.js'); const dir=temp();
+  const { SettingsStore }=await import('../src/services/settings/settings.js'); const dir=temp();
   try { const store=new SettingsStore(dir,dir); const initial=store.get();
     store.save({...initial,extension:{retained:true},workspace:{cwd:dir,additionalDirectories:[dir]}},initial.revision);
     assert.deepEqual(new SettingsStore(dir,dir).get().extension,{retained:true});
@@ -117,7 +117,7 @@ test('new chat snapshots all configured roots, skills, MCP, and editor context',
 });
 
 test('browser provider tools bind access to the actual run identity', async () => {
-  const { browserTools }=await import('../src/browser-tools.js');const calls=[];
+  const { browserTools }=await import('../src/services/browser/browser-tools.js');const calls=[];
   assert.deepEqual(browserTools(null,'run'),[]);
   const tool=browserTools({agent:async(args,id)=>{calls.push({args,id});return {title:'Visible page'};}},'actual-run')[0];
   const result=await tool.handler({action:'snapshot',tabId:'one'});assert.match(result,/Visible page/);assert.equal(calls[0].id,'actual-run');
@@ -154,7 +154,7 @@ test('cancellation rejects both visible and queued permissions', async () => {
 });
 
 test('Copilot adapter forwards explicit approval and rejection using current SDK decisions', async () => {
-  const { CopilotProvider }=await import('../src/copilot.js');
+  const { CopilotProvider }=await import('../src/providers/copilot.js');
   for(const answer of ['approve','approve-auto','deny']) {
     let decision;
     const provider=new CopilotProvider();
@@ -194,7 +194,7 @@ test('provider failure settles unanswered permissions before the same run resume
 });
 
 test('Copilot aborts a timed-out provider turn before disconnecting', async () => {
-  const { CopilotProvider }=await import('../src/copilot.js');const calls=[];
+  const { CopilotProvider }=await import('../src/providers/copilot.js');const calls=[];
   const session=fakeSession({send:async()=>{throw new Error('Timed out');},abort:async()=>calls.push('abort'),disconnect:async()=>calls.push('disconnect')});
   const provider=new CopilotProvider();
   provider.connect=async()=>({listModels:async()=>[{id:'fixture'}],createSession:async()=>session});

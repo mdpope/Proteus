@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 const temporary = privateTemporaryDirectory(path.join(os.tmpdir(), 'proteus-window-chrome-ui-'));
 const workspace = path.join(temporary, 'workspace'); fs.mkdirSync(workspace);
 fs.writeFileSync(path.join(temporary, 'settings.json'), JSON.stringify({ schemaVersion: 1, provider: 'rehearsal', model: '', timezone: 'UTC', workspace: { cwd: workspace, additionalDirectories: [] }, skillDirectories: [], mcpServers: {} }));

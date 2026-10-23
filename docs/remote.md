@@ -309,12 +309,12 @@ other clients. Remote tab descriptors restore after restart; reconnecting reads 
 and never resubmits a prompt. Unsent remote drafts and downloaded conversation snapshots are not
 persisted across application restarts. The sidebar’s AI allowance describes This Mac in three compact provider columns.
 
-`src/desktop-peers.js` owns the desktop client. `desktop-peers.enc` under the app data directory
+`src/services/remote/desktop-peers.js` owns the desktop client. `desktop-peers.enc` under the app data directory
 contains only OS-encrypted pairing records with owner-only permissions and atomic replacement.
 Electron safeStorage encryption must be available; there is no plaintext fallback. Native IPC
 accepts only the trusted main app frame and explicit destination IDs, and exposes a bounded
 command allowlist. Keys never enter renderer localStorage, workspace descriptors, logs or HTTP
-endpoints. `src/remote-client.js` is shared with the website's WebCrypto transport; the native
+endpoints. `src/services/remote/remote-client.js` is shared with the website's WebCrypto transport; the native
 credential callback protects the independent device key before importing it for use in memory.
 The host continues to enforce all workspace, pending-request and provider permission boundaries.
 Mutation retries within a retained composer reuse their request ID after ambiguous failures.
@@ -339,7 +339,7 @@ Browser/document descriptors converge through open, close, rename and reorder op
 current document-grant filtering including mutation replays. Scope/revision notifications contain
 no content. Visiting desktops reconcile the host's chat tabs; native clients also reconcile Team
 browser tabs. Browser-only reorder preserves hidden document slots. Cookies, history, page state,
-terminals, selection and document approval do not synchronize. See `src/content-tabs.js`.
+terminals, selection and document approval do not synchronize. See `src/services/workspaces/content-tabs.js`.
 
 ## Desktop connection notices and recovery
 

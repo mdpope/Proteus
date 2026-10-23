@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
-const {resizeVideoWindow,moveVideoWindow}=createRequire(import.meta.url)('../desktop/video-window-geometry.cjs');
+const {resizeVideoWindow,moveVideoWindow}=createRequire(import.meta.url)('../desktop/browser/video-window-geometry.cjs');
 test('pinch resizing is proportional, reversible before limits, and respects the display work area',()=>{
  const area={x:0,y:24,width:1920,height:1016},bounds={x:400,y:200,width:960,height:540};
  const small=resizeVideoWindow(bounds,area,.5);assert.equal(small.width,480);assert.equal(small.height,270);assert.deepEqual(resizeVideoWindow(small,area,2),bounds);

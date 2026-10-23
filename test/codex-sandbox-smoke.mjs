@@ -1,6 +1,6 @@
 // Opt-in native sandbox smoke test. No model turn, account auth, or production data.
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import assert from 'node:assert/strict';
-import {CodexRPC,codexSandbox,verifyCodexSandbox} from '../src/codex.js';
+import {CodexRPC,codexSandbox,verifyCodexSandbox} from '../src/providers/codex.js';
 if(process.platform!=='darwin')throw new Error('This smoke test validates the installed macOS Codex sandbox.');
 const home=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'proteus-codex-sandbox-'))),cwd=path.join(home,'allowed'),other=path.join(home,'second'),outside=path.join(home,'outside');for(const p of [cwd,other,outside,path.join(home,'codex')])fs.mkdirSync(p);fs.symlinkSync(outside,path.join(cwd,'escape'));
 const schedule={workspace:{cwd,additionalDirectories:[other]}},policy=codexSandbox(schedule,{mode:'trusted',readOnlyTools:true,folders:[cwd,other].map(path=>({path,access:'read-write'}))});

@@ -1,6 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {chatLink,parseChatLink} from '../public/chat-links.js';
-import {historyDateSections} from '../public/browser-history-panel.js';
+import {chatLink,parseChatLink} from '../public/features/chats/chat-links.js';
+import {historyDateSections} from '../public/features/browser/browser-history-panel.js';
 const hostId='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 test('chat links retain host and run identity across application/workspace representations',()=>{
  const link=chatLink({hostId,id});assert.deepEqual(parseChatLink(link),{hostId,id});assert.equal(chatLink({hostId,id:'workspace:child',runId:id}),link);assert.equal(chatLink({hostId,id},{origin:'https://app.example'}),'https://app.example/remote?view=chats&host='+hostId+'&chat='+id);assert.throws(()=>chatLink({hostId:'local',id}),/unavailable/);

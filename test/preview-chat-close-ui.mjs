@@ -3,7 +3,7 @@ import {_electron as electron} from 'playwright';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {sidebarFixture} from './preview-sidebar-fixture.mjs';
-const require=createRequire(import.meta.url),{WorkspaceSession}=require('../desktop/workspace-session.cjs');
+const require=createRequire(import.meta.url),{WorkspaceSession}=require('../desktop/windows/workspace-session.cjs');
 const fixture=await sidebarFixture(),target=fixture.user[4],aliasId='synthetic-top-chat-alias',errors=[],requests=[];
 const store=new WorkspaceSession(fixture.locations.home),saved=store.get();saved.tabs.push({id:aliasId,type:'run',runId:target.id,label:target.title});store.save(saved);
 let app,page,terminal,holdNext=false,held,releaseHeld;

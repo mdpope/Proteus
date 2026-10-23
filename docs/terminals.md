@@ -1,3 +1,25 @@
+## October 23 — explicit agent sharing and consistent paste
+
+Each live terminal has a robot button. It starts off and explicitly permits agents to read its
+saved output and enter input using that shell's OS permissions. Turning it off blocks the next
+read/input. Grants do not survive exit, close, app restart or tmux reattachment; tab moves do not
+grant access. The button remains available while the user works in other tabs.
+
+`proteus_terminal` provides metadata inventory, bounded snapshots and exact input on the owning
+desktop. Snapshot observations are run-bound and expire after two minutes. Writes require a stable
+UUID receipt and observation; uncertain delivery must reuse the same ID and content. Off/on sharing
+does not erase accepted input receipts. Agents cannot create, restart, resize or terminate shells
+through this tool. Output is untrusted evidence and delivery does not prove command success.
+All three provider adapters and authenticated local stdio MCP use the same host boundary.
+The separate human desktop IPC controls creation/lifecycle/sharing. Relay/mobile pages do not
+receive a terminal control endpoint or output synchronization.
+
+Native keyboard paste, outer-canvas paste and context-menu paste now all use the renderer's
+bracketed-paste support with CRLF/LF normalized to terminal carriage returns. A real message-copy
+and native Cmd+V round trip, both focus targets, sharing/input/deduplication/revocation are tested.
+The exact user's additional paste symptom remains awaiting an example; these two inconsistent
+paths were independently reproduced and corrected.
+
 # Local terminals
 
 October 13 queued BF-2026-10-13-12 in [planned updates](planned-updates.md) requires terminal
@@ -18,7 +40,7 @@ Use the terminal button in the tab bar to choose a saved profile and configured 
 
 Import Ghostty settings reads the standard user config locations and maps supported font, command, working-directory, and theme/palette values. Unsupported native window, keyboard, clipboard, shell integration, adaptive theme, and included-config behavior is reported rather than silently claimed. The importer only reads bounded files and contained named theme paths; saving creates a separate Proteus profile. Shell defaults to `/bin/zsh` on macOS.
 
-Terminal access is desktop IPC only, checked against the main window's trusted origin and top frame. No HTTP, relay, browser page, provider, or mobile terminal endpoint exists. The HTTP service serves only the renderer assets. The CSP allows WebAssembly compilation (`wasm-unsafe-eval`) without general JavaScript `unsafe-eval`.
+Terminal access is desktop IPC only, checked against the main window's trusted origin and top frame. The authenticated local agent endpoint is limited to explicitly shared live terminals; no relay or mobile shell endpoint exists. The HTTP service serves only the renderer assets. The CSP allows WebAssembly compilation (`wasm-unsafe-eval`) without general JavaScript `unsafe-eval`.
 
 Live PTYs survive tab switches. For a temporary process terminal, closing the tab or quitting Proteus terminates the managed shell/process group, with a bounded forced-kill fallback. As with other terminals, an intentionally detached/daemonized process may outlive its shell. Optional persistent tmux sessions run on a dedicated Proteus socket in protected app data and use `/dev/null` instead of the user's `~/.tmux.conf`; the user's default tmux server and unrelated sessions are untouched. Closing a persistent terminal or quitting Proteus detaches its viewer. Only the explicit **End session** action kills the selected Proteus-managed tmux session. A saved appearance profile and a tmux session are separate choices. Each managed session carries an identity tag so a restored tab cannot attach to a same-name replacement after a server restart. An already attached managed session is rejected to avoid an accidental second viewer.
 

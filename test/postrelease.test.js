@@ -1,13 +1,13 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
-import {atomicJSON} from '../src/files.js';
-import {chatDelta} from '../src/chat-deltas.js';
-import {mergeChatHistory} from '../public/chat-history.js';
+import {atomicJSON} from '../src/shared/files.js';
+import {chatDelta} from '../src/services/chats/chat-deltas.js';
+import {mergeChatHistory} from '../public/features/chats/chat-history.js';
 import {startServer} from '../src/server.js';
-import {RunHistoryCache} from '../src/run-history-cache.js';
-import {chatActivityAt} from '../src/run-activity.js';
+import {RunHistoryCache} from '../src/services/chats/run-history-cache.js';
+import {chatActivityAt} from '../src/services/chats/run-activity.js';
 import {Engine} from '../src/engine.js';
 
 test('atomic replacement preserves prior data and removes temp after every failed write stage',()=>{
@@ -42,7 +42,7 @@ test('summary state omits histories and storage failure diagnostics do not escap
 });
 
 test('completed history cache reloads durable events and pins active references',async()=>{
- const {RunHistoryCache}=await import('../src/run-history-cache.js');
+ const {RunHistoryCache}=await import('../src/services/chats/run-history-cache.js');
  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-history-cache-'));
  try{const cache=new RunHistoryCache(id=>path.join(home,id+'.json'),2),runs=[];
  for(let i=0;i<6;i++){const run={id:String(i),status:i===0?'running':'completed',events:[{text:'event '+i}]};atomicJSON(path.join(home,i+'.json'),run);runs.push(run);cache.attach(run);}

@@ -1,7 +1,7 @@
 // Narrow stdio MCP client; capability and endpoint exist only during the owning turn.
 const {createInterface}=require('node:readline');
 const endpoint=process.env.PROTEUS_DOCUMENT_ENDPOINT,capability=process.env.PROTEUS_DOCUMENT_CAPABILITY;
-const resultHelpers=import('./tool-results.js');
+const resultHelpers=import('./shared/tool-results.js');
 async function call(body){const response=await fetch(endpoint,{method:'POST',headers:{authorization:capability,'content-type':'application/json'},body:JSON.stringify(body)});const result=await response.json();if(!response.ok)throw new Error(result.error||'Document operation failed.');return result;}
 createInterface({input:process.stdin}).on('line',async line=>{let message;try{message=JSON.parse(line);if(message.id===undefined)return;let result;
  if(message.method==='initialize')result={protocolVersion:message.params.protocolVersion,capabilities:{tools:{}},serverInfo:{name:'Proteus documents',version:'1.0'}};

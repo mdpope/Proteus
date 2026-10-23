@@ -5,7 +5,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { Engine } from '../src/engine.js';
-import { CopilotProvider } from '../src/copilot.js';
+import { CopilotProvider } from '../src/providers/copilot.js';
 
 if (!process.argv.includes('--run-live')) throw new Error('Pass --run-live to use Copilot credits for the synthetic permission test.');
 const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-auto-smoke-'));

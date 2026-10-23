@@ -1,11 +1,11 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
-import { PermissionStore, canonicalPath, permissionContext } from '../src/permissions.js';
+import { PermissionStore, canonicalPath, permissionContext } from '../src/services/settings/permissions.js';
 
 const fixture = () => privateTemporaryDirectory(path.join(os.tmpdir(), 'proteus-permission-paths-'));
 const schedule = cwd => ({name:'Synthetic chat', provider:'fixture', workspace:{cwd, additionalDirectories:[]}, skillDirectories:[]});

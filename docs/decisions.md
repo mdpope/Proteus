@@ -1,3 +1,39 @@
+## October 23 follow-up — canonical chat homes and independent local windows
+
+An organizational chat home governs presentation entry points as well as the project index.
+Reuse the same saved chat view under that home; do not recreate its children, provider session
+or approval origin. Resolve fresh remote membership without replacing the active subscription.
+Explicit null membership remains unassigned. Registry migration retires only housed main aliases,
+preserving order, child registries and revision protection.
+
+Native Menu callbacks outlive the IPC scope in which they were constructed; re-enter the source
+window before asynchronous effects. Content events and presentation events have separate purposes:
+passive descriptor synchronization continues during local typing, while sibling windows on the
+same computer keep independent selection/reading state. A rejected sibling presentation must not
+seed a replacement selection over it. Paired-computer follow remains available.
+
+## October 23 — shared navigation and explicit live terminal authority
+
+All move entry points use a shared destination control grouped by workspace/project and start
+at the current location. The UI delegates to typed owner operations: moving chat membership
+does not change captured execution folders/options/permissions; moving a live resource does not
+restart its session or rewrite its source authority. Current-location selection is a no-op.
+
+Terminal agent access is an explicit, process-local human grant for the exact PTY identity.
+Do not persist it in history or restore it with tmux. Internal tools and authenticated local
+MCP use the same host boundary; metadata inventory alone grants no output or input. Snapshot
+observations are owner-bound and expire, input receipts prevent duplicate delivery through
+uncertain outcomes and off/on sharing, and revocation blocks the next read/input. Closed or
+exited sessions cannot be restarted by agent tools. Shared shells retain their OS permissions.
+
+Question attachments remain exact-file/provider/device/question consent, delivered through a
+run-bound tool when a provider's native question answer is text-only. Unsupported media fails
+before delivery. Neither attachment receipt nor model completion proves external success.
+
+High-frequency native descriptors use immutable snapshots on a serial utility queue; frequent
+scroll measurements do not publish whole-history changes. Source organization follows
+[documented boundaries](code-organization.md), preserving stable entry points and packaging.
+
 ## October 23 — acknowledge navigation before the next batch
 
 A successful navigation response and the last response of a multi-batch reconciliation are
@@ -1222,7 +1258,7 @@ so interrupted automation can recover without disabling certificate reporting or
 
 ## October 6 evening — shared Home and evidence-based acceptance
 
-Home is one DOM renderer and one scoped stylesheet (`public/home.js`, `public/home.css`) imported
+Home is one DOM renderer and one scoped stylesheet (`public/shared/ui/home.js`, `public/home.css`) imported
 by desktop and web. Platform adapters supply data and navigation; only a Mac-only instruction
 panel differs. The latest release is summarized with expansion, rather than rendering full
 history in a separate desktop design. A local demo uses this same renderer.

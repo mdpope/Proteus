@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import provenance from '../desktop/build-provenance.cjs';
+import provenance from '../desktop/updates/build-provenance.cjs';
 export const {createProvenance,validateProvenance}=provenance;
 
 export const desktopRuntimeRoots = ['desktop', 'public', 'src', 'schemas', 'templates', 'relay'];

@@ -11,7 +11,7 @@ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));let browser;
 try{
  browser=await chromium.launch({headless:true});const page=await browser.newPage();page.setDefaultTimeout(10000);const errors=[];page.on('pageerror',error=>errors.push(error.message));await page.goto('http://127.0.0.1:'+server.address().port);
  await page.evaluate(async()=>{
-  const workspaces=await import('/public/desktop-workspaces.js'),preview=await import('/public/desktop-preview.js');
+  const workspaces=await import('/public/features/workspaces/desktop-workspaces.js'),preview=await import('/public/shared/navigation/desktop-preview.js');
   const scope={additionalDirectories:[],libraryFolders:[],universalFolders:[],documents:[],modes:{},favorites:[],workspaceFiles:[],defaults:{},discovery:{},approvals:{mode:'ask',folders:[],rules:[]}};
   const context={revision:'context-1',entries:[],workspaces:[{...scope,id:'w',name:'Remote workspace',cwd:'/synthetic/owner'}]};
   const catalog={enabled:true,revision:'r1',projects:[{id:'general',workspaceId:'w',name:'General'},{id:'research',workspaceId:'w',name:'Research'}],defaultProjectIds:{w:'general'},memberships:{},sourceLibrary:[]};

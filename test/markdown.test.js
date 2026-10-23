@@ -1,11 +1,11 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { render } from '../src/markdown-renderer.js';
-import { readChatImage } from '../src/chat-images.js';
+import { render } from '../src/shared/markdown-renderer.js';
+import { readChatImage } from '../src/services/chats/chat-images.js';
 
 test('rich Markdown supports tables, task lists, code, links and inert image placeholders', () => {
   const html = render('# Heading\n\n**Bold** and *italic* ~~old~~\n\n|Name|State|\n|---|---|\n|Mac|Ready|\n\n- [x] Done\n- [ ] Next\n\n```js\nconst n = 42;\n```\n\n![diagram](./plot.png)\n\n[Docs](https://example.com)');

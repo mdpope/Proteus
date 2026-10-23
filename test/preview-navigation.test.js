@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {buildPreviewNavigation,previewLastAccess,previewRelativeAge,previewItemIcon,previewChatActivity,previewTabsForScope} from '../public/preview-navigation.js';
+import {buildPreviewNavigation,previewLastAccess,previewRelativeAge,previewItemIcon,previewChatActivity,previewTabsForScope} from '../public/shared/navigation/preview-navigation.js';
 
 const at=hour=>`2026-10-16T${String(hour).padStart(2,'0')}:00:00.000Z`;
 const fixture=()=>({

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import {createRequire} from 'node:module';
-const {environment}=createRequire(import.meta.url)('../desktop/update-helper.cjs');
+const {environment}=createRequire(import.meta.url)('../desktop/updates/update-helper.cjs');
 
 test('update and rollback relaunch keep provider namespaces without copying tokens or helper mode',()=>{
  const source={HOME:'/synthetic/user',PATH:'/synthetic/bin',CLAUDE_CONFIG_DIR:'/synthetic/work-claude',PROTEUS_CLAUDE_PATH:'/synthetic/claude',CODEX_HOME:'/synthetic/work-codex',PROTEUS_CODEX_PATH:'/synthetic/codex',COPILOT_HOME:'/synthetic/work-copilot',COPILOT_CLI_PATH:'/synthetic/copilot',ELECTRON_RUN_AS_NODE:'1',ANTHROPIC_API_KEY:'synthetic-secret',CLAUDE_CODE_OAUTH_TOKEN:'synthetic-secret',GITHUB_TOKEN:'synthetic-secret'};

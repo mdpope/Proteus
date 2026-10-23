@@ -1,15 +1,15 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { EventEmitter } from 'node:events';
-import { ActivityStore, safeLog } from '../src/activity.js';
-import { BrowserRemoteClient, importKey, seal } from '../src/remote-client.js';
-import { AppAccount } from '../src/app-account.js';
-import history from '../desktop/browsing-history.cjs';
-import workspace from '../desktop/workspace-session.cjs';
+import { ActivityStore, safeLog } from '../src/services/telemetry/activity.js';
+import { BrowserRemoteClient, importKey, seal } from '../src/services/remote/remote-client.js';
+import { AppAccount } from '../src/services/remote/app-account.js';
+import history from '../desktop/browser/browsing-history.cjs';
+import workspace from '../desktop/windows/workspace-session.cjs';
 
 function home(t){const p=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-parity-test-'));t.after(()=>fs.rmSync(p,{recursive:true,force:true}));return p;}
 test('browser notifications stay local, deduplicate per owner and persist recovery references',async t=>{

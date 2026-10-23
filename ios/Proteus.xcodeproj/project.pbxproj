@@ -43,6 +43,7 @@
 		E430010E9EE52E44B1F9CA66 /* BrowserCacheKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A9B8CF994FE93C63B66ED43 /* BrowserCacheKeychain.swift */; };
 		35F51F9D47A18DF741E5E436 /* NativeDescriptorCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = B397B11ABD4B7498DF5F7163 /* NativeDescriptorCache.swift */; };
 		D1240567439FF2681FD55806 /* NativeChatScrollMeasurements.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07A3786A67A7D7F69111D816 /* NativeChatScrollMeasurements.swift */; };
+		88BD493A4BA05423DD6D27BC /* NativeMoveMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD3C496FEA9D3B251477A77E /* NativeMoveMenu.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -103,6 +104,7 @@
 		7A9B8CF994FE93C63B66ED43 /* BrowserCacheKeychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserCacheKeychain.swift; sourceTree = "<group>"; };
 		B397B11ABD4B7498DF5F7163 /* NativeDescriptorCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeDescriptorCache.swift; sourceTree = "<group>"; };
 		07A3786A67A7D7F69111D816 /* NativeChatScrollMeasurements.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeChatScrollMeasurements.swift; sourceTree = "<group>"; };
+		CD3C496FEA9D3B251477A77E /* NativeMoveMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeMoveMenu.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -371,6 +373,7 @@
 			isa = PBXGroup;
 			children = (
 				2627C7D5A4DE8F9F996B47F8 /* NativeShell.swift */,
+				CD3C496FEA9D3B251477A77E /* NativeMoveMenu.swift */,
 			);
 			path = Navigation;
 			sourceTree = "<group>";
@@ -532,6 +535,7 @@
 				5547E966924E34D2887095B3 /* NativeProjects.swift in Sources */,
 				5FD40E7880BD5ACA87A6D6E1 /* NativeProjectViews.swift in Sources */,
 				5AF04EA8A646DCCFDEEF17BA /* NativeShell.swift in Sources */,
+				88BD493A4BA05423DD6D27BC /* NativeMoveMenu.swift in Sources */,
 				48D84288A895FCA50DB71BA5 /* NativePhonePreview.swift in Sources */,
 				5023E16EAE07DA09B8342690 /* NativeNotifications.swift in Sources */,
 				D26BCA5F8CC14636821B06A3 /* SharedAppStore.swift in Sources */,

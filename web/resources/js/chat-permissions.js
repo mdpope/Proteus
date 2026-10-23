@@ -1,4 +1,4 @@
-import {previewPermissionHelp,previewFolderDialog} from '../../../public/preview-permissions.js';
+import {previewPermissionHelp,previewFolderDialog} from '../../../public/shared/navigation/preview-permissions.js';
 const pendingChanges=new Set();
 export function bindWebChatPermissions(root,{run,request,refresh,workspace,notify}){
  if(!root||!run.permissionContext)return;

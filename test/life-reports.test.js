@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {nutritionReport, latestObservation} from '../src/life-reports.js';
+import {nutritionReport, latestObservation} from '../src/services/life/life-reports.js';
 const day=(date,value=100)=>['Breakfast','lunch','DINNER'].map(meal=>({date,meal,qty:1,calories:value,protein:10,carbs:20,fat:3,food_name:'Recorded food'}));
 test('fixed nutrition windows use complete days, historical values and inclusive calendar dates',()=>{
  const entries=[...day('2024-02-01',100),...day('2024-02-29',200),...day('2024-03-01',300),{...day('2024-02-29')[0],meal:'snack',qty:2,calories:50},day('2024-02-15')[0],{...day('2024-02-29')[0],calories:999,deleted_at:'removed'}];

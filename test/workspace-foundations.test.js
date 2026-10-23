@@ -1,14 +1,14 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ContextStore } from '../src/context.js';
-import { SettingsStore } from '../src/settings.js';
-import { PermissionStore, permissionContext } from '../src/permissions.js';
+import { ContextStore } from '../src/services/workspaces/context.js';
+import { SettingsStore } from '../src/services/settings/settings.js';
+import { PermissionStore, permissionContext } from '../src/services/settings/permissions.js';
 import { Engine } from '../src/engine.js';
-import { ContentTabs } from '../src/content-tabs.js';
+import { ContentTabs } from '../src/services/workspaces/content-tabs.js';
 
 function setup(t, beforeRemove) {
   const root = fs.realpathSync(privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-workspaces-')));

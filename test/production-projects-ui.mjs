@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import {sidebarFixture} from './preview-sidebar-fixture.mjs';
-import {ContentTabs} from '../src/content-tabs.js';
+import {ContentTabs} from '../src/services/workspaces/content-tabs.js';
 const fixture=await sidebarFixture(),home=fixture.locations.home,errors=[];
 let app,page,peerUpgraded=false;
 const originalRuns=new Map();

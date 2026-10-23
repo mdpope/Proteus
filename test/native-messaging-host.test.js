@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {EventEmitter} from 'node:events';import {PassThrough,Writable} from 'node:stream';import {createRequire} from 'node:module';
-const {createNativeMessagingHost}=createRequire(import.meta.url)('../desktop/native-messaging-host.cjs');
+const {createNativeMessagingHost}=createRequire(import.meta.url)('../desktop/services/native-messaging-host.cjs');
 function fixture({broken=false,timeoutMs=100}={}){
  const child=new EventEmitter();child.stdout=new PassThrough();child.stderr=new PassThrough();child.kill=()=>{child.kills=(child.kills||0)+1;};const written=[];child.stdin=new Writable({write(data,_encoding,callback){written.push(data);callback(broken?Object.assign(new Error('closed'),{code:'EPIPE'}):null);}});
  const sender={ipc:new EventEmitter(),sent:[],send(...args){this.sent.push(args);}};

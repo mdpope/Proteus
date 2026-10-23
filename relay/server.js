@@ -20,7 +20,7 @@ const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 function hasPrivatePermissions(file, info) {
   // The standalone Linux container has no desktop source tree. Only Windows
   // needs the desktop ACL helper; Unix retains the owner and mode checks here.
-  if (process.platform === 'win32') return createRequire(import.meta.url)('../src/private-paths.cjs').hasPrivatePermissions(file, info);
+  if (process.platform === 'win32') return createRequire(import.meta.url)('../src/shared/private-paths.cjs').hasPrivatePermissions(file, info);
   return !(info.mode & 0o077) && (!process.getuid || info.uid === process.getuid());
 }
 export function relayOrigins(values = []) {

@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { createRequire } from 'node:module';
-import { createWindowChrome } from '../public/window-chrome.js';
-const { windowChromeOptions, installWindowChrome } = createRequire(import.meta.url)('../desktop/window-chrome.cjs');
+import { createWindowChrome } from '../public/shared/navigation/window-chrome.js';
+const { windowChromeOptions, installWindowChrome } = createRequire(import.meta.url)('../desktop/windows/window-chrome.cjs');
 
 test('Linux and Windows share custom chrome; Mac and website retain their existing UI', () => {
   for (const platform of ['linux', 'win32']) assert.deepEqual(windowChromeOptions(platform), { frame: false });

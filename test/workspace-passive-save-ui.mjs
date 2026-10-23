@@ -1,6 +1,6 @@
 // Rehearsal only: passive sidebar painting must not schedule descriptor traffic.
 import {_electron as electron} from 'playwright';
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import assert from 'node:assert/strict';
 const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-passive-save-'));
 fs.writeFileSync(path.join(home,'settings.json'),JSON.stringify({schemaVersion:1,provider:'rehearsal',timezone:'UTC',workspace:{cwd:home,additionalDirectories:[]},skillDirectories:[],mcpServers:{},appearance:{showProviderUsage:false}}));

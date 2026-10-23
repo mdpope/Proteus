@@ -1,3 +1,21 @@
+## October 23 — native link callbacks and passive project synchronization
+
+Native menu callbacks now explicitly re-enter the source tab's window context. The callback's
+asynchronous page creation and selection no longer inherit another focused window. Foreground,
+background and hidden/unloaded link actions retain source project/profile/window placement.
+
+Owner `content-tabs` events synchronize the exact visible scope independently of general state
+refresh gates, including when another window owns focus or an address/composer field has input.
+Tab-list application remains passive and revision/history guarded. Open/close/order converge;
+local-window presentation events do not change a sibling window's selection or reading state.
+Paired-computer follow remains supported. Address edits are per-view ephemeral drafts, retained
+through passive refresh and cleared by successful submission or Escape. Mounted filtered Tabs
+lists redraw from current owner state without losing the query, selection or caret.
+
+The real two-window regression covers native foreground/background/unloaded links, canonical
+ordered membership, separate selections, an unfinished URL, a focused tab filter, and no hidden
+page load. It uses isolated profiles and leaves the installed app untouched.
+
 ## Queued October 21 — distinguish current-tab refresh from renderer recovery
 
 BF-2026-10-21-79 queues Command+R for the initiating window's selected tab, including when shell
@@ -133,9 +151,9 @@ competing writes instead of repeatedly replaying or resurrecting closed tabs. Us
 host-owned tab/browser boundary for all views and agent actions.
 
 Source orientation: secondary main and Team scopes both use `window:<windowId>` in
-`public/app.js`, `src/content-tabs.js` and shell inventory in `desktop/main.cjs`. Main isolation
+`public/app.js`, `src/services/workspaces/content-tabs.js` and shell inventory in `desktop/main.cjs`. Main isolation
 matches the requested top-level behavior; Team isolation conflicts with the clarified contract.
-Workspace/project scopes already use container IDs. `public/team-tools.js` keeps separate local
+Workspace/project scopes already use container IDs. `public/features/tools/team-tools.js` keeps separate local
 tab/native-view IDs, and reconciliation deliberately retains older aliases. These were the initial investigation
 points; the isolated creation race and scope corrections are described above. Do not merge
 or remove real tabs by URL. No HC data/session was inspected or changed by this source review.
@@ -166,7 +184,7 @@ metadata private under configured application data. Validate versioned records b
 replacement, preserve unknown fields and use revision/conflict protection. Display removal must
 recover accessible bounds. Existing old closed-window records are not promised recoverable.
 
-Source confirmation: `desktop/windows.cjs` forgets explicitly closed window records, and
+Source confirmation: `desktop/windows/windows.cjs` forgets explicitly closed window records, and
 `desktop/main.cjs` calls `windows.forget(id)` during individual close. Existing per-window session
 files alone do not constitute a supported closed-window recovery manager. No production app-data
 editing or claim of recovering the operator's lost window is made here.

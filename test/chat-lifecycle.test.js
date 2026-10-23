@@ -1,11 +1,11 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {Engine} from '../src/engine.js';
-import {ActivityStore} from '../src/activity.js';
+import {ActivityStore} from '../src/services/telemetry/activity.js';
 
 const schedule=cwd=>({schemaVersion:1,id:'synthetic',name:'Synthetic chat',enabled:false,cron:'0 9 * * 1-5',timezone:'UTC',provider:'rehearsal',model:'',workspace:{cwd,additionalDirectories:[]},misfire:'skip',prompt:'Synthetic prompt'});
 test('archive preserves history, delete tombstones it across restart, and active work is guarded',async()=>{

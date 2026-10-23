@@ -1,5 +1,8 @@
 # Architecture
 
+See [code organization](code-organization.md) for feature/model/service folder ownership, source
+placement and commentary conventions across native, desktop and web builds.
+
 Proteus has one host-owned service and runner per application-data home. Electron,
 the authenticated local HTTP interface, paired clients, internal tools, and external
 MCP act through service boundaries. The scheduler is provider-neutral; adapters own
@@ -14,16 +17,16 @@ The runner isolates provider sessions and permits independent chats to execute w
 preventing concurrent turns in the same session. A model's completed turn is separate
 from completion of an external workflow.
 
-`src/engine.js` owns execution; `src/run-history-cache.js` manages lazy history residency;
-`src/schedules.js` owns schedule validation; provider adapters live in `src/copilot.js`, `src/codex.js`, and `src/claude.js`.
+`src/engine.js` owns execution; `src/services/chats/run-history-cache.js` manages lazy history residency;
+`src/services/scheduling/schedules.js` owns schedule validation; provider adapters live in `src/providers/copilot.js`, `src/providers/codex.js`, and `src/providers/claude.js`.
 Active turns keep their required histories resident. Inactive history eviction does not
-remove durable events. `src/files.js` provides atomic storage primitives.
+remove durable events. `src/shared/files.js` provides atomic storage primitives.
 
 ## Desktop presentation
 
 `desktop/main.cjs` hosts the service and window registry. Each window owns its IPC
 presentation, browser views, terminal attachments, geometry, and selected content.
-`desktop/browser.cjs` owns embedded pages, profiles, history, navigation provenance,
+`desktop/browser/browser.cjs` owns embedded pages, profiles, history, navigation provenance,
 and scoped browser actions. Trusted-page input records navigation intent immediately;
 activity-only metadata is coalesced. Cookies and page sessions remain local.
 
@@ -35,13 +38,13 @@ shells or losing owner-side output. These lifecycle rules are documented in
 
 ## Tabs and follow-along
 
-`src/content-tabs.js` owns durable descriptor identity, order, navigation, and revisions.
-`public/content-tab-sync.js` reconciles changes with durable pending operations and
+`src/services/workspaces/content-tabs.js` owns durable descriptor identity, order, navigation, and revisions.
+`public/models/content-tab-sync.js` reconciles changes with durable pending operations and
 history conflicts. Browser histories retain the session beginning; small descriptor
 windows and incremental reads reduce transfer, not retention.
 
-`src/project-follow.js` owns bounded, ephemeral presentation state. A renderer subscribes
-only to its selected owner workspace/project. `public/project-follow.js` coordinates
+`src/services/workspaces/project-follow.js` owns bounded, ephemeral presentation state. A renderer subscribes
+only to its selected owner workspace/project. `public/features/workspaces/project-follow.js` coordinates
 selection and position changes; tab order and URL changes use the existing tab service.
 Re-entry reads the latest scoped state. Browser pages load independently in each local
 profile. No remote page rendering, cookies, page text, or sign-in state is shared.
@@ -50,7 +53,7 @@ private URLs, drafts, and provider approvals retain their existing boundaries.
 
 ## Connections and shared services
 
-`src/remote.js`, `src/remote-client.js`, and `src/desktop-peers.js` implement authenticated
+`src/services/remote/remote.js`, `src/services/remote/remote-client.js`, and `src/services/remote/desktop-peers.js` implement authenticated
 paired connections. `relay/server.js` routes encrypted messages without interpreting
 application payloads. Packet, backlog, pending-request, and byte-rate limits bound
 transport work. Disconnects preserve pairing; uncertain mutations use durable command
@@ -58,7 +61,7 @@ identities and receipts instead of blind replay. Follow events are replaceable a
 not replayed as historical gestures. See [remote access](remote.md).
 
 The website account is separate from peer transport and provider credentials. Shared
-account authentication lives in `src/account-session.js`; AppAccount and Life use that
+account authentication lives in `src/services/remote/account-session.js`; AppAccount and Life use that
 boundary while preserving existing encrypted credentials and consent. Website APIs
 support selective collections and revision-checked writes. Life read models filter,
 page, and aggregate in SQL while keeping immutable nutrition versions and totals.

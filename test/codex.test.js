@@ -1,13 +1,13 @@
 import {assertPrivate} from './helpers/permissions.js';
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {PermissionStore} from '../src/permissions.js';
-import {CodexProvider,codexModel,codexSandbox,verifyCodexSandbox} from '../src/codex.js';
+import {PermissionStore} from '../src/services/settings/permissions.js';
+import {CodexProvider,codexModel,codexSandbox,verifyCodexSandbox} from '../src/providers/codex.js';
 class RPC extends EventEmitter {
  constructor(){super();this.calls=[];this.closed=false;this.turn=0;this.responses=[];}
  async initialize(){this.initialized=true;return this;}
@@ -44,7 +44,7 @@ test('Codex sends only synthetic image inputs through private turn-scoped files 
 });
 test('Codex waits for native interruption and refuses unenforceable agent scopes before a turn',async()=>{const f=fixture();try{const task=f.provider.run(f.args);await until(()=>f.rpc.turn===1);f.controller.abort();await assert.rejects(task,/interrupted/);assert.ok(f.rpc.calls.some(c=>c.method==='turn/interrupt'));assert.equal(f.provider.active,null);f.provider.context.providerContext=()=>({customAgents:[{displayName:'Restricted',tools:['read']} ]});await assert.rejects(f.provider.run({...f.args,signal:new AbortController().signal}),/cannot yet enforce/);assert.equal(f.rpc.turn,1);}finally{await f.provider.close();}});
 test('Codex missing executable fails promptly and close does not wait for an impossible exit', async()=>{
- const {CodexRPC}=await import('../src/codex.js');const client=new CodexRPC({command:'/nonexistent/proteus-codex-fixture'});
+ const {CodexRPC}=await import('../src/providers/codex.js');const client=new CodexRPC({command:'/nonexistent/proteus-codex-fixture'});
  await assert.rejects(client.initialize(),/ENOENT/);await client.close();
 });
 

@@ -13,7 +13,7 @@ budget rejects the save instead of silently truncating visits.
 
 Tab order and browser navigation use the existing revision-checked content-tab
 service. Selected tabs and positions use `tabs.follow.v1`, a bounded ephemeral
-service in `src/project-follow.js`. A client joins one visible scope, renews a
+service in `src/services/workspaces/project-follow.js`. A client joins one visible scope, renews a
 45-second lease, and publishes ordered changes. Scope-bound leave, actor binding,
 generation checks, and latest-event coalescing protect navigation and reconnect races.
 Awaited descriptor synchronization includes passes queued during an earlier response, so

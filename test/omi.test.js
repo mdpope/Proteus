@@ -1,12 +1,12 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { OmiIntegration, safeOmiMetadata, isOmiSchedule } from '../src/omi.js';
-import { ScheduleStore } from '../src/schedules.js';
-import { runLocalProcess } from '../src/local-process.js';
+import { OmiIntegration, safeOmiMetadata, isOmiSchedule } from '../src/services/tools/omi.js';
+import { ScheduleStore } from '../src/services/scheduling/schedules.js';
+import { runLocalProcess } from '../src/providers/local-process.js';
 
 function fixture(t, options = {}) {
   const root = privateTemporaryDirectory(path.join(os.tmpdir(), 'proteus-omi-test-')); t.after(() => fs.rmSync(root, { recursive: true, force: true }));

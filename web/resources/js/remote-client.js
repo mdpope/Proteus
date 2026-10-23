@@ -1,6 +1,6 @@
 // Shared encrypted transport. Legacy browser-only pairings remain in scoped IndexedDB;
 // account-backed destination credentials are imported into session memory only.
-export { BrowserRemoteClient, parsePairing, importKey, seal, unseal } from '../../../src/remote-client.js';
+export { BrowserRemoteClient, parsePairing, importKey, seal, unseal } from '../../../src/services/remote/remote-client.js';
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 export class PairingStore {
     constructor(account) { if (!/^[a-f0-9]{64}$/.test(account)) throw new Error('Sign in again to use remote workspaces.'); this.account = account; }
@@ -84,7 +84,7 @@ export class AccountPairingStore {
     async rename(host,label) { return destination(await this.request('/'+host.hostId,{method:'PATCH',body:{deviceId:host.deviceId,label}})); }
     async remove(host) { if(!uuid.test(host.hostId)||!uuid.test(host.deviceId))throw new Error('Choose a valid destination.');return this.request('/'+host.hostId,{method:'DELETE',body:{deviceId:host.deviceId}}); }
 }
-import { importKey as importAccountKey } from '../../../src/remote-client.js';
+import { importKey as importAccountKey } from '../../../src/services/remote/remote-client.js';
 
 // Account records take precedence. Legacy keys stay nonextractable in this browser;
 // a failed account lookup must never silently select an older local authorization.

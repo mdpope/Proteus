@@ -4,9 +4,9 @@ import {createWorkspaceTree} from './workspace-tree.js';
 const ownerStates=new Map(),ownerLabels=new Map();let globalWorkspaceTree;
 function observeRunningChats(hostId,source,state,online=true){updateRunningChats(hostId,source,state,online);if(state)ownerStates.set(hostId,state);globalWorkspaceTree?.render();}
 
-import {authenticatedComputerMetadata} from '../../../public/computer-identity.js';
+import {authenticatedComputerMetadata} from '../../../public/services/remote/computer-identity.js';
 import { BrowserDestinationStore, BrowserRemoteClient } from './remote-client.js';
-import { usageSidebar, usageDetails } from '../../../public/provider-usage-view.js';
+import { usageSidebar, usageDetails } from '../../../public/features/settings/provider-usage-view.js';
 const account = document.body.dataset.browserAccount;
 export const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export async function appRequest(path = '', method = 'GET', body) {

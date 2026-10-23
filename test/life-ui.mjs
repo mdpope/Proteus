@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
 import { fileURLToPath } from 'node:url';
-import { LifeStore } from '../src/life-admin.js';
+import { LifeStore } from '../src/services/life/life-admin.js';
 const root=path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-life-ui-'));
 const store=new LifeStore(home),actions=[],errors=[];
@@ -15,7 +15,7 @@ const plan=await store.planSetup({mode:'local-new',ownerName:'Synthetic owner',o
 const metadata=()=>({...store.get(),schemaVersion:3,identity,websiteOrigin:identity.origin,connection:{...store.get().connection,mode:'website-api'}});
 let app,failNextFood=false;
 const html=`<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/life.css"><style>body{padding:16px}#life-setup{max-width:1200px;margin:auto}#main{padding-top:22px;height:auto;overflow:visible}</style><div id="life-setup"></div><main id="main"></main><script type="module">
-import {initLife,renderLife,renderLifeSetup} from '/life.js';
+import {initLife,renderLife,renderLifeSetup} from '/features/tools/life.js';
 const api=async(url,value)=>{const r=await fetch(url,{method:value===undefined?'GET':'POST',headers:{'Content-Type':'application/json'},body:value===undefined?undefined:JSON.stringify(value)});const v=await r.json();if(!r.ok)throw new Error(v.error);return v;};
 window.state={data:{life:await api('/api/life')}};window.refreshLife=async()=>{state.data.life=await api('/api/life');renderLife();renderLifeSetup('#life-setup');};
 initLife({state,api,escape:v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),toast:()=>{},refresh:window.refreshLife,openSettings:()=>document.querySelector('#life-setup').scrollIntoView()});
@@ -23,7 +23,7 @@ window.renderLife=renderLife;renderLifeSetup('#life-setup');renderLife();
 </script>`;
 const server=http.createServer(async(req,res)=>{try{
  if(req.url==='/'){res.setHeader('Content-Type','text/html');res.end(html);return;}
- if(['/life.js','/life.css','/style.css','/proteus-theme.css'].includes(req.url)){res.setHeader('Content-Type',req.url.endsWith('.js')?'text/javascript':'text/css');res.end(fs.readFileSync(path.join(root,'public',req.url.slice(1))));return;}
+ if(['/features/tools/life.js','/life.css','/style.css','/proteus-theme.css'].includes(req.url)){res.setHeader('Content-Type',req.url.endsWith('.js')?'text/javascript':'text/css');res.end(fs.readFileSync(path.join(root,'public',req.url.slice(1))));return;}
  let text='';for await(const chunk of req)text+=chunk;const input=text?JSON.parse(text):{};let result;
  if(req.url==='/api/life')result=req.method==='GET'?metadata():({...store.save({...input.settings,schemaVersion:2},input.expectedRevision),identity});
  else if(req.url==='/api/life/setup-plan')result=await store.planSetup(input);

@@ -1,16 +1,16 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import { fakeSession } from './fake-copilot.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ContextStore, parseJSONC } from '../src/context.js';
-import { SettingsStore } from '../src/settings.js';
+import { ContextStore, parseJSONC } from '../src/services/workspaces/context.js';
+import { SettingsStore } from '../src/services/settings/settings.js';
 import { Engine } from '../src/engine.js';
-import { StandupStore } from '../src/standup.js';
-import { CredentialBroker, BitwardenCLI } from '../src/credentials.js';
-import { exportTranscript } from '../src/transcripts.js';
+import { StandupStore } from '../src/services/tools/standup.js';
+import { CredentialBroker, BitwardenCLI } from '../src/services/integrations/credentials.js';
+import { exportTranscript } from '../src/services/tools/transcripts.js';
 
 function fixture(t, beforeRemove) {
   const home = fs.realpathSync(privateTemporaryDirectory(path.join(os.tmpdir(), 'proteus-context-test-')));
@@ -246,7 +246,7 @@ test('only selected sources skips workspace/universal documents while preserving
 test('schedule selections are validated, persist in plain JSON and capture only selected sources on each run', async t => {
   let app;
   const f = fixture(t, () => app?.close()); f.write(path.join(f.repo, 'AGENTS.md'), '# Automatic source'); f.write(path.join(f.repo, 'skills/check/SKILL.md'), '# Schedule skill\nVersion one.');
-  const { startServer } = await import('../src/server.js'); const { revision } = await import('../src/schedules.js');
+  const { startServer } = await import('../src/server.js'); const { revision } = await import('../src/services/scheduling/schedules.js');
   app = await startServer({ home: path.join(f.home, 'app'), port: 0, timers: false }); app.engine.drain = async () => {};
   const skill = app.context.get().entries.find(e => e.kind === 'skill');
   const schedule = app.engine.schedules.get('workspace-pulse'); schedule.workspace = { cwd: f.repo, additionalDirectories: [] };
@@ -262,7 +262,7 @@ test('schedule selections are validated, persist in plain JSON and capture only 
   const second = app.engine.createRun(saved); assert.match(second.schedule.context.entries[0].content, /Version two/); assert.match(first.schedule.context.entries[0].content, /Version one/);
 });
 test('only-selected Copilot configuration removes legacy MCP/skill discovery and supplies selected tools', async () => {
-  const { CopilotProvider } = await import('../src/copilot.js');
+  const { CopilotProvider } = await import('../src/providers/copilot.js');
   let config;
   const provider = new CopilotProvider({}, { context: { providerContext: () => ({ disabledLegacyMcp: [], disabledSkills: [], customAgents: [], mcpServers: { selected: { command: 'false', tools: ['read'] } }, mcpMappings: {}, instructionText: 'Selected instructions' }) } });
   const session = fakeSession({ sessionId: 'synthetic', rpc: { agent: { deselect: async () => {} }, usage: { getMetrics: async () => ({}) } } });

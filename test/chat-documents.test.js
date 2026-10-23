@@ -1,10 +1,10 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ChatDocumentApprovals } from '../src/chat-documents.js';
+import { ChatDocumentApprovals } from '../src/services/chats/chat-documents.js';
 
 test('one approved document version is readable only by its requesting device', t=>{
   const root=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-chat-docs-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));

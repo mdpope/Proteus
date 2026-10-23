@@ -1,14 +1,14 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import { fakeSession } from './fake-copilot.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { agentMetadata, selectedAgentToolScope } from '../src/agent-tools.js';
-import { ContextStore } from '../src/context.js';
-import { SettingsStore } from '../src/settings.js';
-import { CopilotProvider } from '../src/copilot.js';
+import { agentMetadata, selectedAgentToolScope } from '../src/services/chats/agent-tools.js';
+import { ContextStore } from '../src/services/workspaces/context.js';
+import { SettingsStore } from '../src/services/settings/settings.js';
+import { CopilotProvider } from '../src/providers/copilot.js';
 
 const profile = frontmatter => `---\nname: Synthetic agent\n${frontmatter}\n---\nUse only the selected workspace.`;
 test('portable tool groups parse as YAML flow lists, block lists and comma strings', () => {

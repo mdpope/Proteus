@@ -1,15 +1,15 @@
 const { app, BrowserWindow, ipcMain, shell, dialog, clipboard, Tray, Menu, nativeImage, screen, safeStorage, Notification, powerMonitor, powerSaveBlocker } = require('electron');
 const path = require('node:path');
-const { BrowserTabs } = require('./browser.cjs');
-const { launchPath, closeToTray, protocolURL } = require('./platform.cjs');
-const {ExternalURLs,webURL}=require('./external-urls.cjs');
-const { windowChromeOptions, installWindowChrome } = require('./window-chrome.cjs');
-const { WorkspaceSession } = require('./workspace-session.cjs');
-const {HistoryService}=require('./history-service.cjs');
-const { createProcessSampler, trackedChildren, trackedPids, resourceTotals } = require('./resource-metrics.cjs');
-const { ArtifactPreview } = require('./artifact-preview.cjs');
-const {RendererRecovery}=require('./renderer-recovery.cjs');
-const {KeepAwake}=require('./keep-awake.cjs');
+const { BrowserTabs } = require('./browser/browser.cjs');
+const { launchPath, closeToTray, protocolURL } = require('./services/platform.cjs');
+const {ExternalURLs,webURL}=require('./services/external-urls.cjs');
+const { windowChromeOptions, installWindowChrome } = require('./windows/window-chrome.cjs');
+const { WorkspaceSession } = require('./windows/workspace-session.cjs');
+const {HistoryService}=require('./browser/history-service.cjs');
+const { createProcessSampler, trackedChildren, trackedPids, resourceTotals } = require('./services/resource-metrics.cjs');
+const { ArtifactPreview } = require('./documents/artifact-preview.cjs');
+const {RendererRecovery}=require('./windows/renderer-recovery.cjs');
+const {KeepAwake}=require('./services/keep-awake.cjs');
 const keepAwake=new KeepAwake(powerSaveBlocker);
 let hostMenu;
 const {configureDesktopPreview,stageCodexAuthentication,preparePreviewFixtures}=require('./preview-runtime.cjs');
@@ -20,7 +20,7 @@ const showWindow = () => { const target=windows?.current()?.window;if(!target){i
 if(!desktopPreview)app.setName('Proteus');
 if (process.platform === 'linux') app.setDesktopName('proteus.desktop');
 process.env.PATH = launchPath(process.platform, require('node:os').homedir(), process.env.PATH);
-if(process.platform==='win32')require('../src/private-paths.cjs').ensurePrivateHome(app.getPath('userData'));
+if(process.platform==='win32')require('../src/shared/private-paths.cjs').ensurePrivateHome(app.getPath('userData'));
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   // CLI-driven updates and service stops use the same graceful shutdown as Quit.
@@ -42,13 +42,13 @@ else {
     const appIcon = nativeImage.createFromPath(path.join(__dirname, 'icon.png'));
     app.dock?.setIcon(appIcon);
     const { startServer } = await import('../src/server.js');
-    const { isWithin,defaultHome } = await import('../src/files.js');
-    const {Updates,pendingUpdate}=await import('../src/updates.js');
+    const { isWithin,defaultHome } = await import('../src/shared/files.js');
+    const {Updates,pendingUpdate}=await import('../src/services/updates/updates.js');
     const freshHome=!require('node:fs').existsSync(defaultHome());
     const installation=app.isPackaged?(process.platform==='darwin'?path.resolve(app.getAppPath(),'../../..'):path.resolve(app.getAppPath(),'../..')):null;
     const pendingRecovery=installation&&!desktopPreview?pendingUpdate(defaultHome(),installation):null;if(pendingRecovery)process.env.PROTEUS_UPDATE_JOB=pendingRecovery;
-    const { CredentialBroker } = await import('../src/credentials.js');
-    const { TerminalStore } = await import('../src/terminals.js');
+    const { CredentialBroker } = await import('../src/services/integrations/credentials.js');
+    const { TerminalStore } = await import('../src/services/tools/terminals.js');
     if(desktopPreview){
       const fs=require('node:fs');
       const {seedDesktopPreview,assertDesktopPreviewHome}=await import('../src/desktop-preview.js');
@@ -60,11 +60,11 @@ else {
       stageCodexAuthentication(desktopPreview);
     }
     // The provider only receives this bounded interface, never Electron or a CDP endpoint.
-    service = await startServer({updateRecovery:!!pendingRecovery, ...(desktopPreview?{home:desktopPreview.home,port:0,desktopPreview:{codexHome:desktopPreview.codexHome},withSeed:false}:{port:Number(process.env.PORT || 4317)}), openExternal:url=>require('./link-routing/preferred-browser.cjs').openPreferredBrowser(url,{preference:service?.settings.get().preferences?.clickedLinks,system:value=>shell.openExternal(value),embedded:browser?async value=>{authWindowId=windows.current()?.id;const info=await browser.create(value,null,null,{explicitParent:true});browser.actions.send({type:'select-tab',info});showWindow();}:null}), browser: {updates:updateBridge, projects:true,preview:!!desktopPreview,manageTabs:(args,runId)=>service.tabManagement.handle(args),agent:async(value,runId)=>{if(!windows?.contexts.size)await createAppWindow();const ctx=service.windowForChat?.(runId)||windows.current();return windows.run(ctx.id,()=>browser.agent(value,runId));}, openDocument:async(args,runId)=>(await import('../src/document-tools.js')).openChatDocument(service,args,runId) }, background: true, lifeOptions: { safeStorage, Notification, powerMonitor,client:'desktop',callbackURL:'proteus-desktop://life-oauth/callback',openExternal:async url=>{authWindowId=windows?.current()?.id;if(service.settings.get().preferences?.clickedLinks==='system')return shell.openExternal(url);const info=await browser.create(url);browser.actions.send({type:'select-tab',info});} } });
+    service = await startServer({updateRecovery:!!pendingRecovery, ...(desktopPreview?{home:desktopPreview.home,port:0,desktopPreview:{codexHome:desktopPreview.codexHome},withSeed:false}:{port:Number(process.env.PORT || 4317)}), openExternal:url=>require('./link-routing/preferred-browser.cjs').openPreferredBrowser(url,{preference:service?.settings.get().preferences?.clickedLinks,system:value=>shell.openExternal(value),embedded:browser?async value=>{authWindowId=windows.current()?.id;const info=await browser.create(value,null,null,{explicitParent:true});browser.actions.send({type:'select-tab',info});showWindow();}:null}), browser: {terminal:(args,runId)=>{if(!terminals)throw Error('Terminal service is not ready.');return terminals.agentAccess.handle(args,runId);},updates:updateBridge, projects:true,preview:!!desktopPreview,manageTabs:(args,runId)=>service.tabManagement.handle(args),agent:async(value,runId)=>{if(!windows?.contexts.size)await createAppWindow();const ctx=service.windowForChat?.(runId)||windows.current();return windows.run(ctx.id,()=>browser.agent(value,runId));}, openDocument:async(args,runId)=>(await import('../src/services/chats/document-tools.js')).openChatDocument(service,args,runId) }, background: true, lifeOptions: { safeStorage, Notification, powerMonitor,client:'desktop',callbackURL:'proteus-desktop://life-oauth/callback',openExternal:async url=>{authWindowId=windows?.current()?.id;if(service.settings.get().preferences?.clickedLinks==='system')return shell.openExternal(url);const info=await browser.create(url);browser.actions.send({type:'select-tab',info});} } });
     if (lifeCallback) { const value=lifeCallback; lifeCallback=null; void service.life.callback(value).catch(()=>{}); }
     keepAwake.onChange=enabled=>{const saved=service.settings.get();service.settings.save({...saved,preferences:{...saved.preferences,keepScreenAwake:enabled}},saved.revision);};
     try{keepAwake.setEnabled(service.settings.get().preferences?.keepScreenAwake===true);}catch(error){console.warn('Keep Screen Awake: '+error.message);}
-    windows=new (require('./windows.cjs').WindowRegistry)(service.home,{ipcMain,screen});
+    windows=new (require('./windows/windows.cjs').WindowRegistry)(service.home,{ipcMain,screen});
     service.contentTabs.migrateWindowTeams();
     const records=windows.records(),firstRecord=records[0];
     const makeWindow=record=>new BrowserWindow({ ...windows.bounds(record), ...windowChromeOptions(), minWidth: 850, minHeight: 650, title: desktopPreview?.name||'Proteus', icon: appIcon, backgroundColor: '#121512',
@@ -73,10 +73,10 @@ else {
     const firstWindow=makeWindow(firstRecord);windows.attach(firstWindow,firstRecord.id);window=windows.proxy();
     if(desktopPreview)window.on('page-title-updated',event=>{event.preventDefault();window.setTitle(desktopPreview.name);});
     const browsingHistory=new HistoryService(service.browserHistory,{onError:error=>window.webContents.send('proteus:browser-action',{type:'error',message:error.message})});
-    const {browserDestination,browserDestinations,previewChatResourcePlacement}=await import('../src/browser-destinations.js');
+    const {browserDestination,browserDestinations,previewChatResourcePlacement}=await import('../src/services/browser/browser-destinations.js');
     const projects=service.workspaceProjects||service.desktopPreview;
-    const {remapPreviewProjectSession,resolvePreviewProject,remapPreviewBrowserPlacement}=await import('../public/preview-project-placement.js');
-    const {reconcileWindowSession}=await import('../public/window-session-reconcile.js');
+    const {remapPreviewProjectSession,resolvePreviewProject,remapPreviewBrowserPlacement}=await import('../public/features/workspaces/preview-project-placement.js');
+    const {reconcileWindowSession}=await import('../public/shared/navigation/window-session-reconcile.js');
     const resolvePreviewPlacement=value=>projects.remapBrowserPlacement(value);
     await service.browserProfiles.refresh().catch(()=>{});
     browser = new BrowserTabs(firstWindow, service.origin,{windowRegistry:windows,newWindow:()=>createAppWindow?.(),projects:true,preview:!!desktopPreview,resolvePreviewPlacement,retainedTabs:()=>service.settings.get().browser?.loadedTabLimit??6,home:service.home,handleCallback:url=>{if(!url.startsWith('proteus-desktop://life-oauth/callback?'))return false;void service.life.callback(url).catch(error=>browser.actions.send({type:'error',message:error.message}));returnToAuthWindow();return true;},diagnostics:service.performanceDiagnostics,history:browsingHistory,agentDestination:(runId,value)=>browserDestination(service,runId,value,{preview:!!projects}),agentDestinations:runId=>browserDestinations(service,runId,{preview:!!projects}),profiles:service.browserProfiles,onLoadError:({error,url,detail,tabId,windowId})=>{const log=service.activity.log('warning','browser.load-failed',`${error}\n${url||''}`,{hostId:service.remote.info().hostId,tabId,error:detail,url});let site='this page';try{site=new URL(url).host;}catch{}const item=service.activity.browserIssue({kind:'load-error',windowId,tabId,logId:log.id,title:'Could not load '+site,body:error});service.notify();return {...log,notificationId:item.id};}});
@@ -90,7 +90,7 @@ else {
     const trusted = event => { if (new URL(event.senderFrame.url).origin !== service.origin || event.sender !== window.webContents) throw new Error('Untrusted renderer.'); };
     const configureWindowChrome=installWindowChrome({windows,trusted,Menu,isClosing:()=>closing});
     const notices=new Map();
-    windows.handle('proteus:notice',(event,value)=>{trusted(event);if(event.senderFrame!==window.webContents.mainFrame||closing)throw new Error('Notification access unavailable.');return (()=>{const ctx=windows.current();if(!notices.has(ctx.id))notices.set(ctx.id,new (require('./notice-window.cjs').NoticeWindow)(ctx.window));return notices.get(ctx.id).show(value);})();});
+    windows.handle('proteus:notice',(event,value)=>{trusted(event);if(event.senderFrame!==window.webContents.mainFrame||closing)throw new Error('Notification access unavailable.');return (()=>{const ctx=windows.current();if(!notices.has(ctx.id))notices.set(ctx.id,new (require('./features/notifications/notice-window.cjs').NoticeWindow)(ctx.window));return notices.get(ctx.id).show(value);})();});
     const openBrowserNotification=(item,intent='review')=>{const issue=item?.browserIssue;if(!issue)throw Error('Browser notification not found.');const actions=issue.kind==='history-conflict'?['review','keep-history','open-copy']:['review','open-tab','reload','logs'];if(!actions.includes(intent))throw Error('Choose an available notification action.');const ctx=windows.contexts.get(issue.windowId);if(!ctx||ctx.window.isDestroyed())throw Error('Restore the original window in Engine Room → Windows before reviewing this browser issue.');windows.run(ctx.id,()=>{ctx.window.show();ctx.window.focus();ctx.window.webContents.send('proteus:notification-open',{browserIssueId:item.id,issueAction:intent});});return {dispatched:true};};
     windows.handle('proteus:browser-notification',(event,value)=>{trusted(event);if(event.senderFrame!==window.webContents.mainFrame||closing)throw Error('Browser notification access unavailable.');if(value?.action==='record'){const item=service.activity.browserIssue({...value,windowId:windows.current().id});service.notify();return item;}if(value?.action==='act'){const item=service.activity.notifications().items.find(item=>item.id===value.id&&item.type==='browser.issue');return openBrowserNotification(item,value.intent);}throw Error('Choose a browser notification action.');});
     windows.handle('proteus:default-browser',event=>{trusted(event);return app.getApplicationNameForProtocol('https:')||null;});
@@ -99,16 +99,18 @@ else {
     windows.handle('proteus:life-account', (event, value) => { trusted(event); if(event.senderFrame.parent!==null||event.senderFrame.routingId!==window.webContents.mainFrame.routingId||event.senderFrame.processId!==window.webContents.mainFrame.processId||closing)throw new Error('Life account access is unavailable.'); if(['begin','upgrade'].includes(value?.action))authWindowId=windows.current().id;return service.life.auth(value?.action, value); });
     // PTYs are desktop-only. Neither the HTTP API nor embedded web pages receive this bridge.
     terminals = new TerminalStore(service.home, { workspaceFiles: service.workspaceFiles });
+    terminals.agentAccess.active=owner=>owner==='operator'||['running','awaiting_input'].includes(service.engine.getRun(owner)?.status);
+    service.terminalAgent=(args,owner)=>terminals.agentAccess.handle(args,owner);
     windows.handle('proteus:terminal', (event, value) => { trusted(event); if (event.senderFrame.parent !== null || event.senderFrame.routingId !== window.webContents.mainFrame.routingId || event.senderFrame.processId !== window.webContents.mainFrame.processId || closing) throw new Error('Terminal access is unavailable.'); return terminals.handle(value); });
     windows.handle('proteus:artifact-preview', (event, value) => { trusted(event); if(event.senderFrame.parent!==null||event.senderFrame.routingId!==window.webContents.mainFrame.routingId||event.senderFrame.processId!==window.webContents.mainFrame.processId||closing)throw new Error('Document preview is unavailable.');if(value?.action==='hide')return preview.hide();if(value?.action==='show')return preview.show(value);if(value?.action==='follow-scroll')return preview.followScroll(value);throw new Error('Unknown document preview action.'); });
     terminals.on('event', value => windows.broadcast('proteus:terminal-event',value));
-    const { DesktopPeers } = await import('../src/desktop-peers.js');
+    const { DesktopPeers } = await import('../src/services/remote/desktop-peers.js');
     peers = new DesktopPeers(service.home, { safeStorage, localHostId: service.remote.info().hostId,browserHistory:service.browserHistory, diagnostics: service.performanceDiagnostics });
     windows.handle('proteus:desktop-peers', (event, value) => { trusted(event); if(event.senderFrame.parent!==null||event.senderFrame.routingId!==window.webContents.mainFrame.routingId||event.senderFrame.processId!==window.webContents.mainFrame.processId||closing)throw new Error('Desktop peer access is unavailable.');return peers.handle(value); });
     peers.on('event', value => windows.broadcast('proteus:desktop-peer-event',value));
     service.peers=peers;
     void service.browserHistory.importAccount(service.account).catch(()=>{});
-    const {LiveBrowser}=await import('../src/live-browser.js');
+    const {LiveBrowser}=await import('../src/services/browser/live-browser.js');
     service.liveBrowser=new LiveBrowser({
       list:chatId=>browser.list().filter(info=>{const tab=browser.get(info.id);return info.loaded&&browser.profileAvailable(tab)&&(tab.parentId===chatId||tab.owner===chatId||tab.resumeOwner===chatId||tab.automationRuns?.has(chatId));}).map(({id,title,agentControlling})=>({id,title,agentControlling})),
       current:(id,revision)=>{const tab=browser.tabs.get(id);return !!tab?.view?.webContents&&browser.profileAvailable(tab)&&!tab.view.webContents.isDestroyed()&&revision===`${tab.view.webContents.id}:${tab.captureRevision||0}`;},
@@ -123,10 +125,10 @@ else {
     });
 
     powerMonitor.on('resume',()=>peers?.resumeConnections());
-    const makeSession=id=>new WorkspaceSession(service.home,{windowId:id,projects:true,sharedTeam:true,remap:value=>projects.remapSession(value)});
+    const makeSession=id=>new WorkspaceSession(service.home,{windowId:id,projects:true,sharedTeam:true,remap:value=>projects.remapSession(value,service.engine)});
     windows.current().session=makeSession(firstRecord.id);const workspaceSession=windows.proxy('session');
     const tabActions=new Map();
-    const windowLayouts=new (require('./window-layouts.cjs').WindowLayouts)(service.home);
+    const windowLayouts=new (require('./windows/window-layouts.cjs').WindowLayouts)(service.home);
     const checkpointWindow=ctx=>ctx.recovery?.restoring||ctx.window.webContents.isCrashed()?Promise.resolve():new Promise((resolve,reject)=>{const requestId=require('node:crypto').randomUUID();const timer=setTimeout(()=>{tabActions.delete(requestId);reject(Error('The window did not finish saving. Try again after it responds.'));},10000);tabActions.set(requestId,{resolve,reject,timer,windowId:ctx.id});ctx.window.webContents.send('proteus:tab-management',{action:'window-checkpoint',requestId});});
     const windowPositions=id=>{const prefix='window:'+id+':';return viewPositions.get().flatMap(([key,position])=>key.startsWith(prefix)?[[key.slice(prefix.length),position]]:id==='main'&&!key.startsWith('window:')?[[key,position]]:[]);};
     const captureWindow=(ctx,kind,name,expectedRevision)=>windowLayouts.capture({windowId:ctx.id,session:ctx.session.get(),positions:windowPositions(ctx.id),bounds:ctx.window.getNormalBounds(),maximized:ctx.window.isMaximized(),kind,name},expectedRevision);
@@ -176,7 +178,7 @@ else {
         id:runtimeIdentity(tab,saved),runtimeId:tab.id,
         manageable:!['overview','omi','life','team','engine','home','standup'].includes(tab.type),type:tab.type==='workspace'?'workspace':['run','remote-run'].includes(tab.type)?'chat':tab.type==='markdown'||tab.type==='remote-document'?'document':tab.type==='browser'?'browser':['terminal','agent-terminal'].includes(tab.type)?'terminal':'viewer',
         scope:'shell',scopeId:'shell',browserId:tab.type==='browser'?tab.browserId||tab.id:undefined,location:(()=>{const parent=saved.tabs?.find(item=>item.id===tab.parentId);return parent?.type==='workspace'?{scope:parent.projectId?'project':'workspace',id:parent.projectId||parent.workspaceId,hostId:parent.hostId||null}:['run','remote-run'].includes(parent?.type)?{scope:'chat',id:parent.runId||parent.id,hostId:parent.hostId||null}:{scope:saved.team?.tabs?.includes(tab)?'team':'main',id:saved.team?.tabs?.includes(tab)?'team':windows.current().id==='main'?(saved.team?.tabs?.includes(tab)?'team':'main'):'window:'+windows.current().id};})(),group:saved.team?.tabs?.includes(tab)?'team':'main',liveSession:tab.type==='agent-terminal',parentId:tab.parentId||null,title:tab.customTitle||tab.label||tab.title||'Tab',
-        url:tab.type==='browser'?require('./browser-history.cjs').safeHistoryURL(tab.url)||null:tab.type==='markdown'&&tab.file?require('node:url').pathToFileURL(tab.file).href:null,
+        url:tab.type==='browser'?require('./browser/browser-history.cjs').safeHistoryURL(tab.url)||null:tab.type==='markdown'&&tab.file?require('node:url').pathToFileURL(tab.file).href:null,
         openedAt:tab.openedAt||null,lastTouchedAt:tab.lastTouchedAt||null,...(projects?{lastActivityAt:tab.lastActivityAt||null}:{}),hidden:tab.hidden===true,persist:tab.persist===true,
         ...(tab.workspaceId?{workspaceId:tab.workspaceId}:{}),...(tab.hostId?{hostId:tab.hostId}:{}),...(tab.terminal?.id?{terminalId:tab.terminal.id}:{}),...(tab.runId||tab.type==='run'?{chatId:tab.runId||tab.id}:{}),...(tab.favicon?{favicon:tab.favicon}:{})
       }));
@@ -232,7 +234,7 @@ else {
       for(const root of service.workspaceFiles.roots().roots.filter(root=>root.available)){const relative=path.relative(root.path,file);if(relative&&!relative.startsWith('..'+path.sep)&&relative!=='..'&&!path.isAbsolute(relative))return {...service.workspaceFiles.read({rootId:root.id,file:relative}),title:descriptor.title,mediaType:'text/markdown'};}
       throw new Error('Document is outside a currently authorized workspace.');
     };
-    const {chatResourcePlacement}=await import('../public/chat-resource-placement.js');
+    const {chatResourcePlacement}=await import('../public/features/chats/chat-resource-placement.js');
     service.windowForChat=runId=>{const entries=[...windows.contexts.values()],current=windows.current();return [current,...entries.filter(ctx=>ctx!==current)].find(ctx=>(ctx?.session?.get()?.tabs||[]).some(tab=>!tab.navigationClosed&&((tab.runId||(['run','remote-run'].includes(tab.type)?tab.id:null))===runId||tab.associationChatId===runId)))||current;};
     service.chatResourcePlacement=run=>{const ctx=service.windowForChat(run.id),saved=ctx?.session.get();return {...(projects?previewChatResourcePlacement(service,run,saved):chatResourcePlacement(run.id,saved,{workspaceId:Object.hasOwn(run,'workspaceId')?run.workspaceId:run.schedule.context?.workspaceId})),windowId:ctx?.id};};
     service.onDocumentOpened=value=>{const ctx=windows.contexts.get(value.placement?.windowId)||service.windowForChat(value.runId);if(ctx&&!ctx.window.isDestroyed())ctx.window.webContents.send('proteus:open-document',value);};
@@ -267,7 +269,7 @@ else {
     service.activity.on('notification',item=>{const p=service.activity.data.preferences;if(!p.systemEnabled||p[item.type]===false||!Notification.isSupported())return;const notification=new Notification({title:item.title,body:item.body,silent:false});notification.on('click',()=>{if(item.browserIssue){try{openBrowserNotification(item);}catch{showWindow();}return;}const ctx=service.windowForChat(item.runId);if(ctx)windows.run(ctx.id,()=>{showWindow();ctx.window.webContents.send('proteus:notification-open',item);});else showWindow();});notification.show();});
 
     windows.handle('proteus:workspace-session', async (event, value) => { trusted(event); if(value?.action==='reconcile-peer-projects'&&!closing){const hostId=value.hostId;if(!/^[a-f0-9-]{36}$/i.test(hostId||''))throw new Error('Choose a paired computer.');const catalog=await peers.request(hostId,'projects.get',{});const prefix='project:'+hostId+':';const current=workspaceSession.get();if(current)workspaceSession.save(remapPreviewProjectSession(current,catalog,{hostId}));browser.reparentPreviewProjects(placement=>{if(!placement.parentId?.startsWith(prefix))return placement;return remapPreviewBrowserPlacement(placement,catalog,{hostId});});return {catalog};} if(value?.action==='get'){const saved=workspaceSession.get(),recovery=windows.current().recovery;return saved?{...saved,rendererRecovery:recovery?.restoring===true,recoveryGeneration:recovery?.generation||0}:saved;}if(value?.action==='ready'){const ctx=windows.current();const recovered=ctx.recovery?.ready(value.generation)===true;if(recovered){ctx.externalURLReady=true;void externalURLs.drain();}return recovered;} if(value?.action==='save'&&(!closing||windows.current()?.checkpointing)){const saved=service.performanceDiagnostics.measureSync('desktop.session.save',()=>workspaceSession.save(value.session));service.contentTabs.seedWorkspace(saved);return;} });
-    const viewPositions=new (require('./view-positions.cjs').ViewPositions)(service.home);
+    const viewPositions=new (require('./windows/view-positions.cjs').ViewPositions)(service.home);
     windows.handle('proteus:view-positions',(event,value)=>{trusted(event);const prefix='window:'+windows.current().id+':';if(value?.action==='get')return viewPositions.get().flatMap(([key,position])=>key.startsWith(prefix)?[[key.slice(prefix.length),position]]:windows.current().id==='main'&&!key.startsWith('window:')?[[key,position]]:[]);if(value?.action==='set')return viewPositions.set(prefix+value.key,value.position);throw Error('Choose a reading-position action.');});
     const pendingThumbnails=new Map();
     windows.handle('proteus:thumbnails',async(event,value)=>{
@@ -316,11 +318,11 @@ else {
       const area = screen.getDisplayMatching(window.getBounds()).workArea;
       standupWindow = new BrowserWindow({ x: area.x, y: area.y, width: Math.round(Math.max(180, Math.min(320, Number(width) || 230))), height: area.height,
         title: 'Proteus Standup', frame: false, alwaysOnTop: true, minimizable: false, fullscreenable: false, minWidth: 180, minHeight: 300, backgroundColor: '#19201e',
-        webPreferences: { preload: path.join(__dirname, 'standup-preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
+        webPreferences: { preload: path.join(__dirname, 'features/standup/standup-preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
       standupWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
       standupWindow.webContents.on('will-navigate', event => event.preventDefault());
       standupWindow.on('closed', () => { standupWindow = null; });
-      await standupWindow.loadFile(path.join(__dirname, 'standup.html'));
+      await standupWindow.loadFile(path.join(__dirname, 'features/standup/standup.html'));
     });
     const trustedStandup = event => { if (!standupWindow || event.sender !== standupWindow.webContents || event.senderFrame !== standupWindow.webContents.mainFrame) throw new Error('Untrusted standup renderer.'); };
     ipcMain.handle('proteus:standup-current', event => { trustedStandup(event); return service.standup.get().current; });

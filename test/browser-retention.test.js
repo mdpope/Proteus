@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 const require=createRequire(import.meta.url);
-const { retirementCandidates, RECENT_MS }=require('../desktop/browser-retention.cjs');
+const { retirementCandidates, RECENT_MS }=require('../desktop/browser/browser-retention.cjs');
 
 test('configured budget ignores unloaded records and protects selections in every window',()=>{
  const now=1_000_000_000,view={webContents:{isCurrentlyAudible:()=>false}};

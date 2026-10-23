@@ -1,6 +1,6 @@
 // Isolated Electron home and two loopback hosts. No operational prompts or real pairing keys.
 import {_electron as electron} from 'playwright';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import assert from 'node:assert/strict';
-import {startServer} from '../src/server.js';import {startRelay} from '../relay/server.js';import {atomicJSON} from '../src/files.js';import {secret} from '../src/remote-crypto.js';import {until} from './remote-client.mjs';
+import {startServer} from '../src/server.js';import {startRelay} from '../relay/server.js';import {atomicJSON} from '../src/shared/files.js';import {secret} from '../src/services/remote/remote-crypto.js';import {until} from './remote-client.mjs';
 const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-desktop-peers-ui-')),localHome=path.join(home,'local'),apps=[],token=secret(),relay=await startRelay({port:0,token}),url=`ws://127.0.0.1:${relay.port}`,errors=[];
 let app,page;
 function settings(h,provider='rehearsal'){const cwd=path.join(h,'workspace');fs.mkdirSync(cwd,{recursive:true});atomicJSON(path.join(h,'settings.json'),{schemaVersion:1,provider,model:provider==='copilot'?'synthetic':'',reasoningEffort:provider==='copilot'?'high':'',serviceTier:provider==='copilot'?'fast':'',contextTier:provider==='copilot'?'default':'',timezone:'UTC',workspace:{cwd,additionalDirectories:[]},skillDirectories:[],mcpServers:{}});return cwd;}

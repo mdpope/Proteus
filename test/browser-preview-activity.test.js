@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import {EventEmitter} from 'node:events';
 import {createRequire} from 'node:module';
-const require=createRequire(import.meta.url),desktopRequire=createRequire(new URL('../desktop/browser.cjs',import.meta.url));
+const require=createRequire(import.meta.url),desktopRequire=createRequire(new URL('../desktop/browser/browser.cjs',import.meta.url));
 
 // Run the native broker against synthetic webContents, without a browser profile
 // or Electron process. The real history and navigation implementations are used.
@@ -19,9 +19,9 @@ function fixture(preview=true){
   close(){if(this.unsaved){this.emit('will-prevent-unload');return;}this.destroyed=true;this.emit('destroyed');}
  }
  class View {constructor(){views++;this.webContents=new Contents();}setBounds(value){this.bounds=value;}getBounds(){return this.bounds;}setVisible(value){this.visible=value;}getVisible(){return this.visible;}}
- const module={exports:{}},source=fs.readFileSync(new URL('../desktop/browser.cjs',import.meta.url),'utf8');
- const dependency=name=>name==='electron'?{WebContentsView:View}:name.startsWith('node:')||['./browser-history.cjs','./browser-navigation.cjs','./browser-background-focus.cjs','./navigation.cjs'].includes(name)?desktopRequire(name):{};
- vm.runInNewContext(source,{module,exports:module.exports,require:dependency,__dirname:new URL('../desktop/',import.meta.url).pathname,Date:Clock,URL,Buffer,structuredClone,setTimeout,clearTimeout,setInterval,clearInterval});
+ const module={exports:{}},source=fs.readFileSync(new URL('../desktop/browser/browser.cjs',import.meta.url),'utf8');
+ const dependency=name=>name==='electron'?{WebContentsView:View}:name.startsWith('node:')||['./browser-history.cjs','./browser-navigation.cjs','./browser-background-focus.cjs','../windows/navigation.cjs'].includes(name)?desktopRequire(name):{};
+ vm.runInNewContext(source,{module,exports:module.exports,require:dependency,__dirname:new URL('../desktop/browser/',import.meta.url).pathname,Date:Clock,URL,Buffer,structuredClone,setTimeout,clearTimeout,setInterval,clearInterval});
  const browser=Object.create(module.exports.BrowserTabs.prototype),partition={};
  Object.assign(browser,{videoPopout:{bind(){},close(){}},options:{projects:preview},appOrigin:'http://app.test',tabs:new Map(),reloading:new Map(),cookieStores:new Map(),overlays:new Set(),window:{contentView:{addChildView(){},removeChildView(){}},getContentBounds:()=>({width:800,height:600}),isFocused:()=>false,isDestroyed:()=>false,webContents:{send(){}}},actions:{send(){}},profile:()=>({settings:{blockingEnabled:false}}),sessionFor:()=>partition,profileAvailable:()=>true,changed(){},disconnect:async()=>{}});
  return {browser,tick(){now+=1000;},views:()=>views};
@@ -77,7 +77,7 @@ test('legacy broker without project capability does not expose activity/visibili
 
 
 test('preview workspace persistence retains validated logical history identities and revision without Chromium state',async()=>{
- const {normalizeSession}=require('../desktop/workspace-session.cjs');
+ const {normalizeSession}=require('../desktop/windows/workspace-session.cjs');
  const history={entries:[{id:'entry-one',url:'https://example.test/one',title:'One',pageState:'private'},{id:'entry-two',url:'https://example.test/two',title:'Two'}],index:1,currentEntryId:'entry-two',revision:7,secret:'private'};
  const session={tabs:[{id:'browser',type:'browser',history}]},saved=normalizeSession(session,{preview:true}).tabs.find(tab=>tab.id==='browser').history;
  assert.deepEqual(saved,{entries:[{url:'https://example.test/one',title:'One',id:'entry-one'},{url:'https://example.test/two',title:'Two',id:'entry-two'}],index:1,currentEntryId:'entry-two',revision:7});

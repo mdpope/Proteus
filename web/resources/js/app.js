@@ -1,7 +1,7 @@
-import { installPageFind } from '../../../public/page-find.js';
+import { installPageFind } from '../../../public/shared/ui/page-find.js';
 import '../../../public/page-find.css';
-import {mountHome} from '../../../public/home.js';
-import {mount as mountHomeMarkdown} from '../../../src/markdown-renderer.js';
+import {mountHome} from '../../../public/shared/ui/home.js';
+import {mount as mountHomeMarkdown} from '../../../src/shared/markdown-renderer.js';
 import {appRequest} from './shared-app.js';
 import {clearChatIndex,clearChatDrafts} from './remote-cache.js';
 import './app-tools.js';

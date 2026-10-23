@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applicationHome } from '../src/files.js';
-import platform from '../desktop/platform.cjs';
+import { applicationHome } from '../src/shared/files.js';
+import platform from '../desktop/services/platform.cjs';
 
 test('Linux data follows absolute XDG paths, with explicit override and unchanged Mac storage', () => {
   const options = { home: '/synthetic/user', platform: 'linux', env: {} };

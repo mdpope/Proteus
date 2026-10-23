@@ -1,15 +1,29 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import {cleanupStack} from './helpers/cleanup.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {SettingsStore} from '../src/settings.js';
-import {ContextStore} from '../src/context.js';
-import {WorkspaceProjects} from '../src/workspace-projects.js';
-import {atomicJSON} from '../src/files.js';
-import {codexSandbox} from '../src/codex.js';
+import {SettingsStore} from '../src/services/settings/settings.js';
+import {ContextStore} from '../src/services/workspaces/context.js';
+import {WorkspaceProjects} from '../src/services/workspaces/workspace-projects.js';
+import {atomicJSON} from '../src/shared/files.js';
+import {codexSandbox} from '../src/providers/codex.js';
+import {TabManagement} from '../src/services/workspaces/tab-management.js';
+import {ContentTabs} from '../src/services/workspaces/content-tabs.js';
+import {Engine} from '../src/engine.js';
+
+test('the common typed-tab move route moves chat membership to a project without changing captured execution access',async t=>{
+ const f=fixture(t),engine=new Engine(f.home,{rehearsal:{async run(){}}});f.cleanup(()=>engine.close());engine.drain=async()=>{};
+ const projects=new WorkspaceProjects(f.home,f.context),contentTabs=new ContentTabs(f.home),catalog=projects.read(),source=catalog.projects[0];
+ projects.projects({action:'create',workspaceId:source.workspaceId,name:'Destination',expectedRevision:catalog.revision},engine);const destination=projects.read().projects.at(-1);
+ const run=engine.createRun({schemaVersion:1,id:'move-chat-fixture',name:'Synthetic chat',provider:'rehearsal',enabled:false,model:'',workspace:{cwd:f.cwd,additionalDirectories:[]},context:{workspaceId:source.workspaceId},cron:'0 9 * * 1-5',timezone:'UTC',misfire:'skip',prompt:'Synthetic test'},'chat');run.workspaceId=source.workspaceId;run.projectId=source.id;engine.persist(run);const before=structuredClone(run.schedule);
+ contentTabs.mutate({scope:'project',id:source.id,expectedRevision:0,operations:[{action:'open',tab:{id:'chat-view',type:'chat',chatId:run.id,title:'Synthetic chat'}}]});
+ const manager=new TabManagement({home:f.home,engine,context:f.context,contentTabs,workspaceProjects:projects});
+ await manager.handle({action:'move',scope:'project',id:source.id,tabId:'chat:'+run.id,expectedRevision:contentTabs.get('project',source.id).revision,destination:{scope:'project',id:destination.id,expectedRevision:0}});
+ assert.equal(run.projectId,destination.id);assert.deepEqual(run.schedule,{...before,context:{...before.context,followsWorkspace:false}});assert.equal(contentTabs.list({type:'chat'}).filter(tab=>tab.chatId===run.id).length,1);
+});
 
 function fixture(t){
  const cleanup=cleanupStack(t);
@@ -58,7 +72,7 @@ test('legacy chat placement gains a project without recreating resources or alte
 });
 
 test('production owner API and remote adapter advertise projects, route creation and preserve preview isolation',async t=>{
- const f=fixture(t),{startServer}=await import('../src/server.js'),{remoteState}=await import('../src/remote.js');
+ const f=fixture(t),{startServer}=await import('../src/server.js'),{remoteState}=await import('../src/services/remote/remote.js');
  const app=await startServer({home:f.home,port:0,timers:false,withSeed:false,providers:{rehearsal:{async run(){}}}});f.cleanup(()=>app.close());app.engine.drain=async()=>{};
  const call=async(route,value)=>{const response=await fetch(app.origin+route,{headers:{authorization:'Bearer '+app.token,'content-type':'application/json'},...(value?{method:'POST',body:JSON.stringify(value)}:{})});return {status:response.status,data:await response.json()};};
  const state=(await call('/api/state')).data;assert.equal(state.desktopPreview,undefined);assert.equal(state.workspaceProjects.enabled,true);assert.equal(app.desktopPreview,null);assert.equal(app.engine.permissions.preserveInheritedDefaults,true);
@@ -90,7 +104,7 @@ test('production owner API and remote adapter advertise projects, route creation
 });
 
 test('project content scopes preserve document origins and reconcile deleted project browser history',async t=>{
- const f=fixture(t),{ContentTabs,workspaceContentScopes}=await import('../src/content-tabs.js'),service=new WorkspaceProjects(f.home,f.context),tabs=new ContentTabs(f.home),engine={listRuns:()=>[]};
+ const f=fixture(t),{ContentTabs,workspaceContentScopes}=await import('../src/services/workspaces/content-tabs.js'),service=new WorkspaceProjects(f.home,f.context),tabs=new ContentTabs(f.home),engine={listRuns:()=>[]};
  const original=service.read();service.projects({action:'create',workspaceId:'default',name:'Temporary',expectedRevision:original.revision},engine);
  const catalog=service.read(),target=catalog.projects[0],source=catalog.projects[1],documentId='a'.repeat(64),file=path.join(f.cwd,'note.md');fs.writeFileSync(file,'# Synthetic document');
  atomicJSON(tabs.sourcesFile,{[documentId]:{chatId:'original-chat',file,extension:'keep'}});
@@ -106,7 +120,7 @@ test('project content scopes preserve document origins and reconcile deleted pro
 
 test('production synchronized navigation retains more than one hundred legacy resources and refuses overflow without truncation',t=>{
  const f=fixture(t),service=new WorkspaceProjects(f.home,f.context),project=service.read().projects[0];
- return import('../src/content-tabs.js').then(({ContentTabs})=>{
+ return import('../src/services/workspaces/content-tabs.js').then(({ContentTabs})=>{
   const tabs=new ContentTabs(f.home),session={tabs:[{id:'project:local:'+project.id,type:'workspace',projectId:project.id,workspaceId:'default'},...Array.from({length:120},(_,i)=>({id:'browser-'+i,type:'browser',url:'https://example.com/'+i,parentId:'project:local:'+project.id}))]};
   tabs.seedWorkspace(session);assert.equal(tabs.get('project',project.id).tabs.length,120);const bytes=fs.readFileSync(tabs.file);tabs.seedWorkspace(session);assert.deepEqual(fs.readFileSync(tabs.file),bytes);
   const tooMany={tabs:[{id:'workspace:local:overflow',type:'workspace',workspaceId:'overflow'},...Array.from({length:1001},(_,i)=>({id:'overflow-'+i,type:'browser',url:'https://example.com/'+i,parentId:'workspace:local:overflow'}))]};
@@ -114,35 +128,35 @@ test('production synchronized navigation retains more than one hundred legacy re
  });
 });
 
-test('passive project migration keeps main chat aliases and child registries with existing revisions',async t=>{
- const f=fixture(t),{ContentTabs}=await import('../src/content-tabs.js'),service=new WorkspaceProjects(f.home,f.context),tabs=new ContentTabs(f.home),project=service.read().projects[0];
+test('project migration retires top-level chat aliases while retaining child registries and their revisions',async t=>{
+ const f=fixture(t),{ContentTabs}=await import('../src/services/workspaces/content-tabs.js'),service=new WorkspaceProjects(f.home,f.context),tabs=new ContentTabs(f.home),project=service.read().projects[0];
  const chat={id:'saved-chat',title:'Synthetic',workspaceId:'default'},browser={id:'browser',type:'browser',title:'Retained',url:'https://example.test/'};
  atomicJSON(tabs.file,{schemaVersion:1,scopes:{'main:main':{revision:680,desktopSeedVersion:2,tabs:[{id:'chat:saved-chat',type:'chat',chatId:chat.id,title:chat.title}]},'chat:saved-chat':{revision:42,desktopSeedVersion:2,tabs:[browser]},'workspace:default':{revision:7,desktopSeedVersion:2,tabs:[{id:'chat:saved-chat',type:'chat',chatId:chat.id,title:chat.title}]}}});
  const main=tabs.get('main','main'),children=tabs.get('chat',chat.id);
  await service.reconcileContentTabs(tabs,{listRuns:()=>[chat]});
- assert.deepEqual(tabs.get('main','main'),main);assert.deepEqual(tabs.get('chat',chat.id),children);
+ assert.equal(tabs.get('main','main').tabs.length,0);assert.equal(tabs.get('main','main').revision,main.revision+1);assert.deepEqual(tabs.get('chat',chat.id),children);
  assert.equal(tabs.get('workspace','default').tabs.length,0);assert.equal(tabs.get('project',project.id).tabs[0].chatId,chat.id);
  const bytes=fs.readFileSync(tabs.file);await service.reconcileContentTabs(tabs,{listRuns:()=>[chat]});assert.deepEqual(fs.readFileSync(tabs.file),bytes);
 });
 
 test('workspace chat migration preserves saved order instead of newest-first run order in one registry commit',async t=>{
- const f=fixture(t),{ContentTabs}=await import('../src/content-tabs.js'),service=new WorkspaceProjects(f.home,f.context),tabs=new ContentTabs(f.home),project=service.read().projects[0];
+ const f=fixture(t),{ContentTabs}=await import('../src/services/workspaces/content-tabs.js'),service=new WorkspaceProjects(f.home,f.context),tabs=new ContentTabs(f.home),project=service.read().projects[0];
  const a={id:'older',title:'Older first',workspaceId:'default'},b={id:'newer',title:'Newer second',workspaceId:'default'},chat=run=>({id:'chat:'+run.id,type:'chat',chatId:run.id,title:run.title}),browser={id:'between',type:'browser',title:'Direct workspace resource',url:'https://example.test/'};
  atomicJSON(tabs.file,{schemaVersion:1,scopes:{'main:main':{revision:680,desktopSeedVersion:2,tabs:[chat(b),chat(a)]},'workspace:default':{revision:70,desktopSeedVersion:2,tabs:[chat(a),browser,chat(b)]},'chat:older':{revision:42,tabs:[{...browser,id:'child'}]}}});
  const main=tabs.get('main','main'),child=tabs.get('chat',a.id),write=tabs.write.bind(tabs);let writes=0;tabs.write=data=>{writes++;write(data);};
  await service.reconcileContentTabs(tabs,{listRuns:()=>[b,a]});
- assert.deepEqual(tabs.get('project',project.id).tabs.map(tab=>tab.chatId),[a.id,b.id]);assert.deepEqual(tabs.get('workspace','default').tabs,[browser]);assert.deepEqual(tabs.get('main','main'),main);assert.deepEqual(tabs.get('chat',a.id),child);assert.equal(writes,1,'Whole relocation has one atomic registry commit');
+ assert.deepEqual(tabs.get('project',project.id).tabs.map(tab=>tab.chatId),[a.id,b.id]);assert.deepEqual(tabs.get('workspace','default').tabs,[browser]);assert.equal(tabs.get('main','main').tabs.length,0);assert.equal(tabs.get('main','main').revision,main.revision+2);assert.deepEqual(tabs.get('chat',a.id),child);assert.equal(writes,1,'Whole relocation has one atomic registry commit');
  const bytes=fs.readFileSync(tabs.file);await service.reconcileContentTabs(tabs,{listRuns:()=>[b,a]});assert.deepEqual(fs.readFileSync(tabs.file),bytes);assert.equal(writes,1);
 });
 
 test('ordered chat relocation validation failure preserves every original scope and revision',async t=>{
- const f=fixture(t),{ContentTabs}=await import('../src/content-tabs.js'),tabs=new ContentTabs(f.home),chat=id=>({id:'chat:'+id,type:'chat',chatId:id,title:id});
+ const f=fixture(t),{ContentTabs}=await import('../src/services/workspaces/content-tabs.js'),tabs=new ContentTabs(f.home),chat=id=>({id:'chat:'+id,type:'chat',chatId:id,title:id});
  atomicJSON(tabs.file,{schemaVersion:1,scopes:{'workspace:default':{revision:70,tabs:[chat('a'),chat('b')]},'project:target':{revision:3,tabs:Array.from({length:999},(_,i)=>chat('existing-'+i))}}});
  const before=fs.readFileSync(tabs.file);assert.throws(()=>tabs.rehouseChats([{chatId:'a',projectId:'target'},{chatId:'b',projectId:'target'}],{preserveMain:true}),/too many/);assert.deepEqual(fs.readFileSync(tabs.file),before);
 });
 
 test('inactive legacy workspace selection migrates through native save to project and original chat',async t=>{
- const f=fixture(t),service=new WorkspaceProjects(f.home,f.context),{default:{WorkspaceSession}}=await import('../desktop/workspace-session.cjs'),parent='workspace:local:default',project='project:local:'+service.read().defaultProjectIds.default;
+ const f=fixture(t),service=new WorkspaceProjects(f.home,f.context),{default:{WorkspaceSession}}=await import('../desktop/windows/workspace-session.cjs'),parent='workspace:local:default',project='project:local:'+service.read().defaultProjectIds.default;
  const store=new WorkspaceSession(f.home,{projects:true,remap:value=>service.remapSession(value)}),source={active:'terminal',tabs:[{id:parent,type:'workspace',workspaceId:'default'},{id:'chat-view',type:'run',runId:'chat',parentId:parent},{id:'terminal',type:'terminal',terminal:{id:'pty'}}],selectedChildren:{[parent]:'chat-view'}};
  store.save(source);const saved=store.get();assert.equal(saved.active,'terminal');assert.equal(saved.selectedChildren[parent],project);assert.equal(saved.selectedChildren[project],'chat-view');assert.equal(saved.tabs.find(tab=>tab.id==='chat-view').parentId,project);assert.deepEqual(store.get(),saved);
 });
@@ -203,7 +217,7 @@ test('whole-project move retains sessions, approval origin, archived chats and r
 });
 
 test('paired saved project views follow a same-ID move without changing resource or authorization identity',async()=>{
- const {remapPreviewProjectSession,remapPreviewBrowserPlacement,resolvePreviewProject}=await import('../public/preview-project-placement.js');
+ const {remapPreviewProjectSession,remapPreviewBrowserPlacement,resolvePreviewProject}=await import('../public/features/workspaces/preview-project-placement.js');
  const catalog={projects:[{id:'project',workspaceId:'gaming',name:'Game'}],workspaces:[{id:'gaming',name:'Gaming'}],projectMoves:{project:[{from:'video',to:'gaming'}]}};
  const hostId='paired-host',parentId='project:'+hostId+':project';
  const route={parentId,destination:{type:'project',id:'project',workspaceId:'video'}};

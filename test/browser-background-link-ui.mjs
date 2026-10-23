@@ -25,6 +25,7 @@ try{
  await select(source);await until(()=>native((main,id)=>main.getBrowser().active===id,source.id),'source selected');
  const click=async(id,url,label)=>native((main,{id,url,label})=>{const browser=main.getBrowser(),menu=browser.actions.menu(browser.get(id),{linkURL:url}),labels=menu.items.map(item=>item.label);menu.items.find(item=>item.label===label).click();return labels;},{id,url,label});
  await native((main,id)=>{const browser=main.getBrowser(),wc=browser.get(id).view.webContents;process.mainModule.require('electron').app.focus({steal:true});browser.window.focus();wc.focus();return wc.executeJavaScript('document.querySelector("#draft").focus();document.querySelector("#draft").value="unfinished local draft";true');},source.id);
+ await page.bringToFront();await native((main,id)=>{const tab=main.getBrowser().get(id),window=main.getWindows().contexts.get(tab.windowId).window;window.show();window.focus();tab.view.webContents.focus();},source.id);
  await until(()=>native((main,id)=>main.getBrowser().get(id).view.webContents.isFocused(),source.id),'native source focus before menu');
  const labels=await click(source.id,origin+'/background','Open Link in Background Tab');assert.deepEqual(labels.slice(0,3),['Open Link in New Tab','Open Link in Background Tab','Open Link in Unloaded Tab']);
  await until(()=>page.evaluate(url=>backgroundFixture.state.tabs.some(tab=>tab.info?.url===url&&tab.info?.loaded&&!tab.info.loading),origin+'/background'),'background loaded');

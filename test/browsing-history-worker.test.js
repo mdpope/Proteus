@@ -1,11 +1,11 @@
 import {assertPrivate} from './helpers/permissions.js';
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {BrowsingHistory} from '../desktop/browsing-history.cjs';
+import {BrowsingHistory} from '../desktop/browser/browsing-history.cjs';
 const until=async predicate=>{for(let i=0;i<100;i++){if(predicate())return;await new Promise(resolve=>setImmediate(resolve));}throw new Error('Synthetic writer did not reach the expected operation');};
 function deferredWriter(){
   const writes=[];return {writes,save(data){return new Promise((resolve,reject)=>writes.push({data:structuredClone(data),resolve,reject}));},close(){}};
@@ -44,7 +44,7 @@ test('history worker preserves unknown document fields and original bytes across
 });
 
 test('closing the history writer directly rejects outstanding saves instead of leaving their promises pending',async t=>{
-  const {HistoryWriter}=await import('../desktop/browsing-history-writer.cjs');
+  const {HistoryWriter}=await import('../desktop/browser/browsing-history-writer.cjs');
   const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-history-close-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
   const writer=new HistoryWriter(path.join(home,'browsing-history.json'));
   const saving=writer.save({version:1,enabled:true,retentionDays:90,items:[]});const rejected=assert.rejects(saving,/closed before saving/);await writer.close();await rejected;

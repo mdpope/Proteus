@@ -37,8 +37,8 @@ implemented second service or permission change; see [planned updates](planned-u
 
 The opt-in desktop design preview uses the same boundaries with a separate data root and app
 identity. `desktop/preview-runtime.cjs` initializes only a fresh marked profile; `src/desktop-preview.js`
-owns experimental projects and discovery registrations. `public/desktop-preview.js` and
-`public/preview-permissions.js` gate presentation on the authenticated preview flag. Normal servers
+owns experimental projects and discovery registrations. `public/shared/navigation/desktop-preview.js` and
+`public/shared/navigation/preview-permissions.js` gate presentation on the authenticated preview flag. Normal servers
 do not expose preview mutation routes. See [desktop preview](desktop-preview.md).
 
 Proteus has four boundaries: file-backed schedules, the runner, provider adapters, and clients.

@@ -1,6 +1,6 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
-import {remoteState} from '../src/remote.js';
-import { LiveBrowser } from '../src/live-browser.js';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
+import {remoteState} from '../src/services/remote/remote.js';
+import { LiveBrowser } from '../src/services/browser/live-browser.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -10,10 +10,10 @@ import { randomUUID } from 'node:crypto';
 import { WebSocket } from 'ws';
 import { startServer } from '../src/server.js';
 import { startRelay } from '../relay/server.js';
-import { atomicJSON } from '../src/files.js';
-import { seal, unseal, secret } from '../src/remote-crypto.js';
+import { atomicJSON } from '../src/shared/files.js';
+import { seal, unseal, secret } from '../src/services/remote/remote-crypto.js';
 import { RemoteClient, until } from './remote-client.mjs';
-import { hostPlatformMetadata } from '../src/host-platform.js';
+import { hostPlatformMetadata } from '../src/shared/host-platform.js';
 
 async function fixture(t, providers) {
   const home = privateTemporaryDirectory(path.join(os.tmpdir(), 'proteus-remote-')); const workspace = path.join(home, 'workspace'); fs.mkdirSync(workspace);
@@ -243,7 +243,7 @@ test('favorites and explicit schedule selections sync across devices without ena
 });
 
 test('remote model options and provider capabilities round trip through encrypted commands', async t => {
-  const { copilotModel }=await import('../src/model-catalog.js');
+  const { copilotModel }=await import('../src/models/model-catalog.js');
   const model=copilotModel({id:'fixture',supportedReasoningEfforts:['none'],billing:{tokenPrices:{maxPromptTokens:100,longContext:{maxPromptTokens:200}}}});
   const {app,connect}=await fixture(t,{copilot:{status:async()=>({available:true,models:[model]}),run:async()=>{}}});
   const client=await connect();const catalog=await client.request('provider.status',{force:true});

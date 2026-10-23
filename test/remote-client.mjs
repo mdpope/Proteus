@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
 import { WebSocket } from 'ws';
-import { seal, unseal, secret } from '../src/remote-crypto.js';
+import { seal, unseal, secret } from '../src/services/remote/remote-crypto.js';
 export const until = async (check, timeout = 8000) => { const end = Date.now() + timeout; while (Date.now() < end) { if (await check()) return; await new Promise(r => setTimeout(r, 20)); } throw new Error('Remote condition timed out.'); };
 export class RemoteClient extends EventEmitter {
   constructor(capsule, device) { super(); this.capsule = capsule; this.device = device; this.incoming = 0; this.outgoing = 0; this.waiting = new Map(); this.events = []; }

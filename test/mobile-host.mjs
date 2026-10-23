@@ -1,4 +1,4 @@
-import { LiveBrowser } from '../src/live-browser.js';
+import { LiveBrowser } from '../src/services/browser/live-browser.js';
 // Synthetic fixture only: never run against an operator's real data directory.
 import http from 'node:http';
 import crypto from 'node:crypto';
@@ -6,12 +6,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { atomicJSON } from '../src/files.js';
-import { secret, seal } from '../src/remote-crypto.js';
+import { atomicJSON } from '../src/shared/files.js';
+import { secret, seal } from '../src/services/remote/remote-crypto.js';
 import { startServer } from '../src/server.js';
-import { RehearsalProvider } from '../src/rehearsal.js';
+import { RehearsalProvider } from '../src/providers/rehearsal.js';
 import { startRelay } from '../relay/server.js';
-import { copilotModel } from '../src/model-catalog.js';
+import { copilotModel } from '../src/models/model-catalog.js';
 import { until } from './remote-client.mjs';
 const fixtureRelayPort=Number(process.env.PROTEUS_TEST_RELAY_PORT||4328),fixtureHTTPPort=Number(process.env.PROTEUS_TEST_HTTP_PORT||4329);
 const fixtureHTTPOrigin='http://127.0.0.1:'+fixtureHTTPPort,fixtureRelayOrigin='ws://127.0.0.1:'+fixtureRelayPort;

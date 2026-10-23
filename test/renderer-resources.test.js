@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {terminalOutputBatch} from '../public/terminal-output.js';
-import {bindRuntimeTimer,disposeRuntimeTimers} from '../public/runtime.js';
-import {firstAssistantKeys} from '../public/chat-history.js';
+import {terminalOutputBatch} from '../public/features/tools/terminal-output.js';
+import {bindRuntimeTimer,disposeRuntimeTimers} from '../public/features/chats/runtime.js';
+import {firstAssistantKeys} from '../public/features/chats/chat-history.js';
 
 test('terminal output batches hidden writes, flushes on reveal and retains every byte in order',()=>{
  const callbacks=new Map(),written=[],delays=[];let visible=false,next=0;

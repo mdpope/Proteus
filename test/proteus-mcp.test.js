@@ -1,4 +1,4 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import {spawn} from 'node:child_process';import {createInterface} from 'node:readline';import {startServer} from '../src/server.js';
 test('external stdio MCP lists/filter tabs and applies revision-checked operations through the authenticated owner service',async t=>{
  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-mcp-test-'));const service=await startServer({home,port:0,timers:false,withSeed:false});t.after(async()=>{await service.close();fs.rmSync(home,{recursive:true,force:true});});

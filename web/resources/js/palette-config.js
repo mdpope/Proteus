@@ -1,4 +1,4 @@
-import {defaultPalette,validatePalette} from '../../../public/palette.js';
+import {defaultPalette,validatePalette} from '../../../public/shared/ui/palette.js';
 
 export function webPaletteConfig(account,storage=globalThis.localStorage){
     const key='proteus.palette.config.v1.'+account;

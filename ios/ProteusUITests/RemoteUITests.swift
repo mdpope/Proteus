@@ -2501,7 +2501,8 @@ final class NativeReleaseFollowupUITests: XCTestCase {
         project.tap(); revealNavigation(); XCTAssertEqual(projectToggle.value as? String, "Expanded")
         let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Workspace and project name auto expansion"; shot.lifetime = .keepAlways; add(shot)
     }
-    @MainActor func testRestoredWorkspaceBrowserSelectionAndSwitching() {
+    @MainActor func testRestoredWorkspaceBrowserSelectionAndSwitching() throws {
+        try XCTSkipIf(UIDevice.current.userInterfaceIdiom != .pad, "This fixture exercises the tablet workspace strip; phone navigation uses its drawer.")
         let app = nativeFixtureApplication()
         app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-long-chat", "--synthetic-workspace-tab-icons", "--synthetic-workspace-browser-selection"]
         app.launch()
@@ -2509,8 +2510,8 @@ final class NativeReleaseFollowupUITests: XCTestCase {
         XCTAssertTrue(workspaces.waitForExistence(timeout: 15)); workspaces.tap()
         let workspace = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Native icon rehearsal")).firstMatch
         XCTAssertTrue(workspace.waitForExistence(timeout: 10)); workspace.tap()
-        let first = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label == %@", "workspace-child-tab-", "First browser page")).firstMatch
-        let third = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label == %@", "workspace-child-tab-", "Third browser page")).firstMatch
+        let first = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label BEGINSWITH %@", "workspace-child-tab-", "First browser page")).firstMatch
+        let third = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label BEGINSWITH %@", "workspace-child-tab-", "Third browser page")).firstMatch
         XCTAssertTrue(first.waitForExistence(timeout: 10))
         XCTAssertEqual(first.value as? String, "Selected")
         XCTAssertTrue(app.webViews.staticTexts["First browser page"].waitForExistence(timeout: 15), "Restoring the highlighted child must show its page, even when the scoped browser selection was different")
@@ -2563,7 +2564,8 @@ final class NativeReleaseFollowupUITests: XCTestCase {
     }
 
     override func setUpWithError() throws { continueAfterFailure = false }
-    @MainActor func testIPadWorkspacePagesAndItemsUseOneContinuousTabStrip() {
+    @MainActor func testIPadWorkspacePagesAndItemsUseOneContinuousTabStrip() throws {
+        try XCTSkipIf(UIDevice.current.userInterfaceIdiom != .pad, "This fixture exercises the tablet workspace strip; phone navigation uses its drawer.")
         let app = nativeFixtureApplication()
         app.launchArguments = ["--reset-pairing", "--native-design-preview", "--synthetic-destinations", "--synthetic-long-chat", "--synthetic-workspace-tab-icons"]
         app.launch()

@@ -1,5 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {toolPresentation,structuredOutput,requestPresentation} from '../public/tool-presentation.js';
+import {toolPresentation,structuredOutput,requestPresentation} from '../public/features/chats/tool-presentation.js';
 test('tool results become bounded tables and facts without credential fields',()=>{const table=structuredOutput(JSON.stringify({items:Array.from({length:30},(_,i)=>({name:'File '+i,status:'ready',token:'private'}))}));assert.equal(table.kind,'table');assert.equal(table.rows.length,20);assert.ok(!JSON.stringify(table).includes('private'));const facts=structuredOutput('{"status":"ready","secret":"private"}');assert.equal(facts.kind,'facts');assert.ok(!JSON.stringify(facts).includes('private'));});
 test('commands, file targets and browser snapshots are readable and raw payloads stay separate',()=>{const p=toolPresentation({name:'bash',arguments:'{"command":"git status","cwd":"/work"}',output:'Clean'});assert.equal(p.command,'git status');assert.ok(p.targets.includes('/work'));const b=structuredOutput('{"url":"https://example.test","title":"Example","snapshot":"Visible page"}');assert.match(JSON.stringify(b),/Visible page/);assert.ok(!JSON.stringify(requestPresentation({kind:'read',path:'/work/readme.md'})).includes('undefined'));});

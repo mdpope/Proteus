@@ -1,7 +1,7 @@
 // Two isolated desktop applications, a disposable encrypted relay, independent cookies.
 import {_electron as electron} from 'playwright';
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import http from 'node:http';import assert from 'node:assert/strict';
-import {startRelay} from '../relay/server.js';import {secret} from '../src/remote-crypto.js';
+import {startRelay} from '../relay/server.js';import {secret} from '../src/services/remote/remote-crypto.js';
 const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'proteus-follow-ui-'))),apps=[],errors=[],followDebug=[];
 const fixture=http.createServer((req,res)=>{const slow=req.url==='/slow'&&req.headers.cookie?.includes('localIdentity=client');res.setHeader('Content-Type','text/html');res.end('<!doctype html><title>Follow '+req.url+'</title><h1>Follow '+req.url+'</h1><a id="native-next" href="/native" style="position:fixed;top:0;left:0">Native navigation</a><div id="fixture-content" style="height:'+(slow?0:8000)+'px;background:linear-gradient(white,green)">Synthetic local page</div>'+(slow?'<script>setTimeout(()=>{document.querySelector("#fixture-content").style.height="8000px";document.documentElement.dataset.ready="true";},3500)</script>':''));});
 await new Promise(resolve=>fixture.listen(0,'127.0.0.1',resolve));const origin='http://follow.test:'+fixture.address().port,token=secret(),relay=await startRelay({port:0,token});

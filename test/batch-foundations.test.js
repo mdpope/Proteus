@@ -1,12 +1,12 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {HistoryWriter} from '../desktop/browsing-history-writer.cjs';
-import {BrowsingHistory} from '../desktop/browsing-history.cjs';
-import {uniqueModels} from '../public/model-choices.js';
+import {HistoryWriter} from '../desktop/browser/browsing-history-writer.cjs';
+import {BrowsingHistory} from '../desktop/browser/browsing-history.cjs';
+import {uniqueModels} from '../public/features/chats/model-choices.js';
 
 test('catalog normalization keeps current metadata without collapsing distinct model IDs',()=>{
  assert.deepEqual(uniqueModels([{id:'a',name:'Shared',controls:{reasoningEfforts:['low']}},{id:'b',name:'Shared'},{id:'a',name:'Latest',controls:{reasoningEfforts:['high']}},{}]),[{id:'a',name:'Latest',controls:{reasoningEfforts:['high']}},{id:'b',name:'Shared'}]);

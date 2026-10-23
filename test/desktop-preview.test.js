@@ -1,12 +1,12 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { seedDesktopPreview, DesktopPreview, assertDesktopPreviewHome, desktopPreviewCodexHome } from '../src/desktop-preview.js';
-import { SettingsStore } from '../src/settings.js';
-import { ContextStore } from '../src/context.js';
+import { SettingsStore } from '../src/services/settings/settings.js';
+import { ContextStore } from '../src/services/workspaces/context.js';
 import { Engine } from '../src/engine.js';
 
 async function fixture(t){

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {approvalDetails} from '../public/chat-details.js';
-import {previewApprovalChoices,previewApprovalRequest,previewRememberChoices,previewRememberDialog,previewRememberEffect,previewPermissionHelp,previewChatModeToggle} from '../public/preview-permissions.js';
+import {approvalDetails} from '../public/features/chats/chat-details.js';
+import {previewApprovalChoices,previewApprovalRequest,previewRememberChoices,previewRememberDialog,previewRememberEffect,previewPermissionHelp,previewChatModeToggle} from '../public/shared/navigation/preview-permissions.js';
 const context={id:'context',workspaceId:'original',mode:'custom',workspaceMode:'custom',folders:[{path:'/synthetic/project',access:'read'}],rules:[],chatFolders:[]};
 test('preview sidebar is one compact destination without workspace mutations or embedded dialogs',()=>{
  const normal=approvalDetails(context),preview=approvalDetails(context,{desktopPreview:true,workspaceName:'Original workspace'});

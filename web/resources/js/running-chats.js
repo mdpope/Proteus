@@ -1,5 +1,5 @@
-import {chatType} from '../../../public/chat-types.js';
-import {hostRunningChatCount} from '../../../public/computer-identity.js';
+import {chatType} from '../../../public/features/chats/chat-types.js';
+import {hostRunningChatCount} from '../../../public/services/remote/computer-identity.js';
 const observations=new Map();
 export function observeRunningChats(hostId,source,state,online=true){
  if(!hostId)return;

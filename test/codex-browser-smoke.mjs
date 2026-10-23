@@ -1,6 +1,6 @@
 // A live model, with a synthetic browser adapter: no external page or operator data is accessed.
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import assert from 'node:assert/strict';
-import {CodexProvider} from '../src/codex.js';import {Engine} from '../src/engine.js';
+import {CodexProvider} from '../src/providers/codex.js';import {Engine} from '../src/engine.js';
 const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-codex-tools-'));let releaseBrowser,called;
 const browser={agent:async args=>{called=args;await new Promise(r=>releaseBrowser=r);return {tabs:[{title:'Synthetic page',url:'https://example.test'}],note:'Synthetic adapter; no website accessed.'};}};
 const context={providerContext:()=>({instructionText:'Use only explicitly requested tools. This is a synthetic integration check.',customAgents:[],disabledLegacyMcp:[],disabledSkills:[],mcpServers:{}})};

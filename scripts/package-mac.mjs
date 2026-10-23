@@ -1,3 +1,4 @@
+import bundleInfo from '../desktop/link-routing/bundle-info.cjs';
 // Local development bundle. Optional existing Apple signing identity keeps OS grants stable.
 // Distribution notarization is separate.
 import { packager } from '@electron/packager';
@@ -46,7 +47,7 @@ verifySource();
 const bundles = await packager({ dir: root, out: process.env.PROTEUS_PACKAGE_OUTPUT || path.join(root, 'dist',...(desktopPreview?['design-preview']:[])), overwrite: true,
   name: appName, executableName: appName, appBundleId,
   platform: 'darwin', arch: process.arch, icon, asar: false,
-  protocols: desktopPreview?[]:[{ name: 'Websites', schemes: ['http','https'] },{ name: 'Proteus Life sign-in', schemes: ['proteus','proteus-desktop'] }],
+  extendInfo: bundleInfo.browserBundleInfo({preview:!!desktopPreview}),
   // Rebuild only our PTY in the copied app. Preserve source Node ABI and vendor signatures.
   afterCopy: [async ({buildPath, electronVersion, arch}) => {
     verifySource();verifyCopied(buildPath);

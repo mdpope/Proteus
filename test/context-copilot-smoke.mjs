@@ -3,9 +3,9 @@ import os from 'node:os';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { ContextStore } from '../src/context.js';
-import { SettingsStore } from '../src/settings.js';
-import { CopilotProvider } from '../src/copilot.js';
+import { ContextStore } from '../src/services/workspaces/context.js';
+import { SettingsStore } from '../src/services/settings/settings.js';
+import { CopilotProvider } from '../src/providers/copilot.js';
 
 if (!process.argv.includes('--run-live')) { console.log('Use --run-live for two synthetic Copilot turns.'); process.exit(0); }
 const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-live-context-')));

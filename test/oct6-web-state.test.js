@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BrowserRemoteClient, importKey, seal, unseal } from '../src/remote-client.js';
-import { toolActivity } from '../src/tool-activity.js';
-import { toolPresentation, activitySummary } from '../public/tool-presentation.js';
-import { normalizeProviderUsage } from '../src/usage.js';
-import { DesktopPeers } from '../src/desktop-peers.js';
-import { CopilotProvider } from '../src/copilot.js';
-import { initChatsIndex, loadChatsIndex, recentChats, attentionChats, reconcileIndexedChat, openIndexedChat } from '../public/chats-index.js';
+import { BrowserRemoteClient, importKey, seal, unseal } from '../src/services/remote/remote-client.js';
+import { toolActivity } from '../src/shared/tool-activity.js';
+import { toolPresentation, activitySummary } from '../public/features/chats/tool-presentation.js';
+import { normalizeProviderUsage } from '../src/services/telemetry/usage.js';
+import { DesktopPeers } from '../src/services/remote/desktop-peers.js';
+import { CopilotProvider } from '../src/providers/copilot.js';
+import { initChatsIndex, loadChatsIndex, recentChats, attentionChats, reconcileIndexedChat, openIndexedChat } from '../public/features/chats/chats-index.js';
 const hostId='11111111-1111-4111-8111-111111111111',deviceId='22222222-2222-4222-8222-222222222222',keyHex='a'.repeat(64),challenge='b'.repeat(64);
 class Socket extends EventTarget {
   readyState=1;

@@ -1,11 +1,11 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
-import {chatResourcePlacement} from '../public/chat-resource-placement.js';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
+import {chatResourcePlacement} from '../public/features/chats/chat-resource-placement.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
 import {Engine} from '../src/engine.js';
-import {chatMembership} from '../public/chat-membership.js';
-import {permissionContext} from '../src/permissions.js';
+import {chatMembership} from '../public/features/chats/chat-membership.js';
+import {permissionContext} from '../src/services/settings/permissions.js';
 test('moving an active chat preserves pending input, session, execution roots and approval identity across restart',async()=>{
  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-membership-')),engine=new Engine(home);
  try{

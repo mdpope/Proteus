@@ -22,9 +22,9 @@ try{
  await page.getByRole('button',{name:'↓ Jump to latest'}).click();
  assert.ok(Number(await pane.getAttribute('data-event-start'))>2400,'Jump to latest releases older rendered rows without deleting their cached history');
  const end=await pane.evaluate(p=>({gap:p.scrollHeight-p.clientHeight-p.scrollTop,last:p.querySelector('[data-key="event-2506"]')?.getBoundingClientRect().bottom,bottom:p.getBoundingClientRect().bottom}));assert.ok(end.gap<5,JSON.stringify(end));
- const followed=await pane.evaluate(async root=>{const {captureConversationPosition,applyConversationPosition}=await import('/conversation.js');const applied=await applyConversationPosition(root,{key:'event-2400',index:2400,offset:8,follow:false});const position=captureConversationPosition(root);return {applied,key:position.key,offset:position.offset};});assert.equal(followed.applied,true);assert.equal(followed.key,'event-2400');assert.ok(Math.abs(followed.offset-8)<2);
+ const followed=await pane.evaluate(async root=>{const {captureConversationPosition,applyConversationPosition}=await import('/features/chats/conversation.js');const applied=await applyConversationPosition(root,{key:'event-2400',index:2400,offset:8,follow:false});const position=captureConversationPosition(root);return {applied,key:position.key,offset:position.offset};});assert.equal(followed.applied,true);assert.equal(followed.key,'event-2400');assert.ok(Math.abs(followed.offset-8)<2);
  const readiness=await page.evaluate(async()=>{
-  const {conversation,captureConversationPosition,applyConversationPosition,restoreConversationPosition,forgetConversation}=await import('/conversation.js');
+  const {conversation,captureConversationPosition,applyConversationPosition,restoreConversationPosition,forgetConversation}=await import('/features/chats/conversation.js');
   const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms)),wait=async predicate=>{for(let attempt=0;attempt<200;attempt++){if(predicate())return;await pause(10);}throw Error('Conversation restoration did not settle');};
   const roots=[],ids=[],position=index=>({key:'event-'+index,index,offset:8,follow:false}),events=(start,count)=>Array.from({length:count},(_,index)=>({role:'user',text:'Restoration marker '+(start+index)+' '+'. '.repeat(80)}));
   const fixture=(name,{start=0,count=240,loadEarlier=async()=>{}}={})=>{const root=document.createElement('section');root.style.cssText='position:fixed;inset:0 auto auto 0;width:600px;height:320px;display:flex;flex-direction:column;z-index:1000;background:white';document.body.append(root);roots.push(root);const id='restoration-'+name;ids.push(id);const run={id,eventStart:start,eventCount:start+count,events:events(start,count)},options={loadEarlier,time:()=>'',copy:()=>{}};return {root,run,mount:()=>conversation(root,run,options)};};
@@ -42,7 +42,7 @@ try{
   }finally{for(const root of roots)root.remove();for(const id of ids)forgetConversation(id);}
  });assert.deepEqual(readiness,{delayed:true,lateEvent:true,newestWins:true,abortedFollow:true,humanFollow:true,scopedFollow:true,inflightCancelled:true,failedReads:1});
  const retained=await page.evaluate(async()=>{
-  const {replaceChatMarkup}=await import('/chat-dom.js');const target=document.createElement('section');document.body.append(target);
+  const {replaceChatMarkup}=await import('/features/chats/chat-dom.js');const target=document.createElement('section');document.body.append(target);
   const markup=value=>'<div class="remote-messages"><article data-event-key="4"><p>Stable selected words</p><details><summary>Details</summary>Retained details</details></article></div><form id="remote-composer"><textarea name="prompt">'+value+'</textarea></form>';
   replaceChatMarkup(target,markup('draft'),'host:chat');const row=target.querySelector('article'),input=target.querySelector('textarea'),details=row.querySelector('details'),text=row.querySelector('p').firstChild;
   input.focus();input.setSelectionRange(1,3);details.open=true;replaceChatMarkup(target,markup('draft continues'),'host:chat');

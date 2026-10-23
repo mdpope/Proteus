@@ -1,6 +1,6 @@
 // Opt-in live desktop acceptance: install/grant the backends first. Only a disposable window is controlled.
 import {_electron} from 'playwright';
-import {DesktopControl,desktopTools} from '../src/desktop-control.js';
+import {DesktopControl,desktopTools} from '../src/services/remote/desktop-control.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';

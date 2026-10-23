@@ -1,3 +1,18 @@
+## Next release — October 23 feature queue (source candidate; rollout held)
+
+- Preserve Keep Screen Awake across restarts; make the ordinary loaded-browser budget configurable in Engine Room (default 6), and retain Persisted pages through hiding, restoration and memory eviction.
+- Move iOS browser-cache serialization/encryption/writes off the main actor and isolate chat scroll measurements from observable history state. Preserve the baseline navigation acknowledgment and deep workspace/project selection fixes.
+- Support consented question-reply attachments across Copilot, Codex and Claude; keep attachment chips above provider/model controls. Show stalled provider/tool progress independently of user messages and interrupt a turn after 30 minutes without observable progress while preserving its queue.
+- Default configured working folders to read/write, retain explicit read-only overrides and protected metadata, and expose folder access selection. Honor the configured browser preference for host-managed sign-in links through required core guidance.
+- Add profile-name title suffixes, meaningful provisional hidden-tab titles, project tab text/type filtering and clearer unloaded-page colors. Scheduled tasks open their own needed tabs beside their chat.
+- Add macOS HTTP/HTTPS registration controls, a green workspace/project link picker and ordered URL rules adapted from SafariSelector. Registration/default changes remain explicit UI actions; Apple's recorded entitlement review is separate.
+- Normalize signed desktop release feeds/staging for macOS, Linux and Windows; add Engine Room update-coordinator defaults and unassigned destination coordinators. Publishing, installation and remote dispatch remain held; iOS stays Mac-guided.
+- Organize native, desktop and shared web code into feature, model, service and shared folders, with architecture/commentary guidance.
+- Route terminal clipboard paths through bracketed paste with consistent newlines. Add an explicit robot sharing button and bounded, revocable agent output/input tools with stable input receipts.
+- Use a shared workspace/project destination menu for chat, browser, document, terminal and bulk moves, initially positioned at the current location. Keep chat membership and resource ownership operations distinct behind that common UI.
+- Open associated chats inside their current project/workspace from global lists, links, notifications, creation and restored navigation, preserving live chat/child identity and drafts.
+- Keep native link-menu creation in its originating window. Synchronize project content independently of focused input; preserve separate local window selection, address drafts and filtered tab lists.
+
 ## Unreleased — October 23 local corrections; desktop rollout resumed
 
 - Acknowledge each native browser navigation receipt before a following metadata batch can race another desktop's address edit. Preserve exact selection, complete history and profile guards.

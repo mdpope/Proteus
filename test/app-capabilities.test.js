@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {captureAppCapabilities} from '../src/app-capabilities.js';import {proteusOrientation} from '../public/proteus-orientation.js';import {appInstructions} from '../src/document-tools.js';import {browserTools} from '../src/browser-tools.js';import {codexToolContent,mcpToolResult,modelToolResult} from '../src/tool-results.js';
+import {captureAppCapabilities} from '../src/services/chats/app-capabilities.js';import {proteusOrientation} from '../public/shared/ui/proteus-orientation.js';import {appInstructions} from '../src/services/chats/document-tools.js';import {browserTools} from '../src/services/browser/browser-tools.js';import {codexToolContent,mcpToolResult,modelToolResult} from '../src/shared/tool-results.js';
 test('required guidance stays independent of optional source selection and inventory distinguishes deferred/selected tools',()=>{
  assert.equal(appInstructions,proteusOrientation.text);assert.match(appInstructions,/workspace/i);assert.match(appInstructions,/question/i);
  const run={};let updates=0;captureAppCapabilities(run,[{name:'proteus_browser',description:'Browser',defer:'never'},{name:'proteus_developer',description:'Developer',defer:'auto'}],()=>updates++,['proteus_browser']);

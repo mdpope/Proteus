@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {installPageFind} from '../public/page-find.js';
+import {installPageFind} from '../public/shared/ui/page-find.js';
 
 const settle=async()=>{for(let i=0;i<6;i++)await Promise.resolve();};
 const deferred=()=>{let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject};};

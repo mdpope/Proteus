@@ -1,11 +1,11 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ContextStore } from '../src/context.js';
-import { revision } from '../src/schedules.js';
+import { ContextStore } from '../src/services/workspaces/context.js';
+import { revision } from '../src/services/scheduling/schedules.js';
 
 function fixture(t) {
   const root = fs.realpathSync(privateTemporaryDirectory(path.join(os.tmpdir(), 'proteus-mcp-batch-rehearsal-')));

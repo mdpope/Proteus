@@ -2,7 +2,7 @@
 
 This document preserves the original database adapters, setup tooling and validation record.
 **The desktop application no longer opens these profiles or exposes these setup controls.**
-Current client behavior is in [Life](life.md). `src/life-admin.js` is explicit administrator/test
+Current client behavior is in [Life](life.md). `src/services/life/life-admin.js` is explicit administrator/test
 code; production schema upgrades belong to the website deployment workflow. Existing private
 profiles and credentials are retained for recovery, without automatic connections or migrations.
 
@@ -61,7 +61,7 @@ with Laravel-compatible tables and migration history and one device-local owner/
 Website passwords, Passport keys, emails and live credentials are not provisioned. Proteus's
 host/device authorization protects this local installation.
 
-`src/life-schema.json` is schema only, generated from a disposable database running the original
+`src/services/life/life-schema.json` is schema only, generated from a disposable database running the original
 13 Laravel migrations at upstream commit `af7d28abfb9f6004931523c83c109b7e1035d287`.
 It contains no source database rows. Native schema version 2 adds only `proteus_life_schema` and
 `proteus_life_mutations`, with a checksum and per-user/workspace retry ledger. It changes no

@@ -1,6 +1,6 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
-import {ContentTabs} from '../src/content-tabs.js';import {TabManagement} from '../src/tab-management.js';import {Engine} from '../src/engine.js';import {ContextStore} from '../src/context.js';import {SettingsStore} from '../src/settings.js';import {chatMembership} from '../public/chat-membership.js';
+import {ContentTabs} from '../src/services/workspaces/content-tabs.js';import {TabManagement} from '../src/services/workspaces/tab-management.js';import {Engine} from '../src/engine.js';import {ContextStore} from '../src/services/workspaces/context.js';import {SettingsStore} from '../src/services/settings/settings.js';import {chatMembership} from '../public/features/chats/chat-membership.js';
 function fixture(t){const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-manager-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));const settings=new SettingsStore(home,home),context=new ContextStore(home,settings),engine=new Engine(home),contentTabs=new ContentTabs(home);t.after(()=>engine.close());return {home,settings,context,engine,contentTabs};}
 test('moving browser, terminal and viewer descriptors preserves identity, history, dates and source authority',async t=>{
  const service=fixture(t),manager=new TabManagement(service),source='default',created=service.context.copyWorkspace(source,'Target',service.context.get().revision),target=created.copiedWorkspaceId;

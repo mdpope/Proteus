@@ -1,9 +1,9 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
 import {startServer} from '../src/server.js';
-import {atomicJSON} from '../src/files.js';
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
-import {updateCoordinatorConfiguration,updateCoordinatorPrompt} from '../src/update-coordinator.js';
+import {atomicJSON} from '../src/shared/files.js';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
+import {updateCoordinatorConfiguration,updateCoordinatorPrompt} from '../src/services/updates/update-coordinator.js';
 const model={id:'fixture',name:'Synthetic model',controls:{reasoningEfforts:['high'],serviceTiers:[{id:'priority'}],contextTiers:[{id:'default'}]}};
 test('update defaults are explicit and validated against current provider metadata',async()=>{
  const saved={provider:'codex',model:'fixture',reasoningEffort:'high',serviceTier:'priority'},catalogs={codex:{get:async()=>({models:[model]})}};

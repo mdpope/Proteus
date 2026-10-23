@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {ContentTabs,contentTabMembershipLimits} from '../src/content-tabs.js';
-import {fileStamp} from '../src/file-stamp.js';
-import {atomicJSON} from '../src/files.js';
+import {ContentTabs,contentTabMembershipLimits} from '../src/services/workspaces/content-tabs.js';
+import {fileStamp} from '../src/shared/file-stamp.js';
+import {atomicJSON} from '../src/shared/files.js';
 import {startServer} from '../src/server.js';
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import {cleanupStack} from './helpers/cleanup.js';
 
 function fixture(t){const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-follow-membership-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));return {home,tabs:new ContentTabs(home)};}

@@ -1,3 +1,20 @@
+## October 23 — question attachments, liveness and shared terminals
+
+All three providers expose consented question attachments through `proteus_question_attachments`:
+the ordinary text reply names the request ID and the active chat's tool returns the exact approved
+PNG/JPEG/WebP/text bytes. Cross-chat/device/provider access and changed-content replay fail.
+Images use each adapter's structured image result transport. Adapter-boundary tests cover all
+three; live model/image interpretation remains release acceptance.
+
+Run liveness tracks provider output and tool transitions independently of user edits/queued input.
+After five minutes without observable progress the UI shows the stage and elapsed warning;
+after thirty minutes the engine interrupts once. The execution slot stays occupied until the
+provider actually settles; no automatic replay or replacement session is created. Queued messages
+remain intact for explicit recovery. The reported old stuck chat's precise hung call is unproven.
+
+When the host desktop is available, all three provider catalogs expose `proteus_terminal` through
+the same explicit live sharing boundary as local MCP. See [terminals](terminals.md).
+
 # Provider boundary
 
 ## 0.2.28 — MCP approval routing and Claude steering
@@ -65,7 +82,7 @@ provider constraints. No arbitrary Proteus chat-count cap is introduced.
 
 ## Allowance refresh: current behavior and queued review
 
-As reviewed October 5, `ProviderUsageCache` in `src/usage.js` refreshes all three adapters on
+As reviewed October 5, `ProviderUsageCache` in `src/services/telemetry/usage.js` refreshes all three adapters on
 request, coalesces concurrent calls, and caches the result for five minutes; force bypasses TTL.
 It has no active-chat versus idle policy and no independent host usage timer. Desktop asks every
 minute while allowance is enabled. Visible website shell/remote views ask every minute, and the
@@ -149,7 +166,7 @@ Sources: [Copilot SDK Node reference](https://github.com/github/copilot-sdk/blob
 
 ## Codex
 
-`src/codex.js` speaks the native Codex app-server JSON-RPC protocol over private stdio. It starts
+`src/providers/codex.js` speaks the native Codex app-server JSON-RPC protocol over private stdio. It starts
 its own runtime process, uses the existing Codex CLI sign-in, and never controls the Codex desktop
 app's active tasks. It finds a standard installed CLI or accepts `PROTEUS_CODEX_PATH`. Install the
 CLI or Codex app and run `codex login` on the Mac if Providers reports no account. The runtime owns
@@ -237,7 +254,7 @@ artifacts, native UI/device delivery and installed acceptance remain separate.
 
 ## Claude Code
 
-`src/claude.js` owns a private native Claude Code process for each Proteus turn. It discovers a
+`src/providers/claude.js` owns a private native Claude Code process for each Proteus turn. It discovers a
 standard CLI installation or the Claude desktop app's downloaded native CLI; `PROTEUS_CLAUDE_PATH`
 can select another executable. Native session IDs are retained and resumed explicitly. No desktop
 app conversation is reused. Sign in to the CLI with `claude auth login`; installing or signing in

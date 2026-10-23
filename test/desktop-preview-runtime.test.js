@@ -1,5 +1,5 @@
 import {assertPrivate} from './helpers/permissions.js';
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -8,7 +8,7 @@ import path from 'node:path';
 import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url);
 const {initializePreviewRoot,configureDesktopPreview,stageCodexAuthentication,preparePreviewFixtures}=require('../desktop/preview-runtime.cjs');
-const {normalizeSession}=require('../desktop/workspace-session.cjs');
+const {normalizeSession}=require('../desktop/windows/workspace-session.cjs');
 const fixture=t=>{const root=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-preview-runtime-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));return root;};
 
 test('preview opt-in uses a distinct named profile and leaves ordinary launches alone',t=>{

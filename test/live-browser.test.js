@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {LiveBrowser} from '../src/live-browser.js';
+import {LiveBrowser} from '../src/services/browser/live-browser.js';
 
 function fixture() {
   let now=100000,revision=1,available=true,captures=0,release;

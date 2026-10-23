@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {performance,monitorEventLoopDelay} from 'node:perf_hooks';
-import {BrowserHistory} from '../src/browser-history.js';
+import {BrowserHistory} from '../src/services/browser/browser-history.js';
 const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-history-50k-'));
 const now=Date.now(),day=86400000,sha=value=>createHash('sha256').update(value).digest('hex');
 const legacyFile=path.join(home,'browsing-history.json');

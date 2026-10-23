@@ -1,53 +1,53 @@
 # October 23 next-release implementation
 
-Operator authorized implementing all twenty intake items on October 23. Work is isolated on
-`codex/oct23-next-release`. Release packaging, installation, OS default-browser changes,
-publishing, and rollout remain held. The linked ongoing update conversation is
-`codex://threads/2500d184-9574-546d-ba2d-280c206a84ba`; its current source checkout is
-the primary Proteus checkout. This worktree started from its clean committed checkpoint
-`637f1d5`. The older `codex/stabilize-project-follow` worktree is an ancestor with no
-missing commits. Recheck the primary branch and the linked thread before integration.
+Operator authorized implementing the intake and follow-ups on `codex/oct23-next-release`.
+Release packaging, installation, OS defaults, publishing and rollout remain held. Simulator
+tests, disposable desktop previews and scratch web compilation are validation only.
 
-## Progress
+The linked update chat is `codex://threads/2500d184-9574-546d-ba2d-280c206a84ba`. Its current
+checkout is primary Proteus. This branch includes its latest clean committed source,
+`19e8c098d8fc377ccf270d847c764937fef0c278`; the older performance worktree is an ancestor with
+no missing commits. The final application-source check still matches this commit. The other chat has uncommitted
+documentation updates; those edits remain untouched in its checkout. Implementation checkpoint
+`961af16` precedes the final organization and terminal/menu follow-ups. Recheck before integration.
 
-All rows remain subject to integrated verification. Existing baseline behavior must be
-tested rather than needlessly reimplemented.
-
-| # | Scope | Current work |
+| # | Item | Implementation and verification |
 | --- | --- | --- |
-| 1 | iOS browser/chat scrolling | Audit baseline performance fixes; native validation pending |
-| 2 | Cross-device URL/history | Baseline includes navigation acknowledgment fix; regression verification pending |
-| 3 | Keep Screen Awake | Preference saved; shutdown releases assertion without clearing preference; unit checked |
-| 4 | Question attachments | Pending implementation across provider/transport/UI boundaries |
-| 5 | New-chat selection | Baseline audit and regression pending |
-| 6 | Browser profile suffix | Presentation helper added; cross-surface/native verification pending |
-| 7 | Hidden-tab titles | Link text and tool title input added; verification pending |
-| 8 | Project tab filter | Combined type/title/URL controls added; UI verification pending |
-| 9 | Unloaded colors | Shared palette styling added; UI verification pending |
-| 10 | Schedule-owned browser tabs | Required orientation/tool guidance added; placement validation pending |
-| 11 | Attachments above controls | Separate new-chat row added; responsive UI verification pending |
-| 12 | Auth browser preference | Guidance added; host launcher change and validation pending |
-| 13 | Working folder access | Pending implementation and permission tests |
-| 14 | Stalled run detection | Baseline recovery exists; liveness/timeout and diagnostics pending |
-| 15 | Workspace/project restoration | Baseline includes deep selection memory; regression verification pending |
-| 16 | Persisted pages | Project restore, Hide, and explicit-unload paths corrected; lifecycle UI/native checks pending |
-| 17 | Coordinated desktop updates | Pending defaults, dispatch, hosted feed normalization and tests; no publishing authorized |
-| 18 | Code organization/docs | New routing feature has focused modules; broader organization pending |
-| 19 | Loaded-tab budget | Actual baseline is 6; numeric per-machine setting added; unit checked |
-| 20 | macOS link picker/rules | Isolated implementation added; integration, UI, registration and rule tests ongoing |
+| 1 | iOS scrolling | Cache serialization/encryption/atomic writes use a serial utility queue; scroll measurements no longer publish whole-history state. Native units/simulator scrolling pass. Physical frame-rate profiling remains acceptance. |
+| 2 | URL/history sync | Latest baseline navigation-acknowledgment fix retained; Node/native identity/history reconciliation regressions pass. Physical cross-device acceptance remains separate. |
+| 3 | Keep Screen Awake | Preference restored across restart; quit releases assertion without clearing preference. Unit verified. |
+| 4 | Question attachments | Desktop/web/native reviewed PNG/JPEG/WebP/text replies; exact question/chat/device/provider consent and structured results across all three providers. Replay/cleanup units pass. Live image interpretation remains acceptance. |
+| 5 | New-chat selection | Baseline fix retained; real project Tabs → new rehearsal chat → workspace return passes. |
+| 6 | Profile suffix | Display-only `[Profile name]` across desktop/web/native; saved page/history titles unchanged. Model checks/native compile pass. |
+| 7 | Hidden titles | Source link text supplies provisional title; tool open accepts `title`; page loading replaces provisional title. Menu/tool checks pass. |
+| 8 | Tab filtering | Combined type/title/URL filtering on desktop/native; desktop proves order/identity unchanged. |
+| 9 | Unloaded colors | New-tab palette and readable unloaded text/buttons. Disposable UI verified. |
+| 10 | Scheduled browser tabs | Required guidance/default placement opens needed tabs beside the scheduled chat, including unassigned schedules. Placement units pass; no real schedule changed. |
+| 11 | Attachment footer | Separate row above provider/model controls, including preview overrides. Narrow/wide long-draft and pending-question desktop checks pass. |
+| 12 | Auth browser preference | Host sign-in launcher and required guidance honor system/embedded preference. Unit verified; independent CLI authentication remains a provider limitation. |
+| 13 | Folder access | Working roots default read/write; explicit read-only/protected metadata/enforced restrictions win. Read / Read-write UI; permission regressions and actual native Codex profile probe pass. |
+| 14 | Stuck chat | Provider/tool progress is separate from user messages. Warn at five minutes; interrupt once at thirty; retain queue/slot until actual settlement. All-three-provider engine regressions pass. Historical hung-call cause remains unproven; old chat was inspected without mutation. |
+| 15 | Return selection | Baseline deep selection retained; real desktop restart and tablet browser switching pass. |
+| 16 | Persisted residency | Restore/Hide/eviction keep Persisted pages loaded; Unload requires Unpersist. Real desktop residency/native WebView units pass. |
+| 17 | Desktop updates | Common signed downloads.proteus.example feed/staging for Mac/Linux/Windows; Engine Room coordinator defaults; unassigned target coordinators/durable dispatch. Feed/staging/config tests pass. No publishing/dispatch/install; actual destination migration/update acceptance remains. |
+| 18 | Organization | Native, Node, Electron and shared renderer feature/model/service folders, imports/manifests/workers/preloads/Xcode groups/test URLs updated. [Architecture/commentary conventions](code-organization.md) cite Apple/Google/Microsoft. Node/native/web/desktop checks pass. |
+| 19 | Loaded-tab budget | Per-machine Engine Room value 1–256, actual default 6. Units pass; protected/active pages can exceed it. |
+| 20 | macOS browser/picker | HTTP/HTTPS declarations; explicit registration/default/repair UI; green workspace/project picker, keyboard filtering and ordered URL rules. Unit/real picker checks pass. Installed-app registration is held. Recorded Apple request TGNRQJ22PP remains pending, separate from LaunchServices; no live status recheck. |
+| 21 | Terminal paste | Both focus targets/context paste use bracketed paste and consistent newlines. Real chat-copy/native Cmd+V/PTY round trip passes. Exact additional reported symptom awaits an example. |
+| 22 | Terminal agent access | Explicit robot button; common host tool across three providers/local MCP; bounded output, owner-bound snapshots, idempotent input, revocation, no restored grants. Unit and real desktop/PTY checks pass. |
+| 23 | Common move menu | Shared desktop/web destination component and native picker. Single/bulk/chat/resource entry points start at current project. Typed chat moves use membership operations. Shared-menu/retry/history/source-authority UI and native grouping units pass. |
+| 24 | Associated chat home | Global chat lists, links, notifications, creation and saved views reuse the chat inside its current project/workspace. Main aliases are retired from the canonical registry without changing chat/child identities or captured access. Local/remote reconciliation units and real global-list/deep-link/restart/draft/child checks pass. Unassigned chats may remain top-level. |
+| 25 | Window routing and sync | Native menu callbacks re-enter their source window. Scope-specific passive tab events synchronize content while input is focused; local windows retain independent selection/reading state. Address drafts and filtered Tabs lists survive passive changes. A real two-window test passes all three link actions, ordered membership, selection/draft/filter retention and hidden no-load behavior. |
 
-## Validation so far
+Validation includes the complete Node suite and syntax checks, 143 native units, two tablet UI
+checks, scratch Vite compilation and real desktop checks for link routing, attachment layout,
+workspace restart, tab filtering/new-chat selection, residency, terminal clipboard/access and moves.
+The complete Node suite passes: 1,111 passed, one skipped, zero failures. Recursive syntax checks and Vite compilation also pass. Tablet fixtures initially failed on the
+phone because they require tablet navigation; they now skip that pairing and both pass on iPad.
+The broader interrupted UI run remains an incomplete result, not a suite pass.
 
-- Thirteen focused rule/store/window-selection/registration/keep-awake/retention tests pass.
-- Existing sixteen focused browser/retention/keep-awake/reorder tests passed before the new tests.
-- Static JavaScript checks passed before the latest routing integration; rerun at integration.
-- Temporary test files must use a writable task-local TMPDIR in the restricted environment.
-- No release artifacts built, default browser changed, app installed, or update dispatched.
-
-The external-link matcher follows SafariSelector host/glob rules, but fixes its plain-path
-substring fallback: `example.com/team` must not route `example.com/teammate`. The picker
-ports its keyboard behavior and type scale; it resolves actual workspace/project identities,
-uses green surfaces, and uses the existing owner process without a Safari extension.
-
-Apple's recorded browser/passkey entitlement request is pending. This is separate from
-LaunchServices HTTP/HTTPS registration. No duplicate Apple request should be submitted.
+Fixtures use `/private/tmp`; preview guards remain strict. No installed app, real browser profile,
+credentials, chat state or schedule was edited. SafariSelector-derived matcher/picker behavior
+retains GPL notices in `docs/licenses/` and desktop third-party notices. `/team` does not match
+`/teammate`. No duplicate Apple request or remote update was performed. Required live-device,
+provider, OS-registration and update acceptance is not implied by local tests.

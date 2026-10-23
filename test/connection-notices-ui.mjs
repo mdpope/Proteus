@@ -22,7 +22,7 @@ try{
  assert.ok(await app.evaluate(()=>globalThis.noticeFixture.reads)>0);
  const before=await app.evaluate(()=>{globalThis.noticeFixture.offline=true;return globalThis.noticeFixture.reads;});
  await page.waitForTimeout(4000);assert.ok(await app.evaluate(()=>globalThis.noticeFixture.reads)>before);assert.equal(await page.locator('#toast').isVisible(),false,'background disconnect does not raise a toast');
- await page.evaluate(async()=>{const {createToast}=await import('/toast.js');window.testNotice=createToast(document.querySelector('#toast'),{duration:700,repeatWindow:1200});window.testNotice("Error invoking remote method 'proteus:desktop-peers': Error: Reconnecting automatically.");});
+ await page.evaluate(async()=>{const {createToast}=await import('/shared/ui/toast.js');window.testNotice=createToast(document.querySelector('#toast'),{duration:700,repeatWindow:1200});window.testNotice("Error invoking remote method 'proteus:desktop-peers': Error: Reconnecting automatically.");});
  assert.equal(await page.locator('#toast [role=status]').innerText(),'Reconnecting automatically.');
  for(let i=0;i<4;i++){await page.waitForTimeout(220);await page.evaluate(()=>window.testNotice('Reconnecting automatically.'));}
  assert.equal(await page.locator('#toast').isVisible(),false,'duplicate notices do not reset expiry');

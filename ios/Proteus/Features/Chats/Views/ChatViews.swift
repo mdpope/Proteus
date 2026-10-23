@@ -919,7 +919,7 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
             ForEach(shared.orderedChatChildren(in: chatBrowserScope, documentIDs: documents.map(\.id)), id: \.self) { childID in
                 HStack {
                     if let tab = shared.tabs(in: chatBrowserScope).first(where: { $0.id == childID }) {
-                        Button { if NativePhonePreview.enabled { phoneChrome.captureCurrent() }; shared.select(tab.id, in: chatBrowserScope); selectedChild = tab.id; shared.selectChatChild(tab.id, for: chatBrowserScope) } label: { NativeContentTabLabel(title: tab.title, symbol: NativeTabSymbol.name(kind: "browser")) }.lineLimit(1).accessibilityLabel(tab.title)
+                        Button { if NativePhonePreview.enabled { phoneChrome.captureCurrent() }; shared.select(tab.id, in: chatBrowserScope); selectedChild = tab.id; shared.selectChatChild(tab.id, for: chatBrowserScope) } label: { NativeContentTabLabel(title: shared.browserLabel(tab), symbol: NativeTabSymbol.name(kind: "browser")) }.lineLimit(1).accessibilityLabel(tab.title)
                             .accessibilityIdentifier("chat-browser-tab-" + (tab.contentTabId ?? tab.id))
                             .accessibilityValue(selectedChild == tab.id ? "Active" : "Inactive")
                         Button { closeChild(tab.id) } label: { Image(systemName: "xmark").font(.caption2) }.accessibilityLabel("Close " + tab.title)

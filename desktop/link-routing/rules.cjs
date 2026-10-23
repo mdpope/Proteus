@@ -1,6 +1,6 @@
 // Adapted from SafariSelector/Core/Config.swift (SafariSelector contributors,
 // GPL-3.0-or-later): host/subdomain, glob, and host/path routing semantics.
-const {webURL}=require('../external-urls.cjs');
+const {webURL}=require('../services/external-urls.cjs');
 
 /** Bounded shell glob matching without regex backtracking. Plain text is a substring. */
 function glob(pattern,subject){

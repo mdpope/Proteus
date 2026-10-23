@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { defaultHome, readJSON } from './files.js';
-import { ScheduleStore, validateSchedule, revision } from './schedules.js';
+import { defaultHome, readJSON } from './shared/files.js';
+import { ScheduleStore, validateSchedule, revision } from './services/scheduling/schedules.js';
 
 const [command, file] = process.argv.slice(2);
 try {

@@ -1,12 +1,12 @@
 import {assertPrivate} from './helpers/permissions.js';
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {BrowsingHistory} from '../desktop/browsing-history.cjs';
-import {historyTimestamp,historyDevice} from '../public/browser-home.js';
+import {BrowsingHistory} from '../desktop/browser/browsing-history.cjs';
+import {historyTimestamp,historyDevice} from '../public/features/browser/browser-home.js';
 const hostId='11111111-1111-4111-8111-111111111111';
 function home(t){const folder=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-visit-metadata-'));t.after(()=>fs.rmSync(folder,{recursive:true,force:true}));return folder;}
 test('visit timestamp and configured device identity persist without rewriting older names',async t=>{

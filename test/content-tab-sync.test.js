@@ -1,13 +1,13 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {createRequire} from 'node:module';
-import {ContentTabs,contentTab} from '../src/content-tabs.js';
-import {normalizeContentTabDescriptor,normalizeContentTabHistory,sameContentTab,acknowledgesBrowserNavigation} from '../public/content-tab-descriptor.js';
-import {createTabSynchronizer,rebaseTabChanges,tabChanges,syncableTabURL} from '../public/content-tab-sync.js';
+import {ContentTabs,contentTab} from '../src/services/workspaces/content-tabs.js';
+import {normalizeContentTabDescriptor,normalizeContentTabHistory,sameContentTab,acknowledgesBrowserNavigation} from '../public/models/content-tab-descriptor.js';
+import {createTabSynchronizer,rebaseTabChanges,tabChanges,syncableTabURL} from '../public/models/content-tab-sync.js';
 const pendingCount=values=>[...values.keys()].filter(key=>key.startsWith('proteus.navigation.pending:')).length;
 const tab=id=>({id,type:'browser',title:id,url:'https://example.test/'+id});
 test('navigation acknowledgement ignores passive metadata but preserves exact selection, full branch and profile guards',()=>{
@@ -107,7 +107,7 @@ test('comparison matches host defaults and filtering while retaining every porta
 });
 
 test('shared canonical history retains the full portable list while desktop engine restoration keeps its legacy bounded window',()=>{
-  const {normalizeHistory}=createRequire(import.meta.url)('../desktop/browser-history.cjs');
+  const {normalizeHistory}=createRequire(import.meta.url)('../desktop/browser/browser-history.cjs');
   const entries=Array.from({length:70},(_,index)=>({id:'entry-'+index,url:`https://example.test/${index}?q=${'x'.repeat(1600)}`,title:'🎉'.repeat(150),pageState:'private'}));
   entries[36]={id:'entry-36',url:'https://example.test/callback?token=private',title:'Private'};
   const history=normalizeContentTabHistory({entries,index:30,currentEntryId:'entry-30',revision:7});
@@ -181,7 +181,7 @@ test('a navigation receipt retry keeps the original operation ID and timestamp a
 });
 
 test('full signed redirect URLs are retained in descriptors and navigation without unsafe schemes or URL userinfo',t=>{
- const {safeHistoryURL}=createRequire(import.meta.url)('../desktop/browser-history.cjs'),host=hostStore(t);
+ const {safeHistoryURL}=createRequire(import.meta.url)('../desktop/browser/browser-history.cjs'),host=hostStore(t);
  const keys=['code','state','cookie','signedCookie','X-Amz-Signature','X-Goog-Credential','Key-Pair-Id'];let revision=0;
  for(const key of keys)for(const address of [`https://example.test/login?${key}=fixture`,`https://example.test/callback#${key}=fixture`]){
    assert.equal(safeHistoryURL(address),address);assert.equal(syncableTabURL(address),address);

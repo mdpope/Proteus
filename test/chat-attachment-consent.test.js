@@ -1,12 +1,12 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
-import { ChatAttachmentStore } from '../src/chat-attachments.js';
-import { ChatAttachmentConsents } from '../src/chat-attachment-consent.js';
+import { ChatAttachmentStore } from '../src/services/chats/chat-attachments.js';
+import { ChatAttachmentConsents } from '../src/services/chats/chat-attachment-consent.js';
 
 const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLytQAAAABJRU5ErkJggg==','base64');
 const sha256=createHash('sha256').update(png).digest('hex');

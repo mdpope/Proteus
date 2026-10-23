@@ -106,7 +106,7 @@ successful semantic filing or all source coverage.
 
 ## Integration contract
 
-`src/omi.js` exports `OmiIntegration`, `OMI_JOBS`, `isOmiSchedule` and the metadata
+`src/services/tools/omi.js` exports `OmiIntegration`, `OMI_JOBS`, `isOmiSchedule` and the metadata
 projector. A single instance uses the application data directory. Its provider is
 registered as `local-process`; this provider is only for recognized Omi native jobs.
 

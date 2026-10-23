@@ -1,6 +1,6 @@
 // Explicit opt-in: one synthetic model turn, then verify the same session on resume.
 import { CopilotClient } from '@github/copilot-sdk';
-import { copilotModel, validateModelOptions } from '../src/model-catalog.js';
+import { copilotModel, validateModelOptions } from '../src/models/model-catalog.js';
 import { randomUUID } from 'node:crypto';
 import assert from 'node:assert/strict';
 import os from 'node:os';

@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {applicationHome} from '../src/files.js';
-import {defaultTerminalShell,terminalShellArgs} from '../src/terminal-shell.js';
-import {windowsProviderExecutable} from '../src/windows-provider.js';
-import {hasPrivatePermissions,privateTemporaryDirectory,ensurePrivateHome} from '../src/private-paths.cjs';
+import {applicationHome} from '../src/shared/files.js';
+import {defaultTerminalShell,terminalShellArgs} from '../src/services/tools/terminal-shell.js';
+import {windowsProviderExecutable} from '../src/providers/windows-provider.js';
+import {hasPrivatePermissions,privateTemporaryDirectory,ensurePrivateHome} from '../src/shared/private-paths.cjs';
 import {makeReadableByOthers} from './helpers/permissions.js';
 
 test('Windows data belongs to LocalAppData and explicit homes retain precedence',()=>{

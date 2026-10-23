@@ -1,6 +1,6 @@
 // Synthetic missing native host only: no password manager, vault or live profile is used.
 import {_electron as electron} from 'playwright';
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import assert from 'node:assert/strict';
 const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-extension-notice-ui-'));
 fs.writeFileSync(path.join(home,'settings.json'),JSON.stringify({schemaVersion:1,provider:'rehearsal',timezone:'UTC',workspace:{cwd:home,additionalDirectories:[]},skillDirectories:[],mcpServers:{},appearance:{showProviderUsage:false}}));
@@ -23,8 +23,8 @@ const start=async()=>{
  });
 };
 const fail=profile=>app.evaluate((_,profile)=>globalThis.failNativeNotice(profile),profile);
-const notice=()=>app.windows().find(window=>window.url().endsWith('/desktop/notice.html'));
-const visible=()=>app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().filter(window=>window.webContents.getURL().endsWith('/desktop/notice.html')&&window.isVisible()).length);
+const notice=()=>app.windows().find(window=>window.url().endsWith('/desktop/features/notifications/notice.html'));
+const visible=()=>app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().filter(window=>window.webContents.getURL().endsWith('/desktop/features/notifications/notice.html')&&window.isVisible()).length);
 try{
  await start();await fail('default');
  for(let i=0;i<50&&!notice();i++)await page.waitForTimeout(100);

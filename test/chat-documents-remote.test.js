@@ -1,4 +1,4 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -6,8 +6,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { startServer } from '../src/server.js';
 import { startRelay } from '../relay/server.js';
-import { atomicJSON } from '../src/files.js';
-import { secret } from '../src/remote-crypto.js';
+import { atomicJSON } from '../src/shared/files.js';
+import { secret } from '../src/services/remote/remote-crypto.js';
 import { RemoteClient, until } from './remote-client.mjs';
 
 test('remote documents allow one-time shares or direct device access with identity and revocation checks', async t=>{

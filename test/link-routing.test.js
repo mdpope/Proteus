@@ -49,3 +49,21 @@ test('browser registration is explicit, scoped to this app, verifies both scheme
   app.isPackaged=false;await assert.rejects(()=>registration.act('register'),/installed macOS/);
   assert.notEqual(targetKey(destination),targetKey({...destination,hostId:'other'}));
 });
+
+test('production bundle declares ownership of both web protocols while previews declare none',async()=>{
+ const {browserBundleInfo}=await import('../desktop/link-routing/bundle-info.cjs').then(module=>module.default);
+ assert.deepEqual(browserBundleInfo({preview:true}),{});
+ const declarations=browserBundleInfo().CFBundleURLTypes;
+ for(const scheme of ['http','https']){const item=declarations.find(item=>item.CFBundleURLSchemes.includes(scheme));assert.equal(item.LSHandlerRank,'Owner');assert.equal(item.CFBundleTypeRole,'Viewer');}
+ assert.ok(declarations.some(item=>item.CFBundleURLSchemes.includes('proteus-desktop')));
+});
+
+test('provider sign-in launcher honors browser preference without silently switching browsers',async()=>{
+ const {openPreferredBrowser}=require('../desktop/link-routing/preferred-browser.cjs'),calls=[];
+ const options={embedded:async url=>calls.push(['embedded',url]),system:async url=>calls.push(['system',url])};
+ await openPreferredBrowser('https://auth.example.test/sign-in',{...options,preference:'embedded'});
+ await openPreferredBrowser('https://auth.example.test/sign-in',{...options,preference:'system'});
+ assert.deepEqual(calls.map(call=>call[0]),['embedded','system']);
+ await assert.rejects(openPreferredBrowser('https://auth.example.test/',{system:options.system}),/not ready/);
+ await assert.rejects(openPreferredBrowser('https://user:password@auth.example.test/',options),/without credentials/);assert.equal(calls.length,2);
+});

@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import { startRelay } from '../relay/server.js';
-import { secret } from '../src/remote-crypto.js';
+import { secret } from '../src/services/remote/remote-crypto.js';
 import { RemoteClient, until } from './remote-client.mjs';
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'proteus-remote-ui-'));
 const token = secret(); const relay = await startRelay({ port: 0, token }); const url = `ws://127.0.0.1:${relay.port}`;

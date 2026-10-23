@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-const { KeepAwake } = createRequire(import.meta.url)('../desktop/keep-awake.cjs');
+const { KeepAwake } = createRequire(import.meta.url)('../desktop/services/keep-awake.cjs');
 
 test('keep-awake owns one assertion, including ID zero, and releases only its own', () => {
   const live = new Map([[77, 'other app assertion']]); let next = 0;

@@ -1,18 +1,18 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { ContextStore } from '../src/context.js';
-import { SettingsStore } from '../src/settings.js';
-import { ScheduleStore } from '../src/schedules.js';
-import { IntegrationHealth } from '../src/integrations.js';
-import { CopilotProvider } from '../src/copilot.js';
-import { ClaudeProvider } from '../src/claude.js';
-import { SessionProvider } from '../src/session-provider.js';
-import { remoteState, RemoteHost } from '../src/remote.js';
+import { ContextStore } from '../src/services/workspaces/context.js';
+import { SettingsStore } from '../src/services/settings/settings.js';
+import { ScheduleStore } from '../src/services/scheduling/schedules.js';
+import { IntegrationHealth } from '../src/services/integrations/integrations.js';
+import { CopilotProvider } from '../src/providers/copilot.js';
+import { ClaudeProvider } from '../src/providers/claude.js';
+import { SessionProvider } from '../src/providers/session-provider.js';
+import { remoteState, RemoteHost } from '../src/services/remote/remote.js';
 
 function fixture(t) {
   const home = fs.realpathSync(privateTemporaryDirectory(path.join(os.tmpdir(), 'proteus-state-rehearsal-')));

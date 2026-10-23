@@ -2,7 +2,7 @@ const {LinkRoutingStore}=require('./store.cjs');
 const {BrowserRegistration}=require('./registration.cjs');
 const {LinkPicker}=require('./picker.cjs');
 const {routeRule,targetKey,selectWindow}=require('./rules.cjs');
-const {webURL}=require('../external-urls.cjs');
+const {webURL}=require('../services/external-urls.cjs');
 class LinkRouter{
   constructor({service,windows,browser,createWindow,app,preview=false}){
     Object.assign(this,{service,windows,browser,createWindow});this.store=new LinkRoutingStore(service.home);this.registration=new BrowserRegistration(app,{preview});this.picker=new LinkPicker();

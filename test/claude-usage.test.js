@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {accumulateClaudeUsage} from '../src/claude-usage.js';
+import {accumulateClaudeUsage} from '../src/providers/claude-usage.js';
 test('Claude aggregates uncached and cached input exactly once per completed result',()=>{
  const first=accumulateClaudeUsage({}, {input_tokens:44,cache_read_input_tokens:1000,cache_creation_input_tokens:600,output_tokens:30});
  assert.equal(first.inputTokens,1644);assert.equal(first.outputTokens,30);assert.equal(first.inputComplete,true);

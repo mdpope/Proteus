@@ -1,15 +1,15 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { UsageCache, ProviderUsageCache, normalizeProviderUsage } from '../src/usage.js';
-import { usageSummary, providerUsageSummary } from '../public/usage.js';
-import { agentName } from '../public/agent-name.js';
-import { CopilotProvider } from '../src/copilot.js';
+import { UsageCache, ProviderUsageCache, normalizeProviderUsage } from '../src/services/telemetry/usage.js';
+import { usageSummary, providerUsageSummary } from '../public/features/settings/usage.js';
+import { agentName } from '../public/features/chats/agent-name.js';
+import { CopilotProvider } from '../src/providers/copilot.js';
 import { Engine } from '../src/engine.js';
-import { remoteRun } from '../src/remote.js';
+import { remoteRun } from '../src/services/remote/remote.js';
 const quota = remainingPercentage => ({ quotaSnapshots: { premium_interactions: { remainingPercentage, isUnlimitedEntitlement: false }, chat: { isUnlimitedEntitlement: true } } });
 test('sidebar uses premium allowance and distinguishes unknown, exhausted, and unlimited', () => {
   assert.equal(usageSummary({ quota: quota(62.5) }).label, '62.5% remaining');

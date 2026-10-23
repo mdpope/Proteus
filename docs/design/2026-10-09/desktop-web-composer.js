@@ -1,4 +1,4 @@
-import { mountAttachmentPicker, selectedAttachments, clearAttachments } from '../../../public/chat-attachments.js';
+import { mountAttachmentPicker, selectedAttachments, clearAttachments } from '../../../public/features/chats/chat-attachments.js';
 
 const paths = {
   steer: '<path d="M7 20V4m-3 3 3-3 3 3M7 15h5a5 5 0 0 0 5-5V5m-3 3 3-3 3 3"/>',

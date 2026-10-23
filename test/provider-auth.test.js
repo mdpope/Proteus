@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
-import {ProviderAuthManager} from '../src/provider-auth.js';
+import {ProviderAuthManager} from '../src/providers/provider-auth.js';
 
 const until=async condition=>{for(let i=0;i<100;i++){if(condition())return;await new Promise(resolve=>setTimeout(resolve,5));}assert.fail('Provider auth state did not change.');};
 const adapters=()=>({

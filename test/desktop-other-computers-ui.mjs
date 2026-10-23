@@ -11,7 +11,7 @@ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));let browser;
 try{
  browser=await chromium.launch({headless:true});const page=await browser.newPage();page.setDefaultTimeout(10000);const errors=[];page.on('pageerror',error=>errors.push(error.message));await page.goto('http://127.0.0.1:'+server.address().port);
  await page.evaluate(async()=>{
-  const preview=await import('/public/desktop-preview.js'),workspaces=await import('/public/desktop-workspaces.js');
+  const preview=await import('/public/shared/navigation/desktop-preview.js'),workspaces=await import('/public/features/workspaces/desktop-workspaces.js');
   const catalog={schemaVersion:1,enabled:true,revision:'r1',projects:[{id:'general',workspaceId:'same',name:'Shared project ID'},{id:'second',workspaceId:'same',name:'Second project'}],defaultProjectIds:{same:'general'},memberships:{chat:{workspaceId:'same',projectId:'general'}},sourceLibrary:[]};
   const state={tab:'overview',page:'context',tabs:[],data:{hostId:'local-host',hostName:'Local computer',runs:[{id:'chat',title:'Local chat',workspaceId:'same',projectId:'general',createdAt:'2026-10-18T01:00:00Z'}],context:{workspaces:[{id:'same',name:'Local workspace'}]},workspaceProjects:catalog}};
   const tabs=[{id:'owner-browser',type:'browser',title:'Owner browser',url:'https://example.test/synthetic',hidden:true,lastActivityAt:'2026-10-18T03:00:00Z'},{id:'owner-terminal',type:'terminal',title:'Owner terminal',terminalId:'original-session'},{id:'document:doc',type:'document',documentId:'doc',title:'Owner document',associationChatId:'chat'}];

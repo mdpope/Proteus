@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {createRequire} from 'node:module';
-const {ArtifactScroll,positions}=createRequire(import.meta.url)('../desktop/artifact-scroll.cjs');
+const {ArtifactScroll,positions}=createRequire(import.meta.url)('../desktop/documents/artifact-scroll.cjs');
 const position={path:'root',top:200,left:0,x:0,y:.5};
 
 test('artifact positions accept only bounded numeric paths and geometry',()=>{

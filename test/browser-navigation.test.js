@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
-import {browserDestination,browserDestinations} from '../src/browser-destinations.js';
-const {restoreNavigation,commitNavigation,traverseNavigation,acknowledgesNavigation}=createRequire(import.meta.url)('../desktop/browser-navigation.cjs');
+import {browserDestination,browserDestinations} from '../src/services/browser/browser-destinations.js';
+const {restoreNavigation,commitNavigation,traverseNavigation,acknowledgesNavigation}=createRequire(import.meta.url)('../desktop/browser/browser-navigation.cjs');
 
 test('logical traversal keeps Forward entries and a new address branches without mutating the old stack',()=>{
  const tab={};const first=commitNavigation(tab,'https://example.test/one','One');commitNavigation(tab,'https://example.test/two','Two');const third=commitNavigation(tab,'https://example.test/three','Three');

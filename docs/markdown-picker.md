@@ -100,7 +100,7 @@ The returned `file` is the validated absolute path expected by existing Markdown
 and image rendering. The existing Markdown image endpoint should accept the same
 case-insensitive `.md` extension check.
 
-Serve `public/markdown-picker.js` and `public/markdown-picker.css` with the other
+Serve `public/shared/ui/markdown-picker.js` and `public/markdown-picker.css` with the other
 static app assets. Initialize with `initMarkdownPicker({ api, escape, showDialog,
 openTab, toast, defaultWorkspaceId })`; the optional `defaultWorkspaceId` function
 returns the active/default workspace's ID. Invoke `openMarkdownPicker('open')` from

@@ -1,5 +1,5 @@
 const {app,BrowserWindow}=require('electron');
-const {ArtifactPreview}=require('../desktop/artifact-preview.cjs');
+const {ArtifactPreview}=require('../desktop/documents/artifact-preview.cjs');
 globalThis.previewConsole=[];
 globalThis.previewPopups=0;
 globalThis.previewScroll=[];

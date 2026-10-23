@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
-import {hasPrivatePermissions} from '../../src/private-paths.cjs';
+import {hasPrivatePermissions} from '../../src/shared/private-paths.cjs';
 
 export function assertPrivate(file, mode=0o600) {
   if(process.platform==='win32')assert.equal(hasPrivatePermissions(file),true,'Private Windows ACL: '+file);

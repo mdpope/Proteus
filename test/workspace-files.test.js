@@ -1,11 +1,11 @@
 import {assertPrivate} from './helpers/permissions.js';
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { WorkspaceFiles } from '../src/workspace-files.js';
+import { WorkspaceFiles } from '../src/services/workspaces/workspace-files.js';
 
 function fixture(t) {
   const home = privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-workspace-picker-'));

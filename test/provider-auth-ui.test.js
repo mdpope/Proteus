@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { allowedProviderAuthURL } from '../public/provider-auth.js';
+import { allowedProviderAuthURL } from '../public/features/settings/provider-auth.js';
 
 test('provider sign-in pages are exact HTTPS destinations without embedded credentials or tokens', () => {
   assert.equal(allowedProviderAuthURL('copilot', 'https://github.com/login/device'), 'https://github.com/login/device');

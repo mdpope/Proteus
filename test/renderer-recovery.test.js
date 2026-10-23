@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {EventEmitter} from 'node:events';import {createRequire} from 'node:module';
-const {RendererRecovery}=createRequire(import.meta.url)('../desktop/renderer-recovery.cjs');
+const {RendererRecovery}=createRequire(import.meta.url)('../desktop/windows/renderer-recovery.cjs');
 const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 function fixture(options={}){const window=new EventEmitter(),wc=new EventEmitter(),loads=[],fallbacks=[],logs=[];window.webContents=wc;window.isDestroyed=wc.isDestroyed=()=>false;window.loadURL=async url=>{loads.push(url);};wc.loadFile=async file=>{fallbacks.push(file);};const recovery=new RendererRecovery(window,{url:'http://127.0.0.1:4317/',delays:[1,1,1],timeout:6,stable:10000,log:entry=>logs.push(entry),...options});return {window,wc,recovery,loads,fallbacks,logs};}
 test('renderer crash recovery is deferred, window-local, acknowledged by generation and never owns host execution',async t=>{

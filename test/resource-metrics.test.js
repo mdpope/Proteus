@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 const require=createRequire(import.meta.url);
-const {trackedChildren,trackedPids,resourceTotals}=require('../desktop/resource-metrics.cjs');
+const {trackedChildren,trackedPids,resourceTotals}=require('../desktop/services/resource-metrics.cjs');
 
 test('whole-app resource totals include descendants once without duplicating Electron PIDs',()=>{
   const sample='100 1 1024 1.0 /Applications/Proteus\n101 100 2048 2.0 Electron Helper\n102 100 4096 3.0 codex\n103 102 8192 4.0 shell\n104 999 65536 99.0 other';
@@ -19,7 +19,7 @@ test('tagged persistent tmux PIDs are measured without counting unrelated sessio
 });
 
 test('process sampling is asynchronous, coalesces overlap and retries after failure',async()=>{
-  const {createProcessSampler}=require('../desktop/resource-metrics.cjs');
+  const {createProcessSampler}=require('../desktop/services/resource-metrics.cjs');
   const calls=[];
   const sample=createProcessSampler({platform:'darwin',run:(file,args,options,callback)=>calls.push({file,args,options,callback})});
   const first=sample(),second=sample();assert.equal(first,second);assert.equal(calls.length,1);

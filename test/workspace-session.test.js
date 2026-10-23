@@ -1,11 +1,11 @@
 import {assertPrivate} from './helpers/permissions.js';
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import session from '../desktop/workspace-session.cjs';
+import session from '../desktop/windows/workspace-session.cjs';
 const {WorkspaceSession,normalizeSession}=session;
 test('workspace records only descriptors, strips authority, content and startup commands',()=>{
  const value=normalizeSession({active:'web',page:'settings',tabs:[{id:'web',type:'browser',url:'https://example.test/',shared:true,owner:'run',token:'secret'},{id:'md',type:'markdown',file:'/tmp/a.md',content:'private'},{id:'term',type:'terminal',terminal:{id:'terminal-id',profileId:'default',rootId:'root',directory:'a',command:'danger'},output:'private'}]});

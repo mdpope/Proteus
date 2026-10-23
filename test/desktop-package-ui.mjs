@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
-import { hostPlatformMetadata } from '../src/host-platform.js';
+import { hostPlatformMetadata } from '../src/shared/host-platform.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 if (!process.argv[2] || process.argv.slice(3).some(value => value !== '--structure-only')) throw new Error('Usage: node test/desktop-package-ui.mjs /absolute/path/to/packaged/executable [--structure-only]');

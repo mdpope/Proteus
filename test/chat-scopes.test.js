@@ -1,11 +1,11 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { Engine } from '../src/engine.js';
-import { runSummary, remoteRun } from '../src/remote.js';
+import { runSummary, remoteRun } from '../src/services/remote/remote.js';
 
 const schedule=(cwd,prompt,name='Workspace chat',manual=false)=>({schemaVersion:1,id:'synthetic-'+Math.random().toString(36).slice(2),name,chatTitleManual:manual,enabled:false,cron:'0 9 * * 1-5',timezone:'UTC',provider:'rehearsal',model:'',workspace:{cwd,additionalDirectories:[]},misfire:'skip',prompt});
 

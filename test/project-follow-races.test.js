@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {createProjectFollower} from '../public/project-follow.js';
+import {createProjectFollower} from '../public/features/workspaces/project-follow.js';
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
 const until=async fn=>{for(let i=0;i<200;i++){if(fn())return;await pause(5);}throw Error('Synthetic controller checkpoint timed out');};
 async function scenario(t,phase,human='none'){

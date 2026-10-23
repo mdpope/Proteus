@@ -5,15 +5,25 @@ import vm from 'node:vm';
 import path from 'node:path';
 import {webcrypto} from 'node:crypto';
 import {EventEmitter} from 'node:events';
+import {AsyncLocalStorage} from 'node:async_hooks';
 import {createRequire} from 'node:module';
-import {placeTabAfter} from '../public/tab-placement.js';
-const {preserveBackgroundFocus}=createRequire(import.meta.url)('../desktop/browser-background-focus.cjs');
+import {placeTabAfter} from '../public/shared/navigation/tab-placement.js';
+const {preserveBackgroundFocus}=createRequire(import.meta.url)('../desktop/browser/browser-background-focus.cjs');
 
 const copy=value=>JSON.parse(JSON.stringify(value));
+test('a native link menu callback keeps its originating window after focus moves elsewhere',async()=>{
+ const scope=new AsyncLocalStorage(),created=[],electron={app:{getApplicationNameForProtocol:()=> 'Browser'},Menu:{buildFromTemplate:items=>({items})}};
+ const sandbox={module:{exports:{}},URL,process:{platform:'linux'},require:name=>name==='electron'?electron:name==='node:path'?path:name==='./browser-history.cjs'?{}:name==='./browser-downloads.cjs'?{}:assert.fail(name)};
+ vm.createContext(sandbox);vm.runInContext(fs.readFileSync(new URL('../desktop/browser/browser-actions.cjs',import.meta.url),'utf8'),sandbox);
+ const source={id:'source',windowId:'first',profileId:'default',parentId:'project:local:one'},browser={options:{},partition:{on(){}},tabs:new Map([[source.id,source]]),appOrigin:'http://app.test',withTabWindow:(tab,fn)=>scope.run(tab.windowId,fn),create:async()=>{await Promise.resolve();created.push(scope.getStore()||'other-focused-window');return {id:'new'};},sendAction(){}};
+ const menu=scope.run('first',()=>new sandbox.module.exports.BrowserActions(browser).menu(source,{linkURL:'https://example.test/'}));
+ for(const action of menu.items.slice(0,3)){scope.run('other-focused-window',()=>action.click());await new Promise(resolve=>setImmediate(resolve));}
+ assert.deepEqual(created,['first','first','first']);
+});
 test('native link menu keeps foreground/background/unloaded choices distinct and captures source ownership',async()=>{
   const created=[],sent=[],electron={app:{getApplicationNameForProtocol:()=> 'Browser'},Menu:{buildFromTemplate:items=>({items})}};
   const sandbox={module:{exports:{}},URL,process:{platform:'linux'},require:name=>name==='electron'?electron:name==='node:path'?path:name==='./browser-history.cjs'?{}:name==='./browser-downloads.cjs'?{}:assert.fail(name)};
-  vm.createContext(sandbox);vm.runInContext(fs.readFileSync(new URL('../desktop/browser-actions.cjs',import.meta.url),'utf8'),sandbox);
+  vm.createContext(sandbox);vm.runInContext(fs.readFileSync(new URL('../desktop/browser/browser-actions.cjs',import.meta.url),'utf8'),sandbox);
   const source={id:'source',profileId:'profile-a',group:'team',parentId:'chat',destination:{type:'chat',id:'chat'},workspaceName:'Workspace',associationChatId:'chat'};
   const browser={options:{},partition:{on(){}},tabs:new Map([[source.id,source]]),appOrigin:'http://app.test',create:async(url,_owner,_history,descriptor)=>{created.push({url,descriptor:copy(descriptor)});return {id:'created',...descriptor};},sendAction:value=>sent.push(copy(value))};
   const actions=new sandbox.module.exports.BrowserActions(browser),menu=actions.menu(source,{linkURL:'https://example.test/page'});
@@ -105,7 +115,7 @@ test('background browser registration orders the new tab without changing curren
 });
 
 test('Team background registration preserves its selected tab and existing default foreground behavior',()=>{
-  const source=fs.readFileSync(new URL('../public/team-tools.js',import.meta.url),'utf8'),start=source.indexOf('export function selectTeamBrowser('),end=source.indexOf('\nexport function forgetTeamBrowser',start);
+  const source=fs.readFileSync(new URL('../public/features/tools/team-tools.js',import.meta.url),'utf8'),start=source.indexOf('export function selectTeamBrowser('),end=source.indexOf('\nexport function forgetTeamBrowser',start);
   const state={active:'selected',tabs:[{id:'source',browserId:'source-native'},{id:'selected',browserId:'selected-native'}]},calls=[];
   const sandbox={state,crypto:webcrypto,placeTabAfter,revealActive:false,save:()=>calls.push('save'),paintTabs:()=>calls.push('paint')};
   vm.createContext(sandbox);vm.runInContext(source.slice(start,end).replace('export ','')+'\nglobalThis.select=selectTeamBrowser;',sandbox);

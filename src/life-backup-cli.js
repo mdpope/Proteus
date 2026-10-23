@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { LifeStore } from './life.js';
-import { defaultHome } from './files.js';
+import { LifeStore } from './services/life/life.js';
+import { defaultHome } from './shared/files.js';
 const flags = new Map();
 try {
     const args = process.argv.slice(2), allowed = ['--source-profile','--restore-profile','--dump','--home'];

@@ -1,7 +1,7 @@
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 import {assertPrivate} from './helpers/permissions.js';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import {createRequire} from 'node:module';
-const require=createRequire(import.meta.url),{BrowserMedia}=require('../desktop/browser-media.cjs'),{BrowserAgentAccess}=require('../desktop/browser-agent-access.cjs');
+const require=createRequire(import.meta.url),{BrowserMedia}=require('../desktop/browser/browser-media.cjs'),{BrowserAgentAccess}=require('../desktop/browser/browser-agent-access.cjs');
 const fixture=t=>{const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-media-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));return home;};
 test('global autoplay preference is persistent, preserves extension fields and validates before replacement',t=>{const home=fixture(t),media=new BrowserMedia(home);assert.equal(media.blocked,false);media.set(true);const raw=JSON.parse(fs.readFileSync(media.file));raw.future={keep:true};fs.writeFileSync(media.file,JSON.stringify(raw));const again=new BrowserMedia(home);assert.equal(again.blocked,true);assert.throws(()=>again.set('false'),/Choose/);assert.equal(again.blocked,true);again.set(false);assert.equal(new BrowserMedia(home).blocked,false);assert.deepEqual(JSON.parse(fs.readFileSync(media.file)).future,{keep:true});assertPrivate(media.file);});
 test('unreadable media preference preserves the original and blocks autoplay until repaired',t=>{const home=fixture(t),file=path.join(home,'browser-media.json');fs.writeFileSync(file,'invalid original');const media=new BrowserMedia(home);assert.equal(media.blocked,true);assert.throws(()=>media.set(false),/preserved/);assert.equal(fs.readFileSync(file,'utf8'),'invalid original');});

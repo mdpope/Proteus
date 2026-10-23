@@ -1,6 +1,6 @@
 # Unified host browser history
 
-Implemented source now uses `src/browser-history.js` as the async boundary to a dedicated
+Implemented source now uses `src/services/browser/browser-history.js` as the async boundary to a dedicated
 SQLite worker. `browser-history.sqlite` belongs in the configured application-data directory.
 No private history, website session, cookie or form body belongs in this database. The worker
 retains full HTTP(S) redirect URLs by the operator’s October 14 choice, including login paths, query strings and fragments. Explicit private-profile records, URL userinfo and non-web/privileged targets remain excluded.

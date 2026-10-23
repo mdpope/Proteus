@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { CopilotProvider } from '../src/copilot.js';
+import { CopilotProvider } from '../src/providers/copilot.js';
 const root=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-permission-'));
 const file=path.join(root,'probe.txt'); const marker='PROTEUS_READ_'+randomUUID();fs.writeFileSync(file,marker);
 const provider=new CopilotProvider();const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),120000);

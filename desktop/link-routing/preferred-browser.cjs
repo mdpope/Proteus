@@ -1,4 +1,4 @@
-const {webURL}=require('../external-urls.cjs');
+const {webURL}=require('../services/external-urls.cjs');
 /** The host's single URL-launch policy, including provider/MCP sign-in links. */
 async function openPreferredBrowser(value,{preference,embedded,system}){
   const url=webURL(value);if(!url)throw Error('Use an HTTP or HTTPS link without credentials.');

@@ -1,8 +1,0 @@
-import {paletteMenuColors} from './palette.js';
-export function mountDownloadIndicator(bar){
- if(!bar||!window.desktop?.browser)return;let button=bar.querySelector('[data-browser-downloads]');
- if(!button){button=document.createElement('button');button.type='button';button.dataset.browserDownloads='';button.textContent='↓';button.title='Downloads';button.setAttribute('aria-label','Downloads');button.setAttribute('aria-haspopup','dialog');const overview=bar.querySelector('[id$="overview"],[data-browser-overview]');if(overview)overview.before(button);else bar.querySelector('.browser-go')?.after(button);}
- button.onclick=()=>{const rect=button.getBoundingClientRect(),style=getComputedStyle(document.documentElement),colors={...paletteMenuColors(),background:style.getPropertyValue('--panel').trim(),text:style.getPropertyValue('--ink').trim(),muted:style.getPropertyValue('--muted').trim(),border:style.getPropertyValue('--line').trim(),hover:style.getPropertyValue('--bg').trim(),accent:style.getPropertyValue('--accent').trim(),...paletteMenuColors()};void window.desktop.browser({action:'downloads-panel',x:rect.right,y:rect.bottom,colors}).catch(error=>document.dispatchEvent(new CustomEvent('proteus-notice',{detail:error.message})));};
- void window.desktop.browser({action:'downloads-list'}).then(state=>{if(button.isConnected){button.classList.toggle('downloading',state.active>0);button.title=state.active?`Downloads · ${state.active} in progress`:'Downloads';button.setAttribute('aria-label',button.title);}}).catch(()=>{});
-}
-export function downloadsChanged(){for(const bar of document.querySelectorAll('.browserbar'))mountDownloadIndicator(bar);}

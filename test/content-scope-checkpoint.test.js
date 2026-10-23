@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-import {createTabSynchronizer} from '../public/content-tab-sync.js';
+import {webcrypto} from 'node:crypto';
+import {createTabSynchronizer} from '../public/models/content-tab-sync.js';
 
 const source=fs.readFileSync(new URL('../public/app.js',import.meta.url),'utf8');
 const section=(start,end)=>{const from=source.indexOf(start),to=source.indexOf(end,from);assert.ok(from>=0&&to>from);return source.slice(from,to);};
@@ -19,7 +20,7 @@ function appFixture({checkpoint=async()=>false,sync=async()=>{},save=async()=>{}
   const calls=[],errors=[],browser={id:'browser',type:'browser',parentId:chat.id,label:'Next',info:{url:nextEntry.url,history:pendingHistory,navigationPending:true,profileId:'default'}};
   const state={tab:browser.id,page:'context',tabs:copy([oldProject,newProject,chat,browser])};
   let follower;
-  const sandbox={state,workspaceReady:true,workspaceRestoring:false,workspaceClosing:false,lastWorkspace:'',workspaceSaving:undefined,
+  const sandbox={crypto:webcrypto,state,workspaceReady:true,workspaceRestoring:false,workspaceClosing:false,lastWorkspace:'',workspaceSaving:undefined,
     window:{desktop:{workspaceSession:async value=>{calls.push({kind:'save',session:copy(value.session)});return save(value);}}},
     document:{hidden:false},chatSetupTabs:{capture(){}},reconcilePreviewProjects(){},selectedChildren:new Map(),desktopWindowId:'main',windowScopeId:value=>value,
     teamState:()=>team,contentTabMetadata:()=>({}),setTimeout:()=>1,clearTimeout(){},toast:error=>errors.push(error),

@@ -5,8 +5,8 @@ import {createRequire} from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-const {createProvenance,validateProvenance,sourceFields}=createRequire(import.meta.url)('../desktop/build-provenance.cjs');
-const {compatible,inspectPackage,fileDigest}=createRequire(import.meta.url)('../desktop/update-package.cjs');
+const {createProvenance,validateProvenance,sourceFields}=createRequire(import.meta.url)('../desktop/updates/build-provenance.cjs');
+const {compatible,inspectPackage,fileDigest}=createRequire(import.meta.url)('../desktop/updates/update-package.cjs');
 const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const source={runtimeFiles:{'src/server.js':'a'.repeat(64)},buildInputs:{'scripts/package-mac.mjs':'b'.repeat(64)},gitHead:'synthetic',dirty:true};
 

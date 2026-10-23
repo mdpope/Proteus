@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { toolActivity, displayText } from '../src/tool-activity.js';
-import { TurnWaiter } from '../src/turn-waiter.js';
-import { CopilotProvider } from '../src/copilot.js';
+import { toolActivity, displayText } from '../src/shared/tool-activity.js';
+import { TurnWaiter } from '../src/providers/turn-waiter.js';
+import { CopilotProvider } from '../src/providers/copilot.js';
 import { fakeSession } from './fake-copilot.js';
 
 test('parallel tool calls retain arguments, progress, output, failure and one entry per call', () => {

@@ -1,7 +1,7 @@
 const fs=require('node:fs');
 const path=require('node:path');
 const {createHash,randomUUID}=require('node:crypto');
-const {atomicRename}=require('../../src/atomic-rename.cjs');
+const {atomicRename}=require('../../src/shared/atomic-rename.cjs');
 const revision=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 function validate(value){
   if(value?.schemaVersion!==1||!Array.isArray(value.rules)||value.rules.length>200)throw Error('Invalid link-routing preferences.');

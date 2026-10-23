@@ -65,7 +65,7 @@ OS-level folder picking remain desktop responsibilities.
 ## Encryption and host isolation
 
 `web/resources/js/remote-client.js` uses browser WebCrypto AES-256-GCM with the exact representation
-and additional authenticated data used by `src/remote-crypto.js` and Apple CryptoKit:
+and additional authenticated data used by `src/services/remote/remote-crypto.js` and Apple CryptoKit:
 
 - Combined ciphertext is a random 12-byte nonce, ciphertext, then 16-byte authentication tag.
 - Pairing/authentication are tied to the host's fresh challenge. Both directions authenticate the
@@ -249,7 +249,7 @@ Disconnected pages hide allowances instead of presenting stale values as current
 are consumed from the URL fragment before query-view normalization, including later hash changes;
 the fragment is cleared without sending its token to Laravel and opens the dedicated Connections view.
 
-The pure wire client now lives in `src/remote-client.js`; the website wrapper provides the account
+The pure wire client now lives in `src/services/remote/remote-client.js`; the website wrapper provides the account
 credential adapter and reexports the same API. The older IndexedDB store remains a legacy adapter. The desktop peer client uses this
 same transport with OS-encrypted native storage, without copying website keys or exposing them to
 the desktop renderer. `test/web-remote-ui.mjs` verifies the integrated shell/remote experience in

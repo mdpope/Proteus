@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
 import {Engine} from '../src/engine.js';
-import {ChatRecovery} from '../src/chat-recovery.js';
-import {chatRecoveryState,capacityFailure} from '../public/chat-recovery-state.js';
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {ChatRecovery} from '../src/services/chats/chat-recovery.js';
+import {chatRecoveryState,capacityFailure} from '../public/features/chats/chat-recovery-state.js';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 function fixture(t){
  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-recovery-test-'));let now=Date.parse('2026-10-22T12:00:00Z');const timers=new Map(),calls=[];
  const engine=new Engine(home,{},()=>new Date(now));engine.drain=async()=>{};engine.recovery=new ChatRecovery(engine,{setTimer:(fn,delay)=>{const timer={fn,delay};timers.set(timer,timer);return timer;},clearTimer:timer=>timers.delete(timer)});

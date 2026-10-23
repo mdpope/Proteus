@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SessionProvider } from '../src/session-provider.js';
+import { SessionProvider } from '../src/providers/session-provider.js';
 
 test('independent chat adapters isolate steering, requests and cleanup', async () => {
   const instances=[];

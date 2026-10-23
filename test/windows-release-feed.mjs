@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import {pathToFileURL} from 'node:url';
-import {privateTemporaryDirectory} from '../src/private-paths.cjs';
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 const [bundle,local]=process.argv.slice(2),base=new URL(local);
 if(!path.isAbsolute(bundle||'')||base.protocol!=='http:'||base.hostname!=='127.0.0.1'||base.pathname!=='/')throw Error('Supply the exact packaged folder and a loopback publication fixture origin.');
 const app=path.join(bundle,'resources','app'),{DesktopReleaseFeed}=await import(pathToFileURL(path.join(app,'src','desktop-release-feed.js'))),{verifyRelease,extractRelease,windowsReleaseOrigin}=await import(pathToFileURL(path.join(app,'src','desktop-releases.js')));

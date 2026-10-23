@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createProjectFollower} from '../public/project-follow.js';
+import {createProjectFollower} from '../public/features/workspaces/project-follow.js';
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const until=async condition=>{for(let i=0;i<200;i++){if(condition())return;await pause(5);}throw Error('Follow checkpoint timed out');};
 
@@ -29,7 +29,7 @@ test('renewing a lease or receiving duplicate snapshots cannot override a local 
 });
 
 test('unchanged owner presentations renew leases without new revisions or broadcasts',async()=>{
- const {ProjectFollow}=await import('../src/project-follow.js');let now=1;const events=[];
+ const {ProjectFollow}=await import('../src/services/workspaces/project-follow.js');let now=1;const events=[];
  const store=new ProjectFollow({validate:()=>{},tabs:()=>[{id:'browser'}],now:()=>now,changed:value=>events.push(value)});
  const scope={scope:'project',id:'synthetic',clientId:'client'};store.handle({...scope,action:'join'},'actor');
  const first=store.handle({...scope,action:'update',sequence:1,state:{tabId:'browser'}},'actor');

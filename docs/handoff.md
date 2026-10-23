@@ -896,7 +896,7 @@ build/package/install was run. The operator's **do not build yet** hold remains 
 Latest operator request queues BF-2026-10-21-74: the URL-bar recent-history popup must keep the
 webpage visible like the compact menus already fixed. Screenshot shows suggestions with a white
 page backdrop. Source still sends an `address-recents-*` overlay token from
-`public/browser-recents.js`; `BrowserTabs.setOverlay` hides the native page. Queue the existing
+`public/features/browser/browser-recents.js`; `BrowserTabs.setOverlay` hides the native page. Queue the existing
 owner-bound compact popup approach, preserving editing/keyboard/dismissal behavior and stale
 window/tab/profile checks. See planned-updates.md for future acceptance. Documentation only:
 no runtime changes, UI test, build, packaging or installation performed for this intake. The
@@ -1764,7 +1764,7 @@ existing chat history and permission controls, and sidebar width/expansion persi
 project propagation and the refreshed 273-chat index pass. See
 [release and migration runbook](2026-10-18-projects-release.md).
 
-Production uses `src/workspace-projects.js`; synthetic setup remains in `src/desktop-preview.js`
+Production uses `src/services/workspaces/workspace-projects.js`; synthetic setup remains in `src/desktop-preview.js`
 and `desktop/preview-runtime.cjs`. The catalog is additive: default projects and global source
 registration are separate from unchanged chat context, permissions, schedules and provider
 sessions. Tab synchronization uses separate host/project scopes. Existing direct workspace
@@ -1818,7 +1818,7 @@ Session reads/saves, native browser creation/reparenting and renderer reconcilia
 late placement writes. Document creation resolves placement after awaited persistence while
 keeping its originating chat authorization. Do not use browser transfer for this organizational
 operation: grants, session views and terminal processes must remain intact. Shared helper:
-`public/preview-project-placement.js`. See desktop-preview.md for validation/package status.
+`public/features/workspaces/preview-project-placement.js`. See desktop-preview.md for validation/package status.
 Prior open preview: `dist/design-preview-project-delete`, revision
 `ec8b213d382e+dirty.1732b450b708`. 678 tests, source checks, deletion/restart Electron acceptance
 and exact-package/live retained-data verification passed. Production, web and mobile remain held.
@@ -3121,7 +3121,7 @@ for current ownership, acceptance and deployment receipts. The installed release
 state below remains the baseline until new receipts establish updates.
 
 Before the hold, item 19 produced uncommitted source edits in `public/app.js`,
-`public/team-tools.js`, `public/style.css`, new `public/browser-toolbar.js` and a
+`public/features/tools/team-tools.js`, `public/style.css`, new `public/features/browser/browser-toolbar.js` and a
 new `test/browser-toolbar-ui.mjs`. Main/chat/Team toolbars now share an icon-only
 Agent access control inside a lighter address field. Off has no box; on uses an
 accent fill and dark icon. Team access state follows browser updates; clicking an
@@ -3332,25 +3332,25 @@ that a previous conversation is available to the next agent.
 | Area | Entry points |
 | --- | --- |
 | Authenticated loopback API and lifecycle | `src/server.js` |
-| Schedule validation, disk reads, revision conflicts | `src/schedules.js`, `schemas/schedule.schema.json`, `src/cli.js` |
-| Serialized AI turns, independent native job lanes, snapshots and journal | `src/engine.js`, `src/turn-waiter.js` |
-| Provider execution, model capabilities and refresh | `src/copilot.js`, `src/codex.js`, `src/claude.js`, `src/model-catalog.js`, `src/usage.js` |
-| Workspace context, source delivery and tool scopes | `src/context.js`, `src/agent-tools.js`, `public/context-plan.js` |
-| Live tool grants and workspace authorization | `src/permissions.js` |
-| Mac forms, tabs, chat and shared controls | `public/app.js`, `public/features.js`, `public/conversation.js` |
-| Tool event normalization and rendering | `src/tool-activity.js`, `public/tool-presentation.js`, `ios/Proteus/Features/Chats/Views/ToolActivityView.swift` |
-| Shared Markdown | `src/markdown-renderer.js`, `public/markdown/`, `ios/Proteus/Shared/Views/MarkdownView.swift` |
-| Electron lifecycle, menu bar and browser bridge | `desktop/main.cjs`, `desktop/browser.cjs`, `src/browser-tools.js` |
-| Credential fill | `src/credentials.js` (desktop-only boundary) |
-| Encrypted remote protocol and relay | `src/remote.js`, `src/remote-crypto.js`, `relay/` |
+| Schedule validation, disk reads, revision conflicts | `src/services/scheduling/schedules.js`, `schemas/schedule.schema.json`, `src/cli.js` |
+| Serialized AI turns, independent native job lanes, snapshots and journal | `src/engine.js`, `src/providers/turn-waiter.js` |
+| Provider execution, model capabilities and refresh | `src/providers/copilot.js`, `src/providers/codex.js`, `src/providers/claude.js`, `src/models/model-catalog.js`, `src/services/telemetry/usage.js` |
+| Workspace context, source delivery and tool scopes | `src/services/workspaces/context.js`, `src/services/chats/agent-tools.js`, `public/features/workspaces/context-plan.js` |
+| Live tool grants and workspace authorization | `src/services/settings/permissions.js` |
+| Mac forms, tabs, chat and shared controls | `public/app.js`, `public/shared/ui/features.js`, `public/features/chats/conversation.js` |
+| Tool event normalization and rendering | `src/shared/tool-activity.js`, `public/features/chats/tool-presentation.js`, `ios/Proteus/Features/Chats/Views/ToolActivityView.swift` |
+| Shared Markdown | `src/shared/markdown-renderer.js`, `public/markdown/`, `ios/Proteus/Shared/Views/MarkdownView.swift` |
+| Electron lifecycle, menu bar and browser bridge | `desktop/main.cjs`, `desktop/browser/browser.cjs`, `src/services/browser/browser-tools.js` |
+| Credential fill | `src/services/integrations/credentials.js` (desktop-only boundary) |
+| Encrypted remote protocol and relay | `src/services/remote/remote.js`, `src/services/remote/remote-crypto.js`, `relay/` |
 | Native UI and remote store | `ios/Proteus/`, `ios/project.yml`, `ios/Proteus.xcodeproj` |
 | VS Code companion | `extensions/vscode/` |
 | Local Mac package | `scripts/package-mac.mjs` |
-| Transcription, Omi and native process execution | `src/transcription.js`, `src/omi.js`, `src/local-process.js`, `public/omi.js` |
-| Configured-root Markdown picker | `src/workspace-files.js`, `public/markdown-picker.js` |
-| Ghostty VT terminal profiles and local PTYs | `src/terminals.js`, `public/terminals.js`, desktop IPC |
-| Durable desktop tab descriptors | `desktop/workspace-session.cjs`, `public/app.js` |
-| Life and full website application | `src/life.js`, `public/life.js`, `web/` |
+| Transcription, Omi and native process execution | `src/services/tools/transcription.js`, `src/services/tools/omi.js`, `src/providers/local-process.js`, `public/features/tools/omi.js` |
+| Configured-root Markdown picker | `src/services/workspaces/workspace-files.js`, `public/shared/ui/markdown-picker.js` |
+| Ghostty VT terminal profiles and local PTYs | `src/services/tools/terminals.js`, `public/features/tools/terminals.js`, desktop IPC |
+| Durable desktop tab descriptors | `desktop/windows/workspace-session.cjs`, `public/app.js` |
+| Life and full website application | `src/services/life/life.js`, `public/features/tools/life.js`, `web/` |
 | Reproducible Apple simulator builds/tests | `scripts/apple-build.mjs` |
 
 ## Safe development and validation
