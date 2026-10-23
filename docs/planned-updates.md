@@ -18,8 +18,11 @@ compiles and 141 unit tests pass; phone system/activity layout passes. Phone and
 UI tests pass an actual minute of retry, Stop/Continue and retained draft/queue. Typing checks
 across 1/100/1,000 events inspect no history during 210-character entry. Tablet history remains
 bounded and pages normally; prior fixture/simulator failures remain separate. These XCTest
-measurements do not certify physical-device response time. Web deployment and physical iPhone/iPad delivery are
-still authorized but not yet accepted. The monitor stays active until all authorized installations
+measurements do not certify physical-device response time. Both physical devices now run 2610.23.1:
+298 phone/268 tablet protected files match, actual connected Home shows the correct build and
+saved tabs, and two verified full recoveries remain per device. A physical Instruments attachment
+failed despite the target still running; physical CPU/frame-rate performance remains unverified.
+Web deployment is still pending. The monitor stays active until all authorized installations
 are verified or the operator cancels it; dispatch/build/staging do not count as completion.
 
 ## October 22 — stop GitHub-hosted builds

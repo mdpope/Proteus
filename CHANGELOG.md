@@ -3,6 +3,7 @@
 - Acknowledge each native browser navigation receipt before a following metadata batch can race another desktop's address edit. Preserve exact selection, complete history and profile guards.
 - Bring explicit chat recovery and supported attached steering to the web client. Native recovery keeps plain system failures visible and rechecks the host/active turn before attached steering.
 - Verify phone/tablet recovery and local typing work for long messages and 100/1,000-event histories; preserve every typed character with no history traversal during entry. Physical-device performance and live acceptance remain separate.
+- Install mobile build 2610.23.1 on phone and tablet with cold data preservation, connected Home/live build verification and two verified recoveries each. Physical CPU/frame-rate profiling remains unverified.
 
 ## Unreleased — chat recovery, navigation and layout corrections
 

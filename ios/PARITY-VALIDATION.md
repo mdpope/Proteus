@@ -29,12 +29,19 @@ the keyboard, leaving recovery above the viewport. The corrected test uses the k
 dismissal control and explicitly requires recovery to be hittable after normal scrolling;
 no application runtime or recovery assertion changed.
 
-Physical installation/live acceptance remains separate: the phone update is installed and its
-cold protected-file hashes and process launch verify, while actual foreground Proteus UI is
-still pending. Tablet physical delivery remains pending. Mobile-only Release
-build 2610.23.1 is signed using the existing paid identity/profile, which covers both registered
-devices and expires October 16, 2027. No certificate/account was recreated, desktop app updated,
-or live-data backup taken for simulator/build-only work.
+Physical phone and tablet now run mobile-only Release 2610.23.1. Cold verification matches all
+298 phone and 268 tablet protected files. Actual foreground Home screenshots show the correct
+build, connected Build Mac and saved open tabs on both devices; tablet workspaces also render.
+These observations certify installation, preservation and connected Home, not every physical
+gesture, provider workflow or website sign-in. A separate physical Activity Monitor trace could
+not attach to the iPhone's still-running process; no physical CPU/frame-rate result is claimed.
+
+Both devices retain exactly two independently verified full recovery generations, one signed
+app each. The oldest data/app payloads were retired, preserving their receipts. Retirement
+removed 150,226,097 logical bytes; observed free space changed by -159,744 bytes amid concurrent
+work/APFS sharing, so no actual free-space gain is claimed. Existing paid identity/profile covers
+both devices and expires October 16, 2027. No certificate/account was recreated, desktop app
+updated, or live-data backup taken for simulator/build-only work.
 
 ## October 22 — attachment steering composition (source)
 

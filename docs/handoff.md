@@ -11,8 +11,11 @@ system/activity layout passes. Phone and tablet recovery/typing UI checks now pa
 actual minute of capacity retry and zero history traversals during 210-character entry across
 1/100/1,000 events. The tablet's earlier keyboard-dismissal coordinate tap was a fixture defect;
 its corrected interaction keeps the same recovery/draft/queue assertions. See native parity
-validation for retained simulator failures and measurement limits. Web deployment and physical
-mobile live acceptance remain pending. Keep the monitor active and Windows' separate review blocker
+validation for retained simulator failures and measurement limits. Both physical mobile devices
+now run 2610.23.1 with all protected files matched, connected Home/live build verified and two
+verified recoveries each. Physical CPU/frame-rate profiling remains unverified after Instruments
+failed to attach; local typing results remain separate. Web deployment is pending. Keep the
+monitor active and Windows' separate review blocker
 intact. Preserve two native/desktop recoveries per target, without build/test-only snapshots.
 
 ## October 22 — hosted builds disabled by operator request
