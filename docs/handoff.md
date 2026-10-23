@@ -1,3 +1,23 @@
+## October 22 — rollout acceptance corrections
+
+A controlled 120 ms content-tab response delay exposed follow presentation arriving before
+queued navigation reconciliation completed. Awaiting the queued pass keeps the follow
+publication barrier through navigation seeding. The regression also waits for actual native
+page readiness before dispatching input; a pending renderer URL is not load completion.
+
+Authenticated web acceptance exposed duplicate parallel destination lookups reaching the
+existing rate limit. Account-bound in-flight GET coalescing reduces duplicate requests without
+retaining settled authorization/credentials or changing server limits. Connections presents
+an explicit retry control instead of remaining at a loading message.
+
+Acceptance: 1,002 Node tests pass (one platform skip), static checks pass, and 101 web
+tests pass with 867 assertions. Two isolated desktops pass with 120 ms descriptor latency,
+including sustained scroll in both directions (50–51 visible updates; maximum gap 530 ms).
+Both corrections require replacement desktop/web artifacts. Native build 2610.22.2 is unchanged;
+iPhone and iPad installation, protected-data hashes and launch have passed. Physical camera
+orientation and actual post-update pairing remain separate from simulator/UI acceptance.
+Private per-device installation and recovery receipts remain outside source.
+
 ## October 22 — 0.2.29 full rollout authorized
 
 After the Windows integration chat completed and PR #21 merged, the operator authorized

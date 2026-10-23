@@ -24,6 +24,17 @@ test('stale removal cannot delete newer device; endpoint redirects and failures 
  assert.throws(()=>new AccountPairingStore(account,{base:'https://other.example.test/keys'}),/website/);
 });
 
+test('parallel account panels share in-flight reads without retaining credentials or authorization',async()=>{
+ const calls=[],gates=[];const release=()=>gates.shift()();
+ const fetcher=async(url,options)=>{calls.push({url,account:options.headers['X-Proteus-Account']});await new Promise(resolve=>gates.push(resolve));return Response.json(url==='/remote/session'?{account}:{destinations:[credential]});};
+ const a=new AccountPairingStore(account,{fetcher}),b=new AccountPairingStore(account,{fetcher});
+ const reads=[a.list(),b.list()];await new Promise(resolve=>setImmediate(resolve));assert.equal(calls.length,1);release();await new Promise(resolve=>setImmediate(resolve));assert.equal(calls.length,2);release();
+ const [first,second]=await Promise.all(reads);assert.deepEqual(first,second);first[0].label='Local edit';assert.equal(second[0].label,credential.label);
+ const next=a.verifySession();await new Promise(resolve=>setImmediate(resolve));assert.equal(calls.length,3,'settled session checks are never cached');release();await next;
+ const different=new AccountPairingStore(other,{fetcher});const checks=[a.verifySession(),different.verifySession()];await new Promise(resolve=>setImmediate(resolve));assert.deepEqual(calls.slice(-2).map(row=>row.account),[account,other]);
+ release();release();await checks[0];await assert.rejects(checks[1],AccountSessionError);
+});
+
 test('browser destination adapter merges authorized stores without migrating or falling back from account failures',async()=>{
  const localId='44444444-4444-4444-8444-444444444444',f=fixture();
  const key=await crypto.subtle.importKey('raw',new Uint8Array(32),{name:'AES-GCM'},false,['encrypt','decrypt']);

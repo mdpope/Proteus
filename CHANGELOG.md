@@ -3,6 +3,8 @@
 - Combine scoped desktop follow-along, resource/backup improvements, browser controls and the Home correction from the updates below.
 - Preserve independent browser profiles, complete navigation histories, chat state, approvals and durable retry receipts across the update.
 - Include native pairing completion and scanner-orientation fixes, Windows release/update support, portable recovery-copy durability and the patched Markdown renderer.
+- Wait for queued navigation reconciliation before publishing followed tabs, avoiding an empty/unloaded page during slower responses.
+- Coalesce simultaneous website account reads without caching credentials or authorization; show a retry control when Connections cannot load.
 - Rollout acceptance is tracked separately for each device and the web; a successful build does not imply installation or live verification.
 
 ## Documentation — historical Linux acceptance reconciliation

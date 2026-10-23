@@ -39,17 +39,30 @@ function destination(value, key = false) {
     return {hostId:value.hostId, relay:value.relay, label:value.label, deviceId:value.deviceId, pairedAt:value.pairedAt, source:'account', ...(key ? {key:value.key} : {})};
 }
 // Only the selected destination credential is fetched. Raw keys never enter browser storage.
+const accountFetch=(...args)=>fetch(...args),accountReads=new WeakMap();
 export class AccountPairingStore {
-    constructor(account, { fetcher = (...args) => fetch(...args), csrf = () => document.querySelector('meta[name="csrf-token"]')?.content || '', sessionURL = '/remote/session', base = '/remote/destinations' } = {}) {
+    constructor(account, { fetcher = accountFetch, csrf = () => document.querySelector('meta[name="csrf-token"]')?.content || '', sessionURL = '/remote/session', base = '/remote/destinations' } = {}) {
         if (!/^[a-f0-9]{64}$/.test(account)) throw new AccountSessionError();
         if (![sessionURL, base].every(path => /^\/(?!\/)[^?#]*$/.test(path))) throw new Error('Account endpoints must belong to this website.');
         this.account=account;this.fetcher=fetcher;this.csrf=csrf;this.sessionURL=sessionURL;this.base=base;
     }
     async checked(path, {method='GET', body} = {}) {
+        // Shell panels and paired computers request the same account metadata at
+        // once. Share only an in-flight read, never a cached authorization or key.
+        if(method==='GET'){
+            let pending=accountReads.get(this.fetcher);if(!pending){pending=new Map();accountReads.set(this.fetcher,pending);}
+            const key=JSON.stringify([this.account,path]);
+            if(pending.has(key))return structuredClone(await pending.get(key));
+            const work=this.fetchChecked(path,{method,body});pending.set(key,work);
+            try{return structuredClone(await work);}finally{if(pending.get(key)===work)pending.delete(key);}
+        }
+        return this.fetchChecked(path,{method,body});
+    }
+    async fetchChecked(path,{method,body}) {
         const response = await this.fetcher(path, {method, signal:AbortSignal.timeout(15_000), credentials:'same-origin', cache:'no-store', redirect:'manual', headers:{Accept:'application/json', 'X-Proteus-Account':this.account, ...(method==='GET'?{}:{'Content-Type':'application/json','X-CSRF-TOKEN':this.csrf()})}, ...(body===undefined?{}:{body:JSON.stringify(body)})});
         if ([0,401,403,419].includes(response.status) || response.type==='opaqueredirect') throw new AccountSessionError();
         if (!response.ok) {
-            const failure = new Error(response.status===409 ? 'The saved destination changed in another session. Reload before trying again.' : 'The account destination request failed. Please retry.');failure.status=response.status;throw failure;
+            const failure = new Error(response.status===409 ? 'The saved destination changed in another session. Reload before trying again.' : response.status===429 ? 'Account connections are busy. Wait a moment, then retry.' : 'The account destination request failed. Please retry.');failure.status=response.status;throw failure;
         }
         if (response.status===204) return null;
         return response.json();

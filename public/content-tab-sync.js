@@ -223,7 +223,7 @@ export function createTabSynchronizer({scopes,readLocal,apply,request,onError=()
       const notify=previous?.notifiedAt===undefined||now()-previous.notifiedAt>=60_000;
       record.retry={attempt,until:now()+Math.min(60_000,1000*2**Math.min(attempt-1,6)),notifiedAt:notify?now():previous.notifiedAt};
       if(notify)onError(error,scope,record.baseline!==null,record.pending||[]);
-    }).finally(()=>{record.busy=null;if(record.again&&records.get(id)===record){record.again=false;void sync(scope);}});
+    }).finally(async()=>{record.busy=null;if(record.again&&records.get(id)===record){record.again=false;await sync(scope);}});
     return record.busy;
   }
   async function resolve(scope,{preserve}={}){

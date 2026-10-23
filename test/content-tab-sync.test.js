@@ -10,6 +10,14 @@ import {normalizeContentTabDescriptor,normalizeContentTabHistory,sameContentTab}
 import {createTabSynchronizer,rebaseTabChanges,tabChanges,syncableTabURL} from '../public/content-tab-sync.js';
 const pendingCount=values=>[...values.keys()].filter(key=>key.startsWith('proteus.navigation.pending:')).length;
 const tab=id=>({id,type:'browser',title:id,url:'https://example.test/'+id});
+test('awaited synchronization includes a reconciliation queued during the first response',async()=>{
+ const scope={scope:'project',id:'p'},gates=[],applied=[];let requests=0,complete=false;
+ const sync=createTabSynchronizer({scopes:()=>[scope],readLocal:async()=>[],apply:async(_scope,tabs)=>applied.push(tabs),request:async()=>{const revision=++requests;await new Promise(resolve=>gates.push(resolve));return {revision,tabs:[]};}});
+ const first=sync.sync(scope).then(()=>{complete=true;});await new Promise(resolve=>setImmediate(resolve));
+ const queued=sync.sync(scope);gates.shift()();await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(requests,2);assert.equal(complete,false,'follow presentation must not precede the queued navigation reconciliation');
+ gates.shift()();await Promise.all([first,queued]);assert.equal(complete,true);assert.equal(applied.length,2);
+});
 test('repeated synchronization failures back off by scope while retaining uncertain request identity',async()=>{
  const bad={hostId:'owner',scope:'project',id:'pending'},healthy={hostId:'owner',scope:'project',id:'healthy'},values=new Map();
  let clock=0,fail=true,healthyReads=0;const submissions=[],errors=[];

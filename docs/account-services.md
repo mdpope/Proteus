@@ -47,3 +47,11 @@ does not silently truncate the desktop day list or retained meal/version records
 Validation uses disposable accounts/SQLite and isolated browser/Electron rehearsals.
 Production database execution plans and installed native account flows require separate
 deployment verification; source tests and Swift parsing are not a live-workflow claim.
+
+## Parallel website destination reads
+
+Website panels coalesce simultaneous GETs only while the same account-bound request is
+in flight. Settled results and raw keys are not retained; later operations verify the session
+again. Different accounts and fetch transports remain isolated, and mutations are never
+coalesced. Existing server rate limits remain unchanged. Connections offers an explicit retry
+when loading fails.

@@ -1,3 +1,14 @@
+## October 22 — follow synchronization completion and account read coalescing
+
+Keep durable navigation and ephemeral presentation on their existing service boundaries.
+The presentation caller must await every reconciliation already queued behind its navigation
+request; detaching that pass can publish a selected browser before its URL/history seed exists.
+Do not mask this race by adding fixed sleeps or bypassing navigation conflict checks.
+
+Coalesce only concurrent account-bound website reads, with immediate disposal on settlement.
+Do not cache authorization/credential responses or raise rate limits to accommodate duplicate
+panel requests. Account identity and transport form the in-flight isolation boundary.
+
 ## October 22 — bounded external transcript coverage for manual Linux update
 
 The current Linux provider uses a shared home outside Proteus app/profile snapshot roots. The

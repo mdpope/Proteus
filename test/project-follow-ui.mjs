@@ -10,6 +10,8 @@ const service=async(app,fn,arg)=>app.evaluate(({app},{source,arg})=>{const servi
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const scrollPosition=app=>app.evaluate(async({app})=>{const browser=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser(),tab=browser.tabs.get(browser.active);return tab.view.webContents.executeJavaScript('({top:scrollY,fraction:scrollY/Math.max(1,document.documentElement.scrollHeight-innerHeight)})');});
 const nativeScript=(app,source)=>app.evaluate(({app},source)=>{const browser=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser();return browser.tabs.get(browser.active).view.webContents.executeJavaScript(source);},source);
+// Renderer URLs can describe pending navigation before the native page exists.
+const nativeReady=(app,url)=>until(()=>app.evaluate(({app},url)=>{const browser=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser(),wc=browser.tabs.get(browser.active)?.view?.webContents;return !!wc&&wc.getURL()===url&&!wc.isLoading();},url),'native document ready '+url);
 const nativeFollow=(app,y)=>app.evaluate(({app},y)=>{const browser=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser(),wc=browser.tabs.get(browser.active).view.webContents;wc.send('proteus:follow-scroll',{url:wc.getURL(),positions:[{path:'root',top:0,left:0,x:0,y}]});},y);
 async function delayedNativeScroll(owner,client){
  // Bounded synthetic traces distinguish a replaced address edit from an older
@@ -27,6 +29,7 @@ async function delayedNativeScroll(owner,client){
  });
  await owner.page.locator('#browser-url').fill(origin+'/slow');await owner.page.locator('#browser-url').press('Enter');
  await until(()=>client.page.evaluate(()=>followFixture.state.tabs.find(tab=>tab.id===followFixture.state.tab)?.info?.url?.endsWith('/slow')),'slow page URL follows');
+ await Promise.all([nativeReady(owner,origin+'/slow'),nativeReady(client,origin+'/slow')]);
  await until(()=>nativeScript(client,'!!document.querySelector("#fixture-content")'),'slow content placeholder');
  assert.equal(await nativeScript(client,'document.documentElement.dataset.ready'),undefined,'receiver content is still delayed');
  await owner.evaluate(({app})=>{const browser=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser();browser.tabs.get(browser.active).view.webContents.sendInputEvent({type:'mouseWheel',x:200,y:200,deltaY:-900,deltaX:0,canScroll:true});});
@@ -103,6 +106,8 @@ try{
   app.page=page;
  }
  const [a,b]=apps;
+ const responseDelay=Number(process.env.PROTEUS_FOLLOW_RESPONSE_DELAY_MS||0);assert.ok(Number.isSafeInteger(responseDelay)&&responseDelay>=0&&responseDelay<=1000);
+ if(responseDelay)for(const app of apps)await app.page.route('**/api/content-tabs',async route=>{const response=await route.fetch();await pause(responseDelay);await route.fulfill({response});});
  await service(a,async(s,args)=>{await s.remote.configure({enabled:true,mode:'external',label:'Follow owner',relayURL:args.url,publicURL:args.url,relayToken:args.token});},{url:'ws://127.0.0.1:'+relay.port,token});
  await until(()=>service(a,s=>s.remote.status==='online'),'owner online');
  const pairing=await service(a,async s=>({code:(await s.remote.pairing()).code,hostId:s.remote.config.hostId}));
@@ -122,9 +127,11 @@ try{
  await delayedSharedScroll(a.page);
  const first=await a.page.evaluate(async url=>{const info=await window.desktop.browser({action:'create',url,parentId:followFixture.state.tab});followFixture.openTab({id:info.id,type:'browser',info,label:'First',parentId:followFixture.state.tab});return info.id;},origin+'/one');
  await until(()=>b.page.evaluate(()=>followFixture.state.tabs.find(tab=>tab.id===followFixture.state.tab)?.info?.url?.endsWith('/one')),'browser selection follows');
+ await Promise.all(apps.map(app=>nativeReady(app,origin+'/one')));
  for(const [app,name]of [[a,'owner'],[b,'client']])await app.evaluate(async({app},{origin,name})=>{const browser=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser(),tab=[...browser.tabs.values()].find(tab=>tab.view?.webContents.getURL().startsWith(origin));await tab.view.webContents.session.cookies.set({url:origin,name:'localIdentity',value:name});},{origin,name});
  await a.page.locator('#browser-url').fill(origin+'/two');await a.page.locator('#browser-url').press('Enter');
  await until(()=>b.page.evaluate(()=>followFixture.state.tabs.find(tab=>tab.id===followFixture.state.tab)?.info?.url?.endsWith('/two')),'URL follows');
+ await Promise.all(apps.map(app=>nativeReady(app,origin+'/two')));
  const identities=[];for(const app of apps)identities.push(await app.evaluate(async({app},origin)=>{const browser=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser(),tab=[...browser.tabs.values()].find(tab=>tab.view?.webContents.getURL().startsWith(origin));return (await tab.view.webContents.session.cookies.get({url:origin})).find(row=>row.name==='localIdentity')?.value;},origin));assert.deepEqual(identities,['owner','client']);
  await a.evaluate(({app})=>{const browser=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser(),tab=browser.tabs.get(browser.active);tab.view.webContents.sendInputEvent({type:'mouseWheel',x:200,y:200,deltaY:-650,deltaX:0,canScroll:true});});
  await until(()=>b.evaluate(async({app})=>{const browser=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser(),tab=browser.tabs.get(browser.active);return tab?.view&&await tab.view.webContents.executeJavaScript('scrollY>100');}),'browser scroll follows');

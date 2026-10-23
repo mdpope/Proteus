@@ -16,7 +16,8 @@ service. Selected tabs and positions use `tabs.follow.v1`, a bounded ephemeral
 service in `src/project-follow.js`. A client joins one visible scope, renews a
 45-second lease, and publishes ordered changes. Scope-bound leave, actor binding,
 generation checks, and latest-event coalescing protect navigation and reconnect races.
-Follow events are excluded from replay journals. Durable history, pending navigation
+Awaited descriptor synchronization includes passes queued during an earlier response, so
+selection cannot overtake a pending navigation seed. Follow events are excluded from replay journals. Durable history, pending navigation
 operations, and retry receipts retain their existing ownership.
 
 Each browser loads the shared URL in its own local profile. Cookies, credentials,
