@@ -1,5 +1,6 @@
 ## Next release — October 23 feature queue (local package validation; rollout held)
 
+- Exclude disposable validation output from desktop packages and migrate existing extension native-messaging patches to the organized service path when packaging.
 - Preserve Keep Screen Awake across restarts; make the ordinary loaded-browser budget configurable in Engine Room (default 6), and retain Persisted pages through hiding, restoration and memory eviction.
 - Move iOS browser-cache serialization/encryption/writes off the main actor and isolate chat scroll measurements from observable history state. Preserve the baseline navigation acknowledgment and deep workspace/project selection fixes.
 - Support consented question-reply attachments across Copilot, Codex and Claude; keep attachment chips above provider/model controls. Show stalled provider/tool progress independently of user messages and interrupt a turn after 30 minutes without observable progress while preserving its queue.

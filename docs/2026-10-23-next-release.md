@@ -10,6 +10,12 @@ checkout is primary Proteus. This branch merges its latest clean main, `15327ab`
 merge `63bfc39`; the newer main commit contains rollout/retention documentation only. Both
 sets of release records are preserved. Implementation checkpoints are `961af16` and `266e43b`.
 
+Local package gates caught two issues before acceptance: scratch validation output needed an
+explicit exclusion, and an already-patched extension dependency retained its pre-organization
+native-messaging path. Both are fixed with regression coverage. The first package failed closed;
+the second package's startup timeout is retained as a failed result, superseded only by a rebuilt
+package passing the same gates. Test launch errors now retain their original exception.
+
 | # | Item | Implementation and verification |
 | --- | --- | --- |
 | 1 | iOS scrolling | Cache serialization/encryption/atomic writes use a serial utility queue; scroll measurements no longer publish whole-history state. Native units/simulator scrolling pass. Physical frame-rate profiling remains acceptance. |
