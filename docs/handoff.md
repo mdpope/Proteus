@@ -30,9 +30,15 @@ or successful continuation of its earlier failed native Codex session. The opera
 new four-item retirement after review initially blocked it; exactly two verified recoveries
 remain and actual free space increased by 1,553,993,728 bytes.
 
-Linux's new package is installed but is **not live-accepted**: peer verification found that the
-helper-launched process cannot access existing protected credential storage. Pairing bytes remain
-intact; investigate its launch context without changing credentials, keyrings or grants. Windows'
+Linux's new package is installed but is **not fully live-accepted**. Its first helper launch
+omitted desktop-session settings and could not access existing protected credential storage.
+One guarded relaunch of the same installed build with the existing desktop environment restored
+credential access, the online relay and all 36 remote/five local chats, without changing secrets
+or grants. One unexpired cookie and one original navigation entry are absent from the active
+store; their recovery/saved-session evidence remains intact. A narrow recovery that preserves
+newer browser activity is being prepared. Keep both recoveries; do not claim full acceptance,
+overwrite the whole profile or relax history/cookie guards.
+Windows'
 new candidate passes its package gates but remains uninstalled: the visible app has an empty
 pairing view while the stored profile retains five pairings, and its prior cleanup review blocker
 remains unresolved. Preserve both views; do not copy data or re-pair to conceal the mismatch.

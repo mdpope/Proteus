@@ -28,7 +28,10 @@ HC now runs the same new build with actual connected/browser UI, 399 preserved o
 1,819 protected retry receipts and two verified recoveries after a newly approved four-item
 retirement. Actual free-space gain is 1,553,993,728 bytes. Later timestamp-only mutable differences
 remain separately classified; the prior native Codex continuation failure remains unresolved.
-Linux is installed but live acceptance is held by credential-store access after helper launch.
+Linux is installed; one normal relaunch restored credential/peer access after its updater dropped
+desktop-session hints. Full live acceptance remains held: one unexpired cookie and one original
+navigation entry are absent from the active store, with recovery evidence retained. Prepare a
+narrow recovery preserving newer activity; do not overwrite the profile or weaken existing guards.
 Windows needs its live/stored data-view mismatch resolved without changing either profile or
 bypassing its cleanup review blocker. Its read-only native-owner helper needs human execution
 under the destination's installed computer-use guidance; no terminal-UI workaround was attempted.
@@ -39,6 +42,9 @@ shared owner-owned download-idle check and a regression covering those grants. T
 not implement that change or reidentify the accepted package. Current installations require
 actual owner-window Downloads observations or the operator's target-specific readiness evidence
 in addition to the existing final owner barrier; the barrier alone does not prove global idleness.
+Also queue preservation of the existing Linux desktop-session environment through helper launch
+and a protected-storage readiness regression. The observed launch-context correction used the
+same installed artifact and existing keyring; it changed no credential, grant or frozen runtime.
 
 Web recovery UI passes a real minute of retry, explicit Stop and Continue, retained draft/queue,
 standalone system errors, exact consenting steering attachments and stale-turn rejection. All
