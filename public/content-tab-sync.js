@@ -73,7 +73,7 @@ export function rebaseTabChanges(operations,current){
   if(order){const ids=order.ids.filter(id=>live.has(id));for(const tab of current)if(live.has(tab.id)&&!ids.includes(tab.id))ids.push(tab.id);for(const id of live.keys())if(!ids.includes(id))ids.push(id);if(ids.join('\0')!==[...live.keys()].join('\0'))changes.push({action:'reorder',ids});}
   return changes;
 }
-export function createTabSynchronizer({scopes,readLocal,apply,request,onError=()=>{},navigation=false,pendingStorage,now=Date.now,preserveUntracked=()=>false}){
+export function createTabSynchronizer({scopes,readLocal,apply,acknowledge=async()=>{},request,onError=()=>{},navigation=false,pendingStorage,now=Date.now,preserveUntracked=()=>false}){
   const records=new Map(),navigationCache=new Map(),backoff=new Map();
   const hostKey=scope=>scope.hostId||'local';
   const key=scope=>JSON.stringify([scope.hostId||'',scope.scope,scope.id]);
@@ -210,6 +210,10 @@ export function createTabSynchronizer({scopes,readLocal,apply,request,onError=()
             if(records.get(id)!==record||rebaseTabChanges(changes,fresh.tabs).length||operations.some(op=>op.action==='open'&&(op.tab.profileId||'default')!==(tab?.profileId||'default')))throw error;
             remote=fresh;converged=true;
           }
+          // A following metadata batch may race another desktop's navigation.
+          // Settle this exact native branch while its own receipt is available;
+          // the later response may already select a different committed entry.
+          if(changes.some(op=>op.action.startsWith('browser-'))&&records.get(id)===record)await acknowledge(scope,remote.tabs);
           record.request=null;pendingStorage?.removeItem(requestKey);
           return converged;
         };

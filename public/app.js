@@ -12,7 +12,7 @@ import {rememberTabSelection,restoreTabSelection} from './workspace-selection.js
 import {previewRelativeAge,previewChatActivity} from './preview-navigation.js';
 import {previewApprovalChoices,previewPermissionNames,previewPermissionHelp,previewFolderDialog,previewRememberDialog,previewRememberEffect,previewPermissionChoiceLabel} from './preview-permissions.js';
 import {downloadsChanged} from './browser-downloads.js';
-import {normalizeContentTabHistory,contentTabMetadata} from './content-tab-descriptor.js';
+import {normalizeContentTabHistory,contentTabMetadata,acknowledgesBrowserNavigation} from './content-tab-descriptor.js';
 import {chatLink,parseChatLink} from './chat-links.js';
 import {computerName} from './computer-identity.js';
 import {initWorkspaces,renderWorkspaces,renderWorkspace,openWorkspace,openWorkspaceChat,openRemoteProject,workspaceOwners,refreshWorkspaceOwners,loadWorkspaceOwnerTabs,recentWorkspaces,sendChatToWorkspace,moveChatToWorkspace,createWorkspace,deleteWorkspace} from './desktop-workspaces.js';
@@ -860,6 +860,17 @@ const contentTabSync=createTabSynchronizer({navigation:true,pendingStorage:deskt
       if(snapshot.state?.capabilities?.includes('projects.v1')&&state.tabs.some(tab=>tab.type==='remote-run'&&tab.parentId===scopeParent(scope)?.id&&catalog?.projects?.some(project=>project.id===catalog.memberships?.[tab.runId]?.projectId&&project.workspaceId===scope.id)))await reconcileRemoteProjectPlacement(scope.hostId);
     }
     return window.desktop.peers({action:'request',hostId:scope.hostId,method:action==='get'?'tabs.get':action==='history'?'tabs.history':'tabs.mutate',args:{scope:scope.scope,id:scope.id,...args},options});
+  },
+  acknowledge:async(scope,descriptors)=>{
+    const parent=scopeParent(scope);if(scope.scope!=='team'&&(!parent||parent.connectionPaused))return;
+    const list=scope.scope==='team'?teamState().tabs:state.tabs.filter(tab=>!tab.connectionPaused&&tab.parentId===parent.id);
+    for(const tab of list){
+      if(tab.type!=='browser'||tab.remotePreviewURL)continue;
+      const current=await descriptorFor(tab,scope.scope==='team'?{type:'team',id:null}:parent),descriptor=descriptors.find(item=>item.id===current?.id);
+      if(!acknowledgesBrowserNavigation(current,descriptor))continue;
+      const info=await window.desktop.browser({action:'apply-history',id:tab.browserId||tab.id,url:descriptor.url,history:descriptor.history,title:descriptor.history.entries[descriptor.history.index]?.title||descriptor.title,expectedURL:current.url,expectedEntryId:current.history.currentEntryId});
+      if(tab.info)tab.info=info;else Object.assign(tab,{url:info.url,history:info.history,nativeTitle:info.title,navigationPending:info.navigationPending});
+    }
   },
   apply:async(scope,descriptors,captured,{discardPendingNavigation=false}={})=>{
     descriptors=previewContentDescriptors(scope,descriptors);

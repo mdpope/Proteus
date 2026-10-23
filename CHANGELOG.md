@@ -1,3 +1,9 @@
+## Unreleased — October 23 local corrections; desktop rollout held
+
+- Acknowledge each native browser navigation receipt before a following metadata batch can race another desktop's address edit. Preserve exact selection, complete history and profile guards.
+- Bring explicit chat recovery and supported attached steering to the web client. Native recovery keeps plain system failures visible and rechecks the host/active turn before attached steering.
+- Expand local iOS performance checks to long messages and 100/1,000-event histories. Physical-device performance and installation remain separate.
+
 ## Unreleased — chat recovery, navigation and layout corrections
 
 - Disable the GitHub build workflow at the operator's request; retain local validation and require fresh authorization before enabling or dispatching hosted jobs.

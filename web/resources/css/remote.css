@@ -130,7 +130,10 @@ body[data-browser-account] .remote-new-chat .remote-chat-name{margin-bottom:18px
 .workspace-folder-content>.actions{margin-bottom:12px}
 @media(max-width:600px){.workspace-folder-content{padding:10px 8px 4px}}
 
-.remote-activity-items>.remote-message.system{margin:0;background:#17201c;border:1px dashed var(--line);border-left:3px solid #53675a;border-radius:8px;padding:10px 12px}
+.remote-message.system{margin:0;background:#17201c;border:1px dashed var(--line);border-left:3px solid #53675a;border-radius:8px;padding:10px 12px}
+.chat-recovery-controls{margin-top:12px;padding-top:10px;border-top:1px solid var(--line)}
+.chat-recovery-controls .actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.chat-recovery-controls button{white-space:normal}
 .remote-permission-detail{border:1px solid #455947;border-left:3px solid #8aafa5;border-radius:8px}
 .remote-activity-item .tool-call-reference{overflow-wrap:anywhere}
 

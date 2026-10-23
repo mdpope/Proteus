@@ -1,3 +1,24 @@
+## October 23 — local URL-follow fix and web/native parity; desktop hold
+
+The operator requested iOS performance checks and reported project tab selection following while
+its changed page URL did not. All further desktop installations, including Windows, are held
+pending combined review. Existing accepted Build Mac/Linux/HC installations are not repeated;
+Windows still has its separate unresolved recovery-retirement review blocker.
+
+A two-desktop test reproduces native-link/immediate reverse-address reversion at 400 ms latency.
+Source now acknowledges each navigation's exact saved branch before later metadata I/O can race
+another client's navigation; native history/profile/revision guards remain strict. The same full
+UI test passes locally, with 48/51 scroll updates, 1,345/447 ms gaps and 4/3 descriptor reads.
+No new desktop package or installation is accepted by this source result.
+
+Web recovery UI passes a real minute of retry, explicit Stop and Continue, retained draft/queue,
+standalone system errors, exact consenting steering attachments and stale-turn rejection. All
+101 Laravel tests pass with disposable test keys; the built web package compiles. Native source
+compiles and 141 unit tests pass; phone system/activity layout passes. Expanded performance and
+native recovery UI checks are in progress. Web deployment and physical iPhone/iPad delivery are
+still authorized but not yet accepted. The monitor stays active until all authorized installations
+are verified or the operator cancels it; dispatch/build/staging do not count as completion.
+
 ## October 22 — stop GitHub-hosted builds
 
 Operator direction: stop triggering GitHub builds while credits are exhausted. Disable the

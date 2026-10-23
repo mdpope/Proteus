@@ -6,10 +6,39 @@ import os from 'node:os';
 import path from 'node:path';
 import {createRequire} from 'node:module';
 import {ContentTabs,contentTab} from '../src/content-tabs.js';
-import {normalizeContentTabDescriptor,normalizeContentTabHistory,sameContentTab} from '../public/content-tab-descriptor.js';
+import {normalizeContentTabDescriptor,normalizeContentTabHistory,sameContentTab,acknowledgesBrowserNavigation} from '../public/content-tab-descriptor.js';
 import {createTabSynchronizer,rebaseTabChanges,tabChanges,syncableTabURL} from '../public/content-tab-sync.js';
 const pendingCount=values=>[...values.keys()].filter(key=>key.startsWith('proteus.navigation.pending:')).length;
 const tab=id=>({id,type:'browser',title:id,url:'https://example.test/'+id});
+test('navigation acknowledgement ignores passive metadata but preserves exact selection, full branch and profile guards',()=>{
+ const history={entries:['a','b','c'].map(id=>({id,url:'https://example.test/'+id,title:id})),index:1,currentEntryId:'b',revision:2};
+ const local={...tab('view'),url:'https://example.test/b',history,navigationPending:true,lastActivityAt:'2026-10-23T12:00:00Z'};
+ const remote={...local,title:'New native title',navigationPending:false,history:{...structuredClone(history),revision:4}};
+ assert.equal(acknowledgesBrowserNavigation(local,remote),true);
+ for(const changed of [{...remote,profileId:'other'},{...remote,history:{...remote.history,index:2,currentEntryId:'c'}},{...remote,history:{...remote.history,entries:remote.history.entries.slice(0,2)}},{...remote,history:{...remote.history,revision:1}},{...remote,url:'https://example.test/redirect'}])assert.equal(acknowledgesBrowserNavigation(local,changed),false);
+ assert.equal(acknowledgesBrowserNavigation({...local,navigationPending:false},remote),false);
+});
+test('each navigation receipt is acknowledged before metadata can observe another desktop selection',async()=>{
+ const scope={scope:'project',id:'receipt-order'},entry=id=>({id,url:'https://example.test/'+id,title:id});
+ const original={...tab('view'),url:entry('a').url,history:{entries:[entry('a')],index:0,currentEntryId:'a',revision:1}};
+ let local=[structuredClone(original)],remote={revision:1,tabs:[structuredClone(original)]};const order=[],errors=[];
+ const sync=createTabSynchronizer({navigation:true,scopes:()=>[scope],readLocal:async()=>structuredClone(local),
+  acknowledge:async(_scope,tabs)=>{order.push('ack:'+tabs[0].history.currentEntryId);if(acknowledgesBrowserNavigation(local[0],tabs[0]))local[0].navigationPending=false;},
+  apply:async(_scope,tabs)=>{if(!local[0].navigationPending)local=structuredClone(tabs);},onError:error=>errors.push(error),
+  request:async(_scope,action,args)=>{
+   if(action==='get')return structuredClone(remote);
+   const op=args.operations[0];order.push(op.action);
+   if(op.action==='browser-navigate')remote={revision:2,tabs:[{...original,url:entry('b').url,history:{entries:[entry('a'),entry('b')],index:1,currentEntryId:'b',revision:2}}]};
+   else{
+    assert.equal(local[0].navigationPending,false,'the native pending branch is settled before metadata I/O');
+    remote={revision:3,tabs:[{...remote.tabs[0],title:'Other desktop',url:entry('c').url,history:{entries:[entry('a'),entry('b'),entry('c')],index:2,currentEntryId:'c',revision:3}}]};
+   }
+   return structuredClone(remote);
+  }});
+ await sync.all();local=[{...original,title:'Changed metadata',url:entry('b').url,navigationPending:true,history:{entries:[entry('a'),entry('b')],index:1,currentEntryId:'b',revision:1}}];
+ await sync.all();assert.deepEqual(errors,[]);assert.deepEqual(order,['browser-navigate','ack:b','open']);
+ assert.equal(local[0].history.currentEntryId,'c');await sync.all();assert.deepEqual(order,['browser-navigate','ack:b','open'],'old pending selection is never republished as Back');
+});
 test('awaited synchronization includes a reconciliation queued during the first response',async()=>{
  const scope={scope:'project',id:'p'},gates=[],applied=[];let requests=0,complete=false;
  const sync=createTabSynchronizer({scopes:()=>[scope],readLocal:async()=>[],apply:async(_scope,tabs)=>applied.push(tabs),request:async()=>{const revision=++requests;await new Promise(resolve=>gates.push(resolve));return {revision,tabs:[]};}});

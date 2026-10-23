@@ -1,3 +1,16 @@
+## October 23 — desktop hold; local URL correction and web/mobile work
+
+Latest operator direction holds all desktop updates, including Windows, while local fixes and iOS
+performance are checked. Build Mac/Linux/HC already run the prior accepted correction; do not
+reinstall them. The URL-follow race now reproduces and passes with a source correction; see
+[follow verification](project-follow.md). No new desktop package/install is accepted yet.
+
+Web recovery/attachment steering is implemented locally and passes focused authenticated UI
+checks including a real 60-second retry. Native source compiles, 141 units pass and standalone
+system/activity layout passes; expanded typing/recovery UI work continues. Web and physical
+mobile deployments are still pending. Keep the monitor active and Windows' separate review blocker
+intact. Preserve two native/desktop recoveries per target, without build/test-only snapshots.
+
 ## October 22 — hosted builds disabled by operator request
 
 The operator requested no more GitHub build attempts because credits are exhausted and failed-run

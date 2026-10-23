@@ -1,3 +1,14 @@
+## October 23 — acknowledge navigation before the next batch
+
+A successful navigation response and the last response of a multi-batch reconciliation are
+not interchangeable. Metadata can race another desktop's new navigation between those responses.
+A narrow callback consumes each navigation's exact accepted branch before subsequent metadata
+requests. It only acknowledges an identical profile/URL/current entry and complete ordered local
+history. Native guards recheck the observed identity at execution. The ordinary full-descriptor
+apply and changed-during-I/O guard retain their existing responsibilities and do not relax to
+make stale native pending flags disappear. Uncertain request IDs and strict navigation conflicts
+remain durable. Tests must include a real native link followed by an immediate reverse address edit.
+
 ## October 22 — explicit chat recovery and provider input boundaries
 
 System failures belong in chronological message boxes, not collapsed Activities. Continuation

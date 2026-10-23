@@ -1,6 +1,7 @@
 import {recentItemMarkup} from './navigation-icons.js';
 import {bindWebChatPermissions} from './chat-permissions.js';
 import {chatLink} from '../../../public/chat-links.js';
+import {mountChatRecovery} from '../../../public/chat-recovery-controls.js';
 import {authenticatedComputerMetadata,computerDescription} from '../../../public/computer-identity.js';
 import {observeRunningChats} from './running-chats.js';
 import {createWebWorkspaces} from './workspaces.js';
@@ -106,13 +107,23 @@ async function prepareAttachmentSend(current,run,key,retained,input,base){
     if(items.length>maxAttachmentFiles||items.some(item=>!item.file.size||item.file.size>maxAttachmentBytes)||items.reduce((total,item)=>total+item.file.size,0)>maxAttachmentBatchBytes)throw new Error('The selected files exceed the attachment limits. Remove files before sending.');
     const providerId=run?.schedule?.provider||input.provider,allowed=current.state.attachmentMediaTypes?.[providerId]||[];
     if(items.some(item=>!allowed.includes(item.mediaType)))throw new Error(`${providerName(providerId)} cannot receive one of these file types. Remove it or choose a supported provider.`);
-    if(run&&input.mode==='steer')throw new Error('Files require a queued turn. Choose Queue before sending.');
+    const steering=!!run&&input.mode==='steer',turnId=run?.turns?.at(-1)?.id;
+    const verifySteering=async()=>{
+        assertAttachmentDestination(current,run);
+        if(!steering)return;
+        const fresh=await commandForHost(current,'chat.get',{id:run.id});
+        assertAttachmentDestination(current,run);
+        if(fresh.status!=='running'||fresh.schedule?.provider!==providerId||fresh.turns?.at(-1)?.id!==turnId||!fresh.chatControls?.steering||items.some(item=>!fresh.chatControls.steeringMediaTypes?.includes(item.mediaType)))throw new Error('The active turn or supported attachment types changed. Review the message again.');
+    };
+    await verifySteering();
     if(!await confirmAttachmentSend({items,providerId,hostName:current.host.label,chatName:run?.title||input.name||'New chat'})){const error=new Error('Send cancelled.');error.cancelled=true;throw error;}
+    await verifySteering();
     retained.draftId ||= crypto.randomUUID();const messageId=retained.id,metadata=[];
     for(const item of items)metadata.push(await uploadAttachment(item,{current,run,draftId:retained.draftId,messageId,providerId}));
     assertAttachmentDestination(current,run);
     const authorization=await command('chat.attachments.authorize',{...(run?{id:run.id}:{draftId:retained.draftId}),providerId,messageId,attachments:metadata});
-    return {method:run?'chat.send':'chat.start',args:{...base,...(run?{}:{draftId:retained.draftId}),providerId,messageId,mode:'queue',attachments:metadata.map(item=>item.attachmentId),consentId:authorization.consentId}};
+    await verifySteering();
+    return {method:run?'chat.send':'chat.start',args:{...base,...(run?{}:{draftId:retained.draftId}),providerId,messageId,mode:steering?'steer':'queue',attachments:metadata.map(item=>item.attachmentId),consentId:authorization.consentId}};
 }
 const session = () => sessions.get(active);
 function connectionLabel(hostId) {
@@ -796,6 +807,16 @@ function rememberActivityDisclosures(current,scope=root){
  current.activityDisclosures ||= new Set();scope.querySelectorAll('[data-activity-disclosure]').forEach(details=>{if(details.open)current.activityDisclosures.add(details.dataset.activityDisclosure);else current.activityDisclosures.delete(details.dataset.activityDisclosure);});
 }
 function mountEventMarkdown(scope,current,run){
+ for(const element of scope.querySelectorAll('[data-markdown-event]')){
+  const entry=run.events[Number(element.dataset.markdownEvent)-(run.eventStart||0)];
+  if(!entry)continue;
+  mountChatRecovery(element.parentElement,entry,run,{notify:notice,recover:run.chatControls?.recovery?async(action,expectedFailureEventAt)=>{
+   if(session()!==current||current.run?.id!==run.id)throw new Error('The selected chat changed. Review it before continuing.');
+   await commandForHost(current,'chat.recover',{id:run.id,action,expectedFailureEventAt});
+   const fresh=await commandForHost(current,'chat.get',{id:run.id});
+   if(session()===current&&current.run?.id===run.id){preserveDrafts();current.run=mergeChatHistory(current.run,fresh);render();}
+  }:null});
+ }
  for(const element of scope.querySelectorAll('[data-markdown-event]')) { const event = run.events[Number(element.dataset.markdownEvent)-(run.eventStart||0)]; current.images ||= new Map(); mountMarkdown(element, event?.text || '', { copy: value => navigator.clipboard.writeText(value), link: url => { if (/^https?:\/\//i.test(url)) {if(isLoopbackPreview(url))void openSharedPreview(current,run,url).catch(error=>notice(error.message));else window.open(url, '_blank', 'noopener,noreferrer');} else if((event?.role||event?.type)==='assistant')void openChatDocument(current,run,url).catch(error=>notice(error.message));else notice('Open file links from assistant messages on the owning computer.'); }, image: async source => { const key = run.id + ':' + source; if (!current.images.has(key)) current.images.set(key, command('chat.image', { id: run.id, source }).then(r => r.dataURL).catch(error => { current.images.delete(key); throw error; })); return current.images.get(key); } }); }
 }
 function bindWebRuntime(current,run){

@@ -55,6 +55,16 @@ export function contentTabMetadata(value){
 export const sameContentTab=(left,right)=>JSON.stringify(normalizeContentTabDescriptor(left))===JSON.stringify(normalizeContentTabDescriptor(right));
 export const sameContentTabs=(left,right)=>left.length===right.length&&left.every((tab,index)=>sameContentTab(tab,right[index]));
 
+// Accept only proof of the exact pending selection and its complete ordered
+// branch. Title/activity updates during I/O must not hide that acknowledgement.
+export function acknowledgesBrowserNavigation(local,remote){
+ if(local?.type!=='browser'||remote?.type!=='browser'||!local.navigationPending||local.url!==remote.url||(local.profileId||'default')!==(remote.profileId||'default'))return false;
+ const pending=normalizeContentTabHistory(local.history),saved=normalizeContentTabHistory(remote.history);
+ if(!pending?.entries.length||!saved||pending.currentEntryId!==saved.currentEntryId||!Number.isSafeInteger(saved.revision)||(pending.revision??0)>saved.revision)return false;
+ const positions=new Map(saved.entries.map((entry,index)=>[entry.id,{entry,index}]));let prior=-1;
+ return pending.entries.every(entry=>{const found=positions.get(entry.id);if(!entry.id||!found||found.index<=prior||found.entry.url!==entry.url)return false;prior=found.index;return true;});
+}
+
 // Observing a mirrored view is not a new interaction. Older cached timestamps and
 // absent icon fields must not undo metadata received from another client.
 export function mergeContentTabMetadata(previous,incoming){

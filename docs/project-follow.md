@@ -108,16 +108,28 @@ keep their existing tab behavior; follow is retried after connection recovery.
 These are source and synthetic acceptance checks. Installed physical-device rollout
 is separate and must use the exact verified artifact and the desktop update workflow.
 
-## Separate native-link acknowledgement observation
+## October 23 — native-link then reverse-address correction (local source)
 
-An additional native-link then immediate reverse-address probe reproduces an older pending-entry
-acknowledgement problem on the unchanged `20791699cc10` release as well as the correction.
-The idle source can republish a traversal to its already-committed native entry. Original logs
-and command traces are retained privately; no strict history guard was weakened to make the
-probe pass. This broader history race is not claimed fixed by the input-authority correction.
-Run `PROTEUS_FOLLOW_NATIVE_ACK_PROBE=1` with the normal UI fixture to reproduce it separately.
-The required idle chat-selection, normal bidirectional address, scope, history and scroll checks
-remain unconditional in that fixture.
+A real page-link navigation followed immediately by an address edit on the other desktop
+reproduced the reported URL regression under 400 ms descriptor latency. The navigation mutation
+was accepted, but a following metadata batch could observe the other desktop's next navigation
+before the first native pending branch was acknowledged. The idle original view then republished
+its old selection as Back. The earlier failure also reproduces on the original release; retained
+failed traces remain separate from the passing correction.
+
+Each navigation mutation now passes its own verified response to a narrow native acknowledgment
+callback before sending metadata. It requires the exact URL, profile, selected entry and complete
+ordered pending branch. Native expected-URL/entry and full-history guards remain unchanged. It
+never acknowledges an incomplete Forward branch or a different selection, rewrites a receipt,
+or grants follow authority to an idle observation.
+
+The page-link/reverse-address sequence is now an unconditional UI regression. Local source passes
+it at 400 ms latency alongside bidirectional selection, independent cookies, full retained history,
+inactive-scope/re-entry and continuous nested-browser scrolling. Recorded visible updates are
+48/51, maximum gaps 1,345/447 ms, and descriptor reads 4/3 (limit six). Deterministic tests cover
+acknowledgment before a concurrent metadata response and rejection of changed profiles, stale
+revisions, different selections and missing Forward entries. Packaged and installed acceptance
+are pending: the operator explicitly holds all desktop updates while reviewing further fixes.
 
 ## Fresh-input correction acceptance
 
