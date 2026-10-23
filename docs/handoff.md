@@ -4,14 +4,28 @@ The operator has now requested finishing needed desktop/web updates and deleting
 releasing the earlier desktop hold. Package and verify the tested URL-follow correction before
 replacing the prior accepted Build Mac/Linux/HC builds; Windows needs the same current runtime.
 See [follow verification](project-follow.md). Fresh owner/work, recovery and review gates still
-apply; this authorization does not bypass the separate Windows cleanup rejection. No new desktop
-package/install is accepted yet.
+apply; this authorization does not bypass the separate Windows cleanup rejection.
+
+Build Mac now runs `490fd629b659+src.615fe38d6371`. All ten exact-package gates pass;
+cold verification covers 74,639 files, all three databases and 68 protected retry receipts.
+The actual original chat and ordinary website content/address are restored, all three window
+identities remain, and the relay is online. Provider metadata is available; no external provider
+workflow or Claude sign-in is certified. Twelve native transcript references were already missing
+before capture and remain recorded. Strict history/identity guards pass; changed volatile JSON
+remains listed separately. Two independently verified full recoveries remain with one app each.
+Oldest recovery/duplicate rollback retirement recovered 12,361,728 actual bytes; two matching
+generated app duplicates recovered another 3,014,656 bytes. Logical sizes are larger due to APFS
+sharing. Private receipts retain exact paths and hashes.
 
 Mac exact-package follow at 400 ms and actual-minute recovery pass. Legacy-history and workspace
 restart fixtures now use Playwright's normal Quit, which detaches its debugger; raw SIGTERM had
 stalled both original and candidate test processes. Both binaries pass the unchanged three-launch
 history assertions with clean, unsignalled exits. This fixture-only correction requires no app
-rebuild. Installation, private transfer review and remaining package gates are still separate.
+rebuild. The explicitly approved private draft transfer is complete with all three server asset
+digests matching. HC destination acceptance and Linux installation remain in progress. Windows'
+new candidate passes its package gates but remains uninstalled: the visible app has an empty
+pairing view while the stored profile retains five pairings, and its prior cleanup review blocker
+remains unresolved. Preserve both views; do not copy data or re-pair to conceal the mismatch.
 
 Web recovery/attachment steering is implemented locally and passes focused authenticated UI
 checks including a real 60-second retry. Native source compiles, 141 units pass and standalone
@@ -22,7 +36,8 @@ its corrected interaction keeps the same recovery/draft/queue assertions. See na
 validation for retained simulator failures and measurement limits. Both physical mobile devices
 now run 2610.23.1 with all protected files matched, connected Home/live build verified and two
 verified recoveries each. Physical CPU/frame-rate profiling remains unverified after Instruments
-failed to attach; local typing results remain separate. Web deployment is pending. Keep the
+failed to attach; local typing results remain separate. The tested web archive is uploaded to
+staging only. Capture/activation still waits for the pending server retention decisions. Keep the
 monitor active and Windows' separate review blocker
 intact. Preserve two native/desktop recoveries per target, without build/test-only snapshots.
 

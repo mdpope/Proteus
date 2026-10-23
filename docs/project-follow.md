@@ -108,7 +108,15 @@ keep their existing tab behavior; follow is retried after connection recovery.
 These are source and synthetic acceptance checks. Installed physical-device rollout
 is separate and must use the exact verified artifact and the desktop update workflow.
 
-## October 23 — native-link then reverse-address correction (local source)
+## October 23 — native-link then reverse-address correction
+
+Build Mac now runs signed `490fd629b659+src.615fe38d6371`. Its exact package passes the full
+400 ms race with 47/50 visible updates, 1,292/436 ms maximum gaps and 2/3 descriptor reads.
+Actual restored chat/browser UI and the online relay are verified after cold preservation of
+74,639 files, complete history guards, databases and 68 protected retry receipts. This does not
+certify a live cross-device gesture or provider workflow. Linux/HC/Windows rollout acceptance is
+separate; their completed builds do not prove installation. Two verified Build Mac recovery
+generations remain; private recovery/retirement evidence stays outside this repository.
 
 A real page-link navigation followed immediately by an address edit on the other desktop
 reproduced the reported URL regression under 400 ms descriptor latency. The navigation mutation

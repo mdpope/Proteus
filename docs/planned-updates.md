@@ -10,13 +10,22 @@ A two-desktop test reproduces native-link/immediate reverse-address reversion at
 Source now acknowledges each navigation's exact saved branch before later metadata I/O can race
 another client's navigation; native history/profile/revision guards remain strict. The same full
 UI test passes locally, with 48/51 scroll updates, 1,345/447 ms gaps and 4/3 descriptor reads.
-No new desktop package or installation is accepted by this source result.
+Source acceptance is separate from each destination's installation.
 
 The signed Mac candidate passes exact-package 400 ms follow and actual-minute recovery. A raw
 SIGTERM restart-fixture failure reproduces on the original binary while Playwright retains its
 debugger. Normal Playwright Quit detaches it; original and candidate then pass all three-launch
 history assertions and the candidate passes workspace return. This is a test-only correction,
 with original failures retained, not a runtime fix or permission to skip destination acceptance.
+
+Build Mac installation and actual restored chat/browser UI are accepted for
+`490fd629b659+src.615fe38d6371`: 74,639 cold files, three databases, 68 protected retry receipts,
+101 logical tabs and 120 content tabs pass preservation guards. The relay is online. No external
+workflow continuation, Claude authentication or physical performance claim follows from that
+acceptance. Two verified full recoveries remain after eligible oldest/duplicate-app retirement;
+actual free-space gains were 12,361,728 bytes plus 3,014,656 bytes for two duplicate generated apps.
+Other desktop installations remain separate; Windows also needs its live/stored data-view
+mismatch resolved without changing either profile or bypassing its cleanup review blocker.
 
 Web recovery UI passes a real minute of retry, explicit Stop and Continue, retained draft/queue,
 standalone system errors, exact consenting steering attachments and stale-turn rejection. All
@@ -29,7 +38,8 @@ measurements do not certify physical-device response time. Both physical devices
 298 phone/268 tablet protected files match, actual connected Home shows the correct build and
 saved tabs, and two verified full recoveries remain per device. A physical Instruments attachment
 failed despite the target still running; physical CPU/frame-rate performance remains unverified.
-Web deployment is still pending. The monitor stays active until all authorized installations
+The tested web archive is staged only; retention resolution still blocks capture/activation.
+The monitor stays active until all authorized installations
 are verified or the operator cancels it; dispatch/build/staging do not count as completion.
 
 ## October 22 — stop GitHub-hosted builds
