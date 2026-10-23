@@ -17,6 +17,11 @@ Oldest recovery/duplicate rollback retirement recovered 12,361,728 actual bytes;
 generated app duplicates recovered another 3,014,656 bytes. Logical sizes are larger due to APFS
 sharing. Private receipts retain exact paths and hashes.
 
+A final audit also removed eight expired external-transcript copies from the retired oldest
+generation after proving every original byte remains as an exact prefix in a retained recovery.
+Their 347,260,731 logical bytes produced no additional observed space gain (the measured delta
+was -28,672 bytes amid other filesystem activity). That retired root now contains receipts only.
+
 Mac exact-package follow at 400 ms and actual-minute recovery pass. Legacy-history and workspace
 restart fixtures now use Playwright's normal Quit, which detaches its debugger; raw SIGTERM had
 stalled both original and candidate test processes. Both binaries pass the unchanged three-launch
@@ -34,10 +39,13 @@ Linux's new package is installed but is **not fully live-accepted**. Its first h
 omitted desktop-session settings and could not access existing protected credential storage.
 One guarded relaunch of the same installed build with the existing desktop environment restored
 credential access, the online relay and all 36 remote/five local chats, without changing secrets
-or grants. One unexpired cookie and one original navigation entry are absent from the active
-store; their recovery/saved-session evidence remains intact. A narrow recovery that preserves
-newer browser activity is being prepared. Keep both recoveries; do not claim full acceptance,
-overwrite the whole profile or relax history/cookie guards.
+or grants. One unexpired cookie is absent. Recorded Back then same-URL/title/profile navigation
+replaced one active history entry's IDs; all 16,467 original visits and the saved old session
+entry remain intact, but the operation's trigger is unproven. Recovery proposals and a concrete
+operator decision are ready: retain the current browser state with explicit continuity exceptions,
+or hold final signoff for separate recovery review. A destination question is already pending;
+do not duplicate it. Keep both recoveries, do not claim strict full acceptance or apply a
+whole-profile overwrite, and do not weaken history/cookie guards.
 Windows'
 new candidate passes its package gates but remains uninstalled: the visible app has an empty
 pairing view while the stored profile retains five pairings, and its prior cleanup review blocker
