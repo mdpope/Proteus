@@ -1,3 +1,21 @@
+## October 22 — redundant descriptor traffic correction in verification
+
+Linux's combined `88bdfd8` package passes idle-selection and notice semantics but fails the
+required sustained-scroll descriptor budget: seven reads against six. One separate instrumented
+run proves additional sidebar catalog render → unchanged workspace save → descriptor sync
+traffic, alongside normal state refresh and preserved queued reconciliation. It is diagnostic
+evidence, not a passing retry or exact attribution of the uninstrumented run's extra request.
+
+`saveWorkspace` now schedules its descriptor pass only when its existing serialized snapshot
+comparison finds a change. No-op saves also leave an already scheduled real edit's timer intact.
+Periodic/event refreshes, durable outboxes and queued navigation barriers remain unchanged.
+All 1,056 source tests pass (one platform skip), and static checks pass. The focused actual-
+renderer regression passes with no descriptor reads for unchanged sidebar painting, while a
+changed workspace still coalesces one sync and persists. It fails on the prior signed package
+with one unwanted read. All prior `88bdfd8` desktop artifacts are superseded for installation
+pending new exact-package acceptance. Preserve the local active-chat hold, HC unlock requirement,
+and Windows' pending explicit decision about the previously refused oldest recovery retirement.
+
 ## October 22 — native-helper notice limited to one per app launch
 
 The operator requested that the recurring iCloud Passwords warning appear only once per app

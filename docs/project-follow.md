@@ -43,6 +43,9 @@ are bound to the source URL and navigation entry; an old page's coordinates cann
 apply after navigation. Scroll-only changes are coalesced and do not refetch tab
 descriptors on every gesture. Timestamp-only browser activity is saved and shared in
 15-second batches; navigation, history, placement and selection changes remain immediate.
+Unchanged workspace saves caused by sidebar painting do not schedule another descriptor pass
+or postpone a real edit's pending pass. Changed snapshots, periodic refresh, peer invalidation
+and synchronization queued during an earlier response retain their existing behavior.
 Page layouts can differ with account, screen size,
 dynamic content, and local disclosure state, so equivalent positions are best effort.
 

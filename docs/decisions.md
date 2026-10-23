@@ -2247,3 +2247,15 @@ document. Atomic state writers now share a bounded Windows-only rename retry (at
 waits). They retry the replacement operation without deleting the old document or weakening ACLs.
 Persistent denials still fail, and other platform/error behavior stays immediate. A real Windows
 reader-lock fixture verifies replacement after the reader releases the file.
+## October 22 — unchanged workspace saves do not request descriptor synchronization
+
+A Linux traffic failure and separate bounded trace exposed catalog/sidebar repaint scheduling
+another chat/project descriptor pass immediately after hydration had persisted the same snapshot.
+Use the existing serialized workspace comparison to decide whether `saveWorkspace` schedules
+its debounced sync. Keep the schedule alongside a real snapshot change and preserve a pending
+edit's timer when a no-op save arrives. Do not remove queued reconciliation, cache arbitrary
+descriptor responses, loosen history acknowledgement or increase test traffic budgets.
+Periodic and explicit/event-driven refresh still obtains owner changes; pending request identities,
+complete histories and checkpoint behavior are unchanged. New exact-package verification is
+required before installing the superseding runtime.
+

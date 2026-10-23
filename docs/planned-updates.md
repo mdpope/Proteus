@@ -1,3 +1,16 @@
+## October 22 — passive-save descriptor feedback correction
+
+Linux's combined candidate fails its unchanged six-read traffic budget with seven reads.
+A bounded instrumented diagnostic exposes redundant descriptor requests from sidebar catalog
+rendering saving an already persisted workspace. Original failure and diagnostic remain separate;
+no threshold, history guard or readiness assertion was relaxed. The source correction moves
+descriptor scheduling inside the existing workspace snapshot-change guard. Real edits retain
+debouncing, no-op saves do not postpone their timer, and queued/fresh synchronization remains.
+The focused real-renderer regression passes and fails on the prior signed package; a real edit
+still coalesces one sync and persists. All 1,056 source tests pass (one platform skip), and static
+checks pass. New exact artifacts are pending. All earlier combined artifacts are superseded
+for installation; no installed app/data was changed.
+
 ## October 22 — follow selection requires fresh input
 
 The operator reported chat selection repeatedly returning to a browser while other desktops

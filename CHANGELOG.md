@@ -1,3 +1,7 @@
+## Unreleased — passive workspace saves
+
+- Avoid scheduling another descriptor sync when sidebar rendering saves the same workspace snapshot. Real edits still synchronize; unchanged saves no longer postpone a pending edit.
+
 ## 0.2.29 follow-along correction — fresh input owns selection
 
 - Prevent idle renderer refreshes from publishing stale tabs over a person's chat selection.
