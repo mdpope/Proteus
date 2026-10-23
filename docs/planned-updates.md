@@ -27,6 +27,13 @@ actual free-space gains were 12,361,728 bytes plus 3,014,656 bytes for two dupli
 Other desktop installations remain separate; Windows also needs its live/stored data-view
 mismatch resolved without changing either profile or bypassing its cleanup review blocker.
 
+Rollout review also found a separate updater-readiness gap: its current tab-based activity
+barrier does not inspect the offscreen grants used by direct Save Link As downloads. Queue a
+shared owner-owned download-idle check and a regression covering those grants. This review does
+not implement that change or reidentify the accepted package. Current installations require
+actual owner-window Downloads observations or the operator's target-specific readiness evidence
+in addition to the existing final owner barrier; the barrier alone does not prove global idleness.
+
 Web recovery UI passes a real minute of retry, explicit Stop and Continue, retained draft/queue,
 standalone system errors, exact consenting steering attachments and stale-turn rejection. All
 101 Laravel tests pass with disposable test keys; the built web package compiles. Native source
