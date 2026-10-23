@@ -53,7 +53,14 @@ async function delayedNativeScroll(owner,client){
 async function sustainedScroll(sender,receiver,owner,direction){
  // Exercise more than one relay traffic window with real native input, including
  // direction changes so the page never reaches an edge and appears falsely idle.
- await pause(900);await service(owner,s=>{s.remote.followFixtureCounts={};});
+ // Finish prior native navigation and its queued descriptor reconciliation before measuring scroll.
+ for(const app of [sender,receiver]){
+  await nativeReady(app,origin+'/nested');
+  await until(()=>app.evaluate(({app})=>{const browser=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser(),tab=browser.tabs.get(browser.active);return !tab.navigationPending&&!tab.applyingShared;}),'prior native navigation settled');
+ }
+ await Promise.all([sender,receiver].map(app=>app.page.evaluate(()=>followFixture.contentTabSync.all())));
+ await until(async()=>(await Promise.all([sender,receiver].map(app=>app.page.evaluate(()=>!followFixture.projectFollower.applying)))).every(Boolean),'prior follow reconciliation complete');
+ await service(owner,s=>{s.remote.followFixtureCounts={};});
  const start=Date.now();let previous=(await scrollPosition(receiver)).top,lastProgress=start,maxGap=0,changes=0;
  for(let input=0;input<120;input++){
   await sender.evaluate(({app},deltaY)=>{const browser=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser(),tab=browser.tabs.get(browser.active);tab.view.webContents.sendInputEvent({type:'mouseWheel',x:200,y:200,deltaY,deltaX:0,canScroll:true});},Math.floor(input/20)%2?90:-90);
