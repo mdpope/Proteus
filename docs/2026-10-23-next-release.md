@@ -1,15 +1,14 @@
 # October 23 next-release implementation
 
 Operator authorized implementing the intake and follow-ups on `codex/oct23-next-release`.
-Release packaging, installation, OS defaults, publishing and rollout remain held. Simulator
-tests, disposable desktop previews and scratch web compilation are validation only.
+Local Mac packaging and disposable package tests are authorized. Installation, OS defaults,
+publishing and remote rollout remain held. Simulator and web compilation evidence remains
+separate from physical-device acceptance.
 
 The linked update chat is `codex://threads/2500d184-9574-546d-ba2d-280c206a84ba`. Its current
-checkout is primary Proteus. This branch includes its latest clean committed source,
-`19e8c098d8fc377ccf270d847c764937fef0c278`; the older performance worktree is an ancestor with
-no missing commits. The final application-source check still matches this commit. The other chat has uncommitted
-documentation updates; those edits remain untouched in its checkout. Implementation checkpoint
-`961af16` precedes the final organization and terminal/menu follow-ups. Recheck before integration.
+checkout is primary Proteus. This branch merges its latest clean main, `15327ab`, through
+merge `63bfc39`; the newer main commit contains rollout/retention documentation only. Both
+sets of release records are preserved. Implementation checkpoints are `961af16` and `266e43b`.
 
 | # | Item | Implementation and verification |
 | --- | --- | --- |

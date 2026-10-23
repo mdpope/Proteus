@@ -4,7 +4,7 @@ import {sidebarFixture} from './preview-sidebar-fixture.mjs';
 const fixture=await sidebarFixture();let app;
 const wait=async fn=>{for(let index=0;index<200;index++){const result=await fn();if(result)return result;await new Promise(resolve=>setTimeout(resolve,50));}throw Error('Isolated link-routing condition timed out.');};
 try{
- app=await electron.launch({args:['.'],env:{...process.env,PROTEUS_DESKTOP_PREVIEW:'1',PROTEUS_PREVIEW_HOME:fixture.locations.root,CODEX_HOME:fixture.auth,PORT:'0'}});
+ app=await electron.launch({...(process.env.PROTEUS_TEST_EXECUTABLE?{executablePath:process.env.PROTEUS_TEST_EXECUTABLE}:{}),args:process.env.PROTEUS_TEST_EXECUTABLE?[]:['.'],env:{...process.env,PROTEUS_DESKTOP_PREVIEW:'1',PROTEUS_PREVIEW_HOME:fixture.locations.root,CODEX_HOME:fixture.auth,PORT:'0'}});
  const shell=await app.firstWindow();await shell.locator('body.window-design-preview').waitFor();
  const errors=[];shell.on('pageerror',error=>errors.push(error.message));
  const inventory=()=>app.evaluate(({app})=>process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser().list(true));

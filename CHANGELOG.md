@@ -1,4 +1,4 @@
-## Next release — October 23 feature queue (source candidate; rollout held)
+## Next release — October 23 feature queue (local package validation; rollout held)
 
 - Preserve Keep Screen Awake across restarts; make the ordinary loaded-browser budget configurable in Engine Room (default 6), and retain Persisted pages through hiding, restoration and memory eviction.
 - Move iOS browser-cache serialization/encryption/writes off the main actor and isolate chat scroll measurements from observable history state. Preserve the baseline navigation acknowledgment and deep workspace/project selection fixes.

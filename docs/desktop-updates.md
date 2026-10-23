@@ -4,7 +4,8 @@ The candidate supports a common signed downloads.proteus.example release catalog
 Linux and Windows, with local trusted publisher keys, target/architecture/hash/compatibility
 checks and no credential-bearing redirects. The local staging helper is
 `scripts/stage-desktop-release.mjs`; it prepares signed allowlisted website artifacts and does
-not publish them. No new release was built, uploaded or installed for this queue.
+not publish them. Local Mac packaging and disposable tests are authorized; no new release
+was uploaded or installed for this queue.
 
 Engine Room → Updates configures the coordinator provider, model, intensity, speed and context
 from fresh provider metadata. On an authorized push, `proteus_chats create` with `purpose:update`

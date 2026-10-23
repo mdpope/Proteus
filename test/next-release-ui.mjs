@@ -3,7 +3,7 @@ import {sidebarFixture} from './preview-sidebar-fixture.mjs';
 const fixture=await sidebarFixture();let app,page;
 const wait=async fn=>{for(let index=0;index<250;index++){const value=await fn();if(value)return value;await new Promise(resolve=>setTimeout(resolve,50));}throw Error('Next-release UI condition timed out.');};
 try{
- app=await electron.launch({args:['.','--use-mock-keychain'],env:{...process.env,PROTEUS_DESKTOP_PREVIEW:'1',PROTEUS_PREVIEW_HOME:fixture.locations.root,CODEX_HOME:fixture.auth,PORT:'0'}});page=await app.firstWindow();page.setDefaultTimeout(15000);const errors=[];page.on('pageerror',error=>errors.push(error.message));
+ app=await electron.launch({...(process.env.PROTEUS_TEST_EXECUTABLE?{executablePath:process.env.PROTEUS_TEST_EXECUTABLE}:{}),args:[...(process.env.PROTEUS_TEST_EXECUTABLE?[]:['.']),'--use-mock-keychain'],env:{...process.env,PROTEUS_DESKTOP_PREVIEW:'1',PROTEUS_PREVIEW_HOME:fixture.locations.root,CODEX_HOME:fixture.auth,PORT:'0'}});page=await app.firstWindow();page.setDefaultTimeout(15000);const errors=[];page.on('pageerror',error=>errors.push(error.message));
  await page.locator('[data-preview-workspace-expand="'+fixture.studio.id+'"]').click();await page.locator('[data-preview-project="'+fixture.project.id+'"]').first().click();await page.locator('[data-preview-project-page="tabs"]').click();
  const session=()=>page.evaluate(()=>window.desktop.workspaceSession({action:'get'})),before=await session(),rows=page.locator('[data-managed-tab]'),count=await rows.count();assert.ok(count>2);
  await page.getByRole('searchbox',{name:'Filter tabs'}).fill('favicon');assert.equal(await rows.count(),1);await page.getByRole('searchbox',{name:'Filter tabs'}).fill('');assert.equal(await rows.count(),count);
