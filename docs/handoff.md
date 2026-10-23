@@ -1,3 +1,13 @@
+## October 22 — native-helper notice limited to one per app launch
+
+The operator requested that the recurring iCloud Passwords warning appear only once per app
+opening. Native-helper failure guidance now uses an in-memory extension-identity set shared
+across browser profiles/windows; retries and permissions are unchanged. The guard survives
+renderer and browser-host recreation, and resets only with the app process. This runtime change
+supersedes the previously staged follow-only candidate for the next update. Source regression,
+desktop UI and exact replacement artifact acceptance remain separate. Preserve the operator's
+instruction to wait for the active local chat before any restart.
+
 ## October 22 — fresh-input follow correction staged; activation separate
 
 The correction now also brackets explicit asynchronous address navigation, so a pre-navigation

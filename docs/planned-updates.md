@@ -10134,3 +10134,14 @@ later owner navigation, with complete Forward history and uncertain-request iden
 idle chat-selection regression. No implementation or installed correction of this separate race
 is claimed here. Source and private original/candidate traces distinguish observed evidence from
 unverified hypotheses about the precise acknowledgement path.
+## October 22 — native-helper notice once per launch
+
+The operator requested that the recurring iCloud Passwords desktop-connection warning appear
+only once when opening Proteus. Replaced its per-profile 30-second throttle with an app-process
+set keyed by extension identity, shared across profiles/windows and browser-host recreation.
+Retries, optional permissions and actual connection errors remain unchanged. The limit resets
+on the next app launch, never through a configuration/data write. Source regression, desktop
+UI and replacement artifact acceptance are recorded separately; the earlier follow-only
+candidate is superseded for the next authorized update. The existing wait-for-active-chat
+hold remains in force.
+

@@ -1489,3 +1489,7 @@ Known unfinished work and distribution limitations are tracked in `docs/planned-
 
 - Browser tab and overview selection reloads an unloaded page immediately; background pages remain
   unloaded. All five native link actions have verified macOS template icons.
+## Unreleased — quieter extension connection notices
+
+- Show a native-helper connection warning, including iCloud Passwords, only once per extension per app launch across browser profiles and windows. Retries continue without repeating or reviving the banner; restarting Proteus permits one new warning.
+

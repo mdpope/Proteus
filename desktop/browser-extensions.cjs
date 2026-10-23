@@ -5,6 +5,9 @@ const {BrowserWindow,dialog,nativeImage,app,screen,nativeTheme}=require('electro
 const {extensionName}=require('./extension-metadata.cjs');
 const {ElectronChromeExtensions}=require('electron-chrome-extensions');
 const {downloadExtension}=require('electron-chrome-web-store');
+// Native helpers may retry from several profiles/windows. Warn once per extension
+// for this app process; renderer reloads and profile recreation must not reset it.
+const nativeFailureNotices=new Set();
 function storeExtensionId(value){
  const raw=String(value||'').trim();if(/^[a-p]{32}$/.test(raw))return raw;
  let url;try{url=new URL(raw);}catch{throw new Error('Paste a Chrome Web Store extension link.');}
@@ -24,7 +27,7 @@ class BrowserExtensions {
    requestPermissions:async(extension,permissions)=>(await dialog.showMessageBox(this.browser.window,{type:'question',title:extension.name,message:'Allow additional extension permissions?',detail:[...(permissions.permissions||[]),...(permissions.origins||[])].join('\n'),buttons:['Deny','Allow'],defaultId:0,cancelId:0})).response===1
   });
   require('./extension-permissions.cjs').installExtensionPermissions(host,()=>this.save(host),(extension)=>{
-   host.nativeFailures??=new Map();const last=host.nativeFailures.get(extension.id)||0;if(Date.now()-last<30000)return;host.nativeFailures.set(extension.id,Date.now());
+   if(nativeFailureNotices.has(extension.id))return;nativeFailureNotices.add(extension.id);
    this.browser.actions.send({type:'notice',message:extension.name+' could not connect to its desktop app. Open and unlock that app, check browser integration, then retry in this profile.'});
   });
   host.ready=(async()=>{for(const row of rows)if(row.enabled){try{await session.extensions.loadExtension(path.join(folder,row.directory),{allowFileAccess:false});}catch(error){row.error=error.message;}}})();return host.ready;

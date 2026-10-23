@@ -156,6 +156,15 @@ move immediately above Inspect Element near the bottom; Copy Link stays among li
 Preserve editable actions, source selection, profile/tab ownership and non-link behavior.
 Queue only: the operator requires build confirmation and this intake changes no menu code.
 
+## Native-helper connection notices
+
+If an extension such as iCloud Passwords cannot connect to its desktop app, Proteus shows
+its connection guidance at most once per extension per app launch, shared across profiles
+and windows. Dismissing or expiring the notice does not make background retries show it
+again. Renderer reloads and profile recreation do not reset the limit; quitting and reopening
+Proteus does. This in-memory notice limit does not change native connections, permissions,
+extension popups or profile data.
+
 ## 0.2.28 — browser menus, refresh, icons and extension recovery
 
 Address suggestions now use a sandboxed, owner-bound child window instead of hiding the
