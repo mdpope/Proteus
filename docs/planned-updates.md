@@ -8,8 +8,10 @@ descriptor scheduling inside the existing workspace snapshot-change guard. Real 
 debouncing, no-op saves do not postpone their timer, and queued/fresh synchronization remains.
 The focused real-renderer regression passes and fails on the prior signed package; a real edit
 still coalesces one sync and persists. All 1,056 source tests pass (one platform skip), and static
-checks pass. New exact artifacts are pending. All earlier combined artifacts are superseded
-for installation; no installed app/data was changed.
+checks pass. Exact signed Mac `7290ff3+src.6a916327ca1e` also passes passive-save, notice and
+unchanged 400 ms follow/history acceptance, with three tab-descriptor reads in each direction.
+Windows/Linux acceptance and physical installation remain separate. Earlier combined artifacts
+are superseded for installation; no installed app/data was changed for this verification.
 
 ## October 22 — follow selection requires fresh input
 

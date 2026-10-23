@@ -2259,3 +2259,13 @@ Periodic and explicit/event-driven refresh still obtains owner changes; pending 
 complete histories and checkpoint behavior are unchanged. New exact-package verification is
 required before installing the superseding runtime.
 
+## October 22 — private draft assets for large desktop transfers
+
+Use fixed authenticated draft-release assets in the authorized private source repository when
+transferring a large signed desktop archive and its source companion. Pin repository privacy,
+draft status, numeric release/asset identities, byte lengths and independent digests; verify the
+uploaded server digest and actual destination download. This avoids adding each build's binary
+payload to Git history. Existing transfer branches remain evidence, not application branches to
+merge. Do not publish the draft or replace an ambiguously uploaded asset: reconcile it first.
+No application data, profiles, credentials or private acceptance receipts belong in the assets.
+

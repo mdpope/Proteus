@@ -1,4 +1,4 @@
-## October 22 — redundant descriptor traffic correction in verification
+## October 22 — redundant descriptor traffic correction accepted on Mac; rollout separate
 
 Linux's combined `88bdfd8` package passes idle-selection and notice semantics but fails the
 required sustained-scroll descriptor budget: seven reads against six. One separate instrumented
@@ -13,8 +13,17 @@ All 1,056 source tests pass (one platform skip), and static checks pass. The foc
 renderer regression passes with no descriptor reads for unchanged sidebar painting, while a
 changed workspace still coalesces one sync and persists. It fails on the prior signed package
 with one unwanted read. All prior `88bdfd8` desktop artifacts are superseded for installation
-pending new exact-package acceptance. Preserve the local active-chat hold, HC unlock requirement,
-and Windows' pending explicit decision about the previously refused oldest recovery retirement.
+pending their replacements' acceptance. The exact signed Mac `7290ff3+src.6a916327ca1e`
+passes focused passive-save and notice UI plus the unchanged 400 ms two-desktop follow test:
+47/50 visible updates, maximum gaps 1,295/485 ms, and three tab-descriptor reads each direction.
+Complete history, profile isolation and scope checks pass. Windows/Linux replacement acceptance
+and installation remain separate. Preserve the local active-chat hold and HC unlock requirement.
+The operator explicitly approved retirement of only the previously identified oldest Windows
+recovery before its tested update; fresh verification and automatic review still apply.
+
+The new Mac transfer uses fixed assets in an authenticated private draft release, with archive,
+source, manifest and server digests pinned in private receipts. This avoids another binary Git
+history. Earlier artifact branches remain historical delivery records, not source to merge.
 
 ## October 22 — native-helper notice limited to one per app launch
 

@@ -182,8 +182,14 @@ for delegated work; do not make a particular model a permanent deployment depend
    matches every runtime hash in the bundle's `build-source.json`, including relevant uncommitted
    changes. Version alone is insufficient: record build revision, source fingerprint, runtime
    file count and SHA-256 archive/manifest hashes.
-3. Use the authorized private repository/transfer route. The proven route is a dedicated
-   transfer branch containing the signed app archive, source companion, notices and manifest.
+3. Use the authorized private repository/transfer route. Large archives may use an authenticated
+   draft release in the already-authorized private repository, avoiding binary Git history. Verify
+   repository privacy and draft status, pin the numeric release ID, fixed asset IDs, byte counts
+   and SHA-256 digests, and have the destination independently verify downloaded bytes. Keep the
+   matching source and manifest alongside the signed app; publication is a separate operation.
+   Do not overwrite assets on an ambiguous result: reconcile their existing IDs/hashes first.
+   The earlier proven route is a dedicated transfer branch containing the signed app archive,
+   source companion, notices and manifest.
    Split archives only when transport limits require it, recording part and reconstructed hashes.
    Pin an immutable commit and deliver expected hashes through the coordinating chat. Never
    include application-data homes, chats, browser profiles, credentials or private receipts.
