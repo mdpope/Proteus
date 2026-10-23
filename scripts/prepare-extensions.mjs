@@ -9,6 +9,13 @@ export function prepareExtensions(root=path.resolve(path.dirname(fileURLToPath(i
  if(pkg.version!=='4.9.0')throw Error('Review Proteus native messaging patch for the new adapter version.');
  const file=path.join(base,'dist/cjs/index.js');let text=fs.readFileSync(file,'utf8');
  const marker='// Proteus native messaging lifecycle v1';
+ const hostRequire="require('../../../../desktop/services/native-messaging-host.cjs')";
+ // Existing installs may already contain v1 with the pre-organization path.
+ // Migrate the copied dependency, without modifying a shared source dependency.
+ if(text.includes(marker)){
+  text=text.replace("require('../../../../desktop/native-messaging-host.cjs')",hostRequire);
+  if(!text.includes(hostRequire))throw Error('Native messaging patch host path changed.');
+ }
  if(!text.includes(marker)){
   const start=text.indexOf('var NativeMessagingHost = class {'),end=text.indexOf('// src/browser/api/runtime.ts',start);
   if(start<0||end<start)throw Error('Native messaging patch target changed.');
