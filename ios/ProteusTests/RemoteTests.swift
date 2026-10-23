@@ -1008,19 +1008,33 @@ final class RemoteTests: XCTestCase {
         XCTAssertTrue(toolActivityFailed(.object(["name": .string("read_file"), "status": .string("failed"), "error": .string("Access denied")])))
         XCTAssertFalse(toolActivityFailed(.object(["name": .string("read_file"), "status": .string("completed")])))
     }
-    func testActivityGroupsSystemAndApprovalsUntilCommunication() {
+    func testActivityKeepsPlainSystemMessagesOutsideToolsAndApprovals() {
         let tool: JSON = .object(["role": .string("tool"), "data": .object(["tool": .object([:])])])
         let approval: JSON = .object(["role": .string("system"), "data": .object(["permission": .object([:])])])
         let system: JSON = .object(["role": .string("system"), "text": .string("Synthetic note")])
         let user: JSON = .object(["role": .string("user"), "text": .string("Next request")])
         let model: JSON = .object(["role": .string("assistant"), "text": .string("Response")])
         let events = [user, tool, system, approval, model, system, user]
-        XCTAssertEqual(NativeActivity.group(events: events, startingAt: 1), [tool, system, approval])
-        XCTAssertEqual(NativeActivity.group(events: events, startingAt: 5), [system])
+        XCTAssertEqual(NativeActivity.group(events: events, startingAt: 1), [tool])
+        XCTAssertEqual(NativeActivity.group(events: events, startingAt: 3), [approval])
+        XCTAssertTrue(NativeActivity.group(events: events, startingAt: 5).isEmpty)
         XCTAssertTrue(NativeActivity.group(events: events, startingAt: 0).isEmpty)
         XCTAssertTrue(NativeActivity.group(events: events, startingAt: 4).isEmpty)
         XCTAssertTrue(NativeActivity.group(events: events, startingAt: -1).isEmpty)
         XCTAssertEqual(NativeHistoryWindow.start(events: [tool, system, approval]), 0)
+    }
+    func testRecoverySelectsOnlyCurrentFailureAndRetainsQueueAndRetryState() {
+        let old: JSON = .object(["role": .string("system"), "text": .string("Old error"), "at": .string("2026-10-23T00:00:00Z")])
+        let failure: JSON = .object(["role": .string("system"), "text": .string("Selected model is at capacity."), "at": .string("2026-10-23T01:00:01Z"), "data": .object(["failure": .object(["kind": .string("capacity")])])])
+        var run: [String: JSON] = ["status": .string("failed"), "failureEventAt": failure["at"], "turns": .array([.object(["startedAt": .string("2026-10-23T01:00:00Z")])]), "events": .array([old, failure]), "queuedMessages": .array([.object(["id": .string("preserved")])])]
+        var state = NativeChatRecoveryState.read(.object(run))!
+        XCTAssertEqual(state.event, failure); XCTAssertEqual(state.failureEventAt, failure["at"])
+        XCTAssertTrue(state.capacity); XCTAssertTrue(state.recoverable); XCTAssertEqual(state.queuedCount, 1)
+        run["capacityRetry"] = .object(["nextAttemptAt": .string("2026-10-23T01:01:01Z")])
+        state = NativeChatRecoveryState.read(.object(run))!
+        XCTAssertNotEqual(state.retry, .null)
+        run["status"] = .string("running"); run.removeValue(forKey: "capacityRetry")
+        XCTAssertNil(NativeChatRecoveryState.read(.object(run)))
     }
     func testIndividualToolElapsedUsesRecordedTimingWithoutTurnClipping() {
         let now = ProviderAllowance.date("2026-10-12T12:00:20Z")!

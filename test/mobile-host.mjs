@@ -28,6 +28,7 @@ if (process.env.PROTEUS_TEST_CONTAINER === '1') {
 } else relay = await startRelay({ port: fixtureRelayPort, token });
 const rehearsal = new RehearsalProvider();
 let authConnected = false;
+let recoveryRun,recoveryAttempts=0;
 const syntheticQuota = remaining => async () => ({available:true,windows:[{id:"synthetic",label:"Synthetic account allowance",remainingPercent:remaining,resetAt:"2099-10-05T12:00:00Z"}]});
 const app = await startServer({ home, port: 0, timers: false, providers: { copilot: {
   quota: syntheticQuota(73),
@@ -43,6 +44,11 @@ const app = await startServer({ home, port: 0, timers: false, providers: { copil
     return rehearsal.run(args);
   } }, rehearsal: {
   async run(args) {
+    if(args.run.schedule.name==='Native recovery fixture'){
+      recoveryAttempts++;
+      if(recoveryAttempts===1)throw Error('Selected model is at capacity. Synthetic native retry.');
+      args.emit('assistant','Recovered native fixture: '+args.prompt);return;
+    }
     args.emit('tool', 'Read synthetic notes', { tool: { callId: 'synthetic-read', name: 'view', summary: 'Read synthetic notes', status: 'completed', arguments: '{"path":"fixture.md"}', output: 'Expanded synthetic tool result', durationMs: 120 } });
     if (args.prompt.includes('Permission rehearsal')) await args.ask({ type: 'permission', question: 'Allow synthetic command?', details: { kind: 'shell', fullCommandText: 'synthetic command; no process is executed' } });
     return rehearsal.run(args);
@@ -165,6 +171,7 @@ const fixture = http.createServer(async (req, res) => {
     res.end(`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5,user-scalable=yes"><title>${title} browser page</title><h1>${title} browser page</h1><p>Load ${count}</p><p id="page-scale"></p><a href="/browser/${first?'two':third?'two':'three'}">${third?'Previous':'Next'} browser page</a><script>function scaleStatus(){const text='Page scale '+visualViewport.scale.toFixed(2),label=document.getElementById('page-scale');if(label.textContent!==text)label.textContent=text}visualViewport.addEventListener('resize',scaleStatus);scaleStatus()</script>`);return;
   }
   if (req.url === '/latest') { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ context: app.engine.listRuns()[0]?.schedule.context, reasoningEffort: app.engine.listRuns()[0]?.schedule.reasoningEffort, contextTier: app.engine.listRuns()[0]?.schedule.contextTier, queuedMessages: app.engine.listRuns()[0]?.queuedMessages })); return; }
+  if(req.url==='/recovery-status'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({attempts:recoveryAttempts,status:recoveryRun?.status,queue:recoveryRun?.queuedMessages,retry:recoveryRun?.capacityRetry}));return;}
   if (!req.url.startsWith('/pair')) { res.writeHead(404); res.end(); return; }
   const target = req.url.includes('host=second') ? second : app;
   const projectIDs = req.url.includes('projects=1') ? await seedProjectFixture() : {};
@@ -177,6 +184,16 @@ const fixture = http.createServer(async (req, res) => {
   const key = secret(); const aad = 'synthetic:cross-platform';
   const invite = await target.remote.pairing();
   let previewRunId;
+  if(req.url.includes('recovery=1')){
+    recoveryAttempts=0;
+    const schedule=await target.buildChatSchedule({name:'Native recovery fixture',prompt:'Synthetic native recovery',provider:'rehearsal'});
+    recoveryRun=target.engine.createRun(schedule,'chat',null,{deferStart:true});
+    recoveryRun.status='failed';delete recoveryRun.deferredStart;delete recoveryRun.nextPrompt;
+    recoveryRun.failureEventAt=target.engine.now();
+    target.engine.event(recoveryRun,'system','Selected model is at capacity. Synthetic native initial failure.',{failure:{kind:'capacity'}});
+    recoveryRun.queuedMessages=[{id:'native-recovery-queue',prompt:'Native queued follow-up',at:target.engine.now()}];target.engine.persist(recoveryRun);
+    previewRunId=recoveryRun.id;
+  }
   if(req.url.includes('preview=1')){
     previewRevision=1;
     const schedule=await target.buildChatSchedule({name:'Automatic preview rehearsal',prompt:'Synthetic preview',provider:'rehearsal'});

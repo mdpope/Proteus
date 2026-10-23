@@ -973,7 +973,8 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
         return run["events"].array.contains { $0["role"].string == "assistant" && $0["data"]["turnId"].string == turn["id"].string && !$0["text"].string.isEmpty } ? .null : turn
     }
     private var conversation: some View {
-        ScrollViewReader { proxy in
+        let recovery = run["trigger"].string == "chat" && run["chatControls"]["recovery"].bool ? NativeChatRecoveryState.read(run) : nil
+        return ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 if run["status"].string == "queued" { Text(run["queueReason"].string.isEmpty ? "Preparing this chat…" : run["queueReason"].string).font(.caption).foregroundStyle(.secondary) }
@@ -990,6 +991,11 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
                         } else if event["role"].string != "assistant" || !event["text"].string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             if !event["data"]["delivery"]["state"].string.isEmpty { Text(event["data"]["delivery"]["state"].string.capitalized).font(.caption2).foregroundStyle(.teal) }
                             MessageView(role: event["role"].string == "assistant" ? assistantName(event) : event["role"].string, text: event["text"].string, runID: id, timestamp: event["timestamp"].string.isEmpty ? event["at"].string : event["timestamp"].string, turn: event["role"].string == "assistant" ? messageTurn(at: index) : .null, actionID: MessageActions.eligible(event) ? "\(store.connection?.hostId ?? "local"):\(id):\(absoluteIndex):\(event["at"].string)" : nil, sentAttachments: event["data"]["attachments"].array, onDocumentLink: event["role"].string == "assistant" ? { source in openDocument(source) } : nil, onResize: { Task { @MainActor in await Task.yield(); if followLatest && !userReadingGesture && !restoringConversation && pageSearch.query.isEmpty { proxy.scrollTo("chat-end", anchor: .bottom) } } }, search: pageSearch, searchKey: absoluteIndex, viewport: CGRect(x: 0, y: conversationViewportTop, width: conversationViewportWidth, height: max(1, composerAvailableHeight)))
+                            if let recovery, recovery.event == event {
+                                NativeChatRecoveryControls(state: recovery, disabled: busy || !store.connected) { action in
+                                    act("chat.recover", ["action": .string(action), "expectedFailureEventAt": recovery.failureEventAt])
+                                }
+                            }
                         }
                     }.id(absoluteIndex)
                         .accessibilityElement(children: .contain)
@@ -1396,7 +1402,19 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
         let selectedFiles = attachments
         let submittedPrompt = text
         let providerID = run["schedule"]["provider"].string
+        let hostID = store.connection?.hostId
+        let turnID = run["turns"].array.last?["id"] ?? .null
+        func verifySteering() async throws {
+            guard store.connected, store.connection?.hostId == hostID else { throw RemoteError(message: "The destination changed. Review the files again.") }
+            guard mode == "steer" else { return }
+            let fresh = try await store.request("chat.get", ["id": .string(id)])
+            guard store.connection?.hostId == hostID, fresh["status"].string == "running", fresh["schedule"]["provider"].string == providerID,
+                  fresh["turns"].array.last?["id"] == turnID, fresh["chatControls"]["steering"].bool,
+                  selectedFiles.allSatisfy({ fresh["chatControls"]["steeringMediaTypes"].array.contains(.string($0.mediaType)) })
+            else { throw RemoteError(message: "The active turn or supported attachment types changed. Review the message again.") }
+        }
         do {
+            try await verifySteering()
             var attachmentIDs: [JSON] = []
             var attachmentClaims: [JSON] = []
             for item in selectedFiles {
@@ -1417,6 +1435,7 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
             }
             let consent = try await store.request("chat.attachments.authorize", ["id": .string(id), "providerId": .string(providerID), "messageId": .string(messageID), "attachments": .array(attachmentClaims)])
             guard !consent["consentId"].string.isEmpty, consent["providerId"].string == providerID else { throw RemoteError(message: "\(store.displayName) did not confirm the exact attachment destination.") }
+            try await verifySteering()
             var values: [String: JSON] = ["id": .string(id), "prompt": .string(submittedPrompt), "mode": .string(mode), "messageId": .string(messageID), "providerId": .string(providerID), "attachments": .array(attachmentIDs), "consentId": consent["consentId"]]
             if mode == "queue" && run["schedule"]["provider"].string != "rehearsal" {
                 values["modelOptions"] = .object(["model": .string(model), "reasoningEffort": .string(effort), "contextTier": .string(contextTier), "serviceTier": .string(serviceTier)])
@@ -1747,6 +1766,30 @@ struct IsolatedArtifactWebView: UIViewRepresentable {
         func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? { nil }
     }
 }
+private struct NativeChatRecoveryControls: View {
+    let state: NativeChatRecoveryState
+    let disabled: Bool
+    let recover: (String) -> Void
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(state.queuedCount > 0 ? "\(state.queuedCount) queued message\(state.queuedCount == 1 ? " is" : "s are") waiting. Continue this chat; the queue will run after it finishes." : "Continue this chat from where it left off.").font(.caption).foregroundStyle(.secondary)
+            ViewThatFits(in: .horizontal) { actions; VStack(alignment: .leading, spacing: 8) { buttons } }
+            if state.retry != .null {
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    let next = ProviderAllowance.date(state.retry["nextAttemptAt"].string)
+                    Text(next.map { "Next retry in \(max(0, Int(ceil($0.timeIntervalSince(context.date)))))s" } ?? "Retrying…").font(.caption).foregroundStyle(.secondary)
+                }
+            }
+        }.padding(12).disabled(disabled).accessibilityElement(children: .contain).accessibilityIdentifier("chat-recovery-controls")
+    }
+    private var actions: some View { HStack(spacing: 8) { buttons } }
+    @ViewBuilder private var buttons: some View {
+        if state.recoverable { Button("Continue chat") { recover("continue") }.buttonStyle(.borderedProminent).accessibilityIdentifier("chat-recovery-continue") }
+        if state.retry != .null { Button("Stop retrying") { recover("stop-retry") }.buttonStyle(.bordered).accessibilityIdentifier("chat-recovery-stop-retry") }
+        else if state.capacity { Button("Retry every 60 seconds") { recover("retry") }.buttonStyle(.bordered).accessibilityIdentifier("chat-recovery-retry") }
+    }
+}
+
 struct ChatActivityGroupView: View {
     let events: [JSON]
     let hostName: String

@@ -214,7 +214,7 @@ owner timer. **Stop retrying** stops future attempts. Retry waits until its prio
 re-arms only for another capacity failure, and stops on success, other errors, manual input,
 changed effective settings/permissions or shutdown. It retains the selected model and never
 silently reactivates after launch. Pending retry blocks update/archive/delete. Generic failures
-offer manual continuation only. Local and paired desktop UI use the same owner boundary; older
+offer manual continuation only. Local, paired desktop, web and native UI use the same owner boundary; older
 owners do not advertise recovery. The actual desktop regression waits a full minute and verifies
 one queued follow-up delivery after continuation, with the unsent draft preserved.
 
@@ -225,7 +225,7 @@ Copilot uses supported blobs with immediate mode, including PDF. Claude uses its
 acknowledged interrupt-and-continue boundary with image/text content. Unsupported types/backends
 fail explicitly; no silent queue, cancel/restart fallback, model change or expanded grant occurs.
 Paired owners advertise `chatControls.steeringMediaTypes`; native composition respects that gate
-and confirms the same selected file/provider destination. A timeout remains unconfirmed delivery,
+and confirms the same selected file/provider destination. Web and native attached steering reread the same host/provider/active turn and every accepted media type before sending; a changed turn retains the draft/files. A timeout remains unconfirmed delivery,
 not permission for automatic resend. Existing queued attachment promotion remains unavailable;
 new messages with files can use Steer directly while a turn is active.
 

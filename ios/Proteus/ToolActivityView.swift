@@ -8,7 +8,7 @@ func toolActivityFailed(_ tool: JSON) -> Bool {
 enum NativeActivity {
     static func contains(_ event: JSON) -> Bool {
         if event["data"]["question"] != .null { return false }
-        return event["data"]["tool"] != .null || event["data"]["permission"] != .null || event["role"].string == "system"
+        return event["data"]["tool"] != .null || event["data"]["permission"] != .null || event["role"].string == "tool"
     }
     static func group(events: [JSON], startingAt index: Int) -> [JSON] {
         guard events.indices.contains(index), contains(events[index]) else { return [] }
@@ -34,6 +34,27 @@ enum NativeActivity {
         if seconds < 1 { return "Elapsed \(Int((seconds * 1000).rounded())) ms" }
         if seconds < 60 { return "Elapsed \(seconds.formatted(.number.precision(.fractionLength(0...2))))s" }
         return "Elapsed " + runtimeLabel(seconds)
+    }
+}
+
+struct NativeChatRecoveryState {
+    let event: JSON
+    let failureEventAt: JSON
+    let recoverable: Bool
+    let capacity: Bool
+    let retry: JSON
+    let queuedCount: Int
+    static func read(_ run: JSON) -> NativeChatRecoveryState? {
+        let recoverable = ["failed", "interrupted"].contains(run["status"].string)
+        let retry = run["capacityRetry"]
+        guard recoverable || retry != .null else { return nil }
+        let started = run["turns"].array.last?["startedAt"].string ?? ""
+        let finish = run["failureEventAt"].string.isEmpty ? run["updatedAt"] : run["failureEventAt"]
+        let events = run["events"].array.reversed()
+        let tagged = events.first { $0["data"]["failure"] != .null && (!recoverable || started.isEmpty || $0["at"].string >= started) }
+        let event = tagged ?? events.first { $0["role"].string == "system" && $0["data"]["tool"] == .null && $0["data"]["permission"] == .null && (finish.string.isEmpty || $0["at"].string <= finish.string) && (started.isEmpty || $0["at"].string >= started) } ?? .null
+        let capacity = run["status"].string == "failed" && (event["data"]["failure"]["kind"].string == "capacity" || event["text"].string.trimmingCharacters(in: .whitespacesAndNewlines).range(of: #"^Selected model is at capacity(?:[.!]|$)"#, options: [.regularExpression, .caseInsensitive]) != nil)
+        return NativeChatRecoveryState(event: event, failureEventAt: finish, recoverable: recoverable, capacity: capacity, retry: retry, queuedCount: run["queuedMessages"].array.count)
     }
 }
 

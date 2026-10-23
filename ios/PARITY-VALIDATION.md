@@ -1,3 +1,30 @@
+## October 23 — recovery controls and measured typing (local source)
+
+Plain system failures stay outside collapsed tool/permission activity. The selected current
+failure exposes capability-gated Continue, Retry every 60 seconds and Stop retrying controls;
+commands carry the exact failure identity through the existing owner boundary. The recovery
+state is computed once per conversation render, not once per event. Attached steering rereads
+the same host/provider/native turn and accepted media types before upload and final delivery.
+Drafts, model settings, file consent and message identities keep their existing boundaries.
+
+Phone simulator acceptance: 141 native units pass; standalone system/tool timing and approval
+references pass. A real encrypted-host UI test waits an actual minute for one capacity retry,
+stops the policy, continues the same chat and delivers the retained queued message without
+clearing the unsent draft. Distinct recovery button accessibility IDs are verified.
+
+Typing UI checks pass for one 180-line message and 100/1,000-event histories. Each enters and
+retains all 210 characters, with zero history passes and zero inspected history events during
+entry. Recorded times are 4.30, 4.98 and 4.70 seconds respectively, including XCTest keyboard
+and accessibility overhead; these are not physical-device frame-rate or response-time claims.
+Drafts survive section return and background/foreground. Earlier attempts stopped on stale
+navigation/editor selectors; their failures remain in their original result bundles. The current
+fixture uses the multiline editor and visible controls while retaining all assertions.
+
+Tablet UI checks and physical installation/live acceptance remain pending. Mobile-only Release
+build 2610.23.1 is signed using the existing paid identity/profile, which covers both registered
+devices and expires October 16, 2027. No certificate/account was recreated, desktop app updated,
+or live-data backup taken for simulator/build-only work.
+
 ## October 22 — attachment steering composition (source)
 
 The native composer accepts attached Steer only when the connected owner advertises every file's
