@@ -20,7 +20,18 @@ Drafts survive section return and background/foreground. Earlier attempts stoppe
 navigation/editor selectors; their failures remain in their original result bundles. The current
 fixture uses the multiline editor and visible controls while retaining all assertions.
 
-Tablet UI checks and physical installation/live acceptance remain pending. Mobile-only Release
+Tablet simulator checks now pass the 1,000-message bounded history/paging/background case,
+the actual-minute recovery/Stop/Continue/queue/draft flow, and typing across 1/100/1,000 events.
+All three typing cases retain 210 characters with zero history passes and inspected events;
+XCTest times are 5.09, 4.71 and 4.82 seconds. Earlier simulator/SpringBoard failures remain
+recorded separately. One failed recovery attempt tapped loaded-context details while dismissing
+the keyboard, leaving recovery above the viewport. The corrected test uses the keyboard's
+dismissal control and explicitly requires recovery to be hittable after normal scrolling;
+no application runtime or recovery assertion changed.
+
+Physical installation/live acceptance remains separate: the phone update is installed and its
+cold protected-file hashes and process launch verify, while actual foreground Proteus UI is
+still pending. Tablet physical delivery remains pending. Mobile-only Release
 build 2610.23.1 is signed using the existing paid identity/profile, which covers both registered
 devices and expires October 16, 2027. No certificate/account was recreated, desktop app updated,
 or live-data backup taken for simulator/build-only work.

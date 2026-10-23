@@ -7,8 +7,12 @@ reinstall them. The URL-follow race now reproduces and passes with a source corr
 
 Web recovery/attachment steering is implemented locally and passes focused authenticated UI
 checks including a real 60-second retry. Native source compiles, 141 units pass and standalone
-system/activity layout passes; expanded typing/recovery UI work continues. Web and physical
-mobile deployments are still pending. Keep the monitor active and Windows' separate review blocker
+system/activity layout passes. Phone and tablet recovery/typing UI checks now pass, including an
+actual minute of capacity retry and zero history traversals during 210-character entry across
+1/100/1,000 events. The tablet's earlier keyboard-dismissal coordinate tap was a fixture defect;
+its corrected interaction keeps the same recovery/draft/queue assertions. See native parity
+validation for retained simulator failures and measurement limits. Web deployment and physical
+mobile live acceptance remain pending. Keep the monitor active and Windows' separate review blocker
 intact. Preserve two native/desktop recoveries per target, without build/test-only snapshots.
 
 ## October 22 — hosted builds disabled by operator request

@@ -58,7 +58,12 @@ final class RemoteUITests: XCTestCase {
         if app.buttons["composer-preview"].exists { app.buttons["composer-preview"].tap() }
         let editor = app.descendants(matching: .any).matching(identifier: "reply-text").firstMatch
         XCTAssertTrue(editor.waitForExistence(timeout: 10)); editor.tap(); editor.typeText("Unsent native recovery draft")
-        app.scrollViews["chat-conversation-scroll"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)).tap()
+        // An arbitrary transcript tap can expand loaded-context details on iPad,
+        // moving the earlier failure controls offscreen while dismissing the keyboard.
+        if app.buttons["Hide keyboard"].exists { app.buttons["Hide keyboard"].tap() }
+        let transcript = app.scrollViews["chat-conversation-scroll"]
+        for _ in 0..<6 where !retry.isHittable { transcript.swipeDown() }
+        XCTAssertTrue(retry.isHittable, "Recovery must remain reachable after composing an unsent draft")
         retry.tap(); let start = Date()
         let stop = app.buttons["chat-recovery-stop-retry"]; XCTAssertTrue(stop.waitForExistence(timeout: 10))
         let failure = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Synthetic native retry.")).firstMatch
