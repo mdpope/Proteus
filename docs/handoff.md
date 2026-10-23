@@ -7,7 +7,27 @@ scope; existing SSH trust was not changed. The server-side disable already stops
 Do not re-enable it or dispatch hosted jobs without fresh operator authorization. Continue local source, package and device acceptance normally. This workflow/docs
 change does not alter the frozen runtime or require rebuilding the accepted desktop artifacts.
 
-## October 22 — combined corrections frozen and signed; installation pending
+## October 22 — combined corrections installed on Build Mac; destination holds remain
+
+The exact signed `ef05d03a1cee+src.c5930b5d16bf` candidate is now installed on Build Mac after
+fresh owner/UI idleness and signer checks. Cold-copy verification covers 71,489 files; preservation
+checks cover 135 logical tabs, 113 content tabs and all 31 protected retry receipts. The actual
+restored browser address/content matches preflight, all three window identities survive, the relay
+is online, and Codex/Copilot are ready. Other-window focus cycling was inconclusive; do not claim
+an interactive check of each window. Default-profile Claude remains signed out as before.
+
+Both retained full desktop recoveries independently match their cold-file manifests. The oldest
+superseded payload and duplicate rollback app were retired, leaving exactly two generations and
+one app per generation. Actual free-space gain from that retirement is 29,884,416 bytes; APFS
+clones share extents, so this is not their summed directory size. Private receipts retain details.
+
+HC is unlocked but the operator explicitly requested an installation hold in its destination chat.
+Windows `windows.225b878e9278` passes its package gates, but automatic review again rejected the
+approved oldest-recovery retirement; installation remains held, with no deletion retry/workaround.
+Linux reports installation of `linux.296176b5e0eb`; final live/preservation acceptance is still
+pending. Do not count dispatch, staging, private release upload or compilation as live acceptance.
+
+## October 22 — combined corrections frozen and signed
 
 See the latest [planning entry](planned-updates.md), [provider behavior](providers.md),
 [workspace memory](workspaces.md) and [Connections layout](remote.md). Source now combines
@@ -30,10 +50,10 @@ human sharing and, after correcting that fixture in a temporary diagnostic, expo
 background page viewport/click timeout on both this candidate and the original installed release.
 Keep that baseline issue separate; do not claim the broad fixture passes or relax its assertions.
 
-The originally held chat finished naturally, but fresh local owner/UI preflight now finds another
-running chat. Wait for natural idleness and preserve its draft/queued work; do not restart it.
-Retain the HC unlock requirement and scoped Windows recovery approval. Do not install earlier
-candidates. No new local installation or live-data recovery was made. The default-profile Mac Claude
+The initially held chat and the later running chat both finished naturally before the accepted
+local installation above. Preserve the same fresh idle/UI guards for remaining destinations.
+Retain the HC operator hold and scoped Windows recovery-review blocker. Do not install earlier
+candidates. The default-profile Mac Claude
 sign-out remains under investigation; the existing native Keychain store/signer was preserved.
 
 ## October 22 — redundant descriptor traffic correction accepted on Mac; rollout separate

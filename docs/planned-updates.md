@@ -31,8 +31,14 @@ All 1,070 Node tests pass (one platform skip), static checks pass, and exact-pac
 navigation/restart/history, responsive layout/attachments, activity, notice, passive-save and
 unchanged two-desktop 400 ms follow acceptance pass. Earlier packages retain their exact evidence
 but are superseded for installation. Private signed/source transfer is pinned and verified;
-destination acceptance and installation remain separate. The originally held local chat finished
-naturally; a new running chat now prevents a restart. Preserve the same idle-safe policy. Its reported
+destination acceptance and installation remain separate. Both local running chats finished
+naturally. Build Mac installation now passes strict preservation of 135 logical tabs, 113 content
+tabs and 31 protected retry receipts, actual restored browser UI and three registered window IDs,
+relay and Codex/Copilot readiness. Two full desktop recovery generations independently verify;
+retirement of the oldest payload/duplicate app frees 29,884,416 actual bytes on APFS. HC remains
+on the operator's explicit hold; Windows installation remains blocked by renewed automatic-review
+rejection of the approved oldest-recovery retirement. Linux is installed, with final live acceptance
+pending. Preserve the same idle-safe policy. The reported
 default-profile Claude sign-out is real according to that CLI despite an extant Keychain item;
 cause and restored live sign-in remain unverified. Do not clear credentials or claim the custom
 environment fix resolves that separate observation. License, terminal visibility and history
