@@ -1,3 +1,10 @@
+## 0.2.29 — rollout acceptance
+
+- Include the follow-ordering and duplicate-metadata corrections below in the final tested desktop artifacts.
+- Integrate native-view readiness and Windows path escaping fixes in UI test setup without changing the frozen runtime.
+- Record per-device installation, history preservation, public Windows update consumption and actual backup/staging space measurements in [rollout acceptance](docs/2026-10-22-unified-rollout.md).
+- Retain explicit limits for physical mobile camera/pairing checks, hardware gestures and policy-blocked Windows build-folder cleanup.
+
 ## Unreleased — convergent browser metadata
 
 - Settle a duplicate browser redirect/title intent only when the owner's selected entry already has the exact entry ID, URL and title. A stale redirect conflict gets one fresh read, without resubmitting or inventing a receipt.

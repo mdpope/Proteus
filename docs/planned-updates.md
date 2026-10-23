@@ -1,3 +1,12 @@
+## October 22 — combined 0.2.29 rollout acceptance
+
+The combined release is built and deployed across the authorized targets. See the
+[current per-target acceptance and retention record](2026-10-22-unified-rollout.md).
+This record supersedes earlier holds and source-only status below for this release;
+physical-device workflow limits remain explicit. Desktop runtime froze at `abad91f`;
+later native-view readiness and Windows path-selector changes affect tests only.
+No complete browser history or protected retry receipt was pruned.
+
 ## October 22 — duplicate redirect metadata convergence
 
 Implemented a client-only settlement for identical selected-entry redirect metadata, including

@@ -1,6 +1,8 @@
 # Performance and shared-project follow-along
 
-Status: implementation authorized October 22, 2026; installation and deployment are separate.
+Status: implementation and combined 0.2.29 rollout authorized October 22, 2026.
+See [current artifact and per-target acceptance](2026-10-22-unified-rollout.md); earlier
+source-only measurements below remain historical evidence with their original scope.
 
 The operator requests the full architecture-review plan, minor visual refinements only, and
 shared-project desktop follow-along. Preserve complete browser navigation, stable owner/tab/chat
