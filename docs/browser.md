@@ -1327,6 +1327,21 @@ remain in the menu. The host binds actions to the captured page and validates it
 the sandboxed menu has no website, credential or general application API. Preview validation and
 production deployment are recorded separately in desktop-preview.md.
 
+## Convergent selected-entry metadata
+
+Two clients can observe the same page title at the same navigation revision. The shared
+descriptor client settles a redundant redirect intent only when the authoritative selected
+entry ID, URL and title all match exactly. If a peer commits between GET and mutation, an
+explicit stale redirect conflict permits one fresh verified read to establish that same match.
+It does not resubmit the stale operation or manufacture an execution receipt. Metadata companions
+continue through normal synchronization; batches with navigation/traversal retain conflicts.
+
+Different selected entries, URLs or titles retain the original pending intent and conflict.
+Operation-ID collision, closed-tab and journal errors are unchanged. Uncertain transport failures
+keep the original request identity and bytes for retry; a later read may independently prove
+the metadata intent satisfied. No history entry, Forward branch, visit or server receipt is deleted.
+This is source behavior; exact packaged latency acceptance and installation are separate gates.
+
 ## Complete session history with incremental synchronization
 
 The desktop descriptor synchronizer requests bounded 200-entry navigation windows.

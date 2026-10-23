@@ -1,3 +1,14 @@
+## October 22 — duplicate redirect metadata convergence
+
+Implemented a client-only settlement for identical selected-entry redirect metadata, including
+one fresh hydration after an explicit navigation revision conflict. Exact entry ID, selected
+index, URL and title must agree. The original uncertain request remains intact unless its
+metadata intent is proven satisfied; no server receipt or execution acknowledgement is invented.
+Server revision/digest checks and complete history remain unchanged. Stale-write recovery allows
+one redirect with only same-tab/profile metadata and reorder companions. Navigation/traversal
+batches, divergent metadata, operation-ID collisions and transport failures retain existing
+conflict/retry behavior. Integrated packaged latency acceptance and installation remain pending.
+
 ## October 22 — follow ordering and slow-response source correction
 
 Linux exact-package acceptance exposed a delayed native-position failure despite passing source

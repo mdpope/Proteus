@@ -53,6 +53,12 @@ export function rebaseTabChanges(operations,current){
       const entry=current.find(tab=>tab.id===op.tabId)?.history?.entries?.find(entry=>entry.id===op.entryId);
       if(entry&&entry.url===op.url&&entry.title===op.title)continue;
     }
+    if(op.action==='browser-redirect'){
+      // Another client may already have supplied the same selected-entry title.
+      // Converge that metadata intent without issuing a stale navigation write.
+      const history=current.find(tab=>tab.id===op.tabId)?.history,entry=history?.entries?.[history.index];
+      if(history?.currentEntryId===op.entryId&&entry?.id===op.entryId&&entry.url===op.url&&entry.title===op.title)continue;
+    }
     if(op.action==='close'){if(!live.has(op.id))continue;live.delete(op.id);}
     else if(op.action==='open'){
       const prior=live.get(op.tab.id);
@@ -188,11 +194,37 @@ export function createTabSynchronizer({scopes,readLocal,apply,request,onError=()
           if(record.request?.signature)try{const prior=JSON.parse(record.request.signature);if(JSON.stringify({expectedRevision:prior.expectedRevision,operations:prior.operations})===JSON.stringify({expectedRevision:args.expectedRevision,operations:args.operations})){args=prior;signature=record.request.signature;}}catch{}
           if(record.request?.signature!==signature)record.request={signature,id:crypto.randomUUID(),issuedAt:new Date().toISOString()};
           if(pendingStorage)pendingStorage.setItem(requestKey,JSON.stringify(record.request));
-          remote=await hydrate(scope,await request(scope,'mutate',args,{id:record.request.id,issuedAt:record.request.issuedAt}));
-          wrote=true;
+          let converged=false;
+          try{
+            remote=await hydrate(scope,await request(scope,'mutate',args,{id:record.request.id,issuedAt:record.request.issuedAt}));
+            wrote=true;
+          }catch(error){
+            // A peer may commit identical metadata after our GET. Read once to
+            // prove that this intent is satisfied; never replay a stale write or
+            // manufacture its receipt. Navigation/traversal batches still conflict.
+            const redirect=changes[0];
+            if(error.code!=='NAVIGATION_CONFLICT'||changes.length!==1||redirect.action!=='browser-redirect'||operations.filter(op=>op.action==='browser-redirect').length!==1)throw error;
+            if(!operations.every(op=>op===redirect||op.action==='reorder'||(op.action==='open'&&op.tab.id===redirect.tabId&&op.tab.type==='browser')))throw error;
+            let fresh;try{fresh=await hydrate(scope,await request(scope,'get',{historyLimit:200}));}catch{throw error;}
+            const tab=fresh.tabs.find(tab=>tab.id===redirect.tabId);
+            if(records.get(id)!==record||rebaseTabChanges(changes,fresh.tabs).length||operations.some(op=>op.action==='open'&&(op.tab.profileId||'default')!==(tab?.profileId||'default')))throw error;
+            remote=fresh;converged=true;
+          }
           record.request=null;pendingStorage?.removeItem(requestKey);
+          return converged;
         };
-        const submit=async changes=>{let metadata=[];const flush=async()=>{while(metadata.length)await send(metadata.splice(0,100));};for(const op of changes){if(op.action.startsWith('browser-')){await flush();await send([op]);}else metadata.push(op);}await flush();};
+        const submit=async changes=>{
+          let remaining=[...changes],metadata=[];
+          const flush=async()=>{while(metadata.length)await send(metadata.splice(0,100));};
+          while(remaining.length){
+            const op=remaining.shift();
+            if(op.action.startsWith('browser-')){
+              await flush();
+              if(await send([op]))remaining=rebaseTabChanges(remaining,remote.tabs);
+            }else metadata.push(op);
+          }
+          await flush();
+        };
         try{await submit(rebased);}
         catch(error){if(!/Content tabs changed/.test(error.message))throw error;remote=await hydrate(scope,await request(scope,'get',{historyLimit:200}));if(records.get(id)!==record)return;rebased=rebaseTabChanges(operations,remote.tabs);await submit(rebased);}
         record.pending=null;record.request=null;pendingStorage?.removeItem(storageKey);pendingStorage?.removeItem(requestKey);
