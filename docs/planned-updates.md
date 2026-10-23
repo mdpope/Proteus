@@ -37,8 +37,13 @@ tabs and 31 protected retry receipts, actual restored browser UI and three regis
 relay and Codex/Copilot readiness. Two full desktop recovery generations independently verify;
 retirement of the oldest payload/duplicate app frees 29,884,416 actual bytes on APFS. HC remains
 on the operator's explicit hold; Windows installation remains blocked by renewed automatic-review
-rejection of the approved oldest-recovery retirement. Linux is installed, with final live acceptance
-pending. Preserve the same idle-safe policy. The reported
+rejection of the approved oldest-recovery retirement. Linux has completed actual UI/normal restart,
+provider/relay readiness and two-generation retention acceptance; its source freeze is already on
+main. Observed Btrfs available-space gain is 2,934,657,024 bytes. Strict mutable-file equality failures
+remain recorded with supplemental classifications for refresh timestamps, source-reproduced memory
+additions, new view locators and cookie reissuance (inferred, without a Set-Cookie witness). Histories,
+pairings, protected receipts and recorded coordinates remain intact. Other providers/physical mobile
+workflows remain separate. Preserve the same idle-safe policy. The reported
 default-profile Claude sign-out is real according to that CLI despite an extant Keychain item;
 cause and restored live sign-in remain unverified. Do not clear credentials or claim the custom
 environment fix resolves that separate observation. License, terminal visibility and history

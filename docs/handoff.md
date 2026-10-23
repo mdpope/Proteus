@@ -24,8 +24,18 @@ clones share extents, so this is not their summed directory size. Private receip
 HC is unlocked but the operator explicitly requested an installation hold in its destination chat.
 Windows `windows.225b878e9278` passes its package gates, but automatic review again rejected the
 approved oldest-recovery retirement; installation remains held, with no deletion retry/workaround.
-Linux reports installation of `linux.296176b5e0eb`; final live/preservation acceptance is still
-pending. Do not count dispatch, staging, private release upload or compilation as live acceptance.
+Linux `linux.296176b5e0eb` has completed actual UI/normal restart and update/rollback acceptance,
+with Codex ready and the relay online. Its source branch points to the already integrated runtime
+freeze; no additional Linux runtime merge is needed. Two independently verified full recoveries
+remain after retirement; observed available-space gain is 2,934,657,024 bytes on Btrfs.
+
+Linux's strict mutable-file equality results remain false and are retained alongside supplemental
+preservation acceptance: refresh timestamps, a source-reproduced workspace-memory addition, new
+view locators and website cookie reissuance account for the reviewed differences. Original history,
+pairing bytes, receipts and recorded coordinates remain intact. Cookie reissuance is an inference
+without a Set-Cookie witness, not proven full cookie equality. Other provider continuity and
+physical Mac/iOS workflows were not reverified by this Linux acceptance. Private immutable receipt
+pins retain the evidence. Do not count dispatch, staging, private upload or compilation as live acceptance.
 
 ## October 22 — combined corrections frozen and signed
 
