@@ -1,3 +1,12 @@
+## October 22 — hosted builds disabled by operator request
+
+The operator requested no more GitHub build attempts because credits are exhausted and failed-run
+emails are disruptive. Cross-platform validation is disabled in GitHub. Removing its automatic source triggers was
+prepared but cannot be pushed with the current OAuth credential because it lacks workflow-write
+scope; existing SSH trust was not changed. The server-side disable already stops automatic runs.
+Do not re-enable it or dispatch hosted jobs without fresh operator authorization. Continue local source, package and device acceptance normally. This workflow/docs
+change does not alter the frozen runtime or require rebuilding the accepted desktop artifacts.
+
 ## October 22 — combined corrections frozen and signed; installation pending
 
 See the latest [planning entry](planned-updates.md), [provider behavior](providers.md),

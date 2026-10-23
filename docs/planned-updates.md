@@ -1,3 +1,13 @@
+## October 22 — stop GitHub-hosted builds
+
+Operator direction: stop triggering GitHub builds while credits are exhausted. Disable the
+existing hosted workflow in GitHub; verified disabled with no queued/running jobs. Automatic source
+trigger removal remains deferred because the existing OAuth credential lacks workflow-write scope.
+The workflow remains disabled regardless of its source triggers. Agents must not dispatch or enable
+it without fresh authorization. Local tests and exact-package/device acceptance remain required.
+No runtime change. Broader repository-wide disabling was rejected by automatic review because it
+would also block intentional manual workflows; no further attempt or workaround is authorized.
+
 ## October 22 — operator-requested recovery, workspace memory and layout corrections
 
 Implemented in source: visible chronological system messages, exact-failure Continue chat and

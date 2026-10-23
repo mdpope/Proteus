@@ -1,5 +1,6 @@
 ## Unreleased — chat recovery, navigation and layout corrections
 
+- Disable the GitHub build workflow at the operator's request; retain local validation and require fresh authorization before enabling or dispatching hosted jobs.
 - Show plain system messages outside Activities, with Continue chat and an explicit per-chat 60-second capacity retry/stop option; preserve queued inputs, drafts and native sessions.
 - Restore each top-level workspace's remembered project/chat/resource page through restart without changing resource placement or histories.
 - Allow supported active-turn steering attachments through existing provider/file consent and replay protection; advertise media types to paired desktops/native clients.

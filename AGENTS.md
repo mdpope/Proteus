@@ -12,6 +12,8 @@ schedules. New providers implement the provider boundary rather than changing sc
 
 Run `npm test` and `npm run check` after changing execution or persistence. Exercise the desktop
 UI after interface changes. Mark rehearsal output explicitly and never invent provider usage.
+GitHub-hosted builds are disabled by operator request because credits are exhausted and failed-run
+emails are disruptive. Run validation locally; do not enable or dispatch Actions without fresh authorization.
 Only one runner process owns an application-data directory. Do not permit concurrent turns in
 one session. A completed model turn is not proof that an external workflow finished successfully.
 
