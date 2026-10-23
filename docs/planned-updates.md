@@ -5,8 +5,60 @@ terminal clipboard/agent-access additions, shared move menu, associated-chat rou
 window/project synchronization fixes. See
 [implementation and validation](2026-10-23-next-release.md) and [source organization](code-organization.md).
 This candidate is based on the ongoing update chat's latest committed source; its release
-packaging, installation, OS defaults, publishing and rollout remain held. The earlier rollout
+packaging and disposable local tests are now authorized; installation, OS defaults, publishing and remote rollout remain held. The earlier rollout
 records below describe the previous release and do not release this candidate's hold.
+
+## October 23 — two-backup policy implemented; website live acceptance complete
+
+Keep at most two complete recovery generations in each applicable local/server location: the
+latest verified backup and one previous. This supersedes the website's three-generation/calendar
+and indefinite migration-pin exceptions. Verify the retained pair, retire older known project
+payloads and duplicate code/build copies, keep small receipts, and do not download obsolete
+backups merely to delete them. A temporary third lasts only until acceptance; any longer full
+exception needs a named reason, size, end condition and fresh operator approval. Unknown or
+unrelated backups are excluded.
+
+Website release `20261023T230000Z`, build `5bfcaf6`, is live and accepted. All 9,221 deployed file
+hashes, nine served assets and fourteen endpoints pass. The existing authenticated browser shows
+the correct build, connected Build Mac, six retained content tabs, workspace catalogs, provider
+allowance rows and a loaded Connections page. No provider turn or external workflow is certified.
+Web source is unchanged between `5bfcaf6` and the frozen desktop runtime `490fd629b659`.
+
+One new capture `20261023T225009Z` passed central verification and ordinary isolated restore with
+matching DDL/native ledger, stable protected state and no production writes. The first activation
+stopped during partial extraction near the site's 2 GiB quota; its failed/rolled-back transaction
+is retained. After exact operator-approved code cleanup, a distinct transaction installed the
+same tested bytes using the same capture. No second capture or application rebuild was used.
+
+Exactly two full website recoveries now remain both locally and on the server: October 23 at
+00:08 and 22:50. Every retained file matches its manifest. The server has exactly two code
+releases, current plus previous, and local code archives also retain the current and previous
+packages. Eight old local recovery sets, sixteen loose archives and four transport folders were
+retired with +978,948,096 measured available bytes. Accepted rotation removed another 451,117,890
+logical bytes without a separate physical measurement. Retirement of 63 old local code archives
+and 28 duplicate/obsolete build payloads removed 1,437,742,518 logical bytes with +295,886,848
+observed available bytes; APFS sharing/concurrent activity prevents equating those numbers.
+
+The directly approved 79 server targets and later 109 targets are all retired. Their cleanup
+windows recorded +18,775,552,000 and +3,436,179,456 available bytes respectively; final observed
+server available space was 24,908,283,904 bytes and `/up` returned 200. These separate cleanup
+deltas are not a whole-rollout net-space claim. Earlier 27/18/79/109 questions are resolved or
+superseded. No old sensitive backup bulk transfer was retried.
+
+Capture/activation guards count incomplete copies and enforce two existing generations before
+an in-flight third. The local builder blocks accumulated archives or unresolved prior build
+payloads. Sixteen boundary/storage tests, fourteen client tests, focused preservation fixtures and
+project structure checks pass. Runtime history/retry/access guards remain strict; no GitHub builds,
+remote source push, credential change or general root cleanup interface was added. Private exact
+receipts stay in the owning website project. The MariaDB system-table log flood is unresolved;
+all messages in the bounded classification window matched that existing category. The operator
+completed the Windows read-only native-owner inspection. It confirms that the native and
+Codex-packaged contexts see distinct data homes and host identities; the native owner reports
+an installation-registration query failure although control-context registration reads succeed.
+The supported update still needs that discrepancy and its recovery inventory resolved, and the
+prior cleanup review gate remains. No Windows installation or live acceptance is claimed. Keep
+monitoring active and quiet; do not repeat completed Mac/Linux/mobile/web installs, captures or
+cleanup.
 
 ## October 23 — local URL-follow fix and web/native parity; desktop rollout resumed
 
