@@ -2,6 +2,15 @@ Current cross-platform acceptance is recorded in [PR #20](https://github.com/mdp
 The dated/source-specific checkpoints below retain their original verification scope; later
 workflow results supersede their pending/failure status without changing the recorded artifacts.
 
+## October 22 — 0.2.29 installed and live-verified
+
+Linux x64 `linux.80d84ef350ad`, built from frozen main `abad91f`, is installed in place
+and live-verified after a normal restart. Codex metadata is available and the existing relay
+connection is online. [The artifact-specific report](2026-10-22-linux-029-install.md) records
+source/package checks, 400 ms follow acceptance, preservation evidence, bounded startup
+classifications, recovery retention and verification limits. Earlier failed candidates remain
+separate evidence; their generated bundles were retired after acceptance.
+
 ## October 22 — Linux acceptance evidence reconciled with main
 
 The four reports below retain the observed Linux 0.2.27/0.2.28 artifact identities, test
