@@ -12,6 +12,12 @@ another client's navigation; native history/profile/revision guards remain stric
 UI test passes locally, with 48/51 scroll updates, 1,345/447 ms gaps and 4/3 descriptor reads.
 No new desktop package or installation is accepted by this source result.
 
+The signed Mac candidate passes exact-package 400 ms follow and actual-minute recovery. A raw
+SIGTERM restart-fixture failure reproduces on the original binary while Playwright retains its
+debugger. Normal Playwright Quit detaches it; original and candidate then pass all three-launch
+history assertions and the candidate passes workspace return. This is a test-only correction,
+with original failures retained, not a runtime fix or permission to skip destination acceptance.
+
 Web recovery UI passes a real minute of retry, explicit Stop and Continue, retained draft/queue,
 standalone system errors, exact consenting steering attachments and stale-turn rejection. All
 101 Laravel tests pass with disposable test keys; the built web package compiles. Native source

@@ -7,6 +7,12 @@ See [follow verification](project-follow.md). Fresh owner/work, recovery and rev
 apply; this authorization does not bypass the separate Windows cleanup rejection. No new desktop
 package/install is accepted yet.
 
+Mac exact-package follow at 400 ms and actual-minute recovery pass. Legacy-history and workspace
+restart fixtures now use Playwright's normal Quit, which detaches its debugger; raw SIGTERM had
+stalled both original and candidate test processes. Both binaries pass the unchanged three-launch
+history assertions with clean, unsignalled exits. This fixture-only correction requires no app
+rebuild. Installation, private transfer review and remaining package gates are still separate.
+
 Web recovery/attachment steering is implemented locally and passes focused authenticated UI
 checks including a real 60-second retry. Native source compiles, 141 units pass and standalone
 system/activity layout passes. Phone and tablet recovery/typing UI checks now pass, including an
