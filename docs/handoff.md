@@ -22,7 +22,17 @@ restart fixtures now use Playwright's normal Quit, which detaches its debugger; 
 stalled both original and candidate test processes. Both binaries pass the unchanged three-launch
 history assertions with clean, unsignalled exits. This fixture-only correction requires no app
 rebuild. The explicitly approved private draft transfer is complete with all three server asset
-digests matching. HC destination acceptance and Linux installation remain in progress. Windows'
+digests matching. HC now runs the same new build with actual connected/browser UI accepted,
+399 original chats, 1,819 protected retry receipts and three databases preserved. Initial strict
+startup continuity passed; later timestamp-only tab/history changes keep their failed strict
+results beside a separate protected-field/history comparison. Do not claim full mutable equality
+or successful continuation of its earlier failed native Codex session. The operator approved the
+new four-item retirement after review initially blocked it; exactly two verified recoveries
+remain and actual free space increased by 1,553,993,728 bytes.
+
+Linux's new package is installed but is **not live-accepted**: peer verification found that the
+helper-launched process cannot access existing protected credential storage. Pairing bytes remain
+intact; investigate its launch context without changing credentials, keyrings or grants. Windows'
 new candidate passes its package gates but remains uninstalled: the visible app has an empty
 pairing view while the stored profile retains five pairings, and its prior cleanup review blocker
 remains unresolved. Preserve both views; do not copy data or re-pair to conceal the mismatch.

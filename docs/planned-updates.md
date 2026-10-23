@@ -24,8 +24,14 @@ Build Mac installation and actual restored chat/browser UI are accepted for
 workflow continuation, Claude authentication or physical performance claim follows from that
 acceptance. Two verified full recoveries remain after eligible oldest/duplicate-app retirement;
 actual free-space gains were 12,361,728 bytes plus 3,014,656 bytes for two duplicate generated apps.
-Other desktop installations remain separate; Windows also needs its live/stored data-view
-mismatch resolved without changing either profile or bypassing its cleanup review blocker.
+HC now runs the same new build with actual connected/browser UI, 399 preserved original chats,
+1,819 protected retry receipts and two verified recoveries after a newly approved four-item
+retirement. Actual free-space gain is 1,553,993,728 bytes. Later timestamp-only mutable differences
+remain separately classified; the prior native Codex continuation failure remains unresolved.
+Linux is installed but live acceptance is held by credential-store access after helper launch.
+Windows needs its live/stored data-view mismatch resolved without changing either profile or
+bypassing its cleanup review blocker. Its read-only native-owner helper needs human execution
+under the destination's installed computer-use guidance; no terminal-UI workaround was attempted.
 
 Rollout review also found a separate updater-readiness gap: its current tab-based activity
 barrier does not inspect the offscreen grants used by direct Save Link As downloads. Queue a
