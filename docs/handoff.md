@@ -1,3 +1,13 @@
+## October 22 — follow latency correction awaits integrated artifact acceptance
+
+A shared follower source correction addresses deterministic passive-read/remote-position ordering
+and continuous-scroll starvation across slow descriptor synchronization. See
+[follow-along](project-follow.md) and the latest design decision. Keep the original Linux package
+failures and successful diagnostic retries as separate evidence; neither a retry nor clean source
+checks alone certify a physical installation. The correction needs unified integration and a new
+exact tested artifact before the held Linux update resumes. Existing app/data and protected retry
+receipts remain in place; this source-only change captures no recovery generation.
+
 ## October 22 — rollout acceptance corrections
 
 A controlled 120 ms content-tab response delay exposed follow presentation arriving before

@@ -20,6 +20,13 @@ Awaited descriptor synchronization includes passes queued during an earlier resp
 selection cannot overtake a pending navigation seed. Follow events are excluded from replay journals. Durable history, pending navigation
 operations, and retry receipts retain their existing ownership.
 
+A pending owner presentation takes precedence over passive local reconciliation for the same
+presentation identity. Newer human changes or a different tab, child, page, URL or history entry
+retain their own intent. Continuous scroll positions are read again after slow descriptor
+synchronization and coalesced without repeating that barrier for an unchanged identity. A changed
+entry still needs synchronization, even when its URL is the same. Scope and reconnect generation
+checks apply throughout; an unchanged no-op input does not indefinitely block later presentations.
+
 Each browser loads the shared URL in its own local profile. Cookies, credentials,
 page text, screenshots, and remote-viewing frames are never part of follow state.
 Private sign-in/callback URLs keep existing protections. Browser scroll observations
@@ -57,7 +64,8 @@ keep their existing tab behavior; follow is retried after connection recovery.
 
 - `test/project-follow.test.js`: lease scope, actor identity, malformed state,
   out-of-order updates, delayed leave, asynchronous application, disposal, reconnect,
-  inactive scope, and re-entry.
+  inactive scope, re-entry, pending-event read/sync ordering, no-op input, native navigation
+  identity, continuous input during 400 ms hydration, and changed-entry barrier coverage.
 - `test/project-follow-ui.mjs`: two disposable Electron applications through an
   encrypted relay, tab and nested-chat selection, bidirectional URL changes, native
   scroll sustained beyond the relay traffic window, bounded descriptor/update counts,

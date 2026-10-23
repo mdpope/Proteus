@@ -1,3 +1,9 @@
+## Unreleased — follow presentation ordering under latency
+
+- Apply a pending owner position before publishing passive local changes for the same presentation identity, while preserving newer human input and changed navigation.
+- Coalesce current scroll positions after descriptor synchronization so continuous input does not starve follow updates under slow responses.
+- Keep scope, reconnect, history-entry and presentation-rate protections; integrated exact-package acceptance remains required before rollout.
+
 ## 0.2.29 — combined October 22 release
 
 - Combine scoped desktop follow-along, resource/backup improvements, browser controls and the Home correction from the updates below.

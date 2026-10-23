@@ -1,3 +1,18 @@
+## October 22 — follow ordering and slow-response source correction
+
+Linux exact-package acceptance exposed a delayed native-position failure despite passing source
+acceptance. A separate controlled 400 ms response delay reproduced continuous-scroll starvation
+on Mac. Deterministic regressions reproduce passive positionless publication overtaking a pending
+owner scroll during either a local read or descriptor synchronization, and starvation when
+continuous human scroll repeatedly invalidates the same navigation barrier.
+
+The source correction gives pending remote positions priority only within the same presentation
+identity and without newer effective human changes. After synchronization, a fresh read may
+coalesce newer positions when scope, generation, tab, child, page, URL and entry still match;
+changed navigation requires another barrier. Source verification and exact packaged 400 ms
+acceptance are separate gates. Do not install the previously failing candidate around its failure.
+No Linux installation or recovery capture is claimed by this source correction.
+
 ## October 22 — rollout acceptance corrections
 
 A controlled 120 ms content-tab response delay exposed follow presentation arriving before

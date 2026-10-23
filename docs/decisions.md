@@ -1,3 +1,17 @@
+## October 22 — follow input freshness across descriptor latency
+
+Treat a pending owner presentation and a passive local read as different sources of authority.
+For the same tab/child/page/URL/history-entry identity, a passive positionless update must not
+advance the owner revision ahead of an already received scroll presentation. Preserve newer
+human changes and distinct navigation identities, including native navigation without a shell
+input callback. An unchanged read settles a no-op human signal instead of blocking later events.
+
+Descriptor hydration is a barrier for navigation identity, not for every newer position on that
+same page. Re-read after the barrier and coalesce current positions only while scope, generation
+and identity remain unchanged. A different entry, including one with the same URL, needs its own
+barrier. Preserve presentation pacing. This correction covers events pending during reads and
+hydration; it does not introduce a new server conflict protocol for updates already dispatched.
+
 ## October 22 — follow synchronization completion and account read coalescing
 
 Keep durable navigation and ephemeral presentation on their existing service boundaries.
