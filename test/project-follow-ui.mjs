@@ -98,7 +98,8 @@ async function delayedSharedScroll(page){
 try{
  for(const name of ['owner','client']){
   const home=path.join(root,name);fs.mkdirSync(home);fs.writeFileSync(path.join(home,'settings.json'),JSON.stringify({schemaVersion:1,provider:'rehearsal',timezone:'UTC',workspace:{cwd:home,additionalDirectories:[]},skillDirectories:[],mcpServers:{}}));
-  const app=await electron.launch({args:['.','--use-mock-keychain','--user-data-dir='+path.join(home,'electron'),'--host-resolver-rules=MAP follow.test 127.0.0.1'],env:{...process.env,PROTEUS_HOME:home,PORT:'0'}});apps.push(app);
+  const executablePath=process.env.PROTEUS_FOLLOW_EXECUTABLE;
+  const app=await electron.launch({...(executablePath?{executablePath}:{}),args:[...(executablePath?[]:['.']),'--use-mock-keychain','--user-data-dir='+path.join(home,'electron'),'--host-resolver-rules=MAP follow.test 127.0.0.1'],env:{...process.env,PROTEUS_HOME:home,PORT:'0'}});apps.push(app);
   // Both applications would be foreground on their respective computers. Local
   // window occlusion must not suspend one synthetic app's animation frames.
   await app.evaluate(({app,webContents})=>{for(const contents of webContents.getAllWebContents())contents.setBackgroundThrottling(false);app.on('web-contents-created',(_event,contents)=>contents.setBackgroundThrottling(false));});

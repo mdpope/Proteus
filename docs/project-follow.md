@@ -62,7 +62,7 @@ keep their existing tab behavior; follow is retried after connection recovery.
 
 ## Verification
 
-- `test/project-follow.test.js`: lease scope, actor identity, malformed state,
+- `test/project-follow.test.js` and `test/project-follow-races.test.js`: lease scope, actor identity, malformed state,
   out-of-order updates, delayed leave, asynchronous application, disposal, reconnect,
   inactive scope, re-entry, pending-event read/sync ordering, no-op input, native navigation
   identity, continuous input during 400 ms hydration, and changed-entry barrier coverage.
@@ -71,6 +71,10 @@ keep their existing tab behavior; follow is retried after connection recovery.
   scroll sustained beyond the relay traffic window, bounded descriptor/update counts,
   delayed page mounting and input/navigation cancellation, independent cookies,
   retained session beginning, and inactive/catch-up behavior.
+  Set `PROTEUS_FOLLOW_EXECUTABLE` to test the exact packaged executable with the same
+  disposable homes and mock Keychain. `PROTEUS_FOLLOW_RESPONSE_DELAY_MS=400` exercises
+  slow descriptor responses. Steady-scroll measurement begins after native navigation
+  and queued reconciliation complete; responsiveness and request limits stay unchanged.
 - `test/project-follow-membership.test.js`: fresh disk invalidation, bounded identity
   caching, deleted scopes/tabs, and preserved document-access checks.
 - `test/navigation-checkpoint.test.js`: network-free departure checkpoints, restart
