@@ -20,6 +20,12 @@ Awaited descriptor synchronization includes passes queued during an earlier resp
 selection cannot overtake a pending navigation seed. Follow events are excluded from replay journals. Durable history, pending navigation
 operations, and retry receipts retain their existing ownership.
 
+Only fresh human input may publish a selection/position change, apart from initially seeding
+an empty scope. Native local browser entry changes count as input through the host pending-
+navigation signal. Passive saving, descriptor reconciliation, layout and lease renewal never
+take presentation control. Identical normalized owner state renews its lease without a new
+revision or broadcast. A new actual change on another desktop still follows immediately.
+
 A pending owner presentation takes precedence over passive local reconciliation for the same
 presentation identity. Newer human changes or a different tab, child, page, URL or history entry
 retain their own intent. Continuous scroll positions are read again after slow descriptor

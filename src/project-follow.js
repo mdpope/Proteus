@@ -43,10 +43,12 @@ export class ProjectFollow {
       if (state.tabId && !tab) throw Error('The selected tab no longer belongs to this scope.');
       if (state.childTabId && (tab?.type!=='chat'||!this.lookup({scope:'chat',id:tab.chatId},state.childTabId)))throw Error('The selected child no longer belongs to this chat.');
       lease.sequence = value.sequence;
-      const entry = { scope: value.scope, id: value.id, epoch: this.epoch, revision: ++this.revision, actor: client, state };
-      this.scopes.delete(key); this.scopes.set(key, entry);
-      while (this.scopes.size > this.limit) this.scopes.delete(this.scopes.keys().next().value);
-      this.changed(entry);
+      if(JSON.stringify(this.scopes.get(key)?.state)!==JSON.stringify(state)){
+        const entry = { scope: value.scope, id: value.id, epoch: this.epoch, revision: ++this.revision, actor: client, state };
+        this.scopes.delete(key); this.scopes.set(key, entry);
+        while (this.scopes.size > this.limit) this.scopes.delete(this.scopes.keys().next().value);
+        this.changed(entry);
+      }
     } else if (!this.clients.has(client) || this.clients.get(client).key !== key) {
       if (this.clients.size >= 512) throw Error('Too many active follow clients.');
       this.clients.set(client, { key, sequence: 0, expires: now + 45000, actor });

@@ -26,9 +26,9 @@ test('clients follow the selected scope, catch up on entry and keep inactive cli
  const a=make('a'),b=make('b');a.follower.changed();await pause(150);b.follower.changed();await pause(150);
  a.state={tabId:'two',positions:[{path:'root',top:400,left:0,x:0,y:.7}]};a.follower.human();a.follower.changed();await pause(250);assert.deepEqual(b.state,a.state);
  b.scope={scope:'project',id:'other'};b.state={tabId:'one'};b.follower.changed();await pause(150);const calls=b.calls;
- a.state={tabId:'one'};a.follower.changed();await pause(200);assert.equal(b.calls,calls);
+ a.state={tabId:'one'};a.follower.human();a.follower.changed();await pause(200);assert.equal(b.calls,calls);
  b.scope={scope:'project',id:'project'};b.follower.changed();await pause(200);assert.deepEqual(b.state,a.state);
- b.state={tabId:'two'};b.follower.changed();await pause(200);assert.deepEqual(a.state,b.state);
+ b.state={tabId:'two'};b.follower.human();b.follower.changed();await pause(200);assert.deepEqual(a.state,b.state);
 });
 test('a newer follow event arriving during asynchronous application is not lost',async t=>{
  let state={tabId:'one'},release,applied=0;
@@ -69,7 +69,7 @@ test('a reconnect during navigation synchronization rejoins before sending prese
  const scope={hostId:'peer',scope:'project',id:'a'},entered=deferred(),finish=deferred(),calls=[];let state={tabId:'one'},hold=false,joins=0;
  const follower=createProjectFollower({current:()=>scope,read:async()=>state,apply:async(_scope,value)=>{state=value;},request:async(_scope,value)=>{calls.push(value.action);if(value.action==='join')joins++;return {epoch:'session-'+joins,revision:1,state};},sync:async()=>{if(hold){hold=false;entered.resolve();await finish.promise;}}});
  t.after(()=>follower.dispose());follower.changed();await waitFor(()=>joins===1);await pause(30);
- hold=true;state={tabId:'two'};follower.changed(true);await waitFor(()=>entered.done);
+ hold=true;state={tabId:'two'};follower.human();follower.changed(true);await waitFor(()=>entered.done);
  const checkpoint=calls.length;follower.reconnect('peer');finish.resolve();await waitFor(()=>joins===2);
  assert.equal(calls[checkpoint],'join','a navigation read from the old session cannot publish before its replacement lease joins');
 });

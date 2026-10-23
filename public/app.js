@@ -1456,6 +1456,12 @@ window.desktop?.onBrowserState(infos=>{
   // histories and remote descriptors every second of reading or scrolling.
   const signature=JSON.stringify(infos.map(info=>[info.id,info.parentId,info.destination,info.group,info.hidden,info.profileId,info.persist,info.url,info.title,info.favicon,info.associationChatId,info.loaded,info.privateLocal,info.history?.revision??info.history,info.history?.currentEntryId]));
   const contentChanged=signature!==browserContentSignature;browserContentSignature=signature;
+  // Native link/history navigation occurs outside this document's input
+  // listeners. A changed pending local entry is explicit navigation, whereas
+  // restored/shared history and title/activity refreshes confer no authority.
+  const selectedBefore=state.tabs.find(tab=>tab.id===state.tab&&tab.type==='browser');
+  const selectedInfo=selectedBefore&&infos.find(info=>info.id===selectedBefore.id);
+  if(selectedInfo?.navigationPending===true&&(selectedInfo.url!==selectedBefore.info?.url||selectedInfo.history?.currentEntryId!==selectedBefore.info?.history?.currentEntryId))projectFollower.human();
   const previousFind=pageFindNative();
   browserFindRevisions.clear();for(const info of infos)browserFindRevisions.set(info.id,info.findRevision??0);
   const currentBrowser=state.tabs.find(tab=>tab.id===state.tab&&tab.type==='browser');
@@ -1555,6 +1561,7 @@ function selectBrowserTab(info, afterId=null) {
   }
 }
 window.desktop?.onNewTab?.(()=>{
+ projectFollower.human();
  const parent=selectedChatParent(),team=previousFeature==='team';
  const button=team?document.querySelector('[data-team-add="browser"]'):parent?document.querySelector('[data-chat-add="browser"]'):document.querySelector('#browser');
  const target=button||document.querySelector('#browser');if(!target)return;
@@ -1570,6 +1577,7 @@ async function refreshCurrentTab(){
  if(tab.type==='run'||tab.type==='workspace')await refresh(true);
 }
 window.desktop?.onBrowserAction?.(value=>{
+  if(['select-tab','tab-swipe'].includes(value.type))projectFollower.human();
   if(value.type==='refresh-current-tab'){void refreshCurrentTab().catch(error=>toast(error.message));return;}
   if(value.type==='downloads'){downloadsChanged();return;}
   if(value.type==='extensions-changed'){document.dispatchEvent(new CustomEvent('proteus-extensions-changed',{detail:value}));return;}

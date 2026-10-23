@@ -1,7 +1,7 @@
 // One subscription for the visible owner scope. Connections carry presentation
 // metadata only; navigation still uses the revision-aware content-tab service.
 export function createProjectFollower({ current, read, apply, request, sync, now=Date.now, clientId=crypto.randomUUID(), onError=()=>{} }) {
-  let active=null, generation=0, sequence=0, revision=0, epoch=null, signature='', timer, lease, busy=false, dirty=false, applying=false, disposed=false, intent=0,settledIntent=0, pendingEvent=null,pendingIntent=0,lastPresentation=0;
+  let active=null, generation=0, sequence=0, revision=0, epoch=null, signature='', timer, lease, busy=false, dirty=false, applying=false, disposed=false, intent=0,settledIntent=0, pendingEvent=null,pendingIntent=0,lastPresentation=0,seed=false;
   const unsupported=new Set();
   const key=scope=>scope?JSON.stringify([scope.hostId||'',scope.scope,scope.id]):'';
   const call=(scope,action,extra={})=>request(scope,{...scope,hostId:undefined,action,clientId,...extra});
@@ -27,7 +27,7 @@ export function createProjectFollower({ current, read, apply, request, sync, now
       const scope=current();
       if(scope&&unsupported.has(key(scope)))return;
       if(key(scope)!==key(active)) {
-        const old=active;active=scope;const token=++generation;revision=0;epoch=null;signature='';pendingEvent=null;clearInterval(lease);
+        const old=active;active=scope;const token=++generation;revision=0;epoch=null;signature='';pendingEvent=null;seed=false;clearInterval(lease);
         workGeneration=generation;
         if(old){void call(old,'leave').catch(()=>{});await sync(old);}
         if(!scope||disposed)return;
@@ -36,7 +36,7 @@ export function createProjectFollower({ current, read, apply, request, sync, now
         await sync(scope);
         if(disposed||token!==generation||key(current())!==key(scope))return;
         if(before===intent&&value.state)await accept(value,scope);
-        else if(!value.state)dirty=true;
+        else if(!value.state){seed=true;dirty=true;}
         if(disposed||token!==generation||key(current())!==key(scope))return;
         lease=setInterval(()=>{if(disposed)return;if(key(current())!==key(active)){schedule(true);return;}const before=intent;void call(scope,'join').then(value=>{if(!disposed&&token===generation&&key(active)===key(scope)&&before===intent){pendingEvent=value;pendingIntent=before;schedule();}}).catch(error=>{if(!disposed&&token===generation)onError(error);});},15000);
       }
@@ -45,6 +45,9 @@ export function createProjectFollower({ current, read, apply, request, sync, now
       let state=await read(readScope), next=JSON.stringify(state);
       if(disposed||readGeneration!==generation||readIntent!==intent||key(current())!==key(readScope)||key(active)!==key(readScope)){dirty=!disposed;return;}
       if(next===signature)settledIntent=readIntent;
+      // Saving, hydration and layout refreshes are observations, not a person
+      // taking control. Only fresh input (or the first empty-scope seed) may
+      // publish a presentation. Keep the passive baseline without echoing it.
       if(next!==signature&&!pendingPresentation(state)){
         const scope=active;if(needsSync(state))await sync(scope);
         if(disposed||readGeneration!==generation||key(active)!==key(scope)||key(current())!==key(scope)){dirty=!disposed;return;}
@@ -57,10 +60,13 @@ export function createProjectFollower({ current, read, apply, request, sync, now
         }
         // A remote event may have arrived during the awaited read or sync.
         if(!pendingPresentation(state)){
-          const value=await call(scope,'update',{sequence:++sequence,state});
-          if(disposed||workGeneration!==generation)return;
-          epoch=value.epoch;revision=Math.max(revision,value.revision);signature=next;settledIntent=readIntent;
-          lastPresentation=now();
+          if(seed||readIntent!==settledIntent){
+            const value=await call(scope,'update',{sequence:++sequence,state});
+            if(disposed||workGeneration!==generation)return;
+            epoch=value.epoch;revision=Math.max(revision,value.revision);settledIntent=readIntent;seed=false;
+            lastPresentation=now();
+          }
+          signature=next;
         }
       }
       if(pendingEvent){const value=pendingEvent,scope=active,expectedIntent=pendingIntent;pendingEvent=null;if(needsSync(value.state))await sync(scope);if(workGeneration!==generation||key(active)!==key(scope)){dirty=!disposed;return;}await accept(value,scope,expectedIntent);lastPresentation=now();}

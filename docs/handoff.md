@@ -1,3 +1,18 @@
+## October 22 — follow selection requires fresh input
+
+The operator reported chat selection repeatedly returning to a browser while other desktops
+were idle. A regression reproduces passive renderer reconciliation publishing its stale selected
+tab. Follow now publishes only a fresh input change or the initial seed of an empty scope;
+background saves/hydration update the local observation baseline without taking control.
+Native local browser navigation is identified from a changed pending entry, preserving link and
+Back/Forward following outside the shell's input listeners. Identical normalized owner state
+renews a lease without changing its revision or broadcasting another selection.
+
+The regression requires chat selection to survive passive refreshes and a lease renewal, then
+requires a new real click on the other desktop to resume following. Complete histories, scopes,
+positions and retry identities retain their existing boundaries. Source/packaged/installed
+acceptance for this correction is recorded separately from the earlier 0.2.29 rollout.
+
 ## October 22 — combined 0.2.29 rollout acceptance
 
 The combined release is built and deployed across the authorized targets. See the

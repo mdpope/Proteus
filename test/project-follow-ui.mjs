@@ -3,7 +3,7 @@ import {_electron as electron} from 'playwright';
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import http from 'node:http';import assert from 'node:assert/strict';
 import {startRelay} from '../relay/server.js';import {secret} from '../src/remote-crypto.js';
 const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'proteus-follow-ui-'))),apps=[],errors=[],followDebug=[];
-const fixture=http.createServer((req,res)=>{const slow=req.url==='/slow'&&req.headers.cookie?.includes('localIdentity=client');res.setHeader('Content-Type','text/html');res.end('<!doctype html><title>Follow '+req.url+'</title><h1>Follow '+req.url+'</h1><div id="fixture-content" style="height:'+(slow?0:8000)+'px;background:linear-gradient(white,green)">Synthetic local page</div>'+(slow?'<script>setTimeout(()=>{document.querySelector("#fixture-content").style.height="8000px";document.documentElement.dataset.ready="true";},3500)</script>':''));});
+const fixture=http.createServer((req,res)=>{const slow=req.url==='/slow'&&req.headers.cookie?.includes('localIdentity=client');res.setHeader('Content-Type','text/html');res.end('<!doctype html><title>Follow '+req.url+'</title><h1>Follow '+req.url+'</h1><a id="native-next" href="/native" style="position:fixed;top:0;left:0">Native navigation</a><div id="fixture-content" style="height:'+(slow?0:8000)+'px;background:linear-gradient(white,green)">Synthetic local page</div>'+(slow?'<script>setTimeout(()=>{document.querySelector("#fixture-content").style.height="8000px";document.documentElement.dataset.ready="true";},3500)</script>':''));});
 await new Promise(resolve=>fixture.listen(0,'127.0.0.1',resolve));const origin='http://follow.test:'+fixture.address().port,token=secret(),relay=await startRelay({port:0,token});
 const until=async(fn,message='condition')=>{for(let i=0;i<200;i++){if(await fn())return;await new Promise(resolve=>setTimeout(resolve,50));}throw Error('Timed out: '+message);};
 const service=async(app,fn,arg)=>app.evaluate(({app},{source,arg})=>{const service=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getService();return eval('('+source+')')(service,arg);},{source:fn.toString(),arg});
@@ -144,6 +144,11 @@ try{
  const identities=[];for(const app of apps)identities.push(await app.evaluate(async({app},origin)=>{const browser=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser(),tab=[...browser.tabs.values()].find(tab=>tab.view?.webContents.getURL().startsWith(origin));return (await tab.view.webContents.session.cookies.get({url:origin})).find(row=>row.name==='localIdentity')?.value;},origin));assert.deepEqual(identities,['owner','client']);
  await a.evaluate(({app})=>{const browser=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser(),tab=browser.tabs.get(browser.active);tab.view.webContents.sendInputEvent({type:'mouseWheel',x:200,y:200,deltaY:-650,deltaX:0,canScroll:true});});
  await until(()=>b.evaluate(async({app})=>{const browser=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser(),tab=browser.tabs.get(browser.active);return tab?.view&&await tab.view.webContents.executeJavaScript('scrollY>100');}),'browser scroll follows');
+ // Native page clicks do not bubble through the shell document. They must
+ // still publish the changed local entry without granting idle refresh control.
+ await a.evaluate(async({app})=>{const browser=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser(),wc=browser.tabs.get(browser.active).view.webContents;const point=await wc.executeJavaScript('(()=>{const r=document.querySelector("#native-next").getBoundingClientRect();return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)};})()');wc.sendInputEvent({type:'mouseDown',button:'left',clickCount:1,...point});wc.sendInputEvent({type:'mouseUp',button:'left',clickCount:1,...point});});
+ await until(()=>b.page.evaluate(()=>followFixture.state.tabs.find(tab=>tab.id===followFixture.state.tab)?.info?.url?.endsWith('/native')),'native page link follows without shell input');
+ await Promise.all(apps.map(app=>nativeReady(app,origin+'/native')));
  await b.page.locator('#browser-url').fill(origin+'/three');await b.page.locator('#browser-url').press('Enter');await until(()=>a.page.evaluate(()=>followFixture.state.tabs.find(tab=>tab.id===followFixture.state.tab)?.info?.url?.endsWith('/three')),'reverse URL follows');
  const history=await a.page.evaluate(id=>followFixture.state.tabs.find(tab=>tab.id===id)?.info?.history,first);assert.ok(history.entries.some(row=>row.url.endsWith('/one')),'session beginning retained');
  await b.page.evaluate(()=>{followFixture.state.tab='overview';followFixture.state.page='home';followFixture.projectFollower.changed();});await new Promise(resolve=>setTimeout(resolve,200));
@@ -154,6 +159,23 @@ try{
  const chat=await a.page.evaluate(async owner=>{const response=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...owner,provider:'rehearsal',prompt:'Synthetic follow-along chat'})});if(!response.ok)throw Error(await response.text());const run=await response.json();await followFixture.refresh(true);const parent=followFixture.state.tabs.find(tab=>tab.projectId===owner.projectId&&!tab.hostId);const tab={id:parent.id+':chat:'+run.id,type:'run',runId:run.id,parentId:parent.id,label:'Synthetic follow chat'};followFixture.openTab(tab);return tab.id;},owner);
  try{await until(()=>b.page.evaluate(()=>followFixture.state.tabs.find(tab=>tab.id===followFixture.state.tab)?.type==='remote-run'),'chat follows');}
  catch(error){for(const [name,app]of [['owner',a],['client',b]])console.log(JSON.stringify({name,selection:await app.page.evaluate(()=>({active:followFixture.state.tab,tabs:followFixture.state.tabs.map(tab=>({id:tab.id,type:tab.type,parentId:tab.parentId,contentTabId:tab.contentTabId,runId:tab.runId,url:tab.info?.url}))}))}));throw error;}
+ // A real click back to a chat must survive idle native/descriptor refresh and
+ // the 15-second follow lease. Only the next explicit remote selection may win.
+ await a.page.locator(`[data-chat-subtab="${first}"]`).click();
+ await until(()=>b.page.evaluate(()=>followFixture.state.tabs.find(tab=>tab.id===followFixture.state.tab)?.type==='browser'),'explicit browser selection follows');
+ const clientChat=await b.page.evaluate(()=>followFixture.state.tabs.find(tab=>tab.type==='remote-run')?.id);
+ await b.page.locator(`[data-chat-subtab="${clientChat}"]`).click();
+ await until(()=>a.page.evaluate(()=>followFixture.state.tabs.find(tab=>tab.id===followFixture.state.tab)?.type==='run'),'reverse chat selection follows');
+ const idleUntil=Date.now()+16500;
+ while(Date.now()<idleUntil){
+  await Promise.all(apps.map(app=>app.page.evaluate(()=>followFixture.refresh(true))));
+  await new Promise(resolve=>setTimeout(resolve,200));
+  for(const [app,type] of [[a,'run'],[b,'remote-run']])assert.equal(await app.page.evaluate(()=>followFixture.state.tabs.find(tab=>tab.id===followFixture.state.tab)?.type),type,'idle refresh/lease must not force the browser back');
+ }
+ await a.page.locator(`[data-chat-subtab="${first}"]`).click();
+ await until(()=>b.page.evaluate(()=>followFixture.state.tabs.find(tab=>tab.id===followFixture.state.tab)?.type==='browser'),'a new human action resumes remote following');
+ await a.page.locator(`[data-chat-subtab="${chat}"]`).click();
+ await until(()=>b.page.evaluate(()=>followFixture.state.tabs.find(tab=>tab.id===followFixture.state.tab)?.type==='remote-run'),'return to chat before nested follow');
  await a.page.evaluate(async({chat,url})=>{const info=await window.desktop.browser({action:'create',url,parentId:chat});followFixture.openTab({id:info.id,type:'browser',info,parentId:chat,label:'Nested browser'});},{chat,url:origin+'/nested'});
  await until(()=>b.page.evaluate(()=>followFixture.state.tabs.find(tab=>tab.id===followFixture.state.tab)?.info?.url?.endsWith('/nested')),'nested chat browser follows');
  await delayedNativeScroll(a,b);
@@ -162,6 +184,7 @@ try{
  await sustainedScroll(b,a,a,'client to owner');
  assert.deepEqual(errors,[]);console.log('PASS two isolated desktops: scoped selection, URL both directions, sustained nested-browser scrolling both directions, independent cookies, full navigation beginning, inactive scope stays inactive, re-entry catchup, chat/nested browser selection and production interface');
 }catch(error){
+ console.error(error);
  const diagnosticDirectory=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-follow-diagnostics-'));
  for(const [index,app]of apps.entries())try{const diagnostic={app:index,selection:await app.page.evaluate(()=>({active:followFixture.state.tab,conflicts:followFixture.scopes().map(scope=>({...scope,conflict:followFixture.contentTabSync.hasConflict(scope)})),pendingNavigation:Object.fromEntries(Object.entries(localStorage).filter(([key])=>key.startsWith('proteus.navigation.pending:'))),address:document.querySelector('#browser-url')?.value,addressTrace:window.followFixtureAddressTrace,tabs:followFixture.state.tabs.map(tab=>({id:tab.id,type:tab.type,parentId:tab.parentId,contentTabId:tab.contentTabId,url:tab.info?.url,entry:tab.info?.history?.currentEntryId}))})),native:await app.evaluate(({app})=>{const browser=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser();return {tabs:[...browser.tabs.values()].map(tab=>({id:tab.id,url:tab.view?.webContents.getURL()})),trace:browser.followFixtureNavigationTrace};}),owner:await service(app,s=>({follow:[...s.projectFollow.scopes.values()],mutations:s.contentTabs.followFixtureMutationTrace,tabs:Object.fromEntries(Object.entries(s.contentTabs.read().scopes).map(([key,value])=>[key,{revision:value.revision,tabs:value.tabs.map(tab=>({id:tab.id,type:tab.type,url:tab.url,chatId:tab.chatId}))}]))}))};fs.writeFileSync(path.join(diagnosticDirectory,index+'.json'),JSON.stringify(diagnostic,null,2));console.log(JSON.stringify({app:index,diagnostic:path.join(diagnosticDirectory,index+'.json'),selection:diagnostic.selection,native:diagnostic.native.tabs}));}catch{}
  console.log(JSON.stringify({followDebug}));throw error;

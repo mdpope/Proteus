@@ -1,3 +1,14 @@
+## October 22 — follow publication requires a new interaction
+
+A saved or hydrated presentation difference is insufficient evidence that a person chose it.
+The follow controller keeps that passive baseline locally and publishes only after fresh input,
+or once to seed an empty owner scope. Native pending-entry changes bridge actual browser
+navigation outside the shell document. No-op input settles without authorizing later passive
+changes. The owner suppresses identical normalized updates while renewing sequence and lease.
+Existing pending-position precedence, human cancellation, full-history and scope boundaries apply.
+This prevents an idle desktop from repeatedly taking selection control; a new remote interaction
+still applies. Source, exact-package and installed acceptance remain distinct.
+
 ## October 22 — selected-entry metadata intent can converge without execution
 
 A browser title observation is satisfied when the authoritative currently selected entry has

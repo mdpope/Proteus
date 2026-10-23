@@ -1,3 +1,9 @@
+## 0.2.29 follow-along correction — fresh input owns selection
+
+- Prevent idle renderer refreshes from publishing stale tabs over a person's chat selection.
+- Preserve native link/history navigation following while keeping background reconciliation passive.
+- Renew unchanged owner presentations without new revisions or selection broadcasts.
+
 ## 0.2.29 — rollout acceptance
 
 - Include the follow-ordering and duplicate-metadata corrections below in the final tested desktop artifacts.
