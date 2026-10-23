@@ -2,6 +2,7 @@ import {chatHistoryWindowStart,firstAssistantKeys} from './chat-history.js';
 import {bindRuntimeTimer,refreshRuntimeTimers,disposeRuntimeTimers,formatDuration,turnDuration,runtimeTotal,toolDuration,groupDuration} from './runtime.js';
 import { mountMessageActions } from './message-actions.js';
 import { toolPresentation, mountStructured, normalizedTool, activitySummary, groupActivity, permissionToolCallId, toolEventTime } from './tool-presentation.js';
+import {mountChatRecovery} from './chat-recovery-controls.js';
 import { agentName } from './agent-name.js';
 import { sentAttachmentPreview, openSentAttachmentPreview } from './chat-attachments.js';
 const views = new Map();
@@ -223,6 +224,7 @@ export function conversation(target, run, options) {
     if(entry.data?.permission&&!entry.data.permission.automatic){let details=node.querySelector('.permission-original');if(!details){details=document.createElement('details');details.className='permission-original';node.append(details);}details.replaceChildren();const summary=document.createElement('summary');summary.textContent=entry.data.permission.intention||'Original approval request';const pre=document.createElement('pre');pre.textContent=entry.data.permission.request||'Original request was not recorded by this version.';details.append(summary,pre);}
     const body=node.querySelector('.text');
     ProteusMarkdown.mount(body, entry.text, { ...options, resize: view.position });
+    mountChatRecovery(node,entry,run,{...options,resize:view.position});
     let files=node.querySelector('.message-attachments');
     if(entry.data?.attachments?.length){
       if(!files){files=document.createElement('div');files.className='message-attachments';body.after(files);}

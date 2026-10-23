@@ -1,3 +1,4 @@
+import {claudeMessageContent} from './provider-attachment-input.js';
 import {chatControlTools} from './chat-control-tools.js';
 import {randomUUID} from 'node:crypto';
 import {privateTemporaryDirectory} from './private-paths.cjs';
@@ -153,7 +154,7 @@ export class ClaudeRPC extends EventEmitter {
   retryClose(){if(this.cleanupFailure){this.closing=null;this.cleanupFailure=null;}return this.close();}
 }
 export class ClaudeProvider {
-  constructor(options={}, {context,browser}={}) {this.browser=browser;this.options=options;this.context=context;this.active=null;this.cleanupClients=new Set();this.cleanupError=null;this.acceptedMediaTypes=Object.freeze(['image/png','image/jpeg','image/gif','image/webp','text/plain']);}
+  constructor(options={}, {context,browser}={}) {this.browser=browser;this.options=options;this.context=context;this.active=null;this.cleanupClients=new Set();this.cleanupError=null;this.acceptedMediaTypes=Object.freeze(['image/png','image/jpeg','image/gif','image/webp','text/plain']);this.acceptedSteeringMediaTypes=this.acceptedMediaTypes;}
   client(args=[],cwd,mcpConfigPath=null){return this.options.clientFactory ? this.options.clientFactory({args,cwd,mcpConfigPath}) : new ClaudeRPC({...this.options,args,cwd,mcpConfigPath});}
   selectedMcp(run){const snapshot=run.schedule.context,managed=snapshot&&this.context?(this.context.providerMcpContext?.(snapshot)||this.context.providerContext(snapshot)):null;return managed?{...Object.fromEntries(Object.entries(snapshot.includeDefaults!==false?run.schedule.mcpServers||{}:{}).filter(([name])=>!managed.disabledLegacyMcp.includes(name))),...managed.mcpServers}:run.schedule.mcpServers||{};}
   withMcpSelectionBatch(callback){return this.context?.withMcpSelectionBatch?this.context.withMcpSelectionBatch(callback):callback();}
@@ -221,7 +222,7 @@ export class ClaudeProvider {
     if(this.cleanupError)status={...status,available:false,error:this.cleanupError.message};
     return status;
   }
-  async steer(run,prompt){if(this.activeRunId!==run.id||!this.activeSteer)throw Error('Claude is still starting or this turn ended. Queue this message.');return this.activeSteer(prompt);}
+  async steer(run,prompt,attachments=[]){if(this.activeRunId!==run.id||!this.activeSteer)throw Error('Claude is still starting or this turn ended. Queue this message.');return this.activeSteer(prompt,attachments);}
   async quota(){
     if(this.quotaPending)return this.quotaPending;
     this.quotaPending=this.readQuota().finally(()=>{this.quotaPending=null;});return this.quotaPending;
@@ -241,15 +242,7 @@ export class ClaudeProvider {
   }
 
   async run({run,prompt,attachments=[],emit,ask,update,signal,stream,permissionProfile}) {
-    const content=attachments.length?[{type:'text',text:prompt}]:prompt;
-    for(const item of attachments){
-      if(!this.acceptedMediaTypes.includes(item.mediaType)||!Buffer.isBuffer(item.bytes)||item.bytes.length>8*1024*1024)throw new Error('Claude can receive images and UTF-8 plain text here. PDF and other files are not supported.');
-      if(item.mediaType==='text/plain'){
-        let decoded;try{decoded=new TextDecoder('utf-8',{fatal:true}).decode(item.bytes);}catch{throw new Error('Claude requires UTF-8 plain text attachments.');}
-        if(decoded.includes('\0'))throw new Error('Claude cannot receive binary content as plain text.');
-        content.push({type:'text',text:`Attached plain text file: ${item.name}\n\n${decoded}`});
-      }else content.push({type:'image',source:{type:'base64',media_type:item.mediaType,data:item.bytes.toString('base64')}});
-    }
+    const content=claudeMessageContent(prompt,attachments,this.acceptedMediaTypes);
     if(this.cleanupError)throw this.cleanupError;
     if(this.active)throw new Error('A Claude turn is already active.');
     if(this.mcpProbe)throw new Error('Wait for the Claude MCP connection check to finish before starting this chat.');
@@ -297,7 +290,8 @@ export class ClaudeProvider {
       else client.respond(m.request_id,{behavior:'deny',message:'Unsupported Claude control request.'});
     }catch(error){if(!client.ended)client.respond(m.request_id,{behavior:'deny',message:error.message});}};
     const steerWait=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});promise.catch(()=>{});return {promise,resolve,reject};};
-    const steer=async prompt=>{
+    const steer=async (prompt,attachments=[])=>{
+      const content=claudeMessageContent(prompt,attachments,this.acceptedMediaTypes);
       if(!accepting||finished||resultSeen||signal.aborted||steering)throw Error('Claude cannot accept steering at this moment. Queue this message.');
       const pending={id:randomUUID(),boundary:steerWait(),ack:steerWait()};steering=pending;
       const timeout=setTimeout(()=>{const error=new Error('Claude steering acknowledgment timed out. Delivery is unconfirmed; inspect the chat before resending.');pending.boundary.reject(error);pending.ack.reject(error);reject(error);},this.options.steerTimeoutMs??15000);
@@ -307,7 +301,7 @@ export class ClaudeProvider {
         if(signal.aborted||finished||client.ended)throw Error('Claude stopped before accepting steering.');
         // Only after the old result is drained can a second input own the result.
         resultSeen=false;pending.sent=true;
-        client.write({type:'user',uuid:pending.id,session_id:run.providerSessionId||'',message:{role:'user',content:prompt},parent_tool_use_id:null});
+        client.write({type:'user',uuid:pending.id,session_id:run.providerSessionId||'',message:{role:'user',content},parent_tool_use_id:null});
         await pending.ack.promise;
         emit('system','Claude acknowledged steering after interrupting the previous response.');
       }catch(error){reject(error);throw error;}finally{clearTimeout(timeout);if(steering===pending)steering=null;}

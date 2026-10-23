@@ -1,3 +1,14 @@
+## October 22 — return to the remembered workspace page
+
+Top-level workspace navigation restores its deepest valid remembered project/chat/resource
+selection. Workspace → project is a presentation edge only; actual parent associations and
+viewer authorization origins remain unchanged. Each workspace keeps independent memory, including
+its explicit page selection, and the existing selected-children session map survives restart.
+Hidden/closed/paused/moved or foreign-owner stale entries stop restoration without reopening or
+recreating resources. Unit tests cover chat/browser chains and stale/cyclic records; actual
+desktop tests cover project/document return and a real restart. Existing legacy inactive browser
+selection, complete history and descriptor-identity remapping pass through three process launches.
+
 ## October 22 — selected-scope desktop following
 
 Paired desktops viewing the same owner project/workspace can follow tab selection/order, browser

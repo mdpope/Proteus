@@ -1,3 +1,29 @@
+## October 22 — explicit chat recovery and provider input boundaries
+
+System failures belong in chronological message boxes, not collapsed Activities. Continuation
+uses the existing owner/session and failure identity, leaving queued inputs for normal successful
+completion. Capacity retry is explicit per chat, serialized, one minute apart after settlement,
+and never silently restored after app launch. Effective configuration/permission changes invalidate
+the policy; update/lifecycle guards treat a waiting retry as work. No model fallback or automatic
+approval is introduced. Buttons live inside the failure message rather than replacing the draft.
+
+Steering media support is an adapter capability, separate from ordinary file acceptance. Use
+native structured input shapes, existing exact consent, immutable bytes and message deduplication.
+Codex temporary images outlive steering acknowledgements and retire with the native turn.
+Claude retains its acknowledged interrupt/drain/continue semantics. Unsupported inputs fail before
+delivery; an ambiguous acknowledgement never authorizes replay. Existing queued-file promotion
+requires separate receipt-aware design and stays unavailable; fresh attached steering is supported.
+
+Update relaunch preserves explicit provider executable and configuration *locations*, not arbitrary
+tokens. Do not rebuild credential stores or infer a valid login from file/Keychain existence.
+The local default-profile Claude sign-out predates this correction and is not explained by the
+custom-location bug; preserve that distinction through live acceptance.
+
+Deep workspace selection uses the existing saved child-selection map with a virtual same-owner
+workspace/project edge. It changes navigation memory, not resource parentage or execution authority.
+Connections wrapping/spacing remains scoped to that screen. A narrow pending question yields
+height to the composer footer once the editor reaches its minimum; its body already scrolls.
+
 ## October 22 — follow publication requires a new interaction
 
 A saved or hydrated presentation difference is insufficient evidence that a person chose it.

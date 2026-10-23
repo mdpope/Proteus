@@ -38,6 +38,17 @@ test('explicit first-message and follow-up consent deliver only exact synthetic 
   await client.request('chat.send',{id:runId,prompt:'Check another synthetic image',providerId:'copilot',mode:'queue',messageId:nextMessage,attachments:batch.map(item=>item.attachmentId),consentId:nextGrant.consentId});
   await until(()=>calls.length===2);assert.equal(calls[1].attachments.length,5);for(const item of calls[1].attachments)assert.deepEqual(item.bytes,png);
   assert.deepEqual((await client.request('chat.get',{id:runId})).events.filter(item=>item.data?.attachments).map(item=>item.data.attachments[0].name),['synthetic.png','synthetic.png']);
+  let finish;const steered=[];
+  provider.acceptedSteeringMediaTypes=['image/png'];provider.run=async()=>new Promise(resolve=>{finish=resolve;});provider.steer=async(run,prompt,attachments)=>steered.push({prompt,attachments});
+  await client.request('chat.send',{id:runId,prompt:'Synthetic held turn',mode:'queue',messageId:randomUUID()});await until(()=>!!finish);
+  const steeringId=randomUUID(),file=await upload({id:runId,providerId:'copilot',messageId:steeringId});
+  const steeringConsent=await client.request('chat.attachments.authorize',{id:runId,providerId:'copilot',messageId:steeringId,attachments:[file]});
+  const steering={id:runId,prompt:'Synthetic image correction',providerId:'copilot',mode:'steer',messageId:steeringId,attachments:[file.attachmentId],consentId:steeringConsent.consentId};
+  await client.request('chat.send',steering);assert.equal(steered.length,1);assert.deepEqual(steered[0].attachments[0].bytes,png);assert.equal(app.engine.getRun(runId).status,'running');
+  await client.request('chat.send',steering);assert.equal(steered.length,1,'A new transport request cannot replay the same delivered attachment message');
+  assert.equal(app.engine.getRun(runId).events.find(event=>event.data?.delivery?.id===steeringId).data.delivery.state,'steered');
+  assert.equal(app.engine.getRun(runId).queuedMessages?.length||0,0,'Steering does not silently create a queued turn');
+  finish();await until(()=>app.engine.getRun(runId).status==='completed');
 });
 
 test('deferred draft cannot execute during an unrelated drain',async t=>{

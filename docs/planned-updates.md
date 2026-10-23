@@ -1,3 +1,29 @@
+## October 22 — operator-requested recovery, workspace memory and layout corrections
+
+Implemented in source: visible chronological system messages, exact-failure Continue chat and
+explicit per-chat 60-second model-capacity retry/stop; remembered deepest workspace/project/chat/
+resource navigation; provider-supported fresh steering attachments with existing consent and
+message identity; custom provider location preservation across update/rollback; Connections
+spacing/wrapping and grouped actions. Native attachment composition honors advertised steering
+media types and sends its confirmed mode without changing active model options.
+
+Source acceptance: deterministic recovery/permission/update-barrier tests and encrypted-relay
+attachment consent/deduplication pass. Real desktop acceptance covers a full one-minute retry,
+one queued follow-up after continuation, retained unsent draft, standalone systems with lazy tool
+details, repeated workspace/project/document return and restart, plus legacy browser identity/full
+history across three launches. Connections passes actual 680/920/1560-pixel viewports and unchanged
+pairing/draft/polling behavior. Attachment UI exposes and corrects a narrow pending-question/footer
+overflow and stale chips after successful input; the unchanged footer geometry assertions pass.
+The native image-steering source compiles for simulator; actual native delivery/UI remains separate.
+
+No new runtime artifact is frozen yet. Earlier 7290ff3 packages retain their exact acceptance
+evidence but are superseded for the upcoming final install. Windows confirms installation and
+oldest-generation retirement have not started. The local active-chat hold remains. Its reported
+default-profile Claude sign-out is real according to that CLI despite an extant Keychain item;
+cause and restored live sign-in remain unverified. Do not clear credentials or claim the custom
+environment fix resolves that separate observation. License, terminal visibility and history
+retention preferences remain unchanged.
+
 ## October 22 — passive-save descriptor feedback correction
 
 Linux's combined candidate fails its unchanged six-read traffic budget with seven reads.

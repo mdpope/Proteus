@@ -2,10 +2,10 @@ import {_electron as electron} from 'playwright';
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import assert from 'node:assert/strict';
 const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-activity-ui-'));let app;
 try{
- app=await electron.launch({args:['.','--use-mock-keychain','--user-data-dir='+path.join(home,'electron')],env:{...process.env,PROTEUS_HOME:home,PORT:'0'},timeout:60000});
+ app=await electron.launch({...(process.env.PROTEUS_TEST_EXECUTABLE?{executablePath:process.env.PROTEUS_TEST_EXECUTABLE}:{}),args:[...(process.env.PROTEUS_TEST_EXECUTABLE?[]:['.']),'--use-mock-keychain','--user-data-dir='+path.join(home,'electron')],env:{...process.env,PROTEUS_HOME:home,PORT:'0'},timeout:60000});
  const page=await app.firstWindow(),errors=[];page.on('pageerror',error=>errors.push(error.message));
- const id=await app.evaluate((_,home)=>{
-  const engine=process.mainModule.require(process.cwd()+'/desktop/main.cjs').getService().engine;engine.drain=async()=>{};
+ const id=await app.evaluate(({app},home)=>{
+  const engine=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getService().engine;engine.drain=async()=>{};
   const run=engine.createRun({...engine.schedules.list()[0],workspace:{cwd:home,additionalDirectories:[]}},'chat',null,{deferStart:true});
   run.title='Synthetic activity relationships';run.status='running';run.turns=[{id:'turn',intervals:[['2026-10-12T12:00:00Z','2026-10-12T12:00:02Z'],['2026-10-12T12:00:06Z','2026-10-12T12:00:10Z']]}];
   run.events=Array.from({length:24},(_,i)=>({role:i%2?'assistant':'user',at:'2026-10-12T11:00:00Z',text:'Earlier synthetic message '+i+'\n'+('A paragraph to hold the reading position.\n'.repeat(5))}));
@@ -26,20 +26,20 @@ try{
  await page.locator('.agent-question[data-request-id="fixture-question"]').getByText('Synthetic explanation before continuing?').waitFor();assert.equal(await page.locator('[data-request-id="fixture-question"]').count(),2);
  const groups=page.locator('.activity-group');assert.equal(await groups.count(),2);assert.equal(await page.locator('.activity-group-item').count(),0,'collapsed groups keep bodies lazy');
  await groups.first().evaluate(node=>node.open=true);await page.locator('.activity-group-item').first().waitFor();
- assert.equal(await groups.first().locator('.activity-group-item').count(),6);
- const system=groups.first().locator('.message.system');assert.equal(await system.count(),1);assert.match(await system.textContent(),/Synthetic warning retained/);
+ assert.equal(await groups.first().locator('.activity-group-item').count(),2);
+ const system=page.locator('.message.system').filter({hasText:'Synthetic warning retained'});assert.equal(await system.count(),1);assert.match(await system.textContent(),/Synthetic warning retained/);
  assert.equal(await system.evaluate(node=>getComputedStyle(node).backgroundColor),'rgb(23, 32, 28)');
  const read=groups.first().locator('[data-tool-call-id="read-123"]').first();assert.match(await read.textContent(),/7s/);assert.match(await read.textContent(),/12:00:07|6:00:07/);
- const legacy=groups.first().locator('.activity-group-item').filter({hasText:'Legacy timing unavailable'});assert.match(await legacy.textContent(),/Completion time unavailable.*Unavailable/s);
+ await groups.last().evaluate(node=>node.open=true);const legacy=groups.last().locator('.activity-group-item').filter({hasText:'Legacy timing unavailable'});assert.match(await legacy.textContent(),/Completion time unavailable.*Unavailable/s);
  assert.equal(await page.getByText('SYNTHETIC_LAZY_OUTPUT',{exact:true}).count(),0);
  const details=read.locator('details');await details.evaluate(node=>node.open=true);await page.getByText('SYNTHETIC_LAZY_OUTPUT',{exact:true}).waitFor();
  const approval=groups.first().locator('.permission-entry').first(),request=approval.locator('details');await request.evaluate(node=>node.open=true);assert.match(await request.textContent(),/read-123.*synthetic.md/s);
- assert.match(await groups.first().locator('.permission-entry').last().textContent(),/Tool call failed-456/);
+ assert.match(await groups.last().locator('.permission-entry').last().textContent(),/Tool call failed-456/);
  await groups.first().evaluate(node=>node.open=false);await page.waitForFunction(()=>!document.querySelector('.activity-group-items').childElementCount);await groups.first().evaluate(node=>node.open=true);
  await page.waitForFunction(()=>document.querySelector('.permission-entry details')?.open===true);assert.equal(await groups.first().locator('[data-tool-call-id="read-123"]').first().locator('details').getAttribute('open'),'');
  const scroll=page.locator('#conversation');await scroll.evaluate(node=>{node.dispatchEvent(new WheelEvent('wheel',{deltaY:-200}));node.scrollTop=200;node.dispatchEvent(new Event('scroll'));});const top=await scroll.evaluate(node=>node.scrollTop);
  await page.locator('#followup').fill('Retained synthetic draft');const composer=await page.locator('#followup').elementHandle();
- await app.evaluate((_,id)=>{const engine=process.mainModule.require(process.cwd()+'/desktop/main.cjs').getService().engine,run=engine.getRun(id);run.events.find(event=>event.data?.tool?.callId==='read-123').data.tool.output='Updated SYNTHETIC_LAZY_OUTPUT';engine.persist(run);},id);
+ await app.evaluate(({app},id)=>{const engine=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getService().engine,run=engine.getRun(id);run.events.find(event=>event.data?.tool?.callId==='read-123').data.tool.output='Updated SYNTHETIC_LAZY_OUTPUT';engine.persist(run);},id);
  await page.getByText('Updated SYNTHETIC_LAZY_OUTPUT',{exact:true}).waitFor();
  assert.equal(await groups.first().locator('.permission-entry details').first().getAttribute('open'),'');assert.equal(await composer.evaluate(node=>node.isConnected),true);assert.equal(await page.locator('#followup').inputValue(),'Retained synthetic draft');assert.ok(Math.abs(await scroll.evaluate(node=>node.scrollTop)-top)<4,'expanded activity update keeps reading position');
  await page.locator('.jump-latest').click();await page.screenshot({path:'/private/tmp/proteus-activity-presentation-wide.png'});

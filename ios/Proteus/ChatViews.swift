@@ -664,6 +664,7 @@ struct ChatView: View {
     @State private var filePicker = false
     @State private var previewAttachment: NativeDraftAttachment?
     @State private var confirmAttachmentSend = false
+    @State private var attachmentSendMode = "queue"
     @State private var confirmDelete = false
     @State private var renameChildID: String?
     @State private var renameChildTitle = ""
@@ -745,6 +746,7 @@ struct ChatView: View {
     private var supportedAttachmentTypes: [String] { store.state["attachmentMediaTypes"][run["schedule"]["provider"].string].array.map(\.string) }
     private var attachmentsEnabled: Bool { store.state["capabilities"].array.contains(.string("chat.attachments.v1")) && !supportedAttachmentTypes.isEmpty }
     private var attachments: [NativeDraftAttachment] { shared.draftAttachments[chatBrowserScope] ?? [] }
+    private var canSteerAttachments: Bool { let types = run["chatControls"]["steeringMediaTypes"].array.map(\.string); return attachments.allSatisfy { types.contains($0.mediaType) } }
     private var missingAttachments: [JSON] { missingAttachmentRecords(store: store, draftKey: attachmentDraftKey, items: attachments) }
     var body: some View {
         VStack(spacing: 0) {
@@ -1345,7 +1347,7 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
                     }
                     if run["schedule"]["provider"].string != "rehearsal" { ComposerModelPicker(model: $model, effort: $effort, contextTier: $contextTier, serviceTier: $serviceTier, provider: run["schedule"]["provider"].string).frame(maxWidth: .infinity, alignment: .leading) } else { Spacer(minLength: 0) }
                     if active && run["chatControls"]["steering"].bool {
-                        Button { send("steer") } label: { Image(systemName: "arrow.triangle.branch").frame(width: 44, height: 44).background(NativeTheme.accent.opacity(0.1), in: Circle()) }.buttonStyle(.plain).accessibilityLabel("Steer current turn").disabled(cannotSend || run["status"].string != "running" || !attachments.isEmpty).accessibilityIdentifier("steer-message")
+                        Button { send("steer") } label: { Image(systemName: "arrow.triangle.branch").frame(width: 44, height: 44).background(NativeTheme.accent.opacity(0.1), in: Circle()) }.buttonStyle(.plain).accessibilityLabel("Steer current turn").disabled(cannotSend || run["status"].string != "running" || !canSteerAttachments).accessibilityIdentifier("steer-message")
                     }
                     Button { submitReply() } label: {
                         Image(systemName: "arrow.up").font(.system(size: 23, weight: .semibold)).frame(width: 44, height: 44)
@@ -1372,7 +1374,10 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
     private var cannotSend: Bool { busy || !store.connected || !missingAttachments.isEmpty || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     private func send(_ mode: String) {
         guard missingAttachments.isEmpty else { store.error = "Remove or reattach the missing files before sending."; return }
-        if mode == "queue" && !attachments.isEmpty { confirmAttachmentSend = true; return }
+        if !attachments.isEmpty {
+            guard mode != "steer" || (run["status"].string == "running" && canSteerAttachments) else { store.error = "This computer cannot steer with these attachment types. Queue this message instead."; return }
+            attachmentSendMode = mode; confirmAttachmentSend = true; return
+        }
         var values: [String: JSON] = ["prompt": .string(text), "mode": .string(mode), "messageId": .string(UUID().uuidString)]
         if mode == "queue" && run["schedule"]["provider"].string != "rehearsal" {
             values["modelOptions"] = .object(["model": .string(model), "reasoningEffort": .string(effort), "contextTier": .string(contextTier), "serviceTier": .string(serviceTier)])
@@ -1383,6 +1388,8 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
         guard attachmentsEnabled, !busy, store.connected, missingAttachments.isEmpty else { return }
         busy = true
         defer { busy = false }
+        let mode = attachmentSendMode
+        guard mode != "steer" || (run["status"].string == "running" && canSteerAttachments) else { store.error = "The active turn or supported attachment types changed. Review the message again."; return }
         let key = chatBrowserScope
         let messageID = shared.draftMessageIDs[key] ?? UUID().uuidString
         shared.draftMessageIDs[key] = messageID
@@ -1410,8 +1417,8 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
             }
             let consent = try await store.request("chat.attachments.authorize", ["id": .string(id), "providerId": .string(providerID), "messageId": .string(messageID), "attachments": .array(attachmentClaims)])
             guard !consent["consentId"].string.isEmpty, consent["providerId"].string == providerID else { throw RemoteError(message: "\(store.displayName) did not confirm the exact attachment destination.") }
-            var values: [String: JSON] = ["id": .string(id), "prompt": .string(submittedPrompt), "mode": .string("queue"), "messageId": .string(messageID), "providerId": .string(providerID), "attachments": .array(attachmentIDs), "consentId": consent["consentId"]]
-            if run["schedule"]["provider"].string != "rehearsal" {
+            var values: [String: JSON] = ["id": .string(id), "prompt": .string(submittedPrompt), "mode": .string(mode), "messageId": .string(messageID), "providerId": .string(providerID), "attachments": .array(attachmentIDs), "consentId": consent["consentId"]]
+            if mode == "queue" && run["schedule"]["provider"].string != "rehearsal" {
                 values["modelOptions"] = .object(["model": .string(model), "reasoningEffort": .string(effort), "contextTier": .string(contextTier), "serviceTier": .string(serviceTier)])
             }
             _ = try await store.request("chat.send", values)

@@ -300,7 +300,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         workspaceProjects,
         ...(desktopPreview?{desktopPreview:workspaceProjects}:{}),
         attention:service.desktopAttention(),updates:service.updates?.status()||null,
-        schedules: engine.schedules.list(), runs: engine.listRuns().map(run => url.searchParams.has('summaries') ? {...runSummary(run),...workspaceProjects.memberships[run.id],trigger:run.trigger,usage:run.usage,schedule:{id:run.schedule.id,name:run.schedule.name,provider:run.schedule.provider,model:run.schedule.model,workspace:run.schedule.workspace},permissionContext:engine.permissions.describeRun(run,permissionSnapshot)} : ({ ...run, ...workspaceProjects.memberships[run.id], storage: storagePaths(home, run), permissionContext: engine.permissions.describeRun(run,permissionSnapshot) })), providerSteering:Object.fromEntries(Object.entries(engine.providers).map(([id,provider])=>[id,typeof provider.steer==='function'])),providerStatus: catalog.value, providerStatuses: providerStatuses(),attachmentMediaTypes:Object.fromEntries(['copilot','codex','claude'].map(id=>[id,adapters[id]?.acceptedMediaTypes||[]])),mcpStatusProviders:['copilot','codex','claude'].filter(id=>typeof adapters[id]?.mcpStatus==='function'),mcpLoginProviders:['copilot','codex','claude'].filter(id=>typeof adapters[id]?.mcpLogin==='function'),
+        schedules: engine.schedules.list(), runs: engine.listRuns().map(run => url.searchParams.has('summaries') ? {...runSummary(run),...workspaceProjects.memberships[run.id],trigger:run.trigger,usage:run.usage,schedule:{id:run.schedule.id,name:run.schedule.name,provider:run.schedule.provider,model:run.schedule.model,workspace:run.schedule.workspace},permissionContext:engine.permissions.describeRun(run,permissionSnapshot)} : ({ ...run, ...workspaceProjects.memberships[run.id], storage: storagePaths(home, run), permissionContext: engine.permissions.describeRun(run,permissionSnapshot) })), providerSteeringMediaTypes:Object.fromEntries(Object.entries(engine.providers).map(([id,provider])=>[id,provider.acceptedSteeringMediaTypes||[]])),providerSteering:Object.fromEntries(Object.entries(engine.providers).map(([id,provider])=>[id,typeof provider.steer==='function'])),providerStatus: catalog.value, providerStatuses: providerStatuses(),attachmentMediaTypes:Object.fromEntries(['copilot','codex','claude'].map(id=>[id,adapters[id]?.acceptedMediaTypes||[]])),mcpStatusProviders:['copilot','codex','claude'].filter(id=>typeof adapters[id]?.mcpStatus==='function'),mcpLoginProviders:['copilot','codex','claude'].filter(id=>typeof adapters[id]?.mcpLogin==='function'),
         permissions: permissionSnapshot.value, permissionWorkspaces: engine.permissions.describeMany([
           { ...settings.get(), name: 'Default workspace', ref: { defaults: true } },
           ...engine.schedules.list().filter(schedule => !schedule.error).map(schedule => ({ ...schedule, ref: { scheduleId: schedule.id } })),
@@ -501,7 +501,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         try{prepared=await remote.attachmentConsents.prepareSend({consentId:value.consentId,draftId:value.draftId,chatId:run.id,messageId:value.messageId,providerId:schedule.provider,deviceId:'local-desktop',attachmentIds:files});engine.startDeferredRun(run.id,{proofId:prepared.proofId,attachmentIds:files,messageId:value.messageId});return json(200,run);}
         catch(error){if(prepared)await remote.attachmentConsents.releaseProof(prepared.proofId).catch(()=>{});engine.discardDeferredRun(run.id);throw error;}
       }
-      const match = url.pathname.match(/^\/api\/runs\/([a-f0-9-]+)\/(reply|resume|cancel|send|edit-queued|remove-queued|steer-queued)$/);
+      const match = url.pathname.match(/^\/api\/runs\/([a-f0-9-]+)\/(reply|resume|cancel|send|edit-queued|remove-queued|steer-queued|recover)$/);
       if (match && req.method === 'POST') {
         const value = await body(req); const [, id, action] = match;
         if (action === 'reply') return json(200, engine.reply(id, value.answer, value.requestId));
@@ -524,15 +524,12 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
           } catch(error) { engine.event(run,'system','MCP sign-in failed: '+error.message); throw error; }
           return json(200, run);
         }
+        if(action==='recover'){
+          if(value.modelOptions){const run=engine.getRun(id),options=chatModelOptions(value.modelOptions);if(value.action!=='continue')throw Error('Choose Continue chat to change model settings.');if(run.schedule.provider!=='rehearsal'){const catalog=await catalogs[run.schedule.provider]?.get(),model=catalog?.models?.find(item=>item.id===options.model);if(!model)throw Error('Selected model is unavailable. Refresh models and choose an available model.');validateModelOptions(options,model);}value.modelOptions=options;}
+          return json(200,engine.recovery.command(id,value));
+        }
         if (action === 'send') {
           const run = engine.getRun(id);
-          const files=Array.isArray(value.attachments)?value.attachments:[];
-          if(files.length){
-            if(files.length>chatAttachmentLimits.maxBatchFiles||value.mode==='steer'||!value.messageId||!value.consentId||value.providerId!==run.schedule.provider)throw new Error('Review the exact files and named provider for a queued turn.');
-            const prepared=await remote.attachmentConsents.prepareSend({consentId:value.consentId,chatId:run.id,messageId:value.messageId,providerId:run.schedule.provider,deviceId:'local-desktop',attachmentIds:files});
-            try{return json(200,await engine.send(id,value.prompt,'queue',value.messageId,value.modelOptions,{proofId:prepared.proofId,attachmentIds:files}));}
-            catch(error){await remote.attachmentConsents.releaseProof(prepared.proofId).catch(()=>{});throw error;}
-          }
           if (value.modelOptions && value.mode !== 'steer') {
             const options = chatModelOptions(value.modelOptions);
             if (run.schedule.provider !== 'rehearsal') {
@@ -541,6 +538,14 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
               if (!model) throw new Error('Selected model is unavailable. Refresh models and choose an available model.');
               validateModelOptions(options, model);
             }
+          }
+          if(value.messageId&&run.events.some(event=>event.data?.delivery?.id===value.messageId))return json(200,run);
+          const files=Array.isArray(value.attachments)?value.attachments:[];
+          if(files.length){
+            if(files.length>chatAttachmentLimits.maxBatchFiles||!value.messageId||!value.consentId||value.providerId!==run.schedule.provider)throw new Error('Review the exact files and named provider before sending.');
+            const prepared=await remote.attachmentConsents.prepareSend({consentId:value.consentId,chatId:run.id,messageId:value.messageId,providerId:run.schedule.provider,deviceId:'local-desktop',attachmentIds:files});
+            try{return json(200,await engine.send(id,value.prompt,value.mode||'queue',value.messageId,value.modelOptions,{proofId:prepared.proofId,attachmentIds:files}));}
+            catch(error){await remote.attachmentConsents.releaseProof(prepared.proofId).catch(()=>{});throw error;}
           }
           return json(200, await engine.send(id, value.prompt, value.mode, value.messageId, value.modelOptions));
         }

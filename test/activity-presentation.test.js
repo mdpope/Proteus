@@ -5,12 +5,12 @@ import {toolDuration,groupDuration} from '../public/runtime.js';
 import {remoteRun,ownerChatControls} from '../src/remote.js';
 import {workingMessage} from '../public/chat-working.js';
 
-test('activity groups retain chronology and system/decision rows until user or model communication',()=>{
+test('plain system messages remain visible while tools and decisions retain chronological groups',()=>{
  const events=[{role:'user'},{role:'tool',data:{tool:{callId:'a'}}},{role:'system',text:'A warning'}, {role:'system',data:{permission:{automatic:false,decision:'deny'}}},{role:'assistant',text:'Response'},{role:'system',text:'Another warning'},{role:'user',text:'Continue'}].map((event,index)=>({...event,key:'event-'+index}));
  const groups=groupActivity(events);
- assert.deepEqual(groups.map(event=>event.role),['user','activity','assistant','activity','user']);
- assert.deepEqual(groups[1].items,events.slice(1,4));assert.equal(groups[1].key,'activity-event-1');
- assert.equal(isActivityEvent({role:'system'}),true);assert.equal(isActivityEvent({role:'assistant'}),false);
+ assert.deepEqual(groups.map(event=>event.role),['user','activity','system','activity','assistant','system','user']);
+ assert.deepEqual(groups[1].items,[events[1]]);assert.equal(groups[1].key,'activity-event-1');assert.equal(groups[2],events[2]);
+ assert.equal(isActivityEvent({role:'system'}),false);assert.equal(isActivityEvent({role:'assistant'}),false);
  assert.equal(activitySummary([{status:'completed'}],1,1,1),'Activity · 1 tool · 1 automatic approval · 1 permission decision · 1 system message');
 });
 test('approval references use recorded IDs or older original requests, never a guessed adjacent tool',()=>{
@@ -22,7 +22,7 @@ test('answered questions remain first-class chronological history beside their a
  const question={key:'question',role:'system',text:'**Question**\n\nExplain before proceeding?\n\n• Continue\n• Stop',data:{question:{id:'q1',status:'answered',answer:'Continue'}}};
  const answer={key:'answer',role:'user',text:'Continue',data:{questionReply:{requestId:'q1'}}};
  const groups=groupActivity([{key:'tool',role:'tool'},question,answer,{key:'tail',role:'system'}]);
- assert.deepEqual(groups.map(entry=>entry.key),['activity-tool','question','answer','activity-tail']);
+ assert.deepEqual(groups.map(entry=>entry.key),['activity-tool','question','answer','tail']);
  assert.equal(groups[1],question);assert.equal(groups[2],answer);
  for(const status of ['pending','cancelled','interrupted'])assert.equal(isActivityEvent({...question,data:{question:{id:'q1',status}}}),false);
 });
@@ -49,7 +49,7 @@ test('remote Working guidance requires verified owner work and describes only av
 test('remote work guidance carries the owner adapter steering boundary without provider-name inference',()=>{
  const run={id:'fixture',status:'running',events:[],schedule:{provider:'new-provider'}};
  const controls=ownerChatControls(run,{providers:{'new-provider':{steer:async()=>{}}}});assert.equal(controls.steering,true);
- assert.deepEqual(remoteRun(run,0,undefined,undefined,controls).chatControls,{steering:true});
+ assert.deepEqual(remoteRun(run,0,undefined,undefined,controls).chatControls,{steering:true,recovery:false,steeringMediaTypes:[]});
  assert.equal(ownerChatControls(run,{providers:{'new-provider':{}}}).steering,false);
  assert.equal(workingMessage({...run,chatControls:{steering:false}}),'Working… you can queue a message.');
  assert.equal(Object.hasOwn(remoteRun(run),'chatControls'),false);

@@ -160,7 +160,7 @@ export class Updates {
   // Recovery appends its single continuation after those messages.
  }
  waiting(job){
-  const runs=this.service.engine.listRuns().filter(run=>active.has(run.status)||this.service.engine.running.has(run.id)||this.service.engine.backgroundRuns.has(run.id));
+  const runs=this.service.engine.listRuns().filter(run=>active.has(run.status)||run.capacityRetry||this.service.engine.running.has(run.id)||this.service.engine.backgroundRuns.has(run.id));
   return [...runs.map(run=>'Chat '+run.id.slice(0,8)+' is '+run.status),...this.blockers()];
  }
  async advance(){

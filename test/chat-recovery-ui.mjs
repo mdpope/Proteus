@@ -1,0 +1,28 @@
+import {_electron as electron} from 'playwright';import assert from 'node:assert/strict';import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
+const home=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'proteus-chat-recovery-ui-')));let app;const errors=[];
+const inherited=['PATH','HOME','USER','LOGNAME','SHELL','LANG','LC_ALL','TMPDIR'];const env=Object.fromEntries(inherited.filter(key=>process.env[key]!==undefined).map(key=>[key,process.env[key]]));
+Object.assign(env,{PROTEUS_HOME:home,PORT:'0',COPILOT_HOME:path.join(home,'copilot'),COPILOT_CLI_PATH:path.join(home,'no-copilot'),PROTEUS_CODEX_PATH:path.join(home,'no-codex'),PROTEUS_CLAUDE_PATH:path.join(home,'no-claude'),CLAUDE_CONFIG_DIR:path.join(home,'claude')});
+try{
+ const executablePath=process.env.PROTEUS_TEST_EXECUTABLE;
+ app=await electron.launch({...(executablePath?{executablePath}:{}),args:[...(executablePath?[]:['.']),'--use-mock-keychain','--user-data-dir='+path.join(home,'browser')],env,timeout:60000});const page=await app.firstWindow();page.setDefaultTimeout(20000);page.on('pageerror',error=>errors.push(error.message));await page.locator('#topbar-home').waitFor();
+ const id=await app.evaluate(({app},home)=>{
+  const service=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getService(),engine=service.engine,fixture={calls:[]};service.syntheticRecovery=fixture;
+  engine.providers.rehearsal={run:async({prompt,emit})=>{fixture.calls.push(prompt);if(fixture.calls.length===1)await new Promise((_,reject)=>{fixture.fail=()=>reject(Error('Selected model is at capacity. Please try a different model.'));});else emit('assistant',prompt==='Synthetic queued follow-up'?'Synthetic queued follow-up completed':'Synthetic resumed turn completed');}};
+  const run=engine.createRun({schemaVersion:1,id:'synthetic-recovery',name:'Synthetic recovery UI',enabled:false,cron:'0 9 * * *',timezone:'UTC',provider:'rehearsal',model:'',workspace:{cwd:home,additionalDirectories:[]},misfire:'skip',prompt:'Synthetic first turn'},'chat');run.title='Synthetic recovery UI';run.titleKind='manual';engine.persist(run);return run.id;
+ },home);
+ await app.evaluate(async({app},id)=>{const service=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getService();await service.engine.send(id,'Synthetic queued follow-up','queue','synthetic-follow-up');service.syntheticRecovery.fail();},id);
+ await page.locator('[data-page="runs"]').first().click();await page.locator('.chat-index-row').filter({hasText:'Synthetic recovery UI'}).click();
+ const warning=page.locator('.message.system').filter({hasText:'Selected model is at capacity.'});await warning.getByRole('button',{name:'Continue chat',exact:true}).waitFor();assert.equal(await warning.locator('xpath=ancestor::details').count(),0,'Capacity error is visible outside collapsed Activities');
+ await page.locator('#followup').fill('Unsent draft stays intact');
+ await warning.getByRole('button',{name:'Retry every 60 seconds'}).click();await warning.getByRole('button',{name:'Stop retrying'}).waitFor();assert.match(await warning.innerText(),/Next retry in (59|60)s/);
+ await warning.getByRole('button',{name:'Stop retrying'}).click();await warning.getByRole('button',{name:'Retry every 60 seconds'}).waitFor();
+ const started=Date.now();await warning.getByRole('button',{name:'Retry every 60 seconds'}).click();
+ await page.getByText('Synthetic queued follow-up completed',{exact:true}).waitFor({timeout:75000});assert.ok(Date.now()-started>=59000,'Actual owner timer waits a minute before retry');
+ const facts=await app.evaluate(({app},id)=>{const s=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getService(),run=s.engine.getRun(id);return {calls:s.syntheticRecovery.calls,status:run.status,queue:run.queuedMessages,policy:run.capacityRetry,deliveries:run.events.filter(event=>event.data?.delivery?.id==='synthetic-follow-up')};},id);
+ assert.equal(facts.status,'completed');assert.equal(facts.calls.length,3);assert.match(facts.calls[1],/do not repeat completed external actions/);assert.equal(facts.calls[2],'Synthetic queued follow-up');assert.equal(facts.deliveries.length,1);assert.equal(facts.policy,undefined);assert.equal(facts.queue.length,0);assert.equal(await page.locator('#followup').inputValue(),'Unsent draft stays intact');
+ await app.evaluate(({app},id)=>{const engine=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getService().engine,run=engine.getRun(id);run.status='failed';run.failureEventAt=engine.now();engine.event(run,'system','Synthetic connection interruption',{failure:{kind:'error'}});},id);
+ const generic=page.locator('.message.system').filter({hasText:'Synthetic connection interruption'});await generic.getByRole('button',{name:'Continue chat',exact:true}).waitFor();assert.equal(await generic.getByRole('button',{name:'Retry every 60 seconds'}).count(),0);
+ await page.setViewportSize({width:720,height:960});await page.screenshot({path:path.join(os.tmpdir(),'proteus-chat-recovery-ui.png')});
+ await generic.getByRole('button',{name:'Continue chat',exact:true}).click();await generic.getByRole('button',{name:'Continue chat',exact:true}).waitFor({state:'detached'});assert.equal(await page.locator('#followup').inputValue(),'Unsent draft stays intact');assert.deepEqual(errors,[]);
+ console.log(JSON.stringify({passed:true,synthetic:true,checks:['standalone visible system failure','explicit opt-in and stop','real 60-second owner retry','same chat continues before one queued delivery','generic manual Continue only','draft preservation','narrow controls']}));
+}finally{await app?.close();fs.rmSync(home,{recursive:true,force:true,maxRetries:10,retryDelay:100});}

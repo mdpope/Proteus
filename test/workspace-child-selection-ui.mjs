@@ -28,7 +28,7 @@ async function until(page,predicate,arg){const deadline=Date.now()+20000;do{cons
 async function closeApp(){if(!app)return;const child=app.process();child.kill('SIGTERM');await new Promise((resolve,reject)=>{if(child.exitCode!==null)return resolve();const timer=setTimeout(()=>{child.kill('SIGKILL');reject(new Error('Fixture app failed graceful shutdown'));},10000);child.once('exit',()=>{clearTimeout(timer);resolve();});});app=null;}
 try{
  for(let cycle=0;cycle<3;cycle++){
-  app=await electron.launch({args:['.','--use-mock-keychain','--user-data-dir='+path.join(home,'electron')],env:{...process.env,PROTEUS_HOME:home,COPILOT_HOME:path.join(home,'copilot'),PORT:'0'},timeout:60000});
+  app=await electron.launch({...(process.env.PROTEUS_TEST_EXECUTABLE?{executablePath:process.env.PROTEUS_TEST_EXECUTABLE}:{}),args:[...(process.env.PROTEUS_TEST_EXECUTABLE?[]:['.']),'--use-mock-keychain','--user-data-dir='+path.join(home,'electron')],env:{...process.env,PROTEUS_HOME:home,COPILOT_HOME:path.join(home,'copilot'),PORT:'0'},timeout:60000});
   const page=await app.firstWindow();page.setDefaultTimeout(20000);page.on('pageerror',error=>errors.push(error.message));await page.locator('#tab-add-menu summary').waitFor();
   // Wait for actual restoration/persistence, not just the first overview render.
   await until(page,async previous=>{const session=await window.desktop.workspaceSession({action:'get'}),views=await window.desktop.browser({action:'list'});return session.tabs.filter(tab=>tab.type==='browser').length===2&&session.tabs.filter(tab=>tab.type==='browser').every(tab=>tab.contentTabId&&views.some(view=>view.id===tab.id)&&!previous.includes(tab.id));},previousIds||children.map(tab=>tab.id));

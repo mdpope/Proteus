@@ -1,3 +1,13 @@
+## October 22 — attachment steering composition (source)
+
+The native composer accepts attached Steer only when the connected owner advertises every file's
+type in `chatControls.steeringMediaTypes`. The existing file/provider review sheet captures Queue
+or Steer; upload uses that confirmed mode, and steering omits next-turn model options. Changed
+turn/capability state fails before upload, leaving the draft. Older owners keep attached steering
+disabled. Simulator compilation passes for both architectures; native UI delivery, physical
+installation and live provider interpretation are not certified by this compile. Desktop native
+adapter contracts and encrypted owner transport acceptance are recorded in provider documentation.
+
 ## October 22 — pairing transport and explicit completion
 
 The pending RemoteStore is retained as the saved destination through authenticated `ready`.

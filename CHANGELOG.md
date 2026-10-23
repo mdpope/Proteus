@@ -1,3 +1,12 @@
+## Unreleased — chat recovery, navigation and layout corrections
+
+- Show plain system messages outside Activities, with Continue chat and an explicit per-chat 60-second capacity retry/stop option; preserve queued inputs, drafts and native sessions.
+- Restore each top-level workspace's remembered project/chat/resource page through restart without changing resource placement or histories.
+- Allow supported active-turn steering attachments through existing provider/file consent and replay protection; advertise media types to paired desktops/native clients.
+- Preserve custom provider profile/executable locations on supervised update and rollback. This addresses a restart-environment defect; the reported default-profile Mac Claude sign-in failure remains under investigation.
+- Align Connections cards, spacing and wrapping; keep desktop actions grouped at wide and narrow sizes.
+- Keep the composer footer visible when many attachments and a pending question share a narrow pane; immediately clear accepted attachment chips in retained composers.
+
 ## Unreleased — passive workspace saves
 
 - Avoid scheduling another descriptor sync when sidebar rendering saves the same workspace snapshot. Real edits still synchronize; unchanged saves no longer postpone a pending edit.

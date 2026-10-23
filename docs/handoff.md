@@ -1,3 +1,16 @@
+## October 22 — new requested corrections implemented; final freeze/install pending
+
+See the latest [planning entry](planned-updates.md), [provider behavior](providers.md),
+[workspace memory](workspaces.md) and [Connections layout](remote.md). Source now combines
+system visibility/explicit chat recovery, per-workspace deep restoration, supported fresh steering
+attachments, custom provider-location preservation, and minor Connections/composer layout fixes.
+Real desktop checks cover a full minute of retry, one queued follow-up, draft preservation,
+workspace return/restart, legacy browser histories and measured responsive Connections widths.
+Native steering composition compiles; physical/native delivery remains separate. Retain the local
+running-chat hold, HC unlock requirement and scoped Windows recovery approval. No new source pin
+or artifact has been frozen yet; do not install earlier candidates. The default-profile Mac Claude
+sign-out remains under investigation; the existing native Keychain store/signer was preserved.
+
 ## October 22 — redundant descriptor traffic correction accepted on Mac; rollout separate
 
 Linux's combined `88bdfd8` package passes idle-selection and notice semantics but fails the

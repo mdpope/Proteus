@@ -36,7 +36,7 @@ export function normalizedTool(tool) {
 export function isActivityEvent(event) {
  if(event?.data?.question||event?.data?.agentFeedback)return false;
  const role=event?.role||event?.type;
- return Boolean(event?.data?.tool||event?.data?.permission||role==='tool'||role==='system');
+ return Boolean(event?.data?.tool||event?.data?.permission||role==='tool');
 }
 export function groupActivity(entries) {
  const result=[];let batch=[];

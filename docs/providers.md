@@ -201,6 +201,40 @@ on Send or Queue and applied on the next turn; Steer keeps current settings. Cli
 speed or context-tier choices unless the provider advertises them. Native conversation history
 remains intact across model changes, subject to the provider's context management.
 
+## Interrupted chat recovery and attachment steering
+
+Plain system messages render as chronological message boxes, outside collapsed Activities;
+structured tool and permission records retain lazy activity details. A failed/interrupted chat
+offers **Continue chat** in its latest system box. Its owner verifies the exact failure identity,
+keeps the existing native session, and continues unfinished work before the existing queued inputs.
+Draft text/files and queue receipts remain intact. It never answers a pending approval.
+
+For the explicit model-capacity failure, **Retry every 60 seconds** opts that one chat into an
+owner timer. **Stop retrying** stops future attempts. Retry waits until its prior attempt settles,
+re-arms only for another capacity failure, and stops on success, other errors, manual input,
+changed effective settings/permissions or shutdown. It retains the selected model and never
+silently reactivates after launch. Pending retry blocks update/archive/delete. Generic failures
+offer manual continuation only. Local and paired desktop UI use the same owner boundary; older
+owners do not advertise recovery. The actual desktop regression waits a full minute and verifies
+one queued follow-up delivery after continuation, with the unsent draft preserved.
+
+Supported active-turn inputs now carry attachments through the same exact file/provider consent,
+immutable-byte read and durable message identity as ordinary input. Codex accepts its existing
+image/plain-text types through `turn/steer`; private image files stay until the native turn settles.
+Copilot uses supported blobs with immediate mode, including PDF. Claude uses its existing
+acknowledged interrupt-and-continue boundary with image/text content. Unsupported types/backends
+fail explicitly; no silent queue, cancel/restart fallback, model change or expanded grant occurs.
+Paired owners advertise `chatControls.steeringMediaTypes`; native composition respects that gate
+and confirms the same selected file/provider destination. A timeout remains unconfirmed delivery,
+not permission for automatic resend. Existing queued attachment promotion remains unavailable;
+new messages with files can use Steer directly while a turn is active.
+
+Protocol references: [Codex turn input](https://github.com/openai/codex/blob/main/codex-rs/app-server-protocol/src/protocol/v2/turn.rs),
+[Copilot steering](https://docs.github.com/en/copilot/how-tos/copilot-sdk/features/steering-and-queueing),
+[Claude streaming input](https://code.claude.com/docs/en/agent-sdk/streaming-vs-single-mode).
+Native provider-input contract and encrypted-relay consent/deduplication tests pass; exact signed
+artifacts, native UI/device delivery and installed acceptance remain separate.
+
 ## Claude Code
 
 `src/claude.js` owns a private native Claude Code process for each Proteus turn. It discovers a
@@ -208,6 +242,19 @@ standard CLI installation or the Claude desktop app's downloaded native CLI; `PR
 can select another executable. Native session IDs are retained and resumed explicitly. No desktop
 app conversation is reused. Sign in to the CLI with `claude auth login`; installing or signing in
 to the desktop app does not guarantee that the CLI has an account.
+
+Application updates and compatible rollback preserve the launching process's explicit
+`CLAUDE_CONFIG_DIR` and `PROTEUS_CLAUDE_PATH` locations, alongside Codex/Copilot locations.
+The helper previously discarded these overrides, which could reopen a different credential
+namespace after restart. Default locations remain native; no new per-build profile is created.
+Isolated smoke tests override all provider locations and disable their executables. Authentication
+tokens are not copied into the update journal or added to the relaunch environment allowlist.
+This corrects an update environment defect; it does not establish the cause of every macOS
+sign-in failure. A retained Keychain item alone does not prove that Claude can use its token.
+When diagnosing, compare the actual selected CLI's non-secret authentication status while the
+Mac is unlocked. Preserve the native store and signer; do not clear credentials or force a new
+login merely because capability discovery failed. Claude's desktop-managed CLI can update
+independently of Proteus, and its authentication persistence needs separate live verification.
 
 The adapter uses the bidirectional control protocol published in Anthropic's official Agent SDK.
 Initialization supplies the current model catalog and model effort capabilities. Context capacities

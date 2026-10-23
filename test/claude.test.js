@@ -296,3 +296,10 @@ test('Claude steering timeout is an explicit unconfirmed failure, never success 
  const args=runArgs(),task=p.run(args);task.catch(()=>{});for(let i=0;i<100&&!inputs;i++)await new Promise(r=>setTimeout(r,2));
  await assert.rejects(p.steer(args.run,'Unacknowledged correction'),/unconfirmed/);await assert.rejects(task,/unconfirmed/);assert.equal(inputs,2);assert.equal(client.closed,true);
 });
+test('Claude acknowledged interrupt-and-continue accepts image and text content with the same native session',async()=>{
+ let client,inputs=0;const p=new ClaudeProvider({clientFactory:()=>{client=new Fake(c=>{inputs++;if(inputs===1)c.emit('message',{type:'system',session_id:'native-test'});else c.emit('message',{...c.userMessage,session_id:'native-test'});});client.request=async()=>{result(client);return {};};return client;}});
+ const args=runArgs(),task=p.run(args);for(let i=0;i<100&&!inputs;i++)await new Promise(r=>setTimeout(r,2));
+ await p.steer(args.run,'Image correction',[{name:'shot.png',mediaType:'image/png',bytes:Buffer.from('synthetic-image')},{name:'note.txt',mediaType:'text/plain',bytes:Buffer.from('Synthetic note')}]);
+ assert.equal(client.userMessage.session_id,'native-test');const content=client.userMessage.message.content;assert.equal(content[1].type,'image');assert.equal(content[1].source.data,Buffer.from('synthetic-image').toString('base64'));assert.match(content[2].text,/Synthetic note/);
+ result(client);await task;assert.equal(inputs,2);
+});

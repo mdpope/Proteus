@@ -9,16 +9,17 @@ export class SessionProvider {
     this.retired = new Set();
     this.closing = false;
     this.acceptedMediaTypes = this.metadata.acceptedMediaTypes;
+    this.acceptedSteeringMediaTypes = this.metadata.acceptedSteeringMediaTypes;
     for (const method of ['status', 'quota', 'models', 'selectedMcp', 'withMcpSelectionBatch']) {
       if (typeof this.metadata[method] === 'function') this[method] = (...args) => this.metadata[method](...args);
     }
     for (const method of ['mcpStatus', 'mcpLogin', 'mcpRecover', 'mcpHealth', 'selectIntegrationContext']) {
       if (typeof this.metadata[method] === 'function') this[method] = (run, ...args) => this.withSession(run, adapter => adapter[method](run, ...args));
     }
-    if (typeof this.metadata.steer === 'function') this.steer = (run, prompt) => {
+    if (typeof this.metadata.steer === 'function') this.steer = (run, prompt, attachments) => {
       const entry = this.sessions.get(run.id);
       if (!entry?.turn) throw new Error('This chat is not running. Queue a message instead.');
-      return entry.adapter.steer(run, prompt);
+      return entry.adapter.steer(run, prompt, attachments);
     };
   }
 

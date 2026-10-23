@@ -91,6 +91,18 @@ generation and replace/relaunch the exact tested signed artifact. Reuse the exis
 pairing, credential/signing identity and application data. Follow the two-generation policy below.
 Distinguish update shutdown from explicit window Close so BF-11's window restoration entries survive.
 
+Keep explicit provider executable/configuration locations from the launching process on both
+update and rollback (`CLAUDE_CONFIG_DIR`, `PROTEUS_CLAUDE_PATH`, `CODEX_HOME`,
+`PROTEUS_CODEX_PATH`, `COPILOT_HOME`, `COPILOT_CLI_PATH`). They select existing provider-owned
+authentication stores; silently dropping one can appear to sign the user out. Do not add tokens
+to journal fields or widen the helper's environment allowlist to arbitrary secrets. Isolated
+candidate smoke tests must replace these locations and disable real provider executables.
+For sign-in continuity acceptance, record non-secret availability before/after restart and the
+selected runtime identity; a retained credential-file hash or Keychain item is insufficient.
+If the provider was already unavailable, report continuity as unverified, not newly broken or
+successfully preserved. Never repair this check by deleting native credentials or restarting
+an unrelated active provider chat.
+
 The new host acquires sole ownership, reconciles the update journal and verifies its actual build,
 migrations, required service endpoints and restored durable state. A bounded external verifier checks
 startup and relevant UI before marking installed/healthy. Then the owner claims the continuation once

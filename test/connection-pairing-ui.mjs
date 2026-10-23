@@ -70,6 +70,30 @@ try {
   await page.waitForFunction(() => !document.querySelector('#remote-pair').disabled);
   assert.equal(await page.locator('#remote-connection-error').isHidden(), true);
   assert.equal(await page.locator('#remote-label').inputValue(), 'Still editing this name');
+  // Synthetic owner list only: no real relay, pairing, permission or device action.
+  await app.evaluate(({app})=>{
+    const peers=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getDesktopPeers();
+    peers.list=()=>[{hostId:'synthetic-mac',label:'Synthetic personal computer with a long readable destination name',platform:'darwin',status:'online'}, {hostId:'synthetic-windows',label:'Synthetic-'+ 'longname'.repeat(18),platform:'win32',status:'online'}];
+  });
+  await page.locator('[data-page="home"]').click();
+  await page.locator('[data-page="engine"]').click();await page.locator('[data-engine-section="connections"]').click();
+  await page.locator('.desktop-peer-actions').first().waitFor();
+  for(const width of [1560,920,680]){
+    await page.setViewportSize({width,height:1000});
+    assert.equal(await page.evaluate(()=>innerWidth),width,'Actual renderer viewport follows the fixture width');
+    await page.waitForTimeout(150);
+    const layout=await page.evaluate(()=>{
+      const screen=document.querySelector('#remote-screen'),outgoing=document.querySelector('.desktop-destinations'),grid=screen.querySelector(':scope>.grid');
+      const bounds=node=>{const b=node.getBoundingClientRect();return {x:b.x,y:b.y,right:b.right,bottom:b.bottom,width:b.width};};
+      return {screen:bounds(screen),gap:bounds(grid).y-bounds(outgoing).bottom,overflow:screen.scrollWidth-screen.clientWidth,cards:[...screen.querySelectorAll('.card')].map(bounds),buttons:[...screen.querySelectorAll('.desktop-peer-actions button')].map(bounds),rows:[...screen.querySelectorAll('.device-row')].map(row=>({height:row.clientHeight,content:row.scrollHeight})),actionGaps:[...screen.querySelectorAll('.desktop-peer-actions')].map(group=>{const buttons=[...group.children];return buttons.slice(1).filter((node,i)=>node.getBoundingClientRect().y===buttons[i].getBoundingClientRect().y).map((node,i)=>node.getBoundingClientRect().x-buttons[i].getBoundingClientRect().right);}).flat()};
+    });
+    assert.ok(layout.gap>=19,'Outgoing and incoming cards have a consistent gap at '+width);
+    assert.ok(layout.overflow<=1,'No horizontal overflow at '+width);
+    for(const b of [...layout.cards,...layout.buttons])assert.ok(b.x>=layout.screen.x-1&&b.right<=layout.screen.right+1,'Cards and controls fit at '+width);
+    assert.ok(layout.rows.every(row=>row.content<=row.height+1),'Long names wrap inside their row');
+    assert.ok(layout.actionGaps.every(gap=>gap>=7&&gap<=9),'Actions stay grouped instead of spanning the card');
+    const file=path.join(os.tmpdir(),'proteus-connections-'+width+'.png');await page.screenshot({path:file,fullPage:true});
+  }
   const screenshot = path.resolve('dist/connection-pairing.png'); fs.mkdirSync(path.dirname(screenshot), { recursive: true }); await page.screenshot({ path: screenshot });
   const prior = gets; await page.locator('[data-page="home"]').click(); await page.waitForTimeout(3300);
   assert.equal(gets, prior, 'Leaving Connections stops status requests.');

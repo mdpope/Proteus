@@ -86,9 +86,18 @@ export function mountChatComposer(composer,{textarea,models,actions,active=false
       // pane even when a long draft and a pending question are both present.
       const style=getComputedStyle(pane),composerStyle=getComputedStyle(composer);
       let occupied=(parseFloat(style.paddingTop)||0)+(parseFloat(style.paddingBottom)||0)+(parseFloat(composerStyle.marginTop)||0)+(parseFloat(composerStyle.marginBottom)||0);
+      const waiting=pane.querySelector(':scope > .pending');
       for(const sibling of pane.children){
-        if(sibling===composer||sibling.matches('#conversation-host,#peer-conversation,.conversation-shell')||getComputedStyle(sibling).display==='none')continue;
+        if(sibling===composer||sibling===waiting||sibling.matches('#conversation-host,#peer-conversation,.conversation-shell')||getComputedStyle(sibling).display==='none')continue;
         const style=getComputedStyle(sibling);occupied+=sibling.getBoundingClientRect().height+(parseFloat(style.marginTop)||0)+(parseFloat(style.marginBottom)||0);
+      }
+      if(waiting&&getComputedStyle(waiting).display!=='none'){
+        const style=getComputedStyle(waiting),margins=(parseFloat(style.marginTop)||0)+(parseFloat(style.marginBottom)||0);
+        // A tall question must yield space to the fixed controls and attachment
+        // strip too, once the editor has reached its minimum. Its own body scrolls.
+        const cap=Math.max(48,Math.min(available*.5,available-occupied-margins-chrome-40-80))+'px';
+        if(waiting.style.maxHeight!==cap)waiting.style.maxHeight=cap;
+        occupied+=waiting.getBoundingClientRect().height+margins;
       }
       editorSpace=Math.min(editorSpace,available-occupied-chrome-80);
     }

@@ -1,0 +1,35 @@
+/* Connections keeps its existing sections, with one spacing/wrapping system. */
+#remote-screen{display:flex;flex-direction:column;gap:20px;min-width:0}
+#remote-screen>.heading{margin-bottom:0}
+#remote-screen>.grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));align-items:start}
+#remote-screen .card,#remote-screen .heading>div,#remote-screen .actions,#remote-desktop-destinations{min-width:0}
+#remote-screen .desktop-destinations{max-width:none;margin:0}
+#remote-screen h2{line-height:1.4;overflow-wrap:anywhere}
+#remote-screen .note{max-width:78ch;overflow-wrap:anywhere;white-space:normal;margin:0 0 12px}
+#remote-screen>.heading p{margin-bottom:0;max-width:90ch}
+#remote-screen label{margin:16px 0;overflow-wrap:anywhere}
+#remote-screen textarea{min-width:0;max-width:100%;overflow-wrap:anywhere}
+#remote-screen button{max-width:100%;white-space:normal;overflow-wrap:anywhere}
+#remote-screen .actions{gap:8px;justify-content:flex-start}
+#remote-screen .desktop-pair-form{max-width:72ch;margin-bottom:16px}
+#remote-screen .desktop-peer-list{margin:8px 0 16px}
+#remote-screen .device-row{gap:12px 20px;flex-wrap:wrap;border-color:var(--line)}
+#remote-screen .desktop-peer-summary{flex:1 1 220px;min-width:0;overflow-wrap:anywhere}
+#remote-screen .desktop-peer-summary p{margin:4px 0 0;color:var(--soft)}
+#remote-screen .desktop-peer-actions{flex:0 1 auto}
+#remote-screen .device-list-heading{margin:24px 0 12px;align-items:center;flex-wrap:wrap}
+#remote-screen .device-list-heading h2{margin:0}
+#remote-screen .paired-device-heading{flex-wrap:wrap;align-items:start}
+#remote-screen .paired-device-heading>div:first-child{flex:1 1 180px;min-width:0;overflow-wrap:anywhere}
+#remote-screen .paired-device-heading>.actions{flex:0 1 auto}
+#remote-screen .paired-device-heading .note{margin:4px 0}
+#remote-screen .device-permission{gap:16px;min-width:0}
+#remote-screen .device-permission span{min-width:0;overflow-wrap:anywhere}
+#remote-screen .device-permission small{line-height:1.6}
+#remote-screen .resource-row{min-width:0;flex-wrap:wrap;gap:12px}
+#remote-screen .resource-row>div{min-width:0}
+#remote-screen #remote-invite:not(:empty){margin-top:20px}
+#remote-screen #remote-invite>button{margin:0 8px 8px 0}
+#remote-screen #remote-invite .pairing-qr{max-width:100%;height:auto}
+#remote-desktop-destinations:empty,#remote-screen #remote-invite:empty,#remote-screen [role=status]:empty{display:none}
+@media(max-width:700px){#remote-screen .card{padding:18px}#remote-screen .desktop-peer-actions{flex-basis:100%}}

@@ -2,6 +2,15 @@ Current cross-platform acceptance is recorded in [PR #20](https://github.com/mdp
 The dated/source-specific checkpoints below retain their original verification scope; later
 workflow results supersede their pending/failure status without changing the recorded artifacts.
 
+## October 22 — Connections spacing and wrapping
+
+Connections retains its existing sections and actions with consistent card widths/gaps, bounded
+reading lines, and grouped desktop actions. Long names, paths and permission explanations wrap
+inside their cards; small windows stack sections and action rows. Isolated actual desktop checks
+at measured 680/920/1560-pixel viewports cover containment, card gaps and grouped button spacing,
+alongside unchanged pairing direction, failure recovery, draft preservation and polling cleanup.
+No pairing, relay, credential or permission policy changes are part of this layout correction.
+
 ## October 22 — native pairing completion
 
 The native destination adopts the pending connection after durable credential/index storage,

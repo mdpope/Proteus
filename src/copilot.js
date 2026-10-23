@@ -1,3 +1,4 @@
+import {copilotMessageAttachments} from './provider-attachment-input.js';
 import {chatControlTools} from './chat-control-tools.js';
 import { uniqueModels } from '../public/model-choices.js';
 import {integrationTools} from './integration-tools.js';
@@ -20,7 +21,7 @@ export class CopilotProvider {
     // SDK empty mode disables Keychain and can silently select a different gh
     // account. A fresh quota process must retain the conversation's auth options.
     this.quotaClientFactory=quotaClientFactory || (baseDirectory => this.clientFactory({...this.options,baseDirectory,logLevel:'none'}));
-    this.quotaTimeoutMs=quotaTimeoutMs;this.quotaStopTimeoutMs=quotaStopTimeoutMs;this.quotaPending=null;this.quotaProbe=null; this.client = null; this.starting = null; this.sessions = new Map(); this.authSessions = new Map(); this.acceptedMediaTypes=Object.freeze(['image/png','image/jpeg','image/gif','image/webp','application/pdf','text/plain']); }
+    this.quotaTimeoutMs=quotaTimeoutMs;this.quotaStopTimeoutMs=quotaStopTimeoutMs;this.quotaPending=null;this.quotaProbe=null; this.client = null; this.starting = null; this.sessions = new Map(); this.authSessions = new Map(); this.acceptedMediaTypes=Object.freeze(['image/png','image/jpeg','image/gif','image/webp','application/pdf','text/plain']);this.acceptedSteeringMediaTypes=this.acceptedMediaTypes; }
   dataDirectory() { return this.settings?.get().copilotDataDirectory || this.options.baseDirectory || process.env.COPILOT_HOME || path.join(os.homedir(), '.copilot'); }
   async connect(baseDirectory = this.dataDirectory()) {
     if (this.client && this.baseDirectory !== baseDirectory) await this.close();
@@ -167,16 +168,13 @@ export class CopilotProvider {
     const status=latest?.host?.needsAuthServers?.[name]?'needs-auth':latest?.servers?.find(server=>server.name===name)?.status||'not-connected';
     return {server:name,status:result.authorizationUrl ? 'sign-in-required' : status,authorizationUrl:result.authorizationUrl || null,observedAt:new Date().toISOString(),scope:this.sessions.has(run.id)?'active-chat':'resumed-chat'};
   }
-  async steer(run, prompt) {
+  async steer(run, prompt, attachments=[]) {
     const session = this.sessions.get(run.id);
     if (!session) throw new Error('Copilot is still starting. Queue this message or try steering again.');
-    await session.send({ prompt, mode: 'immediate' });
+    await session.send({ prompt, mode: 'immediate',attachments:copilotMessageAttachments(attachments,this.acceptedMediaTypes) });
   }
   async run({ run, prompt, attachments=[], emit, ask, update, signal, stream, permissionProfile }) {
-    const nativeAttachments=attachments.map(item=>{
-      if(!this.acceptedMediaTypes.includes(item.mediaType)||!Buffer.isBuffer(item.bytes))throw new Error('Copilot cannot receive this attachment type. Choose a supported image, PDF, or plain text file.');
-      return {type:'blob',data:item.bytes.toString('base64'),mimeType:item.mediaType,displayName:item.name};
-    });
+    const nativeAttachments=copilotMessageAttachments(attachments,this.acceptedMediaTypes);
     let turn;
     const askUser = async request => { turn?.pause(); try { return await ask(request); } finally { turn?.resume(); } };
     const decisions = new Map();
