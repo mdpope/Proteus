@@ -29,10 +29,12 @@ HC now runs the same new build with actual connected/browser UI, 399 preserved o
 retirement. Actual free-space gain is 1,553,993,728 bytes. Later timestamp-only mutable differences
 remain separately classified; the prior native Codex continuation failure remains unresolved.
 Linux is installed; one normal relaunch restored credential/peer access after its updater dropped
-desktop-session hints. Full continuity signoff remains held: one unexpired cookie is missing, and
+desktop-session hints. The operator accepted two explicit continuity exceptions: an unexpired
+cookie is missing, and
 recorded Back/new navigation replaced an active history entry's IDs while all original visits
-remain exact. The trigger is unproven. Reviewable proposals and an operator decision are pending;
-preserve both recoveries and newer activity without overwriting the profile or weakening guards.
+remain exact. The trigger is unproven. Retain the current browser state and both verified
+recoveries; strict full equality remains false. No restoration or additional restart was applied,
+and future preservation guards remain unchanged.
 Windows needs its live/stored data-view mismatch resolved without changing either profile or
 bypassing its cleanup review blocker. Its read-only native-owner helper needs human execution
 under the destination's installed computer-use guidance; no terminal-UI workaround was attempted.

@@ -35,17 +35,18 @@ or successful continuation of its earlier failed native Codex session. The opera
 new four-item retirement after review initially blocked it; exactly two verified recoveries
 remain and actual free space increased by 1,553,993,728 bytes.
 
-Linux's new package is installed but is **not fully live-accepted**. Its first helper launch
+Linux `linux.a9682c3ec027` is installed and live-accepted **with explicit operator exceptions**.
+Its first helper launch
 omitted desktop-session settings and could not access existing protected credential storage.
 One guarded relaunch of the same installed build with the existing desktop environment restored
 credential access, the online relay and all 36 remote/five local chats, without changing secrets
 or grants. One unexpired cookie is absent. Recorded Back then same-URL/title/profile navigation
 replaced one active history entry's IDs; all 16,467 original visits and the saved old session
-entry remain intact, but the operation's trigger is unproven. Recovery proposals and a concrete
-operator decision are ready: retain the current browser state with explicit continuity exceptions,
-or hold final signoff for separate recovery review. A destination question is already pending;
-do not duplicate it. Keep both recoveries, do not claim strict full acceptance or apply a
-whole-profile overwrite, and do not weaken history/cookie guards.
+entry remain intact, but the operation's trigger is unproven. The operator directly accepted
+those two browser exceptions and requested moving forward. No restoration, additional restart
+or whole-profile overwrite followed. Strict full equality remains false; this acceptance does
+not weaken future history/cookie guards. Two verified recoveries remain. The helper window's
+observed available-space change is +454,135,808 bytes, not a standalone deletion-space claim.
 Windows'
 new candidate passes its package gates but remains uninstalled: the visible app has an empty
 pairing view while the stored profile retains five pairings, and its prior cleanup review blocker
