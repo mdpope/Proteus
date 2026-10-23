@@ -15,7 +15,7 @@ try{
  const rootId=await shell.locator('#tabs .tabitem.selected').getAttribute('data-tab-container');assert.ok(rootId);
  await shell.locator(`[data-tab="${rootId}"]`).dblclick();await shell.waitForTimeout(150);assert.equal((await command({action:'list'})).length,count+1,'Double-clicking an existing tab does not create another');
  await shell.locator(`[data-preview-workspace-expand="${fixture.studio.id}"]`).click();await shell.locator(`[data-preview-project="${fixture.project.id}"]`).first().click();
- count=(await command({action:'list'})).length;await blankDouble('#chat-subtabs .chat-subtab-list');await until(async()=>(await command({action:'list'})).length===count+1);
+ const beforeChildIds=new Set((await command({action:'list'})).map(tab=>tab.id));count=(await command({action:'list'})).length;await blankDouble('#chat-subtabs .chat-subtab-list');await until(async()=>(await command({action:'list'})).length===count+1);const createdNativeId=(await command({action:'list'})).find(tab=>!beforeChildIds.has(tab.id))?.id;assert.ok(createdNativeId);await until(()=>shell.evaluate(id=>document.querySelector('.chat-subtab.selected [data-chat-subtab]')?.getAttribute('data-chat-subtab')===id,createdNativeId));
  const id=await shell.locator('.chat-subtab.selected [data-chat-subtab]').getAttribute('data-chat-subtab');await command({action:'navigate',id,url:fixture.origin+'/review-controls'});
  await until(async()=>shell.locator('[data-browser-downloads]').isVisible());
  const order=await shell.locator('.browserbar').evaluate(bar=>{const list=[...bar.querySelectorAll('button')];return {downloads:list.indexOf(bar.querySelector('[data-browser-downloads]')),menu:list.indexOf(bar.querySelector('[data-browser-extensions]'))};});assert.ok(order.downloads<order.menu);

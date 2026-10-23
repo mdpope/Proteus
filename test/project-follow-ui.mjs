@@ -14,6 +14,7 @@ const nativeScript=(app,source)=>app.evaluate(({app},source)=>{const browser=pro
 const nativeReady=(app,url)=>until(()=>app.evaluate(({app},url)=>{const browser=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser(),wc=browser.tabs.get(browser.active)?.view?.webContents;return !!wc&&wc.getURL()===url&&!wc.isLoading();},url),'native document ready '+url);
 const nativeFollow=(app,y)=>app.evaluate(({app},y)=>{const browser=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser(),wc=browser.tabs.get(browser.active).view.webContents;wc.send('proteus:follow-scroll',{url:wc.getURL(),positions:[{path:'root',top:0,left:0,x:0,y}]});},y);
 async function delayedNativeScroll(owner,client){
+ await Promise.all([nativeReady(owner,origin+'/nested'),nativeReady(client,origin+'/nested')]);
  // Bounded synthetic traces distinguish a replaced address edit from an older
  // descriptor response winning a navigation race. They are saved only on failure.
  await owner.page.evaluate(()=>{const trace=window.followFixtureAddressTrace=[];for(const name of ['input','submit','keydown','focusin'])document.addEventListener(name,event=>{if(!event.target.closest?.('#browser-form'))return;trace.push({at:Date.now(),kind:name,key:event.key,value:document.querySelector('#browser-url')?.value,target:event.target.id,active:document.activeElement?.id,tab:followFixture.state.tab});while(trace.length>40)trace.shift();},true);});
