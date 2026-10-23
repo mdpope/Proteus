@@ -10145,3 +10145,8 @@ UI and replacement artifact acceptance are recorded separately; the earlier foll
 candidate is superseded for the next authorized update. The existing wait-for-active-chat
 hold remains in force.
 
+Acceptance: 1,056 Node tests pass (one platform skip), static checks pass, and the exact signed
+Mac package passes native-failure notice dismissal/retry/reload/restart/expiry and the combined
+400 ms follow/history UI checks. These do not claim installation or a functioning third-party
+password manager connection; Windows/Linux package acceptance remains separate.
+
