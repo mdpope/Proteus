@@ -9,7 +9,7 @@ try{
  const shell=await app.firstWindow();await shell.locator('#topbar-home').waitFor({timeout:60000});
  const command=value=>shell.evaluate(value=>window.desktop.browser(value),value);
  const url='http://127.0.0.1:'+fixture.address().port;
- const tab=await command({action:'create',url});await app.evaluate(({app},info)=>{const browser=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser();browser.actions.send({type:'select-tab',info});},tab);await shell.waitForTimeout(500);await command({action:'share',id:tab.id,shared:true});
+ const tab=await command({action:'create',url});await app.evaluate(({app},info)=>{const browser=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser();browser.actions.send({type:'select-tab',info});},tab);await shell.waitForTimeout(500);await shell.locator('#browser-share').click();
  const agent=value=>app.evaluate(({app},value)=>process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getBrowser().agent(value,'synthetic'),value);
  const beforeRead=(await command({action:'list'})).find(item=>item.id===tab.id).lastTouchedAt;
  const capture=await agent({action:'screenshot',tabId:tab.id});assert.equal(capture.content[1].type,'image');const metadata=JSON.parse(capture.content[0].text);assert.ok(metadata.width>100);assert.equal(metadata.coordinateSpace.startsWith('CSS'),true);assert.equal((await command({action:'list'})).find(item=>item.id===tab.id).lastTouchedAt,beforeRead,'A screenshot is an observation, not an interaction');
