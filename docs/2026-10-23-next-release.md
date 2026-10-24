@@ -1,3 +1,22 @@
+
+## Corrected signed local candidate — install pending
+
+Frozen build `b2da2f2797b5+src.f7b3a6a8559e` (source
+`f7b3a6a8559e1ade995e5c8de58c4ae344b8d757fc98ee4d4d41726a10358070`)
+passes exact-package integrity/startup/terminal/restart and native three-window fullscreen gates.
+Disposable signed update and compatible rollback from the actual installed baseline pass with a
+surviving managed terminal socket, preserved durable metadata/history/receipts and exactly one
+original rehearsal-chat continuation. Injected unknown-socket capture failure also relaunches the
+unchanged baseline and delivers its failure/checkpoint exactly once. No live provider is called
+by these fixtures; actual local installation and original Codex continuation remain unverified.
+All 366 runtime/build-input hashes match the corresponding source archive. Package hash is
+`3075adcad849248e55f1a4732b38e726829162bc7e9d94afff1debf426fa87a4`.
+The source companion SHA-256 is
+`9e77401757f13d893d314e3c44cd3e2bdb29c7e720a7d136c207cabe2fe01500`.
+Existing code/build inputs outside the updater are unchanged from the fullscreen candidate.
+The first failed installation journal is preserved; no live-data/session edits or blind retry
+occurred. The corrected local install uses a distinct supervised job after these tests.
+
 ## Local updater follow-up — recovery snapshot failure
 
 The authorized local installation stopped before application replacement: the cold snapshot
@@ -12,7 +31,7 @@ Other unsupported entries fail with their relative path. Pre-replacement failure
 verify and relaunch the unchanged baseline behind the recovery barrier, then use the same durable
 original-chat continuation to report the failure. Partial recovery remains separate from verified
 recovery generations; uncertain provider delivery is never replayed. Focused recovery tests and
-the full Node suite pass (1,116 passed, one skipped); signed-package acceptance remains pending.
+the full Node suite pass (1,116 passed, one skipped); signed-package acceptance is recorded below.
 The user authorized local installation; publishing, OS defaults and remote rollout remain held.
 
 # October 23 next-release implementation
