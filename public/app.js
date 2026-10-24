@@ -1198,7 +1198,7 @@ function renderBrowser() {
   bindBrowserAddressMenu($('#browser-url'),state.tab,{showDialog,toast});
   $('#browser-url').addEventListener('input',event=>{browserAddressDrafts.set(tab.id,event.target.value);});
   $('#browser-url').addEventListener('keydown',event=>{if(event.key==='Escape'){browserAddressDrafts.delete(tab.id);event.target.value=tab.info?.url||'';}});
-  const navigateBrowser=async raw=>{const finish=projectFollower.beginHuman();try{const info=await window.desktop.browser({action:'navigate',id:tab.id,url:browserTarget(raw)});if(browserAddressDrafts.get(tab.id)===raw)browserAddressDrafts.delete(tab.id);if(state.tabs.includes(tab)){tab.info=info;if(state.tab===tab.id)renderBrowser();}}catch(error){toast(error.message);}finally{finish();}};
+  const navigateBrowser=async raw=>{const pendingDraft=browserAddressDrafts.get(tab.id),finish=projectFollower.beginHuman();try{const info=await window.desktop.browser({action:'navigate',id:tab.id,url:browserTarget(raw)});if(browserAddressDrafts.get(tab.id)===pendingDraft)browserAddressDrafts.delete(tab.id);if(state.tabs.includes(tab)){tab.info=info;if(state.tab===tab.id)renderBrowser();}}catch(error){toast(error.message);}finally{finish();}};
   $('#browser-form').onsubmit=event=>{event.preventDefault();void navigateBrowser($('#browser-url').value);$('#browser-url').blur();};
   bindDesktopBrowserRecents($('#browser-url'),{api,navigate:navigateBrowser,toast,profileId:tab.info?.profileId||tab.profileId||'default'});
   for (const direction of ['back', 'forward']) {

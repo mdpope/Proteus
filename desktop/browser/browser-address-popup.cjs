@@ -10,11 +10,13 @@ function updateAddressPopup(parent,value,{valid,choose}){
  if(state&&state.token!==value.token)state.close();
  state=popups.get(parent);
  if(!state){
-  const popup=new BrowserWindow({parent,title:'Address suggestions',show:false,focusable:false,frame:false,resizable:false,minimizable:false,maximizable:false,skipTaskbar:true,backgroundColor:'#223129',webPreferences:{preload:path.join(__dirname,'browser-address-popup-preload.cjs'),sandbox:true,contextIsolation:true,nodeIntegration:false,partition:'proteus-address-popup'}});
+  // This auxiliary child must never acquire its own macOS fullscreen Space.
+  const popup=new BrowserWindow({parent,title:'Address suggestions',show:false,focusable:false,frame:false,resizable:false,minimizable:false,maximizable:false,fullscreenable:false,skipTaskbar:true,backgroundColor:'#223129',webPreferences:{preload:path.join(__dirname,'browser-address-popup-preload.cjs'),sandbox:true,contextIsolation:true,nodeIntegration:false,partition:'proteus-address-popup'}});
   state={token:value.token,popup,ready:false,valid,choose};popups.set(parent,state);
-  state.close=()=>{if(popups.get(parent)===state)popups.delete(parent);ipcMain.removeListener('proteus:address-choice',receive);parent.removeListener('blur',state.close);parent.removeListener('closed',state.close);parent.removeListener('move',state.close);parent.removeListener('resize',state.close);if(!popup.isDestroyed())popup.destroy();};
+  const dismissEvents=['blur','closed','move','resize','enter-full-screen','leave-full-screen'];
+  state.close=()=>{if(popups.get(parent)===state)popups.delete(parent);ipcMain.removeListener('proteus:address-choice',receive);for(const event of dismissEvents)parent.removeListener(event,state.close);if(!popup.isDestroyed())popup.destroy();};
   const receive=(event,index)=>{if(event.sender!==popup.webContents||event.senderFrame!==popup.webContents.mainFrame)return;const item=state.items[index];if(!item||!state.valid()){state.close();return;}state.close();state.choose(item.url);};
-  ipcMain.on('proteus:address-choice',receive);popup.once('closed',state.close);parent.on('blur',state.close);parent.on('closed',state.close);parent.on('move',state.close);parent.on('resize',state.close);
+  ipcMain.on('proteus:address-choice',receive);popup.once('closed',state.close);for(const event of dismissEvents)parent.on(event,state.close);
   popup.webContents.setWindowOpenHandler(()=>({action:'deny'}));popup.webContents.on('will-navigate',event=>event.preventDefault());
   popup.webContents.once('did-finish-load',()=>{if(popup.isDestroyed())return;state.ready=true;state.send();});
   state.send=()=>{if(!state.ready)return;if(!state.valid()){state.close();return;}popup.webContents.send('proteus:address-update',{items:state.items,selected:state.selected,colors:state.colors});popup.showInactive();};

@@ -16,7 +16,7 @@ native-messaging path. Both are fixed with regression coverage. The first packag
 the second package's startup timeout is retained as a failed result, superseded only by a rebuilt
 package passing the same gates. Test launch errors now retain their original exception.
 
-## Local Mac acceptance
+## Previous local Mac acceptance (before fullscreen follow-up)
 
 The frozen signed candidate is `9d942f46eb8c+src.04b3dc61c1cc`, with source fingerprint
 `04b3dc61c1ccf4d9b15cb4f4d8a89ce22d353932a220018a2d88ca76e51f712e`.
@@ -73,6 +73,7 @@ backup. Local diagnostic app/data copies were removed after their receipts were 
 | 23 | Common move menu | Shared desktop/web destination component and native picker. Single/bulk/chat/resource entry points start at current project. Typed chat moves use membership operations. Shared-menu/retry/history/source-authority UI and native grouping units pass. |
 | 24 | Associated chat home | Global chat lists, links, notifications, creation and saved views reuse the chat inside its current project/workspace. Main aliases are retired from the canonical registry without changing chat/child identities or captured access. Local/remote reconciliation units and real global-list/deep-link/restart/draft/child checks pass. Unassigned chats may remain top-level. |
 | 25 | Window routing and sync | Native menu callbacks re-enter their source window. Scope-specific passive tab events synchronize content while input is focused; local windows retain independent selection/reading state. Address drafts and filtered Tabs lists survive passive changes. A real two-window test passes all three link actions, ordered membership, selection/draft/filter retention and hidden no-load behavior. |
+| 26 | Fullscreen address popup | Suggestions cannot enter fullscreen and close across native fullscreen transitions. Selecting history clears the submitted address draft without clearing newer typing. Three-window native Mac regression passes in source; exact-package follow-up is pending. Previously invisible windows reappeared after the operator restarted; the original Space/visibility state remains unproven. |
 
 Validation includes the complete Node suite and syntax checks, 143 native units, two tablet UI
 checks, scratch Vite compilation and real desktop checks for link routing, attachment layout,

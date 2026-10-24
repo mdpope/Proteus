@@ -1,5 +1,6 @@
 ## Next release — October 23 feature queue (local package validation; rollout held)
 
+- Keep address-history suggestions out of macOS fullscreen and dismiss them across fullscreen transitions. Clear the submitted address draft after selecting a suggestion while preserving newer typing.
 - Exclude disposable validation output from desktop packages, migrate existing extension native-messaging patches to the organized service path, and retain the helper launcher used by installed releases.
 - Preserve Keep Screen Awake across restarts; make the ordinary loaded-browser budget configurable in Engine Room (default 6), and retain Persisted pages through hiding, restoration and memory eviction.
 - Move iOS browser-cache serialization/encryption/writes off the main actor and isolate chat scroll measurements from observable history state. Preserve the baseline navigation acknowledgment and deep workspace/project selection fixes.

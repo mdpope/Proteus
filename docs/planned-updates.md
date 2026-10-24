@@ -1,6 +1,6 @@
 ## October 23 — isolated next-release implementation
 
-The separate `codex/oct23-next-release` branch implements the 25-item intake, including the
+The separate `codex/oct23-next-release` branch implements the 26-item intake, including the
 terminal clipboard/agent-access additions, shared move menu, associated-chat routing and
 window/project synchronization fixes. See
 [implementation and validation](2026-10-23-next-release.md) and [source organization](code-organization.md).
@@ -11,6 +11,11 @@ scratch output, migrate an existing native-messaging patch and preserve the inst
 helper launcher. Real credential/provider continuity remains separate. Installation, OS defaults,
 publishing and remote rollout remain held. The earlier rollout records below describe the previous
 release and do not release this candidate's hold.
+
+The fullscreen follow-up merges newer documentation-only main `4a546b1`. Native address
+suggestions now reject fullscreen and dismiss through parent transitions. A three-window source
+regression passes; the prior signed package fails its fullscreen-capability assertion. The earlier
+signed package above predates this fix and is being replaced by a locally validated candidate.
 
 ## October 23 local / October 24 UTC — Windows and public download acceptance complete
 

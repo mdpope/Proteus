@@ -114,6 +114,14 @@ atomic versioned records retain 20 automatic snapshots and at most 50 named snap
 Shared content resolves against current owner state before restoration, preventing stale tab or
 URL resurrection. A previously lost window is not recovered retroactively by these new records.
 
+Address-history suggestions are non-fullscreen auxiliary windows. They dismiss on parent
+fullscreen entry/exit as well as move, resize, blur and close, retaining the parent and sibling
+window identities. A native macOS regression exercises URL entry with three windows, fullscreen,
+Escape, fullscreen exit and history selection. The operator reported previously invisible windows
+returning after restart; their pre-restart Space/visibility state was not captured, so this does
+not establish a separate window-loss cause. Choosing a suggestion clears only the draft that was
+present when navigation started; typing added during navigation remains intact.
+
 Validation: 821 runtime tests and static checks pass. Disposable real Electron windows
 verify integrated geometry, the unchanged overview icon/action, shared Team identity/URL/Close,
 named capture, close/restore and current-owner protection. The final exact package additionally verifies early Enter without shell reload, native window
