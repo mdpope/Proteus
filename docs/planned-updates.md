@@ -1,17 +1,23 @@
-## October 23 local / October 24 UTC — Windows live acceptance; publication remains gated
+## October 23 local / October 24 UTC — Windows and public download acceptance complete
 
-`windows.a02de6227c89` from runtime `490fd629b659` is installed through the normal native updater
-and live-verified, including exact installed payload/installer hashes and paused rehearsal state.
-Human-run recovery removal and narrowly bound registration/ownership repairs resolved the earlier
-installation blockers without an agent deletion retry or profile migration. Cached preservation
-is verified separately from native updater health; fresh pairing connectivity is not claimed.
+`windows.a02de6227c89` from runtime `490fd629b659` is installed/live-verified and published on
+WTB. Exact private source/transfer verification covers 334 runtime files and seven build inputs.
+Complete HTTPS installer/archive/manifest downloads and signature verified before catalog/page
+activation; all five public files and actual browser UI match.
 
-The exact private transfer, 334 runtime files, seven build inputs and five proposed public files
-verify. WTB server preflight and central entrypoint recovery are complete. Automatic approval review
-rejected immutable production publication for lack of explicit authorization for that exact action;
-no public activation occurred. Await exact approval, then verify full public binary hashes/signature
-before catalog/page activation and actual installed-client download/preparation. Do not reinstall,
-rebuild, retry the rejected command through another route, or implement held next-release features.
+The installed Windows client's official modules fully downloaded the 393,773,885-byte archive,
+verified embedded trust and cached installer, safely extracted it and passed isolated startup with
+zero page errors. Native owner UI separately discovers the current release. This is external
+installed-module consumer preparation, not a new native-owner job or reinstall. The installed
+process/hash remain unchanged; no credentials/cookies, redirects, restart or settings changes.
+Synthetic output is retained under the no-deletion scope, without a live-data backup.
+
+Direct human actions resolved earlier Windows installation blockers without profile migration.
+Exact current approvals resolved the historical production-publication and remote-message review
+blocks; neither was bypassed. Existing site/symlinks/configuration and protected cached Windows
+state retain their separately documented scope. Final server log window has zero new error bytes.
+All authorized destinations and public checks are complete. Stop this rollout monitor; held
+next-release work remains excluded, with no source push, hosted build or runtime rebuild.
 
 ## October 23 — two-backup policy implemented; website live acceptance complete
 
@@ -59,7 +65,7 @@ receipts stay in the owning website project. The MariaDB system-table log flood 
 all messages in the bounded classification window matched that existing category. The operator
 completed the Windows read-only native-owner inspection. The earlier blocked installation state
 is superseded by the accepted Windows update above. Native/cached homes remain distinct; the
-separate public publication gate remains. Keep monitoring active and quiet without repeating
+public publication is now accepted above. Avoid repeating
 completed Mac/Linux/mobile/web installs, captures or cleanup.
 
 ## October 23 — local URL-follow fix and web/native parity; desktop rollout resumed

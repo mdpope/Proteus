@@ -2,20 +2,24 @@
 
 ## Current correction — October 23 local / October 24 UTC
 
-`0.2.29 / windows.a02de6227c89`, runtime `490fd629b659`, is installed and live-verified through
-the normal native updater and registered installer. Exact installed payload and installer hashes
-match the tested package. Native updater health and cached-profile preservation are separate:
-the distinct homes were not migrated or re-paired. The operator manually retired the two old
-cached recoveries and ran the bounded native registration/metadata repairs; no agent deletion
-retry or review bypass occurred. The paused rehearsal remains inactive. Updates shows complete
-with a stale waiting-description line; no supervisor remains active.
+`0.2.29 / windows.a02de6227c89`, runtime `490fd629b659`, is installed/live-verified and public
+at the existing WTB page/feed. Normal native update and exact installed hashes pass. Distinct
+native/cached data homes remain preserved, with cached protection evidence separate from native
+health and fresh pairing connectivity. Human-run bounded repairs resolved earlier installation
+blockers without an agent deletion retry, profile migration or re-pairing.
 
-The new public release is prepared and hash/signature verified privately, including all 334 runtime
-files and seven build inputs against its source companion. Server preflight and central two-file
-entrypoint recovery pass. Automatic approval review rejected publishing the immutable files for
-lack of explicit authorization for that exact privileged production action. The public page/feed
-therefore still serves the prior release; new public-download/consumer acceptance is pending.
-Await exact approval without rerouting the rejected action, rebuilding or reinstalling.
+All 334 runtime files, seven build inputs and private transfer hashes match. The full public
+installer, 393,773,885-byte archive and signed manifest verified before atomic catalog/page
+activation. All five public hashes, manifest signature, HTTPS behavior and actual page/build/links
+pass. Historical publication/message review blocks were resolved by exact current human approval.
+
+The actual installed package's official feed/trust/extraction modules passed a full public download,
+safe extraction, cached-installer identity and isolated startup with zero page errors. Native owner
+UI separately discovers the new release. The full preparation ran in an external installed-module
+harness, not a new native-owner update job; the installed process and full hash are unchanged.
+No redundant reinstall/restart, account credentials/cookies, redirects, settings change or live
+backup. Test output is retained under the explicit no-deletion scope. The stale waiting description
+under complete update status remains a known UI limitation. Final site preservation/log audit passes.
 
 ## Earlier public-channel acceptance
 

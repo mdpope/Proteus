@@ -1,8 +1,9 @@
-## October 23 local / October 24 UTC — Windows correction accepted; publication pending
+## October 23 local / October 24 UTC — Windows and public release accepted
 
-- Record the normal native update and live acceptance of `windows.a02de6227c89` from `490fd629b659`, with installed hashes verified and distinct native/cached profiles preserved.
-- Record human-run recovery/registration repairs without agent deletion retries or profile migration; retain the stale completed-update description as a UI limitation.
-- Prepare and verify the exact WTB public assets/source and recovery checkpoint; public publication remains pending exact approval after automatic review rejected the privileged immutable-publication step. No rebuild or reinstall.
+- Accept normal native installation/live verification of `windows.a02de6227c89` from `490fd629b659`, preserving distinct native/cached homes and qualified state evidence.
+- Publish the exact installer, update archive and signed manifest on WTB; verify full HTTPS hashes/signature before atomic catalog/page activation, then all five live files and rendered UI.
+- Verify the actual installed Windows feed client downloads all 393,773,885 archive bytes, safely extracts the exact package/installer and passes isolated startup; separately verify native owner catalog discovery without reinstall/restart.
+- Complete server content/symlink/configuration preservation and bounded log checks. Resolve historical review blocks through exact current human approvals and stop the completed rollout monitor. No runtime rebuild or source push.
 
 ## Unreleased — October 23 local corrections; desktop rollout resumed
 

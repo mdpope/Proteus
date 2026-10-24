@@ -1,27 +1,37 @@
-## October 23 local / October 24 UTC — Windows installed; public download publication awaits approval
+## October 23 local / October 24 UTC — Windows installed and public download checks complete
 
-Windows now runs `0.2.29 / windows.a02de6227c89` from frozen runtime `490fd629b659`.
-The normal native updater imported the exact signed offline release, passed preparation and its
-idle barrier, ran the registered installer and relaunched the installed owner. Actual Updates UI
-reports `complete · updated`; independent installed-payload and installer hashes match. The
-rehearsal remains paused with no enabled schedule, runs, waiting work or chats. The stale waiting
-description below complete status is retained as a UI limitation, not an active supervisor.
+Windows runs `0.2.29 / windows.a02de6227c89` from frozen runtime `490fd629b659` through the
+normal native updater and registered installer, with exact installed payload/installer and actual
+UI accepted. Its paused rehearsal remains inactive. The stale waiting description under complete
+status remains a UI limitation; no update supervisor is still running.
 
-The operator manually removed the two old cached recoveries and ran the narrowly bound native
+The operator manually removed the old cached recoveries and ran the narrowly bound native
 registration/metadata ownership repairs. No agent deletion retry, approval bypass, profile
 migration or re-pairing occurred. Native and cached homes remain distinct. Cached protected files,
 five pairings/grants and completed receipts match their baseline; this does not establish full
-native-profile byte equality or fresh cross-device connectivity. No reinstall is needed.
+native-profile byte equality or fresh cross-device connectivity.
 
-The exact six-asset private transfer is verified, including all 334 runtime files and seven build
-inputs against the source companion. The five public files are prepared in the owning WTB project.
-Existing full recovery was reverified; only the two mutable entrypoints received a new supplemental
-checkpoint. Server preflight verifies 1,127 original files, all current regular files and thirteen
-exact existing symlinks. Automatic approval review rejected the first immutable publication command
-because it lacked explicit authorization for that exact privileged production mutation. No immutable
-files, stable catalog or public page were published by that command. Await exact publication approval;
-do not retry through another route. Public-feed consumer acceptance remains pending. Keep monitoring
-active and quiet while waiting; all other accepted destinations need no repeated work.
+The exact release is now live at [WTB Windows downloads](https://downloads.proteus.example/downloads/proteus/windows/).
+All six private transfer hashes, 334 runtime files and seven build inputs match. Full HTTPS
+installer/archive/manifest hashes and the embedded publisher signature verified before atomic
+catalog/page activation; all five live files and actual browser build/links match. Unsigned Windows
+installer Authenticode remains the operator's existing choice; manifest trust is independent.
+
+The actual installed Windows client modules downloaded all 393,773,885 public archive bytes,
+verified signature/hash and cached installer, safely extracted the package and passed isolated
+startup/identity with zero page errors. Native owner UI separately discovers the live release.
+No new native-owner preparation job, redundant reinstall or restart was performed; the installed
+process and full installation hash remain unchanged. No account credentials/cookies were sent,
+and requests rejected redirects. The retained synthetic fixture is not a live-data backup.
+
+Final server audit preserves all 1,127 original files, prior immutable files, thirteen exact
+symlinks and Apache/private route configuration, with zero new Apache error bytes. Existing full
+recovery was reused; the supplemental two-entrypoint checkpoint pin is released and rotation
+removed nothing. The initial publication and remote-message review rejections remain recorded;
+both were resolved by exact current human approvals through the same routes. Private receipts
+remain in the owning website project. No rebuild, push, GitHub Actions, credentials or trust changes.
+All authorized rollout destinations and public-download acceptance are complete; stop this rollout
+monitor. Do not repeat accepted installations, captures, cleanup or tests without a new correction.
 
 ## October 23 — two-backup policy and website rollout accepted
 
@@ -69,7 +79,7 @@ receipts stay in the owning website project. The MariaDB system-table log flood 
 all messages in the bounded classification window matched that existing category. The operator
 completed the Windows read-only native-owner inspection. Its then-blocked installation state is
 superseded by the accepted Windows update above; distinct native/cached homes remain preserved.
-Keep monitoring active for the separately blocked public download publication. Do not repeat
+Public download publication is now accepted as recorded above. Do not repeat
 completed Mac/Linux/mobile/web installs, captures or cleanup.
 
 ## October 23 — desktop rollout resumed; local URL correction and web/mobile work
