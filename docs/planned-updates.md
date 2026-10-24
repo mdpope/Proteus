@@ -1,6 +1,6 @@
 ## Additional queued corrections — implementation and build held
 
-The operator queued these three follow-ups after local installation. Record observations and
+The operator queued these follow-ups after local installation. Record observations and
 future acceptance criteria only; do not implement, build, install or publish them yet.
 
 ### 29. First tab-move attempt reports missing placement acknowledgement
@@ -39,6 +39,14 @@ do not create a replacement chat, rerun the schedule, duplicate effects or move 
 Reflect the destination's acknowledgement/state and retain normal remote authorization checks.
 The reported example is one desktop continuing a scheduled chat executing on another computer;
 no remote run was continued as part of this queue-only request.
+
+### 32. Move notification banners to the bottom of the app
+
+Notifications currently appear at the top and obstruct tab navigation. Move transient in-app
+notification/toast banners to the bottom of the application viewport. Keep their messages,
+actions, dismissal and accessibility behavior, and allow for bottom controls and safe areas so
+notifications remain usable without covering tab navigation. This is queued only under the
+existing implementation/build hold.
 
 ## Local Mac installation and automatic continuation accepted
 
