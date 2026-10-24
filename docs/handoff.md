@@ -1,3 +1,39 @@
+## Local Mac installation and automatic continuation accepted
+
+The authorized local Mac now runs signed `b2da2f2797b5+src.f7b3a6a8559e`. The installed
+complete-bundle hash and Apple signer match the frozen tested candidate. The corrected supervised
+job completed with outcome `updated`, verified renderer/owner health, and delivered one automatic
+continuation into the original live Codex session. Its provider session and native transcript
+location match the cold pre-update record. No installation retry or external action was replayed
+on continuation. Publishing, OS defaults and other-device rollout remain held.
+
+Independent post-install checks verify all 6,346 cold recovery entries, the exact previous app,
+all 37 earlier chat event prefixes (9,358 events), all 138 logical tabs and their histories/receipts,
+and drafts across four saved session files. All three registered window records match exactly;
+fresh native observations show three visible rendered windows, including the original chat.
+Fresh browser view IDs differ while their logical content IDs, active tabs and selected children
+match. The existing associated-chat parent normalization is preserved.
+
+Permissions, browser profiles/access, connection configuration and window layouts match byte for
+byte. Settings add the Keep Screen Awake preference; project source-library changes are scan
+metadata only, and logical tab changes are title/last-touch refreshes only. All effective run
+configurations match. Raw context hashes matched at the restart barrier; after actual Codex
+resumption, 36 still match and the updating chat differs only in its normal context-supplied
+timestamp. The strict post-resume mismatch is retained with this qualification, not described
+as byte equality. One extra Proteus executable is the provider document MCP, not another owner.
+
+Exactly two verified full Electron recoveries remain: the latest prior recovery and this install
+recovery. Their receipts verify; the eligible oldest payload was retired, and completed candidate
+staging retired normally. Native/mobile recovery sets are separate. Actual available space grew
+414,527,488 bytes between preflight and final audit (about 395 MiB); concurrent activity and APFS
+sharing prevent attributing that whole change to one deletion. The helper interval alone recorded
+-1,515,069,440 bytes before staging retirement; candidate retirement measured +690,540,544 bytes.
+Private immutable acceptance, preservation, source and original failure receipts remain locally.
+Other providers, unrelated external workflows and physical iOS behavior are separate acceptance.
+
+A minor status-display follow-up remains queued: a completed update card retains its old idle
+blocker. The actual job is complete and its helper exited; that stale message is not a live block.
+
 ## October 23 local / October 24 UTC — Windows installed and public download checks complete
 
 Windows runs `0.2.29 / windows.a02de6227c89` from frozen runtime `490fd629b659` through the
