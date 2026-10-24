@@ -4,9 +4,13 @@ The separate `codex/oct23-next-release` branch implements the 25-item intake, in
 terminal clipboard/agent-access additions, shared move menu, associated-chat routing and
 window/project synchronization fixes. See
 [implementation and validation](2026-10-23-next-release.md) and [source organization](code-organization.md).
-This candidate is based on the ongoing update chat's latest committed source; its release
-packaging and disposable local tests are now authorized; installation, OS defaults, publishing and remote rollout remain held. The earlier rollout
-records below describe the previous release and do not release this candidate's hold.
+The branch merges current main `15327ab`. Signed local candidate
+`9d942f46eb8c+src.04b3dc61c1cc` passes 1,113 Node tests (one skipped), source checks, twelve
+packaged UI suites and disposable signed update/rollback rehearsals. Packaging fixes exclude
+scratch output, migrate an existing native-messaging patch and preserve the installed-release
+helper launcher. Real credential/provider continuity remains separate. Installation, OS defaults,
+publishing and remote rollout remain held. The earlier rollout records below describe the previous
+release and do not release this candidate's hold.
 
 ## October 23 — two-backup policy implemented; website live acceptance complete
 

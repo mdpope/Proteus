@@ -16,6 +16,36 @@ native-messaging path. Both are fixed with regression coverage. The first packag
 the second package's startup timeout is retained as a failed result, superseded only by a rebuilt
 package passing the same gates. Test launch errors now retain their original exception.
 
+## Local Mac acceptance
+
+The frozen signed candidate is `9d942f46eb8c+src.04b3dc61c1cc`, with source fingerprint
+`04b3dc61c1ccf4d9b15cb4f4d8a89ce22d353932a220018a2d88ca76e51f712e`.
+It retains the installed `org.proteusapp.proteus.desktop` / `TEAMID0000` signing identity. Its
+complete package-tree SHA-256 is `f2cbb12bdb213a904e077408eedfb285354104449ae11edfa35b62658218fb6e`.
+The bundle is `dist/Proteus-darwin-arm64/Proteus.app`; corresponding source is
+`dist/combined-update-source/Proteus-0.2.29-source.tar.gz`. All 366 runtime/build-input hashes
+match the source companion. Later test/documentation commits leave the packaged runtime frozen.
+
+The final Node suite has **1,113 passes, one skip, zero failures**; recursive source checks pass.
+All twelve exact-package UI suites pass: package structure/startup/rehearsal/terminal/restart;
+Mac signing/vendor/model-catalog checks; two-window link routing and synchronization; associated
+chat placement/restart; terminal paste/access; shared move menu; filtering/new-chat selection;
+link picker/rules/persisted residency; attachments; deep workspace return; background control;
+and visual input plus the Playwright/DevTools MCP backends and inspector handoff.
+
+Actual signed update and forced-health-failure rollback rehearsals both pass from baseline
+`490fd629b659+src.615fe38d6371`. They use disposable installation/data paths, preserve events,
+configuration, full browser history and replay receipts, and resume the same rehearsal chat once.
+The installed-release helper path remains a stable launcher into `desktop/updates/`.
+An initial rehearsal exposed a test-isolation gap: relaunch dropped mock Keychain and blocked
+on credential-store setup. That failed result is retained. The test-only helper launch callback
+now keeps mock Keychain on across relaunch/rollback; packaged helper logic and signed runtime
+remain unchanged. This certifies synthetic recovery, not real credential/provider continuity.
+
+No installed application, OS browser default, physical device, schedule or live chat was changed.
+No release was uploaded or remote coordinator dispatched. Build-only validation made no live-data
+backup. Local diagnostic app/data copies were removed after their receipts were retained.
+
 | # | Item | Implementation and verification |
 | --- | --- | --- |
 | 1 | iOS scrolling | Cache serialization/encryption/atomic writes use a serial utility queue; scroll measurements no longer publish whole-history state. Native units/simulator scrolling pass. Physical frame-rate profiling remains acceptance. |
@@ -47,7 +77,7 @@ package passing the same gates. Test launch errors now retain their original exc
 Validation includes the complete Node suite and syntax checks, 143 native units, two tablet UI
 checks, scratch Vite compilation and real desktop checks for link routing, attachment layout,
 workspace restart, tab filtering/new-chat selection, residency, terminal clipboard/access and moves.
-The complete Node suite passes: 1,111 passed, one skipped, zero failures. Recursive syntax checks and Vite compilation also pass. Tablet fixtures initially failed on the
+The final complete Node suite passes: 1,113 passed, one skipped, zero failures. Recursive syntax checks and earlier Vite compilation also pass. Tablet fixtures initially failed on the
 phone because they require tablet navigation; they now skip that pairing and both pass on iPad.
 The broader interrupted UI run remains an incomplete result, not a suite pass.
 
@@ -55,4 +85,4 @@ Fixtures use `/private/tmp`; preview guards remain strict. No installed app, rea
 credentials, chat state or schedule was edited. SafariSelector-derived matcher/picker behavior
 retains GPL notices in `docs/licenses/` and desktop third-party notices. `/team` does not match
 `/teammate`. No duplicate Apple request or remote update was performed. Required live-device,
-provider, OS-registration and update acceptance is not implied by local tests.
+provider, OS-registration and live update acceptance is not implied by local tests.
