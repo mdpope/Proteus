@@ -1,3 +1,14 @@
+## October 24 — MTPLX pilot authorized for isolated Design Preview
+
+The operator requested local MTPLX chats with the same selected context and phased helpers.
+Phase one implements a loopback adapter in Design Preview only, selected text/agent context,
+persistent delivered-message replay, streaming, Stop, measured usage and static SVG previews.
+Read [the pilot contract](mtplx-pilot.md) for capabilities, launch and live acceptance.
+Further phases remain proposed: consented image input; an owner-mediated tool/MCP loop using
+existing approvals; context compaction and richer artifacts; production/web/mobile rollout.
+Do not treat the local text model as an image-generation service or enable tool execution
+by interpreting code in its responses.
+
 ## Additional queued corrections — implementation and build held
 
 The operator queued these follow-ups after local installation. Record observations and
@@ -68,6 +79,16 @@ the default working-data root, despite this being provider-owned working state. 
 reads and writes under that root work in new and resumed Copilot chats without folder prompts;
 the correct custom/host-specific root is reflected; other folders retain their existing access.
 Queued only: no live approval, folder grant, implementation or build was performed.
+
+### 34. Preview chat and Markdown link destinations at the bottom
+
+Hovering a link in a chat or rendered Markdown file should display its destination URL or path
+at the bottom of the application window, matching the existing browser link-status preview.
+Show the resolved target for relative Markdown/file links, keep the preview unobtrusive, and
+clear it when the pointer leaves the link or the view changes. Reuse the browser's presentation
+and positioning where practical so link previews behave consistently across these surfaces.
+Previewing a destination must not open or fetch it. Queued only under the implementation/build
+hold; acceptance should cover web URLs, file paths and relative Markdown links in both surfaces.
 
 ## Local Mac installation and automatic continuation accepted
 
