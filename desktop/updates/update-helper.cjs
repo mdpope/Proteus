@@ -153,5 +153,7 @@ async function supervise(file,{inspect=inspectPackage,request=ownerRequest,launc
  finally{fs.rmSync(lock,{force:true});}
 }
 
-module.exports={smoke,supervise,installWindows,retire,retainGeneration,environment,ownerRequest,verifyLive};
-if(require.main===module){const [action,file]=process.argv.slice(2);if(!['arm','supervise'].includes(action)||!path.isAbsolute(file||''))throw Error('Use the bound update journal.');void (async()=>{if(action==='arm'){const job=readJob(file);if(job.phase!=='waiting-for-idle')throw Error('This update is not waiting for handoff.');writeJob(file,{helperPid:process.pid});process.send?.({ready:job.id});process.disconnect?.();await until(()=>{const phase=readJob(file).phase;if(['prepared','cancelled'].includes(phase))throw Error('The handoff was cancelled before shutdown.');return phase==='stopping';},60000,'host handoff');}return supervise(file);})().catch(error=>{console.error(error.message);process.exitCode=1;});}
+module.exports={smoke,supervise,installWindows,retire,retainGeneration,environment,ownerRequest,verifyLive,runCLI};
+function runCLI(args=process.argv.slice(2)){const [action,file]=args;if(!['arm','supervise'].includes(action)||!path.isAbsolute(file||''))throw Error('Use the bound update journal.');void (async()=>{if(action==='arm'){const job=readJob(file);if(job.phase!=='waiting-for-idle')throw Error('This update is not waiting for handoff.');writeJob(file,{helperPid:process.pid});process.send?.({ready:job.id});process.disconnect?.();await until(()=>{const phase=readJob(file).phase;if(['prepared','cancelled'].includes(phase))throw Error('The handoff was cancelled before shutdown.');return phase==='stopping';},60000,'host handoff');}return supervise(file);})().catch(error=>{console.error(error.message);process.exitCode=1;});}
+
+if(require.main===module)runCLI();

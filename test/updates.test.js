@@ -35,6 +35,26 @@ function fixture(t){
 async function prepare(f){return (await f.controller.handle({action:'prepare',candidate:f.candidate,sourceFingerprint:'b'.repeat(64)},f.run.id)).job;}
 async function handoff(f,job){return f.controller.handle({action:'handoff',id:job.id,expectedRevision:job.revision,checkpoint:'Completed synthetic checks. Verify the restored app and remaining work.'},f.run.id);}
 
+test('installed baseline helper path still arms the organized helper and acknowledges readiness',async t=>{
+ const f=fixture(t);await prepare(f);const job=readJob(f.controller.file);
+ writeJob(job.file,{phase:'waiting-for-idle'});
+ const child=spawn(process.execPath,[new URL('../desktop/update-helper.cjs',import.meta.url).pathname,'arm',job.file],{stdio:['ignore','ignore','pipe','ipc']});
+ t.after(()=>{try{child.kill('SIGKILL');}catch{}});
+ let errors='';child.stderr.on('data',chunk=>errors+=chunk);
+ const exited=new Promise(resolve=>child.once('exit',resolve));
+ const ready=await new Promise((resolve,reject)=>{
+  const timer=setTimeout(()=>reject(Error('Legacy helper launcher did not acknowledge readiness: '+errors)),4000);
+  child.once('message',message=>{clearTimeout(timer);resolve(message);});
+  child.once('error',error=>{clearTimeout(timer);reject(error);});
+  child.once('exit',code=>{clearTimeout(timer);reject(Error('Legacy helper exited early: '+code+' '+errors));});
+ });
+ assert.equal(ready.ready,job.id);
+ assert.equal(readJob(job.file).helperPid,child.pid);
+ writeJob(job.file,{phase:'cancelled'});
+ const code=await Promise.race([exited,new Promise(resolve=>{const timer=setTimeout(()=>resolve('timeout'),4000);timer.unref();})]);
+ assert.equal(code,1,errors);assert.match(errors,/cancelled before shutdown/);
+});
+
 test('Engine Room can update without a model chat and still waits for unrelated active work',async t=>{
  const f=fixture(t),job=(await f.controller.handle({action:'prepare',candidate:f.candidate,sourceFingerprint:'b'.repeat(64)})).job;
  await f.controller.handle({action:'handoff',id:job.id,expectedRevision:job.revision});assert.equal(f.controller.job().runId,null);
