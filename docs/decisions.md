@@ -1,3 +1,16 @@
+## October 23 local / October 24 UTC — installation acceptance does not bypass publication review
+
+Accept the exact Windows correction after the native updater, installed identity and actual UI
+verify. Preserve native and packaged-context data homes separately; human-run bounded repairs do
+not authorize profile migration, re-pairing or agent retries of previously rejected deletion.
+Cached preservation evidence is not native full-profile equality or cross-device acceptance.
+
+Treat public static publication as its own transition: verify the private artifact/source, reuse
+valid full recovery, checkpoint the two entrypoints, preserve every current file and exact symlink,
+then verify immutable HTTPS bytes/signature before activating catalog/page. If automatic approval
+review rejects that production step, retain preparation/receipts and request exact authorization;
+do not reroute the command or equate installed Windows acceptance with public availability.
+
 ## October 23 — acknowledge navigation before the next batch
 
 A successful navigation response and the last response of a multi-batch reconciliation are

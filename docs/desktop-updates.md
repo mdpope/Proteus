@@ -1,5 +1,13 @@
 # Desktop updates through a destination Codex chat
 
+The October 23 correction is now installed and live-verified on the Windows destination as
+`windows.a02de6227c89`, alongside the accepted Mac/Linux/mobile/web rollout. Its prior native
+registration/recovery blockers were resolved by direct human actions; no agent review bypass or
+profile migration occurred. The separate WTB public-download publication is prepared but was
+rejected by automatic approval review for lack of exact production authorization. Keep that
+publication pending exact approval and verify public consumption separately; do not reinstall
+accepted destinations. See [Windows status](windows-app.md).
+
 Use this workflow when the operator authorizes updating Proteus on another computer. The
 October 12 performance rollout verified it on both desktop installations; see the
 [release evidence](2026-10-12-remote-performance.md). The local computer uses the same build,

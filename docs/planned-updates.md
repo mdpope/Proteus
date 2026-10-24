@@ -1,3 +1,18 @@
+## October 23 local / October 24 UTC — Windows live acceptance; publication remains gated
+
+`windows.a02de6227c89` from runtime `490fd629b659` is installed through the normal native updater
+and live-verified, including exact installed payload/installer hashes and paused rehearsal state.
+Human-run recovery removal and narrowly bound registration/ownership repairs resolved the earlier
+installation blockers without an agent deletion retry or profile migration. Cached preservation
+is verified separately from native updater health; fresh pairing connectivity is not claimed.
+
+The exact private transfer, 334 runtime files, seven build inputs and five proposed public files
+verify. WTB server preflight and central entrypoint recovery are complete. Automatic approval review
+rejected immutable production publication for lack of explicit authorization for that exact action;
+no public activation occurred. Await exact approval, then verify full public binary hashes/signature
+before catalog/page activation and actual installed-client download/preparation. Do not reinstall,
+rebuild, retry the rejected command through another route, or implement held next-release features.
+
 ## October 23 — two-backup policy implemented; website live acceptance complete
 
 Keep at most two complete recovery generations in each applicable local/server location: the
@@ -42,13 +57,10 @@ project structure checks pass. Runtime history/retry/access guards remain strict
 remote source push, credential change or general root cleanup interface was added. Private exact
 receipts stay in the owning website project. The MariaDB system-table log flood is unresolved;
 all messages in the bounded classification window matched that existing category. The operator
-completed the Windows read-only native-owner inspection. It confirms that the native and
-Codex-packaged contexts see distinct data homes and host identities; the native owner reports
-an installation-registration query failure although control-context registration reads succeed.
-The supported update still needs that discrepancy and its recovery inventory resolved, and the
-prior cleanup review gate remains. No Windows installation or live acceptance is claimed. Keep
-monitoring active and quiet; do not repeat completed Mac/Linux/mobile/web installs, captures or
-cleanup.
+completed the Windows read-only native-owner inspection. The earlier blocked installation state
+is superseded by the accepted Windows update above. Native/cached homes remain distinct; the
+separate public publication gate remains. Keep monitoring active and quiet without repeating
+completed Mac/Linux/mobile/web installs, captures or cleanup.
 
 ## October 23 — local URL-follow fix and web/native parity; desktop rollout resumed
 

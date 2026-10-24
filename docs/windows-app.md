@@ -1,5 +1,24 @@
 # Windows desktop
 
+## Current correction — October 23 local / October 24 UTC
+
+`0.2.29 / windows.a02de6227c89`, runtime `490fd629b659`, is installed and live-verified through
+the normal native updater and registered installer. Exact installed payload and installer hashes
+match the tested package. Native updater health and cached-profile preservation are separate:
+the distinct homes were not migrated or re-paired. The operator manually retired the two old
+cached recoveries and ran the bounded native registration/metadata repairs; no agent deletion
+retry or review bypass occurred. The paused rehearsal remains inactive. Updates shows complete
+with a stale waiting-description line; no supervisor remains active.
+
+The new public release is prepared and hash/signature verified privately, including all 334 runtime
+files and seven build inputs against its source companion. Server preflight and central two-file
+entrypoint recovery pass. Automatic approval review rejected publishing the immutable files for
+lack of explicit authorization for that exact privileged production action. The public page/feed
+therefore still serves the prior release; new public-download/consumer acceptance is pending.
+Await exact approval without rerouting the rejected action, rebuilding or reinstalling.
+
+## Earlier public-channel acceptance
+
 The Windows channel is live at https://downloads.proteus.example/downloads/proteus/windows/. All five public file
 hashes and the manifest signature verify. Actual installed-client acceptance downloads the entire
 393,649,640-byte final archive from the real WTB endpoint, verifies/extracts the package and cached

@@ -1,3 +1,9 @@
+## October 23 local / October 24 UTC — Windows correction accepted; publication pending
+
+- Record the normal native update and live acceptance of `windows.a02de6227c89` from `490fd629b659`, with installed hashes verified and distinct native/cached profiles preserved.
+- Record human-run recovery/registration repairs without agent deletion retries or profile migration; retain the stale completed-update description as a UI limitation.
+- Prepare and verify the exact WTB public assets/source and recovery checkpoint; public publication remains pending exact approval after automatic review rejected the privileged immutable-publication step. No rebuild or reinstall.
+
 ## Unreleased — October 23 local corrections; desktop rollout resumed
 
 - Document the operator's two-backup ceiling: latest verified plus one previous in each applicable local/server location; retire obsolete website release/migration payloads after verifying the retained pair. No runtime rebuild.
@@ -1518,4 +1524,3 @@ Known unfinished work and distribution limitations are tracked in `docs/planned-
 ## Unreleased — quieter extension connection notices
 
 - Show a native-helper connection warning, including iCloud Passwords, only once per extension per app launch across browser profiles and windows. Retries continue without repeating or reviving the banner; restarting Proteus permits one new warning.
-

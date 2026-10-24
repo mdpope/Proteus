@@ -1,3 +1,28 @@
+## October 23 local / October 24 UTC — Windows installed; public download publication awaits approval
+
+Windows now runs `0.2.29 / windows.a02de6227c89` from frozen runtime `490fd629b659`.
+The normal native updater imported the exact signed offline release, passed preparation and its
+idle barrier, ran the registered installer and relaunched the installed owner. Actual Updates UI
+reports `complete · updated`; independent installed-payload and installer hashes match. The
+rehearsal remains paused with no enabled schedule, runs, waiting work or chats. The stale waiting
+description below complete status is retained as a UI limitation, not an active supervisor.
+
+The operator manually removed the two old cached recoveries and ran the narrowly bound native
+registration/metadata ownership repairs. No agent deletion retry, approval bypass, profile
+migration or re-pairing occurred. Native and cached homes remain distinct. Cached protected files,
+five pairings/grants and completed receipts match their baseline; this does not establish full
+native-profile byte equality or fresh cross-device connectivity. No reinstall is needed.
+
+The exact six-asset private transfer is verified, including all 334 runtime files and seven build
+inputs against the source companion. The five public files are prepared in the owning WTB project.
+Existing full recovery was reverified; only the two mutable entrypoints received a new supplemental
+checkpoint. Server preflight verifies 1,127 original files, all current regular files and thirteen
+exact existing symlinks. Automatic approval review rejected the first immutable publication command
+because it lacked explicit authorization for that exact privileged production mutation. No immutable
+files, stable catalog or public page were published by that command. Await exact publication approval;
+do not retry through another route. Public-feed consumer acceptance remains pending. Keep monitoring
+active and quiet while waiting; all other accepted destinations need no repeated work.
+
 ## October 23 — two-backup policy and website rollout accepted
 
 Keep at most two complete recovery generations in each applicable local/server location: the
@@ -42,13 +67,10 @@ project structure checks pass. Runtime history/retry/access guards remain strict
 remote source push, credential change or general root cleanup interface was added. Private exact
 receipts stay in the owning website project. The MariaDB system-table log flood is unresolved;
 all messages in the bounded classification window matched that existing category. The operator
-completed the Windows read-only native-owner inspection. It confirms that the native and
-Codex-packaged contexts see distinct data homes and host identities; the native owner reports
-an installation-registration query failure although control-context registration reads succeed.
-The supported update still needs that discrepancy and its recovery inventory resolved, and the
-prior cleanup review gate remains. No Windows installation or live acceptance is claimed. Keep
-monitoring active and quiet; do not repeat completed Mac/Linux/mobile/web installs, captures or
-cleanup.
+completed the Windows read-only native-owner inspection. Its then-blocked installation state is
+superseded by the accepted Windows update above; distinct native/cached homes remain preserved.
+Keep monitoring active for the separately blocked public download publication. Do not repeat
+completed Mac/Linux/mobile/web installs, captures or cleanup.
 
 ## October 23 — desktop rollout resumed; local URL correction and web/mobile work
 
