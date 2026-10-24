@@ -73,7 +73,7 @@ async function resume(job,outcome){
  }
 }
 async function supervise(file,{inspect=inspectPackage,request=ownerRequest,launchApp=launch,verify=verifyLive,resumeChat=resume}={}){
- let job=readJob(file);if(job.phase==='complete'){if(job.recovery)retainGeneration(job);return job;}if(['cancelled','attention'].includes(job.phase))return job;
+ let job=readJob(file);if(job.phase==='complete'){if(job.recovery&&!job.failedBeforeReplacement)retainGeneration(job);return job;}if(['cancelled','attention'].includes(job.phase))return job;
  const lock=file+'.helper-lock';try{fs.writeFileSync(lock,String(process.pid),{flag:'wx',mode:0o600});}catch(error){if(error.code!=='EEXIST')throw error;const pid=Number(fs.readFileSync(lock,'utf8'));if(!Number.isSafeInteger(pid)||alive(pid))throw Error('An updater already owns this journal.');fs.unlinkSync(lock);fs.writeFileSync(lock,String(process.pid),{flag:'wx',mode:0o600});}
  try{
   job=writeJob(file,{helperPid:process.pid});
@@ -82,19 +82,19 @@ async function supervise(file,{inspect=inspectPackage,request=ownerRequest,launc
    await until(()=>!alive(job.ownerPid)&&!fs.existsSync(path.join(job.home,'runner.lock')),60000,'graceful app exit and runner lock release');
    const current=inspect(job.installation);compatible(current,candidate);if(current.hash!==job.previous.hash)throw Error('The installed application changed after acceptance.');
    const stat=fs.statfsSync(path.dirname(job.installation)),before=Number(stat.bavail)*Number(stat.bsize);
-   const roots=[...new Set([job.home,job.browserHome])].filter(root=>root&&![job.home,job.browserHome].some(parent=>parent&&parent!==root&&root.startsWith(parent+path.sep))),copyOptions=roots.map(root=>({recoveryCaches:job.recoveryCachePolicy===1&&!!job.browserHome&&(job.browserHome===root||job.browserHome.startsWith(root+path.sep)),cachePrefix:job.browserHome&&(job.browserHome===root||job.browserHome.startsWith(root+path.sep))?path.relative(root,job.browserHome).split(path.sep).join('/'):''})),sizes=roots.map((root,index)=>tree(root,{exclude:excluded,...copyOptions[index]}));
+   const roots=[...new Set([job.home,job.browserHome])].filter(root=>root&&![job.home,job.browserHome].some(parent=>parent&&parent!==root&&root.startsWith(parent+path.sep))),copyOptions=roots.map(root=>({recoveryCaches:job.recoveryCachePolicy===1&&!!job.browserHome&&(job.browserHome===root||job.browserHome.startsWith(root+path.sep)),cachePrefix:job.browserHome&&(job.browserHome===root||job.browserHome.startsWith(root+path.sep))?path.relative(root,job.browserHome).split(path.sep).join('/'):'',runtimePrefix:job.home===root||job.home.startsWith(root+path.sep)?path.relative(root,job.home).split(path.sep).join('/'):null})),sizes=roots.map((root,index)=>tree(root,{exclude:excluded,...copyOptions[index]}));
    if(roots.some(root=>path.dirname(file).startsWith(root+path.sep)))throw Error('Recovery journals must be outside the data snapshots.');
    if(!job.recovery)retire(job.recoveryPolicy,job);const recovery=job.recovery||path.join(job.recoveryRoot,job.id);fs.mkdirSync(recovery,{recursive:true,mode:0o700});
    const crossVolume=fs.statSync(path.dirname(job.installation)).dev!==fs.statSync(recovery).dev;
    const volumes=spaceBudget([{directory:recovery,bytes:sizes.reduce((sum,row)=>sum+row.bytes,0)+(crossVolume||job.platform==='win32'?current.bytes:0)},{directory:path.dirname(job.installation),bytes:candidate.bytes+(crossVolume||job.platform==='win32'?current.bytes:0)}]);
-   job=writeJob(file,{phase:'backing-up',recovery,freeSpaceBefore:job.freeSpaceBefore??before,volumeBudgets:volumes,recoveryData:roots.map((root,index)=>({root,...sizes[index],recoveryCachePolicy:copyOptions[index].recoveryCaches?1:0,cachePrefix:copyOptions[index].cachePrefix}))});
+   job=writeJob(file,{phase:'backing-up',recovery,freeSpaceBefore:job.freeSpaceBefore??before,volumeBudgets:volumes,recoveryData:roots.map((root,index)=>({root,...sizes[index],recoveryCachePolicy:copyOptions[index].recoveryCaches?1:0,cachePrefix:copyOptions[index].cachePrefix,runtimePrefix:copyOptions[index].runtimePrefix}))});
    for(const [index,root]of roots.entries())copyRecovery(root,path.join(recovery,'data-'+index),{manifestFile:path.join(recovery,'copy-'+index+'.json'),expectedHash:sizes[index].hash,...copyOptions[index]});
    const next=job.platform==='win32'?candidate.bundle:job.installation+'.next-'+job.id;if(!fs.existsSync(next))copyTree(candidate.bundle,next);if(inspect(next).hash!==candidate.hash)throw Error('Staged replacement differs from accepted bytes.');
    job=writeJob(file,{phase:'installing',replacement:next});
   }
   if(job.phase==='installing'){
    if(!job.recoveryData?.length)throw Error('The verified data recovery receipt is missing.');
-   for(const [index,row]of job.recoveryData.entries())if(tree(path.join(job.recovery,'data-'+index),{exclude:excluded,recoveryCaches:row.recoveryCachePolicy===1,cachePrefix:row.cachePrefix||''}).hash!==row.hash)throw Error('A recovery data snapshot changed before replacement.');
+   for(const [index,row]of job.recoveryData.entries())if(tree(path.join(job.recovery,'data-'+index),{exclude:excluded,recoveryCaches:row.recoveryCachePolicy===1,cachePrefix:row.cachePrefix||'',runtimePrefix:row.runtimePrefix??null}).hash!==row.hash)throw Error('A recovery data snapshot changed before replacement.');
    if(job.platform==='win32'){
     try{await installWindows(job,candidate,{inspect});job=writeJob(file,{phase:'verifying',outcome:'updated'});}
     catch(error){job=writeJob(file,{phase:'recovering',failedBuild:candidate.buildRevision,error:error.message,launchPid:null});}
@@ -148,8 +148,26 @@ async function supervise(file,{inspect=inspectPackage,request=ownerRequest,launc
   if(!['verifying','awaiting-chat-resume'].includes(job.phase))throw Error('This update phase needs inspection before replacement can continue.');
   if(job.phase==='awaiting-chat-resume')await verifyOutcome(job.outcome==='rollback'?job.previous:candidate);
   const after=fs.statfsSync(path.dirname(job.installation));job=writeJob(file,{phase:'awaiting-chat-resume',freeSpaceAfter:Number(after.bavail)*Number(after.bsize)});
-  const result=await resumeChat(job,job.outcome);if(result.phase==='complete')retainGeneration(readJob(file));return result;
- }catch(error){writeJob(file,{phase:'attention',error:error.message,helperPid:null});throw error;}
+  const result=await resumeChat(job,job.outcome);if(result.phase==='complete'&&!job.failedBeforeReplacement)retainGeneration(readJob(file));return result;
+ }catch(error){
+  const failed=readJob(file);
+  // Snapshot/preflight failure occurs after graceful Quit but before replacement.
+  // Restart only an independently verified unchanged baseline, behind the same
+  // recovery barrier and durable continuation. Never leave the operator with a
+  // closed app, and never restore data or replay an uncertain provider delivery.
+  if(['stopping','backing-up'].includes(failed.phase)){
+   try{
+    if(alive(failed.ownerPid)||fs.existsSync(path.join(failed.home,'runner.lock')))throw Error('The previous owner has not released its data home.');
+    if(inspect(failed.installation).hash!==failed.previous.hash)throw Error('The baseline changed before failed-preflight recovery.');
+    const checkpoint=failed.checkpoint+'\n\nUpdate failed before application replacement: '+error.message+' The previous application is unchanged. Report this failure and inspect the preserved journal before any new installation attempt.';
+    job=writeJob(file,{phase:'verifying',outcome:'rollback',failedBeforeReplacement:true,preInstallFailure:{phase:failed.phase,error:error.message,at:new Date().toISOString()},incompleteRecovery:failed.recovery||null,recovery:null,checkpoint,blocker:null});
+    const child=launchApp(job);job=writeJob(file,{launchPid:child?.pid||null});
+    const health=await verify(job,job.previous);job=writeJob(file,{phase:'awaiting-chat-resume',health});
+    return await resumeChat(job,'rollback');
+   }catch(recoveryError){writeJob(file,{phase:'attention',error:error.message+' Baseline recovery: '+recoveryError.message,helperPid:null});throw recoveryError;}
+  }
+  writeJob(file,{phase:'attention',error:error.message,helperPid:null});throw error;
+ }
  finally{fs.rmSync(lock,{force:true});}
 }
 

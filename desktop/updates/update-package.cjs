@@ -11,8 +11,13 @@ function recoveryCachePath(relative,prefix=''){
  if(prefix){if(!relative.startsWith(prefix+'/'))return false;relative=relative.slice(prefix.length+1);}
  return /^(?:(?:Partitions\/[^/]+|Default)\/)?(?:Cache|Code Cache|GPUCache|DawnCache|DawnGraphiteCache|DawnWebGPUCache)(?:\/|$)/.test(relative);
 }
-function treeRows(directory,{exclude=[],excludeRoot=[],recoveryCaches=false,cachePrefix=''}={}){
- const rows=[],walk=relative=>{for(const name of fs.readdirSync(path.join(directory,relative)).sort()){const key=path.posix.join(relative,name);if(exclude.includes(name)||!relative&&excludeRoot.includes(name)||recoveryCaches&&recoveryCachePath(key,cachePrefix))continue;const file=path.join(directory,key),stat=fs.lstatSync(file);if(stat.isSymbolicLink())rows.push([key,'link',fs.readlinkSync(file)]);else if(stat.isDirectory())walk(key);else if(stat.isFile())rows.push([key,stat.mode&0o777,fileDigest(file),stat.size]);else throw Error('Update snapshots support ordinary files, directories and symbolic links only.');}};walk('');return rows;
+function treeRows(directory,{exclude=[],excludeRoot=[],recoveryCaches=false,cachePrefix='',runtimePrefix=null}={}){
+ // A managed tmux server survives the app so terminals can reconnect. Its Unix
+ // socket is a live endpoint, never recoverable data. Apply this exception only
+ // to that exact home-relative socket during recovery, retaining ordinary files
+ // at the same path and rejecting every other unsupported filesystem entry.
+ const socket=typeof runtimePrefix==='string'?(runtimePrefix?runtimePrefix+'/':'')+'terminal-tmux/socket':null;
+ const rows=[],walk=relative=>{for(const name of fs.readdirSync(path.join(directory,relative)).sort()){const key=path.posix.join(relative,name);if(exclude.includes(name)||!relative&&excludeRoot.includes(name)||recoveryCaches&&recoveryCachePath(key,cachePrefix))continue;const file=path.join(directory,key),stat=fs.lstatSync(file);if(key===socket&&stat.isSocket())continue;if(stat.isSymbolicLink())rows.push([key,'link',fs.readlinkSync(file)]);else if(stat.isDirectory())walk(key);else if(stat.isFile())rows.push([key,stat.mode&0o777,fileDigest(file),stat.size]);else throw Error('Unsupported recovery filesystem entry: '+key+'. Update snapshots support ordinary files, directories and symbolic links only.');}};walk('');return rows;
 }
 const summarize=rows=>({hash:digest(JSON.stringify(rows)),bytes:rows.reduce((sum,row)=>sum+(row[3]||0),0),files:rows.length});
 function tree(directory,options={}){const rows=treeRows(directory,options);return {...summarize(rows),...(options.entries?{entries:rows}:{})};}

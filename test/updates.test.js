@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {createRequire} from 'node:module';
 import {spawn} from 'node:child_process';
+import net from 'node:net';
 import {Engine} from '../src/engine.js';
 import {Updates} from '../src/services/updates/updates.js';
 const {tree,atomic,readJob,writeJob,spaceBudget,packagePaths}=createRequire(import.meta.url)('../desktop/updates/update-package.cjs');
@@ -100,6 +101,22 @@ test('a restarted supervisor reconciles an interrupted atomic app replacement wi
  await supervise(job.file,{inspect:f.inspect,launchApp:()=>{launches++;return {};},verify:async()=>({at:new Date().toISOString()}),resumeChat:async job=>writeJob(job.file,{phase:'complete'})});
  assert.equal(launches,1);assert.equal(fs.readFileSync(path.join(f.installation,'identity'),'utf8'),'new');assert.equal(fs.readdirSync(recovery).filter(name=>name.startsWith('data')).length,1);assert.equal(readJob(job.file).phase,'complete');
  await supervise(job.file,{inspect:()=>{throw Error('A completed replacement must not run again.');}});
+});
+
+test('snapshot failure restarts the unchanged baseline and reports failure through the original continuation',{skip:process.platform==='win32'},async t=>{
+ const f=fixture(t);await handoff(f,await prepare(f));await f.controller.advance();const job=writeJob(f.controller.file,{ownerPid:99999999});
+ const server=net.createServer();await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(path.join(f.home,'unknown.sock'),resolve);});t.after(()=>new Promise(resolve=>server.close(resolve)));
+ let launches=0,verified=0,resumes=0;
+ await supervise(job.file,{inspect:f.inspect,launchApp:()=>{launches++;assert.equal(fs.readFileSync(path.join(f.installation,'identity'),'utf8'),'old');return {};},verify:async(j,identity)=>{verified++;assert.equal(identity.hash,job.previous.hash);assert.equal(j.failedBeforeReplacement,true);return {at:new Date().toISOString()};},resumeChat:async(j,outcome)=>{
+  resumes++;assert.equal(outcome,'rollback');assert.match(j.checkpoint,/failed before application replacement.*unknown.sock/);
+  const args={action:'resume',id:j.id,secret:j.secret,outcome};await f.controller.recovery(args);await f.controller.recovery(args);
+  return writeJob(j.file,{phase:'complete',outcome});
+ }});
+ assert.equal(launches,1);assert.equal(verified,1);assert.equal(resumes,1);
+ const saved=readJob(job.file);assert.equal(saved.failedBeforeReplacement,true);assert.match(saved.preInstallFailure.error,/unknown.sock/);assert.equal(saved.recovery,null);
+ assert.match(f.controller.status().job.error,/unknown.sock/);
+ const messages=f.run.events.filter(e=>e.data?.delivery?.id===job.continuationId);assert.equal(messages.length,1);assert.match(messages[0].text,/update failed before replacement; previous app restarted/);
+ await supervise(job.file,{inspect:()=>{throw Error('Completed failed-preflight recovery must not run again.');}});
 });
 test('helper readiness failure leaves the host running and releases the final barrier',async t=>{
  const f=fixture(t);f.controller.launchHelper=()=>{throw Error('Synthetic runtime cannot launch.');};await handoff(f,await prepare(f));await assert.rejects(f.controller.advance(),/cannot launch/);assert.equal(f.controller.status().job.phase,'prepared');assert.equal(f.engine.updateBarrier,false);assert.equal(f.calls.length,0);

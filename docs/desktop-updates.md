@@ -1,3 +1,20 @@
+## October 23 local updater correction
+
+Recovery snapshots omit only the managed home-relative `terminal-tmux/socket` when it is a Unix
+socket; the running server and durable terminal files are preserved. The exception is explicitly
+scoped to the application home, including when nested under the browser home. Package hashing
+remains strict; unknown special entries fail with a relative-path diagnostic.
+
+If snapshot/preflight fails after graceful Quit and before replacement, independently verify
+that the installed baseline is unchanged and its former owner has released the home. Relaunch
+that baseline behind the existing barrier and deliver the failure/checkpoint through the original
+continuation ID. A partial snapshot is recorded separately and never registered as a verified
+recovery generation. For protocol-1 compatibility the transport outcome is `rollback`, qualified
+by `failedBeforeReplacement` and `preInstallFailure`; the checkpoint states that replacement did
+not occur. Ambiguous sessions or delivery remain attention states without automatic replay.
+The observed local failure and signed acceptance status are in the next-release implementation
+record; these corrections do not imply an accepted installation or real-provider continuation.
+
 ## October 23 next release — common signed feed and local coordinators
 
 The candidate supports a common signed downloads.proteus.example release catalog/staging contract for macOS,

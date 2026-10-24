@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
+import net from 'node:net';
 import {createRequire} from 'node:module';
 import {packageOperation} from '../src/services/updates/update-package-worker.js';
 const require=createRequire(import.meta.url);
@@ -12,6 +13,29 @@ const {tree,atomic,writeJob,fileDigest,excluded,recoveryCachePath}=require('../d
 function fixture(t){const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'proteus-update-storage-')));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));return root;}
 function put(root,name,value=name){const file=path.join(root,name);fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,value);return file;}
 function journal(root,phase){const id=randomUUID(),directory=path.join(root,'jobs',id),file=path.join(directory,'job.json'),candidate=path.join(directory,'candidate','Proteus');put(candidate,'runtime','synthetic');const job={schemaVersion:1,id,file,revision:1,phase,home:path.join(root,'home'),installation:path.join(root,'installation'),recoveryRoot:path.join(root,'recoveries'),recoveryPolicy:path.join(root,'recovery-policy.json'),candidate:{bundle:candidate,sourceFingerprint:'a'.repeat(64)},continuationId:'synthetic',secret:'synthetic'};atomic(file,job);return job;}
+
+test('recovery omits only the managed tmux socket and preserves its live server and durable neighbours',{skip:process.platform==='win32'},async t=>{
+ const root=fixture(t),source=path.join(root,'data'),destination=path.join(root,'snapshot'),manifestFile=path.join(root,'copy.json');
+ put(source,'terminal-tmux/metadata.json','durable terminal metadata');put(source,'terminals.json','durable terminals');
+ const socket=path.join(source,'terminal-tmux/socket'),server=net.createServer();
+ await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(socket,resolve);});t.after(()=>new Promise(resolve=>server.close(resolve)));
+ assert.throws(()=>tree(source),/terminal-tmux\/socket/,'ordinary package hashes remain strict');
+ assert.throws(()=>tree(source,{runtimePrefix:'different-home'}),/terminal-tmux\/socket/,'exception is home scoped');
+ const expected=tree(source,{exclude:excluded,runtimePrefix:''});
+ const result=copyRecovery(source,destination,{manifestFile,expectedHash:expected.hash,runtimePrefix:''});
+ assert.equal(result.hash,expected.hash);assert.equal(result.files,2);assert.equal(fs.existsSync(path.join(destination,'terminal-tmux/socket')),false);
+ assert.equal(fs.readFileSync(path.join(destination,'terminal-tmux/metadata.json'),'utf8'),'durable terminal metadata');
+ assert.equal(fs.lstatSync(socket).isSocket(),true,'live endpoint is never removed');
+ const client=net.createConnection(socket);await new Promise((resolve,reject)=>{client.once('connect',resolve);client.once('error',reject);});client.destroy();
+ assert.equal(copyRecovery(source,destination,{manifestFile,runtimePrefix:''}).reused,2);
+ assert.throws(()=>copyRecovery(source,destination,{manifestFile,runtimePrefix:'nested'}),/Unsupported recovery filesystem entry/);
+});
+test('the tmux recovery exception retains ordinary files and rejects other sockets',{skip:process.platform==='win32'},async t=>{
+ const root=fixture(t);put(root,'terminal-tmux/socket','ordinary file at the endpoint path');
+ assert.equal(tree(root,{runtimePrefix:''}).files,1);
+ const server=net.createServer();await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(path.join(root,'unknown.sock'),resolve);});t.after(()=>new Promise(resolve=>server.close(resolve)));
+ assert.throws(()=>tree(root,{runtimePrefix:''}),/unknown.sock/);
+});
 
 test('ordinary recovery caches are an explicit profile-root allowlist, preserving website data',t=>{
  const root=fixture(t),source=path.join(root,'source'),destination=path.join(root,'snapshot'),manifestFile=path.join(root,'progress.json');

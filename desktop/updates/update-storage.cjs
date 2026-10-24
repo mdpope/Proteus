@@ -15,18 +15,18 @@ function allocation(directory){
  try{walk(directory);}catch(error){if(error.code!=='ENOENT')throw error;}
  return {logicalBytes,allocatedBytes,files};
 }
-function copyRecovery(source,destination,{manifestFile,expectedHash,recoveryCaches=false,cachePrefix='',afterFile}={}){
+function copyRecovery(source,destination,{manifestFile,expectedHash,recoveryCaches=false,cachePrefix='',runtimePrefix=null,afterFile}={}){
  if(![source,destination,manifestFile].every(value=>typeof value==='string'&&path.isAbsolute(value)))throw Error('Recovery copy requires absolute source, destination and manifest paths.');
  source=fs.realpathSync(source);destination=path.resolve(destination);manifestFile=path.resolve(manifestFile);
  if(source===destination||source.startsWith(destination+path.sep)||destination.startsWith(source+path.sep)||[source,destination].some(root=>manifestFile===root||manifestFile.startsWith(root+path.sep)))throw Error('Recovery source, destination and progress manifest must be separate.');
  ordinaryDirectory(destination);ordinaryDirectory(path.dirname(manifestFile));
- const options={exclude:excluded,recoveryCaches,cachePrefix},snapshot=tree(source,{...options,entries:true});
+ const options={exclude:excluded,recoveryCaches,cachePrefix,runtimePrefix},snapshot=tree(source,{...options,entries:true});
  if(expectedHash&&snapshot.hash!==expectedHash)throw Error('Recovery source changed before the resumable copy.');
  fs.mkdirSync(destination,{recursive:true,mode:0o700});
  let previous;
  try{previous=JSON.parse(fs.readFileSync(manifestFile,'utf8'));}catch(error){if(error.code!=='ENOENT')throw error;}
- if(previous&&(previous.source!==source||previous.destination!==destination||previous.sourceHash!==snapshot.hash||previous.recoveryCachePolicy!==(recoveryCaches?1:0)||(previous.cachePrefix||'')!==cachePrefix))throw Error('Partial recovery belongs to a different source generation. It was preserved.');
- const manifest={schemaVersion:1,source,destination,sourceHash:snapshot.hash,recoveryCachePolicy:recoveryCaches?1:0,cachePrefix,files:snapshot.files,verified:0,complete:false};
+ if(previous&&(previous.source!==source||previous.destination!==destination||previous.sourceHash!==snapshot.hash||previous.recoveryCachePolicy!==(recoveryCaches?1:0)||(previous.cachePrefix||'')!==cachePrefix||(previous.runtimePrefix??null)!==runtimePrefix))throw Error('Partial recovery belongs to a different source generation. It was preserved.');
+ const manifest={schemaVersion:1,source,destination,sourceHash:snapshot.hash,recoveryCachePolicy:recoveryCaches?1:0,cachePrefix,runtimePrefix,files:snapshot.files,verified:0,complete:false};
  atomic(manifestFile,manifest);
  let copied=0,reused=0;
  for(const row of snapshot.entries){
@@ -62,6 +62,7 @@ function stagingStatus(job,{alive=processAlive}={}){
  try{const value=Number(fs.readFileSync(job.file+'.helper-lock','utf8'));if(!Number.isSafeInteger(value)||value<1)return {directory,eligible:false,reason:'Unresolved helper lock'};if(alive(value))return {directory,eligible:false,reason:'Helper is running'};}catch(error){if(error.code!=='ENOENT')throw error;}
  if(alive(helper))return {directory,eligible:false,reason:'Helper is running'};
  if(!['cancelled','complete'].includes(job.phase))return {directory,eligible:false,reason:'Update or recovery is unresolved'};
+ if(job.failedBeforeReplacement)return {directory,eligible:false,reason:'Failed pre-install recovery requires inspection'};
  if(job.phase==='complete'&&job.recovery){
   const inventory=recoveryPolicy(job.recoveryPolicy,job),row=inventory.generations.find(row=>row.directory===job.recovery);
   if(!row||!row.verified)return {directory,eligible:false,reason:'Recovery generation is not registered'};

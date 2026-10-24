@@ -1,3 +1,20 @@
+## Local updater follow-up — recovery snapshot failure
+
+The authorized local installation stopped before application replacement: the cold snapshot
+encountered the managed `terminal-tmux/socket` Unix endpoint. The previous installed runtime
+remains `490fd629b659+src.615fe38d6371`; the failed job and prior recovery generations are preserved.
+The helper also stopped without relaunching the previous app or delivering the failure to its
+original chat. This is a failed local installation, not completed update/continuation acceptance.
+
+Source now excludes only that exact home-relative Unix socket from recovery snapshots, while
+preserving terminal metadata, regular files and links and leaving the live server untouched.
+Other unsupported entries fail with their relative path. Pre-replacement failures independently
+verify and relaunch the unchanged baseline behind the recovery barrier, then use the same durable
+original-chat continuation to report the failure. Partial recovery remains separate from verified
+recovery generations; uncertain provider delivery is never replayed. Focused recovery tests and
+the full Node suite pass (1,116 passed, one skipped); signed-package acceptance remains pending.
+The user authorized local installation; publishing, OS defaults and remote rollout remain held.
+
 ## October 23 — isolated next-release implementation
 
 The separate `codex/oct23-next-release` branch implements the 26-item intake, including the

@@ -1,5 +1,6 @@
 ## Next release — October 23 feature queue (local package validation; rollout held)
 
+- Fix recovery snapshots blocked by managed terminal sockets, and restart/report through the original chat when pre-replacement recovery capture fails.
 - Keep address-history suggestions out of macOS fullscreen and dismiss them across fullscreen transitions. Clear the submitted address draft after selecting a suggestion while preserving newer typing.
 - Exclude disposable validation output from desktop packages, migrate existing extension native-messaging patches to the organized service path, and retain the helper launcher used by installed releases.
 - Preserve Keep Screen Awake across restarts; make the ordinary loaded-browser budget configurable in Engine Room (default 6), and retain Persisted pages through hiding, restoration and memory eviction.
