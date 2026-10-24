@@ -1,3 +1,45 @@
+## Additional queued corrections — implementation and build held
+
+The operator queued these three follow-ups after local installation. Record observations and
+future acceptance criteria only; do not implement, build, install or publish them yet.
+
+### 29. First tab-move attempt reports missing placement acknowledgement
+
+The first move attempt displays: “The app did not acknowledge the tab placement. Refresh its
+inventory.” Subsequent attempts work. The supplied screenshot shows the message above the
+project Tabs list while the move dialog remains open. Root cause is unconfirmed; investigate
+inventory/revision freshness and placement acknowledgement timing before choosing a fix.
+
+Acceptance: the first valid move succeeds through the shared move menu and reports the actual
+result. Reconcile an uncertain acknowledgement with owner placement before any retry; preserve
+the same tab/session, history and access, without duplicate moves or tabs. Cover both tab-header
+and Tabs-list entry points and relevant window/project destinations.
+
+### 30. Hide tab from the header context menu is slow
+
+Right-clicking a tab header and choosing Hide tab takes noticeably too long. Measure the path
+from selection to visible removal and completion, including persistence and browser cleanup,
+before assigning a cause. No timing measurement or diagnosis has been made yet.
+
+Acceptance: hiding responds promptly and completes consistently without freezing navigation;
+preserve logical tab identity, history and placement. Honor the existing Persisted-page loading
+guarantee rather than forcing those pages out of memory to improve hide latency.
+
+### 31. Continue a remote scheduled chat from another desktop
+
+The Continue chat button on a remote scheduled Copilot run fails with “Open an ordinary chat
+before continuing.” Manually composing and sending a continuation message works. The supplied
+screenshot shows an execution-time-limit failure offering Continue chat, followed by that toast.
+This identifies a button-path inconsistency; it does not establish that remote sending is broken.
+
+Acceptance: Continue chat works on the existing remote scheduled run when that owner/provider
+supports continuation, using the same authorized remote send/resume route as manual composition.
+Preserve the original run, provider session, effective permissions, queue and retry receipts;
+do not create a replacement chat, rerun the schedule, duplicate effects or move execution locally.
+Reflect the destination's acknowledgement/state and retain normal remote authorization checks.
+The reported example is one desktop continuing a scheduled chat executing on another computer;
+no remote run was continued as part of this queue-only request.
+
 ## Local Mac installation and automatic continuation accepted
 
 The authorized local Mac now runs signed `b2da2f2797b5+src.f7b3a6a8559e`. The installed
