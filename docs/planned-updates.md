@@ -4,7 +4,7 @@ The separate `codex/oct23-next-release` branch implements the 26-item intake, in
 terminal clipboard/agent-access additions, shared move menu, associated-chat routing and
 window/project synchronization fixes. See
 [implementation and validation](2026-10-23-next-release.md) and [source organization](code-organization.md).
-The branch merges current main `15327ab`. Signed local candidate
+The earlier candidate includes main `15327ab`. Signed predecessor
 `9d942f46eb8c+src.04b3dc61c1cc` passes 1,113 Node tests (one skipped), source checks, twelve
 packaged UI suites and disposable signed update/rollback rehearsals. Packaging fixes exclude
 scratch output, migrate an existing native-messaging patch and preserve the installed-release
@@ -12,10 +12,12 @@ helper launcher. Real credential/provider continuity remains separate. Installat
 publishing and remote rollout remain held. The earlier rollout records below describe the previous
 release and do not release this candidate's hold.
 
-The fullscreen follow-up merges newer documentation-only main `4a546b1`. Native address
-suggestions now reject fullscreen and dismiss through parent transitions. A three-window source
-regression passes; the prior signed package fails its fullscreen-capability assertion. The earlier
-signed package above predates this fix and is being replaced by a locally validated candidate.
+The fullscreen follow-up includes newer documentation-only main `4a546b1`. Signed candidate
+`19abae929053+src.b329a09b1dc3` passes the three-window native fullscreen regression, window
+synchronization/draft regression and package-integrity/startup/restart gates, plus the full Node
+suite and source checks. Suggestions reject fullscreen and dismiss through parent transitions.
+The prior signed package fails the new fullscreen-capability assertion. No installation or
+remote rollout of the new candidate has occurred.
 
 ## October 23 local / October 24 UTC — Windows and public download acceptance complete
 

@@ -16,6 +16,24 @@ native-messaging path. Both are fixed with regression coverage. The first packag
 the second package's startup timeout is retained as a failed result, superseded only by a rebuilt
 package passing the same gates. Test launch errors now retain their original exception.
 
+## Fullscreen follow-up — current local Mac acceptance
+
+Main `4a546b1` is included through merge `1e0669e`; the newer main changes are documentation only.
+Current signed candidate `19abae929053+src.b329a09b1dc3` has source fingerprint
+`b329a09b1dc3155db03c6010ead838bf46d9b3dd31ced848d66a35f50a7189bb`.
+The full Node suite again has 1,113 passes, one skip and zero failures; source checks pass.
+Three exact-package gates pass: native macOS fullscreen/address suggestions with three windows,
+the two-window routing/synchronization/draft regression, and package integrity/startup/terminal/
+history/restart acceptance. The older signed build fails the new popup-capability assertion.
+
+URL suggestions now cannot enter fullscreen and dismiss through parent fullscreen transitions.
+The native test covers bounded suggestions, Escape, leaving fullscreen, all three windows remaining
+usable with stable identities, and history selection updating the URL. That last assertion exposed
+and verified a stale submitted-draft fix; later typing remains protected by the captured draft check.
+The operator's original pre-restart visibility/Space state was not captured, so a separate cause
+for those previously invisible windows is not claimed. No installed app or other device is updated.
+The recovery rehearsals below belong to the predecessor; unchanged updater code was not rerun.
+
 ## Previous local Mac acceptance (before fullscreen follow-up)
 
 The frozen signed candidate is `9d942f46eb8c+src.04b3dc61c1cc`, with source fingerprint
@@ -73,7 +91,7 @@ backup. Local diagnostic app/data copies were removed after their receipts were 
 | 23 | Common move menu | Shared desktop/web destination component and native picker. Single/bulk/chat/resource entry points start at current project. Typed chat moves use membership operations. Shared-menu/retry/history/source-authority UI and native grouping units pass. |
 | 24 | Associated chat home | Global chat lists, links, notifications, creation and saved views reuse the chat inside its current project/workspace. Main aliases are retired from the canonical registry without changing chat/child identities or captured access. Local/remote reconciliation units and real global-list/deep-link/restart/draft/child checks pass. Unassigned chats may remain top-level. |
 | 25 | Window routing and sync | Native menu callbacks re-enter their source window. Scope-specific passive tab events synchronize content while input is focused; local windows retain independent selection/reading state. Address drafts and filtered Tabs lists survive passive changes. A real two-window test passes all three link actions, ordered membership, selection/draft/filter retention and hidden no-load behavior. |
-| 26 | Fullscreen address popup | Suggestions cannot enter fullscreen and close across native fullscreen transitions. Selecting history clears the submitted address draft without clearing newer typing. Three-window native Mac regression passes in source; exact-package follow-up is pending. Previously invisible windows reappeared after the operator restarted; the original Space/visibility state remains unproven. |
+| 26 | Fullscreen address popup | Suggestions cannot enter fullscreen and close across native fullscreen transitions. Selecting history clears the submitted address draft without clearing newer typing. Three-window native Mac regression passes in source and the signed package, plus window-sync and package-integrity gates. Previously invisible windows reappeared after the operator restarted; the original Space/visibility state remains unproven. |
 
 Validation includes the complete Node suite and syntax checks, 143 native units, two tablet UI
 checks, scratch Vite compilation and real desktop checks for link routing, attachment layout,
