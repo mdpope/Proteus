@@ -14,6 +14,13 @@
 - Open associated chats inside their current project/workspace from global lists, links, notifications, creation and restored navigation, preserving live chat/child identity and drafts.
 - Keep native link-menu creation in its originating window. Synchronize project content independently of focused input; preserve separate local window selection, address drafts and filtered tab lists.
 
+## October 23 local / October 24 UTC — Windows and public release accepted
+
+- Accept normal native installation/live verification of `windows.a02de6227c89` from `490fd629b659`, preserving distinct native/cached homes and qualified state evidence.
+- Publish the exact installer, update archive and signed manifest on WTB; verify full HTTPS hashes/signature before atomic catalog/page activation, then all five live files and rendered UI.
+- Verify the actual installed Windows feed client downloads all 393,773,885 archive bytes, safely extracts the exact package/installer and passes isolated startup; separately verify native owner catalog discovery without reinstall/restart.
+- Complete server content/symlink/configuration preservation and bounded log checks. Resolve historical review blocks through exact current human approvals and stop the completed rollout monitor. No runtime rebuild or source push.
+
 ## Unreleased — October 23 local corrections; desktop rollout resumed
 
 - Document the operator's two-backup ceiling: latest verified plus one previous in each applicable local/server location; retire obsolete website release/migration payloads after verifying the retained pair. No runtime rebuild.
@@ -1534,4 +1541,3 @@ Known unfinished work and distribution limitations are tracked in `docs/planned-
 ## Unreleased — quieter extension connection notices
 
 - Show a native-helper connection warning, including iCloud Passwords, only once per extension per app launch across browser profiles and windows. Retries continue without repeating or reviving the banner; restarting Proteus permits one new warning.
-

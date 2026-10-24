@@ -12,6 +12,27 @@ helper launcher. Real credential/provider continuity remains separate. Installat
 publishing and remote rollout remain held. The earlier rollout records below describe the previous
 release and do not release this candidate's hold.
 
+## October 23 local / October 24 UTC — Windows and public download acceptance complete
+
+`windows.a02de6227c89` from runtime `490fd629b659` is installed/live-verified and published on
+WTB. Exact private source/transfer verification covers 334 runtime files and seven build inputs.
+Complete HTTPS installer/archive/manifest downloads and signature verified before catalog/page
+activation; all five public files and actual browser UI match.
+
+The installed Windows client's official modules fully downloaded the 393,773,885-byte archive,
+verified embedded trust and cached installer, safely extracted it and passed isolated startup with
+zero page errors. Native owner UI separately discovers the current release. This is external
+installed-module consumer preparation, not a new native-owner job or reinstall. The installed
+process/hash remain unchanged; no credentials/cookies, redirects, restart or settings changes.
+Synthetic output is retained under the no-deletion scope, without a live-data backup.
+
+Direct human actions resolved earlier Windows installation blockers without profile migration.
+Exact current approvals resolved the historical production-publication and remote-message review
+blocks; neither was bypassed. Existing site/symlinks/configuration and protected cached Windows
+state retain their separately documented scope. Final server log window has zero new error bytes.
+All authorized destinations and public checks are complete. Stop this rollout monitor; held
+next-release work remains excluded, with no source push, hosted build or runtime rebuild.
+
 ## October 23 — two-backup policy implemented; website live acceptance complete
 
 Keep at most two complete recovery generations in each applicable local/server location: the
@@ -56,13 +77,10 @@ project structure checks pass. Runtime history/retry/access guards remain strict
 remote source push, credential change or general root cleanup interface was added. Private exact
 receipts stay in the owning website project. The MariaDB system-table log flood is unresolved;
 all messages in the bounded classification window matched that existing category. The operator
-completed the Windows read-only native-owner inspection. It confirms that the native and
-Codex-packaged contexts see distinct data homes and host identities; the native owner reports
-an installation-registration query failure although control-context registration reads succeed.
-The supported update still needs that discrepancy and its recovery inventory resolved, and the
-prior cleanup review gate remains. No Windows installation or live acceptance is claimed. Keep
-monitoring active and quiet; do not repeat completed Mac/Linux/mobile/web installs, captures or
-cleanup.
+completed the Windows read-only native-owner inspection. The earlier blocked installation state
+is superseded by the accepted Windows update above. Native/cached homes remain distinct; the
+public publication is now accepted above. Avoid repeating
+completed Mac/Linux/mobile/web installs, captures or cleanup.
 
 ## October 23 — local URL-follow fix and web/native parity; desktop rollout resumed
 

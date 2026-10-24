@@ -34,6 +34,25 @@ High-frequency native descriptors use immutable snapshots on a serial utility qu
 scroll measurements do not publish whole-history changes. Source organization follows
 [documented boundaries](code-organization.md), preserving stable entry points and packaging.
 
+## October 23 local / October 24 UTC — installation and public-consumer acceptance remain distinct
+
+Accept the exact Windows correction after the native updater, installed identity and actual UI
+verify. Preserve native and packaged-context data homes separately; human-run bounded repairs do
+not authorize profile migration, re-pairing or agent retries of previously rejected deletion.
+Cached preservation evidence is not native full-profile equality or cross-device acceptance.
+
+Treat public static publication as its own transition: verify the private artifact/source, reuse
+valid full recovery, checkpoint the two entrypoints, preserve every current file and exact symlink,
+then verify immutable HTTPS bytes/signature before activating catalog/page. If automatic approval
+review rejects that production step, retain preparation/receipts and request exact authorization;
+do not reroute the command or equate installed Windows acceptance with public availability.
+
+The operator subsequently approved the exact production publication and separately approved the
+Windows-chat consumer instruction in the current chat. Both steps passed through their original
+routes. Public verification is complete: full binary hashes/signature before activation, actual
+rendered page, installed-module public download/extraction/isolated startup and separate native
+owner catalog discovery. No redundant reinstall or new native-owner preparation job was needed.
+
 ## October 23 — acknowledge navigation before the next batch
 
 A successful navigation response and the last response of a multi-batch reconciliation are

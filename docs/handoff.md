@@ -1,3 +1,38 @@
+## October 23 local / October 24 UTC — Windows installed and public download checks complete
+
+Windows runs `0.2.29 / windows.a02de6227c89` from frozen runtime `490fd629b659` through the
+normal native updater and registered installer, with exact installed payload/installer and actual
+UI accepted. Its paused rehearsal remains inactive. The stale waiting description under complete
+status remains a UI limitation; no update supervisor is still running.
+
+The operator manually removed the old cached recoveries and ran the narrowly bound native
+registration/metadata ownership repairs. No agent deletion retry, approval bypass, profile
+migration or re-pairing occurred. Native and cached homes remain distinct. Cached protected files,
+five pairings/grants and completed receipts match their baseline; this does not establish full
+native-profile byte equality or fresh cross-device connectivity.
+
+The exact release is now live at [WTB Windows downloads](https://downloads.proteus.example/downloads/proteus/windows/).
+All six private transfer hashes, 334 runtime files and seven build inputs match. Full HTTPS
+installer/archive/manifest hashes and the embedded publisher signature verified before atomic
+catalog/page activation; all five live files and actual browser build/links match. Unsigned Windows
+installer Authenticode remains the operator's existing choice; manifest trust is independent.
+
+The actual installed Windows client modules downloaded all 393,773,885 public archive bytes,
+verified signature/hash and cached installer, safely extracted the package and passed isolated
+startup/identity with zero page errors. Native owner UI separately discovers the live release.
+No new native-owner preparation job, redundant reinstall or restart was performed; the installed
+process and full installation hash remain unchanged. No account credentials/cookies were sent,
+and requests rejected redirects. The retained synthetic fixture is not a live-data backup.
+
+Final server audit preserves all 1,127 original files, prior immutable files, thirteen exact
+symlinks and Apache/private route configuration, with zero new Apache error bytes. Existing full
+recovery was reused; the supplemental two-entrypoint checkpoint pin is released and rotation
+removed nothing. The initial publication and remote-message review rejections remain recorded;
+both were resolved by exact current human approvals through the same routes. Private receipts
+remain in the owning website project. No rebuild, push, GitHub Actions, credentials or trust changes.
+All authorized rollout destinations and public-download acceptance are complete; stop this rollout
+monitor. Do not repeat accepted installations, captures, cleanup or tests without a new correction.
+
 ## October 23 — two-backup policy and website rollout accepted
 
 Keep at most two complete recovery generations in each applicable local/server location: the
@@ -42,13 +77,10 @@ project structure checks pass. Runtime history/retry/access guards remain strict
 remote source push, credential change or general root cleanup interface was added. Private exact
 receipts stay in the owning website project. The MariaDB system-table log flood is unresolved;
 all messages in the bounded classification window matched that existing category. The operator
-completed the Windows read-only native-owner inspection. It confirms that the native and
-Codex-packaged contexts see distinct data homes and host identities; the native owner reports
-an installation-registration query failure although control-context registration reads succeed.
-The supported update still needs that discrepancy and its recovery inventory resolved, and the
-prior cleanup review gate remains. No Windows installation or live acceptance is claimed. Keep
-monitoring active and quiet; do not repeat completed Mac/Linux/mobile/web installs, captures or
-cleanup.
+completed the Windows read-only native-owner inspection. Its then-blocked installation state is
+superseded by the accepted Windows update above; distinct native/cached homes remain preserved.
+Public download publication is now accepted as recorded above. Do not repeat
+completed Mac/Linux/mobile/web installs, captures or cleanup.
 
 ## October 23 — desktop rollout resumed; local URL correction and web/mobile work
 

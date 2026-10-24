@@ -1,5 +1,28 @@
 # Windows desktop
 
+## Current correction — October 23 local / October 24 UTC
+
+`0.2.29 / windows.a02de6227c89`, runtime `490fd629b659`, is installed/live-verified and public
+at the existing WTB page/feed. Normal native update and exact installed hashes pass. Distinct
+native/cached data homes remain preserved, with cached protection evidence separate from native
+health and fresh pairing connectivity. Human-run bounded repairs resolved earlier installation
+blockers without an agent deletion retry, profile migration or re-pairing.
+
+All 334 runtime files, seven build inputs and private transfer hashes match. The full public
+installer, 393,773,885-byte archive and signed manifest verified before atomic catalog/page
+activation. All five public hashes, manifest signature, HTTPS behavior and actual page/build/links
+pass. Historical publication/message review blocks were resolved by exact current human approval.
+
+The actual installed package's official feed/trust/extraction modules passed a full public download,
+safe extraction, cached-installer identity and isolated startup with zero page errors. Native owner
+UI separately discovers the new release. The full preparation ran in an external installed-module
+harness, not a new native-owner update job; the installed process and full hash are unchanged.
+No redundant reinstall/restart, account credentials/cookies, redirects, settings change or live
+backup. Test output is retained under the explicit no-deletion scope. The stale waiting description
+under complete update status remains a known UI limitation. Final site preservation/log audit passes.
+
+## Earlier public-channel acceptance
+
 The Windows channel is live at https://downloads.proteus.example/downloads/proteus/windows/. All five public file
 hashes and the manifest signature verify. Actual installed-client acceptance downloads the entire
 393,649,640-byte final archive from the real WTB endpoint, verifies/extracts the package and cached
