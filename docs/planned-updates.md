@@ -48,6 +48,27 @@ actions, dismissal and accessibility behavior, and allow for bottom controls and
 notifications remain usable without covering tab navigation. This is queued only under the
 existing implementation/build hold.
 
+### 33. Automatically trust the Copilot working-data root for read/write
+
+For every Copilot-provider chat, include Copilot's resolved top-level working/data directory as
+an automatic trusted read/write folder, matching Copilot's own use of that directory. In the
+default case this is `~/.copilot`, covering `session-state/<session>/checkpoints` and other
+working subdirectories without separate per-session or read/write prompts. Use the actual
+provider directory, including configured/custom locations; the provider's existing
+`dataDirectory()` resolution accounts for settings, overrides and `COPILOT_HOME`.
+
+This is a built-in provider folder, not a configurable workspace folder. Proteus may show its
+resolved path and automatic read/write status as informational UI, without a toggle or requiring
+users to add it manually. Resolve it on the execution owner for local and remote chats, including
+scheduled runs and continuations. Limit the automatic root to Copilot's own directory rather
+than the user's entire home directory. Do not create session-specific workspace approval entries.
+
+Evidence: the supplied screenshot requests read access to a Copilot session's checkpoints under
+the default working-data root, despite this being provider-owned working state. Acceptance:
+reads and writes under that root work in new and resumed Copilot chats without folder prompts;
+the correct custom/host-specific root is reflected; other folders retain their existing access.
+Queued only: no live approval, folder grant, implementation or build was performed.
+
 ## Local Mac installation and automatic continuation accepted
 
 The authorized local Mac now runs signed `b2da2f2797b5+src.f7b3a6a8559e`. The installed
