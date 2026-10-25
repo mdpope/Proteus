@@ -35,7 +35,9 @@
   "dependencies": {
     "@ghostery/adblocker-electron": "2.20.1",
     "@github/copilot-sdk": "1.0.16",
+    "@modelcontextprotocol/sdk": "1.32.2",
     "@playwright/mcp": "0.0.83",
+    "ajv": "8.20.0",
     "chrome-devtools-mcp": "1.10.1",
     "cron-parser": "5.10.1",
     "electron-chrome-extensions": "4.9.0",

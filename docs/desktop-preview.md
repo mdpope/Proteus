@@ -1,3 +1,66 @@
+## October 25 — Full captured Activity review candidate
+
+Current candidate `70b9013065ab+dirty.677bae048f0c` in `dist/design-preview-activity-capture`
+has 367 verified runtime files. It removes the format switcher and records actual observable
+provider phases and reported scoped usage. Codex's explicit public summary channel adds bounded
+summary text; MTPLX/Claude/Copilot raw thinking is not stored. Older notices retain their original
+saved text without inferred timing. All ordinary assistant and system messages remain visible.
+
+The full suite passes 1,142 tests with one skipped, static/diff checks pass, four-provider renderer
+fixtures pass, and a real local MTPLX source run passed live phase/usage/restart acceptance.
+See [handoff](handoff.md) for final exact-package acceptance and retained-profile launch status.
+This is a Design Preview review gate. No installed local update or wider distribution is authorized
+before the operator checks it and approves that next step.
+
+## October 25 — Option 2 real-chat display comparison open (superseded)
+
+`70b9013065ab+dirty.2ce0f85a7e10` in `dist/design-preview-activity-comparison` adds
+**Chat view → Current / Grouped activity** on actual local preview chats and includes the MTPLX
+response-name correction. All 365 runtime files match source/manifest. The exact package passed
+saved-history/draft/disclosure/streaming and 640px UI acceptance without provider calls. Full
+suite: 1,136 passed, one skipped; static/diff checks passed.
+
+The toggle projects existing records, not new model output. Only exact MTPLX thinking notices
+move into Activity; all assistant commentary stays inline. Current remains default; temporary
+view state is not saved as chat configuration. Ordinary prose and important messages remain
+visible. Existing reasoning text that was discarded cannot be recovered by changing views.
+The operator quit the prior preview normally; the tested package is now running with the retained
+profile. All eleven saved chat journals, schedules, statuses and provider sessions match the
+fresh pre-restart hashes. Native window/executable discovery verifies the new app; retained-window
+visual inspection remains blocked by the desktop host's stale closed-window guard. See
+[handoff](handoff.md) for the packaged UI acceptance and exact evidence boundaries.
+
+## October 24 — MTPLX reasoning and tools preview
+
+Current retained preview: `70b9013065ab+dirty.6b57b0faeb6b`, unsigned local staging in
+`dist/design-preview-mtplx-agent`, with 364 manifest/source-verified runtime files.
+**MTPLX · local preview** exposes live model reasoning modes/effort, selected MCPs, approved
+host tools, scoped file helpers and consented images/text, retaining safe SVG rendering.
+All ten existing chat histories/schedules/provider sessions survived the normal restart.
+
+1,133 tests passed, one skipped; static/diff checks passed. Real local-model acceptance verifies
+MCP permission/result continuation, reasoning requests, file read/write, image input and
+restart without changing global MTPLX settings. Final packaged UI separately verifies saved
+reasoning choices and an unsent draft. Only two UI files differ from that live-model candidate;
+adapter and media/tool code are identical. The current executable is verified running against
+the retained profile. Final retained-window visual observation is blocked by the desktop host's
+closed-prior-window uncertainty guard; no bypass was attempted. See [handoff](handoff.md).
+
+See [MTPLX pilot](mtplx-pilot.md) for setup, boundaries and deferred work. Existing chats need
+their intended MCP explicitly selected in context. Production remains unchanged.
+
+## October 24 — MTPLX text pilot (superseded)
+
+The retained MTPLX preview is `1dbe8f7af6fc+dirty.32c0706debae` under
+`dist/design-preview-mtplx`. It is unsigned local staging with 360 verified runtime files.
+The actual packaged app passed local MTPLX context/history/SVG/Stop/restart acceptance and
+is open against the retained preview profile. The previous sections describe older builds.
+
+The current source Design Preview includes **MTPLX · local pilot** in New Chat and Providers.
+It connects to the already-running local MTPLX server, with the ordinary selected text-context
+picker and persistent text chats. Static SVG code can render below its code block.
+See [MTPLX pilot](mtplx-pilot.md) for phase boundaries, setup, validation and deferred work.
+
 ## October 22 — browser controls preview open
 
 Current retained preview is `0fdf5f9dc78c+dirty.19144eb051fb` from

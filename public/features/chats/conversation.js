@@ -1,9 +1,12 @@
 import {chatHistoryWindowStart,firstAssistantKeys} from './chat-history.js';
+import {mountSvgPreviews} from './svg-preview.js';
 import {bindRuntimeTimer,refreshRuntimeTimers,disposeRuntimeTimers,formatDuration,turnDuration,runtimeTotal,toolDuration,groupDuration} from './runtime.js';
 import { mountMessageActions } from './message-actions.js';
-import { toolPresentation, mountStructured, normalizedTool, activitySummary, groupActivity, permissionToolCallId, toolEventTime } from './tool-presentation.js';
+import { toolPresentation, mountStructured, normalizedTool, activitySummary, permissionToolCallId, toolEventTime } from './tool-presentation.js';
+import {activityEntries} from './activity-notes.js';
+import {mountProviderActivity} from './provider-activity-view.js';
 import {mountChatRecovery} from './chat-recovery-controls.js';
-import { agentName } from './agent-name.js';
+import { agentName, assistantName } from './agent-name.js';
 import { sentAttachmentPreview, openSentAttachmentPreview } from './chat-attachments.js';
 const views = new Map();
 const viewIn=root=>[...views.values()].find(view=>view.shell.isConnected&&(root===view.scroll||root===view.shell||root?.contains(view.scroll)));
@@ -130,7 +133,7 @@ export function conversation(target, run, options) {
   bindRuntimeTimer(document.querySelector('[data-runtime-total]'),()=>durationText(runtimeTotal(run.turns,now(),view.verified))+((run.timingPartial||run.turns?.some(t=>t.incomplete))?' · partial':''),!!run.turns?.some(t=>t.activeSince));
   view.updating = true;
   if(view.shell.parentElement!==target)target.replaceChildren(view.shell);
-  const entries = groupActivity([...run.events.slice(view.renderStart-transportStart).map((event, index) => ({ key: `event-${view.renderStart+index}`, ...event })), ...Object.entries(run.liveMessages || {}).map(([id, text]) => ({ key: `stream-${id}`, role: 'assistant', text, streaming: true,data:{turnId:run.turns?.at(-1)?.id} }))].filter(entry => entry.role !== 'assistant' || entry.text?.trim()));
+  const entries = activityEntries([...run.events.slice(view.renderStart-transportStart).map((event, index) => ({ key: `event-${view.renderStart+index}`, ...event })), ...Object.entries(run.liveMessages || {}).map(([id, text]) => ({ key: `stream-${id}`, role: 'assistant', text, streaming: true,data:{turnId:run.turns?.at(-1)?.id} }))].filter(entry => entry.role !== 'assistant' || entry.text?.trim()),run);
   const nodes = new Map([...view.messages.children].map(node => [node.dataset.key, node]));
   const firstAssistants=firstAssistantKeys(entries,run.events),turnsById=new Map((run.turns||[]).map(turn=>[turn.id,turn]));
   let next=view.messages.firstElementChild;
@@ -140,10 +143,11 @@ export function conversation(target, run, options) {
     if(entry.role==='activity'){
       if(!node){node=document.createElement('details');node.dataset.key=entry.key;node.className='activity-group';node.innerHTML='<summary></summary><div class="activity-group-items"></div>';}
       node.dataset.eventEnd=String((eventIndex(entry.items.at(-1)?.key)??eventIndex(entry.key))+1);
-      const tools=entry.items.filter(item=>item.data?.tool).map(item=>normalizedTool(item.data.tool)), approvals=entry.items.filter(item=>item.data?.permission?.automatic),decisions=entry.items.filter(item=>item.data?.permission&&!item.data.permission.automatic),systems=entry.items.filter(item=>!item.data?.tool&&!item.data?.permission&&item.role!=='tool');
+      const tools=entry.items.filter(item=>item.data?.tool).map(item=>normalizedTool(item.data.tool)), approvals=entry.items.filter(item=>item.data?.permission?.automatic),decisions=entry.items.filter(item=>item.data?.permission&&!item.data.permission.automatic),systems=entry.items.filter(item=>!item.data?.tool&&!item.data?.permission&&!item.data?.activityNote&&!item.data?.activity&&item.role!=='tool'),thinking=entry.items.filter(item=>item.data?.activityNote?.kind==='thinking').length,phases=entry.items.filter(item=>item.data?.activity&&item.data.activity.kind!=='usage').length,usage=entry.items.filter(item=>item.data?.activity?.kind==='usage').length;
       node.classList.toggle('running',tools.some(tool=>tool.status==='running'));
+      if(entry.items.some(item=>item.data?.activity?.status==='running')&&['running','awaiting_input'].includes(run.status))node.classList.add('running');
       node.classList.toggle('failed',tools.some(tool=>['failed','error','interrupted'].includes(tool.status)));
-      node.querySelector('summary').textContent=activitySummary(tools,approvals.length,decisions.length,systems.length);if(tools.length){const groupTimer=document.createElement('span');node.querySelector('summary').append(groupTimer);bindRuntimeTimer(groupTimer,()=>durationText(groupDuration(tools,now(),view.verified,run.turns)),tools.some(tool=>tool.status==='running'&&!tool.finishedAt));}
+      node.querySelector('summary').textContent=activitySummary(tools,approvals.length,decisions.length,systems.length)+(thinking?` · ${thinking} thinking ${thinking===1?'notice':'notices'}`:'')+(phases?` · ${phases} ${phases===1?'phase':'phases'}`:'')+(usage?' · usage':'');if(tools.length){const groupTimer=document.createElement('span');node.querySelector('summary').append(groupTimer);if(thinking||phases)groupTimer.before(document.createTextNode(' · Tools '));bindRuntimeTimer(groupTimer,()=>durationText(groupDuration(tools,now(),view.verified,run.turns)),tools.some(tool=>tool.status==='running'&&!tool.finishedAt));}
       node.populateActivity=()=>{
         if(!node.open)return;
         const signature=JSON.stringify(entry.items.map(item=>[item.key,item.role,item.at,item.text,item.data]));
@@ -151,7 +155,9 @@ export function conversation(target, run, options) {
         const content=node.querySelector('.activity-group-items');view.activityDisclosures ||= new Set();rememberDisclosures(content,view.activityDisclosures);content.replaceChildren();
         for(const item of entry.items){
           const row=document.createElement('div');row.className='activity-group-item';row.dataset.activityKey=item.key;
-          if(item.data?.tool||item.role==='tool'){
+          if(item.data?.activity){
+            mountProviderActivity(row,item,run,{...options,time:options.activityTime||options.time,verified:view.verified,now,disclosures:view.activityDisclosures,resize:view.position});
+          }else if(item.data?.tool||item.role==='tool'){
             const tool=normalizedTool(item.data?.tool||{name:'Tool output',status:'output',output:item.text}),presentation=tool.presentation||toolPresentation(tool);row.classList.add(tool.status||'completed');
             const title=document.createElement('strong'),icon=document.createElement('span');icon.className='tool-icon'+(tool.status==='running'?' spinner':'');icon.setAttribute('aria-hidden','true');icon.textContent=tool.status==='running'?'':tool.status==='completed'?'✓':'!';title.append(icon,document.createTextNode(' '+(tool.summary||tool.name||'Tool')));row.append(title);
             const status=document.createElement('div');status.className='note';const at=toolEventTime(tool,item);status.textContent=(tool.status==='running'?'Working…':tool.status==='failed'?'Failed':tool.status==='completed'?'Completed':tool.status)+(at?' · '+(options.activityTime||options.time)(at):' · Completion time unavailable');row.append(status);const timer=document.createElement('span');status.append(timer);bindRuntimeTimer(timer,()=>durationText(toolDuration(tool,now(),view.verified,run.turns)),tool.status==='running'&&!tool.finishedAt&&!Number.isFinite(tool.durationMs));
@@ -167,6 +173,12 @@ export function conversation(target, run, options) {
             const stamp=document.createElement('div');stamp.className='note';stamp.textContent=item.at?options.time(item.at):'Decision time unavailable';row.append(stamp);
             const note=document.createElement('div');note.className='note';note.textContent=[approval.reason||item.text,callId?'Tool call '+callId:null,approval.resolvedTarget?'Target '+approval.resolvedTarget:null,approval.matchedRoot?'Trusted root '+approval.matchedRoot:null].filter(Boolean).join(' · ');row.append(note);if(callId)row.dataset.toolCallId=callId;
             const details=document.createElement('details');details.dataset.disclosureKey=item.key+':request';details.open=view.activityDisclosures.has(details.dataset.disclosureKey);const summary=document.createElement('summary');summary.textContent='Original approval request';const pre=document.createElement('pre');pre.textContent=approval.request||'Original request was not recorded by this version.';details.append(summary,pre);row.append(details);
+          }else if(item.data?.activityNote){
+            const note=item.data.activityNote;row.classList.add('activity-note');
+            const title=document.createElement('strong');title.textContent=note.label;row.append(title);
+            const stamp=document.createElement('div');stamp.className='note';stamp.textContent=note.source+(item.at?' · '+(options.activityTime||options.time)(item.at):' · Time not recorded');row.append(stamp);
+            const details=document.createElement('details');details.dataset.disclosureKey=item.key+':activity-note';details.open=view.activityDisclosures.has(details.dataset.disclosureKey);
+            const summary=document.createElement('summary');summary.textContent='Original saved event';const text=document.createElement('pre');text.textContent=item.text||'';const explanation=document.createElement('p');explanation.className='note';explanation.textContent='This is a saved status notice. Reasoning text and phase duration were not recorded.';details.append(summary,text,explanation);row.append(details);
           }else{
             row.className='activity-group-item message system';
             const role=document.createElement('div');role.className='role';role.textContent='system'+(item.at?' · '+options.time(item.at):'');const body=document.createElement('div');body.className='text';row.append(role,body);ProteusMarkdown.mount(body,item.text||'',{...options,resize:view.position});
@@ -213,7 +225,7 @@ export function conversation(target, run, options) {
     if(eventIndex(entry.key)!==null)node.dataset.eventEnd=String(eventIndex(entry.key)+1);
     node.messageMarkdown=entry.text||'';
     node.className = `message ${['user', 'assistant', 'tool', 'system'].includes(entry.role) ? entry.role : 'system'}`;
-    node.firstChild.textContent = `${entry.data?.delivery ? ({queued:'Queued next',steered:'Steering',sending:'Sending steering',failed:'Not delivered',removed:'Removed from queue',delivered:'Queued message delivered'}[entry.data.delivery.state] || '') + ' · ' : ''}${entry.role === 'assistant' ? entry.agentName || agentName(run) : entry.role}${entry.streaming ? ' · streaming' : entry.at ? ' · ' + options.time(entry.at) : ''}`;
+    node.firstChild.textContent = `${entry.data?.delivery ? ({queued:'Queued next',steered:'Steering',sending:'Sending steering',failed:'Not delivered',removed:'Removed from queue',delivered:'Queued message delivered'}[entry.data.delivery.state] || '') + ' · ' : ''}${entry.role === 'assistant' ? assistantName(run, entry) : entry.role}${entry.streaming ? ' · streaming' : entry.at ? ' · ' + options.time(entry.at) : ''}`;
     if(entry.data?.question){node.classList.add('agent-question');node.firstChild.textContent=`${agentName(run)} · Question · ${entry.data.question.status||'pending'}${entry.at?' · '+options.time(entry.at):''}`;node.dataset.requestId=entry.data.question.id;}
     if(entry.data?.questionReply)node.dataset.requestId=entry.data.questionReply.requestId;
     if(entry.data?.agentFeedback)node.firstChild.textContent=`Task feedback${entry.at?' · '+options.time(entry.at):''}`;
@@ -224,6 +236,7 @@ export function conversation(target, run, options) {
     if(entry.data?.permission&&!entry.data.permission.automatic){let details=node.querySelector('.permission-original');if(!details){details=document.createElement('details');details.className='permission-original';node.append(details);}details.replaceChildren();const summary=document.createElement('summary');summary.textContent=entry.data.permission.intention||'Original approval request';const pre=document.createElement('pre');pre.textContent=entry.data.permission.request||'Original request was not recorded by this version.';details.append(summary,pre);}
     const body=node.querySelector('.text');
     ProteusMarkdown.mount(body, entry.text, { ...options, resize: view.position });
+    if(run.schedule.provider==='mtplx'&&entry.role==='assistant'&&!entry.streaming)mountSvgPreviews(body,{resize:view.position});
     mountChatRecovery(node,entry,run,{...options,resize:view.position});
     let files=node.querySelector('.message-attachments');
     if(entry.data?.attachments?.length){

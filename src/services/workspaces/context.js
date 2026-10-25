@@ -213,7 +213,7 @@ export class ContextStore {
     for (const [source,mode] of Object.entries(configuration.modes || {})) { if (!ids.has(source)) throw new Error('Refresh the source catalog before copying its selections.'); profile.modes[ids.get(source)] = mode; }
     profile.favorites = (configuration.favorites || []).map(source => ids.get(source)).filter(Boolean);
     const defaults = configuration.defaults || {};
-    profile.defaults = { ...Object.fromEntries(['includeDefaults','provider','model','reasoningEffort','contextTier','serviceTier'].filter(key => Object.hasOwn(defaults,key)).map(key => [key,defaults[key]])), selectedIds:(defaults.selectedIds || []).map(source => ids.get(source)).filter(Boolean), agentId:ids.get(defaults.agentId) || null };
+    profile.defaults = { ...Object.fromEntries(['includeDefaults','provider','model','reasoningEffort','reasoningMode','contextTier','serviceTier'].filter(key => Object.hasOwn(defaults,key)).map(key => [key,defaults[key]])), selectedIds:(defaults.selectedIds || []).map(source => ids.get(source)).filter(Boolean), agentId:ids.get(defaults.agentId) || null };
     this.mutate(config => { config.favorites = unique([...config.favorites, ...profile.favorites]); config.workspaces.push(profile); }, expectedRevision);
     return { ...this.get(id), copiedWorkspaceId:id };
   }

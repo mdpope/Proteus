@@ -118,13 +118,13 @@ function modelOptions(models, selected) {
 }
 export const tokenSize = value => Number.isFinite(value) ? (value >= 1_000_000 ? value / 1_000_000 + 'M' : value >= 1000 ? value / 1000 + 'K' : String(value)) : 'Not reported';
 export const contextSize = tier => `${tier.promptTokens ? tokenSize(tier.promptTokens) : 'Capacity not reported'} · ${tier.id === 'default' ? 'Default' : tier.id === 'long_context' ? 'Long context' : tier.id}`;
-export function modelSelection(id) { return { reasoningEffort: $('#' + id + '-effort').value, contextTier: $('#' + id + '-context').value, serviceTier: $('#' + id + '-speed').value }; }
+export function modelSelection(id) { return { ...($('#'+id+'-mode')?.dataset.supported==='true'?{reasoningMode:$('#'+id+'-mode').value}:{}), reasoningEffort: $('#' + id + '-effort').value, contextTier: $('#' + id + '-context').value, serviceTier: $('#' + id + '-speed').value }; }
 const catalogFor = provider => u.state.data.providerStatuses?.[provider] || (provider === 'copilot' ? u.state.data.providerStatus : null);
 export function modelPicker(id, selected, provider = 'copilot') {
   return `<select id="${id}" data-selected="${esc(selected)}" data-provider="${esc(provider)}" aria-label="Model">${modelOptions(catalogFor(provider)?.models || [], selected)}</select>`;
 }
 export function modelControls(id, options = {}, compact = false) {
-  return `<div class="model-controls ${compact ? 'compact-model-controls' : ''}" data-model-picker="${id}"><div><label for="${id}-effort">Thinking effort</label><select id="${id}-effort"><option value="${esc(options.reasoningEffort || '')}">${esc(options.reasoningEffort || 'Provider default')}</option></select></div><div><label for="${id}-context">Context size</label><select id="${id}-context"><option value="${esc(options.contextTier || 'default')}">${esc(options.contextTier || 'default')}</option></select></div><div><label for="${id}-speed">Speed / service tier</label><select id="${id}-speed"><option value="${esc(options.serviceTier || '')}">${esc(options.serviceTier || 'Provider default')}</option></select></div><p class="note" id="${id}-capabilities" aria-live="polite"></p></div>`;
+  return `<div class="model-controls ${compact ? 'compact-model-controls' : ''}" data-model-picker="${id}"><div hidden><label for="${id}-mode">Reasoning</label><select id="${id}-mode"><option value="${esc(options.reasoningMode || '')}">${esc(options.reasoningMode || 'Provider default')}</option></select></div><div><label for="${id}-effort">Thinking effort</label><select id="${id}-effort"><option value="${esc(options.reasoningEffort || '')}">${esc(options.reasoningEffort || 'Provider default')}</option></select></div><div><label for="${id}-context">Context size</label><select id="${id}-context"><option value="${esc(options.contextTier || 'default')}">${esc(options.contextTier || 'default')}</option></select></div><div><label for="${id}-speed">Speed / service tier</label><select id="${id}-speed"><option value="${esc(options.serviceTier || '')}">${esc(options.serviceTier || 'Provider default')}</option></select></div><p class="note" id="${id}-capabilities" aria-live="polite"></p></div>`;
 }
 function optionList(choices, current) {
   if (current && !choices.some(option => option.id === current)) choices.push({ id: current, label: current + ' · unavailable (saved)' });
@@ -136,6 +136,8 @@ function updateModelControls(id, providerId) {
   const data = catalogFor(provider); const model = data?.models?.find(model => model.id === select.value);
   const controls = model?.controls; const local = ['rehearsal','local-process'].includes(provider);
   const effort = $('#' + id + '-effort'), context = $('#' + id + '-context'), speed = $('#' + id + '-speed');
+  const mode=$('#'+id+'-mode'),modes=controls?.reasoningModes||[];
+  if(mode){mode.dataset.supported=String(modes.length>0);mode.parentElement.hidden=!modes.length&&!mode.value;mode.innerHTML=optionList([{id:'',label:'Provider default'+(controls?.defaultReasoningMode?' · '+controls.defaultReasoningMode:'')},...modes.map(id=>({id,label:id[0].toUpperCase()+id.slice(1)}))],mode.value);mode.title='Reasoning mode · applies to the next turn';mode.setAttribute('aria-label','Reasoning mode');mode.onchange=()=>{effort.disabled=mode.value==='off';};}
   const efforts = controls?.reasoningEfforts || [];
   effort.innerHTML = optionList([{ id: '', label: 'Provider default' + (controls?.defaultReasoningEffort ? ' · ' + controls.defaultReasoningEffort : '') }, ...efforts.map(id => ({ id, label: id }))], effort.value);
   context.innerHTML = optionList((controls?.contextTiers || [{ id: 'default' }]).map(tier => ({ id: tier.id, label: contextSize(tier) })), context.value || 'default');
@@ -152,7 +154,7 @@ function updateModelControls(id, providerId) {
       input.title = label + ' · applies to your next turn. Steering keeps the running turn’s settings.'; input.setAttribute('aria-label', label);
     }
   }
-  select.disabled = local; effort.disabled = local; context.disabled = local; speed.disabled = local;
+  select.disabled = local; effort.disabled = local || mode?.value==='off'; context.disabled = local; speed.disabled = local;
   $('#' + id + '-capabilities').textContent = local ? 'Local rehearsal uses no model.' : [
     !select.value ? 'Choose a model.' : !model ? 'Selected model is unavailable or the catalog has not loaded.' : !efforts.length ? (controls?.reasoningSupported === false ? 'This model does not support thinking effort.' : 'Thinking effort choices are not reported.') : '',
     controls?.maxOutputTokens ? 'Maximum output: ' + tokenSize(controls.maxOutputTokens) + ' tokens. Context size is the prompt budget; output is separate.' : 'Context capacity is not advertised by this catalog; actual usage appears during a run.',
@@ -167,7 +169,7 @@ export async function refreshModels(id, providerId, force = false) {
   select.dataset.providerId = providerId;
   if (select.dataset.provider !== provider) {
     select.dataset.provider = provider; select.dataset.selected = ''; select.innerHTML = modelOptions(catalogFor(provider)?.models || [], '');
-    $('#' + id + '-effort').value = ''; $('#' + id + '-context').value = 'default'; $('#' + id + '-speed').value = '';
+    if($('#'+id+'-mode'))$('#'+id+'-mode').value=''; $('#' + id + '-effort').value = ''; $('#' + id + '-context').value = 'default'; $('#' + id + '-speed').value = '';
   }
   select.onchange = () => {
     select.dataset.selected = select.value;

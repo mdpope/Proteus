@@ -1,3 +1,28 @@
+## October 24 — MTPLX reasoning and agent extension
+
+The isolated preview adapter now reads both `/v1/models` and `/v1/mtplx/settings`.
+Model-matched `reasoning_policy` supplies actual modes/efforts; explicit per-chat controls
+use `enable_thinking`, `reasoning_effort` and MTPLX's client-control opt-in header.
+No global settings POST, model-name option table or account/runtime substitution occurs.
+
+A serial OpenAI tool-call loop connects available host tools and a selected-server MCP gateway.
+It validates each schema, uses ordinary `ask` permissions and current owner/selection checks,
+persists tool intents/results and closes orphaned protocol pairs with uncertainty on recovery.
+Official MCP SDK transports support stdio, HTTP and SSE; tool filters and selected agent ceilings
+are enforced before dispatch. OAuth sign-in/recovery is not implemented for this adapter.
+Consented image/text input and vision tool results use actual image content. Older complete
+turns can be evicted with a visible notice; the full event journal stays intact.
+See [MTPLX contract](mtplx-pilot.md).
+
+## October 24 — preview-only MTPLX text provider
+
+Design Preview registers `MtplxProvider` behind `SessionProvider`; production does not register
+it. It uses live MTPLX `/v1/models` and streaming `/v1/chat/completions`, supplies core guidance
+and captured text/agent sources, and persists delivered history in the Proteus run.
+No native MTPLX chat is imported or modified. MCPs, tools and attachments are excluded with
+explicit errors; subscription allowance and unadvertised controls remain unavailable.
+See [MTPLX pilot](mtplx-pilot.md).
+
 ## October 23 — question attachments, liveness and shared terminals
 
 All three providers expose consented question attachments through `proteus_question_attachments`:
@@ -488,3 +513,28 @@ provider capability. HC real-provider picker/execution acceptance remains pendin
 The supervised updater and native desktop controller use the existing provider custom-tool and
 image-result boundary. Tool discovery is lazy; a catalog does not establish OS permission, page/app
 control or actual provider image delivery. These acceptance outcomes are tracked separately.
+
+## Activity detail review — October 24
+
+MTPLX response naming now uses the same provider fallback as Copilot/Codex/Claude in source;
+legacy main-agent “Proteus” labels are corrected at display time without rewriting records.
+The next preview build will include this correction. Broader progress changes remain a
+[standalone design study](design/2026-10-24/activity-details-preview.html), not enabled behavior.
+## October 25 — Captured Activity contract
+
+The shared chat renderer groups structured provider Activity by default, with no format switcher.
+Legacy exact MTPLX thinking notices remain available under Original saved event. Other system
+messages and ordinary assistant updates remain visible. New records are separate from provider
+replay input and carry source, phase status, observed times, optional agent, and scoped usage.
+Activity details explain missing data, interruptions and the distinction between elapsed streaming
+intervals and inference time. Missing counts are not zero; usage scopes are never summed blindly.
+
+MTPLX reasoning/content streams, Copilot reasoning/message events and Claude thinking/text block
+lifecycles supply phase signals. Codex reasoning-item and agent-message events supply phases;
+its explicit public summary channel also supplies bounded summary text. Raw reasoning text and
+signatures are not retained. Claude aggregate input includes uncached + cache-read + cache-write
+only when all three exist; other usage fields retain their provider-reported scopes.
+
+The local MTPLX pilot remains preview-only. Review capture in Design Preview before updating
+the installed app; production registration, OAuth, native steering and remote/mobile rollout
+remain separate capabilities. See [MTPLX contract](mtplx-pilot.md) and current handoff status.

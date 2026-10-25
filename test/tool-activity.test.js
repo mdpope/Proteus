@@ -68,7 +68,8 @@ test('Copilot omits empty assistant cards, preserves streamed final text and sho
   await provider.run({ run, prompt: 'fixture', signal: new AbortController().signal, update() {}, ask() {},
     emit: (role, text, data) => run.events.push({ role, text, data }), stream: (id, text) => { run.liveMessages ??= {}; run.liveMessages[id] = (run.liveMessages[id] || '') + text; } });
   assert.equal(run.events.filter(e => e.role === 'assistant').length, 1);
-  assert.match(run.events[0].text, /Complete final answer/);
+  assert.match(run.events.find(e=>e.role==='assistant').text, /Complete final answer/);
+  assert.ok(run.events.some(e=>e.data?.activity?.kind==='response'));
   assert.ok(run.events.some(e => e.text === 'An integration is unavailable'));
   assert.ok(!JSON.stringify(run.events).includes('Never surface internal reasoning'));
 });

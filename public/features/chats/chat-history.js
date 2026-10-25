@@ -23,7 +23,7 @@ export function chatHistoryWindowStart(events, before=events.length) {
   // Count collapsed activity as a single row. Tool output is mounted only on
   // expansion, so it must not consume the visible-message byte budget.
   while(start>0&&end-start<100){
-    const event=events[start-1],activity=!!(event.data?.tool||event.data?.permission?.automatic);
+    const event=events[start-1],activity=!!(event.data?.tool||event.data?.permission?.automatic||event.data?.activity);
     const cost=activity&&lastActivity?0:1,size=activity?0:encoder.encode(String(event.text||'')).length;
     if(start<end&&(rows+cost>24||bytes+size>128*1024))break;
     bytes+=size;rows+=cost;lastActivity=activity;start--;

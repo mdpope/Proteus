@@ -15,10 +15,11 @@ export function copilotModel(model) {
   return { ...model, controls: { reasoningEfforts: efforts, reasoningSupported: supported ?? (efforts.length ? true : null), defaultReasoningEffort: efforts.includes(model.defaultReasoningEffort) ? model.defaultReasoningEffort : null, contextTiers, maxOutputTokens: output } };
 }
 export function validateModelOptionShape(value) {
-  for (const key of ['reasoningEffort', 'contextTier', 'serviceTier']) if (value[key] != null && (typeof value[key] !== 'string' || (value[key] !== '' && !/^[a-zA-Z0-9_.-]{1,80}$/.test(value[key])))) throw new Error(`${key} must be a provider-advertised option ID.`);
+  for (const key of ['reasoningEffort', 'reasoningMode', 'contextTier', 'serviceTier']) if (value[key] != null && (typeof value[key] !== 'string' || (value[key] !== '' && !/^[a-zA-Z0-9_.-]{1,80}$/.test(value[key])))) throw new Error(`${key} must be a provider-advertised option ID.`);
 }
 export function validateModelOptions(schedule, model) {
   validateModelOptionShape(schedule);
+  if (schedule.reasoningMode && !model.controls?.reasoningModes?.includes(schedule.reasoningMode)) throw new Error(`Reasoning mode ${schedule.reasoningMode} is unavailable for ${model.id}. Refresh models and choose a supported mode or Provider default.`);
   if (model.policy?.state === 'disabled') throw new Error(`Model ${model.id} is disabled for this account.`);
   if (schedule.reasoningEffort && !model.controls?.reasoningEfforts?.includes(schedule.reasoningEffort)) throw new Error(`Reasoning effort ${schedule.reasoningEffort} is unavailable for ${model.id}. Refresh models and choose a supported effort or Provider default.`);
   if (schedule.serviceTier && !model.controls?.serviceTiers?.some(t => t.id === schedule.serviceTier)) throw new Error(`Service tier ${schedule.serviceTier} is unavailable for ${model.id}. Refresh models and choose a supported speed.`);
@@ -50,5 +51,5 @@ export function chatModelOptions(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Model options must be an object.');
   if (typeof value.model !== 'string' || value.model.length > 200 || /[\r\n]/.test(value.model)) throw new Error('Choose a model from the catalog.');
   validateModelOptionShape(value);
-  return { model: value.model, reasoningEffort: value.reasoningEffort || '', contextTier: value.contextTier || 'default', serviceTier: value.serviceTier || '' };
+  return { model: value.model, reasoningEffort: value.reasoningEffort || '', ...(Object.hasOwn(value,'reasoningMode')?{reasoningMode:value.reasoningMode||''}:{}), contextTier: value.contextTier || 'default', serviceTier: value.serviceTier || '' };
 }

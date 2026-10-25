@@ -36,12 +36,12 @@ export function normalizedTool(tool) {
 export function isActivityEvent(event) {
  if(event?.data?.question||event?.data?.agentFeedback)return false;
  const role=event?.role||event?.type;
- return Boolean(event?.data?.tool||event?.data?.permission||role==='tool');
+ return Boolean(event?.data?.tool||event?.data?.permission||event?.data?.activity||role==='tool');
 }
-export function groupActivity(entries) {
+export function groupActivity(entries, classify = isActivityEvent) {
  const result=[];let batch=[];
  const flush=()=>{if(batch.length){result.push({key:'activity-'+batch[0].key,role:'activity',items:batch,at:batch.at(-1).at});batch=[];}};
- for(const entry of entries){if(isActivityEvent(entry)){batch.push(entry);continue;}flush();result.push(entry);}flush();return result;
+ for(const entry of entries){if(classify(entry)){batch.push(entry);continue;}flush();result.push(entry);}flush();return result;
 }
 export function permissionToolCallId(permission) {
  const request=parse(permission?.request);

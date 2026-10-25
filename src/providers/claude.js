@@ -1,4 +1,5 @@
 import {questionAttachmentTools} from '../services/chats/question-attachments.js';
+import {providerActivity} from '../shared/provider-activity.js';
 import {claudeMessageContent} from './provider-attachment-input.js';
 import {chatControlTools} from '../services/chats/chat-control-tools.js';
 import {randomUUID} from 'node:crypto';
@@ -270,7 +271,8 @@ export class ClaudeProvider {
     let client;try{client=this.client(args,run.schedule.workspace.cwd,mcpConfig?.file||null);}catch(error){mcpConfig?.dispose();await bridge?.close();throw error;}
     this.active=client;this.activeRunId=run.id;
     let resolve,reject;const done=new Promise((a,b)=>{resolve=a;reject=b;});done.catch(()=>{});
-    const calls=new Map();let currentId='claude',resultSeen=false,steering=null,accepting=false;const approved=new Map();
+    const calls=new Map();let currentId='claude',resultSeen=false,steering=null,accepting=false,activitySucceeded=false;const approved=new Map();
+    const capture=providerActivity({provider:'claude',emit,update});
     let remaining=this.options.timeoutMs??30*60*1000,started=performance.now(),timer,pauses=0,finished=false;
     const arm=()=>{if(finished||pauses)return;started=performance.now();timer=setTimeout(()=>reject(new Error('Claude exceeded the active execution time limit. Waiting for input was excluded.')),Math.max(0,remaining));};
     const askUser=async request=>{if(pauses++===0){clearTimeout(timer);remaining-=performance.now()-started;}try{return await ask(request);}finally{if(--pauses===0)arm();}};
@@ -308,6 +310,7 @@ export class ClaudeProvider {
       }catch(error){reject(error);throw error;}finally{clearTimeout(timeout);if(steering===pending)steering=null;}
     };
     const message=m=>{
+      if(m.type!=='result'||!resultSeen)capture.receive(m);
       if(m.type==='user'&&steering?.sent&&m.uuid===steering.id){steering.acknowledged=true;steering.ack.resolve();}
 
       if(m.session_id){run.providerSessionId=m.session_id;run.providerHome=process.env.CLAUDE_CONFIG_DIR||path.join(os.homedir(),'.claude');update();}
@@ -347,8 +350,9 @@ export class ClaudeProvider {
       // Fast mode requires both model support and runtime opt-in. Do not silently ignore a selection.
       if(run.schedule.serviceTier==='fast'&&result.fast_mode_disabled_reason)throw new Error(`Claude fast mode unavailable: ${result.fast_mode_disabled_reason}. Choose Provider default.`);
       run.modelCapabilities={id:model.id,controls:model.controls,capturedAt:new Date().toISOString()};if(snapshot){snapshot.suppliedAt=new Date().toISOString();snapshot.delivery='Claude explicit system prompt accepted';}update();
-      if(signal.aborted)throw new Error('Cancelled');accepting=true;this.activeSteer=steer;client.write({type:'user',session_id:run.providerSessionId||'',message:{role:'user',content},parent_tool_use_id:null});await done;
+      if(signal.aborted)throw new Error('Cancelled');accepting=true;this.activeSteer=steer;client.write({type:'user',session_id:run.providerSessionId||'',message:{role:'user',content},parent_tool_use_id:null});await done;activitySucceeded=true;
     }finally{
+      capture.finish(activitySucceeded?'completed':'interrupted');
       finished=true;accepting=false;this.activeSteer=null;steering?.boundary.reject(new Error('Claude turn ended.'));steering?.ack.reject(new Error('Claude turn ended.'));clearTimeout(timer);signal.removeEventListener('abort',abort);let cleanupError;
       try{await client.close();}catch(error){cleanupError=error;this.cleanupError=error;this.cleanupClients.add(client);}
       finally{client.off('message',message);client.off('request',request);client.off('closed',closed);mcpConfig?.dispose();await bridge?.close();if(!cleanupError){this.active=null;this.activeRunId=null;}for(const tool of calls.values())if(tool.status==='running')tool.status='interrupted';update();}

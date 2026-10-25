@@ -1,3 +1,138 @@
+## October 25 — Full Activity capture review candidate
+
+The operator expanded the scope to actual provider capture and requested Design Preview review
+before any installed local update or wider distribution. Source implements default targeted
+grouping with no switcher, observable phase timing, source/agent/interruption detail, scoped
+optional usage, explicit Codex public summaries, raw-reasoning exclusion and actual-heartbeat
+stall tracking. Ordinary assistant updates, questions, warnings, errors and context notices remain
+messages. Legacy MTPLX notices retain original text without invented historical timing.
+
+All four adapters are wired to the shared capture boundary. Protocol fixtures prove each mapping;
+they do not establish live delivery for every model. Real MTPLX source acceptance passed observed
+thinking/response phases, model-request usage (including actual reasoning/cache counts), Activity
+drill-down, exact persisted-record restoration and unchanged native MTPLX controls. Four-provider
+renderer fixtures pass timing/summary/usage, unknown fields, draft/history preservation, lazy open
+disclosures during streaming, no format controls and a real 640px disposable window.
+
+Full suite: 1,142 passed, one skipped; static/diff checks passed. The existing Copilot assistant
+test was corrected to select the assistant event instead of assuming it preceded newly recorded
+Activity. Its original empty-card, final-text, warning and raw-reasoning-exclusion checks remain.
+Review candidate `70b9013065ab+dirty.677bae048f0c` is unsigned local staging in
+`dist/design-preview-activity-capture`; all 367 runtime files match source and embedded manifest.
+Final exact-package renderer and live-model acceptance both passed. The package's real MTPLX
+turn reported 107 reasoning tokens and 4,096 cached input tokens, captured live thinking/response
+intervals, preserved the journal through restart and left native controls unchanged. All-provider
+UI fixtures passed without model calls; live Copilot/Claude/Codex sessions were not exercised.
+Retained-preview restart is pending a normal operator Quit because of the stale desktop guard.
+
+The operator's earlier merge/handoff instruction is source integration only under the newest
+review gate. The named Oct 23 release chat owns the remaining queued items and should build/test
+an isolated combined review candidate, preserving this hold. Do not update the installed app,
+publish/distribute, or start destination updates until Operator checks the preview and authorizes
+that next step. No GitHub Actions, provider/session substitution, approval bypass or source-data
+copying. Production MTPLX registration remains deliberately separate from this pilot.
+
+## October 25 — Option 2 real-chat Current / Grouped comparison open (superseded)
+
+The operator requested comparison on actual saved chats and clarification of history versus
+display. The preview renderer now offers **Chat view → Current / Grouped activity**. Current
+remains the default; the alternate view groups exact MTPLX thinking notices with adjacent tools. Original event text remains drillable, and no extra reasoning,
+timing or usage is invented. Ordinary text, unknown status, questions and final answers stay
+in the conversation. This is the same saved journal projected two ways, not new model output.
+
+Selection and disclosures are renderer-only, per cached chat, and reset on restart/eviction.
+The toggle preserves the composer, draft, loaded history window and reading anchor. Stored
+event journals, schedules and provider replay histories are never rewritten. The earlier
+MTPLX naming fix is included, including legacy main-agent labels corrected only for display.
+Production/remote clients do not show this preview-only comparison control.
+
+Exact unsigned local staging package `70b9013065ab+dirty.2ce0f85a7e10` is in
+`dist/design-preview-activity-comparison`. All 365 runtime files match current source and the
+embedded manifest. The exact packaged renderer passed MTPLX and Codex saved-chat comparison,
+source-file hash preservation, original event drill-down, lazy/open disclosure restoration,
+draft/composer stability, independent chat selection, loaded-window retention, streaming updates
+without a provider turn, and an actual 640px disposable window. No real provider was called.
+Full suite: 1,136 passed, one skipped; static and diff checks passed. A first UI fixture lacked
+the required synthetic model; corrected. A narrow test hit the normal 850px native minimum;
+only the disposable test window's minimum was reduced before the passing packaged check.
+
+The operator clarified Option 2 and quit the old preview normally. All assistant commentary,
+including explicitly tagged Codex messages, stays inline; Option 3 remains deferred. The final
+package passed saved MTPLX/Codex UI checks after the test waited for asynchronous lazy expansion.
+The ordinary launch boundary reopened the retained profile with the exact tested executable.
+Native discovery shows its window; executable inspection confirms the new package. All eleven
+retained event journals, schedules, statuses and provider sessions match fresh pre-restart hashes.
+Native visual observation remains unavailable due to the stale closed-window guard, without a
+bypass. Exact packaged disposable renderer acceptance and preservation hashes are separate proof.
+Existing default-production Activity UI also passes its regression check. No production install,
+provider turn, remote dispatch or source push. Temporary comparison mode resets to Current on
+restart; select Grouped activity on a saved MTPLX chat to compare its actual recorded notices.
+
+## October 24 — Activity study open; behavior decision pending (superseded)
+
+The operator requested options before choosing broader Activity changes. Standalone
+[interactive study](design/2026-10-24/activity-details-preview.html) is open beside the current
+chat through a loopback-only static server. It compares current, quiet phase/tool grouping and
+optional progress notes for all four providers. It includes replay, timeline/usage drill-down,
+availability caveats and approval/failure states. All examples are synthetic, with zero provider
+calls or app settings changes. Provider adapters were inspected; a retained preview chat was
+inspected for metadata/counts only, without copying its contents.
+
+MTPLX's missing name fallback is corrected in source. The renderer also corrects legacy
+main-agent “Proteus” display labels without rewriting history or changing custom identities.
+These small source changes are not in the running packaged preview yet. Activity grouping,
+reasoning collection and automatic progress classification remain unimplemented proposals.
+Existing packaged acceptance below refers to that frozen artifact, not current edited source.
+
+Validation: all twelve provider/treatment combinations, drill-down, collapse, visible attention
+states, replay, keyboard tabs and 390px layout passed in the actual embedded browser. Identity
+checks preserve selected/custom/subagent names and correct legacy MTPLX labels. Static/diff
+checks pass. Full suite: 1,132 passed, one skipped, one fixture failed because macOS rejected
+its overlong Unix-socket temp path. All ten update-storage tests, including that fixture,
+passed with `TMPDIR=/tmp`; no product change was needed. Initial sandboxed test failures were
+temporary-directory access restrictions; the suite was rerun with the required permission.
+
+## October 24 — MTPLX reasoning and tool preview accepted
+
+Design Preview now supports provider-advertised reasoning modes and effort, selected MCPs,
+existing approved Proteus tools, bounded file helpers and consented PNG/JPEG/WebP input.
+Exact unsigned local staging build `70b9013065ab+dirty.6b57b0faeb6b` has 364 runtime files;
+all packaged/source hashes match its embedded manifest. It runs from
+`dist/design-preview-mtplx-agent` against the retained preview profile. All ten prior chat
+IDs, event histories, schedules and provider sessions match pre-restart hashes.
+
+Full validation: 1,133 tests passed, one skipped; static and diff checks passed. Real local
+MTPLX with a disposable preview passed On/Low and Off request controls, an approved selected
+synthetic MCP call, hashed file read/write, consented image interpretation and restart. Global
+MTPLX controls remained unchanged. That live candidate differs from the final package only in
+`public/app.js` and `public/features/chats/chat-composer.js`: the final package separately
+passed reasoning labels/modes, Off disabling effort, and saved On/Xhigh/draft restoration.
+Every adapter/tool/media byte is identical to the live-tested candidate.
+
+Native discovery and executable inspection verify the retained preview's new running package.
+A final retained-window screenshot was unavailable: the desktop host preserves an uncertainty
+guard for the now-closed prior window after normal Quit, despite discovery confirming no old
+windows. No input retry or guard bypass occurred. Packaged synthetic UI screenshots were
+inspected; retained-chat preservation is independently verified from hashes.
+
+See [MTPLX contract](mtplx-pilot.md). Existing text-pilot chats must select desired MCP sources
+through Details → Refresh / choose context. Safari requires SafariSelector; Proteus browser
+tools operate Proteus tabs. Unrestricted shell, MCP OAuth, active steering, native delegation,
+production/mobile/remote registration remain deferred. No production install, source push,
+global MTPLX setting change or user-data model turn was performed for acceptance.
+
+## October 24 — MTPLX isolated text pilot accepted (superseded)
+
+The operator requested local MTPLX chats with ordinary selected context and phased helpers.
+Design Preview now includes a direct loopback text adapter and restricted SVG preview.
+Exact unsigned local build `1dbe8f7af6fc+dirty.32c0706debae` has 360 manifest-verified runtime
+files and passed real packaged UI checks for selected context, history, SVG, Stop and restart
+continuation. Full tests: 1,125 passed, one skipped; static/diff checks passed. It is open with
+the retained private preview profile; production remains unchanged.
+See [MTPLX pilot](mtplx-pilot.md) for the capability contract, failures/corrections and proposed
+image-input/tool/context phases. Tools, MCPs, filesystem access, image input, schedules,
+production and remote/mobile enablement remain deferred. No source push or production install.
+
 ## Local Mac installation and automatic continuation accepted
 
 The authorized local Mac now runs signed `b2da2f2797b5+src.f7b3a6a8559e`. The installed

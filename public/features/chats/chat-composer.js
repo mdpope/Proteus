@@ -32,7 +32,7 @@ export function mountChatComposer(composer,{textarea,models,actions,active=false
   // transcript's scroll range on every keystroke and makes scroll-follow oscillate.
   const measure=textarea.cloneNode(false);measure.removeAttribute('id');measure.removeAttribute('name');measure.setAttribute('aria-hidden','true');measure.tabIndex=-1;measure.disabled=true;measure.className='composer-measure';composer.append(measure);
   const docked=pane?.matches('.remote-chat-main')&&!!pane.querySelector('.remote-messages');if(docked)pane.classList.add('docked-chat');
-  const fieldLabel=select=>/effort|reasoning/i.test(select.id+select.name)?'Level':/context/i.test(select.id+select.name)?'Context':/speed|serviceTier/i.test(select.id+select.name)?'Speed':/provider/i.test(select.id+select.name)?'Provider':'Model';
+  const fieldLabel=select=>/-mode$|reasoningMode/i.test(select.id+select.name)?'Reasoning':/effort|reasoning/i.test(select.id+select.name)?'Level':/context/i.test(select.id+select.name)?'Context':/speed|serviceTier/i.test(select.id+select.name)?'Speed':/provider/i.test(select.id+select.name)?'Provider':'Model';
   function decorate(){
     if(models){
       models.classList.add('composer-models');

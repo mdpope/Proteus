@@ -15,7 +15,7 @@ const MAX_PER_DEVICE_BYTES = 64 * 1024 * 1024;
 const MAX_INCOMPLETE = 16;
 const MAX_INCOMPLETE_PER_DEVICE = 4;
 const MEDIA_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'application/pdf', 'text/plain']);
-const PROVIDERS = new Set(['copilot', 'codex', 'claude']);
+const PROVIDERS = new Set(['copilot', 'codex', 'claude', 'mtplx']);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function identity(value, label) {

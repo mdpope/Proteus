@@ -10,6 +10,16 @@ import { ChatAttachmentConsents } from '../src/services/chats/chat-attachment-co
 
 const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLytQAAAABJRU5ErkJggg==','base64');
 const sha256=createHash('sha256').update(png).digest('hex');
+test('MTPLX image consent preserves exact provider binding through accepted storage and restart',async t=>{
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-mtplx-consent-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+  const store=new ChatAttachmentStore(home);t.after(()=>store.close());const grants=new ChatAttachmentConsents(store);
+  const owner={chatId:'mtplx-chat',deviceId:'local-desktop',messageId:'image-message',providerId:'mtplx'};
+  const begun=await store.begin({...owner,name:'synthetic.png',mediaType:'image/png',size:png.length,sha256});await store.chunk({uploadId:begun.uploadId,deviceId:owner.deviceId,index:0,dataBase64:png.toString('base64')});const file=await store.finish({uploadId:begun.uploadId,deviceId:owner.deviceId});
+  const consent=await grants.authorize({...owner,attachments:[file],acceptedMediaTypes:['image/png']});const claim={...owner,consentId:consent.consentId,attachmentIds:[file.attachmentId]};await assert.rejects(grants.verify({...claim,providerId:'codex'}),/does not match/);
+  const proof=await grants.prepareSend(claim);await store.close();const restored=new ChatAttachmentStore(home);t.after(()=>restored.close());const resumed=new ChatAttachmentConsents(restored);
+  await assert.rejects(resumed.readForProvider({proofId:proof.proofId,chatId:owner.chatId,providerId:'copilot',attachmentIds:claim.attachmentIds}),/consent is missing or changed/);
+  assert.deepEqual((await resumed.readForProvider({proofId:proof.proofId,chatId:owner.chatId,providerId:'mtplx',attachmentIds:claim.attachmentIds}))[0].bytes,png);
+});
 test('explicit consent binds exact payload, peer, chat, message and provider until one send',async t=>{
   const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-consent-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
   const store=new ChatAttachmentStore(home);t.after(()=>store.close());let now=Date.now();const grants=new ChatAttachmentConsents(store,{clock:()=>now});

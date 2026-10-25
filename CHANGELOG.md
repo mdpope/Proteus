@@ -1,3 +1,30 @@
+## October 25 — Captured provider activity for review
+
+- Make targeted thinking-notice grouping the default and remove the format switcher. Preserve assistant commentary, answers, questions, warnings, errors and context notices in the conversation.
+- Record observed thinking/response intervals and scoped reported usage for MTPLX, Codex, Claude and Copilot; show timing, source, missing-value and interruption details inside Activity. Include explicit Codex provider summaries without storing raw internal reasoning.
+- Keep legacy saved notices drillable without inventing missing timing. Preserve draft/history/disclosure state during updates and recognize actual phase heartbeats in stall detection. Local installation and wider rollout remain held for Design Preview review.
+
+## October 25 — Real-chat display comparison in Design Preview (superseded)
+
+- Add Current / Grouped activity buttons to actual local preview chats. Group only recorded MTPLX thinking notices alongside tools, leaving all assistant updates inline; preserve original event drill-down, ordinary text, warnings, questions and answers.
+- Keep comparison state in the renderer only. No chat-history rewrite, new provider request, reasoning capture or automatic prose classification. Include the MTPLX response-name correction and legacy-label display fix in the next preview build.
+
+## October 24 — Activity details study and MTPLX identity correction
+
+- Correct the missing MTPLX provider-name fallback and display old pilot main-agent messages saved as “Proteus” as MTPLX, preserving explicit custom/subagent names and stored history. Source correction awaits the next preview build.
+- Add a standalone interactive Activity study comparing existing flow, grouped phase/tool detail and optional progress updates across MTPLX, Codex, Claude and Copilot. Synthetic fixtures only; Activity classification remains proposed.
+
+## October 24 — MTPLX reasoning, tools and media in Design Preview
+
+- Discover MTPLX reasoning modes/efforts from its live settings metadata and save per-chat Auto/On/Off and effort selections. Send explicit request controls without changing global MTPLX settings.
+- Add an approved serial tool loop with schema validation, selected MCP discovery/calls/resources, authorized text-file reads/edits and existing available Proteus tools. Preserve interrupted-call uncertainty across restart without automatic execution replay.
+- Add consented PNG/JPEG/WebP and plain-text input, vision tool results, MCP health, larger response budgets and visible eviction of complete older context turns. Retain preview-only provider registration.
+
+## October 24 — MTPLX Design Preview pilot
+
+- Add a preview-only local MTPLX chat provider with live model/context discovery, selected text sources and agent prompts, streaming, measured token usage, Stop and persistent conversation replay.
+- Preview a restricted static SVG subset as isolated images while retaining the original code. Explicitly defer image input, tools/MCP, file access, web search and production/web/mobile enablement.
+
 ## Next release — October 23 feature queue (local package validation; rollout held)
 
 - Fix recovery snapshots blocked by managed terminal sockets, and restart/report through the original chat when pre-replacement recovery capture fails.

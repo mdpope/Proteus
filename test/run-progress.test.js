@@ -5,6 +5,9 @@ import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
 import {Engine} from '../src/engine.js';
 import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
 const at=minutes=>new Date(minutes*60_000).toISOString();
+test('observed activity heartbeats clear stalls while unchanged elapsed-time repaint does not',()=>{
+ const activity={id:'phase',kind:'thinking',status:'running',lastObservedAt:at(0)},run={status:'running',events:[{role:'system',data:{activity}}]};startProgress(run,at(0));providerProgress(run,at(0));providerProgress(run,at(4));assert.equal(run.progress.lastProgressAt,at(0));assert.equal(checkProgress(run,at(5)).changed,true);activity.lastObservedAt=at(6);providerProgress(run,at(6));assert.equal(run.progress.lastProgressAt,at(6));assert.equal(run.progress.stalled,false);
+});
 test('queued user messages and unchanged provider updates cannot conceal a stalled tool',()=>{
  const tool={callId:'call',name:'synthetic_write',status:'running',startedAt:at(0)},run={status:'running',events:[{role:'tool',data:{tool}}]};
  startProgress(run,at(0));providerProgress(run,at(0));

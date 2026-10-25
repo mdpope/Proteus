@@ -45,12 +45,17 @@
         "codex",
         "rehearsal",
         "claude",
+        "mtplx",
         "local-process"
       ]
     },
     "model": {
       "type": "string",
       "description": "An explicit provider model ID; empty for rehearsal or a managed local process."
+    },
+    "reasoningMode": {
+      "type": "string",
+      "description": "Provider-advertised reasoning mode ID; omit or empty for provider default. Validated against current model capabilities."
     },
     "reasoningEffort": {
       "type": "string",

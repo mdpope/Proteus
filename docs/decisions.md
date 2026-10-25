@@ -1,3 +1,92 @@
+## October 25 — Capture observable activity with explicit provenance; preview before installation
+
+The operator approved default targeted grouping, removed the format switcher and requested the
+full Activity capture work before a Design Preview review. Keep raw reasoning/signatures out of
+the event journal. Capture only observed lifecycle intervals, provider-reported usage and explicit
+public summary channels. Codex summaryTextDelta/item.summary is such a channel; MTPLX's reasoning
+content, Claude thinking blocks and Copilot reasoning text establish phases without being stored
+as summaries. Do not synthesize summaries from that text. Ordinary assistant prose stays inline.
+
+Store activity as separate structured journal records, never as provider replay input. Show phase
+source/agent, interruption, observed start/end and scoped usage. Session totals, complete-turn
+aggregates and individual-request usage are distinct; show unavailable counts rather than zero.
+Claude input/cache fields are disjoint; reconstruct total input only when all components exist.
+Do not add cache/reasoning subsets to totals or claim observed wall time is exact inference time.
+Missing starts/ends in older or crash-interrupted records remain unknown. Bound summary storage
+and activity counts, and issue a visible notice if capture hits the per-turn limit.
+
+Provider activity heartbeats advance only when actual events arrive; UI elapsed-time repaint must
+not conceal stalled work. Keep questions, pending approvals, warnings, failures and material
+context loss visible. The shared renderer defaults to this presentation with no format controls.
+The MTPLX adapter remains preview-only; enabling its production registration is not implied by
+merging shared Activity support. The latest operator checkpoint is Design Preview review before
+any local installed-app update or wider distribution. Carry that hold into the release handoff.
+
+## October 25 — Compare projections of real saved chats (historical)
+
+The event journal stores normalized provider messages, status notices, tools and permission
+records. The conversation renderer builds message rows/Activity from that journal. Provider
+session input and transcript replay remain owned by the adapter and engine; a display toggle
+must not rewrite or feed projected events back into those histories.
+
+Expose Current / Grouped activity only in local Design Preview. Current remains the default.
+The second view groups exact saved MTPLX thinking notices
+with adjacent tool events. Preserve original text, ordering and event keys for drill-down.
+Never classify Claude/Copilot or ordinary MTPLX text using first-person words or message length.
+Keep warnings, questions, final answers and unclassified text as messages; pending approvals
+retain the existing separate UI. Tool failures retain their existing failed group indicator.
+
+Keep selection and disclosure caches in the renderer, per loaded chat; they reset on restart
+or cache eviction. Preserve draft/composer, loaded history window and reading anchor when
+switching views. Historic notices prove only that a status event was recorded: do not infer
+phase duration, recover discarded reasoning or invent usage detail from their timestamps.
+Collecting richer provider events remains a separate implementation decision.
+
+## October 24 — MTPLX owns a bounded approved tool loop
+
+Reasoning modes and effort are independent controls populated from the loaded server's model
+policy. A request-level opt-in is required for MTPLX to honor them. Provider default leaves the
+field omitted; explicit Auto follows the model's default mode, On/Off supplies a boolean.
+Off preserves the saved effort choice but omits effort from the wire.
+
+Use the official MCP SDK for selected connections, not a cloud provider runtime. Load schemas
+through a paged/searchable gateway to limit local prompt size. Validate inner native arguments
+and exact server/tool/agent scope, then route execution through the engine's existing permission
+flow. Stdio receives the SDK's default environment plus explicitly configured environment;
+HTTP/SSE authentication stays with the selected definition. No implicit login/account fallback.
+
+Persist tool intent before dispatch and each result before advancing. Run calls serially,
+reject duplicate identities and stop on uncertain MCP delivery without retries. Interrupted
+unmatched intents are closed as uncertain transcript entries, never re-executed on restart.
+File helpers resolve authorized folders, block protected metadata writes, verify expected file
+hashes and replace atomically. Arbitrary shell execution is not introduced; shared terminals
+retain their existing live human grant.
+
+Use the established immutable attachment/one-use provider consent boundary for MTPLX images.
+Check the fresh model's vision capability before sending bytes. Context fitting evicts complete
+older user turns with a notice and leaves the event journal intact. Text UTF-8 bytes plus image
+reserves are a conservative estimate, not a tokenizer; MTPLX still owns exact admission.
+Thinking content is not displayed/retained in this iteration. Native steering, OAuth sign-in,
+production and remote/mobile registration remain distinct future work.
+
+## October 24 — local MTPLX pilot uses a direct, preview-only adapter
+
+Use MTPLX's existing OpenAI-compatible loopback server; do not automate its native chat UI,
+start a second model, or route through a paid provider's runtime. Refresh model IDs/context
+limits from the actual server. Effort tiers and image input are not enabled merely because
+a model name or underlying endpoint suggests support.
+
+Use Proteus's captured selected text sources and core guidance on each request. Persist the
+actual delivered message sequence independently of queued UI events so restart/queue ordering
+does not duplicate or deliver removed prompts. No tool definitions or MCP secrets enter this
+phase. Selected MCPs fail explicitly before credential resolution. Stop aborts the request;
+interrupted streams preserve partial text and fail without automatic request replay.
+
+Render generated SVG only as isolated image data after validating a small static element and
+attribute subset. Preserve original code; reject active HTML, scripts, events, styles, external
+references, entities and animation. This is generated vector code, not raster image generation.
+The pilot has no production adapter registration or remote/mobile release.
+
 ## October 23 follow-up — canonical chat homes and independent local windows
 
 An organizational chat home governs presentation entry points as well as the project index.

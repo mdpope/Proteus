@@ -1,4 +1,5 @@
 import {questionAttachmentTools} from '../services/chats/question-attachments.js';
+import {providerActivity} from '../shared/provider-activity.js';
 import {copilotMessageAttachments} from './provider-attachment-input.js';
 import {chatControlTools} from '../services/chats/chat-control-tools.js';
 import { uniqueModels } from '../../public/features/chats/model-choices.js';
@@ -233,9 +234,11 @@ export class CopilotProvider {
     if (snapshot) { snapshot.suppliedAt = new Date().toISOString(); snapshot.delivery = 'Copilot session configuration accepted'; for (const entry of snapshot.entries) if (entry.kind === 'mcp') entry.runtimeName = managed.mcpMappings[entry.id]; }
     run.explicitProviderContext = { mcpNames: Object.keys(config.mcpServers), skillDirectories: config.skillDirectories, disabledSkills: config.disabledSkills || [] };
     update(); this.sessions.set(run.id, session);
-    let providerError;
+    let providerError,activitySucceeded=false;
+    const capture=providerActivity({provider:'copilot',emit,update});
     const activity = toolActivity({ run, emit, update });
     const unsubscribe = session.on(event => {
+      capture.receive(event);
       if (event.type === 'assistant.message_delta') stream?.(event.data.messageId, event.data.deltaContent || '');
       if (event.type === 'assistant.message') {
         const content = event.data.content || run.liveMessages?.[event.data.messageId] || '';
@@ -268,6 +271,7 @@ export class CopilotProvider {
       await turn.run(prompt,nativeAttachments);
       if (providerError) throw new Error(providerError);
       try { run.metrics = await session.rpc.usage.getMetrics({}); update(); } catch { /* Optional runtime capability. */ }
+      activitySucceeded=true;
     } catch (error) {
       // Disconnect alone does not stop a timed-out provider turn.
       await session.abort().catch(() => {});
@@ -278,6 +282,7 @@ export class CopilotProvider {
         delete run.liveMessages[id];
       }
       activity.finish();
+      capture.finish(activitySucceeded?'completed':'interrupted');
       signal.removeEventListener('abort', abort); unsubscribe(); this.sessions.delete(run.id); await session.disconnect();
     }
   }

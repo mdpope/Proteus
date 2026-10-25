@@ -1,4 +1,5 @@
 import {questionAttachmentTools} from '../services/chats/question-attachments.js';
+import {providerActivity} from '../shared/provider-activity.js';
 import {attachmentText} from './provider-attachment-input.js';
 import {chatControlTools} from '../services/chats/chat-control-tools.js';
 import {privateTemporaryDirectory} from '../shared/private-paths.cjs';
@@ -179,8 +180,11 @@ export class CodexProvider {
    assertPendingApprovalCurrent();assertAppToolActive();
    return ['approve','approve-auto'].includes(answer)?await tool.handler(args):{resultType:'failure',textResultForLlm:'User declined.'};
   };
+  const capture=providerActivity({provider:'codex',emit,update});
   const onNotification=({method,params:p={}})=>{
    if(p.threadId&&p.threadId!==run.providerSessionId)return;
+   if(!p.turnId||!active.turnId||p.turnId===active.turnId)capture.receive({method,params:p});
+   if(method==='turn/completed')capture.finish(p.turn?.status==='completed'?'completed':'interrupted');
    if(method==='turn/started')active.turnId=p.turn.id;
    if(method==='item/agentMessage/delta')stream(p.itemId,p.delta);
    if(method==='thread/tokenUsage/updated'){run.usage={observed:true,inputTokens:p.tokenUsage.total.inputTokens,outputTokens:p.tokenUsage.total.outputTokens};run.contextUsage=p.tokenUsage;update();}
@@ -285,7 +289,7 @@ export class CodexProvider {
     }
    }
    const result=await client.request('turn/start',{threadId:run.providerSessionId,...(sandbox.managedProfile?{}:{sandboxPolicy:sandbox.policy}),approvalPolicy:'untrusted',approvalsReviewer:'user',runtimeWorkspaceRoots:sandbox.runtimeWorkspaceRoots,input,effort:run.schedule.reasoningEffort||model.controls.defaultReasoningEffort||null,serviceTier:run.schedule.serviceTier||null});active.turnId=result.turn.id;if(signal.aborted||active.permissionRevoked){clearTimeout(abortTimer);abortTimer=null;abort();}await completed;
-  }finally{if(appBridge)await appBridge.close();clearTimeout(abortTimer);if(active.turnId&&!settled)await client.close();signal.removeEventListener('abort',abort);client.off('notification',onNotification);client.off('request',onRequest);client.off('closed',closed);for(const tool of calls.values())if(tool.status==='running')tool.status='interrupted';if(this.active===active)this.active=null;if(imageDir)fs.rmSync(imageDir,{recursive:true,force:true});for(const directory of active.steeringImageDirs||[])fs.rmSync(directory,{recursive:true,force:true});update();}
+  }finally{capture.finish();if(appBridge)await appBridge.close();clearTimeout(abortTimer);if(active.turnId&&!settled)await client.close();signal.removeEventListener('abort',abort);client.off('notification',onNotification);client.off('request',onRequest);client.off('closed',closed);for(const tool of calls.values())if(tool.status==='running')tool.status='interrupted';if(this.active===active)this.active=null;if(imageDir)fs.rmSync(imageDir,{recursive:true,force:true});for(const directory of active.steeringImageDirs||[])fs.rmSync(directory,{recursive:true,force:true});update();}
  }
  recheckPermissions(){this.active?.recheckPermissions?.();}
  async close(){await this.client?.close();this.client=null;this.starting=null;}

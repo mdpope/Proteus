@@ -1,3 +1,68 @@
+## October 25 — Full Activity capture; Design Preview review gate
+
+The operator requested the complete separate capture work, removal of the format switcher,
+testing (including a real model if needed), and inclusion in Design Preview before an installed
+local update. Implemented: default grouping, observed phase lifecycle for all four adapters,
+explicit Codex summaries, scoped optional usage, provenance/interruption/unknown-value detail,
+and raw-thinking exclusion. Preserve all ordinary assistant updates and other system messages.
+The live local MTPLX synthetic run passed actual phases, reported reasoning/cache tokens,
+renderer drill-down, restart persistence and unchanged native MTPLX settings. Adapter protocol
+fixtures and renderer tests cover the other provider formats; they are not live-provider proof.
+
+The earlier merge/release handoff request remains scoped to source integration and the named
+Oct 23 release chat. That chat should include the other queued changes and test/build an isolated
+review candidate. The newest operator instruction holds installation and wider distribution
+until the Design Preview is checked. Do not treat a merge or dispatched handoff as that approval.
+
+## October 25 — Real-chat comparison authorized (historical)
+
+The operator requested Current / Grouped activity comparison on actual saved chats. Implemented
+in the local Design Preview renderer: exact MTPLX status notices
+join adjacent tools; original events remain drillable. Current stays the default. Selection is
+temporary renderer state, not a saved chat setting. Drafts, loaded pages and history remain intact.
+Ordinary Claude/Copilot/MTPLX prose is not reclassified. No additional provider data is collected.
+More detailed capture from the original study remains proposed; historical data cannot recover
+discarded reasoning text or exact thinking-phase durations. See [decision](decisions.md).
+
+## October 24 — Activity detail options under review (historical)
+
+The operator requested a small interactive study before choosing cross-provider Activity
+changes. [Interactive study](design/2026-10-24/activity-details-preview.html) compares the
+existing mapping, timed phase/tool grouping, and optional progress notes, with provider-specific
+availability, illustrative usage, replay and visible approval/failure states. No actual Activity
+classification or provider reasoning collection is enabled by this prototype.
+
+Private metadata inspection of the latest retained MTPLX chat found ten generic thinking notices
+and eleven completed tool entries. No chat content/results were copied into the study. The
+MTPLX adapter emits one generic system notice per reasoning-bearing model/tool round; these
+notices currently split tool groups. Its reasoning text is discarded. Copilot's installed SDK
+declares reasoning events/summary controls that the adapter doesn't map. Claude handles text
+but not thinking deltas/blocks. Codex preserves commentary/final phase but does not map reasoning
+summary events. Claude/Copilot ordinary progress text has no preserved reliable final-phase tag;
+do not hide it using a first-person keyword rule. Provider capability remains conditional on
+actual model/runtime events; no new provider turns were started for this study.
+
+Proposed first increment: grouped observable thinking phases, existing tool rows, source-aware
+timing and optional usage/context drill-down. Progress notes are a separate decision; Codex can
+use its explicit commentary phase, others need conservative explicit classification or manual
+movement. Keep final answers, questions, pending approvals, failures and material context loss
+visible. Preserve history, event order and open disclosures during streaming; do not fabricate
+summaries or derive compute time from wall-clock gaps.
+
+Implemented only in source: MTPLX name fallback and display correction for old main-agent
+“Proteus” labels, preserving custom names. The running packaged preview is unchanged pending
+the next build; current retained records were not rewritten.
+
+## October 24 — MTPLX preview agent extension authorized
+
+The operator requested the text pilot's missing capabilities and actual MTPLX reasoning levels.
+Implemented locally: live reasoning mode/effort, selected MCPs, approved host/file tools, image/text
+input, vision tool results, MCP status and context-budget eviction. Protocol/permission tests pass;
+exact packaged acceptance is recorded in the [MTPLX contract](mtplx-pilot.md).
+Keep this provider in isolated Design Preview. No production/remote rollout or cloud-runtime
+substitution. Native active-turn steering and MCP OAuth sign-in remain unsupported; terminal
+commands require the existing explicitly shared terminal rather than a new unrestricted shell.
+
 ## October 24 — MTPLX pilot authorized for isolated Design Preview
 
 The operator requested local MTPLX chats with the same selected context and phased helpers.
@@ -89,6 +154,83 @@ clear it when the pointer leaves the link or the view changes. Reuse the browser
 and positioning where practical so link previews behave consistently across these surfaces.
 Previewing a destination must not open or fetch it. Queued only under the implementation/build
 hold; acceptance should cover web URLs, file paths and relative Markdown links in both surfaces.
+
+### 35. Combine Engine Room resource usage and tab controls
+
+The operator accepted one combined Resources list replacing the separate process/resource and
+tab sections. Default ordering: app/system processes first, loaded tabs next, unloaded tabs last.
+Identify tabs by their actual names. Rows show name, type/loading status, current RAM and CPU
+where available, and applicable controls. Identify shared process usage clearly to avoid counting
+the same memory twice; do not invent per-tab measurements where attribution is unavailable.
+
+Place independent System / Loaded / Unloaded visibility toggles above the list, initially all
+enabled, together with a name filter covering the whole list. Add Refresh usage to sample current
+CPU/RAM without reloading pages or changing which tabs are loaded. Visibility filters affect the
+display only. Keep Unload and Close for controllable tabs; unloaded tabs have no Unload action.
+App/system process rows remain informational unless an existing supported control applies.
+
+Future acceptance: the default grouping and combined toggles/filter work together, refresh updates
+real measurements, and existing tab actions preserve their owner/permission and lifecycle rules.
+Unloaded tabs remain discoverable without loading them just to populate the list. This layout is
+approved for the queue only; implementation and build remain held.
+
+### 36. Continue a chat automatically after its provider allowance resets
+
+For a provider-allowance exhaustion failure, add a one-time action labelled “Continue chat when
+allowance resets at {time}”, displaying the actual reset time with seconds and an unambiguous
+timezone/date when needed. Queue continuation for a few seconds after reset (initial target:
+five seconds), rather than sending immediately. The example time is illustrative, not a fixed
+schedule. Under Permissions in the chat's right-hand column, add a persistent per-chat checkbox,
+“Automatically continue when allowance resets”, initially unchecked, applying to any provider
+that reports the relevant allowance/reset information. The explicit button arms one occurrence;
+the checkbox opts that same chat into future allowance-reset continuations.
+
+Evidence: the supplied screenshot shows “Claude rate_limit”. Claude's adapter already receives
+`rate_limit_event` / `rate_limit_info` with reset metadata and normalizes allowance windows.
+The locally generated Codex app-server protocol exposes `usageLimitExceeded` and
+`rateLimitExceeded`; the current Codex quota adapter normalizes primary/secondary window
+`resetsAt` into `resetAt`. These are structured integration signals, not verified exact human
+error wording for a real Codex exhaustion event. Preserve the actual provider cause/reset data
+and distinguish exhausted account/model allowance from a transient request-rate throttle.
+
+Use fresh provider-reported reset information for the applicable blocking allowance windows.
+If multiple relevant windows are exhausted, wait until all blocking limits permit continuation.
+Do not invent a reset time from stale metadata, error labels, or a predicted billing rollover;
+show that reset information is unavailable while retaining ordinary manual continuation. Recheck
+allowance before dispatch, and handle a continued limit with bounded waiting and an updated
+reported reset rather than a rapid retry loop.
+
+Pending continuation and the checkbox must survive app restart, disconnection and sleep. Execute
+the timer on the original chat's owner, including remote/scheduled chats (related to item 31),
+and provide visible pending/cancel state. Preserve run/provider session, permissions, model,
+context, queued input and retry receipts. Reconcile manual continuation, new input, cancellation
+or already-running/completed work before dispatch so only one continuation is delivered and no
+uncertain external effect is replayed. Do not rerun the schedule or create a replacement chat.
+Future acceptance covers Claude/Codex/Copilot signals where supported, remote ownership,
+multiple windows, timestamp/timezone handling, restart catch-up and duplicate-dispatch races.
+Queued only: no implementation, build, live checkbox change, timer or continuation was started.
+
+### 37. Normalize remote chat tabs to the local chat interface
+
+Remote chat tabs should use the same interface and supported behavior as local chat tabs.
+The reported discrepancies are the right-column Permissions section and the provider selector
+in the message composer. Reuse shared chat views/controls rather than maintaining divergent
+remote versions; align labels, layout, options, current values and feedback for matching
+capabilities. Include existing and queued per-chat permission options, including item 36's
+allowance-reset continuation setting, where supported by the owner.
+
+Provider/model options and permission state must come from the remote execution owner and its
+fresh provider metadata. Changing a remote chat setting acts on that same remote chat/session;
+it must not silently create a local chat, move execution, grant local workspace access or replace
+remote approval rules. Preserve supported local provider-switch/session behavior and queued
+input through the corresponding authorized remote operation. For older owners or unsupported
+capabilities, retain the shared layout and clearly explain unavailable controls rather than
+inventing support or silently falling back to local execution.
+
+Future acceptance compares local/remote Permissions and composer controls side by side for
+matching capabilities, verifies owner-confirmed updates and current selections after reconnect,
+and preserves drafts, queued messages, session/context and applicable approvals. This is a
+queue-only normalization request; no implementation, build or live chat setting was changed.
 
 ## Local Mac installation and automatic continuation accepted
 
