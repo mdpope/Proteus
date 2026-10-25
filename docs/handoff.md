@@ -25,6 +25,12 @@ intervals, preserved the journal through restart and left native controls unchan
 UI fixtures passed without model calls; live Copilot/Claude/Codex sessions were not exercised.
 Retained-preview restart is pending a normal operator Quit because of the stale desktop guard.
 
+Source integration completed locally at `62180b2` (MTPLX pilot plus full Activity capture),
+fast-forwarded into clean `main` from `codex/oct23-next-release`. No remote push, installed-app
+replacement, signed/public release or device rollout occurred. The 367-file review package is
+frozen before that source commit; its embedded manifest independently matches every runtime file
+in the committed source. The Oct 23 release handoff must preserve the latest review hold above.
+
 The operator's earlier merge/handoff instruction is source integration only under the newest
 review gate. The named Oct 23 release chat owns the remaining queued items and should build/test
 an isolated combined review candidate, preserving this hold. Do not update the installed app,
