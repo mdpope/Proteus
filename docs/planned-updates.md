@@ -9,7 +9,9 @@ Operator checks the preview and authorizes the next step. MTPLX remains preview-
 The exact stale-catalog placement error is reproduced with the previous renderer and fixed
 without replay. Shared remote controls, durable owner allowance continuation, automatic Copilot
 working-root trust, bottom notices/link previews and combined Resources are implemented.
-Final package acceptance remains separate from source tests and the earlier installed release.
+The final unsigned combined package `f7d32b4a3aad+src.e41ac3955d99` passes all six exact-package
+UI fixtures and 373-file source verification. Full tests: 1,156 passed, one skipped. This is
+review acceptance, separate from the earlier installed release and any live remote/provider proof.
 
 ## October 25 — Full Activity capture; Design Preview review gate
 
@@ -95,6 +97,9 @@ held for preview review. Original reports and acceptance criteria follow.
 
 ### 29. First tab-move attempt reports missing placement acknowledgement
 
+Current status: implemented and included in the combined unsigned Design Preview; acceptance
+and limitations are recorded in [the combined review receipt](2026-10-25-combined-preview.md).
+
 The first move attempt displays: “The app did not acknowledge the tab placement. Refresh its
 inventory.” Subsequent attempts work. The supplied screenshot shows the message above the
 project Tabs list while the move dialog remains open. Root cause is unconfirmed; investigate
@@ -107,6 +112,9 @@ and Tabs-list entry points and relevant window/project destinations.
 
 ### 30. Hide tab from the header context menu is slow
 
+Current status: implemented and included in the combined unsigned Design Preview; acceptance
+and limitations are recorded in [the combined review receipt](2026-10-25-combined-preview.md).
+
 Right-clicking a tab header and choosing Hide tab takes noticeably too long. Measure the path
 from selection to visible removal and completion, including persistence and browser cleanup,
 before assigning a cause. No timing measurement or diagnosis has been made yet.
@@ -116,6 +124,9 @@ preserve logical tab identity, history and placement. Honor the existing Persist
 guarantee rather than forcing those pages out of memory to improve hide latency.
 
 ### 31. Continue a remote scheduled chat from another desktop
+
+Current status: implemented and included in the combined unsigned Design Preview; acceptance
+and limitations are recorded in [the combined review receipt](2026-10-25-combined-preview.md).
 
 The Continue chat button on a remote scheduled Copilot run fails with “Open an ordinary chat
 before continuing.” Manually composing and sending a continuation message works. The supplied
@@ -132,6 +143,9 @@ no remote run was continued as part of this queue-only request.
 
 ### 32. Move notification banners to the bottom of the app
 
+Current status: implemented and included in the combined unsigned Design Preview; acceptance
+and limitations are recorded in [the combined review receipt](2026-10-25-combined-preview.md).
+
 Notifications currently appear at the top and obstruct tab navigation. Move transient in-app
 notification/toast banners to the bottom of the application viewport. Keep their messages,
 actions, dismissal and accessibility behavior, and allow for bottom controls and safe areas so
@@ -139,6 +153,9 @@ notifications remain usable without covering tab navigation. This is queued only
 existing implementation/build hold.
 
 ### 33. Automatically trust the Copilot working-data root for read/write
+
+Current status: implemented and included in the combined unsigned Design Preview; acceptance
+and limitations are recorded in [the combined review receipt](2026-10-25-combined-preview.md).
 
 For every Copilot-provider chat, include Copilot's resolved top-level working/data directory as
 an automatic trusted read/write folder, matching Copilot's own use of that directory. In the
@@ -161,6 +178,9 @@ Queued only: no live approval, folder grant, implementation or build was perform
 
 ### 34. Preview chat and Markdown link destinations at the bottom
 
+Current status: implemented and included in the combined unsigned Design Preview; acceptance
+and limitations are recorded in [the combined review receipt](2026-10-25-combined-preview.md).
+
 Hovering a link in a chat or rendered Markdown file should display its destination URL or path
 at the bottom of the application window, matching the existing browser link-status preview.
 Show the resolved target for relative Markdown/file links, keep the preview unobtrusive, and
@@ -170,6 +190,9 @@ Previewing a destination must not open or fetch it. Queued only under the implem
 hold; acceptance should cover web URLs, file paths and relative Markdown links in both surfaces.
 
 ### 35. Combine Engine Room resource usage and tab controls
+
+Current status: implemented and included in the combined unsigned Design Preview; acceptance
+and limitations are recorded in [the combined review receipt](2026-10-25-combined-preview.md).
 
 The operator accepted one combined Resources list replacing the separate process/resource and
 tab sections. Default ordering: app/system processes first, loaded tabs next, unloaded tabs last.
@@ -189,6 +212,9 @@ Unloaded tabs remain discoverable without loading them just to populate the list
 approved for the queue only; implementation and build remain held.
 
 ### 36. Continue a chat automatically after its provider allowance resets
+
+Current status: implemented and included in the combined unsigned Design Preview; acceptance
+and limitations are recorded in [the combined review receipt](2026-10-25-combined-preview.md).
 
 For a provider-allowance exhaustion failure, add a one-time action labelled “Continue chat when
 allowance resets at {time}”, displaying the actual reset time with seconds and an unambiguous
@@ -225,6 +251,9 @@ multiple windows, timestamp/timezone handling, restart catch-up and duplicate-di
 Queued only: no implementation, build, live checkbox change, timer or continuation was started.
 
 ### 37. Normalize remote chat tabs to the local chat interface
+
+Current status: implemented and included in the combined unsigned Design Preview; acceptance
+and limitations are recorded in [the combined review receipt](2026-10-25-combined-preview.md).
 
 Remote chat tabs should use the same interface and supported behavior as local chat tabs.
 The reported discrepancies are the right-column Permissions section and the provider selector

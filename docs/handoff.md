@@ -2,11 +2,13 @@
 
 The Oct 23 release branch implements items 28–37 on top of merged main `d0a30fd`.
 See [combined Design Preview work and acceptance](2026-10-25-combined-preview.md).
-Final frozen-runtime tests pass 1,155 with one skip; static checks pass. The stale-catalog
+Final frozen-runtime tests pass 1,156 with one skip; static checks pass. The stale-catalog
 first-move error is reproduced against the previous renderer and fixed in the same disposable
 owner/renderer fixture. Synthetic remote controls and native tab/resource/notice/link checks pass.
 
-An isolated unsigned combined package and exact-package acceptance follow in that document.
+The final unsigned combined package is `f7d32b4a3aad+src.e41ac3955d99` in
+`dist/design-preview-combined-queue`; all 373 runtime hashes and six exact-package UI fixtures pass.
+The build, source fingerprint and private evidence receipt are recorded in that document.
 Do not treat source completion, a commit or a packaged fixture as approval to replace the installed
 app, publish, change defaults or update another device. MTPLX remains preview-only. The retained
 preview's normal-Quit request and closed-window desktop uncertainty guard remain respected;

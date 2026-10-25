@@ -1,3 +1,12 @@
+## October 25 — Combined Design Preview remains a review candidate
+
+The combined queue/MTPLX/Activity candidate passes source and exact-package review checks;
+see [acceptance](2026-10-25-combined-preview.md). It is unsigned isolated staging, not an installed
+update or published release. Wait for Operator's preview review and explicit authorization before
+replacing local Proteus or dispatching update coordinators elsewhere. Completed updater cards
+now suppress obsolete idle blockers while retaining their real errors/outcomes. The earlier
+installed acceptance below remains a separate historical release.
+
 ## Local Mac installation and automatic continuation accepted
 
 The authorized local Mac now runs signed `b2da2f2797b5+src.f7b3a6a8559e`. The installed
