@@ -5,7 +5,10 @@ import {chatRecoveryState} from '../../../public/features/chats/chat-recovery-st
 export const allowanceFailure=error=>['usageLimitExceeded','rateLimitExceeded','usage_limit_reached','rate_limit','quota_exceeded','session_quota_exceeded','user_weekly_rate_limited','user_global_rate_limited','user_model_rate_limited','rate_limited'].includes(error?.code)||/^(?:Claude\s+rate_limit\b)|(?:usage|allowance|premium requests?|quota) (?:limit (?:has been )?(?:reached|exceeded)|exhausted|exceeded|used up)|(?:you(?:'ve| have) (?:hit|reached) your (?:usage|rate) limit)|\b(?:exceeded|exhausted|used up)\b.{0,60}\b(?:quota|allowance|premium requests?)\b/i.test(error?.message||'');
 const prompt='Continue this conversation from where the allowance-limited turn left off. Preserve completed work and do not repeat completed external actions. Finish the current work before queued follow-up messages.';
 const failed=run=>['failed','interrupted'].includes(run.status)&&!run.archivedAt;
-const applicable=(run,windows)=>windows.filter(w=>!w.modelId||w.modelId===run.schedule.model).filter(w=>run.schedule.provider!=='claude'||!(/(?:opus|sonnet|haiku)/i.test(w.modelFamily||w.id)&&!String(run.schedule.model).toLowerCase().includes((w.modelFamily||w.id).match(/opus|sonnet|haiku/i)[0].toLowerCase())));
+const applicable=(run,windows)=>{
+ const model=run.modelCapabilities?.id||run.schedule.model,family=String(model).match(/opus|sonnet|haiku/i)?.[0].toLowerCase();
+ return windows.filter(w=>!w.modelId||!model||model==='default'||w.modelId===model).filter(w=>run.schedule.provider!=='claude'||!family||!(/(?:opus|sonnet|haiku)/i.test(w.modelFamily||w.id)&&!(w.modelFamily||w.id).toLowerCase().includes(family)));
+};
 const fresh=(quota,now)=>quota?.available&&!quota.stale&&!quota.error&&(!quota.observedAt||Number.isFinite(Date.parse(quota.observedAt))&&Math.abs(now-Date.parse(quota.observedAt))<300000);
 export function allowanceReset(run,quota,now){
  if(!fresh(quota,now))return null;
@@ -74,7 +77,9 @@ export class AllowanceContinuation {
   const ready=fresh(quota,this.now())&&required.every(w=>w&&(w.unlimited||Number.isFinite(w.remainingPercent)&&w.remainingPercent>0))&&!windows.some(w=>w.remainingPercent===0&&!w.unlimited);
   if(!ready){const reset=allowanceReset(run,quota,this.now());Object.assign(pending,reset||{}, {nextAttemptAt:new Date(reset?Date.parse(reset.resetAt)+this.delayMs:this.now()+60000).toISOString(),reason:quota?.error||'Waiting for fresh available allowance.'});this.engine.persist(run);return;}
   pending.state='delivered';pending.dispatchedAt=this.engine.now();
-  try{await this.engine.send(run.id,prompt,'queue',pending.id);}
+  // A follow-up queued during the failed turn can select a different next model.
+  // Recover this turn with its own options; queued messages retain their options.
+  try{await this.engine.send(run.id,prompt,'queue',pending.id,run.schedule);}
   catch(error){pending.state='attention';pending.reason='Continuation delivery requires inspection: '+error.message;if(run.status==='queued')run.deferredStart=true;try{this.engine.persist(run);}catch{}throw error;}
  }
  close(){clearInterval(this.timer);return Promise.allSettled([...this.inflight.values()]);}

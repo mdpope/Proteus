@@ -33,6 +33,7 @@ test('explicit allowance wait survives restart and sleep and sends exactly once 
 test('reset selection uses the last exhausted applicable window and rejects stale, inferred, missing and past resets',()=>{
  const run={schedule:{provider:'claude',model:'sonnet'}},windows=[{id:'five_hour',remainingPercent:0,resetAt:new Date(start+10000).toISOString()},{id:'seven_day',remainingPercent:0,resetAt:new Date(start+30000).toISOString()},{id:'seven_day_opus',remainingPercent:0,resetAt:new Date(start+90000).toISOString()}];
  assert.equal(allowanceReset(run,{available:true,windows},start).resetAt,windows[1].resetAt);
+ assert.equal(allowanceReset({schedule:{provider:'claude',model:'default'}},{available:true,windows},start).resetAt,windows[2].resetAt,'Unknown model family conservatively waits for every exhausted bucket');
  for(const quota of [{available:true,stale:true,windows},{available:true,error:'failed',windows},{available:true,observedAt:new Date(start-300001).toISOString(),windows},{available:true,windows:[{...windows[0],resetSource:'expected-monthly'}]},{available:true,windows:[{...windows[0],resetAt:null}]},{available:true,windows:[{...windows[0],resetAt:new Date(start-1).toISOString()}]}])assert.equal(allowanceReset(run,quota,start),null);
  for(const code of ['usageLimitExceeded','rateLimitExceeded','usage_limit_reached'])assert.ok(allowanceFailure({code}));assert.ok(allowanceFailure({message:'Claude rate_limit'}));assert.equal(allowanceFailure({message:'A tool mentioned quota planning'}),false);
 });
@@ -52,6 +53,9 @@ test('cancelling while fresh quota is in flight cannot deliver or re-arm a wait'
 });
 test('automatic preference persists independently of one-shot intent and retries no model calls without authoritative quota',async t=>{
  const f=fixture(t);await f.command({action:'allowance-auto',enabled:true});assert.equal(f.run.allowanceContinuation.enabled,true);await f.restart();assert.equal(f.run.allowanceContinuation.enabled,true);assert.equal(f.run.allowanceContinuation.pending.state,'waiting');await f.command({action:'allowance-auto',enabled:false});await f.restart();assert.equal(f.run.allowanceContinuation.enabled,false);assert.equal(f.run.allowanceContinuation.pending.state,'cancelled');
+});
+test('automatic continuation keeps failed-turn model options while retaining a queued follow-up model',async t=>{
+ const f=fixture(t),current=structuredClone(f.run.schedule);f.run.nextModelOptions={model:'queued-model',reasoningEffort:'high',contextTier:'default',serviceTier:''};f.run.queuedMessages[0].modelOptions=structuredClone(f.run.nextModelOptions);await f.command({action:'allowance-arm'});f.advance(65000);f.quota({available:true,windows:[{id:'five_hour',remainingPercent:100}]});await f.engine.allowance.tick();assert.equal(f.run.status,'queued');assert.equal(f.run.schedule.model,current.model);assert.equal(f.run.schedule.reasoningEffort,current.reasoningEffort);assert.equal(f.run.queuedMessages[0].modelOptions.model,'queued-model');
 });
 test('uncertain durable dispatch becomes attention and cannot drain or automatically retry',async t=>{
  const f=fixture(t);await f.command({action:'allowance-arm'});f.advance(65000);f.quota({available:true,windows:[{id:'five_hour',remainingPercent:100}]});let calls=0;f.engine.send=async()=>{calls++;f.run.status='queued';throw Error('Synthetic journal failure');};await f.engine.allowance.tick();assert.equal(f.run.allowanceContinuation.pending.state,'attention');assert.equal(f.run.deferredStart,true);await f.engine.allowance.tick();assert.equal(calls,1);
