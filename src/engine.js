@@ -1,3 +1,4 @@
+import {AllowanceContinuation,allowanceFailure} from './services/chats/allowance-continuation.js';
 import {displayText} from './shared/tool-activity.js';
 import { RunHistoryCache } from './services/chats/run-history-cache.js';
 import {startTurn,pauseTurn,resumeTurn,finishTurn,interruptTiming} from './services/chats/run-timing.js';
@@ -34,6 +35,8 @@ export class Engine extends EventEmitter {
     this.tombstoneFile = path.join(home, 'chat-tombstones.json');
     this.tombstones = readJSON(this.tombstoneFile, {});
     this.providers = { rehearsal: new RehearsalProvider(), ...providers };
+    // Provider-owned state is an automatic owner-local grant, not a saved workspace exception.
+    this.permissions.automaticProviderFolders=run=>{const root=run.schedule.provider==='copilot'&&canonicalPath(run.providerHome||this.providers.copilot?.dataDirectory?.(),run.schedule.workspace.cwd);return root?[{path:root,access:'read-write',source:'provider',label:'Copilot working folder (automatic)'}]:[];};
     this.queuedSteers = new Map(); this.pending = new Map(); this.questionQueues = new Map(); this.running = new Map(); this.backgroundRuns = new Map(); this.executions = new Set(); this.stopping = false;
     fs.mkdirSync(this.runsDir, { recursive: true, mode: 0o700 });
     this.journal = readJSON(path.join(home, 'scheduler.json'), { lastPoll: clock().toISOString(), slots: {} });
@@ -59,6 +62,7 @@ export class Engine extends EventEmitter {
         this.runs.set(run.id, run);this.historyCache.attach(run);
       } catch (error) { this.recoveryErrors ??= []; this.recoveryErrors.push({ file, error: error.message }); }
     }
+    this.allowance=new AllowanceContinuation(this);
   }
   now() { return this.clock().toISOString(); }
   persist(run) { if(this.tombstones[run.id]||!this.runs.has(run.id))throw new Error('Deleted chat cannot be restored.');
@@ -66,6 +70,7 @@ export class Engine extends EventEmitter {
     run.updatedAt = this.now(); const bytes=atomicJSON(path.join(this.runsDir, `${run.id}.json`), run); this.historyCache.attach(run,bytes);this.emit('change', run); }
   event(run, role, text, data) {
     if(role!=='user'&&run.status==='running')providerProgress(run,this.now(),{observable:true});
+    if(role==='user')this.allowance?.onInput(run,data?.delivery?.id);
     run.events.push({ role, text, ...(role === 'assistant' ? { agentName: agentName(run) } : {}), data:{...data,...(run.turns?.at(-1)&&['running','awaiting_input'].includes(run.status)?{turnId:run.turns.at(-1).id}:{})}, at: this.now() }); this.persist(run);
   }
   stream(run, messageId, text) {
@@ -76,9 +81,8 @@ export class Engine extends EventEmitter {
   listRuns() { return [...this.runs.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)); }
   visibleRuns(includeArchived = false) { return this.listRuns().filter(run => includeArchived || !run.archivedAt); }
   getRun(id) { const run = this.runs.get(id); if (!run) throw new Error('Run not found.'); return run; }
-  describePermissions(run) {
-    return this.permissions.describeRun(run);
-  }
+  describePermissions(run) { return this.permissions.describeRun(run); }
+
   moveWorkspace(id,{workspaceId,workspaceName='',expectedUpdatedAt}={}){
     const run=this.getRun(id);
     if(workspaceId!==null&&!/^[a-zA-Z0-9_-]{1,128}$/.test(workspaceId||''))throw new Error('Choose a workspace or Unhoused.');
@@ -460,7 +464,7 @@ export class Engine extends EventEmitter {
       run.status = controller.signal.aborted ? (this.stopping ? 'interrupted' : 'cancelled') : 'completed';
     } catch (error) {
       run.status = controller.progressTimeout?'failed':controller.signal.aborted ? (this.stopping ? 'interrupted' : 'cancelled') : 'failed';
-      this.event(run, 'system', controller.progressTimeout||error.message,{failure:{kind:controller.progressTimeout?'stalled':capacityFailure(error.message)?'capacity':'error'}});
+      this.event(run, 'system', controller.progressTimeout||error.message,{failure:{kind:controller.progressTimeout?'stalled':capacityFailure(error.message)?'capacity':allowanceFailure(error)?'allowance':'error'}});
     } finally {
       // Provider errors/timeouts can leave permission promises pending. Settle them
       // before another turn reuses this run's serialized question queue.
@@ -481,7 +485,7 @@ export class Engine extends EventEmitter {
         const event=run.events.find(e=>e.data?.delivery?.id===next.id);if(event)event.data.delivery.state='delivered';
       }
       this.persist(run); if (lane) this.backgroundRuns.delete(lane); else this.running.delete(run.id);this.historyCache.trim();
-      this.recovery.settled(run);queueMicrotask(() => this.drain());
+      this.recovery.settled(run);this.allowance?.settled(run);queueMicrotask(() => this.drain());
     }
   }
   cancel(id) {
@@ -551,7 +555,7 @@ export class Engine extends EventEmitter {
   async close() {
     if (this.closePromise) return this.closePromise;
     this.stopping = true;
-    this.recovery.close();
+    this.recovery.close();this.allowanceClosing=this.allowance?.close();
     for (const slot of this.running.values()) slot.controller.abort();
     for (const slot of this.backgroundRuns.values()) slot.controller.abort();
     this.closePromise = this.finishClose();
@@ -561,6 +565,7 @@ export class Engine extends EventEmitter {
     // A started checkpoint must finish before the worker terminates. A scan
     // interrupted by shutdown cannot advance the poll past an unclaimed slot.
     let schedulerError;
+    await this.allowanceClosing;
     try { await this.schedulerTick; } catch (error) { schedulerError = error; }
     try { await this.schedulerWorker?.close(); } catch (error) { schedulerError ||= error; }
     for (const provider of Object.values(this.providers)) await provider.close?.();

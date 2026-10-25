@@ -36,6 +36,11 @@ function fixture(t){
 async function prepare(f){return (await f.controller.handle({action:'prepare',candidate:f.candidate,sourceFingerprint:'b'.repeat(64)},f.run.id)).job;}
 async function handoff(f,job){return f.controller.handle({action:'handoff',id:job.id,expectedRevision:job.revision,checkpoint:'Completed synthetic checks. Verify the restored app and remaining work.'},f.run.id);}
 
+test('completed updater card clears an old idle blocker while preserving real failure evidence',async t=>{
+ const f=fixture(t);await prepare(f);writeJob(f.controller.file,{phase:'waiting-for-idle',blocker:'A model turn is active.'});assert.match(f.controller.status().job.blocker,/active/);
+ writeJob(f.controller.file,{phase:'complete',outcome:'updated',error:'Retained diagnostic',blocker:'A model turn is active.'});const status=f.controller.status();assert.equal(status.job.blocker,null);assert.equal(status.job.error,'Retained diagnostic');assert.equal(status.job.outcome,'updated');
+});
+
 test('installed baseline helper path still arms the organized helper and acknowledges readiness',async t=>{
  const f=fixture(t);await prepare(f);const job=readJob(f.controller.file);
  writeJob(job.file,{phase:'waiting-for-idle'});

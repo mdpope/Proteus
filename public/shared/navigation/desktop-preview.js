@@ -74,8 +74,8 @@ export function previewTopId(tab,state=ui.state){
  return tab?.id;
 }
 
-export function ensurePreviewProject(project,{reveal=false}={}){
- if(!project)return;const profile=workspace(project.workspaceId);if(!profile)return;
+export function ensurePreviewProject(project,{reveal=false,workspaceRecord}={}){
+ if(!project)return;const profile=workspace(project.workspaceId)||(workspaceRecord?.id===project.workspaceId?workspaceRecord:null);if(!profile)return;
  const workspaceId='workspace:local:'+profile.id;let root=ui.state.tabs.find(t=>t.id===workspaceId);if(!root){root={id:workspaceId,type:'workspace',workspaceId:profile.id,label:profile.name,workspacePage:'projects'};ui.state.tabs.push(root);}if(reveal){root.hidden=false;root.navigationClosed=false;}
  let tab=ui.state.tabs.find(t=>t.id===projectViewId(project.id));if(!tab){tab={id:projectViewId(project.id),type:'workspace',workspaceId:profile.id,workspaceName:profile.name,projectId:project.id,label:project.name,workspacePage:'chats',hidden:false};ui.state.tabs.push(tab);}return tab;
 }

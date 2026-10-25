@@ -1,4 +1,7 @@
+import {bindAllowancePreference} from './features/chats/allowance-controls.js';
+import {bindPermissionSidebar} from './shared/navigation/permission-sidebar.js';
 import {showMoveMenu} from './shared/navigation/move-menu.js';
+import {installLinkPreview} from './shared/ui/link-preview.js';
 import {refreshMountedWorkspaceTabs} from './features/workspaces/workspace-tabs.js';
 import {workingMessage} from './features/chats/chat-working.js';
 import {mountQuestionAttachments} from './features/chats/question-attachments.js';
@@ -15,7 +18,7 @@ import {reorderWorkspaceTabSiblings} from './features/workspaces/workspace-tabs.
 import {workspaceProjectsCatalog,setWorkspaceProjectsCatalog,initDesktopPreview,previewEnabled,projectIcon,previewTopId,reconcilePreviewChatPlacement,previewContentDescriptors,ensurePreviewProject,previewProjects,previewProjectForChat,previewResourceParent,capturePreviewSidebar,bindPreviewSidebar,resetPreviewProjectPaging,openPreviewChat,previewChatBreadcrumb,bindPreviewChatBreadcrumb,renderPreviewSources} from './shared/navigation/desktop-preview.js';
 import {rememberTabSelection,restoreTabSelection} from './features/workspaces/workspace-selection.js';
 import {previewRelativeAge,previewChatActivity} from './shared/navigation/preview-navigation.js';
-import {previewApprovalChoices,previewPermissionNames,previewPermissionHelp,previewFolderDialog,previewRememberDialog,previewRememberEffect,previewPermissionChoiceLabel} from './shared/navigation/preview-permissions.js';
+import {previewApprovalChoices,previewPermissionNames} from './shared/navigation/preview-permissions.js';
 import {downloadsChanged} from './features/browser/browser-downloads.js';
 import {normalizeContentTabHistory,contentTabMetadata,acknowledgesBrowserNavigation} from './models/content-tab-descriptor.js';
 import {chatLink,parseChatLink} from './features/chats/chat-links.js';
@@ -84,6 +87,7 @@ const linuxWindowChrome=createLinuxWindowChrome(window.desktop,message=>toast(me
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 const desktopWindowId=window.desktop?.windowId||'main',windowScopeId=kind=>kind==='team'&&window.desktop?.windowPreview?'team':desktopWindowId==='main'?kind:'window:'+desktopWindowId;
 const state = { data: null, page: 'home', engineSection:'resources', selected: null, tab: 'overview', tabs: [{ id: 'overview', label: 'Schedules', type: 'overview' }], draft: null, dirty: false, signature: '', markdown: null };
+installLinkPreview({base:()=>{const tab=state.tabs.find(tab=>tab.id===state.tab),run=localHistories.get(tab?.runId||tab?.id);return {file:tab?.markdown?.file,cwd:run?.schedule?.workspace?.cwd};}});
 const windowChrome=createWindowChrome({state,icon:tabOverviewIcon,overview:showBrowserOverview,layout:()=>browserBounds()});
 const navigationIcon = markup => previewEnabled(state)?`<span class="preview-tab-icon">${markup}</span>`:markup;
 const friendly = value => ({ awaiting_input:'Needs feedback', completed:'Turn complete', queued:'Queued', running:'Running', cancelled:'Cancelled', interrupted:'Interrupted', failed:'Failed' }[value] || value);
@@ -121,7 +125,7 @@ async function reconcileRemoteProjectPlacement(hostId){
 function reorderVisibleTabs(source,target,after,parentId=null){const visible=state.tabs.filter(tab=>parentId?tab.parentId===parentId:!tab.parentId&&!['overview','omi','life','team','engine','home','standup'].includes(tab.type));if(!visible.some(tab=>tab.id===source)||!visible.some(tab=>tab.id===target))return;const ordered=visible.slice();if(!reorderById(ordered,source,target,after))return;const positions=state.tabs.map((tab,index)=>visible.includes(tab)?index:-1).filter(index=>index>=0);positions.forEach((position,index)=>state.tabs[position]=ordered[index]);saveWorkspace();if(parentId)renderChatSubtabs();else renderTabs();}
 const syncMessageContext=()=>setMessageActionsContext(JSON.stringify([state.data?.life?.identity?.accountId||'',state.data?.life?.identity?.workspaceId||'',state.data?.life?.identity?.origin||'',state.data?.life?.identity?.sessionId||'',state.tab,state.tabs.find(t=>t.id===state.tab)?.hostId||'local']));
 const lifeVisible = () => state.data?.life?.enabled === true;
-let applyingContentTabs=0, contentSyncTimer, browserActivitySaveTimer;
+let applyingContentTabs=0, ownerTabActions=0, contentSyncTimer, browserActivitySaveTimer;
 function saveWorkspace() {
   chatSetupTabs.capture();
   if(!workspaceReady || workspaceRestoring || workspaceClosing)return;
@@ -135,14 +139,16 @@ function saveWorkspace() {
     // Sidebar/state repaint can save the same snapshot after owner hydration.
     // Only new local state needs another descriptor pass; a no-op must neither
     // enqueue a read nor postpone the timer already carrying a real edit.
-    if(!applyingContentTabs){clearTimeout(contentSyncTimer);contentSyncTimer=setTimeout(()=>void contentTabSync.all(),100);}
+    if(!applyingContentTabs&&!ownerTabActions){clearTimeout(contentSyncTimer);contentSyncTimer=setTimeout(()=>void contentTabSync.all(),100);}
     lastWorkspace=json;
     if(window.desktop?.workspaceSession)workspaceSaving=window.desktop.workspaceSession({action:'save',session}).catch(error=>{lastWorkspace='';toast(error.message);return {failed:true,error:error.message};});
     else try{localStorage.setItem('proteus.workspace',json);}catch{}
   }
   // Send the saved history/pending marker before starting the local-only outbox
   // checkpoint. Window shutdown waits for both without waiting for a remote host.
-  const checkpoint=checkpointDepartedContentScopes();
+  // An owner placement already committed the canonical descriptor. Avoid starting
+  // a competing local synchronization while acknowledging its renderer placement.
+  const checkpoint=ownerTabActions?null:checkpointDepartedContentScopes();
   if(checkpoint)workspaceSaving=Promise.all([workspaceSaving,checkpoint]).then(results=>results.find(result=>result?.failed)||results[0]);
   return workspaceSaving;
 }
@@ -610,6 +616,7 @@ function renderRun(id) {
   const answerKey = id + ":" + (pending?.id || "");
   const modelDraft = state.chatModelDrafts[id] || run.nextModelOptions || run.schedule;
   replaceChatContent(`<div class="heading"><div>${previewChatBreadcrumb(run)}<div class="eyebrow">${escape(run.schedule.provider)} / ${run.id.slice(0,8)}</div><div class="chat-title-line"><h1>${escape(run.title)}</h1><button id="chat-rename" class="chat-rename" type="button" aria-label="Rename chat" title="Rename chat">✎</button></div><div class="muted">${time(run.createdAt)} · ${escape(run.schedule.model || (run.schedule.provider==='rehearsal'?'Local rehearsal, no AI calls':'Provider default model'))}</div></div><div class="actions"><button id="toggle-chat-details">${state.showChatDetails?'Chat':'Details'}</button>${run.chatType==='internet'?'<button id="chat-promote" class="chat-secondary-action">Promote to User Chat</button>':''}<button id="chat-move" class="chat-secondary-action">Move</button><button id="chat-archive" class="chat-secondary-action">${run.archivedAt?'Unarchive':'Archive'}</button><button id="chat-delete" class="chat-secondary-action danger">Delete</button>${badge(run.status)}</div></div><div class="grid chat-grid"><section class="card chat-pane"><div id="conversation-host"></div>${pending?`<div class="pending">${previewEnabled(state)&&pending.type==='permission'?'':`<div class="eyebrow">Your input is needed</div><p>${escape(pending.question)}</p>`}${pending.details&&!(previewEnabled(state)&&pending.type==='permission')?`<div id="request-summary"></div><details class="raw-details"><summary>Raw request</summary><pre>${escape(JSON.stringify(pending.details,null,2))}</pre></details>`:''}${pending.type==='permission'?(previewEnabled(state)?permissionChoices(pending,run):'<div class="actions"><button id="deny">Deny</button><button class="primary" id="approve">Approve once</button></div>'+permissionChoices(pending,run)):`<textarea id="answer" placeholder="Add your feedback…" rows="2">${escape(state.chatAnswerDrafts[answerKey]||'')}</textarea><div id="question-attachments"></div><div class="actions"><button class="primary" id="reply">Send feedback</button></div>`}</div>`:run.status==='running'?'<p class="note" role="status"><span class="spinner" aria-hidden="true"></span>'+escape(workingMessage(run))+'</p>':''}${run.status==='queued'?`<p class="note" role="status">${escape(run.queueReason||'Preparing this chat…')}</p>`:''}<div class="composer"><textarea id="followup" placeholder="${active?'Add an update while this runs…':'Continue this conversation…'}" rows="2">${escape(state.chatDrafts[id]||'')}</textarea><div class="composer-footer"><div id="run-attachments"></div><div class="composer-models" ${run.schedule.provider==='rehearsal'?'hidden':''}><input type="hidden" id="run-provider" value="${escape(run.schedule.provider)}">${modelPicker('run-model',modelDraft.model,run.schedule.provider)}${modelControls('run-model',modelDraft,true)}<button class="subtle" id="run-model-refresh" aria-label="Refresh model choices" title="Refresh model choices">↻</button></div><div class="composer-actions">${active&&state.data.providerSteering?.[run.schedule.provider]?`<button id="steer" data-steer-mode="${run.schedule.provider==='claude'?'interrupt-and-continue':'steer'}" title="Send into the running turn using its current model settings" ${run.status!=='running'?'disabled':''}>Steer</button>`:''}<button class="primary" id="continue" title="${active?'Send after the current turn finishes':'Send message'}">${active?'Queue':'Send ↑'}</button>${['running','awaiting_input'].includes(run.status)?'<button class="danger" id="cancel" title="Stop the running turn">Stop</button>':''}</div></div>${run.queuedMessages?.length?`<p class="note">${run.queuedMessages.length} message(s) ${['failed','interrupted'].includes(run.status)?'waiting for this chat to continue.':'queued for after this turn.'}</p>${run.queuedMessages.map(m=>`<div class="queued-message"><span>${escape(m.prompt.slice(0,120))}</span>${run.status==='running'&&state.data.providerSteering?.[run.schedule.provider]&&!m.attachmentDispatch?`<button data-steer-queued="${escape(m.id)}" title="Send now using the current turn’s model">Steer now</button>`:''}<button data-edit-queued="${escape(m.id)}">Edit</button><button data-remove-message="${escape(m.id)}" aria-label="Remove queued message">×</button></div>`).join('')}`:''}</div></section><div class="stack chat-details">${renderRunDetails(run,{desktopPreview:previewEnabled(state),permissionHTML:permissionControls(run.permissionContext,{runId:run.id}),mcp:state.data.mcpStatusProviders?.includes(run.schedule.provider)})}</div></div>`);
+  bindAllowancePreference(main,{run,command:payload=>api(`/api/runs/${run.id}/recover`,payload),reload:async()=>{await loadRunView(id);renderRun(id);},notify:toast});
   bindChatFolderTrust(main,{run,request:payload=>api('/api/permissions',payload),pick:()=>window.desktop.choosePaths({kind:'folder'}),refresh:async()=>{await loadRunView(id);renderRun(id);},notify:toast});
   renderChatSubtabs();
   updateConversation(run);renderUpdateCard(main,state.data.updates,run.id,escape,()=>{state.engineSection='updates';openFeatureTab('engine');});
@@ -1236,41 +1243,12 @@ function permissionControls(context, ref) {
   return `<div class="permission-control" data-context-id="${escape(context.id)}" data-permission-ref="${escape(JSON.stringify(ref))}"><label>Workspace tool approvals</label><p class="note">Saved on this computer for this and future chats and scheduled runs with the same provider and workspace configuration, until changed or revoked. Chat-only approval survives restart and applies only to this chat and its future continuations.</p><div class="actions"><select aria-label="Tool approval mode" data-permission-mode>${Object.entries(permissionModeNames).map(([mode,name])=>`<option value="${mode}" ${(permissionDrafts.get(context.id)||context.workspaceMode||displayedMode(context))===mode?'selected':''}>${name}</option>`).join('')}</select><button data-save-permissions>Apply permissions</button></div><p class="note">Effective: <strong>${escape(permissionModeNames[displayedMode(context)])}</strong> from ${context.source==='chat'?'this chat':'the workspace'}. Workspace setting: ${escape(permissionModeNames[context.workspaceMode||displayedMode(context)])}. Changing the workspace setting also affects other chats and schedules with this context.</p><p class="note">Trusted workspace allows file reads/writes in its folders, read-only MCP calls, and browser reading/navigation. Other operations use saved rules or ask. Auto-approve tools also allows terminal commands and configured tools; commands can access beyond these folders. Questions and enterprise-required approvals still pause.</p><details><summary>Authorized folders and saved rules</summary><ul>${context.folders.map(folder=>`<li><code>${escape(folder.path)}</code> · ${escape(folder.access)}</li>`).join('') || '<li>No folders trusted yet.</li>'}</ul><pre>${escape(JSON.stringify(context.rules,null,2))}</pre></details>${ref.runId?`<div class="chat-permission-scope"><h3>This chat only</h3><p class="note">${context.chatMode==='autopilot'?'Auto-approve this chat and future continuations is on. It lasts through continuation and restart until revoked or this chat’s permission context changes.':'This chat inherits its workspace setting.'} Auto-approval stays within existing granted resources; it does not grant new filesystem access. Mandatory approvals and sandbox rules still apply.</p><div class="actions"><button data-chat-autoapprove ${context.chatMode==='autopilot'?'disabled':''}>Auto-approve this chat and future continuations</button><button data-chat-inherit ${context.chatMode==='autopilot'?'':'disabled'}>Use workspace setting</button></div></div>`:''}</div>`;
 }
 function bindPreviewPermissionSidebar(run){
-  const context=run.permissionContext;if(!context)return;
-  const reload=async()=>{await loadRunView(run.id);await refresh(true);};
-  $('[data-preview-permission-help]')?.addEventListener('click',()=>showDialog(previewPermissionHelp(run.schedule.provider)));
-  $('[data-preview-add-folder]')?.addEventListener('click',()=>{
-    showDialog(previewFolderDialog(),async()=>{
-      const folder=$('#preview-folder-path').value.trim();if(!folder)throw Error('Choose a folder.');
-      await api('/api/permissions',{action:'grant-chat-folder',runId:run.id,folder,access:$('#preview-folder-access').value,expectedContextId:context.id,expectedChatRevision:context.chatRevision||null});await reload();
-    });
-    $('[data-preview-pick-folder]').onclick=async()=>{try{const folders=await window.desktop.choosePaths({kind:'folder'});if(folders?.[0])$('#preview-folder-path').value=folders[0];}catch(error){toast(error.message);}};
-    $('#preview-folder-path').focus();
-  });
-  const updateChatPermission=async(values)=>{
-    const controls=document.querySelectorAll('[data-preview-chat-mode],[data-preview-read-only],[data-preview-read-only-inherit],[data-preview-revoke-rule]');controls.forEach(button=>button.disabled=true);
-    try{await api('/api/permissions',{...values,runId:run.id,expectedContextId:context.id,expectedChatRevision:context.chatRevision||null,...(run.pending?.type==='permission'?{expectedRequestId:run.pending.id}:{})});await reload();}catch(error){toast(error.message);await reload();}
-  };
-  document.querySelectorAll('[data-preview-chat-mode]').forEach(button=>button.onclick=()=>{if(button.getAttribute('aria-pressed')!=='true')void updateChatPermission({action:'set-chat-mode',mode:button.dataset.previewChatMode});});
-  $('[data-preview-read-only]')?.addEventListener('change',event=>void updateChatPermission({action:'set-chat-read-only',enabled:event.target.checked}));
-  $('[data-preview-read-only-inherit]')?.addEventListener('click',()=>void updateChatPermission({action:'set-chat-read-only',enabled:null}));
-  document.querySelectorAll('[data-preview-revoke-rule]').forEach(button=>button.onclick=()=>void updateChatPermission({action:'revoke-chat-rule',ruleId:button.dataset.previewRevokeRule}));
-  $('[data-preview-workspace-permissions]')?.addEventListener('click',async()=>{
-    const workspaceId=run.schedule.context?.workspaceId||context.workspaceId;
-    const workspace=state.data.context.workspaces.find(item=>item.id===workspaceId);
-    if(!workspace||workspace.deletedAt){toast('The original workspace is unavailable. This chat keeps its saved settings.');return;}
-    openWorkspace({...workspace,hostId:'local'},'configuration');
-    for(let attempt=0;attempt<40;attempt++){const section=$('[data-config-section="approvals"]');if(section){section.open=true;section.scrollIntoView({block:'nearest'});break;}await new Promise(resolve=>setTimeout(resolve,50));}
-  });
-  $('[data-preview-remember]')?.addEventListener('click',()=>{
-    const pending=run.pending;if(pending?.type!=='permission')return;
-    showDialog(previewRememberDialog(pending),async()=>{
-      const answer=$('[data-preview-remember-choice][aria-pressed=true]').dataset.previewRememberChoice;
-      await api(`/api/runs/${run.id}/reply`,{answer,requestId:pending.id});await reload();
-    });
-    const explain=()=>{const answer=$('[data-preview-remember-choice][aria-pressed=true]').dataset.previewRememberChoice;$('[data-preview-remember-target]').textContent=previewPermissionChoiceLabel(pending.permissionChoices.find(choice=>choice.value===answer),pending);$('[data-preview-remember-effect]').textContent=previewRememberEffect(pending,answer);};
-    document.querySelectorAll('[data-preview-remember-choice]').forEach(button=>button.onclick=()=>{document.querySelectorAll('[data-preview-remember-choice]').forEach(item=>item.setAttribute('aria-pressed',String(item===button)));explain();});explain();
-  });
+ bindPermissionSidebar(document.querySelector('#main'),{run,request:payload=>api('/api/permissions',payload),reply:(answer,requestId)=>api(`/api/runs/${run.id}/reply`,{answer,requestId}),reload:async()=>{await loadRunView(run.id);await refresh(true);},dialog:showDialog,pick:()=>window.desktop.choosePaths({kind:'folder'}),notify:toast,openWorkspace:async()=>{
+  const context=run.permissionContext,workspaceId=run.schedule.context?.workspaceId||context.workspaceId,workspace=state.data.context.workspaces.find(item=>item.id===workspaceId);
+  if(!workspace||workspace.deletedAt){toast('The original workspace is unavailable. This chat keeps its saved settings.');return;}
+  openWorkspace({...workspace,hostId:'local'},'configuration');
+  for(let attempt=0;attempt<40;attempt++){const section=$('[data-config-section="approvals"]');if(section){section.open=true;section.scrollIntoView({block:'nearest'});break;}await new Promise(resolve=>setTimeout(resolve,50));}
+ }});
 }
 
 function permissionSettings() {
@@ -1398,7 +1376,7 @@ async function moveManagedWorkspaceTab(tab,target,parent){
   await api('/api/tabs/manage',{action:'move',scope:'shell',id:'shell',tabId:source.id,expectedRevision:source.revision,destination});return;
  }
  if(tab.hostId||parent?.hostId)throw Error('Move this resource from its owning computer’s Tabs page.');
- await saveWorkspace();await contentTabSync.all();
+ await saveWorkspace();await syncTabScope(tab);
  const descriptor=await descriptorFor(tab,state.tabs.find(item=>item.id===tab.parentId)||{type:'main'}),source=await findManagedTab(item=>item.id===descriptor?.id);
  if(!source)throw Error('The tab has not synchronized yet. Refresh and retry.');
  const destination=target==='team'?{scope:'team',id:windowScopeId('team')}:target==='main'?{scope:'main',id:windowScopeId('main')}:parent.type==='workspace'?{scope:parent.projectId?'project':'workspace',id:parent.projectId||parent.workspaceId}:{scope:'chat',id:parent.runId||parent.id};
@@ -1433,6 +1411,11 @@ async function manageWorkspaceTabs(action,rows){
   $('#dialog').addEventListener('close',()=>finish({cancelled:true}),{once:true});
  });
 }
+async function syncTabScope(tab){
+ const parent=state.tabs.find(item=>item.id===tab.parentId),team=teamState().tabs.includes(tab);
+ const scope=team?{scope:'team',id:windowScopeId('team')}:parent?.projectId?{scope:'project',id:parent.projectId}:parent?.type==='workspace'?{scope:'workspace',id:parent.workspaceId}:parent?{scope:'chat',id:parent.runId||parent.id}:{scope:'main',id:windowScopeId('main')};
+ if(parent?.hostId)scope.hostId=parent.hostId;await contentTabSync.sync(scope);
+}
 async function manageWorkspaceTab(action,id,placement){const tab=state.tabs.find(tab=>tab.id===id);if(!tab)throw new Error('Tab is no longer open.');if(action==='open'){if(tab.hidden||tab.info?.hidden)await setTabVisibility(tab,false);if(tab.type==='browser')return selectBrowserTab(tab.info);return openTab({...tab,hidden:false});}if(action==='reorder'){
  if(!previewEnabled(state))throw new Error('Drag reordering is unavailable for this host.');
  if(!workspaceReady||workspaceRestoring||workspaceClosing)throw new Error('The desktop session is not ready to save tab order. Try again shortly.');
@@ -1441,7 +1424,7 @@ async function manageWorkspaceTab(action,id,placement){const tab=state.tabs.find
  renderTabs();renderChatSubtabs();return;
 }if(action==='move')return transferTabDialog(tab);if(action==='close'){if(tab.type==='terminal'&&!window.confirm('Close this terminal tab? Persistent tmux work remains available; ordinary shell processes stop.'))return;return closeChildTab(tab);}if(['hide','restore'].includes(action)){
  if(!tab.hostId&&!['remote-document','agent-terminal'].includes(tab.type)){
-  await saveWorkspace();await contentTabSync.all();const descriptor=await descriptorFor(tab,state.tabs.find(item=>item.id===tab.parentId)||{type:'main'}),source=await findManagedTab(row=>row.id===descriptor?.id);if(!source)throw Error('Refresh this tab’s owner inventory before changing visibility.');
+  await saveWorkspace();await syncTabScope(tab);const descriptor=await descriptorFor(tab,state.tabs.find(item=>item.id===tab.parentId)||{type:'main'}),source=await findManagedTab(row=>row.id===descriptor?.id);if(!source)throw Error('Refresh this tab’s owner inventory before changing visibility.');
   await api('/api/tabs/manage',{action,scope:source.scope,id:source.scopeId,tabId:source.id,expectedRevision:source.revision});
  }else await setTabVisibility(tab,action==='hide');
 }else if(['up','down'].includes(action)){const siblings=state.tabs.filter(item=>item.parentId===tab.parentId),index=siblings.indexOf(tab),other=siblings[index+(action==='up'?-1:1)];if(other){const a=state.tabs.indexOf(tab),b=state.tabs.indexOf(other);[state.tabs[a],state.tabs[b]]=[state.tabs[b],state.tabs[a]];}}saveWorkspace();renderTabs();renderChatSubtabs();}
@@ -1517,6 +1500,9 @@ window.desktop?.onBrowserState(infos=>{
 window.desktop?.onCloseCurrentTab?.(()=>void closeCurrentTab().catch(error=>toast(error.message)));
 window.desktop?.onCloseTool?.((id)=>{state.tabs=state.tabs.filter(t=>t.id!==id);if(state.tab===id)state.tab='overview';render();});
 window.desktop?.onTabManagement?.(async value=>{
+ let acknowledged=false;const ownerPlacement=value.action!=='window-checkpoint';if(ownerPlacement){ownerTabActions++;clearTimeout(contentSyncTimer);}
+ try {
+ if(value.navigationCatalog)setWorkspaceProjectsCatalog(state,{...workspaceProjectsCatalog(state),...value.navigationCatalog});
  if(value.action==='window-checkpoint'){try{rememberView($('#main'),$('#main').dataset.viewKey);await flushViewPositions();const saved=await saveWorkspace();if(saved?.failed)throw Error(saved.error);await window.desktop.tabActionResult({requestId:value.requestId,result:{saved:true}});}catch(error){await window.desktop.tabActionResult({requestId:value.requestId,error:error.message});}return;}
  if(value.action==='project-catalog'){
   try{
@@ -1526,7 +1512,7 @@ window.desktop?.onTabManagement?.(async value=>{
   }catch(error){await window.desktop.tabActionResult({requestId:value.requestId,error:error.message});}
   return;
  }
- if(value.action==='shell-action'){try{const tab=[...state.tabs,...teamState().tabs].find(tab=>tab.id===value.tab.runtimeId);if(!tab)throw new Error('Tab was closed.');if(value.operation==='close'&&teamState().tabs.includes(tab)){teamState().tabs=teamState().tabs.filter(item=>item!==tab);if(teamState().active===tab.id)teamState().active='overview';if(tab.type==='remote-document')forgetRemoteDocument(tab.id);}else if(value.operation==='close'){if(tab.type==='workspace')tab.navigationClosed=true;if(tab.parentId)await closeChildTab(tab);else await closeTopTab(tab.id);}else if(['hide','restore'].includes(value.operation)){await setTabVisibility(tab,value.operation==='hide');}else if(value.operation==='move'){if(tab.type==='agent-terminal')tab.runId||=agentTerminalRunId(tab);tab.contentTabId=value.tab.id;const target=value.destination;if(teamState().tabs.includes(tab)&&target.scope!=='team'){teamState().tabs=teamState().tabs.filter(item=>item!==tab);tab.label||=tab.title;state.tabs.push(tab);if(teamState().active===tab.id)teamState().active='overview';}if(target.scope==='main')delete tab.parentId;else if(target.scope==='team'){state.tabs=state.tabs.filter(item=>item!==tab);if(teamState().tabs.includes(tab)){const saved=await saveWorkspace();render();await window.desktop.tabActionResult({requestId:value.requestId,...(saved?.failed?{error:saved.error}:{result:{completed:true}})});return;}if(tab.type==='browser')selectTeamBrowser({...tab.info,id:tab.id,contentTabId:tab.contentTabId});else teamState().tabs.push({...tab,title:tab.label,file:tab.markdown?.file||tab.file,parentId:undefined});}else{const parentId=target.scope==='project'?'project:local:'+target.id:target.scope==='workspace'?'workspace:local:'+target.id:target.id;let parent=state.tabs.find(item=>item.id===parentId);if(!parent&&target.scope==='project'){const project=previewProjects().find(item=>item.id===target.id);if(!project)throw new Error('Choose an existing project.');parent=ensurePreviewProject(project);}if(!parent){parent={id:parentId,type:target.scope==='workspace'?'workspace':'run',workspaceId:target.scope==='workspace'?target.id:undefined,label:target.scope==='workspace'?state.data.context.workspaces.find(row=>row.id===target.id)?.name||'Workspace':state.data.runs.find(row=>row.id===target.id)?.title||'Chat'};state.tabs.push(parent);}tab.parentId=parent.id;}}else if(value.operation==='reorder'){const current=state.tabs.filter(tab=>!tab.parentId&&!tab.navigationClosed),ids=value.ids||[];if(ids.length!==current.length||new Set(ids).size!==current.length||ids.some(id=>!current.some(tab=>tab.id===id)))throw new Error('Reorder must include each root view exactly once.');const positions=state.tabs.map((tab,index)=>current.includes(tab)?index:-1).filter(index=>index>=0);positions.forEach((position,index)=>state.tabs[position]=current.find(tab=>tab.id===ids[index]));}const saved=await saveWorkspace();if(saved?.failed)throw new Error(saved.error);render();await window.desktop.tabActionResult({requestId:value.requestId,result:{completed:true,operation:value.operation}});}catch(error){await window.desktop.tabActionResult({requestId:value.requestId,error:error.message});}return;}
+ if(value.action==='shell-action'){try{const tab=[...state.tabs,...teamState().tabs].find(tab=>tab.id===value.tab.runtimeId);if(!tab)throw new Error('Tab was closed.');if(value.operation==='close'&&teamState().tabs.includes(tab)){teamState().tabs=teamState().tabs.filter(item=>item!==tab);if(teamState().active===tab.id)teamState().active='overview';if(tab.type==='remote-document')forgetRemoteDocument(tab.id);}else if(value.operation==='close'){if(tab.type==='workspace')tab.navigationClosed=true;if(tab.parentId)await closeChildTab(tab);else await closeTopTab(tab.id);}else if(['hide','restore'].includes(value.operation)){await setTabVisibility(tab,value.operation==='hide');}else if(value.operation==='move'){if(tab.type==='agent-terminal')tab.runId||=agentTerminalRunId(tab);tab.contentTabId=value.tab.id;const target=value.destination;if(teamState().tabs.includes(tab)&&target.scope!=='team'){teamState().tabs=teamState().tabs.filter(item=>item!==tab);tab.label||=tab.title;state.tabs.push(tab);if(teamState().active===tab.id)teamState().active='overview';}if(target.scope==='main')delete tab.parentId;else if(target.scope==='team'){state.tabs=state.tabs.filter(item=>item!==tab);if(teamState().tabs.includes(tab)){const saved=await saveWorkspace();render();await window.desktop.tabActionResult({requestId:value.requestId,...(saved?.failed?{error:saved.error}:{result:{completed:true}})});return;}if(tab.type==='browser')selectTeamBrowser({...tab.info,id:tab.id,contentTabId:tab.contentTabId});else teamState().tabs.push({...tab,title:tab.label,file:tab.markdown?.file||tab.file,parentId:undefined});}else{const parentId=target.scope==='project'?'project:local:'+target.id:target.scope==='workspace'?'workspace:local:'+target.id:target.id;let parent=state.tabs.find(item=>item.id===parentId);if(!parent&&target.scope==='project'){const project=target.project||previewProjects().find(item=>item.id===target.id);if(!project)throw new Error('Choose an existing project.');parent=ensurePreviewProject(project,{workspaceRecord:target.workspace});}if(!parent){parent={id:parentId,type:target.scope==='workspace'?'workspace':'run',workspaceId:target.scope==='workspace'?target.id:undefined,label:target.scope==='workspace'?state.data.context.workspaces.find(row=>row.id===target.id)?.name||'Workspace':state.data.runs.find(row=>row.id===target.id)?.title||'Chat'};state.tabs.push(parent);}tab.parentId=parent.id;}}else if(value.operation==='reorder'){const current=state.tabs.filter(tab=>!tab.parentId&&!tab.navigationClosed),ids=value.ids||[];if(ids.length!==current.length||new Set(ids).size!==current.length||ids.some(id=>!current.some(tab=>tab.id===id)))throw new Error('Reorder must include each root view exactly once.');const positions=state.tabs.map((tab,index)=>current.includes(tab)?index:-1).filter(index=>index>=0);positions.forEach((position,index)=>state.tabs[position]=current.find(tab=>tab.id===ids[index]));}const saved=await saveWorkspace();if(saved?.failed)throw new Error(saved.error);render();await window.desktop.tabActionResult({requestId:value.requestId,result:{completed:true,operation:value.operation}});}catch(error){await window.desktop.tabActionResult({requestId:value.requestId,error:error.message});}return;}
 
  if(value.action==='chat-moved'){
   const views=state.tabs.filter(tab=>tab.type==='run'&&(tab.runId||tab.id)===value.chatId);
@@ -1550,13 +1536,15 @@ window.desktop?.onTabManagement?.(async value=>{
   tab.contentTabId=value.tab.id;
   const {scope,id}=value.destination;
   if(fromTeam&&scope!=='team'){teamState().tabs=teamState().tabs.filter(item=>item!==tab);if(teamState().active===tab.id)teamState().active='overview';if(tab.browserId){tab.id=tab.browserId;tab.info=await window.desktop.browser({action:'activate',id:tab.browserId});delete tab.browserId;}tab.label=tab.label||tab.title;state.tabs.push(tab);}
-  if(scope==='project'){const parent=ensurePreviewProject(previewProjects().find(project=>project.id===id));if(!parent)throw Error('Project is unavailable.');tab.parentId=parent.id;}
+  if(scope==='project'){const parent=ensurePreviewProject(value.destination.project||previewProjects().find(project=>project.id===id),{workspaceRecord:value.destination.workspace});if(!parent)throw Error('Project is unavailable.');tab.parentId=parent.id;}
   else if(scope==='workspace'){let parent=state.tabs.find(item=>item.type==='workspace'&&!item.projectId&&!item.hostId&&item.workspaceId===id);if(!parent){const profile=state.data.context.workspaces.find(item=>item.id===id);parent={id:'workspace:local:'+id,type:'workspace',workspaceId:id,label:profile?.name||'Workspace'};state.tabs.push(parent);}tab.parentId=parent.id;}
   else if(scope==='chat'){if(!state.tabs.some(item=>item.id===id)){const run=state.data.runs.find(item=>item.id===id);state.tabs.push({id,type:'run',label:run?.title||'Chat'});}tab.parentId=id;}
   else if(scope==='main')delete tab.parentId;
   else if(scope==='team'&&!fromTeam){if(tab.type==='browser')selectTeamBrowser({...tab.info,id:tab.id,contentTabId:value.tab.id});else teamState().tabs.push({...tab,title:tab.label,file:tab.markdown?.file||tab.file,parentId:undefined});state.tabs=state.tabs.filter(item=>item!==tab);}
  }
- const saved=await saveWorkspace();render();if(value.requestId)await window.desktop.tabActionResult({requestId:value.requestId,...(saved?.failed?{error:saved.error}:{result:{completed:true}})});
+ const saved=await saveWorkspace();if(saved?.failed)throw Error(saved.error);if(value.requestId){await window.desktop.tabActionResult({requestId:value.requestId,result:{completed:true}});acknowledged=true;}render();
+ }catch(error){if(value.requestId&&!acknowledged)await window.desktop.tabActionResult({requestId:value.requestId,error:error.message});else toast(error.message);}
+ finally{if(ownerPlacement)ownerTabActions--;}
 });
 window.desktop?.onNotification?.(()=>{if(state.page==='engine'&&state.engineSection==='notifications')renderEngineRoom('notifications',true);});
 window.desktop?.onAddressFocus(()=>$('#browser-url')?.focus());
@@ -1671,7 +1659,7 @@ async function closeOverview(item){
   const tab=state.tabs.find(entry=>entry.id===item.id);if(!tab)return;if(tab.parentId)await closeChildTab(tab);else await closeTopTab(tab.id);
 }
 initBrowserOverview({escape,toast,overviewGroups,selectOverview,closeOverview,loadCached:async scope=>{if(!window.desktop?.thumbnails)return [];const rows=overviewGroups([],scope).flatMap(group=>group.items).filter(item=>['run','remote-run'].includes(item.kind)).map(item=>({id:item.id,key:chatThumbnailKey(state.tabs.find(tab=>tab.id===item.id)||item)}));const cached=await window.desktop.thumbnails({action:'get',keys:rows.map(row=>row.key)});return rows.map(row=>({id:row.id,...cached.find(item=>item.key===row.key)}));},reorder:(source,target,after)=>{if(source.team||target.team){if(!source.team||!target.team)throw Error('Reorder tabs within the same section.');const tabs=teamState().tabs;if(reorderById(tabs,source.id,target.id,after))saveWorkspace();return;}if(source.parentId!==target.parentId)throw Error('Reorder tabs within their current owner.');reorderVisibleTabs(source.id,target.id,after,source.parentId);},restore:()=>render()});
-initRemoteDesktops({openAssociatedChat:sendChatToWorkspace,moveChat:moveChatToWorkspace,selectedChatParent:()=>selectedChatParent()?.id,saveWorkspace,state,escape,toast,showDialog,openTab,time,refresh,openMessageLink,renderChatSubtabs,syncContentTabs:()=>contentTabSync.all(),revokeHostContent,replaceChatContent,onDeleted:reconcileDeletedChat,rename:renameChat,rememberView:()=>rememberView($('#main'),$('#main').dataset.viewKey),restoreView:()=>restoreView($('#main'),$('#main').dataset.viewKey)});
+initRemoteDesktops({openWorkspace,openAssociatedChat:sendChatToWorkspace,moveChat:moveChatToWorkspace,selectedChatParent:()=>selectedChatParent()?.id,saveWorkspace,state,escape,toast,showDialog,openTab,time,refresh,openMessageLink,renderChatSubtabs,syncContentTabs:()=>contentTabSync.all(),revokeHostContent,replaceChatContent,onDeleted:reconcileDeletedChat,rename:renameChat,rememberView:()=>rememberView($('#main'),$('#main').dataset.viewKey),restoreView:()=>restoreView($('#main'),$('#main').dataset.viewKey)});
 initBrowserNotifications({api,refresh,review:item=>{if(item.readAt)navigate('engine','notifications');else openAttentionItem('notification:'+item.id);},logs:id=>openEventLogs({logId:id}),resolve:async(scope,preserve)=>{
  if(!contentTabSync.hasConflict(scope)){await contentTabSync.sync(scope);if(!contentTabSync.hasConflict(scope))throw Error('This scope has no active history conflict. Its pending data was preserved; reopen the original tab to refresh its status.');}
  await contentTabSync.resolve(scope,{...(preserve?{preserve:async tabs=>{for(const tab of tabs){if(!tab.url)continue;const info=await window.desktop.browser({action:'create',url:tab.url,profileId:tab.profileId||'default',group:'main'});openTab({id:info.id,type:'browser',label:info.title||tab.title||'Browser',info});}}}:{})});

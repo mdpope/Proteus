@@ -547,7 +547,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         }
         if(action==='recover'){
           if(value.modelOptions){const run=engine.getRun(id),options=chatModelOptions(value.modelOptions);if(value.action!=='continue')throw Error('Choose Continue chat to change model settings.');if(run.schedule.provider!=='rehearsal'){const catalog=await catalogs[run.schedule.provider]?.get(),model=catalog?.models?.find(item=>item.id===options.model);if(!model)throw Error('Selected model is unavailable. Refresh models and choose an available model.');validateModelOptions(options,model);}value.modelOptions=options;}
-          return json(200,engine.recovery.command(id,value));
+          return json(200,await engine.recovery.command(id,value));
         }
         if (action === 'send') {
           const run = engine.getRun(id);

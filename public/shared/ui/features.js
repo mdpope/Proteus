@@ -120,8 +120,8 @@ export const tokenSize = value => Number.isFinite(value) ? (value >= 1_000_000 ?
 export const contextSize = tier => `${tier.promptTokens ? tokenSize(tier.promptTokens) : 'Capacity not reported'} · ${tier.id === 'default' ? 'Default' : tier.id === 'long_context' ? 'Long context' : tier.id}`;
 export function modelSelection(id) { return { ...($('#'+id+'-mode')?.dataset.supported==='true'?{reasoningMode:$('#'+id+'-mode').value}:{}), reasoningEffort: $('#' + id + '-effort').value, contextTier: $('#' + id + '-context').value, serviceTier: $('#' + id + '-speed').value }; }
 const catalogFor = provider => u.state.data.providerStatuses?.[provider] || (provider === 'copilot' ? u.state.data.providerStatus : null);
-export function modelPicker(id, selected, provider = 'copilot') {
-  return `<select id="${id}" data-selected="${esc(selected)}" data-provider="${esc(provider)}" aria-label="Model">${modelOptions(catalogFor(provider)?.models || [], selected)}</select>`;
+export function modelPicker(id, selected, provider = 'copilot', catalog=catalogFor(provider)) {
+  return `<select id="${id}" data-selected="${esc(selected)}" data-provider="${esc(provider)}" aria-label="Model">${modelOptions(catalog?.models || [], selected)}</select>`;
 }
 export function modelControls(id, options = {}, compact = false) {
   return `<div class="model-controls ${compact ? 'compact-model-controls' : ''}" data-model-picker="${id}"><div hidden><label for="${id}-mode">Reasoning</label><select id="${id}-mode"><option value="${esc(options.reasoningMode || '')}">${esc(options.reasoningMode || 'Provider default')}</option></select></div><div><label for="${id}-effort">Thinking effort</label><select id="${id}-effort"><option value="${esc(options.reasoningEffort || '')}">${esc(options.reasoningEffort || 'Provider default')}</option></select></div><div><label for="${id}-context">Context size</label><select id="${id}-context"><option value="${esc(options.contextTier || 'default')}">${esc(options.contextTier || 'default')}</option></select></div><div><label for="${id}-speed">Speed / service tier</label><select id="${id}-speed"><option value="${esc(options.serviceTier || '')}">${esc(options.serviceTier || 'Provider default')}</option></select></div><p class="note" id="${id}-capabilities" aria-live="polite"></p></div>`;
@@ -130,10 +130,10 @@ function optionList(choices, current) {
   if (current && !choices.some(option => option.id === current)) choices.push({ id: current, label: current + ' · unavailable (saved)' });
   return choices.map(option => `<option value="${esc(option.id)}" ${option.id === current ? 'selected' : ''}>${esc(option.label)}</option>`).join('');
 }
-function updateModelControls(id, providerId) {
+function updateModelControls(id, providerId, ownerCatalog) {
   const select = $('#' + id); if (!select) return;
   const provider = $('#' + providerId)?.value || select.dataset.provider;
-  const data = catalogFor(provider); const model = data?.models?.find(model => model.id === select.value);
+  const data = ownerCatalog===undefined?catalogFor(provider):ownerCatalog; const model = data?.models?.find(model => model.id === select.value);
   const controls = model?.controls; const local = ['rehearsal','local-process'].includes(provider);
   const effort = $('#' + id + '-effort'), context = $('#' + id + '-context'), speed = $('#' + id + '-speed');
   const mode=$('#'+id+'-mode'),modes=controls?.reasoningModes||[];
@@ -158,10 +158,20 @@ function updateModelControls(id, providerId) {
   $('#' + id + '-capabilities').textContent = local ? 'Local rehearsal uses no model.' : [
     !select.value ? 'Choose a model.' : !model ? 'Selected model is unavailable or the catalog has not loaded.' : !efforts.length ? (controls?.reasoningSupported === false ? 'This model does not support thinking effort.' : 'Thinking effort choices are not reported.') : '',
     controls?.maxOutputTokens ? 'Maximum output: ' + tokenSize(controls.maxOutputTokens) + ' tokens. Context size is the prompt budget; output is separate.' : 'Context capacity is not advertised by this catalog; actual usage appears during a run.',
-    provider === 'codex' ? 'Uses this computer’s Codex sign-in. Selected instructions and skills are supplied; editor-specific agent tool filters are not supported. MCP servers require a grant for all their selected tools.' : '',
+    provider === 'codex' ? 'Uses the executing computer’s Codex sign-in. Selected instructions and skills are supplied; editor-specific agent tool filters are not supported. MCP servers require a grant for all their selected tools.' : '',
     data?.checkedAt ? 'Catalog checked ' + new Date(data.checkedAt).toLocaleTimeString() + '. Refreshes every five minutes.' : 'Catalog has not been checked.',
     data?.stale ? 'Using last known choices. Refresh failed: ' + data.error : ''
   ].filter(Boolean).join(' ');
+}
+// Remote choices are rendered by the same controls, but never enter the local
+// account's catalog cache or its refresh loop.
+export function applyOwnerModelCatalog(id,catalog) {
+ const select=$('#'+id);if(!select)return;
+ select.dataset.modelOwner='remote';
+ const current=select.value||select.dataset.selected||'';
+ select.innerHTML=modelOptions(catalog?.models||[],current);select.value=current;
+ select.onchange=()=>{select.dataset.selected=select.value;updateModelControls(id,null,catalog);};
+ updateModelControls(id,null,catalog);
 }
 export async function refreshModels(id, providerId, force = false) {
   const select = $('#' + id); if (!select) return;
@@ -193,7 +203,7 @@ export async function refreshModels(id, providerId, force = false) {
     u.state.data.providerStatuses ??= {}; u.state.data.providerStatuses[provider] = data;
     if (provider === 'copilot') u.state.data.providerStatus = data;
     document.querySelectorAll('[data-model-picker]').forEach(root => {
-      const input = $('#' + root.dataset.modelPicker); if (input.dataset.provider !== provider) return;
+      const input = $('#' + root.dataset.modelPicker); if (input.dataset.modelOwner==='remote'||input.dataset.provider !== provider) return;
       const current = input.value || input.dataset.selected || ''; input.innerHTML = modelOptions(data.models || [], current); input.value = current;
       updateModelControls(input.id, input.dataset.providerId);
     });

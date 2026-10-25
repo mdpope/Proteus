@@ -1,3 +1,18 @@
+## October 25 — Combined preview tab and resource corrections
+
+Owner move acknowledgements carry current navigation metadata so the first placement works
+when a window's project catalog lags. Saving placement precedes acknowledgement; repaint follows
+it. Visibility/move preflight synchronizes its own source scope. Ordinary Hide retains guarded
+unload, while Persisted Hide keeps the page and history loaded.
+
+Engine Room Resources combines app/system processes, loaded tabs and canonical unloaded tabs.
+System / Loaded / Unloaded toggles start enabled, with a name filter and explicit usage refresh.
+Shared process usage is attributed once. Refresh/filtering never loads tabs; cold logical tabs
+remain closable. Notifications sit at the bottom, and chat/Markdown link destinations use a
+bottom display preview without opening or reading the target.
+
+These changes are in the combined Design Preview source, pending exact-package review.
+
 ## October 23 — residency, titles, routing and shared destinations
 
 Persisted pages stay loaded, including hidden pages and restored project tabs. Ordinary memory

@@ -1,3 +1,17 @@
+## October 25 — Combined queue implementation, review hold preserved
+
+The Oct 23 release branch implements items 28–37 on top of merged main `d0a30fd`.
+See [combined Design Preview work and acceptance](2026-10-25-combined-preview.md).
+Final frozen-runtime tests pass 1,154 with one skip; static checks pass. The stale-catalog
+first-move error is reproduced against the previous renderer and fixed in the same disposable
+owner/renderer fixture. Synthetic remote controls and native tab/resource/notice/link checks pass.
+
+An isolated unsigned combined package and exact-package acceptance follow in that document.
+Do not treat source completion, a commit or a packaged fixture as approval to replace the installed
+app, publish, change defaults or update another device. MTPLX remains preview-only. The retained
+preview's normal-Quit request and closed-window desktop uncertainty guard remain respected;
+do not claim the retained 11-chat profile runs the new candidate until actually verified.
+
 ## October 25 — Full Activity capture review candidate
 
 The operator expanded the scope to actual provider capture and requested Design Preview review

@@ -67,7 +67,7 @@ async function installWindows(job,candidate,{inspect=inspectPackage,rollback=fal
 async function resume(job,outcome){
  let delay=1000;
  for(;;){
-  try{const reply=await ownerRequest(job,'/api/updates/recovery',{action:'resume',id:job.id,secret:job.secret,outcome});if(reply.ambiguous)throw Object.assign(Error(reply.reason),{terminal:true});if(reply.accepted)return writeJob(job.file,{phase:'complete',outcome,continuation:job.runId?{id:job.continuationId,acceptedAt:new Date().toISOString(),delivery:reply.delivery}:null,helperPid:process.pid,error:null});writeJob(job.file,{phase:'awaiting-chat-resume',outcome,blocker:reply.reason||'Waiting for the original provider.'});}
+  try{const reply=await ownerRequest(job,'/api/updates/recovery',{action:'resume',id:job.id,secret:job.secret,outcome});if(reply.ambiguous)throw Object.assign(Error(reply.reason),{terminal:true});if(reply.accepted)return writeJob(job.file,{phase:'complete',outcome,blocker:null,continuation:job.runId?{id:job.continuationId,acceptedAt:new Date().toISOString(),delivery:reply.delivery}:null,helperPid:process.pid,error:null});writeJob(job.file,{phase:'awaiting-chat-resume',outcome,blocker:reply.reason||'Waiting for the original provider.'});}
   catch(error){if(error.terminal){writeJob(job.file,{phase:'attention',error:error.message});throw error;}writeJob(job.file,{phase:'awaiting-chat-resume',outcome,blocker:error.message});}
   await sleep(delay);delay=Math.min(60000,delay*2);
  }

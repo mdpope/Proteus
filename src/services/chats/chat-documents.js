@@ -109,7 +109,9 @@ export class ChatDocumentApprovals {
     this.prune();const item=this.requests.get(requestId);if(!item||item.deviceId!==deviceId||!item.approvedAt)throw new Error('This document has not been approved on the host computer.');
     const run=engine.getRun(item.chatId),current=snapshot(run,item.source,this.currentRoots,item.verifiedLink);
     if(current.file!==item.file||current.documentId!==item.documentId||current.version!==item.version)throw new Error('This document changed. Ask the host to approve the new version.');
-    return {requestId,documentId:item.documentId,title:item.title,version:item.version,size:item.size,mediaType:item.mediaType,content:current.content,...fileDatesFromSnapshot(current),assets:publicAssets(current.assets),links:current.links,readAt:new Date().toISOString()};
+    // Owner path is display metadata for this already-approved exact document;
+    // the receiving renderer must never read it using local filesystem tools.
+    return {requestId,documentId:item.documentId,title:item.title,version:item.version,size:item.size,mediaType:item.mediaType,displayPath:current.file,content:current.content,...fileDatesFromSnapshot(current),assets:publicAssets(current.assets),links:current.links,readAt:new Date().toISOString()};
   }
   asset(requestId,assetId,deviceId,engine){
     this.prune();const item=this.requests.get(requestId);

@@ -12,8 +12,9 @@ export class ChatRecovery {
   return state;
  }
  stop(id,persist=true){const policy=this.policies.get(id);if(policy)this.clearTimer(policy.timer);this.policies.delete(id);const run=this.engine.runs.get(id);if(run?.capacityRetry){delete run.capacityRetry;if(persist)this.engine.persist(run);}return run;}
- command(id,{action,expectedFailureEventAt,modelOptions}={}){
+ command(id,{action,expectedFailureEventAt,modelOptions,enabled}={}){
   const run=this.engine.getRun(id);
+  if(action?.startsWith('allowance-'))return this.engine.allowance.command(id,{action,enabled,expectedFailureEventAt});
   if(action==='stop-retry')return this.stop(id)||run;
   if(this.engine.stopping||this.engine.updateBarrier)throw Error('Wait for the current application update before continuing.');this.engine.updateGuard?.();
   const state=this.state(run,expectedFailureEventAt);

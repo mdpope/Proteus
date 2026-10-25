@@ -190,7 +190,7 @@ export class CodexProvider {
    if(method==='thread/tokenUsage/updated'){run.usage={observed:true,inputTokens:p.tokenUsage.total.inputTokens,outputTokens:p.tokenUsage.total.outputTokens};run.contextUsage=p.tokenUsage;update();}
    if(method==='turn/plan/updated')emit('system',(p.explanation?p.explanation+'\n\n':'')+(p.plan||[]).map(x=>`- [${x.status==='completed'?'x':' '}] ${x.step}`).join('\n'));
    if(method==='error'&&p.willRetry)emit('system','Codex is retrying: '+displayText(p.error?.message||'temporary provider error',1500));
-   if(method==='error'&&!p.willRetry)rejectTurn(new Error(p.error?.message||'Codex turn failed.'));
+   if(method==='error'&&!p.willRetry)rejectTurn(Object.assign(new Error(p.error?.message||'Codex turn failed.'),{code:p.error?.codexErrorInfo||p.error?.code}));
    if(method==='item/started'||method==='item/completed'){
     const item=p.item;items.set(item.id,item);
     if(item.type==='agentMessage'&&method==='item/completed'){if(run.liveMessages)delete run.liveMessages[item.id];emit('assistant',item.text,{phase:item.phase});}
@@ -203,7 +203,7 @@ export class CodexProvider {
     }
    }
    if(method==='item/commandExecution/outputDelta'){const tool=calls.get(p.itemId);if(tool){tool.output=displayText((tool.output||'')+p.delta);update();}}
-   if(method==='turn/completed'){settled=true;clearTimeout(abortTimer);if(active.permissionRevoked)rejectTurn(new Error((this.options.permissionControls===true||this.options.desktopPreview===true)?'Permissions changed and this turn was stopped. Choose Continue to resume this chat with the current permissions. No actions were automatically retried.':'Workspace permissions changed during the Codex turn. Its tools were interrupted; continue with the current permissions.'));else if(p.turn.status==='completed')resolveTurn();else rejectTurn(new Error(p.turn.error?.message||'Codex turn '+p.turn.status));}
+   if(method==='turn/completed'){settled=true;clearTimeout(abortTimer);if(active.permissionRevoked)rejectTurn(new Error((this.options.permissionControls===true||this.options.desktopPreview===true)?'Permissions changed and this turn was stopped. Choose Continue to resume this chat with the current permissions. No actions were automatically retried.':'Workspace permissions changed during the Codex turn. Its tools were interrupted; continue with the current permissions.'));else if(p.turn.status==='completed')resolveTurn();else rejectTurn(Object.assign(new Error(p.turn.error?.message||'Codex turn '+p.turn.status),{code:p.turn.error?.codexErrorInfo||p.turn.error?.code}));}
   };
   const handledRequests=new Set();
   const onRequest=async msg=>{if(handledRequests.has(msg.id))return;handledRequests.add(msg.id);const p=msg.params||{};if(p.threadId&&p.threadId!==run.providerSessionId||p.turnId&&active.turnId&&p.turnId!==active.turnId)return client.respond(msg.id,msg.method==='mcpServer/elicitation/request'?{action:'decline',content:null}:{decision:'decline'});try{

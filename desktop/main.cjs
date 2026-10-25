@@ -187,6 +187,10 @@ else {
     };
     service.tabInventory=()=>[...windows.contexts.values()].flatMap(ctx=>windows.run(ctx.id,()=>windowInventory().map(row=>({...row,logicalId:row.id,id:'view:'+ctx.id+':'+row.runtimeId,windowId:ctx.id}))));
     const windowRuntime=async value=>{
+      // Validated owner navigation metadata lets the first placement succeed in
+      // windows whose project catalog has not caught up yet. This supplies no
+      // execution roots or permission grants.
+      if(value.destination?.scope==='project'&&projects&&(value.action==='move'||value.action==='shell-action'&&value.operation==='move')){const project=projects.projectFor({projectId:value.destination.id}),workspace=service.context.scope(project.workspaceId),catalog=projects.read();value={...value,navigationCatalog:{revision:catalog.revision,projects:catalog.projects,defaultProjectIds:catalog.defaultProjectIds},destination:{...value.destination,project:{id:project.id,name:project.name,workspaceId:project.workspaceId},workspace:{id:workspace.id,name:workspace.name}}};}
       if(value.action==='shell-action'){
         if(['load','unload'].includes(value.operation)){if(value.tab.type!=='browser')throw new Error('Load/unload applies to browser pages.');const tab=browser.get(value.tab.browserId||value.tab.runtimeId||value.tab.id);return value.operation==='unload'?browser.unload(tab.id):browser.reload(tab.id,true,{background:true});}
         if(value.operation==='move'&&value.tab.type==='browser'){const native=browser.windowTabs().find(tab=>tab.id===(value.tab.browserId||value.tab.runtimeId));if(native)await browser.command({action:'transfer',id:native.id,group:value.destination.scope==='team'?'team':'main',parentId:value.destination.scope==='project'?'project:local:'+value.destination.id:value.destination.scope==='workspace'?'workspace:local:'+value.destination.id:['chat','shell'].includes(value.destination.scope)?value.destination.id:null});}
@@ -243,11 +247,12 @@ else {
     service.resources={
       list:async()=>{
         const [psOutput,tmuxState]=await Promise.all([sampleProcesses(),terminals.tmux.statusAsync()]);
-        const tabs=browser.list().map(({id,title,url,group,loaded,pid,error})=>({id,title,url,group,loaded,pid,error,windowId:browser.tabs.get(id)?.windowId}));
+        const tabs=browser.list().map(({id,title,url,group,loaded,pid,error,persist})=>({id,title,url,group,loaded,pid,error,persist,logicalId:browser.tabs.get(id)?.thumbnailId||id,canUnload:loaded&&!persist,canClose:true,windowId:browser.tabs.get(id)?.windowId}));
+        for(const row of service.contentTabs.list({type:'browser'}))if(!tabs.some(tab=>tab.id===row.id||tab.logicalId===row.id))tabs.push({...row,loaded:false,canUnload:false,canClose:true,canonical:true});
         for(const ctx of windows.contexts.values()){
           let descriptors=[];try{const saved=ctx.session?.get();descriptors=[...(saved?.tabs||[]),...(saved?.team?.tabs||[])];}catch{}
           const rendererPid=!ctx.window.isDestroyed()&&!ctx.window.webContents.isDestroyed()?ctx.window.webContents.getOSProcessId():null;
-          for(const tab of descriptors)if(tab.type!=='browser')tabs.push({id:'view:'+ctx.id+':'+tab.id,runtimeId:tab.id,windowId:ctx.id,title:tab.label,group:tab.type,loaded:!!rendererPid,pid:rendererPid,sharedProcess:true});
+          for(const tab of descriptors)if(tab.type!=='browser')tabs.push({id:'view:'+ctx.id+':'+tab.id,runtimeId:tab.id,windowId:ctx.id,title:tab.label,group:tab.type,loaded:!!rendererPid,pid:rendererPid,sharedProcess:true,canUnload:false,canClose:!['overview','home','engine','team','terminal','workspace'].includes(tab.type)});
         }
         const processes=app.getAppMetrics().map(p=>({pid:p.pid,type:p.type,name:p.name||p.serviceName||p.type,cpuPercent:p.cpu.percentCPUUsage,memoryBytes:(p.memory.workingSetSize||0)*1024,tabIds:tabs.filter(t=>t.pid===p.pid).map(t=>t.id)}));
         const terminalPids=new Set([...terminals.sessions.values()].map(record=>record.child?.pid).filter(Number.isSafeInteger));
@@ -261,7 +266,9 @@ else {
       },
       action:async value=>{
         if(!['unload','close'].includes(value.action)||typeof value.tabId!=='string')throw new Error('Choose Close or Unload for a tab.');
-        if(browser.tabs.has(value.tabId)){if(value.action==='unload')await browser.unload(value.tabId);else await browser.close(value.tabId);}
+        const canonical=service.contentTabs.list({type:'browser'}).find(row=>row.id===value.tabId);
+        if(canonical&&(value.action==='close'||!browser.tabs.has(value.tabId))){if(value.action==='unload')throw Error('This logical tab has no loaded page.');await service.tabManagement.handle({action:'close',scope:canonical.scope,id:canonical.scopeId,tabId:canonical.id,expectedRevision:canonical.revision});}
+        else if(browser.tabs.has(value.tabId)){if(value.action==='unload')await browser.unload(value.tabId);else await browser.close(value.tabId);}
         else {const row=service.tabInventory().find(tab=>tab.id===value.tabId);if(!row)throw new Error('Tab not found.');if(!row.manageable)throw new Error('This permanent application surface stays open.');if(row.type==='terminal')throw new Error('Close terminal sessions from their terminal tab.');if(value.action==='unload')throw new Error('This tool shares the app renderer. Close its view to release its data; its execution stays on the host.');windows.contexts.get(row.windowId).window.webContents.send('proteus:close-tool',row.runtimeId);}
         return service.resources.list();
       }

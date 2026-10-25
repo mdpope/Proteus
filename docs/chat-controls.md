@@ -1,3 +1,25 @@
+## October 25 — Combined preview recovery and remote parity
+
+The combined review candidate shares local/remote permission controls and model/effort/context/
+service selectors. Remote choices come from the executing owner's provider catalog, do not
+replace the local cache, and keep unsent drafts and selected options through updates. Folder
+entry targets the executing computer. Older owners expose clear capability limits.
+
+Under Permissions, **Automatically continue when allowance resets** is initially off and applies
+only to that chat and its future continuations. On a recognized allowance failure, a provider-
+reported reset enables a one-shot button showing date, time, seconds and timezone. The owner
+waits until the latest applicable exhausted window plus five seconds, then refreshes quota.
+No reset is guessed from an example, stale metadata or an expected monthly rollover.
+
+Waiting/cancel state survives restart/sleep. Manual input, effective permission/session/context
+changes and archive prevent dispatch; update transitions defer it. Unknown or still-exhausted
+quota waits with bounded checks. A stable delivery ID prevents repeated sends; uncertain delivery
+requires inspection. The existing manual Continue remains available. Remote scheduled chats
+continue the same owner session, rather than rerunning the schedule or opening a local chat.
+
+This is source/review behavior, pending combined Design Preview acceptance and operator review;
+it is not installed or physical remote-device acceptance.
+
 # Chat presentation, queue and steering
 
 **October 15 design rehearsal — BF-2026-10-15-12:** The [synthetic prototype](design/2026-10-15/projects-workspaces.html)

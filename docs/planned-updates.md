@@ -1,3 +1,16 @@
+## October 25 — Combined queue authorized for Design Preview review
+
+The latest MTPLX/Activity handoff supersedes the earlier implementation/build hold for items
+28–37. Their combined source implementation preserves merged main `d0a30fd`; local main has
+no newer commits. Review and validation are tracked in [combined preview](2026-10-25-combined-preview.md).
+Installation, publication, OS default changes and updates to other devices remain held until
+Operator checks the preview and authorizes the next step. MTPLX remains preview-only.
+
+The exact stale-catalog placement error is reproduced with the previous renderer and fixed
+without replay. Shared remote controls, durable owner allowance continuation, automatic Copilot
+working-root trust, bottom notices/link previews and combined Resources are implemented.
+Final package acceptance remains separate from source tests and the earlier installed release.
+
 ## October 25 — Full Activity capture; Design Preview review gate
 
 The operator requested the complete separate capture work, removal of the format switcher,
@@ -74,10 +87,11 @@ existing approvals; context compaction and richer artifacts; production/web/mobi
 Do not treat the local text model as an image-generation service or enable tool execution
 by interpreting code in its responses.
 
-## Additional queued corrections — implementation and build held
+## Additional corrections — authorized for combined Design Preview
 
-The operator queued these follow-ups after local installation. Record observations and
-future acceptance criteria only; do not implement, build, install or publish them yet.
+The operator originally queued these follow-ups after local installation. The October 25 handoff
+authorizes implementation and an isolated combined build/test; installation and publication remain
+held for preview review. Original reports and acceptance criteria follow.
 
 ### 29. First tab-move attempt reports missing placement acknowledgement
 

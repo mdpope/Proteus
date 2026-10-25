@@ -1,3 +1,10 @@
+## October 25 — Combined Design Preview queue
+
+- Fix first-move acknowledgement when a window's project catalog lags the owner; scope tab visibility preflight and preserve Persisted pages.
+- Share remote/local permission and model controls, continue remote scheduled chats safely, and add durable opt-in allowance-reset continuation with fresh owner quota validation.
+- Move native/web notices to the bottom, preview link destinations, automatically trust Copilot's working root, combine Resources lists and clear completed update blockers.
+- Include the merged MTPLX/full Activity work. Installation, publishing and other-device rollout remain held for preview review.
+
 ## October 25 — Captured provider activity for review
 
 - Make targeted thinking-notice grouping the default and remove the format switcher. Preserve assistant commentary, answers, questions, warnings, errors and context notices in the conversation.

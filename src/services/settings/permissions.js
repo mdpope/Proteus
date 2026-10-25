@@ -125,7 +125,11 @@ export class PermissionStore {
     }
     return [...contexts.values()].map(({ context, ref }) => ({ ...this.describeContext(context, snapshot), ref }));
   }
-  describeRun(run, snapshot) {
+  describeRun(run,snapshot) {
+    const profile=this.describeRunProfile(run,snapshot),automaticFolders=this.automaticProviderFolders?.(run)||[];
+    return automaticFolders.length?{...profile,automaticFolders,folders:[...profile.folders,...automaticFolders]}:profile;
+  }
+  describeRunProfile(run, snapshot) {
     const workspace = this.describe(run.schedule, snapshot);
     const chat = run.chatPermission?.contextId === workspace.id ? run.chatPermission : null;
     if (this.preserveInheritedDefaults) {
@@ -252,6 +256,10 @@ export class PermissionStore {
   }
   decide(schedule, request, profile = this.describe(schedule)) {
     if (protectedRequest(request)) return { allowed: false, reason: 'Enterprise policy or sandbox escape requires a direct response.' };
+    if(['read','write'].includes(request.kind)){
+      const target=requestedPath(request,profile),folder=(profile.automaticFolders||[]).find(folder=>folder.source==='provider'&&canonicalPath(folder.path,profile.cwd)===folder.path&&target&&within(target,folder.path));
+      if(folder)return {allowed:true,reason:'Automatic provider working folder',mode:profile.mode,resolvedTarget:target,matchedRoot:folder.path,source:'provider'};
+    }
     if(this.preserveInheritedDefaults&&['read','write'].includes(request.kind)){
       const target=requestedPath(request,profile);
       const folders=[...(profile.workingFolders||[]),...(profile.folders||[])].filter(folder=>canonicalPath(folder.path,profile.cwd)===folder.path&&target&&within(target,folder.path)).sort((a,b)=>b.path.length-a.path.length||Number(a.access==='read-write')-Number(b.access==='read-write'));

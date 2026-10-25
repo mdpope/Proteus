@@ -194,7 +194,8 @@ export class CopilotProvider {
     };
     const snapshot = run.schedule.context;
     const managed = snapshot && this.context ? this.context.providerContext(snapshot) : null;
-    const additionalDirectories=[...new Set([...run.schedule.workspace.additionalDirectories,...(permissionProfile?.().chatFolders||[]).map(folder=>folder.path)])];
+    const folders=permissionProfile?.();
+    const additionalDirectories=[...new Set([...run.schedule.workspace.additionalDirectories,...(folders?.chatFolders||[]).map(folder=>folder.path),...(folders?.automaticFolders||[]).map(folder=>folder.path)])];
     const fingerprint = revision({ context: snapshot || null, mcp: run.schedule.mcpServers || {}, additionalDirectories });
     // Cold resume is required for removed MCP servers and changed context to take effect.
     if (this.configurationFingerprint && this.configurationFingerprint !== fingerprint) await this.close();

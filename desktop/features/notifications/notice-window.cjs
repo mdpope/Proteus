@@ -9,7 +9,9 @@ class NoticeWindow {
   this.window=new BrowserWindow({parent,show:false,frame:false,transparent:true,hasShadow:false,resizable:false,minimizable:false,maximizable:false,fullscreenable:false,skipTaskbar:true,width:720,height:90,webPreferences:{preload:path.join(__dirname,'notice-preload.cjs'),sandbox:true,contextIsolation:true,nodeIntegration:false}});
   this.window.webContents.setWindowOpenHandler(()=>({action:'deny'}));this.window.webContents.on('will-navigate',event=>event.preventDefault());
   this.ready=this.window.loadFile(path.join(__dirname,'notice.html'));
-  this.move=()=>{if(this.window.isDestroyed())return;const bounds=parent.getContentBounds(),width=Math.min(720,bounds.width-32);this.window.setBounds({x:Math.round(bounds.x+(bounds.width-width)/2),y:bounds.y+(typeof offsetY==='function'?offsetY():offsetY),width,height:this.height});};
+  // The native overlay must share the web toast's bottom placement; otherwise
+  // browser surfaces would still cover the tab strip despite the CSS change.
+  this.move=()=>{if(this.window.isDestroyed())return;const bounds=parent.getContentBounds(),width=Math.min(720,bounds.width-32),inset=typeof offsetY==='function'?offsetY():offsetY;this.window.setBounds({x:Math.round(bounds.x+(bounds.width-width)/2),y:Math.round(Math.max(bounds.y+16,bounds.y+bounds.height-this.height-inset)),width,height:this.height});};
   parent.on('move',this.move);parent.on('resize',this.move);parent.on('hide',()=>this.window.hide());parent.on('minimize',()=>this.window.hide());parent.on('show',()=>{if(this.current)this.window.showInactive();});
   this.action=(event,value)=>{if(event.sender!==this.window.webContents||event.senderFrame!==event.sender.mainFrame||value?.id!==this.current?.id)return;if(value.action==='height'){if(Number.isFinite(value.height)){this.height=Math.max(64,Math.min(320,Math.ceil(value.height)));this.move();}return;}if(value.action==='dismiss'||Number.isInteger(value.action)&&value.action>=0&&value.action<this.current.actions.length){if(onAction)onAction(value);else parent.webContents.send('proteus:notice-action',value);}};
   ipcMain.on('proteus:notice-action',this.action);

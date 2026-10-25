@@ -1,3 +1,32 @@
+## October 25 — Combine queued corrections behind the existing preview review gate
+
+The latest operator handoff authorizes implementation, isolated build and tests for items 28–37.
+It does not authorize replacing the installed app. Preserve the merged MTPLX pilot as preview-only
+and keep historical installed acceptance separate from the new candidate's synthetic evidence.
+
+Move placement uses authoritative owner project navigation metadata, without execution roots or
+permission grants, so a stale renderer catalog cannot convert an already-committed move into an
+unacknowledged first attempt. Save placement before acknowledging; acknowledge before unrelated
+painting. Do not retry an uncertain mutation. Visibility preflights target their source scope.
+
+Allowance continuation is per-chat persisted owner intent, not a scheduled-task rerun or a
+replacement chat. Only a recognized allowance failure and authoritative applicable reset may arm
+it. Recheck quota after the latest exhausted window plus five seconds; unknown quota waits with
+bounded checks. Preserve the original session, effective permissions, context, queue and stable
+delivery ID. Changed inputs/configuration cancel intent; ambiguous delivery becomes attention.
+The checkbox is off by default and persists independently of a one-shot wait. Copilot's inferred
+monthly reset is unsuitable for automatic continuation.
+
+Remote UI reuses local presentation/binding while owner catalogs, mutations, paths and filesystem
+authority remain remote. Unknown older capabilities are disabled with an explanation. Only the
+specific permanent legacy ordinary-chat rejection permits a reconciled manual-send equivalent;
+a timeout cannot select another delivery method.
+
+Resources attributes each process once, including shared app renderers, and lists cold canonical
+browser descriptors without instantiating them. Hover preview is display-only. Copilot's automatic
+root is its own resolved working directory, not the home directory or a configurable workspace
+grant; it approves file requests without broadening command/tool approval.
+
 ## October 25 — Capture observable activity with explicit provenance; preview before installation
 
 The operator approved default targeted grouping, removed the format switcher and requested the

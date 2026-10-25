@@ -101,7 +101,7 @@ export function claudeQuota(value) {
     if(!window||typeof window!=='object')return;
     const used=window.utilization,remainingPercent=typeof used==='number'&&Number.isFinite(used)&&used>=0&&used<=100?100-used:null;
     const reset=typeof window.resets_at==='string'?Date.parse(window.resets_at):NaN;
-    windows.push({id,label,remainingPercent,resetAt:Number.isFinite(reset)?new Date(reset).toISOString():null,unlimited:false});
+    windows.push({id,label,remainingPercent,resetAt:Number.isFinite(reset)?new Date(reset).toISOString():null,unlimited:false,...(id.startsWith('model_')&&label.match(/opus|sonnet|haiku/i)?{modelFamily:label.match(/opus|sonnet|haiku/i)[0].toLowerCase()}:{})});
   };
   for(const [id,window] of Object.entries(value.rate_limits))if(/^(five_hour|seven_day(?:_[a-z0-9_]+)?)$/.test(id))add(id,({five_hour:'5-hour allowance',seven_day:'Weekly allowance',seven_day_oauth_apps:'Weekly connected-app allowance',seven_day_opus:'Weekly Opus allowance',seven_day_sonnet:'Weekly Sonnet allowance'})[id]||id.replaceAll('_',' '),window);
   for(const [index,window] of (Array.isArray(value.rate_limits.model_scoped)?value.rate_limits.model_scoped:[]).entries())if(typeof window?.display_name==='string')add('model_'+index,window.display_name,window);

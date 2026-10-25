@@ -244,7 +244,7 @@ body.sidebar-minimized #sidebar [data-page="team"] .nav-icon,body.sidebar-minimi
 #chat-subtabs>[data-chat-subtab]{position:relative;z-index:1;background:var(--proteus-bg,var(--bg))}
 #tabs .tab-add-menu>summary,#chat-subtabs .chat-tab-add>summary,#team-subtabs .chat-tab-add>summary{font:24px/1 system-ui;display:flex;align-items:center;justify-content:center;width:36px;height:36px;padding:0}
 
-#toast{inset:16px auto auto 50%;margin:0;bottom:auto;border:1px solid #bddb9d;max-width:min(720px,90vw);z-index:2147483647;animation:notice-enter 160ms ease-out}
+#toast{inset:auto auto max(16px,env(safe-area-inset-bottom)) 50%;margin:0;top:auto;border:1px solid #bddb9d;max-width:min(720px,90vw);z-index:2147483647;animation:notice-enter 160ms ease-out}
 #toast .toast-action{background:#c2dfa9;color:#1c2d18;border-color:#9cb982;white-space:nowrap}
 @keyframes notice-enter{from{translate:0 -24px;opacity:0}to{translate:0 0;opacity:1}}
 @media(prefers-reduced-motion:reduce){#toast{animation:none}}
@@ -271,3 +271,5 @@ body.sidebar-minimized:has(#sidebar:hover) #workspace,body.sidebar-minimized:has
 /* Compact browser menu marks and optional extension actions preserve row heights. */
 .proteus-context-menu button{display:flex;align-items:center;gap:8px}.menu-icon{width:15px;height:15px;flex:0 0 15px;object-fit:contain}.menu-label{overflow:hidden;text-overflow:ellipsis}
 .browser-extension-pins{display:flex;align-items:center;flex:0 1 auto;min-width:0;max-width:30vw;overflow-x:auto;scrollbar-width:none}.browser-extension-pins:empty{display:none}.browser-extension-pins .menu-icon{width:20px;height:20px;flex-basis:20px}.browser-extension-pins .menu-label{display:none}.extension-preference-icon{width:20px;height:20px;object-fit:contain;flex:none}
+
+.link-destination-preview{position:fixed;left:max(10px,env(safe-area-inset-left));bottom:max(10px,env(safe-area-inset-bottom));z-index:2147483646;pointer-events:none;max-width:calc(100vw - 20px);padding:5px 9px;border-radius:7px;background:rgba(20,25,26,.86);color:#fff;box-shadow:0 2px 12px #0005;backdrop-filter:blur(12px);font:12px/1.35 system-ui,sans-serif;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
