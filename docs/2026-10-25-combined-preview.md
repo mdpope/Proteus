@@ -61,7 +61,7 @@ acceptance. The installed local application and existing retained preview were n
 
 ## Verification so far
 
-The complete frozen-runtime source suite passed 1,154 tests with one skip after display-path
+The complete frozen-runtime source suite passed 1,155 tests with one skip after display-path
 compatibility and older-owner presentation refinements; static and diff checks pass. Exact-package
 acceptance is recorded separately below when completed.
 
@@ -93,3 +93,10 @@ the originating chat. Do not bypass it, force quit, or control that profile thro
 backend. The pending normal-Quit request is preserved. Disposable test profiles do not establish
 that the retained 11-chat profile is running the combined package. No installed app, OS default,
 public release, GitHub Actions, remote coordinator or other device update is authorized.
+
+
+Copilot protocol acceptance also covers SDK `errorCode` values such as `quota_exceeded`
+and account rate-limit codes, preserving them through the turn waiter. Billing-setup errors
+are excluded. The final full suite passes 1,155 tests with one skip. A first packaging attempt
+using a relative output directory stopped at its package-verification path boundary; it was not
+launched or installed. Repackage using an absolute output directory before artifact acceptance.

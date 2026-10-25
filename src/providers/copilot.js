@@ -262,7 +262,7 @@ export class CopilotProvider {
         run.usage.observed = true; update();
       }
       if (event.type === 'session.usage_info') { run.contextUsage = event.data; update(); }
-      if (event.type === 'session.error') { providerError = event.data.message || 'Provider reported an error'; emit('system', providerError); }
+      if (event.type === 'session.error') { providerError = Object.assign(new Error(event.data.message || 'Provider reported an error'),{code:event.data.errorCode||event.data.errorType}); emit('system', providerError.message); }
     });
     const abort = () => { void session.abort().catch(() => {}); };
     signal.addEventListener('abort', abort, { once: true });
@@ -270,7 +270,7 @@ export class CopilotProvider {
       if (signal.aborted) throw new Error('Cancelled');
       turn = new TurnWaiter(session, signal);
       await turn.run(prompt,nativeAttachments);
-      if (providerError) throw new Error(providerError);
+      if (providerError) throw providerError;
       try { run.metrics = await session.rpc.usage.getMetrics({}); update(); } catch { /* Optional runtime capability. */ }
       activitySucceeded=true;
     } catch (error) {

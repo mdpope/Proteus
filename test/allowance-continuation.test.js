@@ -5,7 +5,15 @@ import {Engine} from '../src/engine.js';
 import {AllowanceContinuation,allowanceReset,allowanceFailure} from '../src/services/chats/allowance-continuation.js';
 import {recoverRemoteChat} from '../public/services/remote/remote-chat-recovery.js';
 import {resourceRows,filterResourceRows} from '../public/features/settings/resources.js';
+import {CopilotProvider} from '../src/providers/copilot.js';
+import {fakeSession} from './fake-copilot.js';
 const start=Date.parse('2026-10-25T06:00:00Z');
+test('Copilot retains structured allowance causes from the SDK without treating billing setup as exhaustion',async()=>{
+ const session=fakeSession({async send(){this.event('session.error',{message:'Synthetic account refusal',errorType:'quota',errorCode:'quota_exceeded'});this.event('session.idle');}}),provider=new CopilotProvider();provider.connect=async()=>({listModels:async()=>[{id:'fixture'}],createSession:async()=>session});
+ const run={id:'fixture',events:[],providerHome:'/synthetic/copilot',schedule:{model:'fixture',workspace:{cwd:'/synthetic',additionalDirectories:[]}},usage:{}};
+ await assert.rejects(provider.run({run,prompt:'Synthetic only',signal:new AbortController().signal,update(){},emit(){},ask:async()=>assert.fail('No tools requested')}),error=>error.code==='quota_exceeded'&&allowanceFailure(error));
+ assert.equal(allowanceFailure({code:'billing_not_configured',message:'Billing configuration required'}),false);assert.equal(allowanceFailure({message:'You have exceeded your premium request allowance.'}),true);
+});
 function fixture(t){
  const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-allowance-'));let now=start,quota={available:true,windows:[{id:'five_hour',remainingPercent:0,resetAt:new Date(start+60000).toISOString()}]};
  const make=()=>{const engine=new Engine(home,{},()=>new Date(now),{permissionControls:true});engine.drain=async()=>{};void engine.allowance.close();engine.allowance=new AllowanceContinuation(engine,{intervalMs:3600000,readQuota:async()=>structuredClone(quota)});return engine;};

@@ -7,7 +7,7 @@ export class TurnWaiter {
     this.unsubscribe = session.on(event => {
       if (event.agentId) return;
       if (event.type === 'session.idle' && event.data?.mode !== 'autopilot') this.resolve();
-      if (event.type === 'session.error') this.reject(new Error(event.data.message));
+      if (event.type === 'session.error') this.reject(Object.assign(new Error(event.data.message),{code:event.data.errorCode||event.data.errorType}));
     });
     this.signal = signal; this.abort = () => this.reject(new Error('Cancelled'));
     signal.addEventListener('abort', this.abort, { once: true });
