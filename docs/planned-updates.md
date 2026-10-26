@@ -5,7 +5,7 @@ descendant cleanup, crashes/disconnect, startup-once and exact warmed handle cou
 Root review adds an update race fix: reserve the entire asynchronous terminal creation, retain
 unconfirmed cleanup blockers, and allow metadata cleanup after a later confirmed process exit.
 Windows packaging now compiles/records the helper before runtime freezing and hashes its source
-and build inputs. Focused integration regression: 43 passes, including actual POSIX PTY I/O and
+and build inputs. Focused integration regression: 44 passes, including actual POSIX PTY I/O and
 supervisor handoff blocking. Final returned-source/full-suite/Windows package acceptance remains
 pending; these changes are not installed or published. Existing installer isolation approval and
 other platform live-acceptance qualifications remain in handoff.md.

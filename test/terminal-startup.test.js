@@ -19,6 +19,16 @@ function owned(){
   return {ownsProcessTree:true,pid:42,onData:()=>({dispose(){}}),onExit(fn){exit=fn;return {dispose(){}};},close:async()=>exit({exitCode:null,signal:'terminated'})};
 }
 
+test('disposal before the default PTY module loads cancels startup without creating process history',async t=>{
+  const store=fixture(t);
+  const opening=store.create();
+  const rejected=assert.rejects(opening,/shutting down/);
+  assert.equal(store.pendingCreates.size,1);
+  await store.dispose();await rejected;
+  assert.equal(store.sessions.size,0);assert.equal(store.history.size,0);
+  assert.deepEqual(store.updateBlockers(),[]);
+});
+
 test('pending terminal starts reserve capacity and block updates until creation and cleanup finish',async t=>{
   const resolve=[],store=fixture(t,()=>new Promise(done=>resolve.push(done)));
   const pending=Array.from({length:12},()=>store.create());

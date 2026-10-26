@@ -14,7 +14,7 @@ through startup and attached-child state, then allows graceful handoff after con
 Windows packaging compiles a fresh production helper before the snapshot, verifies its build
 receipt, includes its bytes in runtime hashes and its C# source/build recipes in build inputs,
 and retains compiler/helper hashes outside the package. Generated helpers stay untracked and
-native source stays outside Mac/Linux runtime packages. Focused integration checks pass 43 cases,
+native source stays outside Mac/Linux runtime packages. Focused integration checks pass 44 cases,
 including real local POSIX PTY input/output, update handoff, history/tmux and packaging failures.
 The Windows chat is formatting/hardening its owned modules and adding bounded unconfirmed-close
 coverage; merge/retest that returned source before any new package/signature.
