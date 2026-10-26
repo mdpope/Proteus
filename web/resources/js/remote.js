@@ -621,7 +621,9 @@ function renderChats(current) {
     requestAnimationFrame(()=>{const pane=root.querySelector('.remote-messages');if(pane&&run&&current.run?.id===run.id&&!current.earlierError&&pane.scrollHeight<=pane.clientHeight+80)void loadEarlier();});
     if(run&&historyPane){
         const answerQuestion=async(question,answer,messageId)=>{await command(question.blocking?'chat.reply':'chat.answer-question',{id:run.id,answer,messageId,...(question.blocking?{requestId:question.id}:{questionId:question.id})});await openChat(run.id);};
-        let queue=root.querySelector('.user-question-queue');if(!queue){queue=document.createElement('div');queue.className='user-question-queue';historyPane.before(queue);}
+        // The transcript owns this queue's bounds. Reusing the pending-input grid
+        // row would overlap the existing answer/permission form in docked chats.
+        let queue=historyPane.querySelector(':scope>.user-question-queue');if(!queue){queue=document.createElement('div');queue.className='user-question-queue';historyPane.prepend(queue);}
         mountQuestionQueue(queue,run,{answer:answerQuestion,notify:notice,jump:async question=>{
             const card=[...root.querySelectorAll('[data-question-id]')].find(node=>node.dataset.questionId===question.id);
             if(card){card.scrollIntoView({block:'center'});card.querySelector('textarea')?.focus({preventScroll:true});return;}

@@ -1,4 +1,4 @@
-const drafts=new Map(),attempts=new Map();
+const drafts=new Map(),attempts=new Map(),queueStates=new Map();
 export function chatQuestions(run){
   const questions=[...(run.userQuestions||[])];
   if(run.pending?.type==='question')questions.push({id:run.pending.id,text:run.pending.question,choices:run.pending.choices||[],status:'pending',blocking:true,eventIndex:(run.eventStart||0)+run.events.findIndex(event=>event.data?.question?.id===run.pending.id)});
@@ -34,7 +34,7 @@ export function mountQuestionQueue(host,run,{jump,answer,notify}){
   if(host.questionSignature===signature)return;
   const open=host.querySelector('details')?.open;host.questionSignature=signature;host.replaceChildren();host.hidden=!questions.length;
   if(!questions.length)return;
-  const details=document.createElement('details'),summary=document.createElement('summary');details.open=!!open;summary.textContent=`Questions to answer (${questions.length})`;details.append(summary);
-  for(const question of questions)details.append(button(question.text,()=>void host.questionActions.jump(question)));
+  const details=document.createElement('details'),summary=document.createElement('summary');details.open=queueStates.get(run.id)??!!open;details.ontoggle=()=>{if(details.isConnected)queueStates.set(run.id,details.open);};summary.textContent=`Questions to answer (${questions.length})`;details.append(summary);
+  for(const question of questions)details.append(button(question.text,()=>{details.open=false;queueStates.set(run.id,false);void host.questionActions.jump(question);}));
   host.className='user-question-queue';host.append(details);
 }

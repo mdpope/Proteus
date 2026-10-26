@@ -1,3 +1,29 @@
+## October 25 — Final website question-layout acceptance
+
+The complete encrypted web fixture exposed the queue sharing a docked grid row with the pending
+answer form. The queue now stays inside the transcript's clipped scroll bounds, retains expansion
+across DOM refresh, and closes its list when jumping to a question. Full encrypted two-owner web
+acceptance now passes, including actual ordinary input and permission buttons; shared paged
+question/draft/uncertain-operation acceptance also passes. This UI-only correction supersedes
+the e12628b source/packages for final release; do not claim the older package includes it.
+
+Both clean local main and private origin/main were synced at e12628b before this correction.
+Its unsigned staging build e12628bd9320+src.b453df408dbc passed exact-package tabs/history/Resources,
+four-provider Activity and question fixtures. All 377 runtime files and eight build inputs match
+the 1,304-file source companion, SHA256
+d910b02b7bcd8dfce69b61efa1756a0a4c0c6e6c2689304fcb93e87c843058ff under
+dist/combined-update-source/e12628b-clean. It is unsigned staging, not an installable signed release.
+The first companion's AppleDouble metadata failed manifest validation; only that task-created
+archive was retired after the clean replacement verified. Old signed candidates, live data and
+recoveries remain untouched. Source/package receipts are retained under .runtime-tests/e126-*.
+
+HC source review is now complete at its clean isolated e12628b checkout. Both HC and Linux's
+installed verifiers need a signed legacy bootstrap manifest without distribution and with
+/api/v1/app/releases/<id>/artifact. Both await exact immutable signed artifacts; no staging or
+installation was invoked. Linux's new e12628b build task is running. Mac unlock and the existing
+publisher-key reference are pending; Windows remains reconnecting. Normal rollout authorization
+persists, but do not bypass signing, native uncertainty, production capture or offline-device gates.
+
 ## October 25 — Latest Linux and HC coordination
 
 HC preflight is complete in the approved unassigned Codex bootstrap. Its signed installed

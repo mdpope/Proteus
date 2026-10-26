@@ -1,4 +1,4 @@
 .user-question-queue{flex:none;max-height:25vh;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:10px 14px;margin-bottom:10px;background:var(--panel)}
 .user-question-queue[hidden]{display:none}.user-question-queue summary{cursor:pointer;color:var(--accent);font-weight:600}.user-question-queue details>button{display:block;width:100%;text-align:left;white-space:normal;margin-top:8px}
 .user-question-card{border-top:1px solid var(--line);padding:12px 0;margin-top:12px;overflow-wrap:anywhere}.user-question-card form{display:grid;gap:10px}.user-question-card textarea{width:100%;min-height:68px}.user-question-choices{display:flex;gap:8px;flex-wrap:wrap}.user-question-card button{white-space:normal;max-width:100%}.user-question-card form>button{justify-self:start}
-.remote-chat-main.docked-chat>.user-question-queue{grid-column:1;grid-row:2;z-index:1}.remote-chat-main.docked-chat:has(>.user-question-queue:not([hidden]))>.remote-pending{grid-row:4}
+.remote-messages>.user-question-queue{position:sticky;top:0;z-index:1;max-height:35%;margin-bottom:12px}

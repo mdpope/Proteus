@@ -10,6 +10,11 @@ That is diagnostic acceptance; freeze/rebuild and verify the final package befor
 
 ## October 25 — Interactive questions and live returned-task feedback
 
+Full web acceptance caught a queue/pending-form grid overlap missed by the narrow question-only
+fixture. The queue now lives within the transcript, retains expansion through refresh, and closes
+its list on selection. The complete encrypted two-owner website fixture and shared paged question
+fixture pass with the pending answer/permission controls usable. Rebuild final release artifacts.
+
 38. Preserve native structured questions instead of rendering choices only as assistant prose.
 Desktop, web and iOS now expose a persistent unanswered-question queue, jump to the original
 message, explicit choice buttons and a custom answer. The owner retains provider/session/item
