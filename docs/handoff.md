@@ -1,3 +1,25 @@
+## October 26 — Team Tools correction supersedes frozen 568bcb2
+
+All-device installation remains authorized. Before installing, include the new reproduced
+Team Tools close/metadata race correction: existing-tab `open` snapshots carry `updateOnly`, and
+both rebase and owner mutation refuse to recreate an absent identity. Full suite: 1,176 passes,
+one skip, zero failures; static and real Electron close-15/open-four/stale-mirror checks pass.
+The read-only HC report identified 15 old plus four new identities, but no incident transaction
+or writer. No live tab cleanup was performed. Private receipts: team-close-metadata-baseline.log
+(reproduced failure), team-close-full.log, team-close-check.log and team-close-ui.log.
+
+The earlier clean 568bcb2 Mac bundle is now signed with the existing installation identity and
+passed isolated startup/vendor/signature checks. Its frozen identity/archive receipts are under
+.runtime-tests/568-signed-*. It still lacks this latest correction; do not install it as current.
+The Mac is unlocked and SSH access works again. Purpose:update coordinator creation was rejected
+because Engine Room update defaults are unset; no coordinator/task was created. The operator was
+asked to save those defaults and reconnect Windows. The original failure operation remains
+recorded. Existing publisher-key reference is unresolved after scoped credential metadata lookup;
+never substitute or rotate trust. iPhone/iPad remain connected on 0.2.29. Existing Xcode account
+metadata is present, but the paid profile lacks Push Notifications. Native control remains guarded
+by an older closed preview target, so no account/session repair or guard bypass was attempted.
+Preserve all earlier installed/recovery/remote task receipts and production capture failures.
+
 ## October 25 — Final website question-layout acceptance
 
 The complete encrypted web fixture exposed the queue sharing a docked grid row with the pending

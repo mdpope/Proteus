@@ -1,3 +1,13 @@
+## October 26 — close wins over stale descriptor metadata
+
+Metadata updates for an existing tab carry `updateOnly` through descriptor reconciliation and
+revision-conflict rebase. The owner ignores them if another window closed or moved that identity;
+they cannot recreate it. Explicit new opens remain separate. Team Tools close-all followed by
+four standup links is exercised against a stale mirror with 15 older tabs using the real host
+and native browser inventory. This fixes a reproduced race; incident logs do not identify which
+saved window or device caused the operator's live recurrence. Upgrade participating clients;
+older clients do not mark passive snapshots. Existing uncertain outbox identities stay unchanged.
+
 ## October 25 — Combined preview tab and resource corrections
 
 Owner move acknowledgements carry current navigation metadata so the first placement works

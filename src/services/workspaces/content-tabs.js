@@ -142,7 +142,9 @@ export class ContentTabs {
     if(!Number.isSafeInteger(expectedRevision)||expectedRevision!==current.revision)throw new Error('Content tabs changed. Refresh before retrying this action.');
     if(!Array.isArray(operations)||operations.length>100)throw new Error('Choose at most 100 tab changes.');
     let tabs=current.tabs.map(contentTab);
-    for(const op of operations){if(op.action==='open'){const tab=contentTab(op.tab);if(tab.type==='chat'&&!['workspace','project','main'].includes(scope))throw new Error('Chats can appear in workspace or main navigation.');const existing=tabs.findIndex(item=>item.id===tab.id);if(existing<0)tabs.push(tab);else tabs[existing]=mergeContentTabMetadata(tabs[existing],tab);}
+    // Passive snapshots update an existing identity only. A close/move from
+    // another window wins; an explicit new open remains a separate operation.
+    for(const op of operations){if(op.action==='open'){const tab=contentTab(op.tab);if(tab.type==='chat'&&!['workspace','project','main'].includes(scope))throw new Error('Chats can appear in workspace or main navigation.');const existing=tabs.findIndex(item=>item.id===tab.id);if(op.updateOnly===true&&existing<0)continue;if(existing<0)tabs.push(tab);else tabs[existing]=mergeContentTabMetadata(tabs[existing],tab);}
       else if(op.action==='close')tabs=tabs.filter(tab=>tab.id!==op.id);
       else if(op.action==='rename'){const tab=tabs.find(tab=>tab.id===op.id);if(!tab)throw new Error('Tab is no longer open.');tab.title=title(op.title)||'New tab';tab.customTitle=tab.title;}
       else if(op.action==='visibility'){const tab=tabs.find(tab=>tab.id===op.id);if(!tab||typeof op.hidden!=='boolean')throw new Error('Choose an open tab and visibility.');if(op.hidden)tab.hidden=true;else delete tab.hidden;}

@@ -1,5 +1,6 @@
 ## 0.2.30 — cross-platform release candidate
 
+- Prevent a stale window's metadata refresh from reopening tabs another window closed or moved; preserve explicit new opens, including Team Tools standup links.
 - Keep ignored local and empty lease renewals out of descriptor synchronization so they do not stall scroll publication; retain the barrier for applicable remote navigation.
 - Preserve Codex structured questions; add durable unanswered-question queues, choices and custom answers on desktop, web and iOS. Keep native blocking/nonblocking request resolution separate from tool approvals and avoid replaying uncertain answers.
 - Keep the web question queue within the transcript so it cannot cover pending answer or permission controls; retain expansion through refresh and close the list when jumping to a question.

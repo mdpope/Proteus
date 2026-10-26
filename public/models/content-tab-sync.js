@@ -18,7 +18,7 @@ export function tabChanges(before,after,{navigation=false,seed=false}={}){
       seedNavigation(tab);
     }else if(navigation&&previous?.type==='browser'&&tab.type==='browser'&&!previous.url&&tab.url&&!Number.isSafeInteger(previous.history?.revision)){
       seedNavigation(tab);
-      if(!sameContentTab({...previous,url:tab.url,history:tab.history},tab))operations.push({action:'open',tab:{...tab,url:previous.url,history:previous.history}});
+      if(!sameContentTab({...previous,url:tab.url,history:tab.history},tab))operations.push({action:'open',updateOnly:true,tab:{...tab,url:previous.url,history:previous.history}});
     }else if(previous?.type==='browser'&&tab.type==='browser'&&Number.isSafeInteger(previous.history?.revision)){
       const old=previous.history,history=tab.history,selected=history?.entries?.[history.index];
       const oldEntries=new Map(old.entries.map(entry=>[entry.id,entry])),firstNew=history?.entries.findIndex(entry=>!oldEntries.has(entry.id))??-1,canNavigate=!navigation||tab.navigationPending!==false;
@@ -37,8 +37,8 @@ export function tabChanges(before,after,{navigation=false,seed=false}={}){
       }else if(selected&&selected.id!==old.currentEntryId&&canNavigate){
         operations.push({action:'browser-traverse',tabId:tab.id,entryId:selected.id,operationId:crypto.randomUUID(),visitedAt:new Date().toISOString(),baseRevision:old.revision});
       }else if(selected&&selected.id===old.currentEntryId&&(selected.url!==previous.url||selected.title!==old.entries.find(entry=>entry.id===selected.id)?.title))operations.push({action:'browser-redirect',tabId:tab.id,entryId:selected.id,url:selected.url,title:selected.title,operationId:crypto.randomUUID(),baseRevision:old.revision});
-      if(!sameContentTab({...previous,url:tab.url,history:tab.history},tab))operations.push({action:'open',tab:{...tab,url:previous.url,history:previous.history}});
-    }else operations.push({action:'open',tab});
+      if(!sameContentTab({...previous,url:tab.url,history:tab.history},tab))operations.push({action:'open',updateOnly:true,tab:{...tab,url:previous.url,history:previous.history}});
+    }else operations.push({action:'open',...(previous?{updateOnly:true}:{}),tab});
   }
   if(before.map(tab=>tab.id).join('\0')!==after.map(tab=>tab.id).join('\0'))operations.push({action:'reorder',ids:after.map(tab=>tab.id)});
   return operations;
@@ -62,6 +62,9 @@ export function rebaseTabChanges(operations,current){
     if(op.action==='close'){if(!live.has(op.id))continue;live.delete(op.id);}
     else if(op.action==='open'){
       const prior=live.get(op.tab.id);
+      // A title/history/visibility refresh of an existing view cannot reopen
+      // its identity after another window has closed or moved that tab.
+      if(op.updateOnly===true&&!prior)continue;
       op={...op,tab:mergeContentTabMetadata(prior,op.tab)};
       if(prior?.type==='browser'&&op.tab.type==='browser'&&op.tab.url===''&&!op.tab.history)op={...op,tab:{...op.tab,url:prior.url,history:prior.history}};
       if(sameContentTab(prior,op.tab))continue;live.set(op.tab.id,op.tab);

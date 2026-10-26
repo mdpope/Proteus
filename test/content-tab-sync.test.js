@@ -10,6 +10,28 @@ import {normalizeContentTabDescriptor,normalizeContentTabHistory,sameContentTab,
 import {createTabSynchronizer,rebaseTabChanges,tabChanges,syncableTabURL} from '../public/models/content-tab-sync.js';
 const pendingCount=values=>[...values.keys()].filter(key=>key.startsWith('proteus.navigation.pending:')).length;
 const tab=id=>({id,type:'browser',title:id,url:'https://example.test/'+id});
+test('a stale Team mirror cannot reopen fifteen closed tabs with metadata after four new standup tabs open',async t=>{
+ const host=hostStore(t),scope={scope:'team',id:'team'},old=Array.from({length:15},(_,i)=>tab('old-'+i)),fresh=Array.from({length:4},(_,i)=>tab('standup-'+i));
+ host.mutate({...scope,expectedRevision:0,operations:old.map(tab=>({action:'open',tab}))});
+ let local=structuredClone(old);const errors=[];
+ const sync=createTabSynchronizer({scopes:()=>[scope],readLocal:async()=>structuredClone(local),apply:async(_scope,tabs)=>{local=structuredClone(tabs);},onError:error=>errors.push(error),request:async(_scope,action,args)=>action==='get'?host.get(scope.scope,scope.id):host.mutate({...scope,...args})});
+ await sync.all();
+ local=local.map(tab=>({...tab,title:'Passive title refresh '+tab.id}));
+ host.mutate({...scope,expectedRevision:host.get(scope.scope,scope.id).revision,operations:[...old.map(tab=>({action:'close',id:tab.id})),...fresh.map(tab=>({action:'open',tab}))]});
+ await sync.all();await sync.all();
+ assert.deepEqual(host.get(scope.scope,scope.id).tabs.map(tab=>tab.id),fresh.map(tab=>tab.id));
+ assert.deepEqual(local.map(tab=>tab.id),fresh.map(tab=>tab.id));assert.deepEqual(errors,[]);
+});
+test('metadata arriving after a close cannot create a tab, while a fresh explicit open still can',t=>{
+ const host=hostStore(t),scope={scope:'team',id:'team'};
+ host.mutate({...scope,expectedRevision:0,operations:[{action:'open',tab:tab('old')}]});
+ host.mutate({...scope,expectedRevision:1,operations:[{action:'close',id:'old'}]});
+ const metadata=tabChanges([tab('old')],[{...tab('old'),title:'Delayed native title'}]);
+ const result=host.mutate({...scope,expectedRevision:2,operations:metadata});
+ assert.deepEqual(result.tabs,[]);assert.equal(result.revision,2);
+ const opened=host.mutate({...scope,expectedRevision:2,operations:tabChanges([],[tab('new')])});
+ assert.deepEqual(opened.tabs.map(tab=>tab.id),['new']);
+});
 test('navigation acknowledgement ignores passive metadata but preserves exact selection, full branch and profile guards',()=>{
  const history={entries:['a','b','c'].map(id=>({id,url:'https://example.test/'+id,title:id})),index:1,currentEntryId:'b',revision:2};
  const local={...tab('view'),url:'https://example.test/b',history,navigationPending:true,lastActivityAt:'2026-10-23T12:00:00Z'};

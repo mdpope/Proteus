@@ -2508,3 +2508,11 @@ resolution notification. Answers and returned task feedback preserve stable owne
 identities; uncertain delivery cannot trigger an automatic resend/fallback. Native tool approvals
 remain a separate human decision even when a remote coordinator reports awaiting input.
 
+## October 26 — existing-tab metadata cannot reopen a closed identity
+
+Retain the compatible open operation with an optional updateOnly flag for snapshots of existing
+tabs. Both client rebase and the owner require that identity to remain present. Fresh user opens
+retain ordinary creation semantics. This avoids treating title/history refresh as an instruction
+to reopen a closed or moved tab, without changing placement, sessions, permissions, navigation
+receipts or the persisted descriptor format. Older clients must be upgraded to supply the flag;
+existing uncertain request payloads and operation identities are never rewritten.

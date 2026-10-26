@@ -1,3 +1,19 @@
+## October 26 — Team Tools closed tabs return during standup launch
+
+The operator closed all Team Tools tabs, opened four standup links, then saw older tabs return.
+Read-only destination evidence identified four fresh tabs plus 15 older logical identities and
+another saved local window containing those older identities. The incident's exact writer and
+transaction sequence are unavailable; cross-device involvement is not established.
+
+An isolated reproduction demonstrates one concrete race: metadata from a stale mirror uses the
+same `open` operation as a new tab and can recreate all 15 closed identities beside the four new
+ones. Existing-tab snapshots now carry `updateOnly`; both conflict rebase and the owner ignore
+those updates when the identity is absent. Explicit new opens retain their normal behavior.
+The real Electron close-all/standup/stale-mirror fixture retains exactly four owner, renderer and
+native tabs. Full regression passes 1,176 with one skip; static checks pass. Frozen 568bcb2 packages
+predate this correction and must be superseded before installation. Actual installed acceptance
+and rollout remain pending; no live tabs were changed by diagnosis or tests.
+
 ## October 25 — Lease renewal scroll stall correction
 
 Linux's isolated diagnostic commit 5ffb80af04db669e1912f7f898fe5b938023587e identified an ignored
@@ -10810,4 +10826,3 @@ Acceptance: 1,056 Node tests pass (one platform skip), static checks pass, and t
 Mac package passes native-failure notice dismissal/retry/reload/restart/expiry and the combined
 400 ms follow/history UI checks. These do not claim installation or a functioning third-party
 password manager connection; Windows/Linux package acceptance remains separate.
-
