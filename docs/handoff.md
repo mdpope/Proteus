@@ -1,3 +1,22 @@
+## October 26 — Linux desktop context after verified installation
+
+Linux 0.2.30 c683 runtime/source hashes, original Codex session/one continuation, prior event
+prefixes, drafts, permissions, tab/window selection, receipts and both recovery generations
+verify. Peer access remains qualified: the protected-storage guard fails before decryption,
+unchanged encrypted files are retained, and both wallet and Secret Service are unlocked.
+Working original-launch evidence includes six desktop-selection variables omitted on helper
+relaunch. Their loss is confirmed; the exact running backend remains unobserved.
+
+The helper now preserves those existing values (no inferred desktop/backend or credential
+changes). An actual child-process regression fails on the previous helper and passes after
+the correction. Full Node suite passes 1,177 with one skip; static checks pass. The disposable
+Linux update/rollback fixture also checks the real resumed owner's six values. Private logs:
+linux-desktop-env-baseline.log, linux-desktop-env-fixed.log, linux-desktop-env-full.log and
+linux-desktop-env-check.log. Real graceful recovery and packaged Linux gates remain pending;
+the new allowlist cannot reconstruct values already absent in the installed owner. The existing
+authorized remote coordinator is preparing a concrete normal relaunch plan without restarting,
+editing live state, changing backend/protection or replaying the completed update job.
+
 ## October 26 — frozen combined artifacts and live website
 
 The accepted runtime source is clean c6839fb4b5b18319506c6ecfc2d409a1a98f04cb, synced to

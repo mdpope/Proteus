@@ -27,8 +27,12 @@ const fixtureRoot=process.env.PROTEUS_UPDATE_TEST_ROOT||os.tmpdir();if(!path.isA
 const root=fs.realpathSync(privateTemporaryDirectory(path.join(fixtureRoot,'proteus-packaged-update-'))),home=path.join(root,'data'),browser=path.join(root,'browser'),installation=path.join(root,mac?'Proteus.app':'Proteus');
 fs.mkdirSync(home);if(!win)fs.cpSync(baseline.bundle,installation,{recursive:true,verbatimSymlinks:true,preserveTimestamps:true});
 fs.writeFileSync(path.join(home,'settings.json'),JSON.stringify({schemaVersion:1,provider:'rehearsal',model:'',timezone:'UTC',workspace:{cwd:root,additionalDirectories:[]},skillDirectories:[],mcpServers:{}}));
-const inherited=['PATH','HOME','USER','LOGNAME','SHELL','LANG','LC_ALL','DISPLAY','WAYLAND_DISPLAY','XAUTHORITY','XDG_RUNTIME_DIR','DBUS_SESSION_BUS_ADDRESS','TMPDIR','TMP','TEMP','SystemRoot','WINDIR','ComSpec','USERPROFILE','HOMEDRIVE','HOMEPATH','LOCALAPPDATA','APPDATA','COMPUTERNAME'];
+const inherited=['PATH','HOME','USER','LOGNAME','SHELL','LANG','LC_ALL','DISPLAY','WAYLAND_DISPLAY','XAUTHORITY','XDG_RUNTIME_DIR','DBUS_SESSION_BUS_ADDRESS','XDG_CURRENT_DESKTOP','XDG_SESSION_DESKTOP','DESKTOP_SESSION','KDE_FULL_SESSION','KDE_SESSION_VERSION','XDG_SESSION_TYPE','TMPDIR','TMP','TEMP','SystemRoot','WINDIR','ComSpec','USERPROFILE','HOMEDRIVE','HOMEPATH','LOCALAPPDATA','APPDATA','COMPUTERNAME'];
 const isolatedEnv=Object.fromEntries(inherited.filter(key=>process.env[key]!==undefined).map(key=>[key,process.env[key]]));
+// Rehearsals select basic storage in a private profile; these synthetic desktop
+// values exercise the real helper/relaunch environment, not a user's keyring.
+const desktopSelection=process.platform==='linux'?{XDG_CURRENT_DESKTOP:'KDE',XDG_SESSION_DESKTOP:'KDE',DESKTOP_SESSION:'plasma',KDE_FULL_SESSION:'true',KDE_SESSION_VERSION:'6',XDG_SESSION_TYPE:'x11'}:{};
+if(!live)Object.assign(isolatedEnv,desktopSelection);
 // Every helper relaunch inherits this disposable user home, even when its
 // launch environment deliberately drops provider-specific CLI overrides.
 const fixtureUserHome=path.join(root,'user-home');if(!live)fs.mkdirSync(fixtureUserHome);
@@ -91,6 +95,10 @@ try{
  await request('/api/updates',{action:'handoff',id:prepared.job.id,expectedRevision:prepared.job.revision,...(noChat?{}:{runId:setup.id}),checkpoint:'Finish this disposable acceptance: reply with CODEX_UPDATE_VERIFIED. No tools, file edits or external effects are needed.'});
  await wait(()=>{const j=readJob(jobFile);if(j.phase==='attention')throw Error(j.error);return j.phase==='complete';},'independent helper restart/rollback and automatic same-chat delivery',win?600000:240000);
  ownedPid=JSON.parse(fs.readFileSync(path.join(home,'connection.json'))).pid;
+ if(process.platform==='linux'&&!live){
+  const actual=Object.fromEntries(fs.readFileSync('/proc/'+ownedPid+'/environ','utf8').split('\0').filter(Boolean).map(row=>{const index=row.indexOf('=');return [row.slice(0,index),row.slice(index+1)];}));
+  assert.deepEqual(Object.fromEntries(Object.keys(desktopSelection).map(key=>[key,actual[key]])),desktopSelection,'Update and rollback preserve the desktop identity used to select credential storage');
+ }
  await wait(async()=>{const run=JSON.parse(fs.readFileSync(path.join(home,'runs',setup.id+'.json')));await settleRehearsal(run);return run.status==='completed';},'automatically resumed provider turn');
  const job=readJob(jobFile),restored=JSON.parse(fs.readFileSync(path.join(home,'runs',setup.id+'.json')));
  assert.equal(job.outcome,rollback||preflightFailure?'rollback':'updated');assert.equal(inspectPackage(installation).sourceFingerprint,rollback||preflightFailure?baseline.sourceFingerprint:candidate.sourceFingerprint);assert.equal(restored.providerSessionId,prior.providerSessionId);assert.deepEqual(restored.events.slice(0,prior.events.length),prior.events);assert.equal(restored.events.filter(event=>event.data?.delivery?.id===job.continuationId).length,noChat?0:1);if(noChat){assert.equal(job.runId,null);assert.deepEqual(restored.events,prior.events);}if(live)assert.ok(restored.events.some(event=>event.role==='assistant'&&event.text.includes('CODEX_UPDATE_VERIFIED')));

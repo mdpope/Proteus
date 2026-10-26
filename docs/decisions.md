@@ -2508,6 +2508,14 @@ resolution notification. Answers and returned task feedback preserve stable owne
 identities; uncertain delivery cannot trigger an automatic resend/fallback. Native tool approvals
 remain a separate human decision even when a remote coordinator reports awaiting input.
 
+## October 26 — retain desktop identity for protected credential selection
+
+Keep a bounded allowlist of existing Linux desktop-session variables across updater relaunches.
+Desktop identity and D-Bus/display identity jointly determine Chromium's protected-store choice;
+preserving only the latter can change availability despite an unlocked wallet. Never infer a
+desktop, switch password stores, change encryption or copy secret environment values to solve
+this. A previously lost context needs its verified normal-launch values restored separately.
+
 ## October 26 — presentation cleanup during owner shutdown
 
 Validate the trusted origin/window/main frame before acknowledging late hide/overlay requests

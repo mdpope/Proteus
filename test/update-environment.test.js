@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import {createRequire} from 'node:module';
+import {execFileSync} from 'node:child_process';
 const {environment}=createRequire(import.meta.url)('../desktop/updates/update-helper.cjs');
 
 test('update and rollback relaunch keep provider namespaces without copying tokens or helper mode',()=>{
@@ -20,4 +21,14 @@ test('isolated update smoke cannot use the real provider homes or executables',(
 test('default provider locations stay native rather than acquiring a new update-specific profile',()=>{
  const env=environment('/synthetic/proteus',false,{},{});
  for(const key of ['CLAUDE_CONFIG_DIR','PROTEUS_CLAUDE_PATH','CODEX_HOME','COPILOT_HOME'])assert.equal(Object.hasOwn(env,key),false);
+});
+
+test('a relaunched child retains desktop keyring selection without inheriting secrets or helper mode',()=>{
+ const desktop={XDG_CURRENT_DESKTOP:'KDE',XDG_SESSION_DESKTOP:'KDE',DESKTOP_SESSION:'plasma',KDE_FULL_SESSION:'true',KDE_SESSION_VERSION:'6',XDG_SESSION_TYPE:'wayland'};
+ const source={...desktop,DBUS_SESSION_BUS_ADDRESS:'unix:path=/synthetic/bus',XDG_RUNTIME_DIR:'/synthetic/runtime',WAYLAND_DISPLAY:'wayland-synthetic',DISPLAY:':synthetic',ELECTRON_RUN_AS_NODE:'1',SYNTHETIC_SECRET_TOKEN:'must-not-reach-child'};
+ const result=JSON.parse(execFileSync(process.execPath,['-e',`console.log(JSON.stringify({desktop:Object.fromEntries(${JSON.stringify(Object.keys(desktop))}.filter(key=>Object.hasOwn(process.env,key)).map(key=>[key,process.env[key]])),bus:process.env.DBUS_SESSION_BUS_ADDRESS,secretPresent:Object.hasOwn(process.env,'SYNTHETIC_SECRET_TOKEN'),helperModePresent:Object.hasOwn(process.env,'ELECTRON_RUN_AS_NODE')}))`],{env:environment('/synthetic/proteus',false,{},source),encoding:'utf8'}));
+ assert.deepEqual(result,{desktop,bus:source.DBUS_SESSION_BUS_ADDRESS,secretPresent:false,helperModePresent:false});
+ // Missing desktop context stays missing; no inferred desktop/backend is inserted.
+ const absent=environment('/synthetic/proteus',false,{},{});
+ for(const key of Object.keys(desktop))assert.equal(Object.hasOwn(absent,key),false);
 });

@@ -12,7 +12,10 @@ function environment(home,browser,extra={},source=process.env){
  // Keep the same provider-owned credential namespaces/executables on restart and
  // rollback. These are locations, not tokens; do not copy authentication secrets
  // or Electron's helper-only RUN_AS_NODE switch into the relaunched application.
- const names=['PATH','HOME','USER','LOGNAME','SHELL','LANG','LC_ALL','DISPLAY','WAYLAND_DISPLAY','XAUTHORITY','XDG_RUNTIME_DIR','DBUS_SESSION_BUS_ADDRESS','TMPDIR','TMP','TEMP','SystemRoot','WINDIR','ComSpec','USERPROFILE','HOMEDRIVE','HOMEPATH','LOCALAPPDATA','APPDATA','COMPUTERNAME','CLAUDE_CONFIG_DIR','PROTEUS_CLAUDE_PATH','CODEX_HOME','PROTEUS_CODEX_PATH','COPILOT_HOME','COPILOT_CLI_PATH'];
+ // Chromium uses the desktop identity as well as the bus to select protected
+ // credential storage. Losing KDE/GNOME context can select another backend even
+ // with an unlocked wallet. Preserve existing values, never infer a backend.
+ const names=['PATH','HOME','USER','LOGNAME','SHELL','LANG','LC_ALL','DISPLAY','WAYLAND_DISPLAY','XAUTHORITY','XDG_RUNTIME_DIR','DBUS_SESSION_BUS_ADDRESS','XDG_CURRENT_DESKTOP','XDG_SESSION_DESKTOP','DESKTOP_SESSION','KDE_FULL_SESSION','KDE_SESSION_VERSION','XDG_SESSION_TYPE','TMPDIR','TMP','TEMP','SystemRoot','WINDIR','ComSpec','USERPROFILE','HOMEDRIVE','HOMEPATH','LOCALAPPDATA','APPDATA','COMPUTERNAME','CLAUDE_CONFIG_DIR','PROTEUS_CLAUDE_PATH','CODEX_HOME','PROTEUS_CODEX_PATH','COPILOT_HOME','COPILOT_CLI_PATH'];
  const env=Object.fromEntries(names.filter(name=>source[name]!==undefined).map(name=>[name,source[name]]));
  return {...env,PROTEUS_HOME:home,PORT:'0',...extra,...(browser?{COPILOT_HOME:path.join(home,'copilot'),COPILOT_CLI_PATH:path.join(home,'no-copilot'),CODEX_HOME:path.join(home,'codex'),PROTEUS_CODEX_PATH:path.join(home,'no-codex'),PROTEUS_CLAUDE_PATH:path.join(home,'no-claude'),CLAUDE_CONFIG_DIR:path.join(home,'claude')}:{} )};
 }

@@ -1,5 +1,6 @@
 ## 0.2.30 — cross-platform release candidate
 
+- Preserve the Linux desktop-session identity during update and rollback so Chromium can select the existing protected credential backend after restart.
 - Treat late trusted browser surface cleanup as an inert shutdown acknowledgement; keep tab, navigation and history commands blocked after quit starts.
 - Expire desktop/web banners after five seconds, including native overlays when their renderer is background-throttled; preserve notification history and queued actions.
 - Prevent a stale window's metadata refresh from reopening tabs another window closed or moved; preserve explicit new opens, including Team Tools standup links.

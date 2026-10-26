@@ -1,3 +1,21 @@
+## October 26 — preserve Linux credential-backend selection context
+
+Update and rollback relaunches preserve existing XDG_CURRENT_DESKTOP, XDG_SESSION_DESKTOP,
+DESKTOP_SESSION, KDE_FULL_SESSION, KDE_SESSION_VERSION and XDG_SESSION_TYPE alongside the bus
+and display context. Chromium uses that desktop identity to choose protected credential storage;
+an available/unlocked service alone does not preserve backend selection. Values are inherited
+from the owner, never guessed. No password-store override, credential migration or plaintext
+fallback is added. A relaunch starting from an owner that already lost its context cannot recover
+missing values through this allowlist; restore the previously verified ordinary desktop launch
+context separately through a reviewed graceful process.
+
+The installed Linux 0.2.30 runtime and data-preservation checks passed, but peer access failed at
+the protected-storage availability guard before decryption. The working prior owner had all six
+selection values; its resumed child lacked them. Encrypted files are unchanged and the wallet
+and Secret Service are unlocked. The exact failing backend is unobserved, so preserve that
+qualification until the restored launch passes a real read. Do not ask for an unlock or recreate
+pairings based on this failure. The source fix and actual recovery acceptance are separate.
+
 ## October 25 — All-device rollout authorized after final validation
 
 The operator has completed Design Preview review and lifted the Mac hold. Build/test/validate the

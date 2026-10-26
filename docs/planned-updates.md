@@ -1,3 +1,13 @@
+## October 26 — Linux update loses desktop keyring-selection context
+
+Installed 0.2.30 source/package, session, history, permissions, drafts, receipts and both recovery
+generations verify. Peer readiness remains qualified: protected storage fails before decryption,
+while encrypted files match recovery and the wallet/service are unlocked. Working pre-update
+launch evidence retained six desktop-selection values that the helper omitted on relaunch.
+The helper now preserves them without inventing values or changing the backend. An actual child
+regression fails before the fix and passes after; Linux disposable update/rollback/failure gates
+also assert the restored owner's environment. Live graceful recovery remains separately pending.
+
 ## October 26 — combined runtime accepted; rollout in progress
 
 Frozen clean c6839fb includes Team metadata close protection, five-second native/web banners and
