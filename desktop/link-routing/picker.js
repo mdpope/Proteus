@@ -1,14 +1,14 @@
 // Keyboard behavior ported from SafariSelector/UI/SelectorView.swift
 // (SafariSelector contributors, GPL-3.0-or-later).
-let targets=[],flat=[],filter='',selection=0,selected=false;
+let targets=[],external=[],flat=[],filter='',selection=0,selected=false;
 const list=document.querySelector('#targets'),field=document.querySelector('#filter');
-const choose=newWindow=>{const target=flat[selection];if(target)window.linkPicker.choose({key:target.key,newWindow});};
+const choose=newWindow=>{const target=flat[selection];if(target)window.linkPicker.choose(target.external?{external:target.external}:{key:target.key,newWindow});};
 function draw(){
   const query=filter.toLocaleLowerCase();
-  flat=targets.filter(t=>[t.workspaceName,t.projectName,t.hostName].join(' ').toLocaleLowerCase().includes(query));
+  flat=[...external,...targets.filter(t=>[t.workspaceName,t.projectName,t.hostName].join(' ').toLocaleLowerCase().includes(query))];
   selection=Math.max(0,Math.min(selection,flat.length-1));list.replaceChildren();let group;
   flat.forEach((target,index)=>{
-    const key=JSON.stringify([target.hostId,target.workspaceId]);if(key!==group){group=key;const heading=document.createElement('h2');heading.textContent=target.workspaceName+(target.hostId==='local'?'':' · '+target.hostName);list.append(heading);}
+    const key=JSON.stringify([target.hostId,target.workspaceId]);if(key!==group){group=key;const heading=document.createElement('h2');heading.textContent=target.external?'Open in another browser':target.workspaceName+(target.hostId==='local'?'':' · '+target.hostName);list.append(heading);}
     const row=document.createElement('button');row.className='project';row.type='button';row.dataset.key=target.key;row.setAttribute('role','option');row.setAttribute('aria-selected',String(selection===index));
     const content=document.createElement('span'),title=document.createElement('span'),detail=document.createElement('span'),digit=document.createElement('span');title.className='name';title.textContent=target.projectName;detail.className='detail';detail.textContent=target.workspaceName;digit.className='digit';digit.textContent=index<9?String(index+1):'';content.append(title,detail);row.append(content,digit);row.onclick=()=>{selection=index;choose(false);};list.append(row);
   });
@@ -19,6 +19,7 @@ function draw(){
 }
 window.linkPicker.on(value=>{
   targets=value.targets;document.querySelector('#url').textContent=value.url;
+  external=value.safariSelector?[{key:'safariselector',external:'safariselector',projectName:'Open in SafariSelector',workspaceName:'Choose a Safari profile and tab group',hostName:'',hostId:'external',workspaceId:'safariselector'}]:[];
   const warning=document.querySelector('#warning');warning.textContent=value.warning||'';warning.hidden=!value.warning;
   const palette=value.colors||{};for(const [name,key]of [['--panel','menu'],['--selected','sidebarSelected'],['--muted','menuMuted'],['--edge','menuBorder']])if(/^#[0-9a-f]{6}$/i.test(palette[key]||''))document.documentElement.style.setProperty(name,palette[key]);
   draw();field.focus();

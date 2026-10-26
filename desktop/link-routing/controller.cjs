@@ -3,6 +3,7 @@ const {BrowserRegistration}=require('./registration.cjs');
 const {LinkPicker}=require('./picker.cjs');
 const {routeRule,targetKey,selectWindow}=require('./rules.cjs');
 const {webURL}=require('../services/external-urls.cjs');
+const {openSafariSelector}=require('./preferred-browser.cjs');
 class LinkRouter{
   constructor({service,windows,browser,createWindow,app,preview=false}){
     Object.assign(this,{service,windows,browser,createWindow});this.store=new LinkRoutingStore(service.home);this.registration=new BrowserRegistration(app,{preview});this.picker=new LinkPicker();
@@ -31,8 +32,9 @@ class LinkRouter{
     const url=webURL(address);if(!url)throw Error('Choose an HTTP or HTTPS website without URL credentials.');
     let configuration,warning='';try{configuration=this.store.read();}catch(error){configuration={rules:[]};warning=error.message;}
     const {targets,warnings}=await this.catalog(),matched=routeRule(configuration.rules,url,targets);
-    let choice=matched.target?{target:matched.target}:await this.picker.choose({url,targets,warning:[warning,matched.unavailable?'The matching rule’s project is unavailable. Choose another project.':'',...warnings].filter(Boolean).join(' '),colors:this.service.settings.get().appearance?.palette?.colors});
+    let choice=matched.target?{target:matched.target}:await this.picker.choose({url,targets,safariSelector:process.platform==='darwin',warning:[warning,matched.unavailable?'The matching rule’s project is unavailable. Choose another project.':'',...warnings].filter(Boolean).join(' '),colors:this.service.settings.get().appearance?.palette?.colors});
     if(!choice)return {cancelled:true};
+    if(choice.external==='safariselector')return openSafariSelector(url);
     // Catalogs can change while the picker is open. Match stable IDs again.
     const fresh=(await this.catalog()).targets.find(target=>target.key===choice.target.key);
     if(!fresh)throw Error('The chosen project changed or disconnected. Open the link again to choose a current destination.');
