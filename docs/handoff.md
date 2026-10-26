@@ -1,4 +1,49 @@
-## October 26 — personal Mac working-chat bootstrap authorized
+## October 26 — personal Mac installed and independently verified
+
+The authorized working-chat bootstrap completed through the native supervisor. Installed 0.2.30
+is the exact accepted c6839fb4b5b1+src.483790a728e3 Mac package, fingerprint
+483790a728e3e7dd64b17d2cf88a5d6761ab92270b394aa6d26bb5e756a9d623 and whole-package hash
+89de0f7ebd3e76ab0d9d898c945dd51c8a7c9129742f63ce4ceaff543b13c5cd. Fresh inspection verifies
+runtime provenance and deep/strict Apple signing with the existing bundle/team identity. The job
+is complete/updated, health verified, no blocker/error, barrier released and helper exited.
+One owning runner/lock/home matches; the second matching executable is the original Codex's
+document-MCP worker, not another owner. One durable continuation resumed this same provider session.
+
+The final cold checkpoint verifies all 42 chats/15,532 event prefixes. Original provider-session
+hashes match, and effective configuration is unchanged except this resumed chat's context suppliedAt
+timestamp. The early active-turn preflight hash changed before shutdown as work continued; use
+the final immutable supervisor receipt/cold snapshot, both of which match exactly. All 135 shared
+descriptors and saved logical tabs remain; runtime view IDs remap normally. Four saved session files
+retain chat drafts and page selections. The updating chat remains selected in its original window;
+the other window has a subsequently observed additional blank tab/selection. This coordinator made
+no tab, URL, fullscreen or content mutations. Both restored windows were observed through native
+screenshots/accessibility; control was released.
+
+All 1,221 durable navigation entries remain with unchanged URLs; two titles refreshed. All 3,352
+prior navigation receipts and 62 SQLite retry receipts are unchanged, as is the legacy retry store.
+Settings, permissions, credentials, pairings, browser profiles and access grants match cold bytes.
+Project configuration matches after excluding refreshed source-scan metadata. Encrypted active
+browser sessions/chat index refresh and bounded reading-position changes are qualified, not claimed
+byte-identical. Codex's fresh local catalog reports available/non-stale with eight models; no
+credential reset, replacement chat or new authentication flow was used.
+
+Retention now contains exactly the previous recovery plus the new cold baseline recovery, both
+freshly verified app/signature/data/receipt hashes. Their cold data trees contain 6,346 and 6,034
+files. The eligible oldest generation and supervisor staging were retired normally; prior failed
+and completed journals remain. No full after-copy or policy rewrite. Measured free space was
+28,498,501,632 bytes, up 1,452,503,040 from preflight; the supervisor's narrower interval reports
+-1,936,613,376 bytes, so these are different APFS/time observations, not an exact reclaimed total.
+Private compact post-install, semantic-v2 and SQLite receipts preserve the checks and diagnostic
+limitations, including sandbox signing, numeric lock, helper classification and legacy no-ID history
+comparison corrections. No fixtures, rebuild, remote installation, signing or publication repeated.
+
+This completes the personal Mac bootstrap. The separate Windows Codex owns its reported startup
+crash; do not infer current Windows state from historical receipts or dispatch more work there.
+Linux's normal KDE relaunch/corrected update and mobile push subscription/live delivery remain
+pending. Work Mac, website, iPhone and iPad installations were already completed; do not repeat them.
+MTPLX stays preview-only. The installed Mac artifact intentionally remains the accepted c683 build.
+
+## October 26 — personal Mac working-chat bootstrap authorized (completed above)
 
 Operator explicitly authorizes this existing working chat for the personal Mac's one-time bootstrap.
 The separate Windows Codex chat now owns a reported Windows startup crash; do not dispatch further

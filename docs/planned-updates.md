@@ -1,4 +1,21 @@
-## October 26 — personal Mac bootstrap authorized in the existing chat
+## October 26 — personal Mac bootstrap installed and verified
+
+The native supervisor completed the exact accepted signed c683 Mac update to 0.2.30 and delivered
+one continuation to the same original Codex session. Independent installed whole-package, provenance,
+signing, owner/lock and cold recovery verification pass. All 42 chats/15,532 checkpoint events,
+135 descriptors, saved logical tabs/drafts, 1,221 navigation entries and previous navigation/retry
+receipts remain. Settings/permissions/pairings match; only resumed context suppliedAt, source scan,
+title and live browsing/reading-position metadata are qualified. Both restored windows were observed
+without changing content. Codex's fresh model catalog is available; no credential repair was needed.
+
+Exactly two verified recovery generations remain; the eligible oldest generation and staging were
+retired by the helper. About 28.50 GB was free at verification, 1.45 GB above early preflight, while
+the helper's narrower interval reports a 1.94 GB decrease. Private compact receipts retain both
+measurements and verification diagnostics. No full after-copy, repeated fixture/build or remote
+effect. Windows repair belongs to the separate Codex chat. Linux KDE relaunch/corrected update
+and real mobile push registration/delivery are still pending; do not repeat other completed installs.
+
+## October 26 — personal Mac bootstrap authorized in the existing chat (completed above)
 
 Operator approves the previously pending working-chat exception for this personal Mac. Use its retained
 accepted signed c6839fb package through local prepare/handoff, preserving original session/data and
