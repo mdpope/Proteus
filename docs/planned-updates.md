@@ -1,3 +1,17 @@
+## October 26 — local Windows recovery and source validation
+
+The existing installed 0.2.29 owner was reopened and Home/Chats navigation verified;
+a second ordinary launch returned to that owner in under a second. Two windowless,
+listenerless duplicate launches were stopped. This is recovery of the existing app,
+not acceptance or installation of the pending 0.2.30 candidate. Cached data checks
+remain separate from the native owner's health and protected-state acceptance.
+
+Source validation exposed two Windows test-path assumptions: a raw file URL pathname
+passed to Node and a POSIX-only expected path in mocked Mac registration. Both fixtures
+are corrected without changing runtime behavior or relaxing helper readiness/registration
+checks. Full Windows source validation passes: 1,196 tests, five platform skips and zero
+failures; static checks pass. No new package was built or installed for this recovery.
+
 ## October 26 — signed Windows package accepted; clean-build recipe corrected
 
 Frozen d5dc6c9 windows.c6c079eaa341 passes the complete Windows suite (1,194 passes/five skips),

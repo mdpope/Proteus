@@ -1,3 +1,7 @@
+## Unreleased — Windows validation paths
+
+- Convert the legacy updater fixture's file URL to a native path before launching Node, and normalize the mocked Mac registration path for the test host. Production runtime and signed packages are unchanged.
+
 ## Unreleased — Windows terminal ownership
 
 - Own Windows terminal descendants in a kill-on-close Job Object established before user commands run. Preserve output, input, resize, history and real natural exit codes; avoid the vendor's delayed numeric-PID cleanup.
