@@ -9,6 +9,15 @@ import { CopilotProvider } from '../src/providers/copilot.js';
 import { startServer } from '../src/server.js';
 import { remoteState, remoteRun } from '../src/services/remote/remote.js';
 import { fakeSession } from './fake-copilot.js';
+import {modelControlVisible,optionsForModelChange} from '../public/features/chats/model-choices.js';
+test('turn controls follow advertised choices and clear incompatible options only on explicit model changes',()=>{
+ for(const contextTiers of [undefined,[],[{id:'default'}],[{id:'default',promptTokens:200000}]])assert.equal(modelControlVisible({contextTiers},'contextTier','default'),false);
+ const controls={reasoningEfforts:['high'],contextTiers:[{id:'default'},{id:'long_context'}],serviceTiers:[{id:'fast'}]};
+ assert.equal(modelControlVisible(controls,'contextTier','default'),true);
+ assert.equal(modelControlVisible({},'contextTier','saved-future'),true,'saved options remain reviewable before a model change');
+ assert.deepEqual(optionsForModelChange(controls,{reasoningEffort:'high',contextTier:'long_context',serviceTier:'fast'}),{reasoningEffort:'high',contextTier:'long_context',serviceTier:'fast'});
+ assert.deepEqual(optionsForModelChange({contextTiers:[{id:'default'}]},{reasoningEffort:'high',contextTier:'long_context',serviceTier:'fast'}),{reasoningEffort:'',contextTier:'default',serviceTier:''});
+});
 const raw = { id: 'fixture', supportedReasoningEfforts: ['none', 'low', 'medium', 'high', 'xhigh', 'max'], capabilities: { supports: { reasoningEffort: true }, limits: { max_prompt_tokens: 872000, max_context_window_tokens: 1000000, max_output_tokens: 128000 } }, billing: { tokenPrices: { maxPromptTokens: 272000, longContext: { maxPromptTokens: 872000 } } } };
 test('Copilot maps provider prompt budgets separately from total windows, with no invented defaults', () => {
   const m = copilotModel(raw);

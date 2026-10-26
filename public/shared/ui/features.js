@@ -1,6 +1,6 @@
 import {sourceKindIcon} from './source-icons.js';
 import {workspaceCatalog} from '../../features/workspaces/workspace-ui.js';
-import { uniqueModels } from '../../features/chats/model-choices.js';
+import { uniqueModels, modelControlVisible, optionsForModelChange } from '../../features/chats/model-choices.js';
 import { contextPlan } from '../../features/workspaces/context-plan.js';
 import { browserSurfaceIdentity } from '../../features/browser/browser-toolbar.js';
 let u;
@@ -147,9 +147,9 @@ function updateModelControls(id, providerId, ownerCatalog) {
     for (const option of select.options) { const item = data?.models?.find(m => m.id === option.value); if (item) option.textContent = item.name || item.id; }
     effort.options[0].textContent = controls?.defaultReasoningEffort || 'Default';
     speed.options[0].textContent = 'Standard';
-    effort.parentElement.hidden = !efforts.length && !effort.value;
-    context.parentElement.hidden = (controls?.contextTiers?.length || 0) < 2 && context.value === 'default';
-    speed.parentElement.hidden = !controls?.serviceTiers?.length && !speed.value;
+    effort.parentElement.hidden = !modelControlVisible(controls,'reasoningEffort',effort.value);
+    context.parentElement.hidden = !modelControlVisible(controls,'contextTier',context.value);
+    speed.parentElement.hidden = !modelControlVisible(controls,'serviceTier',speed.value);
     for (const [input, label] of [[select, 'Model'], [effort, 'Thinking effort'], [context, 'Context size'], [speed, 'Speed / service tier']]) {
       input.title = label + ' · applies to your next turn. Steering keeps the running turn’s settings.'; input.setAttribute('aria-label', label);
     }
@@ -165,12 +165,17 @@ function updateModelControls(id, providerId, ownerCatalog) {
 }
 // Remote choices are rendered by the same controls, but never enter the local
 // account's catalog cache or its refresh loop.
+function resetModelControls(id,controls){
+ const inputs={reasoningEffort:$('#'+id+'-effort'),contextTier:$('#'+id+'-context'),serviceTier:$('#'+id+'-speed')};
+ const values=optionsForModelChange(controls,Object.fromEntries(Object.entries(inputs).map(([key,input])=>[key,input.value])));
+ for(const [key,input]of Object.entries(inputs))input.value=values[key];
+}
 export function applyOwnerModelCatalog(id,catalog) {
  const select=$('#'+id);if(!select)return;
  select.dataset.modelOwner='remote';
  const current=select.value||select.dataset.selected||'';
  select.innerHTML=modelOptions(catalog?.models||[],current);select.value=current;
- select.onchange=()=>{select.dataset.selected=select.value;updateModelControls(id,null,catalog);};
+ select.onchange=()=>{select.dataset.selected=select.value;resetModelControls(id,catalog?.models?.find(model=>model.id===select.value)?.controls);updateModelControls(id,null,catalog);};
  updateModelControls(id,null,catalog);
 }
 export async function refreshModels(id, providerId, force = false) {
@@ -185,10 +190,7 @@ export async function refreshModels(id, providerId, force = false) {
     select.dataset.selected = select.value;
     if (select.closest('.composer')) {
       const controls = catalogFor(provider)?.models?.find(m => m.id === select.value)?.controls;
-      const effort = $('#' + id + '-effort'), context = $('#' + id + '-context'), speed = $('#' + id + '-speed');
-      if (!controls?.reasoningEfforts?.includes(effort.value)) effort.value = '';
-      if (!controls?.contextTiers?.some(t => t.id === context.value)) context.value = 'default';
-      if (!controls?.serviceTiers?.some(t => t.id === speed.value)) speed.value = '';
+      resetModelControls(id,controls);
     }
     updateModelControls(id, providerId);
   };

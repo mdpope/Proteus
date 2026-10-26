@@ -43,6 +43,14 @@ content synchronization and paired-computer following remain active. The accepta
 an actual old owner response across a child-selection commit to exercise that interval explicitly.
 A new frozen package must include this correction before desktop rollout.
 
+The next operator screenshot also exposed web model-control drift: fixed-context providers still
+received a Context menu. Desktop remote and web now share metadata-driven option visibility;
+they do not infer controls from provider/model names. An explicit model switch clears options
+the new model cannot accept, matching local behavior. Saved unknown settings survive ordinary
+catalog refresh. Remote synthetic owner UI and the real encrypted two-host website fixture verify
+fixed-context hiding, actual context selection, reset on model change and retained drafts.
+Full regression after these corrections: 1,161 passed / one skipped; static/diff checks pass.
+
 The October 25 handoff authorizes implementing queue items 28–37 and building/testing an isolated
 combined Design Preview. Installed Proteus, public releases and other devices remain held until
 Operator reviews the preview and explicitly authorizes the next step. MTPLX remains preview-only.

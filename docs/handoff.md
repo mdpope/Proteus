@@ -1,5 +1,10 @@
 ## October 25 — 0.2.30 rollout authorized; final acceptance in progress
 
+New remote/web context follow-up supersedes the `070549d` package: both clients share advertised
+model-control visibility and clear incompatible next-turn options only after an explicit model
+change. Remote fixture and actual encrypted two-host web acceptance pass. Final full suite has
+1,161 passes / one skip and static checks pass. Rebuild a clean signed candidate before updating.
+
 Latest audit follow-up: the signed `00e90e945951+src.d0f51e3e8295` package verifies bottom native
 notices, move/hide/residency/history, Resources and hover previews; Activity and new-chat selection
 also pass. A local saved-follow response can still race a newer selection, so the next source

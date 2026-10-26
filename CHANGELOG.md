@@ -1,5 +1,6 @@
 ## 0.2.30 — cross-platform release candidate
 
+- Share capability-based model-control visibility across desktop remote chats and the website; hide fixed context and reset incompatible options only when explicitly changing models.
 - Keep a local window's selected project tab when its older saved follow response arrives during project loading.
 - Restore iOS workspace/project/tab selection, retain all saved tab identities, prepare bounded URL suggestions off the main actor, cache thumbnails asynchronously and constrain overview previews.
 - Focus the iOS composer from its entire card; show known chat titles in attention rows, persist keep-awake/loaded-tab settings and share Activity, recovery and resource controls across clients.

@@ -4,6 +4,13 @@ Operator approved Design Preview review and authorized all-platform/device deplo
 including Mac; this supersedes the historical holds below. OS default-browser selection still
 requires an explicit user action. MTPLX registration remains preview-only.
 
+Follow-up remote/web context controls: the website still rendered a Context selector even for
+models with no selectable context. Both clients now use the same advertised-choice rule; a sole
+default capacity does not produce a chooser. Explicit model changes clear incompatible turn
+options on the owner catalog, retaining the unsent message. Existing non-default saved settings
+remain reviewable until a deliberate change. Remote renderer and actual encrypted two-host web
+acceptance pass, as do 1,161 Node tests with one skip. Rebuild/release acceptance remains separate.
+
 The retained Activity-only preview did not contain items 28–37, including bottom notifications.
 Do not equate that running app with the combined package. The audit in
 [combined preview](2026-10-25-combined-preview.md) maps the complete intake to source/package/live
