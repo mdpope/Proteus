@@ -1,3 +1,39 @@
+## October 26 — frozen combined artifacts and live website
+
+The accepted runtime source is clean c6839fb4b5b18319506c6ecfc2d409a1a98f04cb, synced to
+local/private main. Subsequent rollout notes do not change that artifact identity. Full Node
+suite: 1,176 passes, one skip; static checks pass. Signed Mac build
+c6839fb4b5b1+src.483790a728e3 passes startup/vendor identity, Team close/open, unchanged search,
+shutdown IPC, five-second paused-clock notifications, native three-window fullscreen, successful
+update/socket, compatible rollback/socket and pre-install failure recovery. All 377 runtime files,
+eight build inputs and 1,307 source Git blobs match its corresponding-source archive.
+
+Linux's same clean source passes fresh package gates, unchanged delayed-follow bound, search
+zero-error and shutdown IPC tests. Its notice fixture needed a clock-only adapter to avoid a
+past pauseAt target; original failure and unchanged timing assertions remain retained. The old
+installed owner supports explicit local candidate preparation on both Mac and Linux without
+changing publisher trust; Windows still requires its signed installer/envelope. Public downloads.proteus.example
+desktop-feed publication remains blocked on the existing publisher-key reference.
+
+HC's existing approved bootstrap downloaded the pinned authenticated private draft assets,
+verified the actual installed 490 baseline through all three disposable transition tests, and
+prepared the exact private candidate. Its normal idle barrier waits for another permission-waiting
+chat; it is not installed yet. Linux's authorized old Codex chat is preserving state and preparing
+its accepted local candidate. Never send new input to a handed-off coordinator merely to poll it;
+use reads/tasks and preserve once-only continuation identities. The originating Mac's coordinator
+creation remains rejected until Engine Room update defaults are saved. Windows is reconnecting;
+physical iOS paid provisioning/APNs remains unresolved. No arbitrary provider or signing fallback.
+
+The website is live at release 20261026T162500Z / c6839fb. All 9,221 hashes, nine actual HTTPS
+assets, fourteen endpoints and ordinary isolated recovery restore pass; full encrypted synthetic
+web acceptance passes. Authenticated production UI sharing timed out and is not a live UI pass.
+The first activation rolled back on the three-code-generation retention guard. The documented
+retry reused the identical tested archive and verified capture after strict eligible cleanup;
+all failure receipts remain. Exactly two server/local recovery generations and two code generations
+remain, with private deletion receipts and measured space changes in the deployment workspace.
+Do not repeat any completed retirement, capture, upload or activation. Private current checkpoints
+and final evidence are .runtime-tests/rollout-030-latest-checkpoint.json and c683-* logs.
+
 ## October 26 — shutdown acceptance and recovery retention
 
 Linux retained two failures of the unchanged search/update-notice zero-error fixture. The trace

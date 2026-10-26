@@ -1,3 +1,18 @@
+## October 26 — combined runtime accepted; rollout in progress
+
+Frozen clean c6839fb includes Team metadata close protection, five-second native/web banners and
+the shutdown presentation correction. Full Node/static and fresh exact Mac/Linux package gates
+pass. Mac synthetic update/socket, rollback/socket and pre-install failure recovery pass; real
+provider/session continuation remains an installed acceptance check. Linux retained a clock-only
+fixture qualification and its original failed receipt; runtime and timing assertions were unchanged.
+
+Website c6839fb is deployed with actual asset/hash/endpoint and ordinary restore verification.
+Its initial retention-guard rollback is retained; the documented same-artifact retry reused the
+verified capture. Server and local generations are verified/rotated back to two. Actual authenticated
+web UI sharing timed out. HC is prepared, waiting for idle; Linux preparation is underway. Local
+Mac Engine Room defaults, Windows connectivity, physical iOS paid push provisioning and existing
+public publisher signing remain distinct blockers. No OS browser default was changed.
+
 ## October 26 — shutdown browser presentation rejection
 
 Linux exact-package acceptance retained a search/update-notice fixture failure during the first
