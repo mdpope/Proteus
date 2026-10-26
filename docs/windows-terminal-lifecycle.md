@@ -16,8 +16,8 @@ broker creation. All subsequent processes inherit the job's restrictions.
 
 The guardian starts the existing Electron executable as a Node broker. Only
 internal runtime/script paths are on argv. Shell, args, cwd, environment and input
-travel over private redirected pipes in bounded UTF-8 JSON/base64 frames. No user
-text is interpreted by PowerShell or by the guardian. The broker uses the existing
+travel over private redirected pipes in bounded UTF-8 JSON/base64 frames. The guardian never interpolates user input into a launcher command. The selected
+terminal shell still interprets profile commands and terminal input normally. The broker uses the existing
 pinned node-pty default ConPTY path, never useConptyDll and never node-pty.kill().
 
 Natural root exit forwards its real exit code and output tail, then the guardian
