@@ -201,3 +201,18 @@ test('unconfirmed close leaves the real TerminalStore session running until actu
   assert.equal(store.snapshot(session.id).session.status, 'exited');
   assert.equal(exits, 1);
 });
+
+test('startup transport failure keeps an unconfirmed error serializable while confirmation stays pending', async t => {
+  const f = fixture(t, () => false);
+  const keepAlive = setInterval(() => {}, 100);
+  t.after(() => clearInterval(keepAlive));
+  const pending = f.spawn('must-not-start', [], {});
+  f.child.stdin.emit('error', Error('Synthetic startup transport failure'));
+  let rejection;
+  await assert.rejects(pending, error => { rejection = error; return assertUnconfirmed(error); });
+  assert.notEqual(rejection.startupError, rejection, 'Cleanup error must not reference itself');
+  assert.doesNotThrow(() => JSON.stringify(rejection));
+  await assertStillPending(rejection.cleanupCompleted);
+  f.child.emit('close');
+  await rejection.cleanupCompleted;
+});

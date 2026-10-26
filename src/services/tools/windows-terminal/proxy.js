@@ -245,7 +245,7 @@ export function createWindowsPty({
       return await started;
     } catch (startupError) {
       try { await stop(); } catch (error) {
-        error.startupError = startupError;
+        if (error !== startupError) error.startupError = startupError;
         throw error;
       }
       throw startupError;
