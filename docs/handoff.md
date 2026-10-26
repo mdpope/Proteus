@@ -1,3 +1,28 @@
+## October 26 — Windows ownership integration under validation
+
+Windows source prototype d213502 passes nine real-process cases and its complete source suite
+(1,177 passes/five skips). Root reviewed its pre-command anonymous noninheritable Job Object,
+bounded pipe protocol and native-handle fallback. Integration remains on a separate source branch;
+main and installed Windows .29 are unchanged. A source merge is not package acceptance.
+
+Root adds whole-create reservations (including async imports), capacity/disposal accounting and
+TerminalStore-owned update blockers. Startup termination failures keep an unconfirmed blocker until
+actual guardian closure; ready-session close failure keeps the running session and cannot resend
+termination. A later actual exit permits metadata cleanup. The real supervisor regression waits
+through startup and attached-child state, then allows graceful handoff after confirmed close.
+
+Windows packaging compiles a fresh production helper before the snapshot, verifies its build
+receipt, includes its bytes in runtime hashes and its C# source/build recipes in build inputs,
+and retains compiler/helper hashes outside the package. Generated helpers stay untracked and
+native source stays outside Mac/Linux runtime packages. Focused integration checks pass 43 cases,
+including real local POSIX PTY input/output, update handoff, history/tmux and packaging failures.
+The Windows chat is formatting/hardening its owned modules and adding bounded unconfirmed-close
+coverage; merge/retest that returned source before any new package/signature.
+
+Preserve frozen signed 57c, all original failures and receipt indexes. Real Windows installer,
+update and rollback acceptance still require the pending human disposable-account authorization
+and interactive/elevated setup. No production restart, account action or publication occurred.
+
 ## October 26 — Windows suite and signature accepted; PTY lifecycle fix in progress
 
 The corrected Windows source-only run at ee6ff3e passes the complete suite: 1,173 passes,

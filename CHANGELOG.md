@@ -1,3 +1,9 @@
+## Unreleased — Windows terminal ownership
+
+- Own Windows terminal descendants in a kill-on-close Job Object established before user commands run. Preserve output, input, resize, history and real natural exit codes; avoid the vendor's delayed numeric-PID cleanup.
+- Include terminal startup and unconfirmed process cleanup in the update idle barrier. Failed cleanup retains its blocker until actual exit is confirmed.
+- Compile the Windows terminal guardian only on the build host, freeze its bytes in runtime provenance, and retain source/build/compiler identities. Installed apps never compile or download this helper.
+
 ## Unreleased — native question navigation
 
 - Collapse the iOS question queue when selecting a question and scroll to that question's card, keeping later answer controls clear of the composer and keyboard.

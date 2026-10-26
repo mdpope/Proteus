@@ -20,3 +20,6 @@ xcuserdata/
 
 # Isolated local validation fixtures and receipts
 /.runtime-tests/
+
+# Generated on the Windows build host and frozen into package provenance.
+/desktop/terminal/windows-terminal-guardian.exe

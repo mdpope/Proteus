@@ -5,15 +5,22 @@ import {build,Platform,Arch} from 'electron-builder';
 import {c as createTar} from 'tar';
 import {prepareExtensions} from './prepare-extensions.mjs';
 import {createDesktopSnapshot,verifyDesktopMetadata,fileDigest,desktopRuntimeRoots,desktopRuntimeFiles} from './desktop-build.mjs';
+import {prepareWindowsTerminal} from './prepare-windows-terminal.mjs';
 
 if(process.platform!=='win32'||process.arch!=='x64')throw new Error('Build this Windows x64 release on Windows x64.');
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 await import('./build-terminal.mjs');
+const {buildWindowsTerminalGuardian}=await import('./build-windows-terminal-guardian.mjs');
+// Compile before freezing: the helper bytes are runtime, while its source and
+// build recipe are provenance inputs. No compiler runs on the installed host.
+const terminalBuild=prepareWindowsTerminal(root,{build:buildWindowsTerminalGuardian});
 const metadata=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
-const snapshot=createDesktopSnapshot(root,['package.json','package-lock.json','scripts/package-windows.mjs','scripts/windows-installer.nsh','scripts/desktop-build.mjs','scripts/build-terminal.mjs','scripts/prepare-extensions.mjs']);
+const snapshot=createDesktopSnapshot(root,['package.json','package-lock.json','scripts/package-windows.mjs','scripts/windows-installer.nsh','scripts/desktop-build.mjs','scripts/build-terminal.mjs','scripts/prepare-extensions.mjs','scripts/build-windows-terminal-guardian.mjs','scripts/prepare-windows-terminal.mjs','native/windows-terminal/guardian.cs']);
 const {runtimeFiles,buildInputs,sourceFingerprint}=snapshot,buildRevision='windows.'+sourceFingerprint.slice(0,12);
 const provenance={schemaVersion:1,version:metadata.version,buildRevision,sourceFingerprint,platform:'win32',arch:'x64',runtimeFiles,buildInputs};
 const out=path.resolve(process.env.PROTEUS_PACKAGE_OUTPUT||path.join(root,'dist','windows'));
+fs.mkdirSync(out,{recursive:true});
+fs.writeFileSync(path.join(out,'windows-terminal-build.json'),JSON.stringify(terminalBuild,null,2)+'\n');
 // This first release is intentionally unsigned; do not discover or use another
 // application's signing identity from the build machine.
 process.env.CSC_IDENTITY_AUTO_DISCOVERY='false';

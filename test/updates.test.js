@@ -9,6 +9,7 @@ import {spawn} from 'node:child_process';
 import net from 'node:net';
 import {Engine} from '../src/engine.js';
 import {Updates} from '../src/services/updates/updates.js';
+import {TerminalStore} from '../src/services/tools/terminals.js';
 const {tree,atomic,readJob,writeJob,spaceBudget,packagePaths}=createRequire(import.meta.url)('../desktop/updates/update-package.cjs');
 const {supervise}=createRequire(import.meta.url)('../desktop/updates/update-helper.cjs');
 test('helper readiness releases IPC before handoff while the independent helper stays alive',async t=>{
@@ -35,6 +36,21 @@ function fixture(t){
 }
 async function prepare(f){return (await f.controller.handle({action:'prepare',candidate:f.candidate,sourceFingerprint:'b'.repeat(64)},f.run.id)).job;}
 async function handoff(f,job){return f.controller.handle({action:'handoff',id:job.id,expectedRevision:job.revision,checkpoint:'Completed synthetic checks. Verify the restored app and remaining work.'},f.run.id);}
+
+test('update handoff waits for terminal startup, then the attached child, before graceful quit',async t=>{
+ const f=fixture(t);let supply,exit;
+ const terminals=new TerminalStore(f.home,{workspaceFiles:{roots:()=>({roots:[{id:'test',path:f.home,available:true}]}),resolve:()=>({root:{id:'test'},resolved:f.home,relative:''})},spawnPty:()=>new Promise(resolve=>{supply=resolve;})});
+ t.after(()=>terminals.dispose());
+ f.controller.blockers=()=>terminals.updateBlockers();
+ const job=await prepare(f);await handoff(f,job);
+ const opening=terminals.create();
+ await f.controller.advance();assert.equal(f.calls.length,0);assert.match(f.controller.status().job.blocker,/still opening/);
+ supply({ownsProcessTree:true,onData:()=>({dispose(){}}),onExit(fn){exit=fn;return {dispose(){}};},close:async()=>exit({exitCode:0})});
+ const session=await opening;
+ await f.controller.advance();assert.equal(f.calls.length,0);assert.match(f.controller.status().job.blocker,/still attached/);
+ await terminals.close(session.id);
+ await f.controller.advance();assert.ok(f.calls.includes('quit'));
+});
 
 test('completed updater card clears an old idle blocker while preserving real failure evidence',async t=>{
  const f=fixture(t);await prepare(f);writeJob(f.controller.file,{phase:'waiting-for-idle',blocker:'A model turn is active.'});assert.match(f.controller.status().job.blocker,/active/);

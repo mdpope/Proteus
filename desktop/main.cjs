@@ -375,7 +375,7 @@ else {
     }
     service.updateUIHealth=async()=>{for(const ctx of windows.contexts.values()){if(ctx.window.isDestroyed()||ctx.window.webContents.isLoading()||!await ctx.window.webContents.executeJavaScript("!!(document.querySelector('#topbar-home')&&document.querySelector('#main')&&window.desktop)"))return false;}return windows.contexts.size>0;};
     service.windowCount=()=>[...windows.contexts.values()].filter(ctx=>!ctx.window.isDestroyed()&&!ctx.window.webContents.isLoading()).length;
-    service.updates=new Updates(service,{packaged:app.isPackaged&&!desktopPreview,installation,freshHome,browserHome:app.getPath('userData'),quit:()=>app.quit(),blockers:()=>[...terminals.sessions.values()].filter(session=>session.child&&session.status==='running'&&session.persistence!=='tmux').map(()=> 'A local terminal process is still attached. Finish or detach it before updating.').concat([...browser.tabs.values()].some(tab=>tab.agentActions||tab.downloads?.size)?['A browser operation or download is active.']:[])});
+    service.updates=new Updates(service,{packaged:app.isPackaged&&!desktopPreview,installation,freshHome,browserHome:app.getPath('userData'),quit:()=>app.quit(),blockers:()=>terminals.updateBlockers().concat([...browser.tabs.values()].some(tab=>tab.agentActions||tab.downloads?.size)?['A browser operation or download is active.']:[])});
     service.onUpdateResumed=runId=>{const ctx=service.windowForChat(runId);if(ctx)windows.run(ctx.id,()=>{showWindow();ctx.window.webContents.send('proteus:notification-open',{runId});});};
     const mac = process.platform === 'darwin';
     const icon = nativeImage.createFromPath(path.join(__dirname, mac ? 'trayTemplate.png' : 'icon.png')).resize({ width: mac ? 18 : 24, height: mac ? 18 : 24 });

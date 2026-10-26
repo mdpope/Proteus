@@ -42,7 +42,7 @@ export function importGhosttyProfile({configFiles=[path.join(os.homedir(),'.conf
  return {profile:validateProfile(profile),unsupported:[...unsupported].sort(),source:sources,renderer:'Ghostty VT (WebAssembly)'};
 }
 export class TerminalStore extends EventEmitter {
- constructor(home,{workspaceFiles,spawnPty,ghosttyOptions,killGroup,tmux}={}){super();if(!workspaceFiles)throw new Error('Configured workspace files are required.');this.file=path.join(home,'terminal-profiles.json');this.historyFile=path.join(home,'terminal-history.json');this.workspaceFiles=workspaceFiles;this.spawnPty=spawnPty;this.ghosttyOptions=ghosttyOptions;this.sessions=new Map();this.pendingSpawns=new Set();this.history=new Map();this.agentAccess=new TerminalAgentAccess(this);this.historyTimer=null;this.closing=false;this.tmux=tmux||new ProteusTmux(home);this.killGroup=killGroup||((pid,signal)=>{try{process.kill(-pid,signal);}catch{}});this.loadHistory();}
+ constructor(home,{workspaceFiles,spawnPty,ghosttyOptions,killGroup,tmux}={}){super();if(!workspaceFiles)throw new Error('Configured workspace files are required.');this.file=path.join(home,'terminal-profiles.json');this.historyFile=path.join(home,'terminal-history.json');this.workspaceFiles=workspaceFiles;this.spawnPty=spawnPty;this.ghosttyOptions=ghosttyOptions;this.sessions=new Map();this.pendingSpawns=new Set();this.pendingCreates=new Set();this.unconfirmedStarts=new Set();this.history=new Map();this.agentAccess=new TerminalAgentAccess(this);this.historyTimer=null;this.closing=false;this.tmux=tmux||new ProteusTmux(home);this.killGroup=killGroup||((pid,signal)=>{try{process.kill(-pid,signal);}catch{}});this.loadHistory();}
  loadHistory(){const saved=readJSON(this.historyFile,{schemaVersion:1,items:[]});if(saved.schemaVersion!==1||!Array.isArray(saved.items))return;for(const item of saved.items.slice(-32)){if(typeof item?.id!=='string'||typeof item?.profileId!=='string'||typeof item?.data!=='string')continue;this.history.set(item.id,{...item,agentShared:false,agentAccessRevision:0,data:Buffer.from(item.data).subarray(-MAX_BUFFER).toString('utf8'),status:item.status==='running'?(item.persistence==='tmux'?'detached':'exited'):item.status});}}
  saveHistory(){if(this.historyTimer){clearTimeout(this.historyTimer);this.historyTimer=null;}const items=[...this.history.values()].slice(-32);atomicJSON(this.historyFile,{schemaVersion:1,items});}
  remember(record){const {agentShared,agentAccessRevision,...saved}=this.info(record);const item={...saved,data:record.data,seq:record.seq,truncated:record.truncated};this.history.delete(record.id);this.history.set(record.id,item);while(this.history.size>32)this.history.delete(this.history.keys().next().value);if(!this.historyTimer){this.historyTimer=setTimeout(()=>this.saveHistory(),250);this.historyTimer.unref?.();}}
@@ -51,8 +51,29 @@ export class TerminalStore extends EventEmitter {
  info(record){return {id:record.id,agentShared:this.agentAccess.shared(record.id),agentAccessRevision:record.agentAccessRevision||0,profileId:record.profile.id,name:record.profile.name,rootId:record.rootId,directory:record.directory,cwd:record.cwd,status:record.status,exitCode:record.exitCode,signal:record.signal,createdAt:record.createdAt,cols:record.cols,rows:record.rows,persistence:record.persistence||'process',tmuxSessionId:record.tmuxSessionId||null,tmuxSessionTag:record.tmuxSessionTag||null,appearance:{fontFamily:record.profile.fontFamily,fontSize:record.profile.fontSize,scrollback:record.profile.scrollback,theme:record.profile.theme},renderer:'Ghostty VT (WebAssembly)'};}
  list(){return [...this.history.values()].filter(item=>!this.sessions.has(item.id)).map(({data,seq,truncated,...item})=>item).concat([...this.sessions.values()].map(record=>this.info(record)));}
  find(id){const session=this.sessions.get(id);if(!session)throw new Error('This terminal process is no longer available. Open a new shell to resume.');return session;}
- async create({profileId='default',rootId,directory='',cols=80,rows=24,resumeShell=false,persistence='process',tmuxSessionId=null,tmuxSessionTag=null}={}){
-  if(this.closing)throw new Error('Terminals are shutting down.');if([...this.sessions.values()].filter(s=>s.status==='running').length+this.pendingSpawns.size>=MAX_SESSIONS)throw new Error('Close an active terminal before opening another.');dimensions(cols,rows);if(typeof resumeShell!=='boolean')throw new Error('Invalid terminal restart mode.');
+ // Reserve before the first import/await so updates, disposal and capacity limits
+ // observe the whole creation operation, not only an established PTY child.
+ async create(options={}){
+  if(this.closing)throw new Error('Terminals are shutting down.');
+  const active=[...this.sessions.values()].filter(s=>s.status==='running').length;
+  const starting=[...this.pendingCreates].filter(item=>!item.started).length;
+  if(active+starting>=MAX_SESSIONS)throw new Error('Close an active terminal before opening another.');
+  let finish;
+  const reservation={started:false,finished:new Promise(resolve=>{finish=resolve;})};
+  this.pendingCreates.add(reservation);
+  try{return await this.#createSession(options,reservation);}
+  catch(error){
+   // A failed startup can still own processes. Only actual guardian exit clears
+   // this blocker; a timeout or failed termination request cannot clear it.
+   if(error.cleanupUnconfirmed){
+    this.unconfirmedStarts.add(error);
+    error.cleanupCompleted?.then(()=>this.unconfirmedStarts.delete(error),()=>{});
+   }
+   throw error;
+  }finally{this.pendingCreates.delete(reservation);finish();}
+ }
+ async #createSession({profileId='default',rootId,directory='',cols=80,rows=24,resumeShell=false,persistence='process',tmuxSessionId=null,tmuxSessionTag=null}={},reservation){
+  dimensions(cols,rows);if(typeof resumeShell!=='boolean')throw new Error('Invalid terminal restart mode.');
   if(!['process','tmux'].includes(persistence))throw new Error('Choose process or tmux persistence.');if(persistence==='process'&&tmuxSessionId)throw new Error('A tmux session needs tmux persistence.');
   const profile=this.profiles().profiles.find(p=>p.id===profileId);if(!profile)throw new Error('Choose an existing terminal profile.');
   let selected;
@@ -62,7 +83,7 @@ export class TerminalStore extends EventEmitter {
   // Startup commands are explicit profile actions, never replayed during restoration.
   const args=terminalShellArgs(profile.shell,profile.command,resumeShell);
   const spawn=this.spawnPty||(process.platform==='win32'&&persistence==='process'?(await import('./windows-terminal/proxy.js')).spawnWindowsPty:(await import('node-pty')).spawn);
-  if(this.closing)throw new Error('Terminals are shutting down.');if([...this.sessions.values()].filter(s=>s.status==='running').length+this.pendingSpawns.size>=MAX_SESSIONS)throw new Error('Close an active terminal before opening another.');
+  if(this.closing)throw new Error('Terminals are shutting down.');
   if(persistence==='tmux'){
     const current=this.tmux.sessions();if(!current.available)throw new Error('tmux is not available on this computer.');
     if(tmuxSessionId){this.tmux.validate(tmuxSessionId);const selectedSession=current.managedSessions.find(item=>item.id===tmuxSessionId&&item.tag===tmuxSessionTag);if(!selectedSession)throw new Error('This Proteus tmux session identity changed or is unavailable.');if(selectedSession.attached||[...this.sessions.values()].some(item=>item.status==='running'&&item.tmuxSessionId===tmuxSessionId))throw new Error('This tmux session already has an attached viewer.');}
@@ -72,18 +93,72 @@ export class TerminalStore extends EventEmitter {
   const spawned=spawn(persistence==='tmux'?this.tmux.binary:profile.shell,persistence==='tmux'?this.tmux.attachArgs(tmuxSessionId,tmuxSessionTag):args,{name:'xterm-256color',cols,rows,cwd:selected.resolved,env,encoding:'utf8'});
   // Async guardian startup is included in disposal and capacity accounting.
   let child=spawned;if(spawned?.then){const pending=Promise.resolve(spawned).then(async value=>{if(value.ownsProcessTree&&this.closing){await value.close();throw Error('Terminals are shutting down.');}return value;});this.pendingSpawns.add(pending);try{child=await pending;}finally{this.pendingSpawns.delete(pending);}}
-  const record={id:randomUUID(),agentAccessRevision:0,profile,rootId:selected.root.id,directory:selected.relative,cwd:selected.resolved,cols,rows,child,status:'running',persistence,tmuxSessionId,tmuxSessionTag,createdAt:new Date().toISOString(),data:'',seq:0,truncated:false};this.sessions.set(record.id,record);this.remember(record);
+  const record={id:randomUUID(),agentAccessRevision:0,profile,rootId:selected.root.id,directory:selected.relative,cwd:selected.resolved,cols,rows,child,status:'running',persistence,tmuxSessionId,tmuxSessionTag,createdAt:new Date().toISOString(),data:'',seq:0,truncated:false};this.sessions.set(record.id,record);reservation.started=true;this.remember(record);
   record.dataSub=child.onData(data=>{if(typeof data!=='string')return;for(let i=0;i<data.length;i+=32768){const chunk=data.slice(i,i+32768);record.data+=chunk;if(Buffer.byteLength(record.data)>MAX_BUFFER){record.data=Buffer.from(record.data).subarray(-MAX_BUFFER).toString('utf8');record.truncated=true;}record.seq++;this.emit('event',{type:'data',id:record.id,seq:record.seq,data:chunk});}this.remember(record);});
-  record.exitSub=child.onExit(({exitCode,signal})=>{if(record.exitHandled)return;record.exitHandled=true;record.status='exited';this.agentAccess.revoke(record.id,{closed:true});record.exitCode=exitCode;record.signal=signal;this.remember(record);this.emit('event',{type:'exit',id:record.id,session:this.info(record)});record.resolveExit?.();if(!child.ownsProcessTree){if(process.platform==='win32'){try{child.kill();}catch{}}this.killGroup(child.pid,'SIGTERM');record.killTimer=setTimeout(()=>this.killGroup(child.pid,'SIGKILL'),1000);record.killTimer.unref?.();}});
+  record.exitSub=child.onExit(({exitCode,signal})=>{if(record.exitHandled)return;record.exitHandled=true;record.status='exited';if(record.closeFailed)record.closePromise=null;this.agentAccess.revoke(record.id,{closed:true});record.exitCode=exitCode;record.signal=signal;this.remember(record);this.emit('event',{type:'exit',id:record.id,session:this.info(record)});record.resolveExit?.();if(!child.ownsProcessTree){if(process.platform==='win32'){try{child.kill();}catch{}}this.killGroup(child.pid,'SIGTERM');record.killTimer=setTimeout(()=>this.killGroup(child.pid,'SIGKILL'),1000);record.killTimer.unref?.();}});
   for(const item of [...this.sessions.values()])if(this.sessions.size>32&&item.status!=='running'&&item!==record){clearTimeout(item.killTimer);item.dataSub?.dispose();item.exitSub?.dispose();this.sessions.delete(item.id);}
   return this.info(record);
  }
  snapshot(id){const s=this.sessions.get(id);if(s)return {session:this.info(s),data:s.data,seq:s.seq,truncated:s.truncated,live:s.status==='running'};const archived=this.history.get(id);if(archived){const {data,seq,truncated,...session}=archived;const result={session,data,seq,truncated,live:false};if(archived.persistence==='tmux'&&archived.status!=='ended'&&archived.tmuxSessionId&&archived.tmuxSessionTag){try{result.detachedOutput=this.tmux.capture(archived.tmuxSessionId,archived.tmuxSessionTag);}catch(error){result.detachedOutputError=error.message;}}return result;}throw new Error('This terminal is no longer available.');}
  write(id,data){const s=this.find(id);if(s.status!=='running')throw new Error('This terminal has exited.');if(typeof data!=='string'||Buffer.byteLength(data)>MAX_INPUT)throw new Error('Terminal input is limited to 64 KiB per message.');s.child.write(data);return {ok:true};}
  resize(id,cols,rows){const s=this.find(id);dimensions(cols,rows);if(s.status==='running'){s.child.resize(cols,rows);s.cols=cols;s.rows=rows;}return {ok:true};}
- async close(id){this.agentAccess.revoke(id,{closed:true});const s=this.sessions.get(id);if(!s){if(this.history.delete(id)){this.saveHistory();return {ok:true};}throw new Error('This terminal is no longer available.');}if(s.closePromise)return s.closePromise;s.closePromise=(async()=>{if(s.status==='running'&&s.child.ownsProcessTree){await s.child.close();}else if(s.status==='running'){const exit=new Promise(resolve=>s.resolveExit=resolve);this.killGroup(s.child.pid,'SIGTERM');try{s.child.kill(process.platform==='win32'?undefined:'SIGTERM');}catch{}let timer;await Promise.race([exit,new Promise(resolve=>timer=setTimeout(resolve,1000))]);clearTimeout(timer);this.killGroup(s.child.pid,'SIGKILL');try{if(s.status==='running')s.child.kill(process.platform==='win32'?undefined:'SIGKILL');}catch{}if(s.status==='running'){s.status='closed';this.emit('event',{type:'exit',id:s.id,session:this.info(s)});}}if(s.killTimer)this.killGroup(s.child.pid,'SIGKILL');clearTimeout(s.killTimer);s.dataSub?.dispose();s.exitSub?.dispose();this.sessions.delete(id);s.status=s.persistence==='tmux'?'detached':'closed';this.remember(s);return {ok:true,detached:s.persistence==='tmux',tmuxSessionId:s.tmuxSessionId||null};})();return s.closePromise;}
+ async close(id){
+  this.agentAccess.revoke(id,{closed:true});
+  const session=this.sessions.get(id);
+  if(!session){
+   if(this.history.delete(id)){this.saveHistory();return {ok:true};}
+   throw new Error('This terminal is no longer available.');
+  }
+  if(session.closePromise)return session.closePromise;
+  session.closePromise=(async()=>{
+   if(session.status==='running'&&session.child.ownsProcessTree){
+    // A rejected ownership close leaves this session active and blocks updates.
+    // Never substitute legacy PID cleanup for an unconfirmed Job Object exit.
+    await session.child.close();
+   }else if(session.status==='running'){
+    const exit=new Promise(resolve=>{session.resolveExit=resolve;});
+    this.killGroup(session.child.pid,'SIGTERM');
+    try{session.child.kill(process.platform==='win32'?undefined:'SIGTERM');}catch{}
+    let timer;
+    await Promise.race([exit,new Promise(resolve=>{timer=setTimeout(resolve,1000);})]);
+    clearTimeout(timer);
+    this.killGroup(session.child.pid,'SIGKILL');
+    try{if(session.status==='running')session.child.kill(process.platform==='win32'?undefined:'SIGKILL');}catch{}
+    if(session.status==='running'){
+     session.status='closed';this.emit('event',{type:'exit',id:session.id,session:this.info(session)});
+    }
+   }
+   if(session.killTimer)this.killGroup(session.child.pid,'SIGKILL');
+   clearTimeout(session.killTimer);
+   session.dataSub?.dispose();session.exitSub?.dispose();
+   this.sessions.delete(id);session.status=session.persistence==='tmux'?'detached':'closed';
+   this.remember(session);
+   return {ok:true,detached:session.persistence==='tmux',tmuxSessionId:session.tmuxSessionId||null};
+  })();
+  try{return await session.closePromise;}
+  catch(error){
+   session.closeFailed=true;
+   // Later actual exit permits metadata cleanup without sending another kill.
+   if(session.status!=='running')session.closePromise=null;
+   throw error;
+  }
+ }
  async end(id){const item=this.sessions.get(id)||this.history.get(id);if(!item)throw new Error('This terminal is no longer available.');if(item.persistence!=='tmux'||!item.tmuxSessionId)throw new Error('Only a Proteus tmux session can be ended this way.');this.tmux.end(item.tmuxSessionId,item.tmuxSessionTag);if(this.sessions.has(id))await this.close(id);const archived=this.history.get(id);if(archived){archived.status='ended';this.saveHistory();}return {ok:true,ended:true,tmuxSessionId:item.tmuxSessionId};}
  forget(id){if(this.sessions.has(id))throw new Error('Close the terminal viewer before removing its local history.');if(!this.history.delete(id))throw new Error('This terminal history is no longer available.');this.saveHistory();return {ok:true};}
  async handle(value={}){switch(value.action){case 'state':return {profiles:this.profiles(),roots:this.workspaceFiles.roots().roots,sessions:this.list(),tmux:await (this.tmux.statusAsync?.()??this.tmux.status())};case 'tmux-sessions':return this.tmux.statusAsync?.()??this.tmux.status();case 'save-profiles':return this.saveProfiles(value.profiles,value.expectedRevision);case 'import-ghostty':return importGhosttyProfile(this.ghosttyOptions);case 'create':return this.create(value);case 'agent-access':return this.agentAccess.set(value.id,value.enabled,value.expectedRevision);case 'snapshot':return this.snapshot(value.id);case 'write':return this.write(value.id,value.data);case 'resize':return this.resize(value.id,value.cols,value.rows);case 'close':return this.close(value.id);case 'end':return this.end(value.id);case 'forget':return this.forget(value.id);default:throw new Error('Unknown terminal action.');}}
- async dispose(){this.closing=true;if(this.pendingSpawns.size)await Promise.allSettled([...this.pendingSpawns]);await Promise.all([...this.sessions.keys()].map(id=>this.close(id)));if(this.historyTimer)this.saveHistory();this.removeAllListeners();}
+ updateBlockers(){
+  const blockers=[];
+  if(this.pendingCreates.size)blockers.push('A local terminal is still opening. Wait for startup before updating.');
+  if(this.unconfirmedStarts.size)blockers.push('A terminal startup failed and process cleanup is not confirmed.');
+  for(const session of this.sessions.values())if(session.child&&session.status==='running'&&session.persistence!=='tmux')blockers.push('A local terminal process is still attached. Finish or detach it before updating.');
+  return blockers;
+ }
+ async dispose(){
+  this.closing=true;
+  // Preserve synchronous POSIX close ordering when no startup is pending.
+  if(this.pendingCreates.size)await Promise.all([...this.pendingCreates].map(item=>item.finished));
+  if(this.unconfirmedStarts.size)throw new Error('Terminal process cleanup is not confirmed.');
+  await Promise.all([...this.sessions.keys()].map(id=>this.close(id)));
+  if(this.historyTimer)this.saveHistory();this.removeAllListeners();
+ }
 }
