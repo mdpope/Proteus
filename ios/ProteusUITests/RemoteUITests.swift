@@ -2490,7 +2490,7 @@ final class NativeReleaseParityUITests: XCTestCase {
 
 final class TabletComposerPreviewUITests: XCTestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
-    @MainActor func testQuestionQueueChoicesAndCustomAnswerUseOwnerSession() { verifyQuestionQueueAnswers(phone: false) }
+    @MainActor func testTabletQuestionQueueChoicesAndCustomAnswerUseOwnerSession() { verifyQuestionQueueAnswers(phone: false) }
     @MainActor func testTabletCompactComposerRemainsVisibleAndReturnSubmits() {
         let app = openComposerDesignPreview(phone: false)
         let editor = app.textViews["reply-text"]

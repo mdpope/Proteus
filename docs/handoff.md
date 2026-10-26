@@ -1,3 +1,35 @@
+## October 26 — Windows signed; native inventory correction accepted
+
+The existing authorized Windows chat built clean 57cde39 into frozen windows.086cb65808ff.
+All 1,324 source files, 377 runtime files and seven build inputs match; supported packaged
+UI/PTY/history/Team/search/shutdown/notice/provider/follow gates pass. Follow at 400 ms keeps
+1,321/453 ms gaps. Preserve original fixture failures and their external-only corrections.
+No production prepare, installation, restart or publication occurred.
+
+Private signing with existing publisher 92b49fc0e69763fbd06099e2 passed protected-owner/public-key
+checks. Both installed .29 and candidate verifiers accept the immutable envelope:
+0.2.30-windows.086cb65808ff-win32-x64, 1,792 bytes, SHA-256
+5019ee3ca8d6525828d54b866819a3222d62acfef90b57b8319904f9136edb67.
+The private key stays in its original protected Windows location; do not copy it or alter trust.
+
+The original full Windows run excluded a real native-inventory failure; it is not full acceptance.
+Two Swift test classes used the same method name. The tablet method now has its unique Tablet
+prefix, and the shard regression explicitly requires it in the iPad suite. Focused inventory,
+full Node (1,177 passes/one skip), static checks and the actual renamed tablet choice/custom-answer
+UI flow pass. This is test-only: frozen runtime packages and installed mobile apps are unchanged.
+The first restricted Node run could not create temporary fixtures; retain that sandbox failure
+separately from the passing normal-access run. Rerun the full Windows suite with this corrected
+test source; do not rebuild or silently replace its frozen package/source companion.
+
+Windows still needs real NSIS/update/rollback tests in a genuine disposable account/guest. Existing
+production-registration guards remain; Sandbox/Hyper-V are disabled and no authorized disposable
+account is established. Human approval for a temporary standard test account/profile and cleanup
+is pending. The account plan/script is preparation only. Current shell is unelevated and actual
+UI testing needs interactive sign-in. Windows pre-install-failure injection remains unsupported.
+Unclassified AttachConsole/document-preview/notice stderr is being attributed in isolated fresh
+diagnostics; do not waive it or change frozen runtime based on speculation. Original observer
+setup/cleanup failures are retained. Private task/operation IDs remain in the rollout checkpoint.
+
 ## October 26 — both physical clients installed; recovery rotation complete
 
 After the user unlocked the iPad, its existing capture was rebound to the final 77bd05b

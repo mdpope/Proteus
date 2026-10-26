@@ -1,3 +1,16 @@
+## October 26 — Windows release signed; test-discovery correction
+
+The frozen Windows .30 package passes supported runtime/UI gates and is signed by the unchanged
+trusted publisher; installed .29 and candidate verifiers accept its exact envelope. Real installer,
+update and rollback acceptance still require an authorized disposable Windows environment.
+Unclassified stderr is under fresh phase attribution; no production update is claimed.
+
+The full Windows report exposed a duplicate Swift test-method name that had been excluded from
+its reported pass count. Rename the tablet question-answer case with the Tablet prefix and require
+it in the tablet inventory. Focused discovery, full Node/static checks and the actual renamed
+tablet UI flow pass. Runtime files and physical installs are unchanged; corrected Windows suite
+acceptance must be recorded separately from the original failure.
+
 ## October 26 — physical native installation complete
 
 Both phone and tablet now run signed 0.2.30/2610.26.1. All 291/259 protected files matched

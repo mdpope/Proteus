@@ -33,7 +33,7 @@ test('phone shards and the tablet suite cover every actual Swift test exactly on
   assert.ok(shards.every(shard => shard.length > 0));
   assert.deepEqual(selected.sort(), inventory);
   assert.equal(new Set(selected).size, inventory.length);
-  for (const name of ['testIPadMainAndTeamBrowserTabsRestoreSeparately', 'testIPadMainTabStripKeepsExactScrollPositionAcrossTabAndSidebarSelection', 'testIPadNotificationTapOpensHostContentTabsAndColdSchedule', 'testIPadSidebarHeadingAndNewTabsReveal', 'testTabletUsesOnlyTopChatActions']) assert.ok(tablet.includes(name), 'Known tablet workflows require an iPad: ' + name);
+  for (const name of ['testIPadMainAndTeamBrowserTabsRestoreSeparately', 'testIPadMainTabStripKeepsExactScrollPositionAcrossTabAndSidebarSelection', 'testIPadNotificationTapOpensHostContentTabsAndColdSchedule', 'testIPadSidebarHeadingAndNewTabsReveal', 'testTabletUsesOnlyTopChatActions', 'testTabletQuestionQueueChoicesAndCustomAnswerUseOwnerSession']) assert.ok(tablet.includes(name), 'Known tablet workflows require an iPad: ' + name);
   assert.ok(tablet.every(name => /^test(?:IPad|Tablet)/.test(name)));
   assert.ok(shards.flat().every(name => !tablet.includes(name)));
   assert.ok(Math.max(...shards.map(shard => shard.length)) - Math.min(...shards.map(shard => shard.length)) <= 1);

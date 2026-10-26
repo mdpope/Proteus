@@ -378,6 +378,10 @@ identifiers are rejected by this helper. Build/test output, DerivedData, fixture
 result bundles are saved in a fresh temporary directory printed by the command. Simulator signing
 is left enabled for Keychain pairing support.
 
+Keep UI test method names globally unique across test classes. Tablet-only workflows use the
+`testTablet` or `testIPad` prefix so shard discovery assigns them to iPad hardware. The shared
+question-answer helper has separate phone and uniquely prefixed tablet test entry points.
+
 `test` requires ports 4328 and 4329 to be free, waits for simulator boot readiness, starts `test/mobile-host.mjs` with synthetic
 workspace/data and a local Node relay, then stops that fixture on completion or interruption.
 It never starts Docker or reads the real application home. Run devices sequentially because the
