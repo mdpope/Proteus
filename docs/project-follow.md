@@ -28,6 +28,9 @@ released on success or failure, and newer scope/selection still wins.
 Passive saving, descriptor reconciliation, layout and lease renewal never
 take presentation control. Identical normalized owner state renews its lease without a new
 revision or broadcast. A new actual change on another desktop still follows immediately.
+Lease replies with no applicable presentation, including ignored local actors, do not
+enter the presentation queue or start descriptor synchronization. Applicable remote
+navigation still passes through the existing descriptor barrier.
 
 A pending owner presentation takes precedence over passive local reconciliation for the same
 presentation identity. Newer human changes or a different tab, child, page, URL or history entry
@@ -74,6 +77,9 @@ keep their existing tab behavior; follow is retried after connection recovery.
 
 ## Verification
 
+- `test/project-follow-lease.test.js`: ignored local and empty remote renewals neither
+  hydrate descriptors nor delay same-entry human scrolling; changed remote navigation
+  still synchronizes before application.
 - `test/project-follow.test.js` and `test/project-follow-races.test.js`: lease scope, actor identity, malformed state,
   out-of-order updates, delayed leave, asynchronous application, disposal, reconnect,
   inactive scope, re-entry, pending-event read/sync ordering, no-op input, native navigation

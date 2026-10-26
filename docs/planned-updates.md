@@ -1,3 +1,13 @@
+## October 25 — Lease renewal scroll stall correction
+
+Linux's isolated diagnostic commit 5ffb80af04db669e1912f7f898fe5b938023587e identified an ignored
+local/empty lease reply entering the presentation queue. Its unnecessary descriptor wait held
+scroll publication for 3,682 ms while main/renderer event-loop lag stayed at 0–2 ms. The reviewed
+guard is now included here with the exact three regression tests, independently hash-verified
+from the destination. All 35 local follow tests pass; combined suite passes 1,174 with one skip and static checks pass. With unchanged 400 ms response delay and
+2,200 ms bound, Linux's routed-source fixture passed at 1,348 ms / 434 ms in the two directions.
+That is diagnostic acceptance; freeze/rebuild and verify the final package before installation.
+
 ## October 25 — Interactive questions and live returned-task feedback
 
 38. Preserve native structured questions instead of rendering choices only as assistant prose.

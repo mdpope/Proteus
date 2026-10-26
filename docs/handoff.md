@@ -1,3 +1,23 @@
+## October 25 — Latest Linux and HC coordination
+
+HC preflight is complete in the approved unassigned Codex bootstrap. Its signed installed
+490fd629b659+src.615fe38d6371 runtime/home/recovery receipts are intact, no update job is active,
+and it awaits the immutable Mac artifact, exact hashes and new source instructions. Its old
+checkout lacks 366b2af; no checkout was changed. Do not repeat preflight effects or tool approval.
+
+Linux's narrow follow correction from isolated commit 5ffb80af04db669e1912f7f898fe5b938023587e is
+reviewed/integrated with its exact regression source (SHA256
+3b00662c0c63961d00b48e351c9a3817d6ecfa65fa9baff06124cc8bb39fbbde, 3,287 bytes).
+The unnecessary ignored/empty lease descriptor wait caused the prior stall. All 35 local follow
+tests pass; Linux's diagnostic 400 ms gate passes at 1,348 ms / 434 ms without changing its bound.
+Final combined regression passes 1,174 with one skip, and static checks pass. Its frozen
+366b2af package stays unchanged. Current Mac console is locked (fresh IORegistry flag); Apple
+signing/account checks await operator unlock, while unsigned fixture/package work may continue.
+The installed old Linux verifier supports offline import-release with a signed legacy Linux
+manifest: omit distribution and use /api/v1/app/releases/<id>/artifact. Do not rotate/bypass the
+publisher; actual signed-envelope acceptance is still required. A non-secret protected key/item
+reference for existing publisher 92b49fc0e69763fbd06099e2 was requested; never request key contents.
+
 ## October 25 — Structured questions / task-feedback steering supersede 366b2af
 
 Current implementation preserves Codex agent-message question metadata, provides desktop/web/iOS

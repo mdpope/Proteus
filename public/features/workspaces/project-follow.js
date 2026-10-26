@@ -42,7 +42,9 @@ export function createProjectFollower({ current, read, apply, request, sync, now
         if(before===intent&&value.state)await accept(value,scope);
         else if(!value.state&&!value.ignored){seed=true;dirty=true;}
         if(disposed||token!==generation||key(current())!==key(scope))return;
-        lease=setInterval(()=>{if(disposed)return;if(key(current())!==key(active)){schedule(true);return;}const before=intent;void call(scope,'join').then(value=>{if(!disposed&&token===generation&&key(active)===key(scope)&&before===intent){pendingEvent=value;pendingIntent=before;schedule();}}).catch(error=>{if(!disposed&&token===generation)onError(error);});},15000);
+        // An ignored local or empty lease reply has no presentation to hydrate.
+        // Keep renewal off the scroll path; real remote states retain their barrier.
+        lease=setInterval(()=>{if(disposed)return;if(key(current())!==key(active)){schedule(true);return;}const before=intent;void call(scope,'join').then(value=>{if(!disposed&&token===generation&&key(active)===key(scope)&&before===intent&&value.state){pendingEvent=value;pendingIntent=before;schedule();}}).catch(error=>{if(!disposed&&token===generation)onError(error);});},15000);
       }
       if(disposed||!active||key(current())!==key(active))return;
       const readScope=active,readGeneration=generation;let readIntent=intent;

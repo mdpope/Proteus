@@ -1,5 +1,6 @@
 ## 0.2.30 — cross-platform release candidate
 
+- Keep ignored local and empty lease renewals out of descriptor synchronization so they do not stall scroll publication; retain the barrier for applicable remote navigation.
 - Preserve Codex structured questions; add durable unanswered-question queues, choices and custom answers on desktop, web and iOS. Keep native blocking/nonblocking request resolution separate from tool approvals and avoid replaying uncertain answers.
 - Steer returned task feedback into a running coordinator when its provider supports it; otherwise queue it, retaining the same delivery identity and human-stop boundaries.
 - Share capability-based model-control visibility across desktop remote chats and the website; hide fixed context and reset incompatible options only when explicitly changing models.
