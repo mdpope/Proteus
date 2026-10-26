@@ -1,0 +1,24 @@
+// Shared desktop renderer, synthetic owner only. No live chats or model calls.
+import fs from 'node:fs';import path from 'node:path';import http from 'node:http';
+import assert from 'node:assert/strict';import {chromium} from 'playwright';
+const root=process.env.PROTEUS_TEST_APP_ROOT||path.resolve(import.meta.dirname,'..');
+const html='<!doctype html><link rel="stylesheet" href="/public/style.css"><style>body{height:100vh}#host{height:75vh}.conversation-shell{height:100%;display:flex;flex-direction:column}.conversation{overflow:auto;flex:1}.message{padding:24px}</style><textarea id="draft">Retained composer draft</textarea><div id="host"></div><script>window.ProteusMarkdown={mount:(node,text)=>node.textContent=text}</script>';
+const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http://fixture').pathname,file=path.resolve(root,'.'+pathname);if(pathname.startsWith('/public/')&&file.startsWith(root+path.sep)&&fs.existsSync(file)){res.setHeader('Content-Type',file.endsWith('.css')?'text/css':'text/javascript');res.end(fs.readFileSync(file));}else{res.setHeader('Content-Type','text/html');res.end(html);}});
+await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));let browser;
+try{
+ browser=await chromium.launch({headless:true});const page=await browser.newPage({viewport:{width:1100,height:900}});const errors=[];page.on('pageerror',error=>errors.push(error.message));await page.goto('http://127.0.0.1:'+server.address().port);
+ await page.evaluate(async()=>{
+  const {conversation}=await import('/public/features/chats/conversation.js');const events=Array.from({length:300},(_,index)=>({role:'assistant',text:'Synthetic message '+index}));
+  const run={id:'synthetic-question-chat',status:'running',schedule:{provider:'codex'},userQuestions:[{id:'choice',text:'Choose a destination',choices:['Project A','Project B'],status:'pending',eventIndex:0},{id:'custom',text:'Any instructions?',choices:[],status:'pending',eventIndex:1}],eventStart:200,eventCount:300,events:events.slice(200),earlier:200};
+  window.fixture={run,calls:[],notices:[],fail:false};
+  const render=()=>conversation(document.querySelector('#host'),run,{time:String,notify:text=>fixture.notices.push(text),copy:()=>{},loadEarlier:async()=>{run.eventStart=Math.max(0,run.eventStart-100);run.events=events.slice(run.eventStart);render();},answerQuestion:async(question,answer,messageId)=>{fixture.calls.push({id:question.id,answer,messageId});if(fixture.fail)throw Error('Synthetic uncertain transport');question.status='answered';render();}});
+  fixture.render=render;render();
+ });
+ await page.locator('.user-question-queue summary').click();await page.getByRole('button',{name:'Choose a destination',exact:true}).click();await page.locator('[data-question-id="choice"] textarea').waitFor();assert.equal(await page.evaluate(()=>fixture.run.eventStart),0);
+ await page.getByRole('button',{name:'Project B',exact:true}).click();await page.waitForFunction(()=>fixture.calls.length===1);assert.equal(await page.locator('#draft').inputValue(),'Retained composer draft');assert.equal(await page.locator('.user-question-queue summary').textContent(),'Questions to answer (1)');
+ const input=page.locator('[data-question-id="custom"] textarea');await input.fill('A custom answer');await page.evaluate(()=>fixture.render());assert.equal(await input.inputValue(),'A custom answer');
+ await page.evaluate(()=>fixture.fail=true);await page.locator('[data-question-id="custom"]').getByRole('button',{name:'Send answer',exact:true}).click();await page.waitForFunction(()=>fixture.notices.length===1);
+ await page.evaluate(()=>{fixture.run.liveMessages={stream:'Synthetic stream'};fixture.render();});await page.locator('[data-question-id="custom"]').getByRole('button',{name:'Send answer',exact:true}).click();await page.waitForFunction(()=>fixture.calls.length===3);const attempts=await page.evaluate(()=>fixture.calls.slice(1));assert.equal(attempts[0].messageId,attempts[1].messageId);
+ await page.setViewportSize({width:640,height:900});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);assert.deepEqual(errors,[]);
+ console.log(JSON.stringify({passed:true,pagedQuestionJump:true,choicesAndCustomAnswer:true,composerAndAnswerDraftsPreserved:true,uncertainOperationPreserved:true,narrowLayout:true}));
+}finally{await browser?.close();await new Promise(resolve=>server.close(resolve));}

@@ -19,6 +19,19 @@ class RPC extends EventEmitter {
 }
 const fixture=()=>{const rpc=new RPC();const context={providerContext:()=>({instructionText:'selected context',customAgents:[],disabledLegacyMcp:[],disabledSkills:[],mcpServers:{}})};const provider=new CodexProvider({clientFactory:()=>rpc},{context});const run={id:'run',schedule:{provider:'codex',model:'runtime-model',reasoningEffort:'future',serviceTier:'priority',workspace:{cwd:'/synthetic/work',additionalDirectories:['/synthetic/other']},context:{entries:[],includeDefaults:false}},events:[]};const controller=new AbortController();const args={run,prompt:'Hello',signal:controller.signal,emit:(role,text,data)=>run.events.push({role,text,data}),stream:(id,text)=>{run.liveMessages??={};run.liveMessages[id]=(run.liveMessages[id]||'')+text;},update:()=>{},ask:async()=>'approve'};return {rpc,provider,run,controller,args};};
 const until=async fn=>{for(let i=0;i<100;i++){if(fn())return;await new Promise(r=>setTimeout(r,5));}throw new Error('Timed out');};
+test('Codex preserves native asynchronous question metadata and clears resolved input requests without answering them',async()=>{
+ const f=fixture();let requestSignal;
+ f.args.ask=async(request,signal)=>{requestSignal=signal;return new Promise((resolve,reject)=>signal.addEventListener('abort',()=>reject(Error('Resolved')),{once:true}));};
+ try{
+  const task=f.provider.run(f.args);await until(()=>f.provider.active?.turnId);
+  const questions=[{title:'Choose a destination',options:['A','B']},{title:'Custom answer'}];
+  f.rpc.notice('item/completed',{item:{id:'question-item',type:'agentMessage',text:'Choose a destination',questions,phase:'commentary'}});
+  assert.deepEqual(f.run.events.at(-1).data.userQuestions,questions);assert.equal(f.run.events.at(-1).data.providerItemId,'question-item');
+  f.rpc.emit('request',{id:42,method:'item/tool/requestUserInput',params:{threadId:'thread',turnId:'turn-1',isBlocking:true,autoResolutionMs:1200,questions:[{id:'native-q',question:'Native input',options:[{label:'A'}]}]}});
+  await until(()=>requestSignal);assert.equal(requestSignal.aborted,false);f.rpc.notice('serverRequest/resolved',{requestId:42});await until(()=>requestSignal.aborted);assert.equal(f.rpc.responses.some(response=>response.id===42),false);
+  f.rpc.notice('turn/completed',{turn:{status:'completed'}});await task;
+ }finally{await f.provider.close();}
+});
 test('Codex status reads the authenticated account without forcing token rotation and still reports a genuine sign-out',async()=>{
  const rpc=new RPC(),original=rpc.request.bind(rpc);let signedIn=true;
  rpc.request=async(method,params)=>method==='account/read'?(rpc.calls.push({method,params}),{account:signedIn&&!params.refreshToken?{type:'chatgpt'}:null}):original(method,params);

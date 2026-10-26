@@ -2499,3 +2499,12 @@ payload to Git history. Existing transfer branches remain evidence, not applicat
 merge. Do not publish the draft or replace an ambiguously uploaded asset: reconcile it first.
 No application data, profiles, credentials or private acceptance receipts belong in the assets.
 
+# Structured questions retain protocol identity and provider lifetime
+
+Only structured provider input enters the answer queue; ordinary prose is never classified as
+a request or an approval. Native asynchronous message questions remain durable until answered;
+the protocol advertises no expiry. Native server requests retain their blocking flag and actual
+resolution notification. Answers and returned task feedback preserve stable owner-side delivery
+identities; uncertain delivery cannot trigger an automatic resend/fallback. Native tool approvals
+remain a separate human decision even when a remote coordinator reports awaiting input.
+

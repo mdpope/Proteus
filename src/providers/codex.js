@@ -183,11 +183,13 @@ export class CodexProvider {
    assertPendingApprovalCurrent();assertAppToolActive();
    return ['approve','approve-auto'].includes(answer)?await tool.handler(args):{resultType:'failure',textResultForLlm:'User declined.'};
   };
+  const userInputRequests=new Map();
   const capture=providerActivity({provider:'codex',emit,update});
   const onNotification=({method,params:p={}})=>{
    if(p.threadId&&p.threadId!==run.providerSessionId)return;
    if(!p.turnId||!active.turnId||p.turnId===active.turnId)capture.receive({method,params:p});
    if(method==='turn/completed')capture.finish(p.turn?.status==='completed'?'completed':'interrupted');
+   if(method==='serverRequest/resolved'){const request=userInputRequests.get(p.requestId);if(request){request.resolved=true;request.controller.abort({code:'provider-resolved'});}}
    if(method==='turn/started')active.turnId=p.turn.id;
    if(method==='item/agentMessage/delta')stream(p.itemId,p.delta);
    if(method==='thread/tokenUsage/updated'){run.usage={observed:true,inputTokens:p.tokenUsage.total.inputTokens,outputTokens:p.tokenUsage.total.outputTokens};run.contextUsage=p.tokenUsage;update();}
@@ -196,7 +198,7 @@ export class CodexProvider {
    if(method==='error'&&!p.willRetry)rejectTurn(Object.assign(new Error(p.error?.message||'Codex turn failed.'),{code:p.error?.codexErrorInfo||p.error?.code}));
    if(method==='item/started'||method==='item/completed'){
     const item=p.item;items.set(item.id,item);
-    if(item.type==='agentMessage'&&method==='item/completed'){if(run.liveMessages)delete run.liveMessages[item.id];emit('assistant',item.text,{phase:item.phase});}
+    if(item.type==='agentMessage'&&method==='item/completed'){if(run.liveMessages)delete run.liveMessages[item.id];emit('assistant',item.text,{phase:item.phase,providerItemId:item.id,...(Array.isArray(item.questions)&&item.questions.length?{userQuestions:item.questions}:{})});}
     else if(item.type==='contextCompaction'&&method==='item/completed')emit('system','Codex compacted conversation context.');
     else if(['commandExecution','fileChange','mcpToolCall','dynamicToolCall','webSearch','imageView'].includes(item.type)){
       const name=item.type==='commandExecution'?'shell':item.type==='fileChange'?'apply_patch':item.tool||item.type;
@@ -222,7 +224,11 @@ export class CodexProvider {
      for(const change of changes){const answer=await ask({type:'permission',question:p.reason||'Allow this file change?',details:{kind:'write',toolCallId:p.itemId,fileName:change.path,intention:'Edit '+change.path}});assertPendingApprovalCurrent();if(!['approve','approve-auto'].includes(answer))allowed=false;}
      client.respond(msg.id,{decision:allowed?'accept':'decline'});
    }else if(msg.method==='item/tool/requestUserInput'){
-     const answers={};for(const q of p.questions||[])answers[q.id]={answers:[await ask({type:'question',question:q.question,choices:q.options?.map(x=>x.label),optionDetails:q.options?.map(x=>({label:x.label,description:x.description||''})),providerQuestionId:q.id})]};client.respond(msg.id,{answers});
+     const request={controller:new AbortController(),resolved:false};userInputRequests.set(msg.id,request);
+     const abortRequest=()=>request.controller.abort(signal.reason);signal.addEventListener('abort',abortRequest,{once:true});
+     try{const answers={};for(const q of p.questions||[])answers[q.id]={answers:[await ask({type:'question',question:q.question,choices:q.options?.map(x=>x.label),optionDetails:q.options?.map(x=>({label:x.label,description:x.description||''})),providerQuestionId:q.id,isBlocking:p.isBlocking!==false,autoResolutionMs:p.autoResolutionMs??null},request.controller.signal)]};if(!request.resolved)client.respond(msg.id,{answers});}
+     catch(error){if(!request.resolved)throw error;}
+     finally{signal.removeEventListener('abort',abortRequest);userInputRequests.delete(msg.id);}
    }else if(msg.method==='mcpServer/elicitation/request'){
      const meta=p._meta,name=p.message?.match(/tool "([^"\n]+)"\?$/)?.[1],tool=browser.find(tool=>tool.name===name);
      if(p.serverName==='proteus_app'&&p.mode==='form'&&meta?.codex_approval_kind==='mcp_tool_call'&&tool&&meta.tool_params&&typeof meta.tool_params==='object'&&!Array.isArray(meta.tool_params)&&Object.keys(p.requestedSchema?.properties||{}).length===0){
@@ -292,7 +298,7 @@ export class CodexProvider {
     }
    }
    const result=await client.request('turn/start',{threadId:run.providerSessionId,...(sandbox.managedProfile?{}:{sandboxPolicy:sandbox.policy}),approvalPolicy:'untrusted',approvalsReviewer:'user',runtimeWorkspaceRoots:sandbox.runtimeWorkspaceRoots,input,effort:run.schedule.reasoningEffort||model.controls.defaultReasoningEffort||null,serviceTier:run.schedule.serviceTier||null});active.turnId=result.turn.id;if(signal.aborted||active.permissionRevoked){clearTimeout(abortTimer);abortTimer=null;abort();}await completed;
-  }finally{capture.finish();if(appBridge)await appBridge.close();clearTimeout(abortTimer);if(active.turnId&&!settled)await client.close();signal.removeEventListener('abort',abort);client.off('notification',onNotification);client.off('request',onRequest);client.off('closed',closed);for(const tool of calls.values())if(tool.status==='running')tool.status='interrupted';if(this.active===active)this.active=null;if(imageDir)fs.rmSync(imageDir,{recursive:true,force:true});for(const directory of active.steeringImageDirs||[])fs.rmSync(directory,{recursive:true,force:true});update();}
+  }finally{for(const request of userInputRequests.values()){request.resolved=true;request.controller.abort({code:'provider-resolved'});}userInputRequests.clear();capture.finish();if(appBridge)await appBridge.close();clearTimeout(abortTimer);if(active.turnId&&!settled)await client.close();signal.removeEventListener('abort',abort);client.off('notification',onNotification);client.off('request',onRequest);client.off('closed',closed);for(const tool of calls.values())if(tool.status==='running')tool.status='interrupted';if(this.active===active)this.active=null;if(imageDir)fs.rmSync(imageDir,{recursive:true,force:true});for(const directory of active.steeringImageDirs||[])fs.rmSync(directory,{recursive:true,force:true});update();}
  }
  recheckPermissions(){this.active?.recheckPermissions?.();}
  async close(){await this.client?.close();this.client=null;this.starting=null;}

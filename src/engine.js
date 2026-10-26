@@ -1,3 +1,4 @@
+import {captureUserQuestions,answerUserQuestion,recoverUserQuestions,askBackgroundQuestion} from './services/chats/user-questions.js';
 import {AllowanceContinuation,allowanceFailure} from './services/chats/allowance-continuation.js';
 import {displayText} from './shared/tool-activity.js';
 import { RunHistoryCache } from './services/chats/run-history-cache.js';
@@ -42,13 +43,14 @@ export class Engine extends EventEmitter {
       const root=home&&path.isAbsolute(home)&&canonicalPath(home,run.schedule.workspace.cwd);
       return root?[{path:root,access:'read-write',source:'provider',label:(provider==='claude'?'Claude':'Copilot')+' working folder (automatic)'}]:[];
     };
-    this.queuedSteers = new Map(); this.pending = new Map(); this.questionQueues = new Map(); this.running = new Map(); this.backgroundRuns = new Map(); this.executions = new Set(); this.stopping = false;
+    this.queuedSteers = new Map(); this.pending = new Map(); this.questionQueues = new Map(); this.backgroundQuestions=new Map(); this.running = new Map(); this.backgroundRuns = new Map(); this.executions = new Set(); this.stopping = false;
     fs.mkdirSync(this.runsDir, { recursive: true, mode: 0o700 });
     this.journal = readJSON(path.join(home, 'scheduler.json'), { lastPoll: clock().toISOString(), slots: {} });
     this.runs = new Map();this.recovery=new ChatRecovery(this);
     for (const file of jsonFiles(this.runsDir)) {
       try {
         const run = readJSON(file);
+        recoverUserQuestions(run);
         if(run.capacityRetry){delete run.capacityRetry;run.events.push({role:'system',text:'Automatic capacity retry stopped when Proteus closed. Continue this chat or enable retry again when ready.',at:clock().toISOString()});atomicJSON(file,run);}
         if (this.tombstones[run.id]) { fs.rmSync(file, { force: true }); continue; }
         if (run.trigger === 'chat' && (!run.titleRevision || !run.titleKind)) {
@@ -76,6 +78,7 @@ export class Engine extends EventEmitter {
   event(run, role, text, data) {
     if(role!=='user'&&run.status==='running')providerProgress(run,this.now(),{observable:true});
     if(role==='user')this.allowance?.onInput(run,data?.delivery?.id);
+    captureUserQuestions(run,data,run.events.length,this.now());
     run.events.push({ role, text, ...(role === 'assistant' ? { agentName: agentName(run) } : {}), data:{...data,...(run.turns?.at(-1)&&['running','awaiting_input'].includes(run.status)?{turnId:run.turns.at(-1).id}:{})}, at: this.now() }); this.persist(run);
   }
   stream(run, messageId, text) {
@@ -372,6 +375,7 @@ export class Engine extends EventEmitter {
     if (isPermission) this.recheckPermissions();
     return run;
   }
+  answerQuestion(id,questionId,answer,messageId,action){return answerUserQuestion(this,id,questionId,answer,messageId,action);}
   async readQuestionAttachments(id,requestId){
     const run=this.getRun(id),slot=this.running.get(id),dispatch=run.questionAttachmentReplies?.[requestId];
     if(!slot||slot.controller.signal.aborted||!dispatch||dispatch.providerId!==run.schedule.provider)throw Error('These question attachments are not available to this active chat/provider.');
@@ -382,6 +386,7 @@ export class Engine extends EventEmitter {
     return files;
   }
   ask(run, request, signal) {
+    if(request.type==='question'&&request.isBlocking===false)return askBackgroundQuestion(this,run,request,signal,randomUUID());
     const previous = this.questionQueues.get(run.id) || Promise.resolve();
     const response = previous.catch(() => {}).then(() => this.askNext(run, request, signal));
     this.questionQueues.set(run.id, response);
@@ -398,14 +403,15 @@ export class Engine extends EventEmitter {
       if (decision.allowed) { this.recordAutomaticPermission(run, request.details, decision); return Promise.resolve('approve-auto'); }
       request = { ...request, ...(this.permissions.preserveInheritedDefaults ? {permissionContextId:this.permissions.describe(run.schedule).id} : {}), permissionChoices: this.permissions.choices(run.schedule, request.details || {}), permissionReason: decision.reason };
     }
+    const requestId=randomUUID();
     return new Promise((resolve, reject) => {
-      const onAbort = () => { const event=run.events.find(event=>event.data?.question?.id===run.pending?.id);if(event)event.data.question.status='cancelled';this.pending.delete(run.id); reject(new Error('Cancelled')); };
+      const onAbort = () => {if(run.pending?.id===requestId){const event=run.events.find(event=>event.data?.question?.id===requestId);if(event)event.data.question.status=signal.reason?.code==='provider-resolved'?'resolved':'cancelled';this.pending.delete(run.id);run.pending=null;if(run.status==='awaiting_input'){run.status='running';resumeTurn(run,this.now());}this.persist(run);}reject(new Error('Question request ended'));};
       signal.addEventListener('abort', onAbort, { once: true });
       this.pending.set(run.id, {
         resolve: value => { signal.removeEventListener('abort', onAbort); resolve(value); },
         reject: error => { signal.removeEventListener('abort', onAbort); reject(error); }
       });
-      run.pending = { ...request, id: randomUUID() }; run.status = 'awaiting_input';pauseTurn(run,this.now(),run.pending.id);
+      run.pending = { ...request, id: requestId }; run.status = 'awaiting_input';pauseTurn(run,this.now(),run.pending.id);
       if(request.type!=='permission'){const question={id:run.pending.id,text:String(request.question||''),choices:request.choices||[],options:request.optionDetails||request.choices||[],providerQuestionId:request.providerQuestionId||null,status:'pending',askedAt:this.now()};this.event(run,'system','**Question**\n\n'+question.text+(question.choices.length?'\n\n'+question.options.map(choice=>'• '+(typeof choice==='string'?choice:(choice.label||choice.title||'')+(choice.description?' — '+choice.description:''))).join('\n'):''),{question});}
       else this.persist(run);
     });
@@ -463,7 +469,7 @@ export class Engine extends EventEmitter {
         emit: (role, text, data) => this.event(run, role, text, data),
         stream: (id, text) => this.stream(run, id, text),
         update: () => {providerProgress(run,this.now());this.persist(run);},
-        ask: request => this.ask(run, request, controller.signal)
+        ask: (request,requestSignal) => this.ask(run, request, requestSignal||controller.signal)
       });
       if(controller.progressTimeout)throw Error(controller.progressTimeout);
       run.status = controller.signal.aborted ? (this.stopping ? 'interrupted' : 'cancelled') : 'completed';

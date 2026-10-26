@@ -36,6 +36,10 @@ const app = await startServer({ home, port: 0, timers: false, providers: { copil
   mcpLogin: async () => { setTimeout(()=>{authConnected=true;},1200); return {server:'synthetic-integration',status:'sign-in-required'}; },
   status: async () => ({available:true,models:[copilotModel({id:"synthetic-mobile",name:"Synthetic mobile",supportedReasoningEfforts:["none","high"],capabilities:{supports:{reasoningEffort:true},limits:{max_output_tokens:128000}},billing:{tokenPrices:{maxPromptTokens:272000,longContext:{maxPromptTokens:872000}}}})]}),
   async run(args) {
+    if(args.prompt==='Structured questions rehearsal'){
+      args.emit('assistant','Two structured questions for this rehearsal.',{providerItemId:'native-questions',userQuestions:[{title:'Choose a rehearsal destination',options:['Project A','Project B']},{title:'Any rehearsal instructions?'}]});return;
+    }
+    if(args.prompt.startsWith('Answer to your question:')){args.emit('assistant','Synthetic answer accepted. No external provider.');return;}
     if (args.prompt === 'Model options rehearsal') {
       args.emit('assistant', 'Local model-options rehearsal — no AI provider or tool was called.');
       await args.ask({type:'permission',question:'Allow synthetic model-options checkpoint?',details:{kind:'shell',fullCommandText:'synthetic model-options checkpoint; no process is executed'}});

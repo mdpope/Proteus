@@ -1,3 +1,43 @@
+## October 25 — Structured questions / task-feedback steering supersede 366b2af
+
+Current implementation preserves Codex agent-message question metadata, provides desktop/web/iOS
+unanswered queues and choices/custom answers, and routes native blocking/nonblocking input through
+its actual request lifetime. Native server resolution clears the matching request without an
+invented answer or timeout. Answers are owner/session-bound; ambiguous/restarted delivery is
+retained for inspection. Explicit native async questions notify through the existing privacy-safe
+review channel. Returned task feedback now steers capable running origins, with a guarded queue
+fallback and stable delivery IDs; it never revives a deliberate stop or approves destination tools.
+
+Question owner/protocol fixtures, paged browser queue/choice/custom/draft/uncertainty UI and actual
+encrypted website answers pass. iOS builds, the native question-model test and the actual iPhone choice/custom UI flow pass.
+The queue uses separately accessible toggle/row controls and retains its expansion explicitly. Initial website fixture exposed duplicate cards
+on live refresh (fixed) and initial phone fixture resumed its generic feedback prompt (corrected
+synthetic answer provider). Preserve those failed receipts; do not call them acceptance passes.
+Final combined full suite passed 1,171 with one skip; static checks, shared remote controls,
+paged browser questions and encrypted web answers pass. Freeze new artifacts before deployment.
+Private receipts: questions-feedback-full-final.log, questions-feedback-check-final.log,
+questions-feedback-browser-accepted.log, user-questions-web-ui-final.log and
+user-questions-ios-tests-explicit-controls.log under .runtime-tests; native xcresult is retained
+in /tmp/proteus-apple-xTjzaH. This is synthetic acceptance, not live-provider/device installation.
+
+Both local main and private origin/main were clean/synced at 366b2af before these new changes;
+there are zero open PRs and Actions remain disabled. The clean signed Mac candidate under
+dist/release-0.2.30-final is the older 366b2af build and MUST NOT be described as including questions.
+Linux built that exact source with core package/update preservation acceptance, but full acceptance
+failed its unchanged 2,200 ms delayed-follow bound (2,586 ms observed) and its old static Linux
+manifest verifier requires a compatible bootstrap. Existing old Codex chat is investigating those
+two issues with retained receipts; no installation/publication. HC's explicitly approved unassigned
+Codex bootstrap exists but still awaits its human tool approval. Do not approve it through another
+agent. Windows remains offline. Physical iOS paid push remains blocked by Xcode No Accounts and
+missing APNs profile/server credentials; preserve existing certificates and device apps.
+
+Website 20261026T042545Z remains the last verified live release. The later 045533Z correction
+stopped at a recorded failed capture before any helper/activation; preserve that immutable failure
+and do not retry under another job ID to evade the fixed wrapper's guard/quota. New question
+website assets passed an isolated encrypted owner fixture, but are not live. Private capture and
+distribution investigation is retained outside Git. Normal rollout authorization remains active;
+finish gates, source sync, exact artifact/signature checks and supervised owner updates.
+
 ## October 25 — 0.2.30 rollout authorized; final acceptance in progress
 
 New remote/web context follow-up supersedes the `070549d` package: both clients share advertised

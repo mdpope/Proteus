@@ -13,6 +13,18 @@ private actor PreviewRequestCounter {
 }
 
 final class RemoteTests: XCTestCase {
+    func testStructuredQuestionQueuePreservesIdentityChoicesAndOrdinaryPendingRequest() {
+        let run: JSON = .object(["eventStart": .number(100), "userQuestions": .array([.object(["id": .string("async-1"), "text": .string("Choose a destination"), "choices": .array([.string("A"), .string("B")]), "status": .string("pending"), "eventIndex": .number(3)])]), "pending": .object(["type": .string("question"), "id": .string("native-2"), "question": .string("Your answer?")]), "events": .array([.object(["data": .object(["question": .object(["id": .string("native-2")])])])])])
+        let questions = NativeUserQuestion.read(run)
+        XCTAssertEqual(questions.count, 2)
+        XCTAssertEqual(questions[0].id, "async-1")
+        XCTAssertEqual(questions[0].choices, ["A", "B"])
+        XCTAssertEqual(questions[0].eventIndex, 3)
+        XCTAssertFalse(questions[0].blocking)
+        XCTAssertEqual(questions[1].eventIndex, 100)
+        XCTAssertTrue(questions[1].blocking)
+        XCTAssertTrue(NativeUserQuestion.read(.object(["events": .array([.object(["text": .string("Is this a question?")])])])).isEmpty)
+    }
     @MainActor func testNativeBrowserAutoplayUpdatesExistingFrames() async throws {
         let original = UserDefaults.standard.object(forKey: "proteus.block-video-autoplay")
         let shared = SharedAppStore()

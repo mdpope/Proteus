@@ -1,3 +1,4 @@
+import {chatQuestions,mountQuestionCard,mountQuestionQueue} from './user-questions.js';
 import {chatHistoryWindowStart,firstAssistantKeys} from './chat-history.js';
 import {mountSvgPreviews} from './svg-preview.js';
 import {bindRuntimeTimer,refreshRuntimeTimers,disposeRuntimeTimers,formatDuration,turnDuration,runtimeTotal,toolDuration,groupDuration} from './runtime.js';
@@ -133,6 +134,15 @@ export function conversation(target, run, options) {
   bindRuntimeTimer(document.querySelector('[data-runtime-total]'),()=>durationText(runtimeTotal(run.turns,now(),view.verified))+((run.timingPartial||run.turns?.some(t=>t.incomplete))?' · partial':''),!!run.turns?.some(t=>t.activeSince));
   view.updating = true;
   if(view.shell.parentElement!==target)target.replaceChildren(view.shell);
+  let questionQueue=view.shell.querySelector('.user-question-queue');if(!questionQueue){questionQueue=document.createElement('div');questionQueue.className='user-question-queue';view.shell.prepend(questionQueue);}
+  const questions=chatQuestions(run),questionOptions={answer:options.answerQuestion,notify:options.notify};
+  mountQuestionQueue(questionQueue,run,{...questionOptions,jump:async question=>{
+    view.following=false;
+    while(question.eventIndex<view.eventStart&&view.more){const before=view.eventStart;await view.loadEarlier(true);if(view.eventStart===before)break;}
+    const node=[...view.messages.querySelectorAll('[data-question-id]')].find(node=>node.dataset.questionId===question.id);
+    if(node){node.scrollIntoView({block:'center'});node.querySelector('textarea')?.focus({preventScroll:true});view.top=view.scroll.scrollTop;}
+    else options.notify?.('Load earlier messages to view this question.');
+  }});
   const entries = activityEntries([...run.events.slice(view.renderStart-transportStart).map((event, index) => ({ key: `event-${view.renderStart+index}`, ...event })), ...Object.entries(run.liveMessages || {}).map(([id, text]) => ({ key: `stream-${id}`, role: 'assistant', text, streaming: true,data:{turnId:run.turns?.at(-1)?.id} }))].filter(entry => entry.role !== 'assistant' || entry.text?.trim()),run);
   const nodes = new Map([...view.messages.children].map(node => [node.dataset.key, node]));
   const firstAssistants=firstAssistantKeys(entries,run.events),turnsById=new Map((run.turns||[]).map(turn=>[turn.id,turn]));
@@ -236,6 +246,9 @@ export function conversation(target, run, options) {
     if(entry.data?.permission&&!entry.data.permission.automatic){let details=node.querySelector('.permission-original');if(!details){details=document.createElement('details');details.className='permission-original';node.append(details);}details.replaceChildren();const summary=document.createElement('summary');summary.textContent=entry.data.permission.intention||'Original approval request';const pre=document.createElement('pre');pre.textContent=entry.data.permission.request||'Original request was not recorded by this version.';details.append(summary,pre);}
     const body=node.querySelector('.text');
     ProteusMarkdown.mount(body, entry.text, { ...options, resize: view.position });
+    const index=eventIndex(entry.key),eventQuestions=questions.filter(question=>question.eventIndex===index);
+    let questionCards=node.querySelector('.user-question-cards');
+    if(eventQuestions.length&&options.answerQuestion){if(!questionCards){questionCards=document.createElement('div');questionCards.className='user-question-cards';node.append(questionCards);}for(const question of eventQuestions){let card=[...questionCards.children].find(card=>card.dataset.questionId===question.id);if(!card){card=document.createElement('div');questionCards.append(card);}mountQuestionCard(card,question,{...questionOptions,key:run.id+':'+question.id});}}else questionCards?.remove();
     if(run.schedule.provider==='mtplx'&&entry.role==='assistant'&&!entry.streaming)mountSvgPreviews(body,{resize:view.position});
     mountChatRecovery(node,entry,run,{...options,resize:view.position});
     let files=node.querySelector('.message-attachments');

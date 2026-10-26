@@ -300,7 +300,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (url.pathname === '/api/chats/index' && req.method === 'GET') {
         const info=remote.info(),lastSyncAt=new Date().toISOString();
         const includeArchived=url.searchParams.get('includeArchived')==='1',projectCatalog=preview?.read();
-        const local=engine.visibleRuns(includeArchived).slice(0,1000).map(r=>({id:r.id,chatId:r.id,hostId:info.hostId,local:true,title:r.title,titleRevision:r.titleRevision,trigger:r.trigger,chatType:r.chatType,provider:r.schedule.provider,status:r.status,createdAt:r.createdAt,updatedAt:r.updatedAt,lastActivityAt:chatActivityAt(r),archivedAt:r.archivedAt||null,archived:!!r.archivedAt,attentionRequired:r.status==='awaiting_input'||(!r.archivedAt&&['failed','interrupted'].includes(r.status)&&!r.failureReviewedAt),failureEventAt:['failed','interrupted'].includes(r.status)?r.failureEventAt||r.updatedAt:null,failureReviewedAt:r.failureReviewedAt||null,...chatMembership(r),...(preview?preview.membership(r,projectCatalog):{}),scheduleName:r.trigger==='chat'?'':r.schedule.name,destinationName:info.label}));
+        const local=engine.visibleRuns(includeArchived).slice(0,1000).map(r=>({id:r.id,chatId:r.id,hostId:info.hostId,local:true,title:r.title,titleRevision:r.titleRevision,trigger:r.trigger,chatType:r.chatType,provider:r.schedule.provider,status:r.status,createdAt:r.createdAt,updatedAt:r.updatedAt,lastActivityAt:chatActivityAt(r),archivedAt:r.archivedAt||null,archived:!!r.archivedAt,unansweredQuestionCount:(r.userQuestions||[]).filter(q=>q.status==='pending').length,attentionRequired:(r.userQuestions||[]).some(q=>q.status==='pending')||r.status==='awaiting_input'||(!r.archivedAt&&['failed','interrupted'].includes(r.status)&&!r.failureReviewedAt),failureEventAt:['failed','interrupted'].includes(r.status)?r.failureEventAt||r.updatedAt:null,failureReviewedAt:r.failureReviewedAt||null,...chatMembership(r),...(preview?preview.membership(r,projectCatalog):{}),scheduleName:r.trigger==='chat'?'':r.schedule.name,destinationName:info.label}));
         const peer=service.peers?await service.peers.index():{items:[],hosts:[],partial:false};
         const items=[...local,...peer.items.filter(item=>includeArchived||!item.archivedAt)].sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt))||a.hostId.localeCompare(b.hostId)||a.chatId.localeCompare(b.chatId));
         return json(200,{items,hosts:[{id:info.hostId,name:info.label,online:true,lastSyncAt},...peer.hosts],partial:peer.partial});
@@ -522,9 +522,10 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         try{prepared=await remote.attachmentConsents.prepareSend({consentId:value.consentId,draftId:value.draftId,chatId:run.id,messageId:value.messageId,providerId:schedule.provider,deviceId:'local-desktop',attachmentIds:files});engine.startDeferredRun(run.id,{proofId:prepared.proofId,attachmentIds:files,messageId:value.messageId});return json(200,run);}
         catch(error){if(prepared)await remote.attachmentConsents.releaseProof(prepared.proofId).catch(()=>{});engine.discardDeferredRun(run.id);throw error;}
       }
-      const match = url.pathname.match(/^\/api\/runs\/([a-f0-9-]+)\/(reply|resume|cancel|send|edit-queued|remove-queued|steer-queued|recover)$/);
+      const match = url.pathname.match(/^\/api\/runs\/([a-f0-9-]+)\/(answer-question|reply|resume|cancel|send|edit-queued|remove-queued|steer-queued|recover)$/);
       if (match && req.method === 'POST') {
         const value = await body(req); const [, id, action] = match;
+        if (action === 'answer-question') return json(200,await engine.answerQuestion(id,value.questionId,value.answer,value.messageId,value.action));
         if (action === 'reply') return json(200, await replyWithAttachments(engine,id,value,'local-desktop'));
         if (action === 'send' && typeof value.prompt === 'string' && /^\/mcp\s+auth(?:\s|$)/i.test(value.prompt.trim())) {
           const run = engine.getRun(id); const provider = engine.providers[run.schedule.provider];

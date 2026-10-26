@@ -2340,7 +2340,7 @@ final class PhoneSidebarPreviewUITests: XCTestCase {
 }
 
 /// Existing signed preview identities and pairings; provider execution is the local fixture.
-@MainActor private func openComposerDesignPreview(phone: Bool) -> XCUIApplication {
+@MainActor private func openComposerDesignPreview(phone: Bool, questions: Bool = false) -> XCUIApplication {
     // Exercise the app built by this test invocation, with its current fixture
     // ports, instead of a separately installed and potentially stale preview.
     let app = nativeFixtureApplication()
@@ -2353,7 +2353,7 @@ final class PhoneSidebarPreviewUITests: XCTestCase {
         XCTAssertTrue(app.buttons["sidebar-Chats"].waitForExistence(timeout: 20)); app.buttons["sidebar-Chats"].tap()
     }
     let seeded = app.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", phone ? "iPhone line editor rehearsal" : "iPad line editor rehearsal", "Build Mac")).firstMatch
-    if seeded.waitForExistence(timeout: 3) {
+    if !questions && seeded.waitForExistence(timeout: 3) {
         seeded.tap(); XCTAssertTrue(app.scrollViews["chat-conversation-scroll"].waitForExistence(timeout: 20)); return app
     }
     let create = app.buttons["new-chat"]
@@ -2362,7 +2362,7 @@ final class PhoneSidebarPreviewUITests: XCTestCase {
     XCTAssertEqual(XCTWaiter.wait(for: [connected], timeout: 20), .completed); create.tap()
     let name = app.textFields["new-chat-name"]
     XCTAssertTrue(name.waitForExistence(timeout: 8)); name.tap(); name.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: (name.value as? String ?? "").count)); name.typeText(phone ? "iPhone composer controls rehearsal" : "iPad composer controls rehearsal")
-    let prompt = app.textFields["chat-prompt"]; prompt.tap(); prompt.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: (prompt.value as? String ?? "").count)); prompt.typeText("Synthetic composer design rehearsal. No external workflow.")
+    let prompt = app.textFields["chat-prompt"]; prompt.tap(); prompt.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: (prompt.value as? String ?? "").count)); prompt.typeText(questions ? "Structured questions rehearsal" : "Synthetic composer design rehearsal. No external workflow.")
     app.buttons["chat-provider"].tap(); app.buttons["GitHub Copilot"].tap()
     let picker = app.buttons["model-picker"]
     XCTAssertTrue(picker.waitForExistence(timeout: 10)); picker.tap(); app.buttons["Synthetic mobile · synthetic-mobile"].tap()
@@ -2375,6 +2375,26 @@ final class PhoneSidebarPreviewUITests: XCTestCase {
 
 final class PhoneComposerPreviewUITests: XCTestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
+    @MainActor func testQuestionQueueChoicesAndCustomAnswerUseOwnerSession() {
+        let app = openComposerDesignPreview(phone: true, questions: true)
+        let queue = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Questions to answer (2)")).firstMatch
+        XCTAssertTrue(queue.waitForExistence(timeout: 15)); queue.tap()
+        let question = app.buttons["Choose a rehearsal destination"]
+        XCTAssertTrue(question.waitForExistence(timeout: 5)); question.tap()
+        let choice = app.buttons["Project B"]
+        XCTAssertTrue(choice.waitForExistence(timeout: 5)); choice.tap()
+        let remaining = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Questions to answer (1)")).firstMatch
+        XCTAssertTrue(remaining.waitForExistence(timeout: 15))
+        let custom = app.buttons["Any rehearsal instructions?"]
+        if !custom.exists { remaining.tap() }
+        XCTAssertTrue(custom.waitForExistence(timeout: 5)); custom.tap()
+        let input = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "question-answer-")).firstMatch
+        XCTAssertTrue(input.waitForExistence(timeout: 5)); input.tap(); input.typeText("Keep the same session")
+        app.buttons["Send answer"].firstMatch.tap()
+        let answered = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: remaining)
+        XCTAssertEqual(XCTWaiter.wait(for: [answered], timeout: 15), .completed)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Keep the same session")).firstMatch.waitForExistence(timeout: 10))
+    }
     @MainActor func testOneLineComposerExpandsControlsAndPreservesDraft() {
         let app = openComposerDesignPreview(phone: true)
         let compact = app.buttons["composer-preview"]

@@ -19,6 +19,8 @@
 		5740FAB8AE1ED396820BEC60 /* ToolActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2C219FBBECD427ED9810FAF /* ToolActivityView.swift */; };
 		5AF04EA8A646DCCFDEEF17BA /* NativeShell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2627C7D5A4DE8F9F996B47F8 /* NativeShell.swift */; };
 		5F7A96C7CCAC62FF1B3C0FE2 /* ChatViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A814582040CD2B969E3FED0 /* ChatViews.swift */; };
+		D041375426F54E73AAE56901 /* NativeUserQuestion.swift in Sources */ = {isa = PBXBuildFile; fileRef = D041375426F54E73AAE56902 /* NativeUserQuestion.swift */; };
+		D041375426F54E73AAE56903 /* NativeUserQuestionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D041375426F54E73AAE56904 /* NativeUserQuestionsView.swift */; };
 		68FFA33EBE3DB02F0593900F /* RemoteCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B068C230D5ED165EE25D9DD /* RemoteCrypto.swift */; };
 		6BF7A7A42FCA9E2E7B40DD85 /* RemoteUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5F927DCF4BF815F06256F2A /* RemoteUITests.swift */; };
 		7022D275A902DE896A1918FC /* LifeStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61F0564BC9EBE73040AC8CEB /* LifeStore.swift */; };
@@ -83,6 +85,8 @@
 		92BF81FE2FB7FD30E6747EA6 /* LifeViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeViews.swift; sourceTree = "<group>"; };
 		99814D317E2043305330CB8E /* ScheduleViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleViews.swift; sourceTree = "<group>"; };
 		9A814582040CD2B969E3FED0 /* ChatViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViews.swift; sourceTree = "<group>"; };
+		D041375426F54E73AAE56902 /* NativeUserQuestion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeUserQuestion.swift; sourceTree = "<group>"; };
+		D041375426F54E73AAE56904 /* NativeUserQuestionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeUserQuestionsView.swift; sourceTree = "<group>"; };
 		A381A2CE3D0727C537781BBD /* ProteusTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = ProteusTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		ABF0057B2DB7BDE6C2A5BEA1 /* LifeForms.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeForms.swift; sourceTree = "<group>"; };
 		B5F927DCF4BF815F06256F2A /* RemoteUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteUITests.swift; sourceTree = "<group>"; };
@@ -204,15 +208,23 @@
 		2E34D0118F7DF305762E885E /* Chats */ = {
 			isa = PBXGroup;
 			children = (
+				D041375426F54E73AAE56905 /* Models */,
 				A4D69411FAE8BBF27AEC53B6 /* Views */,
 			);
 			path = Chats;
+			sourceTree = "<group>";
+		};
+		D041375426F54E73AAE56905 /* Models */ = {
+			isa = PBXGroup;
+			children = (D041375426F54E73AAE56902 /* NativeUserQuestion.swift */,);
+			path = Models;
 			sourceTree = "<group>";
 		};
 		A4D69411FAE8BBF27AEC53B6 /* Views */ = {
 			isa = PBXGroup;
 			children = (
 				9A814582040CD2B969E3FED0 /* ChatViews.swift */,
+				D041375426F54E73AAE56904 /* NativeUserQuestionsView.swift */,
 				F2C219FBBECD427ED9810FAF /* ToolActivityView.swift */,
 			);
 			path = Views;
@@ -522,6 +534,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				5F7A96C7CCAC62FF1B3C0FE2 /* ChatViews.swift in Sources */,
+				D041375426F54E73AAE56901 /* NativeUserQuestion.swift in Sources */,
+				D041375426F54E73AAE56903 /* NativeUserQuestionsView.swift in Sources */,
 				7A6C3D8E4B1F4906A2E35C70 /* NativeScrollProbe.swift in Sources */,
 				72DBBD6D208FC0DF6672ED87 /* ContextViews.swift in Sources */,
 				94928203EE4720AE61143A35 /* JSON.swift in Sources */,
@@ -639,7 +653,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 2610.22.2;
+				CURRENT_PROJECT_VERSION = 2610.25.1;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -658,7 +672,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 0.2.29;
+				MARKETING_VERSION = 0.2.30;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -742,7 +756,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 2610.22.2;
+				CURRENT_PROJECT_VERSION = 2610.25.1;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -755,7 +769,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 0.2.29;
+				MARKETING_VERSION = 0.2.30;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";

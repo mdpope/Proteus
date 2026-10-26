@@ -1,5 +1,7 @@
 ## 0.2.30 — cross-platform release candidate
 
+- Preserve Codex structured questions; add durable unanswered-question queues, choices and custom answers on desktop, web and iOS. Keep native blocking/nonblocking request resolution separate from tool approvals and avoid replaying uncertain answers.
+- Steer returned task feedback into a running coordinator when its provider supports it; otherwise queue it, retaining the same delivery identity and human-stop boundaries.
 - Share capability-based model-control visibility across desktop remote chats and the website; hide fixed context and reset incompatible options only when explicitly changing models.
 - Keep a local window's selected project tab when its older saved follow response arrives during project loading.
 - Restore iOS workspace/project/tab selection, retain all saved tab identities, prepare bounded URL suggestions off the main actor, cache thumbnails asynchronously and constrain overview previews.

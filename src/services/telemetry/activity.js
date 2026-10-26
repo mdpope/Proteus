@@ -101,13 +101,14 @@ export class ActivityStore extends EventEmitter {
     this.data.outbox=this.data.outbox.slice(-limits.outbox);this.save();void this.flush();
   }
   attach(engine, hostId) {
-    const snapshot = run => ({ status: run.status, pending: run.pending?.id });
+    const snapshot = run => ({ status: run.status, pending: run.pending?.id, questions:(run.userQuestions||[]).filter(question=>question.status==='pending').map(question=>question.id) });
     for (const run of engine.listRuns()) this.states.set(run.id, snapshot(run));
     this.listener = run => {
       if (!run?.id) return;
       if(run.deleted){this.states.delete(run.id);this.log('info','chat.deleted',`Chat ${run.id} deleted from Proteus.`,{hostId:hostId()});return;}
       const before = this.states.get(run.id); this.states.set(run.id, snapshot(run));
       if (run.status === 'awaiting_input' && run.pending?.id && before?.pending !== run.pending.id) this.add('review.required', { hostId: hostId(), chatId: run.id });
+      if((run.userQuestions||[]).some(question=>question.status==='pending'&&!before?.questions?.includes(question.id)))this.add('review.required',{hostId:hostId(),chatId:run.id});
       if (run.status === 'completed' && before?.status !== 'completed') {
         const scheduled = run.trigger !== 'chat';
         if (!scheduled || run.schedule.notifications?.onCompletion === true) this.add(scheduled ? 'schedule.completed' : 'chat.completed', { hostId: hostId(), chatId: run.id, ...(scheduled ? { scheduleId: run.schedule.id } : {}) });

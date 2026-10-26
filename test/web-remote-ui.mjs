@@ -34,7 +34,18 @@ try{
  const expiredInvite=await apps[0].remote.pairing(),expiredCapsule=JSON.parse(Buffer.from(new URL(expiredInvite.code).searchParams.get('data'),'base64url'));expiredCapsule.expiresAt='2000-01-01T00:00:00Z';const expiredCode='proteus://pair?data='+Buffer.from(JSON.stringify(expiredCapsule)).toString('base64url');await page.locator('#remote-pair-panel').evaluate(node=>node.open=true);await page.locator('#remote-pair-code').fill(expiredCode);await page.locator('#remote-pair-form button').click();await page.getByText('Pairing expired or is invalid. Generate a fresh code on the computer.',{exact:true}).waitFor();assert.equal(await page.locator('#remote-pair-code').inputValue(),expiredCode);
  apps[0].liveBrowser=new LiveBrowser({list:()=>[{id:'synthetic-tab',title:'Synthetic live page',agentControlling:true}],current:()=>true,capture:async()=>({revision:1,width:800,height:600,image:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII='})});
  await pair(0,'Studio Desktop',true);apps[0].remote.setBrowserAccess(apps[0].remote.config.devices[0].id,true);
- if(process.env.PROTEUS_TEST_CORRECTIONS_ONLY==='1'){
+ if(process.env.PROTEUS_TEST_QUESTIONS_ONLY==='1'){
+  const app=apps[0],schedule=await app.buildChatSchedule({name:'Structured web questions',prompt:'Synthetic question history',provider:'rehearsal'}),run=app.engine.createRun(schedule,'chat',null,{deferStart:true});
+  run.status='completed';delete run.deferredStart;delete run.nextPrompt;
+  app.engine.providers.rehearsal={async run({emit}){emit('assistant','Synthetic answer accepted. No external provider.');}};
+  app.engine.event(run,'assistant','Choose a web destination.',{providerItemId:'web-question-item',userQuestions:[{title:'Web destination?',options:['Web A','Web B']},{title:'Web instructions?'}]});
+  await page.reload();await page.locator(`[data-run="${run.id}"]`).first().click();await page.locator('.user-question-queue summary').waitFor();
+  await page.locator('.user-question-queue summary').click();await page.getByRole('button',{name:'Web destination?',exact:true}).click();await page.getByRole('button',{name:'Web B',exact:true}).click();
+  await until(()=>run.userQuestions[0].status==='answered');await until(()=>run.status==='completed');
+  await page.locator('.user-question-queue summary').waitFor();await page.locator(`[data-question-id="${run.userQuestions[1].id}"] textarea`).fill('Custom web answer');
+  await page.locator(`[data-question-id="${run.userQuestions[1].id}"]`).getByRole('button',{name:'Send answer',exact:true}).click();await until(()=>run.userQuestions[1].status==='answered');
+  assert.equal(run.events.filter(event=>event.data?.questionReply).length,2);assert.deepEqual(errors,[]);console.log(JSON.stringify({passed:true,encryptedOwnerQuestions:true,choiceAndCustomAnswer:true,sameOwnerChat:true}));
+ }else if(process.env.PROTEUS_TEST_CORRECTIONS_ONLY==='1'){
   await exerciseWebCorrections(page,apps[0]);assert.deepEqual(errors,[]);
  }else{
  apps[0].remote.setDocumentAccess(apps[0].remote.config.devices[0].id,true);

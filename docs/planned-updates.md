@@ -1,3 +1,26 @@
+## October 25 — Interactive questions and live returned-task feedback
+
+38. Preserve native structured questions instead of rendering choices only as assistant prose.
+Desktop, web and iOS now expose a persistent unanswered-question queue, jump to the original
+message, explicit choice buttons and a custom answer. The owner retains provider/session/item
+identity across paging/restart. Answers use native request responses or the same session's
+steering/next-turn path; retries retain delivery IDs and uncertain deliveries require inspection.
+Blocking questions and permissions keep separate authority. Nonblocking native requests do not
+pause the turn or serialize later permission requests behind an unanswered question.
+
+Codex's `AgentMessageThreadItem.questions` supplies no expiry; these questions remain available.
+Native `item/tool/requestUserInput` carries `isBlocking` and deprecated optional `autoResolutionMs`;
+Proteus observes `serverRequest/resolved` and does not invent an expiry or automatically select
+an answer. Official protocol: https://learn.chatgpt.com/docs/app-server.md. Other providers retain
+their actual native question lifecycle through the shared ordinary-question UI.
+
+39. Returned task feedback steers a running origin when its provider supports live steering.
+Waiting/unsupported providers queue feedback. The original task-data/authority disclaimer and
+delivery ID remain; concurrency is serialized, fallback requires no recorded attempt, and an
+ambiguous send cannot become a queued duplicate. Cancelled/failed/interrupted/archived origins
+still require human continuation. These changes need the new package; the 366b2af artifacts
+and installed clients do not contain them.
+
 ## October 25 — Combined release audit and rollout authorization
 
 Operator approved Design Preview review and authorized all-platform/device deployment after testing,

@@ -667,6 +667,7 @@ struct ChatView: View {
     @State private var confirmAttachmentSend = false
     @State private var attachmentSendMode = "queue"
     @State private var questionAttachmentSubmission: JSON = .null
+    @State private var questionRevealTask: Task<Void, Never>?
     @State private var confirmDelete = false
     @State private var renameChildID: String?
     @State private var renameChildTitle = ""
@@ -826,7 +827,7 @@ struct ChatView: View {
             let saved = shared.chatSelectedChildren[chatBrowserScope] ?? shared.selected(in: chatBrowserScope) ?? "chat"
             selectedChild = saved == "chat" || saved == "live" || shared.tabs(in: chatBrowserScope).contains(where: { $0.id == saved }) || documents.contains(where: { $0.id == saved }) ? saved : "chat"
         }
-            .onDisappear { documentTask?.cancel(); documents = [] }
+            .onDisappear { documentTask?.cancel(); questionRevealTask?.cancel(); documents = [] }
             .onChange(of: pageSearch.query) { _, query in if !query.isEmpty { followLatest = false; restoringConversation = false; pendingAnchorRestore = nil; pendingInitialRestore = nil } }
             .onChange(of: shared.chatSelectedChildren[chatBrowserScope]) { _, value in
                 if let value, value == "chat" || value == "live" || shared.tabs(in: chatBrowserScope).contains(where: { $0.id == value }) || documents.contains(where: { $0.id == value }) { selectedChild = value }
@@ -1002,6 +1003,12 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
                         } else if event["role"].string != "assistant" || !event["text"].string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             if !event["data"]["delivery"]["state"].string.isEmpty { Text(event["data"]["delivery"]["state"].string.capitalized).font(.caption2).foregroundStyle(.teal) }
                             MessageView(role: event["role"].string == "assistant" ? assistantName(event) : event["role"].string, text: event["text"].string, runID: id, timestamp: event["timestamp"].string.isEmpty ? event["at"].string : event["timestamp"].string, turn: event["role"].string == "assistant" ? messageTurn(at: index) : .null, actionID: MessageActions.eligible(event) ? "\(store.connection?.hostId ?? "local"):\(id):\(absoluteIndex):\(event["at"].string)" : nil, sentAttachments: event["data"]["attachments"].array, onDocumentLink: event["role"].string == "assistant" ? { source in openDocument(source) } : nil, onResize: { Task { @MainActor in await Task.yield(); if followLatest && !userReadingGesture && !restoringConversation && pageSearch.query.isEmpty { proxy.scrollTo("chat-end", anchor: .bottom) } } }, search: pageSearch, searchKey: absoluteIndex, viewport: CGRect(x: 0, y: conversationViewportTop, width: conversationViewportWidth, height: max(1, composerAvailableHeight)))
+                            ForEach(NativeUserQuestion.read(run).filter { $0.eventIndex == absoluteIndex }) { question in
+                                NativeUserQuestionCard(question: question) { value, messageID in
+                                    _ = try await store.request(question.blocking ? "chat.reply" : "chat.answer-question", ["id": .string(id), "answer": .string(value), "messageId": .string(messageID), question.blocking ? "requestId" : "questionId": .string(question.id)])
+                                    await store.openChat(id)
+                                }
+                            }
                             if let recovery, recovery.event == event {
                                 NativeChatRecoveryControls(state: recovery, run: run, disabled: busy || !store.connected) { action in
                                     act("chat.recover", ["action": .string(action), "expectedFailureEventAt": recovery.failureEventAt])
@@ -1203,6 +1210,11 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
                 else if !followLatest, let reading = shared.chatScrollLocations[chatBrowserScope] { restoreConversation(reading, with: proxy) }
             }
             .onChange(of: run["liveMessages"]) { _, _ in if followLatest { proxy.scrollTo("chat-end", anchor: .bottom) } }
+            .safeAreaInset(edge: .top) {
+                NativeUserQuestionQueue(questions: NativeUserQuestion.read(run)) { question in
+                    questionRevealTask?.cancel(); questionRevealTask = Task { await revealQuestion(question, with: proxy) }
+                }
+            }
         }
             .safeAreaInset(edge: .bottom) { if nativeRun { VStack { Text("Native Omi processing · outcomes are recorded by the worker.").font(.caption); if active { Button("Stop process", role: .destructive) { act("chat.cancel", [:]) } } }.padding().background(NativeTheme.surface) } else { composer } }
     }
@@ -1531,6 +1543,23 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
         if !files.isEmpty { for url in files { if !importFile(url) { break } }; return }
         if let image = UIPasteboard.general.image, let data = image.pngData() { addAttachment(data, name: "Pasted image.png", mediaType: "image/png"); return }
         store.error = "Copy an image or a file supported by this provider, then paste it here."
+    }
+    private func revealQuestion(_ question: NativeUserQuestion, with proxy: ScrollViewProxy) async {
+        guard question.eventIndex >= 0 else { return }
+        followLatest = false; pendingHistoryRestore = nil; pendingInitialRestore = nil; pendingAnchorRestore = nil; restoringConversation = false
+        do {
+            while run["eventStart"].int > question.eventIndex {
+                try Task.checkCancellation()
+                let before = run["eventStart"].int
+                let value = try await store.request("chat.get", ["id": .string(id), "beforeEvent": .number(Double(before))])
+                guard value["eventStart"].int < before else { throw RemoteError(message: "Earlier messages are unavailable.") }
+                store.mergeChat(value)
+            }
+            oldestVisibleEvent = max(run["eventStart"].int, question.eventIndex - 4)
+            await Task.yield()
+            try Task.checkCancellation()
+            proxy.scrollTo(question.eventIndex, anchor: .center)
+        } catch is CancellationError { } catch { store.error = error.localizedDescription }
     }
     private func answer(_ value: String) { act("chat.reply", ["answer": .string(value), "requestId": pending["id"]]) }
     private func act(_ method: String, _ values: [String: JSON]) {

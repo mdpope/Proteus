@@ -42,6 +42,14 @@ test('activity records transitions once and requires schedule completion opt in'
   const id=store.notifications().items[0].id;store.read(id);assert.ok(store.notifications().items[0].readAt);
   assert.throws(()=>store.preferences({systemEnabled:'yes'}));await store.close();
 });
+test('structured asynchronous questions notify once without pausing a turn or publishing their contents',async t=>{
+ const engine=new EventEmitter(),run={id:'questions',status:'running',trigger:'chat',schedule:{},userQuestions:[]};engine.listRuns=()=>[run];
+ const folder=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-question-notifications-')),store=new ActivityStore(folder);store.attach(engine,()=> 'host');t.after(async()=>{await store.close();fs.rmSync(folder,{recursive:true,force:true});});
+ run.userQuestions.push({id:'q1',status:'pending',text:'Private question contents'});engine.emit('change',run);engine.emit('change',run);
+ assert.equal(store.notifications().items.length,1);assert.equal(run.status,'running');assert.equal(store.notifications().items[0].chatId,run.id);assert.doesNotMatch(JSON.stringify(store.notifications()),/Private question/);
+ run.userQuestions[0].status='answered';engine.emit('change',run);assert.equal(store.notifications().items.length,1);
+ run.userQuestions.push({id:'q2',status:'pending'});engine.emit('change',run);assert.equal(store.notifications().items.length,2);
+});
 test('activity outbox never transfers a prior account event into a replacement account',async t=>{
   let identity={accountId:'a',workspaceId:'1',origin:'https://example.test'},fail=true;const received=[];
   const store=new ActivityStore(home(t),{identity:()=>identity,publish:async item=>{if(fail)throw new Error('offline');received.push(item);}});

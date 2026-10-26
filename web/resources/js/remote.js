@@ -1,6 +1,7 @@
 import {moveMenuMarkup,projectMoveGroups} from '../../../public/shared/navigation/move-menu.js';
 import {modelControlVisible,optionsForModelChange} from '../../../public/features/chats/model-choices.js';
 import {mountQuestionAttachments} from '../../../public/features/chats/question-attachments.js';
+import {chatQuestions,mountQuestionCard,mountQuestionQueue} from '../../../public/features/chats/user-questions.js';
 import {recentItemMarkup} from './navigation-icons.js';
 import {bindWebChatPermissions} from './chat-permissions.js';
 import {chatLink} from '../../../public/features/chats/chat-links.js';
@@ -618,6 +619,23 @@ function renderChats(current) {
         }catch(error){current.earlierError=true;if(status){status.innerHTML='<button id="remote-earlier-retry" type="button">Retry loading earlier messages</button>';$('remote-earlier-retry').onclick=()=>void loadEarlier();}notice(error.message);}finally{current.loadingEarlier=false;}
     }
     requestAnimationFrame(()=>{const pane=root.querySelector('.remote-messages');if(pane&&run&&current.run?.id===run.id&&!current.earlierError&&pane.scrollHeight<=pane.clientHeight+80)void loadEarlier();});
+    if(run&&historyPane){
+        const answerQuestion=async(question,answer,messageId)=>{await command(question.blocking?'chat.reply':'chat.answer-question',{id:run.id,answer,messageId,...(question.blocking?{requestId:question.id}:{questionId:question.id})});await openChat(run.id);};
+        let queue=root.querySelector('.user-question-queue');if(!queue){queue=document.createElement('div');queue.className='user-question-queue';historyPane.before(queue);}
+        mountQuestionQueue(queue,run,{answer:answerQuestion,notify:notice,jump:async question=>{
+            const card=[...root.querySelectorAll('[data-question-id]')].find(node=>node.dataset.questionId===question.id);
+            if(card){card.scrollIntoView({block:'center'});card.querySelector('textarea')?.focus({preventScroll:true});return;}
+            const before=current.historyWindows?.get(run.id)??renderStart;await loadEarlier();
+            const after=current.historyWindows?.get(run.id)??renderStart;
+            if(after<before){await root.querySelector('.user-question-queue')?.questionActions.jump(question);}else notice('Load earlier messages to view this question.');
+        }});
+        const questions=chatQuestions(run),ids=new Set(questions.map(question=>question.id));
+        for(const card of root.querySelectorAll('.user-question-card'))if(!ids.has(card.dataset.questionId))card.remove();
+        for(const question of questions){
+            const row=root.querySelector(`[data-event-key="${question.eventIndex}"]`);if(!row)continue;
+            let card=[...row.querySelectorAll(':scope>.user-question-card')].find(node=>node.dataset.questionId===question.id);if(!card){card=document.createElement('div');row.append(card);}mountQuestionCard(card,question,{key:current.host.hostId+':'+run.id+':'+question.id,answer:answerQuestion,notify:notice});
+        }
+    }
     const questionAttachments=mountQuestionAttachments({key:current.host.hostId+':'+answerKey,host:$('remote-question-attachments'),textarea:$('remote-answer')?.querySelector('textarea'),providerId:run?.schedule?.provider,mediaTypes:current.state.questionAttachmentMediaTypes||{},destination:current.host.label+' · '+run?.title,chatId:run?.id,requestId:pending?.id,send:(action,args)=>command('chat.attachments.'+action,args),notify:notice});
     let answering=false;const answer = async value => { if(answering)return;answering=true;try { const delivery=pending.type==='permission'?{}:await questionAttachments.payload(value);await command('chat.reply', { id: run.id, requestId: pending.id, answer: value,...delivery });questionAttachments.clear();current.drafts.delete(answerKey);if(view==='chats'&&current.selected===run.id)await openChat(run.id);else await refresh(); } catch (error) { notice(error.message); } finally {answering=false;} };
     root.querySelectorAll('[data-answer]').forEach(button => button.onclick = () => answer(button.dataset.answer));
