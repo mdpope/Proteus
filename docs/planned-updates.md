@@ -1,3 +1,12 @@
+## October 26 — physical native installation complete
+
+Both phone and tablet now run signed 0.2.30/2610.26.1. All 291/259 protected files matched
+before first launch, with prior non-system preferences equal afterward. Two verified full
+recovery generations remain per device; only reviewed obsolete payloads and superseded
+build-only artifacts were retired, retaining receipts. Shared push subscription/background
+delivery and physical visual/performance acceptance remain pending. Windows' newly supplied
+host identity needs pairing before dispatch; the stale saved entry is a different host.
+
 ## October 26 — final native rollout acceptance
 
 The final signed 77bd05b iOS 0.2.30/2610.26.1 app is frozen with exact source and 17-file

@@ -1,3 +1,30 @@
+## October 26 — both physical clients installed; recovery rotation complete
+
+After the user unlocked the iPad, its existing capture was rebound to the final 77bd05b
+artifact without another full copy. Official installation succeeded once; all 259 protected
+files matched before launch, and its prior non-system preferences remain equal afterward.
+Both devices now independently report 0.2.30/2610.26.1 and launched their installed app once.
+Do not repeat the completed installs, launches or retention operations.
+
+Both retained app/data recovery generations were rehashed and their Apple signatures verified:
+physical-2610231 and physical-2610261. Only the four reviewed oldest payloads were retired;
+all original receipts remain. Rotation retired 159,714,579 logical bytes; measured free-space
+change during that operation was -229,376 bytes (concurrent/APFS effects). Superseded 91affe5
+staging app/archive and the initial d4c12a7 build app were separately verified then retired,
+retaining manifests and failure evidence; measured free space increased 52,326,400 bytes.
+No full after-container copy is retained. Final private staging and current recovery apps remain.
+
+Neither mobile client yet has a saved shared push subscription. Notifications status, separate
+shared-account consent, real background delivery and physical visual/performance acceptance
+remain pending. Simulator/fixture acceptance does not establish those live outcomes.
+
+The user identified Windows chat 59fb2dde on host 3a8b82fd; that host is absent from the fresh
+computer catalog. The stale reconnecting 9dda5a16 entry is a different identity. Pair the new
+Windows destination through Computer Connections before agent access/dispatch. No pairing tool
+is registered; native control still has the existing uncertain-window guard. Do not bypass it.
+A reverse pairing is needed for Windows-initiated access, not ordinary update-task feedback.
+The one-time local Mac working-chat bootstrap choice was explained and remains unanswered.
+
 ## October 26 — final iPhone installed and preserved; iPad unlock pending
 
 Clean 77bd05b produced the final signed 0.2.30/2610.26.1 app. All 17 frozen files,
