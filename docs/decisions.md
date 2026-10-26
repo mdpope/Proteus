@@ -1,3 +1,28 @@
+## October 26 — Own Windows terminal processes before starting commands
+
+The existing node-pty natural-exit cleanup cannot enumerate a console after its root exits;
+actual tests leave descendants alive and reach a delayed numeric-PID fallback. Enabling the
+included ConPTY DLL removes a warning but fails bounded process exit. Neither behavior is an
+acceptable ownership boundary.
+
+A build-time compiled guardian assigns its own current process handle to an anonymous,
+noninheritable kill-on-close Job Object before starting the Electron broker or any user command.
+The job owns the complete inherited tree; natural exit preserves the shell exit code and output
+before teardown. Forced termination has an unknown shell exit code. The broker never calls the
+vendor kill path. The only bounded stuck-guardian fallback uses its retained ChildProcess handle.
+Unsupported job/runtime policy fails before command startup; it never chooses a weaker backend.
+
+Keep lifecycle confirmation separate from a bounded close request. If termination cannot be
+confirmed, reject the request while retaining its update/disposal blocker; only actual guardian
+closure confirms cleanup. Reserve the entire asynchronous create operation before its first
+await so update idleness and terminal capacity cannot race module import or guardian startup.
+
+Compile only on the Windows build host, verify unchanged source/compiler bytes across compilation,
+then hash the exact executable as runtime and its source/build recipes as build inputs. The source
+companion and acceptance receipts must preserve those identities. No compiler, SDK installation,
+vendor patch, trust change or runtime download occurs on an end-user computer. This decision is
+source integration; exact packaged and real installer acceptance remain distinct gates.
+
 ## October 25 — Combine queued corrections behind the existing preview review gate
 
 The latest operator handoff authorizes implementation, isolated build and tests for items 28–37.
