@@ -1,3 +1,19 @@
+## October 26 — actual-owner environment observation in disposable acceptance
+
+Electron can expose no parseable entries through `/proc/<pid>/environ` even while
+`process.env` and its children retain their values. The frozen Linux 39692c2 candidate's
+three transition tests completed their supervisor outcomes, then failed that observation;
+retain those failures and do not infer that the remaining preservation assertions passed.
+
+The corrected test adds an ephemeral loopback Node inspector only to the exact disposable
+owner launched by the real packaged helper. It validates PID, executable, data home and
+browser profile before reading only the six desktop-selection values. Exact equality and
+all later session/history/receipt assertions remain required. The inspector closes after
+observation. No production launch path, candidate bytes or credential behavior changes.
+A separate actual-Electron probe rejects a mismatched PID and verifies all six values;
+fresh Linux update, rollback and pre-install-failure gates remain required. Neither this
+probe nor a basic-storage rehearsal proves live protected-storage readiness.
+
 ## October 26 — preserve Linux credential-backend selection context
 
 Update and rollback relaunches preserve existing XDG_CURRENT_DESKTOP, XDG_SESSION_DESKTOP,

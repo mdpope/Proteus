@@ -1,3 +1,16 @@
+## October 26 — frozen Linux candidate and corrected observation gate
+
+Clean 39692c2 produced Linux candidate linux.76e9537e9226; all runtime/source hashes,
+1,177 Node passes/one skip, static checks and fresh core checks pass. Three disposable
+transitions completed, then failed an invalid `/proc` environment observation; later
+preservation assertions were not reached. The failures and frozen package remain retained.
+Test-only correction reads the actual relaunched owner's `process.env` through an ephemeral
+loopback inspector after exact PID/executable/home/profile validation. It preserves exact
+six-value equality and all subsequent assertions. An isolated real Electron probe passes
+and rejects the wrong PID. Linux transition reacceptance is pending; no newer production
+installation occurred. Protected-storage round-trip remains qualified, and restoring the
+installed owner's lost desktop context still needs a supported graceful desktop relaunch.
+
 ## October 26 — Linux desktop context after verified installation
 
 Linux 0.2.30 c683 runtime/source hashes, original Codex session/one continuation, prior event

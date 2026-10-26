@@ -1,13 +1,27 @@
 // Test-only launch isolation and optional failed-health injection. Never packaged.
-const fs=require('node:fs'),path=require('node:path'),{spawn}=require('node:child_process');
+const fs=require('node:fs'),path=require('node:path'),childProcess=require('node:child_process');
 const [file,modulePath,...flags]=process.argv.slice(2);
-const {supervise,verifyLive,environment}=require(modulePath);
 const {readJob}=require(path.join(path.dirname(modulePath),'update-package.cjs'));
 const rollback=flags.includes('--rollback'),mock=flags.includes('--mock-keychain');
 const root=path.resolve(path.dirname(file),'../../../..');
 function assertFixture(job){
  if(job.home!==path.join(root,'data')||job.installation!==path.join(root,process.platform==='darwin'?'Proteus.app':'Proteus')||!fs.existsSync(path.join(root,'receipt')))throw Error('Use only the disposable packaged-update fixture.');
 }
+if(flags.includes('--inspect-owner')){
+ const job=readJob(file);assertFixture(job);if(process.platform!=='linux')throw Error('Linux disposable observation only.');
+ const original=childProcess.spawn,executable=path.join(job.installation,'proteus');
+ // Use the real packaged launch function/environment; add an ephemeral loopback
+ // inspector only to this exact disposable child. Production source is untouched.
+ childProcess.spawn=(command,args,options)=>{
+  if(command===executable){
+   if(options.env.PROTEUS_HOME!==job.home||!args.includes('--user-data-dir='+job.browserHome)||args.some(value=>value.startsWith('--inspect')))throw Error('Unexpected disposable launch.');
+   args=[...args,'--inspect=127.0.0.1:0'];
+  }
+  return original(command,args,options);
+ };
+}
+const {supervise,verifyLive,environment}=require(modulePath);
+const spawn=(...args)=>childProcess.spawn(...args);
 const launchApp=job=>{
  assertFixture(job);if(process.platform!=='darwin')throw Error('Mock Keychain isolation is Mac only.');
  const executable=path.join(job.installation,'Contents/MacOS/Proteus');

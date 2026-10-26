@@ -1,3 +1,13 @@
+## October 26 — Linux acceptance observation correction
+
+The 39692c2 candidate remains frozen, uninstalled and blocked after three transition
+tests failed their `/proc` environment observation. Electron's actual environment can
+remain intact while that buffer is unparseable. Replace only the test observation with
+an identity-checked disposable-owner inspector read, preserving exact six-value equality,
+session/history/operation assertions and all original failures. A real Electron probe
+passes with wrong-PID rejection; fresh Linux transition acceptance is still pending.
+Production launch code, credential protection and candidate bytes remain unchanged.
+
 ## October 26 — Linux update loses desktop keyring-selection context
 
 Installed 0.2.30 source/package, session, history, permissions, drafts, receipts and both recovery
