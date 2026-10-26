@@ -35,6 +35,27 @@ test('Windows packaging freezes freshly compiled helper bytes and its source; la
   fs.writeFileSync(f.target,'modified helper');assert.throws(()=>snapshot.verifySource(),/Source changed/);
 });
 
+test('a clean checkout creates its missing generated-helper directory before compiling',t=>{
+  const f=fixture(t),directory=path.dirname(f.target);
+  fs.rmdirSync(directory);
+  assert.equal(fs.existsSync(directory),false);
+  const receipt=prepareWindowsTerminal(f.root,{build:f.build});
+  assert.equal(fs.lstatSync(directory).isDirectory(),true);
+  assert.equal(fileDigest(f.target),receipt.helperSha256);
+});
+
+test('generated-helper directory cannot be a file or link to another tree',t=>{
+  const f=fixture(t),directory=path.dirname(f.target);
+  fs.rmdirSync(directory);
+  fs.writeFileSync(directory,'not a directory');
+  const build=()=>assert.fail('invalid destination must be rejected before compiling');
+  assert.throws(()=>prepareWindowsTerminal(f.root,{build}),/regular directory/);
+  fs.unlinkSync(directory);
+  fs.symlinkSync(f.root,directory,process.platform==='win32'?'junction':'dir');
+  assert.throws(()=>prepareWindowsTerminal(f.root,{build}),/regular directory/);
+  assert.equal(fs.existsSync(path.join(f.root,'windows-terminal-guardian.exe')),false);
+});
+
 test('Windows packaging refuses test seams, mismatched receipts and linked output without replacing accepted asset',t=>{
   const f=fixture(t);fs.writeFileSync(f.target,'accepted old asset');
   for(const override of [{testOnlyJobFailureSeam:true},{helperSha256:'0'.repeat(64)},{sourceSha256:'0'.repeat(64)},{compilerSha256:''}]){

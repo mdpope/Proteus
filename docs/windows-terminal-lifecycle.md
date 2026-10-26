@@ -61,6 +61,13 @@ managed asset remains ignored by Git. Include its exact bytes in the frozen sour
 comparing all declared runtime files; record canonical tracked source separately from generated
 assets. Native source stays outside Mac/Linux runtime packages.
 
+The preparer creates the missing `desktop/terminal` child beneath the existing regular desktop
+directory, since Git cannot retain an empty generated-only directory. Existing files and directory
+links remain rejected before compilation. The first d5dc6c9 clean build exposed this omission;
+its accepted package used only an empty-directory workaround with unchanged compiler/packager
+source. Keep that original failure and qualification with its frozen candidate. The source-only
+directory correction does not rewrite, rebuild or re-sign an existing accepted artifact.
+
 Without the helper the Windows process path fails closed and cannot fall back to legacy spawn.
 .NET Framework/runtime policy on clean or older Windows images remains unverified; the actual
 build host's framework and two compatible nested-job cases are observed below. Never install

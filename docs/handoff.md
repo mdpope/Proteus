@@ -1,3 +1,38 @@
+## October 26 — Windows ownership package accepted and signed; real installer gates pending
+
+The exact d5dc6c9 Windows candidate is frozen as windows.c6c079eaa341. Complete Windows suite:
+1,194 passes/five platform skips/zero failures; static checks pass. All nine exact-package
+ownership cases pass, handles 206 → 206, no active transport resources. All eleven package gates
+pass after retained fixture corrections. Notice expiry: 5,007 ms; unchanged 400 ms follow gate:
+1,330/456 ms maximum gaps and 3/5 descriptor reads. Both installed .29 and candidate verifiers
+accept the new signed envelope; root independently verifies its exact bytes, signature and
+package/archive/installer identities using the embedded trusted publisher. The installed .29
+owner and original checkout remain unchanged. No production staging/install or publication.
+
+Frozen identities (SHA-256):
+
+- Fingerprint: c6c079eaa34103595a774446eb515ca5a371d8317c13f89495a757e433f851e3
+- Package: 22f377ce9d621dac55b93cd77af9926eeffd8da0b4339bb4bacef060fbdb9651
+- Archive: df3b80292181ebf77f3b37a5a57e86ef369b461b70f35c753b16239501ba758b
+- Installer: 254e2c2771e5ec82f5c9fdd8cdcbb568fe8d8c89b1f0e48f6aed099b5ef3a025
+- Exact source companion: 79258496bdc0363d81999db10a6e125a1e9768b9a656777b523c9a4a8afef5ea
+- Public envelope: 12e7e990cf7226086f66a373288c8f8bcfaaf8fccdc1c3d495cbf18d75524f4e (1,792 bytes)
+- 120-file receipt index: b2234e3c9d8bf8bf05baaed9d76538e0486c3bab08061532542b22bdb6379640
+
+All 788 prior indexed files and frozen57c artifacts/signature remain unchanged. Keep the actual
+report's fixture qualifications: initial blocker runner launch failure, notice clock anchor and
+native Windows app-root conversions. The first clean build lacked desktop/terminal; creating only
+that empty directory let the unchanged package script compile its production helper. Root now
+corrects directory creation in the preparer, retaining the reproduced failure and passing focused
+regressions (10 passes/two Windows-only skips; static checks pass). This is a build-recipe correction,
+not a new runtime or permission to rewrite the signed d5 artifact. Windows real-compiler validation
+of this source-only fix remains separate from the accepted frozen candidate.
+
+Real NSIS install, update-success, rollback and Windows pre-install-failure gates still require
+approved disposable account isolation. No account lifecycle action is authorized yet. The pending
+personal-Mac bootstrap choice, Linux normal KDE relaunch and mobile push registration remain
+unchanged. Observe original durable tasks; do not replay completed signing/build/install effects.
+
 ## October 26 — combined Windows ownership source accepted; package rebuild next
 
 Root reviewed and integrated Windows 87d78ba with packaging and whole-create idle reservations.

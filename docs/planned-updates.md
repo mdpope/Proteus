@@ -1,3 +1,17 @@
+## October 26 — signed Windows package accepted; clean-build recipe corrected
+
+Frozen d5dc6c9 windows.c6c079eaa341 passes the complete Windows suite (1,194 passes/five skips),
+all nine packaged process ownership cases and eleven package gates. Both verifiers accept its
+new publisher signature; root independently checks the exact envelope and artifact identities.
+Real installer/update/rollback/pre-install-failure gates still await authorized account isolation.
+No production preparation, install or publication occurred.
+
+The initial clean build exposed a missing generated-only directory, which Git does not retain.
+The preparer now creates that missing child beneath a regular desktop directory while rejecting
+files and links. The reproduced failure remains retained; focused directory/provenance tests and
+static checks pass. Keep the already signed candidate unchanged and document its empty-directory
+workaround rather than silently replacing its build recipe or source companion.
+
 ## October 26 — combined Windows ownership validation complete
 
 The reviewed 87d78ba ownership implementation is integrated with helper packaging and terminal

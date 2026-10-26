@@ -12,9 +12,12 @@ function existingInfo(file){
 export function prepareWindowsTerminal(root,{build}){
   const runtime=path.join(root,'.runtime');
   const target=path.join(root,windowsTerminalAsset);
-  for(const directory of [path.join(root,'desktop'),path.dirname(target)]){
-    if(!fs.lstatSync(directory).isDirectory())throw Error('Windows terminal asset directory must be a regular directory.');
-  }
+  if(!fs.lstatSync(path.join(root,'desktop')).isDirectory())throw Error('Windows terminal asset directory must be a regular directory.');
+  // Git retains no empty directories. Create this generated-only child on a
+  // clean checkout, while refusing existing files and links before compilation.
+  const directory=path.dirname(target),directoryInfo=existingInfo(directory);
+  if(directoryInfo&&!directoryInfo.isDirectory())throw Error('Windows terminal asset directory must be a regular directory.');
+  if(!directoryInfo)fs.mkdirSync(directory);
   if(existingInfo(target)&&!existingInfo(target).isFile())throw Error('Windows terminal asset must be a regular file.');
   if(existingInfo(runtime)&&!existingInfo(runtime).isDirectory())throw Error('Build scratch directory must be a regular directory.');
   fs.mkdirSync(runtime,{recursive:true});
