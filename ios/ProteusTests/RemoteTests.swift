@@ -5,6 +5,7 @@ import Network
 import SwiftUI
 import XCTest
 import Combine
+import UserNotifications
 @testable import Proteus
 
 private actor PreviewRequestCounter {
@@ -13,6 +14,22 @@ private actor PreviewRequestCounter {
 }
 
 final class RemoteTests: XCTestCase {
+    @MainActor func testNativeNoticeExpiresAfterFiveSecondsAndPreservesNext() async throws {
+        let center = UNUserNotificationCenter.current(), previousDelegate = center.delegate
+        let notices = NativeNotifications()
+        defer { notices.dismissBanner(); center.delegate = previousDelegate }
+        let route = NativeNotifications.NotificationRoute(hostID: "10000000-0000-4000-8000-000000000001", chatID: "fixture-chat", scheduleID: "", type: "chat.completed")
+        notices.presentBanner("First fixture notice", destination: route)
+        let first = try XCTUnwrap(notices.banner?.id)
+        notices.presentBanner("Next fixture notice", destination: route)
+        try await Task.sleep(for: .milliseconds(4600))
+        XCTAssertEqual(notices.banner?.id, first, "The banner should remain available for its five-second display window")
+        try await Task.sleep(for: .milliseconds(1000))
+        XCTAssertNotEqual(notices.banner?.id, first)
+        XCTAssertEqual(notices.banner?.message, "Next fixture notice", "Expiry must preserve the queued next notice")
+        notices.dismissBanner()
+        XCTAssertNil(notices.banner)
+    }
     func testStructuredQuestionQueuePreservesIdentityChoicesAndOrdinaryPendingRequest() {
         let run: JSON = .object(["eventStart": .number(100), "userQuestions": .array([.object(["id": .string("async-1"), "text": .string("Choose a destination"), "choices": .array([.string("A"), .string("B")]), "status": .string("pending"), "eventIndex": .number(3)])]), "pending": .object(["type": .string("question"), "id": .string("native-2"), "question": .string("Your answer?")]), "events": .array([.object(["data": .object(["question": .object(["id": .string("native-2")])])])])])
         let questions = NativeUserQuestion.read(run)

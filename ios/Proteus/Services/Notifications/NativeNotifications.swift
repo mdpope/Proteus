@@ -12,7 +12,7 @@ import Security
     @Published var banner: Banner?
     private var bannerQueue: [Banner] = []
     private var bannerTask: Task<Void, Never>?
-    func presentBanner(_ message: String, destination: NotificationRoute) { let value = Banner(message: message, destination: destination); if banner != nil { if bannerQueue.count < 30 { bannerQueue.append(value) }; return }; banner = value; bannerTask?.cancel(); bannerTask = Task { try? await Task.sleep(for: .seconds(15)); if !Task.isCancelled && banner?.id == value.id { dismissBanner() } } }
+    func presentBanner(_ message: String, destination: NotificationRoute) { let value = Banner(message: message, destination: destination); if banner != nil { if bannerQueue.count < 30 { bannerQueue.append(value) }; return }; banner = value; bannerTask?.cancel(); bannerTask = Task { try? await Task.sleep(for: .seconds(5)); if !Task.isCancelled && banner?.id == value.id { dismissBanner() } } }
     func dismissBanner() { bannerTask?.cancel(); banner = nil; if !bannerQueue.isEmpty { let next = bannerQueue.removeFirst(); presentBanner(next.message, destination: next.destination) } }
 
     @AppStorage("notificationsEnabled") var enabled = false

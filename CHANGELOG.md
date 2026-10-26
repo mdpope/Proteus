@@ -1,6 +1,7 @@
 ## Unreleased — native question navigation
 
 - Collapse the iOS question queue when selecting a question and scroll to that question's card, keeping later answer controls clear of the composer and keyboard.
+- Expire ordinary native notification banners after five seconds while preserving the next queued notice.
 
 ## 0.2.30 — cross-platform release candidate
 

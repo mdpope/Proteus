@@ -1,3 +1,26 @@
+## October 26 — reuse physical captures for final five-second native parity
+
+Both physical clients are paused and cold captures are complete in the same in-flight update
+generation: 291 phone files (95,310,891 bytes) and 259 tablet files (77,044,910 bytes), plus the
+exact verified current 2610.23.1 signed app. No device installation occurred. Preserve these
+captures; do not create another full backup for the final banner correction.
+
+Before installation, source review found native banners still used 15 seconds. The new real-time
+regression fails on that baseline and passes after the five-second correction, preserving the next
+queued notice. The complete native suite passes all 150 cases. Fresh foreground/in-app UI tests
+first stopped before creating a banner because their old fixture omitted current phone Home
+navigation; keep those failures. Only fixture navigation is corrected, with all timing/route
+assertions retained. The corrected fixtures pass both phone banner flows and the tablet banner
+flow. Final signing and explicit private candidate rebinding remain pending. The earlier frozen
+91affe5 app must not be installed.
+
+APNs setup, scoped vault recovery, server readiness and minute-worker success are complete;
+real registration/background delivery awaits installation. Linux's environment-corrected frozen
+package passes all three transitions and original-preservation assertions. Human KDE relaunch is
+pending. The local Mac's old Codex status check still falsely rejects sign-in; a one-time working
+chat bootstrap choice was requested because saved coordinator defaults remain unset. Windows
+is still reconnecting. Do not substitute providers or repeat any completed update/setup operation.
+
 ## October 26 — native question fix accepted before physical update
 
 The explicit collapse assertion fails on the baseline, matching the retained screen recording.

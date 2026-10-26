@@ -1,3 +1,12 @@
+## October 26 — native notification expiry parity
+
+Native ordinary banners still used 15 seconds after desktop/web moved to five. Align the native
+timer and retain the durable notification history and queued next notice. A real timing/queue
+regression fails on the old value and passes with the correction; the complete suite passes 150
+native cases. Foreground UI fixture navigation is being updated for the current phone Home.
+Reuse the existing cold phone/tablet captures, retain the superseded candidate binding, and bind
+only a newly accepted signed artifact before installation. No device has been installed yet.
+
 ## October 26 — native question controls and paid push provisioning
 
 Fresh iPhone acceptance reproduced an expanded question queue covering a later answer card;

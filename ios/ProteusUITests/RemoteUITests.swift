@@ -41,6 +41,15 @@ private let nativeFixtureRelayOrigin = ProcessInfo.processInfo.environment["PROT
     app.launchEnvironment["PROTEUS_TEST_RELAY_ORIGIN"] = nativeFixtureRelayOrigin
     return app
 }
+@MainActor private func openNotificationFixtureHome(_ app: XCUIApplication) {
+    if let navigation = app.buttons.matching(identifier: "phone-app-navigation").allElementsBoundByIndex.first(where: { $0.isHittable }) {
+        navigation.tap()
+        let home = app.buttons["phone-nav-Home"]
+        XCTAssertTrue(home.waitForExistence(timeout: 8)); home.tap()
+    } else if app.buttons["sidebar-Home"].exists { app.buttons["sidebar-Home"].tap() }
+    else { app.tabBars.buttons["Home"].tap() }
+}
+
 final class RemoteUITests: XCTestCase {
     @MainActor func testNativeRecoveryRetriesOnlyAfterMinuteAndRetainsDraftAndQueue() async throws {
         let request = URLRequest(url: URL(string: "\(nativeFixtureHTTPOrigin)/pair?recovery=1")!, cachePolicy: .reloadIgnoringLocalCacheData)
@@ -953,8 +962,7 @@ final class RemoteUITests: XCTestCase {
         let app = nativeFixtureApplication()
         app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-notification-fixtures", "--synthetic-notification-controls"]
         app.launch()
-        if app.tabBars.buttons["Home"].exists { app.tabBars.buttons["Home"].tap() }
-        else if app.buttons["sidebar-Home"].exists { app.buttons["sidebar-Home"].tap() }
+        openNotificationFixtureHome(app)
         let button = app.buttons["Show in-app notification fixture"]
         for _ in 0..<6 where !button.exists { app.swipeUp() }
         XCTAssertTrue(button.waitForExistence(timeout: 12))
@@ -971,6 +979,7 @@ final class RemoteUITests: XCTestCase {
         let app = nativeFixtureApplication()
         app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-notification-fixtures", "--synthetic-notification-controls"]
         app.launch()
+        openNotificationFixtureHome(app)
         let button = app.buttons["Schedule iOS notification fixture"]
         for _ in 0..<4 where !button.exists { app.swipeUp() }
         XCTAssertTrue(button.waitForExistence(timeout: 12)); for _ in 0..<4 where !button.isHittable { app.swipeUp() }; button.tap()
