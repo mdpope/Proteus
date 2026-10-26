@@ -80,7 +80,12 @@ import Security
     static func safeBody(_ type: String) -> String {
         switch type { case "chat.completed": "A chat finished."; case "review.required", "approval.required": "A chat needs your review."; case "schedule.completed": "A schedule finished."; case "device.added": "A device was added."; case "device.reconnected": "A computer reconnected."; default: "New activity is available." }
     }
-    func receivedTap(_ payload: [AnyHashable: Any]) { route = NotificationRoute.from(payload) }
+    func receivedTap(_ payload: [AnyHashable: Any]) {
+        route = NotificationRoute.from(payload)
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--synthetic-notification-controls") { fixtureStatus = "Received " + (route?.type ?? "unknown") }
+        #endif
+    }
     #if DEBUG
     @Published var fixtureStatus = "Not scheduled"
     func scheduleFixtureTap() async throws {
@@ -101,7 +106,11 @@ import Security
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
         let payload = notification.request.content.userInfo
         let host = payload["hostId"] as? String ?? "", chat = payload["chatId"] as? String ?? "", schedule = payload["scheduleId"] as? String ?? "", type = payload["type"] as? String ?? ""
+        let eventID = payload["notificationId"] as? String ?? ""
         DispatchQueue.main.async {
+            // Account push and the live encrypted host connection can report
+            // the same event. Whichever arrives first owns its foreground alert.
+            if !eventID.isEmpty, UUID(uuidString: eventID) != nil, !self.delivered.insert(host + ":" + eventID).inserted { completionHandler([]); return }
             #if DEBUG
             self.fixtureStatus = "Foreground delivered"
             #endif
@@ -143,7 +152,7 @@ struct NativeNoticeBanner: View {
                 Text(banner.message).font(.subheadline).frame(maxWidth: .infinity, alignment: .leading)
                 Button("Open") { notices.route = banner.destination; notices.dismissBanner() }.fontWeight(.semibold).accessibilityLabel("Open notification")
                 Button { notices.dismissBanner() } label: { Image(systemName: "xmark") }.accessibilityLabel("Dismiss notification")
-            }.padding(16).frame(maxWidth: 640).foregroundStyle(NativeTheme.background).background(NativeTheme.accent, in: RoundedRectangle(cornerRadius: 14)).shadow(color: .black.opacity(0.2), radius: 12, y: 5).padding(.horizontal, 12).transition(.move(edge: .top).combined(with: .opacity))
+            }.padding(16).frame(maxWidth: 640).foregroundStyle(NativeTheme.background).background(NativeTheme.accent, in: RoundedRectangle(cornerRadius: 14)).shadow(color: .black.opacity(0.2), radius: 12, y: 5).padding(.horizontal, 12).transition(.move(edge: .bottom).combined(with: .opacity))
         }
     }
 }

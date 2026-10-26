@@ -107,3 +107,4 @@ body[data-browser-account] .remote-message.remote-activity.failed{background:#33
 body[data-browser-account] .remote-message:is(.user,.assistant){border-top-color:transparent;border-right-color:transparent;border-bottom-color:transparent}
 
 .chat-prompt-label{display:grid;gap:6px;min-width:0}
+.link-destination-preview{position:fixed;left:0;bottom:0;z-index:10000;max-width:min(90vw,850px);padding:5px 9px;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:0 5px 0 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:none;font-size:12px}

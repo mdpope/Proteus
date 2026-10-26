@@ -1,4 +1,14 @@
-## October 25 — Combined Design Preview remains a review candidate
+## October 25 — All-device rollout authorized after final validation
+
+The operator has completed Design Preview review and lifted the Mac hold. Build/test/validate the
+combined 0.2.30 source and then deploy to intended connected platforms, preserving exact artifacts,
+provider sessions, owner homes, two verified recovery generations and durable update receipts.
+Linux explicitly uses its existing Codex chat because its old runtime lacks purpose:update.
+The HC runtime also rejected purpose:update; no task was created and no implicit fallback is
+authorized there. Windows is reconnecting. Current acceptance/blockers live in `handoff.md`.
+No new installation or publication is claimed by this authorization note.
+
+## October 25 — Combined Design Preview remains a review candidate (earlier gate)
 
 The combined queue/MTPLX/Activity candidate passes source and exact-package review checks;
 see [acceptance](2026-10-25-combined-preview.md). It is unsigned isolated staging, not an installed

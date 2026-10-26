@@ -156,6 +156,7 @@ export class ClaudeRPC extends EventEmitter {
   retryClose(){if(this.cleanupFailure){this.closing=null;this.cleanupFailure=null;}return this.close();}
 }
 export class ClaudeProvider {
+  dataDirectory() { return this.options.env?.CLAUDE_CONFIG_DIR || process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude'); }
   constructor(options={}, {context,browser}={}) {this.browser=browser;this.options=options;this.context=context;this.active=null;this.cleanupClients=new Set();this.cleanupError=null;this.acceptedMediaTypes=Object.freeze(['image/png','image/jpeg','image/gif','image/webp','text/plain']);this.acceptedSteeringMediaTypes=this.acceptedMediaTypes;}
   client(args=[],cwd,mcpConfigPath=null){return this.options.clientFactory ? this.options.clientFactory({args,cwd,mcpConfigPath}) : new ClaudeRPC({...this.options,args,cwd,mcpConfigPath});}
   selectedMcp(run){const snapshot=run.schedule.context,managed=snapshot&&this.context?(this.context.providerMcpContext?.(snapshot)||this.context.providerContext(snapshot)):null;return managed?{...Object.fromEntries(Object.entries(snapshot.includeDefaults!==false?run.schedule.mcpServers||{}:{}).filter(([name])=>!managed.disabledLegacyMcp.includes(name))),...managed.mcpServers}:run.schedule.mcpServers||{};}
@@ -313,7 +314,7 @@ export class ClaudeProvider {
       if(m.type!=='result'||!resultSeen)capture.receive(m);
       if(m.type==='user'&&steering?.sent&&m.uuid===steering.id){steering.acknowledged=true;steering.ack.resolve();}
 
-      if(m.session_id){run.providerSessionId=m.session_id;run.providerHome=process.env.CLAUDE_CONFIG_DIR||path.join(os.homedir(),'.claude');update();}
+      if(m.session_id){run.providerSessionId=m.session_id;run.providerHome=this.dataDirectory();update();}
       if(m.type==='stream_event'){const event=m.event;if(event?.type==='message_start')currentId=event.message.id;if(event?.type==='content_block_delta'&&event.delta?.type==='text_delta')stream(currentId,event.delta.text);}
       if(m.type==='assistant'){
         if(m.error){reject(new Error(`Claude ${m.error}`));return;}

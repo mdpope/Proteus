@@ -310,10 +310,12 @@ struct RemoteHostInfo: Equatable {
         var object = value.object; let ids = Set(value["runs"].array.map { $0["id"].string })
         object["runs"] = .array(value["runs"].array + state["runs"].array.filter { !ids.contains($0["id"].string) })
         if !NativeProjectCatalog(raw: value["workspaceProjects"]).isValid, projectCatalog.isValid { object["workspaceProjects"] = state["workspaceProjects"] }
-        state = .object(object)
+        let next = JSON.object(object)
+        if state != next { state = next }
         if connected { onHostName?(value["hostName"].string) }
-        providerStatuses = value["providerStatuses"].object
-        if value["providerStatus"] != .null { modelStatus = value["providerStatus"]; models = modelStatus["models"].array }
+        let statuses = value["providerStatuses"].object
+        if providerStatuses != statuses { providerStatuses = statuses }
+        if value["providerStatus"] != .null, modelStatus != value["providerStatus"] { modelStatus = value["providerStatus"]; models = modelStatus["models"].array }
     }
     func loadMoreRuns() async {
         do { let more = try await request("runs.list", ["offset": .number(Double(state["runs"].array.count))]); var object = state.object; let ids = Set(state["runs"].array.map { $0["id"].string }); object["runs"] = .array(state["runs"].array + more.array.filter { !ids.contains($0["id"].string) }); state = .object(object) }
@@ -392,6 +394,20 @@ struct RemoteHostInfo: Equatable {
         selectedChat = id
         guard connected else { return false } // Offline opening is a cache read; it never sends or changes hosts.
         do { mergeChat(try await request("chat.get", ["id": .string(id)])); saveCache(); return true } catch { self.error = error.localizedDescription; return false }
+    }
+    func recoverChat(_ run: JSON, action: String, expectedFailureEventAt: JSON) async throws -> JSON {
+        let id = run["id"].string
+        do { return try await request("chat.recover", ["id": .string(id), "action": .string(action), "expectedFailureEventAt": expectedFailureEventAt]) }
+        catch {
+            // Only this explicit old-owner rejection permits the equivalent
+            // manual continuation. A timeout never falls through to another send.
+            guard action == "continue", ["manual", "scheduled", "schedule"].contains(run["trigger"].string), let rejection = error as? RemoteError, rejection.message.contains("Open an ordinary chat before continuing.") else { throw error }
+            let fresh = try await request("chat.get", ["id": .string(id), "watch": .string("summary")])
+            let deliveryID = "continue_" + id + "_" + expectedFailureEventAt.string.filter { $0 >= "0" && $0 <= "9" }
+            if fresh["events"].array.contains(where: { $0["data"]["delivery"]["id"].string == deliveryID }) { return .object(["runId": .string(id)]) }
+            guard ["failed", "interrupted"].contains(fresh["status"].string), fresh["archivedAt"].string.isEmpty, fresh["pending"] == .null, fresh["failureEventAt"] == expectedFailureEventAt, fresh["providerSessionId"] == run["providerSessionId"], fresh["schedule"]["provider"] == run["schedule"]["provider"] else { throw RemoteError(message: "This remote chat changed. Refresh before continuing.") }
+            return try await request("chat.send", ["id": .string(id), "prompt": .string("Continue this conversation from where the interrupted turn left off. Preserve completed work and do not repeat completed external actions. Finish the current work before processing queued follow-up messages."), "mode": .string("queue"), "messageId": .string(deliveryID)])
+        }
     }
     func reviewFailure(_ id: String) async {
         guard connected, let chat = chats[id], chat["attentionRequired"].bool,

@@ -2,7 +2,13 @@
 
 The app registers with UIApplication, handles APNs success/failure, implements foreground presentation and notification tap routing, and submits the token to the separately consented shared API. A host-scoped chat identifier routes a tap to that Mac; it never falls back to another execution destination. Cold-launch taps follow the same route. Payload text is generic, without prompts, transcripts, credentials or URLs.
 
-The existing personal-team signing configuration is unchanged. APNs requires a paid Apple Developer Program team with Push Notifications enabled for `org.proteusapp.proteus.mobile`, a matching provisioning profile containing `aps-environment`, and the server's APNs credentials. Local alerts while a host is connected are not background APNs delivery. The UI reports registration and missing server configuration separately.
+Physical paid builds use `org.proteusapp.review.proteus` on the existing paid team `TEAMID0000`.
+`PaidAccount.xcconfig` requests the development push entitlement; the existing wildcard profile
+cannot satisfy it. Enable Push Notifications for this explicit App ID and select its matching
+profile without replacing shared certificates. Simulator and legacy Personal Team settings
+remain separate. The server APNs topic must be `org.proteusapp.review.proteus` and the sandbox/production
+endpoint must match the profile. Local connected-host alerts do not prove background delivery.
+Registration and missing server configuration are reported separately.
 
 On the designated signing Mac, enable Push Notifications with the existing paid team when available. For an explicit build, the included optional entitlements file can be selected using `CODE_SIGN_ENTITLEMENTS=ProteusPush.entitlements` and `PROTEUS_APNS_ENTITLEMENT_ENVIRONMENT=development` (production distribution: `production`). Do not select that file for a profile without push support. Set the `ProteusAPNSEnvironment` Info.plist value to `sandbox` for development or `production` for distribution to match that profile; the current default is sandbox. Never recreate certificates or profiles automatically.
 

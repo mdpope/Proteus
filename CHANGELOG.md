@@ -1,3 +1,10 @@
+## 0.2.30 — cross-platform release candidate
+
+- Restore iOS workspace/project/tab selection, retain all saved tab identities, prepare bounded URL suggestions off the main actor, cache thumbnails asynchronously and constrain overview previews.
+- Focus the iOS composer from its entire card; show known chat titles in attention rows, persist keep-awake/loaded-tab settings and share Activity, recovery and resource controls across clients.
+- Carry private-content-free notification routing identities through APNs and deduplicate foreground delivery. A push-enabled paid profile and live device acceptance are still required.
+- Automatically trust Claude working folders for read/write like Copilot, without changing workspace grants. Open Internet Search setup in retained draft tabs and allow completed update notices to be dismissed.
+
 ## October 25 — Combined Design Preview queue
 
 - Fix first-move acknowledgement when a window's project catalog lags the owner; scope tab visibility preflight and preserve Persisted pages.

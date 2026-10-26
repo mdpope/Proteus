@@ -1698,6 +1698,70 @@ extension DestinationTests {
 }
 
 final class NativeParityTests: XCTestCase {
+    func testProviderActivityGroupsMetadataWhilePreservingHumanAndAssistantMessages() {
+        let activity: JSON = .object(["role": .string("system"), "text": .string("Thinking"), "data": .object(["activity": .object(["kind": .string("thinking"), "provider": .string("codex")])])])
+        let commentary: JSON = .object(["role": .string("assistant"), "text": .string("An ordinary progress update"), "data": .object(["phase": .string("commentary")])])
+        let legacy: JSON = .object(["role": .string("system"), "text": .string("MTPLX is thinking.")])
+        XCTAssertTrue(NativeActivity.contains(activity))
+        XCTAssertFalse(NativeActivity.contains(commentary))
+        XCTAssertEqual(NativeActivity.group(events: [activity, commentary], startingAt: 0), [activity])
+        XCTAssertTrue(NativeActivity.contains(legacy, provider: "mtplx"))
+        XCTAssertFalse(NativeActivity.contains(legacy, provider: "codex"))
+        let feedback: JSON = .object(["role": .string("system"), "data": .object(["agentFeedback": .object([:]), "activity": .object([:])])])
+        XCTAssertFalse(NativeActivity.contains(feedback))
+    }
+    func testNativeResourcesAttributeSharedProcessesOnceAndProtectPersistedTabs() {
+        let tabs: [JSON] = [
+            .object(["id": .string("one"), "title": .string("One"), "loaded": .bool(true), "pid": .number(10), "persist": .bool(true)]),
+            .object(["id": .string("two"), "loaded": .bool(true), "pid": .number(20)]),
+            .object(["id": .string("three"), "loaded": .bool(true), "pid": .number(20)]),
+            .object(["id": .string("cold"), "loaded": .bool(false)])]
+        let processes: [JSON] = [.object(["pid": .number(1), "name": .string("App"), "memoryBytes": .number(1024)]), .object(["pid": .number(10), "memoryBytes": .number(2048)]), .object(["pid": .number(20), "memoryBytes": .number(4096)])]
+        let rows = NativeResourceRow.rows(.object(["tabs": .array(tabs), "processes": .array(processes)]))
+        XCTAssertEqual(rows.filter { $0.kind == "system" }.count, 2)
+        XCTAssertEqual(rows.filter { $0.kind == "loaded" }.count, 3)
+        XCTAssertEqual(rows.last?.id, "tab:cold")
+        XCTAssertFalse(rows.first { $0.id == "tab:one" }!.canUnload)
+        XCTAssertEqual(rows.first { $0.id == "tab:one" }?.process["memoryBytes"].int, 2048)
+        XCTAssertEqual(rows.first { $0.id == "tab:two" }?.process, .null)
+        XCTAssertTrue(rows.first { $0.id == "tab:two" }!.shared)
+    }
+    @MainActor func testDescriptorCacheKeepsOlderSelectedTabsBeyondOneHundred() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let url = folder.appendingPathComponent("tabs.enc"), key = RemoteCrypto.random()
+        let tabs = (0..<150).map { n in BrowserDescriptor(id: "tab-\(n)", title: "Page \(n)", url: "https://example.test/\(n)", scope: "main") }
+        NativeDescriptorCacheWriter.shared.save(tabs: tabs, selections: ["main": .string("tab-0")], snapshot: .null, key: key, account: "fixture", url: url)
+        NativeDescriptorCacheWriter.shared.flush()
+        let restored = try RemoteCrypto.open(String(contentsOf: url, encoding: .utf8), key: key, aad: "fixture")
+        XCTAssertEqual(restored["tabs"].array.count, 150)
+        XCTAssertEqual(restored["tabs"].array.first?["id"].string, "tab-0")
+        XCTAssertEqual(restored["selections"]["main"].string, "tab-0")
+    }
+    func testLargeHistoryIndexKeepsNewestUniqueMatchingVisitsAndBoundsResults() async {
+        var rows: [JSON] = (0..<30_000).map { n in .object(["id": .string("v\(n)"), "url": .string("https://example.test/\(n)"), "title": .string("Site \(n)"), "visitedAt": .string("2026-10-25T01:00:00Z")]) }
+        rows.append(.object(["id": .string("newest"), "url": .string("https://example.test/42"), "title": .string("Changed name"), "visitedAt": .string("2026-10-25T02:00:00.100Z")]))
+        rows.append(.object(["url": .string("javascript:alert(1)"), "title": .string("Changed name")]))
+        let snapshot = rows
+        let index = await Task.detached { NativeBrowserHistoryIndex(snapshot) }.value
+        XCTAssertEqual(index.matching("").count, 20)
+        XCTAssertEqual(index.matching("").first?["id"].string, "newest")
+        XCTAssertEqual(index.matching("changed NAME").map { $0["id"].string }, ["newest"])
+        XCTAssertEqual(index.matching("site impossible").count, 0)
+        XCTAssertEqual(index.matching("site", limit: 7).count, 7)
+        XCTAssertEqual(index.matching("changed", limit: 0).count, 0)
+    }
+    func testNavigationWriterRestoresExactContainerAndSelectionAfterFlush() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let url = folder.appendingPathComponent("navigation.enc"), key = RemoteCrypto.random()
+        let expected: JSON = .object(["area": .string("Workspaces"), "selected": .string("workspace:owner:workspace"), "phoneWorkspaceHost": .string("owner"), "phoneWorkspaceID": .string("workspace"), "phoneCurrentID": .string("browser:retained"), "tabs": .array([])])
+        NativeDescriptorCacheWriter.shared.saveNavigation(.object(["area": .string("Home")]), key: key, url: url)
+        NativeDescriptorCacheWriter.shared.saveNavigation(expected, key: key, url: url)
+        NativeDescriptorCacheWriter.shared.flush()
+        let restored = try RemoteCrypto.open(String(contentsOf: url, encoding: .utf8), key: key, aad: "proteus-mobile-navigation-v1")
+        XCTAssertEqual(restored, expected)
+    }
     func testMoveDestinationsGroupProjectsWithTheirWorkspaceAndKeepOwnersDistinct() {
         let context: JSON = .object(["workspaces": .array([.object(["id": .string("w"), "name": .string("Workspace")])])])
         let projects: JSON = .object(["projects": .array([.object(["id": .string("p"), "workspaceId": .string("w"), "name": .string("Project")])])])
@@ -1733,6 +1797,9 @@ final class NativeParityTests: XCTestCase {
     }
     @MainActor func testBrowserScopesAndOneHourSixTabRetention() throws {
         let shared = SharedAppStore()
+        let savedLimit = UserDefaults.standard.object(forKey: "proteus.loaded-tab-limit")
+        defer { if let savedLimit { UserDefaults.standard.set(savedLimit, forKey: "proteus.loaded-tab-limit") } else { UserDefaults.standard.removeObject(forKey: "proteus.loaded-tab-limit") } }
+        shared.loadedTabLimit = 6 // Exercise an explicit configured budget, independent of the default.
         shared.open(nil, title: "Main", scope: "main")
         let mainID = try XCTUnwrap(shared.selectedMainBrowser)
         XCTAssertTrue(shared.tabs(in: "team").isEmpty)
@@ -2321,7 +2388,11 @@ final class MessageSpeechTests: XCTestCase {
         output.event?(try XCTUnwrap(output.starts.last).token, .failed)
         XCTAssertNil(speech.messageID); XCTAssertEqual(speech.failedMessageID, "a"); XCTAssertNotNil(speech.error)
         speech.toggle(messageID: "b", markdown: "Retry")
-        try await Task.sleep(for: .milliseconds(70))
+        // Await the observable deadline effect: simulator load can delay task startup.
+        let deadline = ContinuousClock.now + .seconds(2)
+        while speech.messageID != nil && ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
         XCTAssertNil(speech.messageID); XCTAssertEqual(speech.failedMessageID, "b")
         speech.stop(); XCTAssertNil(speech.error); XCTAssertNil(speech.failedMessageID)
         speech.toggle(messageID: "empty", markdown: " \n "); XCTAssertNil(speech.messageID)

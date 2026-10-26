@@ -84,6 +84,9 @@ let nativeFixtureRelayOrigin = ""
     @Published var linkChatDraft: BrowserChatDraft?
     @Published var exportFile: BrowserExportFile?
     @Published var blockVideoAutoplay = UserDefaults.standard.bool(forKey: "proteus.block-video-autoplay")
+    @Published var loadedTabLimit = max(1, min(256, UserDefaults.standard.object(forKey: "proteus.loaded-tab-limit") as? Int ?? 7)) {
+        didSet { UserDefaults.standard.set(max(1, min(256, loadedTabLimit)), forKey: "proteus.loaded-tab-limit") }
+    }
     @Published private(set) var pageScales = UserDefaults.standard.dictionary(forKey: "proteus.page-scales.v1") as? [String: Int] ?? [:]
     private static let domainContext: JSContext? = {
         guard let url = Bundle.main.url(forResource: "domain-runtime", withExtension: "js", subdirectory: "markdown"), let script = try? String(contentsOf: url, encoding: .utf8), let context = JSContext() else { return nil }
@@ -257,7 +260,7 @@ let nativeFixtureRelayOrigin = ""
             if descriptor.url != nil && !isBrowserLoaded(descriptor.id) && !preservesLocalNavigation { unloadedBrowsers.insert(descriptor.id) }
         }
         // Publish one coherent list so a selected child never temporarily disappears.
-        browserTabs = nextBrowsers
+        if browserTabs != nextBrowsers { browserTabs = nextBrowsers }
         for tab in browserTabs where tab.persist && profileAvailable(tab.profileId) { reload(tab.id); _ = webView(tab) }
         let docIDs = Set(incoming.filter { $0["type"].string == "document" }.map { $0["documentId"].string })
         for old in documents(in: scope) where old.previewSource == nil && !docIDs.contains(old.id) { documentContents.removeValue(forKey: scope + ":" + old.id); documentSessions.removeValue(forKey: scope + ":" + old.id) }
@@ -436,6 +439,16 @@ let nativeFixtureRelayOrigin = ""
         for index in tabs.indices where tabs[index]["type"].string == "browser" {
             let tab = tabs[index], history = tab["history"]
             guard history["total"].int > history["entries"].array.count || history["offset"].int > 0 else { continue }
+            // Owners send a small window around the current entry. Reuse the
+            // already complete backstack when its revision and selected entry
+            // still match, instead of paging every tab again on every sync.
+            if let cached = browserTabs.first(where: { ($0.contentTabId ?? $0.id) == tab["id"].string && (contentSync[$0.scope]?.remote === remote || $0.ownerHostId == remote.connection?.hostId) })?.history,
+               cached.revision == history["revision"].int, cached.entries.count == history["total"].int,
+               let selected = cached.entries.firstIndex(where: { $0.id == history["currentEntryId"].string }),
+               let encoded = try? JSONEncoder().encode(BrowserTabHistory(entries: cached.entries, index: selected, currentEntryId: cached.entries[selected].id, revision: cached.revision)),
+               let complete = try? JSONDecoder().decode(JSON.self, from: encoded) {
+                var value = tab.object; value["history"] = complete; tabs[index] = .object(value); continue
+            }
             var entries: [JSON] = [], cursor: String? = nil, revision: Int? = nil, selected: JSON = history["currentEntryId"]
             repeat {
                 var args: [String: JSON] = ["scope": .string(kind), "id": .string(scopeID), "tabId": tab["id"], "limit": .number(200)]
@@ -578,21 +591,20 @@ let nativeFixtureRelayOrigin = ""
         guard !restoring, let cacheURL else { return }
         if descriptorCacheKey == nil { descriptorCacheKey = BrowserCacheKeychain.key() }
         guard let key = descriptorCacheKey else { return }
-        let safe = browserTabs.suffix(100).compactMap(Self.retainedDescriptor)
+        // The loaded-page budget is separate from saved tab identity. Taking a
+        // suffix here silently discarded older tabs (including the selected one).
+        let retained = browserTabs
         var selections = scopedSelection.mapValues(JSON.string)
         if let selectedBrowser { selections["team"] = .string(selectedBrowser) }
         if let selectedMainBrowser { selections["main"] = .string(selectedMainBrowser) }
-        NativeDescriptorCacheWriter.shared.save(tabs: safe, selections: selections, snapshot: snapshot, key: key, account: account, url: cacheURL)
+        NativeDescriptorCacheWriter.shared.save(tabs: retained, selections: selections, snapshot: snapshot, key: key, account: account, url: cacheURL)
     }
 
     private var shellCacheURL: URL { FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Proteus/navigation.enc") }
     func saveShellNavigation(_ value: JSON) {
-        guard let key = BrowserCacheKeychain.key() else { return }
-        do {
-            let sealed = try RemoteCrypto.seal(value, key: key, aad: "proteus-mobile-navigation-v1")
-            try FileManager.default.createDirectory(at: shellCacheURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try Data(sealed.utf8).write(to: shellCacheURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
-        } catch { /* Navigation restoration must never affect pairing or chat storage. */ }
+        if descriptorCacheKey == nil { descriptorCacheKey = BrowserCacheKeychain.key() }
+        guard let key = descriptorCacheKey else { return }
+        NativeDescriptorCacheWriter.shared.saveNavigation(value, key: key, url: shellCacheURL)
     }
     func loadShellNavigation() -> JSON {
         guard let key = BrowserCacheKeychain.key(), let data = try? Data(contentsOf: shellCacheURL) else { return .null }
@@ -787,14 +799,14 @@ let nativeFixtureRelayOrigin = ""
     }
     /// Browser history retains every HTTP(S) redirect destination, including query/fragment.
     /// Engine page state and request bodies are never persisted or replayed.
-    static func historyURL(_ text: String) -> URL? {
+    nonisolated static func historyURL(_ text: String) -> URL? {
         let input = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard input.utf8.count <= 4096, !input.unicodeScalars.contains(where: { CharacterSet.whitespacesAndNewlines.contains($0) || CharacterSet.controlCharacters.contains($0) }),
               let parts = URLComponents(string: input), ["http", "https"].contains(parts.scheme?.lowercased() ?? ""), let host = parts.host, !host.isEmpty, parts.user == nil, parts.password == nil,
               let url = parts.url, url.absoluteString.utf8.count <= 4096 else { return nil }
         return url
     }
-    private static func retainedDescriptor(_ tab: BrowserDescriptor) -> BrowserDescriptor? {
+    nonisolated static func retainedDescriptor(_ tab: BrowserDescriptor) -> BrowserDescriptor? {
         guard let text = tab.url else { return tab }
         guard let url = historyURL(text) else { return nil }
         var retained = tab; retained.url = url.absoluteString; retained.history = safeBrowserHistory(tab.history); return retained
@@ -969,7 +981,7 @@ let nativeFixtureRelayOrigin = ""
     func touch(_ id: String) { scheduleBrowserPreview(id); browserTouched[id] = Date(); if let index = browserTabs.firstIndex(where: { $0.id == id }) { browserTabs[index].lastTouchedAt = ISO8601DateFormatter().string(from: Date()) }; pruneBrowsers() }
     func persistBrowser(_ id: String, enabled: Bool) { guard let index = browserTabs.firstIndex(where: { $0.id == id }) else { return }; browserTabs[index].persist = enabled; if enabled { reload(id); _ = webView(browserTabs[index]) }; saveBrowsers() }
     func pruneBrowsers(now: Date = Date()) {
-        let recent = Set(browserTouched.filter { item in browserTabs.first(where: { $0.id == item.key })?.persist != true }.sorted { $0.value > $1.value }.prefix(6).map(\.key))
+        let recent = Set(browserTouched.filter { item in browserTabs.first(where: { $0.id == item.key })?.persist != true }.sorted { $0.value > $1.value }.prefix(max(1, min(256, loadedTabLimit))).map(\.key))
         for id in Array(browserViews.keys) where browserTabs.first(where: { $0.id == id })?.persist != true && !recent.contains(id) && now.timeIntervalSince(browserTouched[id] ?? .distantPast) >= 3600 { unload(id) }
     }
     func takeBrowserInsertionOrigin(_ id: String) -> String? { insertionOrigins.removeValue(forKey: id) }
@@ -1283,7 +1295,7 @@ let nativeFixtureRelayOrigin = ""
         guard let data = try? JSONEncoder().encode(json), let value = try? JSONDecoder().decode(BrowserTabHistory.self, from: data) else { return nil }
         return safeBrowserHistory(value)
     }
-    static func safeBrowserHistory(_ value: BrowserTabHistory?) -> BrowserTabHistory? {
+    nonisolated static func safeBrowserHistory(_ value: BrowserTabHistory?) -> BrowserTabHistory? {
         guard let value, value.entries.indices.contains(value.index), historyURL(value.entries[value.index].url) != nil else { return nil }
         var entries: [BrowserHistoryEntry] = []; var selected = 0
         for i in value.entries.indices {

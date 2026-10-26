@@ -4,6 +4,10 @@ import {recentItemMarkup} from './navigation-icons.js';
 import {bindWebChatPermissions} from './chat-permissions.js';
 import {chatLink} from '../../../public/features/chats/chat-links.js';
 import {mountChatRecovery} from '../../../public/features/chats/chat-recovery-controls.js';
+import {recoverRemoteChat} from '../../../public/services/remote/remote-chat-recovery.js';
+import {bindAllowancePreference} from '../../../public/features/chats/allowance-controls.js';
+import {mountProviderActivity} from '../../../public/features/chats/provider-activity-view.js';
+import {activityNote} from '../../../public/features/chats/activity-notes.js';
 import {authenticatedComputerMetadata,computerDescription} from '../../../public/services/remote/computer-identity.js';
 import {observeRunningChats} from './running-chats.js';
 import {createWebWorkspaces} from './workspaces.js';
@@ -104,7 +108,7 @@ async function uploadAttachment(item,{current,run,draftId,messageId,providerId})
     item.uploaded={scope,messageId,providerId,metadata,at:Date.now()};return metadata;
 }
 async function prepareAttachmentSend(current,run,key,retained,input,base){
-    const items=attachmentItems(current,key);if(!items.length)return {method:run?(['running','awaiting_input','queued'].includes(run.status)?'chat.send':'chat.resume'):'chat.start',args:base};
+    const items=attachmentItems(current,key);if(!items.length)return {method:run?'chat.send':'chat.start',args:base};
     if(!current.state?.capabilities?.includes('chat.attachments.v1'))throw new Error('Update Proteus on this computer to send attachments.');
     if(items.length>maxAttachmentFiles||items.some(item=>!item.file.size||item.file.size>maxAttachmentBytes)||items.reduce((total,item)=>total+item.file.size,0)>maxAttachmentBatchBytes)throw new Error('The selected files exceed the attachment limits. Remove files before sending.');
     const providerId=run?.schedule?.provider||input.provider,allowed=current.state.attachmentMediaTypes?.[providerId]||[];
@@ -330,6 +334,7 @@ function eventAnchor(event,index,eventStart=0){
     return `${at}:${role}:${content?hash.toString(36):eventStart+index}`;
 }
 function renderChatEvent(event,index,provider,eventStart=0){
+    if(event.data?.activity)return `<div class="remote-activity-item" data-provider-activity-index="${eventStart+index}"></div>`;
     if((event.role||event.type)==='assistant'&&!String(event.text||'').trim())return '';
     const role=event.role||event.type,label=role==='assistant'?providerName(provider):role;
     const files=role==='user'&&Array.isArray(event.data?.attachments)?`<div class="remote-sent-attachments">${event.data.attachments.map(item=>`<span>▤ ${escape(item.name||'File')} · ${escape(item.mediaType||'file')}</span>`).join('')}</div>`:'';
@@ -341,10 +346,11 @@ function renderAutomaticApproval(event){
     return `<div class="remote-activity-item remote-permission-detail"><strong>${permission.automatic?'✓ Automatic approval':'Permission '+escape(permission.decision||'decision')}${permission.intention?' · '+escape(permission.intention):permission.kind?' · '+escape(permission.kind):''}</strong><time>${escape(dateTime(event.at||event.timestamp||event.createdAt,appPreferences.timezone))}</time>${detail.length?`<p>${detail.map(escape).join(' · ')}</p>`:''}<details><summary>Original approval request</summary><pre>${escape(permission.request||'Original request was not recorded by this version.')}</pre></details></div>`;
 }
 function renderChatTimeline(events,provider,eventStart=0){
+    const classify=event=>isActivityEvent(event)||!!activityNote(event,{schedule:{provider}});
     const output=[];for(let index=0;index<events.length;){
-        if(!isActivityEvent(events[index])){output.push(renderChatEvent(events[index],index,provider,eventStart));index++;continue;}
+        if(!classify(events[index])){output.push(renderChatEvent(events[index],index,provider,eventStart));index++;continue;}
         const groupStart=index;
-        const items=[],toolStates=[];let failed=false,running=false,tools=0,approvals=0,decisions=0,systems=0;while(index<events.length&&isActivityEvent(events[index])){const event=events[index],tool=event.data?.tool;if(tool||(event.role||event.type)==='tool'){if(tool){tools++;toolStates.push(normalizedTool(tool));}failed ||= ['failed','error'].includes(normalizedTool(tool||{}).status)||Boolean(tool?.presentation?.error);running ||= tool?.status==='running';}if(event.data?.permission){if(event.data.permission.automatic)approvals++;else decisions++;}else if(!tool&&(event.role||event.type)!=='tool')systems++;index++;}
+        const items=[],toolStates=[];let failed=false,running=false,tools=0,approvals=0,decisions=0,systems=0;while(index<events.length&&classify(events[index])){const event=events[index],tool=event.data?.tool;if(tool||(event.role||event.type)==='tool'){if(tool){tools++;toolStates.push(normalizedTool(tool));}failed ||= ['failed','error'].includes(normalizedTool(tool||{}).status)||Boolean(tool?.presentation?.error);running ||= tool?.status==='running';}if(event.data?.permission){if(event.data.permission.automatic)approvals++;else decisions++;}else if(!tool&&(event.role||event.type)!=='tool')systems++;index++;}
         const summary=activitySummary(toolStates,approvals,decisions,systems);
         output.push(`<article class="remote-message remote-activity ${failed?'failed':''} ${running?'running':''}" data-event-key="${eventStart+groupStart}" data-event-anchor="${escape(eventAnchor(events[groupStart],groupStart,eventStart))}"><details data-activity-start="${eventStart+groupStart}" data-activity-end="${eventStart+index}"><summary><span>${escape(summary)}</span>${toolStates.length?`<span data-runtime-group="${escape(JSON.stringify(toolStates.map(t=>({startedAt:t.startedAt,finishedAt:t.finishedAt,status:t.status}))))}"></span>`:''}</summary><div class="remote-activity-items"></div></details></article>`);
     }return output.join('');
@@ -528,11 +534,12 @@ function renderChats(current) {
     for(const [id,mode] of [['remote-chat-autoapprove','autopilot'],['remote-chat-inherit','inherit'],['remote-pending-autoapprove','autopilot']])$(''+id)?.addEventListener('click',async()=>{try{const permission=run.permissionContext;if(!permission||!current.state.capabilities?.includes('chat.permissions.chat.v1'))throw new Error('Update Proteus on this computer to change chat-only approval.');const updated=await command('chat.permissions',{id:run.id,scope:'chat',mode,expectedContextId:permission.id,expectedChatRevision:permission.chatRevision,...(pending?.type==='permission'?{expectedRequestId:pending.id}:{})});current.run=updated;render();}catch(error){notice(error.message);}});
     const documentView=root.querySelector('.remote-chat-document');if(documentView&&openDocument){documentView.dataset.documentId=openDocument.documentId;documentView.dataset.version=String(openDocument.version);documentView._documentContent=openDocument.content;}
     root.querySelectorAll('[data-search-provider]').forEach(button=>button.onclick=event=>{const id=button.dataset.searchProvider;if(!current.state.defaults.internetSearches?.[id]?.model){event.preventDefault();notice('Configure '+providerLabel(id)+' Internet Search defaults in Engine Room on '+current.host.label+' first.');return;}$('remote-composer').elements.namedItem('provider').value=id;draft.values.provider=id;});
-    bindDraft('remote-composer', key, run ? (['running', 'awaiting_input', 'queued'].includes(run.status) ? 'chat.send' : 'chat.resume') : 'chat.start', async (input, retained) => { if (!input.prompt?.trim()) throw new Error('Enter a message.'); const base=run?{ id: run.id, prompt: input.prompt, mode: input.mode, messageId: retained.id,...(retained.modelOptionsChanged&&input.mode!=='steer'?{modelOptions:{model:input.model||'',reasoningEffort:input.reasoningEffort||'',contextTier:input.contextTier||'',serviceTier:input.serviceTier||''}}:{}) }:newInternet?{chatType:'internet',provider:input.provider,workspaceId:input.workspaceId,projectId:input.projectId,prompt:input.prompt}:{ ...input, selectedIds: retained.selectedIds || workspaces.profile?.defaults?.selectedIds || [], includeDefaults: input.includeDefaults !== 'false' };return prepareAttachmentSend(current,run,key,retained,input,base); }, async result => { if (result.runId) await openChat(result.runId); });
+    bindDraft('remote-composer', key, run ? 'chat.send' : 'chat.start', async (input, retained) => { if (!input.prompt?.trim()) throw new Error('Enter a message.'); const base=run?{ id: run.id, prompt: input.prompt, mode: input.mode, messageId: retained.id,...(retained.modelOptionsChanged&&input.mode!=='steer'?{modelOptions:{model:input.model||'',reasoningEffort:input.reasoningEffort||'',contextTier:input.contextTier||'',serviceTier:input.serviceTier||''}}:{}) }:newInternet?{chatType:'internet',provider:input.provider,workspaceId:input.workspaceId,projectId:input.projectId,prompt:input.prompt}:{ ...input, selectedIds: retained.selectedIds || workspaces.profile?.defaults?.selectedIds || [], includeDefaults: input.includeDefaults !== 'false' };return prepareAttachmentSend(current,run,key,retained,input,base); }, async result => { if (result.runId) await openChat(result.runId); });
     $('remote-steer')?.addEventListener('click',()=>{const form=$('remote-composer'),mode=form.elements.namedItem('mode');mode.value='steer';form.requestSubmit();mode.value='queue';},{signal:formBindings.renderBindings.signal});
     bindRemotePaths(root.querySelector('.remote-chat-details')||root,{notify:notice});
     if(run&&current.state?.capabilities?.includes('projects.v1'))bindWebChatPermissions(root.querySelector('.remote-chat-details'),{run,request:(method,args)=>commandForHost(current,method,args),refresh:updated=>{if(current.selected!==run.id)return;if(updated){current.run=mergeChatHistory(current.run,updated);preserveDrafts();render();}else return openChat(run.id);},workspace:()=>void workspaces.enter({hostId:current.host.hostId,id:run.permissionContext.workspaceId||run.schedule?.context?.workspaceId},'configuration').catch(error=>notice(error.message)),notify:notice});
     if(run&&current.state?.capabilities?.includes('chat.paths.v1'))bindRemoteDetails(root.querySelector('.remote-chat-details'),{run,request:(method,args)=>commandForHost(current,method,args),mutate:(method,args)=>commandForHost(current,method,args),refresh:()=>openChat(run.id),notify:notice,context:current.state.context});
+    if(run)bindAllowancePreference(root,{run,command:values=>commandForHost(current,'chat.recover',{id:run.id,...values}),reload:()=>openChat(run.id),notify:notice});
     bindAttachmentControls($('remote-composer'),current,key,run);
     const chatComposer=$('remote-composer'),modelFooter=chatComposer?.querySelector('.remote-composer-primary');
     if(modelFooter){const models=modelFooter.querySelector('.composer-models')||document.createElement('div');models.className='composer-models';const controls=[...modelFooter.children].filter(node=>node.matches('label'));if(controls.length){controls[0].before(models);for(const node of controls)models.append(node);}mountChatComposer(chatComposer.querySelector('.new-chat-composer')||chatComposer,{pane:root.querySelector('.remote-new-chat')||undefined,textarea:chatComposer.querySelector('[name=prompt]'),models,actions:chatComposer.querySelector('.remote-composer-actions'),active:!!run&&['running','awaiting_input','queued'].includes(run.status)});}
@@ -810,12 +817,19 @@ function rememberActivityDisclosures(current,scope=root){
  current.activityDisclosures ||= new Set();scope.querySelectorAll('[data-activity-disclosure]').forEach(details=>{if(details.open)current.activityDisclosures.add(details.dataset.activityDisclosure);else current.activityDisclosures.delete(details.dataset.activityDisclosure);});
 }
 function mountEventMarkdown(scope,current,run){
+ scope.dataset.linkCwd=run?.workspace?.cwd||run?.schedule?.workspace?.cwd||run?.schedule?.context?.cwd||'';
+ for(const element of scope.querySelectorAll('[data-provider-activity-index]')){
+  const index=Number(element.dataset.providerActivityIndex),entry=run.events[index-(run.eventStart||0)];
+  if(!entry?.data?.activity)continue;
+  current.activityDisclosures ||= new Set();
+  mountProviderActivity(element,{...entry,key:String(index)},run,{time:activityTime,verified:current.client?.status==='online',now:()=>Date.now(),disclosures:current.activityDisclosures,renderMarkdown:mountMarkdown});
+ }
  for(const element of scope.querySelectorAll('[data-markdown-event]')){
   const entry=run.events[Number(element.dataset.markdownEvent)-(run.eventStart||0)];
   if(!entry)continue;
   mountChatRecovery(element.parentElement,entry,run,{notify:notice,recover:run.chatControls?.recovery?async(action,expectedFailureEventAt)=>{
    if(session()!==current||current.run?.id!==run.id)throw new Error('The selected chat changed. Review it before continuing.');
-   await commandForHost(current,'chat.recover',{id:run.id,action,expectedFailureEventAt});
+   await recoverRemoteChat({run,action,expectedFailureEventAt,request:(method,args)=>commandForHost(current,method,args),mutate:(method,args)=>commandForHost(current,method,args)});
    const fresh=await commandForHost(current,'chat.get',{id:run.id});
    if(session()===current&&current.run?.id===run.id){preserveDrafts();current.run=mergeChatHistory(current.run,fresh);render();}
   }:null});

@@ -39,6 +39,7 @@ async function handoff(f,job){return f.controller.handle({action:'handoff',id:jo
 test('completed updater card clears an old idle blocker while preserving real failure evidence',async t=>{
  const f=fixture(t);await prepare(f);writeJob(f.controller.file,{phase:'waiting-for-idle',blocker:'A model turn is active.'});assert.match(f.controller.status().job.blocker,/active/);
  writeJob(f.controller.file,{phase:'complete',outcome:'updated',error:'Retained diagnostic',blocker:'A model turn is active.'});const status=f.controller.status();assert.equal(status.job.blocker,null);assert.equal(status.job.error,'Retained diagnostic');assert.equal(status.job.outcome,'updated');
+ writeJob(f.controller.file,{phase:'attention',blocker:'Inspect uncertain continuation before retrying.'});assert.match(f.controller.status().job.blocker,/uncertain continuation/);
 });
 
 test('installed baseline helper path still arms the organized helper and acknowledges readiness',async t=>{

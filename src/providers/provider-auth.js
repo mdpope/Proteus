@@ -77,7 +77,7 @@ export class ProviderAuthManager {
     record.stopListening();record.stopListening=null;
     if(closed)throw new Error('Codex login connection closed.');
     if(record.stopped||!completion)return;if(!completion.success)throw new Error('Codex sign-in failed.');
-    try{const account=await client.request('account/read',{refreshToken:true},5000);record.accountLabel=accountLabel(account?.account?.email)||null;}catch{}
+    try{const account=await client.request('account/read',{refreshToken:false},5000);record.accountLabel=accountLabel(account?.account?.email)||null;}catch{}
     await this.verify(record);
   }
   async claude(record){

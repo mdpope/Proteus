@@ -67,3 +67,14 @@ test('provider sign-in launcher honors browser preference without silently switc
  await assert.rejects(openPreferredBrowser('https://auth.example.test/',{system:options.system}),/not ready/);
  await assert.rejects(openPreferredBrowser('https://user:password@auth.example.test/',options),/without credentials/);assert.equal(calls.length,2);
 });
+
+test('SafariSelector handoff targets its installed bundle explicitly without invoking the default browser',async()=>{
+ const {openSafariSelector}=require('../desktop/link-routing/preferred-browser.cjs'),calls=[];
+ const launch=async(...args)=>calls.push(args),url='https://example.test/a?x=one&y=two';
+ assert.deepEqual(await openSafariSelector(url,{platform:'darwin',launch}),{handedOff:true,browser:'safariselector'});
+ assert.deepEqual(calls,[['/usr/bin/open',['-b','org.proteusapp.review.SafariSelector',url]]]);
+ await assert.rejects(openSafariSelector('file:///tmp/test',{platform:'darwin',launch}),/HTTP/);
+ await assert.rejects(openSafariSelector(url,{platform:'linux',launch}),/macOS/);
+ await assert.rejects(openSafariSelector(url,{platform:'darwin',launch:async()=>{throw Error('missing');}}),/installed/);
+ assert.equal(calls.length,1);
+});

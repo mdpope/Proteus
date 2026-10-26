@@ -1017,15 +1017,21 @@ final class RemoteUITests: XCTestCase {
         let app = nativeFixtureApplication()
         app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-notification-fixtures", "--synthetic-notification-controls"]
         app.launch()
-        let home = app.tabBars.buttons["Home"]
+        func openHome() {
+            let navigation = app.buttons.matching(identifier: "phone-app-navigation").allElementsBoundByIndex.first { $0.isHittable }
+            if let navigation { navigation.tap(); app.buttons["phone-nav-Home"].tap() }
+            else { app.tabBars.buttons["Home"].tap() }
+        }
+        openHome()
         for _ in 0..<4 where !app.buttons["Tap chat notification"].exists { app.swipeUp() }
         XCTAssertTrue(app.buttons["Tap chat notification"].waitForExistence(timeout: 15))
         app.buttons["Tap chat notification"].tap()
         XCTAssertTrue(app.staticTexts["Notification destination loaded"].waitForExistence(timeout: 12), "Foreground chat tap should open its cached conversation")
-        home.tap()
+        openHome()
         for _ in 0..<4 where !app.buttons["Tap schedule notification"].exists { app.swipeUp() }
         app.buttons["Tap schedule notification"].tap()
-        XCTAssertTrue(app.navigationBars["Notification fixture schedule"].waitForExistence(timeout: 12), "Schedule tap should open the schedule on the correct Mac")
+        let scheduleShot = XCTAttachment(screenshot: app.screenshot()); scheduleShot.name = "Schedule notification destination"; scheduleShot.lifetime = .keepAlways; add(scheduleShot)
+        XCTAssertTrue(app.navigationBars["Notification fixture schedule"].waitForExistence(timeout: 12), "Schedule tap should open the schedule on the correct Mac: " + app.staticTexts["notification-fixture-status"].label)
         app.buttons["Done"].tap()
         for _ in 0..<4 where !app.buttons["Tap unavailable notification"].exists { app.swipeUp() }
         app.buttons["Tap unavailable notification"].tap()
@@ -1042,6 +1048,7 @@ final class RemoteUITests: XCTestCase {
         app.terminate()
         app.launchArguments = ["--synthetic-notification-controls"]
         app.launch()
+        openHome()
         for _ in 0..<4 where !app.buttons["Stage background chat notification"].exists { app.swipeUp() }
         XCTAssertTrue(app.buttons["Stage background chat notification"].waitForExistence(timeout: 12))
         app.buttons["Stage background chat notification"].tap()
@@ -2334,7 +2341,9 @@ final class PhoneSidebarPreviewUITests: XCTestCase {
 
 /// Existing signed preview identities and pairings; provider execution is the local fixture.
 @MainActor private func openComposerDesignPreview(phone: Bool) -> XCUIApplication {
-    let app = XCUIApplication(bundleIdentifier: phone ? "org.proteusapp.review.proteus.iphone-preview" : "org.proteusapp.review.proteus.ipad-preview")
+    // Exercise the app built by this test invocation, with its current fixture
+    // ports, instead of a separately installed and potentially stale preview.
+    let app = nativeFixtureApplication()
     app.launchArguments = ["--reset-pairing", "--native-design-preview", "--phone-preview-fixture", "--synthetic-browser-workspace", "--native-app-fixture"]
     app.launch()
     if phone {
@@ -2372,7 +2381,8 @@ final class PhoneComposerPreviewUITests: XCTestCase {
         XCTAssertTrue(compact.waitForExistence(timeout: 10)); XCTAssertLessThanOrEqual(compact.frame.height, 44)
         XCTAssertFalse(app.buttons["send-message"].exists); XCTAssertFalse(app.buttons["composer-options"].exists); XCTAssertFalse(app.buttons["chat-attach"].exists)
         let compactShot = XCTAttachment(screenshot: app.screenshot()); compactShot.name = "Final iPhone one-line composer"; compactShot.lifetime = .keepAlways; add(compactShot)
-        compact.tap()
+        let collapsedCard = app.descendants(matching: .any).matching(identifier: "reply-composer-card").firstMatch
+        collapsedCard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0)).withOffset(CGVector(dx: 0, dy: 2)).tap()
         let editor = app.textViews["reply-text"]
         XCTAssertTrue(editor.waitForExistence(timeout: 5)); XCTAssertTrue(app.buttons["send-message"].exists)
         let initialHeight = editor.frame.height
@@ -2395,13 +2405,51 @@ final class PhoneComposerPreviewUITests: XCTestCase {
         XCTAssertTrue(app.buttons["composer-section-Model"].waitForExistence(timeout: 5)); XCTAssertTrue(app.buttons["composer-section-Level"].exists)
         app.buttons["Done"].tap()
         editor.tap(); editor.typeText(String(repeating: "\n", count: 45))
-        XCTAssertEqual(editor.value as? String, draft + String(repeating: "\n", count: 45))
+        let completeDraft = draft + String(repeating: "\n", count: 45)
+        let committed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in editor.value as? String == completeDraft }, object: editor)
+        XCTAssertEqual(XCTWaiter.wait(for: [committed], timeout: 3), .completed)
+        XCTAssertEqual(editor.value as? String, completeDraft)
         let card = app.descendants(matching: .any).matching(identifier: "reply-composer-card").firstMatch
         XCTAssertLessThanOrEqual(card.frame.height, app.frame.height * 0.5 + 1)
         let cappedShot = XCTAttachment(screenshot: app.screenshot()); cappedShot.name = "iPhone composer capped at half-screen with scrolling text"; cappedShot.lifetime = .keepAlways; add(cappedShot)
         app.buttons["send-message"].tap()
         let saved = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Checkpoint saved:")).firstMatch
         XCTAssertTrue(saved.waitForExistence(timeout: 15), "Only the Send button submits the iPhone draft to the synthetic provider")
+    }
+}
+
+final class NativeReleaseParityUITests: XCTestCase {
+    override func setUpWithError() throws { continueAfterFailure = false }
+    @MainActor func testPhoneRestoresProjectBrowserWithLargeHistoryAndBoundedOverview() throws {
+        try XCTSkipIf(UIDevice.current.userInterfaceIdiom != .phone, "Phone restoration fixture")
+        let app = nativeFixtureApplication()
+        app.launchArguments = ["--reset-pairing", "--synthetic-destinations", "--synthetic-long-chat", "--synthetic-workspace-tab-icons", "--synthetic-workspace-browser-selection", "--synthetic-project-restore", "--synthetic-large-browser"]
+        app.launch()
+        let drawer = app.buttons["phone-app-navigation"]
+        XCTAssertTrue(drawer.waitForExistence(timeout: 15)); drawer.tap()
+        let workspace = app.buttons["workspace-tree-open-workspace:10000000-0000-4000-8000-000000000001:native-icon-workspace"]
+        XCTAssertTrue(workspace.waitForExistence(timeout: 10)); workspace.tap()
+        let first = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label BEGINSWITH %@", "workspace-child-tab-", "First browser page")).firstMatch
+        XCTAssertTrue(first.waitForExistence(timeout: 10))
+        XCTAssertEqual(first.value as? String, "Selected")
+        XCTAssertTrue(app.buttons["browser-tab-overview"].waitForExistence(timeout: 10))
+        app.buttons["browser-tab-overview"].tap()
+        XCTAssertTrue(app.otherElements["phone-tab-overview"].waitForExistence(timeout: 5))
+        let cards = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "phone-tab-browser:"))
+        XCTAssertGreaterThanOrEqual(cards.count, 2)
+        for card in cards.allElementsBoundByIndex.prefix(2) {
+            XCTAssertLessThanOrEqual(card.frame.width, (app.frame.width - 36 - 18) / 2 + 2)
+            XCTAssertGreaterThanOrEqual(card.frame.minX, app.frame.minX)
+            XCTAssertLessThanOrEqual(card.frame.maxX, app.frame.maxX)
+        }
+        XCTAssertFalse(app.keyboards.firstMatch.exists)
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "100 saved tabs and 30000 history entries with tall previews"; shot.lifetime = .keepAlways; add(shot)
+        app.buttons["Done"].tap()
+        XCUIDevice.shared.press(.home)
+        app.terminate(); app.launchArguments = []; app.launch()
+        XCTAssertTrue(first.waitForExistence(timeout: 15), "Cold launch must return to the same saved workspace/project instead of Home")
+        XCTAssertEqual(first.value as? String, "Selected")
+        XCTAssertTrue(app.buttons["browser-tab-overview"].exists)
     }
 }
 

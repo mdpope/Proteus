@@ -30,11 +30,12 @@ class DeliverAppPush extends Command
                 }
                 $item = $records->decode($row);
                 $subscription = $records->query($user, 'push-subscriptions')->where('id', $item['subscriptionId'])->first();
-                $result = $subscription ? $push->deliver($records->decode($subscription)) : 'expired';
+                $notification = $records->query($user, 'notifications')->where('id', $item['notificationId'])->first();
+                $result = ! $notification ? 'obsolete' : ($subscription ? $push->deliver($records->decode($subscription), $records->decode($notification)) : 'expired');
                 if ($result === 'unavailable') {
                     continue;
                 }
-                if (in_array($result, ['accepted', 'expired']) || $item['attempts'] >= 4) {
+                if (in_array($result, ['accepted', 'expired', 'obsolete']) || $item['attempts'] >= 4) {
                     $records->query($user, 'push-outbox')->where('id', $row->id)->delete();
                     if ($result === 'expired' && $subscription) {
                         $records->query($user, 'push-subscriptions')->where('id', $subscription->id)->delete();

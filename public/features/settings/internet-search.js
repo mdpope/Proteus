@@ -7,26 +7,26 @@ export function searchDefaultsFields(id,catalog,value={},escape=String){
   const select=(key,label,choices,current)=>`<label>${label}<select data-search-option="${key}" data-provider="${escape(id)}">${choices.map(([v,t])=>`<option value="${escape(v)}" ${v===(current||'')?'selected':''}>${escape(t)}</option>`).join('')}</select></label>`;
   return select('model','Model',[['','Choose a model'],...models.map(m=>[m.id,m.name||m.id])],value.model)+select('reasoningEffort','Thinking effort',[['','Provider default'],...(controls.reasoningEfforts||[]).map(v=>[v,v])],value.reasoningEffort)+select('serviceTier','Speed',[['','Provider default'],...(controls.serviceTiers||[]).map(v=>[v.id,v.label||v.id])],value.serviceTier);
 }
-export function internetSearchDialog(ui){
-  const {state,escape:e,showDialog,api,toast}=ui,data=state.data,context=data.context;
-  const providers=internetProviders(data);let selected='',busy=false;
-  showDialog(`<h2>Internet Search</h2><label>Workspace<select id="search-workspace" ${ui.workspaceId?'disabled aria-label="Workspace fixed to this workspace"':''}>${context.workspaces.map(w=>`<option value="${e(w.id)}" ${w.id===(ui.workspaceId||context.defaultWorkspaceId)?'selected':''}>${e(w.name)}</option>`).join('')}</select></label><section class="composer internet-search-composer"><textarea id="search-prompt" rows="4" placeholder="What would you like to search for?" aria-label="Search"></textarea><div class="composer-footer"><div id="search-attachments"></div><div class="composer-actions">${providers.map(id=>`<button class="primary" data-search-provider="${e(id)}">Search with ${e(providerLabel(id))}</button>`).join('')}</div></div><p id="search-status" class="note" role="status"></p></section><div class="actions"><button id="close-dialog">Cancel</button></div>`,()=>{});
-  const dialog=document.querySelector('#dialog'),prompt=dialog.querySelector('#search-prompt');
-  dialog.classList.add('internet-search-dialog');dialog.addEventListener('close',()=>dialog.classList.remove('internet-search-dialog'),{once:true});
-  mountAttachmentPicker({key:'internet-search',host:dialog.querySelector('#search-attachments'),textarea:prompt,provider:()=> 'search',mediaTypes:{search:[...new Set(Object.values(data.attachmentMediaTypes||{}).flat())]},notify:toast});
-  dialog.querySelectorAll('[data-search-provider]').forEach(button=>button.onclick=async()=>{
-    if(busy)return;selected=button.dataset.searchProvider;
+export function mountInternetSearch(ui){
+  const {state,escape:e,api,toast,surface}=ui,data=state.data,context=data.context;
+  const providers=internetProviders(data),key=surface.attachmentKey;let busy=false;
+  const root=surface.mount(`<h2>Internet Search</h2><label>Workspace<select id="chat-workspace" ${ui.lockWorkspace?'disabled aria-label="Workspace fixed to this workspace"':''}>${context.workspaces.map(w=>`<option value="${e(w.id)}" ${w.id===(ui.workspaceId||context.defaultWorkspaceId)?'selected':''}>${e(w.name)}</option>`).join('')}</select></label><section class="composer internet-search-composer"><textarea id="chat-prompt" rows="4" placeholder="What would you like to search for?" aria-label="Search"></textarea><div class="composer-footer"><div data-search-attachments></div><div class="composer-actions">${providers.map(id=>`<button class="primary" data-search-provider="${e(id)}">Search with ${e(providerLabel(id))}</button>`).join('')}</div></div><p data-search-status class="note" role="status"></p></section><div class="actions"><button id="close-dialog">Cancel</button><button id="dialog-submit" hidden disabled>Search</button></div>`,()=>{});
+  const prompt=root.querySelector('textarea'),workspace=root.querySelector('select');
+  prompt.value=surface.initial.prompt||'';surface.restore();surface.ready();
+  mountAttachmentPicker({key,host:root.querySelector('[data-search-attachments]'),textarea:prompt,provider:()=> 'search',mediaTypes:{search:[...new Set(Object.values(data.attachmentMediaTypes||{}).flat())]},notify:toast});
+  root.querySelectorAll('[data-search-provider]').forEach(button=>button.onclick=async()=>{
+    if(busy)return;const selected=button.dataset.searchProvider;
     if(!prompt.value.trim()){prompt.focus();return;}
-    if(!data.settings.internetSearches?.[selected]?.model){dialog.querySelector('#search-status').textContent='Choose defaults for '+providerLabel(selected)+' in Engine Room → Internet Searches first.';return;}
-    busy=true;dialog.querySelectorAll('[data-search-provider]').forEach(b=>b.disabled=true);
+    if(!data.settings.internetSearches?.[selected]?.model){root.querySelector('[data-search-status]').textContent='Choose defaults for '+providerLabel(selected)+' in Engine Room → Internet Searches first.';return;}
+    busy=true;root.querySelectorAll('[data-search-provider]').forEach(b=>b.disabled=true);
     try{
       ui.beforeStart?.();
-      const delivery=await prepareLocalAttachments({key:'internet-search',providerId:selected,destination:computerName(data.hostName)+' · Internet Search',draftId:crypto.randomUUID(),messageId:crypto.randomUUID(),mediaTypes:data.attachmentMediaTypes||{},post:api});
+      const delivery=await prepareLocalAttachments({key,providerId:selected,destination:computerName(data.hostName)+' · Internet Search',draftId:crypto.randomUUID(),messageId:crypto.randomUUID(),mediaTypes:data.attachmentMediaTypes||{},post:api});
       ui.beforeStart?.();
-      const run=await api('/api/chat',{chatType:'internet',provider:selected,workspaceId:dialog.querySelector('#search-workspace').value,...(ui.projectId?{projectId:ui.projectId}:{}),prompt:prompt.value,...(delivery||{})});
-      clearAttachments('internet-search');dialog.close();await ui.refresh();ui.open(run);
-    }catch(error){toast(error.message);}finally{busy=false;dialog.querySelectorAll('[data-search-provider]').forEach(b=>b.disabled=false);}
-  });prompt.focus();
+      const run=await api('/api/chat',{chatType:'internet',provider:selected,workspaceId:workspace.value,...(ui.projectId?{projectId:ui.projectId}:{}),prompt:prompt.value,...(delivery||{})});
+      clearAttachments(key);await ui.refresh();ui.open(run);
+    }catch(error){toast(error.message);}finally{busy=false;root.querySelectorAll('[data-search-provider]').forEach(b=>b.disabled=false);}
+  });if(surface.active())prompt.focus();
 }
 export async function renderInternetDefaults(ui,container,active=()=>true){
   const settings=ui.state.data.settings,values=structuredClone(settings.internetSearches||{}),providers=internetProviders(ui.state.data),catalogs={};

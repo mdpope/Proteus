@@ -89,12 +89,10 @@
 .remote-new-chat .new-chat-composer{margin-top:auto}
 
 /* The search dialog's extra area belongs to the message, with viewport bounds. */
-#dialog.internet-search-dialog[open]{width:min(1170px,calc(100vw - 48px));max-width:calc(100vw - 48px);height:min(690px,calc(100dvh - 48px));max-height:calc(100dvh - 48px);display:flex;flex-direction:column}
-.internet-search-dialog .internet-search-composer{flex:1;min-height:0;display:flex;flex-direction:column}
-.internet-search-dialog .internet-search-composer textarea{flex:1;min-height:120px;max-height:none;resize:none;overflow-y:auto}
-.internet-search-dialog .composer-footer,.internet-search-dialog>h2,.internet-search-dialog>label,.internet-search-dialog>.actions,.internet-search-dialog #search-status{flex:none}
-.internet-search-dialog #search-status:empty{display:none}
-@media(max-width:600px){#dialog.internet-search-dialog[open]{width:calc(100vw - 24px);max-width:calc(100vw - 24px);height:calc(100dvh - 24px);max-height:calc(100dvh - 24px)}.internet-search-dialog .composer-actions{flex-wrap:wrap}}
+.new-chat-tab-panel .internet-search-composer{flex:1;min-height:0;display:flex;flex-direction:column}
+.new-chat-tab-panel .internet-search-composer textarea{flex:1;min-height:120px;max-height:none;resize:none;overflow-y:auto}
+.internet-search-composer [data-search-status]:empty{display:none}
+@media(max-width:600px){.internet-search-composer .composer-actions{flex-wrap:wrap}}
 
 /* Preview approval choices stay visible beside the conversation. */
 .preview-mode-toggle{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--line);border-radius:9px;overflow:hidden;margin:10px 0}

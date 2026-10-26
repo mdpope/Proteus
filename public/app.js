@@ -34,7 +34,7 @@ import {chatType} from './features/chats/chat-types.js';
 import {mountChatComposer,mountNewChatComposer} from './features/chats/chat-composer.js';
 import {renderRunDetails,approvalDetails,bindChatFolderTrust} from './features/chats/chat-details.js';
 import {createToast} from './shared/ui/toast.js';
-import {internetSearchDialog} from './features/settings/internet-search.js';
+import {mountInternetSearch} from './features/settings/internet-search.js';
 import {selectChatType} from './features/chats/chats-index.js';
 import { mergeChatHistory } from './features/chats/chat-history.js';
 import { renderAgentTerminal } from './features/tools/agent-terminal.js';
@@ -747,7 +747,7 @@ function renameChat(row){
 }
 async function beginChatSetup(blank,draft={}){
  if(!blank){const info=await window.desktop.browser({action:'create',parentId:draft.parentId});blank=state.tabs.find(tab=>tab.id===info.id)||{id:info.id,type:'browser',label:'New chat',info,...(draft.parentId?{parentId:draft.parentId}:{})};}
- blank.pendingOpen=true;blank.newChatDraft={schemaVersion:1,...draft};blank.customTitle='New chat';blank.label='New chat';openTab(blank);
+ blank.pendingOpen=true;blank.newChatDraft={schemaVersion:1,...draft};blank.customTitle=draft.chatType==='internet'?'Internet Search':'New chat';blank.label=blank.customTitle;openTab(blank);
 }
 function finishChatSetup(blank,created){
  const active=state.tab===blank.id,index=state.tabs.indexOf(blank),parentId=blank.parentId,runId=created.runId||created.id;
@@ -1035,9 +1035,7 @@ function selectedChatParent(){
  return parent&&['run','remote-run','workspace'].includes(parent.type)?parent:null;
 }
 async function newWorkspaceChat(parent,internet=false,prompt=''){
- if(!internet)return beginChatSetup(null,{parentId:parent.id,workspaceId:parent.workspaceId,projectId:parent.projectId||workspaceProjectsCatalog(state)?.defaultProjectIds?.[parent.workspaceId],hostId:parent.hostId,lockWorkspace:true,prompt});
- if(parent.hostId)return openWorkspaceChatDialog(parent.hostId,parent.workspaceId,(id,title)=>openWorkspaceChat(parent,{id,title}),{chatType:'internet',projectId:parent.projectId,prompt});
- return internetSearchDialog({state,api,escape,toast,showDialog,workspaceId:parent.workspaceId,projectId:parent.projectId,open:run=>openWorkspaceChat(parent,run),refresh});
+ return beginChatSetup(null,{parentId:parent.id,workspaceId:parent.workspaceId,projectId:parent.projectId||workspaceProjectsCatalog(state)?.defaultProjectIds?.[parent.workspaceId],hostId:parent.hostId,lockWorkspace:true,prompt,...(internet?{chatType:'internet'}:{})});
 }
 
 function tabToLeft(tab, tabs=state.tabs) {
@@ -1150,7 +1148,7 @@ function renderTabs() {
   $('#tabs').querySelectorAll('[data-close]').forEach(button=>button.onclick=event=>{event.stopPropagation();void closeTopTab(button.dataset.close).catch(error=>toast(error.message));});
 
   const mainMenu=$('#tab-add-menu');mainMenu.open=menuWasOpen;mainMenu.querySelector('summary').onclick=event=>{event.preventDefault();$('#browser')?.click();};
-  $('#internet-search').onclick=()=>{ $('#tab-add-menu').open=false;internetSearchDialog({state,escape,showDialog,api,toast,refresh,open:runTab}); };
+  $('#internet-search').onclick=()=>{ $('#tab-add-menu').open=false;void beginChatSetup(null,{chatType:'internet'}); };
   $('#new-chat').onclick=()=>{ $('#tab-add-menu').open=false;chatDialog(); };$('#markdown').onclick=()=>{ $('#tab-add-menu').open=false;markdownDialog(); };
   $('#terminal').onclick=()=>{ $('#tab-add-menu').open=false;openTerminalDialog(); };
   $('#browser').onclick=async()=>{ $('#tab-add-menu').open=false;try{if(!window.desktop)throw new Error('Open the desktop app to use browser tabs.');await withNewTabInput(async capture=>{const info=await window.desktop.browser({action:'create'});capture.bind(info.id);openTab({id:info.id,type:'browser',label:info.title||'New tab',info});});}catch(error){render();toast(error.message);}};
@@ -1191,13 +1189,12 @@ function newTabAction(blank,action){
     return beginChatSetup(blank,parent?{workspaceId:parent.workspaceId,projectId:parent.projectId,hostId:parent.hostId,lockWorkspace:true}:{});
   }
   if(['internet','internet-search'].includes(action.id)){
-    if(parent?.hostId)return openWorkspaceChatDialog(parent.hostId,parent.workspaceId,(id,title)=>replace({id:parent.id+':chat:'+id,type:'remote-run',hostId:parent.hostId,runId:id,label:title}),{projectId:parent.projectId,chatType:'internet',beforeStart:guard});
-    return internetSearchDialog({state,api,escape,toast,showDialog,refresh,workspaceId:parent?.workspaceId,projectId:parent?.projectId,beforeStart:guard,open:run=>replace({id:run.id,type:'run',label:run.title})});
+    return beginChatSetup(blank,{chatType:'internet',...(parent?{workspaceId:parent.workspaceId,projectId:parent.projectId,hostId:parent.hostId,lockWorkspace:true}:{})});
   }
 }
 function renderBrowser() {
   const tab=state.tabs.find(t=>t.id===state.tab);
-  if(tab.newChatDraft){selectBrowserSurface();void window.desktop.browser({action:'hide',...browserSurfaceIdentity()});chatSetupTabs.show(tab,surface=>{const guard=()=>{if(!state.tabs.includes(tab))throw Error('This chat setup tab was closed.');};if(surface.initial.hostId)return openWorkspaceChatDialog(surface.initial.hostId,surface.initial.workspaceId,(id,title,hostId)=>finishChatSetup(tab,{id:'peer:'+hostId+':'+id,type:'remote-run',hostId,runId:id,label:title||'Chat'}),{...surface.initial,surface,beforeStart:guard});return chatDialog(created=>finishChatSetup(tab,created),guard,surface.initial,surface);});renderChatSubtabs();return;}
+  if(tab.newChatDraft){selectBrowserSurface();void window.desktop.browser({action:'hide',...browserSurfaceIdentity()});chatSetupTabs.show(tab,surface=>{const guard=()=>{if(!state.tabs.includes(tab))throw Error('This chat setup tab was closed.');};if(surface.initial.hostId)return openWorkspaceChatDialog(surface.initial.hostId,surface.initial.workspaceId,(id,title,hostId)=>finishChatSetup(tab,{id:'peer:'+hostId+':'+id,type:'remote-run',hostId,runId:id,label:title||'Chat'}),{...surface.initial,surface,beforeStart:guard});if(surface.initial.chatType==='internet')return mountInternetSearch({state,api,escape,toast,refresh,...surface.initial,beforeStart:guard,surface,open:run=>finishChatSetup(tab,{id:run.id,type:'run',label:run.title})});return chatDialog(created=>finishChatSetup(tab,created),guard,surface.initial,surface);});renderChatSubtabs();return;}
   selectBrowserSurface();
   $('#main').classList.add('browser-main');
   $('#main').innerHTML='<form class="browserbar" id="browser-form"><button type="button" id="browser-back" aria-label="Back">←</button><button type="button" id="browser-forward" aria-label="Forward">→</button><button type="button" id="browser-reload" aria-label="Reload or stop">↻</button>'+browserAddress('browser','Browser address')+'<button class="browser-go" type="submit" id="browser-go" aria-label="Load address" title="Load address">↵</button><button type="button" id="browser-fill-login" title="Fill login" aria-label="Fill login">⚿</button></form><div id="browser-area" class="browserarea"></div>';

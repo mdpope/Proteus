@@ -179,11 +179,24 @@ struct NativePhoneTab: Identifiable {
     private var captureTask: Task<Void, Never>?
     private var delayedCapture: Task<Void, Never>?
     private var delayedCaptureID = ""
+    private var previewRefreshTask: Task<Void, Never>?
     var browserOwnsBack = false
     var snapshot: (() -> UIImage?)?
     var showTabs: (() -> Void)?
     var activateArea: ((String) -> Void)?
     var newMainChat: ((Bool) -> Void)?
+
+    func refreshThumbnails() {
+        guard previewRefreshTask == nil else { return }
+        previewRefreshTask = Task { @MainActor [weak self] in
+            do { try await Task.sleep(for: .milliseconds(60)) } catch { return }
+            guard let self else { return }; previewRefreshTask = nil
+            for index in visited.indices where visited[index].preview == nil {
+                if let image = NativeThumbnailCache.load(cacheNamespace + ":" + visited[index].id) { visited[index].preview = image }
+            }
+            objectWillChange.send()
+        }
+    }
 
     func reset() { captureTask?.cancel(); captureTask = nil; delayedCapture?.cancel(); delayedCapture = nil; delayedCaptureID = ""; lastCapture = [:]; visited = []; recent = []; interactedAt = [:]; currentID = ""; snapshot = nil; overview = false; overviewProgress = 0; controlsHidden = false; browserSurfaceScope = nil; drawer = false; browserOwnsBack = false }
     func register(_ item: NativePhoneTab) {
@@ -364,6 +377,10 @@ struct NativePhoneOverview: View {
     var body: some View {
         GeometryReader { geometry in
             let p = chrome.overviewProgress
+            // Pin the width before aspect-fill: a tall WebKit snapshot must never
+            // contribute its intrinsic width to a flexible grid column.
+            let columns = NativePadPreview.enabled ? 3 : 2
+            let tileWidth = max(1, (geometry.size.width - 36 - CGFloat(columns - 1) * 18) / CGFloat(columns))
             ZStack(alignment: .topLeading) {
                 VStack(spacing: 0) {
                     HStack {
@@ -374,19 +391,19 @@ struct NativePhoneOverview: View {
                         VStack(alignment: .leading, spacing: 16) {
                         ForEach(Array(sections.enumerated()), id: \.offset) { _, section in
                         if !section.title.isEmpty { Text(section.title).font(.headline).padding(.horizontal, 18) }
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .top), count: NativePadPreview.enabled ? 3 : 2), spacing: 18) {
+                        LazyVGrid(columns: Array(repeating: GridItem(.fixed(tileWidth), alignment: .top), count: columns), spacing: 18) {
                             ForEach(section.items) { item in
                                 Button { chrome.closeOverview(select: item) } label: {
                                     VStack(alignment: .leading, spacing: 7) {
                                         Group {
-                                            if let image = item.preview { Image(uiImage: image).resizable().scaledToFill().frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top).clipped() }
+                                            if let image = item.preview { Image(uiImage: image).resizable().scaledToFill().frame(width: tileWidth, height: 225, alignment: .top).clipped() }
                                             else { VStack(spacing: 12) { Image(systemName: item.symbol).font(.title); Text("Preview unavailable").font(.caption) }.frame(maxWidth: .infinity, maxHeight: .infinity).background(NativeTheme.surface) }
-                                        }.frame(height: 225).clipShape(RoundedRectangle(cornerRadius: 15))
+                                        }.frame(width: tileWidth, height: 225).clipShape(RoundedRectangle(cornerRadius: 15))
                                             .overlay { RoundedRectangle(cornerRadius: 15).stroke(item.id == activeID ? NativeTheme.accent : NativeTheme.line, lineWidth: 1) }
                                             .background(GeometryReader { tile in Color.clear.preference(key: PhoneTabRects.self, value: [item.id: tile.frame(in: .named("phone-overview"))]) })
                                         Label(item.title, systemImage: item.symbol).font(.caption).lineLimit(2)
                                         Text(item.detail).font(.caption2).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                                    }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                                    }.frame(width: tileWidth, alignment: .leading).contentShape(Rectangle())
                                 }.buttonStyle(.plain).accessibilityIdentifier("phone-tab-" + item.id)
                             }
                         }.padding(18)
@@ -402,7 +419,7 @@ struct NativePhoneOverview: View {
                         .offset(x: rect.minX * p, y: rect.minY * p).allowsHitTesting(false)
                 }
             }.coordinateSpace(name: "phone-overview").onPreferenceChange(PhoneTabRects.self) { targets = $0 }
-        }.background(NativeTheme.background.opacity(chrome.overviewProgress)).accessibilityElement(children: .contain).accessibilityIdentifier(accessibilityID)
+        }.background(NativeTheme.background.opacity(chrome.overviewProgress)).clipped().accessibilityElement(children: .contain).accessibilityIdentifier(accessibilityID)
     }
 }
 private struct PhoneTabRects: PreferenceKey {
@@ -427,14 +444,35 @@ extension EnvironmentValues {
 /// Private, bounded last-good images. This cache never loads an unloaded page.
 enum NativeThumbnailCache {
     private static let writer = DispatchQueue(label: "org.proteusapp.review.proteus.thumbnail-cache", qos: .utility)
+    private static let images: NSCache<NSString, UIImage> = {
+        let cache = NSCache<NSString, UIImage>(); cache.countLimit = 100; cache.totalCostLimit = 20 * 1024 * 1024; return cache
+    }()
+    private static let lock = NSLock()
+    private static var requested: [String: Date] = [:]
     private static var directory: URL { URL.applicationSupportDirectory.appending(path: "tab-thumbnails", directoryHint: .isDirectory) }
     private static func file(_ key: String) -> URL { directory.appending(path: SHA256.hash(data: Data(key.utf8)).map { String(format: "%02x", $0) }.joined() + ".jpg") }
     static func load(_ key: String) -> UIImage? {
-        let url = file(key)
-        guard let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize, size <= 262144, let data = try? Data(contentsOf: url) else { return nil }
-        return UIImage(data: data)
+        if let image = images.object(forKey: key as NSString) { return image }
+        lock.lock()
+        let recent = Date().timeIntervalSince(requested[key] ?? .distantPast) < 30
+        if !recent {
+            requested[key] = Date()
+            if requested.count > 512 { for old in requested.sorted(by: { $0.value < $1.value }).prefix(requested.count - 512) { requested.removeValue(forKey: old.key) } }
+        }
+        lock.unlock()
+        guard !recent else { return nil }
+        // Overview construction never performs one filesystem read per tab on
+        // the main thread. Missing files are negatively cached, too.
+        writer.async {
+            let url = file(key)
+            guard let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize, size <= 262144, let data = try? Data(contentsOf: url), let image = UIImage(data: data)?.preparingForDisplay() else { return }
+            images.setObject(image, forKey: key as NSString, cost: image.cgImage.map { $0.bytesPerRow * $0.height } ?? data.count)
+            DispatchQueue.main.async { NotificationCenter.default.post(name: Notification.Name("ProteusThumbnailReady"), object: nil) }
+        }
+        return nil
     }
     static func save(_ image: UIImage, key: String) {
+        images.setObject(image, forKey: key as NSString, cost: image.cgImage.map { $0.bytesPerRow * $0.height } ?? 262144)
         writer.async { autoreleasepool { write(image, key: key) } }
     }
     private static func write(_ image: UIImage, key: String) {
@@ -451,5 +489,5 @@ enum NativeThumbnailCache {
             for (index, url) in files.enumerated() { bytes += (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0; if index >= 200 || bytes > 24 * 1024 * 1024 { try? FileManager.default.removeItem(at: url) } }
         } catch { /* Keep the previous good preview and the icon fallback. */ }
     }
-    static func remove(_ key: String) { writer.async { try? FileManager.default.removeItem(at: file(key)) } }
+    static func remove(_ key: String) { images.removeObject(forKey: key as NSString); writer.async { try? FileManager.default.removeItem(at: file(key)); images.removeObject(forKey: key as NSString) } }
 }

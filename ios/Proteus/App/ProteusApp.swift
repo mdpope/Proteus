@@ -25,6 +25,7 @@ struct ProteusRoot: View {
     @State private var area = "macs"
     @State private var incomingPairing = false
     @AppStorage("lifeEnabled") private var lifeEnabled = false
+    @AppStorage("proteus.keep-screen-awake") private var keepScreenAwake = false
     private var showLife: Bool {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--synthetic-life") { return true }
@@ -45,7 +46,9 @@ struct ProteusRoot: View {
     }
     var body: some View {
             applicationContent.tint(NativeTheme.accent).foregroundStyle(NativePalette.shared.color("text")).preferredColorScheme(.dark)
-                .onChange(of: phase) { _, next in if next != .active { NativeDescriptorCacheWriter.shared.flush() } }
+                .onAppear { UIApplication.shared.isIdleTimerDisabled = keepScreenAwake && phase == .active }
+                .onChange(of: keepScreenAwake) { _, value in UIApplication.shared.isIdleTimerDisabled = value && phase == .active }
+                .onChange(of: phase) { _, next in UIApplication.shared.isIdleTimerDisabled = keepScreenAwake && next == .active; if next != .active { NativeDescriptorCacheWriter.shared.flush() } }
                 .onOpenURL { url in if url.scheme == "proteus" && url.host == "pair" { do { try destinations.add(url.absoluteString, label: "New computer"); incomingPairing = true } catch { destinations.error = error.localizedDescription } } }
                 .sheet(isPresented: $incomingPairing, onDismiss: { destinations.cancelPairing() }) { NavigationStack { PairView().toolbar { Button("Cancel") { incomingPairing = false } } } }
                 .onChange(of: destinations.pairingCompletion) { _, completion in if completion != nil { incomingPairing = false } }
@@ -371,9 +374,17 @@ private func nativeActivityFixtureEvents() -> [JSON] {
 @MainActor private func configureNativeIconFixture(remote: RemoteStore, shared: SharedAppStore, life: LifeStore) {
                             shared.reset(for: life.accountIdentity)
                             let workspaceID = "native-icon-workspace"
-                            let scope = "workspace:10000000-0000-4000-8000-000000000001:" + workspaceID
+                            let projectFixture = ProcessInfo.processInfo.arguments.contains("--synthetic-project-restore")
+                            let projectID = "native-restore-project"
+                            let scope = projectFixture ? "project:10000000-0000-4000-8000-000000000001:" + projectID : "workspace:10000000-0000-4000-8000-000000000001:" + workspaceID
+                            let navigationKey = projectFixture ? "project-navigation:" + projectID : "workspace-navigation:" + workspaceID
                             var fields = remote.state.object
                             fields["context"] = .object(["workspaces": .array([.object(["id": .string(workspaceID), "name": .string("Native icon rehearsal"), "cwd": .string("/synthetic-fixture")])])])
+                            if projectFixture {
+                                fields["capabilities"] = .array((fields["capabilities"]?.array ?? []) + [.string("projects.v1")])
+                                fields["workspaceProjects"] = .object(["schemaVersion": .number(1), "revision": .string("fixture-v1"), "projects": .array([.object(["id": .string(projectID), "workspaceId": .string(workspaceID), "name": .string("Restore project")])]), "defaultProjectIds": .object([workspaceID: .string(projectID)])])
+                                remote.setDraft("workspace-selected-project:" + workspaceID, .string(projectID))
+                            }
                             remote.state = .object(fields)
                             remote.setDraft("workspace-navigation:" + workspaceID, .object(["chats": .array([.string("long-chat")]), "selected": .string("workspace")]))
                             shared.applyContentTabs(.object(["revision": .number(1), "tabs": .array([
@@ -386,7 +397,14 @@ private func nativeActivityFixtureEvents() -> [JSON] {
                                 shared.open(URL(string: nativeFixtureHTTPOrigin + "/browser/three"), title: "Third browser page", scope: scope)
                                 // Simulate opening a saved project/sidebar child while another
                                 // browser was the last scoped selection.
-                                remote.setDraft("workspace-navigation:" + workspaceID, .object(["chats": .array([.string("long-chat")]), "selected": .string(first ?? "workspace")]))
+                                remote.setDraft(navigationKey, .object(["chats": .array([.string("long-chat")]), "selected": .string(first ?? "workspace")]))
+                                if ProcessInfo.processInfo.arguments.contains("--synthetic-large-browser") {
+                                    let entries = (0..<300).map { number in BrowserHistoryEntry(id: "entry-\(number)", url: "https://example.test/history/\(number)", title: "History \(number)") }
+                                    shared.browserTabs += (0..<98).map { number in BrowserDescriptor(id: "large-browser-\(number)", title: "Saved page \(number)", url: "https://example.test/history/299", scope: scope, history: BrowserTabHistory(entries: entries, index: 299)) }
+                                    // An unusually tall screenshot previously escaped its grid cell.
+                                    let image = UIGraphicsImageRenderer(size: CGSize(width: 80, height: 800)).image { context in UIColor.systemGreen.setFill(); context.fill(CGRect(x: 0, y: 0, width: 80, height: 800)) }
+                                    for tab in shared.tabs(in: scope).prefix(2) { NativeThumbnailCache.save(image, key: "browser:" + life.accountIdentity + ":" + tab.profileId + ":" + (tab.ownerHostId ?? "local") + ":" + (tab.contentTabId ?? tab.id)) }
+                                }
                             } else { shared.open(nil, title: "Synthetic browser", scope: scope) }
                             shared.browserTabs.append(BrowserDescriptor(id: "fixture-local-recents", title: "Local recent across scopes", url: nil, scope: "fixture-history", history: BrowserTabHistory(entries: [BrowserHistoryEntry(url: "https://example.test/local", title: "Local recent across scopes")], index: 0)))
 }

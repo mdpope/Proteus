@@ -30,9 +30,16 @@ export async function renderUpdates(container,ui,active){
  await mountUpdateCoordinatorDefaults(container,ui,active);
  await refresh();const poll=()=>setTimeout(async()=>{if(!active())return;try{await refresh();}catch{}poll();},2000);poll();
 }
+// Dismissal hides only a terminal notice; the supervisor receipt remains intact.
+const dismissalKey='proteus.dismissed-update-notices',dismissedUpdateNotices=new Set();
+export const dismissibleUpdateJob=job=>!!job?.id&&['complete','cancelled'].includes(job.phase);
+function isDismissed(job){try{return dismissedUpdateNotices.has(job.id)||JSON.parse(localStorage.getItem(dismissalKey)||'[]').includes(job.id);}catch{return dismissedUpdateNotices.has(job.id);}}
+function dismiss(job){dismissedUpdateNotices.add(job.id);try{const ids=new Set(JSON.parse(localStorage.getItem(dismissalKey)||'[]'));ids.add(job.id);localStorage.setItem(dismissalKey,JSON.stringify([...ids].slice(-64)));}catch{}}
 export function renderUpdateCard(root,status,runId,escape,open){
  const previous=root.querySelector('.update-chat-card'),job=status?.job;
- if(job?.runId!==runId){previous?.remove();return;}
+ if(job?.runId!==runId||dismissibleUpdateJob(job)&&isDismissed(job)){previous?.remove();return;}
  const card=previous||document.createElement('section');card.className='card update-chat-card';card.setAttribute('role','status');card.innerHTML=`<strong>Proteus update · ${escape(job.phase)}</strong>${job.outcome?`<p>${escape(job.outcome==='rollback'?'Recovered the compatible previous app.':'Updated app verified.')}</p>`:''}${job.blocker?`<p>${escape(job.blocker)}</p>`:''}${job.error?`<p>${escape(job.error)}</p>`:''}<p class="note">${job.continuation?'This same chat resumed automatically.':'The helper retains this chat’s checkpoint through restart or compatible rollback.'}</p><button data-open-update-status>Update status</button>`;
- card.querySelector('button').onclick=open;if(!previous)(root.querySelector('#conversation-host')||root.lastElementChild)?.before(card);
+ card.querySelector('button').onclick=open;
+ if(dismissibleUpdateJob(job)){const close=document.createElement('button');close.textContent='Dismiss';close.setAttribute('aria-label','Dismiss completed update notice');close.dataset.dismissUpdateNotice='';close.onclick=()=>{dismiss(job);card.remove();};card.append(close);}
+ if(!previous)(root.querySelector('#conversation-host')||root.lastElementChild)?.before(card);
 }

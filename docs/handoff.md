@@ -1,4 +1,77 @@
-## October 25 — Combined queue implementation, review hold preserved
+## October 25 — 0.2.30 rollout authorized; final acceptance in progress
+
+The operator has completed Design Preview review and explicitly authorized deployment to **all
+platforms/devices after build/test/validation**, lifting the Mac hold below. Preserve MTPLX's
+preview-only registration. Finish by reconciling open Proteus source branches/PRs into main and
+syncing a clean project. GitHub reports zero open PRs; a complete remote fetch is still downloading
+large historical artifact branches, so do not repeat it or blindly merge artifact payloads.
+
+The actual retained preview is Activity-only `70b9013065ab+dirty.677bae048f0c`, observed at its
+activity-capture executable. Its notice CSS and native child window still anchor at the top.
+The combined source has bottom notices, but that is not proof the retained preview received them.
+The operator correctly identified this omission. Audit source, frozen package and installed/live
+acceptance separately; see the current audit in `2026-10-25-combined-preview.md`.
+
+New source work also trusts Claude working roots like Copilot (including the SessionProvider
+boundary), retains Internet Search setup in draft tabs, dismisses terminal update cards durably,
+preserves real attention blockers, and adds a first SafariSelector picker option/shortcut 1.
+SafariSelector launches by explicit bundle ID, never through the system default HTTP handler.
+No default-browser change was requested. Codex status was reproduced live: forced account refresh
+returned no account, while ordinary account read authenticated successfully. The corrected probe
+loads seven actual models without a turn or sign-in change. Auth verification uses that same read.
+
+Remote desktop/web follow-ups now always use the owner-side idempotent send path. A compatibility
+resume carrying a message ID retains it. A synthetic delayed-cleanup/retry test proves one follow-up
+wakes without a second send and creates one delivery/turn. This is not a claim that the exact old
+HC runtime's cause is established: read-only inspection confirms the two retained user timestamps
+and delayed first reply, but its tool projection omits delivery/turn details.
+
+Latest shared full suite: 1,159 passed / one skipped, plus the subsequent single-send test passed.
+Static checks passed; final targeted checks and complete native units are running. Web API/PHP
+suite passes 103 tests/890 assertions; actual encrypted two-host web renderer acceptance passes
+after fixing a new-chat null access, updated attachment/disclosure selectors and no-default
+Resources state. Large phone restoration/overview, full-card composer, iPad parity/composer and
+foreground/cold/background notification routing pass. The phone schedule notification previously
+reached its sheet binding without presenting; it now uses the durable schedule-tab route.
+
+No installation/publication has happened in this work. Both physical iPhone/iPad are now reachable.
+Paid push build remains blocked: Xcode reports No Accounts on an unlocked Mac and the existing
+wildcard profile lacks Push Notifications/aps-environment. One allowed provisioning attempt with
+the exact existing paid certificate failed; do not reset/recreate/revoke accounts or certificates.
+Apple portal sign-in remains pending, and production APNs credentials are not configured.
+Windows host remains reconnecting. Linux's old Codex preflight/task receipt is preserved and
+read/dispatch/answer access was renewed for that exact chat. HC host access is approved, but its
+purpose:update create permanently rejected coordinator support (operation recorded privately);
+no task was created. Do not silently substitute an HC provider/chat; Linux alone has an explicit
+operator-approved legacy-Codex exception.
+
+## October 25 — iOS performance, cross-platform parity and live push work (earlier scope)
+
+Latest operator instruction authorizes implementing relevant desktop changes in iOS/web,
+large-state iOS performance/restoration fixes, identifiable chat names, and deployment to
+iOS/web/Linux/Windows after validation. Mac deployment remains on hold. This supersedes the
+earlier preview-only rollout hold for those named targets; MTPLX stays a preview-only pilot.
+Additional requests: real background phone alerts for connected computers using the paid Apple
+account, and tapping the entire message composer card to focus/expand it.
+
+Worktree edits restore saved shell area/tab and phone workspace/chat identity, constrain overview
+snapshot widths, asynchronously cache thumbnails, prepare/debounce history search off the UI actor,
+suppress unchanged remote state publications, resolve attention rows to known chat titles, expand
+the composer from its padding, and carry APNs host/chat/schedule/event identities through delivery.
+These are in progress, not deployed. First native unit run passed 143; focused web push/API run
+passed 14 tests/177 assertions with disposable in-memory test keys. New targeted UI/large-state
+tests and the full parity/rollout acceptance still remain.
+
+Fresh unlocked Mac inspection confirms the existing paid certificate and wildcard profile, but
+no installed profile has an APNs entitlement. Developer portal sign-in is pending in this chat's
+Apple tab. iPad is available; iPhone was unavailable and operator connection was requested.
+Internal read/dispatch/answer grants are approved for Linux laptop and the paired `proteus` host;
+Linux is reachable, the other host is offline and its platform is not yet independently verified.
+No update coordinator has been dispatched and no external installation/publication has occurred.
+Private website access/operations live in the existing proteus.example deployment workspace; its
+latest two-generation policy supersedes older generic website retention guidance.
+
+## October 25 — Combined queue implementation, review hold preserved (earlier gate)
 
 The Oct 23 release branch implements items 28–37 on top of merged main `d0a30fd`.
 See [combined Design Preview work and acceptance](2026-10-25-combined-preview.md).

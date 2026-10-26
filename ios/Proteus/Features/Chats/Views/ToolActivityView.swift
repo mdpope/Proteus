@@ -6,14 +6,15 @@ func toolActivityFailed(_ tool: JSON) -> Bool {
 }
 
 enum NativeActivity {
-    static func contains(_ event: JSON) -> Bool {
-        if event["data"]["question"] != .null { return false }
-        return event["data"]["tool"] != .null || event["data"]["permission"] != .null || event["role"].string == "tool"
+    static func contains(_ event: JSON, provider: String = "") -> Bool {
+        if event["data"]["question"] != .null || event["data"]["agentFeedback"] != .null { return false }
+        if provider == "mtplx", event["role"].string == "system", event["text"].string == "MTPLX is thinking." { return true }
+        return event["data"]["tool"] != .null || event["data"]["permission"] != .null || event["data"]["activity"] != .null || event["role"].string == "tool"
     }
-    static func group(events: [JSON], startingAt index: Int) -> [JSON] {
-        guard events.indices.contains(index), contains(events[index]) else { return [] }
+    static func group(events: [JSON], startingAt index: Int, provider: String = "") -> [JSON] {
+        guard events.indices.contains(index), contains(events[index], provider: provider) else { return [] }
         var end = index
-        while end < events.count && contains(events[end]) { end += 1 }
+        while end < events.count && contains(events[end], provider: provider) { end += 1 }
         return Array(events[index..<end])
     }
     static func permissionCallID(_ permission: JSON) -> String {
@@ -37,6 +38,52 @@ enum NativeActivity {
     }
 }
 
+/// Adapter-reported intervals and usage, disclosed lazily with their provenance.
+/// Raw reasoning is never accepted as display content here.
+struct NativeProviderActivityView: View {
+    @EnvironmentObject var store: RemoteStore
+    let activity: JSON
+    let runStatus: String
+    @State private var expanded = false
+    private var live: Bool { activity["status"].string == "running" && ["running", "awaiting_input"].contains(runStatus) && store.connected && store.runtimeClockOffset != nil }
+    private let usageFields = [("inputTokens", "Input tokens"), ("uncachedInputTokens", "Uncached input tokens"), ("outputTokens", "Output tokens"), ("cachedInputTokens", "Cached input tokens"), ("cacheWriteInputTokens", "Cache-write input tokens"), ("reasoningTokens", "Reasoning tokens"), ("totalTokens", "Total tokens")]
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(activity["provider"].string.capitalized + " · " + activity["label"].string).font(.subheadline.weight(.medium))
+            Text(activity["status"].string == "running" ? (live ? "In progress" : "End not recorded") : activity["status"].string.capitalized).font(.caption).foregroundStyle(.secondary)
+            if activity["kind"].string != "usage" {
+                if live { TimelineView(.periodic(from: .now, by: 1)) { context in elapsed(context.date) } }
+                else { elapsed(Date()) }
+            }
+            DisclosureGroup(activity["kind"].string == "usage" ? "Usage details" : "Activity details", isExpanded: $expanded) {
+                if expanded {
+                    if !activity["summary"].string.isEmpty { Text("Provider-supplied summary").font(.caption); Text(String(activity["summary"].string.prefix(12_000))).textSelection(.enabled) }
+                    Text("Source: " + (activity["source"].string.isEmpty ? "Not recorded" : activity["source"].string)).font(.caption)
+                    if !activity["agentId"].string.isEmpty { Text("Agent: " + activity["agentId"].string).font(.caption) }
+                    if !activity["scope"].string.isEmpty { Text("Scope: " + activity["scope"].string).font(.caption) }
+                    if activity["kind"].string == "usage" {
+                        ForEach(usageFields, id: \.0) { key, label in
+                            HStack { Text(label); Spacer(); Text(count(activity["values"][key])) }.font(.caption)
+                        }
+                        Text("Values belong to the reported scope. Cache and reasoning counts can be subsets; missing values are not zero.").font(.caption).foregroundStyle(.secondary)
+                    } else {
+                        Text("First observed: " + (activity["startedAt"].string.isEmpty ? "Start not recorded" : activity["startedAt"].string)).font(.caption)
+                        Text("Last observed: " + (activity["finishedAt"].string.isEmpty ? "End not recorded" : activity["finishedAt"].string)).font(.caption)
+                        Text("Observed streaming intervals may include transport or waiting. Raw internal reasoning is not stored here.").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }.font(.caption)
+        }.accessibilityIdentifier("provider-activity-" + activity["id"].string)
+    }
+    private func count(_ value: JSON) -> String {
+        guard case .number(let number) = value, number.isFinite, number >= 0, number < Double(Int.max), number.rounded() == number else { return "Not reported" }
+        return Int(number).formatted()
+    }
+    private func elapsed(_ date: Date) -> some View {
+        Text(NativeActivity.elapsedLabel(activity["status"].string == "running" && !live ? nil : NativeActivity.toolSeconds(activity, now: date.addingTimeInterval(store.runtimeClockOffset ?? 0), verified: live))).font(.caption).monospacedDigit()
+    }
+}
+
 struct NativeChatRecoveryState {
     let event: JSON
     let failureEventAt: JSON
@@ -44,6 +91,7 @@ struct NativeChatRecoveryState {
     let capacity: Bool
     let retry: JSON
     let queuedCount: Int
+    var allowance: Bool { event["data"]["failure"]["kind"].string == "allowance" || event["text"].string.range(of: #"^Claude rate_limit\b"#, options: .caseInsensitive) != nil }
     static func read(_ run: JSON) -> NativeChatRecoveryState? {
         let recoverable = ["failed", "interrupted"].contains(run["status"].string)
         let retry = run["capacityRetry"]
@@ -250,6 +298,16 @@ struct ChatPermissionsView: View {
                 Text("Tool approvals").font(.headline)
                 Text("Current: \(names[context["mode"].string] ?? context["mode"].string) · \(context["source"].string == "chat" ? "this chat only" : "workspace setting")").font(.caption)
                 Text("\(run["automaticApprovals"].int) tool requests approved automatically").font(.caption).foregroundStyle(.secondary)
+                if run["chatControls"]["allowanceContinuation"].bool {
+                    Toggle("Automatically continue when allowance resets", isOn: Binding(get: { run["allowanceContinuation"]["enabled"].bool }, set: { value in
+                        busy = true
+                        Task { defer { busy = false }; do {
+                            let updated = try await store.request("chat.recover", ["id": run["id"], "action": .string("allowance-auto"), "enabled": .bool(value)])
+                            store.mergeChat(updated); await store.refresh()
+                        } catch { store.error = error.localizedDescription } }
+                    })).disabled(busy || !store.connected).accessibilityIdentifier("allowance-auto")
+                    Text("The executing computer checks fresh provider allowance before continuing. Unknown reset times remain paused.").font(.caption).foregroundStyle(.secondary)
+                }
                 if chatScopeAvailable {
                     if context["source"].string == "chat" {
                         Button("Revoke chat-only auto-approval") { applyChat("inherit") }.disabled(busy || !store.connected).accessibilityIdentifier("revoke-chat-auto-approval")

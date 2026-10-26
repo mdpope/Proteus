@@ -10,7 +10,7 @@ export class SessionProvider {
     this.closing = false;
     this.acceptedMediaTypes = this.metadata.acceptedMediaTypes;
     this.acceptedSteeringMediaTypes = this.metadata.acceptedSteeringMediaTypes;
-    for (const method of ['status', 'quota', 'models', 'selectedMcp', 'withMcpSelectionBatch']) {
+    for (const method of ['status', 'quota', 'models', 'dataDirectory', 'selectedMcp', 'withMcpSelectionBatch']) {
       if (typeof this.metadata[method] === 'function') this[method] = (...args) => this.metadata[method](...args);
     }
     for (const method of ['mcpStatus', 'mcpLogin', 'mcpRecover', 'mcpHealth', 'selectIntegrationContext']) {
@@ -22,6 +22,10 @@ export class SessionProvider {
       return entry.adapter.steer(run, prompt, attachments);
     };
   }
+
+  // Metadata/authentication and new runs must resolve the same provider home.
+  get options() { return this.metadata.options; }
+  set options(value) { this.metadata.options = value; }
 
   set integrations(value) {
     this.integrationHealth = value;

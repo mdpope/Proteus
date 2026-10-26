@@ -583,6 +583,9 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
             }
             return json(200,await engine.send(id,value.prompt,'queue',value.messageId,options));
           }
+          // Modern remote clients include an idempotent delivery ID even when
+          // resuming an ended turn. Preserve it and let the owner choose queue/start.
+          if(value.messageId)return json(200,await engine.send(id,value.prompt,value.mode||'queue',value.messageId));
           return json(200, engine.resume(id, value.prompt));
         }
         engine.cancel(id); return json(200, { ok: true });

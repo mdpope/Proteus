@@ -1,4 +1,6 @@
 import { installPageFind } from '../../../public/shared/ui/page-find.js';
+import {installLinkPreview} from '../../../public/shared/ui/link-preview.js';
+installLinkPreview();
 import '../../../public/page-find.css';
 import {mountHome} from '../../../public/shared/ui/home.js';
 import {mount as mountHomeMarkdown} from '../../../src/shared/markdown-renderer.js';

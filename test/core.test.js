@@ -95,6 +95,22 @@ test('loopback API enforces authentication, origin, duplicate IDs, and paused im
   }finally{await app.close();fs.rmSync(dir,{recursive:true,force:true});}
 });
 
+test('one remote follow-up wakes after prior cleanup and legacy resume retries keep the same delivery',async()=>{
+ const dir=temp(),prompts=[];let release;
+ const app=await startServer({home:dir,port:0,timers:false,withSeed:false,providers:{rehearsal:{run:async({prompt})=>{prompts.push(prompt);}}}});
+ const headers={'Content-Type':'application/json',Authorization:`Bearer ${app.token}`};
+ app.engine.releaseBrowser=async()=>{if(prompts.length===1)await new Promise(resolve=>{release=resolve;});};
+ try{
+  const run=app.engine.createRun(example(dir),'chat');await until(()=>run.status==='completed'&&!!release);
+  const body=JSON.stringify({prompt:'One retained remote follow-up',messageId:'synthetic-single-followup',mode:'queue'});
+  const send=()=>fetch(app.origin+'/api/runs/'+run.id+'/resume',{method:'POST',headers,body});
+  assert.equal((await send()).status,200);assert.equal((await send()).status,200);assert.equal(prompts.length,1);
+  release();await until(()=>prompts.length===2&&run.status==='completed'&&!app.engine.running.has(run.id));
+  assert.deepEqual(prompts,[example(dir).prompt,'One retained remote follow-up']);assert.equal(run.events.filter(e=>e.data?.delivery?.id==='synthetic-single-followup').length,1);
+  assert.equal((await send()).status,200);await new Promise(resolve=>setTimeout(resolve,20));assert.equal(prompts.length,2);
+ }finally{release?.();await app.close();fs.rmSync(dir,{recursive:true,force:true});}
+});
+
 test('settings persist defaults, preserve extensions, and reject stale or unavailable paths', async () => {
   const { SettingsStore }=await import('../src/services/settings/settings.js'); const dir=temp();
   try { const store=new SettingsStore(dir,dir); const initial=store.get();

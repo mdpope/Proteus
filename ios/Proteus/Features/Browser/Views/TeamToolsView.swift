@@ -186,6 +186,9 @@ struct TeamBrowserView: View {
     @State private var tabsClipped = false
     @State private var historyDirection: Bool?
     @State private var ownerHistoryResults: [JSON]?
+    @State private var historyIndex = NativeBrowserHistoryIndex([])
+    @State private var historyIndexRevision = 0
+    @State private var matchingHistory: [JSON] = []
     var scope = "team"
     var showTabs = true
     // A containing project/chat/main strip owns its selected child. Render that
@@ -211,7 +214,7 @@ struct TeamBrowserView: View {
         guard let remote = historyRemote, let host = remote.connection?.hostId else { return "Choose a computer for owner history. Saved navigation remains on this device." }
         return shared.historyStatus[host] ?? (remote.connected ? "History from " + remote.displayName + ". Each tab keeps its own navigation list." : "Offline · cached last 30 days and saved navigation only")
     }
-    private var historySearchIdentity: String { [selectedID ?? "", text, String(addressFocused)].joined(separator: "|") }
+    private var historySearchIdentity: String { [selectedID ?? "", text, String(addressFocused), String(historyIndexRevision)].joined(separator: "|") }
     private var accountRefreshIdentity: String { [scope, selectedID ?? "", life.accountIdentity, String(addressFocused)].joined(separator: ":") }
 
     @ViewBuilder private func browserTabMenu(_ tab: BrowserDescriptor) -> some View {
@@ -293,18 +296,45 @@ struct TeamBrowserView: View {
             if let remote = historyRemote { await shared.flushHistory(remote) }
         }
         .task(id: historySearchIdentity) {
-            ownerHistoryResults = nil
-            guard addressFocused || selectedTab?.url == nil, let remote = historyRemote else { return }
+            guard addressFocused || selectedTab?.url == nil else { return }
             do { try await Task.sleep(for: .milliseconds(200)) } catch { return }
             let query = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            let index = historyIndex
+            let local = await Task.detached(priority: .userInitiated) { index.matching(query) }.value
+            guard !Task.isCancelled else { return }
+            matchingHistory = local
+            guard let remote = historyRemote else { return }
             let result = await shared.queryHistory(remote, profileId: selectedTab?.profileId ?? "default", query: query, from: query.isEmpty ? Date().addingTimeInterval(-30 * 86400) : nil)
             guard !Task.isCancelled else { return }
-            if result != .null { ownerHistoryResults = result["items"].array }
+            if result != .null {
+                let rows = result["items"].array + local
+                let matches = await Task.detached(priority: .userInitiated) { NativeBrowserHistoryIndex(rows).matching(query) }.value
+                guard !Task.isCancelled else { return }; matchingHistory = matches
+            }
         }
         .onAppear { if NativePhonePreview.enabled && phoneAreaActive { phoneChrome.browserSurfaceScope = scope }; if tabs.isEmpty && showTabs { shared.open(nil, scope: scope) }; text = selectedTab?.url ?? ""; engine = ["google": "Google", "duckduckgo": "DuckDuckGo", "bing": "Bing"][shared.snapshot["preferences"]["searchEngine"].string] ?? "Google"; if NativePhonePreview.enabled { editingAddress = false } else { addressFocused = false } }
         .onChange(of: selectedID) { _, _ in text = selectedTab?.url ?? ""; if NativePhonePreview.enabled { editingAddress = false } else { addressFocused = false } }
-        .task(id: accountRefreshIdentity) { if addressFocused || selectedTab?.url == nil { await shared.refresh(life) } }
+        .task(id: accountRefreshIdentity) {
+            guard addressFocused || selectedTab?.url == nil else { return }
+            // Copy once per editing session. Never flatten all tab backstacks or
+            // parse/sort the owner's complete history on each text-field update.
+            ownerHistoryResults = nil
+            let rows = availableHistory
+            let index = await Task.detached(priority: .userInitiated) { NativeBrowserHistoryIndex(rows) }.value
+            guard !Task.isCancelled else { return }
+            historyIndex = index; historyIndexRevision += 1
+            await shared.refresh(life)
+            guard !Task.isCancelled else { return }
+            let refreshed = availableHistory
+            if refreshed != rows {
+                let updated = await Task.detached(priority: .userInitiated) { NativeBrowserHistoryIndex(refreshed) }.value
+                guard !Task.isCancelled else { return }; historyIndex = updated; historyIndexRevision += 1
+            }
+        }
         .onChange(of: addressFocused) { _, focused in if NativePhonePreview.enabled && !focused { editingAddress = false } }
+        .onChange(of: phoneChrome.overview) { _, visible in
+            if visible { addressFocused = false; homeAddressFocused = false; editingAddress = false }
+        }
         .onChange(of: navigation.url) { _, url in if !addressFocused && !url.isEmpty { text = url }; if NativePhonePreview.enabled && phoneAreaActive { phoneChrome.browserOwnsBack = navigation.canGoBack } }
         .onChange(of: navigation.canGoBack) { _, value in if NativePhonePreview.enabled && phoneAreaActive { phoneChrome.browserOwnsBack = value } }
         .onChange(of: phoneAreaActive) { _, active in if NativePhonePreview.enabled { if active { phoneChrome.browserSurfaceScope = scope } else if phoneChrome.browserSurfaceScope == scope { phoneChrome.browserSurfaceScope = nil } }; if NativePhonePreview.enabled && active { phoneChrome.currentID = selectedID.map { "browser:" + $0 } ?? ""; phoneChrome.browserOwnsBack = navigation.canGoBack } }
@@ -326,6 +356,7 @@ struct TeamBrowserView: View {
             }
     }
     private func showOverview() {
+        addressFocused = false; homeAddressFocused = false; editingAddress = false
         if NativeDesignPreview.enabled { if let selectedID { phoneChrome.currentID = "browser:" + selectedID }; phoneChrome.showTabs?(); return }
         withAnimation(reduceMotion ? .easeOut(duration: 0.12) : .spring(response: 0.32, dampingFraction: 0.86)) { overview = true }
     }
@@ -422,9 +453,7 @@ struct TeamBrowserView: View {
     }
     private var recentSites: some View {
         let query = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let terms = query.split(whereSeparator: \.isWhitespace).map(String.init)
-        let matching = availableHistory.filter { item in terms.allSatisfy { (item["title"].string + " " + item["url"].string).localizedCaseInsensitiveContains($0) } }
-        let items = SharedAppStore.recentBrowserVisits(matching)
+        let items = matchingHistory
         return ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .firstTextBaseline) { Text("Recent sites").font(.subheadline.weight(.semibold)); Text(historyAvailability).font(.caption2).foregroundStyle(.secondary).lineLimit(2); Spacer(minLength: 0) }.padding(12)
@@ -475,7 +504,7 @@ struct TeamBrowserView: View {
                 if !shared.snapshot["links"].array.isEmpty { Text("Shared links").font(.headline); linkRows(shared.snapshot["links"].array) }
                 Text("Recent sites").font(.headline)
                 Text(historyAvailability).font(.caption).foregroundStyle(.secondary)
-                BrowserHistoryRows(items: availableHistory.filter { text.isEmpty || ($0["title"].string + " " + $0["url"].string).localizedCaseInsensitiveContains(text) }) { link in text = link["url"].string; navigate() }
+                BrowserHistoryRows(items: matchingHistory) { link in text = link["url"].string; navigate() }
                 if let error = shared.error { Text(error).foregroundStyle(.orange) }
             }.padding(20)
         }.task(id: selectedID) { try? await Task.sleep(for: .milliseconds(150)); if selectedTab?.url == nil { homeAddressFocused = true } }

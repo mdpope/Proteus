@@ -30,7 +30,7 @@ class PushDelivery
     }
 
     /** Returns accepted, expired, unavailable, or failed; provider acceptance is not device delivery. */
-    public function deliver(array $subscription): string
+    public function deliver(array $subscription, array $notification = []): string
     {
         $platform = $subscription['platform'];
         if (! ($this->status()[$platform] ?? false)) {
@@ -51,7 +51,19 @@ class PushDelivery
             } else {
                 $token = JWT::encode(['iss' => config('push.apns_team_id'), 'iat' => time()], $key, 'ES256', config('push.apns_key_id'));
                 $host = $subscription['environment'] === 'sandbox' ? 'api.sandbox.push.apple.com' : 'api.push.apple.com';
-                $response = $http->withOptions(['version' => 2.0])->withToken($token)->withHeaders(['apns-topic' => config('push.apns_topic'), 'apns-push-type' => 'alert', 'apns-expiration' => (string) (time() + 300)])->post('https://'.$host.'/3/device/'.$subscription['token'], ['aps' => ['alert' => ['title' => 'Proteus', 'body' => 'There is an update in Proteus. Open Notifications to review.'], 'sound' => 'default']]);
+                // Carry only validated navigation identities. Prompts, chat titles,
+                // transcripts and URLs never leave the encrypted account record.
+                $route = array_intersect_key($notification, array_flip(['hostId', 'chatId', 'scheduleId', 'type']));
+                $eventId = $notification['eventId'] ?? $notification['id'] ?? null;
+                $payload = ['aps' => ['alert' => ['title' => 'Proteus', 'body' => 'There is an update in Proteus. Open Notifications to review.'], 'sound' => 'default']];
+                if (is_string($eventId)) {
+                    $route['notificationId'] = $eventId;
+                }
+                $headers = ['apns-topic' => config('push.apns_topic'), 'apns-push-type' => 'alert', 'apns-priority' => '10', 'apns-expiration' => (string) (time() + 300)];
+                if (is_string($eventId)) {
+                    $headers['apns-collapse-id'] = hash('sha256', $eventId);
+                }
+                $response = $http->withOptions(['version' => 2.0])->withToken($token)->withHeaders($headers)->post('https://'.$host.'/3/device/'.$subscription['token'], $payload + $route);
             }
 
             return $response->successful() ? 'accepted' : (in_array($response->status(), [404, 410]) ? 'expired' : 'failed');

@@ -1,4 +1,21 @@
-## October 25 — Combined queue authorized for Design Preview review
+## October 25 — Mobile performance and cross-platform rollout
+
+Implement relevant desktop queue changes for iOS/web and Linux/Windows; release to those targets
+after validation. Mac installation remains held, and MTPLX remains a preview-only pilot.
+Restore the exact mobile workspace/project/tab, bound and prepare URL history off the UI actor,
+cache thumbnails asynchronously, constrain overview images and reduce redundant polling updates.
+Resolve attention/history rows to their chat names and make the whole composer card focusable.
+Paid-account APNs needs a matching push-enabled profile and live delivery acceptance; protocol
+fixtures alone do not prove background alerts from connected computers.
+
+Additional approved changes: Claude's owner-local working directory has automatic read/write
+access like Copilot's, visible as an automatic provider folder without changing workspace grants.
+Internet Search setup uses retained tabs with independent drafts instead of a blocking overlay.
+Completed/cancelled update notices can be dismissed durably; ongoing and attention states remain
+visible and the underlying update receipts remain intact. These changes are source work pending
+the validation/deployment receipts in `docs/handoff.md`.
+
+## October 25 — Combined queue authorized for Design Preview review (earlier gate)
 
 The latest MTPLX/Activity handoff supersedes the earlier implementation/build hold for items
 28–37. Their combined source implementation preserves merged main `d0a30fd`; local main has

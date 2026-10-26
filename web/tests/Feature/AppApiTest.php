@@ -177,6 +177,52 @@ class AppApiTest extends TestCase
         }
     }
 
+    public function test_push_worker_routes_each_computers_event_without_private_chat_content(): void
+    {
+        Http::preventStrayRequests();
+        $path = tempnam(sys_get_temp_dir(), 'proteus-test-push-');
+        $key = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_EC, 'curve_name' => 'prime256v1']);
+        openssl_pkey_export($key, $pem);
+        file_put_contents($path, $pem);
+        try {
+            config(['push.apns_key_path' => $path, 'push.apns_key_id' => 'SYNTHETIC', 'push.apns_team_id' => 'TEAM', 'push.apns_topic' => 'org.proteusapp.review.proteus']);
+            Http::fake(['api.sandbox.push.apple.com/*' => Http::response([], 200)]);
+            $user = $this->owner();
+            Passport::actingAs($user, ['app:read', 'app:write']);
+            $this->postJson('/api/v1/app/push-subscriptions', ['deviceId' => (string) Str::uuid(), 'platform' => 'apns', 'token' => str_repeat('b', 64), 'environment' => 'sandbox'])->assertOk();
+            $events = [];
+            foreach (['personal', 'work', 'linux', 'windows'] as $computer) {
+                $event = ['eventId' => (string) Str::uuid(), 'hostId' => (string) Str::uuid(), 'chatId' => 'chat-'.$computer, 'scheduleId' => 'schedule-'.$computer, 'type' => 'review.required'];
+                $events[] = $event;
+                $this->postJson('/api/v1/app/notifications', $event + ['prompt' => 'PRIVATE PROMPT', 'title' => 'PRIVATE TITLE', 'url' => 'https://private.test/'])->assertCreated();
+                $this->postJson('/api/v1/app/notifications', $event)->assertCreated();
+            }
+            $this->assertSame(4, DB::table('app_records')->where('kind', 'push-outbox')->count(), 'Replayed host events do not enqueue duplicate alerts');
+            $this->artisan('proteus:deliver-push')->assertSuccessful();
+            Http::assertSentCount(4);
+            foreach ($events as $event) {
+                Http::assertSent(fn ($request) => $request['hostId'] === $event['hostId'] && $request['chatId'] === $event['chatId'] && $request['scheduleId'] === $event['scheduleId'] && $request['notificationId'] === $event['eventId'] && $request->hasHeader('apns-topic', 'org.proteusapp.review.proteus') && $request->hasHeader('apns-collapse-id', hash('sha256', $event['eventId'])) && ! str_contains($request->body(), 'PRIVATE') && ! isset($request['url']));
+            }
+            $this->assertSame(0, DB::table('app_records')->where('kind', 'push-outbox')->count());
+        } finally {
+            unlink($path);
+        }
+    }
+
+    public function test_push_outbox_drops_deleted_notifications_without_revoking_the_phone(): void
+    {
+        Http::preventStrayRequests();
+        $user = $this->owner();
+        Passport::actingAs($user, ['app:read', 'app:write']);
+        $this->postJson('/api/v1/app/push-subscriptions', ['deviceId' => (string) Str::uuid(), 'platform' => 'apns', 'token' => str_repeat('c', 64), 'environment' => 'sandbox'])->assertOk();
+        $this->postJson('/api/v1/app/notifications', ['eventId' => (string) Str::uuid(), 'type' => 'chat.completed'])->assertCreated();
+        DB::table('app_records')->where('kind', 'notifications')->delete();
+        $this->artisan('proteus:deliver-push')->assertSuccessful();
+        Http::assertNothingSent();
+        $this->assertSame(0, DB::table('app_records')->where('kind', 'push-outbox')->count());
+        $this->assertSame(1, DB::table('app_records')->where('kind', 'push-subscriptions')->count());
+    }
+
     public function test_browsing_and_engine_room_require_strong_session_and_render_shell(): void
     {
         $this->withoutVite();

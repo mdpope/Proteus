@@ -1,6 +1,38 @@
 import Foundation
 import UIKit
 
+/// Build once from an immutable history snapshot, away from the UI actor.
+/// Keystrokes search the prepared rows; date parsing and sorting are not layout work.
+struct NativeBrowserHistoryIndex: Sendable {
+    private struct Row: Sendable { let value: JSON; let search: String }
+    private let rows: [Row]
+    init(_ items: [JSON]) {
+        let formatter = ISO8601DateFormatter()
+        let fractional = ISO8601DateFormatter(); fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        func date(_ item: JSON) -> Date {
+            let text = item["visitedAt"].string.isEmpty ? item["createdAt"].string : item["visitedAt"].string
+            return fractional.date(from: text) ?? formatter.date(from: text) ?? .distantPast
+        }
+        var sorted: [(index: Int, value: JSON, date: Date)] = []
+        sorted.reserveCapacity(items.count)
+        for (index, value) in items.enumerated() { sorted.append((index: index, value: value, date: date(value))) }
+        sorted.sort { left, right in
+            if left.date == right.date { return left.index < right.index }
+            return left.date > right.date
+        }
+        var seen = Set<String>()
+        rows = sorted.compactMap { item in
+            let text = item.value["url"].string
+            guard let url = URLComponents(string: text), ["http", "https"].contains(url.scheme?.lowercased() ?? ""), url.host?.isEmpty == false, url.user == nil, url.password == nil, seen.insert(text).inserted else { return nil }
+            return Row(value: item.value, search: item.value["title"].string + " " + text)
+        }
+    }
+    func matching(_ query: String, limit: Int = 20) -> [JSON] {
+        let terms = query.split(whereSeparator: \.isWhitespace).map(String.init)
+        return Array(rows.lazy.filter { row in terms.allSatisfy { row.search.localizedCaseInsensitiveContains($0) } }.prefix(max(0, limit)).map(\.value))
+    }
+}
+
 // Shared descriptors contain identity and navigation, never live page authority.
 struct BrowserNavigationState: Equatable {
     var url = ""

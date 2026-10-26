@@ -7,7 +7,7 @@ export function providerActivityState(activity,run,verified=true){
 }
 /** Activity is trusted adapter metadata, not assistant markup or a new message.
  * Missing historic telemetry stays unknown; running rows need live owner proof. */
-export function mountProviderActivity(row,item,run,{time,verified,now,disclosures,resize,...options}){
+export function mountProviderActivity(row,item,run,{time,verified,now,disclosures,resize,renderMarkdown,...options}){
  const a=item.data.activity,state=providerActivityState(a,run,verified);row.classList.add('provider-activity',a.status||'completed');row.dataset.providerActivity=a.kind;row.dataset.providerActivityId=a.id;
  const text=(tag,value,cls)=>{const node=document.createElement(tag);node.textContent=value;if(cls)node.className=cls;return node;};
  row.append(text('strong',(names[a.provider]||a.provider)+' · '+a.label));
@@ -18,7 +18,7 @@ export function mountProviderActivity(row,item,run,{time,verified,now,disclosure
  const body=document.createElement('div');details.append(body);row.append(details);
  const populate=()=>{
   if(body.childElementCount)return;
-  if(a.summary){body.append(text('p','Provider-supplied summary','note'));const summary=document.createElement('div');body.append(summary);ProteusMarkdown.mount(summary,a.summary,{...options,resize});if(a.summaryTruncated)body.append(text('p','Summary display was shortened to the recorded limit.','note'));}
+  if(a.summary){body.append(text('p','Provider-supplied summary','note'));const summary=document.createElement('div');body.append(summary);(renderMarkdown||globalThis.ProteusMarkdown.mount)(summary,a.summary,{...options,resize});if(a.summaryTruncated)body.append(text('p','Summary display was shortened to the recorded limit.','note'));}
   const facts=document.createElement('dl');facts.className='detail-facts';const fact=(key,value)=>{facts.append(text('dt',key),text('dd',value));};
   fact('Source',a.source||'Not recorded');if(a.agentId)fact('Agent',a.agentId);
   if(a.kind==='usage'){
@@ -27,5 +27,5 @@ export function mountProviderActivity(row,item,run,{time,verified,now,disclosure
   body.append(facts);
   body.append(text('p',a.kind==='usage'?'Values belong to the scope shown above. Cache and reasoning counts can be subsets of input/output; do not add them to totals. Missing values are not zero.':'This is the observed streaming interval, which may include transport or waiting. It is not exact inference time. '+(a.summary?'':'No concise provider summary was supplied. Raw internal reasoning is not stored here.'),'note'));
  };
- details.ontoggle=()=>{if(details.open)populate();};if(details.open)populate();
+ details.ontoggle=()=>{if(details.open){disclosures.add(details.dataset.disclosureKey);populate();}else disclosures.delete(details.dataset.disclosureKey);};if(details.open)populate();
 }

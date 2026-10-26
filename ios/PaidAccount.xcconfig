@@ -5,3 +5,7 @@ DEVELOPMENT_TEAM = TEAMID0000
 PRODUCT_BUNDLE_IDENTIFIER = org.proteusapp.review.proteus
 CODE_SIGN_STYLE = Automatic
 CODE_SIGN_IDENTITY = Apple Development
+// Physical paid builds require a matching explicit App ID/profile with Push
+// Notifications. This deliberately fails with the old wildcard profile.
+CODE_SIGN_ENTITLEMENTS = ProteusPush.entitlements
+PROTEUS_APNS_ENTITLEMENT_ENVIRONMENT = development

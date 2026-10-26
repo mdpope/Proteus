@@ -41,7 +41,9 @@ try{
  }
  await page.locator('.chat-index-row').filter({hasText:'Synthetic comparison mtplx'}).click();await page.locator('#followup').waitFor();
  const window=await app.browserWindow(page);await window.evaluate(w=>{w.setMinimumSize(640,650);w.setSize(640,850);});await page.waitForFunction(()=>innerWidth<=640);assert.ok(await page.locator('.chat-pane').evaluate(e=>e.scrollWidth<=e.clientWidth+2));
- await page.locator('.jump-latest').click();await page.locator('.activity-group').evaluate(e=>e.open=false);
+ if(await page.locator('.jump-latest').isVisible())await page.locator('.jump-latest').click();
+ else assert.ok(await page.locator('#conversation').evaluate(e=>e.scrollHeight-e.scrollTop-e.clientHeight<120),'A hidden jump button must mean the current reading position is already at the end');
+ await page.locator('.activity-group').evaluate(e=>e.open=false);
  await page.screenshot({path:path.join(root,'grouped-activity.png')});assert.deepEqual(errors,[]);
  const receipt={passed:true,noProviderTurns:true,unchangedSavedHistory:true,providers:['mtplx','codex','claude','copilot'],checks:['default grouping without a switcher','known notices only; all commentary stays inline','captured phase duration and provider summary','reported scoped usage and missing values','original event drill-down','lazy disclosures survive streaming','draft/composer/history preservation','640px layout'],root};fs.writeFileSync(path.join(root,'receipt.json'),JSON.stringify(receipt,null,2));console.log(JSON.stringify(receipt));
 }catch(error){await page?.screenshot({path:path.join(root,'failure.png')}).catch(()=>{});throw error;}finally{if(app)await app.close();}

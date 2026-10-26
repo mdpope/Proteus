@@ -84,13 +84,7 @@ struct EngineRoomView: View {
         }
     }
     private var resources: some View {
-        NativeList {
-            Section { Text(destinations.selectedLabel).font(.headline); if let failure { Text(failure).foregroundStyle(.orange) }; Text("Host figures include processes Proteus can inspect. Shared processes cannot be charged to one tab. iOS does not expose other apps’ memory here.").font(.caption).foregroundStyle(.secondary) }
-            ForEach(value["processes"].array, id: \.self) { process in VStack(alignment: .leading) { Text(process["name"].string); HStack { Text("PID \(process["pid"].int)"); Text("CPU \(process["cpuPercent"].pretty)%"); Text(ByteCountFormatter.string(fromByteCount: Int64(process["memoryBytes"].int), countStyle: .memory)) }.font(.caption); if process["tabIds"].array.count > 1 { Text("Shared by \(process["tabIds"].array.count) tabs").font(.caption).foregroundStyle(.secondary) } } }
-            if value["supported"] == .bool(false) { Text("Resource reporting is unavailable from this host.").foregroundStyle(.secondary) }
-            Section("Host tabs") { ForEach(value["tabs"].array, id: \.self) { tab in VStack(alignment: .leading) { Text(tab["title"].string); Text(tab["loaded"].bool ? "Loaded" : "Unloaded").font(.caption).foregroundStyle(.secondary); HStack { Button("Unload") { resourceAction("unload", id: tab["id"].string) }.disabled(!tab["loaded"].bool); Button("Close", role: .destructive) { resourceAction("close", id: tab["id"].string) } }.buttonStyle(.bordered) }.contextMenu { Button("Unload") { resourceAction("unload", id: tab["id"].string) }; Button("Close", role: .destructive) { resourceAction("close", id: tab["id"].string) } } } }
-            Section("This device · browser tabs") { ForEach(shared.browserTabs) { tab in HStack { VStack(alignment: .leading) { Text(tab.title); Text(tab.scope == "main" ? "Main tabs" : "Team Tools").font(.caption).foregroundStyle(.secondary) }; Spacer(); Button("Unload") { shared.unload(tab.id) }; Button("Close", role: .destructive) { shared.close(tab.id) } }.buttonStyle(.bordered) } }
-        }
+        NativeResourcesView(value: value, failure: failure, owner: destinations.selectedLabel, refresh: { await load() }, action: resourceAction)
     }
     private var activity: some View {
         NativeList {
@@ -169,6 +163,80 @@ struct EngineRoomView: View {
             do { _ = try await remote.request("resources.action", ["action": .string(action), "tabId": .string(id)]); if destinations.selectedID == requestedHost { await load() } }
             catch { if destinations.selectedID == requestedHost { failure = error.localizedDescription } }
         }
+    }
+}
+
+private struct NativeResourcesView: View {
+    @EnvironmentObject var shared: SharedAppStore
+    let value: JSON
+    let failure: String?
+    let owner: String
+    let refresh: () async -> Void
+    let action: (String, String) -> Void
+    @State private var query = ""
+    @State private var system = true
+    @State private var loaded = true
+    @State private var unloaded = true
+    private var rows: [NativeResourceRow] { NativeResourceRow.rows(value).filter { row in
+        (row.kind == "system" ? system : row.kind == "loaded" ? loaded : unloaded) && (query.isEmpty || row.title.localizedCaseInsensitiveContains(query))
+    } }
+    var body: some View {
+        NativeList {
+            Section {
+                Text(owner).font(.headline)
+                if let failure { Text(failure).foregroundStyle(.orange) }
+                TextField("Filter processes and tabs by name", text: $query).accessibilityIdentifier("resource-filter")
+                HStack { Toggle("System", isOn: $system); Toggle("Loaded", isOn: $loaded); Toggle("Unloaded", isOn: $unloaded) }.toggleStyle(.button).font(.caption)
+                Button("Refresh usage", systemImage: "arrow.clockwise") { Task { await refresh() } }.accessibilityIdentifier("resource-refresh")
+                Text("Shared process usage appears once in its system row. iOS cannot inspect other apps’ memory.").font(.caption).foregroundStyle(.secondary)
+            }
+            ForEach(rows) { row in
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(row.title).font(.headline)
+                    Text(row.kind == "system" ? "App/system process" : row.kind == "loaded" ? "Loaded tab" : "Unloaded tab").font(.caption)
+                    Text(row.shared ? "Shared process usage shown above" : "CPU \(row.metric("cpuPercent", suffix: "%")) · Memory \(row.metric("memoryBytes", suffix: " MB", scale: 1_048_576))").font(.caption).foregroundStyle(.secondary)
+                    if row.kind != "system" {
+                        HStack {
+                            if row.canUnload { Button("Unload") { action("unload", row.tab["id"].string) } }
+                            Button("Close", role: .destructive) { action("close", row.tab["id"].string) }.disabled(!row.canClose)
+                        }.buttonStyle(.bordered)
+                    }
+                }.accessibilityIdentifier("resource-" + row.id)
+            }
+            Section("This device · browser tabs") {
+                ForEach(shared.browserTabs.filter { tab in (query.isEmpty || tab.title.localizedCaseInsensitiveContains(query)) && (shared.isBrowserLoaded(tab.id) ? loaded : unloaded) }) { tab in
+                    HStack { Text(shared.browserLabel(tab)); Spacer(); Button("Unload") { shared.unload(tab.id) }.disabled(tab.persist || !shared.isBrowserLoaded(tab.id)); Button("Close", role: .destructive) { shared.close(tab.id) } }.buttonStyle(.bordered)
+                }
+            }
+        }
+    }
+}
+
+/// One process attribution per row, following the shared desktop/web Resources model.
+struct NativeResourceRow: Identifiable {
+    let id: String
+    let title: String
+    let kind: String
+    let tab: JSON
+    let process: JSON
+    let shared: Bool
+    var canUnload: Bool { tab["canUnload"] == .null ? tab["loaded"].bool && !tab["sharedProcess"].bool && !tab["persist"].bool : tab["canUnload"].bool }
+    var canClose: Bool { tab["canClose"] == .null ? tab["id"].string != "overview" && tab["manageable"] != .bool(false) : tab["canClose"].bool }
+    func metric(_ key: String, suffix: String, scale: Double = 1) -> String {
+        guard case .number(let number) = process[key], number.isFinite, number >= 0 else { return "Not reported" }
+        return (number / scale).formatted(.number.precision(.fractionLength(1))) + suffix
+    }
+    static func rows(_ value: JSON) -> [Self] {
+        let tabs = value["tabs"].array, processes = value["processes"].array
+        func shared(_ process: JSON) -> Bool { let owned = tabs.filter { $0["loaded"].bool && $0["pid"] == process["pid"] }; return owned.count != 1 || owned.contains { $0["sharedProcess"].bool } }
+        var rows = processes.filter(shared).map { process in Self(id: "process:" + process["pid"].pretty, title: [process["label"].string, process["name"].string, process["type"].string, "Process"].first { !$0.isEmpty }!, kind: "system", tab: .null, process: process, shared: false) }
+        rows += tabs.map { tab in
+            let process = tab["loaded"].bool ? processes.first { $0["pid"] == tab["pid"] } ?? .null : .null
+            let isShared = process != .null && shared(process)
+            return Self(id: "tab:" + tab["id"].string, title: tab["title"].string.isEmpty ? tab["id"].string : tab["title"].string, kind: tab["loaded"].bool ? "loaded" : "unloaded", tab: tab, process: isShared ? .null : process, shared: isShared)
+        }
+        let order = ["system": 0, "loaded": 1, "unloaded": 2]
+        return rows.sorted { left, right in left.kind == right.kind ? left.title.localizedStandardCompare(right.title) == .orderedAscending : order[left.kind, default: 3] < order[right.kind, default: 3] }
     }
 }
 
@@ -529,6 +597,7 @@ struct NativePasswordAutoFillPreferences: View {
 
 struct NativeDownloadPreferences: View {
     @EnvironmentObject var shared: SharedAppStore
+    @AppStorage("proteus.keep-screen-awake") private var keepScreenAwake = false
     @State private var choosing = false
     @State private var showing = false
     var body: some View { Form { Section("Downloads") {
@@ -538,6 +607,10 @@ struct NativeDownloadPreferences: View {
         Button("Use default Downloads folder") { shared.chooseDownloadDirectory(nil) }
         Button("Open downloads folder") { if let folder = try? shared.downloadDirectory() { try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true); var parts = URLComponents(url: folder, resolvingAgainstBaseURL: false); parts?.scheme = "shareddocuments"; if let url = parts?.url { UIApplication.shared.open(url) } } }
         Button("Download history") { showing = true }
+    }; Section("This device") {
+        Toggle("Keep screen awake", isOn: $keepScreenAwake).accessibilityIdentifier("keep-screen-awake")
+        Stepper("Ordinary tabs kept loaded: \(shared.loadedTabLimit)", value: $shared.loadedTabLimit, in: 1...256).accessibilityIdentifier("loaded-tab-limit")
+        Text("The default is 6. Higher values use more RAM. Recently used and Persisted tabs stay protected from automatic unloading; increasing this value does not open unopened tabs.").font(.caption)
     }; NativePasswordAutoFillPreferences() }.sheet(isPresented: $choosing) { NativeDownloadFolderPicker { shared.chooseDownloadDirectory($0); choosing = false } }.sheet(isPresented: $showing) { NativeDownloadsView() } }
 }
 

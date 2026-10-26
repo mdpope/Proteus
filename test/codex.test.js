@@ -19,6 +19,14 @@ class RPC extends EventEmitter {
 }
 const fixture=()=>{const rpc=new RPC();const context={providerContext:()=>({instructionText:'selected context',customAgents:[],disabledLegacyMcp:[],disabledSkills:[],mcpServers:{}})};const provider=new CodexProvider({clientFactory:()=>rpc},{context});const run={id:'run',schedule:{provider:'codex',model:'runtime-model',reasoningEffort:'future',serviceTier:'priority',workspace:{cwd:'/synthetic/work',additionalDirectories:['/synthetic/other']},context:{entries:[],includeDefaults:false}},events:[]};const controller=new AbortController();const args={run,prompt:'Hello',signal:controller.signal,emit:(role,text,data)=>run.events.push({role,text,data}),stream:(id,text)=>{run.liveMessages??={};run.liveMessages[id]=(run.liveMessages[id]||'')+text;},update:()=>{},ask:async()=>'approve'};return {rpc,provider,run,controller,args};};
 const until=async fn=>{for(let i=0;i<100;i++){if(fn())return;await new Promise(r=>setTimeout(r,5));}throw new Error('Timed out');};
+test('Codex status reads the authenticated account without forcing token rotation and still reports a genuine sign-out',async()=>{
+ const rpc=new RPC(),original=rpc.request.bind(rpc);let signedIn=true;
+ rpc.request=async(method,params)=>method==='account/read'?(rpc.calls.push({method,params}),{account:signedIn&&!params.refreshToken?{type:'chatgpt'}:null}):original(method,params);
+ const provider=new CodexProvider({clientFactory:()=>rpc});
+ try{const online=await provider.status();assert.equal(online.available,true);assert.equal(online.models[0].id,'runtime-model');assert.equal(rpc.closed,false);assert.deepEqual(rpc.calls.find(c=>c.method==='account/read').params,{refreshToken:false});
+ signedIn=false;provider.active={run:{id:'existing-turn'}};const offline=await provider.status();assert.equal(offline.available,false);assert.deepEqual(offline.models,[]);assert.match(offline.error,/Sign in/);assert.equal(rpc.closed,false,'Status must not close an active provider session');
+ }finally{await provider.close();}
+});
 test('Codex steering receives native image/text input and keeps private image bytes until the turn settles',async()=>{
  const f=fixture(),bytes=Buffer.from('synthetic-steering-image');let file;
  try{

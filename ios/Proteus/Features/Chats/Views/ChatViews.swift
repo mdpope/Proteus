@@ -710,7 +710,7 @@ struct ChatView: View {
         let agent = event["agentName"].string.isEmpty ? run["agentName"].string : event["agentName"].string
         return agent.isEmpty || agent.caseInsensitiveCompare(providerName) == .orderedSame ? providerName : providerName + " · " + agent
     }
-    private func routineActivity(_ event: JSON) -> Bool { NativeActivity.contains(event) }
+    private func routineActivity(_ event: JSON) -> Bool { NativeActivity.contains(event, provider: run["schedule"]["provider"].string) }
     private var renderedEventStart: Int {
         let events = run["events"].array, start = run["eventStart"].int
         return max(start, min(oldestVisibleEvent ?? (start + NativeHistoryWindow.start(events: events)), start + events.count))
@@ -737,7 +737,7 @@ struct ChatView: View {
         }
     }
     private func activityGroup(startingAt index: Int) -> [JSON] {
-        NativeActivity.group(events: run["events"].array, startingAt: index)
+        NativeActivity.group(events: run["events"].array, startingAt: index, provider: run["schedule"]["provider"].string)
     }
     private var pending: JSON { run["pending"] }
     private var desiredDraftKey: String { pending["type"].string == "question" ? "answer:" + id + ":" + pending["id"].string : "reply:" + id }
@@ -998,12 +998,12 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
                     let event = run["events"].array[index]
                     VStack(alignment: .leading, spacing: 0) {
                         if routineActivity(event) {
-                            ChatActivityGroupView(events: activityGroup(startingAt: index), hostName: store.state["hostName"].string, runID: id, search: pageSearch, eventStart: absoluteIndex)
+                            ChatActivityGroupView(events: activityGroup(startingAt: index), hostName: store.state["hostName"].string, runID: id, runStatus: run["status"].string, search: pageSearch, eventStart: absoluteIndex)
                         } else if event["role"].string != "assistant" || !event["text"].string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             if !event["data"]["delivery"]["state"].string.isEmpty { Text(event["data"]["delivery"]["state"].string.capitalized).font(.caption2).foregroundStyle(.teal) }
                             MessageView(role: event["role"].string == "assistant" ? assistantName(event) : event["role"].string, text: event["text"].string, runID: id, timestamp: event["timestamp"].string.isEmpty ? event["at"].string : event["timestamp"].string, turn: event["role"].string == "assistant" ? messageTurn(at: index) : .null, actionID: MessageActions.eligible(event) ? "\(store.connection?.hostId ?? "local"):\(id):\(absoluteIndex):\(event["at"].string)" : nil, sentAttachments: event["data"]["attachments"].array, onDocumentLink: event["role"].string == "assistant" ? { source in openDocument(source) } : nil, onResize: { Task { @MainActor in await Task.yield(); if followLatest && !userReadingGesture && !restoringConversation && pageSearch.query.isEmpty { proxy.scrollTo("chat-end", anchor: .bottom) } } }, search: pageSearch, searchKey: absoluteIndex, viewport: CGRect(x: 0, y: conversationViewportTop, width: conversationViewportWidth, height: max(1, composerAvailableHeight)))
                             if let recovery, recovery.event == event {
-                                NativeChatRecoveryControls(state: recovery, disabled: busy || !store.connected) { action in
+                                NativeChatRecoveryControls(state: recovery, run: run, disabled: busy || !store.connected) { action in
                                     act("chat.recover", ["action": .string(action), "expectedFailureEventAt": recovery.failureEventAt])
                                 }
                             }
@@ -1384,6 +1384,10 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { composerActionsHeight = $0 }
                 }
             }.padding(NativePhonePreview.enabled && !composerExpanded ? 4 : 12).background(Color.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 16))
+                // The card owns its empty padding. Child editor/control gestures
+                // retain precedence over this ordinary parent tap gesture.
+                .contentShape(RoundedRectangle(cornerRadius: 16))
+                .onTapGesture { composerExpanded = true; composerHasFocus = true }
                 .accessibilityElement(children: .contain).accessibilityIdentifier("reply-composer-card")
 
         }.padding(.horizontal).padding(.vertical, 8).background(NativePalette.shared.color("composer"))
@@ -1535,7 +1539,9 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
         let submitted = text, draftKey = composerDraftKey
         let sendsText = method == "chat.send" || method == "chat.reply" && pending["type"].string == "question"
         Task { defer { busy = false }; do {
-            var args = values; args["id"] = .string(id); _ = try await store.request(method, args)
+            var args = values; args["id"] = .string(id)
+            if method == "chat.recover" { _ = try await store.recoverChat(run, action: values["action"]?.string ?? "", expectedFailureEventAt: values["expectedFailureEventAt"] ?? .null) }
+            else { _ = try await store.request(method, args) }
             if sendsText, store.draft(draftKey).string == submitted { store.setDraft(draftKey, .null); if composerDraftKey == draftKey && text == submitted { text = ""; composerHasFocus = false; followLatest = true } }
             await store.openChat(id)
         } catch { store.error = error.localizedDescription } }
@@ -1799,6 +1805,7 @@ struct IsolatedArtifactWebView: UIViewRepresentable {
 }
 private struct NativeChatRecoveryControls: View {
     let state: NativeChatRecoveryState
+    let run: JSON
     let disabled: Bool
     let recover: (String) -> Void
     var body: some View {
@@ -1816,6 +1823,16 @@ private struct NativeChatRecoveryControls: View {
     private var actions: some View { HStack(spacing: 8) { buttons } }
     @ViewBuilder private var buttons: some View {
         if state.recoverable { Button("Continue chat") { recover("continue") }.buttonStyle(.borderedProminent).accessibilityIdentifier("chat-recovery-continue") }
+        if state.recoverable, state.allowance, run["chatControls"]["allowanceContinuation"].bool {
+            let pending = run["allowanceContinuation"]["pending"]
+            if pending["state"].string == "waiting", pending["failureEventAt"] == state.failureEventAt {
+                Text("Waiting until " + pending["nextAttemptAt"].string).font(.caption)
+                Button("Cancel allowance continuation") { recover("allowance-cancel") }.accessibilityIdentifier("allowance-cancel")
+            } else if run["allowanceStatus"]["failureEventAt"] == state.failureEventAt, let reset = ProviderAllowance.date(run["allowanceStatus"]["resetAt"].string), reset > Date() {
+                Button("Continue chat when allowance resets at " + reset.formatted(date: .abbreviated, time: .complete)) { recover("allowance-arm") }.accessibilityIdentifier("allowance-arm")
+            } else { Button("Check allowance reset time") { recover("allowance-check") }.accessibilityIdentifier("allowance-check") }
+            if !run["allowanceStatus"]["note"].string.isEmpty { Text(run["allowanceStatus"]["note"].string).font(.caption) }
+        }
         if state.retry != .null { Button("Stop retrying") { recover("stop-retry") }.buttonStyle(.bordered).accessibilityIdentifier("chat-recovery-stop-retry") }
         else if state.capacity { Button("Retry every 60 seconds") { recover("retry") }.buttonStyle(.bordered).accessibilityIdentifier("chat-recovery-retry") }
     }
@@ -1825,6 +1842,7 @@ struct ChatActivityGroupView: View {
     let events: [JSON]
     let hostName: String
     var runID = ""
+    var runStatus = ""
     var search: NativePageSearch? = nil
     var eventStart = 0
     @State private var expanded = false
@@ -1852,6 +1870,7 @@ struct ChatActivityGroupView: View {
                 ForEach(Array(events.enumerated()), id: \.offset) { offset, event in
                     if event["data"]["tool"] != .null { ToolActivityView(tool: event["data"]["tool"]) }
                     else if event["data"]["permission"] != .null { ChatPermissionActivityView(event: event) }
+                    else if event["data"]["activity"] != .null { NativeProviderActivityView(activity: event["data"]["activity"], runStatus: runStatus) }
                     else { MessageView(role: "system", text: event["text"].string, runID: runID, timestamp: event["timestamp"].string.isEmpty ? event["at"].string : event["timestamp"].string, search: search, searchKey: eventStart + offset).accessibilityIdentifier("system-activity") }
                 }
             }.padding(.top, 8)
