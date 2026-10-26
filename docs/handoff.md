@@ -1,3 +1,19 @@
+## October 26 — HC installed; Linux corrected-fixture reacceptance dispatched
+
+Fresh read of the existing HC bootstrap confirms job 1c5eb36f completed `updated` and
+c6839fb4b5b1+src.483790a728e3 is live. Exact installed package/source/Apple identity,
+one owner, original Codex session and once-only continuation verify. All 426 chat event
+prefixes (28,503 events), 154 logical tabs, four saved windows, 1,196 navigation entries
+and 12,657 navigation receipts are preserved; exactly two recoveries remain. Native
+visual inspection was unavailable. Existing workspace/project association fields were
+already present in the cold snapshot and remain unchanged; do not call it unassigned.
+Do not repeat preparation, handoff or installation based on older queued task messages.
+
+Linux's authorized old chat is rerunning the three transitions with test-only dd5cae6
+observation against the unchanged frozen396 candidate. Original failures are retained;
+no production restart or installation was dispatched. Both source checkouts are clean,
+main is synced, and no open PR or unmerged local branch remains at that checkpoint.
+
 ## October 26 — frozen Linux candidate and corrected observation gate
 
 Clean 39692c2 produced Linux candidate linux.76e9537e9226; all runtime/source hashes,
