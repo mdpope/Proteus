@@ -1,3 +1,11 @@
+## October 26 — personal Mac bootstrap authorized in the existing chat
+
+Operator approves the previously pending working-chat exception for this personal Mac. Use its retained
+accepted signed c6839fb package through local prepare/handoff, preserving original session/data and
+the ordinary idle barrier. Fresh package/source/recovery checks pass; installed verification remains
+pending. A separate Codex chat owns the reported Windows startup crash, so this coordinator must not
+continue Windows deployment/repair actions. Earlier Windows acceptance remains historical evidence.
+
 ## October 26 — signed Windows package accepted; clean-build recipe corrected
 
 Frozen d5dc6c9 windows.c6c079eaa341 passes the complete Windows suite (1,194 passes/five skips),

@@ -1,3 +1,25 @@
+## October 26 — personal Mac working-chat bootstrap authorized
+
+Operator explicitly authorizes this existing working chat for the personal Mac's one-time bootstrap.
+The separate Windows Codex chat now owns a reported Windows startup crash; do not dispatch further
+Windows update/repair/account actions from this coordinator or infer its current installed state
+from earlier acceptance. Preserve every existing artifact, failure and operation receipt.
+
+Use the retained exact signed c6839fb Mac candidate (483790a728e3, package 89de0f7e...), already
+accepted in update/socket, rollback/socket and pre-install-failure rehearsals from this actual
+b2da2f baseline. Fresh source proof matches all 377 runtime files/eight build inputs/1,307 source
+files and pinned c683 Git blobs. Fresh package inspection/signature and installed-baseline hash
+match their prior receipts. The 6,346-file latest recovery and its app reverify; the older eligible
+generation's immutable audit/manifest binding remains intact without rerunning its broad audit.
+
+Read-only preflight records 42 chats/15,498 event prefixes, four saved session files and two current
+registered windows, with about 27 GB free. Only the updating chat is running. Private compact
+preflight/source/recovery receipts are bound to the local-bootstrap staging record. No full live
+backup was made; the supervisor must take its consistent cold recovery at the normal idle barrier,
+retain two verified generations and resume this same original Codex session exactly once.
+Preparation/handoff and installed acceptance must be reported separately. Do not force Quit,
+cancel other work, change browser defaults or replay completed remote effects.
+
 ## October 26 — Windows ownership package accepted and signed; real installer gates pending
 
 The exact d5dc6c9 Windows candidate is frozen as windows.c6c079eaa341. Complete Windows suite:
