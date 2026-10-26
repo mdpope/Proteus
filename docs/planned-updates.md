@@ -1,3 +1,15 @@
+## October 26 — shutdown browser presentation rejection
+
+Linux exact-package acceptance retained a search/update-notice fixture failure during the first
+app shutdown: late trusted surface cleanup reached the owner's closing guard and rejected.
+Reload itself did not reproduce the rejection. Once quit starts, the trusted main frame's hide
+and overlay requests now acknowledge without dispatching anything; all other commands and
+untrusted frames remain rejected. Keep the unchanged zero-error fixture and prior failures.
+Fresh combined package acceptance is required before installation; the 96c0d53 artifact stays
+frozen and superseded. Source acceptance passes the unchanged search fixture and a real IPC
+shutdown test that proves no commands dispatch and create/history/close stay rejected. Full
+Node suite: 1,176 passes, one skip, zero failures; static checks pass.
+
 ## October 26 — five-second notification banners
 
 The operator reports routine Chat completed banners remaining over other applications. Shared

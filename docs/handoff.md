@@ -1,3 +1,22 @@
+## October 26 — shutdown acceptance and recovery retention
+
+Linux retained two failures of the unchanged search/update-notice zero-error fixture. The trace
+records trusted hide/overlay requests after before-quit set closing; reload had no rejection.
+The main-frame browser bridge now acknowledges only hide/overlay inertly while closing and
+still rejects every other action. Fresh actual Electron tests verify no commands dispatch,
+create/history/close remain blocked, and the unchanged search fixture passes. The first new
+shutdown fixture used an unavailable bare require; its corrected main-module test passes.
+Keep the prior failed receipts and require fresh final package acceptance on Linux. The combined
+source full suite has 1,176 passes/one skip/zero failures; static checks pass. Private logs are
+shutdown-full.log, shutdown-check.log, browser-shutdown-ui-corrected.log and search-shutdown-fix-ui.log.
+
+The obsolete server recovery was retired through the existing authenticated Webmin session
+after both retained generations matched independently verified central copies and all hashes.
+The complete private retirement receipt is in the deployment project's rollout directory;
+451,223,425 logical bytes were removed, with a 451,321,856-byte observed free-space increase.
+The server now retains the October 23 22:50 and October 26 04:26 pair. Do not repeat the
+retirement, clear the old failed capture, or claim a new capture/deployment has occurred.
+
 ## October 26 — notification expiry supersedes frozen 96c0d53
 
 The operator requested five-second notification banners. Shared desktop/web toast duration is
@@ -15,7 +34,8 @@ Read-only private capture diagnostics establish the web failure: the capture hel
 guard sees three server recovery generations. The failure is before capture/activation, not
 proof that no helper ran (older receipts omit helperPid). Both desired retained dates were
 independently reverified locally and on the server. The obsolete raw generation is identified;
-no server deletion or capture retry has happened yet. Preserve the immutable failed job.
+the later guarded retirement is recorded above. No capture retry has happened yet. Preserve
+the immutable failed job.
 
 ## October 26 — Team Tools correction supersedes frozen 568bcb2
 

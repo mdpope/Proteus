@@ -1,3 +1,11 @@
+## October 26 — shutdown presentation cleanup
+
+After the owner starts quitting, trusted main-frame `hide` and `overlay` requests are
+acknowledged without dispatching browser commands. A finishing renderer checkpoint or paint
+cannot create a rejection/notification cycle during shutdown. Frame validation still happens
+first; navigation, history, tab changes and every other command remain rejected. This does not
+alter saving, checkpoint order or browser disposal.
+
 ## October 26 — five-second notification lifetime
 
 Desktop and web banners expire after five seconds. Native overlays enforce the same lifetime

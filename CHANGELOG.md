@@ -1,5 +1,6 @@
 ## 0.2.30 — cross-platform release candidate
 
+- Treat late trusted browser surface cleanup as an inert shutdown acknowledgement; keep tab, navigation and history commands blocked after quit starts.
 - Expire desktop/web banners after five seconds, including native overlays when their renderer is background-throttled; preserve notification history and queued actions.
 - Prevent a stale window's metadata refresh from reopening tabs another window closed or moved; preserve explicit new opens, including Team Tools standup links.
 - Keep ignored local and empty lease renewals out of descriptor synchronization so they do not stall scroll publication; retain the barrier for applicable remote navigation.

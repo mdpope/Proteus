@@ -2508,6 +2508,13 @@ resolution notification. Answers and returned task feedback preserve stable owne
 identities; uncertain delivery cannot trigger an automatic resend/fallback. Native tool approvals
 remain a separate human decision even when a remote coordinator reports awaiting input.
 
+## October 26 — presentation cleanup during owner shutdown
+
+Validate the trusted origin/window/main frame before acknowledging late hide/overlay requests
+as no-ops during shutdown. These requests cannot mutate durable tabs or reopen surfaces after
+the owner has started disposing them. Preserve rejection for every other browser action rather
+than suppressing renderer errors generally or weakening the search fixture's zero-error gate.
+
 ## October 26 — existing-tab metadata cannot reopen a closed identity
 
 Retain the compatible open operation with an optional updateOnly flag for snapshots of existing

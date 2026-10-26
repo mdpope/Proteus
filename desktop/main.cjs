@@ -316,7 +316,11 @@ else {
     });
     windows.handle('proteus:browser', (event, value) => {
       trusted(event);
-      if(event.senderFrame !== window.webContents.mainFrame || closing)throw new Error('Browser access is unavailable from this document.');
+      if(event.senderFrame !== window.webContents.mainFrame)throw new Error('Browser access is unavailable from this document.');
+      // Checkpointing can finish a renderer paint after quit begins. Its surface
+      // cleanup is already superseded by owner shutdown; never dispatch it or
+      // turn it into another error notification. All other commands stay closed.
+      if(closing){if(value?.action==='hide'||value?.action==='overlay')return;throw new Error('Browser access is unavailable from this document.');}
       return browser.command(value);
     });
     windows.handle('proteus:standup-popout', async (event, width) => {
