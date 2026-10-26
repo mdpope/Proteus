@@ -1,3 +1,18 @@
+## October 26 — Windows natural-exit terminal process ownership
+
+Actual .29 and frozen .30 tests expose the same preexisting defect: a descendant survives
+natural shell exit and store disposal, although explicit close terminates it. The node-pty
+console-list helper fails and falls back after five seconds to an unverified old shell PID;
+no actual PID reuse or unrelated kill was observed. The included ConPTY DLL option fails exit
+bounds and is not an accepted fix. An isolated Windows Job Object lifecycle prototype is in
+progress, with ownership before commands, full-tree cleanup and no numeric-PID fallback.
+No implementation or production acceptance is claimed yet.
+
+The corrected complete Windows suite passes 1,173 cases/five platform skips, and root independently
+verifies the unchanged signed envelope. Real NSIS/update/rollback tests still require a human-
+approved disposable account. The late preview/notice rejections are caught closing-guard failures
+with no late native effects or unhandled renderer errors; those guards remain unchanged.
+
 ## October 26 — Windows release signed; test-discovery correction
 
 The frozen Windows .30 package passes supported runtime/UI gates and is signed by the unchanged

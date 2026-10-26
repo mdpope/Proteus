@@ -1,3 +1,37 @@
+## October 26 — Windows suite and signature accepted; PTY lifecycle fix in progress
+
+The corrected Windows source-only run at ee6ff3e passes the complete suite: 1,173 passes,
+five explicit platform skips, zero failures; static checks pass. The initial Life privacy
+failure remains retained. The passing rerun uses the existing private fixture temp directory,
+without changed ACLs/assertions; the first failure's exact cause is not conclusively established.
+All frozen 57c artifacts, signature, 377 runtime files/seven inputs and prior receipts match.
+Root independently verifies the exact 1,792-byte envelope against the embedded publisher and
+expected package/archive/installer identities. No production installation or publication occurred.
+
+Fresh actual .29/.30 PTY comparisons confirm a preexisting real defect: natural shell exit
+leaves a synthetic descendant alive through TerminalStore disposal until its 12-second deadline.
+Explicit close kills that descendant in both versions. Both share the Windows onExit/child.kill
+path. The vendor console helper fails AttachConsole, then its five-second numeric-PID fallback
+finds the old shell absent (ESRCH). No actual PID reuse/unrelated kill was observed; do not call
+the fallback identity-safe. useConptyDll:true removed the warning but failed natural-exit and
+owner-lifetime bounds; preserve those failures and do not use it as a fix.
+
+The authorized Windows chat is building a source-only prototype on a separate branch/worktree
+from ee6, using Windows Job Object ownership established before commands run. Required gates:
+natural/explicit/crash cleanup of the full owned tree, bounded helper/handle/timer lifetimes,
+correct output/input/resize/exit/history/access, failure before startup commands, and no numeric
+PID fallback. Root review is required before merging or rebuilding/signing a new candidate.
+Preserve frozen 57c and all original failures. No account/elevation/security/production changes
+are authorized by that prototype dispatch. The temporary standard test-account approval remains
+pending for real installer/update/rollback acceptance; never reuse harness/service accounts.
+
+Late preview hide/show and notice dismiss/display are trusted main-frame calls rejected after
+global closing/registry closure. Renderer cleanup catches execute; no unhandled page errors,
+late native display or browser command occurs through final teardown. Keep these closing guards;
+the diagnostic does not justify a runtime patch or claim empty stderr. Private full reports and
+task/operation identities remain in the rollout checkpoint. Do not repeat signing or installs
+based on queued older task messages.
+
 ## October 26 — Windows signed; native inventory correction accepted
 
 The existing authorized Windows chat built clean 57cde39 into frozen windows.086cb65808ff.
