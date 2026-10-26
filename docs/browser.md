@@ -1,3 +1,10 @@
+## October 26 — five-second notification lifetime
+
+Desktop and web banners expire after five seconds. Native overlays enforce the same lifetime
+in their owner process so a background or suspended renderer cannot leave a banner above other
+applications. Expiry leaves the notification list untouched, invokes no action, advances the
+transient queue and cannot revive a banner when the parent window returns.
+
 ## October 26 — close wins over stale descriptor metadata
 
 Metadata updates for an existing tab carry `updateOnly` through descriptor reconciliation and

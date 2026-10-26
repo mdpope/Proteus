@@ -1,3 +1,14 @@
+## October 26 — five-second notification banners
+
+The operator reports routine Chat completed banners remaining over other applications. Shared
+desktop/web toast duration is now five seconds. Native overlays enforce that lifetime in the
+owner process, independent of background renderer timers, and cannot reappear when the parent
+window is shown again. Expiry leaves notification history intact and never invokes an action.
+An older slow action cannot dismiss the next queued banner. An actual isolated Electron test
+with its renderer clock paused passes at about five seconds, including the queued-action race.
+Full regression passes 1,176 with one skip; static checks pass. Supersede frozen 96c0d53 before
+installation. No live notification record, permission decision or chat was changed.
+
 ## October 26 — Team Tools closed tabs return during standup launch
 
 The operator closed all Team Tools tabs, opened four standup links, then saw older tabs return.

@@ -1,3 +1,22 @@
+## October 26 — notification expiry supersedes frozen 96c0d53
+
+The operator requested five-second notification banners. Shared desktop/web toast duration is
+5,000 ms; native NoticeWindow enforces its own matching timer so renderer throttling cannot
+leave the overlay above other apps. Dismissal clears its identity/timer; an older asynchronous
+action cannot dismiss the next banner. Isolated Electron acceptance with renderer clock paused
+passes at 5,039 ms, plus no parent-show resurrection and queued-action preservation. Full Node
+suite remains 1,176 passes/one skip and static checks pass. Private receipts are
+notice-five-seconds-ui.log, team-notice-full.log and team-notice-check.log. Frozen signed
+96c0d53 passed exact Team close/open and startup/signature gates but lacks this latest change;
+freeze new packages before installation.
+
+The existing Webmin session is now shared and authenticated at its recorded downloads.proteus.example origin.
+Read-only private capture diagnostics establish the web failure: the capture helper retention
+guard sees three server recovery generations. The failure is before capture/activation, not
+proof that no helper ran (older receipts omit helperPid). Both desired retained dates were
+independently reverified locally and on the server. The obsolete raw generation is identified;
+no server deletion or capture retry has happened yet. Preserve the immutable failed job.
+
 ## October 26 — Team Tools correction supersedes frozen 568bcb2
 
 All-device installation remains authorized. Before installing, include the new reproduced
