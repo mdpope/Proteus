@@ -1,3 +1,30 @@
+## October 26 — final iPhone installed and preserved; iPad unlock pending
+
+Clean 77bd05b produced the final signed 0.2.30/2610.26.1 app. All 17 frozen files,
+paid signer, exact two-device push profile and sandbox entitlement verify. The private source
+archive SHA-256 is ba90a6a3047d304df054eddbe79b5206f538f84514698f8aad654785eb4d0907.
+The final stage is native-2610261-final; older 91affe5 and d4c12a7 artifacts are superseded.
+
+The iPhone's existing capture was explicitly rebound after exact cold metadata/hash checks.
+Official installation succeeded once. All 291 protected files matched before the first launch;
+the exact installed app process launched once and all prior non-system preferences remain equal.
+Private physical-2610261/iphone state and operation receipts establish these effects. Do not
+repeat install/launch. No shared push subscription is saved yet; the user was asked for the
+Notifications status and any required separate Account & Security consent. Actual background
+delivery and physical visual/performance acceptance remain unverified.
+
+The iPad locked before rebinding or installation. It remains 0.2.29/2610.23.1 with its accepted
+259-file cold capture intact. Unlock is requested. After unlock, use the final staged helper:
+rebind-candidate, install, verify, launch, then minimal post-launch metadata. No second full
+capture. Retention is not executed: retire only the reviewed oldest physical payloads after
+both new installations and retained recovery generations verify. Keep all receipts.
+
+Work Mac and website are verified updated. Linux's corrected frozen package acceptance passes,
+but human normal KDE relaunch remains pending before live peer checks and its next update.
+Build Mac's explicit one-time working-chat bootstrap choice remains pending because saved
+coordinator defaults are unset and the old app falsely reports Codex signed out. Windows is
+still reconnecting. Do not infer answers or repeat completed external operations.
+
 ## October 26 — reuse physical captures for final five-second native parity
 
 Both physical clients are paused and cold captures are complete in the same in-flight update

@@ -1,3 +1,14 @@
+## October 26 — final native rollout acceptance
+
+The final signed 77bd05b iOS 0.2.30/2610.26.1 app is frozen with exact source and 17-file
+manifest. The phone is installed and launched: all 291 protected files match before launch,
+and its prior non-system preferences remain unchanged afterward. The tablet remains on .29
+because it locked before candidate rebinding/install; its existing capture is retained.
+The full 150-case native suite, four core phone and four tablet UI flows, plus two phone and
+one tablet five-second banner flows pass. Physical visual/performance and real background
+push acceptance are separate and remain pending; no shared subscription is saved yet.
+No duplicate full capture or retention deletion occurred during final build retries.
+
 ## October 26 — native notification expiry parity
 
 Native ordinary banners still used 15 seconds after desktop/web moved to five. Align the native

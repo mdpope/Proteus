@@ -10,8 +10,10 @@ The server's Proteus-only sandbox key is secured in the configured vault and pro
 storage. Configuration, worker health and Apple's expected invalid-device-token response pass;
 these are readiness checks, not real-device delivery. Credential IDs/paths and exact receipts
 belong in the private deployment access record. Topic-specific production delivery requires a
-separate production key. A newly signed physical 2610.26.1 build and background alert acceptance
-remain required after the native question-navigation correction.
+separate production key. The final signed 2610.26.1 app is installed and running on the phone,
+with all 291 protected files preserved. No shared subscription is saved yet; confirm the app's
+Notifications status and separate Account & Security consent. The tablet is awaiting unlock
+before installation. Real background alert acceptance remains pending on both devices.
 
 The app registers with UIApplication, handles APNs success/failure, implements foreground presentation and notification tap routing, and submits the token to the separately consented shared API. A host-scoped chat identifier routes a tap to that Mac; it never falls back to another execution destination. Cold-launch taps follow the same route. Payload text is generic, without prompts, transcripts, credentials or URLs.
 
