@@ -9,12 +9,12 @@ notices still sit at the top; it never received the combined queue. Validate the
 | Requests | Current evidence and remaining gate |
 | --- | --- |
 | 1–2, 15, 25–26: scrolling, URL/history sync, restored selection, window routing/fullscreen | Shared regression suite and earlier native window fixtures pass. New phone fixture restores the same project/browser from 100 tabs and about 30,000 navigation entries; tall previews stay bounded. Physical-device acceptance remains. |
-| 3, 19: keep awake and loaded-tab budget | Desktop controls retained; iOS preferences persist and use the same default budget of seven. Persisted pages remain outside eviction. |
+| 3, 19: keep awake and loaded-tab budget | Desktop controls retained; iOS preferences persist. Actual ordinary defaults are six on desktop and seven on iOS, configurable per device. Persisted pages remain outside eviction. |
 | 4, 11: question/composer attachments | Provider transport fixtures and actual encrypted web question/attachment controls pass; native whole-card focus and exact draft/newline preservation pass. |
 | 5, 23–24: new-chat selection, common move UI, associated placement | Desktop draft-tab and shared-move fixtures pass. Native associated opening uses canonical owner membership. Verify exact packaged views and existing device state. |
 | 6–10, 12–13, 18, 20–22: browser labels/titles/filter/colors, scheduled ownership, auth preference, folder controls, organization, registration, terminal access | Existing combined implementation and owner-boundary tests retained. macOS picker filter/project/rule/keyboard tests pass; SafariSelector is now option 1 with explicit bundle handoff. Registration/default changes remain explicit actions. |
 | 14, 27–31: stalls, updater/recovery, first move/hide, remote Continue | Existing fixes and regression evidence retained. Phone schedule notifications now open durable tabs. Remote send retains idempotent IDs, including legacy resume, with delayed-cleanup wakeup coverage. Exact HC delayed-send cause remains unproven until owner metadata can be inspected. |
-| 17: common update distribution | Common protocol/feed source exists. No new release deployed yet. Linux legacy coordinator is explicitly authorized; HC old runtime lacks purpose:update and Windows is offline. |
+| 17: common update distribution | Common protocol/feed source exists. Website release `20261026T042545Z` is live with verified recovery/restore/manifest and 14 endpoint checks. Desktop/device updates remain separate. Linux legacy coordinator is explicitly authorized; HC old runtime lacks purpose:update and Windows is offline. |
 | 32–34: bottom notices, automatic provider roots, hover paths | Combined source has web/native bottom placement; older retained preview does not. Claude joins Copilot with owner-local automatic roots, forwarded through session wrappers. Link previews remain display-only. |
 | 35–37: Resources, allowance continuation, remote/local parity | Actual web renderer acceptance passes shared permissions, models, Activity and Resources, including no-default/reconnect handling. Native Activity/resource/recovery surfaces compile and focused unit/parity tests pass. Owner capability gates remain authoritative. |
 | New mobile performance/live push requests | History indexing/search and thumbnail I/O leave the main actor; persistence coalesces off-thread, equal polls do not republish, cold navigation restores identity, attention shows known chat names. APNs payload/routing fixtures pass; live delivery requires the missing paid profile and server APNs setup. |
@@ -22,6 +22,26 @@ notices still sit at the top; it never received the combined queue. Validate the
 
 Source completion does not establish installed/live acceptance. This audit is the remaining release
 gate, with receipts and blockers in `handoff.md`; do not mark these targets deployed from a build.
+
+### Audit corrections and exact-package observations
+
+The signed `00e90e945951+src.d0f51e3e8295` package passes bottom native notification bounds,
+first move/header Hide, ordinary unload, Persisted residency/full history, cold-tab close without
+fetch, Resources filters/refresh and Markdown destination previews in disposable UI acceptance.
+Its four-provider Activity and project filter/new-chat/workspace-return checks also pass.
+The retained human preview is still the older package; these tests do not claim it was replaced.
+
+The history check initially compared a legacy entry before asynchronous owner enrichment against
+its acknowledged entry after Hide. IPC tracing showed a forward revision, with identical entry
+identity/URL and added requested-URL metadata. The fixture now awaits and captures the completed
+navigation snapshot before asserting exact preservation; it does not discard history fields.
+
+A separate intermittent selection regression was found while checking hover previews: a saved
+same-window project-follow join could replace the newer document selection with the project root.
+Local windows now ignore local presentation snapshots, including their own older actor; canonical
+content synchronization and paired-computer following remain active. The acceptance fixture holds
+an actual old owner response across a child-selection commit to exercise that interval explicitly.
+A new frozen package must include this correction before desktop rollout.
 
 The October 25 handoff authorizes implementing queue items 28–37 and building/testing an isolated
 combined Design Preview. Installed Proteus, public releases and other devices remain held until

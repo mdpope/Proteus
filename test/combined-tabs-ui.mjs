@@ -36,7 +36,16 @@ try{
   const ordinary=await page.evaluate(async id=>(await window.desktop.browser({action:'list'})).find(tab=>tab.id===id),source.id);assert.equal(ordinary.loaded,false);
   await page.evaluate(async id=>{await window.desktop.browser({action:'persist',id,enabled:true});await window.desktop.browser({action:'visibility',id,hidden:false});},source.id);
   await page.locator('[data-chat-subtab="'+source.id+'"]').waitFor();await page.locator('[data-chat-subtab="'+source.id+'"]').click();
-  const persistedBefore=await page.evaluate(async id=>(await window.desktop.browser({action:'list'})).find(tab=>tab.id===id),source.id);
+  // Await IPC outside the page predicate and retain the exact observed snapshot:
+  // an async waitForFunction predicate can be truthy before this IPC settles.
+  // Loading enriches the legacy entry; Hide must preserve its completed stack.
+  let persistedBefore;
+  for(let attempt=0;attempt<150;attempt++){
+   const tab=await page.evaluate(async id=>(await window.desktop.browser({action:'list'})).find(tab=>tab.id===id),source.id);
+   if(tab?.loaded&&!tab.loading&&tab.history?.entries?.[tab.history.index]?.requestedURL===tab.url){persistedBefore=tab;break;}
+   await new Promise(resolve=>setTimeout(resolve,100));
+  }
+  assert.ok(persistedBefore,'restored navigation must finish before checking Hide');
   await page.locator('[data-chat-subtab="'+source.id+'"]').click({button:'right'});await page.locator('[data-chat-subtab="'+source.id+'"]').waitFor({state:'hidden'});
   const persistedAfter=await page.evaluate(async id=>(await window.desktop.browser({action:'list'})).find(tab=>tab.id===id),source.id);assert.equal(persistedAfter.loaded,true);assert.equal(persistedAfter.persist,true);assert.equal(persistedAfter.hidden,true);assert.deepEqual(persistedAfter.history,persistedBefore.history);
   const coldId=await app.evaluate(({app},{project,url})=>{const service=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs').getService(),current=service.contentTabs.get('project',project),id='synthetic-cold-logical-tab';service.contentTabs.mutate({scope:'project',id:project,expectedRevision:current.revision,operations:[{action:'open',tab:{id,type:'browser',profileId:'default',title:'Synthetic never instantiated',url}}]});return id;},{project:fixture.projects.at(-1).id,url:fixture.origin+'/never-loaded'});
@@ -47,10 +56,26 @@ try{
   await page.locator('[data-resource-close="'+coldId+'"]').click();await page.locator('[data-resource-close="'+coldId+'"]').waitFor({state:'hidden'});assert.equal(fixture.requests.includes('/never-loaded'),false);
   await page.evaluate(()=>window.desktop.notice({id:'synthetic-bottom-notice',message:'Synthetic bottom notification',actions:[]}));
   await page.waitForTimeout(200);const notice=await app.evaluate(({BrowserWindow})=>{const child=BrowserWindow.getAllWindows().find(window=>window.webContents.getURL().endsWith('/notice.html'));return {bounds:child.getBounds(),parent:child.getParentWindow().getContentBounds()};});assert.ok(notice.bounds.y>notice.parent.y+notice.parent.height/2);assert.ok(notice.bounds.y+notice.bounds.height<=notice.parent.y+notice.parent.height);await page.evaluate(()=>window.desktop.notice({action:'dismiss',id:'synthetic-bottom-notice'}));
-  await page.locator('[data-preview-project="'+fixture.project.id+'"]').first().click();await page.locator('[data-chat-subtab="markdown:'+fixture.document+'"]').click();
+  // Hold the actual owner's old same-window join reply across a newer child
+  // selection. A saved root presentation must never select the root again.
+  let releaseJoin,joinCaptured=false;
+  const heldJoin=new Promise(resolve=>releaseJoin=resolve);
+  await page.route('**/api/project-follow',async route=>{
+   const args=route.request().postDataJSON();
+   if(args.action!=='join'||args.id!==fixture.project.id)return route.continue();
+   const response=await route.fetch();joinCaptured=true;await heldJoin;await route.fulfill({response});
+  });
+  await page.locator('[data-preview-project="'+fixture.project.id+'"]').first().click();
+  for(let attempt=0;attempt<100&&!joinCaptured;attempt++)await new Promise(resolve=>setTimeout(resolve,50));
+  assert.equal(joinCaptured,true,'fixture must observe the actual old project join');
+  // Commit the real click handler after the input intent captured by Join; this
+  // is the pointer-down / delayed-click interval that exposed the stale reply.
+  await page.locator('[data-chat-subtab="markdown:'+fixture.document+'"]').evaluate(button=>button.click());releaseJoin();
+  await page.waitForTimeout(350);
   await page.locator('.markdown-preview a').filter({hasText:'Relative preview'}).hover();await page.locator('.link-destination-preview').filter({hasText:'file://'+path.join(path.dirname(fixture.document),'../linked.md')}).waitFor();
   await page.locator('.markdown-preview a').filter({hasText:'Web preview'}).hover();await page.locator('.link-destination-preview').filter({hasText:'https://example.invalid/preview'}).waitFor();await page.mouse.move(0,0);await page.locator('.link-destination-preview').waitFor({state:'hidden'});
-  assert.deepEqual(errors,[]);console.log(JSON.stringify({passed:true,firstMoveMs:moveMs,hideHeaderMs:hideMs,stableBrowserIdentity:!!moved,ordinaryHideUnloaded:true,persistedHideKeepsPageAndHistory:true,unloadedResources:true,canonicalColdCloseWithoutLoad:true,refreshPreservesFilters:true,bottomNativeNotice:true,markdownFileAndWebPreview:true}));
+  assert.equal((await session()).active,'markdown:'+fixture.document);
+  assert.deepEqual(errors,[]);console.log(JSON.stringify({passed:true,firstMoveMs:moveMs,hideHeaderMs:hideMs,stableBrowserIdentity:!!moved,ordinaryHideUnloaded:true,persistedHideKeepsPageAndHistory:true,unloadedResources:true,canonicalColdCloseWithoutLoad:true,refreshPreservesFilters:true,bottomNativeNotice:true,markdownFileAndWebPreview:true,staleOwnJoinPreservesSelection:true}));
  }
 }catch(error){await page?.screenshot({path:process.cwd()+'/.runtime-tests/combined-tabs-failure.png'}).catch(()=>{});throw error;}
 finally{await app?.close();await fixture.cleanup();}

@@ -1,5 +1,18 @@
 ## October 25 — 0.2.30 rollout authorized; final acceptance in progress
 
+Latest audit follow-up: the signed `00e90e945951+src.d0f51e3e8295` package verifies bottom native
+notices, move/hide/residency/history, Resources and hover previews; Activity and new-chat selection
+also pass. A local saved-follow response can still race a newer selection, so the next source
+correction rejects local presentation snapshots including the same window's own old actor.
+Rebuild before installing; do not install the previous package as if it includes this fix.
+The full regression rerun initially exposed a VM fixture missing the new shared helper import;
+that fixture is corrected without changing its checkpoint assertions. Final acceptance is pending.
+
+Website `20261026T042545Z` is now deployed: 9,221 manifest files verified, ordinary recovery restore
+and 14 endpoint audits pass. Do not repeat its activation or recovery capture. Private receipts
+live in the existing website deployment workspace. Current/previous central recovery retention
+completed; code-archive and duplicate build-payload retirement still needs its verified inventory.
+
 The operator has completed Design Preview review and explicitly authorized deployment to **all
 platforms/devices after build/test/validation**, lifting the Mac hold below. Preserve MTPLX's
 preview-only registration. Finish by reconciling open Proteus source branches/PRs into main and
@@ -34,7 +47,7 @@ Resources state. Large phone restoration/overview, full-card composer, iPad pari
 foreground/cold/background notification routing pass. The phone schedule notification previously
 reached its sheet binding without presenting; it now uses the durable schedule-tab route.
 
-No installation/publication has happened in this work. Both physical iPhone/iPad are now reachable.
+Desktop/physical mobile installation has not happened in this work. Both physical iPhone/iPad are now reachable.
 Paid push build remains blocked: Xcode reports No Accounts on an unlocked Mac and the existing
 wildcard profile lacks Push Notifications/aps-environment. One allowed provisioning attempt with
 the exact existing paid certificate failed; do not reset/recreate/revoke accounts or certificates.

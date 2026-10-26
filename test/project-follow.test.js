@@ -1,15 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {ProjectFollow,normalizeFollowState} from '../src/services/workspaces/project-follow.js';
-import {createProjectFollower} from '../public/features/workspaces/project-follow.js';
+import {createProjectFollower,acceptsProjectPresentation} from '../public/features/workspaces/project-follow.js';
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const deferred=()=>{let complete;const gate={done:false,promise:new Promise(resolve=>{complete=resolve;})};gate.resolve=value=>{gate.done=true;complete(value);};return gate;};
 const waitFor=async condition=>{for(let index=0;index<200;index++){if(condition())return;await pause(10);}throw Error('Timed out waiting for controller checkpoint.');};
-test('independent local windows reject sibling presentation without seeding over it, while paired follow remains usable',async t=>{
- const scope={scope:'project',id:'project'},applied=[],updates=[];let actor='local:sibling',revision=1,state={tabId:'own'};
- const follower=createProjectFollower({clientId:'own',current:()=>scope,read:async()=>state,apply:async(_scope,value)=>{state=value;applied.push(value);},sync:async()=>{},acceptPresentation:value=>!value.actor?.startsWith('local:')||value.actor==='local:own',request:async(_scope,args)=>{if(args.action==='update')updates.push(args);return {epoch:'owner',revision,actor,state:{tabId:'other'}};}});t.after(()=>follower.dispose());
+test('local windows reject their own stale join and sibling presentation, while paired follow remains usable',async t=>{
+ const scope={scope:'project',id:'project'},applied=[],updates=[];let actor='local:own',revision=1,state={tabId:'own'};
+ const follower=createProjectFollower({clientId:'own',current:()=>scope,read:async()=>state,apply:async(_scope,value)=>{state=value;applied.push(value);},sync:async()=>{},acceptPresentation:acceptsProjectPresentation,request:async(_scope,args)=>{if(args.action==='update')updates.push(args);return {epoch:'owner',revision,actor,state:{tabId:'other'}};}});t.after(()=>follower.dispose());
  follower.changed();await pause(180);assert.deepEqual(applied,[]);assert.deepEqual(updates,[]);assert.equal(state.tabId,'own');
  await follower.receive(scope,{epoch:'owner',revision:++revision,actor:'local:sibling',state:{tabId:'sibling'}});await pause(150);assert.deepEqual(applied,[]);
+ assert.equal(acceptsProjectPresentation({actor:'local:own'},{hostId:'paired-owner'}),true,'remote owners retain their existing follow semantics');
  actor='paired-computer:client';await follower.receive(scope,{epoch:'owner',revision:++revision,actor,state:{tabId:'paired'}});await waitFor(()=>applied.length===1);assert.equal(state.tabId,'paired');
 });
 test('presentation state is scoped, leased, ordered and excludes page secrets',()=>{

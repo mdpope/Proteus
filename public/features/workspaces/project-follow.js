@@ -1,5 +1,9 @@
 // One subscription for the visible owner scope. Connections carry presentation
 // metadata only; navigation still uses the revision-aware content-tab service.
+// Each local window restores its own saved selection. Even its own last server
+// presentation can predate a click while a project join hydrates asynchronously.
+// Paired computers retain same-scope presentation following.
+export function acceptsProjectPresentation(value,scope){return !!scope.hostId||!value?.actor?.startsWith('local:');}
 export function createProjectFollower({ current, read, apply, request, sync, now=Date.now, clientId=crypto.randomUUID(), acceptPresentation=()=>true, onError=()=>{} }) {
   let active=null, generation=0, sequence=0, revision=0, epoch=null, signature='', timer, lease, busy=false, dirty=false, applying=false, disposed=false, intent=0,settledIntent=0, pendingEvent=null,pendingIntent=0,lastPresentation=0,seed=false;
   const unsupported=new Set(),humanOperations=new Set();

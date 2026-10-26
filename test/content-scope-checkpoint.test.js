@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import {webcrypto} from 'node:crypto';
 import {createTabSynchronizer} from '../public/models/content-tab-sync.js';
+import {acceptsProjectPresentation} from '../public/features/workspaces/project-follow.js';
 
 const source=fs.readFileSync(new URL('../public/app.js',import.meta.url),'utf8');
 const section=(start,end)=>{const from=source.indexOf(start),to=source.indexOf(end,from);assert.ok(from>=0&&to>from);return source.slice(from,to);};
@@ -25,7 +26,7 @@ function appFixture({checkpoint=async()=>false,sync=async()=>{},save=async()=>{}
     document:{hidden:false},chatSetupTabs:{capture(){}},reconcilePreviewProjects(){},selectedChildren:new Map(),desktopWindowId:'main',windowScopeId:value=>value,
     teamState:()=>team,contentTabMetadata:()=>({}),setTimeout:()=>1,clearTimeout(){},toast:error=>errors.push(error),
     contentTabSync:{all:async()=>assert.fail('Inactive scopes must not be polled.'),checkpoint:async scope=>{calls.push({kind:'checkpoint',scope:copy(scope)});return checkpoint(scope);},sync:async scope=>{calls.push({kind:'sync',scope:copy(scope)});return sync(scope);}},
-    createProjectFollower:options=>{follower=options;return {changed(){}};},
+    acceptsProjectPresentation,createProjectFollower:options=>{follower=options;return {changed(){}};},
   };
   vm.createContext(sandbox);
   vm.runInContext(section('let applyingContentTabs=0','\nfunction openFeatureTab')+'\n'+section('function scopeParent(scope){','\nfunction sharedBrowserDescriptor')+'\n'+section('let savedContentScopes=[];',"\nfor(const type of ['pointerdown','wheel','touchstart','keydown'])")+'\nglobalThis.fixture={saveWorkspace,visibleContentScopes,checkpointDepartedContentScopes};',sandbox);

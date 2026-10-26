@@ -1,4 +1,23 @@
-## October 25 — Mobile performance and cross-platform rollout
+## October 25 — Combined release audit and rollout authorization
+
+Operator approved Design Preview review and authorized all-platform/device deployment after testing,
+including Mac; this supersedes the historical holds below. OS default-browser selection still
+requires an explicit user action. MTPLX registration remains preview-only.
+
+The retained Activity-only preview did not contain items 28–37, including bottom notifications.
+Do not equate that running app with the combined package. The audit in
+[combined preview](2026-10-25-combined-preview.md) maps the complete intake to source/package/live
+evidence. It also corrected provider-home forwarding through session wrappers, web Resources
+without a default computer, phone schedule-alert presentation, Codex account status and remote
+single-send routing. A further local selection race now ignores even the same window's older
+saved follow presentation; paired-computer following remains supported.
+
+Website release `20261026T042545Z` is activated and independently audited. Desktop and physical
+mobile installations remain separate pending acceptance/availability; APNs requires the existing
+paid Xcode account/profile and server credentials, and the Windows host is offline. These are
+explicit remaining work, not completed features inferred from successful compilation.
+
+## October 25 — Mobile performance and cross-platform rollout (earlier scope)
 
 Implement relevant desktop queue changes for iOS/web and Linux/Windows; release to those targets
 after validation. Mac installation remains held, and MTPLX remains a preview-only pilot.

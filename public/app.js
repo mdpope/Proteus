@@ -42,7 +42,7 @@ import {usageSidebar,usageDetails} from './features/settings/provider-usage-view
 import { bindDesktopBrowserRecents } from './features/browser/browser-recents.js';
 import { mountHome } from './shared/ui/home.js';
 import { createTabSynchronizer, syncableTabURL } from './models/content-tab-sync.js';
-import { createProjectFollower, sharedScrollPosition, restoreSharedScroll } from './features/workspaces/project-follow.js';
+import { createProjectFollower, acceptsProjectPresentation, sharedScrollPosition, restoreSharedScroll } from './features/workspaces/project-follow.js';
 import { browserTabIcon } from './features/browser/browser-icons.js';
 import { setMessageActionsContext, stopMessageSpeech } from './features/chats/message-actions.js';
 import { tabOverviewIcon, chatIconPaths, addTabMenuEntries, addTabMenuItems, setBrowserProfiles, browserProfileMenu } from './shared/navigation/add-tab-menu.js';
@@ -990,7 +990,7 @@ const projectFollower=createProjectFollower({
  clientId:followClientId,
  // Local windows share content, but each keeps its own selection/reading state.
  // Paired computers retain their explicit same-scope follow behavior.
- acceptPresentation:(value,scope)=>!!scope.hostId||!value?.actor?.startsWith('local:')||value.actor==='local:'+followClientId,
+ acceptPresentation:acceptsProjectPresentation,
  current:visibleFollowScope,
  request:(scope,value)=>scope.hostId?window.desktop.peers({action:'request',hostId:scope.hostId,method:'tabs.follow',args:value}):api('/api/project-follow',value),
  sync:async scope=>{const current=()=>JSON.stringify(visibleFollowScope())===JSON.stringify(scope);if(!current())return;for(const child of visibleContentScopes())if(child.scope==='chat'){if(!current())return;await contentTabSync.sync(child);}if(current())await contentTabSync.sync(scope);},
