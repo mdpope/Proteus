@@ -12,6 +12,12 @@ files and links. The reproduced failure remains retained; focused directory/prov
 static checks pass. Keep the already signed candidate unchanged and document its empty-directory
 workaround rather than silently replacing its build recipe or source companion.
 
+Exact 268eda7 now passes all 12 focused tests and static checks on Windows. The real preparer
+creates the missing directory and a regular production helper, with unchanged compiler/C# hashes;
+all four file/junction parent negatives refuse before compilation. The original ENOENT remains
+reproduced. Both frozen candidates and 908 prior receipt files remain unchanged. This completes
+the source-only build fix; real installer/update/rollback gates still await account isolation.
+
 ## October 26 — combined Windows ownership validation complete
 
 The reviewed 87d78ba ownership implementation is integrated with helper packaging and terminal

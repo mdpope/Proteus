@@ -26,7 +26,22 @@ that empty directory let the unchanged package script compile its production hel
 corrects directory creation in the preparer, retaining the reproduced failure and passing focused
 regressions (10 passes/two Windows-only skips; static checks pass). This is a build-recipe correction,
 not a new runtime or permission to rewrite the signed d5 artifact. Windows real-compiler validation
-of this source-only fix remains separate from the accepted frozen candidate.
+of exact 268eda7 now passes separately: 12 focused tests, zero skips/failures, static checks,
+and real compilation from the initially missing directory. The preparer creates a regular
+12,288-byte production helper; C# and compiler hashes match before/after. All four file/junction
+parent cases refuse before compilation, and the old ENOENT is reproduced with its failure retained.
+The frozen candidate still has 380 runtime files, 10 build inputs and 1,339 companion files.
+Both frozen candidates and all 908 existing receipt files reverify unchanged.
+
+Separate build-recipe validation identities (not replacement release identities):
+
+- Helper: 99f97ae8e8b82c1da2a1e16061999741ad4f62d82461713de7d2328abc24de63
+- Compiler: 46809206887326d2d24db1eff1f3064de972c3451abe766b49111450a5e08e00
+- C# source: 4769431c428615535dae87927307ca8f2275c27c1a0f437e84dd539a73fb47ca
+- 13-file receipt index: b1f8f1a801ec0667730d3edaf3eb6955453ca071bb8f1a75dcdbc3406130bbe7
+
+This validation performs no packaging, signing, account or production operation. Keep the signed
+c6 artifact/source companion bound to d5dc6c9 and its documented empty-directory workaround.
 
 Real NSIS install, update-success, rollback and Windows pre-install-failure gates still require
 approved disposable account isolation. No account lifecycle action is authorized yet. The pending

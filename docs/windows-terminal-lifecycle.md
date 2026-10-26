@@ -67,6 +67,9 @@ links remain rejected before compilation. The first d5dc6c9 clean build exposed 
 its accepted package used only an empty-directory workaround with unchanged compiler/packager
 source. Keep that original failure and qualification with its frozen candidate. The source-only
 directory correction does not rewrite, rebuild or re-sign an existing accepted artifact.
+The exact 268eda7 correction is verified on Windows with 12 focused tests, static checks and
+one real compiler invocation from an initially absent directory. All four file/junction parent
+cases refuse before compilation. The separate compiled test helper is not a replacement release.
 
 Without the helper the Windows process path fails closed and cannot fall back to legacy spawn.
 .NET Framework/runtime policy on clean or older Windows images remains unverified; the actual
