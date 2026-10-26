@@ -1,3 +1,33 @@
+## October 26 — combined Windows ownership source accepted; package rebuild next
+
+Root reviewed and integrated Windows 87d78ba with packaging and whole-create idle reservations.
+Complete combined Node suite: 1,196 passes/three skips/zero failures; static checks pass. Two
+new skips are Windows-only compiler mutation cases, which pass on Windows; the other is the
+existing Windows reader-lock case. The first Mac run retained its Unix-socket path-limit failure
+under the long default temporary directory; the passing run uses established TMPDIR=/tmp with
+unchanged assertions. Focused integration: 44 passes, including actual local POSIX PTY I/O.
+
+Windows source acceptance: 1,187 passes/five platform skips; all nine real ownership cases pass,
+exact final warmed handles 205 → 205, zero active transport resources. Error paths cover refused,
+throwing and unconfirmed termination, actual-close-only lifecycle confirmation and serializable
+startup errors. Builder hashes source/compiler before and after compile. Root additionally rejects
+dangling output links. Existing framework and two compatible nested-job probes pass on that host;
+clean/older framework images and genuine denied-nesting environments remain unverified.
+
+Private Windows report: ownership-hardening/REPORT.md. Final source tip 87d78baea004b21018304e75a647c2e6d9016269;
+exact-diff SHA-256 50ce075a0a16687512921f241ec205b3a09e6e95ca25c5f52d40d3e1eaaa86f8;
+tested source helper 4f0145eafb1355587efedf1f138a18b7b03b628f8f49cc01093e7cb2fbc9504a;
+receipt index 788c59a936972b715d5417a5100105eb2302168eb8c1b186de1461e5d34939c5.
+All original failures, 582 prior indexed files and old frozen57c artifacts/signature are preserved.
+
+Next: build from the clean combined source on Windows, use only the exact packaged production
+helper for native acceptance, and verify every runtime/build-input/source-companion byte. A new
+build requires its own immutable identities and signed envelope; never overwrite/re-sign frozen57c.
+Do not install/publish before package and real installer gates. The temporary Windows standard-account
+choice, personal-Mac working-chat bootstrap choice and Linux normal KDE relaunch remain pending.
+A fresh read-only iPhone check still shows enabled notifications but no saved push subscription;
+real background delivery remains unverified. Do not repeat completed mobile/HC/web installations.
+
 ## October 26 — Windows ownership integration under validation
 
 Windows source prototype d213502 passes nine real-process cases and its complete source suite

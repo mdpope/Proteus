@@ -1,3 +1,13 @@
+## October 26 — combined Windows ownership validation complete
+
+The reviewed 87d78ba ownership implementation is integrated with helper packaging and terminal
+startup/update blockers. Combined source validation passes 1,196 cases/three explicit skips and
+static checks; the retained long-temporary-path socket failure passes under established /tmp
+without assertion changes. Windows source validation passes 1,187 cases/five platform skips and
+nine native cases, with exact handle counts and serialized unconfirmed-cleanup errors. New exact
+Windows package/installer acceptance remains pending. Preserve the old signed57c candidate and
+all failure receipts; no new installation/publication is claimed by these source results.
+
 ## October 26 — Windows terminal ownership integration
 
 The isolated d213502 prototype passes nine real-process ownership cases, including natural exit,

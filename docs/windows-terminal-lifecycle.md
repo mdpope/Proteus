@@ -1,9 +1,9 @@
-# Windows terminal ownership prototype
+# Windows terminal ownership
 
-This source branch is a review prototype based on ee6ff3e. It is not packaged,
-installed, signed or published. The previous frozen 57c release is unchanged.
-The general handoff, planned updates, release metadata and shutdown IPC guards
-are deliberately outside this patch's ownership.
+The Job Object implementation and build integration are source-validated. A new exact Windows
+package and real installer/update/rollback acceptance remain pending. The previous frozen signed
+57c artifact is unchanged, and installed Windows .29 remains in place. Source integration does
+not establish an installed outcome.
 
 ## Ownership boundary
 
@@ -50,16 +50,21 @@ SHA-256. `--test-job-failure` builds a separate test-only executable that can
 invoke an invalid SetInformationJobObject class: the OS rejects setup before
 any broker/sentinel command. Production compilation omits that argument seam.
 
-Before release packaging, a reviewed build must place the exact compiled helper
-at `desktop/terminal/windows-terminal-guardian.exe`, include it in the runtime
-hash/provenance, and include this C# source and builder in the Windows build-input
-identity. Preserve the matching source companion, pin/record compiler identity
-and retain exact helper hashes. Existing desktop runtime roots already cover
-that asset path, but the package builder is NOT wired to compile/verify it yet.
-Without the helper the new Windows process path fails closed; it must not silently
-fall back to legacy spawn. .NET Framework runtime availability and antivirus/
-application-control acceptance still need validation on supported clean Windows
-images. This prototype does not justify a new release package or signature.
+`scripts/package-windows.mjs` invokes the exported builder through
+`scripts/prepare-windows-terminal.mjs` before creating the desktop snapshot. Each compile uses
+a new private scratch output; only a verified production receipt can replace the regular managed
+asset at `desktop/terminal/windows-terminal-guardian.exe`. Linked paths, test seams and mismatched
+source/helper/compiler receipts fail packaging. Runtime provenance includes the exact executable;
+build inputs include its C# source and both build scripts. The separate build receipt records the
+compiler hash and is retained outside the package. Scratch files are retired, while the generated
+managed asset remains ignored by Git. Include its exact bytes in the frozen source companion when
+comparing all declared runtime files; record canonical tracked source separately from generated
+assets. Native source stays outside Mac/Linux runtime packages.
+
+Without the helper the Windows process path fails closed and cannot fall back to legacy spawn.
+.NET Framework/runtime policy on clean or older Windows images remains unverified; the actual
+build host's framework and two compatible nested-job cases are observed below. Never install
+frameworks, enable machine features or weaken job policy as an implicit deployment fallback.
 
 ## Validation and limits
 

@@ -13,7 +13,9 @@ export function buildWindowsTerminalGuardian({output, testOnlyJobFailureSeam = f
   if (process.platform !== 'win32' || process.arch !== 'x64' || !output || !path.isAbsolute(output)) {
     throw Error('Provide a new absolute helper output path on Windows x64.');
   }
-  if (fs.existsSync(output)) throw Error('Refuse to overwrite an existing helper.');
+  // A dangling link still occupies the output path; never let the compiler
+  // follow it to another destination under the guise of a fresh build.
+  if (fs.lstatSync(output, {throwIfNoEntry: false})) throw Error('Refuse to overwrite an existing helper.');
   const source = path.join(root, 'native/windows-terminal/guardian.cs');
   const compiler = path.join(process.env.SystemRoot || 'C:/Windows', 'Microsoft.NET/Framework64/v4.0.30319/csc.exe');
   if (!fs.existsSync(compiler)) {

@@ -22,6 +22,10 @@ test('guardian builder refuses an existing output and never changes its bytes', 
   const expected = process.platform === 'win32' && process.arch === 'x64' ? /overwrite/ : /Windows x64/;
   assert.throws(() => buildWindowsTerminalGuardian({output}), expected);
   assert.equal(fs.readFileSync(output, 'utf8'), 'DO_NOT_REPLACE');
+  const linkedOutput=path.join(dir,'linked.exe'),missing=path.join(dir,'missing.exe');
+  fs.symlinkSync(missing,linkedOutput);
+  assert.throws(()=>buildWindowsTerminalGuardian({output:linkedOutput}),expected);
+  assert.equal(fs.existsSync(missing),false,'compiler cannot create output through a dangling link');
 });
 
 for (const mutated of ['source', 'compiler']) {
