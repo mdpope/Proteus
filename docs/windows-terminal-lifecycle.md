@@ -1,4 +1,4 @@
-﻿# Windows terminal ownership prototype
+# Windows terminal ownership prototype
 
 This source branch is a review prototype based on ee6ff3e. It is not packaged,
 installed, signed or published. The previous frozen 57c release is unchanged.
@@ -99,3 +99,44 @@ repeats the default path: 205 before and after each measured case, zero active
 transport resources. The strict equality assertion is unchanged; no tolerance,
 process exclusion or deadline extension was added. This qualifies the initial
 measurement rather than erasing it.
+
+## Unconfirmed termination contract and pinned build receipts
+
+`close()` and `closed` are bounded operation-result promises. Graceful close still
+gets one second before using the retained ChildProcess handle. If `kill()` throws
+or returns false, the close operation rejects immediately at that point. If it
+returns true but no actual `close` arrives, a new one-second confirmation deadline
+rejects the formerly unbounded wait. Startup still has its original ten-second
+bound; native exit/descendant deadlines remain unchanged.
+
+The rejection has code `PROTEUS_TERMINAL_CLEANUP_UNCONFIRMED`,
+`cleanupUnconfirmed=true`, and `cleanupCompleted`, a separate promise resolving
+ONLY on an actual guardian `close` event. It never resolves because of a timeout,
+a successful kill request, a protocol exit frame or the bounded rejection.
+Startup rejection retains the original startup error as `startupError` when
+cleanup is also unconfirmed. Root retains that rejection as a startup blocker
+until `cleanupCompleted` resolves. Ready sessions receive no synthetic exit and
+remain running/blocking after a rejected close. A later actual close may emit
+exit once and resolve lifecycle confirmation; the earlier result stays rejected.
+Root owns TerminalStore reservations/update-blocker and supervisor integration.
+
+The build module exports `buildWindowsTerminalGuardian({output,
+testOnlyJobFailureSeam=false})`, with an inert import and CLI-only printing.
+It requires Windows x64 and the existing compiler, refuses output overwrite,
+hashes C# source/compiler BEFORE compilation, verifies both unchanged AFTER,
+and returns those pinned hashes plus the final helper hash. Concurrent mutation
+rejects without issuing a trusted receipt; its unverified output remains for
+inspection and cannot be overwritten on retry. Tests mutate only copied fixture
+source/compiler files through a mocked compiler invocation, never host tooling.
+
+Formatting removes BOMs and expands critical C#/JS/build/test code into readable
+functions. Native guardian/broker behavior and frame/size bounds are retained.
+The helper runs here under CLR 4.0.30319.42000; its references are mscorlib,
+System and System.Web.Extensions version 4.0.0.0. Installed framework release
+533509 is observed; older/clean images are not established by this machine.
+`test/windows-terminal-nesting.cs` probes ordinary and UI-handle-restricted
+anonymous outer jobs using only disposable processes. Both nested successfully
+on this Windows build; a genuine incompatible nesting environment remains an
+acceptance limitation. The separate actual invalid-job-info OS failure still
+proves rejection before the sentinel broker/command can run. No policy, token,
+privilege, account or machine feature changes are made by these probes.
