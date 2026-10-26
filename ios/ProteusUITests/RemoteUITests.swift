@@ -2373,28 +2373,34 @@ final class PhoneSidebarPreviewUITests: XCTestCase {
     return app
 }
 
+@MainActor private func verifyQuestionQueueAnswers(phone: Bool) {
+    let app = openComposerDesignPreview(phone: phone, questions: true)
+    let queue = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Questions to answer (2)")).firstMatch
+    XCTAssertTrue(queue.waitForExistence(timeout: 15)); queue.tap()
+    let question = app.buttons["Choose a rehearsal destination"]
+    XCTAssertTrue(question.waitForExistence(timeout: 5)); question.tap()
+    XCTAssertEqual(app.buttons["chat-question-queue-toggle"].value as? String, "Collapsed", "Selecting a question must release the queue space for its answer controls")
+    let choice = app.buttons["Project B"]
+    XCTAssertTrue(choice.waitForExistence(timeout: 5)); choice.tap()
+    let remaining = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Questions to answer (1)")).firstMatch
+    XCTAssertTrue(remaining.waitForExistence(timeout: 15))
+    let custom = app.buttons["Any rehearsal instructions?"]
+    if !custom.exists { remaining.tap() }
+    XCTAssertTrue(custom.waitForExistence(timeout: 5)); custom.tap()
+    XCTAssertEqual(app.buttons["chat-question-queue-toggle"].value as? String, "Collapsed")
+    let input = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "question-answer-")).firstMatch
+    XCTAssertTrue(input.waitForExistence(timeout: 5)); input.tap(); input.typeText("Keep the same session")
+    XCTAssertEqual(input.value as? String, "Keep the same session")
+    XCTAssertTrue(app.buttons["Send answer"].firstMatch.isHittable)
+    app.buttons["Send answer"].firstMatch.tap()
+    let answered = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: remaining)
+    XCTAssertEqual(XCTWaiter.wait(for: [answered], timeout: 15), .completed)
+    XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Keep the same session")).firstMatch.waitForExistence(timeout: 10))
+}
+
 final class PhoneComposerPreviewUITests: XCTestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
-    @MainActor func testQuestionQueueChoicesAndCustomAnswerUseOwnerSession() {
-        let app = openComposerDesignPreview(phone: true, questions: true)
-        let queue = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Questions to answer (2)")).firstMatch
-        XCTAssertTrue(queue.waitForExistence(timeout: 15)); queue.tap()
-        let question = app.buttons["Choose a rehearsal destination"]
-        XCTAssertTrue(question.waitForExistence(timeout: 5)); question.tap()
-        let choice = app.buttons["Project B"]
-        XCTAssertTrue(choice.waitForExistence(timeout: 5)); choice.tap()
-        let remaining = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Questions to answer (1)")).firstMatch
-        XCTAssertTrue(remaining.waitForExistence(timeout: 15))
-        let custom = app.buttons["Any rehearsal instructions?"]
-        if !custom.exists { remaining.tap() }
-        XCTAssertTrue(custom.waitForExistence(timeout: 5)); custom.tap()
-        let input = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "question-answer-")).firstMatch
-        XCTAssertTrue(input.waitForExistence(timeout: 5)); input.tap(); input.typeText("Keep the same session")
-        app.buttons["Send answer"].firstMatch.tap()
-        let answered = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: remaining)
-        XCTAssertEqual(XCTWaiter.wait(for: [answered], timeout: 15), .completed)
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Keep the same session")).firstMatch.waitForExistence(timeout: 10))
-    }
+    @MainActor func testQuestionQueueChoicesAndCustomAnswerUseOwnerSession() { verifyQuestionQueueAnswers(phone: true) }
     @MainActor func testOneLineComposerExpandsControlsAndPreservesDraft() {
         let app = openComposerDesignPreview(phone: true)
         let compact = app.buttons["composer-preview"]
@@ -2475,6 +2481,7 @@ final class NativeReleaseParityUITests: XCTestCase {
 
 final class TabletComposerPreviewUITests: XCTestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
+    @MainActor func testQuestionQueueChoicesAndCustomAnswerUseOwnerSession() { verifyQuestionQueueAnswers(phone: false) }
     @MainActor func testTabletCompactComposerRemainsVisibleAndReturnSubmits() {
         let app = openComposerDesignPreview(phone: false)
         let editor = app.textViews["reply-text"]

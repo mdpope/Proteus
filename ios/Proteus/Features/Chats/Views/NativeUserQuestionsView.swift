@@ -40,7 +40,9 @@ struct NativeUserQuestionQueue: View {
                     HStack { Text("Questions to answer (\(waiting.count))"); Spacer(); Image(systemName: expanded ? "chevron.up" : "chevron.down") }
                 }.accessibilityIdentifier("chat-question-queue-toggle").accessibilityValue(expanded ? "Expanded" : "Collapsed")
                 if expanded {
-                    ScrollView { VStack(alignment: .leading, spacing: 10) { ForEach(waiting) { question in Button(question.text) { select(question) }.multilineTextAlignment(.leading) } }.frame(maxWidth: .infinity, alignment: .leading) }.frame(maxHeight: 160)
+                    // Release the list's inset before revealing the answer card,
+                    // keeping its controls visible when the keyboard is open.
+                    ScrollView { VStack(alignment: .leading, spacing: 10) { ForEach(waiting) { question in Button(question.text) { expanded = false; select(question) }.multilineTextAlignment(.leading) } }.frame(maxWidth: .infinity, alignment: .leading) }.frame(maxHeight: 160)
                 }
             }.padding(12).background(NativeTheme.surface).accessibilityElement(children: .contain).accessibilityIdentifier("chat-question-queue")
         }

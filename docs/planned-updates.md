@@ -1,3 +1,20 @@
+## October 26 — native question controls and paid push provisioning
+
+Fresh iPhone acceptance reproduced an expanded question queue covering a later answer card;
+the original custom-answer flow timed out, and an explicit collapse assertion confirms the cause.
+Selection now closes the queue and reveals the specific question card, including multiple questions
+in one event. Keep the original failures; fresh phone/tablet acceptance is required before install.
+
+The existing paid Apple portal session enabled Push Notifications for the unchanged mobile
+bundle. A new matching development profile verifies the existing certificate and both registered
+devices. A signed physical build and 149 native units pass; that first build predates this queue
+fix and must be replaced. The corrected source passes 149 native units, four phone and four
+tablet UI flows with the collapse, input, hittability and answer-delivery assertions intact.
+A topic-specific sandbox APNs key is secured in the scoped vault and
+protected server runtime. Server configuration/worker readiness and a synthetic invalid-token
+probe pass. Physical registration and background alert delivery remain unverified. No installed
+device app or shared certificate was replaced by provisioning/build work.
+
 ## October 26 — Linux acceptance observation correction
 
 The 39692c2 candidate remains frozen, uninstalled and blocked after three transition

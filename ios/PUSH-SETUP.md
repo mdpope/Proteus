@@ -1,5 +1,18 @@
 # Native notification delivery
 
+October 26: the paid portal's explicit mobile App ID now has Push Notifications enabled.
+Its matching development profile retains the existing paid certificate and both registered
+devices. When the existing Xcode CLI account is unavailable, the already authenticated portal
+can generate/download that matching profile; use a private manual-signing overlay that includes
+the canonical paid configuration. Preserve the old profile and all shared certificates.
+
+The server's Proteus-only sandbox key is secured in the configured vault and protected runtime
+storage. Configuration, worker health and Apple's expected invalid-device-token response pass;
+these are readiness checks, not real-device delivery. Credential IDs/paths and exact receipts
+belong in the private deployment access record. Topic-specific production delivery requires a
+separate production key. A newly signed physical 2610.26.1 build and background alert acceptance
+remain required after the native question-navigation correction.
+
 The app registers with UIApplication, handles APNs success/failure, implements foreground presentation and notification tap routing, and submits the token to the separately consented shared API. A host-scoped chat identifier routes a tap to that Mac; it never falls back to another execution destination. Cold-launch taps follow the same route. Payload text is generic, without prompts, transcripts, credentials or URLs.
 
 Physical paid builds use `org.proteusapp.review.proteus` on the existing paid team `TEAMID0000`.

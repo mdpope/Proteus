@@ -1008,6 +1008,7 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
                                     _ = try await store.request(question.blocking ? "chat.reply" : "chat.answer-question", ["id": .string(id), "answer": .string(value), "messageId": .string(messageID), question.blocking ? "requestId" : "questionId": .string(question.id)])
                                     await store.openChat(id)
                                 }
+                                .id("user-question-" + question.id)
                             }
                             if let recovery, recovery.event == event {
                                 NativeChatRecoveryControls(state: recovery, run: run, disabled: busy || !store.connected) { action in
@@ -1558,7 +1559,9 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
             oldestVisibleEvent = max(run["eventStart"].int, question.eventIndex - 4)
             await Task.yield()
             try Task.checkCancellation()
-            proxy.scrollTo(question.eventIndex, anchor: .center)
+            // Several questions can share one event. Reveal the selected card
+            // itself so later answer controls do not remain below the composer.
+            proxy.scrollTo("user-question-" + question.id, anchor: .top)
         } catch is CancellationError { } catch { store.error = error.localizedDescription }
     }
     private func answer(_ value: String) { act("chat.reply", ["answer": .string(value), "requestId": pending["id"]]) }

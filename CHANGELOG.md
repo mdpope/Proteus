@@ -1,3 +1,7 @@
+## Unreleased — native question navigation
+
+- Collapse the iOS question queue when selecting a question and scroll to that question's card, keeping later answer controls clear of the composer and keyboard.
+
 ## 0.2.30 — cross-platform release candidate
 
 - Preserve the Linux desktop-session identity during update and rollback so Chromium can select the existing protected credential backend after restart.

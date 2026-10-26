@@ -1,3 +1,42 @@
+## October 26 — native question fix accepted before physical update
+
+The explicit collapse assertion fails on the baseline, matching the retained screen recording.
+The correction passes 149 native units plus phone restoration/overview, full-card composer,
+choice/custom answer and foreground/cold/background notification routing. Four iPad UI flows
+also pass: restored selection, notification routing, the same choice/custom answer assertions,
+and compact composer/Return submission. Static checks pass. Native build number is 2610.26.1;
+freeze a newly signed artifact from the committed source before physical capture/install.
+
+APNs server setup is complete and independently confirmed by its receipt, protected key hash,
+successful worker/timer and expected Apple invalid-device-token response. Webmin's tool response
+timed out after submission; do not repeat the completed setup. The one-time private staging key
+was retired after runtime/vault verification. Existing Web Push configuration remains valid.
+Real device registration and background delivery still require physical acceptance. Both devices
+were freshly reachable/unlocked; all four retained recovery app/data generations verify. No
+new physical snapshot or installation has occurred yet. Private receipts remain under .runtime-tests.
+
+## October 26 — iOS provisioning unblocked; native question miss reproduced
+
+The existing signed-in paid Apple portal was usable despite the CLI account problem. Push is
+enabled for the unchanged org.proteusapp.review.proteus bundle; the new development profile matches the existing
+paid certificate and exact two registered devices, expiring October 26, 2027. A private manual
+signing overlay builds/signature-verifies 0.2.30/2610.25.1 without changing canonical settings or
+shared certificates. A fresh complete native unit suite passes all 149 cases. That first signed
+artifact predates the newly reproduced native question layout fix; do not install it as final.
+
+Fresh phone restoration/overview, full-card composer and notification routing pass. The custom
+answer test failed: the question queue stays expanded after selection and obscures answer controls.
+Its recording and explicit red collapse assertion are retained. Source now collapses the queue
+before selecting and scrolls to the actual question card instead of its shared event. Phone gates
+are running; tablet acceptance and a new frozen signed artifact remain required before install.
+
+A new Proteus-only sandbox APNs key is downloaded once, secured outside Git, and post-sync
+verified in the existing scoped vault. Protected server configuration and worker readiness pass;
+Apple returns expected BadDeviceToken for the synthetic invalid-token probe. The private website
+access record owns credential IDs, runtime paths and setup evidence. Never repeat key creation,
+download or the completed Webmin setup. Real registration/background delivery are still unverified.
+Neither physical device was installed or captured during these build-only checks.
+
 ## October 26 — HC installed; Linux corrected-fixture reacceptance dispatched
 
 Fresh read of the existing HC bootstrap confirms job 1c5eb36f completed `updated` and
