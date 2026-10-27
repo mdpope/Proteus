@@ -18,10 +18,11 @@ if(win){let registered;try{registered=windows.registration();}catch{}if(register
 const [baselinePath,candidatePath]=process.argv.slice(2);if(!baselinePath||!candidatePath)throw Error('Pass a helper-capable packaged baseline and a different packaged candidate. Only disposable copies are installed.');
 const baseline=inspectPackage(path.resolve(baselinePath)),candidate=inspectPackage(path.resolve(candidatePath)),rollback=process.argv.includes('--rollback'),live=process.argv.includes('--live-provider'),configuredOwner=!process.argv.includes('--fresh-owner');
 const recoverySocket=process.argv.includes('--recovery-socket'),preflightFailure=process.argv.includes('--preflight-failure');
+const noChat=process.argv.includes('--no-chat'),manifest=process.argv[process.argv.indexOf('--manifest')+1];
 if(recoverySocket&&win)throw Error('Unix recovery socket fixtures require Mac or Linux.');
 if(preflightFailure&&win&&(live||noChat||rollback))throw Error('Windows snapshot failure requires a separate rehearsal chat without rollback injection.');
 if(preflightFailure&&live)throw Error('Failure injection uses rehearsal only.');
-const noChat=process.argv.includes('--no-chat'),manifest=process.argv[process.argv.indexOf('--manifest')+1];
+
 if(win&&(!process.argv.includes('--manifest')||!path.isAbsolute(manifest)))throw Error('Windows acceptance requires the exact signed --manifest path.');
 if(noChat&&live)throw Error('Use either standalone Engine Room or live same-chat acceptance.');
 // Large package copies can use disk without lengthening Chromium's TMPDIR socket paths.
