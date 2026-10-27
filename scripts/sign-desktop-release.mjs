@@ -5,6 +5,7 @@ import {createPrivateKey,createPublicKey,createHash,sign} from 'node:crypto';
 import packages from '../desktop/updates/update-package.cjs';
 import {hasPrivatePermissions} from '../src/shared/private-paths.cjs';
 import {verifyRelease,windowsReleaseOrigin} from '../src/services/updates/desktop-releases.js';
+import {desktopReleaseId} from './release-identity.mjs';
 
 const args=process.argv.slice(2),options={};
 for(let index=0;index<args.length;index+=2){if(!['--bundle','--archive','--installer','--key','--channel','--out'].includes(args[index])||!args[index+1])throw Error('Use --bundle, --archive, --installer (Windows), --key, --channel and --out.');options[args[index].slice(2)]=args[index+1];}
@@ -13,7 +14,7 @@ const checkout=fs.realpathSync(fileURLToPath(new URL('..',import.meta.url))),key
 const stat=fs.lstatSync(options.key);if(!keyRelative.startsWith('..'+path.sep)&&!path.isAbsolute(keyRelative)||!stat.isFile()||!hasPrivatePermissions(options.key,stat)||stat.size>16384)throw Error('Use a private publisher key outside the source checkout.');
 const key=createPrivateKey(fs.readFileSync(options.key));if(key.asymmetricKeyType!=='ed25519')throw Error('Use the existing Ed25519 publisher key.');
 const publicKey=createPublicKey(key),keyId=createHash('sha256').update(publicKey.export({type:'spki',format:'der'})).digest('hex').slice(0,24);
-const candidate=packages.inspectPackage(options.bundle),archiveInfo=fs.statSync(options.archive),now=Date.now(),id=[candidate.version,candidate.buildRevision,process.platform,process.arch].join('-');
+const candidate=packages.inspectPackage(options.bundle),archiveInfo=fs.statSync(options.archive),now=Date.now(),id=desktopReleaseId(candidate,process.platform,process.arch);
 const release={schemaVersion:1,product:'org.proteusapp.proteus.desktop',id,channel:options.channel||'stable',platform:process.platform,arch:process.arch,version:candidate.version,buildRevision:candidate.buildRevision,sourceFingerprint:candidate.sourceFingerprint,packageHash:candidate.hash,publishedAt:new Date(now).toISOString(),expiresAt:new Date(now+90*86400000).toISOString(),artifact:{format:'tar.gz',filename:path.basename(options.archive),bytes:archiveInfo.size,unpackedBytes:candidate.bytes,sha256:packages.fileDigest(options.archive),path:'/api/v1/app/releases/'+id+'/artifact'}};
 release.distribution={kind:'static',origin:windowsReleaseOrigin};
 release.artifact.path='/downloads/proteus/releases/'+id+'/'+release.artifact.filename;

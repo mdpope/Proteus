@@ -596,3 +596,9 @@ restored profile in the existing authorized deployment workflow before marking a
 ## Windows distribution integration (acceptance in progress)
 
 See [Windows desktop](windows-app.md) for the authenticated signed-manifest distribution, cached NSIS installer, fresh-home recovery inventory and exact-package commands. Engine Room may hand off without selecting a chat; original-chat handoff still requires its checkpoint and retains its one durable continuation ID. Existing recovery inventories remain mandatory for established homes. Windows installer/update/rollback acceptance is tracked separately from earlier signed Mac/Linux acceptance.
+
+## Public archive identity and layout
+
+The signing recipe uses a package-hash-based public release ID, independently of punctuation in the full signed build revision. Archive app contents at the extraction root, so the official extractor inspects `Contents/Resources/app` directly on Mac. Verify the exact finished archive through `extractRelease` before asking the protected publisher to sign. A generic tar extraction or signature alone does not establish updater compatibility. Preserve rejected private drafts as superseded evidence; never activate them.
+
+Mac 0.2.30 and this 0.2.31 candidate accept the corrected common static feed. Windows 0.2.29 accepts its own static Windows feed but rejects a Mac static manifest by target/distribution policy; that does not invalidate its cryptographic publisher trust. Older unsupported consumers require the documented helper-capable baseline, with an actionable upgrade rather than relaxed trust or redirected credentials.

@@ -14,6 +14,7 @@ import {AccountSession} from '../src/services/remote/account-session.js';
 import {AppAccount} from '../src/services/remote/app-account.js';
 import packages from '../desktop/updates/update-package.cjs';
 import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
+import {desktopReleaseId} from '../scripts/release-identity.mjs';
 const pair=generateKeyPairSync('ed25519'),keys=[{id:'fixture',publicKey:pair.publicKey.export({type:'spki',format:'pem'})}],hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const manifest=()=>({schemaVersion:1,product:'org.proteusapp.proteus.desktop',id:'synthetic-release',channel:'stable',platform:'win32',arch:process.arch,version:'1.2.3',buildRevision:'windows.fixture',sourceFingerprint:'a'.repeat(64),packageHash:'b'.repeat(64),publishedAt:new Date(Date.now()-1000).toISOString(),expiresAt:new Date(Date.now()+3600000).toISOString(),installer:{filename:'synthetic-setup.exe',bytes:1,sha256:'d'.repeat(64),path:'/api/v1/app/releases/synthetic-release/installer'},artifact:{format:'tar.gz',filename:'synthetic.tar.gz',bytes:10,unpackedBytes:1000,sha256:'c'.repeat(64),path:'/api/v1/app/releases/synthetic-release/artifact'}});
 const envelope=value=>{const payload=Buffer.from(JSON.stringify(value));return {schemaVersion:1,keyId:'fixture',payload:payload.toString('base64url'),signature:sign(null,payload,pair.privateKey).toString('base64url')};};
@@ -25,6 +26,14 @@ test('WTB release signatures bind distribution, paths and target while preservin
  const value=hostedManifest();assert.equal(verifyRelease(envelope(value),options).distribution.origin,'https://downloads.proteus.example');
  assert.equal(verifyRelease(envelope(manifest()),options).verification.signatureVerified,true);
  for(const change of [{distribution:{kind:'static',origin:'https://untrusted.example'}},{distribution:{kind:'account',origin:windowsReleaseOrigin}},{artifact:{...value.artifact,path:'/downloads/proteus/releases/other/file.tar.gz'}},{installer:{...value.installer,path:'//untrusted.example/setup.exe'}}])assert.throws(()=>verifyRelease(envelope({...value,...change}),options));
+});
+
+test('public Mac release identity accepts real build punctuation and distinguishes exact package bytes',()=>{
+ const candidate={version:'0.2.31',buildRevision:'synthetic+src.fixture',hash:'b'.repeat(64)},id=desktopReleaseId(candidate,'darwin','arm64');
+ const value={...hostedManifest(),id,platform:'darwin',arch:'arm64',version:candidate.version,buildRevision:candidate.buildRevision};delete value.installer;value.artifact.path='/downloads/proteus/releases/'+id+'/'+value.artifact.filename;
+ assert.equal(verifyRelease(envelope(value),{keys,platform:'darwin',arch:'arm64'}).buildRevision,candidate.buildRevision);
+ assert.notEqual(id,desktopReleaseId({...candidate,hash:'c'.repeat(64)},'darwin','arm64'));
+ assert.throws(()=>desktopReleaseId({...candidate,hash:'unverified'},'darwin','arm64'),/verified package/);
 });
 
 test('WTB catalog and artifact requests omit account credentials and reject redirects',async t=>{

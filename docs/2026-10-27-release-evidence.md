@@ -31,7 +31,7 @@ Candidate version: **0.2.31**. This ledger separates implementation from validat
 
 ## Validation evidence
 
-- Final Node suite with the documented short `TMPDIR=/tmp`: **1,223 passed, 3 skipped, 0 failed** (1,226 total). The original long-temp-path attempt retained one Unix-domain socket path-length failure; no assertion was weakened.
+- Final Node suite with the documented short `TMPDIR=/tmp`: **1,224 passed, 3 skipped, 0 failed** (1,227 total). The original long-temp-path attempt retained one Unix-domain socket path-length failure; no assertion was weakened.
 - `npm run check` passes. Focused delegation, provider lineage, schedule conflict, byte preservation and symlink-pinning contracts pass.
 - Actual disposable Electron DNS error, hostname, themed background, Retry destination and two rapid page notifications with duplicate/click behavior pass.
 - Real disposable desktop window and message-action/speech suites pass. Chromium composer acceptance covers arbitrary files, large/rich paste, themed keyboard menus, stale child responses, retained parent draft/files and narrow width.
@@ -49,3 +49,13 @@ Eight obsolete local development branches and 49 exact-head remote development r
 The existing installed Mac identity is preserved for packaging. A valid matching Apple development certificate is available; existing certificates are unchanged. The common Ed25519 publisher key remains in its existing protected Windows location according to prior acceptance records. Scoped WTB vault metadata did not identify a portable release-key item; no replacement key or trust change was created.
 
 Publication, download verification, local update handoff, physical-device installs, recovery rotation and measured disk-space change remain pending. Do not describe model completion, a clean build, a dispatched task or simulator success as installed/live verification.
+
+## Frozen Mac and publication recipe acceptance
+
+Signed app: 0.2.31, build `419a9bc697f7+src.c68de76d3155`, source fingerprint `c68de76d3155b8a6ebbca8b1fc9e42aa31e1a151b1ae8b2e7f5f14783f98a56e`. Exact package hash: `9475b46754aba01578bd7e0f0440c7a98f344c0ec7278260f89cad90ffb0792c`. All 390 runtime files and declared build inputs remain unchanged after the documentation merge. The signed bundle passes strict signing, runtime/private-file inventory, isolated UI startup, synthetic rehearsal, native PTY input and restart preservation.
+
+The first private manifest draft used display punctuation unsupported by the release-ID validator, and the first archive included an extra enclosing folder. Neither was published. The signed first draft is permanently superseded. Public IDs now derive from the exact package hash; the full display revision and source fingerprint remain signed. The corrected archive contains app contents at its extraction root and passes the actual official extractor and strict package inspection. Its 231,083,851 bytes hash to `deef075dbe5b9dfaefaadb65dd3b9929f86475bfca8c380061a7511f4ce3e9da`.
+
+Corrected release ID: `0.2.31-darwin-arm64-9475b46754aba01578bd7e0f`. Existing publisher `92b49fc0e69763fbd06099e2` signed the exact 880-byte payload at its original protected location. Root independently verifies the 1,360-byte envelope in both the installed Mac 0.2.30 consumer and current source. Windows 0.2.29 cryptographically verifies it but rejects non-Windows static distribution by policy; it is not a Mac static-feed baseline. Version-1 relay chat additions remain independent of this release-consumer capability.
+
+Physical artifact 0.2.31 / 2610.27.1 verifies against the existing paid certificate and explicit push-capable profile, covering both intended devices through October 26, 2027. Automatic selection initially chose the old wildcard profile; a local build overlay selected the existing explicit profile, without account/certificate changes. Both devices were locked at preflight, so capture and installation did not start. Local update coordinator creation was refused because saved Engine Room update defaults are absent; no fallback provider/model was invented.
