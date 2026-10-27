@@ -12,10 +12,12 @@
 
 - Record the complete release implementation/validation plan, including read-only subagent conversations within the parent chat and inherited applicable authorization for delegated work. Feature implementation and deployment follow the operator's model switch.
 - Reconcile Windows validation commits and retain two previously missing historical Linux acceptance reports; document obsolete local branch cleanup without removing worktree files.
-## Documentation — Linux exact-commit package acceptance
 
-- Record the isolated `4b90654` / `linux.8808ae9c976b` package, successful targeted source/update gates and retained broad UI fixture limitations.
-- Distinguish native preparation from pending handoff, installed Codex/peer verification and cold preservation acceptance; frozen396 remains excluded.
+## Documentation — Linux exact-commit installed acceptance
+
+- Record native installation of `4b90654` / `linux.8808ae9c976b`, working Codex discovery with existing sign-in, relay/peer reconnection and restored interface verification.
+- Verify cold session/browser/retry preservation and two recovery generations, retaining historical exceptions, explicit metadata qualifications and original audit/fixture failures.
+- Keep broader UI fixture maintenance deferred; the older frozen396 package remains excluded.
 
 ## Unreleased — Linux Codex discovery
 
