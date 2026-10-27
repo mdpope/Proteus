@@ -2,6 +2,10 @@
 
 - Record the complete release implementation/validation plan, including read-only subagent conversations within the parent chat and inherited applicable authorization for delegated work. Feature implementation and deployment follow the operator's model switch.
 - Reconcile Windows validation commits and retain two previously missing historical Linux acceptance reports; document obsolete local branch cleanup without removing worktree files.
+## Documentation — Linux exact-commit package acceptance
+
+- Record the isolated `4b90654` / `linux.8808ae9c976b` package, successful targeted source/update gates and retained broad UI fixture limitations.
+- Distinguish native preparation from pending handoff, installed Codex/peer verification and cold preservation acceptance; frozen396 remains excluded.
 
 ## Unreleased — Linux Codex discovery
 

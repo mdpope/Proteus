@@ -12,6 +12,15 @@ real resource/approval boundaries and report machine-policy refusal separately f
 [The branch audit](2026-10-26-branch-audit.md) records the Windows validation merge, recovered
 historical Linux evidence, equivalent squash branches and authorized local branch cleanup.
 No new feature, published binary or installed update is claimed by this planning entry.
+## October 26 — exact Linux package gates accepted with explicit limits
+
+The isolated `4b90654` Linux build is frozen as `linux.8808ae9c976b`; required source/package
+and all three supervisor transition gates pass. Native preparation is complete; actual handoff
+and installed Codex/peer/preservation acceptance remain pending the current download/dialog/
+automation idle check. Preserve the prepared job and current state; do not retry frozen396.
+[The artifact report](2026-10-26-linux-030-4b90654.md) distinguishes targeted acceptance from
+incomplete broad UI fixtures. Follow-up fixture maintenance must preserve assertions while
+updating stale selectors, geometry assumptions and the intended close-window lifecycle.
 
 ## October 26 — Linux desktop Codex discovery fixed in source
 
