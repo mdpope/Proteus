@@ -163,6 +163,74 @@
         }
       },
       "additionalProperties": true
+    },
+    "workspaceSources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "workspaceId",
+          "categories"
+        ],
+        "properties": {
+          "workspaceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "folders",
+                "permissions",
+                "instructions",
+                "agents",
+                "skills",
+                "mcps"
+              ]
+            }
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "executionPermissions": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "enum": [
+            "ask",
+            "custom",
+            "autopilot"
+          ]
+        },
+        "readOnlyTools": {
+          "type": "boolean"
+        },
+        "folders": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "path",
+              "access"
+            ],
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "access": {
+                "enum": [
+                  "read",
+                  "read-write"
+                ]
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
     }
   },
   "additionalProperties": true

@@ -8,7 +8,7 @@ const HISTORY_PAGE_SIZE=25;
 export function browserTarget(raw,engine=browserDefaultEngine()){
   const value=String(raw||'').trim();if(!value)throw new Error('Enter a website or search.');
   if(/\s/.test(value)&&!value.includes('://'))return engines[engine]+encodeURIComponent(value);
-  if(/^(file|javascript|data|blob|about|chrome|devtools|proteus):/i.test(value)||/[@\\]/.test(value)||value.startsWith('/')||value.startsWith('.'))throw new Error('Only HTTP and HTTPS websites can open here.');
+  if(/^(file|javascript|data|blob|about|chrome|devtools|proteus):/i.test(value)||/[\\]/.test(value)||value.startsWith('/')||value.startsWith('.'))throw new Error('Only HTTP and HTTPS websites can open here.');
   const candidate=/^https?:\/\//i.test(value)?value:'https://'+value;
   let parsed;try{parsed=new URL(candidate);}catch{if(/^[^\s./:]+$/.test(value))return engines[engine]+encodeURIComponent(value);throw new Error('Enter a valid website or search.');}
   if(!['http:','https:'].includes(parsed.protocol)||parsed.username||parsed.password||!parsed.hostname)throw new Error('Enter an HTTP or HTTPS website without credentials.');

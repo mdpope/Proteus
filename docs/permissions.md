@@ -210,3 +210,9 @@ external folder alone cannot implicitly trust the starting folder. Folder trust 
 Outside the preview, active Codex policy changes trigger the existing interruption/revalidation
 path; preview additions/reductions follow the next-turn rules above. No adapter claims
 that granting a folder restricts all provider reads at the OS level.
+
+## October 26 schedule and delegated scope
+
+Schedules can persist `executionPermissions` independently of placement and inherit explicit categories from `workspaceSources`. The owner resolves references afresh at run start, records source revisions, rejects missing/conflicting sources and preserves schedule-specific persistent approvals. Explicit folder grants are canonicalized on save, retaining read-only access and preventing a selected symlink from authorizing a different target later. Imports remain inactive unless deliberately enabled.
+
+Delegated work retains the parent's captured provider, model, account, context and permission profile. Native Codex approvals accept only provider-proven active descendants, including the current `subAgentActivity` protocol. Host-managed children stop with their parent; profile changes or ended turns invalidate their scope. Rejection of missing/expired adapter scope is distinct from a human decline. A queued parent follow-up does not stop active children.

@@ -2478,3 +2478,28 @@ final class TabManagementNativeTests: XCTestCase {
         let moved = try XCTUnwrap(shared.browserTabs.first { $0.id == id }); XCTAssertEqual(moved.scope, "workspace:fixture:target"); XCTAssertTrue(moved.persist); XCTAssertTrue(shared.webView(moved) === view)
     }
 }
+
+extension RemoteTests {
+    @MainActor func testDelayedChatReplyCannotReplaceCurrentStateOrSelection() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let remote = RemoteStore(connection: nil, cacheRoot: root, legacyCredentials: false)
+        defer { remote.suspend(); try? FileManager.default.removeItem(at: root) }
+        remote.selectedChat = "B"
+        remote.mergeChat(.object(["id": .string("A"), "observedAt": .string("2026-10-26T12:00:02Z"), "status": .string("running"), "eventCount": .number(1), "eventStart": .number(0), "events": .array([.object(["text": .string("new")])]), "liveMessages": .object(["live": .string("current")])]))
+        remote.mergeChat(.object(["id": .string("A"), "observedAt": .string("2026-10-26T12:00:01Z"), "status": .string("failed"), "eventCount": .number(1), "eventStart": .number(0), "events": .array([.object(["text": .string("old")])])]))
+        XCTAssertEqual(remote.selectedChat, "B")
+        XCTAssertEqual(remote.chats["A"]?["status"].string, "running")
+        XCTAssertEqual(remote.chats["A"]?["events"].array.first?["text"].string, "new")
+        XCTAssertEqual(remote.chats["A"]?["liveMessages"]["live"].string, "current")
+    }
+    @MainActor func testNotificationPreviewUsesAvailableOwnerContentAndHonestFallback() {
+        XCTAssertEqual(NativeNotifications.notificationBody(.object(["title": .string("Task complete"), "body": .string("Synthetic result")])), "Task complete — Synthetic result")
+        XCTAssertEqual(NativeNotifications.notificationBody(.object(["type": .string("chat.completed")])), "A chat finished.")
+    }
+    func testLargeNativeTextUsesExactLineAndUTF8Budgets() {
+        XCTAssertFalse(nativeTextAttachmentRequired(Array(repeating: "x", count: 200).joined(separator: "\r\n")))
+        XCTAssertTrue(nativeTextAttachmentRequired(Array(repeating: "x", count: 201).joined(separator: "\r\n")))
+        XCTAssertTrue(nativeTextAttachmentRequired(String(repeating: "🙂", count: 65537)))
+        XCTAssertFalse(nativeTextAttachmentRequired(String(repeating: "🙂", count: 65536)))
+    }
+}

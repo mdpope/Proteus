@@ -1,3 +1,4 @@
+import {turnAttachmentTools} from './attachment-input.js';
 import {createHash} from 'node:crypto';
 import {modelToolResult} from '../../shared/tool-results.js';
 export const questionAttachmentMediaTypes=Object.freeze(['image/png','image/jpeg','image/webp','text/plain']);
@@ -18,8 +19,8 @@ export async function replyWithAttachments(engine,id,args,deviceId){
  catch(error){await engine.attachmentConsents.releaseProof(prepared.proofId).catch(()=>{});throw error;}
 }
 export function questionAttachmentTools(adapter,runId){
- if(!adapter.questionInputs)return [];
- return [{name:'proteus_question_attachments',defer:'never',description:'Read the files explicitly attached by the user to an answered question in this chat. Use the requestId included in the question response. Images are returned as images; text files as text. No other chat or filesystem access is granted.',parameters:{type:'object',properties:{requestId:{type:'string'}},required:['requestId'],additionalProperties:false},handler:async({requestId})=>{
+ if(!adapter.questionInputs)return turnAttachmentTools(adapter,runId);
+ return [...turnAttachmentTools(adapter,runId),{name:'proteus_question_attachments',defer:'never',description:'Read the files explicitly attached by the user to an answered question in this chat. Use the requestId included in the question response. Images are returned as images; text files as text. No other chat or filesystem access is granted.',parameters:{type:'object',properties:{requestId:{type:'string'}},required:['requestId'],additionalProperties:false},handler:async({requestId})=>{
    const files=await adapter.questionInputs(runId,requestId),content=[];
    for(const file of files){content.push({type:'text',text:file.name+' · '+file.mediaType});if(file.mediaType==='text/plain')content.push({type:'text',text:file.bytes.toString('utf8')});else content.push({type:'image',mimeType:file.mediaType,data:file.bytes.toString('base64')});}
    return {...modelToolResult({content}),sessionLog:'User question attachments (image bytes omitted).'};

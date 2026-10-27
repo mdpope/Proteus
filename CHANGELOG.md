@@ -1,3 +1,13 @@
+## 0.2.31 — October 26 release candidate
+
+- Add independent schedule configuration with category-selected workspace sources, canonical explicit folder grants and schedule-scoped approvals.
+- Repair current Codex child lineage/approval routing; add scoped host delegation and inline read-only agent transcripts on desktop/iOS.
+- Accept arbitrary attachments, convert large pasted text to bounded attachments, preserve safe rich paste, enlarge Internet Search and show question choices immediately.
+- Improve selection-aware local speech, themed provider menus, profile link menus, fragment URL validation, navigation errors and page notifications.
+- Add bounded Copilot active-time continuation, verify terminal sharing and coalesce redundant browser state projections.
+- Repair native selection identity and stale-response handling; release inactive refresh tasks and show useful notification text.
+- Record actual acceptance and outstanding publication/device/platform gates in the [release evidence](docs/2026-10-27-release-evidence.md). This candidate is not an installation claim.
+
 ## Planned — October 26 release
 
 - Record the complete release implementation/validation plan, including read-only subagent conversations within the parent chat and inherited applicable authorization for delegated work. Feature implementation and deployment follow the operator's model switch.

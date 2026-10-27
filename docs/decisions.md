@@ -2556,3 +2556,13 @@ retain ordinary creation semantics. This avoids treating title/history refresh a
 to reopen a closed or moved tab, without changing placement, sessions, permissions, navigation
 receipts or the persisted descriptor format. Older clients must be upgraded to supply the flag;
 existing uncertain request payloads and operation identities are never rewritten.
+
+## October 27 — Scope-proven delegation and bounded derived projections
+
+Provider-owned relationship events establish native child lineage. For current Codex this includes authoritative `thread/started` ancestry and `subAgentActivity` started/interacted events; old collaboration events remain compatible. Model narration, restored transcript rows or arbitrary IDs cannot establish authority. Children route applicable approvals through the parent, with child abort signals and explicit scope-rejection provenance. Host delegation uses ordinary engine runs captured from the parent provider/model/account/context, stable operation receipts and current-profile validation; it does not create another owner or approve external tools.
+
+Child journals and selected-transcript caches are bounded. Summaries stay lightweight, transcripts page only through a proven parent relationship, and current streaming text is separate from durable events. The read-only inline surface preserves the parent composer and session. Protocol additions remain optional version-1 fields/capabilities, so older owners get an explicit unavailable view without a relay upgrade.
+
+Arbitrary file storage is separate from provider media support. Preserve exact originals and let a bounded active-turn tool read unsupported binary/oversized text, rather than reserializing huge text into a provider message. Rich paste is inert and uses plain text when hidden styles cannot be established. Explicit schedule folder grants pin the canonical destination at save, while workspace references resolve current configuration afresh with revision provenance.
+
+The measured browser optimization batches only redundant state projections at 16 ms. Mutations, access revocation and explicit reads remain synchronous to owner semantics. The comparison demonstrates reduced projection work, not a general claim of lower production memory or fewer active model processes.

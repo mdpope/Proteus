@@ -475,3 +475,9 @@ Synthetic tests cover queue count/bytes, backlog boundaries, cancellable throttl
 immutable retry payloads, bidirectional budget accounting, isolated over-budget clients, normal
 metadata bursts, pairing, reconnection and authenticated revocation. These bounds are implemented
 in source; measurements on installed devices and deployment of the relay are separate acceptance.
+
+## Additive child transcript protocol
+
+Owners advertise `chat.subagents.v1`. Chat summaries include parent-owned child summaries only; selecting a child uses `chat.get` with the parent's `id`, `agentId` and optional `beforeEvent`. It returns a read-only child page without changing the parent watch or selection. An unknown/foreign child is rejected. Older owners lacking this response show an explicit unavailable transcript state; existing chats and protocol/data version 1 remain compatible without a relay migration.
+
+Native chat refresh tasks stop while their area/scene is inactive, and cancelled responses cannot launch the next preview fetch. Stable selection, durable draft/session state and already loaded history survive. Out-of-order responses can extend history but cannot replace newer metadata/content or choose a different chat. Useful notification text comes from authenticated decrypted event fields, bounded to 500 characters, with a generic fallback and normal OS privacy controls.

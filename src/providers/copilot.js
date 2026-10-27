@@ -1,3 +1,4 @@
+import {subagentJournal} from '../services/chats/subagents.js';
 import {questionAttachmentTools} from '../services/chats/question-attachments.js';
 import {providerActivity} from '../shared/provider-activity.js';
 import {copilotMessageAttachments} from './provider-attachment-input.js';
@@ -208,7 +209,7 @@ export class CopilotProvider {
     validateModelOptions(run.schedule, model);
     run.modelCapabilities = { capturedAt: new Date().toISOString(), id: model.id, controls: model.controls };
     const includeLegacy = snapshot?.includeDefaults !== false;
-    const appTools=[...questionAttachmentTools(this,run.id),...browserTools(this.browser,run.id),...integrationTools(this.integrations,run.id),...chatControlTools(this.chatControl,run.id)];captureAppCapabilities(run,appTools,update,managed?selectedAgentToolScope(managed):null);
+    const appTools=[...questionAttachmentTools(this,run.id),...browserTools(this.browser,run.id),...integrationTools(this.integrations,run.id),...chatControlTools(this.chatControl,run.id)];captureAppCapabilities(run,appTools,update,managed?[...selectedAgentToolScope(managed),...appTools.map(tool=>tool.name)]:null);
     const config = {
       model: run.schedule.model, streaming: true,
       ...((run.schedule.reasoningEffort || model.controls.defaultReasoningEffort) ? { reasoningEffort: run.schedule.reasoningEffort || model.controls.defaultReasoningEffort } : {}),
@@ -217,7 +218,7 @@ export class CopilotProvider {
       additionalDirectories,
       skillDirectories: includeLegacy ? run.schedule.skillDirectories || [] : [],
       mcpServers: managed ? { ...Object.fromEntries(Object.entries(includeLegacy ? run.schedule.mcpServers || {} : {}).filter(([name]) => !managed.disabledLegacyMcp.includes(name))), ...managed.mcpServers } : run.schedule.mcpServers || {},
-      ...(managed ? { skipCustomInstructions: true, enableConfigDiscovery: false, enableOnDemandInstructionDiscovery: false, enableSkills: includeLegacy && !!run.schedule.skillDirectories?.length, disabledSkills: managed.disabledSkills, enableFileHooks: false, customAgents: managed.customAgents, agent: managed.agent, availableTools: selectedAgentToolScope(managed) } : {}),
+      ...(managed ? { skipCustomInstructions: true, enableConfigDiscovery: false, enableOnDemandInstructionDiscovery: false, enableSkills: includeLegacy && !!run.schedule.skillDirectories?.length, disabledSkills: managed.disabledSkills, enableFileHooks: false, customAgents: managed.customAgents.map(agent=>({...agent,...(agent.tools==null?{}:{tools:[...new Set([...agent.tools,...appTools.map(tool=>tool.name)])]})})), agent: managed.agent, availableTools: [...new Set([...selectedAgentToolScope(managed),...appTools.map(tool=>tool.name)])] } : {}),
       tools: appTools,
       systemMessage: { mode: 'append', content: `${appInstructions}\nProteus workspace roots (${managed ? 'use the explicitly selected context below; do not automatically load other instruction/skill/agent files' : 'read relevant AGENTS.md and .github/copilot-instructions.md before work'}):\n${[run.schedule.workspace.cwd, ...additionalDirectories].join('\n')}\n${this.browser ? 'Embedded browser access is available through proteus_browser. Use it for visible authenticated website reads. The user can interact with those same tabs; ask for sign-in if needed.' : 'Embedded browser access is unavailable in this server-only session.'}\nEditor context supplied by the user: ${JSON.stringify(run.schedule.editorContext || null)}\n${managed?.instructionText || ''}` },
       onPermissionRequest: permission,
@@ -238,7 +239,9 @@ export class CopilotProvider {
     let providerError,activitySucceeded=false;
     const capture=providerActivity({provider:'copilot',emit,update});
     const activity = toolActivity({ run, emit, update });
+    const agents=subagentJournal(run,'copilot',update);
     const unsubscribe = session.on(event => {
+      if(agents.copilot(event)||event.agentId)return;
       capture.receive(event);
       if (event.type === 'assistant.message_delta') stream?.(event.data.messageId, event.data.deltaContent || '');
       if (event.type === 'assistant.message') {
@@ -284,7 +287,7 @@ export class CopilotProvider {
       }
       activity.finish();
       capture.finish(activitySucceeded?'completed':'interrupted');
-      signal.removeEventListener('abort', abort); unsubscribe(); this.sessions.delete(run.id); await session.disconnect();
+      agents.finish();signal.removeEventListener('abort', abort); unsubscribe(); this.sessions.delete(run.id); await session.disconnect();
     }
   }
   async close() { this.quotaProbe?.cancel();await this.quotaPending?.catch(()=>{});if (this.client) await this.client.stop(); this.client = null; this.starting = null; this.sessions.clear(); this.authSessions.clear(); }

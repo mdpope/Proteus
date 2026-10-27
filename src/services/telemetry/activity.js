@@ -52,15 +52,15 @@ export class ActivityStore extends EventEmitter {
   }
   browserIssue(detail = {}) {
     const {kind,windowId}=detail;
-    if(!['load-error','history-conflict'].includes(kind)||typeof windowId!=='string'||!windowId||windowId.length>128)throw Error('Choose a browser notification and its original window.');
+    if(!['load-error','history-conflict','site-notification'].includes(kind)||typeof windowId!=='string'||!windowId||windowId.length>128)throw Error('Choose a browser notification and its original window.');
     const issue={kind,windowId};
-    for(const key of ['tabId','logId'])if(detail[key]!==undefined){if(typeof detail[key]!=='string'||!detail[key]||detail[key].length>512)throw Error('Invalid browser notification reference.');issue[key]=detail[key];}
+    for(const key of ['tabId','logId','profileId','origin','siteNotificationId'])if(detail[key]!==undefined){if(typeof detail[key]!=='string'||!detail[key]||detail[key].length>512)throw Error('Invalid browser notification reference.');issue[key]=detail[key];}
     if(kind==='history-conflict'){
       const scope=detail.scope;
       if(!scope||!['main','team','workspace','project','chat'].includes(scope.scope)||typeof scope.id!=='string'||!scope.id||scope.id.length>256||scope.hostId!==undefined&&(typeof scope.hostId!=='string'||scope.hostId.length>128))throw Error('Choose the original browser history scope.');
       issue.scope={scope:scope.scope,id:scope.id,...(scope.hostId?{hostId:scope.hostId}:{})};
     }else if(!issue.tabId)throw Error('Choose the browser tab.');
-    const existing=this.data.notifications.find(item=>!item.readAt&&item.type==='browser.issue'&&item.browserIssue?.kind===kind&&item.browserIssue.windowId===windowId&&JSON.stringify(item.browserIssue.scope||item.browserIssue.tabId)===JSON.stringify(issue.scope||issue.tabId));
+    const existing=this.data.notifications.find(item=>!item.readAt&&item.type==='browser.issue'&&item.browserIssue?.kind===kind&&item.browserIssue.windowId===windowId&&(kind!=='site-notification'||item.browserIssue.siteNotificationId===issue.siteNotificationId)&&JSON.stringify(item.browserIssue.scope||item.browserIssue.tabId)===JSON.stringify(issue.scope||issue.tabId));
     const title=safeLog(detail.title||'Browser needs attention',240),body=safeLog(detail.body||'Open Notifications to review this browser issue.',1500);
     if(existing){if(existing.title!==title||existing.body!==body||existing.browserIssue.logId!==issue.logId){Object.assign(existing,{title,body,browserIssue:issue,updatedAt:this.clock().toISOString()});this.save();}return existing;}
     const item={id:randomUUID(),type:'browser.issue',title,body,browserIssue:issue,silent:true,createdAt:this.clock().toISOString()};

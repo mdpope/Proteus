@@ -586,7 +586,7 @@ struct NativeWorkspaceContentView: View {
             .toolbar(NativePhonePreview.enabled && phoneChrome.controlsHidden ? .hidden : .automatic, for: .navigationBar)
             .nativeFeaturePage(projectID.flatMap { store.projectCatalog.project(id: $0, workspaceID: workspaceID)?["name"].string } ?? profile["name"].string)
             .nativePhoneDestination(isPresented: Binding(get: { NativePhonePreview.enabled && selected.hasPrefix("chat:") }, set: { if !$0 { selected = "workspace" } })) {
-                ChatView(id: String(selected.dropFirst(5)), workspaceBrowserScope: scope).environmentObject(store).modifier(NativePhoneBackNavigation())
+                NativeSelectedWorkspaceChat(navigationKey: navigationKey, browserScope: scope).environmentObject(store).modifier(NativePhoneBackNavigation())
             }
             .sheet(isPresented: $reorder) { NativeTabReorderSheet(items: orderedChildren.map { (id: $0["id"].string, title: $0["title"].string) }) { ids in let children = orderedChildren; mutateTabs([.object(["action": .string("reorder"), "ids": .array(ids.compactMap { id in children.first { $0["id"].string == id }?["sortId"] })])]) } }
             .sheet(item: $transferTab) { tab in NativeBrowserTransferView(tab: tab) }
@@ -782,4 +782,19 @@ struct NativeWorkspaceDeleteView: View {
         for tab in shared.tabs(in: scope) { shared.close(tab.id) }
         await store.refresh(); NotificationCenter.default.post(name: Notification.Name("ProteusWorkspaceDeleted"), object: nil, userInfo: ["hostID": store.connection?.hostId ?? "", "workspaceID": workspaceID]); dismiss()
     } catch { failure = error.localizedDescription } } }
+}
+
+// Pushed destinations observe the current owner selection instead of retaining the
+// value captured when navigationDestination first created its closure.
+private struct NativeSelectedWorkspaceChat: View {
+    @EnvironmentObject var store: RemoteStore
+    let navigationKey: String
+    let browserScope: String
+    private var selected: String { store.draft(navigationKey)["selected"].string }
+    var body: some View {
+        if selected.hasPrefix("chat:") {
+            ChatView(id: String(selected.dropFirst(5)), workspaceBrowserScope: browserScope)
+                .id((store.connection?.hostId ?? "") + ":" + browserScope + ":" + selected)
+        } else { Color.clear }
+    }
 }

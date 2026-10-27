@@ -160,6 +160,10 @@ final class NativeReplyTextView: UITextView {
     }
 }
 
+func nativeTextAttachmentRequired(_ value: String) -> Bool {
+    if value.utf8.count > 256 * 1024 { return true }
+    return value.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n").components(separatedBy: "\n").count > 200
+}
 private struct NativeGrowingReplyEditor: UIViewRepresentable {
     @Binding var text: String
     let placeholder: String
@@ -170,6 +174,7 @@ private struct NativeGrowingReplyEditor: UIViewRepresentable {
     let focusChanged: (Bool) -> Void
     let windowHeightChanged: (CGFloat) -> Void
     let submit: () -> Void
+    var attachLargeText: ((String) -> Bool)? = nil
     func makeCoordinator() -> Coordinator { Coordinator(self) }
     func makeUIView(context: Context) -> NativeReplyTextView {
         let view = NativeReplyTextView()
@@ -219,6 +224,11 @@ private struct NativeGrowingReplyEditor: UIViewRepresentable {
         func textViewDidBeginEditing(_ textView: UITextView) { if !parent.isFocused { parent.focusChanged(true) } }
         func textViewDidEndEditing(_ textView: UITextView) { if parent.isFocused { parent.focusChanged(false) } }
         func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
+            if textView.markedTextRange == nil, nativeTextAttachmentRequired(text), parent.attachLargeText?(text) == true {
+                textView.text = (textView.text as NSString).replacingCharacters(in: range, with: "[Attached: Pasted text.txt]")
+                parent.text = textView.text
+                return false
+            }
             if text == "\n", parent.submitOnReturn, textView.markedTextRange == nil,
                (textView as? NativeReplyTextView)?.insertingLiteralText != true {
                 parent.submit(); return false
@@ -311,7 +321,7 @@ struct NewChatView: View {
     private var attachmentDraftID: String { shared.draftSessionIDs[attachmentScope] ?? "" }
     private var supportedAttachmentTypes: [String] { internet ? Array(Set(store.state["attachmentMediaTypes"].object.values.flatMap { $0.array.map(\.string) })) : store.state["attachmentMediaTypes"][provider].array.map(\.string) }
     private var attachmentsEnabled: Bool { store.state["capabilities"].array.contains(.string("chat.attachments.v1")) && !supportedAttachmentTypes.isEmpty }
-    private var hasUnsupportedAttachment: Bool { attachments.contains { !supportedAttachmentTypes.contains($0.mediaType) } }
+    private var hasUnsupportedAttachment: Bool { !attachments.isEmpty && supportedAttachmentTypes.isEmpty }
     private var providerName: String { provider == "copilot" ? "GitHub Copilot" : provider == "codex" ? "Codex" : provider == "claude" ? "Claude" : provider }
     private func submitPrompt() {
         guard !sending, !loading, !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
@@ -368,7 +378,7 @@ struct NewChatView: View {
             }.scrollDismissesKeyboard(.interactively).disabled(loading || sending).accessibilityIdentifier("new-chat-form").navigationTitle(internet ? "Internet Search" : "New chat").toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) { if !internet { Button { if attachments.isEmpty { start() } else { confirmAttachmentStart = true } } label: { if sending { ProgressView() } else { Image(systemName: "arrow.up").font(.system(size: 19, weight: .semibold)).frame(width: 36, height: 36).background(NativeTheme.accent).foregroundStyle(NativeTheme.background).clipShape(Circle()) } }.disabled(loading || sending || !store.connected || prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || workspace.isEmpty || (provider != "rehearsal" && model.isEmpty) || !missingAttachments.isEmpty || (!attachments.isEmpty && (!attachmentsEnabled || hasUnsupportedAttachment))).accessibilityLabel("Start chat").accessibilityIdentifier("start-chat") } }
-            }.onChange(of: workspace) { _, _ in if !loading { applyWorkspaceDefaults(); project = store.projectCatalog.defaultProject(in: workspace)?["id"].string ?? "" } }.onChange(of: draftValue) { _, value in if !loading { store.setDraft("new-chat", value) } }.onChange(of: provider) { old, value in if !loading && old != value { model = ""; effort = ""; contextTier = "default"; serviceTier = "" }; if value != "rehearsal" { Task { await store.loadModels(provider: value) } } }.task { await store.refresh(); workspace = store.state["context"]["defaultWorkspaceId"].string; provider = store.state["defaults"]["provider"].string; model = store.state["defaults"]["model"].string; effort = store.state["defaults"]["reasoningEffort"].string; serviceTier = store.state["defaults"]["serviceTier"].string; contextTier = store.state["defaults"]["contextTier"].string.isEmpty ? "default" : store.state["defaults"]["contextTier"].string; applyWorkspaceDefaults(); if let saved = store.drafts["new-chat"] { restore(saved) }; if let lockedWorkspaceID { workspace = lockedWorkspaceID; selected = []; agent = ""; includeDefaults = true }; project = lockedProjectID ?? store.projectCatalog.defaultProject(in: workspace)?["id"].string ?? ""; if provider != "rehearsal" { await store.loadModels(provider: provider) }; loading = false }
+            }.onChange(of: workspace) { _, _ in if !loading { applyWorkspaceDefaults(); project = store.projectCatalog.defaultProject(in: workspace)?["id"].string ?? "" } }.onChange(of: draftValue) { _, value in if !loading { store.setDraft("new-chat", value) } }.onChange(of: prompt) { _, value in if !loading && !sending && nativeTextAttachmentRequired(value) { if addAttachment(Data(value.utf8), name: "Pasted text.txt", mediaType: "text/plain") { prompt = "[Attached: Pasted text.txt]" } } } .onChange(of: provider) { old, value in if !loading && old != value { model = ""; effort = ""; contextTier = "default"; serviceTier = "" }; if value != "rehearsal" { Task { await store.loadModels(provider: value) } } }.task { await store.refresh(); workspace = store.state["context"]["defaultWorkspaceId"].string; provider = store.state["defaults"]["provider"].string; model = store.state["defaults"]["model"].string; effort = store.state["defaults"]["reasoningEffort"].string; serviceTier = store.state["defaults"]["serviceTier"].string; contextTier = store.state["defaults"]["contextTier"].string.isEmpty ? "default" : store.state["defaults"]["contextTier"].string; applyWorkspaceDefaults(); if let saved = store.drafts["new-chat"] { restore(saved) }; if let lockedWorkspaceID { workspace = lockedWorkspaceID; selected = []; agent = ""; includeDefaults = true }; project = lockedProjectID ?? store.projectCatalog.defaultProject(in: workspace)?["id"].string ?? ""; if provider != "rehearsal" { await store.loadModels(provider: provider) }; loading = false }
             .sheet(isPresented: $photoPicker) { NativePhotoSelection(limit: NativeAttachmentBudget.maxFiles - attachments.count) { results in photoPicker = false; if !results.isEmpty { Task { await importPhotos(results) } } } }
             .fileImporter(isPresented: $filePicker, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in if case .success(let urls) = result { for url in urls { if !importFile(url) { break } } } else if case .failure(let error) = result { store.error = error.localizedDescription } }
             .sheet(item: $previewAttachment) { item in AttachmentPreview(attachment: item) { previewAttachment = nil } }
@@ -430,7 +440,7 @@ struct NewChatView: View {
     }
     @discardableResult private func addAttachment(_ data: Data, name: String, mediaType: String) -> Bool {
         guard !sending else { return false }
-        guard supportedAttachmentTypes.contains(mediaType) else { store.error = "\(providerName) does not accept this file type through Proteus."; return false }
+        guard !supportedAttachmentTypes.isEmpty else { store.error = "\(providerName) does not accept attachments through Proteus."; return false }
         if let reason = NativeAttachmentBudget.rejection(existingCount: attachments.count, existingBytes: attachments.reduce(0) { $0 + $1.bytes.count }, incomingBytes: data.count) { store.error = reason; return false }
         let item = NativeDraftAttachment(id: UUID().uuidString, name: String(name.prefix(120)), mediaType: mediaType, bytes: data)
         shared.draftAttachments[attachmentScope, default: []].append(item)
@@ -460,7 +470,7 @@ struct NewChatView: View {
     @discardableResult private func importFile(_ url: URL) -> Bool {
         let access = url.startAccessingSecurityScopedResource(); defer { if access { url.stopAccessingSecurityScopedResource() } }
         let types = ["png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "gif": "image/gif", "webp": "image/webp", "pdf": "application/pdf", "txt": "text/plain"]
-        guard let mediaType = types[url.pathExtension.lowercased()] else { store.error = "This file type is not supported by \(providerName)."; return false }
+        let mediaType = types[url.pathExtension.lowercased()] ?? "application/octet-stream"
         do { let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0; guard size > 0, size <= NativeAttachmentBudget.maxFileBytes else { throw RemoteError(message: "Choose a file between 1 byte and 8 MB.") }; return addAttachment(try Data(contentsOf: url), name: url.lastPathComponent, mediaType: mediaType) }
         catch { store.error = error.localizedDescription; return false }
     }
@@ -606,6 +616,7 @@ struct ChatView: View {
     let id: String
     var onBack: (() -> Void)? = nil
     var workspaceBrowserScope: String? = nil
+    @State private var selectedAgent: String?
     @State private var replyDraft = NativeReplyDraft()
     private var text: String {
         get { replyDraft.text }
@@ -752,6 +763,7 @@ struct ChatView: View {
     }
     private var nativeRun: Bool { run["schedule"]["provider"].string == "local-process" }
     private var active: Bool { ["running", "queued", "awaiting_input"].contains(run["status"].string) }
+    private var contentRefreshIdentity: String { chatBrowserScope + ":" + String(phoneAreaActive) + ":" + String(describing: scenePhase) }
     private var chatBrowserScope: String { "chat:\(store.connection?.hostId ?? "local"):\(id)" }
     private var attachmentDraftKey: String { pending["type"].string == "question" ? "question-attachments:" + id + ":" + pending["id"].string : "reply-attachments:" + id }
     private var attachmentScope: String { pending["type"].string == "question" ? chatBrowserScope + ":" + pending["id"].string : chatBrowserScope }
@@ -760,7 +772,7 @@ struct ChatView: View {
     private var attachments: [NativeDraftAttachment] { shared.draftAttachments[attachmentScope] ?? [] }
     private var canSteerAttachments: Bool { let types = run["chatControls"]["steeringMediaTypes"].array.map(\.string); return attachments.allSatisfy { types.contains($0.mediaType) } }
     private var missingAttachments: [JSON] { missingAttachmentRecords(store: store, draftKey: attachmentDraftKey, items: attachments) }
-    var body: some View {
+    private var chatLayout: some View {
         VStack(spacing: 0) {
             if sizeClass != .regular && (!NativePhonePreview.enabled || !phoneChrome.controlsHidden) { compactHeader }
             if NativePhonePreview.enabled {
@@ -783,7 +795,15 @@ struct ChatView: View {
             #endif
             Divider()
             if let documentNotice { HStack { ProgressView().controlSize(.small); Text(documentNotice).font(.caption); Spacer(); Button("Cancel") { documentTask?.cancel(); self.documentNotice = nil } }.padding(8).background(NativeTheme.surface) }
-            if selectedChild == "chat" { conversation }
+            if !run["subagents"].array.isEmpty {
+                HStack { Spacer(); Button(selectedAgent == nil ? "Agents \(run["subagents"].array.count)" : "Parent conversation") {
+                    selectedAgent = selectedAgent == nil ? run["subagents"].array.first?["id"].string : nil
+                }.accessibilityIdentifier("chat-agents") }.padding(.horizontal)
+            }
+            if selectedChild == "chat", let selectedAgent {
+                NativeSubagentConversation(parentID: id, summaries: run["subagents"].array, selected: Binding(get: { self.selectedAgent ?? selectedAgent }, set: { self.selectedAgent = $0 }))
+            }
+            else if selectedChild == "chat" { conversation }
             else if selectedChild == "live" { LiveBrowserView(chatID: id, modeStatus: AnyView(composerStatus)).environmentObject(store) }
             else if let tab = shared.browserTabs.first(where: { $0.id == selectedChild && $0.scope == chatBrowserScope }) {
                 TeamBrowserView(scope: chatBrowserScope, showTabs: false, tabID: tab.id, onBackToList: returnToChats).environment(\.nativeTabStep, { direction in
@@ -804,19 +824,24 @@ struct ChatView: View {
                     requestDocument(fromRequestID: document.requestID, relativePath: source, parentID: document.id)
                 }) { selectedChild = "chat"; shared.selectChatChild("chat", for: chatBrowserScope) }
             } else { conversation.onAppear { selectedChild = "chat" } }
-        }.environment(\.nativeBrowserContainer, workspaceBrowserScope ?? chatBrowserScope).onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in let available = max(160, height - 88); if abs(composerAvailableHeight - available) > 1 { composerAvailableHeight = available } }.background(NativeTheme.background).navigationBarBackButtonHidden(true).toolbar(.hidden, for: .navigationBar)
+        }
+    }
+    var body: some View {
+        AnyView(chatLayout).environment(\.nativeBrowserContainer, workspaceBrowserScope ?? chatBrowserScope).onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in let available = max(160, height - 88); if abs(composerAvailableHeight - available) > 1 { composerAvailableHeight = available } }.background(NativeTheme.background).navigationBarBackButtonHidden(true).toolbar(.hidden, for: .navigationBar)
         .modifier(NativePhoneBackNavigation())
         .simultaneousGesture(TapGesture(count: 2).onEnded { if NativePhonePreview.enabled && !composerHasFocus && !shared.tabs(in: chatBrowserScope).contains(where: { $0.id == selectedChild }) { phoneChrome.toggleControls() } })
         .background { if NativeDesignPreview.enabled && phoneAreaActive { NativePhoneSurface(chrome: phoneChrome, overviewEnabled: !shared.tabs(in: chatBrowserScope).contains(where: { $0.id == selectedChild })) } }
         .onChange(of: selectedChild) { _, _ in if NativeDesignPreview.enabled { registerPhoneTab() } }
         .onChange(of: phoneAreaActive) { _, active in if NativePhonePreview.enabled && active { phoneChrome.browserOwnsBack = false; registerPhoneTab() } }
         .modifier(NativePageSwipe(enabled: !NativePhonePreview.enabled && !shared.tabs(in: chatBrowserScope).contains(where: { $0.id == selectedChild }), back: returnToChats))
-        .task(id: chatBrowserScope) {
+        .task(id: contentRefreshIdentity) {
+            guard scenePhase == .active, !NativePhonePreview.enabled || phoneAreaActive else { return }
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--synthetic-desktop-browser-tabs") { shared.replayDesktopBrowserFixture(scope: chatBrowserScope) }
             #endif
             while !Task.isCancelled {
                 await shared.refreshContentTabs(scope: chatBrowserScope, remote: store, kind: "chat", id: id)
+                guard !Task.isCancelled else { return }
                 await shared.refreshPreviews(scope: chatBrowserScope, remote: store, chatID: id)
                 try? await Task.sleep(for: .seconds(2))
             }
@@ -1066,6 +1091,12 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
                             PendingChatApprovalView(run: run)
                             if !pending["permissionReason"].string.isEmpty { Text(pending["permissionReason"].string).font(.caption).foregroundStyle(.secondary) }
                             ForEach(pending["permissionChoices"].array, id: \.self) { choice in Button(choice["label"].string) { answer(choice["value"].string) } }
+                        } else if pending["type"].string == "question" {
+                            ForEach(pending["choices"].array, id: \.self) { choice in
+                                Button(choice.string.isEmpty ? choice["label"].string : choice.string) {
+                                    text = choice.string.isEmpty ? choice["label"].string : choice.string
+                                }.buttonStyle(.bordered)
+                            }
                         }
                     }.padding().background(Color.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 16)).disabled(busy || !store.connected)
                 }
@@ -1287,7 +1318,7 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
         if NativeDesignPreview.enabled {
             NativeGrowingReplyEditor(text: textBinding, placeholder: replyPlaceholder, isFocused: composerHasFocus,
                 screenHeight: composerCardHeightLimit * 2, chromeHeight: composerEditorChromeHeight, submitOnReturn: NativePadPreview.enabled,
-                focusChanged: { composerHasFocus = $0 }, windowHeightChanged: { composerWindowHeight = $0 }, submit: submitReply)
+                focusChanged: { composerHasFocus = $0 }, windowHeightChanged: { composerWindowHeight = $0 }, submit: submitReply, attachLargeText: { addAttachment(Data($0.utf8), name: "Pasted text.txt", mediaType: "text/plain") })
         } else {
         TextField(replyPlaceholder, text: textBinding, axis: .vertical)
             .modifier(ChatReturnKey(text: textBinding, submit: submitReply)).lineLimit(3...max(3, Int((composerAvailableHeight * 0.6 - 100) / 22))).padding(.horizontal, 10).padding(.vertical, 12)
@@ -1498,7 +1529,7 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
     @discardableResult private func addAttachment(_ data: Data, name: String, mediaType: String) -> Bool {
         guard !busy else { return false }
         guard attachmentsEnabled else { store.error = "\(store.displayName) has not enabled approved attachments for this provider yet."; return false }
-        guard supportedAttachmentTypes.contains(mediaType) else { store.error = "\(providerName) does not accept this file type through Proteus."; return false }
+        guard pending["type"].string != "question" || supportedAttachmentTypes.contains(mediaType) else { store.error = "This question accepts images or plain text."; return false }
         if pending["type"].string == "question", attachments.count >= 4 { store.error = "Question replies accept up to four files."; return false }
         if let reason = NativeAttachmentBudget.rejection(existingCount: attachments.count, existingBytes: attachments.reduce(0) { $0 + $1.bytes.count }, incomingBytes: data.count) { store.error = reason; return false }
         let item = NativeDraftAttachment(id: UUID().uuidString, name: String(name.prefix(120)), mediaType: mediaType, bytes: data)
@@ -1531,7 +1562,7 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
         defer { if access { url.stopAccessingSecurityScopedResource() } }
         let suffix = url.pathExtension.lowercased()
         let types = ["png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "gif": "image/gif", "webp": "image/webp", "pdf": "application/pdf", "txt": "text/plain"]
-        guard let mediaType = types[suffix] else { store.error = "This file type is not supported by \(providerName)."; return false }
+        let mediaType = types[suffix] ?? "application/octet-stream"
         do {
             let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
             guard size > 0, size <= NativeAttachmentBudget.maxFileBytes else { throw RemoteError(message: "Choose a file between 1 byte and 8 MB.") }
@@ -1618,6 +1649,7 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
     private func openDocument(_ source: String) {
         if let url = URL(string: source), ["http", "https"].contains(url.scheme ?? ""), ["localhost", "127.0.0.1", "::1"].contains(url.host ?? "") {
             Task {
+                guard !Task.isCancelled else { return }
                 await shared.refreshPreviews(scope: chatBrowserScope, remote: store, chatID: id)
                 if let preview = shared.documents(in: chatBrowserScope).first(where: { $0.previewSource == source }) { selectedChild = preview.id; shared.selectChatChild(preview.id, for: chatBrowserScope) }
                 else { store.error = "Enable View chat documents on \(store.displayName) and keep the design server running to open this preview." }
@@ -2309,6 +2341,11 @@ enum MessageSpeechEvent { case started, progress(Int), paused, resumed, finished
     deinit { for observer in observers { NotificationCenter.default.removeObserver(observer) } }
     func start(_ text: String, token: UUID) {
         let utterance = AVSpeechUtterance(string: text)
+        let language = Locale.current.language.languageCode?.identifier ?? "en"
+        utterance.voice = AVSpeechSynthesisVoice.speechVoices()
+            .filter { $0.language.hasPrefix(language) }
+            .sorted { $0.quality.rawValue > $1.quality.rawValue }.first
+
         utterance.prefersAssistiveTechnologySettings = true
         current = (utterance, token); synthesizer.speak(utterance)
     }
@@ -2486,5 +2523,60 @@ struct NativeRunFilesView: View {
                 }
             }
         }.padding(12).background(NativeTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+// Transcripts are read through the selected parent owner, never through a child
+// session file or another top-level conversation. Selection cancels old reads.
+private struct NativeSubagentConversation: View {
+    @EnvironmentObject var store: RemoteStore
+    let parentID: String
+    let summaries: [JSON]
+    @Binding var selected: String
+    @State private var page: JSON = .null
+    @State private var error: String?
+    @State private var loading = false
+    private var revision: String { let summary = summaries.first { $0["id"].string == selected }; return (summary?["eventCount"].pretty ?? "") + ":" + (summary?["eventRevision"].pretty ?? "") + ":" + (summary?["status"].string ?? "") }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ScrollView(.horizontal) {
+                HStack { ForEach(summaries, id: \.self) { agent in
+                    Button((agent["name"].string.isEmpty ? "Agent" : agent["name"].string) + " · " + agent["status"].string) { selected = agent["id"].string }
+                        .buttonStyle(.bordered).tint(selected == agent["id"].string ? NativeTheme.accent : .secondary)
+                } }
+            }
+            Text("Read-only agent conversation").font(.caption).foregroundStyle(.secondary)
+            if loading { ProgressView() }
+            if let error { Text(error).foregroundStyle(.orange) }
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 12) {
+                    if page["id"].string == selected && page["earlier"] != .null { Button("Earlier agent messages") { Task { await load(before: page["earlier"]) } } }
+                    if page["truncated"].bool { Text("Earlier detail is outside the retained agent journal.").font(.caption) }
+                    if !loading && page != .null && page["events"].array.isEmpty { Text("This provider has not exposed a transcript.") }
+                    if page["id"].string == selected {
+                        ForEach(page["liveMessages"].object.keys.sorted(), id: \.self) { key in
+                            VStack(alignment: .leading) { Text("Assistant · streaming").font(.caption); Text(page["liveMessages"][key].string).textSelection(.enabled) }
+                        }
+                    }
+                    ForEach(Array((page["id"].string == selected ? page["events"].array : []).enumerated()), id: \.offset) { _, event in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(event["role"].string + " · " + event["at"].string).font(.caption).foregroundStyle(.secondary)
+                            Text(event["text"].string).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                }
+            }
+        }.padding().task(id: parentID + ":" + selected + ":" + revision) { await load() }
+    }
+    @MainActor private func load(before: JSON? = nil) async {
+        let agent = selected; loading = true; error = nil
+        do {
+            var args: [String: JSON] = ["id": .string(parentID), "agentId": .string(agent), "watch": .string("none")]
+            if let before { args["beforeEvent"] = before }
+            let result = try await store.request("chat.get", args)
+            guard !Task.isCancelled, agent == selected else { return }
+            guard result["id"].string == agent else { throw RemoteError(message: "This owner version does not provide agent transcripts.") }
+            page = result; loading = false
+        } catch { if !Task.isCancelled && agent == selected { self.error = error.localizedDescription; loading = false } }
     }
 }

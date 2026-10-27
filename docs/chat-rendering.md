@@ -262,3 +262,11 @@ Selection and restoration do not advance recent activity. Workspace aggregate Ta
 reorderable; project order is manual. Browser Hide unloads and Restore waits for selection to
 load. Chat view closure preserves durable state and active work while releasing presentation
 caches; successful terminal input advances its recent activity. Production rollout remains held.
+
+## Parent-scoped agent conversations and clipboard input
+
+An Agents button appears only when child use exists. It opens inline read-only agent tabs, loads only the selected transcript and retains parent draft, attachments and scroll. Returning to Parent conversation restores the same parent surface. Requests are authorized through the parent owner, paged, bounded and protected against stale selection responses; no child composer or approval controls appear. Desktop and native clients use the same additive owner contract.
+
+Clipboard HTML is parsed inertly into supported Markdown structure, with executable/hidden elements and unsafe links removed. Styled HTML whose hidden content cannot be established falls back to plain text. Pasting more than 200 lines or 256 KiB creates a stable text attachment with exact source content before provider request construction. Arbitrary extensions remain attachable; preview and provider extraction are separate capabilities. Pending question choices render with the custom-answer entry on first arrival.
+
+Desktop Read Aloud reads a nonempty selected range, otherwise the rendered message. Its device-local voice picker uses installed local voices, retains the choice and keeps Stop/seek/pause controls. Native speech chooses the highest installed voice quality for the current language and honors assistive settings. Automated playback does not establish audible preference or quality.

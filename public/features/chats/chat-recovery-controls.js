@@ -6,13 +6,14 @@ export function mountChatRecovery(node,entry,run,options){
  let controls=node.querySelector('.chat-recovery-controls');
  if(!show){if(controls){disposeRuntimeTimers(controls);controls.remove();}return;}
  if(!controls){controls=document.createElement('section');controls.className='chat-recovery-controls';node.append(controls);}
- const signature=JSON.stringify([state.recoverable,state.capacity,state.failureEventAt,state.retry,state.queuedCount,run.allowanceStatus,run.allowanceContinuation]);
+ const signature=JSON.stringify([state.recoverable,state.activeTimeLimit,state.capacity,state.failureEventAt,state.retry,state.queuedCount,run.allowanceStatus,run.allowanceContinuation]);
  if(controls.signature===signature)return;
  controls.signature=signature;disposeRuntimeTimers(controls);controls.replaceChildren();
  const note=document.createElement('p');note.className='note';note.textContent=state.queuedCount?`${state.queuedCount} queued message${state.queuedCount===1?' is':'s are'} waiting. Continue the interrupted chat; the queue will run after it finishes.`:'Continue this chat from where it left off.';controls.append(note);
  const actions=document.createElement('div');actions.className='actions';controls.append(actions);
  const button=(label,action)=>{const element=document.createElement('button');element.type='button';element.textContent=label;element.onclick=async()=>{for(const item of actions.querySelectorAll('button'))item.disabled=true;try{await options.recover(action,state.failureEventAt);}catch(error){options.notify?.(error.message);}finally{for(const item of actions.querySelectorAll('button'))item.disabled=false;}};actions.append(element);return element;};
  if(state.recoverable)button('Continue chat','continue').className='primary';
+ if(state.activeTimeLimit)button('Continue and enable automatic continuation','active-time-continue-enable');
  if(state.recoverable&&state.allowance&&run.chatControls?.allowanceContinuation!==false){
   const pending=run.allowanceContinuation?.pending,status=run.allowanceStatus,waiting=pending?.state==='waiting'&&pending.failureEventAt===state.failureEventAt;
   if(waiting){button('Cancel allowance continuation','allowance-cancel');const waitingNote=document.createElement('p');waitingNote.className='note';waitingNote.textContent='Waiting until '+allowanceResetLabel(pending.nextAttemptAt)+'. '+(pending.reason||'Allowance will be checked again before continuing.');controls.append(waitingNote);}

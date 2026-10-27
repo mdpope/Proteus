@@ -14,7 +14,7 @@ const MAX_PENDING_BYTES = 128 * 1024 * 1024;
 const MAX_PER_DEVICE_BYTES = 64 * 1024 * 1024;
 const MAX_INCOMPLETE = 16;
 const MAX_INCOMPLETE_PER_DEVICE = 4;
-const MEDIA_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'application/pdf', 'text/plain']);
+const validMediaType=value=>typeof value==='string'&&value.length<=127&&/^[a-zA-Z0-9!#$&^_.+-]+\/[a-zA-Z0-9!#$&^_.+-]+$/.test(value);
 const PROVIDERS = new Set(['copilot', 'codex', 'claude', 'mtplx']);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -37,7 +37,7 @@ function fileType(bytes, mediaType) {
     if (bytes.includes(0)) return false;
     try { new TextDecoder('utf-8', { fatal: true }).decode(bytes); return true; } catch { return false; }
   }
-  return false;
+  return true;
 }
 function decodedChunk(value) {
   if (typeof value !== 'string' || value.length > Math.ceil(CHUNK_BYTES / 3) * 4 + 4 || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)) throw new Error('Invalid attachment chunk.');
@@ -75,7 +75,7 @@ export class ChatAttachmentStore {
       const id = name.slice(0, -5), metadata = path.join(this.acceptedRoot, name), file = path.join(this.acceptedRoot, id);
       try {
         const saved = JSON.parse(fs.readFileSync(metadata, 'utf8'));
-        if (saved.id !== id || !PROVIDERS.has(saved.providerId) || !MEDIA_TYPES.has(saved.mediaType) || !Number.isSafeInteger(saved.size) || saved.size < 1 || saved.size > MAX_FILE_BYTES || !/^[0-9a-f]{64}$/.test(saved.sha256)) throw new Error('Invalid accepted attachment record.');
+        if (saved.id !== id || !PROVIDERS.has(saved.providerId) || !validMediaType(saved.mediaType) || !Number.isSafeInteger(saved.size) || saved.size < 1 || saved.size > MAX_FILE_BYTES || !/^[0-9a-f]{64}$/.test(saved.sha256)) throw new Error('Invalid accepted attachment record.');
         const stat = fs.lstatSync(file);
         if (!stat.isFile() || stat.isSymbolicLink() || stat.size !== saved.size) throw new Error('Accepted attachment changed.');
         const record = { ...saved, path: file, fd: null, inode: stat.ino, finished: true, accepted: true, expiresAt: Infinity };
@@ -118,7 +118,7 @@ export class ChatAttachmentStore {
     this.ensureOpen();
     chatId = identity(chatId, 'chat'); deviceId = identity(deviceId, 'device'); messageId = identity(messageId, 'message'); name = filename(name);
     if (!PROVIDERS.has(providerId)) throw new Error('Unsupported attachment provider.');
-    if (!MEDIA_TYPES.has(mediaType)) throw new Error('This file type is not supported for chat attachments.');
+    if (!validMediaType(mediaType)) throw new Error('This file type is not supported for chat attachments.');
     if (!Number.isSafeInteger(size) || size < 1 || size > MAX_FILE_BYTES) throw new Error('Attachments must be between 1 byte and 8 MB.');
     if (typeof sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(sha256)) throw new Error('Invalid attachment digest.');
     const staged = [...this.records.values()].filter(item => !item.accepted);

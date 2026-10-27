@@ -553,3 +553,11 @@ only when all three exist; other usage fields retain their provider-reported sco
 The local MTPLX pilot remains preview-only. Review capture in Design Preview before updating
 the installed app; production registration, OAuth, native steering and remote/mobile rollout
 remain separate capabilities. See [MTPLX contract](mtplx-pilot.md) and current handoff status.
+
+## Delegation and bounded attachment access
+
+Applicable adapters expose mandatory owner tools even when optional sources are empty. Copilot custom-agent declarations and MTPLX tool ceilings retain ordinary selected MCP/executable limits while allowing registered Proteus core tools. `proteus_agents` offers parent-scoped spawn/list/read/wait on the same captured provider/model/account, with stable UUID reconciliation, three active children, 32 retained children and bounded nesting. It cannot approve another task's request. Native provider delegation remains available where supported.
+
+Codex, Copilot and Claude provider-owned lifecycle events populate a separate child journal. Restored transcript history alone grants no current-turn authority. Child completions do not settle the parent's turn. Native journals retain up to 128 children and 200 events/256 KiB per child, with 16,000-character event/live-text bounds and an explicit truncation indication. Only text/tool output is shown; reasoning is excluded. A provider may expose status without transcript. The real Codex CLI regression passes; live non-Codex acceptance remains recorded separately.
+
+Any attached file can be stored with exact original bytes. Native supported media is sent normally; other binary or large text becomes a descriptor for `proteus_attachments`, a bounded reader for this active turn's original files. Reads are byte-paged and UTF-8 boundaries are preserved. This does not give arbitrary filesystem access or promise universal extraction support.

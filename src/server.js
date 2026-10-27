@@ -1,3 +1,5 @@
+import {resolveScheduleContext} from './services/scheduling/schedule-context.js';
+import {subagentPage} from './services/chats/subagents.js';
 import {publicAssets} from './shared/public-assets.js';
 import {MtplxProvider} from './providers/mtplx.js';
 import {replyWithAttachments,questionAttachmentMediaTypes} from './services/chats/question-attachments.js';
@@ -112,7 +114,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   const performanceDiagnostics = new PerformanceDiagnostics({home});
   engine.performanceDiagnostics = performanceDiagnostics;
   activity.performanceDiagnostics=performanceDiagnostics;attachments.performanceDiagnostics=performanceDiagnostics;
-  for(const adapter of Object.values(adapters))adapter.questionInputs=(id,requestId)=>engine.readQuestionAttachments(id,requestId);
+  for(const adapter of Object.values(adapters)){adapter.questionInputs=(id,requestId)=>engine.readQuestionAttachments(id,requestId);adapter.attachmentInputs=id=>engine.turnAttachments.get(id);}
   for (const [target, method, phase] of [[engine.schedules,'list','scheduler.list'],[context,'get','context.get'],[engine,'persist','run.persist']]) {
     const original = target[method];
     target[method] = function (...args) { return performanceDiagnostics.measureSync(phase, () => original.apply(this,args)); };
@@ -124,6 +126,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
     return {...scope.approvals,workingRoots:[scope.cwd,...(scope.additionalDirectories||[])]};
   };
   engine.permissions.workspaceDefaults = workspacePermissionDefaults;
+  engine.permissions.delegationSummaries=id=>engine.delegation.children(id).map(child=>engine.delegation.summary(child));
   const integrations=new IntegrationHealth(home,{engine,context,onChange:()=>{notify();remote?.changed();}});
   for(const adapter of Object.values(adapters)){adapter.integrations=integrations;adapter.onIdle=()=>queueMicrotask(()=>engine.drain());}
   engine.on('change',run=>{try{integrations.capture(run);}catch(error){activity.log('warning','integrations.storage','Connection health could not be saved.',{error});}});
@@ -157,12 +160,13 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
     for (const warning of snapshot.warnings || []) engine.event(run, 'system', warning.message, { contextWarning: warning });
   };
   engine.executionLane = schedule => schedule.provider === 'local-process' && ['audio', 'library', 'semantic'].includes(schedule.integration?.job) ? `omi:${schedule.integration.job}` : null;
-  engine.prepareSchedule = schedule => {
+  engine.prepareSchedule = (schedule,trigger='scheduled') => {
+    if(trigger!=='chat')schedule={...schedule,permissionScope:{kind:'schedule',id:schedule.id}};
     omi.assertEnabled(schedule);
     if (schedule.provider === 'local-process') return schedule;
-    if (schedule.context && !schedule.contextSelection) return schedule;
-    const snapshot = context.capture({ workspace: schedule.workspace, selectedIds: schedule.contextSelection?.selectedIds, agentId: schedule.contextSelection?.agentId, includeDefaults: schedule.contextSelection?.includeDefaults });
-    return { ...schedule, context: snapshot, workspace: snapshot.workspace };
+    if (schedule.context && !schedule.contextSelection && !schedule.workspaceSources) return schedule;
+    const resolved=resolveScheduleContext(schedule,context,engine.permissions),snapshot=resolved.context;
+    return { ...schedule, context: snapshot, workspace: snapshot.workspace,...(resolved.executionPermissions?{executionPermissions:resolved.executionPermissions}:{}) };
   };
   const catalogs = Object.fromEntries(Object.entries(adapters).filter(([id, adapter]) => id !== 'local-process' && adapter.status).map(([id, adapter]) => [id, new ModelCatalog(() => adapter.status())]));
   const catalog = (desktopPreview ? catalogs.codex : catalogs.copilot) || new ModelCatalog(() => desktopPreview ? codex.status() : copilot.status());
@@ -481,7 +485,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (url.pathname === '/api/schedules' && req.method === 'POST') {
         const { schedule, expectedRevision } = await body(req);
         validateSchedule(schedule);
-        if (schedule.contextSelection) context.capture({ workspace: schedule.workspace, selectedIds: schedule.contextSelection?.selectedIds, agentId: schedule.contextSelection?.agentId, includeDefaults: schedule.contextSelection?.includeDefaults });
+        if(schedule.contextSelection||schedule.workspaceSources||schedule.executionPermissions)resolveScheduleContext(schedule,context,engine.permissions);
         const saved=engine.schedules.save(schedule, expectedRevision);
         return json(200, {...saved,revision:revision(saved)});
       }
@@ -494,6 +498,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         for (const schedule of schedules) engine.schedules.save({ ...schedule, enabled: false });
         return json(200, { imported: schedules.length, enabled: false });
       }
+      if(url.pathname==='/api/subagents'&&req.method==='GET'){const run=engine.getRun(url.searchParams.get('id')),agentId=url.searchParams.get('agentId'),before=url.searchParams.has('before')?Number(url.searchParams.get('before')):undefined;return json(200,run.subagents?.some(row=>row.id===agentId)?subagentPage(run,agentId,before):engine.delegation.page(run.id,agentId,before));}
       if (url.pathname === '/api/run' && req.method === 'POST') { const { id } = await body(req); return json(200, engine.createRun(engine.schedules.get(id))); }
       if (url.pathname === '/api/chat-title' && req.method === 'POST') {
         const value = await body(req);
@@ -502,7 +507,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if(url.pathname==='/api/attachments'&&req.method==='POST'){
         const value=await body(req),deviceId='local-desktop',providerId=value.id?engine.getRun(value.id).schedule.provider:value.providerId;
         if(value.action==='begin'){
-          if(value.providerId!==providerId||!adapters[providerId]?.acceptedMediaTypes?.includes(value.mediaType))throw new Error(`${providerId} cannot receive ${value.mediaType} attachments.`);
+          if(value.providerId!==providerId||!adapters[providerId]?.acceptedMediaTypes)throw new Error(`${providerId} cannot receive ${value.mediaType} attachments.`);
           if(!value.id&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.draftId||''))throw new Error('Choose a valid chat draft.');
           return json(200,await attachments.begin({chatId:value.id||'draft:'+value.draftId,deviceId,messageId:value.messageId,providerId,name:value.name,mediaType:value.mediaType,size:value.size,sha256:value.sha256}));
         }

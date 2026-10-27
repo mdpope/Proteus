@@ -423,9 +423,15 @@ struct RemoteHostInfo: Equatable {
     func mergeChat(_ value: JSON) {
         if let observed = ProviderAllowance.date(value["observedAt"].string) { runtimeClockOffset = observed.timeIntervalSinceNow }
         let id = value["id"].string
+        guard !id.isEmpty else { return }
         guard let old = chats[id] else { chats[id] = value; return }
+        // Older paged replies may still add history but cannot replace current
+        // status, selection-related metadata, questions or streaming content.
+        let incomingAt = ProviderAllowance.date(value["observedAt"].string) ?? ProviderAllowance.date(value["updatedAt"].string) ?? .distantPast
+        let previousAt = ProviderAllowance.date(old["observedAt"].string) ?? ProviderAllowance.date(old["updatedAt"].string) ?? .distantPast
+        let incomingIsCurrent = incomingAt >= previousAt && value["eventCount"].int >= old["eventCount"].int
         var events: [Int: JSON] = [:]
-        for page in old["retainedHistory"].array + [old, value] {
+        for page in old["retainedHistory"].array + (incomingIsCurrent ? [old, value] : [value, old]) {
             for (index, event) in page["events"].array.enumerated() { events[page["eventStart"].int + index] = event }
         }
         var pages: [(start: Int, events: [JSON])] = []
@@ -434,7 +440,7 @@ struct RemoteHostInfo: Equatable {
             else { pages.append((key, [events[key]!])) }
         }
         let latest = pages.popLast() ?? (start: 0, events: [])
-        var merged = (value["eventCount"].int >= old["eventCount"].int ? value : old).object
+        var merged = (incomingIsCurrent ? value : old).object
         merged["events"] = .array(latest.events)
         merged["eventStart"] = .number(Double(latest.start)); merged["earlier"] = merged["eventStart"]
         merged["retainedHistory"] = .array(pages.map { .object(["eventStart": .number(Double($0.start)), "events": .array($0.events)]) })

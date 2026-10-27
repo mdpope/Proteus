@@ -1,3 +1,4 @@
+import {delegationTools} from './delegation.js';
 export function chatControlTools(control, runId) {
   if (!control) return [];
   const turn=runId?control.service?.engine.running.get(runId):null;
@@ -21,5 +22,5 @@ export function chatControlTools(control, runId) {
       scope:{type:'object',properties:{hostId:{type:'string'},chatIds:{type:'array',items:{type:'string'}},projectId:{type:'string'},actions:{type:'array',items:{type:'string',enum:['read','dispatch','answer','cancel']}}},required:['hostId','actions'],additionalProperties:false}
     },required:['action'],additionalProperties:false},
     handler:async args=>{if(runId&&control.service&&(control.service.engine.running.get(runId)!==turn||!turn||turn.controller.signal.aborted))throw Error('This chat tool no longer belongs to an active turn.');return JSON.stringify(await control.handle(args, runId || 'operator'));}
-  }];
+  },...delegationTools(control,runId)];
 }

@@ -5,6 +5,18 @@ import {Engine} from '../src/engine.js';
 import {ChatRecovery} from '../src/services/chats/chat-recovery.js';
 import {chatRecoveryState,capacityFailure} from '../public/features/chats/chat-recovery-state.js';
 import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
+test('Copilot active-time continuation is opt-in, bounded, claimed once and keeps the same session and queue',async t=>{
+ const f=fixture(t);f.run.schedule.provider='copilot';f.run.events.at(-1).data.failure.kind='active-time-limit';f.run.activeTimeContinuation={enabled:true,attempts:0};
+ f.engine.recovery.settled(f.run);f.engine.recovery.settled(f.run);await Promise.resolve();assert.equal(f.calls.length,1);assert.equal(f.run.providerSessionId,'same-session');assert.equal(f.run.queuedMessages[0].id,'retained-message');assert.equal(f.run.activeTimeContinuation.attempts,1);
+ const g=fixture(t);g.run.schedule.provider='copilot';g.run.events.at(-1).data.failure.kind='active-time-limit';g.run.activeTimeContinuation={enabled:true,attempts:3};g.engine.recovery.settled(g.run);await Promise.resolve();assert.equal(g.calls.length,0);assert.match(g.run.activeTimeContinuation.attention,/three/);
+});
+test('active-time preference revisions and disabling before the queued continuation take precedence',async t=>{
+ const f=fixture(t);f.run.schedule.provider='copilot';f.run.events.at(-1).data.failure.kind='active-time-limit';
+ assert.throws(()=>f.engine.recovery.command(f.run.id,{action:'active-time-auto',enabled:true,expectedPreferenceVersion:1}),/changed/);
+ f.engine.recovery.command(f.run.id,{action:'active-time-auto',enabled:true,expectedPreferenceVersion:0});f.engine.recovery.settled(f.run);
+ f.engine.recovery.command(f.run.id,{action:'active-time-auto',enabled:false,expectedPreferenceVersion:1});await Promise.resolve();assert.equal(f.calls.length,0);
+ f.engine.recovery.command(f.run.id,{action:'active-time-continue-enable',expectedFailureEventAt:f.run.failureEventAt});assert.equal(f.calls.length,1);assert.equal(f.run.activeTimeContinuation.enabled,true);
+});
 function fixture(t){
  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-recovery-test-'));let now=Date.parse('2026-10-22T12:00:00Z');const timers=new Map(),calls=[];
  const engine=new Engine(home,{},()=>new Date(now));engine.drain=async()=>{};engine.recovery=new ChatRecovery(engine,{setTimer:(fn,delay)=>{const timer={fn,delay};timers.set(timer,timer);return timer;},clearTimer:timer=>timers.delete(timer)});

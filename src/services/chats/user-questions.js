@@ -9,7 +9,7 @@ export function captureUserQuestions(run, data, eventIndex, now) {
     if(typeof value?.title!=='string'||!value.title.trim())return;
     const id=createHash('sha256').update(JSON.stringify([run.schedule.provider,run.providerSessionId,data.providerItemId,index])).digest('hex');
     if(run.userQuestions.some(question=>question.id===id))return;
-    run.userQuestions.push({id,text:value.title,choices:Array.isArray(value.options)?value.options.filter(option=>typeof option==='string'):[],status:'pending',askedAt:now,eventIndex,provider:run.schedule.provider,sessionId:run.providerSessionId||null,providerItemId:data.providerItemId});
+    run.userQuestions.push({id,text:value.title,choices:Array.isArray(value.options)?value.options.map(option=>typeof option==='string'?option:option?.label).filter(option=>typeof option==='string'&&option.trim()):[],status:'pending',askedAt:now,eventIndex,provider:run.schedule.provider,sessionId:run.providerSessionId||null,providerItemId:data.providerItemId});
   });
 }
 

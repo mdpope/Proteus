@@ -88,3 +88,7 @@ Selection and restoration do not advance recent activity. Workspace aggregate Ta
 reorderable; project order is manual. Browser Hide unloads and Restore waits for selection to
 load. Chat view closure preserves durable state and active work while releasing presentation
 caches; successful terminal input advances its recent activity. Production rollout remains held.
+
+## Sharing verification
+
+The terminal robot control performs one owner share/revoke operation, then checks the exact terminal's state through a read-only snapshot. The control remains busy during verification and reports mismatch/error. An uncertain operation is not repeated by toggling again. Sharing, navigation placement and shell lifetime remain independent; moves do not replay startup, and close/restart revokes access.

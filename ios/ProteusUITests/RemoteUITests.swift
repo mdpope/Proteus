@@ -2541,6 +2541,9 @@ final class NativeReleaseFollowupUITests: XCTestCase {
         let projectID = try XCTUnwrap(fixture["projectId"] as? String)
         let defaultID = try XCTUnwrap(fixture["defaultProjectId"] as? String)
         let app = nativeFixtureApplication(); app.launchArguments = ["--reset-pairing"]; app.launch()
+        // Resetting pairing preserves navigation. Explicitly visit Home before
+        // entering the code rather than targeting a retained offscreen form.
+        openNotificationFixtureHome(app)
         let link = app.descendants(matching: .any).matching(identifier: "pairing-link").firstMatch
         XCTAssertTrue(link.waitForExistence(timeout: 15)); link.tap(); link.typeText(try XCTUnwrap(fixture["code"] as? String)); app.buttons["pair-mac"].tap()
         for id in [projectID, defaultID, projectID, defaultID] {

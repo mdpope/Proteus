@@ -1,3 +1,4 @@
+import {installSelectMenus} from '../../shared/ui/select-menu.js';
 // Shared production composer behavior for local desktop, remote desktop and website chats.
 const svg = paths => `<svg viewBox="0 0 24 24" aria-hidden="true">${paths}</svg>`;
 const arrow = svg('<path d="M12 20V4M5 11l7-7 7 7"/>');
@@ -17,6 +18,7 @@ function disposeComposers(){for(const dispose of [...live.values()])dispose();}
 export function disposeChatComposer(composer){mounts.get(composer)?.();}
 export function mountChatComposer(composer,{textarea,models,actions,active=false,pane}={}) {
   if(!composer)return;
+  installSelectMenus();
   for(const [node,dispose] of live)if(!node.isConnected)dispose();
   mounts.get(composer)?.();
   composer.classList.add('adaptive-composer');

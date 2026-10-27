@@ -9,7 +9,8 @@ function localVoice(){
  const voices=synthesis()?.getVoices?.().filter(v=>v.localService===true)||[];
  const lang=document.documentElement.lang||navigator.language||'en',locale=navigator.language||lang;
  const compatible=v=>v.lang?.split('-')[0].toLowerCase()===lang.split('-')[0].toLowerCase();
- return voices.find(v=>v.default&&compatible(v))||voices.find(v=>v.lang?.toLowerCase()===locale.toLowerCase())||voices.find(v=>v.lang?.toLowerCase()===lang.toLowerCase())||voices.find(compatible)||voices.find(v=>v.default)||voices[0];
+ let preferred;try{preferred=localStorage.getItem('proteus-local-speech-voice');}catch{}
+ return voices.find(v=>v.voiceURI===preferred) || voices.find(v=>v.default&&compatible(v))||voices.find(v=>v.lang?.toLowerCase()===locale.toLowerCase())||voices.find(v=>v.lang?.toLowerCase()===lang.toLowerCase())||voices.find(compatible)||voices.find(v=>v.default)||voices[0];
 }
 export function readableMessageText(rendered){
  if(!rendered)return '';
@@ -33,6 +34,12 @@ function display(handle){
  handle.speak.setAttribute('aria-pressed',String(!!owner));
  handle.speak.title=owner?'Stop reading aloud':available?'Read aloud':'Read aloud unavailable: no local system voice';
  handle.playback.hidden=!owner;
+ if(handle.voiceSelect){
+  const voices=synthesis()?.getVoices?.().filter(v=>v.localService===true)||[],signature=voices.map(v=>v.voiceURI).join('\n');
+  if(handle.voiceSignature!==signature){handle.voiceSignature=signature;handle.voiceSelect.replaceChildren(...voices.map(voice=>{const option=document.createElement('option');option.value=voice.voiceURI;option.textContent=voice.name+' · '+voice.lang;return option;}));}
+  handle.voiceSelect.value=(owner?.voice||localVoice())?.voiceURI||'';
+ }
+
  if(owner){
   const position=owner.seekPreview??Math.round(owner.index/owner.content.length*1000),percent=Math.round(position/10);
   setIcon(handle.pause,owner.paused?'resume':'pause');handle.pause.setAttribute('aria-label',owner.paused?'Resume reading':'Pause reading');handle.pause.title=owner.paused?'Resume reading':'Pause reading';
@@ -106,8 +113,10 @@ export function mountMessageActions(container,{key,text,rendered,copy,notify}={}
  if(handle){handle.update({text,rendered,copy,notify});handles.add(handle);return handle;}
  container.classList.add('message-actions');container.setAttribute('role','group');container.setAttribute('aria-label','Message actions');
  const button=(action,label,icon)=>`<button type="button" class="message-action-button" data-message-action="${action}" aria-label="${label}" title="${label}">${svg(icon)}</button>`;
- container.innerHTML=button('copy','Copy message','copy')+button('speak','Read aloud','speak')+`<div class="message-playback" hidden>${button('pause','Pause reading','pause')}${button('stop','Stop reading aloud','stop')}<input type="range" data-message-seek min="0" max="1000" step="1" value="0" aria-label="Reading position" title="Position in message text"><output class="message-playback-position">0%</output></div><span class="message-action-status" role="status" aria-live="polite"></span>`;
+ container.innerHTML=button('copy','Copy message','copy')+button('speak','Read aloud','speak')+`<div class="message-playback" hidden>${button('pause','Pause reading','pause')}${button('stop','Stop reading aloud','stop')}<input type="range" data-message-seek min="0" max="1000" step="1" value="0" aria-label="Reading position" title="Position in message text"><output class="message-playback-position">0%</output><select data-local-speech-voice aria-label="Local speech voice" title="Installed local voices"></select></div><span class="message-action-status" role="status" aria-live="polite"></span>`;
  handle={container,key,text:String(text??''),rendered,copy,notify,copyButton:container.querySelector('[data-message-action="copy"]'),speak:container.querySelector('[data-message-action="speak"]'),pause:container.querySelector('[data-message-action="pause"]'),playback:container.querySelector('.message-playback'),seek:container.querySelector('[data-message-seek]'),position:container.querySelector('.message-playback-position'),status:container.querySelector('.message-action-status'),copyTimer:null,destroyed:false,seeking:false};
+ handle.voiceSelect=container.querySelector('[data-local-speech-voice]');
+ handle.voiceSelect.onchange=()=>{try{localStorage.setItem('proteus-local-speech-voice',handle.voiceSelect.value);}catch{}if(active?.handle===handle){const owner=active,voice=localVoice();if(voice){cancelUtterance(owner);owner.voice=voice;if(!owner.paused)playChunk(owner);}display(handle);}};
  handle.update=value=>{const next=String(value.text??'');if(active?.handle===handle&&handle.text!==next)stopMessageSpeech();Object.assign(handle,{...value,text:next});display(handle);};
  handle.destroy=()=>{if(active?.handle===handle)stopMessageSpeech();clearTimeout(handle.copyTimer);handles.delete(handle);mounts.delete(container);handle.destroyed=true;container.replaceChildren();releaseObserver();};
  handle.copyButton.onclick=async()=>{
@@ -118,9 +127,9 @@ export function mountMessageActions(container,{key,text,rendered,copy,notify}={}
    clearTimeout(handle.copyTimer);handle.copyTimer=setTimeout(()=>{handle.copyButton.innerHTML=svg('copy');handle.copyButton.setAttribute('aria-label','Copy message');handle.copyButton.title='Copy message';handle.status.textContent='';},2000);
   }catch{if(!handle.destroyed)feedback(handle,'Copy failed. Try again.');}
  };
- handle.speak.onclick=()=>{
+ handle.speak.onclick=event=>{
   if(active?.handle===handle){stopMessageSpeech();return;}
-  stopMessageSpeech();const voice=localVoice(),content=readableMessageText(handle.rendered);
+  stopMessageSpeech();const voice=localVoice(),content=(typeof event?.detail?.selectedText==='string'?event.detail.selectedText:globalThis.getSelection?.()?.toString()||'').trim()||readableMessageText(handle.rendered);
   if(!voice){display(handle);feedback(handle,'Read aloud unavailable: no local system voice.');return;}
   if(!content)return;
   active={handle,voice,content,index:0,paused:false,generation:0,utterance:null,awaitingResume:false};playChunk(active);

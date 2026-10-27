@@ -1447,3 +1447,11 @@ a selected-page fallback when a centered window exhausts its byte budget.
 Back/Forward, branching and title changes, stale-delta refusal, and complete
 long-URL paging below 512 KiB per history response. Existing clients keep the
 previous snapshot protocol; this is source validation, not a deployed update.
+
+## October 26 navigation and notification follow-up
+
+Address validation examines authority credentials structurally and permits `@tenant` in URL fragments. Link menus enumerate every configured profile, preserving originating placement. Provider/model menus use the shared themed renderer menu for consistent keyboard and focus behavior.
+
+A failed top-level navigation displays a safe themed document with the hostname, observed Chromium error category and Retry. The logical destination/history stays the requested website. Page notifications with permission feed the existing notification framework with tab/profile/origin identity. Exact page-event IDs deduplicate, while distinct rapid events are retained; click dispatch returns to the original page event. Service-worker/background Web Push integration is not established by this page-notification path.
+
+Browser state-change bursts coalesce projection/IPC work over 16 ms. Direct reads, mutations and revocation remain immediate; disposal cancels stale sends. The [release evidence](2026-10-27-release-evidence.md) records a comparable disposable Electron measurement without claiming a broad production memory reduction.

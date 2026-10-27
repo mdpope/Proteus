@@ -1,10 +1,10 @@
 import {appendMenuLabel} from '../../shared/ui/menu-icons.js';
 let openMenu;
-export async function showContextMenu(event,items,toast){
+export async function showContextMenu(event,items,toast,{renderer=false}={}){
   if(!items.length)return null;
   const priorFocus=document.activeElement,priorStart=priorFocus?.selectionStart,priorEnd=priorFocus?.selectionEnd,priorRange=window.getSelection()?.rangeCount?window.getSelection().getRangeAt(0).cloneRange():null;
   event.preventDefault();event.stopPropagation();openMenu?.();openMenu=null;
-  if(window.desktop?.browser)return window.desktop.browser({action:'popup-menu',items:items.map(item=>({id:item.id,label:item.label,enabled:item.enabled!==false,icon:item.icon})),x:event.clientX,y:event.clientY});
+  if(!renderer&&window.desktop?.browser)return window.desktop.browser({action:'popup-menu',items:items.map(item=>({id:item.id,label:item.label,enabled:item.enabled!==false,icon:item.icon})),x:event.clientX,y:event.clientY});
   return new Promise(resolve=>{
     const menu=document.createElement('div');menu.className='proteus-context-menu';menu.setAttribute('role','menu');
     menu.innerHTML=items.map(item=>`<button role="menuitem" data-menu-choice="${item.id}" ${item.enabled===false?'disabled':''}></button>`).join('');

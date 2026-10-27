@@ -1,6 +1,6 @@
 # October 26 release branch and worktree audit
 
-Status: branch preparation complete; feature implementation and deployment wait for the operator's model switch and next submission.
+Status: branch integration and authorized obsolete-branch cleanup complete. Implementation acceptance is tracked in the release evidence ledger.
 
 ## Integrated changes
 
@@ -36,13 +36,15 @@ After the audit, the operator requested closing old unneeded branches. Eight obs
 | `codex/omi-life-claude` | `cf0aeb00b34017c62d36baeffb7b0e1d467282a1` |
 | `codex/stabilize-project-follow` | `0fdf5f9dc78c6dfb2dde36ead29a2d598950de99` |
 
-Git's ordinary deletion check refused `oct-6-022-build` because its old upstream lacks six commits. Both main and release ancestry were explicitly reverified before deleting that local label; those commits are preserved. Remote branch deletion remains a separate scope choice pending the operator's answer. Signed transport/recovery refs are retained.
+Git's ordinary deletion check refused `oct-6-022-build` because its old upstream lacks six commits. Both main and release ancestry were explicitly reverified before deleting that local label; those commits are preserved. The operator subsequently authorized GitHub cleanup. All 49 audited obsolete development refs were deleted in one atomic push with exact expected-head leases after refreshing origin and verifying the configured account. Remote verification leaves main and the 49 signed transport/recovery refs. Signed transport/recovery refs are retained.
 
-## Validation
+## Validation at planning checkpoint
 
 The merged link-routing/updater suites pass **29/29**. The first sandboxed attempt could not create temporary fixtures (`EPERM` in `/tmp`); the authorized run passed unchanged. `npm run check` passes. No runtime or persistence code changed, so the full runtime and live-UI release gates remain for implementation. No application was built, published or installed.
 
-## Remote dispositions
+## Remote dispositions at the audit snapshot
+
+The development refs below are now deleted; retained signed refs keep their recorded disposition. Concurrent Linux validation documentation from origin/main was merged at c9126c4 before implementation.
 
 | Branch | Observed head | Disposition |
 | --- | --- | --- |

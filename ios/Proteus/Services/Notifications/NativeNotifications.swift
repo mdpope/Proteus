@@ -68,14 +68,22 @@ import Security
         for item in items {
             let id = hostID + ":" + item["id"].string
             guard delivered.insert(id).inserted, !first, item["readAt"] == .null else { continue }
-            if UIApplication.shared.applicationState == .active { presentBanner(Self.safeBody(item["type"].string), destination: NotificationRoute(hostID: hostID, chatID: item["chatId"].string, scheduleID: item["scheduleId"].string, type: item["type"].string)); continue }
+            if UIApplication.shared.applicationState == .active { presentBanner(Self.notificationBody(item), destination: NotificationRoute(hostID: hostID, chatID: item["chatId"].string, scheduleID: item["scheduleId"].string, type: item["type"].string)); continue }
             guard enabled else { continue }
-            let content = UNMutableNotificationContent(); content.title = "Proteus"; content.body = Self.safeBody(item["type"].string); content.sound = .default
+            let content = UNMutableNotificationContent(); content.title = "Proteus"; content.body = Self.notificationBody(item); content.sound = .default
             content.userInfo = ["hostId": hostID, "chatId": item["chatId"].string,
                                 "scheduleId": item["scheduleId"].string, "type": item["type"].string]
             UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: id, content: content, trigger: nil))
         }
         if delivered.count > 2000 { delivered = Set(delivered.suffix(1000)) }
+    }
+    static func notificationBody(_ item: JSON) -> String {
+        // Content arrived through the authenticated/decrypted owner channel.
+        // The OS continues to enforce the operator's lock-screen preview policy.
+        let parts = [item["title"].string, item["body"].string].filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        let text = parts.joined(separator: " — ").unicodeScalars.filter { !CharacterSet.controlCharacters.contains($0) || $0 == "\n" }
+        let preview = String(String.UnicodeScalarView(text)).trimmingCharacters(in: .whitespacesAndNewlines)
+        return preview.isEmpty ? safeBody(item["type"].string) : String(preview.prefix(500))
     }
     static func safeBody(_ type: String) -> String {
         switch type { case "chat.completed": "A chat finished."; case "review.required", "approval.required": "A chat needs your review."; case "schedule.completed": "A schedule finished."; case "device.added": "A device was added."; case "device.reconnected": "A computer reconnected."; default: "New activity is available." }

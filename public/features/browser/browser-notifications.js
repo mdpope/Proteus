@@ -5,7 +5,7 @@ export function recordBrowserIssue(detail){
 }
 export function mountBrowserIssueActions(container,item){
   if(!item.browserIssue||!window.desktop?.browserNotification)return;
-  const choices=item.browserIssue.kind==='history-conflict'?[['keep-history','Keep saved history'],['open-copy','Open pending page in new tab']]:[['open-tab','Open tab'],['reload','Reload'],['logs','View logs']];
+  const choices=item.browserIssue.kind==='site-notification'?[['open-tab','Open website']]:item.browserIssue.kind==='history-conflict'?[['keep-history','Keep saved history'],['open-copy','Open pending page in new tab']]:[['open-tab','Open tab'],['reload','Reload'],['logs','View logs']];
   const actions=document.createElement('div');actions.className='actions';
   const status=document.createElement('p');status.className='note';status.setAttribute('role','status');
   for(const [intent,label]of choices){const button=document.createElement('button');button.type='button';button.textContent=label;button.onclick=async()=>{button.disabled=true;try{await window.desktop.browserNotification({action:'act',id:item.notificationId||item.localId||item.id,intent});}catch(error){status.textContent=error.message;}finally{button.disabled=false;}};actions.append(button);}

@@ -1,3 +1,4 @@
+import {mountSubagentViewer} from './subagent-view.js';
 import {chatQuestions,mountQuestionCard,mountQuestionQueue} from './user-questions.js';
 import {chatHistoryWindowStart,firstAssistantKeys} from './chat-history.js';
 import {mountSvgPreviews} from './svg-preview.js';
@@ -75,6 +76,7 @@ function rememberDisclosures(body,states){
   for(const details of body.querySelectorAll('[data-disclosure-key]')){if(details.open)states.add(details.dataset.disclosureKey);else states.delete(details.dataset.disclosureKey);}
 }
 export function conversation(target, run, options) {
+  mountSubagentViewer(target,run,options);
   let view = views.get(run.id);
   if(view){views.delete(run.id);views.set(run.id,view);}
   for(const [id,cached] of views)if(views.size>=4&&id!==run.id&&!cached.shell.isConnected)forgetConversation(id);

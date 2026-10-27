@@ -32,7 +32,7 @@ export function canonicalPath(value, cwd) {
 function buildPermissionContext(schedule, resolvePath) {
   const cwd = resolvePath(schedule.workspace.cwd, schedule.workspace.cwd) || schedule.workspace.cwd;
   const roots = [...new Set([cwd, ...schedule.workspace.additionalDirectories.map(dir => resolvePath(dir, cwd) || dir)])].sort();
-  const context = { ...(schedule.context?.workspaceId ? { workspaceId: schedule.context.workspaceId } : {}), provider: schedule.provider, cwd, roots, integrations: hash({ mcp: schedule.mcpServers || {}, selectedTools: (schedule.context?.entries || []).filter(entry => ['mcp', 'skill', 'agent'].includes(entry.kind)).map(entry => ({ id: entry.id, hash: entry.hash })), skills: (schedule.skillDirectories || []).map(dir => resolvePath(dir, cwd) || dir).sort() }) };
+  const context = { ...(schedule.permissionScope?.kind==='schedule'?{scheduleId:schedule.permissionScope.id}:{}),...(schedule.executionPermissions?{schedulePermissions:hash(schedule.executionPermissions)}:{}),...(schedule.context?.workspaceId ? { workspaceId: schedule.context.workspaceId } : {}), provider: schedule.provider, cwd, roots, integrations: hash({ mcp: schedule.mcpServers || {}, selectedTools: (schedule.context?.entries || []).filter(entry => ['mcp', 'skill', 'agent'].includes(entry.kind)).map(entry => ({ id: entry.id, hash: entry.hash })), skills: (schedule.skillDirectories || []).map(dir => resolvePath(dir, cwd) || dir).sort() }) };
   return { ...context, id: hash(context), label: schedule.name || path.basename(cwd) };
 }
 export function permissionContext(schedule) { return buildPermissionContext(schedule, canonicalPath); }
@@ -114,7 +114,14 @@ export class PermissionStore {
   }
   describe(schedule, snapshot) {
     const context = snapshot ? projectionContext(schedule, snapshot) : permissionContext(schedule);
-    return this.describeContext(context, snapshot || this.snapshot());
+    const current=snapshot||this.snapshot();
+    const own=this.describeContext(context,current);
+    const inherited=schedule.permissionScope?.kind==='schedule'&&!current.profiles.has(context.id)?this.describeContext(permissionContext({...schedule,permissionScope:undefined}),current):own;
+    const profile={...inherited,...context},explicit=schedule.executionPermissions;
+    if(!explicit)return profile;
+    const folders=(explicit.folders||[]).map(folder=>({...folder,path:canonicalPath(folder.path,context.cwd)}));
+    if(folders.some(folder=>!folder.path))throw Error('A schedule folder is unavailable. Review schedule access.');
+    return {...profile,source:'schedule',mode:explicit.mode||profile.mode,readOnlyTools:explicit.readOnlyTools??profile.readOnlyTools,workingFolders:[...profile.workingFolders,...folders],folders:[...profile.folders,...folders],rules:[...profile.rules,...(explicit.rules||[])]};
   }
   describeMany(schedules, snapshot = this.snapshot()) {
     // Keep the last label/ref for duplicate identities, matching the existing UI.
@@ -232,13 +239,13 @@ export class PermissionStore {
     const choices = [];
     const folder = this.folderOffer(schedule, request);
     if (folder) choices.push({ value: 'trust-folder-chat', label: `Allow ${folder.access === 'read' ? 'reads' : 'reads and writes'} in ${folder.path} for this chat` });
-    if (folder) choices.push({ value: 'trust-folder', label: `Always allow ${folder.access === 'read' ? 'reads' : 'reads and writes'} in ${folder.path}` });
+    if (folder) choices.push({ value: 'trust-folder', label: `Always allow ${folder.access === 'read' ? 'reads' : 'reads and writes'} in ${folder.path}${schedule.permissionScope?.kind==='schedule'?' for this schedule':''}` });
     if (this.preserveInheritedDefaults && operationRule(request)) choices.push({ value: 'always-tool-chat', label: `Allow ${ruleLabel(operationRule(request))} for this chat` });
-    if (operationRule(request)) choices.push({ value: 'always-tool', label: `Always allow ${ruleLabel(operationRule(request))}` });
+    if (operationRule(request)) choices.push({ value: 'always-tool', label: `Always allow ${ruleLabel(operationRule(request))}${schedule.permissionScope?.kind==='schedule'?' for this schedule':''}` });
     // Whole-workspace modes must not silently approve a one-off outside path.
     if (!['read','write'].includes(request.kind) || (requestedPath(request, permissionContext(schedule)) && permissionContext(schedule).roots.some(root => within(requestedPath(request, permissionContext(schedule)), root)))) {
-      choices.push({ value: 'trust-workspace', label: 'Approve and save workspace trust' });
-      choices.push({ value: 'autopilot-workspace', label: 'Save auto-approval for this workspace' });
+      choices.push({ value: 'trust-workspace', label: schedule.permissionScope?.kind==='schedule'?'Approve and save schedule trust':'Approve and save workspace trust' });
+      choices.push({ value: 'autopilot-workspace', label: schedule.permissionScope?.kind==='schedule'?'Save auto-approval for this schedule':'Save auto-approval for this workspace' });
     }
     return choices;
   }

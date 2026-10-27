@@ -16,7 +16,7 @@ export class TurnWaiter {
   arm() {
     if (this.closed || this.pauses) return;
     this.started = performance.now();
-    this.timer = setTimeout(() => this.reject(new Error('Copilot exceeded the active execution time limit. Time waiting for your input was excluded. Continue this chat to resume.')), Math.max(0, this.remaining));
+    this.timer = setTimeout(() => this.reject(Object.assign(new Error('Copilot exceeded the active execution time limit. Time waiting for your input was excluded. Continue this chat to resume.'),{code:'COPILOT_ACTIVE_TIME_LIMIT'})), Math.max(0, this.remaining));
   }
   pause() {
     if (this.closed) return;

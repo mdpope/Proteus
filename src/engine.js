@@ -1,3 +1,5 @@
+import {providerAttachmentInputs} from './services/chats/attachment-input.js';
+import {DelegationService} from './services/chats/delegation.js';
 import {captureUserQuestions,answerUserQuestion,recoverUserQuestions,askBackgroundQuestion} from './services/chats/user-questions.js';
 import {AllowanceContinuation,allowanceFailure} from './services/chats/allowance-continuation.js';
 import {displayText} from './shared/tool-activity.js';
@@ -61,6 +63,7 @@ export class Engine extends EventEmitter {
           interruptTiming(run);
           for(const event of run.events)if(event.data?.question?.status==='pending')event.data.question.status='interrupted';
           run.status = 'interrupted'; run.pending = null; delete run.liveMessages;
+          for(const child of run.subagents||[])if(!['completed','failed','interrupted','closed','unavailable'].includes(child.status)){child.status='interrupted';child.finishedAt=clock().toISOString();delete child.liveMessages;}
           run.failureEventAt = clock().toISOString(); delete run.failureReviewedAt;
           for (const event of run.events) if (event.data?.delivery?.state === 'sending') Object.assign(event.data.delivery, {state:'failed',error:'The runner stopped before confirming delivery. Inspect the provider session before retrying.'});
           run.events.push({ role: 'system', text: 'The runner stopped. Continue this session to recover; no work was silently replayed.', at: clock().toISOString() });
@@ -69,6 +72,8 @@ export class Engine extends EventEmitter {
         this.runs.set(run.id, run);this.historyCache.attach(run);
       } catch (error) { this.recoveryErrors ??= []; this.recoveryErrors.push({ file, error: error.message }); }
     }
+    this.turnAttachments=new Map();
+    this.delegation=new DelegationService(this);
     this.allowance=new AllowanceContinuation(this);
   }
   now() { return this.clock().toISOString(); }
@@ -83,13 +88,20 @@ export class Engine extends EventEmitter {
   }
   stream(run, messageId, text) {
     if(text)providerProgress(run,this.now(),{observable:true});
-    run.liveMessages ??= {}; run.liveMessages[messageId] = (run.liveMessages[messageId] || '') + text;
+    run.liveMessages ??= {}; run.liveMessages[messageId] = (run.liveMessages[messageId] || '') + text; run.liveRevision=(run.liveRevision||0)+1;
     this.emit('change', run);
   }
   listRuns() { return [...this.runs.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)); }
-  visibleRuns(includeArchived = false) { return this.listRuns().filter(run => includeArchived || !run.archivedAt); }
+  visibleRuns(includeArchived = false) { return this.listRuns().filter(run => !run.delegation && (includeArchived || !run.archivedAt)); }
   getRun(id) { const run = this.runs.get(id); if (!run) throw new Error('Run not found.'); return run; }
-  describePermissions(run) { return this.permissions.describeRun(run); }
+  describePermissions(run) {
+    if(!run.delegation)return this.permissions.describeRun(run);
+    const parent=this.getRun(run.delegation.parentRunId),captured=run.delegation.permissionProfile;
+    if(!this.delegation.current(parent)||parent.turns?.at(-1)?.id!==run.delegation.parentTurnId)throw Error('Delegated parent turn ended or was revoked.');
+    const current=this.describePermissions(parent);
+    if(permissionRuleId(current)!==permissionRuleId(captured))throw Error('Parent permissions changed; delegated scope expired.');
+    return {...captured,source:'delegated-parent'};
+  }
 
   moveWorkspace(id,{workspaceId,workspaceName='',expectedUpdatedAt}={}){
     const run=this.getRun(id);
@@ -291,7 +303,8 @@ export class Engine extends EventEmitter {
     try {
       const files=dispatch?await this.attachmentConsents.readForProvider({...dispatch,chatId:run.id,providerId:run.schedule.provider}):[];
       if(this.stopping||run.status!=='running'||this.running.get(id)!==slot||slot.controller.signal.aborted)throw Error('This turn ended before steering delivery. Inspect the chat before sending again.');
-      await provider.steer(run, prompt,files); delivery.state = 'steered';
+      const originals=this.turnAttachments.get(id),offset=originals?.length||0;if(originals)originals.push(...files);
+      await provider.steer(run,prompt,providerAttachmentInputs(files,provider.acceptedSteeringMediaTypes,offset)); delivery.state = 'steered';
     }
     catch (error) { delivery.state = 'failed'; delivery.error = error.message; throw error; }
     finally { if(dispatch)await this.attachmentConsents.releaseProof(dispatch.proofId).catch(()=>{});this.persist(run); }
@@ -386,6 +399,11 @@ export class Engine extends EventEmitter {
     return files;
   }
   ask(run, request, signal) {
+    if(run.delegation){
+      this.describePermissions(run);
+      const parent=this.getRun(run.delegation.parentRunId);
+      return this.ask(parent,{...request,details:{...request.details,delegation:{childRunId:run.id,parentRunId:parent.id}}},signal);
+    }
     if(request.type==='question'&&request.isBlocking===false)return askBackgroundQuestion(this,run,request,signal,randomUUID());
     const previous = this.questionQueues.get(run.id) || Promise.resolve();
     const response = previous.catch(() => {}).then(() => this.askNext(run, request, signal));
@@ -398,6 +416,7 @@ export class Engine extends EventEmitter {
     if (signal.aborted) return Promise.reject(new Error('Cancelled'));
     if (request.type === 'permission') {
       const details=request.details||{},questionDispatch=run.questionAttachmentReplies?.[details.args?.requestId];
+      if(!details.managedApprovalRequired&&!details.requestSandboxBypass&&['proteus_attachments','mcp__proteus_app__proteus_attachments','proteus_agents','mcp__proteus_app__proteus_agents'].includes(details.toolName))return Promise.resolve('approve-auto');
       if(!details.managedApprovalRequired&&!details.requestSandboxBypass&&['proteus_question_attachments','mcp__proteus_app__proteus_question_attachments'].includes(details.toolName)&&questionDispatch?.providerId===run.schedule.provider)return Promise.resolve('approve-auto');
       const decision = this.decidePermission(run, details);
       if (decision.allowed) { this.recordAutomaticPermission(run, request.details, decision); return Promise.resolve('approve-auto'); }
@@ -423,6 +442,9 @@ export class Engine extends EventEmitter {
     this.event(run, 'system', `Auto-approved ${request?.kind || 'tool'}: ${decision.reason}.`, { permission: { kind: request?.kind, request:displayText(request||{},12000), intention:displayText(request?.intention||request?.toolName||request?.fullCommandText||request?.fileName||request?.kind||'Tool request',240), automatic: true, reason: decision.reason, mode: decision.mode, source: decision.source || 'workspace',...(typeof request?.toolCallId==='string'?{toolCallId:request.toolCallId.slice(0,128)}:{}),...(decision.resolvedTarget?{resolvedTarget:decision.resolvedTarget.slice(0,1024)}:{}),...(decision.matchedRoot?{matchedRoot:decision.matchedRoot.slice(0,1024)}:{}) } });
   }
   recheckPermissions() {
+    for(const run of this.runs.values())if(run.delegation&&active.has(run.status)){
+      try{this.describePermissions(run);}catch{this.delegation.stopChildren(run.id);this.cancel(run.id);}
+    }
     for (const provider of Object.values(this.providers)) provider.recheckPermissions?.();
     for (const [id, waiting] of this.pending) {
       const run = this.getRun(id); if (run.pending?.type !== 'permission') continue;
@@ -463,8 +485,9 @@ export class Engine extends EventEmitter {
       // Explicit sender consent is rechecked against the actual run/provider and
       // immutable accepted bytes immediately before the provider receives them.
       const attachments=dispatch?await this.attachmentConsents.readForProvider({...dispatch,chatId:run.id,providerId:run.schedule.provider}):[];
+      this.turnAttachments.set(run.id,attachments);
       await provider.run({
-        run, prompt, attachments, signal: controller.signal,
+        run, prompt, attachments:providerAttachmentInputs(attachments,provider.acceptedMediaTypes), signal: controller.signal,
         permissionProfile: () => this.describePermissions(run),
         emit: (role, text, data) => this.event(run, role, text, data),
         stream: (id, text) => this.stream(run, id, text),
@@ -475,12 +498,12 @@ export class Engine extends EventEmitter {
       run.status = controller.signal.aborted ? (this.stopping ? 'interrupted' : 'cancelled') : 'completed';
     } catch (error) {
       run.status = controller.progressTimeout?'failed':controller.signal.aborted ? (this.stopping ? 'interrupted' : 'cancelled') : 'failed';
-      this.event(run, 'system', controller.progressTimeout||error.message,{failure:{kind:controller.progressTimeout?'stalled':capacityFailure(error.message)?'capacity':allowanceFailure(error)?'allowance':'error'}});
+      this.event(run, 'system', controller.progressTimeout||error.message,{failure:{kind:controller.progressTimeout?'stalled':error.code==='COPILOT_ACTIVE_TIME_LIMIT'?'active-time-limit':capacityFailure(error.message)?'capacity':allowanceFailure(error)?'allowance':'error'}});
     } finally {
       // Provider errors/timeouts can leave permission promises pending. Settle them
       // before another turn reuses this run's serialized question queue.
       finishTurn(run,this.now(),run.status);
-      controller.abort();
+      this.turnAttachments.delete(run.id);this.delegation.stopChildren(run.id);controller.abort();
       await this.releaseBrowser?.(run.id);
       if(['failed','interrupted'].includes(run.status)){run.failureEventAt=this.now();delete run.failureReviewedAt;}
       this.pending.delete(run.id); run.pending = null; delete run.liveMessages;delete run.nextAttachmentDispatch;
@@ -502,7 +525,7 @@ export class Engine extends EventEmitter {
   cancel(id) {
     const run = this.getRun(id);
     if (!active.has(run.status)) throw new Error('This run is not active.');
-    this.recovery.stop(id,false);
+    this.delegation.stopChildren(id);this.recovery.stop(id,false);
     const running = this.running.get(id) || [...this.backgroundRuns.values()].find(slot => slot.id === id);
     if (running) running.controller.abort();
     else { run.status = 'cancelled'; delete run.nextPrompt;if(run.nextAttachmentDispatch)void this.attachmentConsents?.releaseProof(run.nextAttachmentDispatch.proofId).catch(()=>{});delete run.nextAttachmentDispatch;this.persist(run); }

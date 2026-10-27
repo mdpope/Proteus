@@ -38,6 +38,7 @@ export class SessionProvider {
     for(const entry of this.sessions.values())entry.adapter.chatControl=value;
   }
 
+  set attachmentInputs(value) {this.attachmentInputReader=value;this.metadata.attachmentInputs=value;for(const entry of this.sessions.values())entry.adapter.attachmentInputs=value;}
   set questionInputs(value) {this.questionInputReader=value;this.metadata.questionInputs=value;for(const entry of this.sessions.values())entry.adapter.questionInputs=value;}
 
   create() {
@@ -46,6 +47,7 @@ export class SessionProvider {
     adapter.integrations = this.integrationHealth;
     adapter.chatControl = this.control;
     adapter.questionInputs = this.questionInputReader;
+    adapter.attachmentInputs = this.attachmentInputReader;
     return adapter;
   }
 

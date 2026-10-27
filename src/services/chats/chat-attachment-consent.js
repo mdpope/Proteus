@@ -24,7 +24,7 @@ export class ChatAttachmentConsents {
     for(const declared of attachments){
       const item=await this.store.resolve({attachmentId:declared.attachmentId,chatId,deviceId,messageId,providerId});
       if(this.store.records.get(declared.attachmentId)?.accepted)throw new Error('This attachment was already sent. Select it again for a new message.');
-      if(!acceptedMediaTypes?.includes(item.mediaType))throw new Error(`${providerId} cannot receive ${item.mediaType} attachments.`);
+
       const bound=metadata({attachmentId:declared.attachmentId,...item});
       if(JSON.stringify(metadata(declared))!==JSON.stringify(bound))throw new Error('Attachment details changed. Review the files and destination again.');
       exact.push(bound);

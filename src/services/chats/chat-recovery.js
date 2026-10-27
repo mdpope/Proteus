@@ -12,14 +12,24 @@ export class ChatRecovery {
   return state;
  }
  stop(id,persist=true){const policy=this.policies.get(id);if(policy)this.clearTimer(policy.timer);this.policies.delete(id);const run=this.engine.runs.get(id);if(run?.capacityRetry){delete run.capacityRetry;if(persist)this.engine.persist(run);}return run;}
- command(id,{action,expectedFailureEventAt,modelOptions,enabled}={}){
+ command(id,{action,expectedFailureEventAt,expectedUpdatedAt,expectedPreferenceVersion,modelOptions,enabled}={}){
   const run=this.engine.getRun(id);
+  if(action==='active-time-auto'){
+   if(run.schedule.provider!=='copilot'||typeof enabled!=='boolean'||(expectedPreferenceVersion===undefined?expectedUpdatedAt!==run.updatedAt:expectedPreferenceVersion!==(run.activeTimeContinuation?.version||0)))throw Error('This chat changed. Refresh its continuation preference.');
+   run.activeTimeContinuation={...run.activeTimeContinuation,enabled,attempts:0,version:(run.activeTimeContinuation?.version||0)+1};this.engine.persist(run);return run;
+  }
+
   if(action?.startsWith('allowance-'))return this.engine.allowance.command(id,{action,enabled,expectedFailureEventAt});
   if(action==='stop-retry')return this.stop(id)||run;
   if(this.engine.stopping||this.engine.updateBarrier)throw Error('Wait for the current application update before continuing.');this.engine.updateGuard?.();
   const state=this.state(run,expectedFailureEventAt);
   if(run.archivedAt||!['chat','manual','scheduled','schedule'].includes(run.trigger))throw Error('Open an eligible conversation before continuing.');
-  if(action==='continue'){
+  if(action==='continue'||action==='active-time-continue-enable'){
+   if(action==='active-time-continue-enable'){
+    if(!state.activeTimeLimit)throw Error('This failure is not a recoverable Copilot active-time limit.');
+    run.activeTimeContinuation={...run.activeTimeContinuation,enabled:true,attempts:0,lastFailureEventAt:expectedFailureEventAt};this.engine.persist(run);
+   }
+
    this.stop(id,false);if(modelOptions)this.engine.applyModelOptions(run,modelOptions);
    return this.engine.resume(id,continuation);
   }
@@ -43,6 +53,16 @@ export class ChatRecovery {
   }catch{this.stop(id);}
  }
  settled(run){
+  const state=chatRecoveryState(run),auto=run.activeTimeContinuation;
+  if(run.status==='completed'&&auto?.attempts){auto.attempts=0;this.engine.persist(run);}
+  if(auto?.enabled&&state?.activeTimeLimit&&!this.engine.stopping&&!this.engine.updateBarrier&&!run.archivedAt&&!run.pending&&run.providerSessionId&&auto.lastFailureEventAt!==state.failureEventAt){
+   if((auto.attempts||0)>=3){auto.attention='Automatic continuation stopped after three consecutive active-time limits.';this.engine.persist(run);return;}
+   // Persist the claim before queueing; no timer or crash recovery replays it.
+   auto.lastFailureEventAt=state.failureEventAt;auto.attempts=(auto.attempts||0)+1;const failure=state.failureEventAt,session=run.providerSessionId;this.engine.persist(run);
+   queueMicrotask(()=>{try{if(run.activeTimeContinuation!==auto||!auto.enabled||run.failureEventAt!==failure||run.providerSessionId!==session||this.engine.running.has(run.id)||run.pending||run.status!=='failed'||this.engine.updateBarrier||this.engine.stopping)return;this.engine.resume(run.id,continuation);}catch(error){auto.attention=error.message;this.engine.persist(run);}});
+   return;
+  }
+
   const policy=this.policies.get(run.id);if(!policy)return;
   if(!this.engine.stopping&&chatRecoveryState(run)?.capacity&&run.status==='failed'&&!run.archivedAt&&this.fingerprint(run)===policy.fingerprint&&(!policy.sessionId||policy.sessionId===run.providerSessionId)){policy.sessionId??=run.providerSessionId;this.schedule(run,policy);}
   else this.stop(run.id);

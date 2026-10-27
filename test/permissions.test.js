@@ -151,7 +151,10 @@ test('permission API enforces authentication, revision checks, scope selection, 
   try {
     assert.equal((await fetch(app.origin+'/api/permissions',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})).status,401);
     let state=await (await fetch(app.origin+'/api/state',{headers})).json();assert.ok(state.permissionWorkspaces.length);
-    const expectedContextId=app.engine.permissions.describe(app.engine.schedules.get('workspace-pulse')).id;
+    const persistedSchedule=app.engine.schedules.get('workspace-pulse'),preparedSchedule=app.engine.prepareSchedule(persistedSchedule);
+    const expectedContextId=app.engine.permissions.describe(preparedSchedule).id;
+    assert.equal(preparedSchedule.permissionScope.kind,'schedule');
+    assert.notEqual(expectedContextId,app.engine.permissions.describe(persistedSchedule).id,'A durable schedule grant must not also grant unrelated same-folder chats.');
     assert.equal((await post({action:'set-mode',scheduleId:'workspace-pulse',mode:'autopilot',expectedContextId:'stale-context',expectedRevision:state.permissions.revision})).status,400);
     const result=await post({action:'set-mode',scheduleId:'workspace-pulse',mode:'autopilot',expectedContextId,expectedRevision:state.permissions.revision});assert.equal(result.status,200);
     assert.equal((await post({action:'set-mode',scheduleId:'workspace-pulse',mode:'ask',expectedContextId,expectedRevision:state.permissions.revision})).status,400);

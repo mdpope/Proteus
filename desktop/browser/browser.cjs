@@ -1,3 +1,5 @@
+const {BrowserStateBatch}=require('./browser-state-batch.cjs');
+const {browserErrorDocument}=require('./browser-error.cjs');
 const {BrowserCertificates}=require('./browser-certificates.cjs');
 const {restoreNavigation,commitNavigation,traverseNavigation,validPendingNavigation,acknowledgesNavigation}=require('./browser-navigation.cjs');
 const {BrowserCookieStore}=require('./browser-cookie-store.cjs');
@@ -47,6 +49,11 @@ class BrowserTabs {
     tab.error=error;
     if(tab.reportedLoadError)return;
     tab.reportedLoadError=true;
+    const failedURL=safeHistoryURL(url,this.appOrigin)||safeHistoryURL(tab.pageNavigationURL,this.appOrigin)||safeHistoryURL(tab.logicalHistory?.entries[tab.logicalHistory.index]?.url,this.appOrigin);
+    if(failedURL&&tab.view?.webContents&&!tab.view.webContents.isDestroyed()){
+      const documentURL=browserErrorDocument(failedURL,error);tab.errorPage={url:failedURL,documentURL,error};
+      void tab.view.webContents.loadURL(documentURL).catch(()=>{});
+    }
     let site='this page';try{site=new URL(url||tab.view?.webContents?.getURL()).host;}catch{}
     let log;try{log=this.options.onLoadError?.({tabId:tab.id,windowId:tab.windowId||'main',error,url,detail:description});}catch{/* A logging failure must not crash browser navigation. */}
     if(log?.notificationId)return;
@@ -142,7 +149,7 @@ class BrowserTabs {
   agentStatus(tab){return {agentPaused:this.agentAccess?this.agentAccess.paused(this.agentIdentity(tab)):tab.agentPaused!==false,agentAccessRevision:this.agentAccess?.revision||0};}
   state(tab, includeHistory=false) {
     if(!tab.view?.webContents||tab.view.webContents.isDestroyed())return {...tab.snapshot,navigationPending:tab.navigationPending===true,...this.previewState(tab),...this.agentStatus(tab),associationChatId:tab.associationChatId||null,persist:tab.persist===true,openedAt:tab.openedAt?new Date(tab.openedAt).toISOString():null,profileLocked:!this.profileAvailable(tab),siteMode:this.siteMode(tab),extensionsEnabled:this.extensions?.hasEnabled(tab.profileId)===true,profileName:this.options.profiles?.list().items.find(p=>p.id===tab.profileId)?.name||'Unavailable profile',profileId:tab.profileId||'default',id:tab.id,group:tab.group||'main',parentId:tab.parentId||null,loaded:false,loading:false,findRevision:tab.findRevision||0,shared:false,owner:null,resumeOwner:tab.resumeOwner||null,agentControlling:false,lastTouchedAt:tab.lastTouchedAt?new Date(tab.lastTouchedAt).toISOString():null};
-    const wc = tab.view.webContents,liveURL=wc.getURL(),privateLocal=!!liveURL&&liveURL!=='about:blank'&&(!safeHistoryURL(liveURL,this.appOrigin)||isAuthenticationURL(liveURL));
+    const wc = tab.view.webContents,liveURL=wc.getURL(),privateLocal=!tab.errorPage&&!!liveURL&&liveURL!=='about:blank'&&(!safeHistoryURL(liveURL,this.appOrigin)||isAuthenticationURL(liveURL));
     const selectedEntry=tab.logicalHistory?.entries[tab.logicalHistory.index];
     if(selectedEntry?.url===liveURL&&!wc.isLoading()&&wc.getTitle())selectedEntry.title=String(wc.getTitle()).slice(0,200);
     const pendingLogical=tab.navigationPending&&selectedEntry&&(tab.navigationURL||tab.pageNavigationURL||wc.isLoading());
@@ -205,7 +212,8 @@ class BrowserTabs {
     this.changed();
   }
   activityChanged(){if(!this.activityTimer&&!this.shuttingDown)this.activityTimer=setTimeout(()=>{this.activityTimer=null;this.changed();},1000);}
-  changed() { clearTimeout(this.activityTimer);this.activityTimer=null;this.updateThrottling();if(this.shuttingDown)return;const list=this.list(true);if(this.windowRegistry){for(const ctx of this.windowRegistry.contexts.values())if(!ctx.window.isDestroyed())ctx.window.webContents.send('proteus:browser-state',list.filter(tab=>this.tabs.get(tab.id)?.windowId===ctx.id));}else if(!this.window.isDestroyed())this.window.webContents.send('proteus:browser-state',list); }
+  changed(){if(this.shuttingDown)return;this.stateBatch??=new BrowserStateBatch(()=>this.flushChanged());this.stateBatch.request();}
+  flushChanged() { clearTimeout(this.activityTimer);this.activityTimer=null;this.updateThrottling();if(this.shuttingDown)return;const list=this.list(true);if(this.windowRegistry){for(const ctx of this.windowRegistry.contexts.values())if(!ctx.window.isDestroyed())ctx.window.webContents.send('proteus:browser-state',list.filter(tab=>this.tabs.get(tab.id)?.windowId===ctx.id));}else if(!this.window.isDestroyed())this.window.webContents.send('proteus:browser-state',list); }
   get(id) { const tab = this.tabs.get(id); if (!tab) throw new Error('Browser tab is closed or unavailable.'); return tab; }
   previewState(tab) {
     return this.options.projects ? {hidden:tab.hidden===true,destination:tab.destination,lastActivityAt:tab.lastActivityAt?new Date(tab.lastActivityAt).toISOString():null} : {};
@@ -380,14 +388,14 @@ class BrowserTabs {
         tab.pageNavigationURL=address;if(this.options.projects&&Date.now()<(tab.navigationIntentUntil||0))this.touch(tab,true);this.changed();
       } catch { event.preventDefault(); }
     });
-    on('did-start-navigation',details=>{if(details.isMainFrame){tab.error=null;tab.reportedLoadError=false;if(!details.isSameDocument)tab.pageNavigationURL=details.url;}tab.captureRevision=(tab.captureRevision||0)+1;clearTimeout(tab.pointerTimer);tab.pointerTimer=null;tab.agentPointer=null;wc.send('proteus:agent-pointer',null);});
+    on('did-start-navigation',details=>{if(details.isMainFrame&&details.url!==tab.errorPage?.documentURL){tab.errorPage=null;tab.error=null;tab.reportedLoadError=false;if(!details.isSameDocument)tab.pageNavigationURL=details.url;}tab.captureRevision=(tab.captureRevision||0)+1;clearTimeout(tab.pointerTimer);tab.pointerTimer=null;tab.agentPointer=null;wc.send('proteus:agent-pointer',null);});
     for (const name of ['page-title-updated','did-navigate','did-navigate-in-page','did-start-loading','did-stop-loading']) on(name, () => this.changed());
     on('did-navigate-in-page',(_event,url,isMainFrame)=>{if(isMainFrame){if(this.options.projects&&!tab.applyingShared&&Date.now()<(tab.navigationIntentUntil||0))this.touch(tab,true);const index=wc.navigationHistory.getActiveIndex();commitNavigation(tab,url,wc.getTitle(),{redirect:index===tab.nativeHistoryIndex});tab.nativeHistoryIndex=index;this.changed();}});
     on('did-navigate',(event,url)=>{this.applyPageScale(tab,event.url||url);tab.nativeHistoryIndex=wc.navigationHistory.getActiveIndex();commitNavigation(tab,event.url||url,wc.getTitle(),{redirect:!!tab.inflightEntryId});this.changed();});
     on('page-title-updated',()=>{if(!wc.isDestroyed()&&!wc.isLoading()){commitNavigation(tab,wc.getURL(),wc.getTitle());this.changed();}});
     on('did-stop-loading',()=>{if(tab.iconURLs)void this.resolveFavicon(tab,tab.iconURLs);if(!wc.isDestroyed()){{commitNavigation(tab,wc.getURL(),wc.getTitle(),{redirect:!!tab.inflightEntryId});tab.pageNavigationURL=null;tab.inflightEntryId=null;}this.changed();}});
     on('did-fail-load', (_e, code, description, url, isMainFrame) => { if (isMainFrame && code !== -3) { this.reportLoadError(tab,description,url); this.changed(); } });
-    on('did-finish-load',()=>{tab.error=null;tab.reportedLoadError=false;this.scheduleThumbnail(tab);this.changed();});
+    on('did-finish-load',()=>{if(!tab.errorPage){tab.error=null;tab.reportedLoadError=false;}this.scheduleThumbnail(tab);this.changed();});
     void observeCertificate();
     this.changed();
     const history=normalizeHistory(savedHistory,this.appOrigin);
@@ -769,7 +777,8 @@ class BrowserTabs {
     else if (action === 'back' && wc.navigationHistory.canGoBack()) wc.navigationHistory.goBack();
     else if (action === 'forward' && wc.navigationHistory.canGoForward()) wc.navigationHistory.goForward();
     else if (action === 'reload') {
-      if(tab.requestMethod==='POST'){const url=wc.getURL(),choice=await dialog.showMessageBox(this.window,{type:'question',message:'Resubmit form data?',detail:'Refreshing this page sends its last form submission again and may repeat an action. Enter in the address field opens the URL without resubmitting.',buttons:['Cancel','Resubmit'],defaultId:0,cancelId:0});if(choice.response!==1)return this.state(tab);if(this.tabs.get(id)!==tab||tab.view?.webContents!==wc||wc.isDestroyed()||wc.getURL()!==url)throw new Error('The page changed. Review it before refreshing.');const lease=acquireDebugger(wc);try{await lease.debug.sendCommand('Page.reload');}finally{lease.release();}}
+      if(tab.errorPage){const address=tab.errorPage.url;tab.errorPage=null;await wc.loadURL(address).catch(error=>this.reportLoadError(tab,error,address));}
+      else if(tab.requestMethod==='POST'){const url=wc.getURL(),choice=await dialog.showMessageBox(this.window,{type:'question',message:'Resubmit form data?',detail:'Refreshing this page sends its last form submission again and may repeat an action. Enter in the address field opens the URL without resubmitting.',buttons:['Cancel','Resubmit'],defaultId:0,cancelId:0});if(choice.response!==1)return this.state(tab);if(this.tabs.get(id)!==tab||tab.view?.webContents!==wc||wc.isDestroyed()||wc.getURL()!==url)throw new Error('The page changed. Review it before refreshing.');const lease=acquireDebugger(wc);try{await lease.debug.sendCommand('Page.reload');}finally{lease.release();}}
       else wc.reload();
     }
     else if (action === 'stop' && !cancelNavigation(wc)) wc.stop();
@@ -897,6 +906,6 @@ class BrowserTabs {
       catch { throw new Error('Could not fill this page. Check its login fields and complete the step manually.'); }
     });
   }
-  async dispose() { clearTimeout(this.activityTimer);ipcMain.removeListener('proteus:browser-scroll',this.scrollHandler);this.prepareShutdown();this.videoPopout.dispose();clearInterval(this.thumbnailTimer);for(const tab of this.tabs.values())clearTimeout(tab.thumbnailTimer);clearInterval(this.profileTimer);clearTimeout(this.blockNoticeTimer);await Promise.allSettled([...this.cookieStores.values()].map(store=>store.close()));this.extensions?.close();this.permissions.close();await this.history?.close();await Promise.allSettled([...this.sessions.values()].map(async partition=>{partition.flushStorageData();await partition.cookies.flushStore();})); clearInterval(this.retentionTimer); this.actions.dispose();if(this.blocker){ipcMain.removeHandler('@ghostery/adblocker/inject-cosmetic-filters');ipcMain.removeHandler('@ghostery/adblocker/is-mutation-observer-enabled');} ipcMain.removeListener('proteus:site-notification',this.siteNotificationHandler);ipcMain.removeListener('proteus:browser-gesture',this.gestureHandler);ipcMain.removeListener('proteus:navigation-intent',this.navigationIntentHandler);ipcMain.removeListener('proteus:browser-interaction',this.interactionHandler); for (const id of [...this.tabs.keys()]) await this.close(id); }
+  async dispose() { this.stateBatch?.close();clearTimeout(this.activityTimer);ipcMain.removeListener('proteus:browser-scroll',this.scrollHandler);this.prepareShutdown();this.videoPopout.dispose();clearInterval(this.thumbnailTimer);for(const tab of this.tabs.values())clearTimeout(tab.thumbnailTimer);clearInterval(this.profileTimer);clearTimeout(this.blockNoticeTimer);await Promise.allSettled([...this.cookieStores.values()].map(store=>store.close()));this.extensions?.close();this.permissions.close();await this.history?.close();await Promise.allSettled([...this.sessions.values()].map(async partition=>{partition.flushStorageData();await partition.cookies.flushStore();})); clearInterval(this.retentionTimer); this.actions.dispose();if(this.blocker){ipcMain.removeHandler('@ghostery/adblocker/inject-cosmetic-filters');ipcMain.removeHandler('@ghostery/adblocker/is-mutation-observer-enabled');} ipcMain.removeListener('proteus:site-notification',this.siteNotificationHandler);ipcMain.removeListener('proteus:browser-gesture',this.gestureHandler);ipcMain.removeListener('proteus:navigation-intent',this.navigationIntentHandler);ipcMain.removeListener('proteus:browser-interaction',this.interactionHandler); for (const id of [...this.tabs.keys()]) await this.close(id); }
 }
 module.exports = { BrowserTabs, normalizeURL };

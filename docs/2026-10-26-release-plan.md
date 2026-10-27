@@ -1,6 +1,6 @@
 # October 26 release: implementation handoff
 
-**Current stage: planning and branch integration only.** The operator will switch this chat's model and submit implementation next. The release scope includes the original Markdown and seven screenshots, plus the in-chat subagent viewer and delegated-permission repair. No feature implementation, publication or installation has started in this planning turn.
+**Current stage: implementation and acceptance.** The release scope includes the original Markdown and seven screenshots, plus the in-chat subagent viewer and delegated-permission repair. See [the current evidence ledger](2026-10-27-release-evidence.md) for implementation, validation and deployment status. The original planning text below remains the acceptance contract.
 
 Use this release branch after the model switch. The original request authorizes implementation and, after validation, installation on this Mac and the connected iPhone/iPad. Other desktop installations are outside this deployment request. Use GPT-6.1 Terra with high reasoning for implementation and installation agents. Destination update coordinators must still use their saved Engine Room defaults. Do not dispatch GitHub Actions.
 
@@ -16,7 +16,7 @@ Use this release branch after the model switch. The original request authorizes 
 
 ## Release requirements
 
-All rows are planned, not implemented or newly live-verified. Maintain the IDs in implementation evidence.
+The rows below define required results. Current per-requirement evidence is maintained separately; implementation does not imply installation or complete live acceptance.
 
 | ID | Result required | Acceptance |
 | --- | --- | --- |
@@ -138,4 +138,4 @@ Final report: tested commit, published/download-verified artifacts, Mac installe
 
 ## Handoff instruction
 
-After the model switch, resume this plan and branch rather than starting another release checkout. Existing implementation/deployment authorization carries forward; no extra confirmation is needed solely for authorized subagents. Diagnose R22 early so delegation works. All application feature work remains unstarted at this handoff.
+After the model switch, resume this plan and branch rather than starting another release checkout. Existing implementation/deployment authorization carries forward; no extra confirmation is needed solely for authorized subagents. Diagnose R22 early so delegation works. Use the evidence ledger for the current implementation state.

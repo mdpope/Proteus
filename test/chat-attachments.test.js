@@ -40,7 +40,7 @@ test('stages bounded bytes under private paths and binds a finished image to its
 test('rejects out-of-order, oversized, mismatched and disguised uploads', async () => fixture(async store => {
   await assert.rejects(store.begin({ ...owner, providerId: 'rehearsal', name: 'image.png', mediaType: 'image/png', size: png.length, sha256: digest(png) }), /provider/);
   await assert.rejects(store.begin({ ...owner, name: '../secret', mediaType: 'image/png', size: png.length, sha256: digest(png) }), /filename/);
-  await assert.rejects(store.begin({ ...owner, name: 'script.svg', mediaType: 'image/svg+xml', size: png.length, sha256: digest(png) }), /not supported/);
+  await assert.rejects(store.begin({ ...owner, name: 'malformed.bin', mediaType: 'not a media type', size: png.length, sha256: digest(png) }), /not supported/);
   await assert.rejects(store.begin({ ...owner, name: 'huge.png', mediaType: 'image/png', size: chatAttachmentLimits.maxFileBytes + 1, sha256: digest(png) }), /8 MB/);
   const pending = await store.begin({ ...owner, name: 'image.png', mediaType: 'image/png', size: png.length, sha256: digest(png) });
   await assert.rejects(store.chunk({ uploadId: pending.uploadId, deviceId: owner.deviceId, index: 1, dataBase64: png.toString('base64') }), /in order/);

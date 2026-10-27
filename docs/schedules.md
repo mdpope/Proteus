@@ -45,3 +45,7 @@ provider default; `contextTier: "default"` selects the default tier. Optional ch
 live capabilities and are revalidated on every Copilot turn, including resume. Model selection
 and source loading are different: reducing selected skills/MCPs reduces supplied context, while
 context tier changes how much context the provider permits. See `providers.md`.
+
+## Independent schedule configuration
+
+The schedule editor supports explicit approval/read-only/folder settings and multiple workspace references with category selection: folders, permissions, instructions, agents, skills and MCPs. These references supply configuration without moving the schedule. Run snapshots include workspace names and revisions; a missing source or conflicting inherited approval/main-agent choice requires correction instead of silent fallback. Unknown JSON fields and expected-revision checks remain intact. Explicit folder grants save their canonical destination. See the [October release evidence](2026-10-27-release-evidence.md) for current acceptance limits.

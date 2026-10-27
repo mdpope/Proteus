@@ -1,3 +1,4 @@
+import {subagentJournal} from '../services/chats/subagents.js';
 import {questionAttachmentTools} from '../services/chats/question-attachments.js';
 import {providerActivity} from '../shared/provider-activity.js';
 import {claudeMessageContent} from './provider-attachment-input.js';
@@ -259,7 +260,7 @@ export class ClaudeProvider {
     // A custom system prompt omits Claude Code's automatic instruction context. Settings,
     // skills, MCPs and plugins are excluded independently, while native credentials stay native.
     const settings={claudeMdExcludes:['/**'],autoMemoryEnabled:false,enabledPlugins:{},fastMode:run.schedule.serviceTier==='fast'};
-    const args=['--system-prompt',instructions,'--settings',JSON.stringify(settings),'--disallowedTools','Agent,Task,Skill,EnterWorktree,ExitWorktree'];
+    const args=['--system-prompt',instructions,'--settings',JSON.stringify(settings),'--disallowedTools','Skill,EnterWorktree,ExitWorktree'];
     if(run.schedule.model)args.push('--model',run.schedule.model);
     if(run.schedule.reasoningEffort)args.push('--effort',run.schedule.reasoningEffort);
     if(run.providerSessionId)args.push('--resume',run.providerSessionId);
@@ -285,6 +286,7 @@ export class ClaudeProvider {
       const answer=await askUser({type:'permission',question:`Allow Claude ${name}?`,details:{kind,toolCallId:id,toolName:name,args:input,fullCommandText:input.command,fileName:input.file_path||input.notebook_path||input.path,path:input.file_path||input.path||run.schedule.workspace.cwd,intention:`Claude ${name}`}});
       return ['approve','approve-auto'].includes(answer)?{behavior:'allow',updatedInput:input}:{behavior:'deny',message:'The operator declined this tool.'};
     };
+    const agents=subagentJournal(run,'claude',update);
     const request=async m=>{try{const r=m.request;let answer;
       if(r.subtype==='hook_callback'){
         const data=r.input||{},id=data.tool_use_id||r.tool_use_id;answer=await permit(data.tool_name,data.tool_input||{},id);
@@ -314,7 +316,8 @@ export class ClaudeProvider {
       if(m.type!=='result'||!resultSeen)capture.receive(m);
       if(m.type==='user'&&steering?.sent&&m.uuid===steering.id){steering.acknowledged=true;steering.ack.resolve();}
 
-      if(m.session_id){run.providerSessionId=m.session_id;run.providerHome=this.dataDirectory();update();}
+      if(m.session_id&&!m.parent_tool_use_id){run.providerSessionId=m.session_id;run.providerHome=this.dataDirectory();update();}
+      if(agents.claude(m))return;
       if(m.type==='stream_event'){const event=m.event;if(event?.type==='message_start')currentId=event.message.id;if(event?.type==='content_block_delta'&&event.delta?.type==='text_delta')stream(currentId,event.delta.text);}
       if(m.type==='assistant'){
         if(m.error){reject(new Error(`Claude ${m.error}`));return;}
@@ -354,7 +357,7 @@ export class ClaudeProvider {
       if(signal.aborted)throw new Error('Cancelled');accepting=true;this.activeSteer=steer;client.write({type:'user',session_id:run.providerSessionId||'',message:{role:'user',content},parent_tool_use_id:null});await done;activitySucceeded=true;
     }finally{
       capture.finish(activitySucceeded?'completed':'interrupted');
-      finished=true;accepting=false;this.activeSteer=null;steering?.boundary.reject(new Error('Claude turn ended.'));steering?.ack.reject(new Error('Claude turn ended.'));clearTimeout(timer);signal.removeEventListener('abort',abort);let cleanupError;
+      agents.finish();finished=true;accepting=false;this.activeSteer=null;steering?.boundary.reject(new Error('Claude turn ended.'));steering?.ack.reject(new Error('Claude turn ended.'));clearTimeout(timer);signal.removeEventListener('abort',abort);let cleanupError;
       try{await client.close();}catch(error){cleanupError=error;this.cleanupError=error;this.cleanupClients.add(client);}
       finally{client.off('message',message);client.off('request',request);client.off('closed',closed);mcpConfig?.dispose();await bridge?.close();if(!cleanupError){this.active=null;this.activeRunId=null;}for(const tool of calls.values())if(tool.status==='running')tool.status='interrupted';update();}
       if(cleanupError)throw cleanupError;

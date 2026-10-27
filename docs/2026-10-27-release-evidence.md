@@ -1,0 +1,51 @@
+# October 26 release implementation evidence
+
+Candidate version: **0.2.31**. This ledger separates implementation from validation and deployment. The [original acceptance contract](2026-10-26-release-plan.md) remains authoritative. No installed app or public feed has changed at this checkpoint.
+
+## Requirement ledger
+
+| ID | Implemented behavior and evidence | Remaining acceptance |
+| --- | --- | --- |
+| R1 | Schedule-owned filesystem/approval settings and category-selected workspace references persist in schedule JSON. Run-start resolution captures provenance, rejects missing references and conflicting approval/main-agent choices. Revision protection and unknown fields remain. Explicit folder grants resolve on save. Contract tests cover category isolation, conflict and symlink retargeting. | Repeated live schedule runs/restart through the desktop settings surface. |
+| R2 | Existing signed catalog, staging, compatibility and supervised-update services are reused unchanged. Protocol/data compatibility remain 1. Additive agent fields do not require a relay upgrade. | Exact signed artifact, publisher signature, complete HTTPS download, local coordinator installation and physical iOS installation. Other desktop hosts are outside this deployment. |
+| R3 | Mandatory host tools survive empty optional selection and Copilot/MTPLX custom-agent tool ceilings. Actual tool handlers retain their permission gates. | Live Claude/Copilot/MTPLX delegation verification; unavailable adapters must remain explicit. |
+| R4 | Read Aloud uses captured nonempty selection, otherwise the rendered message. Local installed voice choice persists per desktop; iOS prefers the highest-quality installed voice for its language. Real Electron playback lifecycle passes; 180 local voices were enumerated. | Audible quality/latency comparison is not claimed by muted automated playback. |
+| R5 | Schedule and delegated profiles retain canonical paths and read-only overrides. A saved explicit grant remains pinned if its selected symlink changes. Existing permissions tests and new canonical-path regression pass. | Installed resume/restart workflow. |
+| R6 | Provider/model selects use the shared themed renderer menu, including keyboard, focus return and dismissal. Chromium UI acceptance passes. | Actual Linux/Windows appearance is not established by Mac testing. |
+| R7 | Native browser link menus and shared renderer links enumerate all configured profiles, including extension profiles, preserving origin placement. | New release multi-profile native acceptance. |
+| R8 | Address validation parses credentials in the URL authority; a fragment containing `@` is preserved. Fragment and unsupported-scheme tests pass. | Installed Azure-style navigation. |
+| R9 | Failed navigation renders a safe themed hostname/error/Retry document. Categories derive from the actual Chromium error. Logical destination remains the original URL. Contract tests cover escaping and fragment preservation. | Disposable Electron DNS failure, hostname, themed background, logical URL and Retry pass. |
+| R10 | Permitted page notifications reach the existing activity/OS notification path with original tab, profile, origin and notification identity. Exact duplicate IDs coalesce; distinct rapid notifications remain distinct. | Real disposable Electron rapid-page-event, duplicate and click acceptance passes. Service-worker/background Web Push integration is not implemented or claimed. |
+| R11 | Chat-level Copilot active-time continuation opt-in and Continue and enable preserve the original session and receipts. Retries are bounded to three, settle first, and yield to Stop, pending human input, queued input and preference revocation. Focused recovery tests pass. | Installed Copilot active-time timeout. |
+| R12 | Terminal sharing performs one owner mutation and verifies its result with a read-only snapshot. Uncertain results are reported without toggling again. Existing terminal lifecycle tests remain required. | Installed exact-terminal share/revoke check. |
+| R13 | Chat/search/native pickers accept arbitrary extensions. Original hashes and bytes remain authoritative; only known safe types preview. Unsupported media uses a bounded current-turn reader. Arbitrary-binary and UI acceptance pass. | Physical-device file picker. |
+| R14 | Search input starts at eight rows, centered within a bounded panel. Narrow Chromium UI acceptance passes. | Installed zoom/keyboard visual check. |
+| R15 | More than 200 lines or 256 KiB of pasted text becomes a stable text attachment. Exact Unicode/original bytes remain available through bounded reads; provider construction avoids embedding huge text. Boundary and UI tests pass. | Physical iOS paste/retry check. |
+| R16 | Inert rich paste preserves supported headings/lists/code/links/tables; removes executable markup and unsafe links. Styled HTML with uncertain hidden content falls back to plain text. Sanitization and browser UI tests pass. | Installed clipboard acceptance. |
+| R17 | Phone project/chat destination reads current stable selection rather than a captured closure. Older responses may add history but cannot replace current content/selection. Decrypted notification previews use bounded useful event text. Native unit tests pass. | Phone/tablet A→B→A UI passes; installed reconnect and physical notifications remain. |
+| R18 | Browser state projections coalesce at 16 ms while mutations, permission revocation and direct reads remain immediate. A real disposable Electron comparison reduced 500 identical projections to one. | Broad production CPU/memory/handle/write improvements are not inferred from this bounded workload. |
+| R19 | Native transcript refresh tasks cancel while inactive/backgrounded and resume with retained durable state. Cancellation prevents follow-on preview fetches. | Repeated installed switches/background observation and resource counts. |
+| R20 | Pending choices render immediately on desktop/iOS and populate the existing custom-answer draft. Actual iPhone synthetic choice/custom-answer UI flow passes. | Phone and tablet choice/custom-answer UI pass; installed reconnect remains. |
+| R21 | Conditional inline Agents control, read-only child tabs, parent-scoped paging and streaming on desktop/iOS. Parent draft/files/scroll remain owned by the parent. Provider-proven lineage and selected-response guards prevent foreign/stale content. Desktop stale-selection/draft acceptance passes. | Physical native agent transitions. |
+| R22 | Current Codex `subAgentActivity` and authoritative thread lineage route child approvals through the parent scope. Unrelated/expired requests produce an adapter-scope error, not a fabricated human refusal. Claude/Copilot native journals and provider-neutral host delegation preserve captured provider/model/account/context and revocation. A real installed Codex CLI child read and wrote the exact authorized fixture successfully. | Live non-Codex provider acceptance. Current running app remains unchanged until the supervised update. |
+
+## Validation evidence
+
+- Final Node suite with the documented short `TMPDIR=/tmp`: **1,223 passed, 3 skipped, 0 failed** (1,226 total). The original long-temp-path attempt retained one Unix-domain socket path-length failure; no assertion was weakened.
+- `npm run check` passes. Focused delegation, provider lineage, schedule conflict, byte preservation and symlink-pinning contracts pass.
+- Actual disposable Electron DNS error, hostname, themed background, Retry destination and two rapid page notifications with duplicate/click behavior pass.
+- Real disposable desktop window and message-action/speech suites pass. Chromium composer acceptance covers arbitrary files, large/rich paste, themed keyboard menus, stale child responses, retained parent draft/files and narrow width.
+- Native phone source build and 153 unit tests pass. The first UI selection accidentally matched zero tests; it is not acceptance. The corrected question-choice flow passes on iPhone. Project-switch UI setup originally targeted a retained offscreen pairing form; the corrected test explicitly visits Home. Corrected actual A→B→A project-switch flows and question choices pass on both phone and tablet; the tablet also passes all 153 units.
+- Actual Codex child smoke uses refreshed `gpt-6.1-terra` metadata and a synthetic isolated fixture. Its child reports completed with four retained events, and the parent independently verifies exact `VERIFIED` file bytes. No unrelated session files or credentials were used.
+
+Performance comparison used 500 identical state-change notifications with six unloaded synthetic tabs in the same disposable Electron owner. Baseline: 500 flushes, 49.075 ms enqueue, 93,569 microseconds process CPU. Batched: one flush, 0.066 ms enqueue, 18,655 microseconds process CPU. Both retained eight logical tabs, zero loaded website pages and four app processes. RSS measurements were sequential and do not establish a memory reduction. No model work, external website or live cache deletion was involved.
+
+Private logs, raw protocol events, screenshots, host/device identities, paths, recovery receipts and publication access records stay outside this repository.
+
+## Source and deployment status
+
+Eight obsolete local development branches and 49 exact-head remote development refs were removed under the operator's explicit authorization. Main and 49 signed recovery/transport refs remain; detached worktrees and ignored recovery material were preserved. Concurrent Linux validation documentation was merged at `c9126c4`.
+
+The existing installed Mac identity is preserved for packaging. A valid matching Apple development certificate is available; existing certificates are unchanged. The common Ed25519 publisher key remains in its existing protected Windows location according to prior acceptance records. Scoped WTB vault metadata did not identify a portable release-key item; no replacement key or trust change was created.
+
+Publication, download verification, local update handoff, physical-device installs, recovery rotation and measured disk-space change remain pending. Do not describe model completion, a clean build, a dispatched task or simulator success as installed/live verification.

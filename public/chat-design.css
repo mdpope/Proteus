@@ -115,3 +115,12 @@
 .mtplx-svg-preview{margin:12px 0;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);}
 .mtplx-svg-preview figcaption{font-size:12px;margin-bottom:8px;}
 .mtplx-svg-preview img{display:block;width:100%;max-width:560px;max-height:480px;object-fit:contain;background:#fff;border-radius:4px;}
+
+/* Search grows inside its own panel; controls remain reachable at zoom. */
+.internet-search-composer{width:min(100%,900px);margin-inline:auto;max-height:80dvh;overflow:auto;box-sizing:border-box}
+.internet-search-composer textarea{min-height:240px;max-height:calc(80dvh - 100px);resize:vertical}
+.new-chat-tab-panel .internet-search-composer textarea{min-height:min(240px,40dvh)}
+
+.subagent-toggle{margin-left:auto}.subagent-panel{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}.subagent-panel[hidden]{display:none}.subagent-tabs{display:flex;gap:6px;overflow-x:auto;padding:8px 0;flex-shrink:0}.subagent-tabs button{white-space:nowrap}.subagent-tabs [aria-selected=true]{background:var(--accent);color:var(--bg)}.subagent-transcript{overflow:auto;min-height:0;flex:1}.subagent-transcript pre{white-space:pre-wrap;overflow-wrap:anywhere}
+
+.message-playback{flex-wrap:wrap}.message-playback select{max-width:min(220px,100%);min-width:0}

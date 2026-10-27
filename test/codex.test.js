@@ -198,3 +198,19 @@ test('all selected MCP servers use saved scoped rules across transports and pres
  store.setMode(f.run.schedule,'ask');f.rpc.emit('request',approval(104,'tracker'));await until(()=>f.rpc.responses.some(r=>r.id===104));assert.equal(f.rpc.responses.find(r=>r.id===104).result.action,'decline');
  f.rpc.notice('turn/completed',{turn:{status:'completed'}});await task;await f.provider.close();
 });
+
+test('Codex verified child approvals use the parent policy and unverified threads report an adapter rejection',async()=>{
+ const f=fixture(),requests=[],errors=[];f.rpc.write=message=>errors.push(message);f.args.ask=async request=>{requests.push(request);return 'approve-auto';};
+ try{
+  const task=f.provider.run(f.args);await until(()=>f.provider.active?.turnId);
+  assert.equal(f.rpc.calls.find(c=>c.method==='thread/start').params.config.features.multi_agent,true);
+  f.rpc.notice('item/completed',{item:{type:'collabAgentToolCall',tool:'spawnAgent',id:'spawn',senderThreadId:'thread',receiverThreadIds:['child'],agentsStates:{child:{status:'running'}}}});
+  f.rpc.emit('request',{id:901,method:'item/commandExecution/requestApproval',params:{threadId:'child',turnId:'child-turn',itemId:'child-command',command:'node --test synthetic.test.js'}});
+  await until(()=>f.rpc.responses.some(r=>r.id===901));assert.equal(f.rpc.responses.find(r=>r.id===901).result.decision,'accept');assert.equal(requests.at(-1).details.fullCommandText,'node --test synthetic.test.js');
+  f.rpc.emit('request',{id:902,method:'item/commandExecution/requestApproval',params:{threadId:'unrelated',command:'node --test'}});
+  await until(()=>errors.some(r=>r.id===902));assert.match(errors.find(r=>r.id===902).error.message,/adapter scope rejection/);assert.equal(requests.length,1);
+  f.rpc.notice('item/completed',{threadId:'child',item:{id:'child-output',type:'agentMessage',text:'Child result'}});assert.equal(f.run.events.some(e=>e.text==='Child result'),false);assert.equal(f.run.subagents[0].events[0].text,'Child result');
+  f.rpc.notice('turn/completed',{threadId:'child',turn:{id:'child-turn',status:'completed'}});assert.equal(f.provider.active.turnId,'turn-1');
+  f.rpc.notice('turn/completed',{turn:{status:'completed'}});await task;
+ }finally{await f.provider.close();}
+});

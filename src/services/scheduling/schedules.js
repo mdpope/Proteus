@@ -1,3 +1,5 @@
+import {validateScheduleSources} from './schedule-context.js';
+import {canonicalPath} from '../settings/permissions.js';
 import { validateModelOptionShape } from '../../models/model-catalog.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -24,6 +26,7 @@ export function validateSchedule(value) {
   if (value.misfire !== 'skip' && value.misfire !== 'coalesce') throw new Error('misfire must be skip or coalesce.');
   if (value.provider === 'local-process' && (value.integration?.type !== 'omi' || !['audio', 'library', 'semantic'].includes(value.integration?.job))) throw new Error('Local processes must be managed Omi jobs.');
   if (value.notifications !== undefined && (!value.notifications || typeof value.notifications !== 'object' || Array.isArray(value.notifications) || (value.notifications.onCompletion !== undefined && typeof value.notifications.onCompletion !== 'boolean'))) throw new Error('Schedule completion notification must be true or false.');
+  validateScheduleSources(value);
   validateModelOptionShape(value);
   if (value.contextSelection !== undefined) validateContextSelection(value.contextSelection);
   nextRuns(value.cron, value.timezone);
@@ -73,6 +76,13 @@ export class ScheduleStore {
     const file = path.join(this.dir, `${schedule.id}.json`);
     if (fs.existsSync(file) && expectedRevision !== revision(readJSON(file))) throw new Error('This file changed outside the app. Reload before saving.');
     for (const key of ['file', 'revision', 'nextRuns', 'error']) delete schedule[key];
+    // Pin explicit grants to their resolved destination when the operator saves.
+    // Retargeting a selected symlink must not silently authorize a new directory.
+    if(schedule.executionPermissions?.folders) schedule.executionPermissions.folders=schedule.executionPermissions.folders.map(folder=>{
+      const resolved=canonicalPath(folder.path,schedule.workspace.cwd);
+      if(!resolved)throw Error('A schedule folder cannot be resolved. Choose an existing accessible destination.');
+      return {...folder,path:resolved};
+    });
     atomicJSON(file, schedule);
     return schedule;
   }

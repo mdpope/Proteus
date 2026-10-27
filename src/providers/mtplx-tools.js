@@ -34,6 +34,7 @@ export class MtplxTools {
     this.tools=tools.filter(t=>this.allowed(t.name));this.map=new Map(this.tools.map(t=>[t.name,t]));
   }
   allowed(name){
+    if(/^proteus_(?:browser|tabs|playwright|developer|desktop|terminal|open_document|integrations|chats|agents|attachments|question_attachments)$/.test(name))return true;
     if(this.scope==null)return true;
     const aliases={read_file:['view','read_file'],write_file:['edit','create','apply_patch','write_file']};
     if(name==='mcp')return this.scope.some(t=>t.includes('/')||t==='mcp:*');

@@ -1,3 +1,13 @@
+## October 27 — Continue the October 26 release candidate
+
+Use the existing `codex/oct26-release` checkout and [current evidence ledger](2026-10-27-release-evidence.md), preserving the [22-item contract](2026-10-26-release-plan.md). Version is 0.2.31. Source implementation is present, with current Codex native child lineage verified against the installed CLI; the root cause was current `subAgentActivity` events arriving before child approvals, while the adapter recognized only older relationship shapes. Unrelated/expired child requests still fail with scope provenance. Provider-neutral children retain captured provider/model/account/context and stop on parent expiry/revocation.
+
+Final Node short-temp suite: 1,223 pass/three skip/zero fail; static passes. Phone/tablet 153-unit suites and corrected actual A→B→A/question-choice UI pass. Initial zero-test selection and offscreen pairing fixture failures remain in private logs; correcting test setup did not weaken product assertions. Real Electron DNS/Retry and rapid page notification/dedup/click acceptance pass. Desktop paste/menu/agent/speech/window checks and measured projection batching evidence are recorded in the ledger. Live Claude/Copilot/MTPLX, real Linux/Windows appearance, audible voice preference, broad resource attribution and physical-device acceptance remain distinct gates.
+
+Eight obsolete local branches and 49 remote development refs were removed with exact head checks; main and 49 signed recovery/transport refs remain. Preserve detached worktrees, prior artifacts and receipts. Concurrent Linux validation documentation was merged at c9126c4. No other desktop installation is authorized by this deployment. The original request authorizes this Mac and intended iPhone/iPad after acceptance.
+
+Existing Mac signer is retained. Publisher signing must use the existing protected key and trusted public-key match; no key copying or trust replacement. Local/pushed updates use saved-default unassigned coordinators and the supervisor idle barrier. Publication, independent full HTTPS verification, Mac handoff, physical iOS installs and two-generation recovery accounting remain pending. No completed model turn or dispatched task is an installation receipt.
+
 ## October 26 — new release planning and branch reconciliation
 
 Continue from `codex/oct26-release`. The operator requested a model switch before feature

@@ -1,3 +1,4 @@
+import {subagentJournal} from '../services/chats/subagents.js';
 import {questionAttachmentTools} from '../services/chats/question-attachments.js';
 import {providerActivity} from '../shared/provider-activity.js';
 import {attachmentText} from './provider-attachment-input.js';
@@ -172,6 +173,7 @@ export class CodexProvider {
   captureAppCapabilities(run,browser,update);
   let resolveTurn,rejectTurn,settled=false,abortTimer;const completed=new Promise((resolve,reject)=>{resolveTurn=resolve;rejectTurn=reject;});completed.catch(()=>{});
   const active={run,client,turnId:null};this.active=active;
+  const agents=subagentJournal(run,'codex',update);
   active.recheckPermissions=()=>{
    if(active.permissionRevoked)return true;
    let changed;try{const current=codexSandbox(run.schedule,permissionProfile?.(),{permissionControls:(this.options.permissionControls===true||this.options.desktopPreview===true)});changed=(this.options.permissionControls===true||this.options.desktopPreview===true)?!codexSandboxPreservesAccess(sandbox,current):JSON.stringify(current)!==JSON.stringify(sandbox);}catch{changed=true;}
@@ -183,7 +185,7 @@ export class CodexProvider {
   const invokeAppTool=async(tool,args,callId)=>{
    assertAppToolActive();
    if(active.recheckPermissions())throw new Error('Workspace permissions changed; this tool request was cancelled.');
-   if(tool.name==='proteus_chats')return tool.handler(args); // The host service owns scoped approval and rechecks.
+   if(['proteus_chats','proteus_agents'].includes(tool.name))return tool.handler(args); // The host service owns scoped approval and rechecks.
    const key=JSON.stringify([tool.name,args]),approved=approvedBridgeCalls.get(key);approvedBridgeCalls.delete(key);
    const answer=approved&&approved.expires>Date.now()?'approve':await ask({type:'permission',question:'Allow Proteus app action?',details:{kind:'custom-tool',toolCallId:callId,toolName:tool.name,args,intention:tool.name==='proteus_open_document'?`Open Markdown tab: ${args?.path||''}`:`Browser ${args?.action||'action'}`}});
    assertPendingApprovalCurrent();assertAppToolActive();
@@ -192,7 +194,11 @@ export class CodexProvider {
   const userInputRequests=new Map();
   const capture=providerActivity({provider:'codex',emit,update});
   const onNotification=({method,params:p={}})=>{
-   if(p.threadId&&p.threadId!==run.providerSessionId)return;
+   if(p.threadId&&p.threadId!==run.providerSessionId){
+    if(agents.codex({method,params:p})&&p.item)items.set(p.threadId+':'+p.item.id,p.item);
+    return;
+   }
+   agents.codex({method,params:p});
    if(!p.turnId||!active.turnId||p.turnId===active.turnId)capture.receive({method,params:p});
    if(method==='turn/completed')capture.finish(p.turn?.status==='completed'?'completed':'interrupted');
    if(method==='serverRequest/resolved'){const request=userInputRequests.get(p.requestId);if(request){request.resolved=true;request.controller.abort({code:'provider-resolved'});}}
@@ -217,28 +223,29 @@ export class CodexProvider {
    if(method==='turn/completed'){settled=true;clearTimeout(abortTimer);if(active.permissionRevoked)rejectTurn(new Error((this.options.permissionControls===true||this.options.desktopPreview===true)?'Permissions changed and this turn was stopped. Choose Continue to resume this chat with the current permissions. No actions were automatically retried.':'Workspace permissions changed during the Codex turn. Its tools were interrupted; continue with the current permissions.'));else if(p.turn.status==='completed')resolveTurn();else rejectTurn(Object.assign(new Error(p.turn.error?.message||'Codex turn '+p.turn.status),{code:p.turn.error?.codexErrorInfo||p.turn.error?.code}));}
   };
   const handledRequests=new Set();
-  const onRequest=async msg=>{if(handledRequests.has(msg.id))return;handledRequests.add(msg.id);const p=msg.params||{};if(p.threadId&&p.threadId!==run.providerSessionId||p.turnId&&active.turnId&&p.turnId!==active.turnId)return client.respond(msg.id,msg.method==='mcpServer/elicitation/request'?{action:'decline',content:null}:{decision:'decline'});try{
+  const onRequest=async msg=>{if(handledRequests.has(msg.id))return;handledRequests.add(msg.id);const p=msg.params||{};if(p.threadId&&p.threadId!==run.providerSessionId&&!agents.allows(p.threadId,p.turnId)||(!p.threadId||p.threadId===run.providerSessionId)&&p.turnId&&active.turnId&&p.turnId!==active.turnId){emit('system','Provider request rejected: unverified or expired agent scope; no user decision was requested.');return client.write({id:msg.id,error:{code:-32000,message:'Unverified or expired Proteus agent scope. This is an adapter scope rejection, not a user refusal.'}});}try{
+   const scopeAsk=(request,requestSignal)=>ask(p.threadId&&p.threadId!==run.providerSessionId?{...request,details:{...request.details,delegation:{provider:'codex',rootThreadId:run.providerSessionId,threadId:p.threadId,parentThreadId:agents.find(p.threadId)?.parentNativeId,runId:run.id}}}:request,requestSignal);
    if(active.recheckPermissions())throw new Error('Workspace permissions changed; this tool request was cancelled.');
    if(msg.method==='item/tool/call'){
      const tool=browser.find(t=>t.name===p.tool);if(!tool)throw new Error('Unknown Proteus tool.');
      const result=await invokeAppTool(tool,p.arguments,p.callId);
      client.respond(msg.id,{success:result?.resultType!=='failure',contentItems:codexToolContent(result)});
    }else if(msg.method==='item/commandExecution/requestApproval'){
-     const answer=await ask({type:'permission',question:p.reason||'Allow this command?',details:{kind:'shell',toolCallId:p.itemId,fullCommandText:p.command,reason:p.reason,requestSandboxBypass:!!p.additionalPermissions,managedApprovalRequired:!!p.networkApprovalContext}});assertPendingApprovalCurrent();client.respond(msg.id,{decision:['approve','approve-auto'].includes(answer)?'accept':'decline'});
+     const answer=await scopeAsk({type:'permission',question:p.reason||'Allow this command?',details:{kind:'shell',toolCallId:p.itemId,fullCommandText:p.command,reason:p.reason,requestSandboxBypass:!!p.additionalPermissions,managedApprovalRequired:!!p.networkApprovalContext}});assertPendingApprovalCurrent();client.respond(msg.id,{decision:['approve','approve-auto'].includes(answer)?'accept':'decline'});
    }else if(msg.method==='item/fileChange/requestApproval'){
-     const changes=items.get(p.itemId)?.changes||[];let allowed=changes.length>0;
-     for(const change of changes){const answer=await ask({type:'permission',question:p.reason||'Allow this file change?',details:{kind:'write',toolCallId:p.itemId,fileName:change.path,intention:'Edit '+change.path}});assertPendingApprovalCurrent();if(!['approve','approve-auto'].includes(answer))allowed=false;}
+     const changes=items.get(p.threadId&&p.threadId!==run.providerSessionId?p.threadId+':'+p.itemId:p.itemId)?.changes||[];let allowed=changes.length>0;
+     for(const change of changes){const answer=await scopeAsk({type:'permission',question:p.reason||'Allow this file change?',details:{kind:'write',toolCallId:p.itemId,fileName:change.path,intention:'Edit '+change.path}});assertPendingApprovalCurrent();if(!['approve','approve-auto'].includes(answer))allowed=false;}
      client.respond(msg.id,{decision:allowed?'accept':'decline'});
    }else if(msg.method==='item/tool/requestUserInput'){
      const request={controller:new AbortController(),resolved:false};userInputRequests.set(msg.id,request);
      const abortRequest=()=>request.controller.abort(signal.reason);signal.addEventListener('abort',abortRequest,{once:true});
-     try{const answers={};for(const q of p.questions||[])answers[q.id]={answers:[await ask({type:'question',question:q.question,choices:q.options?.map(x=>x.label),optionDetails:q.options?.map(x=>({label:x.label,description:x.description||''})),providerQuestionId:q.id,isBlocking:p.isBlocking!==false,autoResolutionMs:p.autoResolutionMs??null},request.controller.signal)]};if(!request.resolved)client.respond(msg.id,{answers});}
+     try{const answers={};for(const q of p.questions||[])answers[q.id]={answers:[await scopeAsk({type:'question',question:q.question,choices:q.options?.map(x=>x.label),optionDetails:q.options?.map(x=>({label:x.label,description:x.description||''})),providerQuestionId:q.id,isBlocking:p.isBlocking!==false,autoResolutionMs:p.autoResolutionMs??null},request.controller.signal)]};if(!request.resolved)client.respond(msg.id,{answers});}
      catch(error){if(!request.resolved)throw error;}
      finally{signal.removeEventListener('abort',abortRequest);userInputRequests.delete(msg.id);}
    }else if(msg.method==='mcpServer/elicitation/request'){
      const meta=p._meta,name=p.message?.match(/tool "([^"\n]+)"\?$/)?.[1],tool=browser.find(tool=>tool.name===name);
      if(p.serverName==='proteus_app'&&p.mode==='form'&&meta?.codex_approval_kind==='mcp_tool_call'&&tool&&meta.tool_params&&typeof meta.tool_params==='object'&&!Array.isArray(meta.tool_params)&&Object.keys(p.requestedSchema?.properties||{}).length===0){
-       const args=meta.tool_params,answer=await ask({type:'permission',question:'Allow Proteus app action?',details:{kind:'custom-tool',toolCallId:p.turnId,toolName:name,args,intention:`Proteus ${name} ${args.action||''}`}});
+       const args=meta.tool_params,answer=await scopeAsk({type:'permission',question:'Allow Proteus app action?',details:{kind:'custom-tool',toolCallId:p.turnId,toolName:name,args,intention:`Proteus ${name} ${args.action||''}`}});
        assertPendingApprovalCurrent();assertAppToolActive();const allowed=['approve','approve-auto'].includes(answer);
        if(allowed){if(approvedBridgeCalls.size>=16)approvedBridgeCalls.clear();approvedBridgeCalls.set(JSON.stringify([name,args]),{expires:Date.now()+15000});}
        client.respond(msg.id,{action:allowed?'accept':'decline',content:allowed?{}:null});
@@ -252,7 +259,7 @@ export class CodexProvider {
        if(definition.tools?.length&&!definition.tools.includes('*')&&!definition.tools.includes(name))throw new Error('This MCP tool is outside the selected tool set.');
        assertAppToolActive();
        const beforeApproval=JSON.stringify(permissionProfile?.());
-       const answer=await ask({type:'permission',question:`Allow ${p.serverName} ${name}?`,details:{kind:'mcp',serverName:p.serverName,toolName:name,args:meta.tool_params,toolCallId:p.itemId||String(msg.id),intention:`${p.serverName} ${name}`,readOnly:false}});
+       const answer=await scopeAsk({type:'permission',question:`Allow ${p.serverName} ${name}?`,details:{kind:'mcp',serverName:p.serverName,toolName:name,args:meta.tool_params,toolCallId:p.itemId||String(msg.id),intention:`${p.serverName} ${name}`,readOnly:false}});
        assertPendingApprovalCurrent();assertAppToolActive();
        if(answer==='approve-auto'&&JSON.stringify(permissionProfile?.())!==beforeApproval)throw new Error('Saved permissions changed before the MCP approval could be delivered.');
        if(p.turnId!==active.turnId)throw new Error('MCP approval belongs to an ended turn.');
@@ -283,7 +290,7 @@ export class CodexProvider {
     mcp.proteus_app={enabled:true,...appBridge.config};
    }
    const instructions=`${appInstructions}${resumedBrowserTools.length?'\nUse the fresh tools published by the proteus_app MCP server. Native desktop control uses its proteus_desktop tool so screenshots arrive as images. For browser and tab operations in resumed chats, also prefer that fresh catalog: older unprefixed dynamic schemas may be stale. The fresh catalog supports hidden/unloaded lifecycle actions and every available profile; normal workflow approvals still apply.':''}\nYou are working inside Proteus. Use only the selected sources below. Workspace folders:\n${roots.join('\n')}\n${managed?.instructionText||''}\n${(managed?.customAgents||[]).map(a=>`Agent: ${a.displayName}${a.name===managed.agent?' (main identity)':''}\n${a.prompt}`).join('\n\n')}\nEditor context: ${JSON.stringify(run.schedule.editorContext||null)}`;
-   const config={...sandbox.config,project_doc_max_bytes:0,developer_instructions:instructions,mcp_servers:mcp,features:{skip_host_skill_discovery:true,skill_mcp_dependency_install:false,enable_mcp_apps:false,multi_agent:false},plugins:Object.fromEntries(Object.keys(plugins).map(name=>[name,{enabled:false}])),apps:{_default:{enabled:false}},web_search:'disabled'};
+   const config={...sandbox.config,project_doc_max_bytes:0,developer_instructions:instructions,mcp_servers:mcp,features:{skip_host_skill_discovery:true,skill_mcp_dependency_install:false,enable_mcp_apps:false,multi_agent:true},plugins:Object.fromEntries(Object.keys(plugins).map(name=>[name,{enabled:false}])),apps:{_default:{enabled:false}},web_search:'disabled'};
    const params={model:run.schedule.model,cwd:sandbox.cwd,runtimeWorkspaceRoots:sandbox.runtimeWorkspaceRoots,approvalPolicy:'untrusted',approvalsReviewer:'user',...(sandbox.managedProfile?{}:{sandbox:sandbox.sandbox}),developerInstructions:instructions,config};
    const thread=run.providerSessionId?await client.request('thread/resume',{...params,threadId:run.providerSessionId}):await client.request('thread/start',{...params,dynamicTools:browser.filter(t=>!['proteus_open_document','proteus_desktop'].includes(t.name)).map(t=>({type:'function',name:t.name,description:t.description,inputSchema:t.parameters}))});
    verifyCodexSandbox(thread,sandbox,sandbox.cwd);
@@ -304,7 +311,7 @@ export class CodexProvider {
     }
    }
    const result=await client.request('turn/start',{threadId:run.providerSessionId,...(sandbox.managedProfile?{}:{sandboxPolicy:sandbox.policy}),approvalPolicy:'untrusted',approvalsReviewer:'user',runtimeWorkspaceRoots:sandbox.runtimeWorkspaceRoots,input,effort:run.schedule.reasoningEffort||model.controls.defaultReasoningEffort||null,serviceTier:run.schedule.serviceTier||null});active.turnId=result.turn.id;if(signal.aborted||active.permissionRevoked){clearTimeout(abortTimer);abortTimer=null;abort();}await completed;
-  }finally{for(const request of userInputRequests.values()){request.resolved=true;request.controller.abort({code:'provider-resolved'});}userInputRequests.clear();capture.finish();if(appBridge)await appBridge.close();clearTimeout(abortTimer);if(active.turnId&&!settled)await client.close();signal.removeEventListener('abort',abort);client.off('notification',onNotification);client.off('request',onRequest);client.off('closed',closed);for(const tool of calls.values())if(tool.status==='running')tool.status='interrupted';if(this.active===active)this.active=null;if(imageDir)fs.rmSync(imageDir,{recursive:true,force:true});for(const directory of active.steeringImageDirs||[])fs.rmSync(directory,{recursive:true,force:true});update();}
+  }finally{agents.finish();for(const request of userInputRequests.values()){request.resolved=true;request.controller.abort({code:'provider-resolved'});}userInputRequests.clear();capture.finish();if(appBridge)await appBridge.close();clearTimeout(abortTimer);if(active.turnId&&!settled)await client.close();signal.removeEventListener('abort',abort);client.off('notification',onNotification);client.off('request',onRequest);client.off('closed',closed);for(const tool of calls.values())if(tool.status==='running')tool.status='interrupted';if(this.active===active)this.active=null;if(imageDir)fs.rmSync(imageDir,{recursive:true,force:true});for(const directory of active.steeringImageDirs||[])fs.rmSync(directory,{recursive:true,force:true});update();}
  }
  recheckPermissions(){this.active?.recheckPermissions?.();}
  async close(){await this.client?.close();this.client=null;this.starting=null;}
