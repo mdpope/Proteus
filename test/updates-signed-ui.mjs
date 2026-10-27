@@ -56,7 +56,11 @@ const cleanup=()=>cleanupPending??=(async()=>{
  try{const job=readJob(jobFile);helperPids.add(job.helperPid);ownerPids.add(job.launchPid);ownerPids.add(job.health?.identity?.pid);}catch{}
  try{helperPids.add(Number(fs.readFileSync(path.join(root,'health-failure-helper.cjs.pid'),'utf8')));}catch{}
  for(const pid of helperPids)await stopOwned(pid);for(const pid of ownerPids)await stopOwned(pid);
- if(snapshotLock)await releaseSnapshotLock();
+ let lockCleanupError;
+ if(snapshotLock)try{await releaseSnapshotLock();}catch(error){
+  lockCleanupError=error;
+  try{atomic(path.join(receipt,'lock-cleanup-failure.json'),{error:error.message,stack:error.stack});}catch(recordError){lockCleanupError=new AggregateError([error,recordError],'Lock cleanup and failure receipt both failed');}
+ }
  if(socketServer)await new Promise(resolve=>socketServer.close(resolve));
  if(app){let timer;await Promise.race([app.close().catch(()=>{}),new Promise(resolve=>timer=setTimeout(resolve,3000))]);clearTimeout(timer);}
  if(win&&fs.existsSync(path.join(installation,'Uninstall Proteus.exe'))){assert.equal(await execute(path.join(installation,'Uninstall Proteus.exe'),['/S','/currentuser']),0);await wait(()=>{try{return !windows.registration();}catch{return true;}},'disposable uninstaller completion',60000);}
@@ -67,6 +71,7 @@ const cleanup=()=>cleanupPending??=(async()=>{
   try{command=execFileSync(reg,['query',key+'\\shell\\open\\command','/ve'],{encoding:'utf8',windowsHide:true,stdio:['ignore','pipe','ignore']}).match(/REG_SZ\s+(.+)/)?.[1]?.trim();}catch(error){if(error.status===1)continue;throw error;}
   if(command==='"'+path.join(installation,'Proteus.exe')+'" "%1"')execFileSync(reg,['delete',key,'/f'],{windowsHide:true,stdio:'ignore'});
  }
+ if(lockCleanupError)throw lockCleanupError;
 })();
 for(const signal of ['SIGINT','SIGTERM'])process.once(signal,()=>{atomic(path.join(receipt,'interrupted.json'),{signal,at:new Date().toISOString()});void cleanup().finally(()=>process.exit(130));});
 const request=async(route,body)=>{const c=JSON.parse(fs.readFileSync(path.join(home,'connection.json'))),response=await fetch(c.origin+route,{method:body?'POST':'GET',headers:{Authorization:'Bearer '+c.token,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(['prepare','import-release'].includes(body?.action)?240000:10000)});const result=await response.json();if(!response.ok)throw Error(result.error||'Owner request failed');return result;};
