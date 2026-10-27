@@ -18,9 +18,11 @@ if(win){let registered;try{registered=windows.registration();}catch{}if(register
 const [baselinePath,candidatePath]=process.argv.slice(2);if(!baselinePath||!candidatePath)throw Error('Pass a helper-capable packaged baseline and a different packaged candidate. Only disposable copies are installed.');
 const baseline=inspectPackage(path.resolve(baselinePath)),candidate=inspectPackage(path.resolve(candidatePath)),rollback=process.argv.includes('--rollback'),live=process.argv.includes('--live-provider'),configuredOwner=!process.argv.includes('--fresh-owner');
 const recoverySocket=process.argv.includes('--recovery-socket'),preflightFailure=process.argv.includes('--preflight-failure');
-if((recoverySocket||preflightFailure)&&win)throw Error('Unix recovery socket fixtures require Mac or Linux.');
-if(preflightFailure&&live)throw Error('Failure injection uses rehearsal only.');
 const noChat=process.argv.includes('--no-chat'),manifest=process.argv[process.argv.indexOf('--manifest')+1];
+if(recoverySocket&&win)throw Error('Unix recovery socket fixtures require Mac or Linux.');
+if(preflightFailure&&win&&(live||noChat||rollback))throw Error('Windows snapshot failure requires a separate rehearsal chat without rollback injection.');
+if(preflightFailure&&live)throw Error('Failure injection uses rehearsal only.');
+
 if(win&&(!process.argv.includes('--manifest')||!path.isAbsolute(manifest)))throw Error('Windows acceptance requires the exact signed --manifest path.');
 if(noChat&&live)throw Error('Use either standalone Engine Room or live same-chat acceptance.');
 // Large package copies can use disk without lengthening Chromium's TMPDIR socket paths.
@@ -40,11 +42,12 @@ const fixtureUserHome=path.join(root,'user-home');if(!live)fs.mkdirSync(fixtureU
 if(!live)Object.assign(isolatedEnv,{HOME:fixtureUserHome,COPILOT_HOME:path.join(root,'copilot'),COPILOT_CLI_PATH:path.join(root,'no-copilot'),PROTEUS_CODEX_PATH:path.join(root,'no-codex'),PROTEUS_CLAUDE_PATH:path.join(root,'no-claude'),CLAUDE_CONFIG_DIR:path.join(root,'claude')});
 const launchEnv=live?{...process.env,PROTEUS_HOME:home,PORT:'0'}:{...isolatedEnv,PROTEUS_HOME:home,PORT:'0'};
 const launchArgs=[mac?'--use-mock-keychain':'--password-store=basic',...(process.platform==='linux'&&process.env.PROTEUS_TEST_OZONE_PLATFORM==='x11'?['--ozone-platform=x11']:[]),'--user-data-dir='+browser];
-let app,ownedPid,jobFile,socketServer,passed=false;
+let app,ownedPid,jobFile,socketServer,snapshotLock,passed=false;
 const wait=async(fn,label,ms=180000)=>{const end=Date.now()+ms;while(Date.now()<end){if(await fn())return;await new Promise(resolve=>setTimeout(resolve,300));}throw Error('Timed out: '+label);};
 const alive=pid=>{if(!Number.isSafeInteger(pid)||pid<1||pid===process.pid)return false;try{process.kill(pid,0);if(process.platform==='linux'&&fs.readFileSync('/proc/'+pid+'/stat','utf8').match(/\) ([A-Z]) /)?.[1]==='Z')return false;return true;}catch(error){if(['ESRCH','ENOENT'].includes(error.code))return false;throw error;}};
 const stopOwned=async pid=>{if(!alive(pid))return;process.kill(pid,'SIGTERM');for(let n=0;n<80&&alive(pid);n++)await new Promise(resolve=>setTimeout(resolve,100));if(alive(pid))process.kill(pid,'SIGKILL');for(let n=0;n<20&&alive(pid);n++)await new Promise(resolve=>setTimeout(resolve,100));if(alive(pid))throw Error('Disposable update child did not exit: '+pid);};
 const receipt=path.join(root,'receipt');fs.mkdirSync(receipt,{mode:0o700});
+const releaseSnapshotLock=async()=>{if(!snapshotLock)return;const child=snapshotLock;snapshotLock=null;if(child.exitCode!==null||child.signalCode!==null)throw Error('Synthetic lock process exited unexpectedly');const done=new Promise((resolve,reject)=>{const timer=setTimeout(()=>{child.kill();reject(Error('Synthetic lock process did not release'));},10000);child.once('exit',(code)=>{clearTimeout(timer);code===0?resolve():reject(Error('Synthetic lock exit: '+code));});});child.stdin.end();await done;};
 let cleanupPending;
 const cleanup=()=>cleanupPending??=(async()=>{
  // Only PIDs obtained from this private fixture's owner connection/job are touched.
@@ -53,6 +56,11 @@ const cleanup=()=>cleanupPending??=(async()=>{
  try{const job=readJob(jobFile);helperPids.add(job.helperPid);ownerPids.add(job.launchPid);ownerPids.add(job.health?.identity?.pid);}catch{}
  try{helperPids.add(Number(fs.readFileSync(path.join(root,'health-failure-helper.cjs.pid'),'utf8')));}catch{}
  for(const pid of helperPids)await stopOwned(pid);for(const pid of ownerPids)await stopOwned(pid);
+ let lockCleanupError;
+ if(snapshotLock)try{await releaseSnapshotLock();}catch(error){
+  lockCleanupError=error;
+  try{atomic(path.join(receipt,'lock-cleanup-failure.json'),{error:error.message,stack:error.stack});}catch(recordError){lockCleanupError=new AggregateError([error,recordError],'Lock cleanup and failure receipt both failed');}
+ }
  if(socketServer)await new Promise(resolve=>socketServer.close(resolve));
  if(app){let timer;await Promise.race([app.close().catch(()=>{}),new Promise(resolve=>timer=setTimeout(resolve,3000))]);clearTimeout(timer);}
  if(win&&fs.existsSync(path.join(installation,'Uninstall Proteus.exe'))){assert.equal(await execute(path.join(installation,'Uninstall Proteus.exe'),['/S','/currentuser']),0);await wait(()=>{try{return !windows.registration();}catch{return true;}},'disposable uninstaller completion',60000);}
@@ -63,13 +71,14 @@ const cleanup=()=>cleanupPending??=(async()=>{
   try{command=execFileSync(reg,['query',key+'\\shell\\open\\command','/ve'],{encoding:'utf8',windowsHide:true,stdio:['ignore','pipe','ignore']}).match(/REG_SZ\s+(.+)/)?.[1]?.trim();}catch(error){if(error.status===1)continue;throw error;}
   if(command==='"'+path.join(installation,'Proteus.exe')+'" "%1"')execFileSync(reg,['delete',key,'/f'],{windowsHide:true,stdio:'ignore'});
  }
+ if(lockCleanupError)throw lockCleanupError;
 })();
 for(const signal of ['SIGINT','SIGTERM'])process.once(signal,()=>{atomic(path.join(receipt,'interrupted.json'),{signal,at:new Date().toISOString()});void cleanup().finally(()=>process.exit(130));});
 const request=async(route,body)=>{const c=JSON.parse(fs.readFileSync(path.join(home,'connection.json'))),response=await fetch(c.origin+route,{method:body?'POST':'GET',headers:{Authorization:'Bearer '+c.token,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(['prepare','import-release'].includes(body?.action)?240000:10000)});const result=await response.json();if(!response.ok)throw Error(result.error||'Owner request failed');return result;};
 const rehearsalReplies=new Set();
 const settleRehearsal=async run=>{if(!live&&run.schedule.provider==='rehearsal'&&run.status==='awaiting_input'&&run.pending?.type==='question'&&run.pending.question==='This sample run needs feedback. What should the next checkpoint focus on?'&&!rehearsalReplies.has(run.pending.id)){await request('/api/runs/'+run.id+'/reply',{requestId:run.pending.id,answer:'Explicit synthetic updater feedback. No model or external workflow was called.'});rehearsalReplies.add(run.pending.id);}};
 try{
- if(recoverySocket||preflightFailure){
+ if(recoverySocket||preflightFailure&&!win){
   const file=path.join(home,preflightFailure?'unknown.sock':'terminal-tmux/socket');fs.mkdirSync(path.dirname(file),{recursive:true});
   socketServer=net.createServer();await new Promise((resolve,reject)=>{socketServer.once('error',reject);socketServer.listen(file,resolve);});
   fs.writeFileSync(path.join(home,'terminal-metadata-fixture.json'),'retain terminal metadata');
@@ -91,6 +100,13 @@ try{
  // after its service/runner lock is already closed.
  await app.evaluate(()=>{setTimeout(()=>process.mainModule.require('node:inspector').close(),0);});app=null;
  const prepared=await request('/api/updates',win?{action:'import-release',manifest,channel:'stable'}:{action:'prepare',candidate:candidate.bundle,sourceFingerprint:candidate.sourceFingerprint});
+ if(win&&preflightFailure){
+  const sentinel=path.join(home,'synthetic-snapshot-sentinel.txt');fs.writeFileSync(sentinel,'SYNTHETIC SNAPSHOT SENTINEL\n',{flag:'wx'});
+  const lockScript=path.resolve(import.meta.dirname,'windows-snapshot-lock.ps1');
+  snapshotLock=spawn(path.join(process.env.SystemRoot,'System32','WindowsPowerShell','v1.0','powershell.exe'),['-NoLogo','-NoProfile','-NonInteractive','-File',lockScript,sentinel],{windowsHide:true,stdio:['pipe','pipe','pipe']});
+  await new Promise((resolve,reject)=>{let output='',errors='';const timer=setTimeout(()=>reject(Error('Synthetic Windows lock did not become ready')),10000);snapshotLock.stdout.on('data',chunk=>{output+=chunk;if(output.includes('LOCK_READY')){clearTimeout(timer);resolve();}});snapshotLock.stderr.on('data',chunk=>errors+=chunk);snapshotLock.once('error',error=>{clearTimeout(timer);reject(error);});snapshotLock.once('exit',code=>{clearTimeout(timer);reject(Error('Synthetic Windows lock exited before readiness: '+code+' '+errors));});});
+  assert.throws(()=>fs.readFileSync(sentinel),/EBUSY|EPERM|EACCES/,'OS must refuse reading the exclusively held sentinel');
+ }
  console.log('Candidate prepared after exact package and isolated renderer checks.');
  jobFile=JSON.parse(fs.readFileSync(path.join(path.dirname(setup.policy),'current.json'))).file;
  await request('/api/updates',{action:'handoff',id:prepared.job.id,expectedRevision:prepared.job.revision,...(noChat?{}:{runId:setup.id}),checkpoint:'Finish this disposable acceptance: reply with CODEX_UPDATE_VERIFIED. No tools, file edits or external effects are needed.'});
@@ -105,7 +121,7 @@ try{
  const job=readJob(jobFile),restored=JSON.parse(fs.readFileSync(path.join(home,'runs',setup.id+'.json')));
  assert.equal(job.outcome,rollback||preflightFailure?'rollback':'updated');assert.equal(inspectPackage(installation).sourceFingerprint,rollback||preflightFailure?baseline.sourceFingerprint:candidate.sourceFingerprint);assert.equal(restored.providerSessionId,prior.providerSessionId);assert.deepEqual(restored.events.slice(0,prior.events.length),prior.events);assert.equal(restored.events.filter(event=>event.data?.delivery?.id===job.continuationId).length,noChat?0:1);if(noChat){assert.equal(job.runId,null);assert.deepEqual(restored.events,prior.events);}if(live)assert.ok(restored.events.some(event=>event.role==='assistant'&&event.text.includes('CODEX_UPDATE_VERIFIED')));
  let current=await request('/api/content-tabs',{action:'get',...history.scope});assert.deepEqual(current.tabs.find(tab=>tab.id==='signed-history').history,history.history);await request('/api/content-tabs',{action:'mutate',...history.scope,operations:[history.operation]});current=await request('/api/content-tabs',{action:'get',...history.scope});assert.deepEqual(current.tabs.find(tab=>tab.id==='signed-history').history,history.history,'replayed receipt must retain the complete Back/Forward stack');
- if(preflightFailure){assert.equal(job.failedBeforeReplacement,true);assert.match(job.preInstallFailure.error,/unknown.sock/);assert.ok(restored.events.some(event=>event.text?.includes('Update failed before application replacement:')));assert.equal(job.recovery,null);}
+ if(preflightFailure){assert.equal(job.failedBeforeReplacement,true);assert.match(job.preInstallFailure.error,win?/synthetic-snapshot-sentinel|EBUSY|EPERM|EACCES|sharing/i:/unknown.sock/);assert.ok(restored.events.some(event=>event.text?.includes('Update failed before application replacement:')));assert.equal(job.recovery,null);if(win){assert.equal(inspectPackage(installation).hash,baseline.hash);await releaseSnapshotLock();assert.equal(fs.readFileSync(path.join(home,'synthetic-snapshot-sentinel.txt'),'utf8'),'SYNTHETIC SNAPSHOT SENTINEL\n');const policy=JSON.parse(fs.readFileSync(setup.policy,'utf8'));assert.ok(Array.isArray(policy.generations));assert.equal(policy.generations.length,0,'No verified recovery generation may be registered');}}
  if(recoverySocket){assert.equal(fs.lstatSync(path.join(home,'terminal-tmux/socket')).isSocket(),true);assert.equal(fs.existsSync(path.join(job.recovery,'data-0/terminal-tmux/socket')),false);assert.equal(fs.readFileSync(path.join(job.recovery,'data-0/terminal-metadata-fixture.json'),'utf8'),'retain terminal metadata');}
  const duplicate=await request('/api/updates/recovery',{action:'resume',id:job.id,secret:job.secret,outcome:job.outcome}).catch(error=>({error:error.message}));assert.ok(duplicate.error,'completed recovery endpoint refuses another dispatch');
  const acceptance={passed:true,baseline:baseline.buildRevision,candidate:candidate.buildRevision,outcome:job.outcome,provider:noChat?'standalone; existing rehearsal chat unchanged':live?'codex':'explicit rehearsal',usage:restored.usage,identity:identityLabel,ownerFixture:configuredOwner?'explicitly configured legacy baseline':'fresh automatically persisted owner',checks:['exact '+identityLabel+' runtime and separate helper','actual renderer health',preflightFailure?'snapshot failure relaunches unchanged baseline and reports failure once':rollback?'compatible code rollback without restoring old data':'verified code replacement without restoring old data',noChat?'standalone update does not dispatch any chat':'same original chat/session resumes automatically once','prior events/configuration and complete Back/Forward stacks/operation receipts survive',...(recoverySocket?['managed terminal socket survives update and is omitted from recovery; durable terminal metadata is retained']:[])],artifacts:receipt};
