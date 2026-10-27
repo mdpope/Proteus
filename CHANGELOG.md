@@ -1,3 +1,8 @@
+## Planned — October 26 release
+
+- Record the complete release implementation/validation plan, including read-only subagent conversations within the parent chat and inherited applicable authorization for delegated work. Feature implementation and deployment follow the operator's model switch.
+- Reconcile Windows validation commits and retain two previously missing historical Linux acceptance reports; document obsolete local branch cleanup without removing worktree files.
+
 ## Unreleased — Linux Codex discovery
 
 - Find the Linux desktop-bundled Codex executable when launched from KDE with a minimal PATH. Keep explicit executable overrides and PATH precedence, and reject non-executable automatic candidates.

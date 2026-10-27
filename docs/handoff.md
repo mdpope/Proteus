@@ -1,3 +1,21 @@
+## October 26 — new release planning and branch reconciliation
+
+Continue from `codex/oct26-release`. The operator requested a model switch before feature
+implementation. Read [the implementation plan](2026-10-26-release-plan.md) and
+[branch audit](2026-10-26-branch-audit.md) first. This planning turn merged Windows recovery
+validation at `592d362`, recovered two missing historical Linux reports and confirmed 13
+historical feature branches have exact aggregate patch equivalents in main. The 29 focused
+link/update tests and static checks pass. Eight obsolete local branch labels were removed;
+their commits and detached worktree files remain. Main and this release are the retained local branches.
+
+R1–R22 include the original note/screenshots, a read-only subagent panel inside the parent chat,
+and inherited applicable authorization for delegated work. Child read/patch tools failed even
+after explicit user authorization; their wording alone does not prove a human refusal.
+No feature implementation, package build, publication or installation occurred in this turn.
+The original authorized destination scope is this Mac and the intended iPhone/iPad after acceptance.
+Original intake and hash-verified copies remain outside Git. Follow the plan's ownership waves,
+verification and existing supervisor/device retention requirements after the model switch.
+
 ## October 26 — Linux Codex launch failure; source correction accepted
 
 The user completed Ctrl+Q/reopen. The attempted continuation of the existing Linux coordinator

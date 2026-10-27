@@ -1,3 +1,18 @@
+## October 26 — next release scope and implementation handoff
+
+The operator's new intake plus subagent viewer and delegated-permission repair are captured as
+R1–R22 in [the release plan](2026-10-26-release-plan.md). Planning and branch integration are
+complete; feature implementation waits for the operator to change this chat's model and submit.
+Use Terra high implementation/installation workers with explicit ownership. The plan covers
+schedule/workspace authority, core tools, browser/chat/search fixes, local speech, provider
+continuation, terminal sharing, notifications, desktop/native performance, signed distribution,
+read-only in-chat child transcripts and inherited applicable parent authorization. Preserve
+real resource/approval boundaries and report machine-policy refusal separately from human denial.
+
+[The branch audit](2026-10-26-branch-audit.md) records the Windows validation merge, recovered
+historical Linux evidence, equivalent squash branches and authorized local branch cleanup.
+No new feature, published binary or installed update is claimed by this planning entry.
+
 ## October 26 — Linux desktop Codex discovery fixed in source
 
 After the user's normal KDE quit/reopen, the internal Codex update chat fails to spawn (`ENOENT`).
