@@ -37,6 +37,27 @@ the ordinary idle barrier. Fresh package/source/recovery checks pass; installed 
 pending. A separate Codex chat owns the reported Windows startup crash, so this coordinator must not
 continue Windows deployment/repair actions. Earlier Windows acceptance remains historical evidence.
 
+## October 26 — local Windows recovery and source validation
+
+The existing installed 0.2.29 owner was reopened and Home/Chats navigation verified;
+a second ordinary launch returned to that owner in under a second. Two windowless,
+listenerless duplicate launches were stopped. This is recovery of the existing app,
+not acceptance or installation of the pending 0.2.30 candidate. Cached data checks
+remain separate from the native owner's health and protected-state acceptance.
+
+Source validation exposed two Windows test-path assumptions: a raw file URL pathname
+passed to Node and a POSIX-only expected path in mocked Mac registration. Both fixtures
+are corrected without changing runtime behavior or relaxing helper readiness/registration
+checks. Full Windows source validation passes: 1,196 tests, five platform skips and zero
+failures; static checks pass. No new package was built or installed for this recovery.
+
+The operator subsequently clarified that opening had shown a JavaScript error popup;
+its exact message was unavailable. A normal second invocation and a full graceful
+quit/cold launch with private error capture both succeed without reproducing that popup.
+Authenticated local health confirms the existing completed chat and disabled schedules.
+The log contains handled peer-reconnect warnings, not an identified fatal startup error.
+Keep the popup's root cause unconfirmed; the fixture corrections above do not repair it.
+
 ## October 26 — signed Windows package accepted; clean-build recipe corrected
 
 Frozen d5dc6c9 windows.c6c079eaa341 passes the complete Windows suite (1,194 passes/five skips),

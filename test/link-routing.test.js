@@ -44,7 +44,7 @@ test('browser registration is explicit, scoped to this app, verifies both scheme
   const app={isPackaged:true,getAppPath:()=>'/Applications/Proteus.app/Contents/Resources/app',isDefaultProtocolClient:scheme=>defaults.has(scheme),getApplicationNameForProtocol:()=> 'Safari',setAsDefaultProtocolClient:scheme=>{defaults.add(scheme);return true;}};
   const registration=new BrowserRegistration(app,{platform:'darwin',execute:async(...args)=>commands.push(args)});
   assert.equal(registration.status().isDefault,false);assert.equal(commands.length,0);
-  await registration.act('register');assert.deepEqual(commands[0][1],['-f','-R','-trusted','/Applications/Proteus.app']);assert.equal(defaults.size,0);
+  await registration.act('register');assert.deepEqual(commands[0][1],['-f','-R','-trusted',path.resolve('/Applications/Proteus.app')]);assert.equal(defaults.size,0);
   assert.equal((await registration.act('make-default')).isDefault,true);
   app.isPackaged=false;await assert.rejects(()=>registration.act('register'),/installed macOS/);
   assert.notEqual(targetKey(destination),targetKey({...destination,hostId:'other'}));

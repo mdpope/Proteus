@@ -1,5 +1,11 @@
 # Windows desktop
 
+Windows source validation uses native paths when launching the legacy updater fixture
+and when comparing a mocked Mac registration bundle. File URL pathnames are not native
+Windows executable arguments; use `fileURLToPath` so drive letters, spaces and escaped
+characters survive. These fixture corrections do not replace an installed package or
+satisfy the separate real-installer and live workflow gates.
+
 ## Current correction — October 23 local / October 24 UTC
 
 `0.2.29 / windows.a02de6227c89`, runtime `490fd629b659`, is installed/live-verified and public
