@@ -1,4 +1,8 @@
-## October 27 — October 26 scope implemented; release acceptance in progress
+## October 27 — 0.2.31 published and physical iPhone accepted
+
+The signed Mac download/catalog is active and independently full-download verified, including publisher trust, actual official extraction and exact package identity. All four public files match; all 1,138 original server files and 13 symlinks remain unchanged. The physical iPhone is installed/launch-verified on 0.2.31 / 2610.27.1 with 290 protected-file hashes and four saved destinations/selection preserved. Two full recovery generations remain. Final source checks: 1,224 Node passes, three skips, static pass. Physical gesture/reconnect/push acceptance remains separate. This Mac awaits saved Engine Room → Updates coordinator defaults; the iPad awaits unlock before capture/install. No other desktop rollout. See [the current evidence ledger](2026-10-27-release-evidence.md).
+
+## October 27 — Implementation checkpoint (superseded deployment status above)
 
 Candidate 0.2.31 implements the October 26 schedule, attachment/clipboard, inline agent/delegation, native selection, menu/browser, speech, continuation, terminal and projection changes. See [the per-requirement evidence ledger](2026-10-27-release-evidence.md). The original 22 requirements remain visible; live platform/device/publication limits are explicit. The final short-temp Node suite passes 1,223 tests with three skips; static checks pass. Phone/tablet units and actual A→B→A project switching/question-choice UI pass. Actual native Codex child read/write and disposable Electron DNS/page-notification acceptance pass. No application install or public release is claimed by this source checkpoint.
 

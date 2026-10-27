@@ -1,3 +1,7 @@
+## October 27 — iPhone update accepted; iPad awaits unlock
+
+0.2.31 / 2610.27.1 uses the existing paid identity and explicit development push profile, valid through October 26, 2027 and covering both intended devices. The physical iPhone is installed and launch-verified with 290 protected files byte-preserved before launch and four destinations/selection retained. It has exactly two verified full recovery generations; compact older receipts remain. Physical gesture, reconnect and push delivery checks remain separate. The iPad is still locked and unchanged, with its two previous recovery generations and no new full capture. No shared certificate was revoked, deleted or replaced. See [the release ledger](2026-10-27-release-evidence.md).
+
 # Paid-account migration for native iPhone and iPad
 
 The operator authorized this migration on October 18, 2026. It is separate from desktop

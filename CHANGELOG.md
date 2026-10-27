@@ -1,4 +1,4 @@
-## 0.2.31 — October 26 release candidate
+## 0.2.31 — October 27 release
 
 - Add independent schedule configuration with category-selected workspace sources, canonical explicit folder grants and schedule-scoped approvals.
 - Repair current Codex child lineage/approval routing; add scoped host delegation and inline read-only agent transcripts on desktop/iOS.
@@ -6,7 +6,7 @@
 - Improve selection-aware local speech, themed provider menus, profile link menus, fragment URL validation, navigation errors and page notifications.
 - Add bounded Copilot active-time continuation, verify terminal sharing and coalesce redundant browser state projections.
 - Repair native selection identity and stale-response handling; release inactive refresh tasks and show useful notification text.
-- Record actual acceptance and outstanding publication/device/platform gates in the [release evidence](docs/2026-10-27-release-evidence.md). This candidate is not an installation claim.
+- Publish the signed Mac download and verify its full HTTPS archive, publisher trust and official extraction. Install and launch-verify the physical iPhone with protected files/destinations preserved. This Mac awaits saved update coordinator defaults; the iPad awaits unlock. See exact acceptance and remaining platform gates in the [release evidence](docs/2026-10-27-release-evidence.md).
 
 ## Planned — October 26 release
 

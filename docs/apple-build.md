@@ -1,3 +1,7 @@
+## October 27 — physical iPhone 0.2.31 installed
+
+The existing paid identity and explicit push-capable profile signed 0.2.31 / 2610.27.1 for both intended devices; expiry is October 26, 2027. Automatic selection initially chose the older wildcard profile, so a private build overlay selected the existing explicit profile. No account, certificate or device registration changed. The iPhone update is installed in place and launch-verified; all 290 protected files match before launch and all four saved destinations/selection remain. Exactly two verified full recovery generations remain after retiring the oldest eligible app/container payload, preserving compact receipts. Physical gestures, reconnect authentication and push delivery are not claimed. The iPad remains locked and unchanged; no new full capture started. See [the release evidence](2026-10-27-release-evidence.md).
+
 ## October 22 — separate Apple browser evaluation distribution
 
 The private `org.proteusapp.review.proteus.desktop` candidate uses WTB team `TEAMID0000` and Developer ID
