@@ -1,18 +1,30 @@
-## October 26 — exact Linux Codex package prepared; native handoff pending
+## October 26 — exact Linux Codex update installed and verified
 
-Exact main `4b90654706d79930d6c94cca9ead073c77d0d73f` is frozen as `linux.8808ae9c976b`.
-Source/provenance, 1,204 source tests/static checks and the three unchanged packaged supervisor
-transitions pass. Restricted-PATH discovery and real synthetic Codex tools/restart/pairing pass.
-Broader UI fixtures remain explicitly incomplete because their selectors/geometry/close-window
-expectations are stale; retain their raw failures and do not claim full UI acceptance.
+Exact source `4b90654706d79930d6c94cca9ead073c77d0d73f` is installed as `linux.8808ae9c976b`,
+whole-package SHA-256 `a7c6699076c49b53dc94f06e1f32a4124e686e7b9af7f4f39bcc4e4116f0a2fa`.
+The prepared native supervisor completed after explicit operator download/dialog/automation idle
+confirmation and the ordinary owner barrier. One normal owner/lock matches; old owner/helper are
+exited, barrier released, no blocker/error. This external bootstrap had no coordinator run ID,
+model continuation or replay of the failed frozen396 task. Do not install that older candidate.
 
-The native job is prepared, with no coordinator run ID or replay of the failed frozen396 task.
-Handoff and installed verification await the outstanding downloads/save-dialog/automation idle
-status check. No restart or replacement is claimed. Continue the prepared job through the native
-supervisor and ordinary idle barrier; preserve current sessions, accepted historical exceptions,
-retry receipts and two recovery generations. The external transcript supplement belongs in that
-same recovery generation. Installed Codex/peer and actual cold preservation checks remain pending.
-See [the exact artifact report](2026-10-26-linux-030-4b90654.md) for identities and qualifications.
+Installed Codex discovery now succeeds with eight available, non-stale models and existing sign-in.
+The relay and existing encrypted peer are online; pairing bytes and all prior local/peer chat IDs
+remain. An initial partial connection observation is retained. The restored Providers screen was
+visually verified after the operator unlocked the desktop; locked dark captures remain evidence.
+
+Actual cold/native event/context hashes, original sessions/configuration, saved tabs/drafts/history,
+all current cookies and navigation/retry rows verify preserved. Existing historical exceptions were
+not restored or extended. Only scan/poll metadata, a reading-position locator and derived peer cache
+are qualified. An independent audit's numeric copy-counter interpretation defect is explicitly
+classified with original false output retained; actual app/root/copy hashes and complete counters
+verify. Exactly two recovery generations remain, including the bounded transcript supplement in
+the new generation. Measured free space is 1,934,013,313,024 bytes, down 765,800,448 from preflight.
+
+Source tests/static checks and all three packaged supervisor transitions pass. Broad UI fixtures
+remain explicitly incomplete for stale selectors/geometry/close-window expectations; do not claim
+all attempted tests passed or infer unexecuted remote stages. See [the artifact report](2026-10-26-linux-030-4b90654.md)
+for exact identities, preservation qualification and remaining fixture maintenance. Other computers
+and physical mobile installations were not repeated by this Linux rollout.
 
 ## October 26 — Linux Codex launch failure; source correction accepted
 

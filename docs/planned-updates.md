@@ -1,12 +1,16 @@
-## October 26 — exact Linux package gates accepted with explicit limits
+## October 26 — exact Linux Codex update completed
 
-The isolated `4b90654` Linux build is frozen as `linux.8808ae9c976b`; required source/package
-and all three supervisor transition gates pass. Native preparation is complete; actual handoff
-and installed Codex/peer/preservation acceptance remain pending the current download/dialog/
-automation idle check. Preserve the prepared job and current state; do not retry frozen396.
-[The artifact report](2026-10-26-linux-030-4b90654.md) distinguishes targeted acceptance from
-incomplete broad UI fixtures. Follow-up fixture maintenance must preserve assertions while
-updating stale selectors, geometry assumptions and the intended close-window lifecycle.
+The isolated `4b90654` package `linux.8808ae9c976b` completed its authorized native update.
+Installed source/package identity, Codex discovery/catalog, existing relay/encrypted peer, restored
+interface and actual cold session/data preservation verify. Two verified recovery generations
+remain; prior cookie/history exceptions and retry receipts are preserved. No failed frozen396
+task or model continuation was replayed. [The artifact report](2026-10-26-linux-030-4b90654.md)
+retains targeted gate scope, mutable metadata qualifications and original failed audit/fixture
+receipts. The initial numeric copy-counter audit interpretation is independently classified.
+
+Deferred fixture maintenance must preserve assertions while updating stale selectors, geometry
+assumptions and intended close-window lifecycle. Later unexecuted remote fixture stages and new
+physical mobile/Mac installations are not inferred from this Linux acceptance.
 
 ## October 26 — Linux desktop Codex discovery fixed in source
 

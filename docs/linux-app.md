@@ -2,12 +2,13 @@ Current cross-platform acceptance is recorded in [PR #20](https://github.com/mdp
 The dated/source-specific checkpoints below retain their original verification scope; later
 workflow results supersede their pending/failure status without changing the recorded artifacts.
 
-## October 26 — exact 0.2.30 package prepared
+## October 26 — exact 0.2.30 installed and live-verified
 
-`linux.8808ae9c976b` includes the main `4b90654` Linux desktop Codex discovery correction.
-The required isolated package/supervisor gates pass with explicit broader UI fixture limitations.
-Native preparation is complete; restart and installed Codex/peer acceptance are pending the
-outstanding idle-status check. See [the exact artifact report](2026-10-26-linux-030-4b90654.md).
+`linux.8808ae9c976b` from exact main `4b90654` is installed through the native supervisor and
+ordinary idle barrier. Installed provenance, Codex discovery with existing sign-in, relay/peer
+connections and cold data/session preservation verify. The restored interface is visually checked;
+two verified recovery generations remain. Broader package fixtures retain explicit incomplete
+coverage and original failures. See [the exact artifact report](2026-10-26-linux-030-4b90654.md).
 The earlier installed checkpoints below remain historical.
 
 ## October 22 — 0.2.29 installed and live-verified
