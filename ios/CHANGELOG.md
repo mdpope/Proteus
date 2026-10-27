@@ -1,3 +1,7 @@
+# Native follow-up, October 27, 2026 — installed
+
+0.2.31 / 2610.27.2 permits queued attachment steering when the owning provider advertises support. Native simulator compilation and all 153 units pass. Physical iPhone/iPad installs preserve all 290/260 protected files before launch; both processes launch and all four saved destinations/selection remain per device. Two verified full recovery generations remain each. Physical gestures, reconnect authentication and push delivery are not inferred from installation checks. The original paid identity and explicit push-capable profile remain unchanged.
+
 # Native follow-up, October 22, 2026 — staged source
 
 Project navigation now follows the current store selection while a project destination is open.

@@ -11101,3 +11101,6 @@ Acceptance: 1,056 Node tests pass (one platform skip), static checks pass, and t
 Mac package passes native-failure notice dismissal/retry/reload/restart/expiry and the combined
 400 ms follow/history UI checks. These do not claim installation or a functioning third-party
 password manager connection; Windows/Linux package acceptance remains separate.
+## October 27 — follow-up publication acceptance
+
+Fresh version-named update coordinators, resilient provider defaults, inline question attachments, provider-supported queued attachment steering and guarded recovery supersession are implemented and tested. Corrected Mac build `abac31955b11+src.25f29d666329` is published; full HTTPS archive, installed trust, official extraction, exact corresponding source and public page pass. A new local coordinator uses saved update defaults and awaits human approval; installed Mac behavior remains separate. Physical iPhone/iPad 2610.27.2 installation, protected data, launch, destinations and two-generation retention pass. Build Mac's existing Proteus identity verifies as both HTTP/HTTPS defaults. HC's browser change and actual Windows historical-recovery reconciliation remain unverified. See [the evidence ledger](2026-10-27-release-evidence.md).

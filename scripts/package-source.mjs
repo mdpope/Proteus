@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
+import * as tar from 'tar';
 const root=path.resolve(import.meta.dirname,'..');
 const version=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8')).version;
 const output=path.join(root,'dist','combined-update-source');fs.mkdirSync(output,{recursive:true});
@@ -21,6 +22,7 @@ try{
   const target=path.join(destination,file);fs.mkdirSync(path.dirname(target),{recursive:true});fs.copyFileSync(source,target);manifest.files[file]=createHash('sha256').update(fs.readFileSync(source)).digest('hex');
  }
  fs.writeFileSync(path.join(destination,'SOURCE-MANIFEST.json'),JSON.stringify(manifest,null,2)+'\n');
- const archive=path.join(output,name+'.tar.gz');execFileSync('tar',['-czf',archive,'-C',temporary,name]);
+ // Portable tar entries exclude host filesystem metadata/AppleDouble sidecars.
+ const archive=path.join(output,name+'.tar.gz');await tar.c({gzip:true,portable:true,cwd:temporary,file:archive},[name]);
  const sha256=createHash('sha256').update(fs.readFileSync(archive)).digest('hex');fs.writeFileSync(archive+'.sha256',sha256+'  '+path.basename(archive)+'\n');console.log(JSON.stringify({archive,sha256,files:Object.keys(manifest.files).length}));
 }finally{fs.rmSync(temporary,{recursive:true,force:true});}

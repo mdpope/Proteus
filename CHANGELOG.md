@@ -2,14 +2,14 @@
 
 - Follow-up source correction: each manual update creates a fresh release-named coordinator chat from saved provider/model settings. Remove the old chat selector/checkpoint form, preserve update defaults when status fails, and guard rapid provider changes and uncertain start retries.
 - Add consented attachments to inline asynchronous question answers. Permit supported queued attachments to steer immediately on the owning provider, including remote/native clients, while retaining uncertain-delivery receipts.
-- Recognize a rotated historical recovery only when two newer retained receipts verify; unresolved missing recovery records remain explicit. These follow-up changes require a new tested package; the previously published package is unchanged.
+- Recognize a rotated historical recovery only when two newer retained receipts verify; unresolved missing recovery records remain explicit. Publish the corrected signed Mac package after full HTTPS, installed trust and official extraction checks; preserve the earlier immutable release. Use portable corresponding-source archives without host metadata sidecars.
 - Add independent schedule configuration with category-selected workspace sources, canonical explicit folder grants and schedule-scoped approvals.
 - Repair current Codex child lineage/approval routing; add scoped host delegation and inline read-only agent transcripts on desktop/iOS.
 - Accept arbitrary attachments, convert large pasted text to bounded attachments, preserve safe rich paste, enlarge Internet Search and show question choices immediately.
 - Improve selection-aware local speech, themed provider menus, profile link menus, fragment URL validation, navigation errors and page notifications.
 - Add bounded Copilot active-time continuation, verify terminal sharing and coalesce redundant browser state projections.
 - Repair native selection identity and stale-response handling; release inactive refresh tasks and show useful notification text.
-- Publish the signed Mac download and verify its full HTTPS archive, publisher trust and official extraction. Install and launch-verify the physical iPhone with protected files/destinations preserved. This Mac awaits saved update coordinator defaults; the iPad awaits unlock. See exact acceptance and remaining platform gates in the [release evidence](docs/2026-10-27-release-evidence.md).
+- Publish the corrected signed Mac download and verify its full HTTPS archive, publisher trust and official extraction. Install and launch-verify corrected native build 2610.27.2 on iPhone/iPad, preserving protected files, saved destinations and two recovery generations each. Verify Build Mac's existing Proteus identity as both HTTP/HTTPS defaults. The new Mac update coordinator and HC browser task await human approvals. See exact acceptance and remaining platform gates in the [release evidence](docs/2026-10-27-release-evidence.md).
 
 ## Planned — October 26 release
 
