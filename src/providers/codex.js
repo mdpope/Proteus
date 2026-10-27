@@ -4,6 +4,7 @@ import {attachmentText} from './provider-attachment-input.js';
 import {chatControlTools} from '../services/chats/chat-control-tools.js';
 import {privateTemporaryDirectory} from '../shared/private-paths.cjs';
 import {windowsProviderExecutable} from './windows-provider.js';
+import {linuxCodexExecutable} from './linux-provider.js';
 import {integrationTools} from '../services/integrations/integration-tools.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -20,7 +21,12 @@ import { canonicalPath, effectivePermissionMode } from '../services/settings/per
 import { validateModelOptions } from '../models/model-catalog.js';
 const proteusVersion=JSON.parse(fs.readFileSync(new URL('../../package.json',import.meta.url),'utf8')).version;
 
-export const codexExecutable = () => process.env.PROTEUS_CODEX_PATH || (process.platform==='win32'?windowsProviderExecutable('codex'):['/opt/homebrew/bin/codex','/usr/local/bin/codex','/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex','/Applications/Codex.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex','/Applications/ChatGPT.app/Contents/Resources/codex','/Applications/Codex.app/Contents/Resources/codex'].find(p=>fs.existsSync(p)) || 'codex');
+export function codexExecutable({platform=process.platform,env=process.env,home=os.homedir(),executable}={}) {
+ if(env.PROTEUS_CODEX_PATH)return env.PROTEUS_CODEX_PATH;
+ if(platform==='linux')return linuxCodexExecutable({env,home,...(executable?{executable}:{})});
+ if(platform==='win32')return windowsProviderExecutable('codex',{env,home});
+ return ['/opt/homebrew/bin/codex','/usr/local/bin/codex','/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex','/Applications/Codex.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex','/Applications/ChatGPT.app/Contents/Resources/codex','/Applications/Codex.app/Contents/Resources/codex'].find(p=>fs.existsSync(p))||'codex';
+}
 export function codexModel(model) {
  const efforts=(model.supportedReasoningEfforts||[]).map(e=>typeof e==='string'?e:e.reasoningEffort);
  return {id:model.model||model.id,name:model.displayName||model.id,isDefault:model.isDefault,description:model.description,controls:{reasoningEfforts:efforts,reasoningSupported:efforts.length>0,defaultReasoningEffort:model.defaultReasoningEffort||null,contextTiers:[{id:'default',promptTokens:null,totalTokens:null}],maxOutputTokens:null,serviceTiers:(model.serviceTiers||[]).map(t=>({id:t.id||t.serviceTier,name:t.displayName||t.name||t.id||t.serviceTier})).filter(t=>t.id)}};

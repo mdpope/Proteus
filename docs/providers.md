@@ -1,3 +1,18 @@
+## October 26 — Linux Codex executable discovery
+
+Linux honors `PROTEUS_CODEX_PATH`, then executable PATH entries, followed by the desktop bundle at
+`/opt/codex-desktop/resources/codex`, the user's native bin and standard system bins. Automatic
+matches must be executable files; native symlinks work. Relative/empty PATH entries are not scanned.
+Discovery does not launch a shell, change credentials or select a different provider account. An
+explicit unavailable path remains authoritative so isolated smoke tests cannot fall back to a real
+provider. The update helper already preserves the override and desktop-session context.
+
+The reported KDE failure was `spawn codex ENOENT`, before sign-in; the earlier resolver checked
+Mac bundle paths on Linux and missed the desktop installation. Source acceptance passes six new
+discovery regressions, 29 focused cases, the complete 1,204-pass/three-skip suite and static checks.
+These checks ran on Mac with an injected Linux platform and disposable filesystem fixtures;
+actual Linux package/GUI/update acceptance and installation remain pending.
+
 ## October 24 — MTPLX reasoning and agent extension
 
 The isolated preview adapter now reads both `/v1/models` and `/v1/mtplx/settings`.

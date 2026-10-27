@@ -1,3 +1,28 @@
+## October 26 — Linux Codex launch failure; source correction accepted
+
+The user completed Ctrl+Q/reopen. The attempted continuation of the existing Linux coordinator
+failed with `spawn codex ENOENT`, before model execution or any prepare/install effect. Do not
+retry that old frozen396 deployment task: its package lacks the newly required discovery fix.
+The user's working external Linux Codex reports the desktop executable present and runnable at
+`/opt/codex-desktop/resources/codex`. This is executable discovery, not evidence of lost sign-in.
+
+The Linux resolver now respects explicit overrides, executable PATH entries and known native
+locations, including that desktop bundle. It rejects non-executable automatic matches, supports
+symlinks and avoids shell discovery. Existing update environment code already preserves the
+override and KDE context; isolated smoke overrides stay authoritative. Mac/Windows default
+discovery is unchanged. Six new regressions/29 focused cases pass; full suite: 1,204 passes,
+three existing platform skips, zero failures; static checks pass. Baseline failures are retained.
+This is Mac-hosted source acceptance, not native Linux package or installed acceptance.
+
+Next use the working external Linux Codex for the bootstrap while internal turns cannot spawn.
+Read actual installed status, original-session/current work and recorded local cookie/history
+exceptions first. Build/freeze an exact clean candidate including this fix, verify source/runtime
+hashes and Linux package/transition gates, then use the supported local native supervisor and
+ordinary idle barrier. Preserve current data, previous candidates, failures, retry identities and
+two-generation recovery policy. Do not reset credentials, guess backend/environment values,
+replace the app outside its supervisor or repeat completed effects. Root has not restarted,
+rebuilt or installed Linux during this source correction. Windows remains with its other Codex.
+
 ## October 26 — personal Mac installed and independently verified
 
 The authorized working-chat bootstrap completed through the native supervisor. Installed 0.2.30

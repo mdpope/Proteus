@@ -1,3 +1,17 @@
+## October 26 — Linux desktop Codex discovery fixed in source
+
+After the user's normal KDE quit/reopen, the internal Codex update chat fails to spawn (`ENOENT`).
+The user's working Linux Codex reports a verified executable in the desktop bundle. Linux-aware
+discovery now honors explicit overrides/PATH and checks that bundle plus standard native bins;
+automatic candidates require executable files. Updater override/context preservation already works.
+Six new regressions and 29 focused cases pass; full suite: 1,204 passes/three skips; static checks pass.
+
+No new Linux package or installation is claimed. A new exact tested candidate must include this
+fix; do not retry the failed task against frozen396, which lacks it. The working external Linux
+Codex can bootstrap through the supported native supervisor while the internal chat cannot spawn.
+Preserve original provider sessions, current data, accepted prior artifacts and all retry/failure
+receipts; do not reset sign-in or restore old data to mask separately recorded history exceptions.
+
 ## October 26 — personal Mac bootstrap installed and verified
 
 The native supervisor completed the exact accepted signed c683 Mac update to 0.2.30 and delivered

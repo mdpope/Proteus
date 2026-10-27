@@ -1,3 +1,7 @@
+## Unreleased — Linux Codex discovery
+
+- Find the Linux desktop-bundled Codex executable when launched from KDE with a minimal PATH. Keep explicit executable overrides and PATH precedence, and reject non-executable automatic candidates.
+
 ## Unreleased — Windows terminal ownership
 
 - Own Windows terminal descendants in a kill-on-close Job Object established before user commands run. Preserve output, input, resize, history and real natural exit codes; avoid the vendor's delayed numeric-PID cleanup.
