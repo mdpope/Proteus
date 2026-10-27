@@ -9,7 +9,7 @@
 - Improve selection-aware local speech, themed provider menus, profile link menus, fragment URL validation, navigation errors and page notifications.
 - Add bounded Copilot active-time continuation, verify terminal sharing and coalesce redundant browser state projections.
 - Repair native selection identity and stale-response handling; release inactive refresh tasks and show useful notification text.
-- Publish the corrected signed Mac download and verify its full HTTPS archive, publisher trust and official extraction. Install and launch-verify corrected native build 2610.27.2 on iPhone/iPad, preserving protected files, saved destinations and two recovery generations each. Verify both Personal and Work Macs' existing Proteus identity as HTTP/HTTPS defaults. The new Mac update coordinator awaits human approval. See exact acceptance and remaining platform gates in the [release evidence](docs/2026-10-27-release-evidence.md).
+- Publish the corrected signed Mac download and verify its full HTTPS archive, publisher trust and official extraction. Install the exact package through a new unassigned version-named coordinator, verifying live health, original chats/configuration and retained state after restart. Install and launch-verify corrected native build 2610.27.2 on iPhone/iPad, preserving protected files and saved destinations. Retain two recovery generations per target. Verify both Personal and Work Macs' existing Proteus identity as HTTP/HTTPS defaults. See exact acceptance and remaining Windows/feature-specific gates in the [release evidence](docs/2026-10-27-release-evidence.md).
 
 ## Planned — October 26 release
 
