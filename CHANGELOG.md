@@ -1,5 +1,8 @@
 ## 0.2.31 — October 27 release
 
+- Follow-up source correction: each manual update creates a fresh release-named coordinator chat from saved provider/model settings. Remove the old chat selector/checkpoint form, preserve update defaults when status fails, and guard rapid provider changes and uncertain start retries.
+- Add consented attachments to inline asynchronous question answers. Permit supported queued attachments to steer immediately on the owning provider, including remote/native clients, while retaining uncertain-delivery receipts.
+- Recognize a rotated historical recovery only when two newer retained receipts verify; unresolved missing recovery records remain explicit. These follow-up changes require a new tested package; the previously published package is unchanged.
 - Add independent schedule configuration with category-selected workspace sources, canonical explicit folder grants and schedule-scoped approvals.
 - Repair current Codex child lineage/approval routing; add scoped host delegation and inline read-only agent transcripts on desktop/iOS.
 - Accept arbitrary attachments, convert large pasted text to bounded attachments, preserve safe rich paste, enlarge Internet Search and show question choices immediately.

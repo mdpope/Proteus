@@ -3,6 +3,24 @@ import {createHash} from 'node:crypto';
 import {modelToolResult} from '../../shared/tool-results.js';
 export const questionAttachmentMediaTypes=Object.freeze(['image/png','image/jpeg','image/webp','text/plain']);
 const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
+export async function answerQuestionWithAttachments(engine,id,args,deviceId){
+ const run=engine.getRun(id),ids=args.attachments;
+ if(!Array.isArray(ids)||!ids.length)return engine.answerQuestion(id,args.questionId,args.answer,args.messageId,args.action);
+ const signature=digest([args.questionId,args.answer||'',ids,args.providerId,deviceId]);
+ const question=run.userQuestions?.find(item=>item.id===args.questionId);
+ if(!question||args.action&&args.action!=='answer')throw Error('Only an ordinary unanswered question accepts attachments.');
+ if(question.messageId){
+  if(question.messageId!==args.messageId||question.attachmentSignature!==signature)throw Error('This question submission ID was already used with different content.');
+  return engine.answerQuestion(id,args.questionId,args.answer||'Please review the attached files.',args.messageId,args.action,{signature});
+ }
+ if(question.status!=='pending')throw Error('This question is no longer waiting for an answer.');
+ if(ids.length>4||args.providerId!==run.schedule.provider||!args.consentId||!args.messageId)throw Error('Review up to four question attachments and their exact provider before sending.');
+ const files=await engine.attachmentConsents.verify({consentId:args.consentId,chatId:id,messageId:args.messageId,providerId:run.schedule.provider,deviceId,attachmentIds:ids});
+ if(files.some(file=>!questionAttachmentMediaTypes.includes(file.mediaType)))throw Error('Question replies support PNG, JPEG, WebP images and plain text.');
+ const prepared=await engine.attachmentConsents.prepareSend({consentId:args.consentId,chatId:id,messageId:args.messageId,providerId:run.schedule.provider,deviceId,attachmentIds:ids});
+ try{return await engine.answerQuestion(id,args.questionId,args.answer||'Please review the attached files.',args.messageId,args.action,{proofId:prepared.proofId,attachmentIds:ids,messageId:args.messageId,signature});}
+ catch(error){if(!question.messageId)await engine.attachmentConsents.releaseProof(prepared.proofId).catch(()=>{});throw error;}
+}
 /** Use the existing exact-file/provider consent boundary, bound to one question. */
 export async function replyWithAttachments(engine,id,args,deviceId){
  const run=engine.getRun(id),ids=args.attachments;

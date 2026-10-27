@@ -1,3 +1,9 @@
+## October 27 — fresh update sessions and retained recovery history
+
+Each operator-started update creates a new unassigned `purpose:update` chat named for the selected version, using saved Engine Room provider/model/effort/speed defaults. There is no default existing-chat selection. The new coordinator owns prepare, checkpoint, handoff and continuation through that specific upgrade. Stable operation IDs reconcile ambiguous start responses without duplicate chats; a later upgrade creates a different chat. Existing provider capabilities, owner permissions and unrelated work remain enforced. Provider defaults stay available when update status/catalog/recovery inspection reports an error.
+
+An older completed job may reference a generation retired under the two-generation policy. Polling must not re-register its absent payload. It can recognize supersession only when the old directory is absent and at least two newer eligible retained receipt hashes verify. Missing/changed registered receipts or an unresolved missing copy still require inspection. Do not recreate recovery JSON, erase errors or restore stale data to manufacture success. These follow-up source changes do not imply a live Windows repair or installed package acceptance.
+
 ## October 26 — actual-owner environment observation in disposable acceptance
 
 Electron can expose no parseable entries through `/proc/<pid>/environ` even while

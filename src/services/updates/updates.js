@@ -107,17 +107,7 @@ export class Updates {
   if(this.job()&&!terminal.has(this.job().phase))throw Error('Finish or cancel the current update first.');
   this.downloading=true;let directory,prepared;
   try{
-   const channel=value.channel||'stable';let envelope;
-   if(value.action==='import-release'){
-    if(!path.isAbsolute(value.manifest||''))throw Error('Choose an offline signed release manifest.');
-    const stat=fs.lstatSync(value.manifest);if(!stat.isFile()||stat.size>128*1024)throw Error('The offline release manifest is invalid.');
-    envelope=JSON.parse(fs.readFileSync(value.manifest,'utf8'));
-   }else{
-    const envelopes=await this.releaseClient.releases({channel,platform:this.platform,arch:process.arch});
-    envelope=envelopes.find(item=>{const release=verifyRelease(item,{channel,platform:this.platform});return release.id===value.releaseId;});
-    if(!envelope||digest(JSON.stringify(envelope))!==value.manifestDigest)throw Error('The selected release changed. Check available releases again.');
-   }
-   const release=verifyRelease(envelope,{channel,platform:this.platform});this.releaseDirectories();
+   const release=await this.selectedRelease(value);this.releaseDirectories();
    spaceBudget([{directory:this.root,bytes:release.artifact.bytes+release.artifact.unpackedBytes*2}]);
    directory=path.join(this.root,'downloads',randomUUID());fs.mkdirSync(directory,{mode:0o700});
    const archive=path.join(directory,'release.tar.gz');this.download={phase:'downloading',version:release.version,buildRevision:release.buildRevision};this.service.notify?.();
@@ -130,6 +120,20 @@ export class Updates {
    return prepared;
   }catch(error){this.error=error.message;throw error;}
   finally{this.downloading=false;this.download=null;if(directory)fs.rmSync(directory,{recursive:true,force:true});this.service.notify?.();}
+ }
+ async selectedRelease(value){
+  const channel=value.channel||'stable';let envelope;
+  if(value.action==='import-release'){
+   if(!path.isAbsolute(value.manifest||''))throw Error('Choose an offline signed release manifest.');
+   const stat=fs.lstatSync(value.manifest);if(!stat.isFile()||stat.isSymbolicLink()||stat.size>128*1024)throw Error('The offline release manifest is invalid.');
+   try{envelope=JSON.parse(fs.readFileSync(value.manifest,'utf8'));}
+   catch{throw Error('The selected release manifest is not valid JSON. Choose the signed release.json file. No update was started.');}
+  }else{
+   const envelopes=await this.releaseClient.releases({channel,platform:this.platform,arch:process.arch});
+   envelope=envelopes.find(item=>verifyRelease(item,{channel,platform:this.platform}).id===value.releaseId);
+   if(!envelope||digest(JSON.stringify(envelope))!==value.manifestDigest)throw Error('The selected release changed. Check available releases again.');
+  }
+  return verifyRelease(envelope,{channel,platform:this.platform});
  }
  async prepare(value,runId,release=null){
   if(this.busy||this.downloading)throw Error('Another update check is running.');

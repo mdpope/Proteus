@@ -13,7 +13,7 @@ export function captureUserQuestions(run, data, eventIndex, now) {
   });
 }
 
-export async function answerUserQuestion(engine,id,questionId,answer,messageId,action='answer') {
+export async function answerUserQuestion(engine,id,questionId,answer,messageId,action='answer',dispatch=null) {
   const run=engine.getRun(id),question=run.userQuestions?.find(item=>item.id===questionId);
   if(!question)throw Error('This question is no longer available. Refresh the chat.');
   if(action==='dismiss'){
@@ -23,7 +23,7 @@ export async function answerUserQuestion(engine,id,questionId,answer,messageId,a
   if(action!=='answer'||typeof answer!=='string'||!answer.trim()||answer.length>100000)throw Error('Enter an answer or select a choice.');
   if(typeof messageId!=='string'||!/^[a-zA-Z0-9_-]{1,100}$/.test(messageId))throw Error('A stable answer identifier is required.');
   if(question.messageId){
-    if(question.messageId!==messageId||question.answer!==answer)throw Error('This question already has a response. Refresh the chat.');
+    if(question.messageId!==messageId||question.answer!==answer||question.attachmentSignature!==dispatch?.signature)throw Error('This question already has a response. Refresh the chat.');
     if(question.status==='uncertain'||question.status==='sending')throw Error('Answer delivery is unconfirmed. Inspect this session before sending another answer.');
     return run;
   }
@@ -34,13 +34,19 @@ export async function answerUserQuestion(engine,id,questionId,answer,messageId,a
   if(question.nativeRequest&&!native)throw Error('The provider has already resolved this input request.');
   if(run.events.some(event=>event.data?.delivery?.id===messageId))throw Error('This answer identifier is already in use. Refresh the chat.');
   engine.updateGuard?.();
+  const files=dispatch?engine.verifyAttachmentDispatch(run,dispatch):[];
   // Claim before awaiting transport. Restart or ambiguous delivery must never
   // replay a response or turn a repeated button click into a second user turn.
-  Object.assign(question,{answer,messageId,status:'sending',answeredAt:engine.now()});engine.persist(run);
+  Object.assign(question,{answer,messageId,status:'sending',answeredAt:engine.now(),...(dispatch?{attachmentSignature:dispatch.signature}:{})});engine.persist(run);
   try{
-    if(native){question.status='answered';question.deliveryState='native-input';engine.event(run,'user',answer,{questionReply:{requestId:question.id},delivery:{id:messageId,state:'delivered'}});native.resolve(answer);return run;}
-    const mode=run.status==='running'&&engine.running.has(id)&&engine.providers[run.schedule.provider]?.steer?'steer':'queue';
-    await engine.send(id,`Answer to your question: ${question.text}\n\n${answer}`,mode,messageId);
+    if(native){
+      if(dispatch){run.questionAttachmentReplies??={};run.questionAttachmentReplies[question.id]={...dispatch,providerId:run.schedule.provider};}
+      question.status='answered';question.deliveryState='native-input';engine.event(run,'user',answer,{questionReply:{requestId:question.id},delivery:{id:messageId,state:'delivered'},...(dispatch?{attachments:files}:{})});
+      native.resolve(dispatch?answer+`\nThe user attached ${files.length} file(s). Call proteus_question_attachments with requestId ${question.id} to view them before continuing.`:answer);return run;
+    }
+    const provider=engine.providers[run.schedule.provider],canSteer=provider?.steer&&files.every(file=>provider.acceptedSteeringMediaTypes?.includes(file.mediaType));
+    const mode=run.status==='running'&&engine.running.has(id)&&canSteer?'steer':'queue';
+    await engine.send(id,`Answer to your question: ${question.text}\n\n${answer}`,mode,messageId,undefined,dispatch);
     const event=run.events.find(item=>item.data?.delivery?.id===messageId),state=event?.data.delivery.state;
     if(!['queued','delivered','steered'].includes(state))throw Error('The provider did not confirm answer delivery.');
     event.data.questionReply={requestId:question.id};question.status='answered';question.deliveryState=state;engine.persist(run);return run;

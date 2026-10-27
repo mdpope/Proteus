@@ -1,3 +1,9 @@
+## October 27 — each update owns a fresh coordinator; attachment steering follows provider capability
+
+Manual update UI never chooses an existing chat. Its owner service validates the signed selected release and saved current provider metadata, then durably claims a new unassigned coordinator for that upgrade. Persist the operation ID in the run so uncertain HTTP responses can reconcile after restart. The coordinator's own run owns staging/handoff/continuation; a later upgrade receives a new chat. Keep provider configuration mounted if update-journal inspection fails.
+
+Nonblocking answers use the same exact-file/provider/device consent as ordinary replies. Native input references a current-turn question attachment reader; structured asynchronous answers use the existing provider attachment steering/queue transport. Do not force capable providers to queue merely because files exist. Check advertised media types, retain original bytes and current turn identity, serialize steering, and never replay an uncertain consumed attachment delivery. Remote/native projections expose capability without exposing send proofs.
+
 ## October 26 — Own Windows terminal processes before starting commands
 
 The existing node-pty natural-exit cleanup cannot enumerate a console after its root exits;

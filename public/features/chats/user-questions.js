@@ -1,3 +1,4 @@
+import {mountQuestionAttachments} from './question-attachments.js';
 const drafts=new Map(),attempts=new Map(),queueStates=new Map();
 export function chatQuestions(run){
   const questions=[...(run.userQuestions||[])];
@@ -5,7 +6,7 @@ export function chatQuestions(run){
   return questions;
 }
 const button=(label,action)=>{const node=document.createElement('button');node.type='button';node.textContent=label;node.onclick=action;return node;};
-export function mountQuestionCard(host,question,{key,answer,notify=()=>{}}){
+export function mountQuestionCard(host,question,{key,answer,attachments,notify=()=>{}}){
   const signature=JSON.stringify(question);host.questionActions={answer,notify};
   if(host.questionSignature===signature)return;
   host.questionSignature=signature;host.replaceChildren();host.className='user-question-card';host.dataset.questionId=question.id;
@@ -15,18 +16,21 @@ export function mountQuestionCard(host,question,{key,answer,notify=()=>{}}){
   }
   const form=document.createElement('form'),label=document.createElement('label'),input=document.createElement('textarea'),choices=document.createElement('div'),submit=document.createElement('button');
   label.textContent='Your answer';input.rows=2;input.value=drafts.get(key)||'';input.setAttribute('aria-label','Your answer');label.append(input);choices.className='user-question-choices';
+  const attachmentHost=document.createElement('div');
+  const picker=attachments?mountQuestionAttachments({...attachments,key:'question:'+key,requestId:question.id,host:attachmentHost,textarea:input,notify}):{files:()=>[],payload:async()=>({}),clear:()=>{}};
   let messageId,submittedAnswer,busy=false;
   const send=async value=>{
-    if(busy||!value.trim())return;busy=true;submit.disabled=true;
+    if(busy||!value.trim()&&!picker.files().length)return;value=value.trim()?value:'Please review the attached files.';busy=true;submit.disabled=true;
     // Retain the operation on transport uncertainty, including a retry after a
     // render. The owner rejects changed content or a second answer claim.
     const attempt=attempts.get(key);
-    if(attempt&&attempt.answer!==value){host.questionActions.notify('Refresh the chat to inspect the previous answer before changing it.');busy=false;submit.disabled=false;return;}
-    messageId=attempt?.messageId||crypto.randomUUID();submittedAnswer=value;attempts.set(key,{messageId,answer:submittedAnswer});
-    try{await host.questionActions.answer(question,value,messageId);drafts.delete(key);attempts.delete(key);}catch(error){host.questionActions.notify(error.message);}finally{busy=false;submit.disabled=false;}
+    const files=picker.files();
+    if(attempt&&(attempt.answer!==value||attempt.files.length!==files.length||files.some((file,index)=>file!==attempt.files[index]))){host.questionActions.notify('Refresh the chat to inspect the previous answer before changing it.');busy=false;submit.disabled=false;return;}
+    messageId=attempt?.messageId||crypto.randomUUID();submittedAnswer=value;
+    try{const delivery=attempt?.delivery||await picker.payload(value,messageId);attempts.set(key,{messageId,answer:submittedAnswer,files,delivery});await host.questionActions.answer(question,value,messageId,delivery);drafts.delete(key);attempts.delete(key);picker.clear();}catch(error){host.questionActions.notify(error.message);}finally{busy=false;submit.disabled=false;}
   };
   for(const choice of question.choices||[])choices.append(button(choice,()=>{input.value=choice;drafts.set(key,choice);void send(choice);}));
-  input.oninput=()=>drafts.set(key,input.value);submit.type='submit';submit.textContent='Send answer';form.onsubmit=event=>{event.preventDefault();void send(input.value);};form.append(choices,label,submit);host.append(form);
+  input.oninput=()=>drafts.set(key,input.value);submit.type='submit';submit.textContent='Send answer';form.onsubmit=event=>{event.preventDefault();void send(input.value);};form.append(choices,label,attachmentHost,submit);host.append(form);
 }
 export function mountQuestionQueue(host,run,{jump,answer,notify}){
   const questions=chatQuestions(run).filter(question=>['pending','sending','uncertain'].includes(question.status));

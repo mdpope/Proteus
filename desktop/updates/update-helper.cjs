@@ -42,7 +42,20 @@ function retire(file,job){
 }
 function retainGeneration(job){
  const file=job.recoveryPolicy,inventory=recoveryPolicy(file,job),receiptFile=path.join(job.recovery,'recovery.json');
- if(!inventory.generations.some(row=>row.directory===job.recovery)){inventory.generations.push({id:job.id,directory:job.recovery,at:new Date().toISOString(),receiptFile,receiptHash:digest(fs.readFileSync(receiptFile)),verified:true,eligible:true});atomic(file,inventory);}
+ const retained=inventory.generations.find(row=>row.directory===job.recovery);
+ if(retained){if(!fs.existsSync(retained.receiptFile)||digest(fs.readFileSync(retained.receiptFile))!==retained.receiptHash)throw Error('A retained recovery receipt is missing or changed. Preserve the recovery inventory for inspection.');return {retained:true};}
+ let receiptHash;
+ try{receiptHash=digest(fs.readFileSync(receiptFile));}
+ catch(error){
+  if(error.code!=='ENOENT')throw error;
+  // A completed historical job may outlive its deliberately rotated payload.
+  // Recognize that only from two newer, currently verified recovery receipts;
+  // never recreate a deleted generation or suppress an unresolved missing copy.
+  const later=inventory.generations.filter(row=>row.eligible===true&&Date.parse(row.at)>Date.parse(job.createdAt));
+  if(job.phase==='complete'&&!fs.existsSync(job.recovery)&&later.length>=2&&later.every(row=>fs.existsSync(row.receiptFile)&&digest(fs.readFileSync(row.receiptFile))===row.receiptHash))return {retained:false,superseded:true,verifiedSuccessors:later.map(row=>row.id)};
+  throw Error('The completed update recovery receipt is missing. Verify and reconcile the retained recovery generations before another restart.');
+ }
+ inventory.generations.push({id:job.id,directory:job.recovery,at:new Date().toISOString(),receiptFile,receiptHash,verified:true,eligible:true});atomic(file,inventory);return {retained:true};
 }
 
 async function installWindows(job,candidate,{inspect=inspectPackage,rollback=false,runInstaller=require('./windows-installation.cjs').runInstaller,verifyRegistration=require('./windows-installation.cjs').verifyRegistration}={}){

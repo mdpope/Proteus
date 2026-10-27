@@ -2,7 +2,7 @@ import {resolveScheduleContext} from './services/scheduling/schedule-context.js'
 import {subagentPage} from './services/chats/subagents.js';
 import {publicAssets} from './shared/public-assets.js';
 import {MtplxProvider} from './providers/mtplx.js';
-import {replyWithAttachments,questionAttachmentMediaTypes} from './services/chats/question-attachments.js';
+import {replyWithAttachments,answerQuestionWithAttachments,questionAttachmentMediaTypes} from './services/chats/question-attachments.js';
 import {readMarkdownFile} from './shared/file-metadata.js';
 import {ensurePrivateHome} from './shared/private-paths.cjs';
 import {DesktopControl} from './services/remote/desktop-control.js';
@@ -255,6 +255,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (url.pathname === '/api/team/lists' && req.method === 'GET') return json(200, await account.lists());
       if (url.pathname === '/api/team/lists' && req.method === 'POST') return json(200, await account.team(await body(req)));
       if(url.pathname==='/api/browser-history'){const value=req.method==='GET'?{action:'query',...Object.fromEntries(url.searchParams)}:await body(req);const action=value.action||'query';if(!['query','record','delete','settings','sync','status'].includes(action))throw new Error('Unknown browser history action.');return json(200,action==='sync'?await service.peers?.syncHistory()||{synced:false}:action==='settings'?await browserHistorySettings(service,value):await service.browserHistory[action](value));}
+      if(url.pathname==='/api/updates/coordinator'&&req.method==='POST')return json(200,await (await import('./services/updates/update-session.js')).startUpdateSession(service,await body(req)));
       if(url.pathname==='/api/updates/recovery'&&req.method==='POST'){if(!service.updates)throw Error('Supervised desktop updates are unavailable.');return json(200,await service.updates.recovery(await body(req)));}
       if(url.pathname==='/api/updates'){if(!service.updates)return json(200,{identity:{packaged:false,capabilities:{prepare:false}},job:null});return json(200,await service.updates.handle(req.method==='GET'?{action:'status'}:await body(req)));}
       if(url.pathname==='/api/desktop-control'){if(!desktopControl)throw Error('Native desktop control is unavailable in this isolated preview.');return json(200,await desktopControl.handle(req.method==='GET'?{action:'status'}:await body(req)));}
@@ -530,7 +531,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       const match = url.pathname.match(/^\/api\/runs\/([a-f0-9-]+)\/(answer-question|reply|resume|cancel|send|edit-queued|remove-queued|steer-queued|recover)$/);
       if (match && req.method === 'POST') {
         const value = await body(req); const [, id, action] = match;
-        if (action === 'answer-question') return json(200,await engine.answerQuestion(id,value.questionId,value.answer,value.messageId,value.action));
+        if (action === 'answer-question') return json(200,await answerQuestionWithAttachments(engine,id,value,'local-desktop'));
         if (action === 'reply') return json(200, await replyWithAttachments(engine,id,value,'local-desktop'));
         if (action === 'send' && typeof value.prompt === 'string' && /^\/mcp\s+auth(?:\s|$)/i.test(value.prompt.trim())) {
           const run = engine.getRun(id); const provider = engine.providers[run.schedule.provider];

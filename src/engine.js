@@ -323,11 +323,22 @@ export class Engine extends EventEmitter {
     const run=this.getRun(id),message=run.queuedMessages?.find(item=>item.id===messageId);
     if(!message){if(run.events.some(e=>e.data?.delivery?.id===messageId&&e.data.delivery.state==='steered'))return run;throw new Error('This queued message was already delivered or removed.');}
     if(run.status!=='running'||!this.running.has(id))throw new Error('Steering is available during a running turn.');
-    if(message.attachmentDispatch)throw new Error('Messages with attachments must stay queued.');
     const provider=this.providers[run.schedule.provider];if(!provider.steer)throw new Error('This provider does not support steering. The message remains queued.');
+    const dispatch=message.attachmentDispatch,attached=dispatch?this.verifyAttachmentDispatch(run,dispatch):[];
+    if(attached.some(item=>!provider.acceptedSteeringMediaTypes?.includes(item.mediaType)))throw Error('This provider cannot steer with these attachment types. The message remains queued.');
     if(this.queuedSteers.has(id))throw new Error('Wait for the current steering request.');
     const delivery=run.events.find(e=>e.data?.delivery?.id===messageId)?.data.delivery;
-    const operation=(async()=>{try{await provider.steer(run,message.prompt);run.queuedMessages=run.queuedMessages.filter(item=>item.id!==messageId);if(delivery){delivery.state='steered';delete delivery.error;}}catch(error){if(delivery)delivery.error=error.message;throw error;}finally{this.persist(run);}})();
+    const slot=this.running.get(id);
+    const operation=(async()=>{let attempted=false;try{
+      const files=dispatch?await this.attachmentConsents.readForProvider({...dispatch,chatId:id,providerId:run.schedule.provider}):[];
+      if(this.stopping||run.status!=='running'||this.running.get(id)!==slot||slot.controller.signal.aborted)throw Error('This turn ended before steering delivery. Inspect the chat before sending again.');
+      const originals=this.turnAttachments.get(id),offset=originals?.length||0;if(originals)originals.push(...files);
+      attempted=true;await provider.steer(run,message.prompt,providerAttachmentInputs(files,provider.acceptedSteeringMediaTypes,offset));run.queuedMessages=run.queuedMessages.filter(item=>item.id!==messageId);if(delivery){delivery.state='steered';delete delivery.error;}
+    }catch(error){if(delivery)delivery.error=error.message;if(dispatch){
+      // A consumed proof cannot be queued or replayed after ambiguous provider
+      // transport. Preserve the event/receipt, rather than silently sending twice.
+      run.queuedMessages=run.queuedMessages.filter(item=>item.id!==messageId);if(delivery)delivery.state=attempted?'uncertain':'failed';
+    }throw error;}finally{if(dispatch)await this.attachmentConsents.releaseProof(dispatch.proofId).catch(()=>{});this.persist(run);}})();
     this.queuedSteers.set(id,operation);try{await operation;return run;}finally{this.queuedSteers.delete(id);}
   }
   editQueued(id, messageId, prompt, expectedPrompt) {
@@ -388,7 +399,7 @@ export class Engine extends EventEmitter {
     if (isPermission) this.recheckPermissions();
     return run;
   }
-  answerQuestion(id,questionId,answer,messageId,action){return answerUserQuestion(this,id,questionId,answer,messageId,action);}
+  answerQuestion(id,questionId,answer,messageId,action,dispatch){return answerUserQuestion(this,id,questionId,answer,messageId,action,dispatch);}
   async readQuestionAttachments(id,requestId){
     const run=this.getRun(id),slot=this.running.get(id),dispatch=run.questionAttachmentReplies?.[requestId];
     if(!slot||slot.controller.signal.aborted||!dispatch||dispatch.providerId!==run.schedule.provider)throw Error('These question attachments are not available to this active chat/provider.');

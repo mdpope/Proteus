@@ -137,7 +137,7 @@ export function conversation(target, run, options) {
   view.updating = true;
   if(view.shell.parentElement!==target)target.replaceChildren(view.shell);
   let questionQueue=view.shell.querySelector('.user-question-queue');if(!questionQueue){questionQueue=document.createElement('div');questionQueue.className='user-question-queue';view.shell.prepend(questionQueue);}
-  const questions=chatQuestions(run),questionOptions={answer:options.answerQuestion,notify:options.notify};
+  const questions=chatQuestions(run),questionOptions={answer:options.answerQuestion,notify:options.notify,attachments:options.questionAttachments};
   mountQuestionQueue(questionQueue,run,{...questionOptions,jump:async question=>{
     view.following=false;
     while(question.eventIndex<view.eventStart&&view.more){const before=view.eventStart;await view.loadEarlier(true);if(view.eventStart===before)break;}
