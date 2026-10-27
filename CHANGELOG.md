@@ -1,3 +1,8 @@
+## Documentation — Linux exact-commit package acceptance
+
+- Record the isolated `4b90654` / `linux.8808ae9c976b` package, successful targeted source/update gates and retained broad UI fixture limitations.
+- Distinguish native preparation from pending handoff, installed Codex/peer verification and cold preservation acceptance; frozen396 remains excluded.
+
 ## Unreleased — Linux Codex discovery
 
 - Find the Linux desktop-bundled Codex executable when launched from KDE with a minimal PATH. Keep explicit executable overrides and PATH precedence, and reject non-executable automatic candidates.

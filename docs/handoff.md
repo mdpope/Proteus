@@ -1,3 +1,19 @@
+## October 26 — exact Linux Codex package prepared; native handoff pending
+
+Exact main `4b90654706d79930d6c94cca9ead073c77d0d73f` is frozen as `linux.8808ae9c976b`.
+Source/provenance, 1,204 source tests/static checks and the three unchanged packaged supervisor
+transitions pass. Restricted-PATH discovery and real synthetic Codex tools/restart/pairing pass.
+Broader UI fixtures remain explicitly incomplete because their selectors/geometry/close-window
+expectations are stale; retain their raw failures and do not claim full UI acceptance.
+
+The native job is prepared, with no coordinator run ID or replay of the failed frozen396 task.
+Handoff and installed verification await the outstanding downloads/save-dialog/automation idle
+status check. No restart or replacement is claimed. Continue the prepared job through the native
+supervisor and ordinary idle barrier; preserve current sessions, accepted historical exceptions,
+retry receipts and two recovery generations. The external transcript supplement belongs in that
+same recovery generation. Installed Codex/peer and actual cold preservation checks remain pending.
+See [the exact artifact report](2026-10-26-linux-030-4b90654.md) for identities and qualifications.
+
 ## October 26 — Linux Codex launch failure; source correction accepted
 
 The user completed Ctrl+Q/reopen. The attempted continuation of the existing Linux coordinator
