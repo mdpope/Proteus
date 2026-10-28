@@ -6,7 +6,9 @@ export const {createProvenance,validateProvenance}=provenance;
 
 export const desktopRuntimeRoots = ['desktop', 'public', 'src', 'schemas', 'templates', 'relay'];
 export const desktopRuntimeFiles = ['.gitignore', 'AGENTS.md', 'CHANGELOG.md', 'README.md'];
-export const desktopPackageIgnore = [/(?:^|\/)\.DS_Store$/, /(?:^|\/)\._[^/]*$/, /^\/(?:web|ios|native|test|docs|scripts|extensions|dist|coverage|work|outputs|local-records|\.runtime(?:-tests)?|\.git|\.github|\.agents|\.codex|\.aws)(?:\/|$)/, /^\/(?:CONTRIBUTING|SECURITY)\.md$/, /^\/\.env/, /\.(?:log|xcresult)$/];
+export const desktopPackageIgnore = [/(?:^|\/)\.DS_Store$/, /(?:^|\/)\._[^/]*$/, /^\/(?:web|ios|native|test|docs|scripts|extensions|dist|coverage|work|outputs|local-records|\.runtime(?:-tests)?|\.git|\.github|\.agents|\.codex|\.aws)(?:\/|$)/, /^\/(?:CONTRIBUTING|SECURITY)\.md$/, /^\/\.env/, /\.(?:log|xcresult)$/,
+  // Operator documents and screenshots kept beside a checkout are never runtime files.
+  /^\/[^/]+\.(?:pdf|png|jpe?g|heic|gif|docx?|xlsx?|pptx?|key|numbers|pages)$/i];
 export const fileDigest = file => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 
 function collect(root, relative) {
