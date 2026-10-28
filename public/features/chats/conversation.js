@@ -9,7 +9,7 @@ import {activityEntries} from './activity-notes.js';
 import {mountProviderActivity} from './provider-activity-view.js';
 import {mountChatRecovery} from './chat-recovery-controls.js';
 import { agentName, assistantName } from './agent-name.js';
-import { sentAttachmentPreview, openSentAttachmentPreview } from './chat-attachments.js';
+import { sentAttachmentPreview, openSentAttachmentPreview, openStoredAttachment } from './chat-attachments.js';
 const views = new Map();
 const viewIn=root=>[...views.values()].find(view=>view.shell.isConnected&&(root===view.scroll||root===view.shell||root?.contains(view.scroll)));
 const eventIndex=key=>{const match=String(key||'').match(/^(?:activity-)?event-(\d+)$/);return match?Number(match[1]):null;};
@@ -261,7 +261,10 @@ export function conversation(target, run, options) {
         const chip=document.createElement('div');chip.className='message-attachment';
         const preview=sentAttachmentPreview(entry.data?.delivery?.id,attachment.name);
         if(preview){const button=document.createElement('button');button.type='button';button.title='Preview '+attachment.name;const image=document.createElement('img');image.src=preview;image.alt='';button.append(image);button.onclick=()=>openSentAttachmentPreview(entry.data.delivery.id,attachment.name);chip.append(button);}
-        const label=document.createElement('span');label.textContent=attachment.name;const type=document.createElement('small');type.textContent=attachment.mediaType+(preview?'':' · preview available only in the sending session');label.append(type);chip.append(label);files.append(chip);
+        const stored=typeof options.readAttachment==='function'&&/^[a-f0-9]{64}$/.test(attachment.sha256||'');
+        const label=document.createElement('span');label.textContent=attachment.name;const type=document.createElement('small');type.textContent=attachment.mediaType+(preview||stored?'':' · preview available only in the sending session');label.append(type);chip.append(label);
+        if(stored){const open=document.createElement('button');open.type='button';open.className='subtle';open.textContent='Open';open.title='Open '+attachment.name;open.onclick=()=>void openStoredAttachment(attachment.name,()=>options.readAttachment(attachment.sha256));chip.append(open);}
+        files.append(chip);
       }
     }else files?.remove();
     const completed=entry.role==='assistant'&&!entry.streaming&&!entry.data?.reasoning&&!['reasoning','thinking','analysis'].includes(entry.data?.phase||entry.phase||entry.type)&&entry.text?.trim();

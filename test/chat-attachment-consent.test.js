@@ -58,6 +58,20 @@ test('provider byte boundary requires exact one-use prepared proof and rechecks 
   await assert.rejects(grants.readForProvider({proofId:prepared.proofId,chatId:owner.chatId,providerId:owner.providerId,attachmentIds:[file.attachmentId]}),/consent is missing or changed/);
   await grants.releaseProof(prepared.proofId);
   await assert.rejects(store.read({...owner,attachmentId:file.attachmentId}),/unavailable/);
+  // A delivered file stays viewable with its chat, read-only and verified, until the chat is deleted.
+  assert.deepEqual(store.history(owner.chatId,sha256),png);
+  assert.throws(()=>store.history('chat-2',sha256),/not kept/);assert.throws(()=>store.history(owner.chatId,'../x'),/Choose an attachment/);
+  await store.revokeChat(owner.chatId);assert.throws(()=>store.history(owner.chatId,sha256),/not kept/);
+});
+test('an undelivered send never keeps a viewable copy',async t=>{
+  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-consent-undelivered-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+  const store=new ChatAttachmentStore(home);t.after(()=>store.close());const grants=new ChatAttachmentConsents(store);
+  const owner={chatId:'chat-1',deviceId:'device-a',messageId:'message-2',providerId:'copilot'};
+  const begun=await store.begin({...owner,name:'picture.png',mediaType:'image/png',size:png.length,sha256});await store.chunk({uploadId:begun.uploadId,deviceId:owner.deviceId,index:0,dataBase64:png.toString('base64')});const file=await store.finish({uploadId:begun.uploadId,deviceId:owner.deviceId});
+  const consent=await grants.authorize({...owner,attachments:[file],acceptedMediaTypes:['image/png']});
+  const prepared=await grants.prepareSend({...owner,consentId:consent.consentId,attachmentIds:[file.attachmentId]});
+  await grants.releaseProof(prepared.proofId);
+  assert.throws(()=>store.history(owner.chatId,sha256),/not kept/);
 });
 test('first-message prepared proof binds claimed chat and provider before any byte read',async t=>{
   const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-consent-first-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));

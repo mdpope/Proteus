@@ -209,8 +209,29 @@ export class ChatAttachmentStore {
     this.ensureOpen(); deviceId = identity(deviceId, 'device');
     for (const record of [...this.records.values()]) if (record.deviceId === deviceId) this.remove(record);
   }
+  /** Delivered message files are kept with their chat (content-addressed, read-only)
+   * so every client that can read the chat can view them. Deleted with the chat. */
+  historyDirectory(chatId) { return path.join(this.base, 'history', identity(chatId, 'chat')); }
+  async preserve({ attachmentId } = {}, chatId) {
+    const record = this.records.get(attachmentId); if (!record?.finished || !/^[a-f0-9]{64}$/.test(record.sha256)) return false;
+    const directory = this.historyDirectory(chatId), target = path.join(directory, record.sha256);
+    fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+    if (fs.existsSync(target)) return true;
+    const bytes = this.verify(record), temporary = target + '.' + randomUUID() + '.tmp';
+    try { fs.writeFileSync(temporary, bytes, { flag: 'wx', mode: 0o400 }); fs.renameSync(temporary, target); } finally { fs.rmSync(temporary, { force: true }); }
+    return true;
+  }
+  /** Bytes of a preserved message file; callers verify the chat references it. */
+  history(chatId, sha256) {
+    if (!/^[a-f0-9]{64}$/.test(String(sha256))) throw new Error('Choose an attachment from this chat.');
+    const file = path.join(this.historyDirectory(chatId), sha256);
+    let bytes; try { bytes = fs.readFileSync(file); } catch { throw new Error('This attachment was not kept with the chat.'); }
+    if (createHash('sha256').update(bytes).digest('hex') !== sha256) throw new Error('The saved attachment changed and was not opened.');
+    return bytes;
+  }
   async revokeChat(chatId) {
     this.ensureOpen(); chatId = identity(chatId, 'chat');
+    fs.rmSync(this.historyDirectory(chatId), { recursive: true, force: true });
     for (const record of [...this.records.values()]) if (record.chatId === chatId) this.remove(record);
   }
   async close() {

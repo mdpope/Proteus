@@ -91,6 +91,8 @@ struct NativeChatRecoveryState {
     let capacity: Bool
     let retry: JSON
     let queuedCount: Int
+    /// Agents the provider rejected before starting; the chat can drop them and retry.
+    var incompatibleAgents: [String] { event["data"]["failure"]["kind"].string == "incompatible-agents" ? event["data"]["failure"]["agents"].array.map(\.["name"].string).filter { !$0.isEmpty } : [] }
     var allowance: Bool { event["data"]["failure"]["kind"].string == "allowance" || event["text"].string.range(of: #"^Claude rate_limit\b"#, options: .caseInsensitive) != nil }
     static func read(_ run: JSON) -> NativeChatRecoveryState? {
         let recoverable = ["failed", "interrupted"].contains(run["status"].string)

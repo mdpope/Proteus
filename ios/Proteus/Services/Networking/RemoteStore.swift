@@ -126,6 +126,21 @@ struct RemoteHostInfo: Equatable {
         guard projectCatalog.project(id: projectID, workspaceID: workspaceID)?["id"].string == projectID else { throw RemoteError(message: "Refresh and choose an available project on this computer.") }
         return try await updateProjectCatalog("chat.move", arguments: ["id": .string(id), "workspaceId": .string(workspaceID), "projectId": .string(projectID), "expectedUpdatedAt": .string(expectedUpdatedAt)])
     }
+    /// Downloads a file kept with a chat on its owner into a private temporary copy.
+    func attachmentFile(chatID: String, sha256: String, name: String) async throws -> URL {
+        var data = Data(), offset = 0
+        for _ in 0..<400 {
+            let page = try await request("chat.attachments.get", ["id": .string(chatID), "sha256": .string(sha256), "offset": .number(Double(offset))])
+            guard let chunk = Data(base64Encoded: page["dataBase64"].string) else { throw RemoteError(message: "The attachment could not be read.") }
+            data.append(chunk); offset += chunk.count
+            if page["done"].bool || chunk.isEmpty { break }
+        }
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("chat-attachments/" + sha256, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let safe = name.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: ":", with: "_").trimmingCharacters(in: .whitespacesAndNewlines)
+        let url = directory.appendingPathComponent(safe.isEmpty ? "attachment" : String(safe.prefix(120)))
+        try data.write(to: url, options: [.atomic, .completeFileProtection]); return url
+    }
     func draft(_ id: String) -> JSON { _ = draftRevision; return drafts[id] ?? .null }
     func setDraft(_ id: String, _ value: JSON, notifyObservers: Bool = true) {
         guard draft(id) != value else { return }

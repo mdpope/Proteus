@@ -42,11 +42,11 @@ test('activity records transitions once and requires schedule completion opt in'
   const id=store.notifications().items[0].id;store.read(id);assert.ok(store.notifications().items[0].readAt);
   assert.throws(()=>store.preferences({systemEnabled:'yes'}));await store.close();
 });
-test('structured asynchronous questions notify once without pausing a turn or publishing their contents',async t=>{
+test('structured asynchronous questions notify once without pausing a turn and show their bounded text',async t=>{
  const engine=new EventEmitter(),run={id:'questions',status:'running',trigger:'chat',schedule:{},userQuestions:[]};engine.listRuns=()=>[run];
  const folder=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-question-notifications-')),store=new ActivityStore(folder);store.attach(engine,()=> 'host');t.after(async()=>{await store.close();fs.rmSync(folder,{recursive:true,force:true});});
  run.userQuestions.push({id:'q1',status:'pending',text:'Private question contents'});engine.emit('change',run);engine.emit('change',run);
- assert.equal(store.notifications().items.length,1);assert.equal(run.status,'running');assert.equal(store.notifications().items[0].chatId,run.id);assert.doesNotMatch(JSON.stringify(store.notifications()),/Private question/);
+ assert.equal(store.notifications().items.length,1);assert.equal(run.status,'running');assert.equal(store.notifications().items[0].chatId,run.id);assert.equal(store.notifications().items[0].body,'Question: Private question contents');
  run.userQuestions[0].status='answered';engine.emit('change',run);assert.equal(store.notifications().items.length,1);
  run.userQuestions.push({id:'q2',status:'pending'});engine.emit('change',run);assert.equal(store.notifications().items.length,2);
 });
@@ -107,4 +107,13 @@ test('retained history evicts oldest rows before reaching its own reopen size li
   const folder=home(t),store=new history.BrowsingHistory(folder),at=new Date().toISOString();
   store.data.items=Array.from({length:2500},(_,i)=>({id:String(i),url:'https://example.test/'+('x'.repeat(3900)),title:'Board',visitedAt:at}));await store.save();
   assert.ok(fs.statSync(store.file).size<=8*1024*1024);assert.ok(new history.BrowsingHistory(folder).list().total>0);await store.close();
+});
+test('notifications name the chat and computer and show the latest reply as plain bounded text',async t=>{
+ const engine=new EventEmitter(),run={id:'rich',title:'HOA fee schedule',status:'running',trigger:'chat',schedule:{},events:[{role:'assistant',text:'## Done\nDrafted the **email** to Craig with `the fee table`.'}]};engine.listRuns=()=>[run];
+ const folder=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-rich-notifications-')),store=new ActivityStore(folder);store.attach(engine,()=>'host',()=>'Build Mac');t.after(async()=>{await store.close();fs.rmSync(folder,{recursive:true,force:true});});
+ run.status='completed';engine.emit('change',run);
+ const item=store.notifications().items[0];
+ assert.equal(item.title,'HOA fee schedule');assert.equal(item.hostName,'Build Mac');assert.equal(item.body,'Done Drafted the email to Craig with the fee table.');
+ run.status='awaiting_input';run.pending={id:'p1',type:'permission',details:{kind:'write',fileName:'/tmp/minutes.md'}};engine.emit('change',run);
+ const review=store.notifications().items.find(entry=>entry.type==='review.required');assert.equal(review.title,'Needs you · HOA fee schedule');assert.equal(review.body,'Edit file: /tmp/minutes.md');
 });

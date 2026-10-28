@@ -131,11 +131,12 @@ class AppApiTest extends TestCase
         $this->getJson('/api/v1/app/history')->assertJsonCount(2, 'items');
     }
 
-    public function test_notification_and_log_events_are_idempotent_and_generic(): void
+    public function test_notification_and_log_events_are_idempotent_and_keep_bounded_chat_text(): void
     {
         Passport::actingAs($this->owner(), ['app:read', 'app:write']);
-        $payload = ['id' => (string) Str::uuid(), 'type' => 'chat.completed', 'title' => 'PRIVATE PROMPT', 'body' => 'secret'];
-        $first = $this->postJson('/api/v1/app/notifications', $payload)->assertCreated()->assertJsonPath('title', 'Chat completed')->assertDontSee('PRIVATE PROMPT')->json();
+        $payload = ['id' => (string) Str::uuid(), 'type' => 'chat.completed', 'title' => 'HOA fee schedule', 'body' => 'Drafted the reply to Craig.', 'hostName' => 'Build Mac', 'prompt' => 'PRIVATE PROMPT'];
+        $first = $this->postJson('/api/v1/app/notifications', $payload)->assertCreated()->assertJsonPath('title', 'HOA fee schedule')->assertJsonPath('body', 'Drafted the reply to Craig.')->assertJsonPath('hostName', 'Build Mac')->assertDontSee('PRIVATE PROMPT')->json();
+        $this->postJson('/api/v1/app/notifications', ['id' => (string) Str::uuid(), 'type' => 'review.required', 'title' => "bad\u{0007}title"])->assertUnprocessable();
         $this->postJson('/api/v1/app/notifications', $payload)->assertCreated()->assertJsonPath('id', $first['id']);
         $this->patchJson('/api/v1/app/notifications/'.$first['id'], ['read' => true])->assertOk()->assertJsonPath('read', true);
         $this->postJson('/api/v1/app/logs', ['id' => (string) Str::uuid(), 'event' => 'chat.completed', 'level' => 'info', 'message' => 'private transcript'])->assertCreated()->assertDontSee('private transcript');
@@ -194,14 +195,14 @@ class AppApiTest extends TestCase
             foreach (['personal', 'work', 'linux', 'windows'] as $computer) {
                 $event = ['eventId' => (string) Str::uuid(), 'hostId' => (string) Str::uuid(), 'chatId' => 'chat-'.$computer, 'scheduleId' => 'schedule-'.$computer, 'type' => 'review.required'];
                 $events[] = $event;
-                $this->postJson('/api/v1/app/notifications', $event + ['prompt' => 'PRIVATE PROMPT', 'title' => 'PRIVATE TITLE', 'url' => 'https://private.test/'])->assertCreated();
+                $this->postJson('/api/v1/app/notifications', $event + ['prompt' => 'PRIVATE PROMPT', 'title' => 'Fee schedule '.$computer, 'body' => 'Needs your review', 'hostName' => 'Mac '.$computer, 'url' => 'https://private.test/'])->assertCreated();
                 $this->postJson('/api/v1/app/notifications', $event)->assertCreated();
             }
             $this->assertSame(4, DB::table('app_records')->where('kind', 'push-outbox')->count(), 'Replayed host events do not enqueue duplicate alerts');
             $this->artisan('proteus:deliver-push')->assertSuccessful();
             Http::assertSentCount(4);
             foreach ($events as $event) {
-                Http::assertSent(fn ($request) => $request['hostId'] === $event['hostId'] && $request['chatId'] === $event['chatId'] && $request['scheduleId'] === $event['scheduleId'] && $request['notificationId'] === $event['eventId'] && $request->hasHeader('apns-topic', 'org.proteusapp.review.proteus') && $request->hasHeader('apns-collapse-id', hash('sha256', $event['eventId'])) && ! str_contains($request->body(), 'PRIVATE') && ! isset($request['url']));
+                Http::assertSent(fn ($request) => $request['hostId'] === $event['hostId'] && $request['chatId'] === $event['chatId'] && $request['scheduleId'] === $event['scheduleId'] && $request['notificationId'] === $event['eventId'] && $request->hasHeader('apns-topic', 'org.proteusapp.review.proteus') && $request->hasHeader('apns-collapse-id', hash('sha256', $event['eventId'])) && ! str_contains($request->body(), 'PRIVATE') && ! isset($request['url']) && str_starts_with($request['aps']['alert']['title'], 'Fee schedule ') && $request['aps']['alert']['body'] === 'Needs your review' && str_starts_with($request['aps']['alert']['subtitle'], 'Mac '));
             }
             $this->assertSame(0, DB::table('app_records')->where('kind', 'push-outbox')->count());
         } finally {

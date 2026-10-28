@@ -419,7 +419,7 @@ export class ContextStore {
         // Parse the captured version on resume too; do not trust stale catalog metadata.
         const agent = agentMetadata(entry.content);
         if (agent.issues.length) throw new Error('Agent is unavailable: ' + entry.name + '. ' + agent.issues.join('; '));
-        if (!mcpOnly) customAgents.push({ name: 'agent-' + entry.id.slice(0, 16), displayName: entry.name, description: entry.description || entry.name, tools: agent.tools, prompt: `Source: ${entry.path}\nScope: ${entry.scope}\n\n${entry.content}`, infer: agent.infer });
+        if (!mcpOnly) customAgents.push({ name: 'agent-' + entry.id.slice(0, 16), entryId: entry.id, displayName: entry.name, description: entry.description || entry.name, tools: agent.tools, prompt: `Source: ${entry.path}\nScope: ${entry.scope}\n\n${entry.content}`, infer: agent.infer });
       }
       else if (!mcpOnly) instructions.push(`## ${entry.kind}: ${entry.name}\nSource: ${entry.path}\nApplies to: ${entry.mode === 'universal' ? 'Every chat; preserve task, domain, and file limits written in the source' : entry.scope}\nUse referenced relative paths from this source's directory. Preserve the source's domain and scope.\n\n${entry.content}`);
     }

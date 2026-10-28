@@ -526,7 +526,13 @@ export class Engine extends EventEmitter {
       run.status = controller.signal.aborted ? (this.stopping ? 'interrupted' : 'cancelled') : 'completed';
     } catch (error) {
       run.status = controller.progressTimeout?'failed':controller.signal.aborted ? (this.stopping ? 'interrupted' : 'cancelled') : 'failed';
-      this.event(run, 'system', controller.progressTimeout||error.message,{failure:{kind:controller.progressTimeout?'stalled':error.code==='COPILOT_ACTIVE_TIME_LIMIT'?'active-time-limit':capacityFailure(error.message)?'capacity':allowanceFailure(error)?'allowance':'error'}});
+      // A provider that rejects selected agents before starting can be retried
+      // without them. Retry the request the user actually made: the original
+      // message if no turn ever produced a response, else this turn's message.
+      const incompatible=error.code==='PROVIDER_AGENT_TOOL_FILTERS'&&Array.isArray(error.agents)&&error.agents.every(agent=>typeof agent?.id==='string');
+      const answered=run.events.some(event=>event.role==='assistant');
+      const retryPrompt=incompatible?(answered?prompt:run.events.find(event=>event.role==='user'&&typeof event.text==='string'&&event.text.trim())?.text||prompt):undefined;
+      this.event(run, 'system', controller.progressTimeout||error.message,{failure:{kind:controller.progressTimeout?'stalled':incompatible?'incompatible-agents':error.code==='COPILOT_ACTIVE_TIME_LIMIT'?'active-time-limit':capacityFailure(error.message)?'capacity':allowanceFailure(error)?'allowance':'error',...(incompatible?{agents:error.agents.slice(0,20),retryPrompt,attachmentsOmitted:!!dispatch}:{})}});
     } finally {
       // Provider errors/timeouts can leave permission promises pending. Settle them
       // before another turn reuses this run's serialized question queue.

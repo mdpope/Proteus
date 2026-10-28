@@ -48,6 +48,7 @@ struct NativeChatWorkspaceMoveView: View {
 
 struct NativeWorkspaceTabsView: View {
     @Environment(RemoteStore.self) var store
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @EnvironmentObject var shared: SharedAppStore
     let workspaceID: String
     var projectID: String? = nil
@@ -72,27 +73,28 @@ struct NativeWorkspaceTabsView: View {
     private func label(_ tab: JSON) -> String { tab["title"].string + (tab["type"].string == "browser" && !tab["profileName"].string.isEmpty ? " [" + tab["profileName"].string + "]" : "") }
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 12) {
+            LazyVStack(alignment: .leading, spacing: 6) {
                 Text("Open tabs").font(.title2.bold()); if !store.connected { Text("Offline · cached tabs").font(.caption).foregroundStyle(.orange) }; Text("Hidden tabs remain open.").font(.caption).foregroundStyle(.secondary)
                 HStack {
                     Picker("Type", selection: Binding(get: { type }, set: { setFilter("type", $0) })) { Text("All types").tag(""); Text("Browser").tag("browser"); Text("Chats").tag("chat"); Text("Documents").tag("document"); Text("Terminal").tag("terminal") }
                     TextField("Filter tabs", text: Binding(get: { query }, set: { setFilter("query", $0) })).textInputAutocapitalization(.never).autocorrectionDisabled().accessibilityIdentifier("workspace-tabs-filter")
                 }
                 Text("\(matchingRows.count) of \(rows.count) tabs").font(.caption).foregroundStyle(.secondary)
+                // One compact line per tab: icon, name, address, age and actions.
                 ForEach(matchingRows, id: \.element) { index, tab in
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            if let encoded = tab["favicon"].string.split(separator: ",", maxSplits: 1).last, tab["favicon"].string.hasPrefix("data:image/png;base64,"), let bytes = Data(base64Encoded: String(encoded)), let image = UIImage(data: bytes) { Image(uiImage: image).resizable().scaledToFit().frame(width: 20, height: 20) } else { Image(systemName: tab["type"].string == "browser" ? "globe" : tab["type"].string == "terminal" ? "terminal" : tab["type"].string == "chat" ? "bubble.left.and.bubble.right" : "doc.text").frame(width: 24) }
-                            Button { open(tab) } label: { Text(label(tab)).font(.headline).lineLimit(1) }.buttonStyle(.plain).accessibilityIdentifier("workspace-managed-title-" + tab["id"].string).disabled(tab["hidden"].bool && !store.connected)
-                            Text(tab["url"].string).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail).frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        HStack { if !tab["projectName"].string.isEmpty { Text(tab["projectName"].string) }; Text("Opened: " + date(tab["openedAt"].string)); Text("Last interaction: " + date(tab["lastTouchedAt"].string)) }.font(.caption).foregroundStyle(.secondary)
-                        ViewThatFits(in: .horizontal) {
-                            HStack { actions(tab, index: index) }
-                            VStack(alignment: .leading) { actions(tab, index: index) }
-                        }.buttonStyle(.bordered).disabled(!store.connected)
-                        if tab["hidden"].bool { Text("Hidden from navigation").font(.caption) }
-                    }.padding().background(NativeTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+                    HStack(spacing: 8) {
+                        tabIcon(tab).frame(width: 20, height: 20).opacity(tab["hidden"].bool ? 0.5 : 1)
+                        Button { open(tab) } label: {
+                            HStack(spacing: 6) {
+                                Text(label(tab)).font(.subheadline.weight(.semibold)).lineLimit(1).frame(maxWidth: tab["url"].string.isEmpty ? .infinity : 160, alignment: .leading).layoutPriority(1)
+                                if !tab["url"].string.isEmpty { Text(tab["url"].string).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle) }
+                            }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                        }.buttonStyle(.plain).accessibilityIdentifier("workspace-managed-title-" + tab["id"].string).disabled(tab["hidden"].bool && !store.connected)
+                        Text(age(tab)).font(.caption2).monospacedDigit().foregroundStyle(.secondary).fixedSize()
+                            .accessibilityLabel("Opened " + date(tab["openedAt"].string) + ", last interaction " + date(tab["lastTouchedAt"].string) + (tab["projectName"].string.isEmpty ? "" : ", in " + tab["projectName"].string))
+                        rowButtons(tab, index: index).disabled(!store.connected)
+                    }.padding(.horizontal, 10).padding(.vertical, 6).frame(minHeight: 44)
+                        .background(NativeTheme.surface.opacity(tab["hidden"].bool ? 0.5 : 1), in: RoundedRectangle(cornerRadius: 10))
                 }
             }.padding()
         }.disabled(busy).task { await load() }
@@ -103,15 +105,42 @@ struct NativeWorkspaceTabsView: View {
             }.navigationTitle("Move tab").toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { moving = false } }; ToolbarItem(placement: .confirmationAction) { Button("Move") { move() } } } }
         }
     }
-    @ViewBuilder private func actions(_ tab: JSON, index: Int) -> some View {
-        if projectID != nil || !store.supportsProjects {
-            Button("↑") { reorder(index, delta: -1) }.disabled(index == 0).accessibilityLabel("Move tab up")
-            Button("↓") { reorder(index, delta: 1) }.disabled(index == rows.count - 1).accessibilityLabel("Move tab down")
-        }
-        Button(tab["hidden"].bool ? "Restore" : "Hide") { mutate([.object(["action": .string("visibility"), "id": tab["id"], "hidden": .bool(!tab["hidden"].bool)])], tab: tab) }
-        if tab["type"].string == "browser" { Button(tab["persist"].bool ? "Unpersist" : "Persist") { command(["action": .string("persist"), "scope": .string(scopeKind), "id": .string(scopeID), "tabId": tab["id"], "expectedRevision": snapshot["revision"], "enabled": .bool(!tab["persist"].bool)]) } }
-        Button("Move") { moveTab = tab; destination = (tab["ownerScope"].string.isEmpty ? scopeKind : tab["ownerScope"].string) + ":" + (tab["ownerID"].string.isEmpty ? scopeID : tab["ownerID"].string); Task { catalog = (try? await store.request("context.get", [:])) ?? .null; moving = true } }
-        Button("Close", role: .destructive) { command(["action": .string("close"), "scope": .string(scopeKind), "id": .string(scopeID), "tabId": tab["id"], "expectedRevision": snapshot["revision"]]) }
+    @ViewBuilder private func tabIcon(_ tab: JSON) -> some View {
+        if let encoded = tab["favicon"].string.split(separator: ",", maxSplits: 1).last, tab["favicon"].string.hasPrefix("data:image/png;base64,"), let bytes = Data(base64Encoded: String(encoded)), let image = UIImage(data: bytes) { Image(uiImage: image).resizable().scaledToFit() }
+        else { Image(systemName: NativeTabSymbol.name(kind: tab["type"].string, chatType: tab["chatType"].string, mediaType: tab["mediaType"].string)).foregroundStyle(.secondary) }
+    }
+    private func age(_ tab: JSON) -> String {
+        guard let date = ProviderAllowance.date(tab["lastTouchedAt"].string) ?? ProviderAllowance.date(tab["openedAt"].string) else { return "—" }
+        let minutes = max(0, Int(Date().timeIntervalSince(date) / 60))
+        return minutes == 0 ? "now" : minutes < 60 ? "\(minutes)m" : minutes < 1440 ? "\(minutes / 60)h" : "\(minutes / 1440)d"
+    }
+    @ViewBuilder private func rowButtons(_ tab: JSON, index: Int) -> some View {
+        HStack(spacing: 2) {
+            // Compact widths keep the address visible: Hide and Move move into the menu.
+            if sizeClass == .regular {
+                Button { toggleHidden(tab) } label: { Image(systemName: tab["hidden"].bool ? "eye" : "eye.slash").frame(width: 30, height: 32) }
+                    .accessibilityLabel(tab["hidden"].bool ? "Restore " + label(tab) : "Hide " + label(tab))
+                Button { beginMove(tab) } label: { Image(systemName: "arrow.right.square").frame(width: 30, height: 32) }.accessibilityLabel("Move " + label(tab))
+            }
+            Menu {
+                if sizeClass != .regular {
+                    Button(tab["hidden"].bool ? "Restore" : "Hide", systemImage: tab["hidden"].bool ? "eye" : "eye.slash") { toggleHidden(tab) }
+                    Button("Move", systemImage: "arrow.right.square") { beginMove(tab) }
+                }
+                if projectID != nil || !store.supportsProjects {
+                    Button("Move up", systemImage: "arrow.up") { reorder(index, delta: -1) }.disabled(index == 0)
+                    Button("Move down", systemImage: "arrow.down") { reorder(index, delta: 1) }.disabled(index == rows.count - 1)
+                }
+                if tab["type"].string == "browser" { Button(tab["persist"].bool ? "Unpersist" : "Persist", systemImage: "pin") { command(["action": .string("persist"), "scope": .string(scopeKind), "id": .string(scopeID), "tabId": tab["id"], "expectedRevision": snapshot["revision"], "enabled": .bool(!tab["persist"].bool)]) } }
+                Section(date(tab["openedAt"].string) == "—" ? "Opened —" : "Opened " + date(tab["openedAt"].string)) {}
+            } label: { Image(systemName: "ellipsis").frame(width: 30, height: 32) }.accessibilityLabel("More actions for " + label(tab))
+            Button(role: .destructive) { command(["action": .string("close"), "scope": .string(scopeKind), "id": .string(scopeID), "tabId": tab["id"], "expectedRevision": snapshot["revision"]]) } label: { Image(systemName: "xmark").frame(width: 30, height: 32) }.accessibilityLabel("Close " + label(tab))
+        }.buttonStyle(.plain).foregroundStyle(NativeTheme.accent).font(.system(size: 15, weight: .medium))
+    }
+    private func toggleHidden(_ tab: JSON) { mutate([.object(["action": .string("visibility"), "id": tab["id"], "hidden": .bool(!tab["hidden"].bool)])], tab: tab) }
+    private func beginMove(_ tab: JSON) {
+        moveTab = tab; destination = (tab["ownerScope"].string.isEmpty ? scopeKind : tab["ownerScope"].string) + ":" + (tab["ownerID"].string.isEmpty ? scopeID : tab["ownerID"].string)
+        Task { catalog = (try? await store.request("context.get", [:])) ?? .null; moving = true }
     }
     private func date(_ value: String) -> String { ProviderAllowance.date(value)?.formatted(date: .abbreviated, time: .shortened) ?? "—" }
     private func load() async {

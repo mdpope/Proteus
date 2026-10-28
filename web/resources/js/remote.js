@@ -1,6 +1,7 @@
 import {moveMenuMarkup,projectMoveGroups} from '../../../public/shared/navigation/move-menu.js';
 import {modelControlVisible,optionsForModelChange} from '../../../public/features/chats/model-choices.js';
 import {mountQuestionAttachments} from '../../../public/features/chats/question-attachments.js';
+import {openStoredAttachment,readRemoteAttachment} from '../../../public/features/chats/chat-attachments.js';
 import {chatQuestions,mountQuestionCard,mountQuestionQueue} from '../../../public/features/chats/user-questions.js';
 import {recentItemMarkup} from './navigation-icons.js';
 import {bindWebChatPermissions} from './chat-permissions.js';
@@ -339,7 +340,7 @@ function renderChatEvent(event,index,provider,eventStart=0){
     if(event.data?.activity)return `<div class="remote-activity-item" data-provider-activity-index="${eventStart+index}"></div>`;
     if((event.role||event.type)==='assistant'&&!String(event.text||'').trim())return '';
     const role=event.role||event.type,label=role==='assistant'?providerName(provider):role;
-    const files=role==='user'&&Array.isArray(event.data?.attachments)?`<div class="remote-sent-attachments">${event.data.attachments.map(item=>`<span>▤ ${escape(item.name||'File')} · ${escape(item.mediaType||'file')}</span>`).join('')}</div>`:'';
+    const files=role==='user'&&Array.isArray(event.data?.attachments)?`<div class="remote-sent-attachments">${event.data.attachments.map(item=>`<span>▤ ${escape(item.name||'File')} · ${escape(item.mediaType||'file')}${/^[a-f0-9]{64}$/.test(item.sha256||'')&&session()?.state?.capabilities?.includes('chat.attachments.view.v1')?` <button type="button" class="subtle" data-remote-attachment="${escape(item.sha256)}" data-remote-attachment-name="${escape(item.name||'File')}">Open</button>`:''}</span>`).join('')}</div>`:'';
     return `<article class="remote-message ${escape(role)}" data-event-key="${eventStart+index}" data-event-anchor="${escape(eventAnchor(event,index,eventStart))}"><div class="eyebrow">${escape(label)}${role==='assistant'?`<span data-runtime-turn="${escape(event.data?.turnId||'')}"></span>`:''}<time>${escape(dateTime(event.at||event.timestamp||event.createdAt,appPreferences.timezone))}</time></div><div data-markdown-event="${eventStart+index}"></div>${files}</article>`;
 }
 function renderAutomaticApproval(event){
@@ -902,3 +903,6 @@ async function moveWebsiteChat(current,run){
  const select=dialog.querySelector('[data-move-destination]');
  dialog.querySelector('[type=button]').onclick=()=>dialog.close();dialog.onclose=()=>dialog.remove();dialog.querySelector('form').onsubmit=async event=>{event.preventDefault();try{const projectId=supportsProjects?select.value:undefined,workspaceId=supportsProjects?projectCatalog.projects.find(project=>project.id===projectId)?.workspaceId:select.value;if((supportsProjects?projectId===fresh.projectId:workspaceId===fresh.workspaceId)){dialog.close();return;}await commandForHost(current,'chat.move',{id:run.id,workspaceId,...(supportsProjects?{projectId,expectedUpdatedAt:fresh.updatedAt,expectedRevision:projectCatalog.revision}:{})});await refreshAggregate(true);dialog.close();await workspaces.enter({hostId:current.host.hostId,id:workspaceId,projectId});await workspaces.openChat(run.id,run.title);render();}catch(error){dialog.querySelector('[data-error]').textContent=error.message;}};document.body.append(dialog);dialog.showModal();
 }
+
+// Files kept with a chat on its owner open through bounded read-only chunks.
+document.addEventListener('click',event=>{const button=event.target.closest?.('[data-remote-attachment]');const run=session()?.run;if(!button||!run?.id)return;event.preventDefault();const chatId=run.id,sha256=button.dataset.remoteAttachment;void openStoredAttachment(button.dataset.remoteAttachmentName||'Attachment',()=>readRemoteAttachment((method,args)=>command(method,args),chatId,sha256));});

@@ -6,7 +6,7 @@ use App\Models\User;
 use Firebase\JWT\JWT;
 use Illuminate\Support\Facades\Http;
 
-/** Payload-free browser wakeups and generic APNs alerts. Secrets stay in configured files. */
+/** Payload-free browser wakeups and APNs alerts with bounded chat text. Secrets stay in configured files. */
 class PushDelivery
 {
     public function __construct(private AppRecords $records) {}
@@ -51,11 +51,20 @@ class PushDelivery
             } else {
                 $token = JWT::encode(['iss' => config('push.apns_team_id'), 'iat' => time()], $key, 'ES256', config('push.apns_key_id'));
                 $host = $subscription['environment'] === 'sandbox' ? 'api.sandbox.push.apple.com' : 'api.push.apple.com';
-                // Carry only validated navigation identities. Prompts, chat titles,
-                // transcripts and URLs never leave the encrypted account record.
+                // Operator decision (Oct 27): alerts show the chat title, a bounded
+                // plain-text preview and the source computer. Transport stays HTTPS to
+                // APNs; Apple can read alert text. Older desktops send no preview fields.
                 $route = array_intersect_key($notification, array_flip(['hostId', 'chatId', 'scheduleId', 'type']));
                 $eventId = $notification['eventId'] ?? $notification['id'] ?? null;
-                $payload = ['aps' => ['alert' => ['title' => 'Proteus', 'body' => 'There is an update in Proteus. Open Notifications to review.'], 'sound' => 'default']];
+                $clean = fn ($value, $limit) => is_string($value) ? mb_substr(trim(preg_replace('/[\x00-\x1f\x7f]+/u', ' ', $value)), 0, $limit) : '';
+                $title = $clean($notification['title'] ?? '', 160);
+                $computer = $clean($notification['hostName'] ?? '', 80);
+                $body = $clean($notification['body'] ?? '', 500);
+                $alert = ['title' => $title !== '' ? $title : 'Proteus', 'body' => $body !== '' ? $body : 'There is an update in Proteus. Open Notifications to review.'];
+                if ($computer !== '') {
+                    $alert['subtitle'] = $computer;
+                }
+                $payload = ['aps' => ['alert' => $alert, 'sound' => 'default', 'thread-id' => $route['chatId'] ?? 'proteus']];
                 if (is_string($eventId)) {
                     $route['notificationId'] = $eventId;
                 }

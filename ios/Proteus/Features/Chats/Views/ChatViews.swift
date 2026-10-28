@@ -1,3 +1,4 @@
+import QuickLook
 import SwiftUI
 import AVFoundation
 import WebKit
@@ -1877,7 +1878,7 @@ private struct NativeChatRecoveryControls: View {
     let recover: (String) -> Void
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(state.queuedCount > 0 ? "\(state.queuedCount) queued message\(state.queuedCount == 1 ? " is" : "s are") waiting. Continue this chat; the queue will run after it finishes." : "Continue this chat from where it left off.").font(.caption).foregroundStyle(.secondary)
+            Text(!state.incompatibleAgents.isEmpty ? state.incompatibleAgents.joined(separator: ", ") + (state.incompatibleAgents.count == 1 ? " is" : " are") + " not compatible with this provider. Turn off for this chat and send your original request again." : state.queuedCount > 0 ? "\(state.queuedCount) queued message\(state.queuedCount == 1 ? " is" : "s are") waiting. Continue this chat; the queue will run after it finishes." : "Continue this chat from where it left off.").font(.caption).foregroundStyle(.secondary)
             ViewThatFits(in: .horizontal) { actions; VStack(alignment: .leading, spacing: 8) { buttons } }
             if state.retry != .null {
                 TimelineView(.periodic(from: .now, by: 1)) { context in
@@ -1889,7 +1890,8 @@ private struct NativeChatRecoveryControls: View {
     }
     private var actions: some View { HStack(spacing: 8) { buttons } }
     @ViewBuilder private var buttons: some View {
-        if state.recoverable { Button("Continue chat") { recover("continue") }.buttonStyle(.borderedProminent).accessibilityIdentifier("chat-recovery-continue") }
+        if !state.incompatibleAgents.isEmpty && run["status"].string == "failed" { Button("Turn off " + state.incompatibleAgents.joined(separator: ", ") + " and retry request") { recover("retry-without-agents") }.buttonStyle(.borderedProminent).accessibilityIdentifier("chat-recovery-without-agents") }
+        if state.recoverable { if state.incompatibleAgents.isEmpty { Button("Continue chat") { recover("continue") }.buttonStyle(.borderedProminent).accessibilityIdentifier("chat-recovery-continue") } else { Button("Continue chat") { recover("continue") }.buttonStyle(.bordered).accessibilityIdentifier("chat-recovery-continue") } }
         if state.recoverable, state.allowance, run["chatControls"]["allowanceContinuation"].bool {
             let pending = run["allowanceContinuation"]["pending"]
             if pending["state"].string == "waiting", pending["failureEventAt"] == state.failureEventAt {
@@ -1982,6 +1984,8 @@ struct MessageView: View {
     var turn: JSON = .null
     var actionID: String? = nil
     var sentAttachments: [JSON] = []
+    @State private var attachmentPreview: URL?
+    @State private var loadingAttachment: String?
     var onDocumentLink: ((String) -> Void)? = nil
     var onResize: () -> Void = {}
     var search: NativePageSearch? = nil
@@ -1997,14 +2001,19 @@ struct MessageView: View {
                 } else { Color.clear.frame(height: height) }
             }.frame(maxWidth: .infinity, alignment: .leading)
             ForEach(sentAttachments, id: \.self) { item in
-                Label(item["name"].string + " · " + ByteCountFormatter.string(fromByteCount: Int64(item["size"].int), countStyle: .file), systemImage: item["mediaType"].string.hasPrefix("image/") ? "photo" : "doc")
-                    .font(.caption).padding(6).background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+                let viewable = item["sha256"].string.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil && store.state["capabilities"].array.contains(.string("chat.attachments.view.v1"))
+                Button { openAttachment(item) } label: {
+                    HStack(spacing: 6) {
+                        Label(item["name"].string + " · " + ByteCountFormatter.string(fromByteCount: Int64(item["size"].int), countStyle: .file), systemImage: item["mediaType"].string.hasPrefix("image/") ? "photo" : "doc")
+                        if viewable { if loadingAttachment == item["sha256"].string { ProgressView().controlSize(.mini) } else { Text("Open").foregroundStyle(NativeTheme.accent) } }
+                    }.font(.caption).padding(6).background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+                }.buttonStyle(.plain).disabled(!viewable || loadingAttachment != nil).accessibilityLabel(viewable ? "Open " + item["name"].string : item["name"].string)
             }
             if let actionID { MessageActionBar(messageID: actionID, markdown: text) }
         }.onGeometryChange(for: Bool.self) { geometry in
             guard let viewport, viewport.width > 0 else { return true }
             return geometry.frame(in: .global).intersects(viewport.insetBy(dx: 0, dy: -max(600, viewport.height * 1.5)))
-        } action: { visible in richVisible = visible }
+        } action: { visible in richVisible = visible }.quickLookPreview($attachmentPreview)
         .padding().background(role == "user" ? NativePalette.shared.color("user") : role == "system" ? NativeTheme.background : NativePalette.shared.color("assistant"), in: RoundedRectangle(cornerRadius: 16)).overlay(alignment: .leading) { Rectangle().fill(NativePalette.shared.color(role == "user" ? "userEdge" : "assistantEdge")).frame(width: 3) }.clipShape(RoundedRectangle(cornerRadius: 16)).padding(.leading, role == "user" ? 20 : 0).padding(.trailing, actionID != nil || role.contains("streaming") ? 20 : 0)
     }
 }
@@ -2581,5 +2590,18 @@ private struct NativeSubagentConversation: View {
             guard result["id"].string == agent else { throw RemoteError(message: "This owner version does not provide agent transcripts.") }
             page = result; loading = false
         } catch { if !Task.isCancelled && agent == selected { self.error = error.localizedDescription; loading = false } }
+    }
+}
+
+extension MessageView {
+    /// Opens a file kept with the chat in Quick Look, the system's sandboxed viewer.
+    fileprivate func openAttachment(_ item: JSON) {
+        let sha = item["sha256"].string
+        guard loadingAttachment == nil, !sha.isEmpty else { return }
+        loadingAttachment = sha
+        Task { defer { loadingAttachment = nil }
+            do { attachmentPreview = try await store.attachmentFile(chatID: runID, sha256: sha, name: item["name"].string) }
+            catch { store.error = error.localizedDescription }
+        }
     }
 }

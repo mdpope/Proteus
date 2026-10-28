@@ -51,3 +51,34 @@ export async function prepareAttachments({key,providerId,destination,chatId,draf
   return {...scope,providerId,messageId,attachments:attachments.map(item=>item.attachmentId),consentId:grant.consentId};
 }
 export const prepareLocalAttachments=options=>prepareAttachments({...options,send:(action,args)=>options.post('/api/attachments',{action,...args})});
+// Files kept with a chat can be opened on every client. Only inert previews are
+// shown: images and text (inserted as text, never markup). Everything else is
+// offered as a downloaded copy so HTML/SVG/PDF scripts cannot run in Proteus.
+const textTypes=/^(text\/|application\/(json|xml|x-yaml|yaml|csv|x-sh|javascript|x-ndjson))/;
+export async function openStoredAttachment(name,load){
+  closePreview();const dialog=document.createElement('dialog');dialog.id='attachment-image-preview';dialog.className='attachment-image-preview attachment-file-viewer';
+  dialog.innerHTML=`<div class="heading"><strong></strong><span class="actions"><a class="button" hidden>Save a copy</a><button aria-label="Close attachment">×</button></span></div><p class="note" role="status">Loading…</p>`;
+  dialog.querySelector('strong').textContent=name;document.body.append(dialog);
+  dialog.querySelector('button').onclick=()=>dialog.close();dialog.addEventListener('click',event=>{if(event.target===dialog)dialog.close();});
+  let url;dialog.addEventListener('close',()=>{dialog.remove();if(url)URL.revokeObjectURL(url);},{once:true});dialog.showModal();
+  const status=dialog.querySelector('[role=status]');
+  try{
+    const file=await load(),type=String(file.mediaType||'').toLowerCase(),blob=new Blob([file.bytes],{type:'application/octet-stream'});
+    url=URL.createObjectURL(blob);const save=dialog.querySelector('a');save.href=url;save.download=file.name||name;save.hidden=false;
+    if(['image/png','image/jpeg','image/gif','image/webp'].includes(type)){const image=document.createElement('img');image.alt=name;image.src=URL.createObjectURL(new Blob([file.bytes],{type}));image.onload=()=>URL.revokeObjectURL(image.src);status.replaceWith(image);}
+    else if(textTypes.test(type)&&file.bytes.byteLength<=2*1024*1024){const pre=document.createElement('pre');pre.className='attachment-text';pre.textContent=new TextDecoder().decode(file.bytes);status.replaceWith(pre);}
+    else status.textContent=(type||'This file type')+' is not previewed in Proteus. Save a copy to open it with another app.';
+  }catch(error){status.textContent=error.message||'This attachment could not be opened.';}
+}
+/** Chunked reader for a remote owner's `chat.attachments.get`. */
+export async function readRemoteAttachment(request,chatId,sha256){
+  const parts=[];let offset=0,meta=null;
+  for(let guard=0;guard<200;guard++){const page=await request('chat.attachments.get',{id:chatId,sha256,offset});meta??=page;const bytes=Uint8Array.from(atob(page.dataBase64||''),c=>c.charCodeAt(0));parts.push(bytes);offset+=bytes.length;if(page.done||!bytes.length)break;}
+  const total=new Uint8Array(offset);let at=0;for(const part of parts){total.set(part,at);at+=part.length;}
+  return {bytes:total,name:meta?.name,mediaType:meta?.mediaType};
+}
+export async function readLocalAttachment(chatId,sha256){
+  const response=await fetch('/api/chat-attachment?chatId='+encodeURIComponent(chatId)+'&sha256='+encodeURIComponent(sha256));
+  if(!response.ok){let message=response.statusText;try{message=(await response.json()).error||message;}catch{}throw new Error(message);}
+  return {bytes:new Uint8Array(await response.arrayBuffer()),name:decodeURIComponent(response.headers.get('X-Proteus-File-Name')||''),mediaType:response.headers.get('X-Proteus-Media-Type')||''};
+}

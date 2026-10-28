@@ -64,7 +64,7 @@ import { showContextMenu, copyContextText } from './features/workspaces/context-
 import { requestPresentation, mountStructured } from './features/chats/tool-presentation.js';
 import { placeTabAfter,destinationSections } from './shared/navigation/tab-placement.js';
 import { conversation, forgetConversation, captureConversationPosition, restoreConversationPosition } from './features/chats/conversation.js';
-import { mountAttachmentPicker, restoreSentAttachments, selectedAttachments, clearAttachments, prepareLocalAttachments } from './features/chats/chat-attachments.js';
+import { mountAttachmentPicker, restoreSentAttachments, selectedAttachments, clearAttachments, prepareLocalAttachments, readLocalAttachment } from './features/chats/chat-attachments.js';
 import { renderProviderAuth } from './features/settings/provider-auth.js';
 import { renderRemote } from './services/remote/remote.js';
 import { initOmi, renderOmi } from './features/tools/omi.js';
@@ -574,7 +574,7 @@ function updateConversation(run) {
     agentPage:(agentId,before)=>api('/api/subagents?id='+encodeURIComponent(run.id)+'&agentId='+encodeURIComponent(agentId)+(before===undefined?'':'&before='+before)),
     questionAttachments:{providerId:run.schedule.provider,mediaTypes:state.data.questionAttachmentMediaTypes||{},destination:computerName(state.data.hostName)+' · '+run.title,chatId:run.id,send:(action,args)=>api('/api/attachments',{action,...args})},
     answerQuestion:async(question,answer,messageId,delivery)=>{await api(`/api/runs/${run.id}/${question.blocking?'reply':'answer-question'}`,{answer,messageId,...delivery,...(question.blocking?{requestId:question.id}:{questionId:question.id})});await loadRunView(run.id);renderRun(run.id);},
-    recover:async(action,expectedFailureEventAt)=>{const modelOptions=action==='continue'?state.chatModelDrafts[run.id]:null;await api(`/api/runs/${run.id}/recover`,{action,expectedFailureEventAt,...(modelOptions?{modelOptions}:{})});if(action==='continue')delete state.chatModelDrafts[run.id];await loadRunView(run.id);renderRun(run.id);},notify:toast,
+    readAttachment:sha256=>readLocalAttachment(run.id,sha256),recover:async(action,expectedFailureEventAt)=>{const modelOptions=action==='continue'?state.chatModelDrafts[run.id]:null;await api(`/api/runs/${run.id}/recover`,{action,expectedFailureEventAt,...(modelOptions?{modelOptions}:{})});if(action==='continue')delete state.chatModelDrafts[run.id];await loadRunView(run.id);renderRun(run.id);},notify:toast,
     loadEarlier:async()=>{const current=localHistories.get(run.id);if(!current?.earlier)return;await loadRunView(run.id,current.eventStart);if(state.tabs.some(tab=>tab.id===state.tab&&tab.type==='run'&&(tab.runId||tab.id)===run.id))renderRun(run.id);},
     edit:entry=>{const input=$('#followup');if(!input)return;if((input.value.trim()&&input.value!==entry.text||selectedAttachments('run:'+run.id).length)&&!confirm('Replace the current unsent draft with this message?'))return;input.value=entry.text||'';input.dispatchEvent(new Event('input'));input.focus();const restored=restoreSentAttachments('run:'+run.id,entry.data?.delivery?.id);if((entry.data?.attachments?.length||0)>restored)toast('Text restored. Some files are no longer available here; reattach them before sending.');},
     time, activityTime:value=>time(value,undefined,true), copy: text => window.desktop ? window.desktop.copyText(text) : navigator.clipboard.writeText(text),

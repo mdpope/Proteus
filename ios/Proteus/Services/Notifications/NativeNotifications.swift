@@ -70,17 +70,18 @@ import Security
             guard delivered.insert(id).inserted, !first, item["readAt"] == .null else { continue }
             if UIApplication.shared.applicationState == .active { presentBanner(Self.notificationBody(item), destination: NotificationRoute(hostID: hostID, chatID: item["chatId"].string, scheduleID: item["scheduleId"].string, type: item["type"].string)); continue }
             guard enabled else { continue }
-            let content = UNMutableNotificationContent(); content.title = "Proteus"; content.body = Self.notificationBody(item); content.sound = .default
+            // Same text the computer published: chat title, preview and source computer.
+            let content = UNMutableNotificationContent(); content.title = item["title"].string.isEmpty ? "Proteus" : String(item["title"].string.prefix(160)); content.subtitle = String(item["hostName"].string.prefix(80)); content.body = Self.notificationBody(item, includeTitle: false); content.sound = .default; content.threadIdentifier = item["chatId"].string
             content.userInfo = ["hostId": hostID, "chatId": item["chatId"].string,
                                 "scheduleId": item["scheduleId"].string, "type": item["type"].string]
             UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: id, content: content, trigger: nil))
         }
         if delivered.count > 2000 { delivered = Set(delivered.suffix(1000)) }
     }
-    static func notificationBody(_ item: JSON) -> String {
+    static func notificationBody(_ item: JSON, includeTitle: Bool = true) -> String {
         // Content arrived through the authenticated/decrypted owner channel.
         // The OS continues to enforce the operator's lock-screen preview policy.
-        let parts = [item["title"].string, item["body"].string].filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        let parts = [includeTitle ? [item["hostName"].string, item["title"].string].filter { !$0.isEmpty }.joined(separator: " · ") : "", item["body"].string].filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         let text = parts.joined(separator: " — ").unicodeScalars.filter { !CharacterSet.controlCharacters.contains($0) || $0 == "\n" }
         let preview = String(String.UnicodeScalarView(text)).trimmingCharacters(in: .whitespacesAndNewlines)
         return preview.isEmpty ? safeBody(item["type"].string) : String(preview.prefix(500))
@@ -122,7 +123,10 @@ import Security
             #if DEBUG
             self.fixtureStatus = "Foreground delivered"
             #endif
-            self.presentBanner(Self.safeBody(type), destination: NotificationRoute.from(["hostId": host, "chatId": chat, "scheduleId": schedule, "type": type])); completionHandler([]) }
+            // Use the pushed alert's own text; fall back to the generic label for older servers.
+            let content = notification.request.content
+            let text = [[content.subtitle, content.title].filter { !$0.isEmpty && $0 != "Proteus" }.joined(separator: " · "), content.body].filter { !$0.isEmpty && $0 != "There is an update in Proteus. Open Notifications to review." }.joined(separator: " — ")
+            self.presentBanner(text.isEmpty ? Self.safeBody(type) : String(text.prefix(500)), destination: NotificationRoute.from(["hostId": host, "chatId": chat, "scheduleId": schedule, "type": type])); completionHandler([]) }
     }
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
         let payload = response.notification.request.content.userInfo

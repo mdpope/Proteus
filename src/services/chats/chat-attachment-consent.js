@@ -74,8 +74,8 @@ export class ChatAttachmentConsents {
   assertPrepared({proofId,chatId,providerId,attachmentIds}={}){
     const proof=this.prepared.get(proofId);
     if(!proof||proof.used||proof.chatId!==chatId||proof.providerId!==providerId||!Array.isArray(attachmentIds)||JSON.stringify(proof.attachments.map(item=>item.attachmentId))!==JSON.stringify(attachmentIds))throw new Error('Attachment send consent is missing or changed. Review the exact files and provider again.');
-    return proof.attachments.map(item=>({name:item.name,mediaType:item.mediaType,size:item.size}));
+    return proof.attachments.map(item=>({name:item.name,mediaType:item.mediaType,size:item.size,...(/^[a-f0-9]{64}$/.test(item.sha256||'')?{sha256:item.sha256}:{})}));
   }
-  async releaseProof(proofId){const proof=this.prepared.get(proofId);this.prepared.delete(proofId);this.persistProofs();if(!proof)return;for(const item of proof.attachments)await this.store.release(item);}
+  async releaseProof(proofId){const proof=this.prepared.get(proofId);this.prepared.delete(proofId);this.persistProofs();if(!proof)return;for(const item of proof.attachments){if(proof.used)try{await this.store.preserve?.(item,proof.chatId);}catch{/* Viewing is optional; delivery already happened. */}await this.store.release(item);}}
   consume(consentId){this.grants.delete(consentId);}
 }

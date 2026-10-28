@@ -151,7 +151,8 @@ export class CodexProvider {
   const snapshot=run.schedule.context, managed=snapshot&&this.context?this.context.providerContext(snapshot):null;
   // Tool scopes are an execution contract. Do not silently drop provider-specific restrictions.
   const restricted=managed?.customAgents.filter(a=>a.tools!==null);
-  if(restricted?.length)throw new Error(`Codex cannot yet enforce the declared tool filters for: ${restricted.map(a=>a.displayName).join(', ')}. Use an unrestricted agent or deselect these agents for this Codex chat.`);
+  // Structured so the chat can offer "turn these off and retry" instead of a dead end.
+  if(restricted?.length)throw Object.assign(new Error(`Codex cannot yet enforce the declared tool filters for: ${restricted.map(a=>a.displayName).join(', ')}. Use an unrestricted agent or deselect these agents for this Codex chat.`),{code:'PROVIDER_AGENT_TOOL_FILTERS',agents:restricted.map(a=>({id:a.entryId,name:a.displayName}))});
   const native=await client.request('config/read',{includeLayers:true});const existing={};for(const layer of native.layers||[])Object.assign(existing,layer.config?.mcp_servers||{});
   Object.assign(existing,native.config?.mcp_servers||{});
   const plugins={};for(const layer of native.layers||[])Object.assign(plugins,layer.config?.plugins||{});Object.assign(plugins,native.config?.plugins||{});

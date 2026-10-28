@@ -107,7 +107,10 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   const activity = new ActivityStore(home, { identity: () => life.api.identity(), publish: (item, identity, kind='notifications') => account.request({ path:'/'+kind, method:'POST', body:item, identity }) });
   const workspaceFiles = new WorkspaceFiles(() => context.config());
   const attachments = new ChatAttachmentStore(home);
-  const adapters = { ...(providers || (desktopPreview ? { codex, mtplx:new SessionProvider(()=>new MtplxProvider({}, {context,browser})) } : { copilot, codex, claude })), ...(!desktopPreview ? {'local-process': omi.provider()} : {}) };
+  // MTPLX is a local Apple-silicon model server. The Mac app registers it so it is
+  // available when the server is running; status reports it unavailable otherwise.
+  const mtplx=new SessionProvider(()=>new MtplxProvider({}, {context,browser}));
+  const adapters = { ...(providers || (desktopPreview ? { codex, mtplx } : { copilot, codex, claude, ...(process.platform==='darwin'?{mtplx}:{}) })), ...(!desktopPreview ? {'local-process': omi.provider()} : {}) };
   const engine = new Engine(home, adapters, undefined, {permissionControls:true,recoveryBarrier:updateRecovery});
   const desktopControl=desktopPreview?null:new DesktopControl({active:owner=>owner==='operator'||['running','awaiting_input'].includes(engine.getRun(owner)?.status)});
   if(browser)browser.desktopControl=desktopControl;
@@ -185,6 +188,30 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       catch { return null; } // Invalid context must not hide the UI needed to repair it.
     }
     return permissionPreviews.get(key);
+  }
+  // One action for a provider that rejected selected agents before starting:
+  // drop exactly those agents from this chat's captured sources and resend the
+  // original request. Other sources, workspace defaults and history are unchanged.
+  function readChatAttachment(chatId, sha256){
+    const run = engine.getRun(chatId), reference = run.events.flatMap(event => event.role === 'user' ? event.data?.attachments || [] : []).find(item => item.sha256 === sha256);
+    if (!reference) throw new Error('Choose an attachment from this chat.');
+    return { bytes: attachments.history(run.id, sha256), name: String(reference.name || 'attachment'), mediaType: String(reference.mediaType || 'application/octet-stream') };
+  }
+  async function retryWithoutAgents(value){
+    const run = engine.getRun(value.runId);
+    if (run.status !== 'failed') throw new Error('This chat is no longer waiting on that failure.');
+    const failure = [...run.events].reverse().find(event => event.data?.failure)?.data?.failure;
+    if (failure?.kind !== 'incompatible-agents' || run.failureEventAt !== value.expectedFailureEventAt) throw new Error('This chat changed. Reopen it before retrying.');
+    const removed = new Set(failure.agents.map(agent => agent.id)), old = run.schedule.context;
+    await context.refreshAsync({ workspaceId: old?.workspaceId });
+    const kept = (old?.entries || []).map(entry => entry.id).filter(id => !removed.has(id));
+    const snapshot = context.capture({ workspaceId: old?.workspaceId, ...(old?.followsWorkspace ? {} : { workspace: old?.baseWorkspace || run.schedule.workspace }), selectedIds: kept, agentId: removed.has(old?.agentId) ? null : old?.agentId, includeDefaults: false });
+    run.initialSchedule ??= structuredClone(run.schedule);
+    run.contextHistory ??= []; if (old) run.contextHistory.push(old);
+    run.schedule = { ...run.schedule, context: snapshot, workspace: snapshot.workspace };
+    engine.event(run, 'system', `Turned off ${failure.agents.map(agent => agent.name).join(', ')} for this chat and sent the original request again.${failure.attachmentsOmitted ? ' Files attached to that message were not resent.' : ''}`, { contextRecovery: { removedAgents: failure.agents } });
+    engine.resume(run.id, failure.retryPrompt || 'Retry the previous request.');
+    return { ok: true, runId: run.id };
   }
   async function buildChatSchedule(value){
     const defaults=settings.get();
@@ -467,6 +494,18 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         engine.event(run, 'system', 'Workspace context refreshed for the next turn. Existing conversation history is retained.');
         return json(200, { ok: true });
       }
+      // One action for a provider that rejected selected agents before starting:
+      // drop exactly those agents from this chat's captured sources and resend the
+      // original request. Other sources, workspace defaults and history are unchanged.
+      // Raw bytes only for files a message in this chat actually references. Served
+      // as octet-stream so HTML/SVG can never execute at the app origin; the client
+      // decides what is safe to preview.
+      if (url.pathname === '/api/chat-attachment' && req.method === 'GET') {
+        const file = readChatAttachment(url.searchParams.get('chatId'), url.searchParams.get('sha256'));
+        res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'private, no-store', 'Content-Disposition': 'attachment', 'X-Proteus-Media-Type': file.mediaType, 'X-Proteus-File-Name': encodeURIComponent(file.name) });
+        res.end(file.bytes); return;
+      }
+      if (url.pathname === '/api/chat-recovery/without-agents' && req.method === 'POST') return json(200, await retryWithoutAgents(await body(req)));
       if (url.pathname === '/api/export' && req.method === 'POST') {
         const value = await body(req); return json(200, exportTranscript(home, engine.getRun(value.runId), value.format));
       }
@@ -569,6 +608,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
           return json(200, run);
         }
         if(action==='recover'){
+          if(value.action==='retry-without-agents')return json(200,await retryWithoutAgents({runId:id,expectedFailureEventAt:value.expectedFailureEventAt}));
           if(value.modelOptions){const run=engine.getRun(id),options=chatModelOptions(value.modelOptions);if(value.action!=='continue')throw Error('Choose Continue chat to change model settings.');if(run.schedule.provider!=='rehearsal'){const catalog=await catalogs[run.schedule.provider]?.get(),model=catalog?.models?.find(item=>item.id===options.model);if(!model)throw Error('Selected model is unavailable. Refresh models and choose an available model.');validateModelOptions(options,model);}value.modelOptions=options;}
           return json(200,await engine.recovery.command(id,value));
         }
@@ -667,7 +707,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   origin = `http://127.0.0.1:${server.address().port}`;
   atomicJSON(path.join(home, 'connection.json'), { origin, token, pid: process.pid });
   const timer = timers ? setInterval(() => { void performanceDiagnostics.measure('scheduler.tick', () => engine.tick()).catch(error => engine.emit('scheduler-error', { error: error.message, at: new Date().toISOString() })); }, 1000) : null;
-  const service = { desktopControl,workspaceProjects:preview, desktopPreview:desktopPreview?preview:null, performanceDiagnostics, notify, desktopAttention:()=>[...(service.browserAttention?.()||[]),...remote.documents.list().filter(item=>!item.approvedAt).map(item=>({id:'document:'+item.requestId,kind:'document',title:item.deviceName+' requests '+item.title,requestId:item.requestId,path:item.path,at:new Date(Date.parse(item.expiresAt)-600000).toISOString()})),...service.attention()], attention:()=>[...integrations.consumers().filter(item=>['needs-auth','failed'].includes(item.connection)).map(item=>({id:'integration:'+item.id,kind:'connection',title:(item.profile.label||item.server)+' needs attention',section:'integrations',at:item.checkedAt})),...activity.notifications().items.filter(item=>!item.readAt).map(item=>({id:'notification:'+item.id,notificationId:item.id,kind:'notification',title:item.title,body:item.body,chatId:item.chatId,...(item.browserIssue?{browserIssue:item.browserIssue,silent:true}:{}),at:item.createdAt}))], browserProfiles, integrations, engine, settings, context, standup, omi, life, account, activity, workspaceFiles, attachments, buildChatSchedule, usage, catalog, catalogs, origin, token, home, url: `${origin}/?token=${token}`, async close() {
+  const service = { readChatAttachment, desktopControl,workspaceProjects:preview, desktopPreview:desktopPreview?preview:null, performanceDiagnostics, notify, desktopAttention:()=>[...(service.browserAttention?.()||[]),...remote.documents.list().filter(item=>!item.approvedAt).map(item=>({id:'document:'+item.requestId,kind:'document',title:item.deviceName+' requests '+item.title,requestId:item.requestId,path:item.path,at:new Date(Date.parse(item.expiresAt)-600000).toISOString()})),...service.attention()], attention:()=>[...integrations.consumers().filter(item=>['needs-auth','failed'].includes(item.connection)).map(item=>({id:'integration:'+item.id,kind:'connection',title:(item.profile.label||item.server)+' needs attention',section:'integrations',at:item.checkedAt})),...activity.notifications().items.filter(item=>!item.readAt).map(item=>({id:'notification:'+item.id,notificationId:item.id,kind:'notification',title:item.title,body:item.body,chatId:item.chatId,...(item.browserIssue?{browserIssue:item.browserIssue,silent:true}:{}),at:item.createdAt}))], browserProfiles, integrations, engine, settings, context, standup, omi, life, account, activity, workspaceFiles, attachments, buildChatSchedule, usage, catalog, catalogs, origin, token, home, url: `${origin}/?token=${token}`, async close() {
     await service.updates?.close();await service.chatControl?.close();await desktopControl?.close();
     activity.log('info','app.stopping','Proteus is shutting down.');clearInterval(integrationTimer);await integrations.close(); if(activityTimer)clearInterval(activityTimer); if (timer) clearInterval(timer); if (catalogTimer) clearInterval(catalogTimer); await Promise.all(Object.values(catalogs).map(c => c.pending)); await providerAuth.close(); await remote.close(); let engineCloseError; try { await engine.close(); } catch (error) { engineCloseError=error; } await attachments.close(); await copilot.close(); await codex.close(); await claude.close(); await life.close?.(); await service.browserHistory?.close(); let activityCloseError; try { await activity.close(); } catch (error) { activityCloseError=error; }
     for (const client of eventClients) client.end(); eventClients.clear();
@@ -702,7 +742,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
     return result;
   };
   service.previews=new ChatPreviews(service);
-  remote = service.remote = new RemoteHost(service); activity.attach(engine,()=>remote.info().hostId); activity.log('info','app.started','Proteus started.'); await remote.start();
+  remote = service.remote = new RemoteHost(service); activity.attach(engine,()=>remote.info().hostId,()=>remote.info().label); activity.log('info','app.started','Proteus started.'); await remote.start();
   service.chatControl=new ChatControl(service);
   for(const adapter of Object.values(adapters))adapter.chatControl=service.chatControl;
   const integrationTimer=timers?setInterval(()=>void integrations.tick(),300000):null;

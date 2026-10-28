@@ -27,6 +27,19 @@ function diagnostic(value, seen = new Set(), depth = 0) {
   const result = Array.isArray(fields) ? fields.slice(0,100).map(item => diagnostic(item,seen,depth+1)) : Object.fromEntries(Object.entries(fields).slice(0,100).map(([key,item]) => [safeLog(key), hiddenField.test(key) ? '[withheld]' : diagnostic(item,seen,depth+1)]));
   seen.delete(value); return result;
 }
+// Plain, bounded notification text: no control characters or Markdown markup.
+function notificationText(value, limit) {
+  if (typeof value !== 'string') return '';
+  const text = value.replace(/```[\s\S]*?```/g, ' ').replace(/`([^`]*)`/g, '$1').replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/^[#>*\-+\s]+/gm, '').replace(/[*_~]{1,3}/g, '').replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return text.length > limit ? text.slice(0, limit - 1).trimEnd() + '…' : text;
+}
+function lastReply(run) { const events = Array.isArray(run?.events) ? run.events : []; for (let index = events.length - 1; index >= 0 && index >= events.length - 200; index--) { const event = events[index]; if (event.role === 'assistant' && !event.data?.reasoning && typeof event.text === 'string' && event.text.trim()) return event.text; } return ''; }
+function pendingPreview(pending) {
+  if (pending?.type === 'question') return 'Question: ' + (pending.question || pending.text || '');
+  const details = pending?.details || {};
+  const action = { shell: 'Run command', write: 'Edit file', read: 'Read files', mcp: 'Use connected tool', url: 'Open website' }[details.kind] || 'Allow app action';
+  return action + ': ' + (details.fullCommandText || details.fileName || details.path || details.url || [details.serverName, details.toolName].filter(Boolean).join(' · ') || 'review the request');
+}
 export class ActivityStore extends EventEmitter {
   constructor(home, { clock = () => new Date(), identity = () => null, publish } = {}) {
     super(); this.file = path.join(home, 'activity.json'); this.clock = clock; this.identity = identity; this.publish = publish;
@@ -87,10 +100,13 @@ export class ActivityStore extends EventEmitter {
   add(type, detail = {}) {
     if (!types.has(type)) throw new Error('Unknown notification type.');
     if(type==='browser.issue')return this.browserIssue(detail);
-    const title = { 'chat.completed': 'Chat completed', 'review.required': 'Review required', 'schedule.completed': 'Schedule completed', 'device.added': 'New device connected', 'device.reconnected': 'Computer reconnected' }[type];
+    const generic = { 'chat.completed': 'Chat completed', 'review.required': 'Review required', 'schedule.completed': 'Schedule completed', 'device.added': 'New device connected', 'device.reconnected': 'Computer reconnected' }[type];
     const offlineSeconds = Math.max(0, Math.floor(Number(detail.offlineSeconds) || 0));
-    const body = type === 'device.reconnected' ? `Connected to the relay after approximately ${offlineSeconds < 60 ? offlineSeconds + ' seconds' : Math.round(offlineSeconds / 60) + ' minutes'} offline.` : 'Open Proteus to view the details.';
-    const item = { id: randomUUID(), type, title, body, createdAt: this.clock().toISOString(), ...Object.fromEntries(['hostId', 'chatId', 'scheduleId', 'deviceId'].filter(key => typeof detail[key] === 'string').map(key => [key, detail[key].slice(0, 128)])), ...(type === 'device.reconnected' ? { offlineSeconds } : {}) };
+    // Useful text: the chat's title, what happened, and which computer it came from.
+    const chatTitle = notificationText(detail.chatTitle, 120), preview = notificationText(detail.preview, 360), hostName = notificationText(detail.hostName, 80);
+    const title = chatTitle ? (type === 'review.required' ? 'Needs you · ' : type === 'schedule.completed' ? 'Schedule done · ' : '') + chatTitle : generic;
+    const body = type === 'device.reconnected' ? `Connected to the relay after approximately ${offlineSeconds < 60 ? offlineSeconds + ' seconds' : Math.round(offlineSeconds / 60) + ' minutes'} offline.` : preview || (chatTitle ? generic + '.' : 'Open Proteus to view the details.');
+    const item = { id: randomUUID(), type, title, body, ...(hostName ? { hostName } : {}), createdAt: this.clock().toISOString(), ...Object.fromEntries(['hostId', 'chatId', 'scheduleId', 'deviceId'].filter(key => typeof detail[key] === 'string').map(key => [key, detail[key].slice(0, 128)])), ...(type === 'device.reconnected' ? { offlineSeconds } : {}) };
     this.data.notifications.push(item); this.data.notifications = this.data.notifications.slice(-limits.notifications);
     this.save(); this.emit('notification', item);this.queue('notifications',item);return item;
   }
@@ -100,18 +116,20 @@ export class ActivityStore extends EventEmitter {
     this.data.outbox.push({kind,item,accountId:identity.accountId,workspaceId:identity.workspaceId,origin:identity.origin});
     this.data.outbox=this.data.outbox.slice(-limits.outbox);this.save();void this.flush();
   }
-  attach(engine, hostId) {
+  attach(engine, hostId, hostName = () => '') {
+    const describe = run => ({ hostId: hostId(), hostName: hostName(), chatId: run.id, chatTitle: run.title || run.schedule?.name || '' });
     const snapshot = run => ({ status: run.status, pending: run.pending?.id, questions:(run.userQuestions||[]).filter(question=>question.status==='pending').map(question=>question.id) });
     for (const run of engine.listRuns()) this.states.set(run.id, snapshot(run));
     this.listener = (run,change) => {
       if (!run?.id||change?.stream) return;
       if(run.deleted){this.states.delete(run.id);this.log('info','chat.deleted',`Chat ${run.id} deleted from Proteus.`,{hostId:hostId()});return;}
       const before = this.states.get(run.id); this.states.set(run.id, snapshot(run));
-      if (run.status === 'awaiting_input' && run.pending?.id && before?.pending !== run.pending.id) this.add('review.required', { hostId: hostId(), chatId: run.id });
-      if((run.userQuestions||[]).some(question=>question.status==='pending'&&!before?.questions?.includes(question.id)))this.add('review.required',{hostId:hostId(),chatId:run.id});
+      if (run.status === 'awaiting_input' && run.pending?.id && before?.pending !== run.pending.id) this.add('review.required', { ...describe(run), preview: pendingPreview(run.pending) });
+      const question=(run.userQuestions||[]).find(question=>question.status==='pending'&&!before?.questions?.includes(question.id));
+      if(question)this.add('review.required',{...describe(run),preview:'Question: '+(question.question||question.text||question.header||'')});
       if (run.status === 'completed' && before?.status !== 'completed') {
         const scheduled = run.trigger !== 'chat';
-        if (!scheduled || run.schedule.notifications?.onCompletion === true) this.add(scheduled ? 'schedule.completed' : 'chat.completed', { hostId: hostId(), chatId: run.id, ...(scheduled ? { scheduleId: run.schedule.id } : {}) });
+        if (!scheduled || run.schedule.notifications?.onCompletion === true) this.add(scheduled ? 'schedule.completed' : 'chat.completed', { ...describe(run), preview: lastReply(run), ...(scheduled ? { scheduleId: run.schedule.id } : {}) });
       }
       if (before?.status !== run.status) this.log(['failed', 'interrupted'].includes(run.status) ? 'warning' : 'info', 'chat.' + run.status, `Chat ${run.id}: ${run.status}.`, { hostId: hostId() });
     };
