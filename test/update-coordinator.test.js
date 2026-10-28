@@ -45,4 +45,9 @@ for(const provider of ['codex','copilot','claude'])test(provider+' coordinator c
  assert.equal(update.allowed,true);assert.equal(update.reason,'User-started update coordinator');
  assert.equal(app.engine.decidePermission(live,{kind:'custom-tool',toolName:'proteus_browser',args:{action:'open'}}).allowed,false,'Other tools keep their approval');
  assert.equal(app.engine.decidePermission(live,{kind:'custom-tool',toolName:'proteus_update',requestSandboxBypass:true}).allowed,false);
+ // Guided desktop-control setup reuses these defaults but is not an update chat.
+ live.status='completed';
+ const setup=await fetch(app.origin+'/api/desktop-control/setup',{method:'POST',headers:{authorization:'Bearer '+app.token,'content-type':'application/json'},body:'{}'}),guide=await setup.json();assert.equal(setup.status,200,JSON.stringify(guide));
+ assert.equal(guide.schedule.purpose,'desktop-control-setup');assert.equal(guide.schedule.updateAuthorization,undefined);assert.equal(guide.schedule.provider,provider);assert.match(guide.schedule.prompt,/Cua Driver/);assert.match(guide.schedule.prompt,/ask me before running any installer/);
+ assert.equal(app.engine.decidePermission(app.engine.getRun(guide.id),{kind:'custom-tool',toolName:'proteus_update'}).allowed,false,'Setup chats do not inherit update-tool approval');
 });

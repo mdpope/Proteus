@@ -197,6 +197,14 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
     if (!reference) throw new Error('Choose an attachment from this chat.');
     return { bytes: attachments.history(run.id, sha256), name: String(reference.name || 'attachment'), mediaType: String(reference.mediaType || 'application/octet-stream') };
   }
+  function desktopSetupPrompt(status,missing){
+    return `Help me set up native desktop control for Proteus on this ${status.platform==='darwin'?'Mac':status.platform} computer.\n`+
+      `Current readiness: ${missing.length?'not installed: '+missing.join(', '):'drivers installed'}${status.permissionIssue?'; permission problem: '+JSON.stringify(status.permissionIssue).slice(0,300):''}.\n`+
+      `1. Call proteus_desktop status to confirm the current state. Cua Driver is primary (setup guide: https://cua.ai/docs/cua-driver/quickstart)${status.platform==='darwin'?'; Peekaboo is the Mac backup (https://github.com/openclaw/Peekaboo)':''}.\n`+
+      `2. For anything missing, explain the official install step and ask me before running any installer or package manager command. Never download from an unofficial source.\n`+
+      `3. After installing, call proteus_desktop catalog, then guide me through granting Accessibility and Screen Recording in System Settings → Privacy & Security for the driver. Do not try to bypass or script around a permission prompt.\n`+
+      `4. Verify with a harmless observation (list apps or windows) and report what is ready and what still needs me.`;
+  }
   async function retryWithoutAgents(value){
     const run = engine.getRun(value.runId);
     if (run.status !== 'failed') throw new Error('This chat is no longer waiting on that failure.');
@@ -295,6 +303,18 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if(url.pathname==='/api/updates/coordinator'&&req.method==='POST')return json(200,await (await import('./services/updates/update-session.js')).startUpdateSession(service,await body(req)));
       if(url.pathname==='/api/updates/recovery'&&req.method==='POST'){if(!service.updates)throw Error('Supervised desktop updates are unavailable.');return json(200,await service.updates.recovery(await body(req)));}
       if(url.pathname==='/api/updates'){if(!service.updates)return json(200,{identity:{packaged:false,capabilities:{prepare:false}},job:null});return json(200,await service.updates.handle(req.method==='GET'?{action:'status'}:await body(req)));}
+      if(url.pathname==='/api/desktop-control/setup'&&req.method==='POST'){
+        // Guided setup chat using the saved update-coordinator provider. It reports
+        // readiness and walks through installation and OS permissions; installing
+        // anything still needs the person's own approval in that chat.
+        if(!desktopControl)throw Error('Native desktop control is unavailable in this isolated preview.');
+        const existing=engine.listRuns().find(run=>run.schedule.purpose==='desktop-control-setup'&&['queued','running','awaiting_input'].includes(run.status));
+        if(existing)return json(200,{id:existing.id,existing:true});
+        const status=desktopControl.status(),missing=status.backends.filter(item=>!item.installed).map(item=>item.id==='cua'?'Cua Driver':'Peekaboo');
+        const schedule=await buildChatSchedule({purpose:'update',name:'Desktop control setup',prompt:desktopSetupPrompt(status,missing)});
+        schedule.purpose='desktop-control-setup';delete schedule.updateAuthorization;
+        return json(200,engine.createRun(schedule,'chat'));
+      }
       if(url.pathname==='/api/desktop-control'){if(!desktopControl)throw Error('Native desktop control is unavailable in this isolated preview.');return json(200,await desktopControl.handle(req.method==='GET'?{action:'status'}:await body(req)));}
       if(url.pathname==='/api/browser-profiles'){const result=await browserProfiles.handle(req.method==='GET'?{action:'list'}:await body(req));notify();return json(200,result);}
       if(url.pathname==='/api/attention'&&req.method==='GET')return json(200,{items:service.desktopAttention()});

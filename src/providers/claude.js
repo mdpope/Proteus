@@ -220,7 +220,7 @@ export class ClaudeProvider {
     try{
       const result=await client.initialize();const account=result.account||{};
       const available=claudeAccountAvailable(account);
-      status={provider:'claude',authenticationCommand,available,models:(result.models||[]).map(m=>claudeModel(m,result)),error:available?null:'Sign in to Claude Code on this computer with claude auth login. The Claude app account is separate.',capabilities:{steering:true,steeringMode:'interrupt-and-continue',context:'Selected instructions and skills; native Claude sessions; tool approvals through Proteus.'}};
+      status={provider:'claude',authenticationCommand,available,models:(result.models||[]).map(m=>claudeModel(m,result)),error:available?null:'Sign in to Claude Code on this computer with claude auth login. The Claude app account is separate.',capabilities:{steering:true,steeringMode:this.options.steerMode==='interrupt'?'interrupt-and-continue':'queued',context:'Selected instructions and skills; native Claude sessions; tool approvals through Proteus.'}};
     }catch(error){status={provider:'claude',authenticationCommand,available:false,models:[],error:error.message};}
     try{await client.close();}catch(error){this.cleanupClients.add(client);this.cleanupError=error;status={...status,available:false,error:error.message};}
     if(this.cleanupError)status={...status,available:false,error:this.cleanupError.message};
@@ -296,8 +296,20 @@ export class ClaudeProvider {
       else client.respond(m.request_id,{behavior:'deny',message:'Unsupported Claude control request.'});
     }catch(error){if(!client.ended)client.respond(m.request_id,{behavior:'deny',message:error.message});}};
     const steerWait=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});promise.catch(()=>{});return {promise,resolve,reject};};
+    // Default steering adds the message to Claude's input without interrupting: Claude
+    // Code injects it at its next step (verified with CLI 2.1.308), so running commands
+    // and edits continue. If the turn ends first, Claude answers it as a follow-up and
+    // this turn stays open for that result. `steerMode:'interrupt'` keeps the old path.
+    const queued=new Map();
     const steer=async (prompt,attachments=[])=>{
       const content=claudeMessageContent(prompt,attachments,this.acceptedMediaTypes);
+      if(this.options.steerMode!=='interrupt'){
+        if(!accepting||finished||signal.aborted||client.ended)throw Error('Claude cannot accept steering at this moment. Queue this message.');
+        const id=randomUUID();queued.set(id,{acknowledged:false});
+        client.write({type:'user',uuid:id,session_id:run.providerSessionId||'',message:{role:'user',content},parent_tool_use_id:null});
+        emit('system','Claude received this message and will read it at its next step. Running work was not interrupted.');
+        return;
+      }
       if(!accepting||finished||resultSeen||signal.aborted||steering)throw Error('Claude cannot accept steering at this moment. Queue this message.');
       const pending={id:randomUUID(),boundary:steerWait(),ack:steerWait()};steering=pending;
       const timeout=setTimeout(()=>{const error=new Error('Claude steering acknowledgment timed out. Delivery is unconfirmed; inspect the chat before resending.');pending.boundary.reject(error);pending.ack.reject(error);reject(error);},this.options.steerTimeoutMs??15000);
@@ -315,6 +327,7 @@ export class ClaudeProvider {
     const message=m=>{
       if(m.type!=='result'||!resultSeen)capture.receive(m);
       if(m.type==='user'&&steering?.sent&&m.uuid===steering.id){steering.acknowledged=true;steering.ack.resolve();}
+      if(m.type==='user'&&queued.has(m.uuid))queued.get(m.uuid).acknowledged=true;
 
       if(m.session_id&&!m.parent_tool_use_id){run.providerSessionId=m.session_id;run.providerHome=this.dataDirectory();update();}
       if(agents.claude(m))return;
@@ -330,7 +343,9 @@ export class ClaudeProvider {
         const q=m.rate_limit_info||m.rateLimitInfo||{},id=q.rateLimitType||q.rate_limit_type;
         if(id){this.rateLimits??=new Map();this.rateLimitsObservedAt=new Date().toISOString();const reset=q.resetsAt??q.resets_at;this.rateLimits.set(id,{id,label:id.replaceAll('_',' '),remainingPercent:Number.isFinite(q.utilization)?Math.max(0,Math.min(100,100-q.utilization*100)):null,resetAt:Number.isFinite(reset)?new Date(reset*1000).toISOString():null,status:q.status,unlimited:false});}
       }
-      if(m.type==='result'){if(resultSeen)return;resultSeen=true;if(m.usage)run.usage=accumulateClaudeUsage(run.usage,m.usage);run.contextUsage=m.modelUsage||null;update();if(steering&&!steering.sent){steering.boundary.resolve();return;}if(steering?.sent&&!steering.acknowledged){const error=new Error('Claude completed without acknowledging steering. Delivery is unconfirmed.');steering.ack.reject(error);reject(error);return;}m.is_error||m.subtype!=='success'?reject(new Error((m.errors||[]).join('\n')||`Claude ${m.subtype}`)):resolve();}
+      if(m.type==='result'){if(resultSeen)return;resultSeen=true;if(m.usage)run.usage=accumulateClaudeUsage(run.usage,m.usage);run.contextUsage=m.modelUsage||null;update();
+        // A steered message Claude has not read yet becomes its next turn in this session.
+        if(!m.is_error&&m.subtype==='success'&&[...queued.values()].some(item=>!item.acknowledged)){resultSeen=false;return;}if(steering&&!steering.sent){steering.boundary.resolve();return;}if(steering?.sent&&!steering.acknowledged){const error=new Error('Claude completed without acknowledging steering. Delivery is unconfirmed.');steering.ack.reject(error);reject(error);return;}m.is_error||m.subtype!=='success'?reject(new Error((m.errors||[]).join('\n')||`Claude ${m.subtype}`)):resolve();}
     };
     const closed=e=>{steering?.boundary.reject(e);steering?.ack.reject(e);if(!resultSeen||steering)reject(e);};const abort=()=>{void client.close().then(()=>reject(new Error('Cancelled')),error=>reject(error));};
     client.on('message',message);client.on('request',request);client.on('closed',closed);signal.addEventListener('abort',abort,{once:true});

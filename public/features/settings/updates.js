@@ -37,6 +37,7 @@ export async function renderUpdates(container,ui,active){
  // Provider configuration remains mounted even when the update journal/catalog
  // needs repair. A Windows JSON error must not hide its provider selector.
  await mountUpdateCoordinatorDefaults(container,ui,active);
+ await mountDesktopControlReadiness(container,ui,active);
  try{await refresh();}catch(error){showError(error);}
  const poll=()=>setTimeout(async()=>{if(!active())return;try{await refresh();}catch(error){showError(error);}poll();},2000);poll();
 }
@@ -53,4 +54,21 @@ export function renderUpdateCard(root,status,runId,escape,open){
  card.querySelector('button').onclick=open;
  if(dismissibleUpdateJob(job)){const close=document.createElement('button');close.textContent='Dismiss';close.setAttribute('aria-label','Dismiss completed update notice');close.dataset.dismissUpdateNotice='';close.onclick=()=>{dismiss(job);card.remove();};card.append(close);}
  if(!previous)(root.querySelector('#conversation-host')||root.lastElementChild)?.before(card);
+}
+
+/** Desktop-control readiness beside updates: drivers are checked after every update,
+ * and a guided chat (using the update-chat defaults) walks through any missing setup. */
+export async function mountDesktopControlReadiness(container,ui,active){
+ if(!window.desktop)return;
+ const section=document.createElement('section');section.className='card desktop-control-readiness';section.setAttribute('aria-label','Desktop control readiness');container.append(section);
+ const draw=async()=>{
+  let status;try{status=await ui.api('/api/desktop-control');}catch(error){if(active())section.innerHTML=`<h2>Desktop control</h2><p class="note">${ui.escape(error.message)}</p>`;return;}
+  if(!active())return;
+  const rows=status.backends.map(item=>`<li><strong>${item.id==='cua'?'Cua Driver':'Peekaboo'}</strong> · ${item.installed?'Installed':'Not installed'}${item.id===status.primary?' · primary':' · backup'}</li>`).join('');
+  const ready=status.backends.find(item=>item.id===status.primary)?.installed&&!status.permissionIssue;
+  section.innerHTML=`<h2>Desktop control</h2><p>${ready?'Ready. Agents can observe and operate native apps when you allow it.':'Needs setup. Agents cannot control native apps until the driver is installed and allowed.'}</p><ul>${rows}</ul>${status.permissionIssue?`<p class="banner">Permission issue: ${ui.escape(typeof status.permissionIssue==='string'?status.permissionIssue:JSON.stringify(status.permissionIssue))}</p>`:''}<div class="actions">${ready?'':'<button class="primary" data-desktop-setup>Set up desktop control</button>'}<button data-desktop-recheck>Check again</button></div><p class="note">Setup opens a chat using the update-chat defaults. It explains each step and asks before installing anything; macOS permissions are granted by you in System Settings.</p>`;
+  section.querySelector('[data-desktop-recheck]').onclick=()=>void draw();
+  const setup=section.querySelector('[data-desktop-setup]');if(setup)setup.onclick=async()=>{setup.disabled=true;try{const run=await ui.api('/api/desktop-control/setup',{});await ui.openUpdateChat?.(run);}catch(error){ui.toast(error.message);}finally{setup.disabled=false;}};
+ };
+ await draw();
 }

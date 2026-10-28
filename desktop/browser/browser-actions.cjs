@@ -47,7 +47,7 @@ class BrowserActions {
     } else if(params.selectionText){
       items.push({label:'Copy Selection',role:'copy'},{role:'selectAll'});
     }
-    const inspect=tab.view?.webContents?{label:'Inspect Element',click:run(()=>this.browser.command({action:'devtools',id:tab.id,x:params.x,y:params.y}))}:null;
+    const inspect=tab.view?.webContents?{label:'Inspect Element',...this.icon('NSRevealFreestandingTemplate'),click:run(()=>this.browser.command({action:'devtools',id:tab.id,x:params.x,y:params.y}))}:null;
     if(!url){
       const editing=items.splice(0);
       const wc=tab.view?.webContents;

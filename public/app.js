@@ -503,6 +503,8 @@ async function renderHome() {
   try {
     const value=await api('/api/home');if(state.page!=='home'||state.tab!=='overview')return;
     mountHome(main,value,{desktop:true,host:state.data,markdown:(target,source)=>ProteusMarkdown.mount(target,source,{allowExternalImages:false,link:source=>{if(ProteusMarkdown.linkKind(source)==='web')window.desktop?.openExternal(source).catch(error=>toast(error.message));},copy:text=>window.desktop?.copyText(text)}),navigate:page=>navigate(page==='chats'?'runs':page==='schedules'?'overview':page)});
+    // Beside update status: point to guided setup when native desktop control is not ready.
+    void api('/api/desktop-control').then(status=>{const row=main.querySelector('.home-update-row');const ready=status.backends?.find(item=>item.id===status.primary)?.installed&&!status.permissionIssue;if(!row||ready||state.page!=='home')return;const note=document.createElement('p');note.className='home-note';note.textContent='Desktop control needs setup. ';const button=document.createElement('button');button.type='button';button.textContent='Set up desktop control';button.onclick=()=>{state.engineSection='updates';openFeatureTab('engine');};note.append(button);row.after(note);}).catch(()=>{});
   } catch(error){if(state.page==='home'&&state.tab==='overview'){main.innerHTML=`<p class="banner">${escape(error.message)}</p>`;}}
 }
 function renderOverview() {
