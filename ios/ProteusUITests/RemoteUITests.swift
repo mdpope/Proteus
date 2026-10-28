@@ -50,6 +50,25 @@ private let nativeFixtureRelayOrigin = ProcessInfo.processInfo.environment["PROT
     else { app.tabBars.buttons["Home"].tap() }
 }
 
+/// Pairs through the visible Connections form. Visited phone areas stay mounted and a
+/// restored area can hide the form, so reveal Connections first when needed.
+@MainActor private func submitPairing(_ app: XCUIApplication, code: String) {
+    func visible() -> XCUIElement? { app.descendants(matching: .any).matching(identifier: "pairing-link").allElementsBoundByIndex.first { $0.isHittable } }
+    _ = app.descendants(matching: .any).matching(identifier: "pairing-link").firstMatch.waitForExistence(timeout: 15)
+    if visible() == nil, let navigation = app.buttons.matching(identifier: "phone-app-navigation").allElementsBoundByIndex.first(where: { $0.isHittable }) {
+        navigation.tap(); app.buttons["phone-nav-Engine Room"].tap()
+        _ = app.buttons["Connections"].firstMatch.waitForExistence(timeout: 5)
+        app.buttons.matching(NSPredicate(format: "label == %@", "Connections")).allElementsBoundByIndex.first(where: { $0.isHittable })?.tap()
+    }
+    for _ in 0..<4 where visible() == nil { app.swipeUp() }
+    guard let field = visible() else { XCTFail("The Connections pairing form is visible"); return }
+    field.tap(); field.typeText(code)
+    if app.buttons["Hide keyboard"].exists { app.buttons["Hide keyboard"].tap() }
+    let pair = app.buttons["pair-mac"]
+    for _ in 0..<4 where !pair.exists || !pair.isHittable { app.swipeUp() }
+    XCTAssertTrue(pair.waitForExistence(timeout: 5)); pair.tap()
+}
+
 final class RemoteUITests: XCTestCase {
     @MainActor func testNativeRecoveryRetriesOnlyAfterMinuteAndRetainsDraftAndQueue() async throws {
         let request = URLRequest(url: URL(string: "\(nativeFixtureHTTPOrigin)/pair?recovery=1")!, cachePolicy: .reloadIgnoringLocalCacheData)
@@ -1652,9 +1671,7 @@ final class RemoteUITests: XCTestCase {
         let (data, _) = try await URLSession.shared.data(from: URL(string: "\(nativeFixtureHTTPOrigin)/pair")!)
         let fixture = try JSONSerialization.jsonObject(with: data) as! [String: Any]
         let app = nativeFixtureApplication(); app.launchArguments = ["--reset-pairing"]; app.launch()
-        let link = app.textFields["pairing-link"]
-        XCTAssertTrue(link.waitForExistence(timeout: 15)); link.tap(); link.typeText(fixture["code"] as! String)
-        app.buttons["pair-mac"].tap()
+        submitPairing(app, code: fixture["code"] as! String)
         XCTAssertTrue(app.buttons["destination-picker"].waitForExistence(timeout: 25))
         if app.tabBars.buttons["Chats"].exists { app.tabBars.buttons["Chats"].tap() } else { app.buttons["Chats"].firstMatch.tap() }
         let newChat = app.buttons["new-chat"]

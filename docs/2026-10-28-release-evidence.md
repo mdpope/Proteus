@@ -39,4 +39,8 @@ Branch `oct27-release`. Source requests: the Oct 27 request note (kept outside G
 - Node: `npm test` 1,237 pass / 3 platform skips / 0 fail (short `TMPDIR`); `npm run check` passes.
 - Website: 103/103 PHPUnit tests (local throwaway `.env`/keys, git-ignored).
 - Desktop Electron UI: `browser-external-links-ui`, `preview-source-controls-ui` pass. Pre-existing failures that also fail on baseline `a5ff322`: `browser-background-link-ui` (source focus timeout), `project-window-link-ui` (assertion at line 25). `browser-actions-ui` now passes through the chat-link step; its download-denial assertion predates the Downloads feature and still fails.
-- iOS: see the native results section.
+- iOS (iPhone 17 Pro simulator): all 153 unit tests pass; the new project-chat switching UI test passes on iPhone and iPad Pro 11-inch. `testCompactHeaderStaysInChatWhenBrowserCloses`, `testPairStartAndReply`, `testTypingDoesNotTraverseLongChatHistory` and `testWorkspaceTabsKeepTypeIconsAndChatNavigation` fail identically on baseline `a5ff322` (they target the pre-drawer iPhone layout or hidden restored areas); a shared `submitPairing` helper was added but these fixtures still need a maintenance pass.
+
+## Mac package
+
+Signed `Proteus.app` 0.2.32, build `6e8c4b1236d8+src.734be4e331ab`, source fingerprint `734be4e331abc7628158b0353e1b3b10fd0590178ad2a2739f342d5a9f7cc656`, 394 runtime files, clean tree. Strict deep signature passes with the installed identity (Apple Development, team `TEAMID0000`, `org.proteusapp.proteus.desktop`); no root-level documents included. Isolated packaged startup reports version 0.2.32, providers copilot/codex/claude/mtplx and Cua Driver installed. Installation on this Mac is through a local update coordinator (`purpose:update`) and the supervisor idle barrier; installed/live verification is recorded separately once it completes. No publication to downloads.proteus.example and no other device rollout.
