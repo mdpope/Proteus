@@ -132,7 +132,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   engine.permissions.delegationSummaries=id=>engine.delegation.children(id).map(child=>engine.delegation.summary(child));
   const integrations=new IntegrationHealth(home,{engine,context,onChange:()=>{notify();remote?.changed();}});
   for(const adapter of Object.values(adapters)){adapter.integrations=integrations;adapter.onIdle=()=>queueMicrotask(()=>engine.drain());}
-  engine.on('change',(run,change)=>{if(change?.stream)return;try{integrations.capture(run);}catch(error){activity.log('warning','integrations.storage','Connection health could not be saved.',{error});}});
+  engine.on('change',(run,change)=>{if(change?.stream&&!change.activity)return;try{integrations.capture(run);}catch(error){activity.log('warning','integrations.storage','Connection health could not be saved.',{error});}});
   const providerAuth = new ProviderAuthManager({adapters,settings,activeTurn:providerId=>[...engine.running.values(),...engine.backgroundRuns.values()].filter(Boolean).some(slot=>engine.getRun(slot.id).schedule.provider===providerId),onTerminal:()=>queueMicrotask(()=>engine.drain())});
   engine.providerAuthHold=providerId=>providerAuth.isActive(providerId)||(!adapters[providerId]?.sessions&&integrations.pending.has(providerId));
   const usage = new ProviderUsageCache(Object.fromEntries(Object.entries(adapters).filter(([id]) => ['copilot', 'codex', 'claude'].includes(id))));

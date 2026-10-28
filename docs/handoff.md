@@ -1,3 +1,7 @@
+## October 28 — 0.2.32 (October 27 requests) on `oct27-release`
+
+Implementation and validation status is in [the release evidence](2026-10-28-release-evidence.md); design choices are in `decisions.md` (October 28). Authorized installs for this release are this personal Mac (through a normal update coordinator) and the iOS simulators only. The downloads.proteus.example website change for rich push text is source-complete and tested but **not deployed**. Physical iPhone/iPad, Work Mac and other computers are not updated by this release request.
+
 ## October 27 — Corrected Mac and native releases installed
 
 The corrected `abac31955b11+src.25f29d666329` Mac package is published and its complete HTTPS archive, installed 0.2.30 verifier, official extraction, all four file hashes and public page pass. Package hash `8f9f53553f7926e31c13ea17741129d78d12351d3db780b0cfdc059b0f6d3a25`; envelope SHA-256 `841a0e6f439bb8e4c3ffb8160d7ea638ee66fb417c7d52d81de1dfa249da0b61`. Private portable source verifies all 391 runtime/eight build-input hashes. The original published release is retained. Site audit preserves 1,140 unrelated files/13 symlinks, with zero new follow-up error-log bytes; verified recovery rotation is complete. See [current evidence](2026-10-27-release-evidence.md).

@@ -1,3 +1,21 @@
+## October 28 — 0.2.32 ownership, persistence and visibility choices
+
+**Chat persistence.** `RunWriter` owns chat record files. Provider narration during a running turn is coalesced to at most one save per 250 ms; serialization stays on the owner thread, the write and fsync use the libuv pool, and a per-chat generation check plus synchronous rename guarantees an older background save can never replace a newer immediate one. User input, delivery receipts, questions, approvals, attachments and status changes stay synchronous and durable before callers continue. A crash can lose at most 250 ms of narration that the provider session also retains. Records are now compact JSON.
+
+**Change fan-out.** Engine `change` events carry `{stream}` for live text and `{stream, activity}` for coalesced narration. Owner SSE events are coalesced and name affected chats; windows refresh only a visible affected conversation for streaming-only bursts and fall back to full state every 3 s. All windows share one assembled `/api/state` per generation (also invalidated by mutations, scheduler errors and on-disk schedule fingerprints, maximum 300 ms). Device publish skips stream-only changes for unwatched chats.
+
+**Native navigation.** An associated chat is always a tab of its workspace/project; only unassigned chats use top-level tabs. The saved `<kind>-navigation:<id>` draft is the single selection owner for the tab strip, iPhone drawer and iPad sidebar. `RemoteStore` uses Observation so views track only the host values they read; typing drafts publish through an explicit revision only when controls need refreshing.
+
+**Approvals.** A chat's captured base working folders are working folders exactly like the workspace's, in every mode; folders contributed only by selected sources stay gated, explicit read-only folders stay read-only. Chat-only autopilot is unchanged (it does not add roots). Update coordinators carry `updateAuthorization` at creation and auto-allow only `proteus_update`; protected requests still prompt; the desktop-control setup chat does not inherit it.
+
+**Steering Claude.** Claude Code 2.1.308 accepts a stream-json user message mid-turn and applies it at the next step. Steering writes the message without interrupting; if a result arrives before Claude reads it, the turn remains open for the follow-up result. `steerMode:'interrupt'` preserves the previous behavior.
+
+**Notifications (operator option B).** Notifications carry the chat title, a bounded plain-text preview and the source computer through downloads.proteus.example to APNs. Transport remains HTTPS; Apple can read alert text. Prompts and URLs are still not forwarded. End-to-end encrypted alerts would require a notification service extension and remain a later option.
+
+**Attachments.** Files actually delivered to a provider are kept read-only and content-addressed under the chat's attachment history, readable only when a message in that chat references the hash, and deleted with the chat. Clients render inert previews (images, text as text) or offer a saved copy; the owner serves raw octet-stream bytes so markup cannot execute at the app origin.
+
+**External applications.** Links to non-web schemes ask before opening with the registered application's name; "always allow" is remembered per profile, HTTP(S) site and scheme. Dangerous and internal schemes are never offered. **Link picker** windows already displaying the destination project win over a focused window that merely has it open; an untouched picker dismissed by clicking away opens the default destination, otherwise an ordinary tab, never dropping the link.
+
 ## October 27 — each update owns a fresh coordinator; attachment steering follows provider capability
 
 Manual update UI never chooses an existing chat. Its owner service validates the signed selected release and saved current provider metadata, then durably claims a new unassigned coordinator for that upgrade. Persist the operation ID in the run so uncertain HTTP responses can reconcile after restart. The coordinator's own run owns staging/handoff/continuation; a later upgrade receives a new chat. Keep provider configuration mounted if update-journal inspection fails.

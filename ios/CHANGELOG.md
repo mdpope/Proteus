@@ -1,3 +1,7 @@
+# Native follow-up, October 28, 2026 — simulator validation
+
+0.2.32 / 2610.28.1 opens every associated chat as a named tab inside its project on iPhone and iPad, with one saved selection per project so switching chats from Chats, the sidebar or the tab strip always shows the chosen conversation. The drawer and iPad sidebar list the active project's open tabs while the top tab strips remain. Relay payloads decode off the main thread and host state uses per-property observation for smoother scrolling while chats stream. Tabs rows fit one line; chat attachments open in Quick Look; failed agent selections offer turn-off-and-retry; notification banners show real chat text and the source computer.
+
 # Native follow-up, October 27, 2026 — installed
 
 0.2.31 / 2610.27.2 permits queued attachment steering when the owning provider advertises support. Native simulator compilation and all 153 units pass. Physical iPhone/iPad installs preserve all 290/260 protected files before launch; both processes launch and all four saved destinations/selection remain per device. Two verified full recovery generations remain each. Physical gestures, reconnect authentication and push delivery are not inferred from installation checks. The original paid identity and explicit push-capable profile remain unchanged.

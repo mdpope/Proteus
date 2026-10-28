@@ -1,3 +1,7 @@
+## October 28 — 0.2.32 scope (October 27 requests)
+
+Implemented on `oct27-release`; see [evidence](2026-10-28-release-evidence.md). Deferred: deploying the website push change; end-to-end encrypted notification alerts (would need an iOS notification service extension); moving the owner engine out of the Electron main process if installed measurements still show stalls; per-property observation for `SharedAppStore` (browser state); refreshing older desktop UI fixtures that fail on baseline as well.
+
 ## October 27 — update workflow and attachment follow-up
 
 Authorized source corrections remove the update-chat selector and always create a new release-named coordinator with captured provider/model/effort defaults and its own supervised update session. Provider controls remain visible across status/recovery errors, including Windows; rapid catalog changes and uncertain start retries retain stable identity. Inline asynchronous answers accept consented screenshots/text; supported queued attachments can steer immediately on the actual owner/provider, including remote/native clients. A historical recovery can be recognized as superseded only from two newer verified receipt hashes and an absent old directory; unresolved missing records are preserved for inspection. The existing Mac release and iPhone installation remain unchanged until new exact-package acceptance. Default-browser setting on Personal/HC is separately authorized and not yet verified; Apple passkey review is not ordinary HTTP/HTTPS registration. See the [handoff](handoff.md).

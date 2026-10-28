@@ -4,6 +4,7 @@ import CryptoKit
 import Network
 import SwiftUI
 import XCTest
+import Observation
 import Combine
 import UserNotifications
 @testable import Proteus
@@ -759,8 +760,10 @@ final class RemoteTests: XCTestCase {
         let first = RemoteStore(connection: nil), second = RemoteStore(connection: nil)
         let draft = NativeReplyDraft()
         var publications = 0
-        let observation = first.objectWillChange.sink { publications += 1 }
-        defer { observation.cancel() }
+        // RemoteStore uses Observation: a view that reads drafts is invalidated only
+        // when a draft change is published, never by keystrokes in the composer.
+        func track() { withObservationTracking { _ = first.draft("answer:chat:question") } onChange: { publications += 1 } }
+        track()
         draft.activate(store: first, key: "reply:chat")
         for _ in 0..<300 { draft.text += "a" }
         XCTAssertEqual(publications, 0, "Typing must not invalidate every observer of the Mac's history")
@@ -768,6 +771,7 @@ final class RemoteTests: XCTestCase {
         first.setDraft("answer:chat:question", .string("Earlier answer"))
         XCTAssertEqual(publications, 1, "External draft and attachment changes still notify their views")
         publications = 0
+        track()
         draft.activate(store: first, key: "answer:chat:question")
         XCTAssertEqual(draft.text, "Earlier answer")
         draft.text = "Edited answer\nwith another line"

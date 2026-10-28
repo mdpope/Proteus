@@ -31,6 +31,8 @@ export function suggestedChatTitle(prompt) {
   return (sentence.split(' ').filter(Boolean).slice(0, 9).join(' ') || 'New chat').slice(0, 90);
 }
 export const streamChange=Object.freeze({stream:true});
+// Coalesced provider narration during a running turn: refresh only views of that chat.
+export const activityChange=Object.freeze({stream:true,activity:true});
 // Only provider narration during an active turn is coalesced. User input, delivery
 // receipts, questions, approvals and attachments always save before continuing.
 const deferredEvent=(run,role,data)=>role!=='user'&&run.status==='running'&&!(data&&(data.question||data.questionReply||data.delivery||data.attachments||data.permission?.decision||data.pending));
@@ -88,7 +90,7 @@ export class Engine extends EventEmitter {
     run.updatedAt = this.now();
     // Provider progress during a running turn is coalesced off the owner thread;
     // every other save stays immediate and durable before callers continue.
-    if(deferred&&!this.closingWrites){this.runWriter.defer(run);this.historyCache.attach(run);this.emit('change', run);return;}
+    if(deferred&&!this.closingWrites){this.runWriter.defer(run);this.historyCache.attach(run);this.emit('change', run, activityChange);return;}
     const bytes=this.runWriter.writeNow(run); this.historyCache.attach(run,bytes);this.emit('change', run); }
   event(run, role, text, data) {
     if(role!=='user'&&run.status==='running')providerProgress(run,this.now(),{observable:true});
