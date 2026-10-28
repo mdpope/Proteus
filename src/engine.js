@@ -4,6 +4,7 @@ import {captureUserQuestions,answerUserQuestion,recoverUserQuestions,askBackgrou
 import {AllowanceContinuation,allowanceFailure} from './services/chats/allowance-continuation.js';
 import {displayText} from './shared/tool-activity.js';
 import { RunHistoryCache } from './services/chats/run-history-cache.js';
+import { RunWriter } from './services/chats/run-writer.js';
 import {startTurn,pauseTurn,resumeTurn,finishTurn,interruptTiming} from './services/chats/run-timing.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -29,12 +30,17 @@ export function suggestedChatTitle(prompt) {
   const sentence = clean.split(/(?<=[.!?])\s/)[0].replace(/[.!?]+$/, '');
   return (sentence.split(' ').filter(Boolean).slice(0, 9).join(' ') || 'New chat').slice(0, 90);
 }
+export const streamChange=Object.freeze({stream:true});
+// Only provider narration during an active turn is coalesced. User input, delivery
+// receipts, questions, approvals and attachments always save before continuing.
+const deferredEvent=(run,role,data)=>role!=='user'&&run.status==='running'&&!(data&&(data.question||data.questionReply||data.delivery||data.attachments||data.permission?.decision||data.pending));
 export class Engine extends EventEmitter {
   constructor(home, providers = {}, clock = () => new Date(), { desktopPreview = false, permissionControls = desktopPreview, recoveryBarrier=false } = {}) {
-    super();this.updateBarrier=recoveryBarrier;this.historyCache=new RunHistoryCache(id=>path.join(home,'runs',id+'.json'),4,{isPinned:run=>this.running?.has(run.id)||[...(this.backgroundRuns?.values()||[])].some(slot=>slot.id===run.id)}); this.home = home; this.clock = clock;
+    super();this.updateBarrier=recoveryBarrier;this.historyCache=new RunHistoryCache(id=>path.join(home,'runs',id+'.json'),4,{isPinned:run=>this.runWriter?.pending(run.id)||this.running?.has(run.id)||[...(this.backgroundRuns?.values()||[])].some(slot=>slot.id===run.id)}); this.home = home; this.clock = clock;
     this.schedules = new ScheduleStore(path.join(home, 'schedules'));
     this.permissions = new PermissionStore(home, {preserveInheritedDefaults:permissionControls===true});
     this.runsDir = path.join(home, 'runs');
+    this.runWriter = new RunWriter({fileFor:id=>path.join(this.runsDir,`${id}.json`),canWrite:run=>!this.tombstones?.[run.id]&&this.runs.get(run.id)===run,onError:(error,run)=>{this.runWriter.failed.add(run.id);this.emit('scheduler-error',{at:this.now(),code:'RUN_PERSIST',message:'A chat record could not be saved in the background. The next save is written immediately.',runId:run.id,error:error?.code||'IO_ERROR'});}});
     this.tombstoneFile = path.join(home, 'chat-tombstones.json');
     this.tombstones = readJSON(this.tombstoneFile, {});
     this.providers = { rehearsal: new RehearsalProvider(), ...providers };
@@ -77,19 +83,25 @@ export class Engine extends EventEmitter {
     this.allowance=new AllowanceContinuation(this);
   }
   now() { return this.clock().toISOString(); }
-  persist(run) { if(this.tombstones[run.id]||!this.runs.has(run.id))throw new Error('Deleted chat cannot be restored.');
+  persist(run,{deferred=false}={}) { if(this.tombstones[run.id]||!this.runs.has(run.id))throw new Error('Deleted chat cannot be restored.');
     if(run.chatPermission && run.chatPermission.contextId !== permissionContext(run.schedule).id){run.chatPermission=null;run.chatPermissionRevision=randomUUID();}
-    run.updatedAt = this.now(); const bytes=atomicJSON(path.join(this.runsDir, `${run.id}.json`), run); this.historyCache.attach(run,bytes);this.emit('change', run); }
+    run.updatedAt = this.now();
+    // Provider progress during a running turn is coalesced off the owner thread;
+    // every other save stays immediate and durable before callers continue.
+    if(deferred&&!this.closingWrites){this.runWriter.defer(run);this.historyCache.attach(run);this.emit('change', run);return;}
+    const bytes=this.runWriter.writeNow(run); this.historyCache.attach(run,bytes);this.emit('change', run); }
   event(run, role, text, data) {
     if(role!=='user'&&run.status==='running')providerProgress(run,this.now(),{observable:true});
     if(role==='user')this.allowance?.onInput(run,data?.delivery?.id);
     captureUserQuestions(run,data,run.events.length,this.now());
-    run.events.push({ role, text, ...(role === 'assistant' ? { agentName: agentName(run) } : {}), data:{...data,...(run.turns?.at(-1)&&['running','awaiting_input'].includes(run.status)?{turnId:run.turns.at(-1).id}:{})}, at: this.now() }); this.persist(run);
+    run.events.push({ role, text, ...(role === 'assistant' ? { agentName: agentName(run) } : {}), data:{...data,...(run.turns?.at(-1)&&['running','awaiting_input'].includes(run.status)?{turnId:run.turns.at(-1).id}:{})}, at: this.now() }); this.persist(run,{deferred:deferredEvent(run,role,data)});
   }
   stream(run, messageId, text) {
     if(text)providerProgress(run,this.now(),{observable:true});
     run.liveMessages ??= {}; run.liveMessages[messageId] = (run.liveMessages[messageId] || '') + text; run.liveRevision=(run.liveRevision||0)+1;
-    this.emit('change', run);
+    // Streaming text changes only this chat's live transcript. Listeners may batch or
+    // skip it; durable state changes still arrive as ordinary change events.
+    this.emit('change', run, streamChange);
   }
   listRuns() { return [...this.runs.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)); }
   visibleRuns(includeArchived = false) { return this.listRuns().filter(run => !run.delegation && (includeArchived || !run.archivedAt)); }
@@ -171,6 +183,11 @@ export class Engine extends EventEmitter {
   }
   decidePermission(run, request) {
     const profile = this.describePermissions(run);
+    // An update coordinator exists only because a person started that update (Updates
+    // page or an explicit update dispatch). Its own update tool needs no second prompt.
+    // Protected requests and every other tool keep their normal approval path.
+    if(request?.kind==='custom-tool'&&request.toolName==='proteus_update'&&run.schedule.purpose==='update'&&run.schedule.updateAuthorization?.tool==='proteus_update'&&!request.managedApprovalRequired&&!request.requestSandboxBypass)
+      return {source:'update',allowed:true,reason:'User-started update coordinator',mode:profile.mode};
     return { source: profile.source, ...this.permissions.decide(run.schedule, request, profile) };
   }
   renameChat(id, title, expectedTitleRevision) {
@@ -188,7 +205,7 @@ export class Engine extends EventEmitter {
     if (active.has(run.status) || run.deferredStart || run.capacityRetry || run.queuedMessages?.length || this.running.has(run.id) || [...this.backgroundRuns.values()].some(slot=>slot.id===run.id) || this.pending.has(run.id)) throw new Error('Finish or cancel the active or queued chat work before archiving or deleting it.');
     if (action === 'archive' || action === 'unarchive') {
       run.archivedAt = action === 'archive' ? (run.archivedAt || this.now()) : null;
-      atomicJSON(path.join(this.runsDir, `${run.id}.json`), run);
+      this.runWriter.writeNow(run);
       this.emit('change', run);
       const result = { id: run.id, archivedAt: run.archivedAt, archived: !!run.archivedAt, updatedAt: run.updatedAt };
       this.emit('lifecycle', result);
@@ -199,7 +216,7 @@ export class Engine extends EventEmitter {
     const deletedAt = this.now();
     this.tombstones[run.id] = deletedAt;
     atomicJSON(this.tombstoneFile, this.tombstones);
-    fs.rmSync(path.join(this.runsDir, `${run.id}.json`), { force: true });
+    this.runWriter.cancel(run.id);fs.rmSync(path.join(this.runsDir, `${run.id}.json`), { force: true });
     this.runs.delete(run.id);this.historyCache.forget(run.id);
     this.emit('change', { id: run.id, deleted: true, deletedAt });
     const result = { id: run.id, deleted: true, deletedAt };
@@ -221,7 +238,7 @@ export class Engine extends EventEmitter {
     if(typeof expectedFailureEventAt!=='string'||expectedFailureEventAt!==eventAt)throw new Error('The chat changed. Reopen it to review the latest failure.');
     run.failureEventAt ||= eventAt;
     run.failureReviewedAt ||= this.now();
-    atomicJSON(path.join(this.runsDir, `${run.id}.json`), run);this.emit('change',run);
+    this.runWriter.writeNow(run);this.emit('change',run);
     return {id:run.id,failureEventAt:run.failureEventAt,failureReviewedAt:run.failureReviewedAt,attentionRequired:false};
   }
   createRun(schedule, trigger = 'manual', slot = null, {deferStart=false} = {}) {
@@ -253,7 +270,7 @@ export class Engine extends EventEmitter {
   }
   verifyAttachmentDispatch(run,dispatch){if(!(this.attachmentConsents instanceof ChatAttachmentConsents)||!dispatch||typeof dispatch.proofId!=='string')throw new Error('Attachment send authorization is unavailable.');return this.attachmentConsents.assertPrepared({...dispatch,chatId:run.id,providerId:run.schedule.provider});}
   startDeferredRun(id,dispatch){const run=this.getRun(id);if(run.trigger!=='chat'||run.status!=='queued'||run.deferredStart!==true)throw new Error('Chat draft changed.');if(dispatch){run.events[0].data={attachments:this.verifyAttachmentDispatch(run,dispatch),delivery:{id:dispatch.messageId,state:'delivered'}};run.nextAttachmentDispatch=dispatch;}delete run.deferredStart;this.persist(run);queueMicrotask(()=>this.drain());return run;}
-  discardDeferredRun(id){const run=this.getRun(id);if(run.trigger!=='chat'||run.status!=='queued'||run.deferredStart!==true)throw new Error('Chat draft changed.');this.runs.delete(id);this.historyCache.forget(id);fs.rmSync(path.join(this.runsDir,`${id}.json`),{force:true});this.emit('change',run);}
+  discardDeferredRun(id){const run=this.getRun(id);if(run.trigger!=='chat'||run.status!=='queued'||run.deferredStart!==true)throw new Error('Chat draft changed.');this.runs.delete(id);this.historyCache.forget(id);this.runWriter.cancel(id);fs.rmSync(path.join(this.runsDir,`${id}.json`),{force:true});this.emit('change',run);}
   resume(id, prompt, {keepCapacityRetry=false}={}) {
     this.updateGuard?.();
     const run = this.getRun(id);
@@ -502,7 +519,7 @@ export class Engine extends EventEmitter {
         permissionProfile: () => this.describePermissions(run),
         emit: (role, text, data) => this.event(run, role, text, data),
         stream: (id, text) => this.stream(run, id, text),
-        update: () => {providerProgress(run,this.now());this.persist(run);},
+        update: () => {providerProgress(run,this.now());this.persist(run,{deferred:run.status==='running'});},
         ask: (request,requestSignal) => this.ask(run, request, requestSignal||controller.signal)
       });
       if(controller.progressTimeout)throw Error(controller.progressTimeout);
@@ -616,6 +633,7 @@ export class Engine extends EventEmitter {
     for (const provider of Object.values(this.providers)) await provider.close?.();
     await Promise.allSettled([...this.executions]);
     for (const run of this.runs.values()) if (active.has(run.status)&&!(this.updateBarrier&&run.status==='queued')) { run.status = 'interrupted'; run.pending = null; this.persist(run); }
+    this.closingWrites=true;await this.runWriter.close(id=>this.runs.get(id));
     if (schedulerError) throw schedulerError;
   }
 }

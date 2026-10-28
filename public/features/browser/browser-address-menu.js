@@ -7,9 +7,9 @@ export function bindBrowserAddressMenu(input, browserId, {showDialog, toast}) {
     const rect=input.getBoundingClientRect();
     const items=[
       {id:'undo',label:'Undo'}, {id:'redo',label:'Redo'},
-      {id:'cut',label:'Cut',enabled:!!selected}, {id:'copy',label:'Copy selection',enabled:!!selected},
+      {id:'cut',label:'Cut',enabled:!!selected}, {id:'copy',label:'Copy Selection',enabled:!!selected},
       {id:'paste',label:'Paste'}, {id:'select-all',label:'Select All'},
-      {id:'copy-url',label:'Copy URL'}, {id:'certificate',label:'View certificate information'}
+      {id:'copy-url',label:'Copy URL'}, {id:'certificate',label:'View Certificate Information'}
     ];
     try {
       const action=await window.desktop.browser({action:'popup-menu',items,x:event.clientX||rect.left,y:event.clientY||rect.bottom});

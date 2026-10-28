@@ -2,7 +2,7 @@ import SwiftUI
 
 let contextModes = [("universal", "Every chat"), ("workspace", "With workspace"), ("available", "Choose per chat"), ("disabled", "Disabled")]
 struct NativeChatWorkspaceMoveView: View {
-    @EnvironmentObject var store: RemoteStore
+    @Environment(RemoteStore.self) var store
     @Environment(\.dismiss) private var dismiss
     let chatID: String
     @State private var catalog: JSON = .null
@@ -47,7 +47,7 @@ struct NativeChatWorkspaceMoveView: View {
 }
 
 struct NativeWorkspaceTabsView: View {
-    @EnvironmentObject var store: RemoteStore
+    @Environment(RemoteStore.self) var store
     @EnvironmentObject var shared: SharedAppStore
     let workspaceID: String
     var projectID: String? = nil
@@ -178,7 +178,7 @@ struct NativeWorkspaceTabsView: View {
     private func move() { let parts = destination.split(separator: ":", maxSplits: 1).map(String.init); guard parts.count == 2 else { return }; Task { do { let target = try await store.request("tabs.get", ["scope": .string(parts[0]), "id": .string(parts[1])]); command(["action": .string("move"), "scope": .string(scopeKind), "id": .string(scopeID), "tabId": moveTab["id"], "expectedRevision": snapshot["revision"], "destination": .object(["scope": .string(parts[0]), "id": .string(parts[1]), "expectedRevision": target["revision"]])]) } catch { store.error = error.localizedDescription } } }
 }
 struct ContextFavoriteButton: View {
-    @EnvironmentObject var store: RemoteStore
+    @Environment(RemoteStore.self) var store
     let entry: JSON
     var workspaceID: String = ""
     @State private var busy = false
@@ -189,7 +189,7 @@ struct ContextFavoriteButton: View {
     }
 }
 struct ContextSelection: View {
-    @EnvironmentObject var store: RemoteStore
+    @Environment(RemoteStore.self) var store
     @Binding var selected: Set<String>
     @Binding var agent: String
     @Binding var includeDefaults: Bool
@@ -266,7 +266,7 @@ struct ContextSelection: View {
     }
 }
 struct ChatContextView: View {
-    @EnvironmentObject var store: RemoteStore
+    @Environment(RemoteStore.self) var store
     @Environment(\.dismiss) private var dismiss
     let run: JSON
     @State private var selected = Set<String>()
@@ -281,7 +281,7 @@ struct ChatContextView: View {
     }
 }
 struct ContextView: View {
-    @EnvironmentObject var store: RemoteStore
+    @Environment(RemoteStore.self) var store
     var workspaceID: String = ""
     @State private var deleting = false
     @State private var search = ""
@@ -371,7 +371,7 @@ struct ContextView: View {
             ForEach(context["errors"].array, id: \.self) { issue in Text(issue["root"].string + " " + issue["message"].string).font(.caption).foregroundStyle(.orange) }
         }.navigationTitle("Workspace configuration")
             .toolbar { Button("Refresh sources", systemImage: "arrow.clockwise") { refresh(nil) }.disabled(busy || !store.connected) }
-            .sheet(isPresented: $deleting) { NativeWorkspaceDeleteView(workspaceID: workspace).environmentObject(store) }
+            .sheet(isPresented: $deleting) { NativeWorkspaceDeleteView(workspaceID: workspace).environment(store) }
         .task { workspace = workspaceID.isEmpty ? store.state["context"]["defaultWorkspaceId"].string : workspaceID; await load() }
             .onChange(of: workspace) { _, _ in Task { await load() } }
             .onDisappear { retainDraft() }
@@ -435,8 +435,69 @@ struct NativeWorkspaceIdentity: Identifiable, Hashable {
     }
 }
 
+/// One owner for a workspace/project's open-tab list and selection. The saved
+/// `<kind>-navigation:<id>` draft is the source of truth for the project tab strip,
+/// the iPhone drawer and the iPad sidebar; views never keep a second copy.
 enum NativeWorkspaceNavigation {
     static func deduplicated(_ ids: [String]) -> [String] { var seen = Set<String>(); return ids.filter { !$0.isEmpty && seen.insert($0).inserted } }
+    @MainActor static func run(_ id: String, remote: RemoteStore) -> JSON { remote.chats[id] ?? remote.state["runs"].array.first { $0["id"].string == id } ?? .object(["id": .string(id), "title": .string("Chat")]) }
+    @MainActor static func select(_ id: String, navigationKey: String, remote: RemoteStore) {
+        var value = remote.draft(navigationKey).object
+        let next = id.isEmpty ? "workspace" : id
+        let chats = value["chats"]?.array.map(\.string) ?? []
+        let chatID = next.hasPrefix("chat:") ? String(next.dropFirst(5)) : nil
+        guard value["selected"]?.string != next || (chatID.map { !chats.contains($0) } ?? false) else { return }
+        value["selected"] = .string(next)
+        if let chatID { value["chats"] = .array(deduplicated(chats + [chatID]).map(JSON.string)) }
+        remote.setDraft(navigationKey, .object(value))
+    }
+    @MainActor static func setChats(_ ids: [String], navigationKey: String, remote: RemoteStore) {
+        var value = remote.draft(navigationKey).object
+        let next = JSON.array(deduplicated(ids).map(JSON.string))
+        guard value["chats"] != next else { return }
+        value["chats"] = next; remote.setDraft(navigationKey, .object(value))
+    }
+    @MainActor static func closeChat(_ id: String, navigationKey: String, remote: RemoteStore) {
+        var value = remote.draft(navigationKey).object
+        let chats = (value["chats"]?.array.map(\.string) ?? []).filter { $0 != id }
+        value["chats"] = .array(chats.map(JSON.string))
+        if value["selected"]?.string == "chat:" + id { value["selected"] = .string("workspace") }
+        remote.setDraft(navigationKey, .object(value))
+    }
+    /// Owner polling is authoritative for which chats are open, but a chat opened here
+    /// moments ago may not have reached the owner yet. Keep the selected chat instead
+    /// of dropping its tab until the next refresh confirms it.
+    @MainActor static func adoptOwnerChats(_ descriptors: [JSON], navigationKey: String, remote: RemoteStore) {
+        var owner = deduplicated(descriptors.filter { $0["type"].string == "chat" }.map { $0["chatId"].string })
+        let selected = remote.draft(navigationKey)["selected"].string
+        if selected.hasPrefix("chat:"), !owner.contains(String(selected.dropFirst(5))) { owner.append(String(selected.dropFirst(5))) }
+        setChats(owner, navigationKey: navigationKey, remote: remote)
+    }
+    /// Revision-checked owner mutation for one workspace/project tab list.
+    @MainActor static func mutate(_ operations: [JSON], kind: String, id: String, scope: String, remote: RemoteStore, shared: SharedAppStore) {
+        Task { do {
+            let snapshot = try await remote.request("tabs.get", ["scope": .string(kind), "id": .string(id)])
+            _ = try await remote.request("tabs.mutate", ["scope": .string(kind), "id": .string(id), "expectedRevision": snapshot["revision"], "operations": .array(operations)])
+            await shared.refreshContentTabs(scope: scope, remote: remote, kind: kind, id: id)
+        } catch { remote.error = error.localizedDescription } }
+    }
+    /// Ordered children shown in the project tab strip and sidebar: chats, browsers,
+    /// and host-owned terminals/documents, following the owner's saved order.
+    @MainActor static func children(scope: String, navigationKey: String, remote: RemoteStore, shared: SharedAppStore) -> [JSON] {
+        let descriptors = shared.workspaceContentDescriptors[scope] ?? []
+        let chatIDs = deduplicated(remote.draft(navigationKey)["chats"].array.map(\.string))
+        let chats: [JSON] = chatIDs.map { .object(["id": .string("chat:" + $0), "sortId": .string("chat:" + $0), "type": .string("chat"), "chatId": .string($0), "title": run($0, remote: remote)["title"]]) }
+        let browsers: [JSON] = shared.tabs(in: scope).map { .object(["id": .string($0.id), "sortId": .string($0.contentTabId ?? $0.id), "type": .string("browser"), "title": .string($0.title)]) }
+        let other: [JSON] = descriptors.filter { ["terminal", "document"].contains($0["type"].string) }.map { tab in var fields = tab.object; fields["sortId"] = tab["id"]; fields["id"] = .string("remote:" + tab["id"].string); return .object(fields) }
+        let order = descriptors.map { $0["id"].string }
+        let hidden = Set(descriptors.filter { $0["hidden"].bool }.map { $0["id"].string })
+        let hiddenBrowsers = Set(shared.tabs(in: scope).filter(\.hidden).map(\.id))
+        return (chats + browsers + other).enumerated().sorted { a, b in
+            let x = order.firstIndex(of: a.element["sortId"].string) ?? order.count + a.offset
+            let y = order.firstIndex(of: b.element["sortId"].string) ?? order.count + b.offset
+            return x < y
+        }.map(\.element).filter { !hidden.contains($0["sortId"].string) && !hiddenBrowsers.contains($0["id"].string) }
+    }
     @MainActor static func openChat(_ chatID: String, workspaceID: String, projectID: String? = nil, remote: RemoteStore) {
         let membership = remote.projectCatalog.membership(for: remote.chats[chatID] ?? remote.state["runs"].array.first { $0["id"].string == chatID } ?? .null)
         let resolved = projectID ?? (remote.supportsProjects && membership["workspaceId"].string == workspaceID ? membership["projectId"].string : "")
@@ -478,7 +539,7 @@ struct NativeWorkspacesView: View {
                 if NativeWorkspaceIdentity.all(destinations).isEmpty { Text("Connect a computer to see its workspaces.").foregroundStyle(.secondary) }
             }.navigationTitle(NativeDesignPreview.enabled ? "" : "Workspaces").nativeFeaturePage("Workspaces", search: $search).refreshable { await destinations.refreshAll() }
                 .toolbar { Button("New workspace", systemImage: "plus") { creating = true }.disabled(!destinations.destinations.contains { destinations.remote(for: $0.id)?.connected == true }) }
-                .navigationDestination(item: $selected) { entry in if let remote = destinations.remote(for: entry.hostID) { NativeWorkspaceView(workspaceID: entry.workspaceID).environmentObject(remote).modifier(NativePhoneBackNavigation()) } }
+                .navigationDestination(item: $selected) { entry in if let remote = destinations.remote(for: entry.hostID) { NativeWorkspaceView(workspaceID: entry.workspaceID).environment(remote).modifier(NativePhoneBackNavigation()) } }
                 .sheet(item: $copying) { entry in NativeWorkspaceCopyView(source: entry) { copy in copying = nil; destinations.remote(for: copy.hostID)?.setDraft("workspace-page:" + copy.workspaceID, .string("Configuration")); open(copy) } }
                 .sheet(isPresented: $creating) { NativeWorkspaceCreateView { entry in creating = false; destinations.remote(for: entry.hostID)?.setDraft("workspace-page:" + entry.workspaceID, .string("Configuration")); open(entry) } }
         }.task { await destinations.refreshAll() }
@@ -530,7 +591,7 @@ struct NativeWorkspaceCreateView: View {
 }
 
 struct NativeWorkspaceContentView: View {
-    @EnvironmentObject var store: RemoteStore
+    @Environment(RemoteStore.self) var store
     @EnvironmentObject var shared: SharedAppStore
     @EnvironmentObject private var phoneChrome: NativePhoneChrome
     @EnvironmentObject var destinations: DestinationStore
@@ -538,9 +599,9 @@ struct NativeWorkspaceContentView: View {
     var projectID: String? = nil
     var onOpenProject: (String) -> Void = { _ in }
     var onOpenMain: ((AggregateChat) -> Void)? = nil
+    @Environment(\.nativePhoneAreaActive) private var areaActive
+    @Environment(\.scenePhase) private var scenePhase
     @State private var page = "Projects"
-    @State private var selected = "workspace"
-    @State private var chatIDs: [String] = []
     @State private var newChat = false
     @State private var transferTab: BrowserDescriptor?
     @State private var internet = false
@@ -551,29 +612,30 @@ struct NativeWorkspaceContentView: View {
     private var scope: String { "\(scopeKind):\(hostID):\(scopeID)" }
     private var navigationKey: String { scopeKind + "-navigation:" + scopeID }
     @State private var reorder = false
-    private var orderedChildren: [JSON] {
-        let chats: [JSON] = chatIDs.map { .object(["id": .string("chat:" + $0), "sortId": .string("chat:" + $0), "type": .string("chat"), "chatId": .string($0), "title": run($0)["title"]]) }
-        let browsers: [JSON] = shared.tabs(in: scope).map { .object(["id": .string($0.id), "sortId": .string($0.contentTabId ?? $0.id), "type": .string("browser"), "title": .string($0.title)]) }
-        let other: [JSON] = (shared.workspaceContentDescriptors[scope] ?? []).filter { ["terminal", "document"].contains($0["type"].string) }.map { tab in var fields = tab.object; fields["sortId"] = tab["id"]; fields["id"] = .string("remote:" + tab["id"].string); return .object(fields) }
-        let order = (shared.workspaceContentDescriptors[scope] ?? []).map { $0["id"].string }
-        return (chats + browsers + other).enumerated().sorted { a, b in
-            let x = order.firstIndex(of: a.element["sortId"].string) ?? order.count + a.offset
-            let y = order.firstIndex(of: b.element["sortId"].string) ?? order.count + b.offset
-            return x < y
-        }.map(\.element).filter { child in !(shared.workspaceContentDescriptors[scope] ?? []).contains { $0["id"].string == child["sortId"].string && $0["hidden"].bool } && !shared.tabs(in: scope).contains { $0.id == child["id"].string && $0.hidden } }
-    }
+    private var orderedChildren: [JSON] { NativeWorkspaceNavigation.children(scope: scope, navigationKey: navigationKey, remote: store, shared: shared) }
     private var navigation: JSON { store.draft(navigationKey) }
-    private func run(_ id: String) -> JSON { store.chats[id] ?? store.state["runs"].array.first { $0["id"].string == id } ?? .object(["id": .string(id), "title": .string("Chat")]) }
+    // The saved navigation record is the only selection source. Earlier view-local
+    // copies raced the drawer, owner polling and pushed destinations, so a second
+    // chat could be "selected" in one copy while another copy kept showing the first.
+    private var selected: String {
+        get { let value = navigation["selected"].string; return value.isEmpty ? "workspace" : value }
+        nonmutating set { NativeWorkspaceNavigation.select(newValue, navigationKey: navigationKey, remote: store) }
+    }
+    private var chatIDs: [String] {
+        get { NativeWorkspaceNavigation.deduplicated(navigation["chats"].array.map(\.string)) }
+        nonmutating set { NativeWorkspaceNavigation.setChats(newValue, navigationKey: navigationKey, remote: store) }
+    }
+    private func run(_ id: String) -> JSON { NativeWorkspaceNavigation.run(id, remote: store) }
     var body: some View {
         VStack(spacing: 0) {
             if !NativePhonePreview.enabled || !phoneChrome.controlsHidden { workspaceTabStrip; Divider() }
-            if selected == "workspace" || (NativePhonePreview.enabled && selected.hasPrefix("chat:")) {
+            if selected == "workspace" {
                 if projectID != nil { Picker("Project page", selection: $page) { Text("Chats").tag("Chats"); Text("Tabs").tag("Tabs") }.pickerStyle(.segmented).padding(12) }
                 if page == "Projects" && projectID == nil && store.supportsProjects { NativeProjectsView(workspaceID: workspaceID, onOpen: onOpenProject) }
-                else if page == "Tabs" { NativeWorkspaceTabsView(workspaceID: workspaceID, projectID: projectID, onOpen: openManagedTab).environmentObject(store) }
-                else if page == "Configuration" { ContextView(workspaceID: workspaceID).environmentObject(store) }
+                else if page == "Tabs" { NativeWorkspaceTabsView(workspaceID: workspaceID, projectID: projectID, onOpen: openManagedTab).environment(store) }
+                else if page == "Configuration" { ContextView(workspaceID: workspaceID).environment(store) }
                 else { AggregateChatsView(onSelect: { openChat($0.run["id"].string) }, lockedWorkspaceID: workspaceID, lockedHostID: hostID, lockedProjectID: projectID, initialChatType: "all") }
-            } else if selected.hasPrefix("chat:") { ChatView(id: String(selected.dropFirst(5)), onBack: { selected = "workspace" }, workspaceBrowserScope: scope).environmentObject(store).id(selected) }
+            } else if selected.hasPrefix("chat:") { ChatView(id: String(selected.dropFirst(5)), onBack: { selected = "workspace" }, workspaceBrowserScope: scope).environment(store).id(selected) }
             else if selected.hasPrefix("remote:") {
                 ContentUnavailableView("Available on \(store.displayName)", systemImage: "desktopcomputer", description: Text("This saved terminal or host document tab remains on \(store.displayName). Open it there to reconnect to the terminal; chat documents can be requested through their chat’s approved document controls.")).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else { TeamBrowserView(scope: scope, showTabs: false, tabID: selected, onBackToList: { selected = "workspace" }, newTabOptions: [NativeNewTabAction(title: "New chat", symbol: "bubble.left.and.bubble.right", enabled: store.connected, run: { internet = false; newChat = true }), NativeNewTabAction(title: "Internet Search", symbol: "magnifyingglass", enabled: store.connected, run: { internet = true; newChat = true })]) }
@@ -585,21 +647,18 @@ struct NativeWorkspaceContentView: View {
         }).background(NativeTheme.background).navigationTitle(profile["name"].string).navigationBarTitleDisplayMode(.inline)
             .toolbar(NativePhonePreview.enabled && phoneChrome.controlsHidden ? .hidden : .automatic, for: .navigationBar)
             .nativeFeaturePage(projectID.flatMap { store.projectCatalog.project(id: $0, workspaceID: workspaceID)?["name"].string } ?? profile["name"].string)
-            .nativePhoneDestination(isPresented: Binding(get: { NativePhonePreview.enabled && selected.hasPrefix("chat:") }, set: { if !$0 { selected = "workspace" } })) {
-                NativeSelectedWorkspaceChat(navigationKey: navigationKey, browserScope: scope).environmentObject(store).modifier(NativePhoneBackNavigation())
-            }
             .sheet(isPresented: $reorder) { NativeTabReorderSheet(items: orderedChildren.map { (id: $0["id"].string, title: $0["title"].string) }) { ids in let children = orderedChildren; mutateTabs([.object(["action": .string("reorder"), "ids": .array(ids.compactMap { id in children.first { $0["id"].string == id }?["sortId"] })])]) } }
             .sheet(item: $transferTab) { tab in NativeBrowserTransferView(tab: tab) }
-            .sheet(isPresented: $newChat) { NewChatView(internet: internet, lockedWorkspaceID: workspaceID, lockedProjectID: projectID) { id in newChat = false; openChat(id) }.environmentObject(store) }
-            .onAppear { restore(); let saved = store.draft(scopeKind + "-page:" + scopeID).string; page = saved.isEmpty ? (projectID != nil || !store.supportsProjects ? "Chats" : "Projects") : (saved == "Projects" && !store.supportsProjects ? "Chats" : saved) }
-            .onChange(of: navigation) { _, _ in restore() }
-            .onChange(of: selected) { _, _ in save() }
+            .sheet(isPresented: $newChat) { NewChatView(internet: internet, lockedWorkspaceID: workspaceID, lockedProjectID: projectID) { id in newChat = false; openChat(id) }.environment(store) }
+            .onAppear { let saved = store.draft(scopeKind + "-page:" + scopeID).string; page = saved.isEmpty ? (projectID != nil || !store.supportsProjects ? "Chats" : "Projects") : (saved == "Projects" && !store.supportsProjects ? "Chats" : saved) }
             .onChange(of: page) { _, value in store.setDraft(scopeKind + "-page:" + scopeID, .string(value)) }
-            .onChange(of: shared.scopedSelection[scope]) { _, value in if let value { selected = value } }
+            .onChange(of: shared.scopedSelection[scope]) { _, value in if let value, value != selected { selected = value } }
             .onChange(of: shared.workspaceContentDescriptors[scope]) { _, value in
-                guard let value else { return }; chatIDs = NativeWorkspaceNavigation.deduplicated(value.filter { $0["type"].string == "chat" }.map { $0["chatId"].string }); save()
+                guard let value else { return }
+                NativeWorkspaceNavigation.adoptOwnerChats(value, navigationKey: navigationKey, remote: store)
             }
-            .task(id: scope) { while !Task.isCancelled { await shared.refreshContentTabs(scope: scope, remote: store, kind: scopeKind, id: scopeID); try? await Task.sleep(for: .seconds(3)) } }
+            // Poll only while this project is on screen; hidden phone areas stay mounted.
+            .task(id: scope + String(areaActive) + String(scenePhase == .active)) { guard areaActive, scenePhase == .active else { return }; while !Task.isCancelled { await shared.refreshContentTabs(scope: scope, remote: store, kind: scopeKind, id: scopeID); try? await Task.sleep(for: .seconds(3)) } }
     }
     private var workspacePageNames: [String] { projectID == nil ? (store.supportsProjects ? ["Projects", "Chats", "Tabs", "Configuration"] : ["Chats", "Tabs", "Configuration"]) : [] }
     private var workspaceTabStrip: some View {
@@ -642,17 +701,15 @@ struct NativeWorkspaceContentView: View {
             let selected = tab["type"].string == "chat" ? "chat:" + tab["chatId"].string : tab["type"].string == "browser" ? (shared.tabs(in: "project:" + hostID + ":" + id).first { ($0.contentTabId ?? $0.id) == tab["id"].string }?.id ?? "remote:" + tab["id"].string) : "remote:" + tab["id"].string
             var saved = store.draft("project-navigation:" + id).object; saved["selected"] = .string(selected); store.setDraft("project-navigation:" + id, .object(saved)); onOpenProject(id); return
         }
-        if tab["type"].string == "chat" { selected = "chat:" + tab["chatId"].string; save() }
+        if tab["type"].string == "chat" { NativeWorkspaceNavigation.openChat(tab["chatId"].string, workspaceID: workspaceID, projectID: projectID, remote: store) }
         else if tab["type"].string == "browser", let browser = shared.tabs(in: scope).first(where: { ($0.contentTabId ?? $0.id) == tab["id"].string }) { shared.select(browser.id, in: scope); selected = browser.id }
         else { selected = "remote:" + tab["id"].string }
     }
     private func openChat(_ id: String) {
-        NativeWorkspaceNavigation.openChat(id, workspaceID: workspaceID, projectID: projectID, remote: store); restore()
+        NativeWorkspaceNavigation.openChat(id, workspaceID: workspaceID, projectID: projectID, remote: store)
     }
-    private func closeChat(_ id: String) { chatIDs.removeAll { $0 == id }; if selected == "chat:" + id { selected = "workspace" }; save(); mutateTabs([.object(["action": .string("close"), "id": .string("chat:" + id)])]) }
-    private func mutateTabs(_ operations: [JSON]) { Task { do { let snapshot = try await store.request("tabs.get", ["scope": .string(scopeKind), "id": .string(scopeID)]); _ = try await store.request("tabs.mutate", ["scope": .string(scopeKind), "id": .string(scopeID), "expectedRevision": snapshot["revision"], "operations": .array(operations)]); await shared.refreshContentTabs(scope: scope, remote: store, kind: scopeKind, id: scopeID) } catch { store.error = error.localizedDescription } } }
-    private func save() { let next: JSON = .object(["chats": .array(NativeWorkspaceNavigation.deduplicated(chatIDs).map(JSON.string)), "selected": .string(selected)]); if next != navigation { store.setDraft(navigationKey, next) } }
-    private func restore() { chatIDs = NativeWorkspaceNavigation.deduplicated(navigation["chats"].array.map(\.string)); let next = navigation["selected"].string; selected = next.isEmpty ? "workspace" : next }
+    private func closeChat(_ id: String) { NativeWorkspaceNavigation.closeChat(id, navigationKey: navigationKey, remote: store); mutateTabs([.object(["action": .string("close"), "id": .string("chat:" + id)])]) }
+    private func mutateTabs(_ operations: [JSON]) { NativeWorkspaceNavigation.mutate(operations, kind: scopeKind, id: scopeID, scope: scope, remote: store, shared: shared) }
 }
 
 struct NativeWorkspaceCopyView: View {
@@ -747,7 +804,7 @@ struct NativeBrowserTransferView: View {
 }
 
 struct NativeWorkspaceDeleteView: View {
-    @EnvironmentObject var store: RemoteStore
+    @Environment(RemoteStore.self) var store
     @EnvironmentObject var shared: SharedAppStore
     @Environment(\.dismiss) private var dismiss
     let workspaceID: String
@@ -784,17 +841,61 @@ struct NativeWorkspaceDeleteView: View {
     } catch { failure = error.localizedDescription } } }
 }
 
-// Pushed destinations observe the current owner selection instead of retaining the
-// value captured when navigationDestination first created its closure.
-private struct NativeSelectedWorkspaceChat: View {
-    @EnvironmentObject var store: RemoteStore
-    let navigationKey: String
-    let browserScope: String
-    private var selected: String { store.draft(navigationKey)["selected"].string }
+/// The active workspace/project's open tabs in the iPhone drawer and iPad sidebar.
+/// Rows mirror the project tab strip; both read and write the same navigation record.
+struct NativeScopeTabRows: View {
+    @EnvironmentObject private var shared: SharedAppStore
+    var remote: RemoteStore
+    let workspaceID: String
+    var onSelect: () -> Void
+    private var hostID: String { remote.connection?.hostId ?? "" }
+    private var projectID: String { remote.draft("workspace-selected-project:" + workspaceID).string }
+    private var project: JSON? { projectID.isEmpty ? nil : remote.projectCatalog.project(id: projectID, workspaceID: workspaceID) }
+    private var kind: String { project == nil ? "workspace" : "project" }
+    private var scopeID: String { project == nil ? workspaceID : projectID }
+    private var scope: String { kind + ":" + hostID + ":" + scopeID }
+    private var navigationKey: String { kind + "-navigation:" + scopeID }
+    private var owner: String { project?["name"].string ?? remote.state["context"]["workspaces"].array.first { $0["id"].string == workspaceID }?["name"].string ?? "Workspace" }
     var body: some View {
-        if selected.hasPrefix("chat:") {
-            ChatView(id: String(selected.dropFirst(5)), workspaceBrowserScope: browserScope)
-                .id((store.connection?.hostId ?? "") + ":" + browserScope + ":" + selected)
-        } else { Color.clear }
+        let children = NativeWorkspaceNavigation.children(scope: scope, navigationKey: navigationKey, remote: remote, shared: shared)
+        let selected = remote.draft(navigationKey)["selected"].string
+        VStack(alignment: .leading, spacing: 2) {
+            Text("Open tabs · " + owner).font(.caption.weight(.semibold)).foregroundStyle(.secondary).lineLimit(1).padding(.horizontal, 12).padding(.top, 4)
+            if children.isEmpty { Text("No open tabs").font(.caption).foregroundStyle(.secondary).padding(.horizontal, 12).padding(.vertical, 6) }
+            ForEach(children, id: \.self) { child in
+                let id = child["id"].string, title = child["title"].string.isEmpty ? (child["type"].string == "chat" ? "Chat" : "Tab") : child["title"].string
+                HStack(spacing: 2) {
+                    Button { open(child) } label: {
+                        Label(title, systemImage: NativeTabSymbol.name(kind: child["type"].string, chatType: child["type"].string == "chat" ? NativeWorkspaceNavigation.run(child["chatId"].string, remote: remote)["chatType"].string : "", mediaType: child["mediaType"].string))
+                            .lineLimit(2).font(.subheadline).frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 9).contentShape(Rectangle())
+                    }.accessibilityIdentifier("scope-tab-" + id).accessibilityValue(selected == id ? "Active" : "Inactive")
+                    Button { close(child) } label: { Image(systemName: "xmark").font(.system(size: 10, weight: .semibold)).foregroundStyle(NativeTheme.accent).frame(width: 44, height: 40, alignment: .trailing).contentShape(Rectangle()) }
+                        .accessibilityLabel("Close tab " + title)
+                }.padding(.leading, 12).padding(.trailing, 6).background(selected == id ? NativeSidebarStyle.selected : .clear, in: RoundedRectangle(cornerRadius: 8))
+            }
+        }.buttonStyle(.plain).task(id: scope) {
+            guard remote.connected else { return }
+            await shared.refreshContentTabs(scope: scope, remote: remote, kind: kind, id: scopeID)
+        }
+    }
+    private func open(_ child: JSON) {
+        let id = child["id"].string
+        NativeWorkspaceNavigation.select(id, navigationKey: navigationKey, remote: remote)
+        if child["type"].string == "browser" { shared.select(id, in: scope) }
+        onSelect()
+    }
+    private func close(_ child: JSON) {
+        let id = child["id"].string
+        switch child["type"].string {
+        case "chat":
+            NativeWorkspaceNavigation.closeChat(child["chatId"].string, navigationKey: navigationKey, remote: remote)
+            NativeWorkspaceNavigation.mutate([.object(["action": .string("close"), "id": .string(id)])], kind: kind, id: scopeID, scope: scope, remote: remote, shared: shared)
+        case "browser":
+            shared.close(id)
+            if remote.draft(navigationKey)["selected"].string == id { NativeWorkspaceNavigation.select("workspace", navigationKey: navigationKey, remote: remote) }
+        default:
+            NativeWorkspaceNavigation.mutate([.object(["action": .string("close"), "id": child["sortId"]])], kind: kind, id: scopeID, scope: scope, remote: remote, shared: shared)
+            if remote.draft(navigationKey)["selected"].string == id { NativeWorkspaceNavigation.select("workspace", navigationKey: navigationKey, remote: remote) }
+        }
     }
 }

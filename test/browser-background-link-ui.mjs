@@ -27,7 +27,7 @@ try{
  await native((main,id)=>{const browser=main.getBrowser(),wc=browser.get(id).view.webContents;process.mainModule.require('electron').app.focus({steal:true});browser.window.focus();wc.focus();return wc.executeJavaScript('document.querySelector("#draft").focus();document.querySelector("#draft").value="unfinished local draft";true');},source.id);
  await page.bringToFront();await native((main,id)=>{const tab=main.getBrowser().get(id),window=main.getWindows().contexts.get(tab.windowId).window;window.show();window.focus();tab.view.webContents.focus();},source.id);
  await until(()=>native((main,id)=>main.getBrowser().get(id).view.webContents.isFocused(),source.id),'native source focus before menu');
- const labels=await click(source.id,origin+'/background','Open Link in Background Tab');assert.deepEqual(labels.slice(0,3),['Open Link in New Tab','Open Link in Background Tab','Open Link in Unloaded Tab']);
+ const labels=await click(source.id,origin+'/background','Open Link in Background Tab');assert.deepEqual(labels.slice(0,3),['Open Link in New Default Browser Tab','Open Link in Background Tab','Open Link in Unloaded Tab']);
  await until(()=>page.evaluate(url=>backgroundFixture.state.tabs.some(tab=>tab.info?.url===url&&tab.info?.loaded&&!tab.info.loading),origin+'/background'),'background loaded');
  const background=(await command({action:'list'})).find(tab=>tab.url===origin+'/background');
  assert.equal(background.profileId,named);assert.equal(background.parentId,parentId);assert.equal(background.loaded,true);assert.equal(background.hidden,false);
@@ -53,7 +53,7 @@ try{
  const before=hits.filter(url=>url==='/sleeping').length;await click(source.id,origin+'/sleeping','Open Link in Unloaded Tab');
  await until(async()=>!!(await command({action:'list'})).find(tab=>tab.url===origin+'/sleeping'),'unloaded registered');
  const sleeping=(await command({action:'list'})).find(tab=>tab.url===origin+'/sleeping');assert.equal(sleeping.loaded,false);assert.equal(sleeping.hidden,true);assert.equal(hits.filter(url=>url==='/sleeping').length,before);
- await click(source.id,origin+'/foreground','Open Link in New Tab');await until(()=>page.evaluate(url=>backgroundFixture.state.tabs.find(tab=>tab.id===backgroundFixture.state.tab)?.info?.url===url,origin+'/foreground'),'foreground selects');
+ await click(source.id,origin+'/foreground','Open Link in New Default Browser Tab');await until(()=>page.evaluate(url=>backgroundFixture.state.tabs.find(tab=>tab.id===backgroundFixture.state.tab)?.info?.url===url,origin+'/foreground'),'foreground selects');
  const team=await command({action:'create',url:origin+'/team-source',group:'team',profileId:named});
  await page.evaluate(info=>{backgroundFixture.selectTeamBrowser(info);backgroundFixture.navigate('team');},team);await page.locator('#team-browser-form').waitFor();await until(()=>native((main,id)=>main.getBrowser().active===id,team.id),'Team selected');
  const teamActive=await page.evaluate(()=>backgroundFixture.teamState().active),form=await page.locator('#team-browser-form').elementHandle();

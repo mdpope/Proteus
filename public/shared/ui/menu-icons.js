@@ -16,9 +16,14 @@ const paths={
  mobile:'<rect x="6" y="2" width="12" height="20" rx="2"/><path d="M10 18h4"/>',
  code:'<path d="m8 6-6 6 6 6m8-12 6 6-6 6M14 3l-4 18"/>',
  extension:'<path d="M3 3h6a3 3 0 1 1 6 0h6v6a3 3 0 1 0 0 6v6h-6a3 3 0 1 0-6 0H3z"/>',
- trash:'<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7"/>'
+ trash:'<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7"/>',
+ undo:'<path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>',
+ redo:'<path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/>',
+ cut:'<circle cx="6" cy="18" r="3"/><circle cx="18" cy="18" r="3"/><path d="M8.1 15.9 18 4M15.9 15.9 6 4"/>',
+ paste:'<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V2h6v2M9 10h6M9 14h6"/>',
+ selectAll:'<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M9 12h6"/>'
 };
-function key(id){if(id==='duplicate'||id.startsWith('copy'))return 'copy';if(id.startsWith('add')||id==='install')return 'plus';if(id.startsWith('move')||id.startsWith('send'))return 'move';if(id.startsWith('rename'))return 'edit';if(id.startsWith('close'))return 'close';if(id==='unload'||id==='hide'||id==='persist')return id==='persist'?'pin':id;if(id==='autoplay')return 'video';if(id==='clear-site')return 'trash';if(id==='certificate')return 'shield';if(id==='mode:mobile')return 'mobile';if(id.startsWith('mode:'))return 'desktop';if(id==='devtools')return 'code';if(id==='manage')return 'extension';if(id==='site-data')return 'settings';return /^[a-p]{32}$/.test(id)?'extension':null;}
+function key(id){if(id==='undo'||id==='redo'||id==='cut'||id==='paste')return id;if(id==='select-all')return 'selectAll';if(id==='duplicate'||id.startsWith('copy'))return 'copy';if(id.startsWith('add')||id==='install')return 'plus';if(id.startsWith('move')||id.startsWith('send'))return 'move';if(id.startsWith('rename'))return 'edit';if(id.startsWith('close'))return 'close';if(id==='unload'||id==='hide'||id==='persist')return id==='persist'?'pin':id;if(id==='autoplay')return 'video';if(id==='clear-site')return 'trash';if(id==='certificate')return 'shield';if(id==='mode:mobile')return 'mobile';if(id.startsWith('mode:'))return 'desktop';if(id==='devtools')return 'code';if(id==='manage')return 'extension';if(id==='site-data')return 'settings';return /^[a-p]{32}$/.test(id)?'extension':null;}
 export function appendMenuLabel(button,item){
  const name=key(item.id);let icon;
  if(typeof item.icon==='string'&&item.icon.length<=32768&&/^data:image\/png;base64,[a-zA-Z0-9+/=]+$/.test(item.icon)){icon=document.createElement('img');icon.src=item.icon;icon.alt='';}

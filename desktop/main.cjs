@@ -32,7 +32,7 @@ else {
     onError:error=>{console.error('Opening website link: '+error.message);if(window&&!window.isDestroyed())window.webContents.send('proteus:browser-action',{type:'error',message:'Could not open an incoming website link. '+error.message});}
   });
   const returnToAuthWindow=()=>{const ctx=windows?.contexts.get(authWindowId)||windows?.current();if(ctx)windows.run(ctx.id,showWindow);else showWindow();};
-  const receiveURL=raw=>{if(externalURLs.receive(raw))return;const url=protocolURL([raw]);if(!url)return;const value=new URL(url);if(value.protocol==='proteus:'){chatLink=url;if(window&&!window.isDestroyed()){window.webContents.send('proteus:open-chat-link',url);chatLink=null;}showWindow();return;}if(service)void service.life.callback(url).catch(()=>{});else lifeCallback=url;returnToAuthWindow();};
+  const receiveURL=raw=>{linkRouter?.noteIncoming?.(raw);if(externalURLs.receive(raw))return;const url=protocolURL([raw]);if(!url)return;const value=new URL(url);if(value.protocol==='proteus:'){chatLink=url;if(window&&!window.isDestroyed()){window.webContents.send('proteus:open-chat-link',url);chatLink=null;}showWindow();return;}if(service)void service.life.callback(url).catch(()=>{});else lifeCallback=url;returnToAuthWindow();};
   app.on('second-instance',(_event,argv)=>{const urls=argv.filter(raw=>webURL(raw)||protocolURL([raw]));if(urls.length)urls.forEach(receiveURL);else showWindow();});
   app.on('open-url',(event,url)=>{event.preventDefault();receiveURL(url);});
   if(process.platform!=='darwin')process.argv.filter(raw=>webURL(raw)||protocolURL([raw])).forEach(receiveURL);

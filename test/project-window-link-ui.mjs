@@ -14,7 +14,7 @@ try{
  const secondID=await second.evaluate(()=>window.desktop.windowId);assert.notEqual(firstID,secondID);
  const mirror=await until(async()=>(await session(second)).tabs.find(tab=>tab.parentId===fixture.parentId&&tab.type==='browser'&&(tab.contentTabId||tab.id)===source.id),'source mirrored to second window');
  await second.locator('[data-chat-subtab="'+mirror.id+'"]').click();await second.locator('#browser-url').fill('unfinished-address-draft.example');const secondActive=(await session(second)).active;
- const labels=['Open Link in New Tab','Open Link in Background Tab','Open Link in Unloaded Tab'],created=[];
+ const labels=['Open Link in New Default Browser Tab','Open Link in Background Tab','Open Link in Unloaded Tab'],created=[];
  for(const [index,label] of labels.entries()){
   const url=fixture.origin+'/window-link-'+index;
   await native((main,{sourceID,url,label})=>{const browser=main.getBrowser(),menu=browser.actions.menu(browser.get(sourceID),{linkURL:url,linkText:'Provisional window link'});menu.items.find(item=>item.label===label).click();},{sourceID:source.id,url,label});

@@ -21,6 +21,7 @@ const { FaviconResolver, finishIconResponse } = require('./favicon-resolver.cjs'
 const {validateCapture,visualPoint}=require('./browser-visual.cjs');
 const {BrowserSiteSettings,siteOrigin,scaleDomain,siteUserAgent,presentationURL}=require('./browser-site-settings.cjs');
 const {BrowserSiteData}=require('./browser-site-data.cjs');
+const {ExternalProtocols,externalProtocolURL}=require('./browser-external-protocols.cjs');
 const {playwrightMCP,developerMCP,mcpCommand}=require('./browser-mcp.cjs');
 
 function safeFavicon(value) { return typeof value==='string'&&value.length<=98304&&/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(value)?value:''; }
@@ -91,7 +92,7 @@ class BrowserTabs {
     this.interactionHandler=event=>{const tab=[...this.tabs.values()].find(tab=>tab.view?.webContents===event.sender);if(tab&&event.senderFrame===event.sender.mainFrame){this.touch(tab);this.activityChanged();}};ipcMain.on('proteus:browser-interaction',this.interactionHandler);ipcMain.on('proteus:navigation-intent',this.navigationIntentHandler);
     this.scrollHandler=(event,value)=>{const tab=[...this.tabs.values()].find(tab=>tab.view?.webContents===event.sender);if(!tab||event.senderFrame!==event.sender.mainFrame||JSON.stringify(value||{}).length>8192)return;const target=this.windowRegistry?.contexts.get(tab.windowId)?.window||this.window;if(!target.isDestroyed())target.webContents.send('proteus:browser-scroll',{id:tab.id,url:event.sender.getURL(),positions:value});};ipcMain.on('proteus:browser-scroll',this.scrollHandler);
     this.partition = session.fromPartition('persist:proteus-browser');
-    this.actions = new BrowserActions(this);this.permissions=new BrowserPermissions(this);this.siteNotificationHandler=(event,value)=>this.withSenderWindow(event,()=>this.permissions.receive(event,value));ipcMain.on('proteus:site-notification',this.siteNotificationHandler);
+    this.actions = new BrowserActions(this);this.permissions=new BrowserPermissions(this);this.externalProtocols=new ExternalProtocols(this,{home:this.options.home});this.siteNotificationHandler=(event,value)=>this.withSenderWindow(event,()=>this.permissions.receive(event,value));ipcMain.on('proteus:site-notification',this.siteNotificationHandler);
     this.configureSession(this.partition,'default');
     this.extensions=options.home?new BrowserExtensions(this,options.home):null;
     if(this.blocker){
@@ -371,14 +372,19 @@ class BrowserTabs {
     on('page-favicon-updated',(_event,icons)=>{tab.iconURLs=icons.slice(0,5);void this.resolveFavicon(tab,tab.iconURLs);});
     on('zoom-changed',(_event,direction)=>{if(!tab.videoPopout)wc.send('proteus:pinch-update',{direction,zoom:wc.getZoomFactor()});});
     on('input-event',(_event,input)=>{if(!tab.videoPopout&&['gesturePinchBegin','gesturePinchEnd'].includes(input.type))wc.send('proteus:pinch-boundary',{type:input.type,zoom:wc.getZoomFactor()});});
+    // Links to other applications (zoommtg:, msteams:, mailto:…) ask before opening,
+    // like a real browser, instead of being silently dropped as invalid addresses.
+    const external=(target)=>{const url=externalProtocolURL(target);if(!url)return false;void this.externalProtocols.request(tab,url.href,wc.getURL()).catch(error=>this.actions.send({type:'error',id:tab.id,message:error.message}));return true;};
+    on('will-frame-navigate',details=>{if(details.isMainFrame===false&&!this.options.handleCallback?.(details.url)&&external(details.url))details.preventDefault?.();});
     wc.setWindowOpenHandler(bind(({ url: next }) => {
-      try { if(this.options.handleCallback?.(next))return {action:'deny'};const address = this.address(next); void this.create(address, tab.owner,null,{profileId:tab.profileId,group:tab.group,parentId:tab.parentId}).then(info=>this.actions.send({type:'select-tab',info,afterId:tab.id})).catch(error=>this.actions.send({type:'error',message:error.message})); } catch { /* Unsupported schemes remain blocked. */ }
+      try { if(this.options.handleCallback?.(next))return {action:'deny'};if(external(next))return {action:'deny'};const address = this.address(next); void this.create(address, tab.owner,null,{profileId:tab.profileId,group:tab.group,parentId:tab.parentId}).then(info=>this.actions.send({type:'select-tab',info,afterId:tab.id})).catch(error=>this.actions.send({type:'error',message:error.message})); } catch { /* Unsupported schemes remain blocked. */ }
       return { action: 'deny' };
     }));
-    on('will-redirect',(event,next,_same,isMainFrame)=>{if((event.isMainFrame??isMainFrame)===false)return;if(this.options.handleCallback?.(event.url||next)){event.preventDefault();return;}const address=safeHistoryURL(event.url||next,this.appOrigin);if(address){void this.applySiteMode(tab,address,false);commitNavigation(tab,address,'',{redirect:true});this.changed();}});
+    on('will-redirect',(event,next,_same,isMainFrame)=>{if((event.isMainFrame??isMainFrame)===false)return;if(this.options.handleCallback?.(event.url||next)){event.preventDefault();return;}if(external(event.url||next)){event.preventDefault();return;}const address=safeHistoryURL(event.url||next,this.appOrigin);if(address){void this.applySiteMode(tab,address,false);commitNavigation(tab,address,'',{redirect:true});this.changed();}});
     on('will-navigate', (event, next) => {
       try {
         if(this.options.handleCallback?.(event.url||next)){event.preventDefault();return;}
+        if(external(event.url||next)){event.preventDefault();return;}
         const address=this.address(event.url||next);
         void this.applySiteMode(tab,address,false);
         // A real page click must claim its destination before descriptor polling

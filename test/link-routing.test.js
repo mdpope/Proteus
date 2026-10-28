@@ -30,6 +30,14 @@ test('external links prefer a project window, then workspace, then main; identic
   project.navigationClosed=true;assert.equal(selectWindow([main,workspace,target],destination),workspace);
   root.hidden=true;assert.equal(selectWindow([main,workspace,target],destination),main);
 });
+test('external links go to the window already displaying the project instead of switching the focused window',()=>{
+  const ctx=(id,session,focused=false)=>({id,window:{isDestroyed:()=>false,isFocused:()=>focused},session:{get:()=>session}});
+  const project={id:'project-tab',type:'workspace',workspaceId:'studio',projectId:'chat'},other={id:'other-tab',type:'workspace',workspaceId:'studio',projectId:'elsewhere'};
+  const main=ctx('main',{active:'other-tab',tabs:[project,other]},true);
+  const second=ctx('second',{active:'child',tabs:[{...project},{id:'child',type:'browser',parentId:'project-tab'}]});
+  assert.equal(selectWindow([main,second],destination),second);
+  assert.equal(selectWindow([main],destination),main,'Without a displaying window the focused window that has the project is used');
+});
 test('rule storage rejects stale writes, preserves unknown fields and never overwrites invalid state',t=>{
   const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-link-rules-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
   const store=new LinkRoutingStore(home),initial=store.read();

@@ -103,8 +103,8 @@ export class ActivityStore extends EventEmitter {
   attach(engine, hostId) {
     const snapshot = run => ({ status: run.status, pending: run.pending?.id, questions:(run.userQuestions||[]).filter(question=>question.status==='pending').map(question=>question.id) });
     for (const run of engine.listRuns()) this.states.set(run.id, snapshot(run));
-    this.listener = run => {
-      if (!run?.id) return;
+    this.listener = (run,change) => {
+      if (!run?.id||change?.stream) return;
       if(run.deleted){this.states.delete(run.id);this.log('info','chat.deleted',`Chat ${run.id} deleted from Proteus.`,{hostId:hostId()});return;}
       const before = this.states.get(run.id); this.states.set(run.id, snapshot(run));
       if (run.status === 'awaiting_input' && run.pending?.id && before?.pending !== run.pending.id) this.add('review.required', { hostId: hostId(), chatId: run.id });

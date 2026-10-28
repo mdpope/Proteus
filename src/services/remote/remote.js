@@ -93,7 +93,14 @@ export class RemoteHost {
     this.peers = new Map(); this.journal = []; this.epoch = randomUUID(); this.sequence = 0; this.closed = false; this.status = 'disabled'; this.inflight = new Map();this.documents=new ChatDocumentApprovals({documentSource:(chatId,documentId)=>service.contentTabs.documentSource(chatId,documentId),currentRoots:run=>{const catalog=service.context.get(),id=run.schedule?.context?.workspaceId;const workspace=id?catalog.workspaces.find(item=>item.id===id):null;return workspace?[workspace.cwd,...(workspace.additionalDirectories||[]),...(workspace.universalFolders||[])]:[];}});this.attachmentConsents=new ChatAttachmentConsents(service.attachments);service.engine.attachmentConsents=this.attachmentConsents;
     this.commandJournal = new RemoteCommandJournal(service.home);
     this.runVersions=new Map();
-    this.changed = run => { if(run?.id&&[...this.peers.values()].some(peer=>peer.runId===run.id))this.runVersions.set(run.id,(this.runVersions.get(run.id)||0)+1);if (!this.changeTimer) this.changeTimer = setTimeout(() => { this.changeTimer = null; this.publish(); }, 150); };
+    // Streaming text matters only to devices watching that chat, and then at a
+    // readable cadence rather than per token. Other changes publish after 150 ms.
+    this.changed = (run,change) => {
+      const watched=run?.id&&[...this.peers.values()].some(peer=>peer.runId===run.id);
+      if(watched)this.runVersions.set(run.id,(this.runVersions.get(run.id)||0)+1);
+      if(change?.stream&&!watched)return;
+      if (!this.changeTimer) this.changeTimer = setTimeout(() => { this.changeTimer = null; this.lastPublishAt=Date.now(); this.publish(); }, change?.stream?Math.max(150,400-(Date.now()-(this.lastPublishAt||0))):150);
+    };
     service.engine.on('change', this.changed);
     this.historyChanged=()=>this.broadcast('browser.history.changed',{});service.browserHistory?.on('changed',this.historyChanged);
     this.lifecycleChanged = result => { if (result.deleted) { for (const peer of this.peers.values()) if (peer.runId === result.id) peer.runId = null; this.documents.revokeChat?.(result.id); service.contentTabs?.removeChat(result.id); this.attachmentConsents.revokeChat(result.id); void service.attachments?.revokeChat?.(result.id); } this.broadcast('chat.lifecycle', result); this.changed(); };

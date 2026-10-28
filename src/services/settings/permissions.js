@@ -110,18 +110,37 @@ export class PermissionStore {
         workingFolders.push({path:root,access:configured?.access||'read-write'});
       }
     }
-    return { ...context, workingFolders, mode: effectivePermissionMode(saved), readOnlyTools: saved?.readOnlyTools === true, folders: saved?.folders || [], rules: saved?.rules || [] };
+    // Explicit read-only folders stay authoritative even where a broader mode allows access.
+    const readOnlyFolders=this.preserveInheritedDefaults?[...(defaults?.folders||[]),...(saved?.folders||[])].filter(folder=>folder.access==='read').map(folder=>canonicalPath(folder.path,context.cwd)).filter(Boolean):[];
+    return { ...context, workingFolders, readOnlyFolders, mode: effectivePermissionMode(saved), readOnlyTools: saved?.readOnlyTools === true, folders: saved?.folders || [], rules: saved?.rules || [] };
   }
   describe(schedule, snapshot) {
     const context = snapshot ? projectionContext(schedule, snapshot) : permissionContext(schedule);
     const current=snapshot||this.snapshot();
     const own=this.describeContext(context,current);
     const inherited=schedule.permissionScope?.kind==='schedule'&&!current.profiles.has(context.id)?this.describeContext(permissionContext({...schedule,permissionScope:undefined}),current):own;
-    const profile={...inherited,...context},explicit=schedule.executionPermissions;
+    const profile={...inherited,...context,workingFolders:this.chatWorkingFolders(schedule,context,inherited)},explicit=schedule.executionPermissions;
     if(!explicit)return profile;
     const folders=(explicit.folders||[]).map(folder=>({...folder,path:canonicalPath(folder.path,context.cwd)}));
     if(folders.some(folder=>!folder.path))throw Error('A schedule folder is unavailable. Review schedule access.');
     return {...profile,source:'schedule',mode:explicit.mode||profile.mode,readOnlyTools:explicit.readOnlyTools??profile.readOnlyTools,workingFolders:[...profile.workingFolders,...folders],folders:[...profile.folders,...folders],rules:[...profile.rules,...(explicit.rules||[])]};
+  }
+  /** Folders chosen as a chat's own working folders (its captured base workspace)
+   * are working folders exactly like the workspace's, even when that workspace's
+   * list differs. Roots contributed only by selected instruction/skill sources stay
+   * source-only and gated. Explicit read-only folders remain read-only. */
+  chatWorkingFolders(schedule,context,profile){
+    const existing=profile.workingFolders||[],base=schedule.context?.baseWorkspace;
+    if(!this.preserveInheritedDefaults||!base?.cwd)return existing;
+    const known=new Set(existing.map(folder=>folder.path)),added=[];
+    for(const value of [base.cwd,...(base.additionalDirectories||[])]){
+      const root=canonicalPath(value,context.cwd);
+      if(!root||known.has(root)||!context.roots.includes(root))continue;
+      known.add(root);
+      const override=(profile.readOnlyFolders||[]).some(folder=>root===folder||within(root,folder));
+      added.push({path:root,access:override?'read':'read-write',source:'chat'});
+    }
+    return added.length?[...existing,...added]:existing;
   }
   describeMany(schedules, snapshot = this.snapshot()) {
     // Keep the last label/ref for duplicate identities, matching the existing UI.
@@ -269,7 +288,7 @@ export class PermissionStore {
     }
     if(this.preserveInheritedDefaults&&['read','write'].includes(request.kind)){
       const target=requestedPath(request,profile);
-      const folders=[...(profile.workingFolders||[]),...(profile.folders||[])].filter(folder=>canonicalPath(folder.path,profile.cwd)===folder.path&&target&&within(target,folder.path)).sort((a,b)=>b.path.length-a.path.length||Number(a.access==='read-write')-Number(b.access==='read-write'));
+      const folders=[...(profile.workingFolders||[]),...(profile.folders||[]),...(profile.readOnlyFolders||[]).map(path=>({path,access:'read'}))].filter(folder=>canonicalPath(folder.path,profile.cwd)===folder.path&&target&&within(target,folder.path)).sort((a,b)=>b.path.length-a.path.length||Number(a.access==='read-write')-Number(b.access==='read-write'));
       const matched=folders[0];
       if(matched)return {allowed:request.kind==='read'||matched.access==='read-write',reason:matched.access==='read'?'Read-only working folder':'Workspace folder access',mode:profile.mode,resolvedTarget:target,matchedRoot:matched.path,source:'workspace'};
     }

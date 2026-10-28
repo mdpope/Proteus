@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct SchedulesView: View {
-    @EnvironmentObject var store: RemoteStore
+    @Environment(RemoteStore.self) var store
     var onSelect: ((JSON) -> Void)? = nil
     @State private var path: [String] = []
     var body: some View {
@@ -32,7 +32,7 @@ struct SchedulesView: View {
     }
 }
 struct ScheduleView: View {
-    @EnvironmentObject var store: RemoteStore
+    @Environment(RemoteStore.self) var store
     let id: String
     var openRun: (String) -> Void
     @State private var name = ""

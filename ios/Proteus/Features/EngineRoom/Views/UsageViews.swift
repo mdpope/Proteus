@@ -29,7 +29,7 @@ struct ProviderAllowance {
 }
 
 struct ProviderUsageStrip: View {
-    @ObservedObject var store: RemoteStore
+    var store: RemoteStore
     @AppStorage("nativeAllowanceMode") private var displayMode = ""
     @State private var details = false
     private var isCollapsed: Bool { displayMode.isEmpty ? store.state["appearance"]["providerUsageCollapsed"].bool : displayMode == "collapsed" }
@@ -87,7 +87,7 @@ struct AllowanceMeter: View {
 }
 
 struct ProviderUsageDetails: View {
-    @ObservedObject var store: RemoteStore
+    var store: RemoteStore
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         List {

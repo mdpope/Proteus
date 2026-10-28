@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 struct NativeWorkspaceView: View {
-    @EnvironmentObject var store: RemoteStore
+    @Environment(RemoteStore.self) var store
     @EnvironmentObject var shared: SharedAppStore
     let workspaceID: String
     var onOpenMain: ((AggregateChat) -> Void)? = nil
@@ -11,9 +11,9 @@ struct NativeWorkspaceView: View {
     var body: some View {
         VStack(spacing: 0) {
             if NativePhonePreview.enabled {
-                NativeWorkspaceContentView(workspaceID: workspaceID, onOpenProject: select, onOpenMain: onOpenMain).environmentObject(store)
+                NativeWorkspaceContentView(workspaceID: workspaceID, onOpenProject: select, onOpenMain: onOpenMain).environment(store)
                     .navigationDestination(isPresented: Binding(get: { !selection.isEmpty }, set: { if !$0 { select("") } })) {
-                        NativeSelectedProjectView(workspaceID: workspaceID, onOpenMain: onOpenMain).environmentObject(store).modifier(NativePhoneBackNavigation())
+                        NativeSelectedProjectView(workspaceID: workspaceID, onOpenMain: onOpenMain).environment(store).modifier(NativePhoneBackNavigation())
                     }
             } else if !selectedProject.isEmpty, store.projectCatalog.project(id: selectedProject, workspaceID: workspaceID) != nil {
                 if !NativePadPreview.enabled { HStack { Button { select("") } label: { Label("Workspace", systemImage: "chevron.left") }; Spacer() }.padding(.horizontal).padding(.vertical, 8) }
@@ -53,7 +53,7 @@ struct NativeWorkspaceView: View {
 // A pushed destination must observe the owner's selection itself. A captured project
 // value in navigationDestination otherwise stays stale when the drawer selects a sibling.
 private struct NativeSelectedProjectView: View {
-    @EnvironmentObject var store: RemoteStore
+    @Environment(RemoteStore.self) var store
     let workspaceID: String
     var onOpenMain: ((AggregateChat) -> Void)?
     private var projectID: String { store.draft("workspace-selected-project:" + workspaceID).string }
@@ -64,7 +64,7 @@ private struct NativeSelectedProjectView: View {
 }
 
 struct NativeProjectsView: View {
-    @EnvironmentObject var store: RemoteStore
+    @Environment(RemoteStore.self) var store
     let workspaceID: String
     var onOpen: (String) -> Void
     @State private var editing: JSON = .null
@@ -113,7 +113,7 @@ struct NativeProjectsView: View {
 }
 
 struct NativeSourceLibraryView: View {
-    @EnvironmentObject var store: RemoteStore
+    @Environment(RemoteStore.self) var store
     @State private var path = ""
     @State private var failure = ""
     @State private var busy = false

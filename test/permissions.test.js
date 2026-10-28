@@ -258,3 +258,24 @@ test('managed workspace folders default to write while nested Read and outside/s
  assert.equal(store.decide(spec,{kind:'write',fileName:path.join(workspace,'file'),requestSandboxBypass:true}).allowed,false);
  }finally{fs.rmSync(home,{recursive:true,force:true});}
 });
+
+test('a chat\'s own chosen working folders are trusted while source-only roots and read-only folders stay gated',()=>{
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-chat-working-'));
+ try{
+ const workspace=path.join(home,'workspace'),chosen=path.join(home,'chosen'),pinned=path.join(chosen,'pinned'),source=path.join(home,'source'),outside=path.join(home,'outside');for(const dir of [workspace,chosen,pinned,source,outside])fs.mkdirSync(dir,{recursive:true});
+ const store=new PermissionStore(home,{preserveInheritedDefaults:true});
+ // The chat chose `chosen` at creation; `source` arrived from a selected instruction.
+ const spec={...schedule(workspace),workspace:{cwd:workspace,additionalDirectories:[chosen,source]},context:{workspaceId:'fixture',baseWorkspace:{cwd:workspace,additionalDirectories:[chosen]}}};
+ store.workspaceDefaults=()=>({mode:'ask',workingRoots:[workspace],folders:[{path:pinned,access:'read'}],rules:[]});
+ const write=store.decide(spec,{kind:'write',fileName:path.join(chosen,'notes.txt')});
+ assert.equal(write.allowed,true);assert.equal(write.matchedRoot,fs.realpathSync(chosen));
+ assert.equal(store.decide(spec,{kind:'read',path:path.join(pinned,'notes.txt')}).allowed,true);
+ assert.equal(store.decide(spec,{kind:'write',fileName:path.join(pinned,'notes.txt')}).allowed,false,'Explicit read-only folders remain read-only');
+ assert.equal(store.decide(spec,{kind:'write',fileName:path.join(source,'notes.txt')}).allowed,false,'Source-only roots stay gated');
+ assert.equal(store.decide(spec,{kind:'write',fileName:path.join(outside,'notes.txt')}).allowed,false);
+ assert.equal(store.decide(spec,{kind:'write',fileName:path.join(chosen,'x'),requestSandboxBypass:true}).allowed,false);
+ // A chat without a captured base keeps the original workspace-only behavior.
+ const legacy={...spec,context:{workspaceId:'fixture'}};
+ assert.equal(store.decide(legacy,{kind:'write',fileName:path.join(chosen,'notes.txt')}).allowed,false);
+ }finally{fs.rmSync(home,{recursive:true,force:true});}
+});

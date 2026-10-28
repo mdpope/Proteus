@@ -58,7 +58,7 @@ import { browserTarget, renderBrowserHome } from './features/browser/browser-hom
 import {beginNewTabInput,withNewTabInput} from './features/browser/new-tab-input.js';
 import { browserAddress, updateAgentAccess, bindBrowserHistoryButton, browserSurfaceIdentity, browserSurfaceRevision, selectBrowserSurface } from './features/browser/browser-toolbar.js';
 import { bindBrowserAddressMenu } from './features/browser/browser-address-menu.js';
-import { bindTabEdges, bindTabReorder, reorderById, revealNewTabs, revealWholeTab, resetTabReveals } from './shared/navigation/tab-interactions.js';
+import { bindTabEdges, bindTabReorder, reorderById, revealNewTabs, revealWholeTab, resetTabReveals, neighborAfterRemoval } from './shared/navigation/tab-interactions.js';
 import { initializeViewPositions, rememberView, restoreView, restoreDocumentView, flushViewPositions } from './shared/navigation/view-position.js';
 import { showContextMenu, copyContextText } from './features/workspaces/context-menu.js';
 import { requestPresentation, mountStructured } from './features/chats/tool-presentation.js';
@@ -1328,6 +1328,13 @@ async function duplicateBrowserTab(tab){
  if(info.loaded)selectBrowserTab(info);else{render();toast('Tab duplicated with its history. Select it to load.');}
  }finally{transferringTab=false;}
 }
+// Sending a tab elsewhere keeps the user where they are; users often move several
+// tabs in a row. Only an active tab is replaced, by its neighbour in this scope.
+function stayAfterMove(tab){
+  const active=state.tabs.find(item=>item.id===state.tab);if(!active||(active!==tab&&active.parentId!==tab.id))return;
+  const next=neighborAfterRemoval(state.tabs,tab);state.tab=next;
+  if(tab.parentId){if(next!==tab.parentId)selectedChildren.set(tab.parentId,next);else selectedChildren.delete(tab.parentId);}
+}
 function transferTabDialog(tab,copy=false,teamSource=null){
   if(state.data.desktopPreview?.enabled&&!state.data.workspaceProjects&&!copy&&!['run','remote-run'].includes(tab.type)&&state.tabs.find(parent=>parent.id===tab.parentId)?.projectId){toast('Moving project resources between locations is not available in this desktop preview. Their existing sessions and access stay in place.');return;}
   if(!copy&&['run','remote-run'].includes(tab.type))return void moveChatToWorkspace({...tab,chatId:tab.runId||tab.id,local:tab.type==='run'}).catch(error=>toast(error.message));
@@ -1338,16 +1345,16 @@ function transferTabDialog(tab,copy=false,teamSource=null){
     if(parent?.projectId&&!parent.hostId&&!state.tabs.includes(parent)){const fresh=await api('/api/workspace-projects'),project=fresh.projects.find(project=>project.id===parent.projectId);if(!project)throw Error('The destination project changed. Refresh before moving.');parent=ensurePreviewProject(project);}
     if(!['main','team'].includes(target)&&(!parent||!state.tabs.includes(parent)))throw new Error('The destination chat was closed.');
     if(tab.type!=='browser'||!copy){if(['run','remote-run'].includes(tab.type)){if(parent?.type!=='workspace')throw new Error('Choose a workspace for a chat.');await moveChatToWorkspace({...tab,chatId:tab.runId||tab.id,local:tab.type==='run'});return;}const actual=teamSource||tab;
-      if(tab.type==='remote-document'||tab.type==='agent-terminal'){const source=await findManagedTab(row=>row.runtimeId===actual.id&&(!row.windowId||row.windowId===desktopWindowId),{scope:'shell'});if(!source)throw new Error('Refresh this tab’s inventory before moving it.');const destination=['main','team'].includes(target)?{scope:target,id:target,expectedRevision:0}:{scope:'shell',id:parent.id,expectedRevision:source.revision};await api('/api/tabs/manage',{action:'move',scope:'shell',id:'shell',tabId:source.id,expectedRevision:source.revision,destination});return;}if(tab.hostId||parent?.hostId)throw new Error('Move this host-owned resource using its owning computer’s Tabs page.');
+      if(tab.type==='remote-document'||tab.type==='agent-terminal'){const source=await findManagedTab(row=>row.runtimeId===actual.id&&(!row.windowId||row.windowId===desktopWindowId),{scope:'shell'});if(!source)throw new Error('Refresh this tab’s inventory before moving it.');const destination=['main','team'].includes(target)?{scope:target,id:target,expectedRevision:0}:{scope:'shell',id:parent.id,expectedRevision:source.revision};await api('/api/tabs/manage',{action:'move',scope:'shell',id:'shell',tabId:source.id,expectedRevision:source.revision,destination});stayAfterMove(tab);saveWorkspace();render();return;}if(tab.hostId||parent?.hostId)throw new Error('Move this host-owned resource using its owning computer’s Tabs page.');
       await saveWorkspace();await contentTabSync.all();
       const descriptor=await descriptorFor(actual,teamSource?{type:'team'}:state.tabs.find(item=>item.id===tab.parentId)||{type:'main'}),source=await findManagedTab(item=>item.id===descriptor?.id);
       if(!source)throw new Error('The tab has not synchronized yet. Refresh and retry.');
       const destination=target==='team'?{scope:'team',id:windowScopeId('team')}:target==='main'?{scope:'main',id:windowScopeId('main')}:parent.type==='workspace'?{scope:parent.projectId?'project':'workspace',id:parent.projectId||parent.workspaceId}:{scope:'chat',id:parent.runId||parent.id};
       const snapshot=await api('/api/content-tabs',{action:'get',...destination});
-      await api('/api/tabs/manage',{action:'move',scope:source.scope,id:source.scopeId,tabId:source.id,expectedRevision:source.revision,destination:{...destination,expectedRevision:snapshot.revision}});return;}
+      await api('/api/tabs/manage',{action:'move',scope:source.scope,id:source.scopeId,tabId:source.id,expectedRevision:source.revision,destination:{...destination,expectedRevision:snapshot.revision}});if(!teamSource){stayAfterMove(tab);saveWorkspace();render();}return;}
 
     if(tab.info?.agentControlling)throw new Error('Wait for the agent’s browser operation to finish before transferring this tab.');
-    const originalIndex=state.tabs.indexOf(tab),wasActive=state.tab===tab.id;let info;
+    const originalIndex=state.tabs.indexOf(tab);let info;if(!copy&&!teamSource)stayAfterMove(tab);
     transferringTab=true;
     try{
       if(copy)info=await window.desktop.browser({action:'create',profileId:tab.info?.profileId,restore:true,unloaded:true,url:tab.info?.url||'',history:tab.info?.history,title:tab.customTitle||tab.label,group:target==='team'?'team':'main',parentId:parent?.id});
@@ -1356,8 +1363,7 @@ function transferTabDialog(tab,copy=false,teamSource=null){
       if(parent?.type==='workspace'){parent.hidden=false;parent.navigationClosed=false;}
       const next={...tab,id:info.id,contentTabId:copy?info.id:tab.contentTabId,info};delete next.parentId;if(parent)next.parentId=parent.id;
       if(!copy){if(teamSource)forgetTeamBrowser(tab.id);else state.tabs=state.tabs.filter(item=>item!==tab);if(tab.parentId)selectedChildren.delete(tab.parentId);}
-      if(target==='team'){selectTeamBrowser(info);if(wasActive&&!copy)state.tab=tab.parentId||'overview';}
-      else{state.tabs.push(next);if(wasActive&&!copy)state.tab=next.id;}
+      if(target==='team')selectTeamBrowser(info);else state.tabs.push(next);
       saveWorkspace();render();
     }finally{transferringTab=false;}
   }});
@@ -1456,14 +1462,15 @@ document.addEventListener('contextmenu',event=>{
     const href=link.dataset.link||link.href,team=target.closest('#team-content')?teamState():null,source=team?team.tabs.find(tab=>tab.id===team.active):state.tabs.find(tab=>tab.id===state.tab),origin={parentId:team?null:selectedChatParent()?.id||null,afterId:team?team.active:state.tab,group:team?'team':'main',profileId:source?.info?.profileId||source?.profileId};
     void (async()=>{
       const profiles=window.desktop?.browser?(await api('/api/browser-profiles')).items||[]:[];
-      const items=[{id:'copy-link',label:'Copy link address'},{id:'open-tab',label:'Open in new browser tab'},...profiles.map((profile,index)=>({id:'open-profile-'+index,label:'Open in new '+profile.name+' browser tab'})),{id:'open-unloaded',label:'Open link in unloaded tab'},{id:'open-external',label:'Open in default browser'}];
-      if(selection)items.unshift({id:'copy-selection',label:'Copy selection'});
+      // Match the native page menu: one + entry per profile, Default first.
+      const ordered=profiles.length?[...profiles.filter(profile=>profile.id==='default'),...profiles.filter(profile=>profile.id!=='default')]:[{id:'default',name:'Default'}];
+      const items=[...ordered.map((profile,index)=>({id:'add-profile-'+index,label:'Open Link in New '+(profile.name||'Default')+' Browser Tab'})),{id:'open-unloaded',label:'Open Link in Unloaded Tab'},{id:'open-external',label:'Open Link in Default Browser'},{id:'copy-link',label:'Copy Link'}];
+      if(selection)items.unshift({id:'copy-selection',label:'Copy Selection'});
       const choice=await showContextMenu(event,items,toast);
       if(choice==='copy-selection')await copyContextText(selection);
       else if(choice==='copy-link')await copyContextText(href);
-      else if(choice?.startsWith('open-profile-')){const profile=profiles[Number(choice.slice('open-profile-'.length))];if(profile)await openContextLink(href,false,{...origin,profileId:profile.id});}
+      else if(choice?.startsWith('add-profile-')){const profile=ordered[Number(choice.slice('add-profile-'.length))];if(profile)await openContextLink(href,false,{...origin,profileId:profile.id});}
       else if(choice==='open-unloaded'){await window.desktop.browser({action:'create-unloaded-link',url:href,title:(link.textContent||link.getAttribute('title')||'').trim().slice(0,200),...origin});toast('Link added as a hidden, unloaded tab.');}
-      else if(choice==='open-tab')await openContextLink(href,false,origin);
       else if(choice==='open-external')await openContextLink(href,true,origin);
     })().catch(error=>toast(error.message));return;
   }
@@ -1714,7 +1721,24 @@ const liveEvents = new EventSource('/api/events');
 // focus or this window has an unfinished address/composer draft.
 liveEvents.addEventListener('content-tabs',event=>{if(!workspaceReady||workspaceRestoring||workspaceClosing)return;try{const value=JSON.parse(event.data),scope=visibleContentScopes().find(scope=>!scope.hostId&&scope.scope===value.scope&&scope.id===value.id);if(scope)void contentTabSync.sync(scope);}catch{}});
 liveEvents.addEventListener('project-follow',event=>{try{const value=JSON.parse(event.data);void projectFollower.receive({scope:value.scope,id:value.id},value);}catch{}});
-liveEvents.addEventListener('change', () => { if (document.hidden||liveRefreshTimer) return; liveRefreshTimer = setTimeout(() => { liveRefreshTimer = null; if (!document.hidden&&(!document.activeElement?.matches('input,textarea,select') || !!$('#conversation-host')) && !$('#dialog').open) refresh().catch(() => {}); }, 120); });
+// Owner change events are coalesced and name affected chats. A streaming-only burst
+// refreshes just the visible conversation (if it is one of them) instead of every
+// window re-fetching and re-rendering full owner state for each token batch.
+let liveRefreshStreamOnly=true,liveRefreshRuns=new Set();
+async function refreshVisibleRun(id){const tab=state.tabs.find(t=>t.id===state.tab);if(tab?.type!=='run'||(tab.runId||tab.id)!==id)return;await loadRunView(id);if(state.tabs.find(t=>t.id===state.tab)===tab&&$('#main').dataset.runId===id&&$('#conversation-host'))renderRun(id);}
+liveEvents.addEventListener('change', event => {
+ if (document.hidden) return;
+ let value={};try{value=JSON.parse(event.data||'{}')||{};}catch{}
+ for(const id of Array.isArray(value.runs)?value.runs:[])liveRefreshRuns.add(id);
+ liveRefreshStreamOnly&&=value.stream===true;
+ if(liveRefreshTimer)return;
+ liveRefreshTimer = setTimeout(() => {
+  liveRefreshTimer = null;const streamOnly=liveRefreshStreamOnly,runs=liveRefreshRuns;liveRefreshStreamOnly=true;liveRefreshRuns=new Set();
+  if (document.hidden||(document.activeElement?.matches('input,textarea,select') && !$('#conversation-host')) || $('#dialog').open) return;
+  if(streamOnly&&Date.now()-lastStateRefresh<3000){const tab=state.tabs.find(t=>t.id===state.tab),id=tab?.type==='run'?(tab.runId||tab.id):null;if(id&&runs.has(id))void refreshVisibleRun(id).catch(()=>{});return;}
+  refresh().catch(() => {});
+ }, 120);
+});
 
 // A pinch that ever visits visual zoom above baseline cannot open overview.
 let overviewPinch=null,overviewPinchCooldown=0;

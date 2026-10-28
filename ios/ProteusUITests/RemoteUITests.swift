@@ -177,6 +177,58 @@ final class RemoteUITests: XCTestCase {
         XCTAssertTrue(app.buttons["project-pinned-tab"].waitForExistence(timeout: 10))
         let final = XCTAttachment(screenshot: app.screenshot()); final.name = "Native default project after preserved reassignment"; final.lifetime = .keepAlways; add(final)
     }
+    /// Chats always open inside their project as named project tabs. Repeated A→B→A
+    /// switches through Chats, the sidebar's open tabs and the project tab strip must
+    /// keep the strip, sidebar and displayed conversation on the same chat.
+    @MainActor func testProjectChatsOpenAsProjectTabsAndSwitchRepeatedly() async throws {
+        let (data, _) = try await URLSession.shared.data(from: URL(string: "\(nativeFixtureHTTPOrigin)/projects-fixture")!)
+        let fixture = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        let chatIDs = try XCTUnwrap(fixture["chatIds"] as? [String])
+        // The app pairs itself with the synthetic owner's project fixture.
+        let app = nativeFixtureApplication(); app.launchArguments = ["--reset-pairing", "--phone-preview-fixture"]; app.launch()
+        let phone = UIDevice.current.userInterfaceIdiom == .phone
+        func showChats() {
+            if phone {
+                let navigation = app.buttons.matching(identifier: "phone-app-navigation").allElementsBoundByIndex.first { $0.isHittable }
+                XCTAssertNotNil(navigation, "Every phone page must reach the app drawer"); navigation?.tap()
+                let chats = app.buttons["phone-nav-Chats"]; XCTAssertTrue(chats.waitForExistence(timeout: 8)); chats.tap()
+            } else { let chats = app.buttons["sidebar-Chats"]; XCTAssertTrue(chats.waitForExistence(timeout: 8)); chats.tap() }
+        }
+        func openFromChats(_ title: String) {
+            showChats()
+            // Visited areas stay mounted; only a visible Chats row counts.
+            let rows = app.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND NOT (identifier BEGINSWITH %@) AND NOT (identifier BEGINSWITH %@)", title, "workspace-child-tab-", "scope-tab-"))
+            _ = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Synthetic project notes")).firstMatch.waitForExistence(timeout: 15)
+            func visible() -> XCUIElement? { rows.allElementsBoundByIndex.first { $0.isHittable } }
+            for _ in 0..<8 where visible() == nil { app.swipeUp() }
+            let row = visible(); XCTAssertNotNil(row, "Chats lists " + title); row?.tap()
+        }
+        func expectDisplayed(_ index: Int, _ title: String, _ step: String) {
+            let tab = app.buttons["workspace-child-tab-chat:" + chatIDs[index]]
+            XCTAssertTrue(tab.waitForExistence(timeout: 10), step + ": the chat is a named project tab")
+            let selected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "Selected"), object: tab)
+            XCTAssertEqual(XCTWaiter.wait(for: [selected], timeout: 8), .completed, step + ": project tab strip selects the chat")
+            let header = app.staticTexts["chat-header-title"]
+            let shown = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", title), object: header)
+            XCTAssertEqual(XCTWaiter.wait(for: [shown], timeout: 8), .completed, step + ": displayed conversation matches the selected tab")
+            XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND identifier ENDSWITH %@", "shell-tab-", chatIDs[index])).count, 0, step + ": associated chats never become top-level tabs")
+            let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = step; shot.lifetime = .keepAlways; add(shot)
+        }
+        let first = "Review desktop navigation refinements", second = "Synthetic project notes 3"
+        openFromChats(first); expectDisplayed(0, first, "A from Chats")
+        openFromChats(second); expectDisplayed(3, second, "B from Chats")
+        // A through the sidebar's open tabs.
+        if phone { app.buttons.matching(identifier: "phone-app-navigation").allElementsBoundByIndex.first { $0.isHittable }?.tap() }
+        let sidebarRow = app.buttons["scope-tab-chat:" + chatIDs[0]]
+        XCTAssertTrue(sidebarRow.waitForExistence(timeout: 8), "The sidebar lists the project's open tabs")
+        XCTAssertTrue(app.buttons["scope-tab-chat:" + chatIDs[3]].exists)
+        let sidebarShot = XCTAttachment(screenshot: app.screenshot()); sidebarShot.name = "Sidebar project open tabs"; sidebarShot.lifetime = .keepAlways; add(sidebarShot)
+        sidebarRow.tap(); expectDisplayed(0, first, "A from sidebar open tabs")
+        // B and A through the top project tab strip, which remains visible.
+        app.buttons["workspace-child-tab-chat:" + chatIDs[3]].tap(); expectDisplayed(3, second, "B from tab strip")
+        app.buttons["workspace-child-tab-chat:" + chatIDs[0]].tap(); expectDisplayed(0, first, "A from tab strip")
+        openFromChats(second); expectDisplayed(3, second, "B again from Chats")
+    }
     @MainActor func testLogPaginationAndExpandedDiagnostics() async throws {
         let (seedData, _) = try await URLSession.shared.data(from: URL(string: "\(nativeFixtureHTTPOrigin)/logs-fixture")!)
         let seed = try JSONSerialization.jsonObject(with: seedData) as! [String: Any]

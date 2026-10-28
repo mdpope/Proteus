@@ -170,7 +170,7 @@ struct DestinationRoot: View {
             if let remote = destinations.selected {
                 VStack(spacing: 0) {
                     DestinationBar(remote: remote, adding: $adding, managing: $managing, setup: $setup)
-                    RootView().environmentObject(remote).id(destinations.selectedID)
+                    RootView().environment(remote).id(destinations.selectedID)
                 }
             } else { NavigationStack { PairView().toolbar { ToolbarItem(placement: .primaryAction) { Button("App setup", systemImage: "gearshape") { setup = true }.accessibilityIdentifier("app-setup") } } } }
         }
@@ -183,7 +183,7 @@ struct DestinationRoot: View {
 }
 struct DestinationBar: View {
     @EnvironmentObject var destinations: DestinationStore
-    @ObservedObject var remote: RemoteStore
+    var remote: RemoteStore
     @Binding var adding: Bool
     @Binding var managing: Bool
     @Binding var setup: Bool
@@ -223,7 +223,7 @@ private enum Page: String, CaseIterable, Identifiable {
     var icon: String { switch self { case .chats: "bubble.left.and.bubble.right"; case .schedules: "calendar.badge.clock"; case .context: "square.stack.3d.up"; case .connection: "network" } }
 }
 struct RootView: View {
-    @EnvironmentObject var store: RemoteStore
+    @Environment(RemoteStore.self) var store
     @State private var page: Page? = .chats
     var body: some View {
         Group {
@@ -246,7 +246,7 @@ struct RootView: View {
     }
 }
 struct ConnectionStatus: View {
-    @EnvironmentObject var store: RemoteStore
+    @Environment(RemoteStore.self) var store
     var body: some View { HStack(spacing: 7) { Circle().fill(store.connected ? Color.green : Color.orange).frame(width: 7, height: 7); Text(store.status).font(.caption).foregroundStyle(.secondary); Spacer() }.accessibilityElement(children: .combine) }
 }
 struct PairView: View {
@@ -281,7 +281,7 @@ struct PairView: View {
     private func pair() { do { try destinations.add(code, label: label) } catch { destinations.error = error.localizedDescription } }
 }
 struct PairingStatus: View {
-    @ObservedObject var remote: RemoteStore
+    var remote: RemoteStore
     var body: some View { VStack(alignment: .leading) { Text(remote.status).font(.caption).foregroundStyle(.secondary); if let platform = remote.hostInfo.platformDescription { Text(platform).font(.caption).foregroundStyle(.secondary) }; if let error = remote.error { Text(error).foregroundStyle(.orange) } } }
 }
 struct DestinationsView: View {
@@ -348,7 +348,7 @@ struct RelayEditor: View {
     }
 }
 struct ConnectionView: View {
-    @EnvironmentObject var store: RemoteStore
+    @Environment(RemoteStore.self) var store
     @EnvironmentObject var destinations: DestinationStore
     @State private var adding = false
     var body: some View {

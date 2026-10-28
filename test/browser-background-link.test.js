@@ -27,7 +27,7 @@ test('native link menu keeps foreground/background/unloaded choices distinct and
   const source={id:'source',profileId:'profile-a',group:'team',parentId:'chat',destination:{type:'chat',id:'chat'},workspaceName:'Workspace',associationChatId:'chat'};
   const browser={options:{},partition:{on(){}},tabs:new Map([[source.id,source]]),appOrigin:'http://app.test',create:async(url,_owner,_history,descriptor)=>{created.push({url,descriptor:copy(descriptor)});return {id:'created',...descriptor};},sendAction:value=>sent.push(copy(value))};
   const actions=new sandbox.module.exports.BrowserActions(browser),menu=actions.menu(source,{linkURL:'https://example.test/page'});
-  assert.deepEqual(copy(menu.items.slice(0,3).map(item=>item.label)),['Open Link in New Tab','Open Link in Background Tab','Open Link in Unloaded Tab']);
+  assert.deepEqual(copy(menu.items.slice(0,3).map(item=>item.label)),['Open Link in New Default Browser Tab','Open Link in Background Tab','Open Link in Unloaded Tab']);
   source.profileId='later-profile';source.parentId='later-chat';
   menu.items[1].click();await new Promise(resolve=>setImmediate(resolve));
   assert.deepEqual(created[0],{url:'https://example.test/page',descriptor:{profileId:'profile-a',group:'team',parentId:'chat',destination:{type:'chat',id:'chat'},workspaceName:'Workspace',associationChatId:'chat',hidden:false,unloaded:false,background:true}});

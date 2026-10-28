@@ -109,3 +109,11 @@ export function reorderById(items, source, target, after, getId = item => item.i
   items.splice(index + (after ? 1 : 0), 0, item);
   return true;
 }
+/** The tab to show when `tab` leaves its strip (moved or sent elsewhere) while
+ * active: its right neighbour, else left, else its parent. Moving never follows the
+ * tab into its destination; the user stays in the current project/scope. */
+export function neighborAfterRemoval(tabs, tab, visible = item => !item.hidden && !item.navigationClosed) {
+  const siblings = tabs.filter(item => item === tab || ((item.parentId || null) === (tab.parentId || null) && visible(item)));
+  const index = siblings.indexOf(tab), next = siblings[index + 1] || siblings[index - 1];
+  return next ? next.id : (tab.parentId || 'overview');
+}

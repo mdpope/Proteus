@@ -1,3 +1,4 @@
+import Observation
 import Foundation
 import Combine
 
@@ -29,23 +30,27 @@ struct RemoteHostInfo: Equatable {
     }
 }
 
-@MainActor final class RemoteStore: ObservableObject {
-    @Published var state: JSON = .null
-    @Published var chats: [String: JSON] = [:]
-    @Published var allRuns: [JSON] = []
+/// Per-property observation: a view redraws only when the host values it reads change.
+/// Streaming one chat no longer invalidates every view that holds this store.
+@MainActor @Observable final class RemoteStore {
+    var state: JSON = .null
+    var chats: [String: JSON] = [:]
+    var allRuns: [JSON] = []
     private var allRunOffset = 0
-    @Published var providerStatuses: [String: JSON] = [:]
-    @Published var models: [JSON] = []
-    @Published var modelStatus: JSON = .null
-    @Published var status = "Not paired"
-    @Published var connected = false
+    var providerStatuses: [String: JSON] = [:]
+    var models: [JSON] = []
+    var modelStatus: JSON = .null
+    var status = "Not paired"
+    var connected = false
     var runtimeClockOffset: TimeInterval?
-    @Published var error: String?
-    @Published var selectedChat: String?
-    @Published var paired = false
+    var error: String?
+    var selectedChat: String?
+    var paired = false
     // Draft edits belong to their editor, not to every view observing host state.
-    // Keep the in-memory value current without invalidating the loaded transcript.
-    private(set) var drafts: [String: JSON] = [:]
+    // Keep the in-memory value current without invalidating the loaded transcript;
+    // `draftRevision` is the observed signal for edits that should refresh controls.
+    @ObservationIgnored private(set) var drafts: [String: JSON] = [:]
+    private var draftRevision = 0
     var onPaired: ((DeviceConnection) throws -> Void)?
     var onConnected: (() -> Void)?
     var onHostName: ((String) -> Void)?
@@ -83,7 +88,7 @@ struct RemoteHostInfo: Equatable {
         self.cacheRoot = cacheRoot; self.legacyCredentials = legacyCredentials
         self.connection = connection; paired = connection != nil
         if let connection, let data = try? Data(contentsOf: cacheURL), let cache = try? RemoteCrypto.open(String(decoding: data, as: UTF8.self), key: connection.key, aad: "proteus-cache-v1") {
-            state = cache["state"]; chats = cache["chats"].object; allRuns = cache["allRuns"].array; allRunOffset = allRuns.count; cursor = cache["cursor"].string; drafts = cache["drafts"].object; status = "Offline · cached history"
+            state = cache["state"]; chats = cache["chats"].object; allRuns = cache["allRuns"].array; allRunOffset = allRuns.count; cursor = cache["cursor"].string; drafts = cache["drafts"].object; draftRevision &+= 1; status = "Offline · cached history"
             providerStatuses = state["providerStatuses"].object; modelStatus = state["providerStatus"]; models = modelStatus["models"].array
         }
     }
@@ -121,15 +126,15 @@ struct RemoteHostInfo: Equatable {
         guard projectCatalog.project(id: projectID, workspaceID: workspaceID)?["id"].string == projectID else { throw RemoteError(message: "Refresh and choose an available project on this computer.") }
         return try await updateProjectCatalog("chat.move", arguments: ["id": .string(id), "workspaceId": .string(workspaceID), "projectId": .string(projectID), "expectedUpdatedAt": .string(expectedUpdatedAt)])
     }
-    func draft(_ id: String) -> JSON { drafts[id] ?? .null }
+    func draft(_ id: String) -> JSON { _ = draftRevision; return drafts[id] ?? .null }
     func setDraft(_ id: String, _ value: JSON, notifyObservers: Bool = true) {
         guard draft(id) != value else { return }
         // Attachment metadata and external draft actions still refresh their controls.
-        if notifyObservers { objectWillChange.send() }
         if value == .null { drafts.removeValue(forKey: id) } else { drafts[id] = value }
+        if notifyObservers { draftRevision &+= 1 }
         saveCache()
     }
-    func copyHistory(from other: RemoteStore) { state = other.state; chats = other.chats; allRuns = other.allRuns; allRunOffset = other.allRunOffset; cursor = other.cursor; drafts = other.drafts }
+    func copyHistory(from other: RemoteStore) { state = other.state; chats = other.chats; allRuns = other.allRuns; allRunOffset = other.allRunOffset; cursor = other.cursor; drafts = other.drafts; draftRevision &+= 1 }
     func pair(_ code: String) throws {
         guard let components = URLComponents(string: code.trimmingCharacters(in: .whitespacesAndNewlines)), components.scheme == "proteus", components.host == "pair", let encoded = components.queryItems?.first(where: { $0.name == "data" })?.value else { throw RemoteError(message: "Paste a Proteus pairing link from the computer’s Remote Access screen.") }
         var base64 = encoded.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
@@ -185,7 +190,8 @@ struct RemoteHostInfo: Equatable {
                     guard generation == current else { return }
                     let data: Data
                     switch message { case .data(let value): data = value; case .string(let value): data = Data(value.utf8); @unknown default: continue }
-                    try await receive(JSONDecoder().decode(JSON.self, from: data))
+                    // Decode off the main actor; the loop still processes one message at a time.
+                    try await receive(Self.decoded(data))
                 }
             } catch {
                 if generation == current {
@@ -207,6 +213,10 @@ struct RemoteHostInfo: Equatable {
         let box = try RemoteCrypto.seal(.object(["nonce": .string(nonce)]), key: connection.key, aad: "\(challenge):auth")
         try await raw(.object(["type": .string("auth"), "deviceId": .string(connection.deviceId), "box": .string(box)]))
     }
+    /// Large owner payloads (state, chat history) are decrypted and decoded on a
+    /// background executor so scrolling and typing are not blocked while chats stream.
+    nonisolated static func decoded(_ data: Data) async throws -> JSON { try await Task.detached(priority: .userInitiated) { try JSONDecoder().decode(JSON.self, from: data) }.value }
+    nonisolated static func opened(_ box: String, key: String, aad: String) async throws -> JSON { try await Task.detached(priority: .userInitiated) { try RemoteCrypto.open(box, key: key, aad: aad) }.value }
     func receive(_ packet: JSON) async throws {
         switch packet["type"].string {
         case "challenge":
@@ -237,7 +247,9 @@ struct RemoteHostInfo: Equatable {
         case "data":
             guard let connection, packet["seq"].int == incoming + 1 else { throw RemoteError(message: "Invalid message sequence.") }
             let seq = packet["seq"].int
-            let value = try RemoteCrypto.open(packet["box"].string, key: connection.key, aad: "\(prefix):host:\(seq)"); incoming = seq
+            let value = try await Self.opened(packet["box"].string, key: connection.key, aad: "\(prefix):host:\(seq)")
+            guard packet["seq"].int == incoming + 1, self.connection?.hostId == connection.hostId else { throw RemoteError(message: "Invalid message sequence.") }
+            incoming = seq
             if value["type"].string == "revoked" {
                 guard value["deviceId"].string == connection.deviceId else { throw RemoteError(message: "Invalid revocation identity.") }
                 suspend(reason: "\(displayName) authenticated revocation of this device."); status = "Access revoked by \(displayName)"; onAuthenticatedRevocation?(); error = "\(displayName) revoked access. Your cached history remains available. Add a new pairing from Connections to reconnect."
@@ -451,7 +463,7 @@ struct RemoteHostInfo: Equatable {
         do { let value = try await request("provider.status", ["force": .bool(force), "provider": .string(provider)]); providerStatuses[provider] = value; if provider == "copilot" { modelStatus = value; models = value["models"].array }; if !value["available"].bool { error = value["error"].string.isEmpty ? "Provider is not available on the computer." : value["error"].string } }
         catch { self.error = error.localizedDescription }
     }
-    @Published private(set) var usageBusy = false
+    private(set) var usageBusy = false
     var usageEnabled: Bool { state["appearance"]["showProviderUsage"] != .bool(false) }
     func loadUsage(force: Bool = false) async {
         guard usageEnabled, active, connected, !usageBusy else { return }
@@ -478,7 +490,7 @@ struct RemoteHostInfo: Equatable {
         if active && (paired || invite != nil) { retryTask?.cancel(); retryTask = Task { try? await Task.sleep(for: .seconds(3)); if !Task.isCancelled { connect() } } }
     }
     func disconnect() { generation = UUID(); readTask?.cancel(); retryTask?.cancel(); socket?.cancel(with: .goingAway, reason: nil); socket = nil; connected = false; status = paired ? "Offline · cached history" : "Not paired" }
-    func forget() { active = false; suspend(); if legacyCredentials { DeviceKeychain.clear() }; connection = nil; invite = nil; paired = false; state = .null; chats = [:]; allRuns = []; allRunOffset = 0; drafts = [:]; selectedChat = nil; cursor = ""; cacheTimer?.cancel(); removeCache(); for c in waiting.values { c.resume(throwing: RemoteError(message: "Device forgotten.")) }; waiting.removeAll(); pendingCommands.removeAll(); timeouts.values.forEach { $0.cancel() }; timeouts.removeAll() }
+    func forget() { active = false; suspend(); if legacyCredentials { DeviceKeychain.clear() }; connection = nil; invite = nil; paired = false; state = .null; chats = [:]; allRuns = []; allRunOffset = 0; drafts = [:]; draftRevision &+= 1; selectedChat = nil; cursor = ""; cacheTimer?.cancel(); removeCache(); for c in waiting.values { c.resume(throwing: RemoteError(message: "Device forgotten.")) }; waiting.removeAll(); pendingCommands.removeAll(); timeouts.values.forEach { $0.cancel() }; timeouts.removeAll() }
     // A host switch never leaves a retry behind. Commands already accepted by the host continue there.
     func suspend(reason: String = "Computer selection changed. An unconfirmed action may have reached that computer; refresh its history before retrying.") {
         flushCache(); active = false; disconnect(); sendTask?.cancel(); sendTask = nil
@@ -618,7 +630,7 @@ struct PairingCompletion: Equatable {
             self.hydrateHostLabel(label, for: id)
         }
         remote.onChatDeleted = { [weak self] chatID in self?.deletedChat = ChatDeletionEvent(hostID: id, chatID: chatID) }
-        observations[id] = remote.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
+        // RemoteStore is @Observable; views track the host values they read directly.
     }
     func hydrateHostLabel(_ label: String, for id: String) {
         let name = label.trimmingCharacters(in: .whitespacesAndNewlines)

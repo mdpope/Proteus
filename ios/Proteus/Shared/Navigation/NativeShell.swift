@@ -88,6 +88,8 @@ struct NativeTabStrip<Content: View>: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal) { content() }
+                // A newly shown strip (for example a project opened from Chats) reveals its selection.
+                .onAppear { guard let selection else { return }; Task { @MainActor in await Task.yield(); proxy.scrollTo(selection, anchor: .center) } }
                 .onChange(of: ids) { old, new in
                     guard let added = new.last(where: { !old.contains($0) }) else { return }
                     Task { @MainActor in await Task.yield(); proxy.scrollTo(added, anchor: .trailing) }
@@ -267,6 +269,13 @@ struct NativeShell: View {
         guard let tab = opened.first(where: { $0.id == selectedTab }) else { return area }
         switch tab.kind { case "workspace": return .workspaces; case "chat": switch nativeChatType(chatEntry(for: tab)?.run ?? .null) { case "internet": return .internet; case "scheduled": return .schedules; default: return .chats }; case "schedule": return .schedules; default: return nil }
     }
+    /// The workspace whose project tabs the sidebar mirrors.
+    private var activeWorkspaceIdentity: NativeWorkspaceIdentity? {
+        if NativePhonePreview.enabled { return area == .workspaces ? phoneWorkspace : nil }
+        guard let tab = opened.first(where: { $0.id == selectedTab && $0.kind == "workspace" }), let host = tab.hostID else { return nil }
+        let id = String(tab.id.dropFirst(("workspace:" + host + ":").count))
+        return NativeWorkspaceIdentity.all(destinations).first { $0.hostID == host && $0.workspaceID == id }
+    }
     private var selectedChatEntry: AggregateChat? {
         guard let tab = opened.first(where: { $0.id == selectedTab }) else { return nil }
         return chatEntry(for: tab)
@@ -370,7 +379,7 @@ struct NativeShell: View {
                 NewChatView(internet: newMainInternetSearch) { id in
                     newMainChat = false
                     openChat(AggregateChat(hostID: remote.connection?.hostId ?? "", hostName: remote.displayName, run: remote.chats[id] ?? .object(["id": .string(id)])))
-                }.environmentObject(remote)
+                }.environment(remote)
             }
         }
         .sheet(item: $shared.linkChatDraft) { draft in
@@ -380,7 +389,7 @@ struct NativeShell: View {
                     NewChatView { chatID in
                         do { try destinations.select(draft.hostID); remote.selectedChat = chatID; area = .chats; if let run = remote.chats[chatID] { openChat(AggregateChat(hostID: draft.hostID, hostName: draft.hostName, run: run)) }; shared.linkChatDraft = nil }
                         catch { destinations.error = error.localizedDescription }
-                    }.environmentObject(remote)
+                    }.environment(remote)
                 }
             }
         }
@@ -392,13 +401,13 @@ struct NativeShell: View {
                         notificationScheduleTarget = nil
                         notificationChatRequest = NotificationChatRequest(hostID: target.hostID, chatID: runID)
                         area = .chats
-                    }.environmentObject(remote)
+                    }.environment(remote)
                     .toolbar { Button("Done") { notificationScheduleTarget = nil } }
                 }
             }
         }
         .sheet(item: $shellTransfer) { tab in NativeBrowserTransferView(tab: tab) }
-        .sheet(item: $shellRename) { entry in if let remote = destinations.remote(for: entry.hostID) { NativeChatRenameView(run: entry.run).environmentObject(remote) } }
+        .sheet(item: $shellRename) { entry in if let remote = destinations.remote(for: entry.hostID) { NativeChatRenameView(run: entry.run).environment(remote) } }
         .confirmationDialog("Delete this chat?", isPresented: Binding(get: { shellDelete != nil }, set: { if !$0 { shellDelete = nil } })) {
             Button("Delete chat", role: .destructive) { if let entry = shellDelete { Task { do { try await destinations.remote(for: entry.hostID)?.deleteChat(entry.run["id"].string) } catch { destinations.error = error.localizedDescription } } }; shellDelete = nil }
             Button("Cancel", role: .cancel) { shellDelete = nil }
@@ -463,6 +472,8 @@ struct NativeShell: View {
                 let prefix = "chat:" + destination.id + ":"; guard id.hasPrefix(prefix) else { continue }
                 let chatID = String(id.dropFirst(prefix.count)), tabID = destination.id + ":" + chatID
                 let run = destinations.remote(for: destination.id)?.chats[chatID] ?? .null
+                // Associated chats are tabs of their project, never top-level tabs.
+                if let remote = destinations.remote(for: destination.id), Self.associatedWorkspace(run, remote: remote) != nil { continue }
                 if !opened.contains(where: { $0.id == tabID }) { opened.append(NativeContentTab(id: tabID, title: run["title"].string.isEmpty ? "Chat" : run["title"].string, kind: "chat", hostID: destination.id)) }
             }
         }
@@ -481,6 +492,7 @@ struct NativeShell: View {
         .task(id: destinations.selectedID) {
             while !Task.isCancelled {
                 if let remote = destinations.selected { await shared.refreshMainBrowserTabs(remote) }
+                migrateAssociatedChatTabs()
                 try? await Task.sleep(for: .seconds(3))
             }
         }
@@ -605,6 +617,9 @@ struct NativeShell: View {
                 HStack { Text("⤨").foregroundStyle(NativeTheme.accent); Text("Proteus").font(.title2.bold()); Spacer(); Button { withAnimation { phoneChrome.drawer = false } } label: { Image(systemName: "xmark").frame(width: 44, height: 44) }.accessibilityLabel("Close navigation") }.padding(.horizontal, 10)
                 ForEach(NativeArea.allCases.filter { $0 != .workspaces && $0 != .engine }) { item in phoneDrawerRow(item) }
                 NativeWorkspaceTree(activeWorkspace: area == .workspaces ? phoneWorkspace?.id : nil, onOpen: openWorkspace, onBrowse: { choosePhoneArea(.workspaces) })
+                if let workspace = activeWorkspaceIdentity, let remote = destinations.remote(for: workspace.hostID) {
+                    NativeScopeTabRows(remote: remote, workspaceID: workspace.workspaceID, onSelect: { openWorkspace(workspace) }).padding(.top, 8)
+                }
                 Divider().padding(.vertical, 8)
                 phoneDrawerRow(.engine)
                 if activeArea == .engine { engineOptions(phone: true) }
@@ -766,6 +781,9 @@ struct NativeShell: View {
                 ForEach(NativeArea.allCases.filter { !NativePadPreview.enabled || $0 != .workspaces }) { item in
                     if item == .engine {
                         NativeWorkspaceTree(activeWorkspace: opened.first { $0.id == selectedTab && $0.kind == "workspace" }?.id, onOpen: openWorkspace, onBrowse: { area = .workspaces; selectedTab = nil }).padding(.vertical, 8).overlay(alignment: .bottom) { Rectangle().fill(NativeSidebarStyle.border).frame(height: 1) }.listRowInsets(EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4)).listRowBackground(Color.clear).listRowSeparator(.hidden)
+                        if let workspace = activeWorkspaceIdentity, let remote = destinations.remote(for: workspace.hostID) {
+                            NativeScopeTabRows(remote: remote, workspaceID: workspace.workspaceID, onSelect: { openWorkspace(workspace) }).listRowInsets(EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4)).listRowBackground(Color.clear).listRowSeparator(.hidden)
+                        }
                     }
                     Button { area = item; selectedTab = nil; hover = false } label: {
                         HStack { sidebarFeatureLabel(item).fontWeight(activeArea == item ? .semibold : .regular); Spacer(minLength: 4); if let value = count(for: item) { sidebarCount(value, attention: item == .attention).accessibilityLabel("\(value) \(item.rawValue.lowercased())").accessibilityIdentifier("nav-count-" + item.id) } }.accessibilityElement(children: .contain)
@@ -857,17 +875,43 @@ struct NativeShell: View {
         openChat(AggregateChat(hostID: route.hostID, hostName: destinations.selectedLabel, run: run))
     }
     private func edgeHover(_ inside: Bool) { hoverTask?.cancel(); if inside { hover = true } else { hoverTask = Task { try? await Task.sleep(for: .milliseconds(200)); if !Task.isCancelled { hover = false } } } }
-    private func openChat(_ entry: AggregateChat) {
-        if let remote = destinations.remote(for: entry.hostID) {
-            let membership = remote.projectCatalog.membership(for: entry.run)
-            let workspaceID = membership["workspaceId"].string
-            if !workspaceID.isEmpty, let profile = remote.state["context"]["workspaces"].array.first(where: { $0["id"].string == workspaceID }) {
-                NativeWorkspaceNavigation.openChat(entry.run["id"].string, workspaceID: workspaceID, projectID: membership["projectId"].string.isEmpty ? nil : membership["projectId"].string, remote: remote)
-                opened.removeAll { $0.id == entry.id }
-                openWorkspace(NativeWorkspaceIdentity(hostID: entry.hostID, hostName: entry.hostName, profile: profile))
-                return
-            }
+    /// Chats belong to their workspace/project. Open that owner and make the chat one
+    /// of its tabs; only an unassigned chat may use top-level navigation.
+    @discardableResult private func openAssociatedChat(_ entry: AggregateChat) -> Bool {
+        guard let remote = destinations.remote(for: entry.hostID) else { return false }
+        let run = entry.run["id"].string.isEmpty ? entry.run : (remote.chats[entry.run["id"].string] ?? remote.state["runs"].array.first { $0["id"] == entry.run["id"] } ?? entry.run)
+        let membership = remote.projectCatalog.membership(for: run)
+        let workspaceID = membership["workspaceId"].string.isEmpty ? NativeWorkspaceIdentity.workspaceID(run) : membership["workspaceId"].string
+        guard !workspaceID.isEmpty, let profile = remote.state["context"]["workspaces"].array.first(where: { $0["id"].string == workspaceID }) else { return false }
+        let projectID = membership["workspaceId"].string == workspaceID && !membership["projectId"].string.isEmpty ? membership["projectId"].string : nil
+        NativeWorkspaceNavigation.openChat(entry.run["id"].string, workspaceID: workspaceID, projectID: projectID, remote: remote)
+        opened.removeAll { $0.id == entry.id }
+        openWorkspace(NativeWorkspaceIdentity(hostID: entry.hostID, hostName: entry.hostName, profile: profile))
+        remote.activity(true)
+        return true
+    }
+    @MainActor static func associatedWorkspace(_ run: JSON, remote: RemoteStore) -> String? {
+        guard run != .null else { return nil }
+        let member = remote.projectCatalog.membership(for: run)["workspaceId"].string
+        let id = member.isEmpty ? NativeWorkspaceIdentity.workspaceID(run) : member
+        return !id.isEmpty && remote.state["context"]["workspaces"].array.contains(where: { $0["id"].string == id }) ? id : nil
+    }
+    /// Earlier releases saved associated chats as top-level tabs. Once the owner's
+    /// catalog identifies their workspace, move them into that project's tab list.
+    private func migrateAssociatedChatTabs() {
+        for tab in opened where tab.kind == "chat" {
+            guard let entry = chatEntry(for: tab), let remote = destinations.remote(for: entry.hostID), let workspaceID = Self.associatedWorkspace(entry.run, remote: remote) else { continue }
+            if selectedTab == tab.id { openAssociatedChat(entry); continue }
+            let member = remote.projectCatalog.membership(for: entry.run)
+            let project = member["workspaceId"].string == workspaceID ? member["projectId"].string : ""
+            let key = (project.isEmpty ? "workspace-navigation:" + workspaceID : "project-navigation:" + project)
+            var chats = remote.draft(key)["chats"].array.map(\.string); chats.append(entry.run["id"].string)
+            NativeWorkspaceNavigation.setChats(chats, navigationKey: key, remote: remote)
+            opened.removeAll { $0.id == tab.id }
         }
+    }
+    private func openChat(_ entry: AggregateChat) {
+        if openAssociatedChat(entry) { return }
         if NativeDesignPreview.enabled { phoneChrome.record(NativePhoneTab(id: "chat:" + entry.hostID + ":" + entry.run["id"].string, title: entry.run["title"].string, symbol: "bubble.left.and.bubble.right", detail: entry.hostName, preview: nil, select: { openChat(entry) })) }
 
         let id = entry.id; if !opened.contains(where: { $0.id == id }) { opened.append(NativeContentTab(id: id, title: entry.run["title"].string.isEmpty ? "Chat" : entry.run["title"].string, kind: "chat", hostID: entry.hostID)) }
@@ -906,7 +950,7 @@ struct NativeShell: View {
         opened.removeAll { item in item.kind == "browser" && !tabs.contains(where: { $0.id == item.id && $0.scope == "main" }) }
         if let selectedTab, !opened.contains(where: { $0.id == selectedTab }) { self.selectedTab = nil }
     }
-    private func selectContent(_ tab: NativeContentTab) { if NativePhonePreview.enabled && tab.kind == "chat", let host = tab.hostID { choosePhoneArea(.chats); notificationChatRequest = NotificationChatRequest(hostID: host, chatID: String(tab.id.dropFirst(host.count + 1))); return }; selectedTab = tab.id; if tab.kind == "browser" { shared.select(tab.id, in: "main") } }
+    private func selectContent(_ tab: NativeContentTab) { if tab.kind == "chat", let entry = chatEntry(for: tab), openAssociatedChat(entry) { return }; if NativePhonePreview.enabled && tab.kind == "chat", let host = tab.hostID { choosePhoneArea(.chats); notificationChatRequest = NotificationChatRequest(hostID: host, chatID: String(tab.id.dropFirst(host.count + 1))); return }; selectedTab = tab.id; if tab.kind == "browser" { shared.select(tab.id, in: "main") } }
     private func openWorkspace(_ entry: NativeWorkspaceIdentity) {
         if NativePhonePreview.enabled { phoneVisited.insert(.workspaces); area = .workspaces; selectedTab = nil; phoneWorkspace = entry; phoneChrome.browserOwnsBack = false; phoneChrome.controlsHidden = false; phoneChrome.drawer = false; return }
         if !opened.contains(where: { $0.id == entry.id }) { opened.append(NativeContentTab(id: entry.id, title: entry.profile["name"].string, kind: "workspace", hostID: entry.hostID)) }
@@ -943,16 +987,16 @@ struct NativeShell: View {
         if tab.kind == "browser" { TeamBrowserView(scope: "main", showTabs: false, tabID: tab.id, onBackToList: { selectedTab = nil; area = .chats }) }
         else if let hostID = tab.hostID, let remote = destinations.remote(for: hostID) {
             if tab.kind == "workspace" {
-                NativeWorkspaceView(workspaceID: String(tab.id.dropFirst("workspace:\(hostID):".count)), onOpenMain: openChat).environmentObject(remote).id(tab.id)
+                NativeWorkspaceView(workspaceID: String(tab.id.dropFirst("workspace:\(hostID):".count)), onOpenMain: openChat).environment(remote).id(tab.id)
             } else if tab.kind == "schedule" {
-                NavigationStack { ScheduleView(id: String(tab.id.dropFirst("schedule:\(hostID):".count))) { runID in openChat(AggregateChat(hostID: hostID, hostName: destinations.selectedLabel, run: .object(["id": .string(runID)]))) }.environmentObject(remote)
+                NavigationStack { ScheduleView(id: String(tab.id.dropFirst("schedule:\(hostID):".count))) { runID in openChat(AggregateChat(hostID: hostID, hostName: destinations.selectedLabel, run: .object(["id": .string(runID)]))) }.environment(remote)
                     .toolbar { if NativePhonePreview.enabled { Button("Done") { opened.removeAll { $0.id == tab.id }; selectedTab = nil; area = .home } } }
                 }
-            } else { NavigationStack { ChatView(id: String(tab.id.dropFirst(hostID.count + 1)), onBack: { selectedTab = nil; area = .chats }).environmentObject(remote) }.id(tab.id) }
+            } else { NavigationStack { ChatView(id: String(tab.id.dropFirst(hostID.count + 1)), onBack: { selectedTab = nil; area = .chats }).environment(remote) }.id(tab.id) }
         } else { ContentUnavailableView("Computer unavailable", systemImage: "network.slash", description: Text("Reconnect this chat’s computer in Connections, then reopen the chat.")).frame(maxWidth: .infinity, maxHeight: .infinity) }
     }
     @ViewBuilder private func content(_ item: NativeArea) -> some View {
-        switch item { case .workspaces: NativeWorkspacesView(onOpen: openWorkspace); case .home: NativeHome(openTabs: homeTabs, recent: homeRecents, onAddTab: { newMainInternetSearch = false; newMainChat = true }, onManageTabs: { reorderMainTabs = true }, onBrowser: { profile in shared.open(nil, scope: "main", profileId: profile) }, showAllowance: false, onSchedule: tablet ? { schedule in if let hostID = destinations.selectedID { openSchedule(schedule, hostID: hostID) } } : nil); case .schedules: if let remote = destinations.selected { if NativePhonePreview.enabled { SchedulesView().environmentObject(remote) } else { SchedulesView(onSelect: { schedule in if let hostID = destinations.selectedID { openSchedule(schedule, hostID: hostID) } }).environmentObject(remote) } } else { NativeHome() }; case .chats: AggregateChatsView(onSelect: tablet ? openChat : nil, onSendToWorkspace: sendToWorkspace, notificationRequest: notificationChatRequest, onNotificationConsumed: { notificationChatRequest = nil }); case .internet: AggregateChatsView(onSelect: tablet ? openChat : nil, onSendToWorkspace: sendToWorkspace, initialChatType: "internet"); case .attention: AggregateChatsView(onSelect: tablet ? openChat : nil, attentionOnly: true, initialAttentionTab: attentionPreferredTab); case .life: if lifeEnabled || ProcessInfo.processInfo.arguments.contains("--synthetic-life") { LifeRootView() } else { NavigationStack { NativeSetupView().nativeFeaturePage("Life") } }; case .team: TeamToolsView(); case .engine: EngineRoomView(page: $enginePage) }
+        switch item { case .workspaces: NativeWorkspacesView(onOpen: openWorkspace); case .home: NativeHome(openTabs: homeTabs, recent: homeRecents, onAddTab: { newMainInternetSearch = false; newMainChat = true }, onManageTabs: { reorderMainTabs = true }, onBrowser: { profile in shared.open(nil, scope: "main", profileId: profile) }, showAllowance: false, onSchedule: tablet ? { schedule in if let hostID = destinations.selectedID { openSchedule(schedule, hostID: hostID) } } : nil); case .schedules: if let remote = destinations.selected { if NativePhonePreview.enabled { SchedulesView().environment(remote) } else { SchedulesView(onSelect: { schedule in if let hostID = destinations.selectedID { openSchedule(schedule, hostID: hostID) } }).environment(remote) } } else { NativeHome() }; case .chats: AggregateChatsView(onSelect: tablet ? openChat : nil, onSendToWorkspace: sendToWorkspace, routeAssociated: openAssociatedChat, notificationRequest: notificationChatRequest, onNotificationConsumed: { notificationChatRequest = nil }); case .internet: AggregateChatsView(onSelect: tablet ? openChat : nil, onSendToWorkspace: sendToWorkspace, routeAssociated: openAssociatedChat, initialChatType: "internet"); case .attention: AggregateChatsView(onSelect: tablet ? openChat : nil, routeAssociated: openAssociatedChat, attentionOnly: true, initialAttentionTab: attentionPreferredTab); case .life: if lifeEnabled || ProcessInfo.processInfo.arguments.contains("--synthetic-life") { LifeRootView() } else { NavigationStack { NativeSetupView().nativeFeaturePage("Life") } }; case .team: TeamToolsView(); case .engine: EngineRoomView(page: $enginePage) }
     }
 }
 struct NativeHome: View {
@@ -1019,16 +1063,16 @@ struct NativeHome: View {
                             if recent.count > recentLimit { Button("More") { recentLimit += 7 }.accessibilityIdentifier("home-recents-more") }
                         }
                     }
-                    Section(destinations.selectedLabel) { NavigationLink("Schedules" + ((remote.connected ? NativeNavigationCounts.schedules([remote.state]) : nil).map { " · \($0)" } ?? "")) { SchedulesView(onSelect: onSchedule).environmentObject(remote) }; NavigationLink("Workspaces") { NativeWorkspacesView().modifier(NativePhoneBackNavigation()) } }
+                    Section(destinations.selectedLabel) { NavigationLink("Schedules" + ((remote.connected ? NativeNavigationCounts.schedules([remote.state]) : nil).map { " · \($0)" } ?? "")) { SchedulesView(onSelect: onSchedule).environment(remote) }; NavigationLink("Workspaces") { NativeWorkspacesView().modifier(NativePhoneBackNavigation()) } }
                     Section("Needs attention" + (attentionCount.map { " · \($0)" } ?? "")) {
                         NavigationLink("View all computers") { AggregateChatsView(attentionOnly: true) }
                         if NativeDesignPreview.enabled {
                             ForEach(Array(attentionRows.prefix(attentionLimit))) { item in
-                                if !item.value["chatId"].string.isEmpty, let owner = destinations.remote(for: item.hostID) { NavigationLink { ChatView(id: item.value["chatId"].string).environmentObject(owner) } label: { Label { VStack(alignment: .leading) { Text(item.value["title"].string).lineLimit(2); Text(item.hostName).font(.caption).foregroundStyle(.secondary) } } icon: { Image(systemName: "exclamationmark.circle") } } }
+                                if !item.value["chatId"].string.isEmpty, let owner = destinations.remote(for: item.hostID) { NavigationLink { ChatView(id: item.value["chatId"].string).environment(owner) } label: { Label { VStack(alignment: .leading) { Text(item.value["title"].string).lineLimit(2); Text(item.hostName).font(.caption).foregroundStyle(.secondary) } } icon: { Image(systemName: "exclamationmark.circle") } } }
                                 else { NavigationLink { AggregateChatsView(attentionOnly: true, initialAttentionTab: "notifications") } label: { Label(item.value["title"].string, systemImage: "exclamationmark.circle") } }
                             }
                             if attentionRows.count > attentionLimit { Button("More") { attentionLimit += 7 }.accessibilityIdentifier("home-attention-more") }
-                        } else { ForEach(remote.state["runs"].array.filter(nativeNeedsAttention), id: \.self) { run in NavigationLink { ChatView(id: run["id"].string).environmentObject(remote) } label: { Label(run["title"].string, systemImage: "exclamationmark.circle") } } }
+                        } else { ForEach(remote.state["runs"].array.filter(nativeNeedsAttention), id: \.self) { run in NavigationLink { ChatView(id: run["id"].string).environment(remote) } label: { Label(run["title"].string, systemImage: "exclamationmark.circle") } } }
                     }
                     #if DEBUG
                     if ProcessInfo.processInfo.arguments.contains("--synthetic-notification-controls") {
@@ -1140,6 +1184,8 @@ struct AggregateChatsView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     var onSelect: ((AggregateChat) -> Void)? = nil
     var onSendToWorkspace: ((AggregateChat) -> Void)? = nil
+    /// Opens an associated chat inside its workspace/project; false keeps it local.
+    var routeAssociated: ((AggregateChat) -> Bool)? = nil
     var lockedWorkspaceID: String? = nil
     var lockedHostID: String? = nil
     var lockedProjectID: String? = nil
@@ -1199,7 +1245,7 @@ struct AggregateChatsView: View {
                             Text(item.value["title"].string).font(.headline)
                             Text(item.hostName).font(.caption).foregroundStyle(.secondary)
                             if !item.value["body"].string.isEmpty { Text(item.value["body"].string) }
-                            if !item.value["chatId"].string.isEmpty { Button("Open chat") { let chat = AggregateChat(hostID: item.hostID, hostName: item.hostName, run: .object(["id": item.value["chatId"]])); if let onSelect { onSelect(chat) } else { selected = chat } } }
+                            if !item.value["chatId"].string.isEmpty { Button("Open chat") { let chat = AggregateChat(hostID: item.hostID, hostName: item.hostName, run: .object(["id": item.value["chatId"]])); choose(chat) } }
                             if item.value["kind"].string == "connection" { Button("Open connections") { NativeNotifications.shared.route = .init(hostID: item.hostID, chatID: "", scheduleID: "", type: "connection") } }
                             if !item.value["notificationId"].string.isEmpty { Button("Mark read") { Task { if let remote = destinations.remote(for: item.hostID) { _ = try? await remote.request("notifications.read", ["id": item.value["notificationId"]]); await remote.refresh() } } } }
                         }
@@ -1225,9 +1271,9 @@ struct AggregateChatsView: View {
                 }
             }.background(NativeTheme.background).navigationTitle(NativeDesignPreview.enabled || sizeClass == .regular ? "" : attentionOnly ? "Needs attention" : "Chats").safeAreaInset(edge: .top, spacing: 0) { if sizeClass == .regular && !NativeDesignPreview.enabled { Text(attentionOnly ? "Needs attention" : "Chats").font(.title2.bold()).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 20).padding(.vertical, 12).background(NativeTheme.background) } }.onAppear { chatType = initialChatType; attentionTab = initialAttentionTab }.onChange(of: initialAttentionTab) { _, value in attentionTab = value }.onChange(of: initialChatType) { _, value in chatType = value }.nativeFeaturePage(attentionOnly ? "Needs Attention" : initialChatType == "internet" ? "Internet Searches" : "Chats", search: $query).refreshable { await destinations.refreshAll() }
                 .toolbar { if lockedHostID == nil { Menu { ForEach(destinations.destinations) { d in Button(d.label) { try? destinations.select(d.id) } } } label: { Label(destinations.selectedLabel, systemImage: "desktopcomputer") } }; Button("New chat", systemImage: "square.and.pencil") { newChat = true }.disabled((lockedHostID.flatMap { destinations.remote(for: $0) } ?? destinations.selected)?.connected != true).accessibilityIdentifier("new-chat") }
-                .sheet(isPresented: $newChat) { if let remote = lockedHostID.flatMap({ destinations.remote(for: $0) }) ?? destinations.selected { NewChatView(internet: chatType == "internet", lockedWorkspaceID: lockedWorkspaceID, lockedProjectID: lockedProjectID) { id in newChat = false; let item = AggregateChat(hostID: remote.connection?.hostId ?? "", hostName: destinations.destinations.first(where: { $0.id == remote.connection?.hostId })?.label ?? "Computer", run: .object(["id": .string(id)])); if let onSelect { onSelect(item) } else { selected = item } }.environmentObject(remote) } }
-                .navigationDestination(item: $selected) { item in if let remote = destinations.remote(for: item.hostID) { ChatView(id: item.run["id"].string).environmentObject(remote) } }
-                .navigationDestination(item: $selectedWorkspace) { item in if let remote = destinations.remote(for: item.hostID) { NativeWorkspaceView(workspaceID: item.workspaceID).environmentObject(remote) } }
+                .sheet(isPresented: $newChat) { if let remote = lockedHostID.flatMap({ destinations.remote(for: $0) }) ?? destinations.selected { NewChatView(internet: chatType == "internet", lockedWorkspaceID: lockedWorkspaceID, lockedProjectID: lockedProjectID) { id in newChat = false; let item = AggregateChat(hostID: remote.connection?.hostId ?? "", hostName: destinations.destinations.first(where: { $0.id == remote.connection?.hostId })?.label ?? "Computer", run: .object(["id": .string(id)])); choose(item) }.environment(remote) } }
+                .navigationDestination(item: $selected) { item in if let remote = destinations.remote(for: item.hostID) { ChatView(id: item.run["id"].string).environment(remote) } }
+                .navigationDestination(item: $selectedWorkspace) { item in if let remote = destinations.remote(for: item.hostID) { NativeWorkspaceView(workspaceID: item.workspaceID).environment(remote) } }
                 .onChange(of: notificationRequest) { _, request in if let request { openNotificationChat(request) } }
                 .onChange(of: showArchived) { _, visible in if visible { Task { for destination in destinations.destinations { await destinations.remote(for: destination.id)?.loadAllRuns(reset: true) } } } }
                 .onChange(of: destinations.deletedChat) { _, event in if let event, selected?.hostID == event.hostID, selected?.run["id"].string == event.chatID { selected = nil } }
@@ -1235,22 +1281,25 @@ struct AggregateChatsView: View {
                     Button("Delete chat", role: .destructive) { if let item = pendingDelete { Task { await delete(item) } }; pendingDelete = nil }
                     Button("Cancel", role: .cancel) {}
                 } message: { Text("Only the Proteus chat record will be removed. Generated files and the provider’s original chat remain.") }
-                .sheet(item: $pendingRename) { item in if let remote = destinations.remote(for: item.hostID) { NativeChatRenameView(run: item.run).environmentObject(remote) } }
+                .sheet(item: $pendingRename) { item in if let remote = destinations.remote(for: item.hostID) { NativeChatRenameView(run: item.run).environment(remote) } }
         }.task {
             await destinations.refreshAll()
             if let request = notificationRequest { openNotificationChat(request) }
         }
     }
+    private func choose(_ item: AggregateChat) {
+        if let onSelect { onSelect(item) } else if routeAssociated?(item) == true { selected = nil } else { selected = item }
+    }
     private func openNotificationChat(_ request: NotificationChatRequest) {
         guard let remote = destinations.remote(for: request.hostID), let run = remote.chats[request.chatID] else { return }
         let item = AggregateChat(hostID: request.hostID, hostName: destinations.destinations.first(where: { $0.id == request.hostID })?.label ?? "Computer", run: run)
-        if let onSelect { onSelect(item) } else { selected = item }
+        choose(item)
         onNotificationConsumed?()
     }
     private func chatRow(_ item: AggregateChat) -> some View {
         Button {
             destinations.remote(for: item.hostID)?.activity(true)
-            if let onSelect { onSelect(item) } else { selected = item }
+            choose(item)
         } label: {
             VStack(alignment: .leading, spacing: 5) {
                 HStack {
@@ -1267,7 +1316,7 @@ struct AggregateChatsView: View {
                 if destinations.remote(for: item.hostID)?.connected != true { Text("Offline · cached history").font(.caption2).foregroundStyle(.orange) }
             }
         }.contextMenu {
-            Button("Open", systemImage: "arrow.up.right.square") { if let onSelect { onSelect(item) } else { selected = item } }
+            Button("Open", systemImage: "arrow.up.right.square") { choose(item) }
             if lockedWorkspaceID == nil, !NativeWorkspaceIdentity.workspaceID(item.run).isEmpty {
                 Button("Send tab to workspace", systemImage: "square") {
                     if let onSendToWorkspace { onSendToWorkspace(item) }

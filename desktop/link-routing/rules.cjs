@@ -39,7 +39,12 @@ function selectWindow(contexts,target){
   const live=[...contexts].filter(ctx=>!ctx.closing&&!ctx.window.isDestroyed());
   const ordered=live.toSorted((a,b)=>Number(b.window.isFocused?.()===true)-Number(a.window.isFocused?.()===true));
   const host=target.hostId||'local',sameHost=tab=>(tab.hostId||'local')===host;
-  const showing=(ctx,project)=>ctx.session?.get()?.tabs?.some(tab=>tab.type==='workspace'&&!tab.hidden&&!tab.navigationClosed&&sameHost(tab)&&tab.workspaceId===target.workspaceId&&(project?tab.projectId===target.projectId:!tab.projectId));
-  return ordered.find(ctx=>showing(ctx,true))||ordered.find(ctx=>showing(ctx,false))||live.find(ctx=>ctx.id==='main')||live[0];
+  const owns=(tab,project)=>tab?.type==='workspace'&&!tab.hidden&&!tab.navigationClosed&&sameHost(tab)&&tab.workspaceId===target.workspaceId&&(project?tab.projectId===target.projectId:!tab.projectId);
+  const showing=(ctx,project)=>ctx.session?.get()?.tabs?.some(tab=>owns(tab,project));
+  // The project currently displayed in a window, following child tabs to their owner.
+  const displayed=ctx=>{const session=ctx.session?.get(),tabs=session?.tabs||[],seen=new Set();let tab=tabs.find(item=>item.id===session?.active);while(tab&&tab.type!=='workspace'&&tab.parentId&&!seen.has(tab.id)){seen.add(tab.id);tab=tabs.find(item=>item.id===tab.parentId);}return tab;};
+  // A window already showing the destination wins over a focused window that merely
+  // has it open, so routing never switches another window's displayed project.
+  return ordered.find(ctx=>owns(displayed(ctx),true))||ordered.find(ctx=>showing(ctx,true))||ordered.find(ctx=>owns(displayed(ctx),false))||ordered.find(ctx=>showing(ctx,false))||live.find(ctx=>ctx.id==='main')||live[0];
 }
 module.exports={glob,matches,targetKey,routeRule,selectWindow};

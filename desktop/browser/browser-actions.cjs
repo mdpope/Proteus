@@ -29,6 +29,11 @@ class BrowserActions {
     try { const image = nativeImage.createFromNamedImage(name).resize({width:16,height:16}); if (!image.isEmpty()) { image.setTemplateImage(true); return {icon:image}; } } catch {}
     return {};
   }
+  profileItems() {
+    const items=this.browser.options.profiles?.list().items||[];
+    const list=items.length?items:[{id:'default',name:'Default'}];
+    return [...list.filter(profile=>profile.id==='default'),...list.filter(profile=>profile.id!=='default')];
+  }
   menu(tab, params) {
     const url = this.link(params.linkURL);
     // Capture ownership when the menu opens, before another surface can become active.
@@ -59,8 +64,9 @@ class BrowserActions {
     let browserName = 'Default Browser';
     try { browserName = app.getApplicationNameForProtocol('https://') || browserName; } catch {}
     return Menu.buildFromTemplate([
-      {label:'Open Link in New Tab',...this.icon('NSAddTemplate'),click:run(async () => { const info = await this.browser.create(url,null,null,source); this.send({type:'select-tab',info,afterId:tab.id}); })},
-      ...(this.browser.options.profiles?.list().items||[]).map(profile=>({label:`Open in new ${String(profile.name||'Default').replace(/&/g,'&&')} browser tab`,click:run(async()=>{const info=await this.browser.create(url,null,null,{...source,profileId:profile.id});this.send({type:'select-tab',info,afterId:tab.id});})})),
+      // One entry per configured profile, Default first; the former generic
+      // "New Tab" duplicated whichever profile the source tab used.
+      ...this.profileItems().map(profile=>({label:`Open Link in New ${String(profile.name||'Default').replace(/[\r\n]/g,' ').replace(/&/g,'&&')} Browser Tab`,...this.icon('NSAddTemplate'),click:run(async()=>{const info=await this.browser.create(url,null,null,{...source,profileId:profile.id});this.send({type:'select-tab',info,afterId:tab.id});})})),
       {label:'Open Link in Background Tab',...this.icon('NSAddTemplate'),click:run(async()=>{const info=await this.browser.create(url,null,null,{...source,hidden:false,unloaded:false,background:true});this.send({type:'background-tab',info,afterId:tab.id});})},
       {label:'Open Link in Unloaded Tab',...this.icon('NSAddTemplate'),click:run(async()=>{const info=await this.browser.create(url,null,null,{...source,hidden:true,unloaded:true,title:String(params.linkText||'').trim().slice(0,200)});this.send({type:'unloaded-tab',info,afterId:tab.id});})},
       {label:`Open Link in ${browserName.replace(/[\r\n]/g,' ').replace(/&/g,'&&')}`, ...this.icon('NSFollowLinkFreestandingTemplate'), click:run(() => shell.openExternal(url))},

@@ -267,7 +267,7 @@ enum NativeAttachmentBudget {
 }
 
 struct ChatsView: View {
-    @EnvironmentObject var store: RemoteStore
+    @Environment(RemoteStore.self) var store
     @State private var path: [String] = []
     @State private var newChat = false
     @State private var query = ""
@@ -289,7 +289,7 @@ struct ChatsView: View {
     }
 }
 struct NewChatView: View {
-    @EnvironmentObject var store: RemoteStore
+    @Environment(RemoteStore.self) var store
     @EnvironmentObject var shared: SharedAppStore
     @Environment(\.dismiss) private var dismiss
     var internet = false
@@ -482,7 +482,7 @@ struct NewChatView: View {
     }
 }
 struct NativeChatRenameView: View {
-    @EnvironmentObject var store: RemoteStore
+    @Environment(RemoteStore.self) var store
     @Environment(\.dismiss) private var dismiss
     let run: JSON
     @State private var name = ""
@@ -605,7 +605,7 @@ private enum NativeTypingDiagnostics {
 #endif
 
 struct ChatView: View {
-    @EnvironmentObject var store: RemoteStore
+    @Environment(RemoteStore.self) var store
     @EnvironmentObject var shared: SharedAppStore
     @EnvironmentObject private var phoneChrome: NativePhoneChrome
     @Environment(\.nativePhoneAreaActive) private var phoneAreaActive
@@ -616,6 +616,8 @@ struct ChatView: View {
     let id: String
     var onBack: (() -> Void)? = nil
     var workspaceBrowserScope: String? = nil
+    /// A project/workspace tab owns the surrounding navigation bar and tab strip.
+    private var embedded: Bool { workspaceBrowserScope != nil }
     @State private var selectedAgent: String?
     @State private var replyDraft = NativeReplyDraft()
     private var text: String {
@@ -774,10 +776,10 @@ struct ChatView: View {
     private var missingAttachments: [JSON] { missingAttachmentRecords(store: store, draftKey: attachmentDraftKey, items: attachments) }
     private var chatLayout: some View {
         VStack(spacing: 0) {
-            if sizeClass != .regular && (!NativePhonePreview.enabled || !phoneChrome.controlsHidden) { compactHeader }
-            if NativePhonePreview.enabled {
+            if (sizeClass != .regular || embedded) && (!NativePhonePreview.enabled || !phoneChrome.controlsHidden) { compactHeader }
+            if NativePhonePreview.enabled && !embedded {
                 if !phoneChrome.controlsHidden { childTabs }
-            } else if workspaceBrowserScope == nil { childTabs }
+            } else if !embedded { childTabs }
             if selectedChild == "chat" && pageSearch.visible { HStack { Spacer(minLength: 0); NativePageFindBar(search: pageSearch, loadedOnly: true) }.padding(8) }
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--history-diagnostics") {
@@ -804,7 +806,7 @@ struct ChatView: View {
                 NativeSubagentConversation(parentID: id, summaries: run["subagents"].array, selected: Binding(get: { self.selectedAgent ?? selectedAgent }, set: { self.selectedAgent = $0 }))
             }
             else if selectedChild == "chat" { conversation }
-            else if selectedChild == "live" { LiveBrowserView(chatID: id, modeStatus: AnyView(composerStatus)).environmentObject(store) }
+            else if selectedChild == "live" { LiveBrowserView(chatID: id, modeStatus: AnyView(composerStatus)).environment(store) }
             else if let tab = shared.browserTabs.first(where: { $0.id == selectedChild && $0.scope == chatBrowserScope }) {
                 TeamBrowserView(scope: chatBrowserScope, showTabs: false, tabID: tab.id, onBackToList: returnToChats).environment(\.nativeTabStep, { direction in
                     let ids = ["chat"] + shared.orderedChatChildren(in: chatBrowserScope, documentIDs: documents.map(\.id))
@@ -827,7 +829,7 @@ struct ChatView: View {
         }
     }
     var body: some View {
-        AnyView(chatLayout).environment(\.nativeBrowserContainer, workspaceBrowserScope ?? chatBrowserScope).onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in let available = max(160, height - 88); if abs(composerAvailableHeight - available) > 1 { composerAvailableHeight = available } }.background(NativeTheme.background).navigationBarBackButtonHidden(true).toolbar(.hidden, for: .navigationBar)
+        AnyView(chatLayout).environment(\.nativeBrowserContainer, workspaceBrowserScope ?? chatBrowserScope).onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in let available = max(160, height - 88); if abs(composerAvailableHeight - available) > 1 { composerAvailableHeight = available } }.background(NativeTheme.background).navigationBarBackButtonHidden(true).toolbar(embedded ? .automatic : .hidden, for: .navigationBar)
         .modifier(NativePhoneBackNavigation())
         .simultaneousGesture(TapGesture(count: 2).onEnded { if NativePhonePreview.enabled && !composerHasFocus && !shared.tabs(in: chatBrowserScope).contains(where: { $0.id == selectedChild }) { phoneChrome.toggleControls() } })
         .background { if NativeDesignPreview.enabled && phoneAreaActive { NativePhoneSurface(chrome: phoneChrome, overviewEnabled: !shared.tabs(in: chatBrowserScope).contains(where: { $0.id == selectedChild })) } }
@@ -870,9 +872,9 @@ struct ChatView: View {
                 Button("Save") { if let childID = renameChildID { if shared.tabs(in: chatBrowserScope).contains(where: { $0.id == childID }) { shared.renameBrowser(childID, title: renameChildTitle) } else { shared.renameDocument(childID, title: renameChildTitle, in: chatBrowserScope) } }; renameChildID = nil }
                 Button("Cancel", role: .cancel) { renameChildID = nil }
             }
-            .sheet(isPresented: $showRename) { NativeChatRenameView(run: run).environmentObject(store) }
-            .sheet(isPresented: $showMoveWorkspace) { NativeChatWorkspaceMoveView(chatID: id).environmentObject(store) }
-            .sheet(isPresented: $showQueuedEdit) { NativeQueuedEditView(runID: id, message: queuedEdit).environmentObject(store) }
+            .sheet(isPresented: $showRename) { NativeChatRenameView(run: run).environment(store) }
+            .sheet(isPresented: $showMoveWorkspace) { NativeChatWorkspaceMoveView(chatID: id).environment(store) }
+            .sheet(isPresented: $showQueuedEdit) { NativeQueuedEditView(runID: id, message: queuedEdit).environment(store) }
             .confirmationDialog("Delete this chat?", isPresented: $confirmDelete) {
                 Button("Delete chat", role: .destructive) { Task { await deleteChat() } }
                 Button("Cancel", role: .cancel) {}
@@ -912,15 +914,16 @@ struct ChatView: View {
         let chatMode = child == "chat" || child == "live"
         phoneChrome.register(NativePhoneTab(id: chatMode ? "chat:" + host + ":" + chatID : "document:" + host + ":" + child, title: document?.title ?? run["title"].string, symbol: chatMode ? "bubble.left.and.bubble.right" : "doc.text", detail: store.displayName, preview: nil, select: {
             shared.selectChatChild(child, for: chatBrowserScope)
-            phoneChrome.activateArea?("Chats")
+            // Associated chats reopen inside their project; only unassigned chats use Chats.
+            if !embedded { phoneChrome.activateArea?("Chats") }
             NotificationCenter.default.post(name: Notification.Name("ProteusPhoneSelectChat"), object: nil, userInfo: ["hostID": host, "chatID": chatID])
         }))
     }
     private func returnToChats() { if let onBack { onBack() } else { dismiss() } }
     private var compactHeader: some View {
         HStack(spacing: 4) {
-            if !NativePhonePreview.enabled { Button { returnToChats() } label: { Image(systemName: "chevron.left").font(.system(size: 19, weight: .medium)).frame(width: 44, height: 44).contentShape(Rectangle()) }.frame(width: 44, height: 44).contentShape(Rectangle()).accessibilityLabel("Back to Chats").accessibilityIdentifier("chat-back") }
-            if NativePhonePreview.enabled { Button { phoneChrome.drawer = true } label: { Image(systemName: "sidebar.left").frame(width: 44, height: 44) }.accessibilityLabel("App navigation").accessibilityIdentifier("phone-app-navigation") }
+            if !NativePhonePreview.enabled && !embedded { Button { returnToChats() } label: { Image(systemName: "chevron.left").font(.system(size: 19, weight: .medium)).frame(width: 44, height: 44).contentShape(Rectangle()) }.frame(width: 44, height: 44).contentShape(Rectangle()).accessibilityLabel("Back to Chats").accessibilityIdentifier("chat-back") }
+            if NativePhonePreview.enabled && !embedded { Button { phoneChrome.drawer = true } label: { Image(systemName: "sidebar.left").frame(width: 44, height: 44) }.accessibilityLabel("App navigation").accessibilityIdentifier("phone-app-navigation") }
             Text(run["title"].string.isEmpty ? "Conversation" : run["title"].string).font(.subheadline.weight(.medium)).lineLimit(1).truncationMode(.tail).frame(maxWidth: .infinity, alignment: .leading).accessibilityIdentifier("chat-header-title")
             Menu {
                 ForEach(documents) { document in Button(document.title, systemImage: "doc") { selectedChild = document.id; shared.selectChatChild(document.id, for: chatBrowserScope) } }
@@ -931,8 +934,8 @@ struct ChatView: View {
                     Button("Delete chat", systemImage: "trash", role: .destructive) { confirmDelete = true }.disabled(chatHasPendingWork(run))
                 }
             } label: { Image(systemName: "ellipsis.circle").font(.system(size: 22)).frame(width: 44, height: 44).contentShape(Rectangle()) }.frame(width: 44, height: 44).contentShape(Rectangle()).accessibilityLabel("Chat actions").accessibilityIdentifier("chat-actions")
-            if NativePhonePreview.enabled { NativeMainTabAdd() }
-        }.buttonStyle(.plain).padding(.horizontal, 4).frame(height: 44).background(NativeTheme.surface)
+            if NativePhonePreview.enabled && !embedded { NativeMainTabAdd() }
+        }.buttonStyle(.plain).padding(.horizontal, embedded ? 12 : 4).frame(height: 44).background(NativeTheme.surface)
     }
     private var childTabs: some View {
         HStack(spacing: 0) {
@@ -1968,7 +1971,7 @@ struct ChatPermissionActivityView: View {
     }
 }
 struct MessageView: View {
-    @EnvironmentObject var store: RemoteStore
+    @Environment(RemoteStore.self) var store
     @Environment(\.timeZone) private var timeZone
     @State private var height: CGFloat = 0
     @State private var richVisible = true
@@ -2108,13 +2111,13 @@ struct AttachmentPreviewFixture: View {
 }
 /// A rendered-message fixture verifies the environment dependency, including a timezone change.
 struct MessageTimezoneFixture: View {
-    @StateObject private var remote = RemoteStore(connection: nil, legacyCredentials: false)
+    @State private var remote = RemoteStore(connection: nil, legacyCredentials: false)
     @StateObject private var shared = SharedAppStore()
     @State private var timezone = "America/Denver"
     var body: some View {
         VStack {
             MessageView(role: "user", text: "Synthetic timezone message", runID: "timezone-fixture", timestamp: "2026-10-04T18:00:00Z")
-                .environmentObject(remote).environmentObject(shared)
+                .environment(remote).environmentObject(shared)
                 .environment(\.timeZone, TimeZone(identifier: timezone)!)
             Button("Use Tokyo device timezone") { timezone = "Asia/Tokyo" }
         }.padding().onAppear {
@@ -2367,7 +2370,7 @@ enum MessageSpeechEvent { case started, progress(Int), paused, resumed, finished
 
 
 private struct NativeQueuedEditView: View {
-    @EnvironmentObject var store: RemoteStore
+    @Environment(RemoteStore.self) var store
     @Environment(\.dismiss) private var dismiss
     let runID: String
     let message: JSON
@@ -2396,7 +2399,7 @@ private struct NativeQueuedEditView: View {
 }
 
 struct LiveBrowserView: View {
-    @EnvironmentObject var store: RemoteStore
+    @Environment(RemoteStore.self) var store
     @Environment(\.scenePhase) private var scenePhase
     let chatID: String
     var modeStatus: AnyView? = nil
@@ -2529,7 +2532,7 @@ struct NativeRunFilesView: View {
 // Transcripts are read through the selected parent owner, never through a child
 // session file or another top-level conversation. Selection cancels old reads.
 private struct NativeSubagentConversation: View {
-    @EnvironmentObject var store: RemoteStore
+    @Environment(RemoteStore.self) var store
     let parentID: String
     let summaries: [JSON]
     @Binding var selected: String

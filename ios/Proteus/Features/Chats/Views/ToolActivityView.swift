@@ -41,7 +41,7 @@ enum NativeActivity {
 /// Adapter-reported intervals and usage, disclosed lazily with their provenance.
 /// Raw reasoning is never accepted as display content here.
 struct NativeProviderActivityView: View {
-    @EnvironmentObject var store: RemoteStore
+    @Environment(RemoteStore.self) var store
     let activity: JSON
     let runStatus: String
     @State private var expanded = false
@@ -107,7 +107,7 @@ struct NativeChatRecoveryState {
 }
 
 struct ToolTimingView: View {
-    @EnvironmentObject var store: RemoteStore
+    @Environment(RemoteStore.self) var store
     @Environment(\.timeZone) private var timeZone
     let tool: JSON
     private var verified: Bool { store.connected && store.runtimeClockOffset != nil }
@@ -212,7 +212,7 @@ func modelContextLabel(_ tier: JSON) -> String {
     return "\(modelTokenSize(tier["promptTokens"])) · \(id == "default" ? "Default" : id == "long_context" ? "Long context" : id)"
 }
 struct ProviderModelPicker: View {
-    @EnvironmentObject var store: RemoteStore
+    @Environment(RemoteStore.self) var store
     @Binding var model: String
     @Binding var effort: String
     @Binding var contextTier: String
@@ -260,7 +260,7 @@ struct ProviderModelPicker: View {
 }
 
 struct PendingChatApprovalView: View {
-    @EnvironmentObject var store: RemoteStore
+    @Environment(RemoteStore.self) var store
     let run: JSON
     @State private var busy = false
     var body: some View {
@@ -282,7 +282,7 @@ struct PendingChatApprovalView: View {
 }
 
 struct ChatPermissionsView: View {
-    @EnvironmentObject var store: RemoteStore
+    @Environment(RemoteStore.self) var store
     let run: JSON
     @State private var selected = ""
     @State private var busy = false
@@ -367,7 +367,7 @@ struct ChatPermissionsView: View {
 }
 
 struct MCPConnectionsView: View {
-    @EnvironmentObject var store: RemoteStore
+    @Environment(RemoteStore.self) var store
     let runID: String
     var loginAvailable = true
     @State private var servers: [JSON] = []
@@ -427,7 +427,7 @@ struct MCPConnectionsView: View {
 // Small, metadata-driven menus live with the next message, on iPhone and iPad.
 struct ComposerModelPicker: View {
     @State private var showingOptions = false
-    @EnvironmentObject var store: RemoteStore
+    @Environment(RemoteStore.self) var store
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Binding var model: String
     @Binding var effort: String
@@ -563,7 +563,7 @@ func runtimeClockRunning(turns: [JSON], tools: [JSON], verified: Bool) -> Bool {
     verified && (turns.contains { !$0["activeSince"].string.isEmpty } || tools.contains { $0["status"].string == "running" && $0["finishedAt"].string.isEmpty })
 }
 struct RuntimeTimerView: View {
-    @EnvironmentObject var store: RemoteStore
+    @Environment(RemoteStore.self) var store
     var turns: [JSON] = []
     var tools: [JSON] = []
     var total: Bool = false

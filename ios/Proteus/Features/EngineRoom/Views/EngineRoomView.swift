@@ -35,7 +35,7 @@ struct EngineRoomView: View {
                     case "Account & Security": SharedAccountView()
                     case "Connections": DestinationsView { adding = true }
                     case "Usage": if let remote = destinations.selected { ProviderUsageDetails(store: remote) } else { ContentUnavailableView("Choose a computer", systemImage: "desktopcomputer") }
-                    case "Source library": if let remote = destinations.selected { NativeSourceLibraryView().environmentObject(remote) } else { ContentUnavailableView("Choose a computer", systemImage: "desktopcomputer") }
+                    case "Source library": if let remote = destinations.selected { NativeSourceLibraryView().environment(remote) } else { ContentUnavailableView("Choose a computer", systemImage: "desktopcomputer") }
                     case "MCP connections": mcpConnections
                     case "Resources": resources
                     case "Notifications": activity
@@ -508,7 +508,7 @@ struct NativeHistorySettingsDraft {
 }
 
 struct NativeHistorySynchronizationView: View {
-    @ObservedObject var remote: RemoteStore
+    var remote: RemoteStore
     @State private var draft: NativeHistorySettingsDraft?
     @State private var busy = false
     @State private var status: String?
