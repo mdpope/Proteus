@@ -335,6 +335,9 @@ function openTab(tab, afterId=null) {
   if (!existing) {tab.openedAt ||= new Date().toISOString();state.tabs.push(tab);}
   else if(tab.type==='workspace')Object.assign(existing,tab,{hidden:false,navigationClosed:false});
   else if (tab.type === 'markdown' || tab.parentId) Object.assign(existing, tab);
+  // A native state broadcast may register a new view before create returns.
+  // Keep the user's creation intent on that same view until its owner accepts it.
+  if(tab.pendingOpen)(existing||tab).pendingOpen=true;
   if(!previewEnabled(state))(existing||tab).lastTouchedAt=new Date().toISOString();
   else if(!existing&&!['run','remote-run','workspace'].includes(tab.type))tab.lastActivityAt||=tab.info?.lastActivityAt||tab.openedAt;
   placeTabAfter(state.tabs,tab.id,afterId);
@@ -1161,7 +1164,7 @@ function renderTabs() {
   $('#internet-search').onclick=()=>{ $('#tab-add-menu').open=false;void beginChatSetup(null,{chatType:'internet'}); };
   $('#new-chat').onclick=()=>{ $('#tab-add-menu').open=false;chatDialog(); };$('#markdown').onclick=()=>{ $('#tab-add-menu').open=false;markdownDialog(); };
   $('#terminal').onclick=()=>{ $('#tab-add-menu').open=false;openTerminalDialog(); };
-  $('#browser').onclick=async()=>{ $('#tab-add-menu').open=false;try{if(!window.desktop)throw new Error('Open the desktop app to use browser tabs.');await withNewTabInput(async capture=>{const info=await window.desktop.browser({action:'create'});capture.bind(info.id);openTab({id:info.id,type:'browser',label:info.title||'New tab',info});});}catch(error){render();toast(error.message);}};
+  $('#browser').onclick=async()=>{ $('#tab-add-menu').open=false;try{if(!window.desktop)throw new Error('Open the desktop app to use browser tabs.');await withNewTabInput(async capture=>{const info=await window.desktop.browser({action:'create'});capture.bind(info.id);openTab({id:info.id,type:'browser',label:info.title||'New tab',info,pendingOpen:true});});}catch(error){render();toast(error.message);}};
 }
 
 function browserBounds() {

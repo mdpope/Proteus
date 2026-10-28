@@ -1455,3 +1455,9 @@ Address validation examines authority credentials structurally and permits `@ten
 A failed top-level navigation displays a safe themed document with the hostname, observed Chromium error category and Retry. The logical destination/history stays the requested website. Page notifications with permission feed the existing notification framework with tab/profile/origin identity. Exact page-event IDs deduplicate, while distinct rapid events are retained; click dispatch returns to the original page event. Service-worker/background Web Push integration is not established by this page-notification path.
 
 Browser state-change bursts coalesce projection/IPC work over 16 ms. Direct reads, mutations and revocation remain immediate; disposal cancels stale sends. The [release evidence](2026-10-27-release-evidence.md) records a comparable disposable Electron measurement without claiming a broad production memory reduction.
+
+## October 28 — first blank tab creation
+
+New top-level browser tabs retain the existing `pendingOpen` creation marker until owner synchronization acknowledges the same identity. Native browser-state broadcasts may register the view before the create reply; `openTab` preserves the marker on that existing view. Initial reconciliation against a populated owner registry must distinguish this new user action from an obsolete restored tab. Saved/restored untracked tabs still follow the existing owner-authority rules.
+
+`test/browser-strip-create-ui.mjs` reproduces the failure by starting inside a project with a populated main registry, double-clicking the actual empty top-strip area, then reconciling and entering a URL. It verifies selection, native-view survival, marker settlement and project-strip navigation. Source acceptance is separate from installation in the running desktop.

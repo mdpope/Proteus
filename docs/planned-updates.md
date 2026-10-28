@@ -1,3 +1,24 @@
+## October 28 — 0.2.33 follow-up authorized
+
+Build and Build Mac installation are authorized. The pending blank-tab correction and a
+confirmed inherited-permission projection bottleneck are source-complete and tested. Real HC
+diagnostics correlate repeated one-second owner delays with state assembly; the corrected
+synthetic 500-chat fixture reduces repeated path resolutions from 124,129 to 14 and state
+assembly maximum from about 427 ms to 77 ms. Exact package/installation remains pending;
+unattributed longer stalls and HC gesture acceptance remain separate. See [evidence](2026-10-28-followup-release.md).
+
+## October 28 — HC 0.2.32 installed
+
+HC runs the exact accepted 0.2.32 package through its saved-default coordinator and one completed supervisor job. Installed package/source hashes, strict Apple signature, one owner, health and same-chat continuation verify. The operator's normal quit/reopen cleared stuck browser actions; the authorized planning blocker was cancelled and a later scheduled chat finished normally. Chat/event/configuration preservation and two recovery generations verify. All projects, tab memberships, logical window records, selections and existing drafts reconcile. One capped browser-history snapshot rolled forward; recovery retains the oldest entry, while live global history and exact triggers for scope/activity metadata changes remain qualified in the evidence. Codex works; other-provider access and absent desktop drivers limit broader acceptance. The later source-only tab correction, physical devices and website remain separate. See [handoff](handoff.md).
+
+Both full recovery trees pass after preserving the older tree's two extra transaction-free SQLite sidecars as compact evidence. Supervisor candidate and unused task staging are retired; exact transfer/source and original/successful verification receipts remain private.
+
+## October 28 — release follow-up acceptance
+
+The disappearing first blank top-level browser tab is reproduced and fixed in source using the existing pending-creation marker. The focused Electron regression and native early-typing check pass; Node 1,237 pass / three skips and static checks pass. The installed desktop remains the previously accepted 0.2.32 package until a new supervised update.
+
+Both existing phone/tablet simulators received and launched 0.2.32 / 2610.28.1. Live pairing and a separate normal cold-start saved-pairing reconnect pass on each; post-test samples do not establish continuous simultaneous online status. The two live `RemoteUITests` methods require an explicit loopback live-owner bridge and skip ordinary fixture runs; they perform no data reset or chat write. Jira iframe diagnosis remains inconclusive: the HC tab is unshared and sharing/developer calls time out. See [the release evidence](2026-10-28-release-evidence.md).
+
 ## October 28 — 0.2.32 scope (October 27 requests)
 
 Implemented on `oct27-release`; see [evidence](2026-10-28-release-evidence.md). Deferred: deploying the website push change; end-to-end encrypted notification alerts (would need an iOS notification service extension); moving the owner engine out of the Electron main process if installed measurements still show stalls; per-property observation for `SharedAppStore` (browser state); refreshing older desktop UI fixtures that fail on baseline as well.

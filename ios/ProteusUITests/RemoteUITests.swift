@@ -70,6 +70,62 @@ private let nativeFixtureRelayOrigin = ProcessInfo.processInfo.environment["PROT
 }
 
 final class RemoteUITests: XCTestCase {
+    @MainActor func testLiveSimulatorSavedOwnerReconnect() throws {
+        guard let bridge = ProcessInfo.processInfo.environment["PROTEUS_LIVE_SIMULATOR_BRIDGE"],
+              URL(string: bridge)?.host == "127.0.0.1" else {
+            throw XCTSkip("Requires explicit live simulator acceptance")
+        }
+        #if targetEnvironment(simulator)
+        let app = XCUIApplication(); app.launchArguments = []; app.launch()
+        openNotificationFixtureHome(app)
+        let picker = app.buttons["destination-picker"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 10), "The saved owner remains selected")
+        picker.tap()
+        let manage = app.buttons["Manage computers"]
+        XCTAssertTrue(manage.waitForExistence(timeout: 5)); manage.tap()
+        let connected = app.staticTexts.matching(NSPredicate(format: "label == %@", "Connected")).firstMatch
+        XCTAssertTrue(connected.waitForExistence(timeout: 30), "A normal cold launch reconnects using the saved pairing")
+        #else
+        throw XCTSkip("Live acceptance is restricted to simulators")
+        #endif
+    }
+
+    /// Explicit live simulator acceptance only. No synthetic launch/reset, chat
+    /// writes, pairing-key export or persistent permission changes are performed.
+    @MainActor func testLiveSimulatorOwnerConnection() async throws {
+        guard let bridge = ProcessInfo.processInfo.environment["PROTEUS_LIVE_SIMULATOR_BRIDGE"],
+              let origin = URL(string: bridge), origin.host == "127.0.0.1" else {
+            throw XCTSkip("Requires an explicitly authorized loopback live-owner pairing bridge")
+        }
+        #if targetEnvironment(simulator)
+        let app = XCUIApplication()
+        app.launchArguments = []
+        app.launch()
+        // The bridge creates one invitation through the selected running owner's
+        // normal API. Live test diagnostics must remain private and redact links.
+        let (data, _) = try await URLSession.shared.data(from: origin.appendingPathComponent("pair"))
+        let response = try JSONSerialization.jsonObject(with: data) as! [String: String]
+        let link = try XCTUnwrap(URL(string: try XCTUnwrap(response["code"])))
+        XCTAssertEqual(link.scheme, "proteus"); XCTAssertEqual(link.host, "pair")
+        // Use XCTest's documented, bundle-targeted open rather than a URL
+        // launch from the runner process (which iOS refuses as untrusted).
+        app.open(link)
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        for _ in 0..<10 {
+            let alert = springboard.alerts.matching(NSPredicate(format: "label CONTAINS %@", "Proteus")).firstMatch
+            if alert.exists, alert.buttons["Open"].exists { alert.buttons["Open"].tap(); break }
+            try await Task.sleep(for: .milliseconds(300))
+        }
+        app.activate()
+        let success = app.staticTexts["pairing-success"]
+        XCTAssertTrue(success.waitForExistence(timeout: 30), "The real owner completes authenticated pairing")
+        let connected = app.staticTexts.matching(NSPredicate(format: "label == %@", "Connected")).firstMatch
+        XCTAssertTrue(connected.waitForExistence(timeout: 15), "Connections shows an authenticated live transport")
+        #else
+        throw XCTSkip("Live acceptance is restricted to simulators")
+        #endif
+    }
+
     @MainActor func testNativeRecoveryRetriesOnlyAfterMinuteAndRetainsDraftAndQueue() async throws {
         let request = URLRequest(url: URL(string: "\(nativeFixtureHTTPOrigin)/pair?recovery=1")!, cachePolicy: .reloadIgnoringLocalCacheData)
         let (data, _) = try await URLSession.shared.data(for: request)

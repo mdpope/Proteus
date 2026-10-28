@@ -51,6 +51,34 @@ test('projection key includes exact cwd and requested path without sharing label
   } finally {fs.rmSync(home,{recursive:true,force:true});}
 });
 
+test('inherited working folders and provider displays share only the current projection path checks',async t=>{
+  const home=fixture();
+  try {
+    const roots=Array.from({length:12},(_,i)=>path.join(home,'root-'+i));
+    for(const folder of roots)fs.mkdirSync(folder);
+    const providerHome=path.join(home,'provider');fs.symlinkSync(roots[0],providerHome);
+    const store=new PermissionStore(home,{preserveInheritedDefaults:true});
+    store.workspaceDefaults=()=>({mode:'custom',workingRoots:roots,folders:[{path:roots[2],access:'read'}],rules:[]});
+    store.automaticProviderFolders=(run,resolve=canonicalPath)=>[{path:resolve(providerHome,run.schedule.workspace.cwd),access:'read-write',source:'provider'}];
+    const spec={...schedule(home),workspace:{cwd:home,additionalDirectories:roots},context:{workspaceId:'synthetic',baseWorkspace:{cwd:home,additionalDirectories:[roots[1]]}}};
+    const runs=Array.from({length:500},(_,i)=>({id:'run-'+i,schedule:{...spec,name:'Chat '+i,permissionScope:{kind:'schedule',id:'synthetic-schedule'},ref:{runId:'run-'+i}}}));
+    const baseline=observePaths(()=>runs.map(run=>store.describeRun(run)));
+    const snapshot=store.snapshot(),projected=observePaths(()=>({runs:runs.map(run=>store.describeRun(run,snapshot)),contexts:store.describeMany(runs.map(run=>run.schedule),snapshot)}));
+    assert.deepEqual(projected.value.runs,baseline.value);
+    assert.equal(projected.value.contexts.length,1);
+    assert.ok(baseline.counts.realpath>10000);
+    assert.ok(projected.counts.realpath<100,JSON.stringify(projected.counts));
+    const before=store.describeRun(runs[0],snapshot);
+    fs.unlinkSync(providerHome);fs.symlinkSync(roots[1],providerHome);
+    assert.equal(store.describeRun(runs[0],snapshot).automaticFolders[0].path,roots[0]);
+    assert.equal(store.describeRun(runs[0]).automaticFolders[0].path,roots[1],'direct descriptions remain fresh');
+    assert.equal(store.decide(spec,{kind:'write',path:path.join(roots[2],'new.txt')},before).allowed,false,'read-only working folder stays authoritative');
+    await Promise.resolve();
+    assert.equal(store.describeRun(runs[0],snapshot).automaticFolders[0].path,roots[1],'a retained display snapshot cannot retain path checks after a microtask');
+    t.diagnostic(JSON.stringify({synthetic:true,chats:runs.length,roots:roots.length,baseline:{...baseline.counts,ms:baseline.milliseconds},projection:{...projected.counts,ms:projected.milliseconds}}));
+  } finally {fs.rmSync(home,{recursive:true,force:true});}
+});
+
 test('new snapshots and direct authorization observe symlink retarget, deletion and revoked grants',()=>{
   const home=fixture();
   try {

@@ -29,6 +29,12 @@ retain selections for future executions. It does not recapture current instructi
 chat's permission origin. Repeated path resolutions are shared only within a synchronous display
 snapshot; authorization, grants, revocation and subsequent requests resolve current paths afresh.
 
+In 0.2.33 this request-local sharing also covers inherited working/read-only folders, schedule
+fallbacks, chat working folders, explicit schedule folders and automatic provider-folder display.
+The memo retains at most 1,024 exact cwd/path pairs and expires at the next microtask. Direct
+authorization still canonicalizes its actual target and matching grants freshly; no permission
+file, captured origin, effective mode or rule is changed by the display optimization.
+
 # Workspace permissions
 
 ## October 18 isolated desktop preview

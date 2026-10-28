@@ -1,3 +1,9 @@
+## 0.2.33 — October 28 follow-up
+
+- Share canonical path checks across inherited working-folder, schedule, chat and automatic provider-folder displays within one synchronous state snapshot. Large saved-chat lists no longer repeat the same filesystem checks thousands of times. Actual tool authorization and later requests continue to resolve paths freshly.
+- Keep the first blank browser tab opened from a populated top tab strip until its owner accepts the creation. This fixes a tab disappearing during initial synchronization after leaving a project, including the empty-strip double-click gesture.
+- Add explicit opt-in simulator acceptance for live-owner pairing and normal cold-start reconnect, without resetting saved destinations or sending chat messages. Both checks pass on phone and tablet.
+
 ## 0.2.32 — October 27 release requests
 
 - **Responsiveness:** chat saves during a running turn are coalesced and written off the UI thread; streaming and mid-turn activity no longer make every window rebuild full owner state; windows share one state build per change; device sync is throttled while chats stream. On a synthetic three-window streaming workload, full-state rebuilds fell from 87 to 9 and p99 main-thread lag from about 23 ms to about 10 ms.

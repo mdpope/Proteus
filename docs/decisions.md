@@ -1,3 +1,15 @@
+## October 28 — complete request-local permission display reuse
+
+The existing display snapshot memo covered context construction but inherited permission display
+still canonicalized the same roots inside each chat's working-folder checks. Production owner
+diagnostics correlate repeated roughly one-second delays with state assembly; an isolated 500-chat
+fixture reproduces 124,129 repeated path resolutions despite using a snapshot. Route every display
+path through the same bounded synchronous memo, including provider-folder display via an optional
+resolver. Expire it at the next microtask and leave actual authorization target/grant checks fresh.
+This reduces demonstrated repeated filesystem work without retaining a cross-request trust cache
+or adding another owner process. Longer uninstrumented delays and real HC gesture acceptance
+remain separate from this correction.
+
 ## October 28 — 0.2.32 ownership, persistence and visibility choices
 
 **Chat persistence.** `RunWriter` owns chat record files. Provider narration during a running turn is coalesced to at most one save per 250 ms; serialization stays on the owner thread, the write and fsync use the libuv pool, and a per-chat generation check plus synchronous rename guarantees an older background save can never replace a newer immediate one. User input, delivery receipts, questions, approvals, attachments and status changes stay synchronous and durable before callers continue. A crash can lose at most 250 ms of narration that the provider session also retains. Records are now compact JSON.

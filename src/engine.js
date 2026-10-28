@@ -47,10 +47,10 @@ export class Engine extends EventEmitter {
     this.tombstones = readJSON(this.tombstoneFile, {});
     this.providers = { rehearsal: new RehearsalProvider(), ...providers };
     // Provider-owned state is an automatic owner-local grant, not a saved workspace exception.
-    this.permissions.automaticProviderFolders=run=>{
+    this.permissions.automaticProviderFolders=(run,resolvePath=canonicalPath)=>{
       const provider=run.schedule.provider;if(!['copilot','claude'].includes(provider))return [];
       const home=run.providerHome||this.providers[provider]?.dataDirectory?.();
-      const root=home&&path.isAbsolute(home)&&canonicalPath(home,run.schedule.workspace.cwd);
+      const root=home&&path.isAbsolute(home)&&resolvePath(home,run.schedule.workspace.cwd);
       return root?[{path:root,access:'read-write',source:'provider',label:(provider==='claude'?'Claude':'Copilot')+' working folder (automatic)'}]:[];
     };
     this.queuedSteers = new Map(); this.pending = new Map(); this.questionQueues = new Map(); this.backgroundQuestions=new Map(); this.running = new Map(); this.backgroundRuns = new Map(); this.executions = new Set(); this.stopping = false;

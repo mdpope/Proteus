@@ -42,17 +42,17 @@ export function permissionContext(schedule) { return buildPermissionContext(sche
 // direct authorization helpers always resolve paths freshly.
 const projectionPaths = new WeakMap();
 const maxProjectionPaths = 1024;
-function projectionContext(schedule, snapshot) {
+function projectionPath(value, cwd, snapshot) {
   const memo = projectionPaths.get(snapshot);
-  if (!memo?.active) return permissionContext(schedule);
-  return buildPermissionContext(schedule, (value, cwd) => {
-    if (typeof value !== 'string' || typeof cwd !== 'string') return canonicalPath(value, cwd);
-    const key = JSON.stringify([cwd, value]);
-    if (memo.paths.has(key)) return memo.paths.get(key);
-    const resolved = canonicalPath(value, cwd);
-    if (memo.paths.size < maxProjectionPaths) memo.paths.set(key, resolved);
-    return resolved;
-  });
+  if (!memo?.active || typeof value !== 'string' || typeof cwd !== 'string') return canonicalPath(value, cwd);
+  const key = JSON.stringify([cwd, value]);
+  if (memo.paths.has(key)) return memo.paths.get(key);
+  const resolved = canonicalPath(value, cwd);
+  if (memo.paths.size < maxProjectionPaths) memo.paths.set(key, resolved);
+  return resolved;
+}
+function projectionContext(schedule, snapshot) {
+  return buildPermissionContext(schedule, (value, cwd) => projectionPath(value, cwd, snapshot));
 }
 const protectedRequest = request => request.managedApprovalRequired === true || request.requestSandboxBypass === true;
 const requestedPath = (request, context) => canonicalPath(request.resolvedPath || (request.kind === 'read' ? request.path : request.fileName), context.cwd);
@@ -105,23 +105,23 @@ export class PermissionStore {
     const defaults=snapshot.defaults.get(context.workspaceId),workingFolders=[];
     if(this.preserveInheritedDefaults&&defaults?.workingRoots){
       for(const root of context.roots){
-        if(!defaults.workingRoots.some(base=>{const resolved=canonicalPath(base,context.cwd);return resolved&&within(root,resolved);}))continue;
-        const configured=[...(defaults.folders||[]),...(saved?.folders||[])].map(folder=>({...folder,path:canonicalPath(folder.path,context.cwd)})).filter(folder=>folder.path&&within(root,folder.path)).sort((a,b)=>b.path.length-a.path.length||Number(a.access==='read-write')-Number(b.access==='read-write'))[0];
+        if(!defaults.workingRoots.some(base=>{const resolved=projectionPath(base,context.cwd,snapshot);return resolved&&within(root,resolved);}))continue;
+        const configured=[...(defaults.folders||[]),...(saved?.folders||[])].map(folder=>({...folder,path:projectionPath(folder.path,context.cwd,snapshot)})).filter(folder=>folder.path&&within(root,folder.path)).sort((a,b)=>b.path.length-a.path.length||Number(a.access==='read-write')-Number(b.access==='read-write'))[0];
         workingFolders.push({path:root,access:configured?.access||'read-write'});
       }
     }
     // Explicit read-only folders stay authoritative even where a broader mode allows access.
-    const readOnlyFolders=this.preserveInheritedDefaults?[...(defaults?.folders||[]),...(saved?.folders||[])].filter(folder=>folder.access==='read').map(folder=>canonicalPath(folder.path,context.cwd)).filter(Boolean):[];
+    const readOnlyFolders=this.preserveInheritedDefaults?[...(defaults?.folders||[]),...(saved?.folders||[])].filter(folder=>folder.access==='read').map(folder=>projectionPath(folder.path,context.cwd,snapshot)).filter(Boolean):[];
     return { ...context, workingFolders, readOnlyFolders, mode: effectivePermissionMode(saved), readOnlyTools: saved?.readOnlyTools === true, folders: saved?.folders || [], rules: saved?.rules || [] };
   }
   describe(schedule, snapshot) {
     const context = snapshot ? projectionContext(schedule, snapshot) : permissionContext(schedule);
     const current=snapshot||this.snapshot();
     const own=this.describeContext(context,current);
-    const inherited=schedule.permissionScope?.kind==='schedule'&&!current.profiles.has(context.id)?this.describeContext(permissionContext({...schedule,permissionScope:undefined}),current):own;
-    const profile={...inherited,...context,workingFolders:this.chatWorkingFolders(schedule,context,inherited)},explicit=schedule.executionPermissions;
+    const inherited=schedule.permissionScope?.kind==='schedule'&&!current.profiles.has(context.id)?this.describeContext(snapshot?projectionContext({...schedule,permissionScope:undefined},snapshot):permissionContext({...schedule,permissionScope:undefined}),current):own;
+    const profile={...inherited,...context,workingFolders:this.chatWorkingFolders(schedule,context,inherited,snapshot)},explicit=schedule.executionPermissions;
     if(!explicit)return profile;
-    const folders=(explicit.folders||[]).map(folder=>({...folder,path:canonicalPath(folder.path,context.cwd)}));
+    const folders=(explicit.folders||[]).map(folder=>({...folder,path:projectionPath(folder.path,context.cwd,snapshot)}));
     if(folders.some(folder=>!folder.path))throw Error('A schedule folder is unavailable. Review schedule access.');
     return {...profile,source:'schedule',mode:explicit.mode||profile.mode,readOnlyTools:explicit.readOnlyTools??profile.readOnlyTools,workingFolders:[...profile.workingFolders,...folders],folders:[...profile.folders,...folders],rules:[...profile.rules,...(explicit.rules||[])]};
   }
@@ -129,12 +129,12 @@ export class PermissionStore {
    * are working folders exactly like the workspace's, even when that workspace's
    * list differs. Roots contributed only by selected instruction/skill sources stay
    * source-only and gated. Explicit read-only folders remain read-only. */
-  chatWorkingFolders(schedule,context,profile){
+  chatWorkingFolders(schedule,context,profile,snapshot){
     const existing=profile.workingFolders||[],base=schedule.context?.baseWorkspace;
     if(!this.preserveInheritedDefaults||!base?.cwd)return existing;
     const known=new Set(existing.map(folder=>folder.path)),added=[];
     for(const value of [base.cwd,...(base.additionalDirectories||[])]){
-      const root=canonicalPath(value,context.cwd);
+      const root=projectionPath(value,context.cwd,snapshot);
       if(!root||known.has(root)||!context.roots.includes(root))continue;
       known.add(root);
       const override=(profile.readOnlyFolders||[]).some(folder=>root===folder||within(root,folder));
@@ -152,7 +152,7 @@ export class PermissionStore {
     return [...contexts.values()].map(({ context, ref }) => ({ ...this.describeContext(context, snapshot), ref }));
   }
   describeRun(run,snapshot) {
-    const profile=this.describeRunProfile(run,snapshot),automaticFolders=this.automaticProviderFolders?.(run)||[];
+    const profile=this.describeRunProfile(run,snapshot),automaticFolders=this.automaticProviderFolders?.(run,(value,cwd)=>projectionPath(value,cwd,snapshot))||[];
     return automaticFolders.length?{...profile,automaticFolders,folders:[...profile.folders,...automaticFolders]}:profile;
   }
   describeRunProfile(run, snapshot) {

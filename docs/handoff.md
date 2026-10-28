@@ -1,3 +1,30 @@
+## October 28 — 0.2.33 follow-up preparing for Build Mac
+
+The operator authorizes building pending changes and installing on this Mac, while reporting
+continuing HC typing/scrolling hangs. The source includes the blank-tab correction and a new
+inherited-permission display correction: repeated canonical path checks now use the bounded
+request-local memo through the whole projection, with fresh actual authorization. HC diagnostics
+and a failing regression support this bottleneck; longer unattributed stalls remain unresolved.
+Node 1,238 pass / three skips, static and focused permission/tab/focus UI checks pass. Exact
+signed package and local coordinator deployment are pending. HC receives no new update from
+this request. See [follow-up acceptance](2026-10-28-followup-release.md).
+
+## October 28 — HC 0.2.32 installed and verified
+
+The operator explicitly requests HC installation now and authorizes interrupting HC chats as needed. A new unassigned saved-default update coordinator owns this install. The exact accepted Build Mac artifact is privately staged: 0.2.32 / `6e8c4b1236d8+src.734be4e331ab`, source `734be4e331ab…c656`, package hash `b619a43c4dd63fd9c642bdf6a0ba2a5cbe71783f10ef5916ac666927e4a5c1ab`. The archive extracts to the identical 9,412-entry signed package; matching frozen source verifies all 394 runtime files and eight build inputs. The transfer is an unpublished private draft, with no live data or credentials. The newer tab correction remains excluded.
+
+HC now runs the exact 0.2.32 package: matching installed package/source hashes, strict-valid Apple signature, one owner process, supervisor complete/updated, verified health and delivered same-chat continuation. The isolated route to the existing intended GitHub account transferred all four exact assets without a global login change or credential copying. The coordinator reused one supervisor job through new-input protection. The authorized planning-chat cancellation and operator normal quit/reopen cleared the blockers; a later scheduled chat finished normally. No forced exit or journal edit occurred.
+
+The supervisor verifies 507 chats / 35,932 pre-restart events and effective configurations. Two verified recovery generations remain. Selected permissions, profiles, pairings, settings, history database and layout files match the snapshot. Semantic comparison retains all 10 projects, 184 content-tab memberships and 346 window tab records across seven sessions; 106 regenerated window IDs reconcile through stable content identities. URLs, profiles, placement, visibility/persistence, selections and existing drafts match; one empty draft was added. One capped 50-entry browser snapshot rolled forward by one entry, with the oldest retained in recovery; live global-history retention was not established. Two scope revisions and activity timestamps changed without independently proven triggers; nine scan completion times advanced. Raw and corrected logical receipts remain. Codex continuation works; other providers lack authorized model access. Neither Cua nor Peekaboo is installed, so interactive desktop acceptance remains separate. Reported update space change: −1,634,361,344 bytes. Private task/asset receipts stay in the coordinating workspace. This authorization supersedes the earlier HC exclusion below.
+
+Final hygiene verifies both recoveries' complete receipt/app/data trees. The older tree initially had two extra SQLite sidecars: an empty WAL and zero-frame SHM, with no open handles. Their intact bytes/metadata and original failed assessment remain in compact private evidence; moving only those extras restores the exact original tree hash. The supervisor already retired its candidate. Both unused task transport/extraction roots were retired after dependency checks, with a separately observed +1,602,240,512-byte space change (concurrent activity may contribute). The local disposable source checkout and redundant transfer archive were also retired; exact source/artifact and compact receipts remain available privately.
+
+## October 28 — simulator connection acceptance and tab correction
+
+This Mac's supervisor confirms the accepted 0.2.32 package is installed and healthy. On `oct27-release`, a new focused test reproduces the first blank main-strip tab disappearing when initial reconciliation finds an already-populated owner registry. The source fix preserves `pendingOpen` until owner acknowledgement, including when a native state broadcast registered the view before the create reply. Focused UI, early native typing, 1,237 Node tests / three skips, and static checks pass. This correction is not yet packaged or installed.
+
+Existing iPhone/iPad simulators received and launched 0.2.32 / 2610.28.1. Each passes explicit live pairing and a separate normal cold-start reconnect using its saved pairing against this running Mac. Non-secret indexes retain prior destinations and select the real local owner. Apps were relaunched after testing; process/boot checks pass. Post-test owner samples reported the clients offline, so do not claim continuous simultaneous connectivity from these results. No physical device update occurred. HC Jira rendering remains unclassified because its tab is unshared and sharing/developer requests time out; the operator was asked to use that tab's robot button. No Jira/profile/theme state was changed. See [the evidence](2026-10-28-release-evidence.md).
+
 ## October 28 — 0.2.32 (October 27 requests) on `oct27-release`
 
 Implementation and validation status is in [the release evidence](2026-10-28-release-evidence.md); design choices are in `decisions.md` (October 28). Authorized installs for this release are this personal Mac (through a normal update coordinator) and the iOS simulators only. The downloads.proteus.example website change for rich push text is source-complete and tested but **not deployed**. Physical iPhone/iPad, Work Mac and other computers are not updated by this release request.
