@@ -16,9 +16,11 @@ Build Mac, Windows and web once the separate Windows distribution chat finishes.
 The operator subsequently lifted HC's hold. The Windows gate completed with accepted source
 `66ce6f0`, merged into frozen combined source `b12fa84`, version 0.2.36 / native 2610.29.1.
 Final Node/static and exact Mac package acceptance pass. Website, simulators and physical iPhone
-are installed; HC and Windows 0.2.36 are now installed and healthy. Build Mac remains prepared,
-iPad final checks remain qualified, and the additionally authorized Linux native build/acceptance
-is in progress. Combined source is merged and pushed to main; obsolete worktrees are retired.
+are installed; HC, Windows and the additionally authorized Linux 0.2.36 are installed and healthy.
+Build Mac is handed off and waiting for unrelated active work and this parent chat to finish.
+iPad qualified historical readback, controlled launch and two-generation retention are complete;
+current encrypted-cache equality and physical gestures remain unverified. Combined source is
+merged and pushed to main; obsolete worktrees are retired.
 See [combined release](2026-10-29-combined-release.md) for actual outcomes and remaining blockers.
 
 ## October 29 — compact question answer controls

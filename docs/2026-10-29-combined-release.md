@@ -87,8 +87,11 @@ accepted the same recovery without creating another full backup. The first post-
 also matched all 259 file hashes but failed its stopped-process guard. Later startup wrote
 encrypted caches and OS/WebKit scene data; the current profile is not byte-identical. No app-owned
 files disappeared, and all four destinations and the selected owner match the cold receipt.
-Logical encrypted-cache comparison, qualified controlled relaunch and retention remain pending;
-this is not a pre-launch preservation pass. Original failures and later differences are retained.
+Qualified completion now verifies a controlled launch and the unchanged four-destination index.
+The historical 259-file comparison is recorded with zero files claimed as pre-launch verification;
+current profile hash equality and logical encrypted-cache comparison remain unverified. Two full
+verified recoveries remain after retiring the oldest payload. This does not turn the original
+guard failure into a fresh current hash pass; original failures and later differences are retained.
 Physical gestures, authenticated reconnect and actual push delivery remain separate acceptance.
 
 HC and Windows 0.2.36 are installed with supervisor health verified and two full recoveries each.
@@ -103,9 +106,12 @@ guard reset its waiting handoff when feedback arrived; a bounded watcher timed o
 dispatching. Reuse the same job and verified candidate, refresh its revision, and finish the
 parent turn after handoff. Installation and post-restart preservation remain required.
 
-Linux's existing owner is healthy on 0.2.31. A native 0.2.36 artifact `linux.ccf82d62ee56` is built
-from exact main `6903064`; 1,293 source tests pass with four skips, and static checks pass.
-Isolated package/update/rollback acceptance is in progress; this is not an installed Linux update.
+Linux 0.2.36 `linux.ccf82d62ee56` is installed from exact main `6903064`. Source tests pass 1,293
+cases with four skips; static, packaged UI/provenance, update, rollback and pre-install failure
+checks pass. The supervisor verifies live health, continuation, seven runs and 2,839 events;
+two verified recoveries remain. An authorized encrypted peer inventory read succeeds. Full browser
+cookie/credential/history preservation is not independently audited, and recorded Bitwarden
+notification WebSocket/video-acceleration startup messages remain qualified. See [Linux status](linux-app.md).
 
 Main contains both the Codex and Claude changes and matches its pushed remote. Redundant release
 branches and all four obsolete worktrees are retired. The sole uncommitted private simulator

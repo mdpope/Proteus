@@ -2,6 +2,23 @@ Current cross-platform acceptance is recorded in [PR #20](https://github.com/mdp
 The dated/source-specific checkpoints below retain their original verification scope; later
 workflow results supersede their pending/failure status without changing the recorded artifacts.
 
+## October 29 — combined 0.2.36 installed and healthy
+
+Exact combined source `69030643c85865984c5d24946ac9f5549f80d9aa` is installed as
+`linux.ccf82d62ee56`. The supervisor reports complete/updated, verified health and one delivered
+continuation. Source tests pass 1,293 cases with four skips; static, packaged UI/provenance,
+normal update, compatible rollback and pre-install failure checks pass. The retained archive
+SHA-256 is `420dead3a77e0aef1995e3f87243370e6726714db893b88a3d5942dc072338a6`.
+This uses the local source-fingerprint workflow; no publisher signature is claimed.
+
+The live owner verifies seven runs and 2,839 event prefixes, Codex metadata is available, and an
+authorized encrypted read of the paired Mac's project/chat inventory succeeds. Two verified full
+recoveries remain. Installed files match the retained build; four additional empty sandbox
+directories are qualified separately. Full browser cookies/credentials/history and a separate
+migration-by-migration result were not independently audited. The launch log records a Bitwarden
+notification WebSocket handshake failure and video-acceleration initialization error; their impact
+remains unverified. Private receipts preserve these limits and the original sandbox network errors.
+
 ## October 26 — exact 0.2.30 installed and live-verified
 
 `linux.8808ae9c976b` from exact main `4b90654` is installed through the native supervisor and
