@@ -1,3 +1,17 @@
+## October 29 — untrusted page scripts cannot open native app dialogs
+
+Electron's default JavaScript alert/confirm path creates a native window-modal sheet, so a
+background site's ad prompt can block unrelated Proteus controls. Use documented creation-time
+`disableDialogs` WebPreferences for website and extension content, enforced by a shared browser
+policy. Do not inspect message text for ad keywords, monkey-patch Electron internals, use
+synchronous renderer-to-owner IPC, or loosen ad protection to address this UI boundary.
+
+This deliberately ignores alerts and cancels confirms. Existing unsupported prompt behavior is
+unchanged. HTML dialogs remain confined to the page; trusted host approvals retain their normal
+native boundary. A future replacement for synchronous website dialogs would require an explicit
+tab-owned UI/lifetime contract, not reuse of app-wide approvals. This follow-up is source-only
+and held for the next release.
+
 ## October 29 — background native caches preserve mutation durability
 
 Document/tab and browser-history caches contain pending owner operations and retry identities,

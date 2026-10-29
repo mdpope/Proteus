@@ -1,3 +1,8 @@
+## Unreleased
+
+- Prevent website and extension JavaScript alerts/confirms from opening native sheets over the Proteus window. Suppressed confirms return false; page-owned HTML dialogs and Proteus approvals remain available.
+- Add **Copy tab ID** immediately above **Persist tab** in a browser tab's right-click menu, copying the clicked tab's browser-tool ID without changing its selection, persistence or sharing.
+
 ## 0.2.36 — Combined client release
 
 ### web palette

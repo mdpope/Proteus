@@ -1,6 +1,7 @@
 const {WebContentsView}=require('electron');
 const {randomUUID}=require('node:crypto');
 const {siteOrigin}=require('./browser-site-settings.cjs');
+const {pageWebPreferences}=require('./browser-page-preferences.cjs');
 const categories={localStorage:'local_storage',indexedDB:'indexeddb',cacheStorage:'cache_storage',serviceWorkers:'service_workers',fileSystems:'file_systems'};
 const cookieKey=c=>JSON.stringify([c.name,c.domain,c.path,c.partitionKey||null]);
 const cookieFor=(c,origin)=>{const host=new URL(origin).hostname,domain=c.domain.replace(/^\./,'');return host===domain||c.domain.startsWith('.')&&host.endsWith('.'+domain);};
@@ -11,7 +12,7 @@ class BrowserSiteData{
  constructor(browser){this.browser=browser;this.snapshots=new Map();this.jobs=new Map();}
  async target(profileId,origin,callback){
   const b=this.browser,partition=b.sessionFor(profileId),partitionName=b.sessionNames.get(profileId);await b.cookieStores.get(profileId)?.ready;
-  const view=new WebContentsView({webPreferences:{session:partition,sandbox:true,nodeIntegration:false,contextIsolation:true}}),wc=view.webContents;
+  const view=new WebContentsView({webPreferences:pageWebPreferences({session:partition})}),wc=view.webContents;
   b.window.contentView.addChildView(view);view.setBounds({x:0,y:0,width:1,height:1});view.setVisible(false);await wc.loadURL('about:blank');
   wc.setWindowOpenHandler(()=>({action:'deny'}));wc.on('will-attach-webview',event=>event.preventDefault());
   const debug=wc.debugger;debug.attach('1.3');

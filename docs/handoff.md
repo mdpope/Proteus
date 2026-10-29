@@ -1,3 +1,17 @@
+## October 29 — native website dialogs and Copy tab ID, source-only follow-up
+
+The operator requests fixing website-originated native modal sheets and adding **Copy tab ID**
+above **Persist tab**, with both held for the next release. Remote page/extension creation uses
+one documented Electron dialog policy; alert/confirm cannot open native app-window sheets.
+Page HTML dialogs and trusted host approvals remain available. Copy uses the clicked tab's
+browser-tool ID and the existing clipboard boundary, without altering tab state or access.
+Full Node validation passes 1,293 cases with four skips and static checks pass. Disposable
+Electron checks cover background/foreground/repeated/frame/extension prompts, interactive shell,
+HTML dialogs, unsaved-page protection and the real tab menu/clipboard flow; preceding source
+fails its native-dialog preference assertion before a website script can open a native sheet.
+See [browser behavior](browser.md) and [decision](decisions.md#october-29--untrusted-page-scripts-cannot-open-native-app-dialogs).
+No candidate rebuild or live deployment is authorized for this follow-up.
+
 ## October 29 — combined 0.2.36 rollout in progress, HC authorized
 
 The operator requests the combined iOS/desktop/web changes and full physical iPhone/iPad,

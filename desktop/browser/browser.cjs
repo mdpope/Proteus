@@ -16,6 +16,7 @@ const { connectPage } = require('./playwright-bridge.cjs');
 const { acquireDebugger } = require('./debugger-session.cjs');
 const { loadURLWithTimeout, cancelNavigation } = require('../windows/navigation.cjs');
 const { BrowserActions } = require('./browser-actions.cjs');
+const { pageWebPreferences } = require('./browser-page-preferences.cjs');
 const { retirementCandidates } = require('./browser-retention.cjs');
 const { FaviconResolver, finishIconResponse } = require('./favicon-resolver.cjs');
 const {validateCapture,visualPoint}=require('./browser-visual.cjs');
@@ -303,7 +304,7 @@ class BrowserTabs {
     const backgroundWindow=descriptor.background?this.window:null,previousFocus=backgroundWindow?.isFocused()?webContents.getFocusedWebContents():null;
     const preserveFocus=previousFocus&&(previousFocus===backgroundWindow.webContents||this.windowTabs().some(tab=>tab.view?.webContents===previousFocus));
     const tab = { ...(this.options.projects?{hidden:descriptor.hidden===true,lastActivityAt:Date.parse(descriptor.lastActivityAt)||Date.parse(descriptor.openedAt)||(descriptor.restore||descriptor.recreating?null:Date.now())}:{}),associationChatId:descriptor.associationChatId||owner||null,persist:descriptor.persist===true,openedAt:Date.parse(descriptor.openedAt)||(descriptor.restore||descriptor.recreating?null:Date.now()),profileId,parentId:typeof descriptor.parentId==='string'?descriptor.parentId.slice(0,256):descriptor.explicitParent?null:owner,destination:descriptor.destination,workspaceName:descriptor.workspaceName,id: descriptor.id||randomUUID(), group:descriptor.group==='team'?'team':'main', favicon:safeFavicon(descriptor.favicon), agentActions:owner?1:0, shared: false, owner, lastTouchedAt:Date.parse(descriptor.lastTouchedAt)||(descriptor.restore||descriptor.recreating?null:Date.now()), view: new WebContentsView({ webPreferences: {
-      preload: require('node:path').join(__dirname,'browser-preload.cjs'), session: partition, nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true, disableHtmlFullscreenWindowResize:true, backgroundThrottling: true, additionalArguments:this.media?.blocked?['--proteus-block-video-autoplay']:[]
+      ...pageWebPreferences({preload: require('node:path').join(__dirname,'browser-preload.cjs'), session: partition, webSecurity: true, disableHtmlFullscreenWindowResize:true, backgroundThrottling: true, additionalArguments:this.media?.blocked?['--proteus-block-video-autoplay']:[]})
     } }) };
     tab.pendingCreation=descriptor.pendingCreation===true;tab.windowId=this.windowId();tab.retainedTitle=descriptor.title;tab.logicalHistory=restoreNavigation(savedHistory||descriptor.retainedNavigation,this.appOrigin);tab.navigationPending=descriptor.navigationPending===true&&validPendingNavigation(savedHistory||descriptor.retainedNavigation)&&!!tab.logicalHistory;tab.applyingShared=!!tab.logicalHistory||!!(this.options.projects&&(descriptor.restore||descriptor.recreating));
     const placement=this.previewPlacement(tab);if(placement)Object.assign(tab,placement);

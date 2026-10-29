@@ -1,3 +1,19 @@
+## October 29 — website dialogs and diagnostic tab IDs, next release only
+
+The operator reports an ad-permission prompt blocking the entire Electron window and requests
+source fixes for the next release, without another deployment. Website and extension content now
+uses Electron's documented `disableDialogs` preference before scripts execute. Alerts are ignored
+and confirms cancel; ordinary HTML dialogs remain within their page and host approvals are
+unchanged. No ad-blocking or live profile settings change.
+
+Browser tab context menus now place **Copy tab ID** directly above **Persist tab**. It copies the
+clicked tab's current browser-tool ID, without selecting it, persisting it or sharing its page.
+Disposable Electron acceptance passes foreground/background and repeated script dialogs, frames,
+extension popups, shell interaction, HTML dialogs, unsaved-page unload protection and the actual
+Copy tab ID menu/clipboard flow. The preceding source fails before invoking any dialog. Full Node
+validation passes 1,293 cases with four skips; static checks pass. Packaging/deployment is held
+for the next release.
+
 ## October 29 — web sidebar follows desktop palette
 
 The reported darker web sidebar was caused by hard-coded navigation colors overriding the

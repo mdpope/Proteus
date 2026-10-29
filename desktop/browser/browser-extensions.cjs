@@ -3,6 +3,7 @@ const fs=require('node:fs'),path=require('node:path');
 const {randomUUID,createHash}=require('node:crypto');
 const {BrowserWindow,dialog,nativeImage,app,screen,nativeTheme}=require('electron');
 const {extensionName}=require('./extension-metadata.cjs');
+const {pageWebPreferences}=require('./browser-page-preferences.cjs');
 const {ElectronChromeExtensions}=require('electron-chrome-extensions');
 const {downloadExtension}=require('electron-chrome-web-store');
 // Native helpers may retry from several profiles/windows. Warn once per extension
@@ -64,7 +65,7 @@ class BrowserExtensions {
    width,height,x:Math.round(Math.max(area.x,Math.min(area.x+area.width-width,parent.x+(Number.isFinite(x)?x:parent.width-width)))),
    y:Math.round(Math.max(area.y,Math.min(area.y+area.height-height,parent.y+(Number.isFinite(y)?y:90)))),
    show:false,backgroundColor:applePopup?'#243128':nativeTheme.shouldUseDarkColors?'#292a2d':'#ffffff',frame:true,closable:true,minimizable:false,maximizable:false,fullscreenable:false,resizable:options,
-   webPreferences:{session:host.session,sandbox:true,contextIsolation:true,nodeIntegration:false,enablePreferredSizeMode:!options}});
+   webPreferences:pageWebPreferences({session:host.session,enablePreferredSizeMode:!options})});
   popup.extensionURL=target.href;this.windows.add(popup);
   popup.on('closed',()=>{this.windows.delete(popup);if(!this.browser.window.isDestroyed())this.browser.window.focus();});
   popup.webContents.setWindowOpenHandler(()=>({action:'deny'}));

@@ -2,6 +2,7 @@ const { app, Menu, shell, clipboard, dialog, nativeImage, WebContentsView } = re
 const path = require('node:path');
 const { safeHistoryURL } = require('./browser-history.cjs');
 const {BrowserDownloads}=require('./browser-downloads.cjs');
+const {pageWebPreferences}=require('./browser-page-preferences.cjs');
 
 class BrowserActions {
   constructor(browser) {
@@ -89,7 +90,7 @@ class BrowserActions {
   startDownload(url,profileId,file,options={}) {
     if(!this.link(url)||!this.browser.profileAvailable({profileId}))throw Error('This download source or profile is unavailable.');
     // A page cannot consume this grant: only a new, never-navigated webContents may download.
-    const view = new WebContentsView({webPreferences:{session:this.browser.sessionFor(profileId),nodeIntegration:false,contextIsolation:true,sandbox:true}});
+    const view = new WebContentsView({webPreferences:pageWebPreferences({session:this.browser.sessionFor(profileId)})});
     const wc = view.webContents;
     this.downloads.set(wc.id,{view,url,profileId,file,windowId:this.browser.windowId?.()||'main',...options,claimed:false,timer:setTimeout(() => this.disposeDownload(wc.id),60000)});
     try { wc.downloadURL(url); } catch (error) { this.disposeDownload(wc.id); throw error; }

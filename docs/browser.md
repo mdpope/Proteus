@@ -1469,3 +1469,23 @@ snapshot of the previous or next saved page, like Safari, and commits or springs
 recognizer remains disabled so one handler moves saved history, including beside a pinned iPad
 sidebar and for restored owner history. Once history is exhausted a project browser slides back to
 its project home. See the October 29 decision.
+## October 29 — website dialogs and diagnostic tab IDs
+
+Embedded websites, extension popups and temporary website targets use a common creation-time
+Electron WebPreferences boundary with `disableDialogs: true`. Website `alert()` is ignored and
+`confirm()` returns false instead of opening a native sheet over the Proteus window, including
+from background tabs and frames. Electron's already-unsupported `prompt()` behavior is unchanged.
+HTML `<dialog>` remains usable inside the originating page; native Proteus approvals and file
+pickers remain owned by the trusted host. This does not disable ads, consent pages or redirects
+inside a website, nor does it change any ad-blocking preference.
+
+Right-click a browser tab and choose **Copy tab ID**, immediately above **Persist tab**, to copy
+its current browser-tool ID. The clicked tab is captured independently of the active tab; copying
+does not activate, persist, share or navigate it. The ID identifies a tab for diagnosis, not an
+authorization grant. Page sharing still requires the ordinary human decision. Re-inventory after
+a restart rather than assuming an old window-local browser ID is permanent.
+
+Hold or right-click Back/Forward to choose an older saved history entry. Logical-history traversal
+loads that URL again; it is not a frozen snapshot and can run the site's redirect scripts again.
+Repeated entries for the same URL cannot bypass a site access requirement merely by selecting
+an older copy. Native-dialog suppression does not promise to bypass such redirects.
