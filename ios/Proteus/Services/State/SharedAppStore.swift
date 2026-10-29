@@ -1191,11 +1191,18 @@ let nativeFixtureRelayOrigin = ""
         } else { reload(id) }
     }
     func prepareBrowserHistoryNavigation(_ url: URL, in id: String) {
-        guard historyNavigation[id] == nil, let tab = browserTabs.first(where: { $0.id == id }), let history = tab.history,
+        // App-initiated traversals set historyNavigation first; this is WebKit's own
+        // edge swipe (or page script). It is a user traversal, never a mirrored load.
+        guard historyNavigation[id] == nil else { return }
+        nativeTraversals[id] = Date()
+        guard let tab = browserTabs.first(where: { $0.id == id }), let history = tab.history,
               history.entries.indices.contains(history.index), history.entries[history.index].url != url.absoluteString else { return }
         let candidates = history.entries.indices.filter { history.entries[$0].url == url.absoluteString }
-        if let selected = candidates.min(by: { abs($0 - history.index) < abs($1 - history.index) }) { historyNavigation[id] = selected }
+        if let selected = candidates.min(by: { abs($0 - history.index) < abs($1 - history.index) }) { historyNavigation[id] = selected; mirroredBrowserLoads.remove(id) }
     }
+    private var nativeTraversals: [String: Date] = [:]
+    /// Whether WebKit's swipe already moved this tab, so the backup swipe must not move it again.
+    func nativeTraversal(_ id: String, since date: Date) -> Bool { (nativeTraversals[id] ?? .distantPast) >= date }
     private var serverRedirectedBrowsers = Set<String>()
     private var originalBrowserLoads: [String: String] = [:]
     func prepareBrowserLoad(_ url: URL, in id: String, userInitiated: Bool = false) {
@@ -1349,7 +1356,7 @@ let nativeFixtureRelayOrigin = ""
         // Proteus owns the full content-relative edge gesture. Native gesture
         // recognition has different thresholds and must not race that handler.
         // goBrowserHistory still reuses matching native page instances via go(to:).
-        view.allowsBackForwardNavigationGestures = false; view.isFindInteractionEnabled = true
+        view.allowsBackForwardNavigationGestures = true; view.isFindInteractionEnabled = true
         browserViews[tab.id] = view
         browserObservations[tab.id] = [observeBrowser(view, id: tab.id, keyPath: \.canGoBack), observeBrowser(view, id: tab.id, keyPath: \.canGoForward), observeBrowser(view, id: tab.id, keyPath: \.isLoading), observeBrowser(view, id: tab.id, keyPath: \.url), observeBrowser(view, id: tab.id, keyPath: \.title)]
         if let text = tab.url, let url = URL(string: text) { mirroredBrowserLoads.insert(tab.id); pendingBrowserLoads[tab.id] = url.absoluteString; applyPageScale(tab.id, url: url); view.load(URLRequest(url: url)) }

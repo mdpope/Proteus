@@ -482,6 +482,42 @@ struct NewChatView: View {
         store.error = "Copy an image or a file supported by this provider, then paste it here."
     }
 }
+/// Press-and-hold actions for a chat's tab. Chats have no header bar, so link, rename,
+/// move, archive and delete live on the tab that names the chat.
+struct NativeChatTabActions<Extra: View>: ViewModifier {
+    @Environment(RemoteStore.self) private var store
+    let chatID: String
+    @ViewBuilder var extra: () -> Extra
+    @State private var rename = false
+    @State private var move = false
+    @State private var confirmDelete = false
+    private var run: JSON { store.chats[chatID] ?? store.state["runs"].array.first { $0["id"].string == chatID } ?? .null }
+    private var lifecycle: Bool { store.connected && store.state["capabilities"].array.contains(.string("chat.lifecycle.v1")) && run != .null }
+    func body(content: Content) -> some View {
+        content.contextMenu {
+            Button("Copy chat link", systemImage: "link") { UIPasteboard.general.url = NativeChatLink.url(host: store.connection?.hostId ?? "", id: chatID) }
+            if store.state["capabilities"].array.contains(.string("chat.rename.v1")) { Button("Rename", systemImage: "pencil") { rename = true } }
+            extra()
+            if lifecycle {
+                if run["chatType"].string == "internet" { Button("Promote to User Chat", systemImage: "person.bubble") { Task { do { _ = try await store.request("chat.promote", ["id": .string(chatID), "expectedUpdatedAt": run["updatedAt"]]); await store.openChat(chatID) } catch { store.error = error.localizedDescription } } } }
+                Button("Move", systemImage: "arrow.right.square") { move = true }
+                Button(run["archived"].bool ? "Unarchive chat" : "Archive chat", systemImage: "archivebox") { Task { do { try await store.archiveChat(chatID, archived: !run["archived"].bool) } catch { store.error = error.localizedDescription } } }.disabled(chatHasPendingWork(run))
+                Button("Delete chat", systemImage: "trash", role: .destructive) { confirmDelete = true }.disabled(chatHasPendingWork(run))
+            }
+        }
+        .sheet(isPresented: $rename) { NativeChatRenameView(run: run).environment(store) }
+        .sheet(isPresented: $move) { NativeChatWorkspaceMoveView(chatID: chatID).environment(store) }
+        .confirmationDialog("Delete this chat?", isPresented: $confirmDelete) {
+            Button("Delete chat", role: .destructive) { Task { do { try await store.deleteChat(chatID) } catch { store.error = error.localizedDescription } } }
+            Button("Cancel", role: .cancel) {}
+        } message: { Text("Only the Proteus chat record will be removed. Generated files and the provider’s original chat remain.") }
+    }
+}
+extension View {
+    func nativeChatTabActions<Extra: View>(_ chatID: String, @ViewBuilder extra: @escaping () -> Extra) -> some View { modifier(NativeChatTabActions(chatID: chatID, extra: extra)) }
+    func nativeChatTabActions(_ chatID: String) -> some View { modifier(NativeChatTabActions(chatID: chatID, extra: { EmptyView() })) }
+}
+
 struct NativeChatRenameView: View {
     @Environment(RemoteStore.self) var store
     @Environment(\.dismiss) private var dismiss
@@ -776,7 +812,9 @@ struct ChatView: View {
     private var missingAttachments: [JSON] { missingAttachmentRecords(store: store, draftKey: attachmentDraftKey, items: attachments) }
     private var chatLayout: some View {
         VStack(spacing: 0) {
-            if (sizeClass != .regular || embedded) && (!NativePhonePreview.enabled || !phoneChrome.controlsHidden) { compactHeader }
+            // No chat header: its actions are on the chat tab (press and hold), and the
+            // project/tab bars own navigation. Only compact iPad split views keep Back.
+            if sizeClass != .regular && !NativePhonePreview.enabled && !embedded { compactHeader }
             if NativePhonePreview.enabled {
                 if !phoneChrome.controlsHidden { childTabs }
             } else if !embedded { childTabs }
@@ -835,7 +873,8 @@ struct ChatView: View {
         .background { if NativeDesignPreview.enabled && phoneAreaActive { NativePhoneSurface(chrome: phoneChrome, overviewEnabled: !shared.tabs(in: chatBrowserScope).contains(where: { $0.id == selectedChild })) } }
         .onChange(of: selectedChild) { _, _ in if NativeDesignPreview.enabled { registerPhoneTab() } }
         .onChange(of: phoneAreaActive) { _, active in if NativePhonePreview.enabled && active { phoneChrome.browserOwnsBack = false; registerPhoneTab() } }
-        .modifier(NativePageSwipe(enabled: !NativePhonePreview.enabled && !shared.tabs(in: chatBrowserScope).contains(where: { $0.id == selectedChild }), back: returnToChats))
+        // A project chat swipes back to its project home; unassigned iPhone chats use UIKit's pop.
+        .modifier(NativePageSwipe(enabled: (!NativePhonePreview.enabled || embedded) && !shared.tabs(in: chatBrowserScope).contains(where: { $0.id == selectedChild }), phone: embedded, back: returnToChats))
         .task(id: contentRefreshIdentity) {
             guard scenePhase == .active, !NativePhonePreview.enabled || phoneAreaActive else { return }
             #if DEBUG
@@ -939,10 +978,12 @@ struct ChatView: View {
     }
     private var childTabs: some View {
         HStack(spacing: 0) {
+            // An unassigned iPhone chat has no project bar above it, so this row holds the drawer.
+            if NativePhonePreview.enabled && !embedded { NativeSidebarButton(); Divider().frame(height: 24) }
             Button { if NativePhonePreview.enabled { phoneChrome.captureCurrent() }; selectedChild = "chat"; shared.selectChatChild("chat", for: chatBrowserScope) } label: { Label("Chat", systemImage: "bubble.left.and.bubble.right") }.accessibilityIdentifier("chat-conversation-tab")
                 .lineLimit(1).padding(.horizontal, 12).frame(minHeight: 44)
                 .overlay(alignment: .bottom) { Rectangle().fill(selectedChild == "chat" ? NativeTheme.accent : .clear).frame(height: 2) }
-                .contextMenu { Button("Copy chat link", systemImage: "link") { UIPasteboard.general.url = NativeChatLink.url(host: store.connection?.hostId ?? "", id: id) }; if store.state["capabilities"].array.contains(.string("chat.rename.v1")) { Button("Rename", systemImage: "pencil") { showRename = true } } }
+                .nativeChatTabActions(id)
             Divider().frame(height: 24)
 NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs: documents.map(\.id)), selection: selectedChild) { HStack(spacing: 0) {
             ForEach(shared.orderedChatChildren(in: chatBrowserScope, documentIDs: documents.map(\.id)), id: \.self) { childID in
@@ -1218,7 +1259,7 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
                 restoringConversation = false
                 followLatest = snapshot.atEnd
             }).frame(width: 1, height: 1).opacity(0))
-        }.coordinateSpace(name: "conversation-scroll").scrollDismissesKeyboard(.interactively).accessibilityIdentifier("chat-conversation-scroll")
+        }.coordinateSpace(name: "conversation-scroll").scrollDismissesKeyboard(.interactively).accessibilityIdentifier("chat-conversation-scroll").accessibilityLabel(run["title"].string.isEmpty ? "Conversation" : run["title"].string)
             .simultaneousGesture(TapGesture().onEnded { composerHasFocus = false; composerExpanded = false })
             .simultaneousGesture(DragGesture(minimumDistance: 4).onChanged { _ in
                 composerHasFocus = false; composerExpanded = false

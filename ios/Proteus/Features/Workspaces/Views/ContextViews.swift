@@ -557,6 +557,8 @@ struct NativeWorkspacesView: View {
     var onOpen: ((NativeWorkspaceIdentity) -> Void)? = nil
     @State private var search = ""
     @State private var selected: NativeWorkspaceIdentity?
+    /// The workspace last swiped/popped away from; a forward edge swipe reopens it.
+    @State private var previous: NativeWorkspaceIdentity?
     @State private var copying: NativeWorkspaceIdentity?
     @State private var creating = false
     var body: some View {
@@ -571,6 +573,7 @@ struct NativeWorkspacesView: View {
                 }
                 if NativeWorkspaceIdentity.all(destinations).isEmpty { Text("Connect a computer to see its workspaces.").foregroundStyle(.secondary) }
             }.navigationTitle(NativeDesignPreview.enabled ? "" : "Workspaces").nativeFeaturePage("Workspaces", search: $search).refreshable { await destinations.refreshAll() }
+                .modifier(NativePageSwipe(enabled: NativePhonePreview.enabled, phone: true, blockBack: true, blockForward: previous == nil, forward: { if let previous { open(previous) } }))
                 .toolbar { Button("New workspace", systemImage: "plus") { creating = true }.disabled(!destinations.destinations.contains { destinations.remote(for: $0.id)?.connected == true }) }
                 .navigationDestination(item: $selected) { entry in if let remote = destinations.remote(for: entry.hostID) { NativeWorkspaceView(workspaceID: entry.workspaceID).environment(remote).modifier(NativePhoneBackNavigation()) } }
                 .sheet(item: $copying) { entry in NativeWorkspaceCopyView(source: entry) { copy in copying = nil; destinations.remote(for: copy.hostID)?.setDraft("workspace-page:" + copy.workspaceID, .string("Configuration")); open(copy) } }
@@ -578,7 +581,7 @@ struct NativeWorkspacesView: View {
         }.task { await destinations.refreshAll() }
         .onAppear { if NativePhonePreview.enabled, let requestedWorkspace { selected = requestedWorkspace } }
         .onChange(of: requestedWorkspace) { _, value in if NativePhonePreview.enabled { selected = value } }
-        .onChange(of: selected) { _, value in if NativePhonePreview.enabled { onPhoneSelection?(value) } }
+        .onChange(of: selected) { old, value in if value == nil, let old { previous = old }; if NativePhonePreview.enabled { onPhoneSelection?(value) } }
     }
     private func open(_ entry: NativeWorkspaceIdentity) {
         destinations.remote(for: entry.hostID)?.setDraft("workspace-last-opened:" + entry.workspaceID, .string(ISO8601DateFormatter().string(from: Date())))
@@ -679,7 +682,7 @@ struct NativeWorkspaceContentView: View {
             if shared.tabs(in: scope).contains(where: { $0.id == selected }) { shared.select(selected, in: scope) }
         }).background(NativeTheme.background).navigationTitle(NativeDesignPreview.enabled ? "" : profile["name"].string).navigationBarTitleDisplayMode(.inline)
             .toolbar(NativePhonePreview.enabled && phoneChrome.controlsHidden ? .hidden : .automatic, for: .navigationBar)
-            .nativeFeaturePage(projectID.flatMap { store.projectCatalog.project(id: $0, workspaceID: workspaceID)?["name"].string } ?? profile["name"].string, barHidden: NativePhonePreview.enabled && selected.hasPrefix("chat:"))
+            .nativeFeaturePage(projectID.flatMap { store.projectCatalog.project(id: $0, workspaceID: workspaceID)?["name"].string } ?? profile["name"].string, barHidden: NativePhonePreview.enabled)
             .sheet(isPresented: $reorder) { NativeTabReorderSheet(items: orderedChildren.map { (id: $0["id"].string, title: $0["title"].string) }) { ids in let children = orderedChildren; mutateTabs([.object(["action": .string("reorder"), "ids": .array(ids.compactMap { id in children.first { $0["id"].string == id }?["sortId"] })])]) } }
             .sheet(item: $transferTab) { tab in NativeBrowserTransferView(tab: tab) }
             .sheet(isPresented: $newChat) { NewChatView(internet: internet, lockedWorkspaceID: workspaceID, lockedProjectID: projectID) { id in newChat = false; openChat(id) }.environment(store) }
@@ -690,18 +693,26 @@ struct NativeWorkspaceContentView: View {
                 guard let value else { return }
                 NativeWorkspaceNavigation.adoptOwnerChats(value, navigationKey: navigationKey, remote: store)
             }
+            .onAppear { claimBack() }
+            .onChange(of: selected) { _, _ in claimBack() }
+            .onChange(of: areaActive) { _, active in if active { claimBack() } else if NativePhonePreview.enabled { phoneChrome.contentOwnsBack = false } }
+            .onDisappear { if NativePhonePreview.enabled { phoneChrome.contentOwnsBack = false } }
             // Poll only while this project is on screen; hidden phone areas stay mounted.
             .task(id: scope + String(areaActive) + String(scenePhase == .active)) { guard areaActive, scenePhase == .active else { return }; while !Task.isCancelled { await shared.refreshContentTabs(scope: scope, remote: store, kind: scopeKind, id: scopeID); try? await Task.sleep(for: .seconds(3)) } }
     }
     private var workspacePageNames: [String] { projectID == nil ? (store.supportsProjects ? ["Projects", "Chats", "Tabs", "Configuration"] : ["Chats", "Tabs", "Configuration"]) : [] }
+    private var homeTabID: String { selected == "workspace" ? (projectID == nil ? "page:" + page : "page:home") : selected }
     private var workspaceTabStrip: some View {
         HStack(spacing: 0) {
-            if let projectID {
-                Button { selected = "workspace" } label: { Label(store.projectCatalog.project(id: projectID, workspaceID: workspaceID)?["name"].string ?? "Project", systemImage: "folder").padding(12).background(selected == "workspace" ? NativeTheme.accent.opacity(0.12) : .clear) }.overlay(alignment: .bottom) { Rectangle().fill(selected == "workspace" ? NativeTheme.accent : .clear).frame(height: 2) }.accessibilityIdentifier("project-pinned-tab")
-                Divider().frame(height: 24)
-            }
-            NativeTabStrip(ids: workspacePageNames.map { "page:" + $0 } + orderedChildren.map { $0["id"].string }, selection: selected == "workspace" ? "page:" + page : selected) {
+            // The only sidebar control on iPhone and (for workspace tabs) iPad; no header bar.
+            NativeSidebarButton()
+            NativeTabStrip(ids: (projectID == nil ? workspacePageNames.map { "page:" + $0 } : ["page:home"]) + orderedChildren.map { $0["id"].string }, selection: homeTabID) {
                 HStack(spacing: 0) {
+                    // The project home scrolls with its tabs; a pinned tab costs too much width on iOS.
+                    if let projectID {
+                        Button { selected = "workspace" } label: { Label(store.projectCatalog.project(id: projectID, workspaceID: workspaceID)?["name"].string ?? "Project", systemImage: "folder").lineLimit(1).frame(maxWidth: 200).padding(12).background(selected == "workspace" ? NativeTheme.accent.opacity(0.12) : .clear) }.overlay(alignment: .bottom) { Rectangle().fill(selected == "workspace" ? NativeTheme.accent : .clear).frame(height: 2) }.accessibilityIdentifier("project-pinned-tab").id("page:home")
+                        Divider().frame(height: 24)
+                    }
                     ForEach(workspacePageNames, id: \.self) { name in
                         Button(name) { selected = "workspace"; page = name }.padding(.horizontal, 10).padding(.vertical, 12).background(selected == "workspace" && page == name ? NativeTheme.accent.opacity(0.12) : .clear).overlay(alignment: .bottom) { Rectangle().fill(selected == "workspace" && page == name ? NativeTheme.accent : .clear).frame(height: 2) }.accessibilityIdentifier("workspace-page-" + name).id("page:" + name)
                         Divider().frame(height: 24)
@@ -722,11 +733,7 @@ struct NativeWorkspaceContentView: View {
                 if selected == child["id"].string { selected = "workspace" }
             } label: { Image(systemName: "xmark").font(.caption2) }.accessibilityLabel("Close " + child["title"].string)
         }.padding(12).background(selected == child["id"].string ? NativeTheme.accent.opacity(0.12) : .clear).overlay(alignment: .bottom) { Rectangle().fill(selected == child["id"].string ? NativeTheme.accent : .clear).frame(height: 2) }.id(child["id"].string)
-            .contextMenu {
-                if child["type"].string == "chat" { Button("Copy chat link", systemImage: "link") { UIPasteboard.general.url = NativeChatLink.url(host: hostID, id: child["chatId"].string) } }
-                if child["type"].string == "chat", let onOpenMain { Button("Open in main navigation") { onOpenMain(AggregateChat(hostID: hostID, hostName: destinations.destinations.first { $0.id == hostID }?.label ?? "Computer", run: run(child["chatId"].string))) } }
-                if let tab = shared.tabs(in: scope).first(where: { $0.id == child["id"].string }) { Button("Send tab", systemImage: "arrow.right.square") { transferTab = tab } }
-            }
+            .modifier(NativeWorkspaceChildMenu(child: child, scope: scope, hostID: hostID, onOpenMain: onOpenMain, transferTab: $transferTab))
     }
     private func openManagedTab(_ tab: JSON) {
         if projectID == nil, tab["ownerScope"].string == "project" {
@@ -743,6 +750,31 @@ struct NativeWorkspaceContentView: View {
     }
     private func closeChat(_ id: String) { NativeWorkspaceNavigation.closeChat(id, navigationKey: navigationKey, remote: store); mutateTabs([.object(["action": .string("close"), "id": .string("chat:" + id)])]) }
     private func mutateTabs(_ operations: [JSON]) { NativeWorkspaceNavigation.mutate(operations, kind: scopeKind, id: scopeID, scope: scope, remote: store, shared: shared) }
+    /// A selected tab swipes back to this page's home before UIKit pops to the parent.
+    private func claimBack() { if NativePhonePreview.enabled && areaActive { phoneChrome.contentOwnsBack = selected != "workspace" } }
+}
+
+/// Press-and-hold menu for a project/workspace tab. Chat tabs carry the chat's actions.
+private struct NativeWorkspaceChildMenu: ViewModifier {
+    @Environment(RemoteStore.self) private var store
+    @EnvironmentObject private var shared: SharedAppStore
+    @EnvironmentObject private var destinations: DestinationStore
+    let child: JSON
+    let scope: String
+    let hostID: String
+    var onOpenMain: ((AggregateChat) -> Void)?
+    @Binding var transferTab: BrowserDescriptor?
+    func body(content: Content) -> some View {
+        if child["type"].string == "chat" {
+            content.nativeChatTabActions(child["chatId"].string) {
+                if let onOpenMain { Button("Open in main navigation", systemImage: "rectangle.stack") { onOpenMain(AggregateChat(hostID: hostID, hostName: destinations.destinations.first { $0.id == hostID }?.label ?? "Computer", run: NativeWorkspaceNavigation.run(child["chatId"].string, remote: store))) } }
+            }
+        } else {
+            content.contextMenu {
+                if let tab = shared.tabs(in: scope).first(where: { $0.id == child["id"].string }) { Button("Send tab", systemImage: "arrow.right.square") { transferTab = tab } }
+            }
+        }
+    }
 }
 
 struct NativeWorkspaceCopyView: View {

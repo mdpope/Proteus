@@ -283,7 +283,8 @@ final class RemoteUITests: XCTestCase {
             XCTAssertTrue(tab.waitForExistence(timeout: 10), step + ": the chat is a named project tab")
             let selected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "Selected"), object: tab)
             XCTAssertEqual(XCTWaiter.wait(for: [selected], timeout: 8), .completed, step + ": project tab strip selects the chat")
-            let header = app.staticTexts["chat-header-title"]
+            // No chat header: the conversation itself is labelled with the displayed chat.
+            let header = app.scrollViews["chat-conversation-scroll"]
             let shown = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", title), object: header)
             XCTAssertEqual(XCTWaiter.wait(for: [shown], timeout: 8), .completed, step + ": displayed conversation matches the selected tab")
             XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND identifier ENDSWITH %@", "shell-tab-", chatIDs[index])).count, 0, step + ": associated chats never become top-level tabs")
@@ -327,6 +328,72 @@ final class RemoteUITests: XCTestCase {
         shot("07 project browser")
         drawer(); shot("08 drawer from browser")
     }
+    /// Operator-run tour against an already paired preview app and a real host (never part of CI).
+    /// Set TEST_RUNNER_PROTEUS_REAL_HOST_BUNDLE and optionally TEST_RUNNER_PROTEUS_REAL_WORKSPACE.
+    @MainActor func testRealHostTour() async throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let bundle = env["PROTEUS_REAL_HOST_BUNDLE"], !bundle.isEmpty else { throw XCTSkip("Real-host tour needs a paired preview bundle.") }
+        let app = XCUIApplication(bundleIdentifier: bundle); app.launchArguments = ["--native-design-preview"]; app.launch()
+        let phone = UIDevice.current.userInterfaceIdiom == .phone
+        func shot(_ name: String) { let a = XCTAttachment(screenshot: app.screenshot()); a.name = name; a.lifetime = .keepAlways; add(a) }
+        func timed(_ label: String, _ body: () -> Void) { let start = Date(); body(); NSLog("REALTOUR %@ %.0fms", label, Date().timeIntervalSince(start) * 1000) }
+        func drawer() { if phone, let n = app.buttons.matching(identifier: "phone-app-navigation").allElementsBoundByIndex.first(where: { $0.isHittable }) { n.tap(); sleep(1) } }
+        sleep(10); shot("01 launch")
+        drawer(); shot("02 navigation")
+        let name = env["PROTEUS_REAL_WORKSPACE"] ?? "Personal"
+        let workspace = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label BEGINSWITH %@", "workspace-tree-open-", name)).firstMatch
+        if workspace.waitForExistence(timeout: 15) { timed("open workspace") { workspace.tap() }; sleep(2) }
+        shot("03 workspace")
+        drawer(); shot("04 navigation after workspace")
+        let project = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "project-tree-open-")).firstMatch
+        if project.waitForExistence(timeout: 8) { timed("open project") { project.tap() }; sleep(3) }
+        shot("05 project")
+        let chat = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "workspace-child-tab-chat:")).allElementsBoundByIndex.first(where: \.isHittable)
+        if let chat { timed("open chat") { chat.tap() }; sleep(2); shot("06 project chat"); chat.press(forDuration: 1.2); sleep(1); shot("07 chat tab menu"); app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.95)).tap(); sleep(1) }
+        let browser = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND NOT (identifier BEGINSWITH %@)", "workspace-child-tab-", "workspace-child-tab-chat:")).allElementsBoundByIndex.first(where: \.isHittable)
+        if let browser { timed("open browser") { browser.tap() }; sleep(3); shot("08 project browser")
+            // Edge swipe back: WebKit history first, then the project home.
+            let edge: CGFloat = phone ? 0 : 0.315, start = app.coordinate(withNormalizedOffset: CGVector(dx: edge, dy: 0.5)), end = app.coordinate(withNormalizedOffset: CGVector(dx: edge + 0.5, dy: 0.5))
+            start.press(forDuration: 0.05, thenDragTo: end); sleep(2); shot("09 after edge swipe back")
+        }
+        let overview = app.buttons.matching(NSPredicate(format: "identifier IN %@", ["browser-tab-overview", "chat-tab-overview", "main-tab-overview-button"])).allElementsBoundByIndex.first(where: \.isHittable)
+        if let overview { overview.tap(); sleep(2); shot("10 overview"); if app.buttons["Done"].exists { app.buttons["Done"].tap(); sleep(1) } }
+        drawer(); shot("11 navigation at end")
+    }
+    /// Edge swipes in a project browser: back one page per swipe (WebKit's swipe at the iPhone
+    /// screen edge, the content-edge backup beside the iPad sidebar), then the project home.
+    @MainActor func testProjectBrowserEdgeSwipesWalkHistoryThenProjectHome() async throws {
+        let app = nativeFixtureApplication(); app.launchArguments = ["--reset-pairing", "--phone-preview-fixture", "--synthetic-browser-workspace"]; app.launch()
+        let phone = UIDevice.current.userInterfaceIdiom == .phone
+        func drawer() { if phone, let n = app.buttons.matching(identifier: "phone-app-navigation").allElementsBoundByIndex.first(where: { $0.isHittable }) { n.tap(); sleep(1) } }
+        func shot(_ name: String) { let a = XCTAttachment(screenshot: app.screenshot()); a.name = name; a.lifetime = .keepAlways; add(a) }
+        sleep(5); drawer()
+        let studio = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "workspace-tree-open-", "Studio")).firstMatch
+        XCTAssertTrue(studio.waitForExistence(timeout: 10)); studio.tap(); sleep(1); drawer()
+        let project = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "project-tree-open-", "Design review")).firstMatch
+        XCTAssertTrue(project.waitForExistence(timeout: 5)); project.tap(); sleep(2)
+        let browser = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "workspace-child-tab-", "Synthetic project browser")).firstMatch
+        XCTAssertTrue(browser.waitForExistence(timeout: 8)); browser.tap(); sleep(2)
+        if app.buttons["Load tab"].exists { app.buttons["Load tab"].tap(); sleep(2) }
+        let web = app.webViews.firstMatch
+        if !web.staticTexts["First browser page"].waitForExistence(timeout: 15) { shot("first page missing") }
+        XCTAssertTrue(web.staticTexts["First browser page"].exists)
+        web.links["Next browser page"].tap(); XCTAssertTrue(web.staticTexts["Second browser page"].waitForExistence(timeout: 15))
+        web.links["Next browser page"].tap(); XCTAssertTrue(web.staticTexts["Third browser page"].waitForExistence(timeout: 15))
+        let origin = app.coordinate(withNormalizedOffset: .zero), y = web.frame.midY
+        let left = phone ? 2 : web.frame.minX + 24, right = phone ? app.frame.maxX - 2 : web.frame.maxX - 24
+        func swipe(from x: CGFloat, by dx: CGFloat) { origin.withOffset(CGVector(dx: x, dy: y)).press(forDuration: 0.05, thenDragTo: origin.withOffset(CGVector(dx: x + dx, dy: y))); sleep(2) }
+        swipe(from: left, by: 200); shot("back to second")
+        XCTAssertTrue(web.staticTexts["Second browser page"].waitForExistence(timeout: 10), "One edge swipe moves exactly one history entry")
+        XCTAssertFalse(web.staticTexts["First browser page"].exists, "WebKit's swipe and the backup never both move the page")
+        swipe(from: right, by: -200)
+        XCTAssertTrue(web.staticTexts["Third browser page"].waitForExistence(timeout: 10), "Forward keeps the forward entry")
+        swipe(from: left, by: 200); swipe(from: left, by: 200)
+        XCTAssertTrue(web.staticTexts["First browser page"].waitForExistence(timeout: 10))
+        swipe(from: phone ? 2 : web.frame.minX + 24, by: 200); shot("history exhausted")
+        XCTAssertTrue(app.segmentedControls.buttons["Chats"].waitForExistence(timeout: 8), "With history exhausted, back returns to the project home")
+        XCTAssertTrue(app.buttons["New workspace tab"].exists, "The project stays open rather than popping to the workspace")
+    }
     /// The project tab strip's + and close, and the browser bar's tab overview, act on tabs.
     @MainActor func testProjectTabControlsAct() async throws {
         let app = nativeFixtureApplication(); app.launchArguments = ["--reset-pairing", "--phone-preview-fixture"]; app.launch()
@@ -338,12 +405,25 @@ final class RemoteUITests: XCTestCase {
         XCTAssertTrue(studio.waitForExistence(timeout: 10)); studio.tap(); sleep(1); drawer()
         let project = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "project-tree-open-", "Design review")).firstMatch
         XCTAssertTrue(project.waitForExistence(timeout: 5)); project.tap(); sleep(2)
+        // No header bar: the sidebar button leads the project bar, and a chat tab's
+        // press-and-hold menu carries the chat's actions.
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier IN %@", ["phone-app-navigation", "project-sidebar-toggle"])).allElementsBoundByIndex.contains { $0.isHittable }, "The project bar holds the sidebar button")
+        XCTAssertFalse(app.staticTexts["chat-header-title"].exists)
+        let chatTab = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "workspace-child-tab-chat:")).allElementsBoundByIndex.first { $0.isHittable }
+        XCTAssertNotNil(chatTab, "The project has a chat tab"); chatTab?.press(forDuration: 1.2)
+        // iPad presents context menu rows as menu items rather than buttons.
+        let copyLink = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Copy chat link")).firstMatch
+        if !copyLink.waitForExistence(timeout: 5) { print("Chat tab menu state: " + app.debugDescription) }
+        XCTAssertTrue(copyLink.exists, "Press and hold shows chat actions"); XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Rename")).firstMatch.exists); shot("chat tab menu")
+        copyLink.tap(); sleep(1)
         let tabs = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "workspace-child-tab-"))
         let before = tabs.count
         let plus = app.buttons.matching(NSPredicate(format: "label == %@", "New workspace tab")).allElementsBoundByIndex.first { $0.isHittable }
         XCTAssertNotNil(plus, "The project tab strip has a visible + button"); plus?.tap(); sleep(2); shot("after +")
         XCTAssertEqual(tabs.count, before + 1, "+ adds a project tab")
-        let close = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Close New tab")).allElementsBoundByIndex.first { $0.isHittable }
+        // Pick the close button beside the project's new tab (top-level tabs can share the label).
+        let added = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label == %@", "workspace-child-tab-", "New tab")).allElementsBoundByIndex.first { $0.isHittable }
+        let close = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Close New tab")).allElementsBoundByIndex.first { button in button.isHittable && added.map { tab in abs(button.frame.midY - tab.frame.midY) < 12 && button.frame.minX >= tab.frame.maxX - 4 } ?? true }
         XCTAssertNotNil(close, "The new tab has a close button"); close?.tap(); sleep(2); shot("after close")
         XCTAssertEqual(tabs.count, before, "Close removes the project tab")
         let browser = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "workspace-child-tab-", "Synthetic project browser")).firstMatch
@@ -799,12 +879,12 @@ final class RemoteUITests: XCTestCase {
         XCTAssertTrue(app.buttons["chat-conversation-tab"].waitForExistence(timeout: 8))
         XCTAssertFalse(app.staticTexts["chat-header-title"].exists)
         XCTAssertFalse(app.buttons["chat-back"].exists)
-        XCTAssertEqual(app.buttons.matching(identifier: "Chat actions").count, 1)
+        XCTAssertEqual(app.buttons.matching(identifier: "Chat actions").count, 0, "Chat actions are on the chat tab, not a header menu")
         app.buttons["Add chat tab"].tap(); app.buttons["Browser · Default"].firstMatch.tap()
         XCTAssertTrue(app.textFields["browser-address"].waitForExistence(timeout: 8))
         XCTAssertFalse(app.staticTexts["chat-header-title"].exists)
         XCTAssertFalse(app.buttons["chat-back"].exists)
-        XCTAssertEqual(app.buttons.matching(identifier: "Chat actions").count, 1)
+        XCTAssertEqual(app.buttons.matching(identifier: "Chat actions").count, 0, "Chat actions are on the chat tab, not a header menu")
         let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Tablet two tab rows"; shot.lifetime = .keepAlways; add(shot)
     }
     @MainActor func testWorkspaceTabsKeepTypeIconsAndChatNavigation() {
@@ -2314,7 +2394,8 @@ final class PhoneDesignPreviewUITests: XCTestCase {
         let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@ OR label CONTAINS %@", "Review desktop navigation refinements", "Desktop browser title rehearsal")).firstMatch
         for _ in 0..<4 { if row.exists { break }; app.swipeUp() }
         XCTAssertTrue(row.waitForExistence(timeout: 5)); row.tap()
-        XCTAssertTrue(app.staticTexts["chat-header-title"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.scrollViews["chat-conversation-scroll"].waitForExistence(timeout: 15))
+        XCTAssertFalse(app.staticTexts["chat-header-title"].exists, "Chats have no header bar")
         XCTAssertFalse(app.buttons["chat-back"].exists)
         XCTAssertFalse(app.buttons["Chat tools"].exists)
         let conversation = app.scrollViews["chat-conversation-scroll"]
@@ -2524,7 +2605,7 @@ final class PhoneSidebarPreviewUITests: XCTestCase {
         let item = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "project-recent-", "Synthetic project notes 8")).firstMatch
         for _ in 0..<5 { if item.isHittable { break }; drawer.swipeUp() }
         XCTAssertTrue(item.waitForExistence(timeout: 5)); item.tap()
-        let title = app.staticTexts["chat-header-title"]
+        let title = app.scrollViews["chat-conversation-scroll"]
         XCTAssertTrue(title.waitForExistence(timeout: 15)); XCTAssertEqual(title.label, "Synthetic project notes 8")
         XCTAssertFalse(app.buttons["browser-address"].isHittable)
         app.buttons["phone-app-navigation"].tap()

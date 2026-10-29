@@ -191,6 +191,8 @@ struct NativePhoneTab: Identifiable {
     private var delayedCaptureID = ""
     private var previewRefreshTask: Task<Void, Never>?
     var browserOwnsBack = false
+    /// A project/workspace tab is selected: swiping back returns to its home, not the pushed parent.
+    var contentOwnsBack = false
     var snapshot: (() -> UIImage?)?
     var showTabs: (() -> Void)?
     var activateArea: ((String) -> Void)?
@@ -208,7 +210,7 @@ struct NativePhoneTab: Identifiable {
         }
     }
 
-    func reset() { captureTask?.cancel(); captureTask = nil; delayedCapture?.cancel(); delayedCapture = nil; delayedCaptureID = ""; lastCapture = [:]; visited = []; recent = []; interactedAt = [:]; currentID = ""; snapshot = nil; overview = false; overviewProgress = 0; controlsHidden = false; browserSurfaceScope = nil; drawer = false; browserOwnsBack = false }
+    func reset() { captureTask?.cancel(); captureTask = nil; delayedCapture?.cancel(); delayedCapture = nil; delayedCaptureID = ""; lastCapture = [:]; visited = []; recent = []; interactedAt = [:]; currentID = ""; snapshot = nil; overview = false; overviewProgress = 0; controlsHidden = false; browserSurfaceScope = nil; drawer = false; browserOwnsBack = false; contentOwnsBack = false }
     func register(_ item: NativePhoneTab) {
         if captureTask == nil {
             captureTask = Task { @MainActor [weak self] in
@@ -351,7 +353,7 @@ private struct PhonePopBridge: UIViewControllerRepresentable {
             }
         }
         func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-            guard let nav = navigationController, nav.viewControllers.count > 1, nav.transitionCoordinator == nil, chrome?.browserOwnsBack != true else { return false }
+            guard let nav = navigationController, nav.viewControllers.count > 1, nav.transitionCoordinator == nil, chrome?.browserOwnsBack != true, chrome?.contentOwnsBack != true else { return false }
             // iOS 26 also installs a content pan. Reserve only its leading edge for app Back.
             if gestureRecognizer === contentPop {
                 guard gestureRecognizer.location(in: nav.view).x <= 64, let pan = gestureRecognizer as? UIPanGestureRecognizer else { return false }

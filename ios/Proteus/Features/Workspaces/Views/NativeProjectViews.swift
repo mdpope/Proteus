@@ -12,14 +12,19 @@ struct NativeWorkspaceView: View {
         VStack(spacing: 0) {
             if NativePhonePreview.enabled {
                 NativeWorkspaceContentView(workspaceID: workspaceID, onOpenProject: select, onOpenMain: onOpenMain).environment(store)
+                    // Back pops to the workspace list (UIKit); forward reopens the last project.
+                    .modifier(NativePageSwipe(phone: true, blockBack: true, blockForward: lastProject.isEmpty || tabSelected("workspace-navigation:" + workspaceID), forward: { select(lastProject) }))
                     .navigationDestination(isPresented: Binding(get: { !selection.isEmpty }, set: { if !$0 { select("") } })) {
                         NativeSelectedProjectView(workspaceID: workspaceID, onOpenMain: onOpenMain).environment(store).modifier(NativePhoneBackNavigation())
                     }
             } else if !selectedProject.isEmpty, store.projectCatalog.project(id: selectedProject, workspaceID: workspaceID) != nil {
                 if !NativePadPreview.enabled { HStack { Button { select("") } label: { Label("Workspace", systemImage: "chevron.left") }; Spacer() }.padding(.horizontal).padding(.vertical, 8) }
                 NativeWorkspaceContentView(workspaceID: workspaceID, projectID: selectedProject, onOpenMain: onOpenMain).id(selectedProject)
+                    // A project's home swipes back to its workspace; its tabs first return home.
+                    .modifier(NativePageSwipe(blockBack: tabSelected("project-navigation:" + selectedProject), blockForward: true, back: { select("") }))
             } else {
                 NativeWorkspaceContentView(workspaceID: workspaceID, onOpenProject: select, onOpenMain: onOpenMain).id(workspaceID)
+                    .modifier(NativePageSwipe(blockBack: true, blockForward: lastProject.isEmpty || tabSelected("workspace-navigation:" + workspaceID), forward: { select(lastProject) }))
             }
         }.onAppear { reconcile() }
         .onChange(of: store.state["workspaceProjects"]) { _, _ in reconcile() }
@@ -47,7 +52,12 @@ struct NativeWorkspaceView: View {
             store.setDraft("workspace-navigation:" + workspaceID, .object(remaining))
         }
     }
-    private func select(_ id: String) { store.setDraft("workspace-selected-project:" + workspaceID, .string(id)) }
+    private func select(_ id: String) {
+        if id.isEmpty, !selection.isEmpty { store.setDraft("workspace-last-project:" + workspaceID, .string(selection)) }
+        store.setDraft("workspace-selected-project:" + workspaceID, .string(id))
+    }
+    private var lastProject: String { let id = store.draft("workspace-last-project:" + workspaceID).string; return store.projectCatalog.project(id: id, workspaceID: workspaceID) == nil ? "" : id }
+    private func tabSelected(_ navigationKey: String) -> Bool { let value = store.draft(navigationKey)["selected"].string; return !value.isEmpty && value != "workspace" }
 }
 
 // A pushed destination must observe the owner's selection itself. A captured project

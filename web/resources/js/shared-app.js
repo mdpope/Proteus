@@ -8,6 +8,8 @@ import {authenticatedComputerMetadata} from '../../../public/services/remote/com
 import { BrowserDestinationStore, BrowserRemoteClient } from './remote-client.js';
 import { usageSidebar, usageDetails } from '../../../public/features/settings/provider-usage-view.js';
 const account = document.body.dataset.browserAccount;
+/** Projects of one workspace from the latest owner state, for overview Project home entries. */
+export const workspaceProjectsFor=(hostId,workspaceId)=>(ownerStates.get(hostId)?.workspaceProjects?.projects||[]).filter(project=>project.workspaceId===workspaceId);
 export const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export async function appRequest(path = '', method = 'GET', body) {
     const response = await fetch('/app-api' + path, {method, credentials:'same-origin',cache:'no-store',redirect:'manual',signal:AbortSignal.timeout(15000), headers:{Accept:'application/json','Content-Type':'application/json','X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]')?.content || '', 'X-Proteus-Account':account}, ...(body ? {body:JSON.stringify(body)} : {})});

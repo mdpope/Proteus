@@ -2602,3 +2602,19 @@ Child journals and selected-transcript caches are bounded. Summaries stay lightw
 Arbitrary file storage is separate from provider media support. Preserve exact originals and let a bounded active-turn tool read unsupported binary/oversized text, rather than reserializing huge text into a provider message. Rich paste is inert and uses plain text when hidden styles cannot be established. Explicit schedule folder grants pin the canonical destination at save, while workspace references resolve current configuration afresh with revision provenance.
 
 The measured browser optimization batches only redundant state projections at 16 ms. Mutations, access revocation and explicit reads remain synchronous to owner semantics. The comparison demonstrates reduced projection work, not a general claim of lower production memory or fewer active model processes.
+
+## October 29 — WebKit edge swipe with a deduplicated content-edge backup
+
+Supersedes the October 15 native content-edge correction at the operator's request for Safari's
+interactive page-image swipe. WebKit's back/forward recognizer is enabled again. The content-edge
+handler remains for pages beside a pinned iPad sidebar, restored owner history that WebKit does not
+hold, and the return to the previous screen once history is exhausted. To avoid the duplicate moves
+that motivated the earlier decision, the backup waits 450 ms and acts only if WebKit did not start
+its own traversal (WebKit-initiated back/forward navigations are recorded when they are decided;
+app-initiated traversals set their target first and are never counted). WebKit traversals un-mirror
+the tab so the saved history index and owner traverse operation follow them.
+
+Chats have no header bar. Their actions live on the tab that names the chat, so a project chat on
+iPhone shows only the project bar and the chat's own tab row. The single sidebar control sits at the
+start of the project/workspace bar on both iPhone and iPad and is never opened by an edge swipe.
+Project tabs swipe back to their project home before UIKit pops the project.

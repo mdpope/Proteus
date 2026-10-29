@@ -13,3 +13,5 @@ test('other projects are alphabetical and hidden ancestors exclude their descend
  assert.deepEqual(groups.map(g=>g.title),['One','Alpha','Two','Zulu','Studio']);assert.equal(new Set(groups.map(g=>g.id)).size,groups.length);
  assert.equal(groups.flatMap(g=>g.tabs).some(tab=>tab.id==='hidden-child'),false);assert.equal(groups.at(-1).id,'workspace:local:w');
 });
+
+test('each open project section carries its home tab for a Project home card',()=>{const groups=tabOverviewGroups({tabs,catalog,scope:'p1',selectedId:'browser'});assert.deepEqual(groups.map(g=>g.home?.id),['p1','p2']);assert.equal(groups.flatMap(g=>g.tabs).some(tab=>tab.type==='workspace'),false);const closed=tabOverviewGroups({tabs:tabs.filter(tab=>tab.id!=='p2'),catalog,scope:'p1',selectedId:'browser'});assert.equal(closed.find(g=>g.title==='Two').home,null);});

@@ -15,7 +15,9 @@ export function tabOverviewGroups({tabs,catalog,scope='main',selectedId,topId,te
   const projects=(catalog?.projects||[]).filter(project=>project.workspaceId===workspaceId);
   for(const tab of tabs)if(tab.type==='workspace'&&tab.workspaceId===workspaceId&&tab.projectId&&(tab.hostId||'local')===host&&!projects.some(p=>p.id===tab.projectId))projects.push({id:tab.projectId,name:tab.projectName||tab.label,workspaceId});
   projects.sort((a,b)=>(a.id===current?-1:b.id===current?1:0)||String(a.name||'').localeCompare(String(b.name||''),undefined,{sensitivity:'base'})||a.id.localeCompare(b.id));
-  const groups=projects.map(project=>({id:'project:'+host+':'+project.id,title:project.name||'Project',selectedId,tabs:tabs.filter(tab=>eligible(tab)&&tab.type!=='workspace'&&projectOf(tab)?.projectId===project.id)}));
+  // Each project section leads with its home tab (the project's Chats/Tabs page) when open.
+  const homeOf=project=>tabs.find(tab=>tab.type==='workspace'&&tab.projectId===project.id&&tab.workspaceId===workspaceId&&(tab.hostId||'local')===host&&eligible(tab))||null;
+  const groups=projects.map(project=>({id:'project:'+host+':'+project.id,title:project.name||'Project',selectedId,home:homeOf(project),tabs:tabs.filter(tab=>eligible(tab)&&tab.type!=='workspace'&&projectOf(tab)?.projectId===project.id)}));
   const direct=tabs.filter(tab=>eligible(tab)&&tab.type!=='workspace'&&ancestors(tab).some(row=>row.type==='workspace'&&!row.projectId&&row.workspaceId===workspaceId&&(row.hostId||'local')===host)&&!projectOf(tab));
   const legacyRoot=tabs.find(tab=>tab.type==='workspace'&&!tab.projectId&&tab.workspaceId===workspaceId&&(tab.hostId||'local')===host);
   if(direct.length)groups.push({id:'workspace:'+host+':'+workspaceId,title:legacyRoot?.workspaceName||legacyRoot?.label||scoped.workspaceName||'Workspace',selectedId,tabs:direct});

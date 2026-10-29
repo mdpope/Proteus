@@ -1461,3 +1461,10 @@ Browser state-change bursts coalesce projection/IPC work over 16 ms. Direct read
 New top-level browser tabs retain the existing `pendingOpen` creation marker until owner synchronization acknowledges the same identity. Native browser-state broadcasts may register the view before the create reply; `openTab` preserves the marker on that existing view. Initial reconciliation against a populated owner registry must distinguish this new user action from an obsolete restored tab. Saved/restored untracked tabs still follow the existing owner-authority rules.
 
 `test/browser-strip-create-ui.mjs` reproduces the failure by starting inside a project with a populated main registry, double-clicking the actual empty top-strip area, then reconciling and entering a URL. It verifies selection, native-view survival, marker settlement and project-strip navigation. Source acceptance is separate from installation in the running desktop.
+
+## October 29 native swipe update
+
+WebKit's interactive back/forward swipe is enabled on iPhone and iPad. The content-edge gesture
+described above is now the backup: it acts after a short delay only when WebKit did not traverse,
+covering the edge beside a pinned iPad sidebar and owner history missing from WebKit. Once history is
+exhausted, a project browser returns to its project home. See the October 29 decision.

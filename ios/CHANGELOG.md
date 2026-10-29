@@ -1,3 +1,14 @@
+# Native follow-up, October 29, 2026 — simulator validation
+
+Paired with the real Build Mac (0.2.33) in both preview simulators. Relay messages up to 8 MB are
+accepted; the 1 MiB URLSession default had kept real hosts offline. Chats have no header: chat actions
+are on the chat tab's press-and-hold menu and the sidebar button leads the project bar on iPhone and
+iPad. The project home tab scrolls with its tabs. WebKit's Safari-style edge swipe is enabled with
+the content-edge swipe as a deduplicated backup; exhausted history returns to the project home, and
+forward swipes reopen the last project/workspace. Tab overviews start each project with a Project
+home card. Simulator UI tests for project tabs, chat menus, swipes and overview pass on iPhone and
+iPad; no physical device was updated.
+
 # Native follow-up, October 28, 2026 — simulator validation
 
 0.2.32 / 2610.28.1 opens every associated chat as a named tab inside its project on iPhone and iPad, with one saved selection per project so switching chats from Chats, the sidebar or the tab strip always shows the chosen conversation. The drawer and iPad sidebar list the active project's open tabs while the top tab strips remain. Relay payloads decode off the main thread and host state uses per-property observation for smoother scrolling while chats stream. Tabs rows fit one line; chat attachments open in Quick Look; failed agent selections offer turn-off-and-retry; notification banners show real chat text and the source computer.

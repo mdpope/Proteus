@@ -3,6 +3,7 @@ import {chatLink} from '../../../public/features/chats/chat-links.js';
 // The sidebar owns sections. The top strip contains only content the user opened.
 import {mount as mountMarkdown} from '../../../src/shared/markdown-renderer.js';
 import {openContextMenu} from './context-menu.js';
+import {workspaceProjectsFor} from './shared-app.js';
 export function initShell(document=globalThis.document,window=globalThis.window) {
     const strip=document.querySelector('#shell-tabs'),account=document.body.dataset.browserAccount;
     if(!strip||!account)return;
@@ -88,7 +89,11 @@ export function initShell(document=globalThis.document,window=globalThis.window)
         for(const descriptor of order){
             if(descriptor.type==='chat')continue;
             if(descriptor.type==='browser')add(overview,'Browse',sections['browser-home'].url);
-            if(descriptor.type==='workspace')add(overview,descriptor.title,'/remote?view=workspaces&host='+encodeURIComponent(descriptor.hostId)+'&workspace='+encodeURIComponent(descriptor.id));
+            if(descriptor.type==='workspace'){
+                add(overview,descriptor.title,'/remote?view=workspaces&host='+encodeURIComponent(descriptor.hostId)+'&workspace='+encodeURIComponent(descriptor.id));
+                // Project home entries reach each project's Chats page in one step.
+                for(const project of workspaceProjectsFor(descriptor.hostId,descriptor.id))add(overview,(project.name||'Project')+' · Project home','/remote?view=workspaces&host='+encodeURIComponent(descriptor.hostId)+'&workspace='+encodeURIComponent(descriptor.id)+'&project='+encodeURIComponent(project.id)+'&page=chats');
+            }
             if(descriptor.type==='schedule')add(overview,descriptor.title,'/remote?view=schedules&host='+encodeURIComponent(descriptor.hostId)+'&schedule='+encodeURIComponent(descriptor.id));
             if(descriptor.type==='file')add(overview,descriptor.name,'',()=>{const content=localFiles.get(descriptor.id);if(content)showLocalFile(descriptor,content);else{pendingFileId=descriptor.id;document.querySelector('#shell-file-picker')?.click();}});
         }

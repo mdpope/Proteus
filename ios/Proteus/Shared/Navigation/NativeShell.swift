@@ -52,8 +52,11 @@ struct NativeTabReorderSheet: View {
 }
 /// Content-relative edges also work beside an iPad sidebar. Keep vertical scrolling,
 /// selection and middle-of-page horizontal controls available.
+/// On iPhone it is attached only where UIKit's pop gesture cannot express the step
+/// (a project tab returning to its project home); `phone` must not change for one view.
 struct NativePageSwipe: ViewModifier {
     var enabled = true
+    var phone = false
     var blockBack = false
     var blockForward = false
     var back: (() -> Void)?
@@ -61,7 +64,7 @@ struct NativePageSwipe: ViewModifier {
     @State private var width: CGFloat = 0
     @State private var blockedAtStart: (Bool, Bool)?
     func body(content: Content) -> some View {
-        if NativePhonePreview.enabled { content }
+        if NativePhonePreview.enabled && !phone { content }
         else {
         content.contentShape(Rectangle())
             .background(GeometryReader { geometry in
@@ -77,6 +80,26 @@ struct NativePageSwipe: ViewModifier {
                 if value.startLocation.x <= 56, dx > 0, !blocked.0 { back?() }
                 else if value.startLocation.x >= width - 56, dx < 0, !blocked.1 { forward?() }
             })
+        }
+    }
+}
+private struct NativeSidebarToggleKey: EnvironmentKey { static let defaultValue: (() -> Void)? = nil }
+extension EnvironmentValues {
+    /// Set by the iPad shell when a workspace tab owns the sidebar button in its project bar.
+    var nativeSidebarToggle: (() -> Void)? { get { self[NativeSidebarToggleKey.self] } set { self[NativeSidebarToggleKey.self] = newValue } }
+}
+/// The one sidebar control. iPhone opens the drawer; iPad toggles the pinned sidebar.
+/// Neither opens from an edge swipe, so content edges stay free for Back/Forward.
+struct NativeSidebarButton: View {
+    @EnvironmentObject private var chrome: NativePhoneChrome
+    @Environment(\.nativeSidebarToggle) private var toggle
+    var body: some View {
+        if NativePhonePreview.enabled {
+            Button { chrome.captureCurrent(); withAnimation(.easeInOut(duration: 0.22)) { chrome.drawer = true } } label: { Image(systemName: "sidebar.left").frame(width: 44, height: 44).contentShape(Rectangle()) }
+                .buttonStyle(.plain).accessibilityLabel("App navigation").accessibilityIdentifier("phone-app-navigation")
+        } else if let toggle {
+            Button(action: toggle) { Image(systemName: "sidebar.left").frame(width: 44, height: 44).contentShape(Rectangle()) }
+                .buttonStyle(.plain).accessibilityLabel("Toggle sidebar").accessibilityIdentifier("project-sidebar-toggle").keyboardShortcut("s", modifiers: [.command, .option])
         }
     }
 }
@@ -282,6 +305,7 @@ struct NativeShell: View {
         let id = String(tab.id.dropFirst(("workspace:" + host + ":").count))
         return NativeWorkspaceIdentity.all(destinations).first { $0.hostID == host && $0.workspaceID == id }
     }
+    private var workspaceTabSelected: Bool { opened.first(where: { $0.id == selectedTab })?.kind == "workspace" }
     private var selectedChatEntry: AggregateChat? {
         guard let tab = opened.first(where: { $0.id == selectedTab }) else { return nil }
         return chatEntry(for: tab)
@@ -323,27 +347,19 @@ struct NativeShell: View {
                     else { collapsedRail.frame(width: 52); Divider() }
                     VStack(spacing: 0) {
                         HStack(spacing: 0) {
-                            Button { sidebar.toggle() } label: { Label("Toggle sidebar", systemImage: "sidebar.left") }.labelStyle(.iconOnly).padding(10).keyboardShortcut("s", modifiers: [.command, .option])
+                            // A workspace tab's project bar holds the sidebar button instead.
+                            if !workspaceTabSelected { Button { sidebar.toggle() } label: { Label("Toggle sidebar", systemImage: "sidebar.left") }.labelStyle(.iconOnly).padding(10).keyboardShortcut("s", modifiers: [.command, .option]) }
                             NativeTabStrip(ids: opened.map(\.id), selection: selectedTab) { HStack(spacing: 0) {
                                 ForEach(opened) { tab in
                                     shellTab(tab)
                                     Divider().frame(height: 24)
                                 }
                             }.buttonStyle(.plain) }.scrollIndicators(.hidden)
-                                if let entry = selectedChatEntry {
-                                    Menu {
-                                        Button("Copy chat link", systemImage: "link") { UIPasteboard.general.url = NativeChatLink.url(host: entry.hostID, id: entry.run["id"].string) }
-                                        if destinations.remote(for: entry.hostID)?.state["capabilities"].array.contains(.string("chat.rename.v1")) == true { Button("Rename", systemImage: "pencil") { shellRename = entry } }
-                                        Button(entry.run["archived"].bool ? "Unarchive chat" : "Archive chat", systemImage: "archivebox") {
-                                            Task { do { try await destinations.remote(for: entry.hostID)?.archiveChat(entry.run["id"].string, archived: !entry.run["archived"].bool) } catch { destinations.error = error.localizedDescription } }
-                                        }.disabled(chatHasPendingWork(entry.run))
-                                        Button("Delete chat", systemImage: "trash", role: .destructive) { shellDelete = entry }.disabled(chatHasPendingWork(entry.run))
-                                    } label: { Image(systemName: "ellipsis.circle") }.padding(12).accessibilityLabel("Chat actions")
-                                }
+                                // Chat actions are on the chat's tab (press and hold); no separate menu.
                                 Button { mainOverviewChrome.openOverview() } label: { NativeTabOverviewIcon().frame(width: 44, height: 44) }.buttonStyle(.plain).accessibilityLabel("App tab overview").accessibilityIdentifier("main-tab-overview-button")
                                 Button { shared.open(nil, scope: "main") } label: { Image(systemName: "plus") }.padding(12).accessibilityLabel("New tab").accessibilityIdentifier("new-main-browser-tab")
                         }.nativeTabBar()
-                        Divider(); if let selected = opened.first(where: { $0.id == selectedTab }) { contentTab(selected) } else { content(area) }
+                        Divider(); if let selected = opened.first(where: { $0.id == selectedTab }) { contentTab(selected).environment(\.nativeSidebarToggle, selected.kind == "workspace" ? { sidebar.toggle() } : nil) } else { content(area) }
                     }
                 }.overlay(alignment: .leading) {
                     if !sidebar { Color.clear.frame(width: 10).contentShape(Rectangle()).onHover { edgeHover($0) }.overlay(alignment: .topLeading) { if hover { rail.frame(width: 250).background(.regularMaterial).onHover { edgeHover($0) }.shadow(radius: 10) } } }
@@ -541,6 +557,10 @@ struct NativeShell: View {
                                             Button("Copy tab name", systemImage: "doc.on.doc") { UIPasteboard.general.string = title(for: tab) }
                                             if let entry = chatEntry(for: tab) { Button("Copy chat link", systemImage: "link") { UIPasteboard.general.url = NativeChatLink.url(host: entry.hostID, id: entry.run["id"].string) } }
                                             if let entry = chatEntry(for: tab), destinations.remote(for: entry.hostID)?.state["capabilities"].array.contains(.string("chat.rename.v1")) == true { Button("Rename", systemImage: "pencil") { shellRename = entry } }
+                                            if let entry = chatEntry(for: tab), destinations.remote(for: entry.hostID)?.state["capabilities"].array.contains(.string("chat.lifecycle.v1")) == true {
+                                                Button(entry.run["archived"].bool ? "Unarchive chat" : "Archive chat", systemImage: "archivebox") { Task { do { try await destinations.remote(for: entry.hostID)?.archiveChat(entry.run["id"].string, archived: !entry.run["archived"].bool) } catch { destinations.error = error.localizedDescription } } }.disabled(chatHasPendingWork(entry.run))
+                                                Button("Delete chat", systemImage: "trash", role: .destructive) { shellDelete = entry }.disabled(chatHasPendingWork(entry.run))
+                                            }
                                             Button("Move left", systemImage: "arrow.left") { shiftContent(tab.id, by: -1) }.disabled(opened.first?.id == tab.id)
                                             Button("Move right", systemImage: "arrow.right") { shiftContent(tab.id, by: 1) }.disabled(opened.last?.id == tab.id)
                                             Button("Close tab", systemImage: "xmark") { closeContent(tab) }
@@ -713,6 +733,13 @@ struct NativeShell: View {
             for project in projects {
                 let scope = "project:" + owner.host + ":" + project["id"].string, caption = project["name"].string
                 let descriptors = shared.workspaceContentDescriptors[scope] ?? []
+                // Each project section starts with its home (Chats/Tabs), one tap from any tab.
+                let projectID = project["id"].string
+                result.append(NativePhoneTab(id: "project-home:" + owner.host + ":" + projectID, title: caption, symbol: "folder", detail: "Project home", section: caption, sectionID: scope, preview: nil, select: {
+                    remote.setDraft("workspace-selected-project:" + owner.workspace, .string(projectID))
+                    var navigation = remote.draft("project-navigation:" + projectID).object; navigation["selected"] = .string("workspace"); remote.setDraft("project-navigation:" + projectID, .object(navigation))
+                    if let profile = remote.state["context"]["workspaces"].array.first(where: { $0["id"].string == owner.workspace }) { openWorkspace(NativeWorkspaceIdentity(hostID: owner.host, hostName: remote.displayName, profile: profile)) }
+                }))
                 for descriptor in descriptors where !descriptor["hidden"].bool && !descriptor["navigationClosed"].bool {
                     if descriptor["type"].string == "browser", let tab = shared.tabs(in: scope).first(where: { ($0.contentTabId ?? $0.id) == descriptor["id"].string }), !tab.hidden { result.append(overviewBrowser(tab, section: caption, sectionID: scope)) }
                     else if descriptor["type"].string == "chat" {

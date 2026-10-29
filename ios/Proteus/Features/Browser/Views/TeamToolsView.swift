@@ -260,12 +260,26 @@ struct TeamBrowserView: View {
             Group {
                 if let tab = selectedTab, !shared.profileAvailable(tab.profileId) { ContentUnavailableView("Profile unavailable", systemImage: "person.crop.circle.badge.exclamationmark", description: Text("Sign in and refresh browser profiles in Preferences to resume this tab.")) } else if let tab = selectedTab, tab.url != nil { if shared.unloadedBrowsers.contains(tab.id) { ContentUnavailableView { Label("Page unloaded", systemImage: "pause.circle").foregroundStyle(NativePalette.shared.color("text")) } actions: { Button("Load tab") { shared.reload(tab.id); shared.touch(tab.id) }.buttonStyle(.borderedProminent).tint(NativeTheme.accent) }.background(NativePalette.shared.color("background")) } else { NativeBrowser(tab: tab, onOverview: { showOverview() }, onChromeToggle: NativePhonePreview.enabled ? { addressFocused = false; phoneChrome.toggleControls() } : nil, onChromeVisibility: NativePhonePreview.enabled ? { hidden in if hidden { addressFocused = false }; phoneChrome.setControlsHidden(hidden) } : nil, onPinchChanged: NativeDesignPreview.enabled ? { phoneChrome.pinch($0) } : nil, onPinchEnded: NativeDesignPreview.enabled ? { phoneChrome.finishPinch(committed: $0) } : nil).id(tab.id) } }
                 else { home.simultaneousGesture(MagnificationGesture().onEnded { scale in if scale < 0.75 { showOverview() } }) }
-            }.modifier(NativePageSwipe(enabled: !NativePhonePreview.enabled, back: {
-                if let id = selectedID, shared.isTwoFingerNavigation(id) { return }
-                if let id = selectedID, !shared.browserHistory(id, back: true).isEmpty { shared.goBack(id) }
-                else { onBackToList?() }
+            // WebKit's own edge swipe (Safari's page-image animation) handles pages in its
+            // back/forward list where the page meets the screen edge. This content-edge swipe
+            // is the backup: beside a pinned iPad sidebar, for owner history WebKit lacks, and
+            // once history is exhausted it returns to the previous screen (the project home).
+            }.modifier(NativePageSwipe(enabled: !NativePhonePreview.enabled || onBackToList != nil, phone: onBackToList != nil, back: {
+                guard let id = selectedID, !shared.isTwoFingerNavigation(id) else { return }
+                let ended = Date()
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(450))
+                    guard selectedID == id, !shared.nativeTraversal(id, since: ended.addingTimeInterval(-0.4)) else { return }
+                    if !shared.browserHistory(id, back: true).isEmpty { shared.goBack(id) } else { onBackToList?() }
+                }
             }, forward: {
-                if let id = selectedID, !shared.isTwoFingerNavigation(id) { shared.goForward(id) }
+                guard let id = selectedID, !shared.isTwoFingerNavigation(id) else { return }
+                let ended = Date()
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(450))
+                    guard selectedID == id, !shared.nativeTraversal(id, since: ended.addingTimeInterval(-0.4)) else { return }
+                    shared.goForward(id)
+                }
             }))
         }.safeAreaInset(edge: .bottom, spacing: 0) {
             // Sit the row partly in the home-indicator area like Safari, halving the bar height.
@@ -287,6 +301,8 @@ struct TeamBrowserView: View {
         browserContent
         .task(id: selectedID) {
             if let id = selectedID {
+                // Selecting an unloaded page recreates its view, as on desktop; hidden tabs stay unloaded.
+                if shared.unloadedBrowsers.contains(id), let tab = selectedTab, !tab.hidden, shared.profileAvailable(tab.profileId) { shared.reload(id); shared.touch(id) }
                 if tabID != nil, shared.selected(in: scope) != id { shared.select(id, in: scope, activateMainBrowser: false) }
                 shared.assignBrowserOwner(id, host: destinations.selected?.connection?.hostId)
                 if NativeDesignPreview.enabled && phoneAreaActive { phoneChrome.currentID = "browser:" + id; phoneChrome.controlsHidden = false; phoneChrome.browserOwnsBack = navigation.canGoBack }
