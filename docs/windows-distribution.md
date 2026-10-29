@@ -1,0 +1,110 @@
+# Windows distribution and maintenance
+
+An approved Windows update authorizes the bound owner operations needed to
+maintain Proteus, preserve recovery, install the accepted package and restart.
+It does not require a general elevated shell or an interactive Windows test
+account. The initiating computer creates an unassigned `purpose:update` chat
+using the destination's saved defaults and monitors its durable task through
+restart. Model completion alone is not an installed update.
+
+The operator designates one Windows computer as the first Windows build and
+acceptance target. That designation and its actual paths live in the private
+installation-bound `windows-builder.json`, never in repository instructions.
+Other Windows installations consume the signed WTB release and do not need
+Node, npm, Git or the publisher key.
+
+## Normal update
+
+1. Inspect `proteus_update status`, `maintenance` and `resolve-release` for the
+   exact version and source commit/fingerprint. A catalog/network/signature
+   error stops; it is never interpreted as an absent release.
+2. Apply a clean maintenance plan with `maintain` and its current `planDigest`.
+   The owner verifies the complete recovery app and data trees. It can register
+   an unregistered generation only with its completed owning journal. Missing
+   historical directories become explicitly unavailable history while their
+   old hashes and the original policy remain in a compact audit receipt. No
+   missing recovery JSON is recreated, and no old data is restored over work.
+3. Reuse a matching signed published release. If absent, only the configured
+   builder uses `build-release` with a stable operation ID, exact version,
+   source commit and channel. `build-status` reports its durable progress.
+   A repeated operation returns its existing journal; an interrupted operation
+   needs reconciliation and is not replayed. It fetches through the existing
+   repository-local account route, builds in private updater folders, runs source
+   and exact-package acceptance, verifies official archive extraction and signs
+   using the configured protected key. No key is copied or trust replaced.
+4. Import/stage the exact signed release, checkpoint completed and remaining
+   work, hand off, then finish the turn. The existing independent supervisor
+   waits for chats, terminals and builds, captures consistent current data,
+   installs per-user and restarts. The same chat resumes once.
+5. Verify installed hashes/registration, health, preserved histories/configuration,
+   native control and two-generation recovery retention. Publish the exact
+   accepted Windows artifacts to WTB through the authorized deployment workflow;
+   source and private receipts stay private. Verify the public full download
+   through the actual installed consumer. Publication is a distinct outcome.
+
+Maintenance accepts no deletion path or shell command from the model. Its plan
+binds canonical installation, data and browser homes, known recovery roots,
+policy bytes, journal revisions and verified generations. Changed plans fail.
+Unknown/partial generations, changed bytes, active updates and a total loss of
+verified recovery remain explicit blockers. Newest two complete generations are
+retained; eligible older generations and completed candidate staging may retire.
+Every action reports actual observed free-space change, which can include
+concurrent filesystem activity. Building alone never creates a live-data backup.
+
+## One-time older-client bootstrap
+
+Older 0.2.29 installations cannot create `purpose:update` chats. Do not invent
+that capability or silently turn an old build chat into a new coordinator.
+Prepare and test the bootstrap with the existing authorized build context,
+then use its existing owner signed import/idle handoff. After restart, create
+the real fresh coordinator for installed acceptance and subsequent upgrades.
+
+The reviewed `scripts/update-maintenance.mjs` is an adapter for the same owner
+maintenance implementation. Supply canonical `--home`, `--installation` and
+`--browser-home`; include each known external legacy `--recovery-root`. Inspect
+its read-only plan before `--apply --plan-digest HASH`. It writes only the
+bound recovery inventory/audit and retires eligible recovery/staging. It never
+modifies live data, grants, credentials or the installed runtime. Existing
+unknown roots must be audited; absence of a policy is not an empty inventory.
+
+On the designated builder only, `scripts/windows-builder-setup.mjs` captures
+the exact existing `--source`, `--node`, `--npm-cli`, `--git`, and
+`--publisher-key` references against `--home` and `--installation`. This needs
+ordinary user access, not elevation. It refuses a different source origin,
+unprotected key or a differing existing configuration. Use the existing account
+and protected key; never guess another account or initialize new signing trust.
+
+The release runner is `scripts/windows-distribution.mjs --source-commit SHA
+--output ABSOLUTE_NEW_DIRECTORY --build-if-missing`. It requires the selected
+source checkout and local dependencies/toolchain. `--key` supplies an existing
+protected key path when signing is authorized. Its receipt distinguishes build,
+acceptance, publication and installation. Native generated assets remain bound
+by the final source fingerprint; signed `sourceCommit` enables reuse of an
+already-published build before compiling again.
+
+## Qualification and native control
+
+Run source/static and exact extracted package UI/PTY/restart acceptance for each
+new build. The unchanged NSIS installer recipe has prior real installer/update/
+rollback qualification; routine application updates do not recreate accounts
+solely to repeat it. Changes to installer/registration/replacement behavior need
+disposable native qualification. Never run the existing installer harness against
+live HKCU registration or relax its refusal. A missing Sandbox/test account is
+an explicit qualification limitation, not a request for the operator to type a
+sequence of elevated scripts. The actual live update still needs its own exact
+installed-byte, preservation and health acceptance.
+
+Cua Driver is the Windows native-control backend. An explicit update/setup
+authorization can include its official per-user installation. Proteus discovers
+`cua-driver.exe` in the user's `.local/bin` even before a PATH refresh. Verify
+official release hashes/signatures, status/catalog/permissions and an exact-window
+observation; use fresh observations for input and release the lease afterward.
+OS denial is never bypassed. Backups and installation use owner services instead
+of desktop input. Zoho Assist is an optional initial repair surface, not the
+steady-state updater dependency.
+
+## Acceptance status
+
+Implementation is in source. Local regression and native Windows build/live
+acceptance are recorded separately in the release evidence; this document does
+not claim an installed or published release.

@@ -1,3 +1,9 @@
+## Windows distribution repair — October 29
+
+- Added bounded updater maintenance with full recovery verification, preserved missing-generation history, plan revision protection and two-generation cleanup.
+- Added a designated Windows build operation with signed release lookup before building, durable operation receipts, private source/toolchain/key references and no elevated shell requirement.
+- Added a reusable native build/acceptance/signing runner and documented older-client bootstrap and installer qualification boundaries.
+
 ## Unreleased — iOS navigation and swipes
 
 - **iOS real-host connection:** iPhone/iPad accept relay messages up to the 8 MB host/relay limit. URLSession's 1 MiB websocket default dropped the socket ("Message too long") once a real host's state grew past it, so devices stayed "offline · reconnecting".

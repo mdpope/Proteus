@@ -48,6 +48,10 @@ function retainGeneration(job){
  try{receiptHash=digest(fs.readFileSync(receiptFile));}
  catch(error){
   if(error.code!=='ENOENT')throw error;
+  // A maintenance audit can explicitly record a pre-existing lost generation.
+  // This is unavailable history, never a verified backup or a recreated receipt.
+  const unavailable=inventory.unavailableGenerations?.find(row=>row.id===job.id&&row.directory===job.recovery&&row.available===false&&row.verified===false&&row.eligible===false&&row.reason==='directory absent during verified maintenance');
+  if(job.phase==='complete'&&!fs.existsSync(job.recovery)&&unavailable&&inventory.audit?.kind==='owner-maintenance'&&inventory.generations.some(row=>row.verified&&fs.existsSync(row.receiptFile)&&digest(fs.readFileSync(row.receiptFile))===row.receiptHash))return {retained:false,unavailable:true,recordedByMaintenance:true};
   // A completed historical job may outlive its deliberately rotated payload.
   // Recognize that only from two newer, currently verified recovery receipts;
   // never recreate a deleted generation or suppress an unresolved missing copy.

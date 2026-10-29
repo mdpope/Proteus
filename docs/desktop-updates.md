@@ -1,3 +1,7 @@
+## October 29 — Windows owner maintenance and distribution
+
+The approved Windows workflow now has installation-bound maintenance plans, verified recovery reconciliation, a designated native builder and signed release reuse before building. See [Windows distribution](windows-distribution.md). Source implementation and live acceptance remain separate; old-client bootstrap uses the existing signed owner updater before fresh coordinator support is available.
+
 ## October 27 — fresh update sessions and retained recovery history
 
 Each operator-started update creates a new unassigned `purpose:update` chat named for the selected version, using saved Engine Room provider/model/effort/speed defaults. There is no default existing-chat selection. The new coordinator owns prepare, checkpoint, handoff and continuation through that specific upgrade. Stable operation IDs reconcile ambiguous start responses without duplicate chats; a later upgrade creates a different chat. Existing provider capabilities, owner permissions and unrelated work remain enforced. Provider defaults stay available when update status/catalog/recovery inspection reports an error.

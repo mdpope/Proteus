@@ -1,3 +1,7 @@
+## October 29 — Windows distribution repair in source
+
+The new [Windows distribution workflow](windows-distribution.md) adds owner maintenance/reconciliation and a designated per-user native builder. Source is isolated from other ongoing application edits. Native build, bootstrap, publication and live acceptance must be recorded independently. Cua Driver installation on the target is separately verified in private operational receipts; no machine-specific paths belong in source.
+
 ## October 28 — 0.2.33 follow-up preparing for Build Mac
 
 The operator authorizes building pending changes and installing on this Mac, while reporting

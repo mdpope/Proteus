@@ -59,9 +59,23 @@ export class Updates {
  }
  async handle(value={},runId){
   if(value.action==='status'||value.action==='identity'||!value.action)return this.status();
-  if(value.action==='storage'){if(runId)throw Error('Inspect update storage from this desktop.');return this.packageWork('inventoryStorage',this.root,{home:this.ownerHome,installation:this.installation});}
+  if(value.action==='build-status')return require('../../../desktop/updates/windows-builder.cjs').buildStatus(this.root);
+  if(value.action==='build-release'){
+   const selected=await this.resolveRelease(value);if(selected.resolution==='published')return selected;
+   if(!this.packaged||this.platform!=='win32')throw Error('Source builds require the designated installed Windows owner.');
+   return require('../../../desktop/updates/windows-builder.cjs').startBuild(this.root,value);
+  }
+  if(value.action==='storage')return this.packageWork('inventoryStorage',this.root,{home:this.ownerHome,installation:this.installation});
+  if(value.action==='maintenance'||value.action==='maintain'){
+   if(!this.packaged)throw Error('Maintenance requires an installed desktop app.');
+   if(this.busy||this.downloading)throw Error('Another update operation is running.');
+   this.busy=true;
+   try{return await this.packageWork(value.action==='maintenance'?'maintenancePlan':'applyMaintenance',this.root,{home:this.ownerHome,installation:this.installation,browserHome:this.browserHome,platform:this.platform,planDigest:value.planDigest});}
+   finally{this.busy=false;}
+  }
   if(value.action==='inspect'){if(!this.packaged||!path.isAbsolute(value.candidate||''))throw Error('Choose a packaged candidate from the desktop app.');const candidate=await this.inspectAsync(value.candidate);return {candidate:{version:candidate.version,buildRevision:candidate.buildRevision,sourceFingerprint:candidate.sourceFingerprint,hash:candidate.hash,signing:candidate.signing}};}
   if(value.action==='releases')return this.releases(value.channel);
+  if(value.action==='resolve-release')return this.resolveRelease(value);
   if(value.action==='stage-release'||value.action==='import-release')return this.stageRelease(value,runId);
   if(value.action==='prepare')return this.prepare(value,runId);
   const job=this.job();if(!job||job.id!==value.id||job.revision!==value.expectedRevision)throw Error('The update changed. Refresh its status before continuing.');
@@ -100,6 +114,12 @@ export class Updates {
   if(!this.packaged)throw Error('Install the desktop app to check published releases.');
   const envelopes=await this.releaseClient.releases({channel,platform:this.platform,arch:process.arch});
   return {releases:envelopes.map(envelope=>{const release=verifyRelease(envelope,{channel,platform:this.platform});return {...release,manifestDigest:digest(JSON.stringify(envelope))};})};
+ }
+ async resolveRelease(value){
+  if(!/^\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?$/.test(value.version||'')||value.sourceFingerprint!==undefined&&!/^[a-f0-9]{64}$/.test(value.sourceFingerprint)||value.sourceCommit!==undefined&&!/^[a-f0-9]{40,64}$/.test(value.sourceCommit))throw Error('Specify the requested version and, when known, exact source fingerprint or commit.');
+  const {releases}=await this.releases(value.channel),matches=releases.filter(row=>row.version===value.version&&(!value.sourceFingerprint||row.sourceFingerprint===value.sourceFingerprint)&&(!value.sourceCommit||row.sourceCommit===value.sourceCommit));
+  if(matches.length>1)throw Error('More than one release matches. Select an exact source fingerprint or release ID.');
+  return {resolution:matches.length?'published':'build-required',platform:this.platform,arch:process.arch,requested:{version:value.version,sourceFingerprint:value.sourceFingerprint||null,sourceCommit:value.sourceCommit||null},release:matches[0]||null,note:matches.length?'Reuse the signed published release.':'Only the designated Windows build machine builds missing Windows releases; consumer machines wait for publication. A failed catalog request is never treated as a missing release.'};
  }
  async stageRelease(value,runId){
   if(this.busy||this.downloading)throw Error('Another update check is running.');
@@ -165,7 +185,8 @@ export class Updates {
  }
  waiting(job){
   const runs=this.service.engine.listRuns().filter(run=>active.has(run.status)||run.capacityRetry||this.service.engine.running.has(run.id)||this.service.engine.backgroundRuns.has(run.id));
-  return [...runs.map(run=>'Chat '+run.id.slice(0,8)+' is '+run.status),...this.blockers()];
+  const building=this.platform==='win32'?require('../../../desktop/updates/windows-builder.cjs').buildStatus(this.root):null;
+  return [...runs.map(run=>'Chat '+run.id.slice(0,8)+' is '+run.status),...(building?.job?.running||building?.job?.phase==='starting'?['Windows release build is still running.']:[]),...this.blockers()];
  }
  async advance(){
   if(this.busy||!this.file)return;const job=this.job();
@@ -220,4 +241,4 @@ export class Updates {
  }
  close(){this.closed=true;clearInterval(this.timer);return this.packageQueue?.catch(()=>{});}
 }
-export function updateTools(controller,runId){return controller?[{name:'proteus_update',defer:'auto',description:'Inspect this running Proteus installation or supervise its own authorized update. List published releases, then stage the selected release ID and manifest digest, or import an offline signed release manifest. The owner verifies publisher signature, target, archive hashes and isolated UI startup. Local developer candidates retain their explicit source-fingerprint flow on Mac/Linux. Handoff records completed/remaining work and returns before shutdown: finish this turn so the idle barrier can start the independent helper. It never cancels unrelated work. Compatible restart/rollback automatically continues this same chat with one durable delivery ID. Refresh status/revision before handoff/cancel; source mode is reported honestly.',parameters:{type:'object',properties:{action:{type:'string',enum:['status','identity','releases','stage-release','import-release','prepare','handoff','cancel']},channel:{type:'string',enum:['stable','preview']},releaseId:{type:'string'},manifestDigest:{type:'string'},manifest:{type:'string'},candidate:{type:'string'},sourceFingerprint:{type:'string'},checkpoint:{type:'string'},id:{type:'string'},expectedRevision:{type:'integer'}},required:['action'],additionalProperties:false},handler:async args=>JSON.stringify(await controller.handle(args,runId))}]:[];}
+export function updateTools(controller,runId){return controller?[{name:'proteus_update',defer:'auto',description:'Inspect this running Proteus installation or supervise its own authorized update. Use maintenance to inspect bound application/backup folders and full recovery receipts, then maintain with its unchanged planDigest to reconcile missing records and retire eligible staging/backups. No arbitrary paths or elevated shell. Resolve the exact requested version through resolve-release before building; reuse matching signed releases. List published releases, then stage the selected release ID and manifest digest, or import an offline signed release manifest. The owner verifies publisher signature, target, archive hashes and isolated UI startup. Local developer candidates retain their explicit source-fingerprint flow on Mac/Linux. Handoff records completed/remaining work and returns before shutdown: finish this turn so the idle barrier can start the independent helper. It never cancels unrelated work. Compatible restart/rollback automatically continues this same chat with one durable delivery ID. Refresh status/revision before handoff/cancel; source mode is reported honestly.',parameters:{type:'object',properties:{action:{type:'string',enum:['status','identity','build-release','build-status','storage','maintenance','maintain','releases','resolve-release','stage-release','import-release','prepare','handoff','cancel']},channel:{type:'string',enum:['stable','preview']},operationId:{type:'string'},version:{type:'string'},sourceCommit:{type:'string'},planDigest:{type:'string'},releaseId:{type:'string'},manifestDigest:{type:'string'},manifest:{type:'string'},candidate:{type:'string'},sourceFingerprint:{type:'string'},checkpoint:{type:'string'},id:{type:'string'},expectedRevision:{type:'integer'}},required:['action'],additionalProperties:false},handler:async args=>JSON.stringify(await controller.handle(args,runId))}]:[];}

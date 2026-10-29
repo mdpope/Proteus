@@ -1,3 +1,7 @@
+## October 29 — Windows distribution repair · implementation authorized
+
+The operator authorizes repairing Windows distribution, managing bound application/recovery folders, native builds when the matching signed release is absent, publication for subsequent Windows consumers, installation/restart and Cua Driver setup. The connected Windows desktop is the first Windows build/acceptance target; its identity and configuration remain in private owner records. Implemented owner maintenance and build tools are described in [Windows distribution](windows-distribution.md); validation and installed/public outcomes remain separate.
+
 ## October 28 — 0.2.33 follow-up authorized
 
 Build and Build Mac installation are authorized. The pending blank-tab correction and a
