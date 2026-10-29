@@ -1,3 +1,8 @@
+## 0.2.35 — Windows restart preservation follow-up
+
+- Preserve a saved local chat view when its project already has a tab registry but never registered that view. Keep its view identity, selected project child and draft across reload without reopening owner tabs; an observed owner close still takes effect.
+- Record the installed 0.2.34 maintenance bootstrap and public-consumer acceptance separately from the held stable-feed activation and follow-up installation.
+
 ## Windows distribution repair — October 29
 
 - Added bounded updater maintenance with full recovery verification, preserved missing-generation history, plan revision protection and two-generation cleanup.

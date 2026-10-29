@@ -4,7 +4,7 @@ An approved Windows update authorizes the bound owner operations needed to
 maintain Proteus, preserve recovery, install the accepted package and restart.
 It does not require a general elevated shell or an interactive Windows test
 account. The initiating computer creates an unassigned `purpose:update` chat
-using the destination's saved defaults and monitors its durable task through
+using its saved update defaults, validated on the destination, and monitors its durable task through
 restart. Model completion alone is not an installed update.
 
 The operator designates one Windows computer as the first Windows build and
@@ -140,6 +140,15 @@ steady-state updater dependency.
 
 ## Acceptance status
 
-Implementation is in source. Local regression and native Windows build/live
-acceptance are recorded separately in the release evidence; this document does
-not claim an installed or published release.
+The corrected 0.2.34 maintenance bootstrap is installed and healthy on the
+designated Windows target. Full recovery rotation and same-chat continuation
+passed, and its immutable public files passed actual installed-consumer download
+and extraction. Stable-feed activation is held for a reproduced saved-chat-view
+preservation issue. The 0.2.35 source fix preserves never-registered local chat
+aliases just like peer aliases, without reopening owner descriptors or overriding
+an observed close. See [acceptance evidence](2026-10-29-windows-distribution.md).
+
+Creating a fresh update coordinator grants its bound updater operations. Native
+desktop control retains its separate human approval boundary; a pending approval
+must not be answered by another agent or bypassed through an older chat. The new
+coordinator's captured options are distinct from saving future Windows defaults.

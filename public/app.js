@@ -877,7 +877,9 @@ async function descriptorFor(tab,parent){
   return null;
 }
 const contentTabSync=createTabSynchronizer({navigation:true,pendingStorage:desktopWindowId==='main'?localStorage:{getItem:key=>localStorage.getItem('window:'+desktopWindowId+':'+key),setItem:(key,value)=>localStorage.setItem('window:'+desktopWindowId+':'+key,value),removeItem:key=>localStorage.removeItem('window:'+desktopWindowId+':'+key)},
-  preserveUntracked:(scope,tab)=>!!scope.hostId&&tab.type==='chat',
+  // Older local owners can also have saved views absent from the project registry.
+  // Keep those aliases without reopening owner tabs; observed closures still win.
+  preserveUntracked:(_scope,tab)=>tab.type==='chat',
   scopes:()=>visibleContentScopes(),
   readLocal:async scope=>{if(scope.scope==='team')return (await Promise.all(teamState().tabs.map(tab=>descriptorFor(tab,{type:'team',id:null})))).filter(Boolean);const parent=scopeParent(scope);if(!parent)return [];return (await Promise.all(state.tabs.filter(tab=>tab.parentId===parent.id).map(tab=>descriptorFor(tab,parent)))).filter(Boolean);},
   request:async(scope,action,args={},options)=>{

@@ -2617,6 +2617,16 @@ to reopen a closed or moved tab, without changing placement, sessions, permissio
 receipts or the persisted descriptor format. Older clients must be upgraded to supply the flag;
 existing uncertain request payloads and operation identities are never rewritten.
 
+## October 29 — Preserve unregistered local chat views without reopening owner tabs
+
+The Windows bootstrap exposed a saved selected chat view absent from its project's
+already-populated registry. Treat never-observed local chat aliases like the
+existing peer aliases: preserve their view identity, draft and selection without
+publishing an owner open. Remember actual owner participation across restarts so
+an authoritative close still removes the view. This avoids broad first-sync seeding
+that could resurrect closed tabs. A disposable Electron reproduction fails before
+the correction and passes preservation, reload and later owner-close checks after.
+
 ## October 27 — Scope-proven delegation and bounded derived projections
 
 Provider-owned relationship events establish native child lineage. For current Codex this includes authoritative `thread/started` ancestry and `subAgentActivity` started/interacted events; old collaboration events remain compatible. Model narration, restored transcript rows or arbitrary IDs cannot establish authority. Children route applicable approvals through the parent, with child abort signals and explicit scope-rejection provenance. Host delegation uses ordinary engine runs captured from the parent provider/model/account/context, stable operation receipts and current-profile validation; it does not create another owner or approve external tools.

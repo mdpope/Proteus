@@ -1,3 +1,22 @@
+## October 29 — Windows bootstrap installed; navigation follow-up
+
+Signed source `6699775` / 0.2.34 `windows.23aae039d780` is installed and healthy
+on the designated Windows target. The updater preserved chat history and drafts,
+resumed the same chat, verified a new recovery and then rotated to two full
+generations. Cua native observation works. Public immutable artifacts pass full
+download/signature and actual installed Windows extraction; the stable feed and
+page remain held. One previously selected local chat view disappeared during
+initial project synchronization, while its chat/history/draft remained intact.
+
+The new disposable Electron regression reproduces that loss on 0.2.34 and passes
+with the 0.2.35 source correction. It also verifies selection/draft across reload,
+no owner-descriptor resurrection and authoritative owner-close behavior. Native
+follow-up packaging/installation and public activation remain separate gates.
+The genuine new unassigned coordinator uses the approved captured options, but
+its first desktop status call awaits a human tool approval. Do not approve that
+request or route desktop work through the older builder to bypass it. See
+[Windows evidence](2026-10-29-windows-distribution.md).
+
 ## October 29 — Windows distribution repair in source
 
 The new [Windows distribution workflow](windows-distribution.md) adds owner maintenance/reconciliation and a designated per-user native builder. Source is isolated from other ongoing application edits. Native build, bootstrap, publication and live acceptance must be recorded independently. Cua Driver installation on the target is separately verified in private operational receipts; no machine-specific paths belong in source.

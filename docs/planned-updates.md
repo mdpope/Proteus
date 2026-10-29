@@ -1,3 +1,15 @@
+## October 29 — Windows 0.2.34 installed; 0.2.35 view preservation
+
+The corrected maintenance bootstrap, verified two-generation rotation and
+same-chat restart now pass on Windows. Immutable public artifacts pass the actual
+installed verifier/extractor. Stable-feed activation is held: a saved local chat
+view absent from its existing project registry was removed during first sync.
+The same sequence is reproduced in disposable Electron. Source now preserves
+such never-observed local aliases without creating owner tabs, while observed
+owner closures remain authoritative. The regression passes preserved view ID,
+selection, draft, reload and closure checks. Packaging and installing this
+follow-up remain pending; see [evidence](2026-10-29-windows-distribution.md).
+
 ## October 29 — Windows distribution repair · implementation authorized
 
 The operator authorizes repairing Windows distribution, managing bound application/recovery folders, native builds when the matching signed release is absent, publication for subsequent Windows consumers, installation/restart and Cua Driver setup. The connected Windows desktop is the first Windows build/acceptance target; its identity and configuration remain in private owner records. Implemented owner maintenance and build tools are described in [Windows distribution](windows-distribution.md); validation and installed/public outcomes remain separate.
