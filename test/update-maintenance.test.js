@@ -48,6 +48,38 @@ test('stale plans and active updates block writes; completed maintenance keeps t
  const job=packages.readJob(newest.file);packages.writeJob(newest.file,{phase:'prepared'});assert.throws(()=>maintenance.applyMaintenance(f.root,{...f.options,planDigest:plan.planDigest},f.dependencies),/changed/);plan=maintenance.maintenancePlan(f.root,f.options,f.dependencies);assert.equal(plan.canApply,false);
  packages.writeJob(newest.file,{phase:'complete'});plan=maintenance.maintenancePlan(f.root,f.options,f.dependencies);const applied=maintenance.applyMaintenance(f.root,{...f.options,planDigest:plan.planDigest},f.dependencies);assert.deepEqual(applied.retired,[old.id]);assert.deepEqual(applied.retained.sort(),[second.id,newest.id].sort());assert.equal(fs.existsSync(old.directory),false);assert.equal(packages.readJob(newest.file).id,job.id);
 });
+test('maintenance archives complete retired receipts and a bound intent before removing a generation',t=>{
+ const f=fixture(t),old=f.generation(21),second=f.generation(22),newest=f.generation(23),originalPolicy=fs.readFileSync(f.policyFile,'utf8'),originalReceipt=fs.readFileSync(old.receiptFile,'utf8');
+ const plan=maintenance.maintenancePlan(f.root,f.options,f.dependencies),result=maintenance.applyMaintenance(f.root,{...f.options,planDigest:plan.planDigest},f.dependencies);
+ const operation=path.dirname(result.receiptFile),intentFile=path.join(operation,'recovery-retirement-intent.json'),intent=JSON.parse(fs.readFileSync(intentFile,'utf8'));
+ assert.deepEqual(intent.policyBefore,JSON.parse(originalPolicy));assert.equal(intent.planDigest,plan.planDigest);
+ assert.equal(intent.retiredReceipts[0].raw,originalReceipt);assert.deepEqual(intent.retiredReceipts[0].receipt,JSON.parse(originalReceipt));assert.equal(intent.retiredReceipts[0].receiptHash,digest(originalReceipt));
+ const completion=JSON.parse(fs.readFileSync(path.join(operation,'recovery-retirement.json'),'utf8'));assert.equal(completion.intentHash,fileDigest(intentFile));assert.deepEqual(completion.retired,[old.id]);assert.deepEqual(completion.retained.sort(),[second.id,newest.id].sort());
+ assert.equal(fs.existsSync(old.directory),false);assert.equal(maintenance.maintenancePlan(f.root,f.options,f.dependencies).canApply,true);
+});
+test('interruption after recovery deletion cannot become absent history or silently replay',t=>{
+ const f=fixture(t),old=f.generation(21),second=f.generation(22),newest=f.generation(23),originalReceipt=fs.readFileSync(old.receiptFile,'utf8');
+ const survivors=[second,newest].map(row=>({directory:row.directory,hash:tree(row.directory).hash}));
+ const remove=fs.rmSync;t.mock.method(fs,'rmSync',(directory,...args)=>{const result=remove(directory,...args);if(directory===old.directory)throw Error('synthetic interruption after removal, before policy save');return result;});
+ const plan=maintenance.maintenancePlan(f.root,f.options,f.dependencies);
+ assert.throws(()=>maintenance.applyMaintenance(f.root,{...f.options,planDigest:plan.planDigest},f.dependencies),/synthetic interruption/);
+ assert.equal(fs.existsSync(old.directory),false);const interruptedPolicy=fs.readFileSync(f.policyFile);assert.ok(JSON.parse(interruptedPolicy).generations.some(row=>row.id===old.id));
+ const next=maintenance.maintenancePlan(f.root,f.options,f.dependencies);assert.equal(next.canApply,false);assert.ok(next.issues.some(row=>row.kind==='interrupted-retirement'));assert.equal(next.missing.some(row=>row.id===old.id),false);
+ const intentFile=path.join(f.root,'maintenance',plan.planDigest,'recovery-retirement-intent.json'),intent=JSON.parse(fs.readFileSync(intentFile,'utf8'));assert.equal(intent.retiredReceipts[0].raw,originalReceipt);
+ assert.equal(fs.existsSync(path.join(path.dirname(intentFile),'recovery-retirement.json')),false);
+ assert.throws(()=>maintenance.applyMaintenance(f.root,{...f.options,planDigest:next.planDigest},f.dependencies),/inspection/);
+ assert.deepEqual(fs.readFileSync(f.policyFile),interruptedPolicy);assert.deepEqual(JSON.parse(interruptedPolicy).unavailableGenerations,[]);
+ for(const survivor of survivors)assert.equal(tree(survivor.directory).hash,survivor.hash);
+});
+test('an interrupted retirement remains explicit after policy commit but before completion receipt',t=>{
+ const f=fixture(t),old=f.generation(21);f.generation(22);f.generation(23);
+ const rename=fs.renameSync;t.mock.method(fs,'renameSync',(source,target,...args)=>{if(path.basename(target)==='recovery-retirement.json')throw Error('synthetic completion receipt failure');return rename(source,target,...args);});
+ const plan=maintenance.maintenancePlan(f.root,f.options,f.dependencies);
+ assert.throws(()=>maintenance.applyMaintenance(f.root,{...f.options,planDigest:plan.planDigest},f.dependencies),/synthetic completion/);
+ const policy=fs.readFileSync(f.policyFile);assert.equal(JSON.parse(policy).generations.some(row=>row.id===old.id),false);
+ const next=maintenance.maintenancePlan(f.root,f.options,f.dependencies);assert.equal(next.canApply,false);assert.equal(next.missing.length,0);assert.ok(next.issues.some(row=>row.kind==='interrupted-retirement'));
+ assert.throws(()=>maintenance.applyMaintenance(f.root,{...f.options,planDigest:next.planDigest},f.dependencies),/inspection/);assert.deepEqual(fs.readFileSync(f.policyFile),policy);
+});
 test('maintenance rejects live-folder overlaps, wrong owner roots and linked metadata',t=>{
  const f=fixture(t);assert.throws(()=>maintenance.maintenancePlan(f.temp,f.options,f.dependencies),/bound/);
  assert.throws(()=>maintenance.maintenancePlan(f.root,{...f.options,recoveryRoots:[f.options.home]},f.dependencies),/overlaps/);

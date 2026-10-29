@@ -81,6 +81,15 @@ retained; eligible older generations and completed candidate staging may retire.
 Every action reports actual observed free-space change, which can include
 concurrent filesystem activity. Building alone never creates a live-data backup.
 
+Maintenance retirement uses the helper's intent/receipt approach: first retain
+the original policy, the reconciled inventory and each retiring generation's
+complete original receipt bytes and parsed fields outside that generation.
+Only then remove verified eligible payloads and update policy; a separate
+completion receipt binds the intent hash. A missing completion is an interrupted
+retirement even if policy was already saved. Future maintenance reports that
+condition and blocks writes rather than recording its own deletion as unavailable
+history or replaying it. Damaged intent/completion evidence also requires inspection.
+
 The supervisor budgets a temporary third recovery rather than deleting an older
 verified generation before capture. After both the new full recovery and live
 outcome verify, it rechecks all retained app/data trees and retires only eligible

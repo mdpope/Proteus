@@ -90,6 +90,25 @@ Native execution of this new regression and exact packaging remain pending.
 The local suite passes 1,260 tests / four skips / zero failures and static checks;
 the extra skip is the explicit Windows-only launcher execution test.
 
+## Maintenance retirement review
+
+Combined-release review reproduced a maintenance-only retirement gap: full
+receipts disappeared with deleted generations, and interruption before policy
+save produced a clean plan that treated the deletion as absent history. The new
+regressions fail on that source. The correction archives the complete original
+receipt bytes/fields, original policy and reconciled inventory in a durable
+intent before deletion. Completion binds the intent hash. A pending or damaged
+retirement prevents new cleanup and never becomes an unavailable-generation
+record. Tests cover both the deletion-to-policy and policy-to-completion gaps.
+No live maintenance retirement has been repeated for this review.
+The final local source suite passes 1,263 tests / four skips / zero failures;
+static checks pass. Exact native acceptance must be tied to this final source,
+not the earlier candidate built before the maintenance correction.
+
+The helper's full integrity check before readiness remains intact. Exact signed
+Mac arm64 readiness timing against the owning client's 15-second limit is a
+separate combined-release acceptance step; Windows timings do not prove it.
+
 ## Distribution and coordinator boundaries
 
 The 0.2.34 immutable WTB artifacts pass independent full HTTPS hashes/signature

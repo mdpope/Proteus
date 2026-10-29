@@ -45,11 +45,40 @@ function verifyGeneration(row,owner,{inspect=inspectPackage}={}){
  if(!Number.isFinite(Date.parse(row.at||receipt.at)))throw Error('Recovery receipt has no valid capture date.');
  return {...row,directory:base,receiptFile,receiptHash,at:row.at||receipt.at,verified:true,applicationHash:actual.hash};
 }
+function maintenanceRetirements(root,owner,issues){
+ const base=ordinaryPath(path.join(root,'maintenance')),result=[];
+ if(!fs.existsSync(base))return result;
+ const entries=fs.readdirSync(directory(base));if(entries.length>1000)throw Error('Maintenance history exceeds 1,000 operations.');
+ for(const name of entries){
+  const operation=path.join(base,name),intentFile=path.join(operation,'recovery-retirement-intent.json');
+  try{
+   directory(operation);if(!fs.existsSync(intentFile))continue;
+   const intent=json(intentFile),intentHash=fileDigest(intentFile),inventory=intent.inventory;
+   if(!/^[a-f0-9]{64}$/.test(name)||intent.schemaVersion!==1||intent.planDigest!==name||intent.policyBefore?.home!==owner.home||intent.policyBefore?.installation!==owner.installation||inventory?.home!==owner.home||inventory?.installation!==owner.installation||!Array.isArray(inventory.generations)||!Array.isArray(intent.retiredReceipts)||!intent.retiredReceipts.length||intent.retiredReceipts.length>100)throw Error('Maintenance retirement intent does not bind this installation.');
+   const targets=intent.retiredReceipts.map(archived=>{
+    const row=inventory.generations.find(row=>row.id===archived.id&&row.directory===archived.directory);
+    if(!row||row.receiptHash!==archived.receiptHash||typeof archived.raw!=='string'||digest(archived.raw)!==row.receiptHash||JSON.stringify(JSON.parse(archived.raw))!==JSON.stringify(archived.receipt))throw Error('Archived recovery receipt differs from its retirement intent.');
+    return {id:row.id,directory:row.directory};
+   });
+   if(new Set(targets.map(row=>row.id)).size!==targets.length)throw Error('Retirement intent has duplicate generation identities.');
+   const receiptFile=path.join(operation,'recovery-retirement.json'),complete=fs.existsSync(receiptFile);
+   let receiptHash=null;
+   if(complete){
+    const receipt=json(receiptFile),expected=targets.map(row=>row.id).sort();
+    if(receipt.schemaVersion!==1||receipt.planDigest!==name||receipt.intentHash!==intentHash||JSON.stringify(receipt.retired?.slice().sort())!==JSON.stringify(expected)||JSON.stringify(receipt.retained?.slice().sort())!==JSON.stringify(inventory.generations.filter(row=>!expected.includes(row.id)).map(row=>row.id).sort()))throw Error('Maintenance retirement completion differs from its intent.');
+    receiptHash=fileDigest(receiptFile);
+   }else issues.push({kind:'interrupted-retirement',planDigest:name,intentFile,error:'A prior recovery retirement needs receipt-based reconciliation before further maintenance.'});
+   result.push({planDigest:name,intentFile,intentHash,receiptHash,complete,targets});
+  }catch(error){issues.push({kind:'maintenance-history',directory:operation,error:error.message});}
+ }
+ return result;
+}
 function maintenancePlan(root,options={},dependencies={}){
  const owner=binding(root,options),policyFile=ordinaryPath(path.join(root,'recovery-policy.json')),policyHash=fs.existsSync(policyFile)?fileDigest(policyFile):null;
  const issues=[],missing=[],verified=[],discovered=[],jobs=[];
  let policy;
  try{policy=recoveryPolicy(policyFile,owner);}catch(error){issues.push({kind:'policy',error:error.message});}
+ const retirements=maintenanceRetirements(root,owner,issues),retiredBy=new Map(retirements.flatMap(operation=>operation.targets.map(row=>[row.directory,operation])));
  // Only previously inventoried roots and this installation's managed root are
  // scanned. External legacy roots enter through the explicit bootstrap CLI.
  if(!Array.isArray(policy?.audit?.recoveryRoots||[])||!Array.isArray(options.recoveryRoots||[]))throw Error('Recovery roots must be a list.');
@@ -59,6 +88,8 @@ function maintenancePlan(root,options={},dependencies={}){
  const known=new Map((policy?.generations||[]).map(row=>[row.directory,row]));
  for(const row of known.values()){
   try{
+   const retirement=retiredBy.get(row.directory);
+   if(retirement){if(retirement.complete)issues.push({kind:'retirement-policy',directory:row.directory,error:'A completed retirement is still listed in the recovery policy; preserve it for reconciliation.'});continue;}
    ordinaryPath(row.directory);
    if(!fs.existsSync(row.directory)){missing.push({...row,available:false});continue;}
    verified.push(verifyGeneration(row,owner,dependencies));
@@ -93,7 +124,7 @@ function maintenancePlan(root,options={},dependencies={}){
  // Preserve the newest two complete generations. Unresolved generations never
  // become eligible merely because maintenance found their files.
  const ordered=verified.slice().sort((a,b)=>b.at.localeCompare(a.at)),retire=ordered.slice(2).filter(row=>row.eligible===true).map(row=>row.id);
- const state={owner,policyHash,roots,missing,verified,discovered,retire,issues,jobs:jobs.map(job=>({id:job.id,revision:job.revision,phase:job.phase})),staging:storage?.jobs||[]};
+ const state={owner,policyHash,roots,missing,verified,discovered,retire,retirements,issues,jobs:jobs.map(job=>({id:job.id,revision:job.revision,phase:job.phase})),staging:storage?.jobs||[]};
  const planDigest=digest(JSON.stringify(state));
  return {schemaVersion:1,...state,planDigest,paths:{installation:owner.installation,home:owner.home,browserHome:owner.browserHome||null,updates:root,recoveries:path.join(root,'recoveries')},storage,canApply:!!policy&&!issues.length};
 }
@@ -111,14 +142,32 @@ function applyMaintenance(root,options={},dependencies={}){
  const clean=row=>Object.fromEntries(Object.entries(row).filter(([key])=>key!=='applicationHash'));
  const missing=plan.missing.map(row=>({...row,verified:false,eligible:false,reason:'directory absent during verified maintenance',observedAt:new Date().toISOString()}));
  const next={...policy,auditedAt:new Date().toISOString(),audit:{...policy.audit,kind:'owner-maintenance',recoveryRoots:plan.roots},generations:plan.verified.map(clean),unavailableGenerations:[...(policy.unavailableGenerations||[]),...missing]};
+ const inUse=dependencies.inUse||(plan.owner.platform==='win32'?require('./windows-installation.cjs').inUse:location=>require('node:child_process').execFileSync('/bin/ps',['-ax','-o','command='],{encoding:'utf8'}).split('\n').some(command=>command.includes(location+path.sep)));
+ const intentFile=path.join(operation,'recovery-retirement-intent.json'),retirementFile=path.join(operation,'recovery-retirement.json');
+ if(plan.retire.length){
+  const retiredReceipts=plan.retire.map(id=>{
+   const row=plan.verified.find(item=>item.id===id);verifyGeneration(row,plan.owner,dependencies);
+   if(inUse(row.directory))throw Error('A recovery application may be in use; its files were preserved.');
+   const raw=fs.readFileSync(row.receiptFile,'utf8');if(digest(raw)!==row.receiptHash)throw Error('A recovery receipt changed before retirement intent.');
+   return {id:row.id,directory:row.directory,receiptHash:row.receiptHash,receipt:JSON.parse(raw),raw};
+  });
+  if(retiredReceipts.some(row=>typeof row.id!=='string'||!row.id)||new Set(retiredReceipts.map(row=>row.id)).size!==retiredReceipts.length)throw Error('Recovery retirement requires distinct generation identities.');
+  const intent={schemaVersion:1,planDigest:plan.planDigest,at:new Date().toISOString(),policyBefore:policy,inventory:next,retiredReceipts,survivors:plan.verified.filter(row=>!plan.retire.includes(row.id)).map(row=>({id:row.id,receiptHash:row.receiptHash}))};
+  if(Buffer.byteLength(JSON.stringify(intent,null,2)+'\n')>1024*1024)throw Error('Maintenance retirement intent exceeds its supported size; no recovery was removed.');
+  if(fs.existsSync(intentFile)||fs.existsSync(retirementFile))throw Error('A prior recovery retirement needs receipt-based reconciliation before retry.');
+  // Archive every complete receipt and the precise deletion intent before the
+  // policy or a generation changes. Reads recognize unresolved intents instead
+  // of relabelling our interrupted deletion as pre-existing absent history.
+  atomic(intentFile,intent);
+ }
  atomic(policyFile,next);
  const retired=[];
  for(const id of plan.retire){
   const row=plan.verified.find(item=>item.id===id);verifyGeneration(row,plan.owner,dependencies);
-  const inUse=dependencies.inUse||(plan.owner.platform==='win32'?require('./windows-installation.cjs').inUse:location=>require('node:child_process').execFileSync('/bin/ps',['-ax','-o','command='],{encoding:'utf8'}).split('\n').some(command=>command.includes(location+path.sep)));
   if(inUse(row.directory))throw Error('A recovery application may be in use; its files were preserved.');
   fs.rmSync(row.directory,{recursive:true});next.generations=next.generations.filter(item=>item.directory!==row.directory);atomic(policyFile,next);retired.push(id);
  }
+ if(plan.retire.length)atomic(retirementFile,{schemaVersion:1,planDigest:plan.planDigest,intentHash:fileDigest(intentFile),at:new Date().toISOString(),retired,retained:next.generations.map(row=>row.id),freeSpaceChange:available(fs.statfsSync(root))-available(before)});
  const staging=[];
  for(const row of plan.staging.filter(row=>row.eligible))staging.push(retireStaging(path.join(root,'jobs',row.id,'job.json')));
  const receipt={schemaVersion:1,planDigest:plan.planDigest,at:new Date().toISOString(),registered:plan.discovered,unavailable:plan.missing.map(row=>row.id),retired,staging,retained:next.generations.map(row=>row.id),freeSpaceChange:available(fs.statfsSync(root))-available(before)};

@@ -1,3 +1,13 @@
+## October 29 — maintenance retirement interruption evidence
+
+Combined-release review confirmed that maintenance could remove a full recovery
+receipt before archiving it and then misclassify a crash as absent history.
+Source now records full receipts and a deletion intent before mutation, binds
+completion to that intent, and blocks subsequent cleanup while it is unresolved.
+Regressions cover successful archival and interruptions both before policy save
+and before completion receipt. Final native acceptance remains required; live
+maintenance cleanup and combined deployment stay held until that result.
+
 ## October 29 — Windows build launch reconciliation
 
 The persistent launcher passed native source/static checks; packaging exposed a

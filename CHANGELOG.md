@@ -4,6 +4,7 @@
 - Bind Windows build workers and their npm lifecycle children to the configured Node/Git search paths, including Windows `Path`/`PATH` normalization, without changing the user's global environment.
 - Provide each Windows build a private npm command bound to its configured CLI, so packaging works with a Corepack cache that has no usable globally installed npm shim. Preserve the CLI's exit status.
 - Reconcile a launched build worker that exits before its first progress update as needing attention, preserving its original journal and allowing inspected cancellation without replay.
+- Archive full recovery receipts and a bound retirement intent before maintenance deletes a generation. Detect interrupted retirement before treating any missing directory as historical loss; preserve the original evidence and block automatic replay.
 - Record the installed 0.2.34 maintenance bootstrap and public-consumer acceptance separately from the held stable-feed activation and follow-up installation.
 
 ## Windows distribution repair — October 29

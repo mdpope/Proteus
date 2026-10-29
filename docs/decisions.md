@@ -1,5 +1,13 @@
 ## October 29 — bounded maintenance instead of elevated updater shells
 
+Maintenance must preserve the same recovery retirement evidence as the supervisor:
+full original receipt bytes/fields plus policy and deletion intent, followed by a
+hash-bound completion. Recognize an interrupted operation before classifying
+missing directories, including when its policy write already finished. Do not
+automatically replay deletion or turn it into unavailable historical recovery.
+Keep compact evidence outside retired payloads; successful steady-state retention
+still leaves the newest two verified full generations.
+
 Treat an observed exited launcher PID as interrupted even before the worker's
 first journal update. Preserve the original journal and launch receipt on reads;
 only the existing request-hash-checked cancellation writes a terminal state.
