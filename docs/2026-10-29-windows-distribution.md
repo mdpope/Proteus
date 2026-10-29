@@ -60,6 +60,18 @@ three skips / zero failures and static checks. Native bootstrap uses the exact
 reviewed source module with the existing bound policy because the installed
 0.2.34 worker predates this correction; no installed file or global PATH is edited.
 
+That first source-module adapter exited immediately after launch. Its worker PID
+was later absent, the log was empty and the journal never advanced from starting.
+Module loading and the configured Node binary passed separate read-only checks;
+the actual exit cause is not established. The original receipts remain intact.
+Source now recognizes a recorded exited launcher PID as attention even before a
+worker progress write. A real subprocess regression fails before this change and
+passes afterward; missing or live launch identities remain protected. The next
+bootstrap keeps the adapter alive for the worker's terminal receipt rather than
+assuming children outlive a one-shot command context.
+The combined follow-up passes 1,259 local source tests / three skips / zero
+failures and static checks. Exact native build and installation remain pending.
+
 ## Distribution and coordinator boundaries
 
 The 0.2.34 immutable WTB artifacts pass independent full HTTPS hashes/signature

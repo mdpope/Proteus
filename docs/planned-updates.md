@@ -1,3 +1,11 @@
+## October 29 — Windows build launch reconciliation
+
+The first source-module bootstrap worker exited before writing progress; its
+cause remains unclassified and its receipts are preserved. Source now recognizes
+that observed exit and permits inspected cancellation without replay. The next
+bootstrap adapter remains alive until the worker finishes. Missing/live launch
+identities still block cancellation. Exact native package acceptance remains pending.
+
 ## October 29 — Windows 0.2.34 installed; 0.2.35 view preservation
 
 The corrected maintenance bootstrap, verified two-generation rotation and

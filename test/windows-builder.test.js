@@ -42,3 +42,20 @@ test('only configured Windows builders dispatch fixed commands, and operation re
  assert.equal(builder.startBuild(root,request,args).job.phase,'cancelled','Cancelling does not replay the same operation');
  assert.throws(()=>builder.startBuild(root,request,{...args,platform:'linux'}),/designated Windows/);
 });
+test('a launched worker that exits before its first update is reconciled without replay',t=>{
+ const root=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-builder-early-exit-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+ const operationId=randomUUID(),directory=path.join(root,'builds',operationId),file=path.join(directory,'job.json'),requestHash='c'.repeat(64);
+ fs.mkdirSync(directory,{recursive:true});
+ packages.atomic(path.join(root,'build-current.json'),{operationId});
+ const original={schemaVersion:1,root,operationId,requestHash,phase:'starting'};packages.atomic(file,original);
+ assert.equal(builder.buildStatus(root).job.phase,'starting','An unobserved launch is not evidence of exit');
+ packages.atomic(path.join(directory,'launch.json'),{pid:process.pid});
+ const live=builder.buildStatus(root);assert.equal(live.job.phase,'starting');assert.equal(live.job.running,true);
+ assert.throws(()=>builder.cancelBuild(root,{operationId,buildRequestHash:requestHash}),/observed process exit/);
+ const exited=spawnSync(process.execPath,['-e','process.exit(19)']);assert.equal(exited.status,19);assert.ok(exited.pid>0);
+ packages.atomic(path.join(directory,'launch.json'),{pid:exited.pid});
+ const stopped=builder.buildStatus(root);assert.equal(stopped.job.phase,'attention');assert.equal(stopped.job.running,false);assert.match(stopped.job.error,/stopped without a final receipt/);
+ assert.deepEqual(JSON.parse(fs.readFileSync(file,'utf8')),original,'Inspection preserves original failed launch evidence');
+ const cancelled=builder.cancelBuild(root,{operationId,buildRequestHash:requestHash});assert.equal(cancelled.job.phase,'cancelled');assert.equal(cancelled.job.priorFailure,stopped.job.error);
+ assert.equal(JSON.parse(fs.readFileSync(path.join(directory,'launch.json'),'utf8')).pid,exited.pid);
+});

@@ -1,5 +1,13 @@
 ## October 29 — bounded maintenance instead of elevated updater shells
 
+Treat an observed exited launcher PID as interrupted even before the worker's
+first journal update. Preserve the original journal and launch receipt on reads;
+only the existing request-hash-checked cancellation writes a terminal state.
+Missing launch identity or a live PID remains protected. A temporary source
+bootstrap retains its launcher until a final worker receipt instead of relying
+on unreferenced children surviving a command runner. The empty-log early exit
+does not justify asserting a particular process-lifetime cause.
+
 Check candidate integrity before acknowledging helper readiness as well as before
 replacement. Preserve both file/hash observations beside the journal, because the
 old owner may retire failed candidate staging after restoring its baseline. A

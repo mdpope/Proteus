@@ -59,6 +59,9 @@ failure before an installer or process-lifetime cause is asserted.
    repository-local account route, builds in private updater folders, runs source
    and exact-package acceptance, verifies official archive extraction and signs
    using the configured protected key. No key is copied or trust replaced.
+   A recorded launcher PID that has exited is attention even before the worker's
+   first progress write. A missing PID is still an uncertain launch, and a live
+   PID stays protected. Inspection never rewrites the original launch evidence.
 4. Import/stage the exact signed release, checkpoint completed and remaining
    work, hand off, then finish the turn. The existing independent supervisor
    waits for chats, terminals and builds, captures consistent current data,
@@ -116,6 +119,9 @@ even when the desktop owner launched without developer tools on its PATH; no
 global environment or login setting is changed. An older installed builder that
 lacks this correction needs a reviewed source-module bootstrap, not an edit of
 the installed worker or a replay of its failed operation.
+Keep that temporary bootstrap adapter running until its worker reaches a terminal
+receipt, so its process context and exit handler remain available. Do not assume
+a one-shot command's children survive the command runner's process lifetime.
 
 The release runner is `scripts/windows-distribution.mjs --source-commit SHA
 --output ABSOLUTE_NEW_DIRECTORY --build-if-missing`. It requires the selected

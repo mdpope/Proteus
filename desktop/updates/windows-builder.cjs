@@ -45,8 +45,11 @@ function buildStatus(root){
  const file=path.join(root,'builds',ref.operationId,'job.json'),job=JSON.parse(fs.readFileSync(file,'utf8'));
  if(job.root!==root||job.operationId!==ref.operationId)throw Error('Windows build journal does not match its owner.');
  let launcher;try{launcher=JSON.parse(fs.readFileSync(path.join(path.dirname(file),'launch.json'),'utf8'));}catch(error){if(error.code!=='ENOENT')throw error;}
- const pid=job.pid||launcher?.pid,running=['starting','running','attention'].includes(job.phase)&&Number.isSafeInteger(pid)&&pid>0&&alive(pid);
- return {configured,job:{...job,...(pid?{pid}:{}),...(job.phase==='running'&&!running?{phase:'attention',error:'The build process stopped without a final receipt. Inspect its logs; it will not be replayed.'}:{}),running}};
+ const pid=job.pid||launcher?.pid,identified=Number.isSafeInteger(pid)&&pid>0,running=['starting','running','attention'].includes(job.phase)&&identified&&alive(pid);
+ // A launcher can observe the PID before the worker writes its first journal.
+ // Its later exit must be reconcilable even if the launching owner has exited.
+ const interrupted=['starting','running'].includes(job.phase)&&identified&&!running;
+ return {configured,job:{...job,...(pid?{pid}:{}),...(interrupted?{phase:'attention',error:'The build process stopped without a final receipt. Inspect its logs; it will not be replayed.'}:{}),running}};
 }
 function cancelBuild(root,value){
  const state=buildStatus(root),job=state.job;
