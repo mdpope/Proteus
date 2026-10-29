@@ -3,9 +3,10 @@
 Paired with the real Build Mac (0.2.33) in both preview simulators. Relay messages up to 8 MB are
 accepted; the 1 MiB URLSession default had kept real hosts offline. Chats have no header: chat actions
 are on the chat tab's press-and-hold menu and the sidebar button leads the project bar on iPhone and
-iPad. The project home tab scrolls with its tabs. WebKit's Safari-style edge swipe is enabled with
-the content-edge swipe as a deduplicated backup; exhausted history returns to the project home, and
-forward swipes reopen the last project/workspace. Tab overviews start each project with a Project
+iPad. The project home tab scrolls with its tabs. Edge swipes are interactive in browsers, project
+tabs/homes and iPad workspaces: the page follows the finger over an image of the destination and
+edge swipes take priority over scrolling. Exhausted history returns to the project home, and
+forward swipes reopen the last tab/project/workspace. Tab overviews start each project with a Project
 home card. Simulator UI tests for project tabs, chat menus, swipes and overview pass on iPhone and
 iPad; no physical device was updated.
 

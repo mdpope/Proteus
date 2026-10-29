@@ -573,7 +573,7 @@ struct NativeWorkspacesView: View {
                 }
                 if NativeWorkspaceIdentity.all(destinations).isEmpty { Text("Connect a computer to see its workspaces.").foregroundStyle(.secondary) }
             }.navigationTitle(NativeDesignPreview.enabled ? "" : "Workspaces").nativeFeaturePage("Workspaces", search: $search).refreshable { await destinations.refreshAll() }
-                .modifier(NativePageSwipe(enabled: NativePhonePreview.enabled, phone: true, blockBack: true, blockForward: previous == nil, forward: { if let previous { open(previous) } }))
+                .modifier(NativePageSwipe(enabled: NativePhonePreview.enabled, phone: true, blockBack: true, blockForward: previous == nil, forward: { if let previous { open(previous) } }, interactive: false))
                 .toolbar { Button("New workspace", systemImage: "plus") { creating = true }.disabled(!destinations.destinations.contains { destinations.remote(for: $0.id)?.connected == true }) }
                 .navigationDestination(item: $selected) { entry in if let remote = destinations.remote(for: entry.hostID) { NativeWorkspaceView(workspaceID: entry.workspaceID).environment(remote).modifier(NativePhoneBackNavigation()) } }
                 .sheet(item: $copying) { entry in NativeWorkspaceCopyView(source: entry) { copy in copying = nil; destinations.remote(for: copy.hostID)?.setDraft("workspace-page:" + copy.workspaceID, .string("Configuration")); open(copy) } }
@@ -648,6 +648,7 @@ struct NativeWorkspaceContentView: View {
     private var scope: String { "\(scopeKind):\(hostID):\(scopeID)" }
     private var navigationKey: String { scopeKind + "-navigation:" + scopeID }
     @State private var reorder = false
+    @State private var contentFrame: CGRect = .zero
     private var orderedChildren: [JSON] { NativeWorkspaceNavigation.children(scope: scope, navigationKey: navigationKey, remote: store, shared: shared) }
     private var navigation: JSON { store.draft(navigationKey) }
     // The saved navigation record is the only selection source. Earlier view-local
@@ -675,7 +676,11 @@ struct NativeWorkspaceContentView: View {
             else if selected.hasPrefix("remote:") {
                 ContentUnavailableView("Available on \(store.displayName)", systemImage: "desktopcomputer", description: Text("This saved terminal or host document tab remains on \(store.displayName). Open it there to reconnect to the terminal; chat documents can be requested through their chat’s approved document controls.")).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else { TeamBrowserView(scope: scope, showTabs: false, tabID: selected, onBackToList: { selected = "workspace" }, newTabOptions: [NativeNewTabAction(title: "New chat", symbol: "bubble.left.and.bubble.right", enabled: store.connected, run: { internet = false; newChat = true }), NativeNewTabAction(title: "Internet Search", symbol: "magnifyingglass", enabled: store.connected, run: { internet = true; newChat = true })]) }
-        }.environment(\.nativeTabStep, { direction in
+        }
+        // Children swipe back to this home over its last image; the home swipes forward to the last tab.
+        .environment(\.nativeBackPreviewKey, homeImageKey)
+        .modifier(NativePageSwipe(enabled: selected == "workspace" && projectID != nil, phone: true, blockBack: true, blockForward: selected != "workspace" || lastTab.isEmpty, forward: { selected = lastTab; if shared.tabs(in: scope).contains(where: { $0.id == selected }) { shared.select(selected, in: scope) } }, forwardPreview: { NativeScreenMemory.image(tabImageKey) }))
+        .environment(\.nativeTabStep, { direction in
             let ids = orderedChildren.map { $0["id"].string }
             guard let index = ids.firstIndex(of: selected), ids.indices.contains(index + direction) else { return }
             selected = ids[index + direction]
@@ -694,7 +699,8 @@ struct NativeWorkspaceContentView: View {
                 NativeWorkspaceNavigation.adoptOwnerChats(value, navigationKey: navigationKey, remote: store)
             }
             .onAppear { claimBack() }
-            .onChange(of: selected) { _, _ in claimBack() }
+            .onChange(of: selected) { old, new in rememberLeaving(old, new); claimBack() }
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { contentFrame = $0 }
             .onChange(of: areaActive) { _, active in if active { claimBack() } else if NativePhonePreview.enabled { phoneChrome.contentOwnsBack = false } }
             .onDisappear { if NativePhonePreview.enabled { phoneChrome.contentOwnsBack = false } }
             // Poll only while this project is on screen; hidden phone areas stay mounted.
@@ -752,6 +758,15 @@ struct NativeWorkspaceContentView: View {
     private func mutateTabs(_ operations: [JSON]) { NativeWorkspaceNavigation.mutate(operations, kind: scopeKind, id: scopeID, scope: scope, remote: store, shared: shared) }
     /// A selected tab swipes back to this page's home before UIKit pops to the parent.
     private func claimBack() { if NativePhonePreview.enabled && areaActive { phoneChrome.contentOwnsBack = selected != "workspace" } }
+    private var homeImageKey: String { "home:" + scope }
+    private var tabImageKey: String { "tab:" + scope }
+    private var lastTab: String { let value = store.draft(navigationKey + ":last").string; return orderedChildren.contains(where: { $0["id"].string == value }) ? value : "" }
+    /// Keep the image of the screen being left, so swiping back/forward reveals it under the page.
+    private func rememberLeaving(_ old: String, _ new: String) {
+        guard old != new else { return }
+        if old == "workspace" { NativeScreenMemory.remember(homeImageKey, frame: contentFrame) }
+        else if new == "workspace" { NativeScreenMemory.remember(tabImageKey, frame: contentFrame); store.setDraft(navigationKey + ":last", .string(old)) }
+    }
 }
 
 /// Press-and-hold menu for a project/workspace tab. Chat tabs carry the chat's actions.

@@ -178,6 +178,7 @@ struct TeamBrowserView: View {
     @Environment(\.nativePhoneAreaActive) private var phoneAreaActive
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.nativeBackPreviewKey) private var backPreviewKey
     @State private var text = ""
     @State private var engine = "Google"
     @State private var overview = false
@@ -264,23 +265,17 @@ struct TeamBrowserView: View {
             // back/forward list where the page meets the screen edge. This content-edge swipe
             // is the backup: beside a pinned iPad sidebar, for owner history WebKit lacks, and
             // once history is exhausted it returns to the previous screen (the project home).
-            }.modifier(NativePageSwipe(enabled: !NativePhonePreview.enabled || onBackToList != nil, phone: onBackToList != nil, back: {
+            }.modifier(NativePageSwipe(enabled: !NativePhonePreview.enabled || onBackToList != nil, phone: onBackToList != nil, blockBack: onBackToList == nil && (selectedID.map { shared.browserHistory($0, back: true).isEmpty } ?? true), blockForward: selectedID.map { shared.browserHistory($0, back: false).isEmpty } ?? true, back: {
                 guard let id = selectedID, !shared.isTwoFingerNavigation(id) else { return }
-                let ended = Date()
-                Task { @MainActor in
-                    try? await Task.sleep(for: .milliseconds(450))
-                    guard selectedID == id, !shared.nativeTraversal(id, since: ended.addingTimeInterval(-0.4)) else { return }
-                    if !shared.browserHistory(id, back: true).isEmpty { shared.goBack(id) } else { onBackToList?() }
-                }
+                if !shared.browserHistory(id, back: true).isEmpty { shared.goBack(id) } else { onBackToList?() }
             }, forward: {
-                guard let id = selectedID, !shared.isTwoFingerNavigation(id) else { return }
-                let ended = Date()
-                Task { @MainActor in
-                    try? await Task.sleep(for: .milliseconds(450))
-                    guard selectedID == id, !shared.nativeTraversal(id, since: ended.addingTimeInterval(-0.4)) else { return }
-                    shared.goForward(id)
-                }
-            }))
+                guard let id = selectedID, !shared.isTwoFingerNavigation(id), !shared.browserHistory(id, back: false).isEmpty else { return }
+                shared.goForward(id)
+            }, backPreview: {
+                guard let id = selectedID else { return nil }
+                if !shared.browserHistory(id, back: true).isEmpty { return shared.adjacentPageImage(id, back: true) }
+                return backPreviewKey.flatMap(NativeScreenMemory.image)
+            }, forwardPreview: { selectedID.flatMap { shared.adjacentPageImage($0, back: false) } }))
         }.safeAreaInset(edge: .bottom, spacing: 0) {
             // Sit the row partly in the home-indicator area like Safari, halving the bar height.
             if NativePhonePreview.enabled { phoneBrowserControls.fixedSize(horizontal: false, vertical: true).padding(.bottom, -16) }

@@ -497,7 +497,7 @@ final class RemoteTests: XCTestCase {
         shared.browserTabs = [BrowserDescriptor(id: id, title: "SPA", url: base + "?step=1")]
         let view = shared.webView(shared.browserTabs[0], allowLocalNavigation: true)
         defer { shared.unloadBrowsers() }
-        XCTAssertTrue(view.allowsBackForwardNavigationGestures, "WebKit's Safari-style swipe is enabled; the content-edge handler is the backup")
+        XCTAssertFalse(view.allowsBackForwardNavigationGestures, "Proteus's interactive edge swipe is the single browser swipe handler")
         for _ in 0..<200 { if !view.isLoading, shared.browserTabs[0].history?.entries.count == 1 { break }; try await Task.sleep(for: .milliseconds(50)) }
         XCTAssertEqual(shared.browserTabs[0].history?.entries.count, 1)
         _ = try await view.evaluateJavaScript("history.replaceState({visit:0}, '', '?step=1')")
@@ -506,7 +506,7 @@ final class RemoteTests: XCTestCase {
             for _ in 0..<100 { if shared.browserTabs[0].history?.entries.count == index + 2 { break }; try await Task.sleep(for: .milliseconds(25)) }
         }
         XCTAssertEqual(shared.browserTabs[0].history?.entries.count, 4)
-        XCTAssertTrue(view.allowsBackForwardNavigationGestures, "Navigation observations keep the WebKit swipe")
+        XCTAssertFalse(view.allowsBackForwardNavigationGestures, "Navigation observations must not reenable a competing WebKit gesture")
         let entryIDs = shared.browserTabs[0].history?.entries.map(\.id)
         let oldest = try XCTUnwrap(shared.browserHistory(id, back: true).last)
         shared.goBrowserHistory(oldest, in: id)

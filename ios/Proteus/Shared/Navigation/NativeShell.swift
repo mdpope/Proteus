@@ -54,6 +54,12 @@ struct NativeTabReorderSheet: View {
 /// selection and middle-of-page horizontal controls available.
 /// On iPhone it is attached only where UIKit's pop gesture cannot express the step
 /// (a project tab returning to its project home); `phone` must not change for one view.
+///
+/// The swipe is interactive like Safari and UIKit's pop: the page follows the finger over the
+/// last image of the destination (the previous web page, project home or workspace), then
+/// settles or springs back. A swipe that starts at a content edge takes priority over scroll
+/// views and tab strips beneath it. Browsers use this rather than WebKit's own recognizer so
+/// one handler moves saved history, beside a pinned iPad sidebar too.
 struct NativePageSwipe: ViewModifier {
     var enabled = true
     var phone = false
@@ -61,27 +67,149 @@ struct NativePageSwipe: ViewModifier {
     var blockForward = false
     var back: (() -> Void)?
     var forward: (() -> Void)? = nil
+    /// Slide the page with the finger. Off for steps that animate themselves (UIKit pushes).
+    var interactive = true
+    var backPreview: (() -> UIImage?)? = nil
+    var forwardPreview: (() -> UIImage?)? = nil
+    @State private var offset: CGFloat = 0
+    @State private var preview: UIImage?
     @State private var width: CGFloat = 0
-    @State private var blockedAtStart: (Bool, Bool)?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     func body(content: Content) -> some View {
         if NativePhonePreview.enabled && !phone { content }
         else {
-        content.contentShape(Rectangle())
-            .background(GeometryReader { geometry in
-                Color.clear.onAppear { width = geometry.size.width }
-                    .onChange(of: geometry.size.width) { _, value in width = value }
-            })
-            .simultaneousGesture(DragGesture(minimumDistance: 30, coordinateSpace: .local).onChanged { _ in
-                if blockedAtStart == nil { blockedAtStart = (!enabled || blockBack, !enabled || blockForward) }
-            }.onEnded { value in
-                let blocked = blockedAtStart ?? (!enabled || blockBack, !enabled || blockForward); blockedAtStart = nil
-                let dx = value.translation.width, dy = value.translation.height
-                guard abs(dx) >= 80, abs(dx) > abs(dy) * 2 else { return }
-                if value.startLocation.x <= 56, dx > 0, !blocked.0 { back?() }
-                else if value.startLocation.x >= width - 56, dx < 0, !blocked.1 { forward?() }
-            })
+            ZStack(alignment: .topLeading) {
+                if offset != 0 {
+                    // The destination sits slightly behind the page, as in a navigation pop.
+                    Group { if let preview { Image(uiImage: preview).resizable().scaledToFill() } else { NativeTheme.background } }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top).clipped()
+                        .offset(x: offset > 0 ? (offset - width) * 0.3 : (width + offset) * 0.3)
+                        .overlay { Color.black.opacity(0.18 * (1 - min(1, abs(offset) / max(1, width)))) }
+                        .allowsHitTesting(false).accessibilityHidden(true)
+                }
+                content.offset(x: offset).shadow(color: .black.opacity(offset == 0 ? 0 : 0.25), radius: 10)
+            }
+            .clipped()
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+            .background(NativeEdgePan(
+                canBegin: { isBack, _ in enabled && (isBack ? (!blockBack && back != nil) : (!blockForward && forward != nil)) },
+                changed: { isBack, dx in
+                    guard interactive else { return }
+                    if offset == 0 { preview = isBack ? backPreview?() : forwardPreview?() }
+                    offset = isBack ? max(0, dx) : min(0, dx)
+                },
+                ended: { isBack, dx, velocity in
+                    let distance = max(80, min(150, width * 0.3)), commit = isBack ? (dx > distance || velocity > 500) && dx > 20 : (dx < -distance || velocity < -500) && dx < -20
+                    let action = isBack ? back : forward
+                    guard interactive else { if commit { action?() }; return }
+                    if commit {
+                        withAnimation(reduceMotion ? .linear(duration: 0.01) : .easeOut(duration: 0.2)) { offset = isBack ? width : -width } completion: {
+                            action?()
+                            var instant = Transaction(); instant.disablesAnimations = true
+                            withTransaction(instant) { offset = 0; preview = nil }
+                        }
+                    } else {
+                        withAnimation(reduceMotion ? .linear(duration: 0.01) : .spring(response: 0.3, dampingFraction: 0.9)) { offset = 0 } completion: { preview = nil }
+                    }
+                }))
         }
     }
+}
+/// Window-level pan restricted to one surface's 56-point edges. It is required to fail
+/// before scroll views beneath it, so an edge swipe wins over scrolling and tab strips,
+/// while touches elsewhere never reach it.
+struct NativeEdgePan: UIViewRepresentable {
+    var canBegin: (_ back: Bool, _ atScreenEdge: Bool) -> Bool
+    var changed: (_ back: Bool, _ dx: CGFloat) -> Void
+    var ended: (_ back: Bool, _ dx: CGFloat, _ velocity: CGFloat) -> Void
+    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeUIView(context: Context) -> UIView { let view = UIView(); view.isUserInteractionEnabled = false; view.backgroundColor = .clear; return view }
+    func updateUIView(_ view: UIView, context: Context) {
+        context.coordinator.canBegin = canBegin; context.coordinator.changed = changed; context.coordinator.ended = ended; context.coordinator.surface = view
+        DispatchQueue.main.async { [weak coordinator = context.coordinator] in coordinator?.install() }
+    }
+    static func dismantleUIView(_ view: UIView, coordinator: Coordinator) { coordinator.remove() }
+    @MainActor final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var canBegin: (Bool, Bool) -> Bool = { _, _ in false }
+        var changed: (Bool, CGFloat) -> Void = { _, _ in }
+        var ended: (Bool, CGFloat, CGFloat) -> Void = { _, _, _ in }
+        weak var surface: UIView?
+        private weak var host: UIWindow?
+        private var pan: UIPanGestureRecognizer?
+        private var back = true
+        static let edge: CGFloat = 56
+        func install() {
+            guard let window = surface?.window, host !== window else { return }
+            remove(); host = window
+            let recognizer = UIPanGestureRecognizer(target: self, action: #selector(panned(_:)))
+            recognizer.maximumNumberOfTouches = 1; recognizer.delegate = self; recognizer.cancelsTouchesInView = true
+            window.addGestureRecognizer(recognizer); pan = recognizer
+        }
+        func remove() { if let pan { host?.removeGestureRecognizer(pan) }; pan = nil; host = nil }
+        private func edgeSide(_ point: CGPoint, in surface: UIView) -> Bool? {
+            guard surface.bounds.width > Self.edge * 2, surface.bounds.contains(point) else { return nil }
+            if point.x <= Self.edge { return true }
+            if point.x >= surface.bounds.width - Self.edge { return false }
+            return nil
+        }
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            guard let surface, surface.window != nil, !surface.isHidden, surface.alpha > 0.01 else { return false }
+            return edgeSide(touch.location(in: surface), in: surface) != nil
+        }
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            guard let surface, let pan = gestureRecognizer as? UIPanGestureRecognizer, let window = surface.window else { return false }
+            let start = pan.location(in: surface), translation = pan.translation(in: surface)
+            guard let side = edgeSide(CGPoint(x: start.x - translation.x, y: start.y - translation.y), in: surface) else { return false }
+            let velocity = pan.velocity(in: surface)
+            guard abs(velocity.x) > abs(velocity.y) * 1.5, side ? velocity.x > 0 : velocity.x < 0 else { return false }
+            let x = pan.location(in: window).x - translation.x
+            back = side
+            return canBegin(side, x <= 24 || x >= window.bounds.width - 24)
+        }
+        // Edge swipes win over scrolling and horizontal tab strips under the edge.
+        // SwiftUI hosts representables (WKWebView, hosted lists) as siblings, so match by on-screen overlap.
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
+            guard let surface, other is UIPanGestureRecognizer, let view = other.view, other !== gestureRecognizer, !(other.delegate is Coordinator) else { return false }
+            guard view is UIScrollView || view.superview is UIScrollView else { return false }
+            return view.convert(view.bounds, to: nil).intersects(surface.convert(surface.bounds, to: nil))
+        }
+        // Taps, long presses and page touch tracking continue alongside an edge pan.
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { !(other is UIPanGestureRecognizer) }
+        @objc private func panned(_ gesture: UIPanGestureRecognizer) {
+            guard let surface else { return }
+            let dx = gesture.translation(in: surface).x
+            switch gesture.state {
+            case .changed: changed(back, dx)
+            case .ended: ended(back, dx, gesture.velocity(in: surface).x)
+            case .cancelled, .failed: ended(back, 0, 0)
+            default: break
+            }
+        }
+    }
+}
+/// Last image of a screen, shown beneath an interactive edge swipe back to it. Bounded and
+/// memory-only; a missing image falls back to the page background.
+@MainActor enum NativeScreenMemory {
+    private static var images: [String: UIImage] = [:]
+    private static var order: [String] = []
+    static func remember(_ key: String, frame: CGRect) {
+        guard frame.width > 20, frame.height > 20, let window = UIApplication.shared.connectedScenes.compactMap({ ($0 as? UIWindowScene)?.keyWindow }).first else { return }
+        let format = UIGraphicsImageRendererFormat(); format.scale = min(2, window.screen.scale)
+        let image = UIGraphicsImageRenderer(size: frame.size, format: format).image { _ in
+            window.drawHierarchy(in: CGRect(x: -frame.minX, y: -frame.minY, width: window.bounds.width, height: window.bounds.height), afterScreenUpdates: false)
+        }
+        store(key, image)
+    }
+    static func store(_ key: String, _ image: UIImage) {
+        images[key] = image; order.removeAll { $0 == key }; order.append(key)
+        while order.count > 16 { images.removeValue(forKey: order.removeFirst()) }
+    }
+    static func image(_ key: String) -> UIImage? { images[key] }
+}
+private struct NativeBackPreviewKey: EnvironmentKey { static let defaultValue: String? = nil }
+extension EnvironmentValues {
+    /// NativeScreenMemory key of the screen a contained page returns to (its project home).
+    var nativeBackPreviewKey: String? { get { self[NativeBackPreviewKey.self] } set { self[NativeBackPreviewKey.self] = newValue } }
 }
 private struct NativeSidebarToggleKey: EnvironmentKey { static let defaultValue: (() -> Void)? = nil }
 extension EnvironmentValues {

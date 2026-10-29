@@ -1191,8 +1191,8 @@ let nativeFixtureRelayOrigin = ""
         } else { reload(id) }
     }
     func prepareBrowserHistoryNavigation(_ url: URL, in id: String) {
-        // App-initiated traversals set historyNavigation first; this is WebKit's own
-        // edge swipe (or page script). It is a user traversal, never a mirrored load.
+        // App-initiated traversals set historyNavigation first; this is a page-script
+        // back/forward. It is a user traversal, never a mirrored load.
         guard historyNavigation[id] == nil else { return }
         nativeTraversals[id] = Date()
         guard let tab = browserTabs.first(where: { $0.id == id }), let history = tab.history,
@@ -1203,9 +1203,25 @@ let nativeFixtureRelayOrigin = ""
     private var nativeTraversals: [String: Date] = [:]
     /// Whether WebKit's swipe already moved this tab, so the backup swipe must not move it again.
     func nativeTraversal(_ id: String, since date: Date) -> Bool { (nativeTraversals[id] ?? .distantPast) >= date }
+    /// Keep an image of the page being left, keyed by its saved history entry, so an edge
+    /// swipe back or forward shows that page under the sliding one (Safari's page image).
+    private func rememberLeavingPage(_ id: String, toward url: URL) {
+        guard NativeDesignPreview.enabled, let view = browserViews[id], view.window != nil, view.bounds.width > 20, view.url?.absoluteString != url.absoluteString,
+              let history = browserTabs.first(where: { $0.id == id })?.history, history.entries.indices.contains(history.index) else { return }
+        let key = "page:" + history.entries[history.index].id
+        let configuration = WKSnapshotConfiguration(); configuration.afterScreenUpdates = false; configuration.snapshotWidth = NSNumber(value: Double(view.bounds.width))
+        view.takeSnapshot(with: configuration) { image, _ in if let image { Task { @MainActor in NativeScreenMemory.store(key, image) } } }
+    }
+    /// The remembered image of the adjacent saved page, if any.
+    func adjacentPageImage(_ id: String, back: Bool) -> UIImage? {
+        guard let history = browserTabs.first(where: { $0.id == id })?.history else { return nil }
+        let index = history.index + (back ? -1 : 1)
+        return history.entries.indices.contains(index) ? NativeScreenMemory.image("page:" + history.entries[index].id) : nil
+    }
     private var serverRedirectedBrowsers = Set<String>()
     private var originalBrowserLoads: [String: String] = [:]
     func prepareBrowserLoad(_ url: URL, in id: String, userInitiated: Bool = false) {
+        rememberLeavingPage(id, toward: url)
         if userInitiated { mirroredBrowserLoads.remove(id); explicitBrowserNavigations.insert(id); originalBrowserLoads[id] = url.absoluteString }
         applyPageScale(id, url: url); pendingBrowserLoads[id] = url.absoluteString
         if originalBrowserLoads[id] == nil { originalBrowserLoads[id] = url.absoluteString }
@@ -1329,12 +1345,20 @@ let nativeFixtureRelayOrigin = ""
     }
     func reload(_ id: String) { unloadedBrowsers.remove(id) }
     func unloadBrowsers() { for id in Array(browserViews.keys) { unload(id, force: true) } }
+    /// DEBUG simulator fixtures load their local pages in project tabs instead of the design-preview placeholder.
+    static var fixtureLocalBrowsing: Bool {
+        #if DEBUG && targetEnvironment(simulator)
+        return ProcessInfo.processInfo.arguments.contains("--fixture-local-browsing")
+        #else
+        return false
+        #endif
+    }
     func isBrowserLoaded(_ id: String) -> Bool { browserViews[id] != nil }
     func isCurrentBrowserView(_ view: WKWebView, id: String) -> Bool { browserViews[id] === view }
     func webView(_ tab: BrowserDescriptor, allowLocalNavigation: Bool = false) -> WKWebView {
         if let view = browserViews[tab.id] { return view }
         let configuration = WKWebViewConfiguration()
-        if !allowLocalNavigation, let address = tab.url, let url = URL(string: address), ["localhost", "127.0.0.1", "::1"].contains(url.host ?? ""), contentSync[tab.scope]?.remote.state["capabilities"].array.contains(.string("chat.previews.v1")) == true {
+        if !allowLocalNavigation, !Self.fixtureLocalBrowsing, let address = tab.url, let url = URL(string: address), ["localhost", "127.0.0.1", "::1"].contains(url.host ?? ""), contentSync[tab.scope]?.remote.state["capabilities"].array.contains(.string("chat.previews.v1")) == true {
             configuration.websiteDataStore = .nonPersistent()
             let placeholder = WKWebView(frame: .zero, configuration: configuration)
             let owner = (contentSync[tab.scope]?.remote.displayName ?? "the connected computer").replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;").replacingOccurrences(of: ">", with: "&gt;")
@@ -1356,7 +1380,7 @@ let nativeFixtureRelayOrigin = ""
         // Proteus owns the full content-relative edge gesture. Native gesture
         // recognition has different thresholds and must not race that handler.
         // goBrowserHistory still reuses matching native page instances via go(to:).
-        view.allowsBackForwardNavigationGestures = true; view.isFindInteractionEnabled = true
+        view.allowsBackForwardNavigationGestures = false; view.isFindInteractionEnabled = true
         browserViews[tab.id] = view
         browserObservations[tab.id] = [observeBrowser(view, id: tab.id, keyPath: \.canGoBack), observeBrowser(view, id: tab.id, keyPath: \.canGoForward), observeBrowser(view, id: tab.id, keyPath: \.isLoading), observeBrowser(view, id: tab.id, keyPath: \.url), observeBrowser(view, id: tab.id, keyPath: \.title)]
         if let text = tab.url, let url = URL(string: text) { mirroredBrowserLoads.insert(tab.id); pendingBrowserLoads[tab.id] = url.absoluteString; applyPageScale(tab.id, url: url); view.load(URLRequest(url: url)) }

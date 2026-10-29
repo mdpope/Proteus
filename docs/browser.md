@@ -1464,7 +1464,8 @@ New top-level browser tabs retain the existing `pendingOpen` creation marker unt
 
 ## October 29 native swipe update
 
-WebKit's interactive back/forward swipe is enabled on iPhone and iPad. The content-edge gesture
-described above is now the backup: it acts after a short delay only when WebKit did not traverse,
-covering the edge beside a pinned iPad sidebar and owner history missing from WebKit. Once history is
-exhausted, a project browser returns to its project home. See the October 29 decision.
+Native browsers use Proteus's interactive content-edge swipe: the page follows the finger over a
+snapshot of the previous or next saved page, like Safari, and commits or springs back. WebKit's own
+recognizer remains disabled so one handler moves saved history, including beside a pinned iPad
+sidebar and for restored owner history. Once history is exhausted a project browser slides back to
+its project home. See the October 29 decision.

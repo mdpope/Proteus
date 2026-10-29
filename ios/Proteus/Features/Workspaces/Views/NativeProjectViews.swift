@@ -13,7 +13,7 @@ struct NativeWorkspaceView: View {
             if NativePhonePreview.enabled {
                 NativeWorkspaceContentView(workspaceID: workspaceID, onOpenProject: select, onOpenMain: onOpenMain).environment(store)
                     // Back pops to the workspace list (UIKit); forward reopens the last project.
-                    .modifier(NativePageSwipe(phone: true, blockBack: true, blockForward: lastProject.isEmpty || tabSelected("workspace-navigation:" + workspaceID), forward: { select(lastProject) }))
+                    .modifier(NativePageSwipe(phone: true, blockBack: true, blockForward: lastProject.isEmpty || tabSelected("workspace-navigation:" + workspaceID), forward: { select(lastProject) }, interactive: false))
                     .navigationDestination(isPresented: Binding(get: { !selection.isEmpty }, set: { if !$0 { select("") } })) {
                         NativeSelectedProjectView(workspaceID: workspaceID, onOpenMain: onOpenMain).environment(store).modifier(NativePhoneBackNavigation())
                     }
@@ -21,12 +21,13 @@ struct NativeWorkspaceView: View {
                 if !NativePadPreview.enabled { HStack { Button { select("") } label: { Label("Workspace", systemImage: "chevron.left") }; Spacer() }.padding(.horizontal).padding(.vertical, 8) }
                 NativeWorkspaceContentView(workspaceID: workspaceID, projectID: selectedProject, onOpenMain: onOpenMain).id(selectedProject)
                     // A project's home swipes back to its workspace; its tabs first return home.
-                    .modifier(NativePageSwipe(blockBack: tabSelected("project-navigation:" + selectedProject), blockForward: true, back: { select("") }))
+                    .modifier(NativePageSwipe(blockBack: tabSelected("project-navigation:" + selectedProject), blockForward: true, back: { select("") }, backPreview: { NativeScreenMemory.image("workspace:" + workspaceID) }))
             } else {
                 NativeWorkspaceContentView(workspaceID: workspaceID, onOpenProject: select, onOpenMain: onOpenMain).id(workspaceID)
-                    .modifier(NativePageSwipe(blockBack: true, blockForward: lastProject.isEmpty || tabSelected("workspace-navigation:" + workspaceID), forward: { select(lastProject) }))
+                    .modifier(NativePageSwipe(blockBack: true, blockForward: lastProject.isEmpty || tabSelected("workspace-navigation:" + workspaceID), forward: { select(lastProject) }, forwardPreview: { NativeScreenMemory.image("project:" + workspaceID) }))
             }
-        }.onAppear { reconcile() }
+        }.onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
+        .onAppear { reconcile() }
         .onChange(of: store.state["workspaceProjects"]) { _, _ in reconcile() }
     }
     private func reconcile() {
@@ -52,7 +53,10 @@ struct NativeWorkspaceView: View {
             store.setDraft("workspace-navigation:" + workspaceID, .object(remaining))
         }
     }
+    @State private var frame: CGRect = .zero
     private func select(_ id: String) {
+        // Remember the screen being left for the interactive swipe that returns to it (iPad).
+        if !NativePhonePreview.enabled && id != selection { NativeScreenMemory.remember(selection.isEmpty ? "workspace:" + workspaceID : "project:" + workspaceID, frame: frame) }
         if id.isEmpty, !selection.isEmpty { store.setDraft("workspace-last-project:" + workspaceID, .string(selection)) }
         store.setDraft("workspace-selected-project:" + workspaceID, .string(id))
     }

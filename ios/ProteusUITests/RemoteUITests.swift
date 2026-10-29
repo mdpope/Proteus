@@ -363,7 +363,7 @@ final class RemoteUITests: XCTestCase {
     /// Edge swipes in a project browser: back one page per swipe (WebKit's swipe at the iPhone
     /// screen edge, the content-edge backup beside the iPad sidebar), then the project home.
     @MainActor func testProjectBrowserEdgeSwipesWalkHistoryThenProjectHome() async throws {
-        let app = nativeFixtureApplication(); app.launchArguments = ["--reset-pairing", "--phone-preview-fixture", "--synthetic-browser-workspace"]; app.launch()
+        let app = nativeFixtureApplication(); app.launchArguments = ["--reset-pairing", "--phone-preview-fixture", "--synthetic-browser-workspace", "--fixture-local-browsing"]; app.launch()
         let phone = UIDevice.current.userInterfaceIdiom == .phone
         func drawer() { if phone, let n = app.buttons.matching(identifier: "phone-app-navigation").allElementsBoundByIndex.first(where: { $0.isHittable }) { n.tap(); sleep(1) } }
         func shot(_ name: String) { let a = XCTAttachment(screenshot: app.screenshot()); a.name = name; a.lifetime = .keepAlways; add(a) }
@@ -393,6 +393,14 @@ final class RemoteUITests: XCTestCase {
         swipe(from: phone ? 2 : web.frame.minX + 24, by: 200); shot("history exhausted")
         XCTAssertTrue(app.segmentedControls.buttons["Chats"].waitForExistence(timeout: 8), "With history exhausted, back returns to the project home")
         XCTAssertTrue(app.buttons["New workspace tab"].exists, "The project stays open rather than popping to the workspace")
+        // Operator-only: keep this run's screen recording (kept for failures) with a slow, held swipe.
+        if ProcessInfo.processInfo.environment["PROTEUS_RECORD_SWIPE"] != nil {
+            let browser = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "workspace-child-tab-", "First browser page")).firstMatch
+            if browser.waitForExistence(timeout: 5) { browser.tap(); sleep(2) }
+            web.links["Next browser page"].tap(); sleep(3)
+            origin.withOffset(CGVector(dx: left, dy: y)).press(forDuration: 0.1, thenDragTo: origin.withOffset(CGVector(dx: left + 160, dy: y)), withVelocity: 120, thenHoldForDuration: 1.5); sleep(2)
+            XCTFail("Recording retained for review")
+        }
     }
     /// The project tab strip's + and close, and the browser bar's tab overview, act on tabs.
     @MainActor func testProjectTabControlsAct() async throws {

@@ -650,6 +650,7 @@ struct ChatView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.nativeBackPreviewKey) private var backPreviewKey
     let id: String
     var onBack: (() -> Void)? = nil
     var workspaceBrowserScope: String? = nil
@@ -874,7 +875,7 @@ struct ChatView: View {
         .onChange(of: selectedChild) { _, _ in if NativeDesignPreview.enabled { registerPhoneTab() } }
         .onChange(of: phoneAreaActive) { _, active in if NativePhonePreview.enabled && active { phoneChrome.browserOwnsBack = false; registerPhoneTab() } }
         // A project chat swipes back to its project home; unassigned iPhone chats use UIKit's pop.
-        .modifier(NativePageSwipe(enabled: (!NativePhonePreview.enabled || embedded) && !shared.tabs(in: chatBrowserScope).contains(where: { $0.id == selectedChild }), phone: embedded, back: returnToChats))
+        .modifier(NativePageSwipe(enabled: (!NativePhonePreview.enabled || embedded) && !shared.tabs(in: chatBrowserScope).contains(where: { $0.id == selectedChild }), phone: embedded, back: returnToChats, backPreview: { backPreviewKey.flatMap(NativeScreenMemory.image) }))
         .task(id: contentRefreshIdentity) {
             guard scenePhase == .active, !NativePhonePreview.enabled || phoneAreaActive else { return }
             #if DEBUG

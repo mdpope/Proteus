@@ -2603,16 +2603,21 @@ Arbitrary file storage is separate from provider media support. Preserve exact o
 
 The measured browser optimization batches only redundant state projections at 16 ms. Mutations, access revocation and explicit reads remain synchronous to owner semantics. The comparison demonstrates reduced projection work, not a general claim of lower production memory or fewer active model processes.
 
-## October 29 — WebKit edge swipe with a deduplicated content-edge backup
+## October 29 — Interactive edge swipes everywhere; one browser swipe handler
 
-Supersedes the October 15 native content-edge correction at the operator's request for Safari's
-interactive page-image swipe. WebKit's back/forward recognizer is enabled again. The content-edge
-handler remains for pages beside a pinned iPad sidebar, restored owner history that WebKit does not
-hold, and the return to the previous screen once history is exhausted. To avoid the duplicate moves
-that motivated the earlier decision, the backup waits 450 ms and acts only if WebKit did not start
-its own traversal (WebKit-initiated back/forward navigations are recorded when they are decided;
-app-initiated traversals set their target first and are never counted). WebKit traversals un-mirror
-the tab so the saved history index and owner traverse operation follow them.
+Refines the October 15 native content-edge correction at the operator's request for Safari's
+interactive page-image swipe, extended to other navigation. One Proteus edge recognizer serves
+browsers, project tabs, project homes and iPad workspace/project steps. It follows the finger over
+the last image of the destination (the previous/next saved web page, the project home or the
+workspace page), then settles or springs back, committing past 30% of the width (at most 150 pt)
+or with a flick. It starts only within 56 points of the content edge, so it also works beside a
+pinned iPad sidebar, and scroll views and tab strips under that edge wait for it to fail; taps and
+long presses continue alongside. WebKit's own recognizer stays disabled: enabling it was tested,
+and with both installed neither reliably owned the edge, while a single handler keeps saved owner
+history, restored history and the exhausted-history return to the project home consistent. Page
+images are snapshotted as each page is left and held in a bounded memory-only cache. UIKit's pop
+still returns from a pushed project or workspace on iPhone, and steps that push with their own
+animation trigger on release instead of sliding.
 
 Chats have no header bar. Their actions live on the tab that names the chat, so a project chat on
 iPhone shows only the project bar and the chat's own tab row. The single sidebar control sits at the
