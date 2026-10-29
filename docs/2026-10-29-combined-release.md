@@ -6,8 +6,11 @@ Combine the current iOS fixes with the desktop responsiveness, Claude continuati
 question-answer changes, plus relevant web parity. The operator authorizes deployment to the
 physical iPhone/iPad, Build Mac, Windows and the website after the separate Windows distribution
 chat finishes. Work Mac remains explicitly held until the operator lifts that hold. Other computers
-are outside this rollout. Await the gate's final source/acceptance before choosing the final release
-version, merging its changes or installing this combined candidate.
+are outside this rollout. The gate completed with immutable source `66ce6f0`, now merged into
+combined version 0.2.36 and native build 2610.29.1. It installed and published Windows 0.2.35
+`windows.867dc88cfd12`; native source/static, packaged UI/restart/navigation, 3.35-second helper
+readiness, saved-state preservation and two verified recoveries passed. Its remaining human
+desktop-verification approval and saved-effort correction are recorded separately from installation.
 
 ## Integration review
 

@@ -3,8 +3,9 @@
 The operator authorizes combining iOS and desktop fixes, relevant web parity, chat-tool
 Auto-approve and notification focus corrections, then deploying to physical iPhone/iPad,
 Build Mac, Windows and web once the separate Windows distribution chat finishes.
-Work Mac is explicitly held until the operator lifts that hold. Final validation, source merge,
-packaging and installed acceptance are pending; see [combined release](2026-10-29-combined-release.md).
+Work Mac is explicitly held until the operator lifts that hold. The Windows gate completed with
+accepted source `66ce6f0`, now merged into combined 0.2.36 / native 2610.29.1. Final merged
+validation, packaging and installed acceptance are pending; see [combined release](2026-10-29-combined-release.md).
 
 ## October 29 — compact question answer controls
 
@@ -60,6 +61,66 @@ The helper recorded +62,324,736 bytes free across its interval and staging retir
 observed +663,334,912 bytes; concurrent activity and APFS sharing limit attribution. The supervisor
 retired its candidate, while the exact tested artifact and source remain. No other rollout or
 publication is authorized by this update.
+
+## October 29 — maintenance retirement interruption evidence
+
+Combined-release review confirmed that maintenance could remove a full recovery
+receipt before archiving it and then misclassify a crash as absent history.
+Source now records full receipts and a deletion intent before mutation, binds
+completion to that intent, and blocks subsequent cleanup while it is unresolved.
+Regressions cover successful archival and interruptions both before policy save
+and before completion receipt. Final native acceptance remains required; live
+maintenance cleanup and combined deployment stay held until that result.
+
+## October 29 — Windows build launch reconciliation
+
+The persistent launcher passed native source/static checks; packaging exposed a
+second executable-discovery gap for npm's Corepack cache. Source now creates a
+private per-operation launcher for the configured CLI and preserves its exit
+status. Direct dependency JSON succeeds, while the missing command and cached
+shim failures were separately reproduced. Native packaging remains pending.
+
+The first source-module bootstrap worker exited before writing progress; its
+cause remains unclassified and its receipts are preserved. Source now recognizes
+that observed exit and permits inspected cancellation without replay. The next
+bootstrap adapter remains alive until the worker finishes. Missing/live launch
+identities still block cancellation. Exact native package acceptance remains pending.
+
+## October 29 — Windows 0.2.34 installed; 0.2.35 view preservation
+
+The corrected maintenance bootstrap, verified two-generation rotation and
+same-chat restart now pass on Windows. Immutable public artifacts pass the actual
+installed verifier/extractor. Stable-feed activation is held: a saved local chat
+view absent from its existing project registry was removed during first sync.
+The same sequence is reproduced in disposable Electron. Source now preserves
+such never-observed local aliases without creating owner tabs, while observed
+owner closures remain authoritative. The regression passes preserved view ID,
+selection, draft, reload and closure checks. Packaging and installing this
+follow-up remain pending; see [evidence](2026-10-29-windows-distribution.md).
+
+The first installed owner-managed follow-up build stopped when npm postinstall
+could not resolve Node from the desktop worker environment. The failed operation
+is preserved. The correction binds worker and lifecycle PATH to the existing
+configured toolchain, leaving global settings unchanged; native acceptance of
+that correction remains pending.
+
+## October 29 — Windows distribution repair · implementation authorized
+
+The operator authorizes repairing Windows distribution, managing bound application/recovery folders, native builds when the matching signed release is absent, publication for subsequent Windows consumers, installation/restart and Cua Driver setup. The connected Windows desktop is the first Windows build/acceptance target; its identity and configuration remain in private owner records. Implemented owner maintenance and build tools are described in [Windows distribution](windows-distribution.md); validation and installed/public outcomes remain separate.
+
+The initial signed bootstrap failed the helper's candidate-integrity check before replacement and recovered its baseline. Source now verifies candidate integrity before readiness and preserves complete comparison evidence outside staging; native acceptance checks post-startup immutability. The extra-file cause and successful live upgrade remain separate acceptance work, with no weakened hash checks.
+
+A later watched attempt retained exact candidate bytes and created a recovery,
+then rolled back with its transient error cleared. Durable failure/phase receipts
+and continuation/status summaries now survive that completion path. The exact
+later failure remains unclassified until observed; no silent installer retry loop
+or relaxed acceptance is introduced.
+
+Preflight of the signed follow-up identified the inherited retire-before-capture
+ordering. That prepared job was cancelled without handoff. Source now preserves
+both old generations through new capture and full verification, then rotates to
+the newest two after live health. Regressions cover capture failure, corrupted
+new recovery and successful three-to-two rotation; native acceptance is pending.
 
 ## October 28 — 0.2.33 follow-up authorized
 

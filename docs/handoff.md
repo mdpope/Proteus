@@ -1,14 +1,19 @@
-## October 29 — combined deployment in preparation, HC held
+## October 29 — combined 0.2.36 deployment in preparation, HC held
 
 The operator requests the combined iOS/desktop/web changes and full physical iPhone/iPad,
 Build Mac, Windows and website deployment after the Windows distribution chat finishes.
-That chat is still preparing its 0.2.35 correction; do not deploy or select the final combined
-version before reconciling its final source. Work Mac remains held. Web attachment parity,
+The Windows gate completed with signed source `66ce6f0`, installed/published 0.2.35
+`windows.867dc88cfd12`, 1,261 native passes / six skips, packaged navigation/restart acceptance,
+3.35-second helper readiness, preserved views/history/drafts and two verified recoveries.
+That exact final source is merged into combined 0.2.36 (native build 2610.29.1).
+Work Mac remains held. Web attachment parity,
 iOS cache durability, chat-access Auto-approve and passive native notifications are implemented.
 The pre-merge suite passes 1,269 Node cases / three skips, static checks, 103 PHP cases and the
 full encrypted web workflow. iPhone passes 156 units; iPad passes its 155-case full suite and
 three final durability regressions. Native notice/question/attachment checks pass. No new
-combined install has occurred. See the [release ledger](2026-10-29-combined-release.md).
+combined install has occurred; final merged/package acceptance is pending. The prior Windows
+coordinator still has a human desktop-verification approval and a saved-effort correction to
+finish; neither changes its verified installed package. See the [release ledger](2026-10-29-combined-release.md).
 
 ## October 29 — iOS main-thread profiling and smoothness fixes
 
@@ -77,6 +82,55 @@ The helper recorded +62,324,736 bytes free across its interval and staging retir
 observed +663,334,912 bytes; concurrent activity and APFS sharing limit attribution. The supervisor
 retired its candidate, while the exact tested artifact and source remain. No other rollout or
 publication is authorized by this update.
+
+## October 29 — Windows bootstrap installed; navigation follow-up
+
+Signed source `6699775` / 0.2.34 `windows.23aae039d780` is installed and healthy
+on the designated Windows target. The updater preserved chat history and drafts,
+resumed the same chat, verified a new recovery and then rotated to two full
+generations. Cua native observation works. Public immutable artifacts pass full
+download/signature and actual installed Windows extraction; the stable feed and
+page remain held. One previously selected local chat view disappeared during
+initial project synchronization, while its chat/history/draft remained intact.
+
+The new disposable Electron regression reproduces that loss on 0.2.34 and passes
+with the 0.2.35 source correction. It also verifies selection/draft across reload,
+no owner-descriptor resurrection and authoritative owner-close behavior. Native
+follow-up packaging/installation and public activation remain separate gates.
+The genuine new unassigned coordinator uses the approved captured options, but
+its first desktop status call awaits a human tool approval. Do not approve that
+request or route desktop work through the older builder to bypass it. See
+[Windows evidence](2026-10-29-windows-distribution.md).
+
+## October 29 — Windows distribution repair in source
+
+The new [Windows distribution workflow](windows-distribution.md) adds owner maintenance/reconciliation and a designated per-user native builder. Source is isolated from other ongoing application edits. Native build, bootstrap, publication and live acceptance must be recorded independently. Cua Driver installation on the target is separately verified in private operational receipts; no machine-specific paths belong in source.
+
+The initial 0.2.34 Windows package passed native source/extraction/UI/PTY/restart
+checks and the installed 0.2.29 owner's signed import. Its first handoff rejected
+the staged package before replacement and verified baseline recovery and automatic
+continuation. An extra file / 166 bytes was recorded only by the old owner's
+subsequent retirement; its cause remains unclassified. Controlled startup and
+readiness reproductions stayed unchanged. Source now verifies before readiness,
+retains comparison evidence outside staging and checks post-test immutability.
+The second watched attempt passed candidate integrity and captured a verified
+recovery, then rolled back later. Its original error was cleared by successful
+baseline continuation, so that later cause remains unknown. The helper now keeps
+failure receipts outside staging plus journal history and continuation context,
+including when an older owner clears its current error after recovery. Receipt
+storage failure does not block compatible recovery. These source checks do not
+establish a successful Windows installation or publication. Full local validation
+now passes 1,250 tests with three skips, plus static checks. Native package
+acceptance remains required for the exact corrected source.
+
+The signed follow-up passed native acceptance and 3.82-second legacy readiness,
+but preflight found inherited retire-before-capture ordering and cancelled its
+prepared job. No installation or public activation occurred. The next source
+preserves both existing generations until the new full recovery and live health
+verify, then rotates with compact receipts. Focused capture-failure, corrupted-new-
+recovery and successful rotation regressions pass. Full local validation passes
+1,253 tests with three skips, plus static checks. Native acceptance is required
+for this final retention correction.
 
 ## October 28 — 0.2.33 follow-up preparing for Build Mac
 

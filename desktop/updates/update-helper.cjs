@@ -5,6 +5,8 @@ const {spawn}=require('node:child_process');
 const {privateTemporaryDirectory}=require('../../src/shared/private-paths.cjs');
 const {atomic,tree,inspectPackage,compatible,copyTree,spaceBudget,readJob,writeJob,recoveryPolicy,digest,excluded}=require('./update-package.cjs');
 const {copyRecovery}=require('./update-storage.cjs');
+const {verifyCandidate}=require('./update-candidate.cjs');
+const {recordFailure}=require('./update-failure.cjs');
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const alive=pid=>{try{process.kill(pid,0);return true;}catch(error){if(error.code==='ESRCH')return false;throw error;}};
 async function until(check,timeout,label){const end=Date.now()+timeout;while(!await check()){if(Date.now()>=end)throw Error('Timed out: '+label);await sleep(250);}}
@@ -32,12 +34,24 @@ async function ownerRequest(job,route,body){
 }
 async function verifyLive(job,identity){let receipt;await until(async()=>{try{receipt=await ownerRequest(job,'/api/updates/recovery',{action:'verify',id:job.id,secret:job.secret});return receipt.identity?.sourceFingerprint===identity.sourceFingerprint&&receipt.identity?.installation===job.installation&&receipt.identity?.home===job.home&&receipt.identity?.barrier===true;}catch{return false;}},60000,'updated host identity and recovery barrier');return receipt;}
 function launch(job){const executable=require('./update-package.cjs').packagePaths(job.installation).executable,log=fs.openSync(path.join(path.dirname(job.file),'launch.log'),'a',0o600),child=spawn(executable,['--user-data-dir='+job.browserHome],{detached:true,stdio:['ignore',log,log],env:environment(job.home,false,{PROTEUS_UPDATE_JOB:job.file})});child.unref();fs.closeSync(log);return child;}
-function retire(file,job){
+function retire(file,job,{inspect=inspectPackage}={}){
  const inventory=recoveryPolicy(file,job),rows=inventory.generations.slice().sort((a,b)=>a.at.localeCompare(b.at));
- while(rows.length>=2){const index=rows.findIndex(row=>row.eligible===true);if(index<0)throw Error('Two unresolved recovery generations are retained. Finish their verification before creating another.');const row=rows[index];if(digest(fs.readFileSync(row.receiptFile))!==row.receiptHash)throw Error('A retained recovery receipt changed; no generation was removed.');
-  const commands=process.platform==='win32'?'':require('node:child_process').execFileSync('/bin/ps',['-ax','-o','command='],{encoding:'utf8'});if(process.platform==='win32'?require('./windows-installation.cjs').inUse(row.directory):commands.split('\n').some(command=>command.includes(row.directory+path.sep)))throw Error('A retained recovery application is in use. Finish that process before updating.');
-  fs.rmSync(row.directory,{recursive:true,force:true});rows.splice(index,1);inventory.generations=rows;atomic(file,inventory);
+ if(rows.length<=2)return inventory;
+ // A new full generation and the running outcome must verify before either
+ // previous generation can retire. Budget the temporary third copy up front.
+ if(!job.health||!['verifying','awaiting-chat-resume','complete'].includes(job.phase)||!rows.some(row=>row.directory===job.recovery))throw Error('Verify the new recovery and live outcome before retirement.');
+ const {verifyGeneration}=require('./update-maintenance.cjs');
+ for(const row of rows)verifyGeneration(row,job,{inspect});
+ const retired=rows.slice(0,-2);if(retired.some(row=>row.eligible!==true))throw Error('An older unresolved recovery generation was preserved.');
+ for(const row of retired){const commands=process.platform==='win32'?'':require('node:child_process').execFileSync('/bin/ps',['-ax','-o','command='],{encoding:'utf8'});if(process.platform==='win32'?require('./windows-installation.cjs').inUse(row.directory):commands.split('\n').some(command=>command.includes(row.directory+path.sep)))throw Error('A retained recovery application is in use. Finish that process before updating.');}
+ const receiptFile=path.join(path.dirname(job.file),'recovery-retirement.json'),intentFile=path.join(path.dirname(job.file),'recovery-retirement-intent.json');
+ if(fs.existsSync(intentFile))throw Error('A prior recovery retirement needs receipt-based reconciliation before retry.');
+ const available=()=>{const stat=fs.statfsSync(path.dirname(file));return Number(stat.bavail)*Number(stat.bsize);},before=available();
+ atomic(intentFile,{schemaVersion:1,jobId:job.id,at:new Date().toISOString(),policyBefore:inventory,retiredReceipts:retired.map(row=>({id:row.id,receipt:JSON.parse(fs.readFileSync(row.receiptFile,'utf8'))})),survivors:rows.slice(-2).map(row=>({id:row.id,receiptHash:row.receiptHash}))});
+ for(const row of retired){
+  fs.rmSync(row.directory,{recursive:true});inventory.generations=inventory.generations.filter(item=>item.directory!==row.directory);atomic(file,inventory);
  }
+ atomic(receiptFile,{schemaVersion:1,jobId:job.id,at:new Date().toISOString(),retired:retired.map(row=>row.id),retained:inventory.generations.map(row=>row.id),freeSpaceChange:available()-before});
  return inventory;
 }
 function retainGeneration(job){
@@ -48,6 +62,10 @@ function retainGeneration(job){
  try{receiptHash=digest(fs.readFileSync(receiptFile));}
  catch(error){
   if(error.code!=='ENOENT')throw error;
+  // A maintenance audit can explicitly record a pre-existing lost generation.
+  // This is unavailable history, never a verified backup or a recreated receipt.
+  const unavailable=inventory.unavailableGenerations?.find(row=>row.id===job.id&&row.directory===job.recovery&&row.available===false&&row.verified===false&&row.eligible===false&&row.reason==='directory absent during verified maintenance');
+  if(job.phase==='complete'&&!fs.existsSync(job.recovery)&&unavailable&&inventory.audit?.kind==='owner-maintenance'&&inventory.generations.some(row=>row.verified&&fs.existsSync(row.receiptFile)&&digest(fs.readFileSync(row.receiptFile))===row.receiptHash))return {retained:false,unavailable:true,recordedByMaintenance:true};
   // A completed historical job may outlive its deliberately rotated payload.
   // Recognize that only from two newer, currently verified recovery receipts;
   // never recreate a deleted generation or suppress an unresolved missing copy.
@@ -93,14 +111,14 @@ async function supervise(file,{inspect=inspectPackage,request=ownerRequest,launc
  const lock=file+'.helper-lock';try{fs.writeFileSync(lock,String(process.pid),{flag:'wx',mode:0o600});}catch(error){if(error.code!=='EEXIST')throw error;const pid=Number(fs.readFileSync(lock,'utf8'));if(!Number.isSafeInteger(pid)||alive(pid))throw Error('An updater already owns this journal.');fs.unlinkSync(lock);fs.writeFileSync(lock,String(process.pid),{flag:'wx',mode:0o600});}
  try{
   job=writeJob(file,{helperPid:process.pid});
-  const candidate=inspect(job.candidate.bundle);if(candidate.hash!==job.candidate.hash||job.platform==='win32'&&candidate.installationHash!==job.candidate.installationHash)throw Error('The accepted staged candidate changed.');
+  const candidate=verifyCandidate(job,'supervise',{inspect});
   if(['stopping','backing-up'].includes(job.phase)){
    await until(()=>!alive(job.ownerPid)&&!fs.existsSync(path.join(job.home,'runner.lock')),60000,'graceful app exit and runner lock release');
    const current=inspect(job.installation);compatible(current,candidate);if(current.hash!==job.previous.hash)throw Error('The installed application changed after acceptance.');
    const stat=fs.statfsSync(path.dirname(job.installation)),before=Number(stat.bavail)*Number(stat.bsize);
    const roots=[...new Set([job.home,job.browserHome])].filter(root=>root&&![job.home,job.browserHome].some(parent=>parent&&parent!==root&&root.startsWith(parent+path.sep))),copyOptions=roots.map(root=>({recoveryCaches:job.recoveryCachePolicy===1&&!!job.browserHome&&(job.browserHome===root||job.browserHome.startsWith(root+path.sep)),cachePrefix:job.browserHome&&(job.browserHome===root||job.browserHome.startsWith(root+path.sep))?path.relative(root,job.browserHome).split(path.sep).join('/'):'',runtimePrefix:job.home===root||job.home.startsWith(root+path.sep)?path.relative(root,job.home).split(path.sep).join('/'):null})),sizes=roots.map((root,index)=>tree(root,{exclude:excluded,...copyOptions[index]}));
    if(roots.some(root=>path.dirname(file).startsWith(root+path.sep)))throw Error('Recovery journals must be outside the data snapshots.');
-   if(!job.recovery)retire(job.recoveryPolicy,job);const recovery=job.recovery||path.join(job.recoveryRoot,job.id);fs.mkdirSync(recovery,{recursive:true,mode:0o700});
+   const recovery=job.recovery||path.join(job.recoveryRoot,job.id);fs.mkdirSync(recovery,{recursive:true,mode:0o700});
    const crossVolume=fs.statSync(path.dirname(job.installation)).dev!==fs.statSync(recovery).dev;
    const volumes=spaceBudget([{directory:recovery,bytes:sizes.reduce((sum,row)=>sum+row.bytes,0)+(crossVolume||job.platform==='win32'?current.bytes:0)},{directory:path.dirname(job.installation),bytes:candidate.bytes+(crossVolume||job.platform==='win32'?current.bytes:0)}]);
    job=writeJob(file,{phase:'backing-up',recovery,freeSpaceBefore:job.freeSpaceBefore??before,volumeBudgets:volumes,recoveryData:roots.map((root,index)=>({root,...sizes[index],recoveryCachePolicy:copyOptions[index].recoveryCaches?1:0,cachePrefix:copyOptions[index].cachePrefix,runtimePrefix:copyOptions[index].runtimePrefix}))});
@@ -113,7 +131,7 @@ async function supervise(file,{inspect=inspectPackage,request=ownerRequest,launc
    for(const [index,row]of job.recoveryData.entries())if(tree(path.join(job.recovery,'data-'+index),{exclude:excluded,recoveryCaches:row.recoveryCachePolicy===1,cachePrefix:row.cachePrefix||'',runtimePrefix:row.runtimePrefix??null}).hash!==row.hash)throw Error('A recovery data snapshot changed before replacement.');
    if(job.platform==='win32'){
     try{await installWindows(job,candidate,{inspect});job=writeJob(file,{phase:'verifying',outcome:'updated'});}
-    catch(error){job=writeJob(file,{phase:'recovering',failedBuild:candidate.buildRevision,error:error.message,launchPid:null});}
+    catch(error){recordFailure(file,'installing',error);job=writeJob(file,{phase:'recovering',failedBuild:candidate.buildRevision,error:error.message,launchPid:null});}
    }else{
    const recoveryApp=path.join(job.recovery,'Proteus.app'),installed=fs.existsSync(job.installation)?inspect(job.installation):null;
    if(installed?.hash===job.previous.hash){
@@ -143,7 +161,7 @@ async function supervise(file,{inspect=inspectPackage,request=ownerRequest,launc
   };
   if(job.phase==='verifying'){
    try{await verifyOutcome(job.outcome==='rollback'?job.previous:candidate);}
-   catch(error){if(job.outcome==='rollback')throw error;await stopFailed();job=writeJob(file,{phase:'recovering',failedBuild:candidate.buildRevision,error:error.message,launchPid:null});}
+   catch(error){if(job.outcome==='rollback')throw error;recordFailure(file,'verifying',error);await stopFailed();job=writeJob(file,{phase:'recovering',failedBuild:candidate.buildRevision,error:error.message,launchPid:null});}
   }
   if(job.phase==='recovering'){
    if(job.platform==='win32'){
@@ -163,10 +181,14 @@ async function supervise(file,{inspect=inspectPackage,request=ownerRequest,launc
   }
   if(!['verifying','awaiting-chat-resume'].includes(job.phase))throw Error('This update phase needs inspection before replacement can continue.');
   if(job.phase==='awaiting-chat-resume')await verifyOutcome(job.outcome==='rollback'?job.previous:candidate);
+  if(!job.failedBeforeReplacement){
+   require('./update-maintenance.cjs').verifyGeneration({directory:job.recovery},job,{inspect});
+   retainGeneration(job);retire(job.recoveryPolicy,job,{inspect});
+  }
   const after=fs.statfsSync(path.dirname(job.installation));job=writeJob(file,{phase:'awaiting-chat-resume',freeSpaceAfter:Number(after.bavail)*Number(after.bsize)});
   const result=await resumeChat(job,job.outcome);if(result.phase==='complete'&&!job.failedBeforeReplacement)retainGeneration(readJob(file));return result;
  }catch(error){
-  const failed=readJob(file);
+  const failed=recordFailure(file,readJob(file).phase,error);
   // Snapshot/preflight failure occurs after graceful Quit but before replacement.
   // Restart only an independently verified unchanged baseline, behind the same
   // recovery barrier and durable continuation. Never leave the operator with a
@@ -188,6 +210,6 @@ async function supervise(file,{inspect=inspectPackage,request=ownerRequest,launc
 }
 
 module.exports={smoke,supervise,installWindows,retire,retainGeneration,environment,ownerRequest,verifyLive,runCLI};
-function runCLI(args=process.argv.slice(2)){const [action,file]=args;if(!['arm','supervise'].includes(action)||!path.isAbsolute(file||''))throw Error('Use the bound update journal.');void (async()=>{if(action==='arm'){const job=readJob(file);if(job.phase!=='waiting-for-idle')throw Error('This update is not waiting for handoff.');writeJob(file,{helperPid:process.pid});process.send?.({ready:job.id});process.disconnect?.();await until(()=>{const phase=readJob(file).phase;if(['prepared','cancelled'].includes(phase))throw Error('The handoff was cancelled before shutdown.');return phase==='stopping';},60000,'host handoff');}return supervise(file);})().catch(error=>{console.error(error.message);process.exitCode=1;});}
+function runCLI(args=process.argv.slice(2)){const [action,file]=args;if(!['arm','supervise'].includes(action)||!path.isAbsolute(file||''))throw Error('Use the bound update journal.');void (async()=>{if(action==='arm'){const job=readJob(file);if(job.phase!=='waiting-for-idle')throw Error('This update is not waiting for handoff.');verifyCandidate(job,'readiness');writeJob(file,{helperPid:process.pid});process.send?.({ready:job.id});process.disconnect?.();await until(()=>{const phase=readJob(file).phase;if(['prepared','cancelled'].includes(phase))throw Error('The handoff was cancelled before shutdown.');return phase==='stopping';},60000,'host handoff');}return supervise(file);})().catch(error=>{console.error(error.message);process.exitCode=1;});}
 
 if(require.main===module)runCLI();

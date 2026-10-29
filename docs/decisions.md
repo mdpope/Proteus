@@ -47,6 +47,42 @@ retryable response instead of a synchronous fallback. Keep fresh actual authoriz
 Separate asynchronous worker elapsed time from synchronous capture/transfer diagnostics. The
 measured result and remaining renderer/persistence candidates are in the [analysis](2026-10-29-main-thread-responsiveness.md).
 
+## October 29 — bounded maintenance instead of elevated updater shells
+
+Maintenance must preserve the same recovery retirement evidence as the supervisor:
+full original receipt bytes/fields plus policy and deletion intent, followed by a
+hash-bound completion. Recognize an interrupted operation before classifying
+missing directories, including when its policy write already finished. Do not
+automatically replay deletion or turn it into unavailable historical recovery.
+Keep compact evidence outside retired payloads; successful steady-state retention
+still leaves the newest two verified full generations.
+
+Treat an observed exited launcher PID as interrupted even before the worker's
+first journal update. Preserve the original journal and launch receipt on reads;
+only the existing request-hash-checked cancellation writes a terminal state.
+Missing launch identity or a live PID remains protected. A temporary source
+bootstrap retains its launcher until a final worker receipt instead of relying
+on unreferenced children surviving a command runner. The empty-log early exit
+does not justify asserting a particular process-lifetime cause.
+
+Bind Electron Builder's npm command discovery to one private per-operation batch
+launcher for the already configured Node and CLI. A Corepack npm package's
+bundled shims assume a Node installer layout and cannot be used by simply adding
+their directory to PATH. Preserve the real CLI exit code and immutable operation
+evidence; do not install another toolchain, alter global PATH or patch vendor
+dependencies to accommodate this packaging prerequisite.
+
+Check candidate integrity before acknowledging helper readiness as well as before
+replacement. Preserve both file/hash observations beside the journal, because the
+old owner may retire failed candidate staging after restoring its baseline. A
+successful isolated smoke does not prove the candidate stayed unchanged later;
+never accommodate an unexplained extra file by broadening hash exclusions.
+Recovery success clears the current error but must not erase the original failure.
+Keep immutable phase/error receipts and a checkpoint summary that older owners
+also deliver, with bounded history references in update status.
+
+Keep maintenance and native source builds behind the owning updater service. A plan digest binds recovery changes to full verified evidence; absent historical backups remain unavailable records rather than fabricated receipts. Only the designated Windows builder holds private source/toolchain/key references, and it checks the signed feed before building. Consumer machines use conventional per-user NSIS updates. Do not require an interactive test account for an unchanged installer recipe; qualify changed installer behavior separately. Native control supports acceptance, while the independent helper owns restart and recovery.
+
 ## October 28 — complete request-local permission display reuse
 
 The existing display snapshot memo covered context construction but inherited permission display
@@ -456,6 +492,17 @@ installation/deployment for operator review.
 Use the existing shared frameless shell and native popup menu on Windows, including sender-bound
 window actions and menu command routing. Preserve native accelerators and F10 access instead of
 adding a separate menu implementation. macOS retains its native traffic lights and menu.
+
+## October 29 — Verify the replacement recovery before retirement
+
+Two-generation retention is a steady-state ceiling, not permission to delete an
+existing verified recovery before its successor verifies. Budget a temporary
+third copy, retain both predecessors on capture/verification failure, and rotate
+after the new full application/data recovery and live outcome pass. Verify all
+survivor and retirement trees, including the full Windows installation identity;
+keep compact prior-policy and retired-receipt evidence. A partial retirement is
+an explicit reconciliation task. The signed candidate with earlier ordering was
+cancelled before handoff; source tests and native/live acceptance remain distinct.
 
 ## 2026-10-22 — Windows distribution and recovery use the existing owner protocol
 
@@ -2641,6 +2688,27 @@ retain ordinary creation semantics. This avoids treating title/history refresh a
 to reopen a closed or moved tab, without changing placement, sessions, permissions, navigation
 receipts or the persisted descriptor format. Older clients must be upgraded to supply the flag;
 existing uncertain request payloads and operation identities are never rewritten.
+
+## October 29 — Bind build-child PATH to the configured toolchain
+
+The installed Windows owner can have a clean desktop environment with no Node on
+PATH even though its configured absolute Node/npm paths are valid. Build workers
+and their prerequisites now receive a derived child environment that prepends
+the configured Node/Git directories and combines Windows path-key variants.
+Do not change global environment variables or switch tools/accounts to repair a
+failed operation. Preserve its receipt, close it only after exit, and use a new
+operation for the tested correction. A real nested Node process verifies lookup
+from an otherwise empty developer search path.
+
+## October 29 — Preserve unregistered local chat views without reopening owner tabs
+
+The Windows bootstrap exposed a saved selected chat view absent from its project's
+already-populated registry. Treat never-observed local chat aliases like the
+existing peer aliases: preserve their view identity, draft and selection without
+publishing an owner open. Remember actual owner participation across restarts so
+an authoritative close still removes the view. This avoids broad first-sync seeding
+that could resurrect closed tabs. A disposable Electron reproduction fails before
+the correction and passes preservation, reload and later owner-close checks after.
 
 ## October 27 — Scope-proven delegation and bounded derived projections
 

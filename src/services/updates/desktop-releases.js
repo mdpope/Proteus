@@ -15,6 +15,7 @@ export function verifyRelease(envelope,{platform=process.platform,arch=process.a
  const value=JSON.parse(bytes.toString('utf8'));
  if(value.schemaVersion!==1||value.product!=='org.proteusapp.proteus.desktop'||value.platform!==platform||value.arch!==arch||value.channel!==channel||!['stable','preview'].includes(channel))throw Error('This release targets a different product, platform, architecture or channel.');
  if(!/^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$/.test(value.id||'')||!/^\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?$/.test(value.version||'')||!value.buildRevision||!/^[a-f0-9]{64}$/.test(value.sourceFingerprint||'')||!/^[a-f0-9]{64}$/.test(value.packageHash||''))throw Error('The signed release identity is incomplete.');
+ if(value.sourceCommit!==undefined&&!/^[a-f0-9]{40,64}$/.test(value.sourceCommit))throw Error('The signed release source commit is invalid.');
  const published=Date.parse(value.publishedAt),expires=Date.parse(value.expiresAt);
  if(!Number.isFinite(published)||!Number.isFinite(expires)||published>now+300000||expires<=now||expires<=published||expires-published>366*86400000)throw Error('The release manifest is expired or has invalid publication dates.');
  const a=value.artifact;

@@ -1,3 +1,17 @@
+## October 29 — Windows owner maintenance and distribution
+
+The approved Windows workflow now has installation-bound maintenance plans, verified recovery reconciliation, a designated native builder and signed release reuse before building. See [Windows distribution](windows-distribution.md). Source implementation and live acceptance remain separate; old-client bootstrap uses the existing signed owner updater before fresh coordinator support is available.
+
+## October 29 — Verify the next recovery before rotating
+
+Both existing verified generations remain through new capture and verification.
+Budget the temporary third recovery. Only after its full app/data trees and the
+live outcome verify may the helper retire eligible generations older than the
+newest two, with retained policy/receipt evidence and an actual space delta.
+Failed capture or verification preserves both predecessors. This supersedes the
+historical helper's retire-before-capture ordering below; native acceptance of
+the corrected Windows package remains a distinct deployment gate.
+
 ## October 27 — fresh update sessions and retained recovery history
 
 Each operator-started update creates a new unassigned `purpose:update` chat named for the selected version, using saved Engine Room provider/model/effort/speed defaults. There is no default existing-chat selection. The new coordinator owns prepare, checkpoint, handoff and continuation through that specific upgrade. Stable operation IDs reconcile ambiguous start responses without duplicate chats; a later upgrade creates a different chat. Existing provider capabilities, owner permissions and unrelated work remain enforced. Provider defaults stay available when update status/catalog/recovery inspection reports an error.
@@ -503,8 +517,8 @@ The installation workflow must initialize `<per-installation update root>/recove
 inventorying **all** existing recovery roots. Its schema-1 record binds canonical home/installation,
 audit time and verified generation directory/receipt hash/date/eligibility entries. Handoff refuses
 an absent/mismatched inventory. The helper counts imported generations as well as its own; it verifies
-receipts, refuses deletion while an app is in use and retires eligible oldest generations before
-another full snapshot. Partial copies resume in the same generation. No generic backup folder is
+receipts and refuses deletion while an app is in use. Its original retire-before-capture ordering
+is superseded by the October 29 verification-first transition above. Partial copies resume in the same generation. No generic backup folder is
 silently exempt. Private paths, prompts, journals and receipts stay outside this repository.
 
 Eight synthetic protocol/supervisor regressions pass, including waiting for the initiating turn,

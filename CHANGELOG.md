@@ -1,17 +1,19 @@
-## Unreleased — chat access and web question attachments
+## 0.2.36 — Combined client release
+
+### chat access and web question attachments
 
 - Let Proteus chat access requests follow the originating chat/workspace's Auto-approve tools setting for the exact requested scope. Ask and Saved rules still prompt; mandatory approvals and human browser/terminal sharing keep their existing boundaries.
 - Support attachments in chronological website question cards, with shared file previews/consent styling. Keep uploads and answers bound to the selected computer through navigation and uncertain retries.
 
-## Unreleased — notifications preserve the foreground app
+### notifications preserve the foreground app
 
 - Show native in-app notifications only in their already-focused Proteus window. Background notices no longer raise the app over other applications; expired notices stay dismissed when you return.
 
-## Unreleased — question answer layout
+### question answer layout
 
 - Compact inline question forms: place the attachment + and Send answer together immediately below the answer box, with Send answer aligned right. Empty attachment strips reserve no space; selected files wrap above the controls.
 
-## Unreleased — iOS navigation and swipes
+### iOS navigation and swipes
 
 - Preserve durable tab/history mutation identities while saving encrypted caches off the main thread. Wait asynchronously for the atomic save before sending an owner mutation, retain failed writes for retry, and drain caches on background/account changes.
 - **iOS real-host connection:** iPhone/iPad accept relay messages up to the 8 MB host/relay limit. URLSession's 1 MiB websocket default dropped the socket ("Message too long") once a real host's state grew past it, so devices stayed "offline · reconnecting".
@@ -20,15 +22,33 @@
 - **iOS smoothness:** sidebar, Home and drawer data no longer rebuild expensively on the main thread on every redraw (cached date parsing, one attention title index per host, one validated project catalog per host state), and encrypted history/tab caches save on a background writer. A real-data iPhone walkthrough went from 32 potential hangs to none.
 - **Tab overviews:** each project section on desktop and iOS starts with a fixed Project home card; the web overview lists a Project home entry for each project of an open workspace.
 
-## Unreleased — execution safeguards and Claude continuation
+### execution safeguards and Claude continuation
 
 - Raise Claude/Copilot's active-execution budget and the shared no-progress interruption threshold from 30 minutes to two hours. Human input waits remain excluded; the five-minute progress warning does not stop work.
 - Classify Claude execution timeouts explicitly and offer same-session Continue and opt-in automatic continuation, bounded to three consecutive retries. Preserve queued input and wait for old-process cleanup; Stop, permission changes and pending input take precedence.
 - Match Claude results to the exact replayed input UUID so a startup/orphan notification cannot silently consume a follow-up. Keep Claude alive through intermediate responses while native background jobs/monitors remain pending, then await their terminal notifications and final reporting. No uncertain input is automatically resent.
 
-## Unreleased — desktop responsiveness
+### desktop responsiveness
 
 - Move permission-display filesystem checks, context hashing and HTTP state serialization to a bounded background worker. Coalesce simultaneous window refreshes, discard results invalidated by permission/schedule changes, and time out failed workers without blocking the owner. Actual authorization remains fresh and owner-controlled. Add separate capture, transfer and worker diagnostics; this correction is source-only pending a new package.
+
+## 0.2.35 — Windows restart preservation follow-up
+
+- Preserve a saved local chat view when its project already has a tab registry but never registered that view. Keep its view identity, selected project child and draft across reload without reopening owner tabs; an observed owner close still takes effect.
+- Bind Windows build workers and their npm lifecycle children to the configured Node/Git search paths, including Windows `Path`/`PATH` normalization, without changing the user's global environment.
+- Provide each Windows build a private npm command bound to its configured CLI, so packaging works with a Corepack cache that has no usable globally installed npm shim. Preserve the CLI's exit status.
+- Reconcile a launched build worker that exits before its first progress update as needing attention, preserving its original journal and allowing inspected cancellation without replay.
+- Archive full recovery receipts and a bound retirement intent before maintenance deletes a generation. Detect interrupted retirement before treating any missing directory as historical loss; preserve the original evidence and block automatic replay.
+- Record the installed 0.2.34 maintenance bootstrap and public-consumer acceptance separately from the held stable-feed activation and follow-up installation.
+
+## Windows distribution repair — October 29
+
+- Added bounded updater maintenance with full recovery verification, preserved missing-generation history, plan revision protection and two-generation cleanup.
+- Added a designated Windows build operation with signed release lookup before building, durable operation receipts, private source/toolchain/key references and no elevated shell requirement.
+- Added a reusable native build/acceptance/signing runner and documented older-client bootstrap and installer qualification boundaries.
+- Candidate helpers now verify complete package identity before acknowledging restart readiness and retain integrity evidence outside disposable staging. Native release acceptance also checks that startup leaves the extracted package unchanged.
+- Rollback keeps the original failure and phase in durable receipts, update status and the continuation checkpoint, even after recovery clears the current error.
+- Preserve both existing recoveries until the next complete application/data snapshot and live outcome verify. Then retire only the oldest verified generation, retaining compact retirement evidence and exactly two full recoveries.
 
 ## 0.2.33 — October 28 follow-up
 

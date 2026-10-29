@@ -1,3 +1,7 @@
+## October 29 — unattended maintenance and first Windows builder
+
+See [Windows distribution](windows-distribution.md) for owner maintenance, private builder configuration, release-first builds and old-client bootstrap. Ordinary per-user updates do not require interactive elevated scripts or creation of disposable Windows accounts. Installer-recipe qualification remains separate from routine package acceptance.
+
 # Windows desktop
 
 Windows source validation uses native paths when launching the legacy updater fixture

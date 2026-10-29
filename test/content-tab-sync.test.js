@@ -257,8 +257,8 @@ test('operation identity conflicts stop retry storms and preserve pending data u
  await sync.resolve(scope);assert.equal(pendingCount(values),0);assert.equal(values.size,1);assert.equal(local[0].url,entry.url);await sync.all();assert.equal(submits,1);
 });
 
-test('untracked saved peer chat aliases survive initial authoritative scope without reopening owner views',async()=>{
- const scope={hostId:'owner',scope:'workspace',id:'work'},alias={id:'chat:legacy',type:'chat',chatId:'legacy',title:'Saved alias'};
+for(const hostId of [undefined,'owner'])test(`untracked saved ${hostId?'peer':'local'} chat aliases survive initial authoritative scope without reopening owner views`,async()=>{
+ const scope={...(hostId?{hostId}:{}),scope:'project',id:'work'},alias={id:'chat:legacy',type:'chat',chatId:'legacy',title:'Saved alias'};
  let local=[alias,tab('retained')],remote={revision:19,tabs:[tab('retained')]},mutations=0;
  const errors=[],options={scopes:()=>[scope],preserveUntracked:(_scope,tab)=>tab.type==='chat',readLocal:async()=>structuredClone(local),request:async(_scope,action)=>{assert.equal(action,'get','Saved aliases must not cause owner mutations');return structuredClone(remote);},apply:async(_scope,tabs,captured)=>{local=[...local.filter(tab=>!captured.some(item=>item.id===tab.id)),...tabs];},onError:error=>errors.push(error)};
  let sync=createTabSynchronizer(options);await sync.all();await sync.all();assert.ok(local.some(tab=>tab.id===alias.id));
@@ -274,8 +274,8 @@ test('two native browser aliases publish one descriptor and never send duplicate
  await sync.all();await sync.all();assert.equal(local.length,2);assert.deepEqual(errors,[]);
 });
 
-test('an owner-observed peer chat closed while offline stays closed after renderer restart',async()=>{
- const scope={hostId:'owner',scope:'workspace',id:'work'},chat={id:'chat:known',type:'chat',chatId:'known',title:'Known'},alias={id:'chat:legacy',type:'chat',chatId:'legacy',title:'Local alias'};
+for(const hostId of [undefined,'owner'])test(`an owner-observed ${hostId?'peer':'local'} chat closed while offline stays closed after renderer restart`,async()=>{
+ const scope={...(hostId?{hostId}:{}),scope:'project',id:'work'},chat={id:'chat:known',type:'chat',chatId:'known',title:'Known'},alias={id:'chat:legacy',type:'chat',chatId:'legacy',title:'Local alias'};
  let local=[chat,alias],remote={revision:20,tabs:[chat]};const storage=new Map(),errors=[];
  const options={scopes:()=>[scope],preserveUntracked:(_scope,tab)=>tab.type==='chat',pendingStorage:{getItem:key=>storage.get(key),setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},readLocal:async()=>structuredClone(local),request:async(_scope,action)=>{assert.equal(action,'get');return structuredClone(remote);},apply:async(_scope,tabs,captured)=>{local=[...local.filter(tab=>!captured.some(item=>item.id===tab.id)),...tabs];},onError:error=>errors.push(error)};
  await createTabSynchronizer(options).all();remote={revision:21,tabs:[]};await createTabSynchronizer(options).all();
@@ -290,8 +290,8 @@ test('a later native alias pending navigation is retained while divergent pendin
  local=[{...before,navigationPending:true},pending];operations=[];await createTabSynchronizer(options).all();assert.equal(operations.length,0);assert.match(errors[0].message,/different pending navigation/);assert.equal(local.length,2);
 });
 
-test('a chat first exposed by its seed acknowledgement retains owner-close semantics across immediate restart',async()=>{
- const scope={hostId:'owner',scope:'workspace',id:'fresh'},chat={id:'chat:new',type:'chat',chatId:'new',title:'New'};
+for(const hostId of [undefined,'owner'])test(`a ${hostId?'peer':'local'} chat first exposed by its seed acknowledgement retains owner-close semantics across immediate restart`,async()=>{
+ const scope={...(hostId?{hostId}:{}),scope:'project',id:'fresh'},chat={id:'chat:new',type:'chat',chatId:'new',title:'New'};
  let local=[chat],remote={revision:0,tabs:[]};const storage=new Map(),errors=[];
  const options={scopes:()=>[scope],preserveUntracked:(_scope,tab)=>tab.type==='chat',pendingStorage:{getItem:key=>storage.get(key),setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},readLocal:async()=>structuredClone(local),request:async(_scope,action)=>{if(action!=='get')remote={revision:1,tabs:[chat]};return structuredClone(remote);},apply:async(_scope,tabs,captured)=>{local=[...local.filter(tab=>!captured.some(item=>item.id===tab.id)),...tabs];},onError:error=>errors.push(error)};
  await createTabSynchronizer(options).all();remote={revision:2,tabs:[]};await createTabSynchronizer(options).all();assert.deepEqual(local,[]);assert.deepEqual(errors,[]);

@@ -16,6 +16,8 @@ const key=createPrivateKey(fs.readFileSync(options.key));if(key.asymmetricKeyTyp
 const publicKey=createPublicKey(key),keyId=createHash('sha256').update(publicKey.export({type:'spki',format:'der'})).digest('hex').slice(0,24);
 const candidate=packages.inspectPackage(options.bundle),archiveInfo=fs.statSync(options.archive),now=Date.now(),id=desktopReleaseId(candidate,process.platform,process.arch);
 const release={schemaVersion:1,product:'org.proteusapp.proteus.desktop',id,channel:options.channel||'stable',platform:process.platform,arch:process.arch,version:candidate.version,buildRevision:candidate.buildRevision,sourceFingerprint:candidate.sourceFingerprint,packageHash:candidate.hash,publishedAt:new Date(now).toISOString(),expiresAt:new Date(now+90*86400000).toISOString(),artifact:{format:'tar.gz',filename:path.basename(options.archive),bytes:archiveInfo.size,unpackedBytes:candidate.bytes,sha256:packages.fileDigest(options.archive),path:'/api/v1/app/releases/'+id+'/artifact'}};
+const source=JSON.parse(fs.readFileSync(path.join(packages.packagePaths(candidate.bundle).root,'build-source.json'),'utf8'));
+if(source.sourceCommit){if(!/^[a-f0-9]{40,64}$/.test(source.sourceCommit))throw Error('Invalid release source commit.');release.sourceCommit=source.sourceCommit;}
 release.distribution={kind:'static',origin:windowsReleaseOrigin};
 release.artifact.path='/downloads/proteus/releases/'+id+'/'+release.artifact.filename;
 if(process.platform==='win32'){

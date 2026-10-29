@@ -17,7 +17,9 @@ const terminalBuild=prepareWindowsTerminal(root,{build:buildWindowsTerminalGuard
 const metadata=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
 const snapshot=createDesktopSnapshot(root,['package.json','package-lock.json','scripts/package-windows.mjs','scripts/windows-installer.nsh','scripts/desktop-build.mjs','scripts/build-terminal.mjs','scripts/prepare-extensions.mjs','scripts/build-windows-terminal-guardian.mjs','scripts/prepare-windows-terminal.mjs','native/windows-terminal/guardian.cs']);
 const {runtimeFiles,buildInputs,sourceFingerprint}=snapshot,buildRevision='windows.'+sourceFingerprint.slice(0,12);
-const provenance={schemaVersion:1,version:metadata.version,buildRevision,sourceFingerprint,platform:'win32',arch:'x64',runtimeFiles,buildInputs};
+const sourceCommit=process.env.PROTEUS_RELEASE_SOURCE_COMMIT;
+if(sourceCommit&&!/^[a-f0-9]{40,64}$/.test(sourceCommit))throw Error('Invalid release source commit.');
+const provenance={schemaVersion:1,version:metadata.version,buildRevision,sourceFingerprint,platform:'win32',arch:'x64',runtimeFiles,buildInputs,...(sourceCommit?{sourceCommit}:{})};
 const out=path.resolve(process.env.PROTEUS_PACKAGE_OUTPUT||path.join(root,'dist','windows'));
 fs.mkdirSync(out,{recursive:true});
 fs.writeFileSync(path.join(out,'windows-terminal-build.json'),JSON.stringify(terminalBuild,null,2)+'\n');
