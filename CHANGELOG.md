@@ -2,6 +2,7 @@
 
 - Preserve a saved local chat view when its project already has a tab registry but never registered that view. Keep its view identity, selected project child and draft across reload without reopening owner tabs; an observed owner close still takes effect.
 - Bind Windows build workers and their npm lifecycle children to the configured Node/Git search paths, including Windows `Path`/`PATH` normalization, without changing the user's global environment.
+- Provide each Windows build a private npm command bound to its configured CLI, so packaging works with a Corepack cache that has no usable globally installed npm shim. Preserve the CLI's exit status.
 - Reconcile a launched build worker that exits before its first progress update as needing attention, preserving its original journal and allowing inspected cancellation without replay.
 - Record the installed 0.2.34 maintenance bootstrap and public-consumer acceptance separately from the held stable-feed activation and follow-up installation.
 

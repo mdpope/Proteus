@@ -72,6 +72,24 @@ assuming children outlive a one-shot command context.
 The combined follow-up passes 1,259 local source tests / three skips / zero
 failures and static checks. Exact native build and installation remain pending.
 
+The persistent adapter reached native acceptance prerequisites: 1,256 tests /
+six skips / zero failures and static checks passed. Packaging then failed to
+parse npm dependency JSON. A bounded reproduction confirmed no npm command on
+the derived PATH; the vendor PowerShell wrapper returned zero with an empty
+stdout and command-not-found stderr. Direct configured Node/CLI invocation
+returned valid dependency JSON. Merely adding the cached npm bin directory also
+failed because its bundled shim expects a different installation layout.
+The original failed worker environment was not fully recorded, so the
+reproduction is distinguished from the original failure's missing stderr.
+
+The next source worker creates a private operation-local npm launcher bound to
+the existing configured Node/CLI. No global shim, toolchain or dependency is
+replaced. A native regression invokes it through the packaging library's real
+PowerShell argument builder and checks both JSON output and a nonzero CLI exit.
+Native execution of this new regression and exact packaging remain pending.
+The local suite passes 1,260 tests / four skips / zero failures and static checks;
+the extra skip is the explicit Windows-only launcher execution test.
+
 ## Distribution and coordinator boundaries
 
 The 0.2.34 immutable WTB artifacts pass independent full HTTPS hashes/signature

@@ -6,6 +6,7 @@ import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {EventEmitter} from 'node:events';
 import {spawnSync} from 'node:child_process';
+import {createRequire} from 'node:module';
 import packages from '../desktop/updates/update-package.cjs';
 import builder from '../desktop/updates/windows-builder.cjs';
 import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
@@ -23,6 +24,31 @@ test('a lifecycle child finds the configured node with no developer executable o
  const env=builder.buildEnvironment({node:process.execPath,git:path.join(os.tmpdir(),'unused-git','git')},inherited);
  const child=spawnSync(process.execPath,['-e',script],{env,encoding:'utf8'});
  assert.equal(child.status,0,child.stderr);assert.equal(fs.realpathSync(child.stdout),fs.realpathSync(process.execPath));
+});
+test('a private npm launcher is bound to configured paths and cannot overwrite earlier build evidence',t=>{
+ const root=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-npm-launcher-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+ const policy={node:'C:\\Private Tools\\node.exe',npmCli:'C:\\npm cache\\100% !\\npm-cli.js',git:'C:\\Git\\cmd\\git.exe'},original={Path:'C:\\Windows\\System32'};
+ const env=builder.prepareBuildEnvironment(policy,root,original,'win32');
+ const file=path.join(root,'toolchain','npm.cmd'),bytes=fs.readFileSync(file,'utf8');
+ assert.equal(env.PATH.split(';')[0],path.dirname(file));assert.deepEqual(original,{Path:'C:\\Windows\\System32'});
+ assert.match(bytes,/DisableDelayedExpansion/);assert.ok(bytes.includes('"C:\\Private Tools\\node.exe" "C:\\npm cache\\100%% !\\npm-cli.js" %*'));
+ assert.throws(()=>builder.prepareBuildEnvironment(policy,root,original,'win32'),/EEXIST/);assert.equal(fs.readFileSync(file,'utf8'),bytes);
+});
+test('the native packaging collector invokes configured npm and preserves failure status without a global shim',{skip:process.platform!=='win32'},t=>{
+ const root=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus npm %!-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+ const cli=path.join(root,'selected npm-cli.cjs');
+ fs.writeFileSync(cli,"if(process.argv.includes('--probe-failure')){console.error('configured CLI failure');process.exitCode=17;}else console.log(JSON.stringify({executable:process.execPath,args:process.argv.slice(2)}));");
+ const inherited=Object.fromEntries(Object.entries(process.env).filter(([key])=>key.toLowerCase()!=='path'));
+ inherited.PATH=path.join(process.env.SystemRoot,'System32');
+ const policy={node:process.execPath,npmCli:cli,git:path.join(root,'unused-git','git.exe')};
+ const env=builder.prepareBuildEnvironment(policy,root,inherited);
+ const command=path.join(root,'toolchain','npm.cmd'),powershell=path.join(process.env.SystemRoot,'System32','WindowsPowerShell','v1.0','powershell.exe');
+ const {buildPowerShellEncodedArgs}=createRequire(import.meta.url)('app-builder-lib/out/node-module-collector/nodeModulesCollector.js');
+ const args=['list','--json','value with spaces'];
+ const good=spawnSync(powershell,buildPowerShellEncodedArgs(command,args),{env,cwd:root,encoding:'utf8',windowsHide:true});
+ assert.equal(good.status,0,good.stderr);const actual=JSON.parse(good.stdout);assert.equal(fs.realpathSync(actual.executable),fs.realpathSync(process.execPath));assert.deepEqual(actual.args,args);
+ const bad=spawnSync(powershell,buildPowerShellEncodedArgs(command,['--probe-failure']),{env,cwd:root,encoding:'utf8',windowsHide:true});
+ assert.equal(bad.status,17);assert.equal(bad.stdout,'');assert.match(bad.stderr,/configured CLI failure/);
 });
 test('only configured Windows builders dispatch fixed commands, and operation receipts prevent duplicate builds',t=>{
  const root=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-builder-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));

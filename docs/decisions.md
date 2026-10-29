@@ -8,6 +8,13 @@ bootstrap retains its launcher until a final worker receipt instead of relying
 on unreferenced children surviving a command runner. The empty-log early exit
 does not justify asserting a particular process-lifetime cause.
 
+Bind Electron Builder's npm command discovery to one private per-operation batch
+launcher for the already configured Node and CLI. A Corepack npm package's
+bundled shims assume a Node installer layout and cannot be used by simply adding
+their directory to PATH. Preserve the real CLI exit code and immutable operation
+evidence; do not install another toolchain, alter global PATH or patch vendor
+dependencies to accommodate this packaging prerequisite.
+
 Check candidate integrity before acknowledging helper readiness as well as before
 replacement. Preserve both file/hash observations beside the journal, because the
 old owner may retire failed candidate staging after restoring its baseline. A

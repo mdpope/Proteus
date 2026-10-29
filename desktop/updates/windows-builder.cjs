@@ -15,6 +15,18 @@ function buildEnvironment(policy,environment=process.env,platform=process.platfo
  // Windows treats Path/PATH alike, while Node otherwise forwards only one variant.
  return {...Object.fromEntries(Object.entries(environment).filter(([key])=>!keys.includes(key))),PATH:search.join(separator)};
 }
+function prepareBuildEnvironment(policy,directory,environment=process.env,platform=process.platform){
+ const env=buildEnvironment(policy,environment,platform);
+ if(platform!=='win32')return env;
+ // Electron Builder discovers npm by command name even when our own calls use
+ // the absolute CLI. Corepack's cached npm.cmd assumes a different installation
+ // layout. Bind only this job's npm command to its configured Node/CLI instead.
+ const quote=value=>{if(/["\r\n]/.test(value))throw Error('Configured tool paths cannot be represented by a Windows batch launcher.');return '"'+value.replace(/%/g,'%%')+'"';};
+ const command='@echo off\r\nsetlocal DisableDelayedExpansion\r\n'+quote(policy.node)+' '+quote(policy.npmCli)+' %*\r\nexit /b %errorlevel%\r\n';
+ const bin=path.join(directory,'toolchain');ensurePrivateHome(bin);
+ fs.writeFileSync(path.join(bin,'npm.cmd'),command,{flag:'wx',mode:0o600});
+ return {...env,PATH:bin+';'+env.PATH};
+}
 function readPolicy(root){
  const file=path.join(root,'windows-builder.json');
  if(!fs.existsSync(file))throw Error('This installation is a release consumer. Configure the designated Windows builder once before requesting a source build.');
@@ -77,4 +89,4 @@ function startBuild(root,value,{launch=spawn,platform=process.platform}={}){
  }finally{fs.closeSync(fd);}
  return buildStatus(root);
 }
-module.exports={configureBuilder,readPolicy,buildStatus,startBuild,cancelBuild,buildEnvironment,repository};
+module.exports={configureBuilder,readPolicy,buildStatus,startBuild,cancelBuild,buildEnvironment,prepareBuildEnvironment,repository};

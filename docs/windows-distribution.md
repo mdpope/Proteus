@@ -123,6 +123,14 @@ Keep that temporary bootstrap adapter running until its worker reaches a termina
 receipt, so its process context and exit handler remain available. Do not assume
 a one-shot command's children survive the command runner's process lifetime.
 
+Each worker creates one private `toolchain/npm.cmd` under its own operation. It
+invokes the configured absolute Node and npm CLI paths and preserves their exit
+status; only the child PATH includes it. Electron Builder resolves npm by command
+name, while Corepack's cached package can contain shims meant for a different
+installation layout. Never add those unusable shims to global PATH or install
+another npm merely to satisfy packaging. Existing per-operation shims cannot be
+overwritten, and paths are quoted with batch expansion disabled/escaped.
+
 The release runner is `scripts/windows-distribution.mjs --source-commit SHA
 --output ABSOLUTE_NEW_DIRECTORY --build-if-missing`. It requires the selected
 source checkout and local dependencies/toolchain. `--key` supplies an existing

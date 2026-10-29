@@ -1,5 +1,11 @@
 ## October 29 — Windows build launch reconciliation
 
+The persistent launcher passed native source/static checks; packaging exposed a
+second executable-discovery gap for npm's Corepack cache. Source now creates a
+private per-operation launcher for the configured CLI and preserves its exit
+status. Direct dependency JSON succeeds, while the missing command and cached
+shim failures were separately reproduced. Native packaging remains pending.
+
 The first source-module bootstrap worker exited before writing progress; its
 cause remains unclassified and its receipts are preserved. Source now recognizes
 that observed exit and permits inspected cancellation without replay. The next
