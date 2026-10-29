@@ -1,4 +1,4 @@
-body.palette-active{--green:var(--palette-accent);--accent:var(--palette-accent);--bg:var(--palette-background);--panel:var(--palette-panel);--ink:var(--palette-text);--muted:var(--palette-muted);--line:var(--palette-border)}
+body.palette-active{--green:var(--palette-accent);--accent:var(--palette-accent);--bg:var(--palette-background);--panel:var(--palette-panel);--ink:var(--palette-text);--muted:var(--palette-muted);--line:var(--palette-border);background:var(--palette-background);color:var(--palette-text)}
 body.palette-active .sidebar{background:var(--palette-sidebar);color:var(--palette-sidebarText);border-color:var(--palette-sidebarBorder)}
 body.palette-active .sidebar :is(.brand,.brand strong){color:var(--palette-sidebarStrong)}
 body.palette-active .sidebar nav a.active{background:var(--palette-sidebarButton)}

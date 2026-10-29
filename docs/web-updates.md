@@ -1,3 +1,15 @@
+## October 29 — sidebar palette correction in source
+
+The website's grouped navigation duplicated the old sampled sidebar colors and overrode the
+shared palette, making it darker than desktop. It now consumes the same palette aliases as the
+desktop sidebar for surfaces, active items, text, accents and borders. Browser palette storage
+remains independent and existing saved colors are honored.
+
+An isolated browser regression renders the actual desktop and web styles separately and compares
+their computed colors for defaults, custom palette edits and reset. The preceding stylesheet fails;
+the corrected stylesheet passes. This follow-up is not yet deployed; the existing 0.2.36 website
+deployment and pending server-retention work remain separate.
+
 **October 18 computer grouping follow-up:** Release `20261018T184327Z` is deployed with the
 stable Default-computer workspace group, expandable Other Computers with named owner headings,
 and left-aligned project headers. All 9,214 deployed hashes, eight served assets plus manifest,

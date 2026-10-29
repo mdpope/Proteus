@@ -1,3 +1,10 @@
+## October 29 — web sidebar follows desktop palette
+
+The reported darker web sidebar was caused by hard-coded navigation colors overriding the
+shared palette. Source now uses the existing desktop palette aliases, including active-group
+borders and foregrounds. Rendered default/edit/reset parity passes against actual desktop CSS;
+the preceding web stylesheet fails that regression. Follow-up website deployment remains pending.
+
 ## October 29 — combined rollout authorized after Windows work
 
 The operator authorizes combining iOS and desktop fixes, relevant web parity, chat-tool

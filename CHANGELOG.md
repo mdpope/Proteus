@@ -1,5 +1,10 @@
 ## 0.2.36 — Combined client release
 
+### web palette
+
+- Resolve website sidebar surfaces, selected groups, highlights and dividers through the shared desktop palette. Navigation styling no longer overrides the browser's palette with sampled hard-coded colors.
+- Paint the website canvas with its selected palette instead of leaving the root background visible.
+
 ### chat access and web question attachments
 
 - Let Proteus chat access requests follow the originating chat/workspace's Auto-approve tools setting for the exact requested scope. Ask and Saved rules still prompt; mandatory approvals and human browser/terminal sharing keep their existing boundaries.
