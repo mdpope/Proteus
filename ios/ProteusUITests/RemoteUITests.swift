@@ -304,6 +304,66 @@ final class RemoteUITests: XCTestCase {
         app.buttons["workspace-child-tab-chat:" + chatIDs[0]].tap(); expectDisplayed(0, first, "A from tab strip")
         openFromChats(second); expectDisplayed(3, second, "B again from Chats")
     }
+    /// Screenshot tour for design review: drawer/sidebar tree, workspace, project, chat and browser.
+    @MainActor func testDesignTourScreenshots() async throws {
+        let app = nativeFixtureApplication(); app.launchArguments = ["--reset-pairing", "--phone-preview-fixture"]; app.launch()
+        let phone = UIDevice.current.userInterfaceIdiom == .phone
+        func shot(_ name: String) { let a = XCTAttachment(screenshot: app.screenshot()); a.name = name; a.lifetime = .keepAlways; add(a) }
+        func drawer() { if phone, let n = app.buttons.matching(identifier: "phone-app-navigation").allElementsBoundByIndex.first(where: { $0.isHittable }) { n.tap(); sleep(1) } }
+        sleep(6); shot("01 launch")
+        drawer(); shot("02 drawer or sidebar")
+        let studio = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "workspace-tree-open-", "Studio")).firstMatch
+        if studio.waitForExistence(timeout: 10) { studio.tap(); sleep(2) }
+        shot("03 after tapping Studio")
+        drawer(); shot("04 drawer after Studio")
+        let project = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "project-tree-open-", "Design review")).firstMatch
+        if project.waitForExistence(timeout: 5) { project.tap(); sleep(2) }
+        shot("05 project")
+        let chat = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "workspace-child-tab-chat:")).firstMatch
+        if chat.waitForExistence(timeout: 5) { chat.tap(); sleep(2) }
+        shot("06 project chat")
+        let browser = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "workspace-child-tab-", "Synthetic project browser")).firstMatch
+        if browser.waitForExistence(timeout: 5) { browser.tap(); sleep(3) }
+        shot("07 project browser")
+        drawer(); shot("08 drawer from browser")
+    }
+    /// The project tab strip's + and close, and the browser bar's tab overview, act on tabs.
+    @MainActor func testProjectTabControlsAct() async throws {
+        let app = nativeFixtureApplication(); app.launchArguments = ["--reset-pairing", "--phone-preview-fixture"]; app.launch()
+        let phone = UIDevice.current.userInterfaceIdiom == .phone
+        func drawer() { if phone, let n = app.buttons.matching(identifier: "phone-app-navigation").allElementsBoundByIndex.first(where: { $0.isHittable }) { n.tap(); sleep(1) } }
+        func shot(_ name: String) { let a = XCTAttachment(screenshot: app.screenshot()); a.name = name; a.lifetime = .keepAlways; add(a) }
+        sleep(5); drawer()
+        let studio = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "workspace-tree-open-", "Studio")).firstMatch
+        XCTAssertTrue(studio.waitForExistence(timeout: 10)); studio.tap(); sleep(1); drawer()
+        let project = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "project-tree-open-", "Design review")).firstMatch
+        XCTAssertTrue(project.waitForExistence(timeout: 5)); project.tap(); sleep(2)
+        let tabs = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "workspace-child-tab-"))
+        let before = tabs.count
+        let plus = app.buttons.matching(NSPredicate(format: "label == %@", "New workspace tab")).allElementsBoundByIndex.first { $0.isHittable }
+        XCTAssertNotNil(plus, "The project tab strip has a visible + button"); plus?.tap(); sleep(2); shot("after +")
+        XCTAssertEqual(tabs.count, before + 1, "+ adds a project tab")
+        let close = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Close New tab")).allElementsBoundByIndex.first { $0.isHittable }
+        XCTAssertNotNil(close, "The new tab has a close button"); close?.tap(); sleep(2); shot("after close")
+        XCTAssertEqual(tabs.count, before, "Close removes the project tab")
+        let browser = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "workspace-child-tab-", "Synthetic project browser")).firstMatch
+        XCTAssertTrue(browser.waitForExistence(timeout: 5)); browser.tap(); sleep(2)
+        let overview = app.buttons["browser-tab-overview"]
+        XCTAssertTrue(overview.waitForExistence(timeout: 5)); overview.tap(); sleep(2); shot("overview")
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "identifier IN %@", ["phone-tab-overview", "main-tab-overview"])).firstMatch.waitForExistence(timeout: 5), "Tab overview opens")
+        // Tabs manager rows: Hide (menu on iPhone, button on iPad) and Close act on the owner.
+        if app.buttons["Done"].exists { app.buttons["Done"].tap(); sleep(1) }
+        let projectTab = app.buttons.matching(NSPredicate(format: "label == %@", "Design review")).allElementsBoundByIndex.first { $0.isHittable }
+        projectTab?.tap(); sleep(1)
+        let tabsPage = app.segmentedControls.buttons["Tabs"]
+        if tabsPage.waitForExistence(timeout: 8) { tabsPage.tap() }
+        let rows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "workspace-managed-title-"))
+        XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 10), "Tabs page lists tabs"); shot("tabs page")
+        let count = rows.count
+        let closeRow = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "workspace-managed-close-")).allElementsBoundByIndex.first { $0.isHittable }
+        XCTAssertNotNil(closeRow, "Each tab row has a Close button"); closeRow?.tap(); sleep(3); shot("tabs after close")
+        XCTAssertEqual(rows.count, count - 1, "Close removes the tab row")
+    }
     @MainActor func testLogPaginationAndExpandedDiagnostics() async throws {
         let (seedData, _) = try await URLSession.shared.data(from: URL(string: "\(nativeFixtureHTTPOrigin)/logs-fixture")!)
         let seed = try JSONSerialization.jsonObject(with: seedData) as! [String: Any]

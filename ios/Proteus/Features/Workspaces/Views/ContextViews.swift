@@ -98,6 +98,8 @@ struct NativeWorkspaceTabsView: View {
                 }
             }.padding()
         }.disabled(busy).task { await load() }
+        // Tab actions report owner refusals here instead of silently doing nothing.
+        .alert("Tab action", isPresented: Binding(get: { store.error != nil && !moving }, set: { if !$0 { store.error = nil } })) { Button("OK") { store.error = nil } } message: { Text(store.error ?? "") }
         .onChange(of: shared.workspaceContentDescriptors[scope]) { _, _ in Task { await load() } }
         .sheet(isPresented: $moving) {
             NavigationStack { Form {
@@ -133,8 +135,10 @@ struct NativeWorkspaceTabsView: View {
                 }
                 if tab["type"].string == "browser" { Button(tab["persist"].bool ? "Unpersist" : "Persist", systemImage: "pin") { command(["action": .string("persist"), "scope": .string(scopeKind), "id": .string(scopeID), "tabId": tab["id"], "expectedRevision": snapshot["revision"], "enabled": .bool(!tab["persist"].bool)]) } }
                 Section(date(tab["openedAt"].string) == "—" ? "Opened —" : "Opened " + date(tab["openedAt"].string)) {}
-            } label: { Image(systemName: "ellipsis").frame(width: 30, height: 32) }.accessibilityLabel("More actions for " + label(tab))
-            Button(role: .destructive) { command(["action": .string("close"), "scope": .string(scopeKind), "id": .string(scopeID), "tabId": tab["id"], "expectedRevision": snapshot["revision"]]) } label: { Image(systemName: "xmark").frame(width: 30, height: 32) }.accessibilityLabel("Close " + label(tab))
+            } label: { Image(systemName: "ellipsis").frame(width: 30, height: 32) }.accessibilityLabel("More actions for " + label(tab)).accessibilityIdentifier("workspace-managed-more-" + tab["id"].string)
+            // Close uses the same owner tab-list mutation as the tab strip, which this
+            // device may already perform; cross-scope Move/Persist need resource access.
+            Button(role: .destructive) { mutate([.object(["action": .string("close"), "id": tab["id"]])], tab: tab) } label: { Image(systemName: "xmark").frame(width: 30, height: 32) }.accessibilityLabel("Close " + label(tab)).accessibilityIdentifier("workspace-managed-close-" + tab["id"].string)
         }.buttonStyle(.plain).foregroundStyle(NativeTheme.accent).font(.system(size: 15, weight: .medium))
     }
     private func toggleHidden(_ tab: JSON) { mutate([.object(["action": .string("visibility"), "id": tab["id"], "hidden": .bool(!tab["hidden"].bool)])], tab: tab) }
@@ -673,9 +677,9 @@ struct NativeWorkspaceContentView: View {
             guard let index = ids.firstIndex(of: selected), ids.indices.contains(index + direction) else { return }
             selected = ids[index + direction]
             if shared.tabs(in: scope).contains(where: { $0.id == selected }) { shared.select(selected, in: scope) }
-        }).background(NativeTheme.background).navigationTitle(profile["name"].string).navigationBarTitleDisplayMode(.inline)
+        }).background(NativeTheme.background).navigationTitle(NativeDesignPreview.enabled ? "" : profile["name"].string).navigationBarTitleDisplayMode(.inline)
             .toolbar(NativePhonePreview.enabled && phoneChrome.controlsHidden ? .hidden : .automatic, for: .navigationBar)
-            .nativeFeaturePage(projectID.flatMap { store.projectCatalog.project(id: $0, workspaceID: workspaceID)?["name"].string } ?? profile["name"].string)
+            .nativeFeaturePage(projectID.flatMap { store.projectCatalog.project(id: $0, workspaceID: workspaceID)?["name"].string } ?? profile["name"].string, barHidden: NativePhonePreview.enabled && selected.hasPrefix("chat:"))
             .sheet(isPresented: $reorder) { NativeTabReorderSheet(items: orderedChildren.map { (id: $0["id"].string, title: $0["title"].string) }) { ids in let children = orderedChildren; mutateTabs([.object(["action": .string("reorder"), "ids": .array(ids.compactMap { id in children.first { $0["id"].string == id }?["sortId"] })])]) } }
             .sheet(item: $transferTab) { tab in NativeBrowserTransferView(tab: tab) }
             .sheet(isPresented: $newChat) { NewChatView(internet: internet, lockedWorkspaceID: workspaceID, lockedProjectID: projectID) { id in newChat = false; openChat(id) }.environment(store) }

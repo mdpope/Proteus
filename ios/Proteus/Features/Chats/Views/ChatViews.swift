@@ -671,7 +671,6 @@ struct ChatView: View {
     @StateObject private var pageSearch = NativePageSearch()
     @State private var composerDraftKey = ""
     @State private var selectedChild = "chat"
-    @State private var childTabsClipped = false
     @State private var documents: [ChatDocumentTab] = []
     @State private var documentNotice: String?
     @State private var documentTask: Task<Void, Never>?
@@ -778,7 +777,7 @@ struct ChatView: View {
     private var chatLayout: some View {
         VStack(spacing: 0) {
             if (sizeClass != .regular || embedded) && (!NativePhonePreview.enabled || !phoneChrome.controlsHidden) { compactHeader }
-            if NativePhonePreview.enabled && !embedded {
+            if NativePhonePreview.enabled {
                 if !phoneChrome.controlsHidden { childTabs }
             } else if !embedded { childTabs }
             if selectedChild == "chat" && pageSearch.visible { HStack { Spacer(minLength: 0); NativePageFindBar(search: pageSearch, loadedOnly: true) }.padding(8) }
@@ -830,7 +829,7 @@ struct ChatView: View {
         }
     }
     var body: some View {
-        AnyView(chatLayout).environment(\.nativeBrowserContainer, workspaceBrowserScope ?? chatBrowserScope).onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in let available = max(160, height - 88); if abs(composerAvailableHeight - available) > 1 { composerAvailableHeight = available } }.background(NativeTheme.background).navigationBarBackButtonHidden(true).toolbar(embedded ? .automatic : .hidden, for: .navigationBar)
+        AnyView(chatLayout).environment(\.nativeBrowserContainer, workspaceBrowserScope ?? chatBrowserScope).onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in let available = max(160, height - 88); if abs(composerAvailableHeight - available) > 1 { composerAvailableHeight = available } }.background(NativeTheme.background).navigationBarBackButtonHidden(true).toolbar(.hidden, for: .navigationBar)
         .modifier(NativePhoneBackNavigation())
         .simultaneousGesture(TapGesture(count: 2).onEnded { if NativePhonePreview.enabled && !composerHasFocus && !shared.tabs(in: chatBrowserScope).contains(where: { $0.id == selectedChild }) { phoneChrome.toggleControls() } })
         .background { if NativeDesignPreview.enabled && phoneAreaActive { NativePhoneSurface(chrome: phoneChrome, overviewEnabled: !shared.tabs(in: chatBrowserScope).contains(where: { $0.id == selectedChild })) } }
@@ -924,7 +923,7 @@ struct ChatView: View {
     private var compactHeader: some View {
         HStack(spacing: 4) {
             if !NativePhonePreview.enabled && !embedded { Button { returnToChats() } label: { Image(systemName: "chevron.left").font(.system(size: 19, weight: .medium)).frame(width: 44, height: 44).contentShape(Rectangle()) }.frame(width: 44, height: 44).contentShape(Rectangle()).accessibilityLabel("Back to Chats").accessibilityIdentifier("chat-back") }
-            if NativePhonePreview.enabled && !embedded { Button { phoneChrome.drawer = true } label: { Image(systemName: "sidebar.left").frame(width: 44, height: 44) }.accessibilityLabel("App navigation").accessibilityIdentifier("phone-app-navigation") }
+            if NativePhonePreview.enabled { Button { phoneChrome.drawer = true } label: { Image(systemName: "sidebar.left").frame(width: 44, height: 44) }.accessibilityLabel("App navigation").accessibilityIdentifier("phone-app-navigation") }
             Text(run["title"].string.isEmpty ? "Conversation" : run["title"].string).font(.subheadline.weight(.medium)).lineLimit(1).truncationMode(.tail).frame(maxWidth: .infinity, alignment: .leading).accessibilityIdentifier("chat-header-title")
             Menu {
                 ForEach(documents) { document in Button(document.title, systemImage: "doc") { selectedChild = document.id; shared.selectChatChild(document.id, for: chatBrowserScope) } }
@@ -935,8 +934,8 @@ struct ChatView: View {
                     Button("Delete chat", systemImage: "trash", role: .destructive) { confirmDelete = true }.disabled(chatHasPendingWork(run))
                 }
             } label: { Image(systemName: "ellipsis.circle").font(.system(size: 22)).frame(width: 44, height: 44).contentShape(Rectangle()) }.frame(width: 44, height: 44).contentShape(Rectangle()).accessibilityLabel("Chat actions").accessibilityIdentifier("chat-actions")
-            if NativePhonePreview.enabled && !embedded { NativeMainTabAdd() }
-        }.buttonStyle(.plain).padding(.horizontal, embedded ? 12 : 4).frame(height: 44).background(NativeTheme.surface)
+            if NativePhonePreview.enabled { NativeMainTabAdd() }
+        }.buttonStyle(.plain).padding(.horizontal, NativePhonePreview.enabled || !embedded ? 4 : 12).frame(height: 44).background(NativeTheme.surface)
     }
     private var childTabs: some View {
         HStack(spacing: 0) {
@@ -970,8 +969,7 @@ NativeTabStrip(ids: shared.orderedChatChildren(in: chatBrowserScope, documentIDs
                 .id(childID)
                 Divider().frame(height: 24)
             }
-        }.buttonStyle(.plain).background(NativeTabClipProbe { childTabsClipped = $0 }.frame(width: 1, height: 1).opacity(0)) }.scrollIndicators(.hidden).accessibilityIdentifier("chat-child-tab-strip")
-            .mask { LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: childTabsClipped ? 0.9 : 1), .init(color: childTabsClipped ? .clear : .black, location: 1)], startPoint: .leading, endPoint: .trailing) }
+        }.buttonStyle(.plain) }.scrollIndicators(.hidden).accessibilityIdentifier("chat-child-tab-strip")
             if selectedChild == "chat" { Button { pageSearch.visible.toggle() } label: { Image(systemName: "magnifyingglass") }.padding(12).accessibilityLabel("Find in chat").keyboardShortcut("f", modifiers: .command) }
             if NativePhonePreview.enabled && !shared.tabs(in: chatBrowserScope).contains(where: { $0.id == selectedChild }) {
                 Button { phoneChrome.showTabs?() } label: { NativeTabOverviewIcon().frame(width: 44, height: 44) }.accessibilityLabel("Tab overview").accessibilityIdentifier("chat-tab-overview")

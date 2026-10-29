@@ -85,9 +85,12 @@ struct NativeTabStrip<Content: View>: View {
     let ids: [String]
     let selection: String?
     @ViewBuilder var content: () -> Content
+    /// Which ends have tabs scrolled out of view; each such edge fades.
+    @State private var clipped = NativeTabEdges()
     var body: some View {
         ScrollViewReader { proxy in
-            ScrollView(.horizontal) { content() }
+            ScrollView(.horizontal) { content().background(NativeTabClipProbe(onEdges: { if clipped != $0 { clipped = $0 } }).frame(width: 1, height: 1).opacity(0)) }
+                .mask { LinearGradient(stops: [.init(color: clipped.leading ? .clear : .black, location: 0), .init(color: .black, location: clipped.leading ? 0.07 : 0), .init(color: .black, location: clipped.trailing ? 0.93 : 1), .init(color: clipped.trailing ? .clear : .black, location: 1)], startPoint: .leading, endPoint: .trailing) }
                 // A newly shown strip (for example a project opened from Chats) reveals its selection.
                 .onAppear { guard let selection else { return }; Task { @MainActor in await Task.yield(); proxy.scrollTo(selection, anchor: .center) } }
                 .onChange(of: ids) { old, new in
@@ -101,12 +104,14 @@ struct NativeTabStrip<Content: View>: View {
         }
     }
 }
+struct NativeTabEdges: Equatable { var leading = false; var trailing = false }
 struct NativeTabClipProbe: UIViewRepresentable {
-    var onChange: (Bool) -> Void
+    var onChange: (Bool) -> Void = { _ in }
+    var onEdges: (NativeTabEdges) -> Void = { _ in }
     func makeCoordinator() -> Coordinator { Coordinator() }
     func makeUIView(context: Context) -> UIView { UIView(frame: .zero) }
     func updateUIView(_ view: UIView, context: Context) {
-        context.coordinator.onChange = onChange
+        context.coordinator.onChange = onChange; context.coordinator.onEdges = onEdges
         context.coordinator.attach(from: view)
         DispatchQueue.main.async { [weak view, weak coordinator = context.coordinator] in if let view, let coordinator { coordinator.attach(from: view) } }
     }
@@ -117,6 +122,7 @@ struct NativeTabClipProbe: UIViewRepresentable {
         var sizeObservation: NSKeyValueObservation?
         var boundsObservation: NSKeyValueObservation?
         var onChange: (Bool) -> Void = { _ in }
+        var onEdges: (NativeTabEdges) -> Void = { _ in }
         func attach(from view: UIView) {
             guard scrollView == nil else { return }
             var parent = view.superview
@@ -134,7 +140,8 @@ struct NativeTabClipProbe: UIViewRepresentable {
         }
         private func report() {
             guard let scrollView else { return }
-            onChange(scrollView.contentOffset.x + scrollView.bounds.width < scrollView.contentSize.width - 2)
+            let trailing = scrollView.contentOffset.x + scrollView.bounds.width < scrollView.contentSize.width - 2
+            onChange(trailing); onEdges(NativeTabEdges(leading: scrollView.contentOffset.x > 2, trailing: trailing))
         }
     }
 }
@@ -238,7 +245,6 @@ struct NativeShell: View {
     @State private var shellRename: AggregateChat?
     @State private var shellTransfer: BrowserDescriptor?
     @State private var shellDelete: AggregateChat?
-    @State private var mainTabsClipped = false
     @State private var newMainChat = false
     @State private var newMainInternetSearch = false
     @State private var enginePage = "Overview"
@@ -323,8 +329,7 @@ struct NativeShell: View {
                                     shellTab(tab)
                                     Divider().frame(height: 24)
                                 }
-                            }.buttonStyle(.plain).background(NativeTabClipProbe { mainTabsClipped = $0 }.frame(width: 1, height: 1).opacity(0)) }.scrollIndicators(.hidden)
-                                .mask { LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: mainTabsClipped ? 0.9 : 1), .init(color: mainTabsClipped ? .clear : .black, location: 1)], startPoint: .leading, endPoint: .trailing) }
+                            }.buttonStyle(.plain) }.scrollIndicators(.hidden)
                                 if let entry = selectedChatEntry {
                                     Menu {
                                         Button("Copy chat link", systemImage: "link") { UIPasteboard.general.url = NativeChatLink.url(host: entry.hostID, id: entry.run["id"].string) }
@@ -1269,7 +1274,7 @@ struct AggregateChatsView: View {
                 ForEach(chats) { item in chatRow(item) }
                 ForEach(destinations.destinations) { d in if let remote = destinations.remote(for: d.id), (showArchived ? remote.allRuns.count < remote.allRunCount : remote.state["runs"].array.count < remote.state["runCount"].int) { Button("Load older · " + d.label) { Task { if showArchived { await remote.loadAllRuns() } else { await remote.loadMoreRuns() } } }.disabled(!remote.connected) } }
                 }
-            }.background(NativeTheme.background).navigationTitle(NativeDesignPreview.enabled || sizeClass == .regular ? "" : attentionOnly ? "Needs attention" : "Chats").safeAreaInset(edge: .top, spacing: 0) { if sizeClass == .regular && !NativeDesignPreview.enabled { Text(attentionOnly ? "Needs attention" : "Chats").font(.title2.bold()).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 20).padding(.vertical, 12).background(NativeTheme.background) } }.onAppear { chatType = initialChatType; attentionTab = initialAttentionTab }.onChange(of: initialAttentionTab) { _, value in attentionTab = value }.onChange(of: initialChatType) { _, value in chatType = value }.nativeFeaturePage(attentionOnly ? "Needs Attention" : initialChatType == "internet" ? "Internet Searches" : "Chats", search: $query).refreshable { await destinations.refreshAll() }
+            }.background(NativeTheme.background).navigationTitle(NativeDesignPreview.enabled || sizeClass == .regular ? "" : attentionOnly ? "Needs attention" : "Chats").safeAreaInset(edge: .top, spacing: 0) { if sizeClass == .regular && !NativeDesignPreview.enabled { Text(attentionOnly ? "Needs attention" : "Chats").font(.title2.bold()).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 20).padding(.vertical, 12).background(NativeTheme.background) } }.onAppear { chatType = initialChatType; attentionTab = initialAttentionTab }.onChange(of: initialAttentionTab) { _, value in attentionTab = value }.onChange(of: initialChatType) { _, value in chatType = value }.nativeFeaturePage(attentionOnly ? "Needs Attention" : initialChatType == "internet" ? "Internet Searches" : "Chats", search: $query, embedded: lockedWorkspaceID != nil).refreshable { await destinations.refreshAll() }
                 .toolbar { if lockedHostID == nil { Menu { ForEach(destinations.destinations) { d in Button(d.label) { try? destinations.select(d.id) } } } label: { Label(destinations.selectedLabel, systemImage: "desktopcomputer") } }; Button("New chat", systemImage: "square.and.pencil") { newChat = true }.disabled((lockedHostID.flatMap { destinations.remote(for: $0) } ?? destinations.selected)?.connected != true).accessibilityIdentifier("new-chat") }
                 .sheet(isPresented: $newChat) { if let remote = lockedHostID.flatMap({ destinations.remote(for: $0) }) ?? destinations.selected { NewChatView(internet: chatType == "internet", lockedWorkspaceID: lockedWorkspaceID, lockedProjectID: lockedProjectID) { id in newChat = false; let item = AggregateChat(hostID: remote.connection?.hostId ?? "", hostName: destinations.destinations.first(where: { $0.id == remote.connection?.hostId })?.label ?? "Computer", run: .object(["id": .string(id)])); choose(item) }.environment(remote) } }
                 .navigationDestination(item: $selected) { item in if let remote = destinations.remote(for: item.hostID) { ChatView(id: item.run["id"].string).environment(remote) } }

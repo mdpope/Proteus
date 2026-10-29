@@ -114,9 +114,19 @@ private struct NativeFeaturePage: ViewModifier {
     @EnvironmentObject private var chrome: NativePhoneChrome
     let title: String
     var search: Binding<String>?
+    /// A list shown inside another page (for example Chats inside a project) keeps its
+    /// search but not a second title, drawer button or main + in the shared header.
+    var embedded = false
+    /// The page shows its own compact header (a chat inside a project on iPhone).
+    var barHidden = false
     @Environment(\.nativePhoneAreaActive) private var active
     func body(content: Content) -> some View {
-        if NativeDesignPreview.enabled {
+        if NativeDesignPreview.enabled && embedded {
+            // Only the search field; the containing page owns the title and bar.
+            content.safeAreaInset(edge: .bottom, spacing: 0) {
+                if NativePhonePreview.enabled, let search { searchField(search).padding(.horizontal, 16).padding(.vertical, 8).background(NativeTheme.background) }
+            }
+        } else if NativeDesignPreview.enabled {
             content.navigationTitle("").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     if NativePhonePreview.enabled {
@@ -135,7 +145,7 @@ private struct NativeFeaturePage: ViewModifier {
                         ToolbarItem(placement: .topBarTrailing) { searchField(search).frame(width: 230) }
                     }
                 }
-                .toolbar(NativePhonePreview.enabled && (chrome.controlsHidden || !active) ? .hidden : .visible, for: .navigationBar)
+                .toolbar(NativePhonePreview.enabled && (chrome.controlsHidden || !active || barHidden) ? .hidden : .visible, for: .navigationBar)
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     if NativePhonePreview.enabled, let search { searchField(search).padding(.horizontal, 16).padding(.vertical, 8).background(NativeTheme.background) }
                 }
@@ -149,7 +159,7 @@ private struct NativeFeaturePage: ViewModifier {
     }
 }
 extension View {
-    func nativeFeaturePage(_ title: String, search: Binding<String>? = nil) -> some View { modifier(NativeFeaturePage(title: title, search: search)) }
+    func nativeFeaturePage(_ title: String, search: Binding<String>? = nil, embedded: Bool = false, barHidden: Bool = false) -> some View { modifier(NativeFeaturePage(title: title, search: search, embedded: embedded, barHidden: barHidden)) }
 }
 
 struct NativePhoneTab: Identifiable {

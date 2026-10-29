@@ -17,7 +17,6 @@ struct TeamToolsView: View {
     @State private var editingList: TeamListEditorItem?
     @State private var renameBrowserID: String?
     @State private var renameBrowserTitle = ""
-    @State private var teamTabsClipped = false
     private var authorized: Bool {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--synthetic-browser-workspace") || ProcessInfo.processInfo.arguments.contains("--synthetic-team-lists") { return true }
@@ -49,8 +48,7 @@ struct TeamToolsView: View {
                             }
                             Divider().frame(height: 24)
                         }
-                    }.buttonStyle(.plain).background(NativeTabClipProbe { teamTabsClipped = $0 }.frame(width: 1, height: 1).opacity(0)) }.scrollIndicators(.hidden)
-                        .mask { LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: teamTabsClipped ? 0.9 : 1), .init(color: teamTabsClipped ? .clear : .black, location: 1)], startPoint: .leading, endPoint: .trailing) }
+                    }.buttonStyle(.plain) }.scrollIndicators(.hidden)
                         Button { shared.open(nil, scope: "team"); section = shared.selectedBrowser ?? "Overview" } label: { Image(systemName: "plus") }.padding(12).accessibilityLabel("Add Team tab").accessibilityIdentifier("team-new-browser-tab")
                         Button { reorderTabs = true } label: { Image(systemName: "arrow.left.arrow.right").frame(width: 44, height: 44) }.accessibilityLabel("Reorder Team tabs").disabled(shared.tabs(in: "team").count < 2)
                         if sizeClass == .regular { Button(docked ? "Undock standup" : "Dock standup", systemImage: "sidebar.left") { docked.toggle() }.padding(8) }
@@ -183,7 +181,6 @@ struct TeamBrowserView: View {
     @State private var text = ""
     @State private var engine = "Google"
     @State private var overview = false
-    @State private var tabsClipped = false
     @State private var historyDirection: Bool?
     @State private var ownerHistoryResults: [JSON]?
     @State private var historyIndex = NativeBrowserHistoryIndex([])
@@ -244,8 +241,7 @@ struct TeamBrowserView: View {
                     browserTabChip(tab)
                     Divider().frame(height: 24)
                 }
-            }.buttonStyle(.plain).background(NativeTabClipProbe { tabsClipped = $0 }.frame(width: 1, height: 1).opacity(0)) }.scrollIndicators(.hidden)
-                .mask { LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: tabsClipped ? 0.9 : 1), .init(color: tabsClipped ? .clear : .black, location: 1)], startPoint: .leading, endPoint: .trailing) }
+            }.buttonStyle(.plain) }.scrollIndicators(.hidden)
                 Button { shared.open(nil, scope: scope) } label: { Image(systemName: "plus") }.padding(12).accessibilityLabel("Add tab").accessibilityIdentifier("browser-new-tab")
             }.nativeTabBar()
             }
@@ -272,9 +268,11 @@ struct TeamBrowserView: View {
                 if let id = selectedID, !shared.isTwoFingerNavigation(id) { shared.goForward(id) }
             }))
         }.safeAreaInset(edge: .bottom, spacing: 0) {
-            if NativePhonePreview.enabled { phoneBrowserControls.fixedSize(horizontal: false, vertical: true) }
+            // Sit the row partly in the home-indicator area like Safari, halving the bar height.
+            if NativePhonePreview.enabled { phoneBrowserControls.fixedSize(horizontal: false, vertical: true).padding(.bottom, -16) }
         }
-        .scaleEffect(overview && !reduceMotion ? 0.94 : 1).opacity(overview ? 0.5 : 1).clipped()
+        // iPhone controls extend into the home-indicator area; allow that overflow only.
+        .scaleEffect(overview && !reduceMotion ? 0.94 : 1).opacity(overview ? 0.5 : 1).clipShape(Rectangle().inset(by: NativePhonePreview.enabled ? -24 : 0))
         .overlay {
             if overview { BrowserTabOverview(scope: scope, onClose: { withAnimation(reduceMotion ? .easeOut(duration: 0.12) : .spring(response: 0.32, dampingFraction: 0.86)) { overview = false } })
                 .transition(reduceMotion ? .opacity : .scale(scale: 0.88).combined(with: .opacity)).zIndex(1) }
@@ -391,14 +389,14 @@ struct TeamBrowserView: View {
     }
     private var phoneBrowserControls: some View {
         HStack(spacing: 0) {
-            Button { if let id = selectedID { shared.goBack(id) } } label: { Image(systemName: "chevron.left").frame(maxWidth: .infinity).frame(height: 48).contentShape(Rectangle()) }
+            Button { if let id = selectedID { shared.goBack(id) } } label: { Image(systemName: "chevron.left").frame(maxWidth: .infinity).frame(height: 38).contentShape(Rectangle()) }
                 .disabled(!navigation.canGoBack).accessibilityLabel("Back").accessibilityIdentifier("browser-back")
                 .highPriorityGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in historyDirection = true })
-            Button { if let id = selectedID { shared.goForward(id) } } label: { Image(systemName: "chevron.right").frame(maxWidth: .infinity).frame(height: 48).contentShape(Rectangle()) }
+            Button { if let id = selectedID { shared.goForward(id) } } label: { Image(systemName: "chevron.right").frame(maxWidth: .infinity).frame(height: 38).contentShape(Rectangle()) }
                 .disabled(!navigation.canGoForward).accessibilityLabel("Forward").accessibilityIdentifier("browser-forward")
                 .highPriorityGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in historyDirection = false })
-            Button { if let id = selectedID { navigation.isLoading ? shared.stopBrowser(id) : shared.refreshBrowser(id) } } label: { Image(systemName: navigation.isLoading ? "xmark" : "arrow.clockwise").frame(maxWidth: .infinity).frame(height: 48).contentShape(Rectangle()) }.disabled(selectedTab?.url == nil).accessibilityLabel(navigation.isLoading ? "Stop loading" : "Refresh page").accessibilityIdentifier("browser-refresh")
-            Button { if let tab = selectedTab { shared.webView(tab).findInteraction?.presentFindNavigator(showingReplace: false) } } label: { Image(systemName: "magnifyingglass").frame(maxWidth: .infinity).frame(height: 48).contentShape(Rectangle()) }.disabled(selectedTab?.url == nil).accessibilityLabel("Find in page").accessibilityIdentifier("browser-find")
+            Button { if let id = selectedID { navigation.isLoading ? shared.stopBrowser(id) : shared.refreshBrowser(id) } } label: { Image(systemName: navigation.isLoading ? "xmark" : "arrow.clockwise").frame(maxWidth: .infinity).frame(height: 38).contentShape(Rectangle()) }.disabled(selectedTab?.url == nil).accessibilityLabel(navigation.isLoading ? "Stop loading" : "Refresh page").accessibilityIdentifier("browser-refresh")
+            Button { if let tab = selectedTab { shared.webView(tab).findInteraction?.presentFindNavigator(showingReplace: false) } } label: { Image(systemName: "magnifyingglass").frame(maxWidth: .infinity).frame(height: 38).contentShape(Rectangle()) }.disabled(selectedTab?.url == nil).accessibilityLabel("Find in page").accessibilityIdentifier("browser-find")
             Menu {
                 pageOptions
                 Button("Navigation history", systemImage: "clock.arrow.circlepath") { historyDirection = true }.accessibilityIdentifier("browser-navigation-history")
@@ -411,9 +409,9 @@ struct TeamBrowserView: View {
                     Button("Unload page", systemImage: "pause.circle") { shared.unload(tab.id) }
                     Button("Close tab", systemImage: "xmark") { shared.close(tab.id) }
                 }
-            } label: { Image(systemName: "ellipsis.circle").frame(maxWidth: .infinity).frame(height: 48).contentShape(Rectangle()) }.accessibilityLabel("More browser options").accessibilityIdentifier("phone-browser-more")
-            Button { showOverview() } label: { NativeTabOverviewIcon().frame(maxWidth: .infinity).frame(height: 48).contentShape(Rectangle()) }.accessibilityLabel("Tab overview").accessibilityIdentifier("browser-tab-overview")
-        }.buttonStyle(.plain).font(.system(size: 19)).foregroundStyle(NativeTheme.accent).background(NativeTheme.rail).overlay(alignment: .top) { Divider() }
+            } label: { Image(systemName: "ellipsis.circle").frame(maxWidth: .infinity).frame(height: 38).contentShape(Rectangle()) }.accessibilityLabel("More browser options").accessibilityIdentifier("phone-browser-more")
+            Button { showOverview() } label: { NativeTabOverviewIcon().frame(maxWidth: .infinity).frame(height: 38).contentShape(Rectangle()) }.accessibilityLabel("Tab overview").accessibilityIdentifier("browser-tab-overview")
+        }.buttonStyle(.plain).font(.system(size: 19)).foregroundStyle(NativeTheme.accent).background(NativeTheme.rail.ignoresSafeArea(edges: .bottom)).overlay(alignment: .top) { Divider() }
     }
     @ViewBuilder private var pageOptions: some View {
         if let tab = selectedTab, tab.url != nil {

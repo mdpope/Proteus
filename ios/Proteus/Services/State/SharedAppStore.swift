@@ -1338,7 +1338,12 @@ let nativeFixtureRelayOrigin = ""
         let storeKey = account + ":" + tab.profileId
         if profileStores[storeKey] == nil { profileStores[storeKey] = tab.profileId == "default" ? .default() : WKWebsiteDataStore(forIdentifier: Self.persistentProfileStoreID(account: account, id: tab.profileId)) }
         configuration.websiteDataStore = profileStores[storeKey]!
-        configuration.mediaTypesRequiringUserActionForPlayback = []
+        // Safari-like media policy. Without inline playback, iPhone WebKit plays any
+        // autoplaying video fullscreen, so page ads took over the screen. Sound needs a
+        // tap; "Block video autoplay" requires a tap for all media; windows need a tap.
+        configuration.allowsInlineMediaPlayback = true
+        configuration.mediaTypesRequiringUserActionForPlayback = blockVideoAutoplay ? .all : .audio
+        configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
         let view = NativeLinkWebView(frame: .zero, configuration: configuration)
         installVideoPolicy(view)
         // Proteus owns the full content-relative edge gesture. Native gesture
