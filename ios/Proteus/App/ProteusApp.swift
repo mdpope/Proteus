@@ -55,6 +55,10 @@ struct ProteusRoot: View {
                 .task {
                     #if DEBUG
                     if ProcessInfo.processInfo.arguments.contains("--reset-pairing") { destinations.resetForTesting() }
+                    // Simulator pairing with a real host: the side-by-side release app can claim proteus:// URLs.
+                    if let index = ProcessInfo.processInfo.arguments.firstIndex(of: "--pair-link"), ProcessInfo.processInfo.arguments.indices.contains(index + 1) {
+                        do { try destinations.add(ProcessInfo.processInfo.arguments[index + 1], label: "New computer") } catch { destinations.error = error.localizedDescription }
+                    }
                     if NativeDesignPreview.enabled && ProcessInfo.processInfo.arguments.contains("--phone-preview-fixture") && destinations.destinations.isEmpty {
                         do {
                             // Pairing invitations are one-use: never reuse URLSession's cached response.

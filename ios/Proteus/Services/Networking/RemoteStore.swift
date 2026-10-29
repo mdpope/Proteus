@@ -197,7 +197,9 @@ struct RemoteHostInfo: Equatable {
         guard let url = URL(string: "\(relay)/socket?role=client&host=\(host)") else { return }
         generation = UUID(); let current = generation
         incoming = 0; outgoing = 0; challenge = ""; prefix = ""; status = "Connecting…"
-        let task = URLSession.shared.webSocketTask(with: url); socket = task; task.resume()
+        // Hosts and the relay accept 8 MB packets. URLSession defaults to 1 MiB and drops the socket
+        // ("Message too long") once a real host's state grows past it, leaving the device offline.
+        let task = URLSession.shared.webSocketTask(with: url); task.maximumMessageSize = 8_000_000; socket = task; task.resume()
         readTask = Task {
             do {
                 while !Task.isCancelled {
