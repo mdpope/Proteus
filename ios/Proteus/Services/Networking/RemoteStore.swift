@@ -33,7 +33,9 @@ struct RemoteHostInfo: Equatable {
 /// Per-property observation: a view redraws only when the host values it reads change.
 /// Streaming one chat no longer invalidates every view that holds this store.
 @MainActor @Observable final class RemoteStore {
-    var state: JSON = .null
+    var state: JSON = .null { didSet { catalogCache = nil } }
+    /// Rebuilt only when host state changes; sidebar rows and chat filters read it per item.
+    @ObservationIgnored private var catalogCache: NativeProjectCatalog?
     var chats: [String: JSON] = [:]
     var allRuns: [JSON] = []
     private var allRunOffset = 0
@@ -92,7 +94,10 @@ struct RemoteHostInfo: Equatable {
             providerStatuses = state["providerStatuses"].object; modelStatus = state["providerStatus"]; models = modelStatus["models"].array
         }
     }
-    var projectCatalog: NativeProjectCatalog { NativeProjectCatalog(raw: state["workspaceProjects"]) }
+    var projectCatalog: NativeProjectCatalog {
+        if let catalogCache { _ = state; return catalogCache } // Reading state keeps observation intact.
+        let catalog = NativeProjectCatalog(raw: state["workspaceProjects"]); catalogCache = catalog; return catalog
+    }
     var supportsProjects: Bool { state["capabilities"].array.contains(.string("projects.v1")) && projectCatalog.isValid }
     private func acceptProjectCatalog(_ value: JSON) throws {
         guard NativeProjectCatalog(raw: value).isValid else { throw RemoteError(message: "The computer returned an invalid project catalog. Saved projects have been retained.") }

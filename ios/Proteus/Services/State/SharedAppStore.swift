@@ -612,6 +612,7 @@ let nativeFixtureRelayOrigin = ""
     }
     private var documentCacheURL: URL { FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Proteus/document-tabs.enc") }
     private func loadDocumentTabs() {
+        Self.cacheWriter.sync {}
         guard let key = BrowserCacheKeychain.key(), let data = try? Data(contentsOf: documentCacheURL), let payload = try? RemoteCrypto.open(String(decoding: data, as: UTF8.self), key: key, aad: "proteus-mobile-document-tabs-v1") else { return }
         if let encoded = try? JSONEncoder().encode(payload["tabs"]), let tabs = try? JSONDecoder().decode([NativeDocumentDescriptor].self, from: encoded) { documentTabs = Array(tabs.prefix(100)) }
         if let encoded = try? JSONEncoder().encode(payload["browserConflicts"]), let conflicts = try? JSONDecoder().decode([NativeBrowserNavigationConflict].self, from: encoded) { browserConflicts = conflicts }
@@ -624,7 +625,9 @@ let nativeFixtureRelayOrigin = ""
         guard let key = BrowserCacheKeychain.key(), let tabs = try? JSONDecoder().decode(JSON.self, from: JSONEncoder().encode(documentTabs.suffix(100))) else { return }
         let conflicts = (try? JSONDecoder().decode(JSON.self, from: JSONEncoder().encode(browserConflicts))) ?? .array([])
         let payload: JSON = .object(["browserConflicts": conflicts, "contentSnapshots": .object(contentSnapshots), "contentPending": .object(contentPending.mapValues(JSON.array)), "contentRequests": .object(contentRequests), "contentHosts": .object(contentHosts.mapValues(JSON.string)), "tabs": tabs, "selected": .object(chatSelectedChildren.mapValues(JSON.string)), "order": .object(chatChildOrder.mapValues { .array($0.map(JSON.string)) })])
-        do { let sealed = try RemoteCrypto.seal(payload, key: key, aad: "proteus-mobile-document-tabs-v1"); try FileManager.default.createDirectory(at: documentCacheURL.deletingLastPathComponent(), withIntermediateDirectories: true); try Data(sealed.utf8).write(to: documentCacheURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication]) } catch { /* Read-only tab metadata cannot affect the paired host. */ }
+        // Sealing and disk I/O run on the shared serial writer, off the main thread.
+        let url = documentCacheURL
+        Self.cacheWriter.async { do { let sealed = try RemoteCrypto.seal(payload, key: key, aad: "proteus-mobile-document-tabs-v1"); try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true); try Data(sealed.utf8).write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication]) } catch { /* Read-only tab metadata cannot affect the paired host. */ } }
     }
     func contentDescriptorVisible(_ id: String, in scope: String) -> Bool {
         guard let snapshot = contentSnapshots[scope] else { return true }
@@ -1032,6 +1035,7 @@ let nativeFixtureRelayOrigin = ""
     }
     private var historyCacheURL: URL { FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Proteus/browser-history.enc") }
     private func loadHistoryCache() {
+        Self.cacheWriter.sync {}
         guard let key = BrowserCacheKeychain.key(), let data = try? Data(contentsOf: historyCacheURL), let payload = try? RemoteCrypto.open(String(decoding: data, as: UTF8.self), key: key, aad: "proteus-mobile-history-v1") else { return }
         historyOutbox = payload["outbox"].array
         let threshold = Self.historyCacheStart()
@@ -1039,13 +1043,18 @@ let nativeFixtureRelayOrigin = ""
     }
     private func saveHistoryCache() {
         guard let key = BrowserCacheKeychain.key() else { return }
-        let payload: JSON = .object(["outbox": .array(historyOutbox), "cache": .object(historyCache.mapValues(JSON.array))])
-        do {
-            let sealed = try RemoteCrypto.seal(payload, key: key, aad: "proteus-mobile-history-v1")
-            try FileManager.default.createDirectory(at: historyCacheURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try Data(sealed.utf8).write(to: historyCacheURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
-        } catch { self.error = "Browser history could not be saved: " + error.localizedDescription }
+        let payload: JSON = .object(["outbox": .array(historyOutbox), "cache": .object(historyCache.mapValues(JSON.array))]), url = historyCacheURL
+        Self.cacheWriter.async {
+            do {
+                let sealed = try RemoteCrypto.seal(payload, key: key, aad: "proteus-mobile-history-v1")
+                try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try Data(sealed.utf8).write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            } catch { let message = error.localizedDescription; Task { @MainActor [weak self] in self?.error = "Browser history could not be saved: " + message } }
+        }
     }
+    /// One serial writer for encrypted local caches, shared by every store so a later
+    /// write can never be overtaken and reads always observe the newest snapshot.
+    nonisolated static let cacheWriter = DispatchQueue(label: "org.proteusapp.review.proteus.shared-cache-writer", qos: .utility)
     func assignBrowserOwner(_ id: String, host: String?) {
         guard let host, let index = browserTabs.firstIndex(where: { $0.id == id }), browserTabs[index].ownerHostId == nil else { return }
         browserTabs[index].ownerHostId = browserTabs[index].scope == "team" ? currentTeamOwner ?? host : contentHosts[browserTabs[index].scope] ?? host

@@ -1,3 +1,16 @@
+# Native follow-up, October 29, 2026 — main-thread smoothness
+
+Applying the desktop main-thread review to iOS: Time Profiler traces of the preview app while
+navigating the real Build Mac's workspaces, projects and tabs found sidebar and Home data being
+rebuilt on the main thread on every redraw. Recent-item sorting created an ISO-8601 formatter per
+comparison, each of ~1,000 attention items searched the full chat list for its title, and the
+project catalog re-validated on every lookup. These now reuse cached parsers, compute each date
+once per sort, build one title index per host, and keep one validated catalog per host state.
+Encrypted browser-history and document-tab saves moved to a shared serial background writer;
+reads wait for it. On iPhone, potential hangs in the same 75-second walkthrough fell from 32
+(250–590 ms) to 0, and app main-thread samples fell about twelvefold. iPad also measured no
+hangs. Simulator debug builds only; physical-device profiling remains to be done.
+
 # Native follow-up, October 29, 2026 — simulator validation
 
 Paired with the real Build Mac (0.2.33) in both preview simulators. Relay messages up to 8 MB are

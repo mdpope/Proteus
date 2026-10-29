@@ -333,7 +333,9 @@ final class RemoteUITests: XCTestCase {
     @MainActor func testRealHostTour() async throws {
         let env = ProcessInfo.processInfo.environment
         guard let bundle = env["PROTEUS_REAL_HOST_BUNDLE"], !bundle.isEmpty else { throw XCTSkip("Real-host tour needs a paired preview bundle.") }
-        let app = XCUIApplication(bundleIdentifier: bundle); app.launchArguments = ["--native-design-preview"]; app.launch()
+        let app = XCUIApplication(bundleIdentifier: bundle); app.launchArguments = ["--native-design-preview"]
+        // PROTEUS_REAL_ATTACH keeps the running process so a profiler can stay attached.
+        if env["PROTEUS_REAL_ATTACH"] != nil { app.activate() } else { app.launch() }
         let phone = UIDevice.current.userInterfaceIdiom == .phone
         func shot(_ name: String) { let a = XCTAttachment(screenshot: app.screenshot()); a.name = name; a.lifetime = .keepAlways; add(a) }
         func timed(_ label: String, _ body: () -> Void) { let start = Date(); body(); NSLog("REALTOUR %@ %.0fms", label, Date().timeIntervalSince(start) * 1000) }

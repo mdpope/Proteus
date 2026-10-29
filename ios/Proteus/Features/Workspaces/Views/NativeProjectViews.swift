@@ -247,9 +247,10 @@ struct NativeWorkspaceTree: View {
         let scope = "project:" + workspace.hostID + ":" + project["id"].string
         var seen = Set<String>()
         let allChats = (remote.state["runs"].array + remote.allRuns + Array(remote.chats.values)).filter { !$0["id"].string.isEmpty && seen.insert($0["id"].string).inserted }
-        let chats: [JSON] = allChats.filter { !$0["archived"].bool && $0["archivedAt"].string.isEmpty && remote.projectCatalog.membership(for: $0)["projectId"] == project["id"] }.map { run in var row = run.object; row["type"] = .string("chat"); row["chatId"] = run["id"]; row["navigationID"] = .string("chat:" + run["id"].string); return .object(row) }
+        let catalog = remote.projectCatalog // Built and validated once, not per chat.
+        let chats: [JSON] = allChats.filter { !$0["archived"].bool && $0["archivedAt"].string.isEmpty && catalog.membership(for: $0)["projectId"] == project["id"] }.map { run in var row = run.object; row["type"] = .string("chat"); row["chatId"] = run["id"]; row["navigationID"] = .string("chat:" + run["id"].string); return .object(row) }
         let resources: [JSON] = (shared.workspaceContentDescriptors[scope] ?? resourceRows[scope] ?? []).filter { $0["type"].string != "chat" && !$0["hidden"].bool }.map { tab in var row = tab.object; row["navigationID"] = .string(tab["type"].string == "browser" ? (shared.tabs(in: scope).first { ($0.contentTabId ?? $0.id) == tab["id"].string }?.id ?? "remote:" + tab["id"].string) : "remote:" + tab["id"].string); return .object(row) }
-        return (chats + resources).sorted { (NativeProjectActivity.date($0) ?? .distantPast) > (NativeProjectActivity.date($1) ?? .distantPast) }
+        return NativeProjectActivity.newestFirst(chats + resources)
     }
     private func countLabel(_ items: [JSON], scope: String, remote: RemoteStore) -> String {
         let resources = shared.workspaceContentDescriptors[scope] ?? resourceRows[scope]

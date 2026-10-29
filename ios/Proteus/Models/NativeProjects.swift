@@ -11,7 +11,10 @@ struct NativeProjectIdentity: Hashable {
 /// Keep the full owner document so additive fields survive caching and offline use.
 struct NativeProjectCatalog {
     let raw: JSON
-    var isValid: Bool {
+    /// Validated once per catalog; lookups run for every sidebar row and chat membership.
+    let isValid: Bool
+    init(raw: JSON) { self.raw = raw; isValid = Self.validate(raw) }
+    private static func validate(_ raw: JSON) -> Bool {
         guard raw["schemaVersion"].int == 1, case .array(let rows) = raw["projects"], case .object = raw["defaultProjectIds"] else { return false }
         var ids = Set<String>()
         return rows.allSatisfy { !$0["id"].string.isEmpty && !$0["workspaceId"].string.isEmpty && !$0["name"].string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && ids.insert($0["id"].string).inserted }
@@ -61,8 +64,19 @@ enum NativeProjectActivity {
         }
         return nil
     }
+    // Sidebar recents sort on every redraw. A new formatter per comparison dominated the main
+    // thread with real hosts, so reuse the shared parser and remember recent results.
+    private static let memoLock = NSLock()
+    nonisolated(unsafe) private static var memo: [String: Date] = [:]
     private static func parse(_ text: String) -> Date? {
-        let formatter = ISO8601DateFormatter(); formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.date(from: text) ?? ISO8601DateFormatter().date(from: text)
+        guard !text.isEmpty else { return nil }
+        memoLock.lock(); if let date = memo[text] { memoLock.unlock(); return date }; memoLock.unlock()
+        guard let date = ProviderAllowance.date(text) else { return nil }
+        memoLock.lock(); if memo.count > 4096 { memo.removeAll(keepingCapacity: true) }; memo[text] = date; memoLock.unlock()
+        return date
+    }
+    /// Newest first, computing each item's activity date once rather than per comparison.
+    static func newestFirst(_ items: [JSON]) -> [JSON] {
+        items.map { ($0, date($0) ?? .distantPast) }.sorted { $0.1 > $1.1 }.map(\.0)
     }
 }

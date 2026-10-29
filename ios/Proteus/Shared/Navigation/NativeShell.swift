@@ -1552,11 +1552,18 @@ struct NativeAttentionItem: Identifiable {
 @MainActor func nativeAttentionItems(_ destinations: DestinationStore) -> [NativeAttentionItem] {
     destinations.destinations.flatMap { destination in
         let remote = destinations.remote(for: destination.id)
-        return (remote?.state["attention"].array ?? []).map { item in
+        let attention = remote?.state["attention"].array ?? []
+        // One title index per host: a linear run search per item made ~1,000 attention items
+        // cost seconds of main-thread time across Home and drawer counts.
+        var titles: [String: String] = [:]
+        if !attention.isEmpty, let remote {
+            for run in remote.allRuns { titles[run["id"].string] = run["title"].string }
+            for run in remote.state["runs"].array { titles[run["id"].string] = run["title"].string }
+            for (id, run) in remote.chats { titles[id] = run["title"].string }
+        }
+        return attention.map { item in
             var fields = item.object
-            let chatID = item["chatId"].string
-            let run = remote?.chats[chatID] ?? remote?.state["runs"].array.first { $0["id"].string == chatID } ?? remote?.allRuns.first { $0["id"].string == chatID } ?? .null
-            let title = run["title"].string.trimmingCharacters(in: .whitespacesAndNewlines)
+            let title = (titles[item["chatId"].string] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             if !title.isEmpty { fields["title"] = .string(title); fields["notificationTitle"] = item["title"] }
             return NativeAttentionItem(hostID: destination.id, hostName: destination.label, value: .object(fields))
         }
