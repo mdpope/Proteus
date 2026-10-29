@@ -10,6 +10,12 @@ and continuation/status summaries now survive that completion path. The exact
 later failure remains unclassified until observed; no silent installer retry loop
 or relaxed acceptance is introduced.
 
+Preflight of the signed follow-up identified the inherited retire-before-capture
+ordering. That prepared job was cancelled without handoff. Source now preserves
+both old generations through new capture and full verification, then rotates to
+the newest two after live health. Regressions cover capture failure, corrupted
+new recovery and successful three-to-two rotation; native acceptance is pending.
+
 ## October 28 — 0.2.33 follow-up authorized
 
 Build and Build Mac installation are authorized. The pending blank-tab correction and a

@@ -37,7 +37,7 @@ function verifyGeneration(row,owner,{inspect=inspectPackage}={}){
  const expected=[...new Set([owner.home,owner.browserHome].filter(Boolean))].filter(root=>![owner.home,owner.browserHome].some(parent=>parent&&parent!==root&&root.startsWith(parent+path.sep)));
  if(JSON.stringify(receipt.roots.map(row=>row.root).sort())!==JSON.stringify(expected.sort()))throw Error('Recovery receipt does not cover the current data and browser homes.');
  const app=directory(path.join(base,receipt.app)),actual=inspect(app,{platform:owner.platform});
- if(actual.hash!==receipt.previous.hash||actual.sourceFingerprint!==receipt.previous.sourceFingerprint||JSON.stringify(actual.signing)!==JSON.stringify(receipt.previous.signing)||receipt.previous.installer&&actual.installer?.sha256!==receipt.previous.installer.sha256)throw Error('Recovery application differs from its receipt.');
+ if(actual.hash!==receipt.previous.hash||receipt.previous.installationHash&&actual.installationHash!==receipt.previous.installationHash||actual.sourceFingerprint!==receipt.previous.sourceFingerprint||JSON.stringify(actual.signing)!==JSON.stringify(receipt.previous.signing)||receipt.previous.installer&&actual.installer?.sha256!==receipt.previous.installer.sha256)throw Error('Recovery application differs from its receipt.');
  for(const [index,snapshot]of receipt.roots.entries()){
   const source=directory(path.join(base,'data-'+index));
   if(!/^[a-f0-9]{64}$/.test(snapshot.hash||'')||tree(source,{exclude:excluded,recoveryCaches:snapshot.recoveryCachePolicy===1,cachePrefix:snapshot.cachePrefix||'',runtimePrefix:snapshot.runtimePrefix??null}).hash!==snapshot.hash)throw Error('Recovery data differs from its receipt.');

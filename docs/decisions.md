@@ -421,6 +421,17 @@ Use the existing shared frameless shell and native popup menu on Windows, includ
 window actions and menu command routing. Preserve native accelerators and F10 access instead of
 adding a separate menu implementation. macOS retains its native traffic lights and menu.
 
+## October 29 — Verify the replacement recovery before retirement
+
+Two-generation retention is a steady-state ceiling, not permission to delete an
+existing verified recovery before its successor verifies. Budget a temporary
+third copy, retain both predecessors on capture/verification failure, and rotate
+after the new full application/data recovery and live outcome pass. Verify all
+survivor and retirement trees, including the full Windows installation identity;
+keep compact prior-policy and retired-receipt evidence. A partial retirement is
+an explicit reconciliation task. The signed candidate with earlier ordering was
+cancelled before handoff; source tests and native/live acceptance remain distinct.
+
 ## 2026-10-22 — Windows distribution and recovery use the existing owner protocol
 
 The operator selected a conventional per-user installer and an initially unsigned Windows

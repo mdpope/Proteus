@@ -5,6 +5,7 @@
 - Added a reusable native build/acceptance/signing runner and documented older-client bootstrap and installer qualification boundaries.
 - Candidate helpers now verify complete package identity before acknowledging restart readiness and retain integrity evidence outside disposable staging. Native release acceptance also checks that startup leaves the extracted package unchanged.
 - Rollback keeps the original failure and phase in durable receipts, update status and the continuation checkpoint, even after recovery clears the current error.
+- Preserve both existing recoveries until the next complete application/data snapshot and live outcome verify. Then retire only the oldest verified generation, retaining compact retirement evidence and exactly two full recoveries.
 
 ## Unreleased — iOS navigation and swipes
 

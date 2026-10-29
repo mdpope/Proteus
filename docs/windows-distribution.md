@@ -78,6 +78,14 @@ retained; eligible older generations and completed candidate staging may retire.
 Every action reports actual observed free-space change, which can include
 concurrent filesystem activity. Building alone never creates a live-data backup.
 
+The supervisor budgets a temporary third recovery rather than deleting an older
+verified generation before capture. After both the new full recovery and live
+outcome verify, it rechecks all retained app/data trees and retires only eligible
+generations older than the newest two. The original policy, retired receipts,
+survivor hashes and actual space delta stay beside the journal. Capture or new
+recovery verification failure leaves both existing generations intact. An
+interrupted retirement requires reconciliation; it is not replayed blindly.
+
 ## One-time older-client bootstrap
 
 Older 0.2.29 installations cannot create `purpose:update` chats. Do not invent

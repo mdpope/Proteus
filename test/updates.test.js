@@ -11,7 +11,7 @@ import net from 'node:net';
 import {Engine} from '../src/engine.js';
 import {Updates} from '../src/services/updates/updates.js';
 import {TerminalStore} from '../src/services/tools/terminals.js';
-const {tree,atomic,readJob,writeJob,spaceBudget,packagePaths}=createRequire(import.meta.url)('../desktop/updates/update-package.cjs');
+const {tree,atomic,digest,readJob,writeJob,spaceBudget,packagePaths}=createRequire(import.meta.url)('../desktop/updates/update-package.cjs');
 const {supervise}=createRequire(import.meta.url)('../desktop/updates/update-helper.cjs');
 test('helper readiness releases IPC before handoff while the independent helper stays alive',async t=>{
  const root=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-helper-ipc-')),home=path.join(root,'data'),bundle=path.join(root,'candidate'),helper=path.join(bundle,'resources/app/desktop/updates/update-helper.cjs'),job=path.join(root,'job.json');
@@ -37,6 +37,15 @@ function fixture(t){
 }
 async function prepare(f){return (await f.controller.handle({action:'prepare',candidate:f.candidate,sourceFingerprint:'b'.repeat(64)},f.run.id)).job;}
 async function handoff(f,job){return f.controller.handle({action:'handoff',id:job.id,expectedRevision:job.revision,checkpoint:'Completed synthetic checks. Verify the restored app and remaining work.'},f.run.id);}
+function existingRecoveries(f){
+ const policy=JSON.parse(fs.readFileSync(f.controller.policyFile,'utf8'));
+ const rows=[1,2].map(index=>{
+  const id=`00000000-0000-4000-8000-00000000000${index}`,directory=path.join(path.dirname(f.controller.policyFile),'recoveries',id),at=`2026-01-0${index}T00:00:00Z`;
+  fs.mkdirSync(directory,{recursive:true});fs.cpSync(f.installation,path.join(directory,'Proteus.app'),{recursive:true});fs.cpSync(f.home,path.join(directory,'data-0'),{recursive:true});
+  const receiptFile=path.join(directory,'recovery.json');atomic(receiptFile,{schemaVersion:1,verified:true,at,previous:f.inspect(f.installation),app:'Proteus.app',roots:[{root:f.home,...tree(path.join(directory,'data-0'))}]});
+  return {id,directory,at,receiptFile,receiptHash:digest(fs.readFileSync(receiptFile)),verified:true,eligible:true};
+ });atomic(f.controller.policyFile,{...policy,generations:rows});return rows;
+}
 
 test('update handoff waits for terminal startup, then the attached child, before graceful quit',async t=>{
  const f=fixture(t);let supply,exit;
@@ -119,6 +128,28 @@ test('independent supervisor verifies recovery data, rolls back once and resumes
  assert.equal(verifications,2);assert.equal(resumed.outcome,'rollback');assert.equal(fs.readFileSync(path.join(f.installation,'identity'),'utf8'),'old');assert.equal(fs.readFileSync(path.join(f.home,'new-record'),'utf8'),'retained across compatible rollback');
  const generation=path.join(job.recoveryRoot,job.id),receipt=JSON.parse(fs.readFileSync(path.join(generation,'recovery.json'),'utf8'));assert.equal(receipt.verified,true);assert.equal(fs.readdirSync(job.recoveryRoot).length,1);assert.equal(readJob(job.file).phase,'complete');
  const saved=readJob(job.file);assert.equal(saved.error,null);assert.equal(saved.failureHistory.length,1);assert.equal(saved.failureHistory[0].phase,'verifying');assert.equal(JSON.parse(fs.readFileSync(saved.failureHistory[0].receiptFile)).error,'Synthetic failed health');assert.match(saved.checkpoint,/Supervisor failure during verifying: Synthetic failed health/);assert.equal(f.controller.status().job.error,'Synthetic failed health');
+});
+
+test('both existing recoveries survive a new pre-replacement capture failure',async t=>{
+ const f=fixture(t),old=existingRecoveries(f),policy=fs.readFileSync(f.controller.policyFile);await handoff(f,await prepare(f));await f.controller.advance();const job=writeJob(f.controller.file,{ownerPid:99999999});
+ await supervise(job.file,{inspect:bundle=>{if(bundle===f.installation+'.next-'+job.id)throw Error('Synthetic replacement-stage failure');return f.inspect(bundle);},launchApp:()=>({}),verify:async()=>({at:new Date().toISOString()}),resumeChat:async job=>writeJob(job.file,{phase:'complete',outcome:'rollback'})});
+ assert.equal(readJob(job.file).failedBeforeReplacement,true);assert.deepEqual(fs.readFileSync(f.controller.policyFile),policy);
+ for(const row of old)assert.equal(digest(fs.readFileSync(row.receiptFile)),row.receiptHash);
+});
+
+test('new recovery verification failure preserves both existing recovery generations',async t=>{
+ const f=fixture(t),old=existingRecoveries(f),policy=fs.readFileSync(f.controller.policyFile);await handoff(f,await prepare(f));await f.controller.advance();const job=writeJob(f.controller.file,{ownerPid:99999999});
+ await assert.rejects(supervise(job.file,{inspect:f.inspect,launchApp:()=>({}),verify:async job=>{fs.writeFileSync(path.join(job.recovery,'data-0','unexpected'),'Synthetic snapshot corruption');return {at:new Date().toISOString()};},resumeChat:async()=>{throw Error('Unverified recovery must not complete');}}),/Recovery data differs/);
+ assert.deepEqual(fs.readFileSync(f.controller.policyFile),policy);for(const row of old)assert.equal(digest(fs.readFileSync(row.receiptFile)),row.receiptHash);
+ assert.equal(readJob(job.file).phase,'attention');
+});
+
+test('retirement follows verified new recovery and live health, retaining exactly the newest two',async t=>{
+ const f=fixture(t),old=existingRecoveries(f);await handoff(f,await prepare(f));await f.controller.advance();const job=writeJob(f.controller.file,{ownerPid:99999999});
+ await supervise(job.file,{inspect:f.inspect,launchApp:()=>({}),verify:async job=>{for(const row of old)assert.equal(digest(fs.readFileSync(row.receiptFile)),row.receiptHash);assert.equal(fs.readdirSync(job.recoveryRoot).length,3);return {at:new Date().toISOString()};},resumeChat:async job=>writeJob(job.file,{phase:'complete',outcome:'updated'})});
+ const policy=JSON.parse(fs.readFileSync(f.controller.policyFile,'utf8'));assert.deepEqual(policy.generations.map(row=>row.id).sort(),[old[1].id,job.id].sort());assert.equal(fs.existsSync(old[0].directory),false);assert.equal(fs.readdirSync(job.recoveryRoot).length,2);
+ const receipt=JSON.parse(fs.readFileSync(path.join(path.dirname(job.file),'recovery-retirement.json'),'utf8'));assert.deepEqual(receipt.retired,[old[0].id]);assert.equal(receipt.retained.length,2);assert.equal(typeof receipt.freeSpaceChange,'number');
+ const intent=JSON.parse(fs.readFileSync(path.join(path.dirname(job.file),'recovery-retirement-intent.json'),'utf8'));assert.equal(intent.retiredReceipts[0].receipt.previous.hash,job.previous.hash);
 });
 
 test('a restarted supervisor reconciles an interrupted atomic app replacement without another data snapshot',async t=>{

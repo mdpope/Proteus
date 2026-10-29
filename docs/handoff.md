@@ -19,6 +19,15 @@ establish a successful Windows installation or publication. Full local validatio
 now passes 1,250 tests with three skips, plus static checks. Native package
 acceptance remains required for the exact corrected source.
 
+The signed follow-up passed native acceptance and 3.82-second legacy readiness,
+but preflight found inherited retire-before-capture ordering and cancelled its
+prepared job. No installation or public activation occurred. The next source
+preserves both existing generations until the new full recovery and live health
+verify, then rotates with compact receipts. Focused capture-failure, corrupted-new-
+recovery and successful rotation regressions pass. Full local validation passes
+1,253 tests with three skips, plus static checks. Native acceptance is required
+for this final retention correction.
+
 ## October 28 — 0.2.33 follow-up preparing for Build Mac
 
 The operator authorizes building pending changes and installing on this Mac, while reporting
