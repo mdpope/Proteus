@@ -89,7 +89,9 @@ struct NativePageSwipe: ViewModifier {
                 }
                 content.offset(x: offset).shadow(color: .black.opacity(offset == 0 ? 0 : 0.25), radius: 10)
             }
-            .clipped()
+            // Clip only while sliding: at rest, content such as the iPhone browser bar extends
+            // into the home-indicator area and must not be cut off.
+            .clipShape(Rectangle().inset(by: offset == 0 ? -400 : 0))
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
             .background(NativeEdgePan(
                 canBegin: { isBack, _ in enabled && (isBack ? (!blockBack && back != nil) : (!blockForward && forward != nil)) },

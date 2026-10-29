@@ -399,6 +399,7 @@ struct NativePhoneOverview: View {
                         Text(title).font(.title2.bold()); Spacer()
                         Button("Done") { chrome.closeOverview() }.frame(minWidth: 44, minHeight: 44)
                     }.padding(.horizontal, 20)
+                    ScrollViewReader { proxy in
                     ScrollView {
                         VStack(alignment: .leading, spacing: 16) {
                         ForEach(Array(sections.enumerated()), id: \.offset) { _, section in
@@ -416,11 +417,14 @@ struct NativePhoneOverview: View {
                                         Label(item.title, systemImage: item.symbol).font(.caption).lineLimit(2)
                                         Text(item.detail).font(.caption2).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                                     }.frame(width: tileWidth, alignment: .leading).contentShape(Rectangle())
-                                }.buttonStyle(.plain).accessibilityIdentifier("phone-tab-" + item.id)
+                                }.buttonStyle(.plain).accessibilityIdentifier("phone-tab-" + item.id).id(item.id)
                             }
                         }.padding(18)
                         }
                         }
+                    }
+                    // Open on the current tab, centred (the last tab naturally rests at the bottom), as on desktop.
+                    .onAppear { guard items.contains(where: { $0.id == activeID }) else { return }; proxy.scrollTo(activeID, anchor: .center); Task { @MainActor in await Task.yield(); proxy.scrollTo(activeID, anchor: .center) } }
                     }
                 }.background(NativeTheme.background).opacity(reduceMotion ? p : max(0, (p - 0.12) / 0.88))
                 if !reduceMotion, p < 0.999, let image = current?.preview {
