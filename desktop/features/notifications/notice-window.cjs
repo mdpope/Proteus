@@ -13,7 +13,12 @@ class NoticeWindow {
   // The native overlay must share the web toast's bottom placement; otherwise
   // browser surfaces would still cover the tab strip despite the CSS change.
   this.move=()=>{if(this.window.isDestroyed())return;const bounds=parent.getContentBounds(),width=Math.min(720,bounds.width-32),inset=typeof offsetY==='function'?offsetY():offsetY;this.window.setBounds({x:Math.round(bounds.x+(bounds.width-width)/2),y:Math.round(Math.max(bounds.y+16,bounds.y+bounds.height-this.height-inset)),width,height:this.height});};
-  parent.on('move',this.move);parent.on('resize',this.move);parent.on('hide',()=>this.window.hide());parent.on('minimize',()=>this.window.hide());parent.on('show',()=>{if(this.current)this.window.showInactive();});
+  // showInactive preserves keyboard focus but can still raise a macOS parent
+  // above another app. Only present the overlay in its already-focused window.
+  // Allow focus inside the overlay so its actions remain keyboard accessible.
+  this.syncVisibility=()=>{if(this.window.isDestroyed())return;const foreground=parent.isVisible()&&!parent.isMinimized()&&(parent.isFocused()||this.window.isFocused());if(this.current&&foreground){if(!this.window.isVisible())this.window.showInactive();}else this.window.hide();};
+  const afterFocusChange=()=>setImmediate(this.syncVisibility);
+  parent.on('move',this.move);parent.on('resize',this.move);parent.on('hide',()=>this.window.hide());parent.on('minimize',()=>this.window.hide());parent.on('show',this.syncVisibility);parent.on('focus',this.syncVisibility);parent.on('blur',afterFocusChange);this.window.on('blur',afterFocusChange);
   this.action=(event,value)=>{if(event.sender!==this.window.webContents||event.senderFrame!==event.sender.mainFrame||value?.id!==this.current?.id)return;if(value.action==='height'){if(Number.isFinite(value.height)){this.height=Math.max(64,Math.min(320,Math.ceil(value.height)));this.move();}return;}if(value.action==='dismiss'||Number.isInteger(value.action)&&value.action>=0&&value.action<this.current.actions.length){if(value.action==='dismiss')this.dismiss(value.id);this.onAction(value);}};
   ipcMain.on('proteus:notice-action',this.action);
   parent.webContents.on('did-start-navigation',details=>{if(details.isMainFrame&&!details.isSameDocument)this.dismiss(this.current?.id);});
@@ -25,7 +30,7 @@ class NoticeWindow {
   if(typeof value?.id!=='string'||value.id.length>64||typeof value.message!=='string'||value.message.length>10000||!Array.isArray(value.actions)||value.actions.length>6||value.actions.some(label=>typeof label!=='string'||label.length>100))throw new Error('Invalid notification.');
   if(this.current?.id===value.id)return;
   clearTimeout(this.timer);this.current={id:value.id,message:value.message,actions:value.actions};await this.ready;if(this.current?.id!==value.id)return;
-  this.move();this.window.webContents.send('proteus:notice',this.current);if(this.parent.isVisible()&&!this.parent.isMinimized())this.window.showInactive();
+  this.move();this.window.webContents.send('proteus:notice',this.current);this.syncVisibility();
   // The renderer may be background-throttled or suspended. Its toast timer is
   // not a reliable lifetime for a native overlay above the user's other apps.
   this.timer=setTimeout(()=>{if(this.current?.id!==value.id)return;this.dismiss(value.id);this.onAction({id:value.id,action:'dismiss'});},5000);

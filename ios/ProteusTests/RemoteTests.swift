@@ -14,7 +14,114 @@ private actor PreviewRequestCounter {
     func record() { count += 1 }
 }
 
+private final class TabCacheWriteGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private let release = DispatchSemaphore(value: 0)
+    private var nextWrite: XCTestExpectation?
+    private var failure = false
+    private var ids = Set<String>()
+    func pause(_ expectation: XCTestExpectation, fail: Bool = false) { lock.lock(); nextWrite = expectation; failure = fail; lock.unlock() }
+    func resume() { release.signal() }
+    func allowWrites() { lock.lock(); failure = false; lock.unlock() }
+    func requestIDs() -> Set<String> { lock.lock(); defer { lock.unlock() }; return ids }
+    func write(_ data: Data, _ url: URL, key: String) throws {
+        XCTAssertFalse(Thread.isMainThread, "Cache serialization and I/O must stay off the main thread")
+        if url.lastPathComponent == "document-tabs.enc" {
+            let payload = try RemoteCrypto.open(String(decoding: data, as: UTF8.self), key: key, aad: "proteus-mobile-document-tabs-v1")
+            let requests = payload["contentRequests"].object.values
+            if !requests.isEmpty {
+                lock.lock(); for request in requests { ids.insert(request["id"].string) }; let expectation = nextWrite; nextWrite = nil; let fail = failure; lock.unlock()
+                if let expectation { expectation.fulfill(); guard release.wait(timeout: .now() + 10) == .success else { throw RemoteError(message: "Synthetic cache gate timed out") } }
+                if fail { throw RemoteError(message: "Synthetic disk write failure") }
+            }
+        }
+        try NativeSharedCacheWriter.writeFile(data, url)
+    }
+}
+
 final class RemoteTests: XCTestCase {
+    @MainActor func testTabMutationWaitsForDurableRetryIdentityAndPreservesItAfterWriteFailure() async throws {
+        let (data, _) = try await URLSession.shared.data(from: URL(string: "\(nativeFixtureHTTPOrigin)/pair")!)
+        let remote = RemoteStore(); remote.forget(); try remote.pair(try JSONDecoder().decode(JSON.self, from: data)["code"].string)
+        defer { remote.forget() }
+        try await wait { remote.connected && remote.state["capabilities"].array.contains(.string("content-tabs.v1")) }
+        let created = try await remote.request("chat.start", ["prompt": .string("Durability rehearsal"), "provider": .string("rehearsal")])
+        let id = created["runId"].string, host = try XCTUnwrap(remote.connection?.hostId), scope = "chat:\(host):\(id)"
+        let tab: JSON = .object(["id": .string("durable-browser"), "type": .string("browser"), "title": .string("Original"), "url": .string("https://example.test/durable")])
+        _ = try await remote.request("tabs.mutate", ["scope": .string("chat"), "id": .string(id), "expectedRevision": .number(0), "operations": .array([.object(["action": .string("open"), "tab": tab])])])
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), key = RemoteCrypto.random(), gate = TabCacheWriteGate()
+        let writer = NativeSharedCacheWriter(writeFile: { try gate.write($0, $1, key: key) })
+        let shared = SharedAppStore(cacheWriter: writer, cacheRoot: root, cacheKey: { key })
+        defer { gate.resume(); shared.flushCachedState(); try? FileManager.default.removeItem(at: root) }
+        await shared.refreshContentTabs(scope: scope, remote: remote, kind: "chat", id: id)
+        let local = try XCTUnwrap(shared.tabs(in: scope).first)
+        let blocked = expectation(description: "Retry snapshot reached the background writer")
+        gate.pause(blocked, fail: true); shared.renameBrowser(local.id, title: "Durable rename")
+        await fulfillment(of: [blocked], timeout: 5)
+        let before = try await remote.request("tabs.get", ["scope": .string("chat"), "id": .string(id)])
+        XCTAssertEqual(before["tabs"].array.first?["title"].string, "Original", "The owner must not receive the mutation before its retry identity is saved")
+        gate.resume()
+        try await wait { shared.error?.contains("Synthetic disk write failure") == true }
+        XCTAssertFalse(shared.contentPending[scope]?.isEmpty ?? true)
+        let failed = try await remote.request("tabs.get", ["scope": .string("chat"), "id": .string(id)])
+        XCTAssertEqual(failed["revision"], before["revision"], "A failed durable write cannot dispatch an owner effect")
+        let originalIDs = gate.requestIDs(); XCTAssertEqual(originalIDs.count, 1)
+        gate.allowWrites()
+        for _ in 0..<30 {
+            await shared.refreshContentTabs(scope: scope, remote: remote, kind: "chat", id: id)
+            if shared.contentPending[scope] == nil { break }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        let after = try await remote.request("tabs.get", ["scope": .string("chat"), "id": .string(id)])
+        XCTAssertEqual(after["tabs"].array.first?["title"].string, "Durable rename")
+        XCTAssertEqual(gate.requestIDs(), originalIDs, "Retry after a local write failure keeps the original request ID")
+        XCTAssertNil(shared.contentPending[scope])
+        let revoked = expectation(description: "Second mutation waiting for durable storage")
+        gate.pause(revoked); shared.renameBrowser(local.id, title: "Must not dispatch after revoke")
+        await fulfillment(of: [revoked], timeout: 5)
+        shared.revokeContentHost(host); gate.resume()
+        try await Task.sleep(for: .milliseconds(150))
+        let unchanged = try await remote.request("tabs.get", ["scope": .string("chat"), "id": .string(id)])
+        XCTAssertEqual(unchanged["revision"], after["revision"])
+        XCTAssertNil(shared.contentPending[scope], "An awaited write cannot resurrect a revoked host's operations")
+    }
+    @MainActor func testSharedCacheLifetimeFlushDrainsDocumentAndHistoryWrites() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), key = RemoteCrypto.random()
+        let retry: JSON = .object(["id": .string("retained-retry"), "issuedAt": .string("2026-10-28T12:00:00.000Z"), "args": .object([:])])
+        let retained: JSON = .object(["contentRequests": .object(["synthetic-chat": retry]), "contentPending": .object(["synthetic-chat": .array([.object(["action": .string("rename"), "id": .string("retained-tab"), "title": .string("Retained title")])])])])
+        try NativeSharedCacheWriter.writeFile(Data(try RemoteCrypto.seal(retained, key: key, aad: "proteus-mobile-document-tabs-v1").utf8), root.appendingPathComponent("document-tabs.enc"))
+        let writer = NativeSharedCacheWriter(writeFile: { data, url in
+            XCTAssertFalse(Thread.isMainThread); Thread.sleep(forTimeInterval: 0.03)
+            try NativeSharedCacheWriter.writeFile(data, url)
+        })
+        let shared = SharedAppStore(cacheWriter: writer, cacheRoot: root, cacheKey: { key })
+        defer { shared.flushCachedState(); try? FileManager.default.removeItem(at: root) }
+        shared.selectChatChild("retained-child", for: "synthetic-chat")
+        shared.revokeContentHost("synthetic-absent-host") // Enqueues both document and history snapshots.
+        shared.flushCachedState()
+        let documents = try RemoteCrypto.open(String(contentsOf: root.appendingPathComponent("document-tabs.enc"), encoding: .utf8), key: key, aad: "proteus-mobile-document-tabs-v1")
+        XCTAssertEqual(documents["selected"]["synthetic-chat"].string, "retained-child")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: root.appendingPathComponent("browser-history.enc").path))
+        shared.selectChatChild("account-boundary-child", for: "synthetic-chat")
+        shared.reset(for: "synthetic-next-account")
+        let reset = try RemoteCrypto.open(String(contentsOf: root.appendingPathComponent("document-tabs.enc"), encoding: .utf8), key: key, aad: "proteus-mobile-document-tabs-v1")
+        XCTAssertEqual(reset["selected"]["synthetic-chat"].string, "account-boundary-child")
+        shared.selectChatChild("after-account-change", for: "synthetic-chat")
+        shared.flushCachedState()
+        let next = try RemoteCrypto.open(String(contentsOf: root.appendingPathComponent("document-tabs.enc"), encoding: .utf8), key: key, aad: "proteus-mobile-document-tabs-v1")
+        XCTAssertEqual(next["contentRequests"]["synthetic-chat"], retry, "Account changes cannot discard retry identities while retaining their pending operations")
+        XCTAssertEqual(next["contentPending"]["synthetic-chat"], retained["contentPending"]["synthetic-chat"])
+    }
+    @MainActor func testSharedCacheUnavailableKeySurvivesLifetimeFlushAsVisibleFailure() {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let shared = SharedAppStore(cacheWriter: NativeSharedCacheWriter(), cacheRoot: root, cacheKey: { nil })
+        shared.selectChatChild("retained-child", for: "synthetic-chat")
+        XCTAssertNotNil(shared.flushCachedState())
+        shared.reset(for: "synthetic-next-account")
+        XCTAssertTrue(shared.error?.contains("Unlock this device") == true)
+        XCTAssertEqual(shared.chatSelectedChildren["synthetic-chat"], "retained-child")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: root.path), "An unavailable encryption key must never produce a plaintext cache")
+    }
     @MainActor func testNativeNoticeExpiresAfterFiveSecondsAndPreservesNext() async throws {
         let center = UNUserNotificationCenter.current(), previousDelegate = center.delegate
         let notices = NativeNotifications()

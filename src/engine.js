@@ -1,3 +1,4 @@
+import { isActiveExecutionLimit } from './providers/execution-policy.js';
 import {providerAttachmentInputs} from './services/chats/attachment-input.js';
 import {DelegationService} from './services/chats/delegation.js';
 import {captureUserQuestions,answerUserQuestion,recoverUserQuestions,askBackgroundQuestion} from './services/chats/user-questions.js';
@@ -10,6 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
+import { automaticProviderFolders } from './services/settings/provider-folders.js';
 import { atomicJSON, jsonFiles, readJSON } from './shared/files.js';
 import { ScheduleStore, revision, validateSchedule } from './services/scheduling/schedules.js';
 import { SchedulerWorker } from './services/scheduling/scheduler-client.js';
@@ -47,12 +49,8 @@ export class Engine extends EventEmitter {
     this.tombstones = readJSON(this.tombstoneFile, {});
     this.providers = { rehearsal: new RehearsalProvider(), ...providers };
     // Provider-owned state is an automatic owner-local grant, not a saved workspace exception.
-    this.permissions.automaticProviderFolders=(run,resolvePath=canonicalPath)=>{
-      const provider=run.schedule.provider;if(!['copilot','claude'].includes(provider))return [];
-      const home=run.providerHome||this.providers[provider]?.dataDirectory?.();
-      const root=home&&path.isAbsolute(home)&&resolvePath(home,run.schedule.workspace.cwd);
-      return root?[{path:root,access:'read-write',source:'provider',label:(provider==='claude'?'Claude':'Copilot')+' working folder (automatic)'}]:[];
-    };
+    this.permissions.automaticProviderFolders=(run,resolvePath=canonicalPath)=>automaticProviderFolders(
+      run,run.providerHome||(['copilot','claude'].includes(run.schedule.provider)?this.providers[run.schedule.provider]?.dataDirectory?.():undefined),resolvePath);
     this.queuedSteers = new Map(); this.pending = new Map(); this.questionQueues = new Map(); this.backgroundQuestions=new Map(); this.running = new Map(); this.backgroundRuns = new Map(); this.executions = new Set(); this.stopping = false;
     fs.mkdirSync(this.runsDir, { recursive: true, mode: 0o700 });
     this.journal = readJSON(path.join(home, 'scheduler.json'), { lastPoll: clock().toISOString(), slots: {} });
@@ -454,7 +452,7 @@ export class Engine extends EventEmitter {
     }
     const requestId=randomUUID();
     return new Promise((resolve, reject) => {
-      const onAbort = () => {if(run.pending?.id===requestId){const event=run.events.find(event=>event.data?.question?.id===requestId);if(event)event.data.question.status=signal.reason?.code==='provider-resolved'?'resolved':'cancelled';this.pending.delete(run.id);run.pending=null;if(run.status==='awaiting_input'){run.status='running';resumeTurn(run,this.now());}this.persist(run);}reject(new Error('Question request ended'));};
+      const onAbort = () => {if(run.pending?.id===requestId){const event=run.events.find(event=>event.data?.question?.id===requestId);if(event)event.data.question.status=signal.reason?.code==='provider-resolved'?'resolved':'cancelled';this.pending.delete(run.id);run.pending=null;if(run.status==='awaiting_input'){run.status='running';resumeTurn(run,this.now());providerProgress(run,this.now(),{observable:true});}this.persist(run);}reject(new Error('Question request ended'));};
       signal.addEventListener('abort', onAbort, { once: true });
       this.pending.set(run.id, {
         resolve: value => { signal.removeEventListener('abort', onAbort); resolve(value); },
@@ -481,7 +479,7 @@ export class Engine extends EventEmitter {
       const decision = this.decidePermission(run, run.pending.details || {});
       if (!decision.allowed) continue;
       this.recordAutomaticPermission(run, run.pending.details, decision);
-      this.pending.delete(id); run.pending = null; run.status = 'running';resumeTurn(run,this.now()); this.persist(run); waiting.resolve('approve-auto');
+      this.pending.delete(id); run.pending = null; run.status = 'running';resumeTurn(run,this.now());providerProgress(run,this.now(),{observable:true}); this.persist(run); waiting.resolve('approve-auto');
     }
   }
   async drain() {
@@ -534,7 +532,7 @@ export class Engine extends EventEmitter {
       const incompatible=error.code==='PROVIDER_AGENT_TOOL_FILTERS'&&Array.isArray(error.agents)&&error.agents.every(agent=>typeof agent?.id==='string');
       const answered=run.events.some(event=>event.role==='assistant');
       const retryPrompt=incompatible?(answered?prompt:run.events.find(event=>event.role==='user'&&typeof event.text==='string'&&event.text.trim())?.text||prompt):undefined;
-      this.event(run, 'system', controller.progressTimeout||error.message,{failure:{kind:controller.progressTimeout?'stalled':incompatible?'incompatible-agents':error.code==='COPILOT_ACTIVE_TIME_LIMIT'?'active-time-limit':capacityFailure(error.message)?'capacity':allowanceFailure(error)?'allowance':'error',...(incompatible?{agents:error.agents.slice(0,20),retryPrompt,attachmentsOmitted:!!dispatch}:{})}});
+      this.event(run, 'system', controller.progressTimeout||error.message,{failure:{kind:controller.progressTimeout?'stalled':incompatible?'incompatible-agents':isActiveExecutionLimit(error)?'active-time-limit':capacityFailure(error.message)?'capacity':allowanceFailure(error)?'allowance':'error',...(incompatible?{agents:error.agents.slice(0,20),retryPrompt,attachmentsOmitted:!!dispatch}:{})}});
     } finally {
       // Provider errors/timeouts can leave permission promises pending. Settle them
       // before another turn reuses this run's serialized question queue.
@@ -572,7 +570,7 @@ export class Engine extends EventEmitter {
       const state=checkProgress(run,this.now());
       if(state?.changed)this.persist(run);
       if(state?.timedOut&&!slot.controller.signal.aborted){
-        slot.controller.progressTimeout='No observable provider/tool progress for 30 minutes. The turn was interrupted; inspect unfinished operations before continuing. Queued messages were preserved.';
+        slot.controller.progressTimeout='No observable provider/tool progress for two hours. The turn was interrupted; inspect unfinished operations before continuing. Queued messages were preserved.';
         slot.controller.abort();
       }
     }

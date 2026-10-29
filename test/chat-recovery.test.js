@@ -3,19 +3,39 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
 import {Engine} from '../src/engine.js';
 import {ChatRecovery} from '../src/services/chats/chat-recovery.js';
-import {chatRecoveryState,capacityFailure} from '../public/features/chats/chat-recovery-state.js';
+import {chatRecoveryState,capacityFailure,activeTimeContinuationAvailable} from '../public/features/chats/chat-recovery-state.js';
 import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
-test('Copilot active-time continuation is opt-in, bounded, claimed once and keeps the same session and queue',async t=>{
- const f=fixture(t);f.run.schedule.provider='copilot';f.run.events.at(-1).data.failure.kind='active-time-limit';f.run.activeTimeContinuation={enabled:true,attempts:0};
+for(const provider of ['copilot','claude'])test(provider+' active-time continuation is opt-in, bounded, claimed once and keeps the same session and queue',async t=>{
+ const f=fixture(t);f.run.schedule.provider=provider;f.run.events.at(-1).data.failure.kind='active-time-limit';f.run.activeTimeContinuation={enabled:true,attempts:0};
  f.engine.recovery.settled(f.run);f.engine.recovery.settled(f.run);await Promise.resolve();assert.equal(f.calls.length,1);assert.equal(f.run.providerSessionId,'same-session');assert.equal(f.run.queuedMessages[0].id,'retained-message');assert.equal(f.run.activeTimeContinuation.attempts,1);
- const g=fixture(t);g.run.schedule.provider='copilot';g.run.events.at(-1).data.failure.kind='active-time-limit';g.run.activeTimeContinuation={enabled:true,attempts:3};g.engine.recovery.settled(g.run);await Promise.resolve();assert.equal(g.calls.length,0);assert.match(g.run.activeTimeContinuation.attention,/three/);
+ const g=fixture(t);g.run.schedule.provider=provider;g.run.events.at(-1).data.failure.kind='active-time-limit';g.run.activeTimeContinuation={enabled:true,attempts:3};g.engine.recovery.settled(g.run);await Promise.resolve();assert.equal(g.calls.length,0);assert.match(g.run.activeTimeContinuation.attention,/three/);
 });
-test('active-time preference revisions and disabling before the queued continuation take precedence',async t=>{
- const f=fixture(t);f.run.schedule.provider='copilot';f.run.events.at(-1).data.failure.kind='active-time-limit';
+for(const provider of ['copilot','claude'])test(provider+' active-time preference revisions and disabling before the queued continuation take precedence',async t=>{
+ const f=fixture(t);f.run.schedule.provider=provider;f.run.events.at(-1).data.failure.kind='active-time-limit';
  assert.throws(()=>f.engine.recovery.command(f.run.id,{action:'active-time-auto',enabled:true,expectedPreferenceVersion:1}),/changed/);
  f.engine.recovery.command(f.run.id,{action:'active-time-auto',enabled:true,expectedPreferenceVersion:0});f.engine.recovery.settled(f.run);
  f.engine.recovery.command(f.run.id,{action:'active-time-auto',enabled:false,expectedPreferenceVersion:1});await Promise.resolve();assert.equal(f.calls.length,0);
  f.engine.recovery.command(f.run.id,{action:'active-time-continue-enable',expectedFailureEventAt:f.run.failureEventAt});assert.equal(f.calls.length,1);assert.equal(f.run.activeTimeContinuation.enabled,true);
+});
+test('legacy Claude host timeout is recoverable but ordinary tool/transport errors and old remote owners are not auto-capable',t=>{
+ const f=fixture(t);f.run.schedule.provider='claude';const event=f.run.events.at(-1);event.data.failure.kind='error';
+ event.text='Claude exceeded the active execution time limit. Waiting for input was excluded.';
+ assert.equal(chatRecoveryState(f.run).activeTimeLimit,true);assert.equal(chatRecoveryState(f.run).allowance,false);
+ assert.equal(activeTimeContinuationAvailable(f.run),true);
+ f.run.chatControls={recovery:true};assert.equal(activeTimeContinuationAvailable(f.run),false);
+ f.run.chatControls.activeTimeContinuationProviders=['copilot','claude'];assert.equal(activeTimeContinuationAvailable(f.run),true);
+ event.text='Claude connection timed out';assert.equal(chatRecoveryState(f.run).activeTimeLimit,false);
+});
+test('active-time continuation yields to stop, questions, permission changes, archive and occupied execution slots',async t=>{
+ for(const change of [f=>{f.run.status='cancelled';},f=>{f.run.pending={type:'question'};},f=>{f.run.chatPermissionRevision='new-revision';},f=>{f.run.archivedAt=f.engine.now();},f=>{f.engine.running.set(f.run.id,{id:f.run.id});},f=>{f.engine.backgroundRuns.set('synthetic',{id:f.run.id});},f=>{f.engine.updateBarrier=true;},f=>{f.run.providerSessionId=null;}]){
+  const f=fixture(t);f.run.schedule.provider='claude';f.run.events.at(-1).data.failure.kind='active-time-limit';f.run.activeTimeContinuation={enabled:true,attempts:0};
+  f.engine.recovery.settled(f.run);change(f);await Promise.resolve();assert.equal(f.calls.length,0);
+  f.engine.running.clear();f.engine.backgroundRuns.clear();
+ }
+});
+test('a completed turn resets the consecutive-timeout count even when a follow-up is already queued',t=>{
+ const f=fixture(t);f.run.status='queued';f.run.turns=[{status:'completed'}];f.run.activeTimeContinuation={enabled:true,attempts:2,attention:'old warning'};
+ f.engine.recovery.settled(f.run);assert.equal(f.run.activeTimeContinuation.attempts,0);assert.equal(f.run.activeTimeContinuation.attention,undefined);
 });
 function fixture(t){
  const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-recovery-test-'));let now=Date.parse('2026-10-22T12:00:00Z');const timers=new Map(),calls=[];

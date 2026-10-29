@@ -16,7 +16,7 @@ export function mountQuestionCard(host,question,{key,answer,attachments,notify=(
   }
   const form=document.createElement('form'),label=document.createElement('label'),input=document.createElement('textarea'),choices=document.createElement('div'),submit=document.createElement('button');
   label.textContent='Your answer';input.rows=2;input.value=drafts.get(key)||'';input.setAttribute('aria-label','Your answer');label.append(input);choices.className='user-question-choices';
-  const attachmentHost=document.createElement('div');
+  const attachmentHost=document.createElement('div'),footer=document.createElement('div');footer.className='user-question-footer';
   const picker=attachments?mountQuestionAttachments({...attachments,key:'question:'+key,requestId:question.id,host:attachmentHost,textarea:input,notify}):{files:()=>[],payload:async()=>({}),clear:()=>{}};
   let messageId,submittedAnswer,busy=false;
   const send=async value=>{
@@ -30,7 +30,7 @@ export function mountQuestionCard(host,question,{key,answer,attachments,notify=(
     try{const delivery=attempt?.delivery||await picker.payload(value,messageId);attempts.set(key,{messageId,answer:submittedAnswer,files,delivery});await host.questionActions.answer(question,value,messageId,delivery);drafts.delete(key);attempts.delete(key);picker.clear();}catch(error){host.questionActions.notify(error.message);}finally{busy=false;submit.disabled=false;}
   };
   for(const choice of question.choices||[])choices.append(button(choice,()=>{input.value=choice;drafts.set(key,choice);void send(choice);}));
-  input.oninput=()=>drafts.set(key,input.value);submit.type='submit';submit.textContent='Send answer';form.onsubmit=event=>{event.preventDefault();void send(input.value);};form.append(choices,label,attachmentHost,submit);host.append(form);
+  input.oninput=()=>drafts.set(key,input.value);submit.type='submit';submit.textContent='Send answer';form.onsubmit=event=>{event.preventDefault();void send(input.value);};footer.append(attachmentHost,submit);form.append(choices,label,footer);host.append(form);
 }
 export function mountQuestionQueue(host,run,{jump,answer,notify}){
   const questions=chatQuestions(run).filter(question=>['pending','sending','uncertain'].includes(question.status));

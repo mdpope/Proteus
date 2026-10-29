@@ -48,7 +48,7 @@ three; live model/image interpretation remains release acceptance.
 
 Run liveness tracks provider output and tool transitions independently of user edits/queued input.
 After five minutes without observable progress the UI shows the stage and elapsed warning;
-after thirty minutes the engine interrupts once. The execution slot stays occupied until the
+after two hours the engine interrupts once (raised from thirty minutes on October 29). The execution slot stays occupied until the
 provider actually settles; no automatic replay or replacement session is created. Queued messages
 remain intact for explicit recovery. The reported old stuck chat's precise hung call is unproven.
 
@@ -338,11 +338,26 @@ These limits do not change Copilot or Codex support.
 A native PreToolUse hook routes every tool operation through Proteus permission/input handling,
 including reads that the native CLI would otherwise allow. Native fallback permission requests
 reuse a decision only for the same nonempty tool-call ID, name and arguments. User questions retain
-their answers. No bypass permission mode is used. The active execution timeout excludes time spent
-waiting for the operator. Cancellation and timeout terminate only the Proteus-owned process group,
+their answers. No bypass permission mode is used. Claude and Copilot share a two-hour active
+execution safeguard, excluding time spent waiting for the operator. Claude timeout failures have
+an explicit classification, same-session Continue and a separate per-chat automatic-continuation
+preference. Automatic continuation is opt-in, runs at most three consecutive times, preserves
+queued input and waits for process cleanup; it never treats transport/cleanup errors as resumable
+timeouts. A successful intervening turn resets the count even when another follow-up is queued.
+Cancellation and timeout terminate only the Proteus-owned process group,
 escalating if necessary so tool subprocesses do not survive a cancelled turn. Thinking blocks are
 not recorded or displayed. Native result errors fail the turn; token totals accumulate across
 continuations and do not represent subscription allowance.
+
+Every initial Claude input has a UUID and must be echoed by `--replay-user-messages` before a
+successful result can finish it. Startup/orphan notifications may themselves yield zero-token
+success results; these are ignored for the current input, without resending it. Native background
+task lifecycle messages keep the owned process active across intermediate successful responses.
+For runtimes that expose handles in tool results, only exact Bash/Monitor handle envelopes and
+known generated completion notices are recognized. Explicit user inputs and unrelated tool text
+cannot finish those tasks. Task completion still awaits the provider's subsequent result; Stop,
+actual errors, cleanup failure and the two-hour safeguard retain their usual control. See
+[continuation analysis and validation](2026-10-29-claude-continuation.md).
 
 Validation: native CLI initialization and live model-capability discovery succeeded. After the
 operator completed Claude subscription sign-in, the source provider completed an authenticated,

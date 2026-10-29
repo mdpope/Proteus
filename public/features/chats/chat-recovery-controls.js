@@ -1,4 +1,4 @@
-import {chatRecoveryState} from './chat-recovery-state.js';
+import {chatRecoveryState,activeTimeContinuationAvailable} from './chat-recovery-state.js';
 import {bindRuntimeTimer,disposeRuntimeTimers} from './runtime.js';
 import {allowanceResetLabel} from './allowance-controls.js';
 export function mountChatRecovery(node,entry,run,options){
@@ -16,7 +16,7 @@ export function mountChatRecovery(node,entry,run,options){
  // turn. Offer the one-step repair rather than a Continue that has nothing to resume.
  if(state.incompatibleAgents?.length){const names=state.incompatibleAgents.map(agent=>agent.name).join(', ');note.textContent=names+(state.incompatibleAgents.length===1?' is':' are')+' not compatible with this provider. Turn '+(state.incompatibleAgents.length===1?'it':'them')+' off for this chat and send your original request again.';button('Turn off '+names+' and retry request','retry-without-agents').className='primary';}
  if(state.recoverable)button('Continue chat','continue').className=state.incompatibleAgents?.length?'':'primary';
- if(state.activeTimeLimit)button('Continue and enable automatic continuation','active-time-continue-enable');
+ if(state.activeTimeLimit&&activeTimeContinuationAvailable(run))button('Continue and enable automatic continuation','active-time-continue-enable');
  if(state.recoverable&&state.allowance&&run.chatControls?.allowanceContinuation!==false){
   const pending=run.allowanceContinuation?.pending,status=run.allowanceStatus,waiting=pending?.state==='waiting'&&pending.failureEventAt===state.failureEventAt;
   if(waiting){button('Cancel allowance continuation','allowance-cancel');const waitingNote=document.createElement('p');waitingNote.className='note';waitingNote.textContent='Waiting until '+allowanceResetLabel(pending.nextAttemptAt)+'. '+(pending.reason||'Allowance will be checked again before continuing.');controls.append(waitingNote);}

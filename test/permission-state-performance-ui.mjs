@@ -37,7 +37,8 @@ try{
     const phase=service.performanceDiagnostics.snapshot().phases.find(phase=>phase.name==='http.state.assemble'&&phase.kind==='sync');assemblies.push(phase?.maxMs);
     await new Promise(resolve=>setTimeout(resolve,30));
    }
-   return {synthetic:true,chats:ids.length,roots:roots.length,durationsMs:durations,assemblyMaxMs:assemblies.at(-1),pulses,maxGapMs,chatRecordsUnchanged:original===JSON.stringify(ids.map(id=>service.engine.runs.get(id))),version:require(app.getAppPath()+'/package.json').version};
+   const diagnostics=await(await fetch(service.origin+'/api/performance/diagnostics',{headers:{authorization:'Bearer '+service.token}})).json();
+   return {synthetic:true,chats:ids.length,roots:roots.length,durationsMs:durations,assemblyMaxMs:assemblies.at(-1),transferMaxMs:diagnostics.phases.find(phase=>phase.name==='http.state.transfer')?.maxMs,stateProjection:diagnostics.stateProjection,pulses,maxGapMs,chatRecordsUnchanged:original===JSON.stringify(ids.map(id=>service.engine.runs.get(id))),version:require(app.getAppPath()+'/package.json').version};
   }finally{clearInterval(timer);ids.forEach(id=>service.engine.runs.delete(id));}
  });
  assert.ok(result.pulses>0);assert.ok(result.chatRecordsUnchanged);assert.ok(result.assemblyMaxMs<2500,JSON.stringify(result));

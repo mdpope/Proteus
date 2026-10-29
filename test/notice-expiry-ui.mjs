@@ -16,6 +16,8 @@ try{
  await app.evaluate(({BrowserWindow})=>{const overlay=BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().endsWith('/notice.html')),parent=overlay.getParentWindow();parent.hide();parent.showInactive();});
  assert.equal(await visible(),false,'Showing the parent cannot resurrect an expired notification');
  const expiryObservedMs=Date.now()-started;
+ // Subsequent visible-notice checks model an explicit return to this app.
+ await app.evaluate(({BrowserWindow})=>{const overlay=BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().endsWith('/notice.html'));overlay.getParentWindow().focus();});
  await page.evaluate(()=>{document.dispatchEvent(new CustomEvent('proteus-notice',{detail:{message:'Synthetic slow action',actions:[{label:'Open synthetic chat',run:()=>new Promise(resolve=>window.resolveNoticeAction=resolve)}]}}));document.dispatchEvent(new CustomEvent('proteus-notice',{detail:{message:'Synthetic next notification'}}));});
  await until(visible);const popup=app.windows().find(p=>p.url().endsWith('/notice.html'));
  await popup.getByRole('button',{name:'Open synthetic chat',exact:true}).click();

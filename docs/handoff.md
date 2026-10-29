@@ -1,3 +1,15 @@
+## October 29 — combined deployment in preparation, HC held
+
+The operator requests the combined iOS/desktop/web changes and full physical iPhone/iPad,
+Build Mac, Windows and website deployment after the Windows distribution chat finishes.
+That chat is still preparing its 0.2.35 correction; do not deploy or select the final combined
+version before reconciling its final source. Work Mac remains held. Web attachment parity,
+iOS cache durability, chat-access Auto-approve and passive native notifications are implemented.
+The pre-merge suite passes 1,269 Node cases / three skips, static checks, 103 PHP cases and the
+full encrypted web workflow. iPhone passes 156 units; iPad passes its 155-case full suite and
+three final durability regressions. Native notice/question/attachment checks pass. No new
+combined install has occurred. See the [release ledger](2026-10-29-combined-release.md).
+
 ## October 29 — iOS main-thread profiling and smoothness fixes
 
 Simulator preview apps were paired with the real Build Mac and profiled with Time Profiler
@@ -8,6 +20,64 @@ caveats and a prioritized list of what to check next if freezes remain are in th
 [iOS profiling notes](2026-10-29-ios-main-thread-profiling.md). Simulator Debug builds only;
 no physical device was updated or profiled.
 
+## October 29 — source-only execution and Claude continuation corrections
+
+The operator approved replacing the 30-minute host execution limits with a two-hour safeguard
+and preserving Claude continuation in the same session. Claude/Copilot active execution and the
+no-progress watchdog now use that threshold, excluding human waits. Claude gains typed timeout
+recovery and the existing explicit, bounded automatic continuation control. Separate evidence
+identified premature native background-task teardown and an orphan notification result that
+completed a follow-up before its input was accepted. Input UUID acknowledgment and provider-local
+task lifetime tracking now prevent those failures without resending uncertain input.
+
+The final combined Node suite passes 1,260 tests / three skips, static checks pass, and isolated
+Electron recovery acceptance passes preference enable/revoke, Continue and enable, session/queue
+retention and draft preservation. Regression fixtures cover both native lifecycle failures and
+cleanup-before-resume. No new package/install or live paid Claude turn was performed. Concurrent
+iOS work and current sessions are preserved. See the [analysis](2026-10-29-claude-continuation.md).
+
+## October 29 — source-only owner-thread correction
+
+The operator requested analysis and a conventional fix for continued HC hangs. A new bounded
+state worker performs display filesystem resolution, permission hashing and HTTP serialization;
+the owner retains fresh authorization and mutations. Cache revisions reject obsolete worker
+results. Worker failure/timeout/shutdown and transfer timing are explicit. Full Node suite:
+1,244 pass / three skips; static checks and focused desktop typing/scroll acceptance pass.
+The 500-chat Electron fixture measures synchronous assembly 72.58 → 7.52 ms and maximum
+owner timer gap 84.55 → 13.13 ms against installed 0.2.33. No new package/install occurred.
+Other concurrent iOS edits and prior update receipts are preserved. See the
+[analysis and remaining limitations](2026-10-29-main-thread-responsiveness.md).
+
+## October 28 — Build Mac 0.2.33 installed, qualified acceptance
+
+The local supervisor completed job `cacc7323-2d2b-51ac-9dc2-01aa3cad1e1a` with outcome
+`updated`, verified health and one delivered same-chat continuation. The installed build is
+`262d121f6e51+src.7ef610dae5d5`; its complete bundle hash is
+`5bc494117c11446b418a28ef8b7e846f71e0d19f0fd4ff1b0f6528f3fe0c7a54` and strict Apple
+signature passes for `org.proteusapp.proteus.desktop` / team `TEAMID0000`. One owner and a separate
+document MCP process were observed. The restricted shell initially returned `CSSMERR_TP_NOT_TRUSTED`;
+verification outside that restriction passed and the failed result remains in private evidence.
+
+At the restart barrier the owner verified 55 chat histories, 26,539 event prefixes and effective
+configurations. Both retained recovery receipts, app bundles and complete recorded data trees
+match their hashes, and both app signatures pass. Permissions, browser profiles/access, pairing,
+settings, content tabs, desktop windows, layouts and checked history/command databases match the
+cold snapshot byte for byte. Four window sessions retain their tab counts, mapped active and child
+selections, and drafts; regenerated view IDs reconcile by position. Twelve browser records gained
+content IDs. Project changes are scan completion metadata and one scanned-folder count. A fresh post-continuation audit matches all 55 event prefixes and 54 effective configurations;
+the coordinator's sole context difference is its supplied timestamp after resumption. One of four
+encrypted browser-session files changed, so its logical history is not independently verified.
+Raw differences remain in private evidence. No data was restored over current work.
+
+Cua and Peekaboo are installed; Cua Accessibility and Screen Recording are granted. Three restored
+windows were enumerated and one observed. Codex continuation works; other-provider operation was
+not exercised. A 66-second startup/active diagnostic snapshot showed 32 HTTP state assemblies,
+mean 29.12 ms and maximum 104.31 ms; it is not an HC gesture test and does not explain all freezes.
+The helper recorded +62,324,736 bytes free across its interval and staging retirement separately
+observed +663,334,912 bytes; concurrent activity and APFS sharing limit attribution. The supervisor
+retired its candidate, while the exact tested artifact and source remain. No other rollout or
+publication is authorized by this update.
+
 ## October 28 — 0.2.33 follow-up preparing for Build Mac
 
 The operator authorizes building pending changes and installing on this Mac, while reporting
@@ -16,7 +86,9 @@ inherited-permission display correction: repeated canonical path checks now use 
 request-local memo through the whole projection, with fresh actual authorization. HC diagnostics
 and a failing regression support this bottleneck; longer unattributed stalls remain unresolved.
 Node 1,238 pass / three skips, static and focused permission/tab/focus UI checks pass. Exact
-signed package and local coordinator deployment are pending. HC receives no new update from
+signed `262d121f6e51+src.7ef610dae5d5` package passes signature/source checks, packaged performance
+and native early typing. A fresh unassigned saved-default local coordinator owns prepare/handoff
+and automatic post-restart acceptance; the subsequent installed result is recorded above. HC receives no new update from
 this request. See [follow-up acceptance](2026-10-28-followup-release.md).
 
 ## October 28 — HC 0.2.32 installed and verified

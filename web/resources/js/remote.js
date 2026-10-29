@@ -621,7 +621,9 @@ function renderChats(current) {
     }
     requestAnimationFrame(()=>{const pane=root.querySelector('.remote-messages');if(pane&&run&&current.run?.id===run.id&&!current.earlierError&&pane.scrollHeight<=pane.clientHeight+80)void loadEarlier();});
     if(run&&historyPane){
-        const answerQuestion=async(question,answer,messageId)=>{await command(question.blocking?'chat.reply':'chat.answer-question',{id:run.id,answer,messageId,...(question.blocking?{requestId:question.id}:{questionId:question.id})});await openChat(run.id);};
+        // File consent can remain open while navigation changes. Every stage belongs
+        // to this captured owner/chat, including the final answer and its receipt.
+        const answerQuestion=async(question,answer,messageId,delivery={})=>{await commandForHost(current,question.blocking?'chat.reply':'chat.answer-question',{...delivery,id:run.id,answer,messageId,...(question.blocking?{requestId:question.id}:{questionId:question.id})});if(session()===current&&view==='chats'&&current.selected===run.id)await openChat(run.id,current.host.hostId);};
         // The transcript owns this queue's bounds. Reusing the pending-input grid
         // row would overlap the existing answer/permission form in docked chats.
         let queue=historyPane.querySelector(':scope>.user-question-queue');if(!queue){queue=document.createElement('div');queue.className='user-question-queue';historyPane.prepend(queue);}
@@ -636,11 +638,11 @@ function renderChats(current) {
         for(const card of root.querySelectorAll('.user-question-card'))if(!ids.has(card.dataset.questionId))card.remove();
         for(const question of questions){
             const row=root.querySelector(`[data-event-key="${question.eventIndex}"]`);if(!row)continue;
-            let card=[...row.querySelectorAll(':scope>.user-question-card')].find(node=>node.dataset.questionId===question.id);if(!card){card=document.createElement('div');row.append(card);}mountQuestionCard(card,question,{key:current.host.hostId+':'+run.id+':'+question.id,answer:answerQuestion,notify:notice});
+            let card=[...row.querySelectorAll(':scope>.user-question-card')].find(node=>node.dataset.questionId===question.id);if(!card){card=document.createElement('div');row.append(card);}mountQuestionCard(card,question,{key:current.host.hostId+':'+run.id+':'+question.id,answer:answerQuestion,attachments:current.state.capabilities?.includes('chat.question-attachments.v1')?{providerId:run.schedule?.provider,mediaTypes:current.state.questionAttachmentMediaTypes||{},destination:current.host.label+' · '+run.title,chatId:run.id,send:(action,args)=>commandForHost(current,'chat.attachments.'+action,args)}:undefined,notify:notice});
         }
     }
-    const questionAttachments=mountQuestionAttachments({key:current.host.hostId+':'+answerKey,host:$('remote-question-attachments'),textarea:$('remote-answer')?.querySelector('textarea'),providerId:run?.schedule?.provider,mediaTypes:current.state.questionAttachmentMediaTypes||{},destination:current.host.label+' · '+run?.title,chatId:run?.id,requestId:pending?.id,send:(action,args)=>command('chat.attachments.'+action,args),notify:notice});
-    let answering=false;const answer = async value => { if(answering)return;answering=true;try { const delivery=pending.type==='permission'?{}:await questionAttachments.payload(value);await command('chat.reply', { id: run.id, requestId: pending.id, answer: value,...delivery });questionAttachments.clear();current.drafts.delete(answerKey);if(view==='chats'&&current.selected===run.id)await openChat(run.id);else await refresh(); } catch (error) { notice(error.message); } finally {answering=false;} };
+    const questionAttachments=mountQuestionAttachments({key:current.host.hostId+':'+answerKey,host:$('remote-question-attachments'),textarea:$('remote-answer')?.querySelector('textarea'),providerId:run?.schedule?.provider,mediaTypes:current.state.questionAttachmentMediaTypes||{},destination:current.host.label+' · '+run?.title,chatId:run?.id,requestId:pending?.id,send:(action,args)=>commandForHost(current,'chat.attachments.'+action,args),notify:notice});
+    let answering=false;const answer = async value => { if(answering)return;answering=true;try { const delivery=pending.type==='permission'?{}:await questionAttachments.payload(value);await commandForHost(current,'chat.reply', { ...delivery,id: run.id, requestId: pending.id, answer: value });questionAttachments.clear();current.drafts.delete(answerKey);if(session()===current){if(view==='chats'&&current.selected===run.id)await openChat(run.id,current.host.hostId);else await refresh();} } catch (error) { notice(error.message); } finally {answering=false;} };
     root.querySelectorAll('[data-answer]').forEach(button => button.onclick = () => answer(button.dataset.answer));
     $('remote-answer')?.addEventListener('input',event=>{answerDraft.values.answer=new FormData(event.currentTarget).get('answer');});
     $('remote-answer')?.addEventListener('submit', event => { event.preventDefault(); answer(new FormData(event.target).get('answer')); });

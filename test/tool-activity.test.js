@@ -46,6 +46,14 @@ test('active execution timeout and cancellation release the waiter', async () =>
   const controller = new AbortController(); const turn = new TurnWaiter(session, controller.signal, 1000);
   turn.pause(); const done = turn.run('fixture'); controller.abort(); await assert.rejects(done, /Cancelled/);
 });
+test('Copilot default permits more than thirty minutes and expires at two active hours',async t=>{
+  t.mock.timers.enable({apis:['setTimeout']});
+  const session=fakeSession({send:async()=>{}}),waiter=new TurnWaiter(session,new AbortController().signal);
+  let settled=false;const pending=waiter.run('synthetic');pending.then(()=>settled=true,()=>settled=true);
+  const failure=assert.rejects(pending,error=>error.code==='PROVIDER_ACTIVE_TIME_LIMIT');
+  t.mock.timers.tick(119*60*1000);await Promise.resolve();assert.equal(settled,false);
+  t.mock.timers.tick(60*1000);await failure;assert.equal(waiter.closed,true);
+});
 test('Copilot sends approved synthetic file bytes as native SDK blobs',async()=>{
   let sent;const session=fakeSession({async send(value){sent=value;this.event('session.idle');}});
   const provider=new CopilotProvider();provider.connect=async()=>({listModels:async()=>[{id:'fixture'}],createSession:async()=>session});

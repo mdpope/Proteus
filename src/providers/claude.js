@@ -1,4 +1,6 @@
 import {subagentJournal} from '../services/chats/subagents.js';
+import { executionSafeguardMs, activeExecutionLimit } from './execution-policy.js';
+import { ClaudeTurnLifecycle } from './claude-turn-lifecycle.js';
 import {questionAttachmentTools} from '../services/chats/question-attachments.js';
 import {providerActivity} from '../shared/provider-activity.js';
 import {claudeMessageContent} from './provider-attachment-input.js';
@@ -273,10 +275,10 @@ export class ClaudeProvider {
     let client;try{client=this.client(args,run.schedule.workspace.cwd,mcpConfig?.file||null);}catch(error){mcpConfig?.dispose();await bridge?.close();throw error;}
     this.active=client;this.activeRunId=run.id;
     let resolve,reject;const done=new Promise((a,b)=>{resolve=a;reject=b;});done.catch(()=>{});
-    const calls=new Map();let currentId='claude',resultSeen=false,steering=null,accepting=false,activitySucceeded=false;const approved=new Map();
+    const calls=new Map(),initialInputId=randomUUID(),lifecycle=new ClaudeTurnLifecycle(initialInputId,calls,update);let currentId='claude',resultSeen=false,steering=null,accepting=false,activitySucceeded=false,waitingTasks=0;const approved=new Map();
     const capture=providerActivity({provider:'claude',emit,update});
-    let remaining=this.options.timeoutMs??30*60*1000,started=performance.now(),timer,pauses=0,finished=false;
-    const arm=()=>{if(finished||pauses)return;started=performance.now();timer=setTimeout(()=>reject(new Error('Claude exceeded the active execution time limit. Waiting for input was excluded.')),Math.max(0,remaining));};
+    let remaining=this.options.timeoutMs??executionSafeguardMs,started=performance.now(),timer,pauses=0,finished=false;
+    const arm=()=>{if(finished||pauses)return;started=performance.now();timer=setTimeout(()=>reject(activeExecutionLimit('Claude')),Math.max(0,remaining));};
     const askUser=async request=>{if(pauses++===0){clearTimeout(timer);remaining-=performance.now()-started;}try{return await ask(request);}finally{if(--pauses===0)arm();}};
     const permissionKey=(id,name,input)=>typeof id==='string'&&id.length?JSON.stringify([id,name,input]):null;
     arm();
@@ -305,7 +307,7 @@ export class ClaudeProvider {
       const content=claudeMessageContent(prompt,attachments,this.acceptedMediaTypes);
       if(this.options.steerMode!=='interrupt'){
         if(!accepting||finished||signal.aborted||client.ended)throw Error('Claude cannot accept steering at this moment. Queue this message.');
-        const id=randomUUID();queued.set(id,{acknowledged:false});
+        const id=randomUUID();queued.set(id,{acknowledged:false});lifecycle.sent(id);
         client.write({type:'user',uuid:id,session_id:run.providerSessionId||'',message:{role:'user',content},parent_tool_use_id:null});
         emit('system','Claude received this message and will read it at its next step. Running work was not interrupted.');
         return;
@@ -318,13 +320,16 @@ export class ClaudeProvider {
         await pending.boundary.promise;
         if(signal.aborted||finished||client.ended)throw Error('Claude stopped before accepting steering.');
         // Only after the old result is drained can a second input own the result.
-        resultSeen=false;pending.sent=true;
+        resultSeen=false;pending.sent=true;lifecycle.sent(pending.id);
         client.write({type:'user',uuid:pending.id,session_id:run.providerSessionId||'',message:{role:'user',content},parent_tool_use_id:null});
         await pending.ack.promise;
         emit('system','Claude acknowledged steering after interrupting the previous response.');
       }catch(error){reject(error);throw error;}finally{clearTimeout(timeout);if(steering===pending)steering=null;}
     };
     const message=m=>{
+      // An orphan/background notification result is not this input's receipt.
+      // Keep the process alive; never resend an input with uncertain delivery.
+      if(m.type==='result'&&!m.is_error&&m.subtype==='success'&&(!accepting||!lifecycle.acknowledged))return;
       if(m.type!=='result'||!resultSeen)capture.receive(m);
       if(m.type==='user'&&steering?.sent&&m.uuid===steering.id){steering.acknowledged=true;steering.ack.resolve();}
       if(m.type==='user'&&queued.has(m.uuid))queued.get(m.uuid).acknowledged=true;
@@ -338,14 +343,22 @@ export class ClaudeProvider {
           const tool={callId:block.id,name:block.name,summary:toolSummary(block.name,block.input),arguments:displayText(block.input,6000),status:'running',startedAt:new Date().toISOString()};calls.set(block.id,tool);emit('tool',tool.summary,{tool});}}
       }
       if(m.type==='user')for(const block of m.message?.content||[])if(block.type==='tool_result'){const tool=calls.get(block.tool_use_id);if(tool){tool.status=block.is_error?'failed':'completed';tool.output=displayText(block.content);tool.finishedAt=new Date().toISOString();tool.durationMs=Date.now()-Date.parse(tool.startedAt);update();}}
+      lifecycle.observe(m);
       if(m.type==='system'&&m.subtype==='compact_boundary')emit('system','Claude compacted conversation context.');
       if(m.type==='rate_limit_event'){
         const q=m.rate_limit_info||m.rateLimitInfo||{},id=q.rateLimitType||q.rate_limit_type;
         if(id){this.rateLimits??=new Map();this.rateLimitsObservedAt=new Date().toISOString();const reset=q.resetsAt??q.resets_at;this.rateLimits.set(id,{id,label:id.replaceAll('_',' '),remainingPercent:Number.isFinite(q.utilization)?Math.max(0,Math.min(100,100-q.utilization*100)):null,resetAt:Number.isFinite(reset)?new Date(reset*1000).toISOString():null,status:q.status,unlimited:false});}
       }
-      if(m.type==='result'){if(resultSeen)return;resultSeen=true;if(m.usage)run.usage=accumulateClaudeUsage(run.usage,m.usage);run.contextUsage=m.modelUsage||null;update();
+      if(m.type==='result'){
+        if(resultSeen)return;resultSeen=true;if(m.usage)run.usage=accumulateClaudeUsage(run.usage,m.usage);run.contextUsage=m.modelUsage||null;update();
         // A steered message Claude has not read yet becomes its next turn in this session.
-        if(!m.is_error&&m.subtype==='success'&&[...queued.values()].some(item=>!item.acknowledged)){resultSeen=false;return;}if(steering&&!steering.sent){steering.boundary.resolve();return;}if(steering?.sent&&!steering.acknowledged){const error=new Error('Claude completed without acknowledging steering. Delivery is unconfirmed.');steering.ack.reject(error);reject(error);return;}m.is_error||m.subtype!=='success'?reject(new Error((m.errors||[]).join('\n')||`Claude ${m.subtype}`)):resolve();}
+        if(!m.is_error&&m.subtype==='success'&&[...queued.values()].some(item=>!item.acknowledged)){resultSeen=false;return;}
+        if(steering&&!steering.sent){steering.boundary.resolve();return;}
+        if(steering?.sent&&!steering.acknowledged){const error=new Error('Claude completed without acknowledging steering. Delivery is unconfirmed.');steering.ack.reject(error);reject(error);return;}
+        if(m.is_error||m.subtype!=='success'){reject(new Error((m.errors||[]).join('\n')||`Claude ${m.subtype}`));return;}
+        if(lifecycle.pending){resultSeen=false;if(waitingTasks!==lifecycle.pending){waitingTasks=lifecycle.pending;emit('system',`Claude is waiting for ${waitingTasks} background task${waitingTasks===1?'':'s'} to finish. This turn remains active.`);}return;}
+        resolve();
+      }
     };
     const closed=e=>{steering?.boundary.reject(e);steering?.ack.reject(e);if(!resultSeen||steering)reject(e);};const abort=()=>{void client.close().then(()=>reject(new Error('Cancelled')),error=>reject(error));};
     client.on('message',message);client.on('request',request);client.on('closed',closed);signal.addEventListener('abort',abort,{once:true});
@@ -369,7 +382,7 @@ export class ClaudeProvider {
       // Fast mode requires both model support and runtime opt-in. Do not silently ignore a selection.
       if(run.schedule.serviceTier==='fast'&&result.fast_mode_disabled_reason)throw new Error(`Claude fast mode unavailable: ${result.fast_mode_disabled_reason}. Choose Provider default.`);
       run.modelCapabilities={id:model.id,controls:model.controls,capturedAt:new Date().toISOString()};if(snapshot){snapshot.suppliedAt=new Date().toISOString();snapshot.delivery='Claude explicit system prompt accepted';}update();
-      if(signal.aborted)throw new Error('Cancelled');accepting=true;this.activeSteer=steer;client.write({type:'user',session_id:run.providerSessionId||'',message:{role:'user',content},parent_tool_use_id:null});await done;activitySucceeded=true;
+      if(signal.aborted)throw new Error('Cancelled');accepting=true;this.activeSteer=steer;client.write({type:'user',uuid:initialInputId,session_id:run.providerSessionId||'',message:{role:'user',content},parent_tool_use_id:null});await done;activitySucceeded=true;
     }finally{
       capture.finish(activitySucceeded?'completed':'interrupted');
       agents.finish();finished=true;accepting=false;this.activeSteer=null;steering?.boundary.reject(new Error('Claude turn ended.'));steering?.ack.reject(new Error('Claude turn ended.'));clearTimeout(timer);signal.removeEventListener('abort',abort);let cleanupError;

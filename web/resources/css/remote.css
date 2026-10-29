@@ -1,3 +1,4 @@
+@import "../../../public/features/chats/chat-attachments.css";
 @import "../../../public/features/chats/user-questions.css";
 .remote-heading,.remote-destinations,.remote-tabs,.remote-chat-title{display:flex;align-items:center;gap:1rem;justify-content:space-between}
 .remote-heading h1{font-size:28px}.remote-heading p{margin:8px 0 0;color:var(--muted)}

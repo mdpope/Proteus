@@ -33,7 +33,7 @@ can be test artifacts. Confirm any remaining hang by hand or on a device before 
 | ~35%: `NativeWorkspaceTree.recents` → `NativeProjectActivity.parse` | Sidebar recents were re-sorted on every redraw, creating an `ISO8601DateFormatter` for each comparison | Shared cached parser plus a bounded memo; each item's date is computed once per sort (`NativeProjectActivity.newestFirst`) |
 | ~22%: `nativeAttentionItems` (Home rows, drawer counts) | Each attention item linearly searched all runs and `allRuns` for its title, several times per render | One title dictionary per host per call |
 | `NativeProjectCatalog.isValid` via `membership(for:)`/`project(id:)` | Every lookup re-validated the whole catalog; `remote.projectCatalog` built a new catalog per access, including inside per-chat filters | Validate once at init; `RemoteStore` caches one catalog until `state` changes |
-| `RemoteCrypto.seal` from `saveHistoryCache` / `saveDocumentTabs` | Encrypted cache writes ran on the main thread on visits and content refreshes | Shared serial background writer (`SharedAppStore.cacheWriter`); reads wait on it first |
+| `RemoteCrypto.seal` from `saveHistoryCache` / `saveDocumentTabs` | Encrypted cache writes ran on the main thread on visits and content refreshes | Shared serial `NativeSharedCacheWriter`; reads drain it and owner mutations await a durable write receipt |
 | `TeamBrowserView` → `browserHistory(_:back:)` | The edge swipe checked for history by building the full URL list on every render | `hasBrowserHistory(_:back:)` index check |
 
 Result in the same walkthrough: iPhone potential hangs went from 32 (250–590 ms each) to 0, and
@@ -42,6 +42,15 @@ visible) went from 1 hang to 0, with the project tree dropping from 366 to 114 s
 
 Earlier, the iOS relay accepted only 1 MiB websocket messages, so a real host's ~1.2 MB state
 dropped the connection ("offline · reconnecting"). It now accepts the host/relay 8 MB limit.
+
+Integration review corrected the writer's durability boundary: document/history snapshots also
+contain pending mutations and retry identities. Encoding, sealing and atomic writes stay off the
+main thread, while dispatch awaits a success receipt and rechecks account/owner/cancellation.
+Write failures retain that identity and pending work. Background/account transitions drain both
+cache writers; missing keys remain failures until a successful replacement save. Delayed-save,
+failed-save/retry, and missing-key/lifetime regressions pass on both simulator idioms. The final
+iPhone suite passes 156 cases; the iPad full suite passed 155 before the final missing-key case,
+then its three final durability cases passed. This does not replace physical Release acceptance.
 
 ## If freezes or hangs remain — what to check next
 

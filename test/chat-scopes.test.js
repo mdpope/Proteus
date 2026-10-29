@@ -49,6 +49,11 @@ test('chat-only approval is isolated, revocable, context-bound and keeps filesys
     assert.equal(engine.describePermissions(two).source,'workspace');
     assert.equal(engine.describePermissions(scheduled).source,'workspace');
     assert.equal(engine.decidePermission(one,{kind:'shell',fullCommandText:'synthetic'}).allowed,true);
+    const chatAccess={kind:'chat-access',toolName:'proteus_chats',args:{scope:{hostId:'synthetic-owner',actions:['read']}}};
+    assert.equal(engine.decidePermission(one,chatAccess).allowed,true);
+    assert.equal(engine.decidePermission(two,chatAccess).allowed,false);
+    assert.equal(engine.decidePermission(scheduled,chatAccess).allowed,false);
+    assert.equal(engine.decidePermission(one,{...chatAccess,managedApprovalRequired:true}).allowed,false);
     assert.equal(engine.decidePermission(two,{kind:'shell',fullCommandText:'synthetic'}).allowed,false);
     assert.equal(engine.decidePermission(scheduled,{kind:'shell',fullCommandText:'synthetic'}).allowed,false);
     assert.equal(engine.decidePermission(one,{kind:'write',fileName:path.join(home,'output.txt')}).allowed,false);
@@ -63,12 +68,14 @@ test('chat-only approval is isolated, revocable, context-bound and keeps filesys
     assert.equal(await waiting,'approve-auto');
     engine.setChatPermission(two.id,'inherit',context.id,two.chatPermissionRevision);
     assert.equal(engine.decidePermission(two,{kind:'shell',fullCommandText:'synthetic'}).allowed,false);
+    assert.equal(engine.decidePermission(two,chatAccess).allowed,false);
     await engine.close();engine=new Engine(home);
     assert.equal(engine.describePermissions(engine.getRun(one.id)).source,'chat');
     const restored=engine.getRun(one.id);
     restored.schedule={...restored.schedule,workspace:{...restored.schedule.workspace,additionalDirectories:[path.join(home,'other')]}};
     engine.persist(restored);
     assert.equal(engine.describePermissions(restored).source,'workspace');
+    assert.equal(engine.decidePermission(restored,chatAccess).allowed,false);
     restored.schedule.workspace.additionalDirectories=[];engine.persist(restored);
     assert.equal(engine.describePermissions(restored).source,'workspace');
     assert.throws(()=>engine.setChatPermission(one.id,'inherit','wrong',restored.chatPermissionRevision),/Workspace configuration changed/);

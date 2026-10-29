@@ -1,3 +1,12 @@
+## October 29 — compact question answers
+
+Shared desktop/web question cards place the attachment + at the left and Send answer at the
+right of one row, eight pixels below the answer box. Empty attachment strips and choice lists
+reserve no rows; selected files wrap above the controls. Heading and label margins are compact.
+The existing answer, attachment consent, uncertain-delivery and retained-draft behavior remains.
+The question UI check and static checks pass; rendered desktop/narrow previews verify alignment
+and no horizontal overflow, including selected attachments. This is source-only pending packaging.
+
 ## October 22 — Markdown parser security patch
 
 The shared parser uses `markdown-it` 15.0.3, including the upstream fixes for quadratic parsing

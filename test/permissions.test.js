@@ -109,6 +109,17 @@ test('auto-approval respects managed requests, sandbox escape, unknown kinds, an
     assert.equal(store.decide(s,{kind:'custom-tool',toolName:'proteus_browser',args:{action:'click'}}).allowed,false);
   } finally {fs.rmSync(home,{recursive:true,force:true});}
 });
+test('owner chat access follows Auto-approve, never generic saved tool rules or read-only trust',()=>{
+  const home=temp();try{
+    const store=new PermissionStore(home),s=schedule(home),request={kind:'chat-access',toolName:'proteus_chats',args:{scope:{hostId:'synthetic-owner',actions:['read']}}};
+    store.remember(s,{kind:'custom-tool',toolName:'proteus_chats'},'always-tool');
+    for(const mode of ['ask','custom','trusted']){store.setMode(s,mode);assert.equal(store.decide(s,request).allowed,false);}
+    assert.deepEqual(store.choices(s,request),[]);assert.throws(()=>store.remember(s,request,'always-tool'),/not available/);
+    store.setMode(s,'autopilot');assert.equal(store.decide(s,request).allowed,true);
+    for(const protection of [{managedApprovalRequired:true},{requestSandboxBypass:true},{toolName:'unrelated'}])assert.equal(store.decide(s,{...request,...protection}).allowed,false);
+    store.setMode(s,'ask');assert.equal(store.decide(s,request).allowed,false);
+  }finally{fs.rmSync(home,{recursive:true,force:true});}
+});
 test('trusting a workspace clears subsequent queued permissions and persists across new scheduled runs', async () => {
   const home=temp();const answers=[];const provider={run:async({ask})=>answers.push(...await Promise.all(['one','two','three'].map(name=>ask({type:'permission',details:{kind:'write',fileName:path.join(home,name)}}))))};
   let engine=new Engine(home,{copilot:provider});try {

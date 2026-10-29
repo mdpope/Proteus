@@ -1,3 +1,12 @@
+## Owner display worker
+
+The local HTTP state view computes permission displays in a bounded background worker using
+captured settings, grants and provider-home descriptors. `PermissionProjection` shares display
+semantics with `PermissionStore` without disk writers or approval methods. Permission/schedule
+revisions and owner changes invalidate cached and in-flight displays. Actual authorization and
+mutations continue through the owner with fresh filesystem checks; a displayed result is never
+an access grant. See [worker boundaries and validation](2026-10-29-main-thread-responsiveness.md).
+
 ## 0.2.28 — selected third-party Codex MCP approvals
 
 The adapter now routes recognized native tool-approval envelopes for every selected third-party
@@ -127,7 +136,7 @@ Choose a mode in **Workspace → Configuration → Workspace tool approvals**, t
 | Ask each time | Show each permission request received from the provider. |
 | Saved rules only | Use individually approved folders and operations. Other requests still ask. |
 | Trusted workspace | Allow structured file reads/writes inside the listed roots, MCP calls marked read-only, and embedded-browser reading/navigation. Other operations need a saved rule or approval. |
-| Auto-approve tools | Also allow terminal commands, configured MCP tools, URLs, and custom tools without prompts. Structured file requests outside trusted folders still ask. |
+| Auto-approve tools | Also allow terminal commands, configured MCP tools, URLs, custom tools, and exact Proteus chat-access scope requests without prompts. Structured file requests outside trusted folders still ask. |
 
 Auto-approve tools is Proteus's unattended tool-approval mode. Terminal commands are not confined
 to the listed folders: they have the runner's normal filesystem and network access. This setting
@@ -184,6 +193,19 @@ folder authorization, and the Codex sandbox keeps its existing writable roots.
 Managed enterprise approvals, sandbox-bypass requests and unknown request kinds
 still ask. A changed override rechecks a waiting permission request in that chat.
 Automatic approval history records whether the source was chat or workspace.
+
+Proteus chat-access requests use a separate owner-created permission kind. The fresh effective
+Auto-approve setting can approve the requested host, project/chat IDs and read/dispatch/answer/cancel
+actions, then save that exact context-bound grant. Ask, Saved rules and read-only trust still ask;
+a remembered `proteus_chats` invocation cannot grant new scopes. A waiting request is rechecked
+when approval settings change. The originating turn, context, peer availability and automatic
+decision are checked again before the grant is saved. Request arguments cannot broaden while
+approval is pending. Grants retain their existing explicit revocation lifecycle; changing the
+approval mode controls future requests and does not erase already approved scopes.
+
+Direct grant/revoke remains an operator action. Chat access never approves a destination agent's
+tool request, bypasses a paused/revoked peer, or grants browser/terminal sharing. Mandatory provider,
+enterprise and sandbox approvals remain separate and still require a direct response.
 
 Legacy partial grants previously labeled Trusted workspace now display as Saved rules only; no
 authorizations are broadened during migration. Duplicate SDK checks for the identical active tool

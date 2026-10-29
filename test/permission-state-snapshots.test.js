@@ -41,6 +41,8 @@ test('state polling preserves captured scheduled-run permissions without recaptu
     const capture = app.context.capture.bind(app.context);
     app.context.capture = (...args) => { captures++; return capture(...args); };
     const headers = { authorization: 'Bearer ' + app.token };
+    // The HTTP display path must not fall back to synchronous owner projection.
+    app.engine.permissions.describeRun = () => { throw new Error('Owner display projection was called.'); };
     for (let index = 0; index < 2; index++) {
       const response = await fetch(app.origin + '/api/state?summaries=1', { headers });
       assert.equal(response.status, 200);
@@ -52,6 +54,9 @@ test('state polling preserves captured scheduled-run permissions without recaptu
       assert.ok(!retained.roots.includes(added));
       assert.ok(state.permissionWorkspaces.find(workspace => workspace.ref.defaults).roots.includes(added));
     }
+    const diagnostics = await (await fetch(app.origin + '/api/performance/diagnostics', { headers })).json();
+    assert.ok(diagnostics.stateProjection.operations >= 1);
+    assert.equal(diagnostics.stateProjection.failures, 0);
     assert.ok(captures <= 2, 'polling must not recapture any saved run');
     assert.equal(JSON.stringify([...app.engine.runs.values()]), originalRuns);
     // Future executions still capture current sources through the ordinary preparation path.
@@ -59,5 +64,13 @@ test('state polling preserves captured scheduled-run permissions without recaptu
     assert.match(next.context.entries.find(entry => entry.kind === 'instruction').content, /Changed future/);
     assert.ok(next.workspace.additionalDirectories.includes(added));
     assert.notEqual(app.engine.permissions.describe(next).id, capturedID);
+    // External permission edits have no owner change event. A cached display must
+    // still observe revocation through the fresh permission revision stamp.
+    app.engine.permissions.setMode(schedule, 'autopilot');
+    const granted = await (await fetch(app.origin + '/api/state?summaries=1', { headers })).json();
+    assert.ok(granted.runs.every(run => run.permissionContext.mode === 'autopilot'));
+    app.engine.permissions.revoke(capturedID, app.engine.permissions.get().revision);
+    const revoked = await (await fetch(app.origin + '/api/state?summaries=1', { headers })).json();
+    assert.ok(revoked.runs.every(run => run.permissionContext.mode !== 'autopilot'));
   } finally { await app.close(); fs.rmSync(base, { recursive: true, force: true }); }
 });

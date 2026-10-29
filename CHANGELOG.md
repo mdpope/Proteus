@@ -1,10 +1,34 @@
+## Unreleased — chat access and web question attachments
+
+- Let Proteus chat access requests follow the originating chat/workspace's Auto-approve tools setting for the exact requested scope. Ask and Saved rules still prompt; mandatory approvals and human browser/terminal sharing keep their existing boundaries.
+- Support attachments in chronological website question cards, with shared file previews/consent styling. Keep uploads and answers bound to the selected computer through navigation and uncertain retries.
+
+## Unreleased — notifications preserve the foreground app
+
+- Show native in-app notifications only in their already-focused Proteus window. Background notices no longer raise the app over other applications; expired notices stay dismissed when you return.
+
+## Unreleased — question answer layout
+
+- Compact inline question forms: place the attachment + and Send answer together immediately below the answer box, with Send answer aligned right. Empty attachment strips reserve no space; selected files wrap above the controls.
+
 ## Unreleased — iOS navigation and swipes
 
+- Preserve durable tab/history mutation identities while saving encrypted caches off the main thread. Wait asynchronously for the atomic save before sending an owner mutation, retain failed writes for retry, and drain caches on background/account changes.
 - **iOS real-host connection:** iPhone/iPad accept relay messages up to the 8 MB host/relay limit. URLSession's 1 MiB websocket default dropped the socket ("Message too long") once a real host's state grew past it, so devices stayed "offline · reconnecting".
 - **iOS chat and project chrome:** chats have no header bar. Copy link, rename, move, promote, archive and delete are on the chat's tab (press and hold) in the project bar, the chat's own tab row and the iPad top strip. The sidebar button leads the project/workspace tab bar on iPhone and iPad (it leaves the iPad top bar while a workspace tab is open); the iPhone system header with its large glass buttons is gone. The project home tab scrolls with its tabs instead of staying pinned.
 - **iOS swipes:** edge swipes are interactive everywhere, like Safari: the page follows your finger over an image of where you're going (the previous or next web page, the project home or the workspace), then settles or springs back. Browsers, project tabs (back to the project home, and forward to the last tab), iPad project ↔ workspace and iPad chats use it, and it works beside a pinned iPad sidebar. Edge swipes take priority over scrolling and tab strips under the edge. Forward edge swipes also reopen the last project from its workspace and the last workspace from the list. The sidebar opens only from its button.
 - **iOS smoothness:** sidebar, Home and drawer data no longer rebuild expensively on the main thread on every redraw (cached date parsing, one attention title index per host, one validated project catalog per host state), and encrypted history/tab caches save on a background writer. A real-data iPhone walkthrough went from 32 potential hangs to none.
 - **Tab overviews:** each project section on desktop and iOS starts with a fixed Project home card; the web overview lists a Project home entry for each project of an open workspace.
+
+## Unreleased — execution safeguards and Claude continuation
+
+- Raise Claude/Copilot's active-execution budget and the shared no-progress interruption threshold from 30 minutes to two hours. Human input waits remain excluded; the five-minute progress warning does not stop work.
+- Classify Claude execution timeouts explicitly and offer same-session Continue and opt-in automatic continuation, bounded to three consecutive retries. Preserve queued input and wait for old-process cleanup; Stop, permission changes and pending input take precedence.
+- Match Claude results to the exact replayed input UUID so a startup/orphan notification cannot silently consume a follow-up. Keep Claude alive through intermediate responses while native background jobs/monitors remain pending, then await their terminal notifications and final reporting. No uncertain input is automatically resent.
+
+## Unreleased — desktop responsiveness
+
+- Move permission-display filesystem checks, context hashing and HTTP state serialization to a bounded background worker. Coalesce simultaneous window refreshes, discard results invalidated by permission/schedule changes, and time out failed workers without blocking the owner. Actual authorization remains fresh and owner-controlled. Add separate capture, transfer and worker diagnostics; this correction is source-only pending a new package.
 
 ## 0.2.33 — October 28 follow-up
 

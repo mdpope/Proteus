@@ -83,14 +83,21 @@ export class ChatControl {
   }
   async requestAccess(actor,args){
     if(actor==='operator')throw Error('Use the owner grant action with an explicit originating chat.');
-    const scope=args.scope;this.host(scope?.hostId);
-    if(!scope.actions?.length||scope.actions.some(a=>!['read','dispatch','answer','cancel'].includes(a)))throw Error('Choose a valid access scope.');
+    const scope=structuredClone(args.scope);this.host(scope?.hostId);
+    if(!Array.isArray(scope.actions)||!scope.actions.length||scope.actions.some(a=>!['read','dispatch','answer','cancel'].includes(a)))throw Error('Choose a valid access scope.');
+    if(scope.chatIds&&(!Array.isArray(scope.chatIds)||scope.chatIds.length>100||scope.chatIds.some(id=>!uuid.test(id))))throw Error('Choose explicit chat IDs.');
+    if(scope.projectId&&(typeof scope.projectId!=='string'||scope.projectId.length>128))throw Error('Choose an owner project.');
     const run=this.service.engine.getRun(actor),slot=this.service.engine.running.get(actor);
     if(!slot||slot.controller.signal.aborted)throw Error('Access requests belong to an active turn.');
     const contextId=this.context(actor),question=`Allow this chat to ${scope.actions.join(', ')} conversations on ${this.host(scope.hostId).label}? Scope: ${scope.chatIds?.join(', ')||scope.projectId||'all conversations on this computer'}. Dispatch includes returning task results. This does not approve the destination agent’s tools.`;
-    const answer=await this.service.engine.ask(run,{type:'permission',question,details:{kind:'custom-tool',toolName:'proteus_chats',managedApprovalRequired:true,intention:question,args:{scope}}},slot.controller.signal);
-    if(answer==='deny')throw Error('Agent chat access was denied.');
-    if(contextId!==this.context(actor)||slot.controller.signal.aborted)throw Error('Originating context changed during approval.');
+    // Scope approval follows the originating chat's fresh approval policy. Keep
+    // it distinct from both a tool invocation rule and a provider-mandated gate.
+    const details={kind:'chat-access',toolName:'proteus_chats',intention:question,args:{scope:structuredClone(scope)}};
+    const answer=await this.service.engine.ask(run,{type:'permission',question,details},slot.controller.signal);
+    if(!['approve','approve-auto'].includes(answer))throw Error('Agent chat access was denied.');
+    if(contextId!==this.context(actor)||slot.controller.signal.aborted||this.service.engine.running.get(actor)!==slot)throw Error('Originating context changed during approval.');
+    if(answer==='approve-auto'&&!this.service.engine.decidePermission(run,details).allowed)throw Error('Chat approval changed before the access grant was saved.');
+    this.assertCaller();
     return this.grant(actor,scope);
   }
   disconnect(hostId){const connection=this.connections.get(hostId);this.connections.delete(hostId);connection?.client.close();}

@@ -15,7 +15,7 @@ const model={value:'test',displayName:'Synthetic',supportedEffortLevels:['low','
 class Fake extends EventEmitter {
   constructor(action){super();this.action=action;this.responses=[];}
   async initialize(hooks){this.hooks=hooks;return {hooks_applied:true,models:[model],account:{tokenSource:'oauth'},fast_mode_disabled_reason:'sdk_opt_in_required'};}
-  write(message){if(message.type==='user'){this.userMessage=message;queueMicrotask(()=>this.action?.(this));}}
+  write(message){if(message.type==='user'){const first=!this.initialInput;this.initialInput??=message.uuid;this.userMessage=message;queueMicrotask(()=>{if(first&&this.replayInitialInput!==false)this.emit('message',{...message});this.action?.(this);});}}
   respond(id,response){this.responses.push({id,response});this.emit('response');}
   async close(){this.closed=true;}
 }
@@ -74,7 +74,7 @@ test('Claude turn loads selected MCP servers from a private file and waits for c
     configFile=options.mcpConfigPath;args=options.args;
     assert.ok(configFile);assertPrivate(configFile);config=JSON.parse(fs.readFileSync(configFile,'utf8'));
     const client=new Fake(result);client.request=async payload=>{assert.deepEqual(payload,{subtype:'mcp_status'});statusChecks++;return {mcpServers:[{name:'remote',status:'connected'},{name:'unselected',status:'connected'}]};};
-    client.write=message=>{if(message.type==='user'){observedUserBeforeStatus=statusChecks===0;client.userMessage=message;queueMicrotask(()=>result(client));}};
+    client.write=message=>{if(message.type==='user'){observedUserBeforeStatus=statusChecks===0;client.userMessage=message;queueMicrotask(()=>{client.emit('message',{...message});result(client);});}};
     return client;
   }});
   const a=runArgs();a.run.schedule.mcpServers={remote:{type:'http',url:'https://mcp.example.invalid/api',headers:{Authorization:'Bearer SYNTHETIC_SECRET'}}};
@@ -180,8 +180,74 @@ test('Claude missing approval IDs cannot reuse a grant and user-question answers
   assert.ok(client.responses.at(-1).response.updatedInput.answers['Which?']);result(client);await pending;
 });
 test('Claude active execution times out, stops child, and handles abort',async()=>{
-  let client;const provider=new ClaudeProvider({timeoutMs:10,clientFactory:()=>client=new Fake()});await assert.rejects(provider.run(runArgs()),/time limit/);assert.equal(client.closed,true);
+  let client;const provider=new ClaudeProvider({timeoutMs:10,clientFactory:()=>client=new Fake()});await assert.rejects(provider.run(runArgs()),error=>error.code==='PROVIDER_ACTIVE_TIME_LIMIT'&&/time limit/.test(error.message));assert.equal(client.closed,true);
   const aborter=new AbortController(),a=runArgs();a.signal=aborter.signal;const pending=provider.run(a);await new Promise(r=>setImmediate(r));aborter.abort();await assert.rejects(pending,/Cancelled/);assert.equal(client.closed,true);
+});
+test('Claude ignores successful orphan results until the exact initial input is acknowledged, without resending',async()=>{
+  let client,sends=0,settled=false;
+  const provider=new ClaudeProvider({clientFactory:()=>{
+    client=new Fake(c=>{sends++;result(c);});client.replayInitialInput=false;
+    const initialize=client.initialize.bind(client);client.initialize=async hooks=>{result(client);return initialize(hooks);};return client;
+  }});
+  const a=runArgs(),pending=provider.run(a);pending.then(()=>settled=true,()=>settled=true);
+  await new Promise(resolve=>setImmediate(resolve));assert.equal(settled,false);assert.equal(client.closed,undefined);assert.equal(sends,1);
+  client.emit('message',{type:'user',uuid:'unrelated-task-notice',message:{role:'user',content:'<task-notification>Stopped old work</task-notification>'}});result(client);
+  await new Promise(resolve=>setImmediate(resolve));assert.equal(settled,false);assert.equal(a.run.usage,undefined);
+  client.emit('message',{...client.userMessage});result(client);await pending;
+  assert.equal(sends,1);assert.equal(a.run.usage.inputTokens,10);assert.equal(client.closed,true);
+});
+test('Claude keeps background Bash and Monitor tasks alive across intermediate results until final reporting',async()=>{
+  let client,settled=false;const tools=[];
+  const provider=new ClaudeProvider({clientFactory:()=>client=new Fake(c=>{
+    c.emit('message',{type:'assistant',message:{content:[{type:'tool_use',id:'bash',name:'Bash',input:{run_in_background:true}},{type:'tool_use',id:'monitor',name:'Monitor',input:{}}]}});
+    c.emit('message',{type:'system',subtype:'task_started',task_id:'background-job',tool_use_id:'bash'});
+    c.emit('message',{type:'user',message:{content:[{type:'tool_result',tool_use_id:'bash',content:'Command running in background with ID: background-job. Output follows.'},{type:'tool_result',tool_use_id:'monitor',content:'Monitor started (task monitor-job, expires in 5m unless the source ends first).'}]}});
+    result(c);
+  })});
+  const a=runArgs();a.emit=(role,text,data)=>{if(data?.tool)tools.push(data.tool);};
+  const pending=provider.run(a);pending.then(()=>settled=true,()=>settled=true);await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(settled,false);assert.ok(tools.every(tool=>tool.status==='running'));
+  client.emit('message',{type:'system',subtype:'task_notification',task_id:'background-job',status:'completed'});result(client);
+  await new Promise(resolve=>setImmediate(resolve));assert.equal(settled,false);assert.equal(client.closed,undefined);
+  client.emit('message',{type:'user',uuid:'generated-notification',message:{content:'<task-notification>\n<task-id>monitor-job</task-id>\n<status>completed</status>\n</task-notification>'}});
+  client.emit('message',{type:'assistant',message:{content:[{type:'text',text:'Synthetic background work verified.'}]}});result(client);await pending;
+  assert.equal(client.closed,true);assert.ok(tools.every(tool=>tool.status==='completed'));
+});
+test('Stop still closes a Claude process with unfinished background work',async()=>{
+  let client;const provider=new ClaudeProvider({clientFactory:()=>client=new Fake(c=>{c.emit('message',{type:'system',subtype:'task_started',task_id:'background-job'});result(c);})});
+  const a=runArgs(),controller=new AbortController();a.signal=controller.signal;
+  const pending=provider.run(a);await new Promise(resolve=>setImmediate(resolve));controller.abort();
+  await assert.rejects(pending,/Cancelled/);assert.equal(client.closed,true);
+});
+test('explicit interrupt-steering can reach its boundary while a background task is still settling',async()=>{
+  let client,inputs=0;const provider=new ClaudeProvider({steerMode:'interrupt',steerTimeoutMs:1000,clientFactory:()=>{
+    client=new Fake(c=>{inputs++;if(inputs===1)c.emit('message',{type:'system',subtype:'task_started',task_id:'job',session_id:'native-test'});else c.emit('message',{...c.userMessage});});
+    client.request=async()=>{result(client);return {};};return client;
+  }});
+  const a=runArgs(),pending=provider.run(a);await new Promise(resolve=>setImmediate(resolve));
+  await provider.steer(a.run,'Synthetic correction');assert.equal(inputs,2);assert.equal(client.closed,undefined);
+  client.emit('message',{type:'system',subtype:'task_notification',task_id:'job',status:'stopped'});result(client);await pending;
+});
+test('Claude default permits more than thirty minutes and expires at two active hours',async t=>{
+  t.mock.timers.enable({apis:['setTimeout']});
+  let client,settled=false;const provider=new ClaudeProvider({clientFactory:()=>client=new Fake()}),pending=provider.run(runArgs());
+  pending.then(()=>settled=true,()=>settled=true);
+  const failure=assert.rejects(pending,error=>error.code==='PROVIDER_ACTIVE_TIME_LIMIT');
+  await new Promise(resolve=>setImmediate(resolve));assert.ok(client.userMessage);
+  t.mock.timers.tick(119*60*1000);await Promise.resolve();assert.equal(settled,false);
+  t.mock.timers.tick(60*1000);await failure;assert.equal(client.closed,true);
+});
+test('Claude excludes a long human approval wait from its execution safeguard',async t=>{
+  t.mock.timers.enable({apis:['setTimeout']});
+  let client,answer,settled=false;const provider=new ClaudeProvider({clientFactory:()=>client=new Fake()}),a=runArgs();
+  a.ask=()=>new Promise(resolve=>answer=resolve);
+  const pending=provider.run(a);pending.then(()=>settled=true,()=>settled=true);
+  await new Promise(resolve=>setImmediate(resolve));
+  client.emit('request',{request_id:'long-wait',request:{subtype:'can_use_tool',tool_name:'Read',tool_use_id:'read',input:{file_path:'/tmp/synthetic'}}});
+  await new Promise(resolve=>setImmediate(resolve));assert.equal(typeof answer,'function');
+  t.mock.timers.tick(4*60*60*1000);await Promise.resolve();assert.equal(settled,false);
+  const response=once(client,'response');answer('approve');await response;
+  result(client);await pending;assert.equal(client.closed,true);
 });
 test('Claude quota is unknown before authoritative events and preserves reset metadata afterward',async()=>{
   const provider=new ClaudeProvider({clientFactory:()=>new Fake(c=>{c.emit('message',{type:'rate_limit_event',rate_limit_info:{rateLimitType:'five_hour',utilization:.25,resetsAt:1900000000,status:'allowed'}});result(c);})});

@@ -1,3 +1,52 @@
+## October 29 — background native caches preserve mutation durability
+
+Document/tab and browser-history caches contain pending owner operations and retry identities,
+so they cannot be treated as disposable presentation caches. Capture immutable snapshots on the
+main actor, then encode, encrypt and atomically write on a shared FIFO queue. Await a per-write
+success/failure receipt before sending its owner mutation; recheck account, host, connection and
+cancellation after suspension. Retain pending operations and identities together across account
+changes while clearing dispatch bindings. Missing encryption keys enter the same failure ledger
+as disk errors. Background/account lifetime boundaries drain both cache writers and report
+failures; normal navigation and dispatch never synchronously wait for cache I/O.
+
+## October 29 — app-owned scope approval and passive notifications
+
+An app-owned chat access request has its own permission kind. It follows the fresh effective
+chat/workspace Auto-approve mode rather than a provider-mandatory flag or generic saved tool
+rule. The exact scope is copied before waiting, and context, turn, current approval and peer
+availability are checked before a grant is saved. Ask/Saved rules retain the direct decision;
+destination tool approvals, explicit browser/terminal sharing and enterprise/OS gates remain
+independent. This implements the operator's explicit request without broadening an invocation
+rule into arbitrary conversation access.
+
+Native in-app notices are scoped to their already-focused parent/overlay. `showInactive()`
+alone does not prevent macOS window reordering. Background delivery therefore records and
+expires the notice without showing that child window; a foreground return may reveal an
+unexpired notice. Existing explicit notification clicks may still open the selected chat.
+
+## October 29 — two-hour safeguards and Claude input/task ownership
+
+Replace the host's 30-minute execution and no-progress stops with a shared two-hour safeguard.
+Keep active-time recovery distinct from quota resets and generic errors; add Claude to the
+existing explicit, bounded same-session recovery mechanism without rewriting saved preferences.
+An initial Claude input must be acknowledged by its exact replayed UUID before a successful
+result may complete it. Keep the native process alive for pending background tasks across
+intermediate results, rather than promising completion notifications after destroying their
+owner. Prefer structured task events, with narrow compatibility for observed native Bash/Monitor
+envelopes. Never replay input based on a missing acknowledgment. See the
+[analysis and tests](2026-10-29-claude-continuation.md).
+
+## October 29 — read-only state projection worker
+
+Keep one owner of approvals, native UI and mutations; offload display path traversal, permission
+hashing and response serialization to one lazy worker. Reuse the same projection implementation
+through a read-only base class rather than duplicating authorization logic or constructing a
+second permission store in the worker. Transfer captured inputs, never callbacks or providers.
+Bound pending work, coalesce equivalent windows, discard invalidated results and fail with a
+retryable response instead of a synchronous fallback. Keep fresh actual authorization unchanged.
+Separate asynchronous worker elapsed time from synchronous capture/transfer diagnostics. The
+measured result and remaining renderer/persistence candidates are in the [analysis](2026-10-29-main-thread-responsiveness.md).
+
 ## October 28 — complete request-local permission display reuse
 
 The existing display snapshot memo covered context construction but inherited permission display

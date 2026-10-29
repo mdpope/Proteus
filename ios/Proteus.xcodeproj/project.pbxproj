@@ -44,6 +44,7 @@
 		5EF60626047C8C2416E2255F /* ChatScrollModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEBA300AF9361FCB954195A9 /* ChatScrollModels.swift */; };
 		E430010E9EE52E44B1F9CA66 /* BrowserCacheKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A9B8CF994FE93C63B66ED43 /* BrowserCacheKeychain.swift */; };
 		35F51F9D47A18DF741E5E436 /* NativeDescriptorCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = B397B11ABD4B7498DF5F7163 /* NativeDescriptorCache.swift */; };
+		D0A6A874D71541FD86BC5E31 /* NativeSharedCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0A6A874D71541FD86BC5E32 /* NativeSharedCache.swift */; };
 		D1240567439FF2681FD55806 /* NativeChatScrollMeasurements.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07A3786A67A7D7F69111D816 /* NativeChatScrollMeasurements.swift */; };
 		88BD493A4BA05423DD6D27BC /* NativeMoveMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD3C496FEA9D3B251477A77E /* NativeMoveMenu.swift */; };
 /* End PBXBuildFile section */
@@ -107,6 +108,7 @@
 		AEBA300AF9361FCB954195A9 /* ChatScrollModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatScrollModels.swift; sourceTree = "<group>"; };
 		7A9B8CF994FE93C63B66ED43 /* BrowserCacheKeychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserCacheKeychain.swift; sourceTree = "<group>"; };
 		B397B11ABD4B7498DF5F7163 /* NativeDescriptorCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeDescriptorCache.swift; sourceTree = "<group>"; };
+		D0A6A874D71541FD86BC5E32 /* NativeSharedCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeSharedCache.swift; sourceTree = "<group>"; };
 		07A3786A67A7D7F69111D816 /* NativeChatScrollMeasurements.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeChatScrollMeasurements.swift; sourceTree = "<group>"; };
 		CD3C496FEA9D3B251477A77E /* NativeMoveMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeMoveMenu.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -350,6 +352,7 @@
 			children = (
 				7A9B8CF994FE93C63B66ED43 /* BrowserCacheKeychain.swift */,
 				B397B11ABD4B7498DF5F7163 /* NativeDescriptorCache.swift */,
+				D0A6A874D71541FD86BC5E32 /* NativeSharedCache.swift */,
 			);
 			path = Persistence;
 			sourceTree = "<group>";
@@ -564,6 +567,7 @@
 				5EF60626047C8C2416E2255F /* ChatScrollModels.swift in Sources */,
 				E430010E9EE52E44B1F9CA66 /* BrowserCacheKeychain.swift in Sources */,
 				35F51F9D47A18DF741E5E436 /* NativeDescriptorCache.swift in Sources */,
+				D0A6A874D71541FD86BC5E31 /* NativeSharedCache.swift in Sources */,
 				D1240567439FF2681FD55806 /* NativeChatScrollMeasurements.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

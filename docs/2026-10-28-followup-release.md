@@ -1,5 +1,35 @@
 # 0.2.33 follow-up acceptance
 
+## October 28 — Build Mac 0.2.33 installed, qualified acceptance
+
+The local supervisor completed job `cacc7323-2d2b-51ac-9dc2-01aa3cad1e1a` with outcome
+`updated`, verified health and one delivered same-chat continuation. The installed build is
+`262d121f6e51+src.7ef610dae5d5`; its complete bundle hash is
+`5bc494117c11446b418a28ef8b7e846f71e0d19f0fd4ff1b0f6528f3fe0c7a54` and strict Apple
+signature passes for `org.proteusapp.proteus.desktop` / team `TEAMID0000`. One owner and a separate
+document MCP process were observed. The restricted shell initially returned `CSSMERR_TP_NOT_TRUSTED`;
+verification outside that restriction passed and the failed result remains in private evidence.
+
+At the restart barrier the owner verified 55 chat histories, 26,539 event prefixes and effective
+configurations. Both retained recovery receipts, app bundles and complete recorded data trees
+match their hashes, and both app signatures pass. Permissions, browser profiles/access, pairing,
+settings, content tabs, desktop windows, layouts and checked history/command databases match the
+cold snapshot byte for byte. Four window sessions retain their tab counts, mapped active and child
+selections, and drafts; regenerated view IDs reconcile by position. Twelve browser records gained
+content IDs. Project changes are scan completion metadata and one scanned-folder count. A fresh post-continuation audit matches all 55 event prefixes and 54 effective configurations;
+the coordinator's sole context difference is its supplied timestamp after resumption. One of four
+encrypted browser-session files changed, so its logical history is not independently verified.
+Raw differences remain in private evidence. No data was restored over current work.
+
+Cua and Peekaboo are installed; Cua Accessibility and Screen Recording are granted. Three restored
+windows were enumerated and one observed. Codex continuation works; other-provider operation was
+not exercised. A 66-second startup/active diagnostic snapshot showed 32 HTTP state assemblies,
+mean 29.12 ms and maximum 104.31 ms; it is not an HC gesture test and does not explain all freezes.
+The helper recorded +62,324,736 bytes free across its interval and staging retirement separately
+observed +663,334,912 bytes; concurrent activity and APFS sharing limit attribution. The supervisor
+retired its candidate, while the exact tested artifact and source remain. No other rollout or
+publication is authorized by this update.
+
 The operator reports continuing HC typing/scrolling stalls and authorizes building the pending
 changes and deploying on Build Mac. This update targets Build Mac only. HC remains on
 0.2.32 during read-only diagnosis; mobile and website deployment are separate.
@@ -41,9 +71,22 @@ Initial sandbox temp failures and a corrected test-harness require import remain
 
 ## Packaging and deployment
 
-Pending exact signed package acceptance, fresh unassigned saved-default coordinator handoff,
-installed health/continuation and preservation verification. Mac unlock is verified before the
-existing signing identity is checked. Two registered recoveries pass the preflight inventory;
+Signed 0.2.33 build `262d121f6e51+src.7ef610dae5d5`, source fingerprint
+`7ef610dae5d57fe49a71bcd48a255dd46a2c56758f35c06b6760074b8606f6f3`, package hash
+`5bc494117c11446b418a28ef8b7e846f71e0d19f0fd4ff1b0f6528f3fe0c7a54` (608,982,456 logical
+bytes). The clean runtime snapshot retains `org.proteusapp.proteus.desktop` / team `TEAMID0000`;
+strict Apple signature and all 394 runtime/eight build-input source hashes verify. Corresponding
+source archive SHA-256 is `3972aef73201461b1b2bec3f1394ba75979b83bfb41db061fc82a7307e74eea9`.
+The exact signed package's 500-chat state-assembly maximum is 95.74 ms / timer gap 139.97 ms;
+native new-tab focus and buffered early URL/Enter pass on that same package.
+
+A fresh unassigned saved-default local coordinator owns preparation, handoff and automatic
+post-restart verification. Local dispatch access is explicitly granted. Installed health, continuation and qualified preservation are recorded above; a completed model turn alone is not installation proof.
+The owner accepted the exact candidate and its isolated renderer/owner-identity smoke tests.
+New input returned the first handoff to prepared; the same job is delegated for a refreshed
+checkpoint/handoff after the originating turn ends, without another preparation. The originating
+turn must end before the host idle barrier can proceed. Mac unlock is verified
+before the existing signing identity is checked. Two registered recoveries pass preflight inventory;
 eight obsolete inactive desktop build payloads were retired under the retention policy, retaining
 compact identities and the current tested build. The observed cleanup volume delta includes
 concurrent activity and did not establish a physical-space saving. Separate Apple-review,

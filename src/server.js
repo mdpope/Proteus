@@ -1,4 +1,7 @@
 import {resolveScheduleContext} from './services/scheduling/schedule-context.js';
+import { StateProjectionClient } from './services/state/state-projection-client.js';
+import { StateResponseCache } from './services/state/state-response-cache.js';
+import { permissionDisplaySchedule } from './services/state/state-projection.js';
 import {subagentPage} from './services/chats/subagents.js';
 import {publicAssets} from './shared/public-assets.js';
 import {MtplxProvider} from './providers/mtplx.js';
@@ -115,6 +118,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   const desktopControl=desktopPreview?null:new DesktopControl({active:owner=>owner==='operator'||['running','awaiting_input'].includes(engine.getRun(owner)?.status)});
   if(browser)browser.desktopControl=desktopControl;
   const performanceDiagnostics = new PerformanceDiagnostics({home});
+  const stateProjection = new StateProjectionClient();
   engine.performanceDiagnostics = performanceDiagnostics;
   activity.performanceDiagnostics=performanceDiagnostics;attachments.performanceDiagnostics=performanceDiagnostics;
   for(const adapter of Object.values(adapters)){adapter.questionInputs=(id,requestId)=>engine.readQuestionAttachments(id,requestId);adapter.attachmentInputs=id=>engine.turnAttachments.get(id);}
@@ -246,7 +250,8 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   const token = randomBytes(32).toString('hex'); let origin; let remote; const schedulerErrors = []; const eventClients = new Set();
   // All windows share one assembled state per owner generation. Streaming text does
   // not advance it; any other change, mutation, schedule edit or 300 ms age refreshes it.
-  let stateGeneration=0;const stateCache=new Map(),packageVersion=readJSON(path.join(root,'package.json')).version;
+  let stateGeneration=0;const packageVersion=readJSON(path.join(root,'package.json')).version;
+  const stateCache=new StateResponseCache({stamp:()=>JSON.stringify([stateGeneration,schedulerErrors.length,engine.schedules.list(),engine.permissions.get().revision])});
   // Windows refetch owner state after a change event. Bursts (especially streaming
   // text) are coalesced into one event per window frame budget, naming affected
   // chats; `stream:true` means only live transcripts changed, so a window that is not
@@ -280,7 +285,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (url.pathname === '/api/remote' && req.method === 'GET') return json(200, remote.info());
       if (url.pathname === '/api/project-follow' && req.method === 'POST') return json(200, service.projectFollow.handle(await body(req)));
       // Local authenticated diagnostics expose counters only, never command payloads or keys.
-      if (url.pathname === '/api/performance/diagnostics' && req.method === 'GET') return json(200, { ...performanceDiagnostics.snapshot(), scheduler: engine.schedulerWorker?.diagnostics() || {status:'not-started'} });
+      if (url.pathname === '/api/performance/diagnostics' && req.method === 'GET') return json(200, { ...performanceDiagnostics.snapshot(), scheduler: engine.schedulerWorker?.diagnostics() || {status:'not-started'}, stateProjection: stateProjection.diagnostics() });
       if (url.pathname === '/api/remote/diagnostics' && req.method === 'GET') return json(200, await remote.commandDiagnostics());
       if (url.pathname === '/api/remote' && req.method === 'POST') {
         const value = await body(req);
@@ -374,30 +379,36 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         return json(200,before===undefined?chatDelta(run,view,url.searchParams.get('cursor')):view);
       }
       if (url.pathname === '/api/state') {
-        // Schedules are re-read from disk; their fingerprint keeps external edits visible.
-        const cacheKey=url.search,cached=stateCache.get(cacheKey),fingerprint=schedulerErrors.length+':'+JSON.stringify(engine.schedules.list());
-        if(cached&&cached.generation===stateGeneration&&cached.fingerprint===fingerprint&&Date.now()-cached.at<300){res.writeHead(200,{'Content-Type':'application/json'});res.end(cached.body);return;}
-        const generation=stateGeneration;
+        let body;
+        try { body=await stateCache.get(url.search,()=>{
+        let projection;
         const state=performanceDiagnostics.measureSync('http.state.assemble', () => {
         const projectSnapshot=preview.snapshot(),workspaceProjects=preview.get(engine,projectSnapshot),contextCatalog=integrations.decorateCatalog(context.get());
-        const permissionSnapshot=engine.permissions.snapshot({workspaceDefaults:id=>workspacePermissionDefaults(id,projectSnapshot.config)});
+        const runs=engine.listRuns(),schedules=engine.schedules.list();
+        const displaySchedules=[
+          {...settings.get(),name:'Default workspace',ref:{defaults:true}},
+          ...schedules.filter(schedule=>!schedule.error).map(schedule=>({...schedule,ref:{scheduleId:schedule.id}})),
+          ...runs.map(run=>({...run.schedule,ref:{runId:run.id}}))
+        ].map(schedule=>permissionSchedule(schedule,contextCatalog)).filter(Boolean).map(permissionDisplaySchedule);
+        const displayRuns=runs.map(run=>({id:run.id,schedule:permissionDisplaySchedule(run.schedule),chatPermission:run.chatPermission,chatPermissionRevision:run.chatPermissionRevision,providerHome:run.providerHome||(['copilot','claude'].includes(run.schedule.provider)?engine.providers[run.schedule.provider]?.dataDirectory?.():undefined)}));
+        const workspaceIds=new Set([...displaySchedules,...displayRuns.map(run=>run.schedule)].map(schedule=>schedule.context?.workspaceId));
+        projection={runs:displayRuns,schedules:displaySchedules,defaults:[...workspaceIds].map(id=>[id,workspacePermissionDefaults(id,projectSnapshot.config)]),preserveInheritedDefaults:engine.permissions.preserveInheritedDefaults};
         return {
         hostName:remote.info().label,hostId:remote.info().hostId,
         workspaceProjects,
         ...(desktopPreview?{desktopPreview:workspaceProjects}:{}),
         attention:service.desktopAttention(),updates:service.updates?.status()||null,
-        schedules: engine.schedules.list(), runs: engine.listRuns().map(run => url.searchParams.has('summaries') ? {...runSummary(run),...workspaceProjects.memberships[run.id],trigger:run.trigger,usage:run.usage,schedule:{id:run.schedule.id,name:run.schedule.name,provider:run.schedule.provider,model:run.schedule.model,workspace:run.schedule.workspace},permissionContext:engine.permissions.describeRun(run,permissionSnapshot)} : ({ ...run, ...workspaceProjects.memberships[run.id], storage: storagePaths(home, run), permissionContext: engine.permissions.describeRun(run,permissionSnapshot) })), providerSteeringMediaTypes:Object.fromEntries(Object.entries(engine.providers).map(([id,provider])=>[id,provider.acceptedSteeringMediaTypes||[]])),providerSteering:Object.fromEntries(Object.entries(engine.providers).map(([id,provider])=>[id,typeof provider.steer==='function'])),providerStatus: catalog.value, providerStatuses: providerStatuses(),questionAttachmentMediaTypes:Object.fromEntries(Object.keys(adapters).map(id=>[id,questionAttachmentMediaTypes.filter(type=>adapters[id]?.acceptedMediaTypes?.includes(type))])),attachmentMediaTypes:Object.fromEntries(Object.keys(adapters).map(id=>[id,adapters[id]?.acceptedMediaTypes||[]])),mcpStatusProviders:Object.keys(adapters).filter(id=>typeof adapters[id]?.mcpStatus==='function'),mcpLoginProviders:['copilot','codex','claude'].filter(id=>typeof adapters[id]?.mcpLogin==='function'),
-        permissions: permissionSnapshot.value, permissionWorkspaces: engine.permissions.describeMany([
-          { ...settings.get(), name: 'Default workspace', ref: { defaults: true } },
-          ...engine.schedules.list().filter(schedule => !schedule.error).map(schedule => ({ ...schedule, ref: { scheduleId: schedule.id } })),
-          ...engine.listRuns().map(run => ({ ...run.schedule, ref: { runId: run.id } }))
-        ].map(schedule=>permissionSchedule(schedule,contextCatalog)).filter(Boolean),permissionSnapshot),
+        schedules, runs: runs.map(run => url.searchParams.has('summaries') ? {...runSummary(run),...workspaceProjects.memberships[run.id],trigger:run.trigger,usage:run.usage,schedule:{id:run.schedule.id,name:run.schedule.name,provider:run.schedule.provider,model:run.schedule.model,workspace:run.schedule.workspace}} : ({ ...run, ...workspaceProjects.memberships[run.id], storage: storagePaths(home, run) })), providerSteeringMediaTypes:Object.fromEntries(Object.entries(engine.providers).map(([id,provider])=>[id,provider.acceptedSteeringMediaTypes||[]])),providerSteering:Object.fromEntries(Object.entries(engine.providers).map(([id,provider])=>[id,typeof provider.steer==='function'])),providerStatus: catalog.value, providerStatuses: providerStatuses(),questionAttachmentMediaTypes:Object.fromEntries(Object.keys(adapters).map(id=>[id,questionAttachmentMediaTypes.filter(type=>adapters[id]?.acceptedMediaTypes?.includes(type))])),attachmentMediaTypes:Object.fromEntries(Object.keys(adapters).map(id=>[id,adapters[id]?.acceptedMediaTypes||[]])),mcpStatusProviders:Object.keys(adapters).filter(id=>typeof adapters[id]?.mcpStatus==='function'),mcpLoginProviders:['copilot','codex','claude'].filter(id=>typeof adapters[id]?.mcpLogin==='function'),
+        permissions: engine.permissions.get(),
         home, life: life.get(), settings: settings.get(), context: contextCatalog, standup: standup.get(), browserAvailable: !!browser, schedulerErrors, recoveryErrors: engine.recoveryErrors || [], ...hostPlatformMetadata(), version: packageVersion,
         scheduler: { running: true, background, message: background ? 'The desktop host keeps running when its window is closed. Quit Proteus stops execution. The computer must be awake.' : 'Schedules run while this host process is running.' }
       };
         });
-        const body=performanceDiagnostics.measureSync('http.serialize',()=>JSON.stringify(state));
-        if(generation===stateGeneration){if(stateCache.size>8)stateCache.clear();stateCache.set(cacheKey,{generation,fingerprint,at:Date.now(),body});}
+        // postMessage clones before yielding. Only the worker resolves display
+        // paths, hashes permission contexts and serializes the complete response.
+        return performanceDiagnostics.measure('http.state.project',()=>performanceDiagnostics.measureSync('http.state.transfer',()=>stateProjection.serialize({...projection,state})));
+        }); }
+        catch { return json(503,{error:'State display is temporarily unavailable. Retry the refresh.'}); }
         res.writeHead(200,{'Content-Type':'application/json'});res.end(body);return;
       }
       if (['/api/omi','/api/transcription'].includes(url.pathname) && req.method === 'GET') return json(200, { ...await omi.status(), schedules: engine.schedules.list().filter(isOmiSchedule) });
@@ -728,7 +739,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
   atomicJSON(path.join(home, 'connection.json'), { origin, token, pid: process.pid });
   const timer = timers ? setInterval(() => { void performanceDiagnostics.measure('scheduler.tick', () => engine.tick()).catch(error => engine.emit('scheduler-error', { error: error.message, at: new Date().toISOString() })); }, 1000) : null;
   const service = { readChatAttachment, desktopControl,workspaceProjects:preview, desktopPreview:desktopPreview?preview:null, performanceDiagnostics, notify, desktopAttention:()=>[...(service.browserAttention?.()||[]),...remote.documents.list().filter(item=>!item.approvedAt).map(item=>({id:'document:'+item.requestId,kind:'document',title:item.deviceName+' requests '+item.title,requestId:item.requestId,path:item.path,at:new Date(Date.parse(item.expiresAt)-600000).toISOString()})),...service.attention()], attention:()=>[...integrations.consumers().filter(item=>['needs-auth','failed'].includes(item.connection)).map(item=>({id:'integration:'+item.id,kind:'connection',title:(item.profile.label||item.server)+' needs attention',section:'integrations',at:item.checkedAt})),...activity.notifications().items.filter(item=>!item.readAt).map(item=>({id:'notification:'+item.id,notificationId:item.id,kind:'notification',title:item.title,body:item.body,chatId:item.chatId,...(item.browserIssue?{browserIssue:item.browserIssue,silent:true}:{}),at:item.createdAt}))], browserProfiles, integrations, engine, settings, context, standup, omi, life, account, activity, workspaceFiles, attachments, buildChatSchedule, usage, catalog, catalogs, origin, token, home, url: `${origin}/?token=${token}`, async close() {
-    await service.updates?.close();await service.chatControl?.close();await desktopControl?.close();
+    await stateProjection.close();await service.updates?.close();await service.chatControl?.close();await desktopControl?.close();
     activity.log('info','app.stopping','Proteus is shutting down.');clearInterval(integrationTimer);await integrations.close(); if(activityTimer)clearInterval(activityTimer); if (timer) clearInterval(timer); if (catalogTimer) clearInterval(catalogTimer); await Promise.all(Object.values(catalogs).map(c => c.pending)); await providerAuth.close(); await remote.close(); let engineCloseError; try { await engine.close(); } catch (error) { engineCloseError=error; } await attachments.close(); await copilot.close(); await codex.close(); await claude.close(); await life.close?.(); await service.browserHistory?.close(); let activityCloseError; try { await activity.close(); } catch (error) { activityCloseError=error; }
     for (const client of eventClients) client.end(); eventClients.clear();
     await new Promise(resolve => {

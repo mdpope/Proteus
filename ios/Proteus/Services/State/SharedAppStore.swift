@@ -161,7 +161,15 @@ let nativeFixtureRelayOrigin = ""
     private var historyRefreshing = Set<String>()
     private var historyRefreshed: [String: Date] = [:]
     private var insertionOrigins: [String: String] = [:]
-    init() { UserDefaults.standard.removeObject(forKey: "proteus.download-history"); loadDocumentTabs(); loadHistoryCache() }
+    private let cacheWriter: NativeSharedCacheWriter
+    private let sharedCacheRoot: URL
+    private let sharedCacheKey: () -> String?
+    init(cacheWriter: NativeSharedCacheWriter = .shared, cacheRoot: URL? = nil, cacheKey: @escaping () -> String? = BrowserCacheKeychain.key) {
+        self.cacheWriter = cacheWriter
+        sharedCacheRoot = cacheRoot ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Proteus")
+        sharedCacheKey = cacheKey
+        UserDefaults.standard.removeObject(forKey: "proteus.download-history"); loadDocumentTabs(); loadHistoryCache()
+    }
     static func isOrganizationalScope(_ scope: String) -> Bool { scope.hasPrefix("workspace:") || scope.hasPrefix("project:") }
     func localContentTabs(_ scope: String) -> [JSON] {
         let browsers = tabs(in: scope).compactMap { tab -> JSON? in
@@ -508,14 +516,20 @@ let nativeFixtureRelayOrigin = ""
         let operations: [JSON]
         if let first = pending.first, first["action"].string.hasPrefix("browser-") { operations = [first] }
         else { operations = Array(pending.prefix { !$0["action"].string.hasPrefix("browser-") }.prefix(100)) }
+        let requestAccount = account
         contentBusy.insert(scope); defer { contentBusy.remove(scope) }
         func submit(_ args: [String: JSON]) async throws -> JSON {
             let arguments = JSON.object(args)
             if contentRequests[scope]?["args"] != arguments {
                 let formatter = ISO8601DateFormatter(); formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-                contentRequests[scope] = .object(["args": arguments, "id": .string(UUID().uuidString.lowercased()), "issuedAt": .string(formatter.string(from: Date()))]); saveDocumentTabs()
+                contentRequests[scope] = .object(["args": arguments, "id": .string(UUID().uuidString.lowercased()), "issuedAt": .string(formatter.string(from: Date()))])
             }
             let saved = contentRequests[scope] ?? .null
+            try await saveDocumentTabs().value()
+            try Task.checkCancellation()
+            guard account == requestAccount, config.remote.connected, config.remote.connection?.hostId == config.host,
+                  contentHosts[scope] == config.host, contentSync[scope]?.remote === config.remote,
+                  contentRequests[scope] == saved else { throw CancellationError() }
             return try await config.remote.request("tabs.mutate", args, requestID: saved["id"].string, issuedAt: saved["issuedAt"].string)
         }
         do {
@@ -535,13 +549,14 @@ let nativeFixtureRelayOrigin = ""
                 if let reorder = operations.last(where: { $0["action"].string == "reorder" }) { let requested = reorder["ids"].array.filter { ids.contains($0) }; retry.append(.object(["action": .string("reorder"), "ids": .array(requested + ids.filter { !requested.contains($0) })])) }
                 response = try await submit(["scope": .string(config.kind), "id": .string(config.id), "expectedRevision": fresh["revision"], "operations": .array(retry)])
             }
-            guard config.remote.connection?.hostId == config.host, config.remote.connected, contentHosts[scope] == config.host else { return }
+            guard account == requestAccount, config.remote.connection?.hostId == config.host, config.remote.connected, contentHosts[scope] == config.host else { return }
             contentRequests[scope] = nil; contentBackoff[config.host] = nil
             let sentIDs = Set(operations.compactMap { $0["operationId"].string.isEmpty ? nil : $0["operationId"].string })
             let remaining = (contentPending[scope] ?? []).filter { !operations.contains($0) && !sentIDs.contains($0["operationId"].string) }
             contentPending[scope] = remaining.isEmpty ? nil : remaining; saveDocumentTabs()
             if remaining.isEmpty { let complete = try await completeNavigationLists(response, remote: config.remote, kind: config.kind, scopeID: config.id); if contentPending[scope] == nil { applyContentTabs(complete, scope: scope) } else { contentSnapshots[scope] = complete } } else { contentSnapshots[scope] = response; Task { await self.flushContentTabs(scope) } }
         } catch {
+            guard account == requestAccount, contentHosts[scope] == config.host, contentSync[scope]?.remote === config.remote else { return }
             if (error as? RemoteError)?.code == "JOURNAL_BUSY" || error.localizedDescription.localizedCaseInsensitiveContains("Remote command history is busy") {
                 let prior = contentBackoff[config.host], attempts = (prior?.attempts ?? 0) + 1, date = Date()
                 let delay = min(60.0, max(pow(2.0, Double(min(attempts - 1, 6))), Double((error as? RemoteError)?.details["retryAfterMs"].int ?? 0) / 1000))
@@ -565,10 +580,13 @@ let nativeFixtureRelayOrigin = ""
     var lists: [JSON] { snapshot["teamLists"].array }
     func reset(for identity: String) {
         guard account != identity else { return }
-        NativeDescriptorCacheWriter.shared.flush()
+        saveBrowsers()
+        let cacheFailure = flushCachedState()
         mainBrowserSelectionRequest = nil
-        flushDocumentScrollPositions()
-        saveBrowsers(); for download in Array(downloads.values) { download.cancel() }; exportFile?.cleanup(); exportFile = nil; linkChatDraft = nil; restoring = true; contentSync = [:]; contentRequests = [:]; contentBackoff = [:]; workspaceContentDescriptors = contentSnapshots.filter { Self.isOrganizationalScope($0.key) }.mapValues { $0["tabs"].array }; account = identity; snapshot = .null; accountConnected = false; error = nil; browserPreviews = [:]; browserFavicons = [:]; faviconAttempts = [:]; unloadBrowsers(); browserTabs = []; unloadedBrowsers = []; selectedBrowser = nil; selectedMainBrowser = nil; scopedSelection = [:]; browserTouched = [:]; standupOrders = [:]; standupCompleted = [:]; documentContents = [:]; documentSessions = [:]; previewVersions = [:]; profileStores = [:]; draftAttachments = [:]; chatScrollLocations = [:]; documentScrollOffsets = [:]; draftMessageIDs = [:]; draftSessionIDs = [:]
+        // Host-scoped pending operations survive account changes, so their retry
+        // identities must survive too. Clearing sync bindings pauses dispatch
+        // until the new account reconnects to that owner with its own grants.
+        for download in Array(downloads.values) { download.cancel() }; exportFile?.cleanup(); exportFile = nil; linkChatDraft = nil; restoring = true; contentSync = [:]; contentBackoff = [:]; workspaceContentDescriptors = contentSnapshots.filter { Self.isOrganizationalScope($0.key) }.mapValues { $0["tabs"].array }; account = identity; snapshot = .null; accountConnected = false; error = cacheFailure; browserPreviews = [:]; browserFavicons = [:]; faviconAttempts = [:]; unloadBrowsers(); browserTabs = []; unloadedBrowsers = []; selectedBrowser = nil; selectedMainBrowser = nil; scopedSelection = [:]; browserTouched = [:]; standupOrders = [:]; standupCompleted = [:]; documentContents = [:]; documentSessions = [:]; previewVersions = [:]; profileStores = [:]; draftAttachments = [:]; chatScrollLocations = [:]; documentScrollOffsets = [:]; draftMessageIDs = [:]; draftSessionIDs = [:]
         if let cacheURL, let key = BrowserCacheKeychain.key(), let data = try? Data(contentsOf: cacheURL), let payload = try? RemoteCrypto.open(String(decoding: data, as: UTF8.self), key: key, aad: account), let decoded = try? JSONDecoder().decode([BrowserDescriptor].self, from: JSONEncoder().encode(payload["tabs"] == .null ? payload : payload["tabs"])) {
             browserTabs = decoded.compactMap(Self.retainedDescriptor); snapshot = payload["accountSnapshot"]; profilesVerified = snapshot["browserProfiles"] != .null
             let savedSelections = payload["selections"].object
@@ -610,10 +628,10 @@ let nativeFixtureRelayOrigin = ""
         guard let key = BrowserCacheKeychain.key(), let data = try? Data(contentsOf: shellCacheURL) else { return .null }
         return (try? RemoteCrypto.open(String(decoding: data, as: UTF8.self), key: key, aad: "proteus-mobile-navigation-v1")) ?? .null
     }
-    private var documentCacheURL: URL { FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Proteus/document-tabs.enc") }
+    private var documentCacheURL: URL { sharedCacheRoot.appendingPathComponent("document-tabs.enc") }
     private func loadDocumentTabs() {
-        Self.cacheWriter.sync {}
-        guard let key = BrowserCacheKeychain.key(), let data = try? Data(contentsOf: documentCacheURL), let payload = try? RemoteCrypto.open(String(decoding: data, as: UTF8.self), key: key, aad: "proteus-mobile-document-tabs-v1") else { return }
+        do { try cacheWriter.flush() } catch { self.error = error.localizedDescription }
+        guard let key = sharedCacheKey(), let data = try? Data(contentsOf: documentCacheURL), let payload = try? RemoteCrypto.open(String(decoding: data, as: UTF8.self), key: key, aad: "proteus-mobile-document-tabs-v1") else { return }
         if let encoded = try? JSONEncoder().encode(payload["tabs"]), let tabs = try? JSONDecoder().decode([NativeDocumentDescriptor].self, from: encoded) { documentTabs = Array(tabs.prefix(100)) }
         if let encoded = try? JSONEncoder().encode(payload["browserConflicts"]), let conflicts = try? JSONDecoder().decode([NativeBrowserNavigationConflict].self, from: encoded) { browserConflicts = conflicts }
         contentSnapshots = payload["contentSnapshots"].object; contentPending = payload["contentPending"].object.mapValues { $0.array }; contentRequests = payload["contentRequests"].object; contentHosts = payload["contentHosts"].object.mapValues { $0.string }
@@ -621,13 +639,30 @@ let nativeFixtureRelayOrigin = ""
         chatSelectedChildren = payload["selected"].object.compactMapValues { value in value.string.isEmpty ? nil : value.string }
         chatChildOrder = payload["order"].object.mapValues { $0.array.map(\.string).filter { !$0.isEmpty } }
     }
-    private func saveDocumentTabs() {
-        guard let key = BrowserCacheKeychain.key(), let tabs = try? JSONDecoder().decode(JSON.self, from: JSONEncoder().encode(documentTabs.suffix(100))) else { return }
-        let conflicts = (try? JSONDecoder().decode(JSON.self, from: JSONEncoder().encode(browserConflicts))) ?? .array([])
-        let payload: JSON = .object(["browserConflicts": conflicts, "contentSnapshots": .object(contentSnapshots), "contentPending": .object(contentPending.mapValues(JSON.array)), "contentRequests": .object(contentRequests), "contentHosts": .object(contentHosts.mapValues(JSON.string)), "tabs": tabs, "selected": .object(chatSelectedChildren.mapValues(JSON.string)), "order": .object(chatChildOrder.mapValues { .array($0.map(JSON.string)) })])
-        // Sealing and disk I/O run on the shared serial writer, off the main thread.
-        let url = documentCacheURL
-        Self.cacheWriter.async { do { let sealed = try RemoteCrypto.seal(payload, key: key, aad: "proteus-mobile-document-tabs-v1"); try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true); try Data(sealed.utf8).write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication]) } catch { /* Read-only tab metadata cannot affect the paired host. */ } }
+    @discardableResult private func saveDocumentTabs() -> NativeCacheWriteReceipt {
+        let tabs = Array(documentTabs.suffix(100)), conflicts = browserConflicts
+        let fields: [String: JSON] = ["contentSnapshots": .object(contentSnapshots), "contentPending": .object(contentPending.mapValues(JSON.array)), "contentRequests": .object(contentRequests), "contentHosts": .object(contentHosts.mapValues(JSON.string)), "selected": .object(chatSelectedChildren.mapValues(JSON.string)), "order": .object(chatChildOrder.mapValues { .array($0.map(JSON.string)) })]
+        return saveSharedCache(url: documentCacheURL, aad: "proteus-mobile-document-tabs-v1") {
+            var payload = fields
+            payload["tabs"] = try JSONDecoder().decode(JSON.self, from: JSONEncoder().encode(tabs))
+            payload["browserConflicts"] = try JSONDecoder().decode(JSON.self, from: JSONEncoder().encode(conflicts))
+            return .object(payload)
+        }
+    }
+    private func saveSharedCache(url: URL, aad: String, snapshot: @escaping () throws -> JSON) -> NativeCacheWriteReceipt {
+        let key = sharedCacheKey()
+        return cacheWriter.save(url: url, snapshot: {
+            guard let key else { throw RemoteError(message: "Unlock this device before syncing local tab/history changes.") }
+            return Data(try RemoteCrypto.seal(snapshot(), key: key, aad: aad).utf8)
+        }, onFailure: { [weak self] error in
+            let message = error.localizedDescription
+            Task { @MainActor [weak self] in self?.error = "Local tab/history changes could not be saved: " + message }
+        })
+    }
+    @discardableResult func flushCachedState() -> String? {
+        flushDocumentScrollPositions()
+        NativeDescriptorCacheWriter.shared.flush()
+        do { try cacheWriter.flush(); return nil } catch { let message = "Local tab/history changes could not be saved: " + error.localizedDescription; self.error = message; return message }
     }
     func contentDescriptorVisible(_ id: String, in scope: String) -> Bool {
         guard let snapshot = contentSnapshots[scope] else { return true }
@@ -1033,28 +1068,18 @@ let nativeFixtureRelayOrigin = ""
         browserViews[id]?.load(URLRequest(url: url))
         return true
     }
-    private var historyCacheURL: URL { FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Proteus/browser-history.enc") }
+    private var historyCacheURL: URL { sharedCacheRoot.appendingPathComponent("browser-history.enc") }
     private func loadHistoryCache() {
-        Self.cacheWriter.sync {}
-        guard let key = BrowserCacheKeychain.key(), let data = try? Data(contentsOf: historyCacheURL), let payload = try? RemoteCrypto.open(String(decoding: data, as: UTF8.self), key: key, aad: "proteus-mobile-history-v1") else { return }
+        do { try cacheWriter.flush() } catch { self.error = error.localizedDescription }
+        guard let key = sharedCacheKey(), let data = try? Data(contentsOf: historyCacheURL), let payload = try? RemoteCrypto.open(String(decoding: data, as: UTF8.self), key: key, aad: "proteus-mobile-history-v1") else { return }
         historyOutbox = payload["outbox"].array
         let threshold = Self.historyCacheStart()
         historyCache = payload["cache"].object.mapValues { $0.array.filter { ProviderAllowance.date($0["visitedAt"].string).map { $0 >= threshold } == true } }
     }
-    private func saveHistoryCache() {
-        guard let key = BrowserCacheKeychain.key() else { return }
-        let payload: JSON = .object(["outbox": .array(historyOutbox), "cache": .object(historyCache.mapValues(JSON.array))]), url = historyCacheURL
-        Self.cacheWriter.async {
-            do {
-                let sealed = try RemoteCrypto.seal(payload, key: key, aad: "proteus-mobile-history-v1")
-                try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-                try Data(sealed.utf8).write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
-            } catch { let message = error.localizedDescription; Task { @MainActor [weak self] in self?.error = "Browser history could not be saved: " + message } }
-        }
+    @discardableResult private func saveHistoryCache() -> NativeCacheWriteReceipt {
+        let payload: JSON = .object(["outbox": .array(historyOutbox), "cache": .object(historyCache.mapValues(JSON.array))])
+        return saveSharedCache(url: historyCacheURL, aad: "proteus-mobile-history-v1") { payload }
     }
-    /// One serial writer for encrypted local caches, shared by every store so a later
-    /// write can never be overtaken and reads always observe the newest snapshot.
-    nonisolated static let cacheWriter = DispatchQueue(label: "org.proteusapp.review.proteus.shared-cache-writer", qos: .utility)
     func assignBrowserOwner(_ id: String, host: String?) {
         guard let host, let index = browserTabs.firstIndex(where: { $0.id == id }), browserTabs[index].ownerHostId == nil else { return }
         browserTabs[index].ownerHostId = browserTabs[index].scope == "team" ? currentTeamOwner ?? host : contentHosts[browserTabs[index].scope] ?? host
@@ -1067,11 +1092,15 @@ let nativeFixtureRelayOrigin = ""
     }
     func flushHistory(_ remote: RemoteStore) async {
         guard remote.connected, let host = remote.connection?.hostId, !historyFlushing.contains(host) else { return }
+        let requestAccount = account
         historyFlushing.insert(host); defer { historyFlushing.remove(host) }
         do {
-            while remote.connected, remote.connection?.hostId == host {
+            while remote.connected, remote.connection?.hostId == host, account == requestAccount {
                 let visits = Array(historyOutbox.filter { $0["ownerHostId"].string == host }.prefix(100))
                 if visits.isEmpty { break }
+                try await saveHistoryCache().value()
+                try Task.checkCancellation()
+                guard account == requestAccount, remote.connected, remote.connection?.hostId == host, visits.allSatisfy({ historyOutbox.contains($0) }) else { break }
                 let response = try await remote.request("browser.history.record", ["events": .array(visits)])
                 let acknowledged = Set(response["acknowledgedEventIds"].array.map(\.string))
                 guard !acknowledged.isEmpty else { break }

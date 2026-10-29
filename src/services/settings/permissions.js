@@ -66,28 +66,15 @@ export function operationRule(request) {
 }
 export const ruleLabel = rule => rule.kind === 'shell' ? `Exact command: ${rule.command}` : rule.kind === 'url' ? rule.origin : `${rule.server ? `${rule.server} / ` : ''}${rule.tool}${rule.action ? ` / ${rule.action}` : ''}`;
 
-export class PermissionStore {
-  constructor(home, { preserveInheritedDefaults = false } = {}) {
+// Read-only display logic shared with the state worker. It has no file writer,
+// approval methods or provider sessions; the owner retains those capabilities.
+export class PermissionProjection {
+  constructor({ preserveInheritedDefaults = false } = {}) {
     this.preserveInheritedDefaults = preserveInheritedDefaults;
-    this.file = path.join(home, 'permissions.json');
-    if (!fs.existsSync(this.file)) atomicJSON(this.file, { schemaVersion: 1, workspaces: [] });
-  }
-  get() {
-    const value = readJSON(this.file);
-    if (value.schemaVersion !== 1 || !Array.isArray(value.workspaces)) throw new Error('Invalid permissions.json; restore or correct it before running tools.');
-    for (const profile of value.workspaces) {
-      if (!profile?.id || !permissionModes.includes(profile.mode) || !Array.isArray(profile.folders) || !Array.isArray(profile.rules)) throw new Error('Invalid workspace permission profile.');
-      for (const folder of profile.folders) if (!path.isAbsolute(folder.path || '') || !['read', 'read-write'].includes(folder.access)) throw new Error('Invalid trusted folder.');
-      for (const rule of profile.rules) {
-        if (!['shell','mcp','custom-tool','url'].includes(rule.kind) || (rule.kind === 'shell' && typeof rule.command !== 'string') || (rule.kind === 'url' && typeof rule.origin !== 'string') || (['mcp','custom-tool'].includes(rule.kind) && typeof rule.tool !== 'string') || (rule.kind === 'mcp' && typeof rule.server !== 'string')) throw new Error('Invalid saved tool rule.');
-      }
-    }
-    return { ...value, file: this.file, revision: revision(value) };
   }
   // UI projections may share this fresh, request-local read. Authorization and
   // mutations omit the snapshot and continue to load current disk state.
-  snapshot({ workspaceDefaults = this.workspaceDefaults } = {}) {
-    const value = this.get();
+  snapshot({ value = this.get(), workspaceDefaults = this.workspaceDefaults } = {}) {
     const profiles = new Map();
     for (const profile of value.workspaces) if (!profiles.has(profile.id)) profiles.set(profile.id, profile);
     const snapshot = { value, profiles, workspaceDefaults, defaults: new Map() };
@@ -179,6 +166,26 @@ export class PermissionStore {
       source: valid ? 'chat' : 'workspace', chatMode: valid ? 'autopilot' : null,
       chatRevision: run.chatPermissionRevision || null };
   }
+}
+
+export class PermissionStore extends PermissionProjection {
+  constructor(home, { preserveInheritedDefaults = false } = {}) {
+    super({ preserveInheritedDefaults });
+    this.file = path.join(home, 'permissions.json');
+    if (!fs.existsSync(this.file)) atomicJSON(this.file, { schemaVersion: 1, workspaces: [] });
+  }
+  get() {
+    const value = readJSON(this.file);
+    if (value.schemaVersion !== 1 || !Array.isArray(value.workspaces)) throw new Error('Invalid permissions.json; restore or correct it before running tools.');
+    for (const profile of value.workspaces) {
+      if (!profile?.id || !permissionModes.includes(profile.mode) || !Array.isArray(profile.folders) || !Array.isArray(profile.rules)) throw new Error('Invalid workspace permission profile.');
+      for (const folder of profile.folders) if (!path.isAbsolute(folder.path || '') || !['read', 'read-write'].includes(folder.access)) throw new Error('Invalid trusted folder.');
+      for (const rule of profile.rules) {
+        if (!['shell','mcp','custom-tool','url'].includes(rule.kind) || (rule.kind === 'shell' && typeof rule.command !== 'string') || (rule.kind === 'url' && typeof rule.origin !== 'string') || (['mcp','custom-tool'].includes(rule.kind) && typeof rule.tool !== 'string') || (rule.kind === 'mcp' && typeof rule.server !== 'string')) throw new Error('Invalid saved tool rule.');
+      }
+    }
+    return { ...value, file: this.file, revision: revision(value) };
+  }
   mutate(schedule, change, expectedRevision) {
     const value = this.get();
     if (expectedRevision !== undefined && expectedRevision !== value.revision) throw new Error('Permissions changed outside the app. Reload before saving.');
@@ -254,7 +261,7 @@ export class PermissionStore {
     return { path: folder, access: request.kind === 'write' ? 'read-write' : 'read' };
   }
   choices(schedule, request) {
-    if (protectedRequest(request)) return [];
+    if (protectedRequest(request) || request.kind === 'chat-access') return [];
     const choices = [];
     const folder = this.folderOffer(schedule, request);
     if (folder) choices.push({ value: 'trust-folder-chat', label: `Allow ${folder.access === 'read' ? 'reads' : 'reads and writes'} in ${folder.path} for this chat` });
@@ -282,6 +289,12 @@ export class PermissionStore {
   }
   decide(schedule, request, profile = this.describe(schedule)) {
     if (protectedRequest(request)) return { allowed: false, reason: 'Enterprise policy or sandbox escape requires a direct response.' };
+    // The owner creates this request for an exact durable chat scope. A generic
+    // saved tool invocation must never turn into permission to grant new scopes.
+    if (request.kind === 'chat-access') {
+      const allowed = request.toolName === 'proteus_chats' && profile.mode === 'autopilot';
+      return { allowed, reason: allowed ? (profile.source === 'chat' ? 'Chat-only auto-approval' : 'Workspace auto-approval') : 'Chat access scope requires approval', mode: profile.mode };
+    }
     if(['read','write'].includes(request.kind)){
       const target=requestedPath(request,profile),folder=(profile.automaticFolders||[]).find(folder=>folder.source==='provider'&&canonicalPath(folder.path,profile.cwd)===folder.path&&target&&within(target,folder.path));
       if(folder)return {allowed:true,reason:'Automatic provider working folder',mode:profile.mode,resolvedTarget:target,matchedRoot:folder.path,source:'provider'};

@@ -1,5 +1,5 @@
 import {revision} from '../scheduling/schedules.js';
-import {chatRecoveryState} from '../../../public/features/chats/chat-recovery-state.js';
+import {chatRecoveryState,activeTimeProviders} from '../../../public/features/chats/chat-recovery-state.js';
 const continuation='Continue this conversation from where the interrupted turn left off. Preserve completed work and do not repeat completed external actions. Finish the current work before processing queued follow-up messages.';
 // Explicit per-chat opt-in, owned by the sole runner. Never restore timers on
 // launch, replay a failed prompt, change model, or approve a pending request.
@@ -15,7 +15,7 @@ export class ChatRecovery {
  command(id,{action,expectedFailureEventAt,expectedUpdatedAt,expectedPreferenceVersion,modelOptions,enabled}={}){
   const run=this.engine.getRun(id);
   if(action==='active-time-auto'){
-   if(run.schedule.provider!=='copilot'||typeof enabled!=='boolean'||(expectedPreferenceVersion===undefined?expectedUpdatedAt!==run.updatedAt:expectedPreferenceVersion!==(run.activeTimeContinuation?.version||0)))throw Error('This chat changed. Refresh its continuation preference.');
+   if(!activeTimeProviders.includes(run.schedule.provider)||typeof enabled!=='boolean'||(expectedPreferenceVersion===undefined?expectedUpdatedAt!==run.updatedAt:expectedPreferenceVersion!==(run.activeTimeContinuation?.version||0)))throw Error('This chat changed. Refresh its continuation preference.');
    run.activeTimeContinuation={...run.activeTimeContinuation,enabled,attempts:0,version:(run.activeTimeContinuation?.version||0)+1};this.engine.persist(run);return run;
   }
 
@@ -26,7 +26,7 @@ export class ChatRecovery {
   if(run.archivedAt||!['chat','manual','scheduled','schedule'].includes(run.trigger))throw Error('Open an eligible conversation before continuing.');
   if(action==='continue'||action==='active-time-continue-enable'){
    if(action==='active-time-continue-enable'){
-    if(!state.activeTimeLimit)throw Error('This failure is not a recoverable Copilot active-time limit.');
+    if(!state.activeTimeLimit)throw Error('This failure is not a recoverable active-time limit.');
     run.activeTimeContinuation={...run.activeTimeContinuation,enabled:true,attempts:0,lastFailureEventAt:expectedFailureEventAt};this.engine.persist(run);
    }
 
@@ -54,12 +54,12 @@ export class ChatRecovery {
  }
  settled(run){
   const state=chatRecoveryState(run),auto=run.activeTimeContinuation;
-  if(run.status==='completed'&&auto?.attempts){auto.attempts=0;this.engine.persist(run);}
+  if((run.status==='completed'||run.status==='queued'&&run.turns?.at(-1)?.status==='completed')&&auto?.attempts){auto.attempts=0;delete auto.attention;this.engine.persist(run);}
   if(auto?.enabled&&state?.activeTimeLimit&&!this.engine.stopping&&!this.engine.updateBarrier&&!run.archivedAt&&!run.pending&&run.providerSessionId&&auto.lastFailureEventAt!==state.failureEventAt){
    if((auto.attempts||0)>=3){auto.attention='Automatic continuation stopped after three consecutive active-time limits.';this.engine.persist(run);return;}
    // Persist the claim before queueing; no timer or crash recovery replays it.
-   auto.lastFailureEventAt=state.failureEventAt;auto.attempts=(auto.attempts||0)+1;const failure=state.failureEventAt,session=run.providerSessionId;this.engine.persist(run);
-   queueMicrotask(()=>{try{if(run.activeTimeContinuation!==auto||!auto.enabled||run.failureEventAt!==failure||run.providerSessionId!==session||this.engine.running.has(run.id)||run.pending||run.status!=='failed'||this.engine.updateBarrier||this.engine.stopping)return;this.engine.resume(run.id,continuation);}catch(error){auto.attention=error.message;this.engine.persist(run);}});
+   auto.lastFailureEventAt=state.failureEventAt;auto.attempts=(auto.attempts||0)+1;const failure=state.failureEventAt,session=run.providerSessionId,fingerprint=this.fingerprint(run);this.engine.persist(run);
+   queueMicrotask(()=>{try{if(run.activeTimeContinuation!==auto||!auto.enabled||run.failureEventAt!==failure||run.providerSessionId!==session||this.fingerprint(run)!==fingerprint||this.engine.running.has(run.id)||[...this.engine.backgroundRuns.values()].some(slot=>slot.id===run.id)||run.pending||run.archivedAt||run.status!=='failed'||this.engine.updateBarrier||this.engine.stopping)return;this.engine.resume(run.id,continuation);}catch(error){auto.attention=error.message;this.engine.persist(run);}});
    return;
   }
 

@@ -49,14 +49,14 @@ test('encrypted multi-chat dispatch, independent feedback, ordinary answers and 
  const cancelled=await control.handle(command('cancel',{chatId:b.chatId}),caller.id);assert.equal(cancelled.state,'accepted');await until(()=>owner.engine.getRun(b.chatId).status==='cancelled');
 });
 
-test('authorization is required, human grant cannot be self-approved, revoked/context-changed access is rejected',async t=>{
+test('authorization is required, direct grants remain operator-only, denied/revoked/context-changed access is rejected',async t=>{
  const f=await fixture(t),{control,caller,hostId,owner,command}=f;
  await assert.rejects(control.handle(command('create',{provider:'copilot',model:'fixture',prompt:'no grant'}),caller.id),/authorized/);
  await assert.rejects(control.handle({action:'grant',originChatId:caller.id,scope:{hostId,actions:['dispatch']}},caller.id),/Only the trusted/);
  // A real engine permission is exercised independently of the held provider question.
  f.origin.engine.reply(caller.id,'release',caller.pending.id);await until(()=>caller.status==='completed');
  let response;const originalProvider=f.origin.engine.providers.copilot;const askProvider={status:async()=>({available:true,models:[model]}),run:async({run,emit})=>{response=await control.handle({action:'request-access',scope:{hostId,actions:['read','dispatch']}},run.id);emit('assistant','grant result');}};
- f.origin.engine.providers.copilot=askProvider;const requester=await f.create(f.origin,'request grant');await until(()=>requester.pending?.type==='permission');assert.equal(requester.pending.details.managedApprovalRequired,true);f.origin.engine.reply(requester.id,'deny',requester.pending.id);await until(()=>requester.status==='failed');assert.equal(response,undefined);assert.ok(!control.access.grants.some(g=>g.actor===requester.id));
+ f.origin.engine.providers.copilot=askProvider;const requester=await f.create(f.origin,'request grant');await until(()=>requester.pending?.type==='permission');assert.equal(requester.pending.details.kind,"chat-access");f.origin.engine.reply(requester.id,'deny',requester.pending.id);await until(()=>requester.status==='failed');assert.equal(response,undefined);assert.ok(!control.access.grants.some(g=>g.actor===requester.id));
  f.origin.engine.providers.copilot=originalProvider;await f.origin.engine.send(caller.id,'hold resumed origin','queue',randomUUID());await until(()=>caller.pending);const g=f.grant();
  const task=await control.handle(command('create',{provider:'copilot',model:'fixture',prompt:'secret fixture result'}),caller.id);await until(()=>owner.engine.getRun(task.chatId).status==='completed');await control.refresh();
  control.revoke(g.grant.id,control.access.revision);
@@ -166,8 +166,49 @@ test('stopping the origin during metadata refresh prevents a later dispatch effe
 test('an explicit human approval grants only the requested originating scope',async t=>{
  const f=await fixture(t),{origin,control,hostId}=f;let result;
  origin.engine.providers.copilot={status:async()=>({available:true,models:[model]}),run:async({run,emit})=>{result=await control.handle({action:'request-access',scope:{hostId,actions:['read']}},run.id);emit('assistant','Synthetic approved grant');}};
- const run=await f.create(origin,'approve synthetic scope');await until(()=>run.pending?.type==='permission');assert.equal(run.pending.details.managedApprovalRequired,true);assert.deepEqual(run.pending.permissionChoices,[]);
+ const run=await f.create(origin,'approve synthetic scope');await until(()=>run.pending?.type==='permission');assert.equal(run.pending.details.kind,"chat-access");assert.deepEqual(run.pending.permissionChoices,[]);
  origin.engine.reply(run.id,'approve',run.pending.id);await until(()=>run.status==='completed');assert.equal(result.granted,true);assert.equal(result.grant.actor,run.id);assert.deepEqual(result.grant.actions,['read']);assert.equal(result.grant.hostId,hostId);
+});
+
+for(const mode of ['chat','workspace'])test(`${mode} Auto-approve grants only the requested chat scope and keeps revocation effective`,async t=>{
+ const f=await fixture(t),{origin,control,hostId}=f;let result,start;
+ const ready=new Promise(resolve=>start=resolve),chatId=randomUUID(),scope={hostId,chatIds:[chatId],projectId:'synthetic-project',actions:['read']};
+ origin.engine.providers.copilot={status:async()=>({available:true,models:[model]}),run:async({run,emit})=>{await ready;result=await control.handle({action:'request-access',scope},run.id);emit('assistant','Synthetic automatic grant');}};
+ const run=await f.create(origin,'automatic synthetic scope');
+ if(mode==='chat')origin.engine.setChatPermission(run.id,'autopilot',origin.engine.permissions.describe(run.schedule).id,null);
+ else origin.engine.permissions.setMode(run.schedule,'autopilot');
+ start();await until(()=>run.status==='completed');
+ assert.equal(result.granted,true);assert.equal(run.pending,null);assert.deepEqual(result.grant.actions,['read']);assert.deepEqual(result.grant.chatIds,[chatId]);assert.equal(result.grant.projectId,scope.projectId);assert.equal(result.grant.actor,run.id);assert.equal(result.grant.contextId,control.context(run.id));
+ assert.equal(control.permitted(run.id,hostId,'read',chatId,scope.projectId),true);
+ assert.equal(control.permitted(run.id,hostId,'dispatch',chatId,scope.projectId),false);assert.equal(control.permitted(run.id,hostId,'read',randomUUID(),scope.projectId),false);assert.equal(control.permitted(run.id,hostId,'read',chatId,'other-project'),false);
+ const receipt=run.events.find(event=>event.data?.permission?.kind==='chat-access').data.permission;assert.equal(receipt.automatic,true);assert.equal(receipt.source,mode);
+ control.revoke(result.grant.id,control.access.revision);assert.equal(control.permitted(run.id,hostId,'read',chatId,scope.projectId),false);
+});
+
+test('enabling chat Auto-approve resolves a pending scope request without broadening its captured target',async t=>{
+ const f=await fixture(t),{origin,control,hostId}=f;let result;const chatId=randomUUID(),scope={hostId,chatIds:[chatId],actions:['read']};
+ origin.engine.providers.copilot={status:async()=>({available:true,models:[model]}),run:async({run,emit})=>{result=await control.handle({action:'request-access',scope},run.id);emit('assistant','Synthetic rechecked grant');}};
+ const run=await f.create(origin,'pending synthetic scope');await until(()=>run.pending?.type==='permission');
+ scope.actions.push('dispatch');scope.chatIds.push(randomUUID());
+ origin.engine.setChatPermission(run.id,'autopilot',origin.engine.permissions.describe(run.schedule).id,null,run.pending.id);
+ await until(()=>run.status==='completed');assert.deepEqual(result.grant.actions,['read']);assert.deepEqual(result.grant.chatIds,[chatId]);assert.equal(run.automaticApprovals,1);
+});
+
+for(const change of ['approval','context','stop','peer'])test(`changing ${change} before an automatic scope grant is saved fails closed`,async t=>{
+ const f=await fixture(t),{origin,control,hostId}=f;let start;const ready=new Promise(resolve=>start=resolve),ask=origin.engine.ask.bind(origin.engine);
+ origin.engine.ask=async(run,request,signal)=>{
+  const answer=await ask(run,request,signal);
+  if(request.details?.kind==='chat-access'){
+   if(change==='approval')origin.engine.setChatPermission(run.id,'inherit',origin.engine.permissions.describe(run.schedule).id,run.chatPermissionRevision);
+   if(change==='context')run.schedule.context={...run.schedule.context,workspaceId:'changed-synthetic-context'};
+   if(change==='stop')origin.engine.cancel(run.id);
+   if(change==='peer')origin.peers.records.get(hostId).paused=true;
+  }
+  return answer;
+ };
+ origin.engine.providers.copilot={status:async()=>({available:true,models:[model]}),run:async({run})=>{await ready;await control.handle({action:'request-access',scope:{hostId,actions:['read']}},run.id);}};
+ const run=await f.create(origin,'changing synthetic scope');origin.engine.setChatPermission(run.id,'autopilot',origin.engine.permissions.describe(run.schedule).id,null);start();
+ await until(()=>['failed','cancelled'].includes(run.status));assert.equal(control.access.grants.some(grant=>grant.actor===run.id),false);
 });
 
 test('revocation during dispatch suppresses the response but preserves a known accepted receipt',async t=>{

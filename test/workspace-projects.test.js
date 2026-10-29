@@ -84,7 +84,7 @@ test('production owner API and remote adapter advertise projects, route creation
  const ownerRead=app.workspaceProjects.read.bind(app.workspaceProjects);let projectionReads=0;app.workspaceProjects.read=()=>{projectionReads++;return ownerRead();};
  const permissionRead=app.engine.permissions.get.bind(app.engine.permissions);let permissionReads=0;app.engine.permissions.get=()=>{permissionReads++;return permissionRead();};
  const polled=(await call('/api/state?summaries=1')).data;
- assert.equal(permissionReads,2,'State uses one permission snapshot plus the context approval-profile projection');app.engine.permissions.get=permissionRead;
+ assert.equal(permissionReads,4,'State uses two projection reads and fresh revision checks before and after the worker, independent of chat count');app.engine.permissions.get=permissionRead;
  assert.ok(app.performanceDiagnostics.snapshot().phases.some(phase=>phase.name==='http.state.assemble'&&phase.kind==='sync'));
  assert.equal(projectionReads,2,'State uses one project snapshot plus the context source-library projection');assert.equal(polled.runs.find(run=>run.id===created.id).projectId,polled.workspaceProjects.memberships[created.id].projectId);
  projectionReads=0;

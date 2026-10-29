@@ -48,7 +48,7 @@ struct ProteusRoot: View {
             applicationContent.tint(NativeTheme.accent).foregroundStyle(NativePalette.shared.color("text")).preferredColorScheme(.dark)
                 .onAppear { UIApplication.shared.isIdleTimerDisabled = keepScreenAwake && phase == .active }
                 .onChange(of: keepScreenAwake) { _, value in UIApplication.shared.isIdleTimerDisabled = value && phase == .active }
-                .onChange(of: phase) { _, next in UIApplication.shared.isIdleTimerDisabled = keepScreenAwake && next == .active; if next != .active { NativeDescriptorCacheWriter.shared.flush() } }
+                .onChange(of: phase) { _, next in UIApplication.shared.isIdleTimerDisabled = keepScreenAwake && next == .active; if next != .active { shared.flushCachedState() } }
                 .onOpenURL { url in if url.scheme == "proteus" && url.host == "pair" { do { try destinations.add(url.absoluteString, label: "New computer"); incomingPairing = true } catch { destinations.error = error.localizedDescription } } }
                 .sheet(isPresented: $incomingPairing, onDismiss: { destinations.cancelPairing() }) { NavigationStack { PairView().toolbar { Button("Cancel") { incomingPairing = false } } } }
                 .onChange(of: destinations.pairingCompletion) { _, completion in if completion != nil { incomingPairing = false } }

@@ -13,8 +13,8 @@ test('queued user messages and unchanged provider updates cannot conceal a stall
  startProgress(run,at(0));providerProgress(run,at(0));
  run.events.push({role:'user',text:'Any progress?',at:at(4)});run.updatedAt=at(4);providerProgress(run,at(4));
  assert.equal(run.progress.lastProgressAt,at(0));assert.equal(checkProgress(run,at(5)).changed,true);assert.equal(run.progress.waitingTools[0].name,'synthetic_write');assert.match(workingMessage(run),/No observable progress/);
- assert.equal(checkProgress(run,at(30)).timedOut,true);
- tool.status='completed';tool.finishedAt=at(31);providerProgress(run,at(31));assert.equal(run.progress.stalled,false);assert.equal(run.progress.stage,'provider');
+ assert.equal(checkProgress(run,at(30)).timedOut,false);assert.equal(checkProgress(run,at(119)).timedOut,false);assert.equal(checkProgress(run,at(120)).timedOut,true);
+ tool.status='completed';tool.finishedAt=at(121);providerProgress(run,at(121));assert.equal(run.progress.stalled,false);assert.equal(run.progress.stage,'provider');
 });
 test('human waiting is excluded, and fresh provider output clears the warning',()=>{
  const run={status:'awaiting_input',pending:{id:'q'},events:[]};startProgress(run,at(0));assert.equal(checkProgress(run,at(100)),null);
@@ -29,6 +29,7 @@ for(const provider of ['copilot','codex','claude'])test(provider+' stalled-turn 
  const until=async fn=>{for(let i=0;i<100;i++){if(fn())return;await new Promise(resolve=>setTimeout(resolve,5));}throw Error('Watchdog fixture did not settle.');};
  await until(()=>finish);minute=4;await engine.send(run.id,'Keep this queued');const queued=structuredClone(run.queuedMessages);
  minute=5;await engine.tick();assert.equal(run.progress.stalled,true);assert.equal(aborts,0);
- minute=30;await engine.tick();assert.equal(aborts,1);assert.equal(engine.running.has(run.id),true);await engine.tick();assert.equal(aborts,1);assert.equal(started,1);assert.deepEqual(run.queuedMessages,queued);
+ minute=30;await engine.tick();assert.equal(aborts,0);minute=119;await engine.tick();assert.equal(aborts,0);
+ minute=120;await engine.tick();assert.equal(aborts,1);assert.equal(engine.running.has(run.id),true);await engine.tick();assert.equal(aborts,1);assert.equal(started,1);assert.deepEqual(run.queuedMessages,queued);
  finish();await until(()=>run.status==='failed'&&!engine.running.has(run.id));assert.match(run.events.at(-1).text,/No observable provider\/tool progress/);assert.deepEqual(run.queuedMessages,queued);assert.equal(started,1);
 });

@@ -1,10 +1,75 @@
+## October 29 — combined rollout authorized after Windows work
+
+The operator authorizes combining iOS and desktop fixes, relevant web parity, chat-tool
+Auto-approve and notification focus corrections, then deploying to physical iPhone/iPad,
+Build Mac, Windows and web once the separate Windows distribution chat finishes.
+Work Mac is explicitly held until the operator lifts that hold. Final validation, source merge,
+packaging and installed acceptance are pending; see [combined release](2026-10-29-combined-release.md).
+
+## October 29 — compact question answer controls
+
+The operator requested less empty space below question replies. The shared question card now
+places + and right-aligned Send answer in one compact row below the answer box, hiding empty
+attachment spacing. Existing question UI and static checks pass; wide/narrow visual checks retain
+alignment with selected files. Source-only; no package/install. See [chat rendering](chat-rendering.md).
+
+## October 29 — execution limits and Claude continuation
+
+Operator-authorized source changes replace the 30-minute execution/no-progress stops with a
+two-hour safeguard, and add bounded opt-in same-session Claude timeout recovery. A subsequent
+incident revealed premature teardown of native background tasks and an orphan-notification
+result swallowing a follow-up. Initial-input UUID acknowledgment and task lifecycle retention
+now cover both paths; exact regression reproductions and the recovery UI pass. Packaging/live
+acceptance remain separate. See [continuation evidence](2026-10-29-claude-continuation.md).
+
+## October 29 — owner state worker correction
+
+The operator requests analysis and a conventional fix for continued HC typing/scrolling stalls.
+HTTP permission display and serialization now run on a bounded read-only worker, with fresh
+revision checks around asynchronous work and owner-only authorization/mutations. Source Electron
+measurement reduces 500-chat synchronous assembly from 72.58 to 7.52 ms and observed timer gap
+from 84.55 to 13.13 ms. This is source-only; longer unattributed stalls, installed HC behavior
+and any new package/deployment remain separate. See [analysis and validation](2026-10-29-main-thread-responsiveness.md).
+
+## October 28 — Build Mac 0.2.33 installed, qualified acceptance
+
+The local supervisor completed job `cacc7323-2d2b-51ac-9dc2-01aa3cad1e1a` with outcome
+`updated`, verified health and one delivered same-chat continuation. The installed build is
+`262d121f6e51+src.7ef610dae5d5`; its complete bundle hash is
+`5bc494117c11446b418a28ef8b7e846f71e0d19f0fd4ff1b0f6528f3fe0c7a54` and strict Apple
+signature passes for `org.proteusapp.proteus.desktop` / team `TEAMID0000`. One owner and a separate
+document MCP process were observed. The restricted shell initially returned `CSSMERR_TP_NOT_TRUSTED`;
+verification outside that restriction passed and the failed result remains in private evidence.
+
+At the restart barrier the owner verified 55 chat histories, 26,539 event prefixes and effective
+configurations. Both retained recovery receipts, app bundles and complete recorded data trees
+match their hashes, and both app signatures pass. Permissions, browser profiles/access, pairing,
+settings, content tabs, desktop windows, layouts and checked history/command databases match the
+cold snapshot byte for byte. Four window sessions retain their tab counts, mapped active and child
+selections, and drafts; regenerated view IDs reconcile by position. Twelve browser records gained
+content IDs. Project changes are scan completion metadata and one scanned-folder count. A fresh post-continuation audit matches all 55 event prefixes and 54 effective configurations;
+the coordinator's sole context difference is its supplied timestamp after resumption. One of four
+encrypted browser-session files changed, so its logical history is not independently verified.
+Raw differences remain in private evidence. No data was restored over current work.
+
+Cua and Peekaboo are installed; Cua Accessibility and Screen Recording are granted. Three restored
+windows were enumerated and one observed. Codex continuation works; other-provider operation was
+not exercised. A 66-second startup/active diagnostic snapshot showed 32 HTTP state assemblies,
+mean 29.12 ms and maximum 104.31 ms; it is not an HC gesture test and does not explain all freezes.
+The helper recorded +62,324,736 bytes free across its interval and staging retirement separately
+observed +663,334,912 bytes; concurrent activity and APFS sharing limit attribution. The supervisor
+retired its candidate, while the exact tested artifact and source remain. No other rollout or
+publication is authorized by this update.
+
 ## October 28 — 0.2.33 follow-up authorized
 
 Build and Build Mac installation are authorized. The pending blank-tab correction and a
 confirmed inherited-permission projection bottleneck are source-complete and tested. Real HC
 diagnostics correlate repeated one-second owner delays with state assembly; the corrected
 synthetic 500-chat fixture reduces repeated path resolutions from 124,129 to 14 and state
-assembly maximum from about 427 ms to 77 ms. Exact package/installation remains pending;
+assembly maximum from about 427 ms to 77 ms. The exact signed package passes source/signature,
+packaged performance (95.74 ms maximum) and native early-typing checks; the fresh local coordinator
+completed installation and qualified acceptance as recorded above.
 unattributed longer stalls and HC gesture acceptance remain separate. See [evidence](2026-10-28-followup-release.md).
 
 ## October 28 — HC 0.2.32 installed

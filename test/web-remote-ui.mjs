@@ -35,16 +35,36 @@ try{
  apps[0].liveBrowser=new LiveBrowser({list:()=>[{id:'synthetic-tab',title:'Synthetic live page',agentControlling:true}],current:()=>true,capture:async()=>({revision:1,width:800,height:600,image:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII='})});
  await pair(0,'Studio Desktop',true);apps[0].remote.setBrowserAccess(apps[0].remote.config.devices[0].id,true);
  if(process.env.PROTEUS_TEST_QUESTIONS_ONLY==='1'){
-  const app=apps[0],schedule=await app.buildChatSchedule({name:'Structured web questions',prompt:'Synthetic question history',provider:'rehearsal'}),run=app.engine.createRun(schedule,'chat',null,{deferStart:true});
+  await page.goto(origin+'/remote?view=connections');await pair(1,'Travel Laptop');await selectHost(page,apps[0].remote.config.hostId);await page.waitForFunction(()=>document.querySelector('#remote-status').textContent==='Studio Desktop · Connected');
+  const app=apps[0],schedule=await app.buildChatSchedule({name:'Structured web questions',prompt:'Synthetic question history',provider:'copilot',model:'synthetic'}),run=app.engine.createRun(schedule,'chat',null,{deferStart:true});
   run.status='completed';delete run.deferredStart;delete run.nextPrompt;
-  app.engine.providers.rehearsal={async run({emit}){emit('assistant','Synthetic answer accepted. No external provider.');}};
-  app.engine.event(run,'assistant','Choose a web destination.',{providerItemId:'web-question-item',userQuestions:[{title:'Web destination?',options:['Web A','Web B']},{title:'Web instructions?'}]});
+  app.engine.providers.copilot.run=async({emit,attachments=[]})=>{if(attachments.length)app.syntheticAttachmentDeliveries.push(attachments.map(item=>({name:item.name,mediaType:item.mediaType,bytes:Buffer.from(item.bytes)})));emit('assistant','Synthetic answer accepted. No external provider.');};
+  app.engine.event(run,'assistant','Choose a web destination.',{providerItemId:'web-question-item',userQuestions:[{title:'Web destination?',options:['Web A','Web B']},{title:'Web instructions?'},{title:'Show the relevant file.'}]});
   await page.reload();await page.locator(`[data-run="${run.id}"]`).first().click();await page.locator('.user-question-queue summary').waitFor();
   await page.locator('.user-question-queue summary').click();await page.getByRole('button',{name:'Web destination?',exact:true}).click();await page.getByRole('button',{name:'Web B',exact:true}).click();
   await until(()=>run.userQuestions[0].status==='answered');await until(()=>run.status==='completed');
   await page.locator('.user-question-queue summary').waitFor();await page.locator(`[data-question-id="${run.userQuestions[1].id}"] textarea`).fill('Custom web answer');
   await page.locator(`[data-question-id="${run.userQuestions[1].id}"]`).getByRole('button',{name:'Send answer',exact:true}).click();await until(()=>run.userQuestions[1].status==='answered');
-  assert.equal(run.events.filter(event=>event.data?.questionReply).length,2);assert.deepEqual(errors,[]);console.log(JSON.stringify({passed:true,encryptedOwnerQuestions:true,choiceAndCustomAnswer:true,sameOwnerChat:true}));
+  await until(()=>run.status==='completed');
+  const commands=[];let failFileAnswer=true;
+  for(const [index,owner] of apps.entries()){const execute=owner.remote.execute.bind(owner.remote);owner.remote.execute=async(peer,method,args)=>{if(method.startsWith('chat.attachments.')||method==='chat.answer-question'){commands.push({index,method,args});if(method==='chat.answer-question'&&args.attachments?.length&&failFileAnswer){failFileAnswer=false;throw Error('Synthetic uncertain answer transport');}}return execute(peer,method,args);};}
+  const question=run.userQuestions[2],card=page.locator(`[data-question-id="${question.id}"]`),fileBytes=Buffer.from('Synthetic question evidence.');
+  await page.locator('#remote-composer [name=prompt]').fill('Keep this unsent composer draft');
+  await card.locator('input[type=file]').setInputFiles({name:'question-evidence.txt',mimeType:'text/plain',buffer:fileBytes});await card.locator('textarea').fill('Review the attached evidence');
+  await page.setViewportSize({width:390,height:844});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+  assert.equal(await card.locator('.attachment-chip').count(),1);assert.equal(await card.locator('.attachment-controls').evaluate(node=>getComputedStyle(node).display),'flex');
+  await card.getByRole('button',{name:'Send answer',exact:true}).click();const consent=page.locator('dialog.attachment-confirm[open]');await consent.waitFor();
+  assert.match(await consent.innerText(),/Studio Desktop · Structured web questions/);assert.match(await consent.innerText(),/Copilot/);assert.equal(commands.length,0);
+  // Navigation while confirmation is open must not move the upload or answer.
+  await selectHost(page,apps[1].remote.config.hostId);await page.waitForFunction(()=>document.querySelector('#remote-status').textContent==='Travel Laptop · Connected');
+  await consent.getByRole('button',{name:'Confirm Send',exact:true}).click();await until(()=>commands.some(command=>command.method==='chat.answer-question'));await page.waitForFunction(()=>document.querySelector('#remote-notice').textContent.includes('Synthetic uncertain answer transport'));
+  assert.ok(commands.every(command=>command.index===0));assert.equal(question.status,'pending');
+  await selectHost(page,apps[0].remote.config.hostId);await page.waitForFunction(()=>document.querySelector('#remote-status').textContent==='Studio Desktop · Connected');await card.locator('textarea').waitFor();
+  assert.equal(await card.locator('textarea').inputValue(),'Review the attached evidence');assert.equal(await page.locator('#remote-composer [name=prompt]').inputValue(),'Keep this unsent composer draft');
+  await card.getByRole('button',{name:'Send answer',exact:true}).click();await until(()=>question.status==='answered');await until(()=>run.status==='completed');
+  const answers=commands.filter(command=>command.method==='chat.answer-question'),uploads=commands.filter(command=>command.method==='chat.attachments.begin');assert.equal(answers.length,2);assert.deepEqual(answers[0].args,answers[1].args);assert.equal(uploads.length,1);assert.equal(answers[0].args.providerId,'copilot');assert.equal(answers[0].args.id,run.id);assert.ok(answers[0].args.consentId);
+  assert.equal(app.syntheticAttachmentDeliveries.length,1);assert.deepEqual(app.syntheticAttachmentDeliveries[0],[{name:'question-evidence.txt',mediaType:'text/plain',bytes:fileBytes}]);assert.equal(apps[1].syntheticAttachmentDeliveries.length,0);
+  assert.equal(run.events.filter(event=>event.data?.questionReply).length,3);assert.equal(await page.locator('#remote-composer [name=prompt]').inputValue(),'Keep this unsent composer draft');assert.deepEqual(errors,[]);console.log(JSON.stringify({passed:true,encryptedOwnerQuestions:true,choiceAndCustomAnswer:true,sameOwnerChat:true,attachmentsWithConsent:true,ownerRetainedAcrossNavigation:true,uncertainDeliveryRetriedOnceWithSameIdentity:true,narrowLayout:true}));
  }else if(process.env.PROTEUS_TEST_CORRECTIONS_ONLY==='1'){
   await exerciseWebCorrections(page,apps[0]);assert.deepEqual(errors,[]);
  }else{
