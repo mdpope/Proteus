@@ -5,6 +5,7 @@ const {spawn}=require('node:child_process');
 const {privateTemporaryDirectory}=require('../../src/shared/private-paths.cjs');
 const {atomic,tree,inspectPackage,compatible,copyTree,spaceBudget,readJob,writeJob,recoveryPolicy,digest,excluded}=require('./update-package.cjs');
 const {copyRecovery}=require('./update-storage.cjs');
+const {verifyCandidate}=require('./update-candidate.cjs');
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const alive=pid=>{try{process.kill(pid,0);return true;}catch(error){if(error.code==='ESRCH')return false;throw error;}};
 async function until(check,timeout,label){const end=Date.now()+timeout;while(!await check()){if(Date.now()>=end)throw Error('Timed out: '+label);await sleep(250);}}
@@ -97,7 +98,7 @@ async function supervise(file,{inspect=inspectPackage,request=ownerRequest,launc
  const lock=file+'.helper-lock';try{fs.writeFileSync(lock,String(process.pid),{flag:'wx',mode:0o600});}catch(error){if(error.code!=='EEXIST')throw error;const pid=Number(fs.readFileSync(lock,'utf8'));if(!Number.isSafeInteger(pid)||alive(pid))throw Error('An updater already owns this journal.');fs.unlinkSync(lock);fs.writeFileSync(lock,String(process.pid),{flag:'wx',mode:0o600});}
  try{
   job=writeJob(file,{helperPid:process.pid});
-  const candidate=inspect(job.candidate.bundle);if(candidate.hash!==job.candidate.hash||job.platform==='win32'&&candidate.installationHash!==job.candidate.installationHash)throw Error('The accepted staged candidate changed.');
+  const candidate=verifyCandidate(job,'supervise',{inspect});
   if(['stopping','backing-up'].includes(job.phase)){
    await until(()=>!alive(job.ownerPid)&&!fs.existsSync(path.join(job.home,'runner.lock')),60000,'graceful app exit and runner lock release');
    const current=inspect(job.installation);compatible(current,candidate);if(current.hash!==job.previous.hash)throw Error('The installed application changed after acceptance.');
@@ -192,6 +193,6 @@ async function supervise(file,{inspect=inspectPackage,request=ownerRequest,launc
 }
 
 module.exports={smoke,supervise,installWindows,retire,retainGeneration,environment,ownerRequest,verifyLive,runCLI};
-function runCLI(args=process.argv.slice(2)){const [action,file]=args;if(!['arm','supervise'].includes(action)||!path.isAbsolute(file||''))throw Error('Use the bound update journal.');void (async()=>{if(action==='arm'){const job=readJob(file);if(job.phase!=='waiting-for-idle')throw Error('This update is not waiting for handoff.');writeJob(file,{helperPid:process.pid});process.send?.({ready:job.id});process.disconnect?.();await until(()=>{const phase=readJob(file).phase;if(['prepared','cancelled'].includes(phase))throw Error('The handoff was cancelled before shutdown.');return phase==='stopping';},60000,'host handoff');}return supervise(file);})().catch(error=>{console.error(error.message);process.exitCode=1;});}
+function runCLI(args=process.argv.slice(2)){const [action,file]=args;if(!['arm','supervise'].includes(action)||!path.isAbsolute(file||''))throw Error('Use the bound update journal.');void (async()=>{if(action==='arm'){const job=readJob(file);if(job.phase!=='waiting-for-idle')throw Error('This update is not waiting for handoff.');verifyCandidate(job,'readiness');writeJob(file,{helperPid:process.pid});process.send?.({ready:job.id});process.disconnect?.();await until(()=>{const phase=readJob(file).phase;if(['prepared','cancelled'].includes(phase))throw Error('The handoff was cancelled before shutdown.');return phase==='stopping';},60000,'host handoff');}return supervise(file);})().catch(error=>{console.error(error.message);process.exitCode=1;});}
 
 if(require.main===module)runCLI();

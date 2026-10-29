@@ -13,6 +13,23 @@ installation-bound `windows-builder.json`, never in repository instructions.
 Other Windows installations consume the signed WTB release and do not need
 Node, npm, Git or the publisher key.
 
+The candidate helper verifies its accepted package and full Windows installation
+hash before acknowledging readiness, keeping the old owner open on a mismatch.
+It verifies again before replacement. Both observations retain complete file/hash
+evidence beside the job journal, outside candidate staging, because an older owner
+can otherwise remove that staging after a failed pre-install recovery. No unexpected
+file is excluded from package integrity. The native distribution runner checks the
+tested extraction again after UI/PTY/restart acceptance and preserves it on failure.
+
+The first October 29 bootstrap passed signing, extraction and old-owner smoke but
+failed before replacement. The baseline reopened with verified health and the same
+chat continuation. Its old retirement record reported one extra file / 166 bytes;
+the retired copy did not identify the file. A controlled smoke/helper-readiness
+reproduction left the package unchanged. This remains an unclassified live failure,
+not proof of a logging cause or permission to relax hashes. The added evidence and
+pre-readiness check address diagnosis and restart ordering; live installation still
+requires a separately verified result.
+
 ## Normal update
 
 1. Inspect `proteus_update status`, `maintenance` and `resolve-release` for the

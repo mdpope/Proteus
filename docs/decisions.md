@@ -1,5 +1,11 @@
 ## October 29 — bounded maintenance instead of elevated updater shells
 
+Check candidate integrity before acknowledging helper readiness as well as before
+replacement. Preserve both file/hash observations beside the journal, because the
+old owner may retire failed candidate staging after restoring its baseline. A
+successful isolated smoke does not prove the candidate stayed unchanged later;
+never accommodate an unexplained extra file by broadening hash exclusions.
+
 Keep maintenance and native source builds behind the owning updater service. A plan digest binds recovery changes to full verified evidence; absent historical backups remain unavailable records rather than fabricated receipts. Only the designated Windows builder holds private source/toolchain/key references, and it checks the signed feed before building. Consumer machines use conventional per-user NSIS updates. Do not require an interactive test account for an unchanged installer recipe; qualify changed installer behavior separately. Native control supports acceptance, while the independent helper owns restart and recovery.
 
 ## October 28 — complete request-local permission display reuse

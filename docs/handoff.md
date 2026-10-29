@@ -2,6 +2,16 @@
 
 The new [Windows distribution workflow](windows-distribution.md) adds owner maintenance/reconciliation and a designated per-user native builder. Source is isolated from other ongoing application edits. Native build, bootstrap, publication and live acceptance must be recorded independently. Cua Driver installation on the target is separately verified in private operational receipts; no machine-specific paths belong in source.
 
+The initial 0.2.34 Windows package passed native source/extraction/UI/PTY/restart
+checks and the installed 0.2.29 owner's signed import. Its first handoff rejected
+the staged package before replacement and verified baseline recovery and automatic
+continuation. An extra file / 166 bytes was recorded only by the old owner's
+subsequent retirement; its cause remains unclassified. Controlled startup and
+readiness reproductions stayed unchanged. Source now verifies before readiness,
+retains comparison evidence outside staging and checks post-test immutability.
+Full local validation: 1,249 tests pass, three skips; static checks pass. These
+source checks do not establish a successful Windows installation or publication.
+
 ## October 28 — 0.2.33 follow-up preparing for Build Mac
 
 The operator authorizes building pending changes and installing on this Mac, while reporting

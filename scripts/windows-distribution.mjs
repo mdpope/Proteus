@@ -58,6 +58,8 @@ export async function buildWindowsDistribution(argv){
   await extractRelease(archive,extracted,{platform:'win32',version:candidate.version,buildRevision:candidate.buildRevision,sourceFingerprint:candidate.sourceFingerprint,packageHash:candidate.hash,artifact,installer:{sha256:candidate.installer.sha256,bytes:fs.statSync(setup).size}});
   receipt.checks.push({name:'official-extractor',passed:true});
   await run('packaged-acceptance',process.execPath,['test/windows-current.mjs',path.join(extracted,'Proteus.exe')]);
+  if(packages.inspectPackage(extracted).installationHash!==candidate.installationHash)throw Error('The tested application changed during startup or packaged acceptance; preserve the extraction for inspection.');
+  receipt.checks.push({name:'package-unchanged-after-startup',passed:true});
   if(packages.inspectPackage(bundle).installationHash!==candidate.installationHash)throw Error('Frozen application changed during acceptance.');
   receipt.artifacts={bundle,archive,installer:setup,sourceFingerprint:candidate.sourceFingerprint,packageHash:candidate.hash,archiveSha256:artifact.sha256,installerSha256:candidate.installer.sha256};
   receipt.qualification='Source suite and exact extracted package acceptance. Installer/update/rollback behavior requires separate release qualification when its recipe or transition behavior changes; no live registration was touched.';

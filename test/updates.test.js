@@ -62,7 +62,11 @@ test('completed updater card clears an old idle blocker while preserving real fa
 test('installed baseline helper path still arms the organized helper and acknowledges readiness',async t=>{
  const f=fixture(t);await prepare(f);const job=readJob(f.controller.file);
  writeJob(job.file,{phase:'waiting-for-idle'});
- const child=spawn(process.execPath,[fileURLToPath(new URL('../desktop/update-helper.cjs',import.meta.url)),'arm',job.file],{stdio:['ignore','ignore','pipe','ipc']});
+ // The compatibility launcher is real; this fixture has no signed Electron
+ // bundle, so only its synthetic package inspector is injected by the test.
+ const preload=path.join(f.root,'synthetic-inspector.cjs');
+ fs.writeFileSync(preload,`const p=require(${JSON.stringify(fileURLToPath(new URL('../desktop/updates/update-package.cjs',import.meta.url)))});p.inspectPackage=bundle=>({...p.tree(bundle,{entries:true}),installationHash:p.tree(bundle).hash});`);
+ const child=spawn(process.execPath,['--require',preload,fileURLToPath(new URL('../desktop/update-helper.cjs',import.meta.url)),'arm',job.file],{stdio:['ignore','ignore','pipe','ipc']});
  t.after(()=>{try{child.kill('SIGKILL');}catch{}});
  let errors='';child.stderr.on('data',chunk=>errors+=chunk);
  const exited=new Promise(resolve=>child.once('exit',resolve));

@@ -2,6 +2,8 @@
 
 The operator authorizes repairing Windows distribution, managing bound application/recovery folders, native builds when the matching signed release is absent, publication for subsequent Windows consumers, installation/restart and Cua Driver setup. The connected Windows desktop is the first Windows build/acceptance target; its identity and configuration remain in private owner records. Implemented owner maintenance and build tools are described in [Windows distribution](windows-distribution.md); validation and installed/public outcomes remain separate.
 
+The initial signed bootstrap failed the helper's candidate-integrity check before replacement and recovered its baseline. Source now verifies candidate integrity before readiness and preserves complete comparison evidence outside staging; native acceptance checks post-startup immutability. The extra-file cause and successful live upgrade remain separate acceptance work, with no weakened hash checks.
+
 ## October 28 — 0.2.33 follow-up authorized
 
 Build and Build Mac installation are authorized. The pending blank-tab correction and a

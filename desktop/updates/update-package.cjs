@@ -22,7 +22,7 @@ function treeRows(directory,{exclude=[],excludeRoot=[],recoveryCaches=false,cach
 const summarize=rows=>({hash:digest(JSON.stringify(rows)),bytes:rows.reduce((sum,row)=>sum+(row[3]||0),0),files:rows.length});
 function tree(directory,options={}){const rows=treeRows(directory,options);return {...summarize(rows),...(options.entries?{entries:rows}:{})};}
 function packagePaths(bundle,platform=process.platform){const mac=platform==='darwin',root=path.join(bundle,mac?'Contents/Resources/app':'resources/app'),metadata=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));return {root,metadata,executable:path.join(bundle,mac?'Contents/MacOS/Proteus':platform==='win32'?'Proteus.exe':'proteus')};}
-function inspectPackage(bundle,{platform=process.platform,requireProtocol=true}={}){
+function inspectPackage(bundle,{platform=process.platform,requireProtocol=true,entries=false}={}){
  bundle=fs.realpathSync(bundle);const {root,metadata,executable}=packagePaths(bundle,platform);
  if(metadata.name!=='proteus'||metadata.desktopPreview||!fs.statSync(executable).isFile())throw Error('Choose a packaged production Proteus application.');
  if(requireProtocol&&(metadata.updatesProtocol!==1||metadata.dataCompatibility!==1))throw Error('This package does not support compatible supervised update recovery. Install the helper-capable baseline first.');
@@ -50,7 +50,7 @@ function inspectPackage(bundle,{platform=process.platform,requireProtocol=true}=
  // Hash the payload once; both identities must describe the same observation.
  const rows=treeRows(bundle),full=summarize(rows),excludedRoot=platform==='win32'?require('./windows-installation.cjs').installationFiles:[];
  const manifest=platform==='win32'?summarize(rows.filter(([name])=>name.includes('/')||!excludedRoot.includes(name))):full;
- return {bundle,executable,version:metadata.version,buildRevision:metadata.buildRevision,sourceFingerprint:provenance.sourceFingerprint,signing,...manifest,bytes:full.bytes,installationHash:full.hash,...(installer?{installer}:{}),...(provenance.platform?{platform:provenance.platform,arch:provenance.arch}:{})};
+ return {bundle,executable,version:metadata.version,buildRevision:metadata.buildRevision,sourceFingerprint:provenance.sourceFingerprint,signing,...manifest,bytes:full.bytes,installationHash:full.hash,...(entries?{entries:rows}:{}),...(installer?{installer}:{}),...(provenance.platform?{platform:provenance.platform,arch:provenance.arch}:{})};
 }
 function compatible(current,candidate){if(JSON.stringify(current.signing)!==JSON.stringify(candidate.signing))throw Error('The update must preserve this installation’s signing identity.');if(current.sourceFingerprint===candidate.sourceFingerprint)throw Error('This source is already installed.');}
 const excluded=['runner.lock','connection.json','SingletonLock','SingletonCookie','SingletonSocket'];
