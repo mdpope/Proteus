@@ -516,7 +516,7 @@ final class RemoteTests: XCTestCase {
         XCTAssertEqual(shared.browserTabs[0].history?.index, 0)
         XCTAssertEqual(shared.browserTabs[0].history?.entries.count, 4)
         XCTAssertEqual(shared.browserTabs[0].history?.entries.map(\.id), entryIDs, "Traversal preserves every saved page identity and forward entry")
-        XCTAssertFalse(shared.nativeTraversal(id, since: .distantPast), "App-initiated traversal is never mistaken for WebKit's swipe")
+        XCTAssertFalse(view.allowsBackForwardNavigationGestures)
     }
     @MainActor func testSupersededBrowserCancellationKeepsNewerHistoryTraversal() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
