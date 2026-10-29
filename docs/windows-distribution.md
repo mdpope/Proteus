@@ -109,6 +109,14 @@ ordinary user access, not elevation. It refuses a different source origin,
 unprotected key or a differing existing configuration. Use the existing account
 and protected key; never guess another account or initialize new signing trust.
 
+Workers derive a private child environment from those configured Node/Git
+directories plus the inherited search path. Windows `Path`/`PATH` variants are
+combined into one key. npm lifecycle scripts therefore find the same Node binary
+even when the desktop owner launched without developer tools on its PATH; no
+global environment or login setting is changed. An older installed builder that
+lacks this correction needs a reviewed source-module bootstrap, not an edit of
+the installed worker or a replay of its failed operation.
+
 The release runner is `scripts/windows-distribution.mjs --source-commit SHA
 --output ABSOLUTE_NEW_DIRECTORY --build-if-missing`. It requires the selected
 source checkout and local dependencies/toolchain. `--key` supplies an existing

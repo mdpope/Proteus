@@ -5,6 +5,16 @@ const {atomic,digest}=require('./update-package.cjs');
 const {ensurePrivateHome,hasPrivatePermissions}=require('../../src/shared/private-paths.cjs');
 const repository='https://github.com/mdpope/Proteus.git';
 const alive=pid=>{try{process.kill(pid,0);return true;}catch(error){if(error.code==='ESRCH')return false;throw error;}};
+function buildEnvironment(policy,environment=process.env,platform=process.platform){
+ const windows=platform==='win32',paths=windows?path.win32:path,separator=windows?';':path.delimiter;
+ const keys=Object.keys(environment).filter(key=>windows?key.toLowerCase()==='path':key==='PATH').sort();
+ const entries=[paths.dirname(policy.node),paths.dirname(policy.git),...keys.flatMap(key=>String(environment[key]||'').split(separator))];
+ const seen=new Set(),search=entries.filter(entry=>{if(!entry)return false;const key=windows?entry.toLowerCase():entry;if(seen.has(key))return false;seen.add(key);return true;});
+ // npm lifecycle scripts resolve node (and Git) by name. Bind their child PATH
+ // to the configured toolchain without changing the owner's or system's environment.
+ // Windows treats Path/PATH alike, while Node otherwise forwards only one variant.
+ return {...Object.fromEntries(Object.entries(environment).filter(([key])=>!keys.includes(key))),PATH:search.join(separator)};
+}
 function readPolicy(root){
  const file=path.join(root,'windows-builder.json');
  if(!fs.existsSync(file))throw Error('This installation is a release consumer. Configure the designated Windows builder once before requesting a source build.');
@@ -57,11 +67,11 @@ function startBuild(root,value,{launch=spawn,platform=process.platform}={}){
  atomic(file,job);atomic(path.join(root,'build-current.json'),{operationId:value.operationId});
  const fd=fs.openSync(job.log,'a',0o600);
  try{
-  const child=launch(policy.node,[path.join(__dirname,'windows-build-worker.cjs'),file],{windowsHide:true,shell:false,stdio:['ignore',fd,fd]});
+  const child=launch(policy.node,[path.join(__dirname,'windows-build-worker.cjs'),file],{env:buildEnvironment(policy,process.env,platform),windowsHide:true,shell:false,stdio:['ignore',fd,fd]});
   if(child.pid)atomic(path.join(directory,'launch.json'),{pid:child.pid,at:new Date().toISOString()});
   child.on('error',error=>atomic(file,{...job,phase:'attention',launchFailure:true,error:error.message}));
   child.on('exit',code=>{const saved=JSON.parse(fs.readFileSync(file,'utf8'));if(['starting','running'].includes(saved.phase))atomic(file,{...saved,phase:'attention',observedExit:{pid:child.pid,code,at:new Date().toISOString()},error:'Build worker exited without a final receipt ('+code+'). Inspect before retrying.'});});child.unref();
  }finally{fs.closeSync(fd);}
  return buildStatus(root);
 }
-module.exports={configureBuilder,readPolicy,buildStatus,startBuild,cancelBuild,repository};
+module.exports={configureBuilder,readPolicy,buildStatus,startBuild,cancelBuild,buildEnvironment,repository};

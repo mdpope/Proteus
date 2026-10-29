@@ -42,9 +42,23 @@ and remains so across renderer restarts. The same UI test then passes view ID,
 project selection, draft, reload and owner-close checks. Unit cases cover both
 local and peer identities. The original failed assertion is retained privately.
 
-The 0.2.35 full source suite passes 1,256 tests / three skips / zero failures;
+The initial 0.2.35 view-fix source suite passes 1,256 tests / three skips / zero failures;
 static checks pass. Its native package and live installation must be verified
 separately. Do not claim the installed 0.2.34 already includes this correction.
+
+The first genuine installed `build-release` invocation correctly resolved the
+missing exact source but stopped in npm's dependency postinstall because its
+worker PATH did not contain the configured Node executable. Its failed operation
+and log remain intact. Source now passes a configured Node/Git child PATH through
+worker launch and prerequisites, normalizing Windows environment-key casing.
+A real lifecycle subprocess test reproduces failure with the stripped inherited
+PATH and succeeds with the configured environment. Further native validation is
+required before claiming the owner-managed build workflow is accepted.
+
+The combined view and worker-environment correction passes 1,258 source tests /
+three skips / zero failures and static checks. Native bootstrap uses the exact
+reviewed source module with the existing bound policy because the installed
+0.2.34 worker predates this correction; no installed file or global PATH is edited.
 
 ## Distribution and coordinator boundaries
 

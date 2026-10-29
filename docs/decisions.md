@@ -2617,6 +2617,17 @@ to reopen a closed or moved tab, without changing placement, sessions, permissio
 receipts or the persisted descriptor format. Older clients must be upgraded to supply the flag;
 existing uncertain request payloads and operation identities are never rewritten.
 
+## October 29 — Bind build-child PATH to the configured toolchain
+
+The installed Windows owner can have a clean desktop environment with no Node on
+PATH even though its configured absolute Node/npm paths are valid. Build workers
+and their prerequisites now receive a derived child environment that prepends
+the configured Node/Git directories and combines Windows path-key variants.
+Do not change global environment variables or switch tools/accounts to repair a
+failed operation. Preserve its receipt, close it only after exit, and use a new
+operation for the tested correction. A real nested Node process verifies lookup
+from an otherwise empty developer search path.
+
 ## October 29 — Preserve unregistered local chat views without reopening owner tabs
 
 The Windows bootstrap exposed a saved selected chat view absent from its project's

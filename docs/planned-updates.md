@@ -10,6 +10,12 @@ owner closures remain authoritative. The regression passes preserved view ID,
 selection, draft, reload and closure checks. Packaging and installing this
 follow-up remain pending; see [evidence](2026-10-29-windows-distribution.md).
 
+The first installed owner-managed follow-up build stopped when npm postinstall
+could not resolve Node from the desktop worker environment. The failed operation
+is preserved. The correction binds worker and lifecycle PATH to the existing
+configured toolchain, leaving global settings unchanged; native acceptance of
+that correction remains pending.
+
 ## October 29 — Windows distribution repair · implementation authorized
 
 The operator authorizes repairing Windows distribution, managing bound application/recovery folders, native builds when the matching signed release is absent, publication for subsequent Windows consumers, installation/restart and Cua Driver setup. The connected Windows desktop is the first Windows build/acceptance target; its identity and configuration remain in private owner records. Implemented owner maintenance and build tools are described in [Windows distribution](windows-distribution.md); validation and installed/public outcomes remain separate.

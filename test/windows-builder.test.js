@@ -5,16 +5,32 @@ import os from 'node:os';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {EventEmitter} from 'node:events';
+import {spawnSync} from 'node:child_process';
 import packages from '../desktop/updates/update-package.cjs';
 import builder from '../desktop/updates/windows-builder.cjs';
 import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
+test('configured Windows toolchain has one child PATH with inherited search locations preserved',()=>{
+ const original={Path:'C:\\Windows\\System32;C:\\Git\\cmd',PATH:'C:\\Legacy',SystemRoot:'C:\\Windows',OTHER:'retained'};
+ const result=builder.buildEnvironment({node:'C:\\Private Tools\\node.exe',git:'C:\\Git\\cmd\\git.exe'},original,'win32');
+ assert.deepEqual(result,{SystemRoot:'C:\\Windows',OTHER:'retained',PATH:'C:\\Private Tools;C:\\Git\\cmd;C:\\Legacy;C:\\Windows\\System32'});
+ assert.equal(original.Path,'C:\\Windows\\System32;C:\\Git\\cmd');assert.equal(original.PATH,'C:\\Legacy');
+});
+test('a lifecycle child finds the configured node with no developer executable on inherited PATH',()=>{
+ const inherited=Object.fromEntries(Object.entries(process.env).filter(([key])=>key.toLowerCase()!=='path'));
+ inherited.PATH=path.join(os.tmpdir(),'nonexistent-proteus-tool-directory');
+ const script="process.stdout.write(require('node:child_process').execFileSync('node',['-p','process.execPath'],{encoding:'utf8'}).trim())";
+ assert.notEqual(spawnSync(process.execPath,['-e',script],{env:inherited,encoding:'utf8'}).status,0);
+ const env=builder.buildEnvironment({node:process.execPath,git:path.join(os.tmpdir(),'unused-git','git')},inherited);
+ const child=spawnSync(process.execPath,['-e',script],{env,encoding:'utf8'});
+ assert.equal(child.status,0,child.stderr);assert.equal(fs.realpathSync(child.stdout),fs.realpathSync(process.execPath));
+});
 test('only configured Windows builders dispatch fixed commands, and operation receipts prevent duplicate builds',t=>{
  const root=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-builder-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
  const request={operationId:randomUUID(),sourceCommit:'a'.repeat(40),version:'0.2.34'},args={platform:'win32'};
  assert.throws(()=>builder.startBuild(root,request,args),/release consumer/);
  const policy={schemaVersion:1,root,repository:builder.repository,...Object.fromEntries(['source','node','npmCli','git','publisherKey'].map(name=>[name,path.join(root,name)]))};packages.atomic(path.join(root,'windows-builder.json'),policy);
  let calls=0;const child=new EventEmitter();child.unref=()=>{};
- args.launch=(file,argv,options)=>{calls++;assert.equal(file,policy.node);assert.equal(path.basename(argv[0]),'windows-build-worker.cjs');assert.equal(argv[1],path.join(root,'builds',request.operationId,'job.json'));assert.equal(options.shell,false);assert.equal(argv.includes(request.sourceCommit),false);return child;};
+ args.launch=(file,argv,options)=>{calls++;assert.equal(file,policy.node);assert.equal(path.basename(argv[0]),'windows-build-worker.cjs');assert.equal(argv[1],path.join(root,'builds',request.operationId,'job.json'));assert.equal(options.shell,false);assert.equal(options.env.PATH.split(';')[0],path.win32.dirname(policy.node));assert.equal(Object.keys(options.env).filter(key=>key.toLowerCase()==='path').length,1);assert.equal(argv.includes(request.sourceCommit),false);return child;};
  const first=builder.startBuild(root,request,args);assert.equal(first.job.phase,'starting');assert.equal(calls,1);
  const same=builder.startBuild(root,request,args);assert.equal(same.reconciled,true);assert.equal(calls,1);
  assert.throws(()=>builder.startBuild(root,{...request,sourceCommit:'b'.repeat(40)},args),/different source/);
