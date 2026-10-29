@@ -5,6 +5,9 @@ replacement. Preserve both file/hash observations beside the journal, because th
 old owner may retire failed candidate staging after restoring its baseline. A
 successful isolated smoke does not prove the candidate stayed unchanged later;
 never accommodate an unexplained extra file by broadening hash exclusions.
+Recovery success clears the current error but must not erase the original failure.
+Keep immutable phase/error receipts and a checkpoint summary that older owners
+also deliver, with bounded history references in update status.
 
 Keep maintenance and native source builds behind the owning updater service. A plan digest binds recovery changes to full verified evidence; absent historical backups remain unavailable records rather than fabricated receipts. Only the designated Windows builder holds private source/toolchain/key references, and it checks the signed feed before building. Consumer machines use conventional per-user NSIS updates. Do not require an interactive test account for an unchanged installer recipe; qualify changed installer behavior separately. Native control supports acceptance, while the independent helper owns restart and recovery.
 

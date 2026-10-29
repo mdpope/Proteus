@@ -9,8 +9,15 @@ continuation. An extra file / 166 bytes was recorded only by the old owner's
 subsequent retirement; its cause remains unclassified. Controlled startup and
 readiness reproductions stayed unchanged. Source now verifies before readiness,
 retains comparison evidence outside staging and checks post-test immutability.
-Full local validation: 1,249 tests pass, three skips; static checks pass. These
-source checks do not establish a successful Windows installation or publication.
+The second watched attempt passed candidate integrity and captured a verified
+recovery, then rolled back later. Its original error was cleared by successful
+baseline continuation, so that later cause remains unknown. The helper now keeps
+failure receipts outside staging plus journal history and continuation context,
+including when an older owner clears its current error after recovery. Receipt
+storage failure does not block compatible recovery. These source checks do not
+establish a successful Windows installation or publication. Full local validation
+now passes 1,250 tests with three skips, plus static checks. Native package
+acceptance remains required for the exact corrected source.
 
 ## October 28 — 0.2.33 follow-up preparing for Build Mac
 

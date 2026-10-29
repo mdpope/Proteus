@@ -4,6 +4,7 @@
 - Added a designated Windows build operation with signed release lookup before building, durable operation receipts, private source/toolchain/key references and no elevated shell requirement.
 - Added a reusable native build/acceptance/signing runner and documented older-client bootstrap and installer qualification boundaries.
 - Candidate helpers now verify complete package identity before acknowledging restart readiness and retain integrity evidence outside disposable staging. Native release acceptance also checks that startup leaves the extracted package unchanged.
+- Rollback keeps the original failure and phase in durable receipts, update status and the continuation checkpoint, even after recovery clears the current error.
 
 ## Unreleased — iOS navigation and swipes
 

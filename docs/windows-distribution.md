@@ -30,6 +30,13 @@ not proof of a logging cause or permission to relax hashes. The added evidence a
 pre-readiness check address diagnosis and restart ordering; live installation still
 requires a separately verified result.
 
+A second initial-package attempt passed two live staging comparisons and a
+read-only watcher, captured a recovery, then rolled back later. The old completion
+path cleared the transient error without retaining its cause. The helper now
+records original failure/phase receipts outside staging and carries their summary
+in the checkpoint and status. These diagnostics must identify a subsequent
+failure before an installer or process-lifetime cause is asserted.
+
 ## Normal update
 
 1. Inspect `proteus_update status`, `maintenance` and `resolve-release` for the

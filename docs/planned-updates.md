@@ -4,6 +4,12 @@ The operator authorizes repairing Windows distribution, managing bound applicati
 
 The initial signed bootstrap failed the helper's candidate-integrity check before replacement and recovered its baseline. Source now verifies candidate integrity before readiness and preserves complete comparison evidence outside staging; native acceptance checks post-startup immutability. The extra-file cause and successful live upgrade remain separate acceptance work, with no weakened hash checks.
 
+A later watched attempt retained exact candidate bytes and created a recovery,
+then rolled back with its transient error cleared. Durable failure/phase receipts
+and continuation/status summaries now survive that completion path. The exact
+later failure remains unclassified until observed; no silent installer retry loop
+or relaxed acceptance is introduced.
+
 ## October 28 — 0.2.33 follow-up authorized
 
 Build and Build Mac installation are authorized. The pending blank-tab correction and a

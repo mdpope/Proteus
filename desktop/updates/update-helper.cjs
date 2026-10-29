@@ -6,6 +6,7 @@ const {privateTemporaryDirectory}=require('../../src/shared/private-paths.cjs');
 const {atomic,tree,inspectPackage,compatible,copyTree,spaceBudget,readJob,writeJob,recoveryPolicy,digest,excluded}=require('./update-package.cjs');
 const {copyRecovery}=require('./update-storage.cjs');
 const {verifyCandidate}=require('./update-candidate.cjs');
+const {recordFailure}=require('./update-failure.cjs');
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const alive=pid=>{try{process.kill(pid,0);return true;}catch(error){if(error.code==='ESRCH')return false;throw error;}};
 async function until(check,timeout,label){const end=Date.now()+timeout;while(!await check()){if(Date.now()>=end)throw Error('Timed out: '+label);await sleep(250);}}
@@ -118,7 +119,7 @@ async function supervise(file,{inspect=inspectPackage,request=ownerRequest,launc
    for(const [index,row]of job.recoveryData.entries())if(tree(path.join(job.recovery,'data-'+index),{exclude:excluded,recoveryCaches:row.recoveryCachePolicy===1,cachePrefix:row.cachePrefix||'',runtimePrefix:row.runtimePrefix??null}).hash!==row.hash)throw Error('A recovery data snapshot changed before replacement.');
    if(job.platform==='win32'){
     try{await installWindows(job,candidate,{inspect});job=writeJob(file,{phase:'verifying',outcome:'updated'});}
-    catch(error){job=writeJob(file,{phase:'recovering',failedBuild:candidate.buildRevision,error:error.message,launchPid:null});}
+    catch(error){recordFailure(file,'installing',error);job=writeJob(file,{phase:'recovering',failedBuild:candidate.buildRevision,error:error.message,launchPid:null});}
    }else{
    const recoveryApp=path.join(job.recovery,'Proteus.app'),installed=fs.existsSync(job.installation)?inspect(job.installation):null;
    if(installed?.hash===job.previous.hash){
@@ -148,7 +149,7 @@ async function supervise(file,{inspect=inspectPackage,request=ownerRequest,launc
   };
   if(job.phase==='verifying'){
    try{await verifyOutcome(job.outcome==='rollback'?job.previous:candidate);}
-   catch(error){if(job.outcome==='rollback')throw error;await stopFailed();job=writeJob(file,{phase:'recovering',failedBuild:candidate.buildRevision,error:error.message,launchPid:null});}
+   catch(error){if(job.outcome==='rollback')throw error;recordFailure(file,'verifying',error);await stopFailed();job=writeJob(file,{phase:'recovering',failedBuild:candidate.buildRevision,error:error.message,launchPid:null});}
   }
   if(job.phase==='recovering'){
    if(job.platform==='win32'){
@@ -171,7 +172,7 @@ async function supervise(file,{inspect=inspectPackage,request=ownerRequest,launc
   const after=fs.statfsSync(path.dirname(job.installation));job=writeJob(file,{phase:'awaiting-chat-resume',freeSpaceAfter:Number(after.bavail)*Number(after.bsize)});
   const result=await resumeChat(job,job.outcome);if(result.phase==='complete'&&!job.failedBeforeReplacement)retainGeneration(readJob(file));return result;
  }catch(error){
-  const failed=readJob(file);
+  const failed=recordFailure(file,readJob(file).phase,error);
   // Snapshot/preflight failure occurs after graceful Quit but before replacement.
   // Restart only an independently verified unchanged baseline, behind the same
   // recovery barrier and durable continuation. Never leave the operator with a
