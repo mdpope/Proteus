@@ -80,7 +80,7 @@ async function sustainedScroll(sender,receiver,owner,direction){
 }
 async function delayedSharedScroll(page){
  const result=await page.evaluate(async()=>{
-  const {restoreSharedScroll}=await import('./project-follow.js');
+  const {restoreSharedScroll}=await import('./features/workspaces/project-follow.js');
   const roots=Array.from({length:3},()=>{const root=document.createElement('div');root.style.cssText='position:fixed;left:-10000px;width:200px';document.body.append(root);return root;});
   let current=true;const positions=[{path:'0',top:450,left:0,x:0,y:.5}],stop=[restoreSharedScroll(roots[0],positions),restoreSharedScroll(roots[1],positions,()=>current),restoreSharedScroll(roots[2],positions)];
   try{
@@ -159,7 +159,10 @@ try{
  const history=await a.page.evaluate(id=>followFixture.state.tabs.find(tab=>tab.id===id)?.info?.history,first);assert.ok(history.entries.some(row=>row.url.endsWith('/one')),'session beginning retained');
  await b.page.evaluate(()=>{followFixture.state.tab='overview';followFixture.state.page='home';followFixture.projectFollower.changed();});await new Promise(resolve=>setTimeout(resolve,200));
  await a.page.locator('#browser-url').fill(origin+'/four');await a.page.locator('#browser-url').press('Enter');await new Promise(resolve=>setTimeout(resolve,700));assert.equal(await b.page.evaluate(()=>followFixture.state.tab),'overview');
- assert.equal(await b.page.evaluate(()=>followFixture.state.tabs.find(tab=>tab.type==='browser')?.info?.url?.endsWith('/three')),true,'inactive project does not load a new page');
+ // Membership/navigation metadata now stays current for every open project;
+ // the local presentation above must still remain Home. Unloaded residency is
+ // independently exercised by the two-window Persist/mirror regression.
+ assert.equal(await b.page.evaluate(()=>followFixture.state.tabs.find(tab=>tab.type==='browser')?.info?.url?.endsWith('/four')),true,'inactive project receives canonical navigation without changing selection');
  await b.page.evaluate(({owner,hostId})=>{followFixture.openTab(followFixture.state.tabs.find(tab=>tab.projectId===owner.projectId&&tab.hostId===hostId));},{owner,hostId:pairing.hostId});
  await until(()=>b.page.evaluate(()=>followFixture.state.tabs.find(tab=>tab.id===followFixture.state.tab)?.info?.url?.endsWith('/four')),'catch up on re-entry');
  const chat=await a.page.evaluate(async owner=>{const response=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...owner,provider:'rehearsal',prompt:'Synthetic follow-along chat'})});if(!response.ok)throw Error(await response.text());const run=await response.json();await followFixture.refresh(true);const parent=followFixture.state.tabs.find(tab=>tab.projectId===owner.projectId&&!tab.hostId);const tab={id:parent.id+':chat:'+run.id,type:'run',runId:run.id,parentId:parent.id,label:'Synthetic follow chat'};followFixture.openTab(tab);return tab.id;},owner);

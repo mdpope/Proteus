@@ -10,6 +10,14 @@ import {normalizeContentTabDescriptor,normalizeContentTabHistory,sameContentTab,
 import {createTabSynchronizer,rebaseTabChanges,tabChanges,syncableTabURL} from '../public/models/content-tab-sync.js';
 const pendingCount=values=>[...values.keys()].filter(key=>key.startsWith('proteus.navigation.pending:')).length;
 const tab=id=>({id,type:'browser',title:id,url:'https://example.test/'+id});
+test('legacy browser protection never hides explicit new navigation from the canonical project',async t=>{
+ const host=hostStore(t),scope={scope:'project',id:'legacy-and-new'},kept=tab('known');
+ host.mutate({...scope,expectedRevision:0,operations:[{action:'open',tab:kept}]});
+ let local=[kept,tab('legacy'),{...tab('new'),navigationPending:true}],errors=[];
+ const sync=createTabSynchronizer({scopes:()=>[scope],preserveUntracked:()=>true,readLocal:async()=>structuredClone(local),request:async(_scope,action,args)=>action==='get'?host.get(scope.scope,scope.id):host.mutate({...scope,...args}),apply:async(_scope,tabs,captured)=>{local=[...local.filter(tab=>!captured.some(item=>item.id===tab.id)),...tabs];},onError:error=>errors.push(error)});
+ await sync.all();assert.deepEqual(host.get(scope.scope,scope.id).tabs.map(tab=>tab.id),['known','new']);assert.ok(local.some(tab=>tab.id==='legacy'));
+ local=local.map(tab=>tab.id==='legacy'?{...tab,navigationPending:true}:tab);await sync.all();assert.ok(host.get(scope.scope,scope.id).tabs.some(tab=>tab.id==='legacy'),'human navigation in a retained legacy tab explicitly publishes it');assert.deepEqual(errors,[]);
+});
 test('a stale Team mirror cannot reopen fifteen closed tabs with metadata after four new standup tabs open',async t=>{
  const host=hostStore(t),scope={scope:'team',id:'team'},old=Array.from({length:15},(_,i)=>tab('old-'+i)),fresh=Array.from({length:4},(_,i)=>tab('standup-'+i));
  host.mutate({...scope,expectedRevision:0,operations:old.map(tab=>({action:'open',tab}))});

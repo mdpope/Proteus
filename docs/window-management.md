@@ -1,3 +1,33 @@
+## October 29 — inactive project synchronization and retained-window recovery
+
+Open workspace/project roots subscribe to their owning host's canonical content even while a
+different root is selected. Owner events hydrate the affected list, URLs and complete history;
+the presentation follower still subscribes only to the visible project. Local windows keep
+their own selection and scroll position. Paired web/mobile/desktop clients continue to use the
+existing owner scope and remote presentation following; projects with matching names on different
+hosts are not automatically merged. Cookies, sign-in, execution and permissions remain host-owned.
+
+Mirroring an unloaded Persist tab registers its metadata without allocating a website renderer.
+Persist still prevents automatic unloading after a view is loaded. Selecting the same browser
+in two windows can create two live views so their scrolling is independent; opening another
+project window does not eagerly load every website.
+
+Engine Room → Windows → **Find tabs in saved windows…** scans retained window session files
+and indexed closed/previous/named snapshots captured in the last 48 hours. It does not promise
+recovery of every closed window: automatic retention is bounded and previously discarded records
+may be unavailable. Parsing runs in a bounded disposable worker; the existing owner alone commits
+changes. The review identifies unavailable scopes, read errors and identities now placed elsewhere.
+It matches logical IDs and full navigation stacks rather than merging equal URLs. Restoring an
+absent descriptor reuses retained worker history; a divergent saved branch becomes a separate
+history copy, retaining order, Forward and selection. Current navigation is never replaced.
+
+Recovery is explicit because older records cannot distinguish an intentional Close from a tab
+that was never registered. Revision/source checks reject a stale review; original records remain
+intact. Unregistered legacy local views survive first reconciliation until reviewed, while observed
+owner closures remain authoritative. Explicit new opens/navigation still publish normally.
+Recovery does not start a chat, replay terminal startup, approve a viewer source, or share a page.
+This follow-up is source-only for the next release; live HC recovery is recorded separately.
+
 ## October 23 — native link callbacks and passive project synchronization
 
 Native menu callbacks now explicitly re-enter the source tab's window context. The callback's

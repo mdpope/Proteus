@@ -38,6 +38,15 @@ bottom display preview without opening or reading the target.
 
 These changes are in the combined Design Preview source, pending exact-package review.
 
+## October 29 — project mirrors and history recovery
+
+Project URL/history propagation continues while that project is inactive in another local window.
+Selection and scrolling stay independent locally; remote follow retains its existing host/container
+boundary. Creating or passively updating a dormant Persist mirror does not load a second page.
+Saved-window recovery compares complete worker navigation, keeps moved identities in their current
+scope and restores alternative branches into separate tabs. It never appends historical branches
+as fabricated new visits or replaces current stacks. See [window management](window-management.md).
+
 ## October 23 — residency, titles, routing and shared destinations
 
 Persisted pages stay loaded, including hidden pages and restored project tabs. Ordinary memory

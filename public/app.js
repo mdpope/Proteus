@@ -55,6 +55,7 @@ import {tabOverviewGroups} from './shared/navigation/tab-overview-model.js';
 import {showBrowserCertificate} from './features/browser/browser-address-menu.js';
 import { initBrowserOverview, showBrowserOverview, isBrowserOverviewOpen } from './features/browser/browser-overview.js';
 import { browserTarget, renderBrowserHome } from './features/browser/browser-home.js';
+import {openContentScopes} from './features/workspaces/content-scopes.js';
 import {beginNewTabInput,withNewTabInput} from './features/browser/new-tab-input.js';
 import { browserAddress, updateAgentAccess, bindBrowserHistoryButton, browserSurfaceIdentity, browserSurfaceRevision, selectBrowserSurface } from './features/browser/browser-toolbar.js';
 import { bindBrowserAddressMenu } from './features/browser/browser-address-menu.js';
@@ -877,10 +878,11 @@ async function descriptorFor(tab,parent){
   return null;
 }
 const contentTabSync=createTabSynchronizer({navigation:true,pendingStorage:desktopWindowId==='main'?localStorage:{getItem:key=>localStorage.getItem('window:'+desktopWindowId+':'+key),setItem:(key,value)=>localStorage.setItem('window:'+desktopWindowId+':'+key,value),removeItem:key=>localStorage.removeItem('window:'+desktopWindowId+':'+key)},
-  // Older local owners can also have saved views absent from the project registry.
-  // Keep those aliases without reopening owner tabs; observed closures still win.
-  preserveUntracked:(_scope,tab)=>tab.type==='chat',
-  scopes:()=>visibleContentScopes(),
+  // A legacy saved project can contain never-registered browsers/history as
+  // well as chats. Keep their evidence until explicit Windows recovery. Once
+  // observed in the owner registry, ordinary shared Close still wins.
+  preserveUntracked:(scope,tab)=>tab.type==='chat'||['workspace','project','chat'].includes(scope.scope),
+  scopes:()=>synchronizedContentScopes(),
   readLocal:async scope=>{if(scope.scope==='team')return (await Promise.all(teamState().tabs.map(tab=>descriptorFor(tab,{type:'team',id:null})))).filter(Boolean);const parent=scopeParent(scope);if(!parent)return [];return (await Promise.all(state.tabs.filter(tab=>tab.parentId===parent.id).map(tab=>descriptorFor(tab,parent)))).filter(Boolean);},
   request:async(scope,action,args={},options)=>{
     if(!scope.hostId)return api('/api/content-tabs',{action,scope:scope.scope,id:scope.id,...args});
@@ -918,7 +920,7 @@ const contentTabSync=createTabSynchronizer({navigation:true,pendingStorage:deskt
         // A tab closed/moved after the request snapshot must not be recreated
         // from that older owner response. Its close is published on the next pass.
         if(!tab&&captured.some(item=>item.id===descriptor.id))continue;
-        if(!tab){if(descriptor.type==='browser'){const info=await window.desktop.browser({action:'create',contentTabId:descriptor.id,group:scope.scope==='team'?'team':'main',restore:true,unloaded:true,hidden:!!descriptor.hidden,parentId:parent?.id,profileId:descriptor.profileId||'default',url:scope.hostId&&isLoopbackPreview(descriptor.url)?'':descriptor.url,history:scope.hostId&&isLoopbackPreview(descriptor.url)?undefined:descriptor.history,title:descriptor.title,associationChatId:descriptor.associationChatId,persist:descriptor.persist,openedAt:descriptor.openedAt,lastTouchedAt:descriptor.lastTouchedAt,lastActivityAt:descriptor.lastActivityAt});if(!['team','main'].includes(scope.scope)&&!state.tabs.includes(parent)){await window.desktop.browser({action:'close',id:info.id});return;}tab=scope.scope==='team'?{id:'team:'+crypto.randomUUID(),type:'browser',browserId:info.id,profileId:info.profileId||descriptor.profileId||'default',url:info.url,history:info.history,nativeTitle:info.title,title:descriptor.title,loaded:false}:{id:info.id,type:'browser',label:descriptor.title,parentId:parent.id,info};}
+        if(!tab){if(descriptor.type==='browser'){const info=await window.desktop.browser({action:'create',contentTabId:descriptor.id,group:scope.scope==='team'?'team':'main',restore:true,mirror:true,unloaded:true,hidden:!!descriptor.hidden,parentId:parent?.id,profileId:descriptor.profileId||'default',url:scope.hostId&&isLoopbackPreview(descriptor.url)?'':descriptor.url,history:scope.hostId&&isLoopbackPreview(descriptor.url)?undefined:descriptor.history,title:descriptor.title,associationChatId:descriptor.associationChatId,persist:descriptor.persist,openedAt:descriptor.openedAt,lastTouchedAt:descriptor.lastTouchedAt,lastActivityAt:descriptor.lastActivityAt});if(!['team','main'].includes(scope.scope)&&!state.tabs.includes(parent)){await window.desktop.browser({action:'close',id:info.id});return;}tab=scope.scope==='team'?{id:'team:'+crypto.randomUUID(),type:'browser',browserId:info.id,profileId:info.profileId||descriptor.profileId||'default',url:info.url,history:info.history,nativeTitle:info.title,title:descriptor.title,loaded:false}:{id:info.id,type:'browser',label:descriptor.title,parentId:parent.id,info};}
           else if(descriptor.type==='chat'&&['workspace','project','main'].includes(scope.scope))tab={id:parent.id?parent.id+':chat:'+descriptor.chatId:descriptor.chatId,type:scope.hostId?'remote-run':'run',...(scope.hostId?{hostId:scope.hostId}:{}),runId:descriptor.chatId,parentId:parent.id,label:descriptor.title};
           else if(descriptor.type==='terminal')tab={id:(parent.id||'main')+':terminal:'+descriptor.terminalId,type:'terminal',...(scope.hostId?{hostId:scope.hostId}:{}),parentId:parent.id,label:descriptor.title,terminal:{id:descriptor.terminalId}};
           else if(scope.hostId)tab={id:'document:'+scope.hostId+':'+scope.id+':'+descriptor.documentId,type:'remote-document',parentId:parent.id,hostId:scope.hostId,runId:['workspace','project'].includes(scope.scope)?descriptor.chatId||'':scope.id,workspaceId:scope.scope==='workspace'?scope.id:scope.scope==='project'?parent.workspaceId:undefined,projectId:scope.scope==='project'?scope.id:undefined,documentId:descriptor.documentId,mediaType:descriptor.mediaType,label:descriptor.title};
@@ -940,7 +942,7 @@ const contentTabSync=createTabSynchronizer({navigation:true,pendingStorage:deskt
         }
         if(tab.hidden!==!!descriptor.hidden){await setTabVisibility(tab,!!descriptor.hidden);changed=true;}
         for(const field of ['openedAt','lastTouchedAt','lastActivityAt'])if(descriptor[field]&&tab[field]!==descriptor[field]){tab[field]=descriptor[field];changed=true;}
-        if(descriptor.type==='browser'&&!!(tab.info?.persist||tab.persist)!==!!descriptor.persist){const info=await window.desktop.browser({action:'persist',id:tab.browserId||tab.id,enabled:!!descriptor.persist});if(tab.info)tab.info=info;else tab.persist=!!descriptor.persist;changed=true;}
+        if(descriptor.type==='browser'&&!!(tab.info?.persist||tab.persist)!==!!descriptor.persist){const info=await window.desktop.browser({action:'persist',id:tab.browserId||tab.id,enabled:!!descriptor.persist,passive:true});if(tab.info)tab.info=info;else tab.persist=!!descriptor.persist;changed=true;}
         if((tab.customTitle||tab.label||tab.title)!==descriptor.title||tab.customTitle!==descriptor.customTitle){tab.customTitle=descriptor.customTitle;if(scope.scope==='team')tab.title=descriptor.title;else tab.label=descriptor.title;changed=true;}
         if(descriptor.type==='browser'&&!tab.remotePreviewURL&&(JSON.stringify(normalizeContentTabHistory(tab.info?.history||tab.history))!==JSON.stringify(normalizeContentTabHistory(descriptor.history))||(tab.info?.url||tab.url||'')!==descriptor.url||((tab.info?.loaded===false||tab.loaded===false)&&(tab.info?.title||tab.nativeTitle||tab.title)!==(descriptor.history?.entries[descriptor.history.index]?.title||descriptor.title)))){
           const localURL=tab.info?.url||tab.url||'';
@@ -983,6 +985,10 @@ function visibleContentScopes(){
  while(tab&&!seen.has(tab.id)){seen.add(tab.id);if(tab.connectionPaused)break;if(tab.type==='workspace')scopes.push({scope:tab.projectId?'project':'workspace',id:tab.projectId||tab.workspaceId,...(tab.hostId?{hostId:tab.hostId}:{})});else if(['run','remote-run'].includes(tab.type))scopes.push({scope:'chat',id:tab.runId||tab.id,...(tab.hostId?{hostId:tab.hostId}:{})});tab=state.tabs.find(item=>item.id===tab.parentId);}
  if(!scopes.length)scopes.push(state.page==='team'?{scope:'team',id:windowScopeId('team')}:{scope:'main',id:windowScopeId('main')});
  return scopes;
+}
+function synchronizedContentScopes(){
+ if(!window.desktop||!workspaceReady||workspaceRestoring||workspaceClosing)return [];
+ return openContentScopes(state.tabs,visibleContentScopes());
 }
 function visibleFollowScope(){
  if(!window.desktop||!workspaceReady||document.hidden)return null;
@@ -1039,7 +1045,7 @@ document.addEventListener('scroll',event=>{if(!visibleFollowScope()||stopFollowR
 document.addEventListener('proteus:terminal-scroll',event=>{if(event.detail?.tabId===state.tab&&visibleFollowScope()&&!projectFollower.applying&&Date.now()>=followScrollSuppressedUntil&&Date.now()<=followHumanUntil)projectFollower.changed();});
 window.desktop?.onBrowserScroll(value=>{const selected=state.tabs.find(tab=>tab.id===state.tab);if(value.id!==state.tab||value.url!==selected?.info?.url||!syncableTabURL(value.url)||!visibleFollowScope())return;stopFollowRestoration?.();stopFollowRestoration=null;followBrowserPositions.set(value.id,{browser:{url:value.url,entryId:selected.info?.history?.currentEntryId||''},positions:value.positions});projectFollower.human();projectFollower.changed();});
 window.desktop?.onArtifactScroll?.(value=>{if(value.tabId!==state.tab||!visibleFollowScope())return;const documentVersion=remoteDocumentPositionVersion(value.tabId,value.version);if(!documentVersion)return;stopFollowRestoration?.();stopFollowRestoration=null;followDocumentPositions.set(value.tabId,{documentVersion,documentPositions:value.positions});projectFollower.human();projectFollower.changed();});
-window.desktop?.onPeer(event=>{if(event.event==='project-follow')void projectFollower.receive({...event.data,hostId:event.hostId},event.data);if(event.event==='tabs'){const scope={scope:event.data.scope,id:event.data.id,hostId:event.hostId};if(scope.scope==='chat'){if(visibleContentScopes().some(value=>value.scope===scope.scope&&value.id===scope.id&&value.hostId===scope.hostId))void contentTabSync.sync(scope);}else void projectFollower.refresh(scope);}if(event.recovered)projectFollower.reconnect(event.hostId);});
+window.desktop?.onPeer(event=>{if(event.event==='project-follow')void projectFollower.receive({...event.data,hostId:event.hostId},event.data);if(event.event==='tabs'){const scope={scope:event.data.scope,id:event.data.id,hostId:event.hostId};if(synchronizedContentScopes().some(value=>value.scope===scope.scope&&value.id===scope.id&&value.hostId===scope.hostId))void contentTabSync.sync(scope);}if(event.recovered)projectFollower.reconnect(event.hostId);});
 document.addEventListener('visibilitychange',()=>{saveWorkspace();projectFollower.changed();if(!document.hidden)void refresh();});
 window.addEventListener('pagehide',()=>{stopFollowRestoration?.();projectFollower.dispose();});
 function selectedChatParent(){
@@ -1210,17 +1216,25 @@ function newTabAction(blank,action){
 function renderBrowser() {
   const tab=state.tabs.find(t=>t.id===state.tab);
   if(tab.newChatDraft){selectBrowserSurface();void window.desktop.browser({action:'hide',...browserSurfaceIdentity()});chatSetupTabs.show(tab,surface=>{const guard=()=>{if(!state.tabs.includes(tab))throw Error('This chat setup tab was closed.');};if(surface.initial.hostId)return openWorkspaceChatDialog(surface.initial.hostId,surface.initial.workspaceId,(id,title,hostId)=>finishChatSetup(tab,{id:'peer:'+hostId+':'+id,type:'remote-run',hostId,runId:id,label:title||'Chat'}),{...surface.initial,surface,beforeStart:guard});if(surface.initial.chatType==='internet')return mountInternetSearch({state,api,escape,toast,refresh,...surface.initial,beforeStart:guard,surface,open:run=>finishChatSetup(tab,{id:run.id,type:'run',label:run.title})});return chatDialog(created=>finishChatSetup(tab,created),guard,surface.initial,surface);});renderChatSubtabs();return;}
+  const reuseToolbar=$('#browser-form')?.dataset.tabId===tab.id;
+  const command=async(action,extra={})=>{try{return await window.desktop.browser({action,id:tab.id,...extra});}catch(error){toast(error.message);}};
+  // Loading/history hydration can refresh the same surface while input arrives.
+  // Keep the actual address node/listeners mounted so queued input cannot land
+  // on a detached field and lose its window-private draft.
+  const navigateBrowser=async raw=>{const pendingDraft=browserAddressDrafts.get(tab.id),finish=projectFollower.beginHuman();try{const info=await window.desktop.browser({action:'navigate',id:tab.id,url:browserTarget(raw)});if(browserAddressDrafts.get(tab.id)===pendingDraft)browserAddressDrafts.delete(tab.id);if(state.tabs.includes(tab)){tab.info=info;if(state.tab===tab.id)renderBrowser();}}catch(error){toast(error.message);}finally{finish();}};
+  if(!reuseToolbar){
   selectBrowserSurface();
   $('#main').classList.add('browser-main');
   $('#main').innerHTML='<form class="browserbar" id="browser-form"><button type="button" id="browser-back" aria-label="Back">←</button><button type="button" id="browser-forward" aria-label="Forward">→</button><button type="button" id="browser-reload" aria-label="Reload or stop">↻</button>'+browserAddress('browser','Browser address')+'<button class="browser-go" type="submit" id="browser-go" aria-label="Load address" title="Load address">↵</button><button type="button" id="browser-fill-login" title="Fill login" aria-label="Fill login">⚿</button></form><div id="browser-area" class="browserarea"></div>';
-  const command=async(action,extra={})=>{try{return await window.desktop.browser({action,id:tab.id,...extra});}catch(error){toast(error.message);}};
+  $('#browser-form').dataset.tabId=tab.id;
+
   $('#browser-fill-login').onclick=()=>fillBrowserLogin(state.tab);
   $('#browser-fill-login').insertAdjacentHTML('afterend','<button type="button" id="browser-overview" aria-label="Show all browser tabs" title="Tab overview · Ctrl/Cmd+Shift+\\">'+tabOverviewIcon+'</button>');
   $('#browser-overview').onclick=()=>void showBrowserOverview(selectedChatParent()?.id||'main');
   bindBrowserAddressMenu($('#browser-url'),state.tab,{showDialog,toast});
   $('#browser-url').addEventListener('input',event=>{browserAddressDrafts.set(tab.id,event.target.value);});
   $('#browser-url').addEventListener('keydown',event=>{if(event.key==='Escape'){browserAddressDrafts.delete(tab.id);event.target.value=tab.info?.url||'';}});
-  const navigateBrowser=async raw=>{const pendingDraft=browserAddressDrafts.get(tab.id),finish=projectFollower.beginHuman();try{const info=await window.desktop.browser({action:'navigate',id:tab.id,url:browserTarget(raw)});if(browserAddressDrafts.get(tab.id)===pendingDraft)browserAddressDrafts.delete(tab.id);if(state.tabs.includes(tab)){tab.info=info;if(state.tab===tab.id)renderBrowser();}}catch(error){toast(error.message);}finally{finish();}};
+
   $('#browser-form').onsubmit=event=>{event.preventDefault();void navigateBrowser($('#browser-url').value);$('#browser-url').blur();};
   bindDesktopBrowserRecents($('#browser-url'),{api,navigate:navigateBrowser,toast,profileId:tab.info?.profileId||tab.profileId||'default'});
   for (const direction of ['back', 'forward']) {
@@ -1232,11 +1246,12 @@ function renderBrowser() {
   }
   $('#browser-reload').onclick=()=>command(state.tabs.find(t=>t.id===state.tab)?.info?.loading?'stop':'reload');
 
+  }
   updateBrowserControls();
   const current=state.tabs.find(t=>t.id===state.tab);
   if(current?.info?.profileLocked){void window.desktop?.browser({action:'hide',...browserSurfaceIdentity()});$('#browser-area').innerHTML='<div class="empty"><p>This browser profile is unavailable. Sign in and refresh profiles in Browser Preferences to resume it.</p></div>';}else if(!current?.info?.url){void window.desktop?.browser({action:'hide',...browserSurfaceIdentity()});void renderBrowserHome($('#browser-area'),{escape,toast,time,api,showDialog,tabId:current.id,profileId:current.info?.profileId||current.profileId||'default',browser:window.desktop.browser,navigate:navigateBrowser,actions:addTabMenuEntries(selectedChatParent()?.type==='workspace'?'workspace':selectedChatParent()?'chat':'main').map(action=>({...action,run:()=>newTabAction(current,action)}))});}
   else if(current.info.loaded===false){void window.desktop?.browser({action:'hide',...browserSurfaceIdentity()});$('#browser-area').innerHTML='<div class="empty browser-unloaded"><p>This tab is unloaded.</p><button id="browser-load">Load tab</button></div>';$('#browser-load').onclick=async()=>{await command('activate');current.info.loaded=true;renderBrowser();};}
-  else requestAnimationFrame(browserBounds);
+  else{$('#browser-area').replaceChildren();requestAnimationFrame(browserBounds);}
   renderChatSubtabs();
 
 }
@@ -1702,7 +1717,7 @@ initBrowserNotifications({api,refresh,review:item=>{if(item.readAt)navigate('eng
 initAttention({state,api,toast,refresh,openBrowser:info=>openTab({id:info.id,type:'browser',label:info.title||'Browser',parentId:info.parentId,info}),chats:()=>attentionChats(state.data?.runs||[]),openChat:openIndexedChat,renderChats:()=>renderChatsIndex(true),connections:section=>navigate('engine',section),openPage:()=>navigate('attention')});
 initChatsIndex({moveChat:moveChatToWorkspace,copyLink:copyChatLink,sendToWorkspace:sendChatToWorkspace,state,api,escape,toast,time,showDialog,openLocal:runTab,openRemote:openRemoteChat,onDeleted:reconcileDeletedChat,rename:renameChat,onIndexChanged:()=>{const running=$('[data-page="runs"] .count');if(running&&state.data)running.textContent=runningChats(state.data.runs);const count=$('[data-page="attention"] .count');if(count&&state.data)count.textContent=attentionItems().length;}});
 initTeamTools({hideTeamBrowser:async tab=>{await setTabVisibility(tab,true);await saveWorkspace();},state,api,escape,toast,time,lines,showDialog,browserTarget,fillBrowserLogin,timezone:()=>state.data.settings.timezone,onChange:saveWorkspace,transferTeamTab:(tab,copy)=>transferTabDialog({...tab,id:tab.browserId||tab.id,type:tab.browserId?'browser':tab.type,label:tab.title,customTitle:tab.customTitle,info:{url:tab.url,agentControlling:tab.agentControlling}},copy,tab),openTeamTerminal:(callback,guard)=>openTerminalDialog(null,callback,guard),renderTeamRemoteDocument:(tab,container)=>renderRemoteDocument(tab,{container,active:()=>container.isConnected&&teamState().active===tab.id}),renderTeamAgentTerminal:async(tab,container)=>{await loadRunView(tab.runId);if(container.isConnected&&teamState().active===tab.id)renderAgentTerminal(container,localHistories.get(tab.runId));},renderTeamTerminal:renderTerminal,disposeTeamTerminal:disposeTerminalUi,openTeamMarkdown:(callback,guard)=>openMarkdownPicker('open',null,callback,guard),openTeamLink:async(source,cwd)=>{try{const kind=ProteusMarkdown.linkKind(source);if(kind==='web'){const info=await window.desktop.browser({action:'create',url:source,group:'team'});selectTeamBrowser(info);renderTeamTools();}else if(kind==='file'){const file=decodeURIComponent(new URL(source,'file://'+cwd.replace(/\/$/,'')+'/').pathname);if(file.endsWith('.md')){const markdown=await api('/api/markdown',{file});const tab={id:'markdown:'+file,type:'markdown',label:file.split('/').pop(),file,markdown};const current=teamState();const old=current.tabs.find(item=>item.id===tab.id);if(old)Object.assign(old,tab);else current.tabs.push(tab);current.active=tab.id;saveWorkspace();renderTeamTools();}else await window.desktop.openPath(file);}else if(kind==='mail'){await navigator.clipboard.writeText(source.slice(7));toast('Email address copied.');}}catch(error){toast(error.message);}}});
-initEngineRoom({openUpdateChat:async run=>{await refresh();const current=state.data.runs.find(item=>item.id===run.id)||run;if(!previewEnabled(state)||!openPreviewChat(current))runTab(current);},openBrowser:info=>openTab({id:info.id,type:'browser',label:info.title||'Browser',info}),state,api,escape,toast,time,manageMcp,providers:renderProviders,connections:()=>renderRemote({api,escape,toast}),setup:renderSettings,resourceChanged:(action,id)=>{if(action==='close')state.tabs=state.tabs.filter(tab=>tab.id!==id);saveWorkspace();},openAccount:()=>window.desktop?.openExternal(new URL('/security',state.data.life?.websiteOrigin||'https://proteus.example').href)});
+initEngineRoom({showDialog,openUpdateChat:async run=>{await refresh();const current=state.data.runs.find(item=>item.id===run.id)||run;if(!previewEnabled(state)||!openPreviewChat(current))runTab(current);},openBrowser:info=>openTab({id:info.id,type:'browser',label:info.title||'Browser',info}),state,api,escape,toast,time,manageMcp,providers:renderProviders,connections:()=>renderRemote({api,escape,toast}),setup:renderSettings,resourceChanged:(action,id)=>{if(action==='close')state.tabs=state.tabs.filter(tab=>tab.id!==id);saveWorkspace();},openAccount:()=>window.desktop?.openExternal(new URL('/security',state.data.life?.websiteOrigin||'https://proteus.example').href)});
 initTerminals({state,escape,toast,showDialog,openTab,onInput:tab=>recordPreviewActivity(tab)});
 initDesktopPreview({workspaceOwners,refreshWorkspaceOwners,loadWorkspaceOwnerTabs,openRemoteProject,openWorkspaceChat,syncContentTabs:scope=>contentTabSync.sync(scope),state,api,escape,toast,refresh,openTab,render,showDialog,openWorkspace,renderChats:renderChatsIndex,newChat:newWorkspaceChat,createWorkspace,deleteWorkspace,manageWorkspaceTab,manageWorkspaceTabs});
 initWorkspaces({syncContentTabs:scope=>contentTabSync.sync(scope),reconcileRemoteProjectPlacement,revealSelectedTab,manageWorkspaceTab,manageWorkspaceTabs, state,api,escape,toast,loadPeers,openTab,render,renderTabs,showDialog,renderChats:renderChatsIndex,newChat:newWorkspaceChat});
@@ -1727,7 +1742,7 @@ void refreshBrowserProfiles();
 const liveEvents = new EventSource('/api/events');
 // Tab-list convergence is passive and must continue while another window owns
 // focus or this window has an unfinished address/composer draft.
-liveEvents.addEventListener('content-tabs',event=>{if(!workspaceReady||workspaceRestoring||workspaceClosing)return;try{const value=JSON.parse(event.data),scope=visibleContentScopes().find(scope=>!scope.hostId&&scope.scope===value.scope&&scope.id===value.id);if(scope)void contentTabSync.sync(scope);}catch{}});
+liveEvents.addEventListener('content-tabs',event=>{if(!workspaceReady||workspaceRestoring||workspaceClosing)return;try{const value=JSON.parse(event.data),scope=synchronizedContentScopes().find(scope=>!scope.hostId&&scope.scope===value.scope&&scope.id===value.id);if(scope)void contentTabSync.sync(scope);}catch{}});
 liveEvents.addEventListener('project-follow',event=>{try{const value=JSON.parse(event.data);void projectFollower.receive({scope:value.scope,id:value.id},value);}catch{}});
 // Owner change events are coalesced and name affected chats. A streaming-only burst
 // refreshes just the visible conversation (if it is one of them) instead of every

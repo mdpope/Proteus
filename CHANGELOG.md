@@ -1,5 +1,8 @@
 ## Unreleased
 
+- Keep open workspace/project tab lists and history synchronized across windows even while a different project is selected. Local selection and reading positions remain independent; paired-computer presentation following is retained.
+- Keep dormant mirrored Persist tabs unloaded until selected or explicitly loaded, including passive persistence updates.
+- Add **Find tabs in saved windows…** under Engine Room → Windows. Review retained local sessions, restore missing logical tabs and preserve alternative history in separate tabs without replacing current navigation. Legacy records cannot establish whether an absent tab was intentionally closed.
 - Prevent website and extension JavaScript alerts/confirms from opening native sheets over the Proteus window. Suppressed confirms return false; page-owned HTML dialogs and Proteus approvals remain available.
 - Add **Copy tab ID** immediately above **Persist tab** in a browser tab's right-click menu, copying the clicked tab's browser-tool ID without changing its selection, persistence or sharing.
 

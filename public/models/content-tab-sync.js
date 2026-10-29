@@ -161,7 +161,7 @@ export function createTabSynchronizer({scopes,readLocal,apply,acknowledge=async(
         if(!Array.isArray(saved)||saved.length>2000||saved.some(item=>typeof item!=='string'||item.length>256))throw Error('Saved owner tab observations could not be read. Local views were preserved.');
         record.ownerObserved=new Set(saved);
       }
-      if(record.baseline===null&&!record.localAliases)record.localAliases=new Set(local.filter(tab=>remote.revision>0&&!record.ownerObserved.has(tab.id)&&!remote.tabs.some(item=>item.id===tab.id)&&preserveUntracked(scope,tab)).map(tab=>tab.id));
+      if(record.baseline===null&&!record.localAliases)record.localAliases=new Set(local.filter(tab=>!tab.navigationPending&&remote.revision>0&&!record.ownerObserved.has(tab.id)&&!remote.tabs.some(item=>item.id===tab.id)&&preserveUntracked(scope,tab)).map(tab=>tab.id));
       const rememberOwner=()=>{
         for(const tab of remote.tabs){record.localAliases?.delete(tab.id);if(preserveUntracked(scope,tab))record.ownerObserved.add(tab.id);}
         // Remember participation across renderer restarts, including a close made
@@ -171,6 +171,7 @@ export function createTabSynchronizer({scopes,readLocal,apply,acknowledge=async(
         if(record.ownerObserved.size)pendingStorage?.setItem(observedKey,JSON.stringify([...record.ownerObserved]));else pendingStorage?.removeItem(observedKey);
       };
       rememberOwner();
+      for(const tab of local)if(tab.navigationPending)record.localAliases?.delete(tab.id);
       local=local.filter(tab=>!record.localAliases?.has(tab.id));
       // An existing revision is authoritative at first connection. A brand-new scope
       // can adopt locally opened descriptors without resurrecting remotely closed tabs.

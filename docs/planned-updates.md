@@ -1,3 +1,26 @@
+## October 29 — shared project windows and explicit retained-session recovery
+
+Authorized source follow-up: one owner/container tab set across windows and paired clients, with
+independent local selection and scrolling. Inactive open project roots now subscribe to canonical
+membership/history; same-tab loading retains the mounted address control. Dormant Persist mirrors
+remain unloaded until use. Existing remote presentation following and authorization are unchanged.
+
+Engine Room → Windows adds **Find tabs in saved windows…**: bounded worker scanning, current full
+navigation comparison, source/revision review, identity-preserving recovery, and separate history
+copies rather than replacement of live stacks. Compact intent/result receipts retain partial or
+uncertain outcomes. Legacy absent identities are not assumed to be accidental closes; the review
+states the provenance/retention limits. Missing local legacy views survive until reviewed, while
+explicit navigation and previously observed owner Close keep their normal semantics.
+
+Synthetic real two-window UI passes inactive membership/history, independent browser positions,
+lazy Persist metadata, focused address/filter and actual saved-window recovery with Forward and
+no page fetch. The actual encrypted two-desktop fixture passes both-way URL/selection, sustained
+nested-browser scrolling, independent cookies and presentation isolation. Full Node validation:
+1,301 pass / four skips; static checks pass. HC's separate private audit/restoration verifies nine
+original identities and two alternative-history copies in its owner, with current stacks unchanged;
+visible window convergence remains unverified. A Build Mac audit does not establish HC results.
+Package/deployment remains held for the next release.
+
 ## October 29 — website dialogs and diagnostic tab IDs, next release only
 
 The operator reports an ad-permission prompt blocking the entire Electron window and requests

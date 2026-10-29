@@ -1,3 +1,30 @@
+## October 29 — shared project windows and recovery, next-release follow-up
+
+The operator reports different Ember tab lists in two HC windows and requests one owner/container
+content set, independent local selection/scroll, existing paired-client follow and lazy browser
+residency. Open inactive project/workspace roots now receive owner membership/history events.
+Dormant Persist mirrors do not allocate another website renderer, including passive updates and
+sibling-window restore. The same browser toolbar survives history/loading hydration, retaining
+real input nodes and drafts; concurrent tab-table refreshes retain fresh input/focus.
+
+Engine Room → Windows gains an explicit retained-session recovery scan/review. File parsing runs
+in a bounded worker. Current worker stacks, including retained closed-descriptor navigation, stay
+authoritative; alternative historical branches become separate unloaded logical tabs. Stable
+source/revision review and compact intent/result receipts guard partial/uncertain recovery.
+Unavailable/moved identities and unknown historical Close provenance are disclosed. Legacy local
+views remain recoverable without hiding explicit new navigation from canonical publication.
+
+Disposable Electron acceptance covers inactive project membership/history, independent local
+browser scroll, unloaded Persist mirrors, focused drafts/filter, and actual recovery dialog with
+Forward history, repeat-scan identity and no website load. The encrypted two-desktop fixture also
+passes both-way URL/selection and sustained nested-browser scrolling, independent cookies and
+inactive-root presentation isolation. Full Node validation passes 1,301 cases with four skips;
+static checks pass. HC's private audit covers 98 retained records and 66 current browser stacks /
+830 entries: its questioned stack is retained. Nine original identities and two alternative-history
+copies are recovered through the live owner, with prior current stacks unchanged. Visible window
+convergence remains unverified on that installed version. Private evidence stays outside Git.
+This remains held for the next release; no app redeploy.
+
 ## October 29 — native website dialogs and Copy tab ID, source-only follow-up
 
 The operator requests fixing website-originated native modal sheets and adding **Copy tab ID**

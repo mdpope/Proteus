@@ -1,3 +1,18 @@
+## October 29 — project membership subscriptions differ from presentation following
+
+Canonical content belongs to an explicit host/container. Every open root subscribes to membership
+and navigation changes, including inactive projects, while presentation follows only the visible
+project. Do not solve stale lists by making local windows follow one another or by eagerly loading
+all browser mirrors. Persist is residency protection for an actual loaded view, not a request to
+allocate a duplicate renderer when observing its metadata.
+
+Retained-window recovery is an explicit owner operation with a reviewed source/revision digest.
+Scan/parse retained files in a bounded worker, preserve private evidence, and commit through the
+existing canonical mutations. Equal URLs are not identity. Current/moved tabs retain authority;
+historical branches become separate unloaded descriptors rather than rewriting navigation.
+Unknown historical Close provenance is disclosed instead of guessed. Never instantiate another
+runner or edit a live content/session file to recover a missing tool capability.
+
 ## October 29 — untrusted page scripts cannot open native app dialogs
 
 Electron's default JavaScript alert/confirm path creates a native window-modal sheet, so a

@@ -20,7 +20,15 @@ export function reorderWorkspaceTabSiblings(tabs,{id,targetId,parentId,after}){
 }
 export function mountWorkspaceTabs(container,{tabs,act,refresh,notify=()=>{},preview=false,reorder,allowReorder=true,selectionKey='tabs',allTabs=()=>tabs,bulk,toolbar}){
  if(!selections.has(selectionKey))selections.set(selectionKey,{ids:new Set(),selecting:false,busy:false});const selection=selections.get(selectionKey);
- selection.refreshView=async()=>{if(!container.isConnected||selection.busy)return;const active=document.activeElement,query=active?.matches('[data-tab-query]')&&container.contains(active)?{start:active.selectionStart,end:active.selectionEnd}:null;const next=await refresh?.();if(!container.isConnected)return;if(next)tabs=next;draw();if(query){const input=container.querySelector('[data-tab-query]');input.focus({preventScroll:true});input.setSelectionRange(query.start,query.end);}};
+ let refreshGeneration=0;
+ selection.refreshView=async()=>{
+  if(!container.isConnected||selection.busy)return;const generation=++refreshGeneration,next=await refresh?.();
+  if(!container.isConnected||generation!==refreshGeneration)return;
+  // Read focus after I/O, immediately before replacing controls. Concurrent
+  // refreshes and typing may have replaced the earlier input or changed intent.
+  const active=document.activeElement,query=active?.matches('[data-tab-query]')&&container.contains(active)?{start:active.selectionStart,end:active.selectionEnd}:null;
+  if(next)tabs=next;draw();if(query){const input=container.querySelector('[data-tab-query]');input.focus({preventScroll:true});input.setSelectionRange(query.start,query.end);}
+ };
  while(selections.size>100){const first=selections.keys().next().value;if(first===selectionKey)break;selections.delete(first);}
  const selectedRows=()=>allTabs().filter(tab=>selection.ids.has(tab.id));
  selection.query??='';selection.type??='all';

@@ -129,12 +129,16 @@ else {
     windows.current().session=makeSession(firstRecord.id);const workspaceSession=windows.proxy('session');
     const tabActions=new Map();
     const windowLayouts=new (require('./windows/window-layouts.cjs').WindowLayouts)(service.home);
+    const {WindowContentRecovery}=await import('./windows/content-recovery.js');
+    const windowContentRecovery=new WindowContentRecovery(service);
     const checkpointWindow=ctx=>ctx.recovery?.restoring||ctx.window.webContents.isCrashed()?Promise.resolve():new Promise((resolve,reject)=>{const requestId=require('node:crypto').randomUUID();const timer=setTimeout(()=>{tabActions.delete(requestId);reject(Error('The window did not finish saving. Try again after it responds.'));},10000);tabActions.set(requestId,{resolve,reject,timer,windowId:ctx.id});ctx.window.webContents.send('proteus:tab-management',{action:'window-checkpoint',requestId});});
     const windowPositions=id=>{const prefix='window:'+id+':';return viewPositions.get().flatMap(([key,position])=>key.startsWith(prefix)?[[key.slice(prefix.length),position]]:id==='main'&&!key.startsWith('window:')?[[key,position]]:[]);};
     const captureWindow=(ctx,kind,name,expectedRevision)=>windowLayouts.capture({windowId:ctx.id,session:ctx.session.get(),positions:windowPositions(ctx.id),bounds:ctx.window.getNormalBounds(),maximized:ctx.window.isMaximized(),kind,name},expectedRevision);
     if(windowLayouts)windows.checkpointForQuit=async()=>{for(const ctx of windows.contexts.values()){ctx.checkpointing=true;try{await checkpointWindow(ctx);captureWindow(ctx,'previous');}finally{ctx.checkpointing=false;}}};
     windows.handle('proteus:window-layouts',async(event,value)=>{
       trusted(event);if(!windowLayouts)throw Error('Window sessions are available in the design preview.');
+      if(value?.action==='audit-content')return windowContentRecovery.audit();
+      if(value?.action==='recover-content')return windowContentRecovery.restore(value);
       if(value?.action==='list')return windowLayouts.list(windows);
       if(value?.action==='new'){await createAppWindow();return windowLayouts.list(windows);}
       if(value?.action==='rename'){if(!windows.contexts.has(value.id))throw Error('Choose an open window.');windowLayouts.rename(value.id,value.name,value.expectedRevision);}

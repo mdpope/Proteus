@@ -7,6 +7,15 @@ current owner membership while preserving chat IDs, child-resource origins, draf
 sessions. Canonical main-list aliases are retired atomically without changing child registries.
 Unassigned chats can remain top-level. This supersedes the earlier global-quick-view design below.
 
+## October 29 — project content is independent of the visible window
+
+All open views of an owner workspace/project receive content membership and URL/history changes,
+including inactive project roots. Local selection/scroll remain window-private. Dormant browser
+mirrors register unloaded even when Persist is enabled, avoiding a second renderer until use.
+Engine Room's retained-window recovery review can aggregate missing logical identities and preserve
+alternative histories without overwriting live navigation. See [window management](window-management.md).
+Matching workspace/project names on different hosts do not establish the same owner identity.
+
 ## October 23 — shared move menu and working-folder defaults
 
 Chat, browser, terminal, document and bulk-tab move entry points use the shared destination
