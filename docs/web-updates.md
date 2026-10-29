@@ -1,4 +1,4 @@
-## October 29 — sidebar palette correction in source
+## October 29 — sidebar palette correction deployed
 
 The website's grouped navigation duplicated the old sampled sidebar colors and overrode the
 shared palette, making it darker than desktop. It now consumes the same palette aliases as the
@@ -7,8 +7,17 @@ remains independent and existing saved colors are honored.
 
 An isolated browser regression renders the actual desktop and web styles separately and compares
 their computed colors for defaults, custom palette edits and reset. The preceding stylesheet fails;
-the corrected stylesheet passes. This follow-up is not yet deployed; the existing 0.2.36 website
-deployment and pending server-retention work remain separate.
+the corrected stylesheet passes. Release `20261029T221800Z` now serves version 0.2.36 / build
+`6903064`. All nine HTTPS asset hashes and fourteen endpoint checks pass. The signed-in Home
+page uses the shared `#1b251d` sidebar and paints its selected canvas; its console reports no
+errors or warnings. Browser-local palette preferences were not changed.
+
+The new full recovery and captured-state verification pass; ordinary isolated restore fails
+and remains qualified. The immediately preceding ordinary-restore-verified recovery is retained.
+Server and central storage each retain two verified full generations, with two code generations,
+and local generated source/build/archive cleanup is complete. Bounded Apache bytes from both
+website deployments contain the expected protected `.env` probe denial. Original failed
+pre-capture and generated-cache checks remain in private receipts; neither replaced live code.
 
 **October 18 computer grouping follow-up:** Release `20261018T184327Z` is deployed with the
 stable Default-computer workspace group, expandable Other Computers with named owner headings,

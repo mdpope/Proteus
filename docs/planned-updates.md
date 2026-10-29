@@ -3,7 +3,10 @@
 The reported darker web sidebar was caused by hard-coded navigation colors overriding the
 shared palette. Source now uses the existing desktop palette aliases, including active-group
 borders and foregrounds. Rendered default/edit/reset parity passes against actual desktop CSS;
-the preceding web stylesheet fails that regression. Follow-up website deployment remains pending.
+the preceding web stylesheet fails that regression. The correction is deployed as 0.2.36 /
+`6903064`; signed-in computed colors, nine asset hashes, fourteen endpoints and clean browser
+console pass. Two verified server/central recovery generations and two code generations remain;
+ordinary restore is qualified separately from the successful captured-state verification.
 
 ## October 29 — combined rollout authorized after Windows work
 
@@ -13,7 +16,9 @@ Build Mac, Windows and web once the separate Windows distribution chat finishes.
 The operator subsequently lifted HC's hold. The Windows gate completed with accepted source
 `66ce6f0`, merged into frozen combined source `b12fa84`, version 0.2.36 / native 2610.29.1.
 Final Node/static and exact Mac package acceptance pass. Website, simulators and physical iPhone
-are installed; iPad final checks and supervised desktop installations remain in progress.
+are installed; HC and Windows 0.2.36 are now installed and healthy. Build Mac remains prepared,
+iPad final checks remain qualified, and the additionally authorized Linux native build/acceptance
+is in progress. Combined source is merged and pushed to main; obsolete worktrees are retired.
 See [combined release](2026-10-29-combined-release.md) for actual outcomes and remaining blockers.
 
 ## October 29 — compact question answer controls

@@ -6,7 +6,8 @@ Combine the current iOS fixes with the desktop responsiveness, Claude continuati
 question-answer changes, plus relevant web parity. The operator authorizes deployment to the
 physical iPhone/iPad, Build Mac, Windows and the website after the separate Windows distribution
 chat finishes. The operator subsequently lifted the Work Mac hold; that Mac is now included.
-Other computers are outside this rollout. The gate completed with immutable source `66ce6f0`, now merged into
+The operator subsequently included Linux and requested main integration and cleanup.
+The gate completed with immutable source `66ce6f0`, now merged into
 combined version 0.2.36 and native build 2610.29.1. It installed and published Windows 0.2.35
 `windows.867dc88cfd12`; native source/static, packaged UI/restart/navigation, 3.35-second helper
 readiness, saved-state preservation and two verified recoveries passed. Its remaining human
@@ -60,12 +61,16 @@ The unchanged installed launcher acknowledges its helper in 6.44 seconds against
 notification checks pass. The hidden test app remains hidden and unfocused on notification arrival.
 Original sandbox and fixture failures remain in private evidence with their qualifications.
 
-The website is live on 0.2.36 / `b12fa84`. Capture, verified central copy, ordinary restore
-rehearsal, activation and audit complete. All eight compiled HTTPS assets and the manifest match;
-the signed-in Home page connects to the owner, with no browser console errors or warnings.
-Two new Apache events / 222 bytes remain unclassified because the administration backend timed
-out; the application and relay log windows added no bytes. Local retention is complete; exact
-server staging/recovery retirement remains pending that backend. No cleanup command was submitted.
+The website sidebar follow-up is live on 0.2.36 / `6903064`, release `20261029T221800Z`.
+Capture, verified central copy, captured-state verification, activation and audit complete.
+Ordinary isolated restore failed; the preceding ordinary-restore-verified recovery remains.
+All eight compiled HTTPS assets and the manifest match. Signed-in Home reports the expected
+shared `#1b251d` sidebar and selected canvas, with no browser console errors or warnings.
+The bounded Apache bytes from both deployments show the expected protected `.env` probe denial;
+the application and relay log windows added no bytes. Server and local retention now keep two
+verified full recoveries and two code generations. Obsolete transport archives and generated
+source/site copies were verified before retirement. Original pre-capture/cache-check failures
+remain in private evidence and performed no live replacement.
 
 Both existing simulators run 0.2.36 / 2610.29.1 and pass explicit pairing and separate normal
 cold-start reconnect checks against the current owner. Their selected host identities match the
@@ -79,15 +84,33 @@ iPad is installed; qualified preservation and controlled launch/retention remain
 cold copy was rejected because the app restarted, although source metadata was unchanged. A
 stopped-device comparison verified all 259 current file hashes against that preserved copy, then
 accepted the same recovery without creating another full backup. The first post-install readback
-also matched all 259 file hashes but failed its stopped-process guard. Current metadata remains
-unchanged and the app is running. A manual App Switcher close and stable post-launch comparison
-are pending; this is not a pre-launch preservation pass. Both failures are retained.
+also matched all 259 file hashes but failed its stopped-process guard. Later startup wrote
+encrypted caches and OS/WebKit scene data; the current profile is not byte-identical. No app-owned
+files disappeared, and all four destinations and the selected owner match the cold receipt.
+Logical encrypted-cache comparison, qualified controlled relaunch and retention remain pending;
+this is not a pre-launch preservation pass. Original failures and later differences are retained.
 Physical gestures, authenticated reconnect and actual push delivery remain separate acceptance.
 
-HC and Windows candidates are prepared and handed off, but installation is not yet verified.
-Their owner timers identify actual active-work blockers. Build Mac preparation is waiting on
-its destination app-tool approval. Desktop installed performance, preservation and same-chat
-continuation remain required; prepared jobs and completed model turns are not installation proof.
+HC and Windows 0.2.36 are installed with supervisor health verified and two full recoveries each.
+HC's complete installed package matches the candidate; its owner verifies 541 runs and 41,425
+event prefixes. Synchronous state assembly averages 66 ms after startup versus 1,355 ms before;
+this is not a direct gesture benchmark. Windows runs `windows.108470c1b4cc` and passes native
+rendered-window observation; detailed restored-draft/gesture and state-worker timing remain
+unverified. HC has no native desktop driver, so native gesture acceptance was unavailable.
+
+Build Mac remains on 0.2.33 with the exact 0.2.36 job prepared. The older global new-input
+guard reset its waiting handoff when feedback arrived; a bounded watcher timed out without
+dispatching. Reuse the same job and verified candidate, refresh its revision, and finish the
+parent turn after handoff. Installation and post-restart preservation remain required.
+
+Linux's existing owner is healthy on 0.2.31. A native 0.2.36 artifact `linux.ccf82d62ee56` is built
+from exact main `6903064`; 1,293 source tests pass with four skips, and static checks pass.
+Isolated package/update/rollback acceptance is in progress; this is not an installed Linux update.
+
+Main contains both the Codex and Claude changes and matches its pushed remote. Redundant release
+branches and all four obsolete worktrees are retired. The sole uncommitted private simulator
+acceptance patch was preserved before retiring its obsolete baseline; the operator's request PDF
+remains untouched and excluded. Historical artifact/source references remain available.
 
 Preflight retired only verified obsolete build intermediates and redundant generated website
 copies, preserving current/previous signed apps, source companions and two complete website

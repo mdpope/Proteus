@@ -14,11 +14,15 @@ three final durability regressions. Final merged Node validation passes 1,293 ca
 and static/exact Mac package acceptance passes. The website and both simulators are live on
 0.2.36; actual-owner simulator pairing and cold reconnect pass. The physical iPhone is installed,
 preservation/launch verified and rotated to two recoveries. The iPad is installed with final
-preservation/launch/retention in progress. HC and Windows handed-off jobs await their actual
-idle blockers; Build Mac awaits its app-tool approval. Installed desktop checks remain pending.
-The prior Windows
-coordinator still has a human desktop-verification approval and a saved-effort correction to
-finish; neither changes its verified installed package. See the [release ledger](2026-10-29-combined-release.md).
+preservation/launch/retention in progress. HC and Windows 0.2.36 are installed and healthy, with
+two verified recoveries each; Windows native visual acceptance passes. Build Mac is still on
+0.2.33 with the exact 0.2.36 candidate prepared: new input reset its earlier idle handoff.
+The operator additionally requests Linux; its exact-main native package is built and source tests
+pass, with isolated update acceptance in progress. Source is merged/pushed to main `6903064`;
+all obsolete worktrees and redundant local release branches are retired. Website sidebar follow-up
+`6903064` is deployed and signed-in colors/asset/endpoints verified; server/local retention is
+complete, with an explicit ordinary-restore qualification. See the
+[release ledger](2026-10-29-combined-release.md) for current limits and remaining work.
 
 ## October 29 — iOS main-thread profiling and smoothness fixes
 
