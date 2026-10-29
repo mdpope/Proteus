@@ -28,7 +28,10 @@ Node, npm, Git or the publisher key.
    builder uses `build-release` with a stable operation ID, exact version,
    source commit and channel. `build-status` reports its durable progress.
    A repeated operation returns its existing journal; an interrupted operation
-   needs reconciliation and is not replayed. It fetches through the existing
+   needs reconciliation and is not replayed. After inspecting a failed build,
+   `cancel-build` with its operation ID and `buildRequestHash` can close its
+   receipt only after the process has exited, permitting a different operation
+   without editing application files. It fetches through the existing
    repository-local account route, builds in private updater folders, runs source
    and exact-package acceptance, verifies official archive extraction and signs
    using the configured protected key. No key is copied or trust replaced.

@@ -20,5 +20,9 @@ test('only configured Windows builders dispatch fixed commands, and operation re
  assert.throws(()=>builder.startBuild(root,{...request,sourceCommit:'b'.repeat(40)},args),/different source/);
  assert.throws(()=>builder.startBuild(root,{...request,operationId:randomUUID()},args),/current Windows build/);
  child.emit('error',Error('synthetic spawn failure'));assert.equal(builder.buildStatus(root).job.phase,'attention');assert.equal(builder.startBuild(root,request,args).job.phase,'attention');assert.equal(calls,1);
+ const failed=builder.buildStatus(root).job;
+ assert.throws(()=>builder.cancelBuild(root,{operationId:request.operationId,buildRequestHash:'changed'}),/request hash/);
+ assert.equal(builder.cancelBuild(root,{operationId:request.operationId,buildRequestHash:failed.requestHash}).job.phase,'cancelled');
+ assert.equal(builder.startBuild(root,request,args).job.phase,'cancelled','Cancelling does not replay the same operation');
  assert.throws(()=>builder.startBuild(root,request,{...args,platform:'linux'}),/designated Windows/);
 });

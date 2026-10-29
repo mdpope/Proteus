@@ -34,8 +34,17 @@ function buildStatus(root){
  if(!/^[a-f0-9-]{36}$/.test(ref.operationId||''))throw Error('Invalid Windows build reference.');
  const file=path.join(root,'builds',ref.operationId,'job.json'),job=JSON.parse(fs.readFileSync(file,'utf8'));
  if(job.root!==root||job.operationId!==ref.operationId)throw Error('Windows build journal does not match its owner.');
- const running=job.phase==='running'&&alive(job.pid);
- return {configured,job:{...job,...(job.phase==='running'&&!running?{phase:'attention',error:'The build process stopped without a final receipt. Inspect its logs; it will not be replayed.'}:{}),running}};
+ let launcher;try{launcher=JSON.parse(fs.readFileSync(path.join(path.dirname(file),'launch.json'),'utf8'));}catch(error){if(error.code!=='ENOENT')throw error;}
+ const pid=job.pid||launcher?.pid,running=['starting','running','attention'].includes(job.phase)&&Number.isSafeInteger(pid)&&pid>0&&alive(pid);
+ return {configured,job:{...job,...(pid?{pid}:{}),...(job.phase==='running'&&!running?{phase:'attention',error:'The build process stopped without a final receipt. Inspect its logs; it will not be replayed.'}:{}),running}};
+}
+function cancelBuild(root,value){
+ const state=buildStatus(root),job=state.job;
+ if(!job||job.operationId!==value.operationId||job.requestHash!==value.buildRequestHash)throw Error('Refresh the current build and its request hash before cancellation.');
+ if(job.phase==='cancelled')return state;
+ if(job.running||job.phase!=='attention'||!job.pid&&!job.launchFailure&&!job.observedExit)throw Error('Only a failed build with an observed process exit can be cancelled. Active work was preserved.');
+ const file=path.join(root,'builds',job.operationId,'job.json'),saved=JSON.parse(fs.readFileSync(file,'utf8'));
+ atomic(file,{...saved,phase:'cancelled',cancelledAt:new Date().toISOString(),priorFailure:job.error});return buildStatus(root);
 }
 function startBuild(root,value,{launch=spawn,platform=process.platform}={}){
  if(platform!=='win32')throw Error('Source distribution builds require the designated Windows machine.');
@@ -49,9 +58,10 @@ function startBuild(root,value,{launch=spawn,platform=process.platform}={}){
  const fd=fs.openSync(job.log,'a',0o600);
  try{
   const child=launch(policy.node,[path.join(__dirname,'windows-build-worker.cjs'),file],{windowsHide:true,shell:false,stdio:['ignore',fd,fd]});
-  child.on('error',error=>atomic(file,{...job,phase:'attention',error:error.message}));
-  child.on('exit',code=>{const saved=JSON.parse(fs.readFileSync(file,'utf8'));if(['starting','running'].includes(saved.phase))atomic(file,{...saved,phase:'attention',error:'Build worker exited without a final receipt ('+code+'). Inspect before retrying.'});});child.unref();
+  if(child.pid)atomic(path.join(directory,'launch.json'),{pid:child.pid,at:new Date().toISOString()});
+  child.on('error',error=>atomic(file,{...job,phase:'attention',launchFailure:true,error:error.message}));
+  child.on('exit',code=>{const saved=JSON.parse(fs.readFileSync(file,'utf8'));if(['starting','running'].includes(saved.phase))atomic(file,{...saved,phase:'attention',observedExit:{pid:child.pid,code,at:new Date().toISOString()},error:'Build worker exited without a final receipt ('+code+'). Inspect before retrying.'});});child.unref();
  }finally{fs.closeSync(fd);}
  return buildStatus(root);
 }
-module.exports={configureBuilder,readPolicy,buildStatus,startBuild,repository};
+module.exports={configureBuilder,readPolicy,buildStatus,startBuild,cancelBuild,repository};
