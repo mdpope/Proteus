@@ -1,3 +1,13 @@
+## October 29 — iOS main-thread profiling and smoothness fixes
+
+Simulator preview apps were paired with the real Build Mac and profiled with Time Profiler
+during a scripted real-data walkthrough. Sidebar/Home derivations and encrypted cache saves on
+the main thread caused 32 potential hangs on iPhone; fixes bring the same walkthrough to none
+(iPad also none). Repeat the measurement with `scripts/ios-real-host-profile.sh`. Findings,
+caveats and a prioritized list of what to check next if freezes remain are in the
+[iOS profiling notes](2026-10-29-ios-main-thread-profiling.md). Simulator Debug builds only;
+no physical device was updated or profiled.
+
 ## October 28 — 0.2.33 follow-up preparing for Build Mac
 
 The operator authorizes building pending changes and installing on this Mac, while reporting

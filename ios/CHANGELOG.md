@@ -9,7 +9,8 @@ once per sort, build one title index per host, and keep one validated catalog pe
 Encrypted browser-history and document-tab saves moved to a shared serial background writer;
 reads wait for it. On iPhone, potential hangs in the same 75-second walkthrough fell from 32
 (250–590 ms) to 0, and app main-thread samples fell about twelvefold. iPad also measured no
-hangs. Simulator debug builds only; physical-device profiling remains to be done.
+hangs. Simulator debug builds only; physical-device profiling remains to be done. Method, tools and
+next checks: [iOS main-thread profiling](../docs/2026-10-29-ios-main-thread-profiling.md).
 
 # Native follow-up, October 29, 2026 — simulator validation
 

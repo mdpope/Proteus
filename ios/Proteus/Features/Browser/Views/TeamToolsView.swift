@@ -265,7 +265,7 @@ struct TeamBrowserView: View {
             // back/forward list where the page meets the screen edge. This content-edge swipe
             // is the backup: beside a pinned iPad sidebar, for owner history WebKit lacks, and
             // once history is exhausted it returns to the previous screen (the project home).
-            }.modifier(NativePageSwipe(enabled: !NativePhonePreview.enabled || onBackToList != nil, phone: onBackToList != nil, blockBack: onBackToList == nil && (selectedID.map { shared.browserHistory($0, back: true).isEmpty } ?? true), blockForward: selectedID.map { shared.browserHistory($0, back: false).isEmpty } ?? true, back: {
+            }.modifier(NativePageSwipe(enabled: !NativePhonePreview.enabled || onBackToList != nil, phone: onBackToList != nil, blockBack: onBackToList == nil && !(selectedID.map { shared.hasBrowserHistory($0, back: true) } ?? false), blockForward: !(selectedID.map { shared.hasBrowserHistory($0, back: false) } ?? false), back: {
                 guard let id = selectedID, !shared.isTwoFingerNavigation(id) else { return }
                 if !shared.browserHistory(id, back: true).isEmpty { shared.goBack(id) } else { onBackToList?() }
             }, forward: {

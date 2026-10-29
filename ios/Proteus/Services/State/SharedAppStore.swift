@@ -1170,6 +1170,11 @@ let nativeFixtureRelayOrigin = ""
     }
     func goBack(_ id: String) { if let item = browserHistory(id, back: true).first { goBrowserHistory(item, in: id) } }
     func goForward(_ id: String) { if let item = browserHistory(id, back: false).first { goBrowserHistory(item, in: id) } }
+    /// Cheap check used while rendering; browserHistory(_:back:) builds the full URL list.
+    func hasBrowserHistory(_ id: String, back: Bool) -> Bool {
+        guard let history = Self.safeBrowserHistory(browserTabs.first(where: { $0.id == id })?.history) else { return false }
+        return back ? history.index > 0 : history.index + 1 < history.entries.count
+    }
     func browserHistory(_ id: String, back: Bool) -> [BrowserHistoryItem] {
         guard let history = Self.safeBrowserHistory(browserTabs.first(where: { $0.id == id })?.history) else { return [] }
         let indices = back ? Array((0..<history.index).reversed()) : Array((history.index + 1)..<history.entries.count)
