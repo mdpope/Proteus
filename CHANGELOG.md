@@ -30,7 +30,7 @@
 
 ### desktop responsiveness
 
-- Move permission-display filesystem checks, context hashing and HTTP state serialization to a bounded background worker. Coalesce simultaneous window refreshes, discard results invalidated by permission/schedule changes, and time out failed workers without blocking the owner. Actual authorization remains fresh and owner-controlled. Add separate capture, transfer and worker diagnostics; this correction is source-only pending a new package.
+- Move permission-display filesystem checks, context hashing and HTTP state serialization to a bounded background worker. Coalesce simultaneous window refreshes, discard results invalidated by permission/schedule changes, and time out failed workers without blocking the owner. Actual authorization remains fresh and owner-controlled. Add separate capture, transfer and worker diagnostics. Exact-package acceptance passes; installed desktop performance remains a separate rollout check.
 
 ## 0.2.35 — Windows restart preservation follow-up
 

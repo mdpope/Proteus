@@ -1,4 +1,4 @@
-## October 29 — combined 0.2.36 deployment in preparation, HC held
+## October 29 — combined 0.2.36 rollout in progress, HC authorized
 
 The operator requests the combined iOS/desktop/web changes and full physical iPhone/iPad,
 Build Mac, Windows and website deployment after the Windows distribution chat finishes.
@@ -6,12 +6,17 @@ The Windows gate completed with signed source `66ce6f0`, installed/published 0.2
 `windows.867dc88cfd12`, 1,261 native passes / six skips, packaged navigation/restart acceptance,
 3.35-second helper readiness, preserved views/history/drafts and two verified recoveries.
 That exact final source is merged into combined 0.2.36 (native build 2610.29.1).
-Work Mac remains held. Web attachment parity,
+The operator lifted the HC hold; its prepared update is now included. Web attachment parity,
 iOS cache durability, chat-access Auto-approve and passive native notifications are implemented.
 The pre-merge suite passes 1,269 Node cases / three skips, static checks, 103 PHP cases and the
 full encrypted web workflow. iPhone passes 156 units; iPad passes its 155-case full suite and
-three final durability regressions. Native notice/question/attachment checks pass. No new
-combined install has occurred; final merged/package acceptance is pending. The prior Windows
+three final durability regressions. Final merged Node validation passes 1,293 cases / four skips,
+and static/exact Mac package acceptance passes. The website and both simulators are live on
+0.2.36; actual-owner simulator pairing and cold reconnect pass. The physical iPhone is installed,
+preservation/launch verified and rotated to two recoveries. The iPad is installed with final
+preservation/launch/retention in progress. HC and Windows handed-off jobs await their actual
+idle blockers; Build Mac awaits its app-tool approval. Installed desktop checks remain pending.
+The prior Windows
 coordinator still has a human desktop-verification approval and a saved-effort correction to
 finish; neither changes its verified installed package. See the [release ledger](2026-10-29-combined-release.md).
 

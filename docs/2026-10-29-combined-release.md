@@ -5,8 +5,8 @@
 Combine the current iOS fixes with the desktop responsiveness, Claude continuation and compact
 question-answer changes, plus relevant web parity. The operator authorizes deployment to the
 physical iPhone/iPad, Build Mac, Windows and the website after the separate Windows distribution
-chat finishes. Work Mac remains explicitly held until the operator lifts that hold. Other computers
-are outside this rollout. The gate completed with immutable source `66ce6f0`, now merged into
+chat finishes. The operator subsequently lifted the Work Mac hold; that Mac is now included.
+Other computers are outside this rollout. The gate completed with immutable source `66ce6f0`, now merged into
 combined version 0.2.36 and native build 2610.29.1. It installed and published Windows 0.2.35
 `windows.867dc88cfd12`; native source/static, packaged UI/restart/navigation, 3.35-second helper
 readiness, saved-state preservation and two verified recoveries passed. Its remaining human
@@ -51,16 +51,47 @@ and queued-notice behavior. These checks do not claim a live installed fix.
 
 ## Release acceptance
 
-Before the Windows merge, the integrated Node suite passes 1,269 cases with three skips, and
-static checks pass. Repeat final acceptance after incorporating that chat's final corrections.
+Frozen source `b12fa845503a01057a99590319428e79fe127954` passes 1,293 Node cases with four
+skips and static checks. The signed Mac candidate is `b12fa845503a+src.225201346dce`, package
+hash `00adbf50c40f8f2995292a953b2ff8755a88c417b99657ddcf6a18008a1f63d9`.
+All 407 packaged runtime files and eight build inputs match its frozen source companion.
+The unchanged installed launcher acknowledges its helper in 6.44 seconds against the existing
+15-second limit. Exact-package restored-chat, 500-chat state-worker typing/scrolling, and native
+notification checks pass. The hidden test app remains hidden and unfocused on notification arrival.
+Original sandbox and fixture failures remain in private evidence with their qualifications.
+
+The website is live on 0.2.36 / `b12fa84`. Capture, verified central copy, ordinary restore
+rehearsal, activation and audit complete. All eight compiled HTTPS assets and the manifest match;
+the signed-in Home page connects to the owner, with no browser console errors or warnings.
+Two new Apache events / 222 bytes remain unclassified because the administration backend timed
+out; the application and relay log windows added no bytes. Local retention is complete; exact
+server staging/recovery retirement remains pending that backend. No cleanup command was submitted.
+
+Both existing simulators run 0.2.36 / 2610.29.1 and pass explicit pairing and separate normal
+cold-start reconnect checks against the current owner. Their selected host identities match the
+actual owner, previous destinations remain, and both new device entries are online in the final
+owner sample. Cached labels alone were insufficient: the previously selected entries named
+Build Mac had different host identities. Their exact prior provenance remains unclassified.
+
+The physical iPhone is installed and launch-verified: all 306 protected files match before launch,
+all four destinations and selection remain, and two full verified recoveries remain. The physical
+iPad is installed; qualified preservation and controlled launch/retention remain in progress. Its first
+cold copy was rejected because the app restarted, although source metadata was unchanged. A
+stopped-device comparison verified all 259 current file hashes against that preserved copy, then
+accepted the same recovery without creating another full backup. The first post-install readback
+also matched all 259 file hashes but failed its stopped-process guard. Current metadata remains
+unchanged and the app is running. A manual App Switcher close and stable post-launch comparison
+are pending; this is not a pre-launch preservation pass. Both failures are retained.
+Physical gestures, authenticated reconnect and actual push delivery remain separate acceptance.
+
+HC and Windows candidates are prepared and handed off, but installation is not yet verified.
+Their owner timers identify actual active-work blockers. Build Mac preparation is waiting on
+its destination app-tool approval. Desktop installed performance, preservation and same-chat
+continuation remain required; prepared jobs and completed model turns are not installation proof.
 
 Preflight retired only verified obsolete build intermediates and redundant generated website
 copies, preserving current/previous signed apps, source companions and two complete website
 recoveries. Private receipts retain hashes, process checks and observed free-space changes.
-The production website still matches its preceding deployed manifest; its 14 endpoint/auth/relay
-checks pass. No combined package or website release has been installed or published.
-
-Final combined tests, exact package hashes/signatures, source companions, supervised desktop
-coordinators, physical preservation/launch checks, website backup/deployment receipts and
-two-generation retention results are pending. Keep private device/host identifiers, paths and
-raw evidence outside source. A completed model turn or simulator build is not a deployment receipt.
+Keep private device/host identifiers, paths and raw evidence outside source. Jira's missing labels
+remain unclassified: a normal-size page was made available, but its screenshot backend did not
+return. No system-theme or Chromium cause is established.

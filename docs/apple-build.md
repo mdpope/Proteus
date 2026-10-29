@@ -1,3 +1,17 @@
+## October 29 — current-owner simulator acceptance
+
+Both existing simulators run 0.2.36 / 2610.29.1, with exact app bytes and protected data verified
+across in-place installation. Their previously selected entries were labelled Build Mac but
+had host identities different from the actual running owner. Those entries remain; their prior
+provenance is not established. A label alone is not evidence of a live-owner connection.
+
+The explicitly authorized pairing bridge checks the current owner identity and online status,
+uses its normal authenticated connection API, and permits only one invitation per intended
+simulator. Credentials and invitations stay in memory. Both explicit pairing tests and separate
+normal cold-start reconnect tests pass; saved selected identities match the actual owner. Both
+apps were left running, and both new owner device entries were online in the final sample.
+No physical authenticated reconnect, gesture or push acceptance is inferred from these results.
+
 ## October 28 — current simulators and live owner acceptance
 
 The existing iPhone 17 Pro and iPad Pro 11-inch (M5), both iOS 26.5, received and launched 0.2.32 / 2610.28.1 in place. The normal simulator bundle remains `org.proteusapp.proteus.mobile`; no physical app, Apple account, certificate or provisioning profile changed.

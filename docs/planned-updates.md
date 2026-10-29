@@ -3,9 +3,11 @@
 The operator authorizes combining iOS and desktop fixes, relevant web parity, chat-tool
 Auto-approve and notification focus corrections, then deploying to physical iPhone/iPad,
 Build Mac, Windows and web once the separate Windows distribution chat finishes.
-Work Mac is explicitly held until the operator lifts that hold. The Windows gate completed with
-accepted source `66ce6f0`, now merged into combined 0.2.36 / native 2610.29.1. Final merged
-validation, packaging and installed acceptance are pending; see [combined release](2026-10-29-combined-release.md).
+The operator subsequently lifted HC's hold. The Windows gate completed with accepted source
+`66ce6f0`, merged into frozen combined source `b12fa84`, version 0.2.36 / native 2610.29.1.
+Final Node/static and exact Mac package acceptance pass. Website, simulators and physical iPhone
+are installed; iPad final checks and supervised desktop installations remain in progress.
+See [combined release](2026-10-29-combined-release.md) for actual outcomes and remaining blockers.
 
 ## October 29 — compact question answer controls
 
