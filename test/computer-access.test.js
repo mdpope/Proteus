@@ -2,7 +2,9 @@ import test from 'node:test';import assert from 'node:assert/strict';import fs f
 import {ComputerAccess} from '../src/services/remote/computer-access.js';
 import {DesktopPeers} from '../src/services/remote/desktop-peers.js';
 import {startServer} from '../src/server.js';import {startRelay} from '../relay/server.js';import {secret} from '../src/services/remote/remote-crypto.js';import {RemoteClient,until} from './remote-client.mjs';
-const setup=t=>{const home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-managed-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));return {home,policy:new ComputerAccess(home)};};
+import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
+import {cleanupStack} from './helpers/cleanup.js';
+const setup=t=>{const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-managed-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));return {home,policy:new ComputerAccess(home)};};
 test('computer role persists atomically, preserves future metadata, and rejects stale or invalid updates',async t=>{
  const {home,policy}=setup(t),first=policy.get();assert.equal(first.managed,false);policy.set({managed:true,expectedRevision:first.revision});assert.throws(()=>policy.assertOutgoing(),/managed-computer/);
  const file=path.join(home,'computer-access.json'),saved=JSON.parse(fs.readFileSync(file));saved.future={retained:true};fs.writeFileSync(file,JSON.stringify(saved));const restored=new ComputerAccess(home);
@@ -25,8 +27,11 @@ test('enabling managed mode closes outgoing clients and rejects an in-flight res
  policy.set({managed:false,expectedRevision:policy.get().revision});finish({projects:[{name:'Must not escape'}]});await assert.rejects(pending,/access changed/);
 });
 test('management pairing grants only the chosen incoming direction; ordinary invites and existing devices are unchanged',async t=>{
- const token=secret(),home=fs.mkdtempSync(path.join(os.tmpdir(),'proteus-managed-pair-')),relay=await startRelay({port:0,token}),app=await startServer({home,port:0,timers:false,providers:{}}),clients=[];
- t.after(async()=>{for(const client of clients)client.close();await app.close();await relay.close();fs.rmSync(home,{recursive:true,force:true});});
+ const cleanup=cleanupStack(t),token=secret(),home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-managed-pair-'));
+ cleanup(()=>fs.rmSync(home,{recursive:true,force:true}));
+ const relay=await startRelay({port:0,token});cleanup(()=>relay.close());
+ const app=await startServer({home,port:0,timers:false,providers:{}});cleanup(()=>app.close());
+ const clients=[];cleanup(()=>{for(const client of clients)client.close();});
  const url='ws://127.0.0.1:'+relay.port;await app.remote.configure({enabled:true,mode:'external',relayURL:url,publicURL:url,relayToken:token});await until(()=>app.remote.status==='online');
  const pair=async management=>{const invite=await app.remote.pairing(undefined,{management}),client=new RemoteClient(RemoteClient.capsule(invite.code));clients.push(client);await client.connect();return client;};
  const ordinary=await pair(false);assert.equal(app.remote.config.devices.find(row=>row.id===ordinary.device.id).resourceAccess,false);

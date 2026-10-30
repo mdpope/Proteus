@@ -1,3 +1,17 @@
+## October 29 — Windows 0.2.37 fixture correction prepared
+
+The original exact-source build remains in source-tests without an accepted package. Approved
+diagnostics identify its surviving file as `computer-access.test.js`. An isolated Windows probe
+reproduces ordinary temporary-home ACL rejection; the copied fixture using the existing private
+directory and reverse-order cleanup helpers passes all four unchanged assertions. The source
+correction uses those helpers and registers cleanup as each resource is acquired, so a startup
+failure cannot leak the already-started relay. Runtime policy and permission checks are unchanged.
+The full local suite passes 1,307 tests with four skips; static checks pass. This does not establish
+native full-suite or package acceptance. Keep the original frozen source/job and failure evidence;
+a superseding source pin/build requires operator release. The Windows coordinator also needs to
+move its task-created probe evidence out of the installed app and reverify the original package.
+No installer is accepted or delivered, and no laptop installation is authorized to this chat.
+
 ## October 29 — Windows 0.2.37 build authorized for manual installation
 
 The operator authorizes the designated Windows desktop builder to prepare the exact source

@@ -1,5 +1,16 @@
 # Windows distribution and maintenance
 
+## Windows test fixture storage
+
+Fixtures that start an owner use `privateTemporaryDirectory`, including pairing tests. A normal
+temporary directory can inherit broader Windows ACLs and must still be rejected by the real
+owner's private-home check. Register cleanup immediately after each resource acquisition, using
+the reverse-order cleanup helper. In particular, a relay started before owner startup must close
+if startup fails; otherwise the failed test can keep its worker alive and buffer its failure.
+Do not bypass the owner permission check or skip the integration assertions to make a build pass.
+External diagnostic harnesses and receipts belong in private operator records, outside both
+the installed app and the frozen candidate/source checkout.
+
 An approved Windows update authorizes the bound owner operations needed to
 maintain Proteus, preserve recovery, install the accepted package and restart.
 It does not require a general elevated shell or an interactive Windows test
