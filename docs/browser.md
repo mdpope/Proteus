@@ -1,3 +1,21 @@
+## October 30 — intranet sites and custom ports
+
+Both explicit HTTP(S) URLs and omitted-scheme single-label `consolefixture:8006` addresses retain the
+port. Single-word input remains a search. Non-web schemes, credentials and local paths remain
+blocked. Network error documents display host and port and distinguish network-access failures
+from DNS and TLS failures. Mac bundles explain local-network use in their privacy declaration;
+this does not grant permission or bypass a denial.
+
+Failed main-frame certificates offer **Accept certificate and continue** on the error page.
+A direct trusted click is required; a page-script click cannot grant an exception. There is no
+extra menu or confirmation. The native owner validates the exact main frame, error document and
+certificate token before retrying. Chromium shares the exact hostname/certificate decision within
+that profile for the app session, including other tabs and ports; unloading a tab does not revoke
+it. Other profiles and changed certificates stay blocked. Restart clears it. Saved palette changes
+update existing error pages; OS light mode cannot override Emerald Canopy's green background.
+Synthetic native tests verify these behaviors. The reported installed-browser network failure
+still needs live acceptance after installation.
+
 ## October 30 — preserve browser stacks through shared-window synchronization
 
 Local content-tab HTTP responses preserve the existing typed navigation-conflict/closed-tab codes.

@@ -1,10 +1,40 @@
 # October thirtieth release implementation
 
-Version: **0.2.39**. State: Mac source packaged and accepted; rollout awaits destination approvals.
-R1–R13 are authorized, with Mac rollout first and other platforms after HC is verified.
+Version: **0.2.39**. State: R14 browser correction in progress; Mac handoff is held pending its acceptance.
+R1–R14 are authorized, with Mac rollout first and other platforms after HC is verified.
 The active branch is codex/oct30-update-command-center. The earlier R11-only source pin is
 `34419c1047f5a269ff37f42cc826161c4fb6158a`; later record-only commits do not
 change that implementation. A subsequent runtime change requires a new source/package pin.
+
+## Current Mac candidate and R14 follow-up
+
+The handoff guard correction is frozen as `24df95f853ef99101c66c511a1691550b7d8853c`,
+build `24df95f853ef+src.91bfac505be7`. Its full installation hash is
+`47ce119f69c194c68d4be15cce07ac9e190ec809e51f7600b132218f2706e288`;
+archive SHA-256 is `caafa95be27f3ccc5fa7e9bf6c0a2e3c9ad21f5a880ecbf9633a84973433c4bd`.
+It passes 1,343 tests with four skips and four exact extracted-package UI fixtures. Build Mac's
+coordinator verified and prepared it, without handoff or installation. The earlier a79f584
+preparation was cancelled through its owner. Private draft transfer assets were uploaded for HC,
+but HC has not received or installed them. This candidate must now be superseded after R14 passes.
+
+The reported explicit HTTPS/custom-port address is preserved by the installed browser, but both
+hostname and numeric-IP navigation fail with `ERR_ADDRESS_UNREACHABLE`. Independent read-only
+socket checks connect to the same port; verified TLS then reports an untrusted issuer. macOS's
+Local Network UI shows Proteus enabled. Neither observation establishes the installed browser's
+network failure cause or proves a live fix. Private hostnames/IPs stay outside this repository.
+R14 adds omitted-scheme intranet host:port parsing, host/port error presentation, Mac local-network
+usage declarations and direct one-click acceptance of observed failed certificates. Native acceptance passes
+custom HTTPS ports, trusted clicks, live theme changes, profile isolation, changed certificates
+and restart expiry. A newly signed candidate is still required before rollout resumes.
+
+R14 final source validation passes **1,347 tests with four platform skips**, static checks and
+diff checks. The synthetic native fixture proves the requested one-click flow, trusted-input
+boundary, actual Chromium profile/session scope, changed-certificate/profile isolation, restart
+expiry and live Emerald Canopy/Daylight colors. Initial fixture failures exposed a hidden view,
+prevented-navigation waiting and Chromium's profile-wide SSL cache; original evidence is retained
+outside source and the final fixture asserts the supported behavior without global TLS bypass.
+An isolated source-browser probe still reproduces the reported network failure. Test the signed
+bundle with its local-network privacy declaration before claiming live resolution.
 
 ## Full release source acceptance
 

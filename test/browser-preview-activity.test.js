@@ -12,7 +12,7 @@ function fixture(preview=true){
  let now=Date.parse('2026-10-17T12:00:00Z'),views=0;
  class Clock extends Date {static now(){return now;}}
  class Contents extends EventEmitter {
-  constructor(){super();this.url='';this.title='Synthetic';this.mainFrame={};this.entries=[];this.index=-1;this.navigationHistory={getAllEntries:()=>this.entries,getActiveIndex:()=>this.index,canGoBack:()=>this.index>0,canGoForward:()=>this.index<this.entries.length-1,goBack:()=>this.index--,goForward:()=>this.index++,restore:async history=>{this.entries=history.entries;this.index=history.index;this.url=this.entries[this.index].url;}};}
+  constructor(){super();this.session=partition;this.url='';this.title='Synthetic';this.mainFrame={};this.entries=[];this.index=-1;this.navigationHistory={getAllEntries:()=>this.entries,getActiveIndex:()=>this.index,canGoBack:()=>this.index>0,canGoForward:()=>this.index<this.entries.length-1,goBack:()=>this.index--,goForward:()=>this.index++,restore:async history=>{this.entries=history.entries;this.index=history.index;this.url=this.entries[this.index].url;}};}
   getZoomFactor(){return this.zoom||1;} setZoomFactor(value){this.zoom=value;} setZoomMode(){} setVisualZoomLevelLimits(){return Promise.resolve();} setWindowOpenHandler(){} send(){} isDestroyed(){return !!this.destroyed;} getURL(){return this.url;} getTitle(){return this.title;} isLoading(){return false;} getOSProcessId(){return 123;} isCurrentlyAudible(){return !!this.audible;}
   loadURL(url){this.url=url;this.entries.push({url,title:this.title});this.index=this.entries.length-1;return Promise.resolve();} reload(){this.reloads=(this.reloads||0)+1;} stop(){}
   getBackgroundThrottling(){return true;} setBackgroundThrottling(){}
@@ -20,10 +20,11 @@ function fixture(preview=true){
  }
  class View {constructor(){views++;this.webContents=new Contents();}setBounds(value){this.bounds=value;}getBounds(){return this.bounds;}setVisible(value){this.visible=value;}getVisible(){return this.visible;}}
  const module={exports:{}},source=fs.readFileSync(new URL('../desktop/browser/browser.cjs',import.meta.url),'utf8');
- const dependency=name=>name==='electron'?{WebContentsView:View}:name.startsWith('node:')||['./browser-history.cjs','./browser-page-preferences.cjs','./browser-navigation.cjs','./browser-background-focus.cjs','../windows/navigation.cjs'].includes(name)?desktopRequire(name):{};
+ const dependency=name=>name==='electron'?{WebContentsView:View}:name.startsWith('node:')||['./browser-history.cjs','./browser-page-preferences.cjs','./browser-navigation.cjs','./browser-background-focus.cjs','./browser-address.cjs','../windows/navigation.cjs'].includes(name)?desktopRequire(name):{};
  vm.runInNewContext(source,{module,exports:module.exports,require:dependency,__dirname:new URL('../desktop/browser/',import.meta.url).pathname,Date:Clock,URL,Buffer,structuredClone,setTimeout,clearTimeout,setInterval,clearInterval});
  const browser=Object.create(module.exports.BrowserTabs.prototype),partition={};
  Object.assign(browser,{videoPopout:{bind(){},close(){}},options:{projects:preview},appOrigin:'http://app.test',tabs:new Map(),reloading:new Map(),cookieStores:new Map(),overlays:new Set(),window:{contentView:{addChildView(){},removeChildView(){}},getContentBounds:()=>({width:800,height:600}),isFocused:()=>false,isDestroyed:()=>false,webContents:{send(){}}},actions:{send(){}},profile:()=>({settings:{blockingEnabled:false}}),sessionFor:()=>partition,profileAvailable:()=>true,changed(){},disconnect:async()=>{}});
+ browser.certificateReview=new (desktopRequire('./browser-certificate-review.cjs').BrowserCertificateReview)(browser);
  return {browser,tick(){now+=1000;},views:()=>views};
 }
 

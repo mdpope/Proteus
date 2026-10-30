@@ -1,7 +1,7 @@
 # October 30 release plan
 
 **Stage: implementation and Mac rollout authorized October 30.** The October thirtieth release
-remains version 0.2.39. R1–R13 are authorized for implementation and validation. Build/install on
+remains version 0.2.39. R1–R14 are authorized for implementation and validation. Build/install on
 Build Mac and Work Mac first. Build and deploy applicable iOS/web/Linux/Windows work only after
 Work Mac is updated and verified. Preserve data, ongoing work and two verified recovery generations.
 
@@ -26,6 +26,16 @@ and [machine rollout](releases/2026-10-30/rollout.md).
 | R11 | Feature and process | Named/versioned releases, command-center updates, native first builders, current-only publication and bounded retention | Source implemented and validated; packaging/rollout not performed |
 | R12 | Performance | Configurable chat/document residency, idle eviction and exact reading-position restoration across local and paired-host tabs | Source implemented; synthetic native UI verifies historical anchor, draft preservation and saved settings |
 | R13 | Integration | Route actual website-generated notifications, including sites such as Slack, through Proteus and forward to an iPhone connected to the desktop | Desktop source/testing underway; server and iOS integration after HC verification |
+| R14 | Bug | Open intranet sites on custom HTTPS ports, including single-label host:port input, and provide usable network/certificate errors | Implementation and native acceptance underway; installed browser network failure remains under investigation |
+
+R14 distinguishes address parsing from connectivity and HTTPS trust. Explicit HTTPS addresses
+already preserve custom ports; omitted-scheme single-label host:port input needs correction.
+Keep ordinary single-word searches and credential/path rejection. Show the failed host and port,
+include actionable network permission guidance, and declare local-network use in Mac bundles.
+Untrusted certificates offer **Accept certificate and continue** directly on the error page,
+with no additional confirmation or menu. Acceptance follows Chromium’s transient profile/host/
+certificate scope and ends at app restart. Other profiles and changed certificates stay blocked.
+Error pages follow the saved app palette, including live Emerald Canopy/Daylight changes.
 
 Existing October 29 implementation and rollout records retain their own status. Current October 30
 authorization supersedes the earlier collection-only hold for the requests in this register.

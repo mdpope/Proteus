@@ -60,7 +60,9 @@ test('browser registration is explicit, scoped to this app, verifies both scheme
 
 test('production bundle declares ownership of both web protocols while previews declare none',async()=>{
  const {browserBundleInfo}=await import('../desktop/link-routing/bundle-info.cjs').then(module=>module.default);
- assert.deepEqual(browserBundleInfo({preview:true}),{});
+ assert.equal(browserBundleInfo({preview:true}).CFBundleURLTypes,undefined);
+ assert.match(browserBundleInfo({preview:true}).NSLocalNetworkUsageDescription,/local network/);
+ assert.match(browserBundleInfo().NSLocalNetworkUsageDescription,/local network/);
  const declarations=browserBundleInfo().CFBundleURLTypes;
  for(const scheme of ['http','https']){const item=declarations.find(item=>item.CFBundleURLSchemes.includes(scheme));assert.equal(item.LSHandlerRank,'Owner');assert.equal(item.CFBundleTypeRole,'Viewer');}
  assert.ok(declarations.some(item=>item.CFBundleURLSchemes.includes('proteus-desktop')));

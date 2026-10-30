@@ -1,3 +1,10 @@
+## October 30 browser/custom-port follow-up
+
+R14 adds intranet address parsing and usable network/certificate failures to the authorized
+0.2.39 release. Hold the prepared Mac candidate while the correction receives native acceptance
+and a replacement signed package. Both preflights are complete; Build Mac remains on 0.2.33
+and Work Mac on 0.2.38. Other-platform work still follows verified HC installation.
+
 ## October 30 full release and tab-memory implementation authorized
 
 R1–R12 are authorized on Build Mac and Work Mac; other platform builds/rollout follow verified

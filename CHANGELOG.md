@@ -1,5 +1,8 @@
 ## 0.2.39 — October thirtieth release open
 
+- Recognize intranet host:port input, retain custom ports in error pages, explain network-access
+  failures and declare Mac local-network use. Add one-click certificate acceptance on the app-themed error
+  page. Native acceptance passes; reported installed-browser connectivity remains unverified.
 - Preserve a pending update handoff when another chat receives owner-delivered task feedback.
   Keep human-input cancellation, updating-chat checkpoint review and all active-work idle barriers.
 - Add configurable shared chat/document memory limits and idle eviction in Resources. Reload

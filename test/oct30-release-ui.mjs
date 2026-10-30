@@ -11,7 +11,7 @@ const session=page=>page.evaluate(()=>window.desktop.workspaceSession({action:'g
 async function launch(){
  app=await electron.launch({...(process.env.PROTEUS_PREVIEW_EXECUTABLE?{executablePath:process.env.PROTEUS_PREVIEW_EXECUTABLE,args:['--use-mock-keychain']}:{args:['.','--use-mock-keychain']}),env:{...process.env,PROTEUS_DESKTOP_PREVIEW:'1',PROTEUS_PREVIEW_HOME:fixture.locations.root,CODEX_HOME:fixture.auth,PORT:'0'}});
  await app.context().route('**/app.js',async route=>{const response=await route.fetch();await route.fulfill({response,body:(await response.text())+'\nwindow.oct30Fixture={state,contentTabSync,get ready(){return workspaceReady;}};'});});
- const page=await app.firstWindow();page.on('pageerror',error=>errors.push(error.message));await page.reload();await page.waitForFunction(()=>window.oct30Fixture?.ready);page.setDefaultTimeout(20000);return page;
+ const page=await app.firstWindow();page.on('pageerror',error=>errors.push(error.message));await page.locator('#topbar-home').waitFor();await page.reload();await page.waitForFunction(()=>window.oct30Fixture?.ready);page.setDefaultTimeout(20000);return page;
 }
 async function project(page){const expand=page.locator('[data-preview-workspace-expand="'+fixture.studio.id+'"]');await expand.waitFor();if(await expand.getAttribute('aria-expanded')!=='true')await expand.click();await page.locator('[data-preview-project="'+fixture.project.id+'"]').first().click();}
 const colors=async page=>{await page.locator('[data-page="engine"]').click();await page.locator('[data-engine-section="palette"]').click();await page.locator('#palette-preset').waitFor();};

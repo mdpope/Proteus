@@ -1,39 +1,42 @@
-## October 30 full release implementation and staged rollout authorized
+## October 30 release — R14 browser follow-up and Mac rollout
 
-Follow-up: both read-only preflights completed. The superseded Build Mac 0.2.36 preparation
-was cancelled by its original owner chat and independently verified cancelled, revision 16.
-The new 0.2.39 coordinator prepared/handoff-tested a79f584, but returned task feedback to the
-command-center chat reset its waiting-for-idle state to prepared. That installed/source guard
-bug is being corrected before shipping. Keep the a79f584 candidate/job prepared and do not hand
-it off again; it will be superseded by a newly signed and accepted 0.2.39 package. HC still waits
-for the exact package transfer and must not rebuild it. Use the documented authenticated private
-draft-release asset route after independently verifying repository privacy, IDs and hashes.
+The operator authorizes R1–R14 implementation and installation on Build Mac and Work Mac,
+remaining at 0.2.39. Other-platform builds/deployment still follow verified HC installation.
+Current source adds single-label intranet host:port parsing and a direct **Accept certificate and
+continue** button on the themed error page. No confirmation dialog or menu is required. Chromium
+shares acceptance by browser profile, hostname and exact certificate for the current app session;
+changed certificates and other profiles stay blocked, and restart clears acceptance. Error pages
+use the saved Emerald Canopy/Daylight/custom palette and update when saved colors change.
+Synthetic native acceptance passes custom HTTPS ports, one-click input, script-click rejection,
+profile/session boundaries, changed certificate, restart expiry and live theme changes.
 
-The operator releases R1–R13 for implementation, build and installation on Build Mac and
-Work Mac. Keep version 0.2.39. Build/deploy applicable iOS/web/Linux/Windows work after Work Mac
-is updated and verified. Prior collection/implementation holds below are historical.
-Use the existing release branch and per-target ledger. No target is installed merely because
-a task was dispatched. Preserve active work, data, approvals and retry receipts.
+Both Mac read-only preflights completed. Build Mac remains installed on 0.2.33; HC remains on
+0.2.38. No 0.2.39 installation is verified. The old Build Mac 0.2.36 job and initial a79f584
+0.2.39 job were cancelled through their original owner coordinators. Corrected source 24df95f
+passes 1,343 tests/four skips and four exact-package UI fixtures; its signed installation hash is
+47ce119f69c194c68d4be15cce07ac9e190ec809e51f7600b132218f2706e288. Build Mac has prepared that
+candidate without handoff. Private HC draft-transfer assets exist, but HC has not received them.
+Hold both handoffs until R14 is validated, frozen, signed and accepted as a replacement package.
 
-R12 adds a shared local/remote per-window chat/document count and idle cache policy in Resources.
-Synthetic native UI verifies transcript/DOM eviction, historical message-offset restoration across
-transport pages, draft preservation and persisted controls. Defaults are four chats, four documents
-and ten inactive minutes. Terminal sessions remain outside this cache. Both Mac preflight
-coordinators currently await destination tool approvals; no 0.2.39 installation is verified.
-R13 means actual website-generated notifications, not Slack-styled alerts. The desktop page-event
-bridge is source-verified through the common notification path, including silent intent and click
-callback; explicit device forwarding excludes owner-only references. Server/iOS/APNs changes and
-live Slack/phone acceptance remain after HC verification. Website retries expire after five minutes
-and cap at 100 pending events, preserving local history without an old reconnect push backlog.
+The installed command-center input guard cancels a waiting handoff when another chat receives
+task feedback. Source 24df95f fixes this using private owner-only provenance while preserving
+human-input checkpoint review and all queued/running idle barriers. Final Build Mac bootstrap
+handoff must use notify:false after other feedback settles, followed by normal command-center
+turn completion; no forced idle, unrelated cancellation or journal edits. The new owner observer
+continues update monitoring through restart. Verify actual installation and user-profile behavior.
 
-Mac source `a79f584002141dfc0df38bddee7a6fb0396858f8` is pushed in draft PR 24. The signed
-0.2.39 candidate `a79f58400214+src.7cfbbe645830` passes official extraction and four exact-package
-UI fixtures, and installation/archive hashes stay unchanged after startup. See the implementation
-record for complete pins. The duplicate task build app was retired after verification; one accepted
-app/archive remains. Build Mac has the accepted candidate queued; HC has identities but awaits
-artifact transfer/publication. Their original tool approvals are still pending. Do not approve
-those as an agent, claim installation, reuse old 0.2.36 preparation or build other platforms before
-HC is verified. Preserve canonical main's earlier uncommitted planning notes during integration.
+The reported installed-browser intranet failure is ERR_ADDRESS_UNREACHABLE for hostname and IP.
+Read-only TCP checks reach the port; verified TLS reports an untrusted issuer. macOS shows Local
+Network access enabled. Root cause and live resolution remain unverified; neither parser tests
+nor synthetic TLS acceptance alone establish the reported connection fixed.
+
+R12 shared cache/history/draft tests and R13 actual page-generated notifications pass source and
+package fixtures. Real Fusion is unavailable in the refreshed catalog; actual Slack/Web Push,
+server APNs and iPhone acceptance remain pending after HC. Preserve canonical main's earlier
+uncommitted planning notes during eventual integration. The named release remains open in draft
+PR 24; finish all required platform work before merging/syncing/pushing and closing release work.
+
+Earlier entries below are historical checkpoints, not current holds or pending-approval claims.
 
 ## October 30 release open as 0.2.39 — distribution implementation
 

@@ -4,6 +4,10 @@ const { ipcRenderer, contextBridge } = require('electron');
 // The main process verifies the exact sender and origin; notifications additionally
 // require the profile's saved website permission.
 if(process.isMainFrame){
+  // This isolated bridge exposes no callable API. Main also requires its exact
+  // error document, main frame and one-use certificate token.
+  window.addEventListener('click',event=>{const button=event.target?.closest?.('button[data-proteus-certificate-accept]');if(!event.isTrusted||!button||!location.href.startsWith('data:text/html'))return;const token=button.dataset.proteusCertificateAccept;if(/^[a-f0-9-]{36}$/.test(token||''))ipcRenderer.send('proteus:certificate-accept',token);},true);
+  ipcRenderer.on('proteus:browser-error-colors',(_event,colors)=>{if(!location.href.startsWith('data:text/html')||!colors||!['background','text','muted','accent','border','accentText'].every(key=>/^#[a-f0-9]{6}$/i.test(colors[key]||''))||!['light','dark'].includes(colors.scheme))return;const root=document.documentElement;root.style.backgroundColor=colors.background;root.style.color=colors.text;root.style.colorScheme=colors.scheme;for(const code of document.querySelectorAll('code'))code.style.color=colors.muted;for(const button of document.querySelectorAll('a,button')){button.style.backgroundColor=colors.accent;button.style.color=colors.accentText;button.style.borderColor=colors.border;}});
   let scrollTimer,scrollNode,suppressScrollUntil=0,humanScrollUntil=0,pendingScroll,scrollObserver,scrollFrame;
   function stopFollowScroll(){pendingScroll=null;scrollObserver?.disconnect();scrollObserver=null;cancelAnimationFrame(scrollFrame);scrollFrame=null;}
   function applyFollowScroll(){

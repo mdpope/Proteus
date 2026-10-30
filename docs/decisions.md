@@ -1,3 +1,21 @@
+## October 30 — direct certificate acceptance and themed browser failures
+
+Custom-port HTTP(S) addresses retain their port; a numeric port distinguishes single-label
+intranet addresses from ordinary searches. Browser failures display host and port, with separate
+network-access/DNS/TLS categories. Mac bundles declare local-network use without changing grants.
+
+The operator requests direct acceptance on the certificate error page, with no review menus or
+second confirmation. A trusted click crosses an isolated preload bridge; the owner validates its
+main frame, exact generated error document and current certificate token. Page scripts cannot
+invoke acceptance, and there is no generic tool action to alter TLS policy. Match Chromium's
+profile/hostname/exact-certificate session scope rather than promise tab-only isolation that its
+native certificate cache cannot enforce. Restart ends acceptance; changed certificates and other
+profiles require separate decisions. Preserve ordinary HTTPS verification everywhere else.
+
+Render browser failures using resolved saved app colors, including brightness/saturation, rather
+than OS prefers-color-scheme. Send validated colors to existing error pages when settings change,
+without reloading the page or replacing its pending certificate token.
+
 ## October 30 — shared view residency and durable reading anchors
 
 Update input guards distinguish owner-generated task feedback using an internal non-JSON symbol.

@@ -9,7 +9,8 @@
   "implementation": "docs/releases/2026-10-30/implementation.md",
   "rollout": "docs/releases/2026-10-30/rollout.md",
   "closeout": "docs/releases/2026-10-30/closeout.md",
-  "sourceCommit": "a79f584002141dfc0df38bddee7a6fb0396858f8",
+  "sourceCommit": "24df95f853ef99101c66c511a1691550b7d8853c",
+  "sourceStatus": "R14 browser correction in progress; prepared 24df95f candidate must be superseded before handoff",
   "review": "https://github.com/mdpope/Proteus/pull/24",
   "relatedBranches": [
     "codex/oct30-update-command-center"
@@ -28,7 +29,8 @@
       "R10",
       "R11",
       "R12",
-      "R13"
+      "R13",
+      "R14"
     ],
     "held": []
   },

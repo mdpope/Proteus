@@ -1,12 +1,12 @@
 # October thirtieth release rollout
 
-Requested version: **0.2.39**. Mac read-only preflights were dispatched; no installation is verified.
+Requested version: **0.2.39**. Both Mac preflights completed; no installation is verified.
 Target labels are non-secret roles; exact IDs, paths and detailed receipts stay outside Git.
 
 | Machine or target | Platform | Stage | Evidence and remaining work |
 | --- | --- | --- | --- |
-| Build Mac command center | macOS arm64 | Accepted candidate queued; preflight awaiting input | Exact local app/hash supplied to coordinator; destination tool approval pending; prior preparation preserved |
-| Work Mac | macOS arm64 | Preflight awaiting input; transfer pending | Installed 0.2.38 reported; accepted candidate identities supplied, bytes not delivered; destination tool approval pending |
+| Build Mac command center | macOS arm64 | Corrected 24df95f candidate prepared; R14 handoff hold | Installed 0.2.33; old preparations cancelled by their owner chats; staged signature/hash and isolated startup pass; no handoff or installation |
+| Work Mac | macOS arm64 | Preflight complete; exact transfer pending | Installed 0.2.38; two verified recovery generations and ample space reported; 24df95f draft assets uploaded but not delivered; wait for R14 successor |
 | Linux laptop | Linux | Not started | Native package/public catalog required; no new coordinator dispatched |
 | Designated Windows builder | Windows x64 | Not selected | Select the intended builder and pin repository source when a build is authorized |
 | Windows client laptop | Windows | Not started | Consume the signed package after first-builder publication |
