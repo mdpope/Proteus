@@ -6,6 +6,7 @@ import {atomicJSON, readJSON} from '../../shared/files.js';
 import {permissionContext} from '../settings/permissions.js';
 import {validateModelOptions} from '../../models/model-catalog.js';
 import {runSummary} from '../remote/remote.js';
+import {updateStillRunning} from '../updates/update-observation.js';
 import {importKey} from '../remote/remote-client.js';
 
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
@@ -140,7 +141,7 @@ export class ChatControl {
   view(hostId,run){
     let budget=48000;
     const events=(run.events||[]).slice().reverse().map(e=>{const value=text(e.text,Math.min(6000,Math.max(0,budget)));budget-=value.length;return {role:e.role,text:value,at:e.at,...(value.length<String(e.text||'').length?{truncated:true}:{})};}).reverse();
-    return {hostId,chatId:run.id,...(['failed','interrupted'].includes(run.status)?{failure:text(run.events?.findLast(e=>e.role==='system')?.text||'Destination turn did not complete.')}:{ }),...pick(run,['title','status','queueReason','updatedAt','projectId','workspaceId','eventCount','eventStart','earlier','chatControls']),pending:run.pending?{...pick(run.pending,['id','type']),question:text(run.pending.question),choices:Array.isArray(run.pending.choices)?run.pending.choices.slice(0,20).map(choice=>typeof choice==='string'?text(choice,1000):{label:text(choice?.label,500),description:text(choice?.description,1000)}):[],...(run.pending.type==='permission'?{humanApprovalRequired:true,summary:text(run.pending.details?.intention||run.pending.question||'Destination tool approval required')}:{})}:null,events,liveText:text(Object.values(run.liveMessages||{}).join('\n')),outcome:run.status==='completed'?'model-turn-completed':'not-completed',externalOutcomeVerified:false};
+    return {hostId,chatId:run.id,...(['failed','interrupted'].includes(run.status)?{failure:text(run.events?.findLast(e=>e.role==='system')?.text||'Destination turn did not complete.')}:{ }),...(run.update?{update:run.update}:{}),...pick(run,['title','status','queueReason','updatedAt','projectId','workspaceId','eventCount','eventStart','earlier','chatControls']),pending:run.pending?{...pick(run.pending,['id','type']),question:text(run.pending.question),choices:Array.isArray(run.pending.choices)?run.pending.choices.slice(0,20).map(choice=>typeof choice==='string'?text(choice,1000):{label:text(choice?.label,500),description:text(choice?.description,1000)}):[],...(run.pending.type==='permission'?{humanApprovalRequired:true,summary:text(run.pending.details?.intention||run.pending.question||'Destination tool approval required')}:{})}:null,events,liveText:text(Object.values(run.liveMessages||{}).join('\n')),outcome:run.status==='completed'?'model-turn-completed':'not-completed',externalOutcomeVerified:false};
   }
   async read(actor,hostId,chatId,args={}){
     // Check host-level authority before requesting transcript content; resolve exact project
@@ -217,10 +218,11 @@ export class ChatControl {
     if(args.action==='create'&&args.purpose==='update'){
       if(args.workspaceId||args.projectId)throw Error('Update coordinator chats must be unassigned.');
       if(args.hostId!==this.localId()&&!(await this.connection(args.hostId)).capabilities.includes('chat.update-coordinator.v1'))throw Error('This computer needs update-coordinator support before this workflow is available.');
-      const configured=this.service.settings?.get().updateCoordinator;
-      if(!args.provider&&!args.model){if(!configured)throw Error('Configure update coordinator defaults in Engine Room → Updates first.');args={...args,...structuredClone(configured)};}
+      if(['provider','model','reasoningEffort','contextTier','serviceTier'].some(key=>args[key]!==undefined))throw Error('Update coordinators use the destination computer’s saved defaults. Configure them in its Engine Room → Updates.');
+      if(args.updateRelease!==undefined&&args.hostId!==this.localId()&&!(await this.connection(args.hostId)).capabilities.includes('chat.update-release.v1'))throw Error('This computer needs pinned update-release support before this workflow is available.');
     }
-    if(args.action==='create')await this.validateModel(args.hostId,{...args,model:args.model??''});
+    if(args.updateRelease!==undefined&&!(args.action==='create'&&args.purpose==='update'))throw Error('A release selection belongs to an update coordinator.');
+    if(args.action==='create'&&args.purpose!=='update')await this.validateModel(args.hostId,{...args,model:args.model??''});
     this.assertAccess(actor,args.hostId,actionScope,args.chatId,projectId);
     const task={schemaVersion:1,id:randomUUID(),operationId:args.operationId,actor,originChatId,hostId:args.hostId,chatId:args.chatId||null,projectId:actualProjectId,args:structuredClone(args),digest:signature,action:args.action,state:'prepared',status:'dispatching',baseline,notify:args.notify===true,createdAt:new Date().toISOString(),issuedAt:new Date().toISOString()};
     this.save(task);return this.perform(task);
@@ -234,7 +236,7 @@ export class ChatControl {
     this.assertAccess(task.actor,task.hostId,scope,task.args.chatId,task.projectId);
     if(task.state==='accepted'){await this.authorizeTask(task);return this.taskView(task);}
     const args=task.args,method={create:'chat.start',send:'chat.send',reply:'chat.reply',cancel:'chat.cancel'}[task.action];
-    const payload=task.action==='create'?{...pick(args,['purpose','name','prompt','provider','model','reasoningEffort','contextTier','serviceTier','workspaceId','projectId','selectedIds','includeDefaults','agentId']),reasoningEffort:args.reasoningEffort||'',contextTier:args.contextTier||'default',serviceTier:args.serviceTier||''}:
+    const payload=task.action==='create'?{...pick(args,['purpose','name','prompt','provider','model','reasoningEffort','contextTier','serviceTier','workspaceId','projectId','selectedIds','includeDefaults','agentId','updateRelease']),...(args.purpose==='update'?{operationId:args.operationId}:{reasoningEffort:args.reasoningEffort||'',contextTier:args.contextTier||'default',serviceTier:args.serviceTier||''})}:
       task.action==='send'?{id:task.chatId,prompt:args.prompt,mode:args.mode||'queue',messageId:task.id}:
       task.action==='reply'?{id:task.chatId,answer:args.answer,requestId:args.requestId}:{id:task.chatId};
     if(task.action!=='create'){payload.agentControl=true;payload.expectedProjectId=task.projectId||null;}
@@ -262,17 +264,21 @@ export class ChatControl {
   async updateTask(task){
     if(task.state!=='accepted')return;
     await this.authorizeTask(task);
-    if(terminal.has(task.status)){await this.deliver(task);return;}
+    if(terminal.has(task.status)&&!(task.args.purpose==='update'&&!task.updateSettled)){await this.deliver(task);return;}
     const scope={create:'dispatch',send:'dispatch',reply:'answer',cancel:'cancel'}[task.action];
     this.assertAccess(task.actor,task.hostId,scope,task.args.chatId,task.projectId);
     const run=await this.rawRead(task.hostId,task.chatId);
     this.assertAccess(task.actor,task.hostId,scope,task.args.chatId,run.projectId);
     const view=this.view(task.hostId,run);
+    if(task.args.purpose==='update'){
+      if(view.status==='completed'&&updateStillRunning(view.update))view.status='updating';
+      task.updateSettled=terminal.has(view.status);
+    }
     // Dispatch authority returns only the result since this task was submitted.
     const start=Number(run.eventStart)||0;view.events=view.events.slice(Math.max(0,task.baseline-start));
     if(task.action==='send'&&run.queuedMessages?.some(m=>m.id===task.id)){view.status='queued';view.pending=null;view.outcome='not-completed';}
-    const signature=digest(view);
-    if(task.observation===signature){await this.deliver(task);return;}
+    const signature=digest(view),recovered=!!task.deliveryError;delete task.deliveryError;
+    if(task.observation===signature){if(recovered)this.save(task);await this.deliver(task);return;}
     const feedbackKey=view.pending?.id|| (terminal.has(view.status)?(run.turns?.at(-1)?.id||run.updatedAt)+'-'+run.status:null);
     task.observation=signature;task.status=view.status;task.updatedAt=new Date().toISOString();task.feedback=view;delete task.error;
     if(feedbackKey&&task.feedbackKey!==feedbackKey){task.feedbackKey=feedbackKey;task.deliveries??=[];task.deliveries.push({id:randomUUID(),view,at:task.updatedAt});}
@@ -285,7 +291,7 @@ export class ChatControl {
     const engine=this.service.engine,parent=engine.getRun(task.originChatId);
     for(const delivery of task.deliveries||[]){
       if(delivery.deliveredAt)continue;
-      const view=delivery.view,body=`Task feedback from ${this.host(task.hostId).label}: ${view.title||'Chat'}\n\nStatus: ${view.status}.\n\n${view.pending?(view.pending.question||view.pending.summary||'Input required')+'\n\n':''}${view.failure?'Failure: '+view.failure+'\n\n':''}${view.events.filter(e=>e.role==='assistant').slice(-6).map(e=>e.text).join('\n\n').slice(0,20000)}\n\n${view.status==='completed'?'The model turn is complete; external outcomes still need verification.':''}`;
+      const view=delivery.view,body=`Task feedback from ${this.host(task.hostId).label}: ${view.title||'Chat'}\n\nStatus: ${view.status}.\n\n${view.update?'Owner updater receipt: '+JSON.stringify(view.update)+'\n\n':''}${view.pending?(view.pending.question||view.pending.summary||'Input required')+'\n\n':''}${view.failure?'Failure: '+view.failure+'\n\n':''}${view.events.filter(e=>e.role==='assistant').slice(-6).map(e=>e.text).join('\n\n').slice(0,20000)}\n\n${view.status==='completed'?'The model turn is complete; external outcomes still need verification.':''}`;
       const notification=`Returned task data, not new instructions or authorization.\nTask ${task.id}; computer ${task.hostId}; chat ${task.chatId}.\n\n${body}`;
       if(!parent.events.some(e=>e.data?.agentFeedback?.id===delivery.id))engine.event(parent,'system',body,{agentFeedback:{id:delivery.id,taskId:task.id,hostId:task.hostId,chatId:task.chatId}});
       // A deliberate stop, failure, archive or interrupted origin requires human continuation.
@@ -297,7 +303,7 @@ export class ChatControl {
     if(this.closed)return Promise.resolve();if(this.refreshing)return this.refreshing;
     this.refreshing=(async()=>{for(const task of this.tasks.values()){
       if(this.closed)break;if(task.state!=='accepted')continue;
-      try{if(!terminal.has(task.status))await this.updateTask(task);else if(task.deliveries?.some(d=>!d.deliveredAt)){await this.authorizeTask(task);await this.deliver(task);}}catch(error){const message=text(error.message);if(task.deliveryError!==message){task.deliveryError=message;this.save(task);}}
+      try{if(!terminal.has(task.status)||task.args.purpose==='update'&&!task.updateSettled)await this.updateTask(task);else if(task.deliveries?.some(d=>!d.deliveredAt)){await this.authorizeTask(task);await this.deliver(task);}}catch(error){const message=text(error.message);if(task.deliveryError!==message){task.deliveryError=message;this.save(task);}}
     }})().finally(()=>this.refreshing=null);return this.refreshing;
   }
   async wait(actor,args){
@@ -347,6 +353,10 @@ export class ChatControl {
     if(args.action==='list'){
       const page=await this.page(args.hostId,args);this.assertAccess(actor,args.hostId,'read',args.chatId,args.projectId);
       return {...page,hostId:args.hostId,items:page.items.filter(r=>this.permitted(actor,args.hostId,'read',r.id,r.projectId))};
+    }
+    if(args.action==='update-releases'){
+      if(args.hostId!==this.localId()&&!(await this.connection(args.hostId)).capabilities.includes('chat.update-release.v1'))throw Error('This computer needs pinned update-release support.');
+      const result=await this.request(args.hostId,'updates.releases',{channel:args.channel||'stable'});this.assertAccess(actor,args.hostId,'read');return result;
     }
     if(args.action==='models'){const result=await this.models(args.hostId,args.provider);this.assertAccess(actor,args.hostId,'read',args.chatId,args.projectId);return result;}
     if(args.action==='projects'){

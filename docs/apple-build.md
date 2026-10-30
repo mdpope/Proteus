@@ -1,3 +1,14 @@
+## October 30 shared simulator retention
+
+Use the existing shared compatible iPhone/iPad simulator pool for Proteus and Mnemosyne.
+Inventory devices/runtimes before creating anything; do not make one device pool per project.
+Retain only unique required compatibility coverage and retire unused test-created duplicates,
+obsolete runtimes and build products during authorized release cleanup. Preserve active tests,
+installed applications, pairings and data; do not erase shared devices as routine setup.
+The [release process](release-process.md) limits local native artifact generations to two and
+keeps the existing two verified recoveries per physical device/installation. No live simulator
+or recovery cleanup is claimed merely from this policy update.
+
 ## October 29 — current-owner simulator acceptance
 
 Both existing simulators run 0.2.36 / 2610.29.1, with exact app bytes and protected data verified

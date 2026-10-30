@@ -1,9 +1,14 @@
 # October 30 release plan
 
-**Stage: collecting bug reports and feature requests only.** Started October 29, 2026 for the
-October 30 release. Implementation, builds, installation and publication are on hold until
-explicitly requested. The request to implement Copilot Fusion is recorded as future release
-scope under that hold. Release version, final priorities and platform rollout are unassigned.
+**Stage: October thirtieth release is open as version 0.2.39.** Started October 29, 2026.
+R1–R10 remain request collection only. The October 30 command-center distribution and named-release
+process request (R11) explicitly authorizes its implementation and validation. No other item is
+released from its implementation hold. Publishing packages and installing on a target remain
+distinct from source implementation; the operator has not selected a new device rollout here.
+
+Standing process: [named releases](release-process.md). Current record:
+[release.json](releases/2026-10-30/release.json), [implementation](releases/2026-10-30/implementation.md),
+and [machine rollout](releases/2026-10-30/rollout.md).
 
 ## Request register
 
@@ -18,6 +23,8 @@ scope under that hold. Release version, final priorities and platform rollout ar
 | R7 | Feature | Clear the entire Needs attention list with one button instead of opening each chat | Collected; bulk acknowledgement only |
 | R8 | Bug report | Browser videos autoplay despite the enabled block-video-autoplay setting | Reported October 30; cause unconfirmed |
 | R9 | Improvement | Apply Auto-approve tools and remembered approvals to Proteus actions such as proteus_chats | Collected October 30; audit invocation and owner access gates |
+| R10 | Bug | Shared workspace/project tab lists, counts and content diverge between windows, including after Close | Visible divergence in two October 30 screenshots; root cause unconfirmed |
+| R11 | Feature and process | Named/versioned releases, command-center updates, native first builders, current-only publication and bounded retention | Source implemented and validated; packaging/rollout not performed |
 
 Existing October 29 implementation and rollout records retain their own status. This collection
 does not reauthorize those deployments or imply that every earlier pending item is in this release.
@@ -273,10 +280,72 @@ Starting points: [shared permission decisions](../src/services/settings/permissi
 [October 29 Auto-approve work](2026-10-29-combined-release.md). Reconcile existing behavior before
 adding another approval mechanism.
 
+## R10 Keep shared tab information consistent across all windows
+
+**Observed October 30:** Two windows showing the same workspace/project display different tab
+sets. Closing a news browser tab in one leaves it present in the other. The follow-up screenshot
+shows project counts of **19 versus 20**, with the extra news tab visible in the lower window's
+tab strip, sidebar and Tabs table. This is a visible synchronization defect. The user requires
+the same shared information regardless of which window is active or being used.
+
+Both screenshots are retained in this chat as evidence. A visible application label reads
+v0.2.38; the exact installed build and owner mutation/event sequence remain to be verified.
+Keep raw screenshots and private workspace, host, URL and tab details outside Git. Establish
+stable host/container/logical-tab identities and trace the first divergence during reproduction.
+
+Expected behavior and acceptance:
+
+- Maintain one canonical content-tab set per owning host and workspace/project. Every window
+  showing that container must agree on membership, order, titles, URL/history, hide/persist state
+  and other shared metadata. The tab strip, sidebar, project/workspace Tabs table and counts must
+  all reflect that same state.
+- Propagate opens, closes, moves, reorders, hide/restore and shared metadata changes automatically,
+  regardless of the originating or focused window. Include inactive roots, another selected
+  child and focused inputs. Convergence must not require clicking, refreshing or reopening each
+  window. Hidden/unloaded tab metadata must synchronize without loading the websites.
+- Closing a logical content tab in any window removes it from all observing windows and their
+  list/count projections. Apply owner Close despite delayed metadata, stale window snapshots,
+  queued synchronization, focus changes, reconnect or restart. A stale mirror must not retain or
+  recreate the tab. Preserve revision conflict handling and expose failed actions accurately.
+- Match owning host, container and logical tab identity. Distinct tabs with identical names or
+  URLs remain distinct. Preserve each window's local selection, focus, draft and reading position;
+  choose a valid local fallback when its selected tab closes.
+- Retain existing resource lifetime rules: closing a top-level workspace/project navigation
+  representation affects that window, and closing a chat content tab does not archive, delete
+  or cancel its conversation.
+
+Reproduce the screenshot sequence in both directions with two windows, then three. Compare
+actual canonical identities and ordered descriptors with every UI projection after each mutation,
+rather than accepting equal counts alone. Exercise active/inactive containers, repeated focus
+switching, persisted/unloaded tabs, concurrent edits, delayed/out-of-order updates, restart and
+paired views where supported. Demonstrate that the information stays consistent while work
+alternates between windows, with local drafts/selection/scroll preserved.
+
+Related shared-window source work is recorded in [window management](window-management.md),
+[workspace behavior](workspaces.md), and [browser synchronization](browser.md). Diagnose the
+cause of the observed divergence in the installed version; earlier fixture acceptance alone
+does not resolve this report. This remains a collection-only bug in the future plan; the
+previously closed release cycle is not reopened.
+
+## R11 Named releases and command center distribution
+
+The operator authorizes assessing and implementing gaps in Mac/Linux/Windows distribution:
+publish exact signed packages on downloads.proteus.example, start a new local update coordinator on each intended
+destination from this Mac, and observe its download, tests, migration, installation and recovery.
+
+Codify one human release name and version while open; repository plan, implementation and
+per-machine rollout records; first native builders synchronizing pinned repository source;
+subsequent consumers downloading packages without compilation; and closeout that merges PRs/
+branches, synchronizes/pushes main and retires related worktrees. Keep only the current public
+release generation, at most two local application/site recovery generations, one website backup
+on the server, and shared iOS simulators across projects. See [release process](release-process.md)
+and the [implementation ledger](releases/2026-10-30/implementation.md) for concrete behavior.
+
 ## Collection and later implementation
 
 Continue adding requests here with stable IDs. Keep observations, hypotheses and verified results
 distinct. Confirm the Fusion contract and reproduce notification sequences before settling an
 implementation. No runtime settings, provider packages or application behavior change during
-collection. When implementation is authorized, record the final scope, version, required platform
+collection for R1–R10. R11 follows its explicit implementation authorization. Record the final
+scope, version, required platform
 coverage and appropriate validation before any separately authorized rollout.

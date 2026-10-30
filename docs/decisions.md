@@ -1,3 +1,20 @@
+## October 30 named releases and owner-observed update coordination
+
+A human release name maps to one reserved package version. Small repository records retain plan,
+implementation, rollout and closeout; private machine/recovery data remains outside source.
+The coordinating Mac chooses an exact signed package while the destination captures its own
+provider defaults and owns installation. Update tasks observe the destination owner's bounded,
+chat-specific receipt through the pre-restart turn and resumed verification; package health does
+not attest arbitrary migration/workflow results. Existing chat access and retry boundaries apply.
+
+One version is current on downloads.proteus.example. New publication writes empty catalogs for pending native targets
+instead of retaining an older advertised version, then retires obsolete payload directories only
+after checking new public bytes and a digest-bound cleanup plan. Local recovery remains separate:
+at most two native/site generations and one server-side website backup. A designated native builder
+may build from pinned repository source; subsequent consumers never build. Closing a release
+integrates and pushes its source into main and retires related branches/worktrees without requiring
+every deferred installation to finish. See [release process](release-process.md).
+
 ## October 30 — reconcile owner descriptors separately from window views
 
 Use one ordered logical identity set for workspace/project content, with window-local view IDs,

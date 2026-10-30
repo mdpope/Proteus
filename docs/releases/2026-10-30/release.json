@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "id": "2026-10-30",
+  "name": "October thirtieth release",
+  "version": "0.2.39",
+  "status": "open",
+  "openedOn": "2026-10-30",
+  "plan": "docs/2026-10-30-release-plan.md",
+  "implementation": "docs/releases/2026-10-30/implementation.md",
+  "rollout": "docs/releases/2026-10-30/rollout.md",
+  "closeout": "docs/releases/2026-10-30/closeout.md",
+  "sourceCommit": null,
+  "relatedBranches": [
+    "codex/oct30-update-command-center"
+  ],
+  "scope": {
+    "implementing": [
+      "R11"
+    ],
+    "held": [
+      "R1",
+      "R2",
+      "R3",
+      "R4",
+      "R5",
+      "R6",
+      "R7",
+      "R8",
+      "R9",
+      "R10"
+    ]
+  }
+}

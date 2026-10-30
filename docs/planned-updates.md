@@ -1,3 +1,12 @@
+## October 30 release process and distribution implementation authorized
+
+R11 is active implementation in the [0.2.39 named release](releases/2026-10-30/release.json).
+R1–R10 remain collected/held. The [standing release process](release-process.md) covers one version
+per name, implementation/rollout documents, pinned native source builds and package reuse,
+current-only downloads.proteus.example payloads, backup/simulator limits and integration/push/worktree closeout.
+The previously closed October 27 cycle remains closed. No device rollout or server mutation
+is established by this source implementation.
+
 ## October 30 — prior release closed; future request collection preserved
 
 The October 27 release cycle is permanently closed by the operator. Device rollout and retained
@@ -5,7 +14,7 @@ HC recovery review are not release-completion gates. All implemented development
 obsolete branches/worktrees/build staging are retired with preserved evidence. See
 [closeout](2026-10-30-release-closeout.md).
 
-The [October 30 R1–R9 register](2026-10-30-release-plan.md) remains a separate collection-only
+The [October 30 R1–R10 register](2026-10-30-release-plan.md) remains a separate collection-only
 effort. Committing its notes does not authorize implementation or another build/deployment.
 
 ## October 30 — shared-window membership/order source correction accepted
@@ -34,7 +43,9 @@ cataloged there. R8 records the October 30 report that enabled video-autoplay bl
 respected in the browser; reproduction and cause remain unconfirmed. R9 requests Auto-approve
 tools and scope-aware remembered approvals for Proteus actions such as `proteus_chats`. Fusion's
 experimental bundled-runtime events are an integration lead; supported activation and account
-availability still need verification.
+availability still need verification. R10 records visible shared tab-list divergence across
+two windows, including counts of 19 versus 20 and an extra tab after Close. Shared tab strips,
+sidebars, Tabs tables and counts must agree regardless of which window is being used.
 No runtime, settings, package, build, installation or publication change is authorized by this
 collection. Earlier release/rollout entries retain their separate status.
 

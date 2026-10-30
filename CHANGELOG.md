@@ -1,3 +1,14 @@
+## 0.2.39 — October thirtieth release open
+
+- Reserve one version per named release and keep repository plan, implementation and machine
+  rollout records; codify main/PR/push/branch/worktree closeout and bounded retention.
+- Stage one current public package set across platforms, advertise pending targets with empty
+  catalogs, and verify digest-bound retirement of superseded public release payloads.
+- Start pinned remote update coordinators using destination defaults. Return chat-specific owner
+  update receipts and keep monitoring beyond the pre-restart completed model turn.
+- Preserve additional migration/test instructions in the pinned coordinator request.
+- Source implementation only; packages, website publication and machine rollout are not claimed.
+
 ## 0.2.38 — release work closed
 
 The operator closed this release cycle independently of device rollout. Source and accepted private artifacts are retained; see [closeout](docs/2026-10-30-release-closeout.md).
@@ -22,6 +33,8 @@ Collection started; these items are not implemented. See the
 - Fix the reported browser regression where videos autoplay despite enabled video-autoplay blocking.
 - Apply Auto-approve tools and scope-aware remembered approvals to Proteus actions, including
   `proteus_chats`, without repeated prompts for matching approved scopes.
+- Fix shared workspace/project tab-list divergence across windows. Keep tab strips, sidebars,
+  Tabs tables, counts and shared metadata consistent whichever window is used, including Close.
 
 ## 0.2.37 — Windows candidate
 

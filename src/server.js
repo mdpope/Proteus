@@ -234,7 +234,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
     if(updateCoordinator&&value.chatType==='internet')throw Error('Update coordinators require an ordinary unassigned chat.');
     if(updateCoordinator){
       const {updateCoordinatorConfiguration,updateCoordinatorPrompt}=await import('./services/updates/update-coordinator.js');
-      value={...value,...await updateCoordinatorConfiguration(defaults,catalogs,value),workspaceId:null,projectId:null,includeDefaults:false,selectedIds:[],agentId:null,skillDirectories:[],mcpServers:{},workspace:defaults.workspace,prompt:updateCoordinatorPrompt(value.prompt||'Check and install the explicitly requested release after required validation.')};
+      value={...value,reasoningEffort:'',contextTier:'default',serviceTier:'',...await updateCoordinatorConfiguration(defaults,catalogs),workspaceId:null,projectId:null,includeDefaults:false,selectedIds:[],agentId:null,skillDirectories:[],mcpServers:{},workspace:defaults.workspace,prompt:updateCoordinatorPrompt(value.prompt||'Check and install the explicitly requested release after required validation.')};
     }
     if(value.workspaceId){ const profile = context.scope(value.workspaceId); value = {...profile.defaults,...value}; }
     if(value.chatType==='internet'){

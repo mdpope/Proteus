@@ -1,3 +1,14 @@
+## October 30 named release and command center process
+
+The standing [release process](release-process.md) unifies version reservation, repository records,
+native first-builder/source synchronization, current-only downloads.proteus.example publication and per-machine
+update chats. The October thirtieth release reserves 0.2.39; implementation and rollout status
+are in [its record](releases/2026-10-30/release.json). Destination coordinator defaults belong to
+the destination. Pinned release tasks now retain owner update observations through restart.
+The new source requires package/bootstrap deployment before older clients can use the new tool
+contract. No new publication or installation is established by source tests.
+This process supersedes older instructions below to reuse an existing destination update chat.
+
 ## October 29 — Windows owner maintenance and distribution
 
 The approved Windows workflow now has installation-bound maintenance plans, verified recovery reconciliation, a designated native builder and signed release reuse before building. See [Windows distribution](windows-distribution.md). Source implementation and live acceptance remain separate; old-client bootstrap uses the existing signed owner updater before fresh coordinator support is available.

@@ -1,5 +1,17 @@
 # Proteus
 
+## Named release workflow
+
+Follow [docs/release-process.md](docs/release-process.md) for every release. Resolve the current
+named release/version before work; reserve its version once, keep plan/implementation/rollout
+records in Git, and distinguish source, published, installed and live-verified status.
+On operator closeout, merge validated release PRs/branches into main, synchronize/push and verify
+remote main, then retire merged release branches/worktrees and close the record. Do not leave
+another open release effort or restart a closed cycle. Public downloads retain only the current
+generation; website server recovery is one backup and local website recovery is at most two.
+Reuse the shared iOS simulator pool across projects. Apply the precise retention and build-first/
+download-subsequently rules in that document without expanding authorization to unrelated work.
+
 Proteus is an independent, provider-neutral local scheduler and conversation client.
 Follow `docs/code-organization.md` for source placement and boundary commentary. Keep models,
 state, services and feature views in their related folders; keep root files for composition

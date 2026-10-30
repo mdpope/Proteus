@@ -1,4 +1,6 @@
 import {stageDesktopRelease} from '../src/services/updates/desktop-release-staging.js';
+import {stageDesktopDistribution} from '../src/services/updates/desktop-distribution.js';
+import {desktopPublicationPlan,retireDesktopPublications} from '../src/services/updates/desktop-publication.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -137,4 +139,55 @@ for(const platform of ['darwin','linux','win32'])test(platform+' signed catalog 
  assert.equal(requests[0],windowsReleaseOrigin+'/downloads/proteus/stable/'+platform+'-'+process.arch+'.json');
  const staged=stageDesktopRelease(input,output,{keys});assert.ok(staged.files.some(file=>file.path.endsWith(platform+'-'+process.arch+'.json')));assert.equal(staged.files.some(file=>file.path.includes('private-receipt')),false);
  assert.throws(()=>stageDesktopRelease(input,output,{keys}),/exists/);
+});
+
+function distributionInputs(t){
+ const root=directory(t),inputs=[];
+ for(const platform of ['darwin','linux','win32']){
+  const input=path.join(root,platform);fs.mkdirSync(input);inputs.push(input);
+  const bytes=Buffer.from('Synthetic '+platform+' archive'),value=hostedManifest();
+  value.id='synthetic-'+platform;value.platform=platform;value.artifact={...value.artifact,bytes:bytes.length,sha256:hash(bytes),path:'/downloads/proteus/releases/'+value.id+'/'+value.artifact.filename};
+  if(platform!=='win32')delete value.installer;
+  else{value.installer={...value.installer,bytes:bytes.length,sha256:hash(bytes),path:'/downloads/proteus/releases/'+value.id+'/'+value.installer.filename};fs.writeFileSync(path.join(input,value.installer.filename),bytes);}
+  fs.writeFileSync(path.join(input,value.artifact.filename),bytes);fs.writeFileSync(path.join(input,'release.json'),JSON.stringify(envelope(value)));
+  fs.writeFileSync(path.join(input,'private-source-and-receipt.txt'),'Never publish');
+ }
+ return {root,inputs};
+}
+
+test('one distribution set stages all platforms and returns exact remote update selections without private inputs',t=>{
+ const {root,inputs}=distributionInputs(t),output=path.join(root,'distribution');
+ const receipt=stageDesktopDistribution(inputs,output,{keys});assert.equal(receipt.published,false);assert.equal(receipt.releases.length,3);
+ for(const selected of receipt.releases){
+  const file=path.join(output,'downloads/proteus',selected.updateRelease.channel,selected.platform+'-'+selected.arch+'.json');
+  const signed=JSON.parse(fs.readFileSync(file)).releases[0];assert.equal(hash(JSON.stringify(signed)),selected.updateRelease.manifestDigest);
+  assert.equal(verifyRelease(signed,{keys,platform:selected.platform,arch:selected.arch}).id,selected.updateRelease.releaseId);
+ }
+ assert.equal(receipt.files.some(row=>row.path.includes('private-source')),false);
+ const current=JSON.parse(fs.readFileSync(path.join(output,'downloads/proteus/current.json')));assert.equal(current.version,receipt.version);assert.equal(current.targets.length,3);
+ assert.deepEqual(JSON.parse(fs.readFileSync(path.join(output,'downloads/proteus/preview/linux-x64.json'))).releases,[]);
+ assert.throws(()=>stageDesktopDistribution(inputs,output,{keys}),/exists/);
+});
+
+test('distribution staging rejects duplicate targets, mixed versions and damaged artifacts before producing an upload folder',t=>{
+ const {root,inputs}=distributionInputs(t),output=path.join(root,'distribution');
+ assert.throws(()=>stageDesktopDistribution([inputs[0],inputs[0]],output,{keys}),/one release/);assert.equal(fs.existsSync(output),false);
+ const manifestFile=path.join(inputs[1],'release.json'),signed=JSON.parse(fs.readFileSync(manifestFile));
+ const value=JSON.parse(Buffer.from(signed.payload,'base64url'));value.version='9.9.9';fs.writeFileSync(manifestFile,JSON.stringify(envelope(value)));
+ assert.throws(()=>stageDesktopDistribution(inputs,output,{keys}),/one release version/);assert.equal(fs.existsSync(output),false);
+ fs.writeFileSync(manifestFile,JSON.stringify(signed));fs.writeFileSync(path.join(inputs[1],value.artifact.filename),'Damaged');
+ assert.throws(()=>stageDesktopDistribution(inputs,output,{keys}),/differs/);assert.equal(fs.existsSync(output),false);
+ assert.equal(fs.readdirSync(root).some(name=>name.startsWith('.proteus-distribution-')),false);
+});
+
+test('public retirement preserves current packages and requires unchanged verified public and obsolete bytes',t=>{
+ const {root,inputs}=distributionInputs(t),output=path.join(root,'distribution'),receipt=stageDesktopDistribution(inputs,output,{keys});
+ const old=path.join(output,'downloads/proteus/releases/old-version');fs.mkdirSync(old);fs.writeFileSync(path.join(old,'archive'),'Old synthetic package');
+ let plan=desktopPublicationPlan(output,receipt);assert.deepEqual(plan.retired.map(row=>row.id),['old-version']);assert.equal(fs.existsSync(old),true,'dry run preserves obsolete packages');
+ fs.writeFileSync(path.join(old,'archive'),'Changed after plan');assert.throws(()=>retireDesktopPublications(output,receipt,plan.planDigest),/changed/);
+ plan=desktopPublicationPlan(output,receipt);const result=retireDesktopPublications(output,receipt,plan.planDigest);assert.deepEqual(result.retired,['old-version']);assert.equal(fs.existsSync(old),false);
+ for(const id of result.retained)assert.ok(fs.existsSync(path.join(output,'downloads/proteus/releases',id)));
+ fs.mkdirSync(old);fs.writeFileSync(path.join(old,'archive'),'Old synthetic package');
+ fs.writeFileSync(path.join(output,'downloads/proteus/current.json'),'Corrupt new discovery');
+ assert.throws(()=>desktopPublicationPlan(output,receipt),/Verify every new public file/);assert.ok(fs.existsSync(old),'failed verification cannot retire any previous package');
 });

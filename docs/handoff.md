@@ -1,3 +1,13 @@
+## October 30 release open as 0.2.39 — distribution implementation
+
+The operator authorizes command-center distribution and codifying named release/version,
+repository plan/implementation/rollout records, current-only public packages, native first builders,
+main/PR/push closeout and bounded app/site/simulator retention. R1–R10 remain on their collection
+hold. See [release process](release-process.md) and [implementation](releases/2026-10-30/implementation.md).
+Work is isolated on codex/oct30-update-command-center; no installed app, existing prepared update,
+server package or remote target was changed. Final Node validation passes 1,324 tests with four
+platform skips; static/diff checks pass. Native package/publication/installation remain unverified.
+
 ## October 30 — October 27 release permanently closed
 
 The operator closes this release regardless of device rollout. All implemented source is merged
@@ -38,8 +48,11 @@ events can reappear, and pending questions/approvals remain intact. The plan inc
 palette values, source investigation leads and future acceptance criteria. R8 records video
 autoplay despite the enabled blocking preference. R9 extends Auto-approve tools and remembered
 approvals to Proteus actions such as `proteus_chats`, including owner access gates and persistent
-scoped rules. Notification/autoplay causes and live Fusion support remain unverified. No runtime, live settings, version, build or
-rollout changed. Earlier implementation and release authorizations below retain their own scope.
+scoped rules. R10 captures visible cross-window divergence in two screenshots: shared project
+counts differ at 19 versus 20, and the closed news tab remains in the other window. The visible
+version is v0.2.38; exact build and root cause still need diagnosis. Shared tab information must
+agree in every window's strip, sidebar and Tabs table, independent of which window is active. Notification/autoplay causes and live Fusion support remain
+unverified. No runtime, live settings, version, build or rollout changed. Earlier implementation and release authorizations below retain their own scope.
 
 ## October 29 — Windows 0.2.37 installer built and privately delivered
 

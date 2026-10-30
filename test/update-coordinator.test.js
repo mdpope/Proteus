@@ -51,3 +51,14 @@ for(const provider of ['codex','copilot','claude'])test(provider+' coordinator c
  assert.equal(guide.schedule.purpose,'desktop-control-setup');assert.equal(guide.schedule.updateAuthorization,undefined);assert.equal(guide.schedule.provider,provider);assert.match(guide.schedule.prompt,/Cua Driver/);assert.match(guide.schedule.prompt,/ask me before running any installer/);
  assert.equal(app.engine.decidePermission(app.engine.getRun(guide.id),{kind:'custom-tool',toolName:'proteus_update'}).allowed,false,'Setup chats do not inherit update-tool approval');
 });
+
+
+test('an update captures only saved destination options, including when optional values were not saved',async t=>{
+ const home=privateTemporaryDirectory(path.join(os.tmpdir(),'proteus-update-options-'));
+ const saved={provider:'codex',model:'fixture'};
+ atomicJSON(path.join(home,'settings.json'),{schemaVersion:1,provider:'codex',model:'fixture',reasoningEffort:'high',serviceTier:'priority',timezone:'UTC',workspace:{cwd:home,additionalDirectories:[]},skillDirectories:[],mcpServers:{},updateCoordinator:saved});
+ const app=await startServer({home,port:0,timers:false,providers:{codex:{status:async()=>({available:true,models:[model]}),run:async()=>{}}}});
+ t.after(async()=>{await app.close();fs.rmSync(home,{recursive:true,force:true});});
+ const schedule=await app.buildChatSchedule({purpose:'update',prompt:'Synthetic defaults isolation',provider:'copilot',model:'other',reasoningEffort:'invented',contextTier:'long_context',serviceTier:'invented'});
+ assert.equal(schedule.provider,'codex');assert.equal(schedule.model,'fixture');assert.equal(schedule.reasoningEffort,'');assert.equal(schedule.contextTier,'default');assert.equal(schedule.serviceTier,'');
+});
