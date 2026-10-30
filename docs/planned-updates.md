@@ -1,3 +1,17 @@
+## October 30 — shared-window membership/order source correction accepted
+
+The same owner workspace/project now converges by logical identity and canonical order across
+local windows, including inactive roots and duplicate historical chat views. Source fixes cover
+async order guards, native owner-move adoption, typed local navigation conflicts and complete
+saved-window owner projection. Window-local selection, drafts and scroll remain separate; owner
+closes/tombstones and moved placements win over stale layouts. Unknown legacy content remains
+subject to explicit retained-tab review rather than automatic resurrection or deletion.
+
+Source acceptance: 1,316 tests pass with four skips, static checks pass, and disposable native
+multiwindow/restart/restored-chat/link/recovery checks pass. Long-history acceptance retains all
+451 entries and the selected/Forward branch. Deployment is pending; this work did not update HC
+or change its saved content. See [window management](window-management.md) and [handoff](handoff.md).
+
 ## October 29 — Windows 0.2.37 build and private delivery accepted
 
 Exact source `73227b2` includes managed incoming-only computer support and the Windows fixture

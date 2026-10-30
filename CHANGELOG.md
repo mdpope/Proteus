@@ -1,3 +1,10 @@
+## Unreleased — shared workspace/project window convergence
+
+- Make every open view adopt the owner's logical tab membership and order, including inactive roots and legacy chat aliases. Keep local selection, drafts and scroll independent.
+- Restore saved windows with current missing descriptors and owner order. Preserve complete Back/Forward history through the owner service; reject changing/incomplete history without replacing the layout.
+- Adopt owner-committed browser moves without replaying visits or incidental native order. Preserve typed navigation conflicts across local HTTP so an acknowledged title update cannot stall synchronization.
+- Source validation: 1,316 tests pass, four skip; static checks and disposable native multiwindow, restore/restart, legacy-chat and 451-entry history acceptance pass. No deployment or HC data changes.
+
 ## 0.2.37 — Windows candidate
 
 Windows x64 source and exact-package acceptance passed; tested files were privately delivered

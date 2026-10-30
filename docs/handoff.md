@@ -1,3 +1,20 @@
+## October 30 — shared-window membership/order fix merged, deployment pending
+
+Source implementation `c985e92` reproduces and fixes live order rejection from duplicate chat
+aliases, lost typed navigation errors over local HTTP, and duplicate history seeding after native
+owner moves. Named restore now materializes missing descriptors in owner order and retrieves
+complete history before projecting window presentation. Real concurrent edits, pending operation
+identities, intentional closes/moves, independent local selection, drafts and reading positions
+remain protected. Historical records and explicit retained-tab recovery remain intact.
+
+Validation: 1,316 Node tests pass, four skip; static checks pass. Disposable real Electron checks
+cover concurrent opens, keyboard reorder, inactive workspace adds/moves/closes/reorders, two-window
+selection/scroll/drafts, named restoration before hydration, restart, 451-entry Back/Forward
+preservation, legacy unregistered chat preservation, native links and explicit owner closes.
+The raw HC saved counts were not used as proof of the live root cause. HC remains on its installed
+0.2.37; no deployment or live user-data reconciliation occurred. Build/package acceptance and an
+authorized update are required before claiming this correction installed anywhere.
+
 ## October 29 — Windows 0.2.37 installer built and privately delivered
 
 The designated Windows builder accepted exact source `73227b29ddccbcdf4674956bf5ddb9508219f659`,
