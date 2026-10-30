@@ -2,6 +2,8 @@
 
 Version: **0.2.39**. State: implemented and source-validated; not packaged or deployed. R11 is authorized.
 R1–R10 remain held. The active implementation branch is codex/oct30-update-command-center.
+The validated R11 source pin is `34419c1047f5a269ff37f42cc826161c4fb6158a`; later record-only commits do not
+change that implementation. A subsequent runtime change requires a new source/package pin.
 
 ## Distribution audit
 

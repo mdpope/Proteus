@@ -9,7 +9,7 @@
   "implementation": "docs/releases/2026-10-30/implementation.md",
   "rollout": "docs/releases/2026-10-30/rollout.md",
   "closeout": "docs/releases/2026-10-30/closeout.md",
-  "sourceCommit": null,
+  "sourceCommit": "34419c1047f5a269ff37f42cc826161c4fb6158a",
   "relatedBranches": [
     "codex/oct30-update-command-center"
   ],
