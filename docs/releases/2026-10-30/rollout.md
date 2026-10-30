@@ -5,8 +5,8 @@ Target labels are non-secret roles; exact IDs, paths and detailed receipts stay 
 
 | Machine or target | Platform | Stage | Evidence and remaining work |
 | --- | --- | --- | --- |
-| Build Mac command center | macOS arm64 | Preflight awaiting input | Destination tool approval pending; prior-release preparation preserved |
-| Work Mac | macOS arm64 | Preflight awaiting input | Destination tool approval pending; installed 0.2.38 reported, new candidate pending |
+| Build Mac command center | macOS arm64 | Accepted candidate queued; preflight awaiting input | Exact local app/hash supplied to coordinator; destination tool approval pending; prior preparation preserved |
+| Work Mac | macOS arm64 | Preflight awaiting input; transfer pending | Installed 0.2.38 reported; accepted candidate identities supplied, bytes not delivered; destination tool approval pending |
 | Linux laptop | Linux | Not started | Native package/public catalog required; no new coordinator dispatched |
 | Designated Windows builder | Windows x64 | Not selected | Select the intended builder and pin repository source when a build is authorized |
 | Windows client laptop | Windows | Not started | Consume the signed package after first-builder publication |

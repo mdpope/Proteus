@@ -4,7 +4,7 @@ import {sidebarFixture} from './preview-sidebar-fixture.mjs';
 const fixture=await sidebarFixture(),server=http.createServer((_request,response)=>response.end('<!doctype html><title>Synthetic notification source</title><p>Local fixture</p>'));let app;
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const origin='http://127.0.0.1:'+server.address().port;
 try{
- app=await electron.launch({args:['.','--use-mock-keychain','--user-data-dir='+fixture.locations.userData],env:{...process.env,PROTEUS_DESKTOP_PREVIEW:'1',PROTEUS_PREVIEW_HOME:fixture.locations.root,PROTEUS_HOME:fixture.locations.home,CODEX_HOME:fixture.auth,PORT:'0'},timeout:60000});
+ app=await electron.launch({...(process.env.PROTEUS_PREVIEW_EXECUTABLE?{executablePath:process.env.PROTEUS_PREVIEW_EXECUTABLE,args:['--use-mock-keychain','--user-data-dir='+fixture.locations.userData]}:{args:['.','--use-mock-keychain','--user-data-dir='+fixture.locations.userData]}),env:{...process.env,PROTEUS_DESKTOP_PREVIEW:'1',PROTEUS_PREVIEW_HOME:fixture.locations.root,PROTEUS_HOME:fixture.locations.home,CODEX_HOME:fixture.auth,PORT:'0'},timeout:60000});
  const page=await app.firstWindow();await page.waitForFunction(()=>document.querySelector('#workspace-launcher')||document.querySelector('#workspace-tree')||document.querySelector('#main'));
  const result=await app.evaluate(async({app},origin)=>{
   const main=process.mainModule.require(app.getAppPath()+'/desktop/main.cjs'),browser=main.getBrowser(),service=main.getService();

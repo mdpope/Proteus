@@ -1,6 +1,6 @@
 # October thirtieth release implementation
 
-Version: **0.2.39**. State: full release source implemented; final validation/packaging underway.
+Version: **0.2.39**. State: Mac source packaged and accepted; rollout awaits destination approvals.
 R1–R13 are authorized, with Mac rollout first and other platforms after HC is verified.
 The active branch is codex/oct30-update-command-center. The earlier R11-only source pin is
 `34419c1047f5a269ff37f42cc826161c4fb6158a`; later record-only commits do not
@@ -33,9 +33,29 @@ change that implementation. A subsequent runtime change requires a new source/pa
   ordinary notifications. Server/APNs and iOS implementation remain after the HC verification gate;
   real Slack and worker/background push are not verified by the page fixture.
 
-These are source/disposable-profile checks. Neither Mac has received the new artifact yet.
+These are source/disposable-profile checks. Neither installed Mac profile has been updated.
 The two unassigned update coordinators captured destination defaults and await destination tool
 approvals during read-only preflight. Final suite totals and package/source pins follow acceptance.
+
+## Accepted Mac candidate
+
+- Frozen source: `a79f584002141dfc0df38bddee7a6fb0396858f8`, pushed for review in [draft PR 24](https://github.com/mdpope/Proteus/pull/24).
+- Build: `a79f58400214+src.7cfbbe645830`; source fingerprint `7cfbbe6458309762345edaa83aed1a5e28aaffb29ccea3c1d88face66364857f` (427 runtime files).
+- Package/installation SHA-256: `0d518e071fc8a04ca7c779941300492ffc4ab1e3ffd8dc4701f8ca5ddf171913`.
+- Archive SHA-256: `2b2d96edc659652b0920861c421d43970a96d358d46f4cd9942230f30f8d745f` (227,496,687 bytes).
+- Apple app/team identity remains `org.proteusapp.proteus.desktop` / `TEAMID0000`, using the existing valid certificate. Vendor signing stays intact; no notarization is claimed.
+
+The official updater extractor reproduces the complete installation hash. Four exact extracted
+package fixtures pass: combined themes/attention/two-window conflict-time Close, native video/
+browser controls, document reading positions through restart, and actual page Notification events
+with original text/silence/click. Installation/archive hashes remain unchanged after startup tests.
+One accepted app and one update archive remain. Removing only the verified duplicate build app
+increased observed free space by 671,764,480 bytes. No live-data backup or installation occurred.
+
+The Build Mac coordinator has the exact accepted local path and hash pins queued behind its
+pending human tool approval. HC has the same identities queued and waits for private transfer or
+a matching signed publication after preflight; artifact delivery there is not claimed. Neither
+installation, migration, installed-profile preservation nor real Slack/APNs delivery is verified.
 
 Final Mac source acceptance: **1,340 tests pass, four platform skips, zero failures**.
 Static and whitespace checks pass. Disposable native checks pass for the combined theme/attention/
@@ -82,7 +102,7 @@ limits. Re-running with the documented canonical `TMPDIR=/private/tmp` passed wi
 any assertion. Original failed output and final logs remain outside source. Native cross-platform
 installation, real restart/migration acceptance and server retention remain separate.
 
-No native package was built, no update helper or migration was run on live user data, no website
+At that R11-only checkpoint no native package was built, no helper or migration ran on live data, no website
 publication/retirement occurred, and no remote installation was dispatched. The existing prepared
 local update and the previously closed release's source/artifacts remain intact.
 

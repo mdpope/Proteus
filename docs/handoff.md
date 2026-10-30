@@ -17,6 +17,15 @@ callback; explicit device forwarding excludes owner-only references. Server/iOS/
 live Slack/phone acceptance remain after HC verification. Website retries expire after five minutes
 and cap at 100 pending events, preserving local history without an old reconnect push backlog.
 
+Mac source `a79f584002141dfc0df38bddee7a6fb0396858f8` is pushed in draft PR 24. The signed
+0.2.39 candidate `a79f58400214+src.7cfbbe645830` passes official extraction and four exact-package
+UI fixtures, and installation/archive hashes stay unchanged after startup. See the implementation
+record for complete pins. The duplicate task build app was retired after verification; one accepted
+app/archive remains. Build Mac has the accepted candidate queued; HC has identities but awaits
+artifact transfer/publication. Their original tool approvals are still pending. Do not approve
+those as an agent, claim installation, reuse old 0.2.36 preparation or build other platforms before
+HC is verified. Preserve canonical main's earlier uncommitted planning notes during integration.
+
 ## October 30 release open as 0.2.39 — distribution implementation
 
 The operator authorizes command-center distribution and codifying named release/version,
