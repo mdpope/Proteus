@@ -1,3 +1,20 @@
+## October 29 — Windows 0.2.37 installer built and privately delivered
+
+The designated Windows builder accepted exact source `73227b29ddccbcdf4674956bf5ddb9508219f659`,
+build `windows.66ee0288ae84`. Native source validation passes 1,305 tests with six skips and no
+failures. Static checks, packaging, official extraction, exact extracted UI/PTY/restart acceptance,
+unchanged package integrity and the existing publisher signature all pass. The installer remains
+Authenticode unsigned, separately from the verified signed release envelope.
+
+The controller received the exact installer, update archive, envelope and receipts through the
+operator-authorized SMB handoff and independently checked sizes, SHA-256, publisher signature,
+source commit and signed package identity. Private paths/receipts stay outside Git. The original
+failed attempt and its confirmed fixture startup rejection remain preserved. All task-created
+Windows probe files were moved out of the installed runtime; its complete prior package hash
+matched again. No installer ran, pairing changed, public release activated or other platform
+was deployed. The operator owns laptop installation and incoming-only setup; actual target
+pairing/feedback and the optional exact-executable managed-role exercise remain unverified.
+
 ## October 29 — Windows 0.2.37 fixture correction prepared
 
 The original exact-source build remains in source-tests without an accepted package. Approved

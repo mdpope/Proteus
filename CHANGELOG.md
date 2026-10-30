@@ -1,7 +1,7 @@
 ## 0.2.37 — Windows candidate
 
-Build authorized for a manually installed Windows x64 package. Other-platform rollout and
-public stable-feed activation remain separate.
+Windows x64 source and exact-package acceptance passed; tested files were privately delivered
+for manual installation. Other-platform rollout and public stable-feed activation remain separate.
 
 - Add managed-computer mode for one-way family Windows/Mac administration. Block outgoing computer access while retaining incoming workspace/project/tab/chat management and feedback bound to the originating chat. Add scoped management invitations and remote computer-role controls.
 - Keep open workspace/project tab lists and history synchronized across windows even while a different project is selected. Local selection and reading positions remain independent; paired-computer presentation following is retained.

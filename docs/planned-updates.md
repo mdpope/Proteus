@@ -1,3 +1,12 @@
+## October 29 — Windows 0.2.37 build and private delivery accepted
+
+Exact source `73227b2` includes managed incoming-only computer support and the Windows fixture
+ACL/cleanup correction. The native suite passes 1,305 cases with six skips; all seven owner
+release gates pass. Independent Mac download/signature/hash checks pass for the exact installer,
+archive and signed envelope. This is build/private-delivery acceptance only. The operator retains
+laptop installation and setup; no public feed activation or other-platform deployment occurred.
+See [handoff](handoff.md) and [Windows fixture conventions](windows-distribution.md).
+
 ## October 29 — one-way managed computers, next-release follow-up
 
 Implemented a host-owned managed-computer role, directional setup guidance, optional resource
