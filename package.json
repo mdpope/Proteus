@@ -1,6 +1,6 @@
 {
   "name": "proteus",
-  "version": "0.2.37",
+  "version": "0.2.38",
   "buildRevision": "source",
   "private": true,
   "description": "A local control room for scheduled AI work and resumable conversations.",
