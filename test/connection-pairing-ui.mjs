@@ -29,7 +29,7 @@ try {
       setTimeout(() => { remote.status = 'online'; }, 100);
       return route.fulfill({ contentType: 'application/json', body: JSON.stringify(remote) });
     }
-    assert.equal(body.action, 'pair'); pairRequests++;
+    assert.equal(body.action, 'pair'); assert.equal(body.management,true); pairRequests++;
     return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ code: 'proteus://pair?data=synthetic-ui-fixture', browserURL: 'https://example.test/remote#pair=synthetic-ui-fixture', expiresAt: new Date(Date.now() + 300000).toISOString(), qr: '' }) });
   });
   await page.locator('[data-page="engine"]').click();
@@ -54,7 +54,8 @@ try {
   assert.equal(await page.locator('#remote-label').inputValue(), 'Unapplied computer-name draft');
   assert.equal(await code.inputValue(), 'Synthetic other-computer draft');
   assert.equal(pairRequests, 0, 'Status polling must not issue or consume an invitation.');
-  await pair.click(); await page.locator('#remote-code').waitFor();
+  assert.equal(await page.locator('#remote-management').isChecked(),false);
+  await page.locator('#remote-management').check();await pair.click(); await page.locator('#remote-code').waitFor();
   assert.equal(await page.locator('#remote-code').inputValue(), 'proteus://pair?data=synthetic-ui-fixture');
   assert.equal(pairRequests, 1);
   remote.status = 'offline'; remote.error = 'Synthetic registration rejection';

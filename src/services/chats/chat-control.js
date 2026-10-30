@@ -51,8 +51,8 @@ export class ChatControl {
   }
   localId(){return this.service.remote.info().hostId;}
   save(task){atomicJSON(path.join(this.root,'tasks',task.id+'.json'),task);this.tasks.set(task.id,task);}
-  computers(){return [{hostId:this.localId(),label:this.service.remote.info().label,status:'online',local:true},...(this.service.peers?.list()||[]).map(p=>pick(p,['hostId','label','status','paused']))];}
-  host(id){if(typeof id!=='string'||!id)throw Error('Choose an explicit computer from computers.');const host=this.computers().find(h=>h.hostId===id);if(!host)throw Error('This computer is not paired.');if(host.paused)throw Error('This computer connection is paused.');const recovery=this.service.peers?.recovery?.get(id);if(recovery?.suspended||recovery?.blocked)throw Error('Review or resume this computer in Connections.');return host;}
+  computers(){return [{hostId:this.localId(),label:this.service.remote.info().label,status:'online',local:true},...(this.service.computerAccess?.get().managed?[]:(this.service.peers?.list()||[])).map(p=>pick(p,['hostId','label','status','paused']))];}
+  host(id){if(typeof id!=='string'||!id)throw Error('Choose an explicit computer from computers.');if(id!==this.localId())this.service.computerAccess?.assertOutgoing();const host=this.computers().find(h=>h.hostId===id);if(!host)throw Error('This computer is not paired.');if(host.paused)throw Error('This computer connection is paused.');const recovery=this.service.peers?.recovery?.get(id);if(recovery?.suspended||recovery?.blocked)throw Error('Review or resume this computer in Connections.');return host;}
   origin(actor,args={}){
     if(actor!=='operator'){if(args.originChatId&&args.originChatId!==actor)throw Error('Cannot impersonate another originating chat.');return actor;}
     if(args.originChatId)this.service.engine.getRun(args.originChatId);
@@ -114,10 +114,11 @@ export class ChatControl {
     connection={client};this.connections.set(hostId,connection);
     client.addEventListener('recovery-blocked',()=>{if(this.connections.get(hostId)===connection)peers.recoveryFor(hostId).blocked=true;});
     client.addEventListener('revoked',event=>{if(event.detail?.authenticated&&this.connections.get(hostId)===connection){peers.recoveryFor(hostId).blocked=true;try{peers.remove(hostId);}catch{this.disconnect(hostId);}}});
+    const assertCurrent=()=>{this.host(hostId);if(this.closed||this.connections.get(hostId)!==connection||peers.records.get(hostId)!==record||record.paused)throw Error('Computer authorization changed.');};
     connection.pending=(async()=>{try{
-      client.host.key=await importKey(record.key);await client.connect();
+      client.host.key=await importKey(record.key);assertCurrent();await client.connect();assertCurrent();
       const snapshot=await client.request('sync',{});connection.capabilities=snapshot.state?.capabilities||[];
-      if(this.closed||this.connections.get(hostId)!==connection||peers.records.get(hostId)!==record||record.paused)throw Error('Computer authorization changed.');
+      assertCurrent();
       return connection;
     }catch(error){this.disconnect(hostId);throw error;}finally{connection.pending=null;}})();
     return connection.pending;
@@ -125,7 +126,8 @@ export class ChatControl {
   async request(hostId,method,args={},options={}){
     this.assertCaller();const host=this.host(hostId);
     if(host.local)return this.service.remote.execute({device:{id:'local-chat-control'}},method,args);
-    const connection=await this.connection(hostId);this.assertCaller();
+    const connection=await this.connection(hostId);this.assertCaller();this.host(hostId);
+    if(this.connections.get(hostId)!==connection)throw Error('Computer connection changed.');
     const result=await connection.client.request(method,args,{timeoutMs:15000,...options});
     this.assertCaller();this.host(hostId);
     if(this.connections.get(hostId)!==connection)throw Error('Computer connection changed.');

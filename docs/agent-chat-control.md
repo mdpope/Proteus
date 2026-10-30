@@ -14,8 +14,9 @@ that destination's refreshed provider catalog. There is no fallback to another
 computer, provider or model. Rehearsal remains explicitly synthetic.
 
 An internal agent is bound to its originating chat and current provider turn.
-Pairing alone gives it no authority. `request-access` displays a mandatory human
-permission request even when the originating workspace uses automatic approvals.
+Pairing alone gives it no authority. `request-access` follows the originating chat's
+approval mode: Auto-approve tools authorizes only the requested scope; Ask and Saved rules
+require a human decision. Mandatory destination tool approvals remain separate.
 The grant selects a host, optional project or explicit chat IDs, and actions:
 
 - `read`: selected conversation metadata and bounded transcript excerpts.
@@ -65,6 +66,13 @@ Each host has a separate authenticated task-observer connection. This preserves
 the desktop connection's visible-chat subscription, including with older owners.
 Pause, explicit disconnect, authenticated revocation and removal close or deny
 these observers. New owners also support `chat.get` with `watch: 'none'`.
+
+Pairing is directional. A [managed target](remote.md#october-29--managed-computers-and-one-way-administration-next-release)
+can run a remotely initiated chat and return its questions/results without pairing to the
+origin. The origin reads feedback over its own authenticated connection and stores the callback
+chat identity locally. The target receives no controller inventory or general reverse authority.
+Managed mode denies every nonlocal `host` lookup before chat scope/approval resolution and
+exposes only the local computer in agent discovery, including when old outgoing grants exist.
 
 Questions, approval requests and terminal results are durably copied into the
 origin as visible **Task feedback** messages. Each delivery has a stable ID and

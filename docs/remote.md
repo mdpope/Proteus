@@ -2,6 +2,43 @@ Current cross-platform acceptance is recorded in [PR #20](https://github.com/mdp
 The dated/source-specific checkpoints below retain their original verification scope; later
 workflow results supersede their pending/failure status without changing the recorded artifacts.
 
+## October 29 — managed computers and one-way administration (next release)
+
+Engine Room → Computer Connections adds **Managed computer — incoming management only**.
+On a family Windows laptop or Mac, enable that role and save it, then enable incoming
+connections. Check **Allow the new device to manage this computer**, create a pairing code,
+and paste it on the controlling computer under Other desktop computers. Do not pair back
+to the controller. Provider sign-in is independent; sharing a provider account creates no
+Proteus computer connection or chat-control grant.
+
+The controller can use the target's existing workspace, project, tab/history and chat operations.
+The management invitation grants resource access to that new device only. Ordinary invitations
+remain unchanged, existing devices are not upgraded, and documents/live browser viewing retain
+their separate permissions. A paired device with resource access can also change the target's
+role using **Computer role…**. Older targets report the unsupported command until updated.
+
+The host-owned policy blocks outgoing pairing, connecting, reconnecting, requests, combined
+indexes and agent chat discovery/control. It closes existing outgoing sessions and task observers,
+invalidates in-flight results, and hides outgoing cached inventory. It retains saved credentials,
+drafts, incoming devices and grants; disabling the role restores the existing outgoing list.
+The revision-checked policy is stored atomically in `computer-access.json`. Invalid records
+are preserved and fail startup rather than silently enabling outgoing access. This is a Proteus
+connection policy configurable by the local owner, not an operating-system account restriction.
+It does not erase previously downloaded information or transfer browser/provider credentials.
+
+Remote task questions and results return through the controller's existing authenticated task
+observer. The controller retains the originating chat identity locally; the target cannot name
+an arbitrary controller chat, enumerate its workspaces, or relay commands to a third computer.
+`notify:true` opts into originating-chat continuation; otherwise feedback is recorded without
+starting a model turn. Existing scoped chat authorization, revocation and human tool approvals
+still apply. No reverse pairing, callback listener, or new provider session protocol is needed.
+
+Disposable encrypted transport tests cover management invitation scope, workspace/project/tab
+mutations, retained Forward history, task questions/answers/results, origin spoof rejection,
+reverse access denial, role changes and revocation. Native Electron acceptance covers the role
+form, preserved incoming grants/drafts, cross-window policy refresh, retained outgoing records
+and narrow layout. These are source/fixture checks; no family computer has been enrolled or updated.
+
 ## October 22 — Connections spacing and wrapping
 
 Connections retains its existing sections and actions with consistent card widths/gaps, bounded

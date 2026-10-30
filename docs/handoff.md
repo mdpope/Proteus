@@ -1,3 +1,23 @@
+## October 29 — managed family computers, next-release follow-up
+
+Computer Connections adds a managed role that denies outgoing desktop connections and nonlocal
+agent chat access while preserving incoming management. Explicit management invitations grant
+resource access only to the newly paired device. Controllers can edit destination roles using
+revision-checked durable commands. Ordinary pairing and existing document/live-browser grants
+remain unchanged. Shared provider sign-in grants no Proteus computer authority.
+
+Reuse controller-owned task observers for origin-only questions/results; no reverse pairing or
+child-selected callback destination is introduced. Policy changes close outgoing sessions and
+observers, invalidate pending connection/results even after a quick off/on toggle, and preserve
+saved credentials/drafts. Validate policy before starting providers/workers; corrupt records fail
+closed without replacement. Passive policy refresh preserves Connections form drafts and focus.
+
+Full Node validation: 1,307 pass / four skips. Static checks and actual disposable Electron
+role/invitation UI checks pass, alongside encrypted one-way workspace/project/tab/history and
+chat question/result checks. These fixtures do not establish installation on a new family Mac
+or Windows laptop. No live policy, pairing, build or deployment changed. Held for next release.
+See [remote setup and boundaries](remote.md#october-29--managed-computers-and-one-way-administration-next-release).
+
 ## October 29 — shared project windows and recovery, next-release follow-up
 
 The operator reports different Ember tab lists in two HC windows and requests one owner/container

@@ -1,3 +1,14 @@
+## October 29 — one-way managed computers, next-release follow-up
+
+Implemented a host-owned managed-computer role, directional setup guidance, optional resource
+management grant on new invitations, and controller-side role editing. Managed mode closes and
+denies outgoing connections/agent access without removing incoming controllers or saved records.
+Existing task observers return questions/results only to their recorded origin; no reverse
+pairing or arbitrary callback authority is added. Provider sign-in remains independent.
+Encrypted fixture and actual disposable Electron checks are recorded in [remote clients](remote.md).
+Full Node validation passes 1,307 cases with four skips; static checks and disposable native UI
+acceptance pass. No live pairing, family enrollment, build or deployment.
+
 ## October 29 — shared project windows and explicit retained-session recovery
 
 Authorized source follow-up: one owner/container tab set across windows and paired clients, with

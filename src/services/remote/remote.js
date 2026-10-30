@@ -37,7 +37,7 @@ export const runSummary = r => ({lastActivityAt:chatActivityAt(r),...pick(r,['id
 const entryKeys = ['id', 'name', 'description', 'kind', 'path', 'sources', 'roots', 'mode', 'scope', 'warnings', 'unsupportedAgentFields', 'error', 'missing', 'characters', 'transport', 'integrationStatus'];
 const remoteEntry = entry => ({ ...pick(entry, entryKeys), ...(entry.agent ? { userInvocable: entry.agent.userInvocable } : {}) });
 const remoteProjects = service => { const value=service.workspaceProjects.get(service.engine);return {...value,sourceEntries:value.sourceEntries.map(remoteEntry)}; };
-const mutationMethods = new Set(['chat.retry-without-agents','projects.update','sources.update','browser.live.instruct','browser.history.record','browser.history.delete','browser.history.settings','tabs.mutate','tabs.manage','workspace.delete','chat.start', 'chat.answer-question', 'chat.reply', 'chat.resume', 'chat.recover', 'chat.cancel', 'chat.send', 'chat.steer-queued','chat.edit-queued','chat.remove-queued', 'chat.review', 'chat.archive', 'chat.move', 'chat.delete', 'chat.rename', 'chat.promote', 'chat.documents.request', 'chat.attachments.begin', 'chat.attachments.chunk', 'chat.attachments.finish', 'chat.attachments.authorize', 'schedule.run', 'schedule.save', 'context.update', 'context.refresh', 'context.mode', 'context.favorite', 'context.addFolders', 'chat.context', 'chat.permissions', 'mcp.login','integrations.check','integrations.recover', 'notifications.read', 'resources.action', 'connection.revoke']);
+const mutationMethods = new Set(['computer.access.update','chat.retry-without-agents','projects.update','sources.update','browser.live.instruct','browser.history.record','browser.history.delete','browser.history.settings','tabs.mutate','tabs.manage','workspace.delete','chat.start', 'chat.answer-question', 'chat.reply', 'chat.resume', 'chat.recover', 'chat.cancel', 'chat.send', 'chat.steer-queued','chat.edit-queued','chat.remove-queued', 'chat.review', 'chat.archive', 'chat.move', 'chat.delete', 'chat.rename', 'chat.promote', 'chat.documents.request', 'chat.attachments.begin', 'chat.attachments.chunk', 'chat.attachments.finish', 'chat.attachments.authorize', 'schedule.run', 'schedule.save', 'context.update', 'context.refresh', 'context.mode', 'context.favorite', 'context.addFolders', 'chat.context', 'chat.permissions', 'mcp.login','integrations.check','integrations.recover', 'notifications.read', 'resources.action', 'connection.revoke']);
 const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
 export const ownerChatControls = (run,engine) => ({steering:typeof engine.providers[run.schedule.provider]?.steer==='function',recovery:!!engine.recovery,...(engine.recovery?{scheduledRecovery:true,activeTimeContinuationProviders:activeTimeProviders}:{}),...(engine.allowance?{allowanceContinuation:true}:{}),steeringMediaTypes:engine.providers[run.schedule.provider]?.acceptedSteeringMediaTypes||[]});
 export function remoteRun(run, offset = 0, permissions, beforeEvent, chatControls) {
@@ -75,7 +75,7 @@ export function remoteState(service) {
     runningChatCount: countRunningChats(visibleRuns),
     attentionCount: visibleRuns.filter(run=>run.status==='awaiting_input'||(['failed','interrupted'].includes(run.status)&&!run.failureReviewedAt)).length,
     context: { ...pick(context, ['revision', 'refreshedAt', 'rootStatus', 'defaultWorkspaceId', 'workspaces', 'universalFolders', 'libraryFolders', 'documents','modes','favorites', 'errors']), entries: context.entries.map(remoteEntry) },
-    defaults: pick(defaults, ['provider', 'model', 'reasoningMode', 'reasoningEffort', 'contextTier', 'serviceTier', 'timezone', 'internetSearches']), providerStatus: service.catalog?.value || null, providerStatuses: Object.fromEntries(Object.entries(service.catalogs || {}).map(([id, catalog]) => [id, catalog.value])),questionAttachmentMediaTypes:Object.fromEntries(['copilot','codex','claude'].map(id=>[id,questionAttachmentMediaTypes.filter(type=>service.engine.providers[id]?.acceptedMediaTypes?.includes(type))])),attachmentMediaTypes:Object.fromEntries(['copilot','codex','claude'].map(id=>[id,service.engine.providers[id]?.acceptedMediaTypes||[]])),mcpStatusProviders:['copilot','codex','claude'].filter(id=>typeof service.engine.providers[id]?.mcpStatus==='function'),mcpLoginProviders:['copilot','codex','claude'].filter(id=>typeof service.engine.providers[id]?.mcpLogin==='function'),capabilities:[...(service.projectFollow?['tabs.follow.v1']:[]),'chat.subagents.v1','chat.agent-control.v1','chat.update-coordinator.v1','chat.pages.v1','host.platform.v1',...(service.workspaceProjects?['projects.v1','projects.move.v1','source-library.v1']:[]),'chat.paths.v1','chat.export.v1','chat.previews.v1','content-tabs.v1','chat.index.v1','chat.queue-edit.v1','integrations.health.v1','chat.review.v1','chat.lifecycle.v1','chat.rename.v1','chat.retry-without-agents.v1','chat.attachments.view.v1','chat.internet.v1','workspaces.v1',...(service.engine.permissions?.preserveInheritedDefaults?['chat.permissions.shared.v1']:[]),'chat.permissions.folders.v1','chat.permissions.chat.v1','chat.permissions.pending.v1','chat.documents.v1','chat.attachments.v1','chat.question-attachments.v1','notifications.v1','authenticated-revocation.v1','connection-self-revoke.v1',...(service.browserHistory?['browser.history.v1','browser.navigation.v1']:[]),...(service.liveBrowser?['browser.live.v1']:[]),...(service.resources?['resources.v1']:[])],protocol: 1 };
+    defaults: pick(defaults, ['provider', 'model', 'reasoningMode', 'reasoningEffort', 'contextTier', 'serviceTier', 'timezone', 'internetSearches']), providerStatus: service.catalog?.value || null, providerStatuses: Object.fromEntries(Object.entries(service.catalogs || {}).map(([id, catalog]) => [id, catalog.value])),questionAttachmentMediaTypes:Object.fromEntries(['copilot','codex','claude'].map(id=>[id,questionAttachmentMediaTypes.filter(type=>service.engine.providers[id]?.acceptedMediaTypes?.includes(type))])),attachmentMediaTypes:Object.fromEntries(['copilot','codex','claude'].map(id=>[id,service.engine.providers[id]?.acceptedMediaTypes||[]])),mcpStatusProviders:['copilot','codex','claude'].filter(id=>typeof service.engine.providers[id]?.mcpStatus==='function'),mcpLoginProviders:['copilot','codex','claude'].filter(id=>typeof service.engine.providers[id]?.mcpLogin==='function'),capabilities:[...(service.computerAccess?['computer.access.v1']:[]),...(service.projectFollow?['tabs.follow.v1']:[]),'chat.subagents.v1','chat.agent-control.v1','chat.update-coordinator.v1','chat.pages.v1','host.platform.v1',...(service.workspaceProjects?['projects.v1','projects.move.v1','source-library.v1']:[]),'chat.paths.v1','chat.export.v1','chat.previews.v1','content-tabs.v1','chat.index.v1','chat.queue-edit.v1','integrations.health.v1','chat.review.v1','chat.lifecycle.v1','chat.rename.v1','chat.retry-without-agents.v1','chat.attachments.view.v1','chat.internet.v1','workspaces.v1',...(service.engine.permissions?.preserveInheritedDefaults?['chat.permissions.shared.v1']:[]),'chat.permissions.folders.v1','chat.permissions.chat.v1','chat.permissions.pending.v1','chat.documents.v1','chat.attachments.v1','chat.question-attachments.v1','notifications.v1','authenticated-revocation.v1','connection-self-revoke.v1',...(service.browserHistory?['browser.history.v1','browser.navigation.v1']:[]),...(service.liveBrowser?['browser.live.v1']:[]),...(service.resources?['resources.v1']:[])],protocol: 1 };
   });
 }
 function validateRelayURL(value) {
@@ -113,7 +113,7 @@ export class RemoteHost {
   addresses() {
     return Object.values(os.networkInterfaces()).flat().filter(i => i.family === 'IPv4' && !i.internal && /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(i.address)).map(i => `ws://${i.address}:${this.config.port}`);
   }
-  info() { return { enabled: this.config.enabled, mode: this.config.mode, status: this.status, error: this.error || null, hostId: this.config.hostId, label: this.config.label || os.hostname(), ...hostPlatformMetadata(),
+  info() { return { enabled: this.config.enabled, mode: this.config.mode, status: this.status, error: this.error || null, hostId: this.config.hostId, label: this.config.label || os.hostname(), ...hostPlatformMetadata(),...(this.service.computerAccess?{computerAccess:this.service.computerAccess.get()}:{}),
     relayURL: this.config.relayURL || '', publicURL: this.config.publicURL || '', addresses: this.addresses(), port: this.config.port,
     devices: this.config.devices.map(d => ({ id: d.id, name: d.name, pairedAt: d.pairedAt, resourceAccess: d.resourceAccess === true, documentAccess:d.documentAccess===true,browserAccess:d.browserAccess===true, online: [...this.peers.values()].some(p => p.device?.id === d.id) })),documentRequests:this.documents.list() }; }
   deviceStatus(id){const checkedAt=new Date().toISOString(),device=this.info().devices.find(device=>device.id===id);if(!device)throw new Error('Unknown paired device.');return {device:{...device,checkedAt},checkedAt};}
@@ -168,11 +168,11 @@ export class RemoteHost {
     this.socket.send(payload);
   }
   send(peer, value) { const seq = ++peer.outgoing; this.raw(peer, { type: 'data', seq, box: seal(peer.device.key, value, `${peer.prefix}:host:${seq}`) }); }
-  async pairing(publicURL) {
+  async pairing(publicURL,{management=false}={}) {
     if (this.status !== 'online') throw new Error('Enable remote access and wait for the relay to connect.');
     const relay = validateRelayURL(publicURL || (this.config.mode === 'external' ? this.config.publicURL : this.addresses()[0] || `ws://127.0.0.1:${this.config.port}`));
     const expiresAt = new Date(Date.now() + 5 * 60_000).toISOString();
-    this.invite = { key: secret(), expiresAt };
+    this.invite = { key: secret(), expiresAt,resourceAccess:management===true };
     const capsule = { version: 1, relay, label: this.config.label || os.hostname(), hostId: this.config.hostId, key: this.invite.key, expiresAt };
     const code = `proteus://pair?data=${Buffer.from(JSON.stringify(capsule)).toString('base64url')}`;
     return { code, browserURL: `https://proteus.example/remote#pair=${Buffer.from(JSON.stringify(capsule)).toString('base64url')}`, expiresAt, qr: await QRCode.toDataURL(code, { margin: 2, width: 360, errorCorrectionLevel: 'M' }) };
@@ -226,7 +226,7 @@ export class RemoteHost {
         if (!this.invite || Date.parse(this.invite.expiresAt) < Date.now()) throw new Error('Pairing expired.');
         const invite = this.invite; const request = unseal(invite.key, packet.box, `${peer.challenge}:pair`);
         if (typeof request.name !== 'string' || !request.name.trim() || request.name.length > 80 || this.config.devices.length >= 20) throw new Error('Invalid device.');
-        const device = { id: randomUUID(), key: secret(), name: request.name.trim(), pairedAt: new Date().toISOString(), resourceAccess: false,documentAccess:false };
+        const device = { id: randomUUID(), key: secret(), name: request.name.trim(), pairedAt: new Date().toISOString(), resourceAccess: invite.resourceAccess===true,documentAccess:false };
         this.invite = null; this.config.devices.push(device); this.save();this.service.activity?.add('device.added',{hostId:this.config.hostId,deviceId:device.id});
         this.raw(peer, { type: 'paired', box: seal(invite.key, device, `${peer.challenge}:paired`) }); return;
       }
@@ -246,6 +246,7 @@ export class RemoteHost {
   requireCommandGrants(peer, method, args) {
     if (!this.config.devices.some(device => device.id === peer.device?.id)) throw new Error('Unknown paired device.');
     if (method === 'resources.list' || method === 'resources.action') this.requireResourceAccess(peer);
+    if(method==='computer.access.update')this.requireResourceAccess(peer);
     if (method.startsWith('browser.live.')) this.requireBrowserAccess(peer);
     if (method === 'tabs.mutate' && (args.operations || []).some(op => op.tab?.type === 'document' || String(op.id || '').startsWith('document:') || Array.isArray(op.ids) && op.ids.some(id => String(id).startsWith('document:')))) this.requireDocumentAccess(peer);
   }
@@ -309,6 +310,8 @@ export class RemoteHost {
   }
   async execute(peer, method, args) {
     const engine = this.service.engine;
+    if(method==='computer.access.get')return this.service.computerAccess.get();
+    if(method==='computer.access.update'){this.requireResourceAccess(peer);return this.service.computerAccess.set(args);}
     if(method.startsWith('browser.history.')){
       const history=this.service.browserHistory;if(!history)throw new Error('Browser history is unavailable on this computer.');
       const action=method.slice('browser.history.'.length);

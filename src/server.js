@@ -48,6 +48,7 @@ import { readChatImage, readImage } from './services/chats/chat-images.js';
 import { chatDelta } from './services/chats/chat-deltas.js';
 import { RemoteHost, remoteRun, runSummary, chatActivityAt } from './services/remote/remote.js';
 import { ContentTabs } from './services/workspaces/content-tabs.js';
+import {ComputerAccess} from './services/remote/computer-access.js';
 import { ProjectFollow } from './services/workspaces/project-follow.js';
 import { fileStamp } from './shared/file-stamp.js';
 import { ChatAttachmentStore, chatAttachmentLimits } from './services/chats/chat-attachments.js';
@@ -91,6 +92,8 @@ async function body(req, maxBytes = 2_000_000) {
 
 export async function startServer({ home = defaultHome(), port = 4317, providers, browser, openExternal, timers = true, withSeed = true, background = false, lifeOptions = {}, desktopPreview = false, updateRecovery=false } = {}) {
   const previewCodexHome = desktopPreview ? desktopPreviewCodexHome(home, desktopPreview.codexHome) : null;
+  // Validate the access boundary before starting workers, providers or network owners.
+  const computerAccess=new ComputerAccess(home);
   const unlock = lock(home);
   if (withSeed && !desktopPreview) seed(home);
   const settings = new SettingsStore(home, root);
@@ -283,6 +286,10 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         eventClients.add(res); req.on('close', () => eventClients.delete(res)); return;
       }
       if (url.pathname === '/api/remote' && req.method === 'GET') return json(200, remote.info());
+      if(url.pathname==='/api/computer-access'){
+        if(req.method==='GET')return json(200,service.computerAccess.get());
+        if(req.method==='POST')return json(200,service.computerAccess.set(await body(req)));
+      }
       if (url.pathname === '/api/project-follow' && req.method === 'POST') return json(200, service.projectFollow.handle(await body(req)));
       // Local authenticated diagnostics expose counters only, never command payloads or keys.
       if (url.pathname === '/api/performance/diagnostics' && req.method === 'GET') return json(200, { ...performanceDiagnostics.snapshot(), scheduler: engine.schedulerWorker?.diagnostics() || {status:'not-started'}, stateProjection: stateProjection.diagnostics() });
@@ -290,7 +297,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
       if (url.pathname === '/api/remote' && req.method === 'POST') {
         const value = await body(req);
         if (value.action === 'configure') return json(200, await remote.configure(value));
-        if (value.action === 'pair') return json(200, await remote.pairing(value.publicURL));
+        if (value.action === 'pair') return json(200, await remote.pairing(value.publicURL,{management:value.management===true}));
         if (value.action === 'device-status') return json(200, remote.deviceStatus(value.id));
         if (value.action === 'revoke') return json(200, remote.revoke(value.id));
         if (value.action === 'resource-access') return json(200, remote.setResourceAccess(value.id, value.enabled));
@@ -394,7 +401,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
         const workspaceIds=new Set([...displaySchedules,...displayRuns.map(run=>run.schedule)].map(schedule=>schedule.context?.workspaceId));
         projection={runs:displayRuns,schedules:displaySchedules,defaults:[...workspaceIds].map(id=>[id,workspacePermissionDefaults(id,projectSnapshot.config)]),preserveInheritedDefaults:engine.permissions.preserveInheritedDefaults};
         return {
-        hostName:remote.info().label,hostId:remote.info().hostId,
+        hostName:remote.info().label,hostId:remote.info().hostId,computerAccess:service.computerAccess.get(),
         workspaceProjects,
         ...(desktopPreview?{desktopPreview:workspaceProjects}:{}),
         attention:service.desktopAttention(),updates:service.updates?.status()||null,
@@ -752,6 +759,7 @@ export async function startServer({ home = defaultHome(), port = 4317, providers
     if (engineCloseError) throw engineCloseError;
     if (activityCloseError) throw activityCloseError;
   } };
+  service.computerAccess=computerAccess;computerAccess.on('change',()=>{service.notify();service.remote?.changed();});
   service.browserHistory=new BrowserHistory(home,{hostId:()=>service.remote?.info().hostId});
   service.contentTabs=new ContentTabs(home,{history:service.browserHistory,profiles:()=>browserProfiles.list().items,onChange:result=>{const metadata={scope:result.scope,id:result.id,revision:result.revision};for(const client of eventClients)client.write('event: content-tabs\ndata: '+JSON.stringify(metadata)+'\n\n');notify();remote?.broadcast('tabs',metadata,result.scope==='chat'?result.id:undefined);}});
   service.projectFollow = new ProjectFollow({

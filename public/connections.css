@@ -8,6 +8,8 @@
 #remote-screen .note{max-width:78ch;overflow-wrap:anywhere;white-space:normal;margin:0 0 12px}
 #remote-screen>.heading p{margin-bottom:0;max-width:90ch}
 #remote-screen label{margin:16px 0;overflow-wrap:anywhere}
+#remote-screen label.checkbox-row{display:flex;align-items:center;gap:10px}
+#remote-screen label.checkbox-row input[type=checkbox]{display:inline-block;width:auto;margin:0;flex:0 0 auto}
 #remote-screen textarea{min-width:0;max-width:100%;overflow-wrap:anywhere}
 #remote-screen button{max-width:100%;white-space:normal;overflow-wrap:anywhere}
 #remote-screen .actions{gap:8px;justify-content:flex-start}

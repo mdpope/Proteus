@@ -25,7 +25,7 @@ async function fixture(t){
  const start=async home=>{ensurePrivateHome(home);const workspace=path.join(home,'workspace');fs.mkdirSync(workspace,{recursive:true});if(!fs.existsSync(path.join(home,'settings.json')))atomicJSON(path.join(home,'settings.json'),{schemaVersion:1,provider:'copilot',model:'fixture',timezone:'UTC',workspace:{cwd:workspace,additionalDirectories:[]},skillDirectories:[],mcpServers:{}});const app=await startServer({home,port:0,timers:false,withSeed:false,providers:{copilot:provider}});cleanup(async()=>{app.peers?.close();await app.close();});clearInterval(app.chatControl.timer);return app;};
  const origin=await start(path.join(root,'origin')),owner=await start(path.join(root,'owner'));
  await owner.remote.configure({enabled:true,mode:'external',label:'Synthetic task owner',relayURL:url,publicURL:url,relayToken:token});await until(()=>owner.remote.status==='online');
- origin.peers=new DesktopPeers(origin.home,{safeStorage:safeStorage(),localHostId:origin.remote.config.hostId,heartbeatMs:0});await origin.peers.pair((await owner.remote.pairing()).code);
+ origin.peers=new DesktopPeers(origin.home,{safeStorage:safeStorage(),localHostId:origin.remote.config.hostId,heartbeatMs:0,accessPolicy:origin.computerAccess});await origin.peers.pair((await owner.remote.pairing()).code);
  const hostId=owner.remote.config.hostId,control=origin.chatControl;
  const create=async(service,prompt)=>service.engine.createRun(await service.buildChatSchedule({provider:'copilot',model:'fixture',prompt}),'chat');
  const caller=await create(origin,'hold origin');await until(()=>caller.pending);
@@ -47,6 +47,57 @@ test('encrypted multi-chat dispatch, independent feedback, ordinary answers and 
  assert.ok(caller.events.some(e=>e.data?.agentFeedback?.taskId===a.taskId&&e.text.includes('A feedback')));
  const uiPeer=[...owner.remote.peers.values()].find(p=>p.runId===watched.id);assert.ok(uiPeer,'task observation preserved UI watch');
  const cancelled=await control.handle(command('cancel',{chatId:b.chatId}),caller.id);assert.equal(cancelled.state,'accepted');await until(()=>owner.engine.getRun(b.chatId).status==='cancelled');
+});
+
+test('managed target accepts one-way project/tab management and returns task questions/results only to the initiating chat',async t=>{
+ const f=await fixture(t),{origin,owner,control,caller,hostId,command}=f;f.grant();
+ owner.computerAccess.set({managed:true,expectedRevision:owner.computerAccess.get().revision});
+ owner.peers=new DesktopPeers(owner.home,{safeStorage:safeStorage(),localHostId:hostId,accessPolicy:owner.computerAccess,heartbeatMs:0});
+ assert.deepEqual(owner.peers.list(),[]);await assert.rejects(owner.peers.pair('not-a-code'),/managed-computer/);
+ await assert.rejects(owner.peers.connect(origin.remote.config.hostId),/managed-computer/);
+ await assert.rejects(owner.peers.request(randomUUID(),'sync'),/managed-computer/);
+ assert.equal(owner.chatControl.computers().length,1);
+ await origin.peers.connect(hostId);const device=owner.remote.config.devices[0];owner.remote.setResourceAccess(device.id,true);
+ const before=await origin.peers.request(hostId,'projects.get');
+ const context=await origin.peers.request(hostId,'context.get');
+ const workspace=await origin.peers.request(hostId,'context.update',{action:'workspace',create:true,name:'Managed workspace',cwd:path.join(owner.home,'workspace'),expectedRevision:context.revision});
+ assert.ok(workspace.workspaces.some(row=>row.name==='Managed workspace'));
+ const currentProjects=await origin.peers.request(hostId,'projects.get');
+ const changed=await origin.peers.request(hostId,'projects.update',{action:'create',workspaceId:before.projects[0].workspaceId,name:'Managed target project',expectedRevision:currentProjects.revision});
+ const project=changed.projects.find(row=>row.name==='Managed target project');assert.ok(project);
+ const scope={scope:'project',id:project.id},tabs=await origin.peers.request(hostId,'tabs.get',scope);
+ const opened=await origin.peers.request(hostId,'tabs.mutate',{...scope,expectedRevision:tabs.revision,operations:[{action:'open',tab:{id:'managed-browser',type:'browser',title:'Managed tab',url:'https://example.test/one',history:{entries:[{url:'https://example.test/one',title:'One'},{url:'https://example.test/two',title:'Two'}],index:0}}}]});
+ assert.equal(opened.tabs[0].history.entries.length,2);assert.equal(opened.tabs[0].history.index,0);
+ const task=await control.handle(command('create',{provider:'copilot',model:'fixture',prompt:'hold managed task',projectId:project.id}),caller.id);
+ const child=owner.engine.getRun(task.chatId);await until(()=>child.pending);
+ const unrelated=await f.create(origin,'hold unrelated origin');await until(()=>unrelated.pending);
+ await control.refresh();assert.ok(caller.events.some(event=>event.data?.agentFeedback?.taskId===task.taskId&&event.text.includes('Synthetic checkpoint')));
+ assert.ok(!unrelated.events.some(event=>event.data?.agentFeedback));
+ await assert.rejects(control.handle(command('create',{originChatId:unrelated.id,provider:'copilot',model:'fixture',prompt:'spoof origin'}),caller.id),/impersonate/);
+ await assert.rejects(owner.chatControl.handle({action:'read',hostId:origin.remote.config.hostId,chatId:caller.id},child.id),/managed-computer/);
+ await assert.rejects(owner.chatControl.handle({action:'request-access',scope:{hostId:origin.remote.config.hostId,actions:['read','dispatch']}},child.id),/managed-computer/);
+ await control.handle(command('reply',{chatId:child.id,requestId:child.pending.id,answer:'managed result'}),caller.id);await until(()=>child.status==='completed');await control.refresh();
+ assert.ok(caller.events.some(event=>event.data?.agentFeedback?.taskId===task.taskId&&event.text.includes('managed result')));
+ assert.ok(!unrelated.events.some(event=>event.data?.agentFeedback));
+ assert.equal(owner.peers.records.size,0);assert.equal(fs.existsSync(owner.peers.file),false,'no reverse credential was created');assert.equal(origin.remote.config.devices.length,0);
+ const policy=await origin.peers.request(hostId,'computer.access.get');assert.equal(policy.managed,true);
+ owner.remote.setResourceAccess(device.id,false);
+ await assert.rejects(origin.peers.request(hostId,'computer.access.update',{managed:false,expectedRevision:policy.revision}),/Resource access/);
+ assert.equal(owner.computerAccess.get().managed,true);
+ owner.remote.setResourceAccess(device.id,true);
+ const allowed=await origin.peers.request(hostId,'computer.access.update',{managed:false,expectedRevision:policy.revision});assert.equal(allowed.managed,false);
+ await origin.peers.request(hostId,'computer.access.update',{managed:true,expectedRevision:allowed.revision});
+ assert.equal((await origin.peers.request(hostId,'projects.get')).projects.some(row=>row.id===project.id),true,'changing the target role preserves the incoming controller connection');
+});
+
+test('managed policy change during observer connection prevents even a sync after the connection completes',async t=>{
+ const {origin,hostId,control}=await fixture(t);let connected=false,release,commands=0;
+ const ready=new Promise(resolve=>release=resolve);
+ origin.peers.clientFactory=host=>Object.assign(new EventTarget(),{host,connect:async()=>{connected=true;await ready;},close(){},request:async()=>{commands++;return {state:{capabilities:[]}};}});
+ const pending=control.request(hostId,'projects.get');await until(()=>connected);
+ origin.computerAccess.set({managed:true,expectedRevision:origin.computerAccess.get().revision});
+ origin.computerAccess.set({managed:false,expectedRevision:origin.computerAccess.get().revision});release();
+ await assert.rejects(pending,/authorization changed/);assert.equal(commands,0);assert.equal(control.connections.size,0);
 });
 
 test('authorization is required, direct grants remain operator-only, denied/revoked/context-changed access is rejected',async t=>{

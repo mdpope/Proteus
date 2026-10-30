@@ -12,7 +12,7 @@ export function chatControlTools(control, runId) {
       provider:{type:'string'}, model:{type:'string'}, reasoningEffort:{type:'string'}, contextTier:{type:'string'}, serviceTier:{type:'string'},
       name:{type:'string'}, prompt:{type:'string'}, answer:{type:'string'}, requestId:{type:'string'},
       mode:{type:'string',enum:['queue','steer']}, operationId:{type:'string'}, taskId:{type:'string'},
-      notify:{type:'boolean',description:'Explicitly continue the originating conversation with permitted task feedback. Defaults false.'},
+      notify:{type:'boolean',description:'Explicitly continue the originating conversation with permitted task feedback. Defaults false. Feedback uses the initiating connection and requires no reverse pairing; managed computers cannot access other computers.'},
       expectedRevision:{type:'string'},grantId:{type:'string'},
       originChatId:{type:'string',description:'Trusted external callers only: originating local chat for feedback. Internal identity is supplied by Proteus.'},
       selectedIds:{type:'array',items:{type:'string'}}, includeDefaults:{type:'boolean'}, agentId:{type:'string'},

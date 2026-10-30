@@ -105,7 +105,7 @@ else {
     windows.handle('proteus:artifact-preview', (event, value) => { trusted(event); if(event.senderFrame.parent!==null||event.senderFrame.routingId!==window.webContents.mainFrame.routingId||event.senderFrame.processId!==window.webContents.mainFrame.processId||closing)throw new Error('Document preview is unavailable.');if(value?.action==='hide')return preview.hide();if(value?.action==='show')return preview.show(value);if(value?.action==='follow-scroll')return preview.followScroll(value);throw new Error('Unknown document preview action.'); });
     terminals.on('event', value => windows.broadcast('proteus:terminal-event',value));
     const { DesktopPeers } = await import('../src/services/remote/desktop-peers.js');
-    peers = new DesktopPeers(service.home, { safeStorage, localHostId: service.remote.info().hostId,browserHistory:service.browserHistory, diagnostics: service.performanceDiagnostics });
+    peers = new DesktopPeers(service.home, { safeStorage, localHostId: service.remote.info().hostId,browserHistory:service.browserHistory, diagnostics: service.performanceDiagnostics,accessPolicy:service.computerAccess });
     windows.handle('proteus:desktop-peers', (event, value) => { trusted(event); if(event.senderFrame.parent!==null||event.senderFrame.routingId!==window.webContents.mainFrame.routingId||event.senderFrame.processId!==window.webContents.mainFrame.processId||closing)throw new Error('Desktop peer access is unavailable.');return peers.handle(value); });
     peers.on('event', value => windows.broadcast('proteus:desktop-peer-event',value));
     service.peers=peers;

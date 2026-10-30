@@ -1,3 +1,16 @@
+## October 29 — directional management uses existing task feedback
+
+Pairing already creates authority in only one direction. Reuse that protocol and the
+controller-owned, origin-bound task observer rather than giving a child chat a reverse pairing
+or callback-routing capability. A separate host-owned managed role blocks outgoing desktop
+connections and nonlocal chat control before grants or networking, invalidates in-flight results,
+and retains encrypted connection records for reversible policy changes. Incoming management
+remains on existing authenticated commands and resource grants; an explicit management invitation
+can grant that permission only to the newly paired device. It never upgrades existing devices or
+document/live-browser grants. Use revision checks and durable mutation receipts for remote role
+changes. Provider accounts do not confer computer access. Local owner configuration remains
+separate from OS account isolation. Held for the next release; no live configuration change.
+
 ## October 29 — project membership subscriptions differ from presentation following
 
 Canonical content belongs to an explicit host/container. Every open root subscribes to membership
