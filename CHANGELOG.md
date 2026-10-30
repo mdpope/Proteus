@@ -5,6 +5,22 @@
 - Adopt owner-committed browser moves without replaying visits or incidental native order. Preserve typed navigation conflicts across local HTTP so an acknowledged title update cannot stall synchronization.
 - Source validation: 1,316 tests pass, four skip; static checks and disposable native multiwindow, restore/restart, legacy-chat and 451-entry history acceptance pass. No deployment or HC data changes.
 
+## Planned October 30 — requests only
+
+Collection started; these items are not implemented. See the
+[release plan](docs/2026-10-30-release-plan.md).
+
+- Integrate Copilot Fusion after verifying supported provider capabilities.
+- Catalog the green default as Emerald Canopy and add a white Daylight theme in Colors. Preserve
+  saved theme choices and custom colors through application updates.
+- Reduce notification interruptions, correct false/stale “Needs you” notices, deduplicate alerts,
+  and fix reported five-second expiry or queue-backlog behavior.
+- Add **Clear all** to acknowledge the entire Needs attention list in one action, preserving
+  actual pending questions/approvals and allowing genuinely new attention events to appear.
+- Fix the reported browser regression where videos autoplay despite enabled video-autoplay blocking.
+- Apply Auto-approve tools and scope-aware remembered approvals to Proteus actions, including
+  `proteus_chats`, without repeated prompts for matching approved scopes.
+
 ## 0.2.37 — Windows candidate
 
 Windows x64 source and exact-package acceptance passed; tested files were privately delivered

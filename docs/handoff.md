@@ -15,6 +15,20 @@ The raw HC saved counts were not used as proof of the live root cause. HC remain
 0.2.37; no deployment or live user-data reconciliation occurred. Build/package acceptance and an
 authorized update are required before claiming this correction installed anywhere.
 
+## October 30 release collection started October 29
+
+Current work is **request collection only; do not implement yet**. The
+[October 30 release plan](2026-10-30-release-plan.md) records Copilot Fusion, the existing green
+palette as Emerald Canopy, a white Daylight preset in Colors, preservation of saved themes across
+updates, and quieter/accurate/deduplicated notifications with five-second expiry. R7 adds
+**Clear all** for Needs attention without opening every chat; acknowledgement persists, new
+events can reappear, and pending questions/approvals remain intact. The plan includes 35 current
+palette values, source investigation leads and future acceptance criteria. R8 records video
+autoplay despite the enabled blocking preference. R9 extends Auto-approve tools and remembered
+approvals to Proteus actions such as `proteus_chats`, including owner access gates and persistent
+scoped rules. Notification/autoplay causes and live Fusion support remain unverified. No runtime, live settings, version, build or
+rollout changed. Earlier implementation and release authorizations below retain their own scope.
+
 ## October 29 — Windows 0.2.37 installer built and privately delivered
 
 The designated Windows builder accepted exact source `73227b29ddccbcdf4674956bf5ddb9508219f659`,

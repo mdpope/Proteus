@@ -12,6 +12,22 @@ multiwindow/restart/restored-chat/link/recovery checks pass. Long-history accept
 451 entries and the selected/Forward branch. Deployment is pending; this work did not update HC
 or change its saved content. See [window management](window-management.md) and [handoff](handoff.md).
 
+## October 30 release — collecting requests only
+
+The operator starts the October 30 plan on October 29 and explicitly holds implementation.
+See the [release request register](2026-10-30-release-plan.md) for R1 Copilot Fusion, R2 Emerald
+Canopy/Daylight themes with settings preserved across versions, and R3–R6 quieter notifications,
+truthful attention state, deduplication and reliable five-second expiry. R7 adds one-button
+**Clear all** for the full Needs attention list, with durable acknowledgement and new-event
+visibility while actual pending work stays intact. The current default's 35 palette tokens are
+cataloged there. R8 records the October 30 report that enabled video-autoplay blocking is not
+respected in the browser; reproduction and cause remain unconfirmed. R9 requests Auto-approve
+tools and scope-aware remembered approvals for Proteus actions such as `proteus_chats`. Fusion's
+experimental bundled-runtime events are an integration lead; supported activation and account
+availability still need verification.
+No runtime, settings, package, build, installation or publication change is authorized by this
+collection. Earlier release/rollout entries retain their separate status.
+
 ## October 29 — Windows 0.2.37 build and private delivery accepted
 
 Exact source `73227b2` includes managed incoming-only computer support and the Windows fixture
