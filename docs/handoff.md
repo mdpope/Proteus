@@ -1,3 +1,15 @@
+## October 29 — Windows 0.2.37 build authorized for manual installation
+
+The operator authorizes the designated Windows desktop builder to prepare the exact source
+including managed-computer change `c344fb9` as a distinct 0.2.37 installer. Use a fresh unassigned
+purpose:update coordinator with captured defaults. Source/static, official extraction and exact
+extracted-package acceptance/signature/hash verification remain required. Return immutable
+installer, archive and signed manifest identities plus an accessible private artifact location.
+This authorization does not install on the family laptop or builder, change pairings, reverse-pair
+the target to its controller, activate the public feed, or deploy any other platform. The operator
+owns laptop installation through their existing remote-support workflow. Build acceptance and
+live installation remain separate. Progress/evidence stays in private release receipts.
+
 ## October 29 — managed family computers, next-release follow-up
 
 Computer Connections adds a managed role that denies outgoing desktop connections and nonlocal
