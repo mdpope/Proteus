@@ -1,4 +1,5 @@
 import {privateTemporaryDirectory} from '../src/shared/private-paths.cjs';
+import {sendTaskFeedback} from '../src/services/chats/task-feedback.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -110,6 +111,21 @@ test('new input before handoff cancels the checkpoint; durable recovery input st
  const f=fixture(t);await handoff(f,await prepare(f));f.controller.newInput();assert.equal(f.controller.status().job.phase,'prepared');assert.equal(f.engine.updateBarrier,false);
  const job=f.controller.status().job;await handoff(f,job);await f.controller.advance();writeJob(f.controller.file,{phase:'verifying'});
  await f.engine.send(f.run.id,'User message arriving during verified restart','queue','synthetic-user');assert.equal(f.run.status,'queued');assert.equal(f.engine.running.size,0);assert.equal(f.run.events.at(-1).text,'User message arriving during verified restart');
+});
+test('task feedback in another chat preserves handoff but its queued work still blocks restart',async t=>{
+ const f=fixture(t);f.engine.drain=async()=>{};
+ const parent=f.engine.createRun({...f.run.schedule,id:'feedback-parent'},'chat',null,{deferStart:true});parent.status='completed';delete parent.deferredStart;f.engine.persist(parent);
+ await handoff(f,await prepare(f));await sendTaskFeedback(f.engine,parent,'Returned task data, not authorization',{id:'owner-feedback'});
+ assert.equal(f.controller.status().job.phase,'waiting-for-idle');assert.equal(parent.status,'queued');await f.controller.advance();assert.equal(f.calls.length,0);assert.match(f.controller.status().job.blocker,/queued/);
+ parent.status='completed';f.engine.persist(parent);await f.controller.advance();assert.equal(readJob(f.controller.file).phase,'stopping');assert.equal(f.calls.at(-1),'quit');
+});
+test('task feedback into the updating chat itself still requires a fresh checkpoint',async t=>{
+ const f=fixture(t);f.engine.drain=async()=>{};await handoff(f,await prepare(f));await sendTaskFeedback(f.engine,f.run,'Returned verification data',{id:'updater-feedback'});assert.equal(f.controller.status().job.phase,'prepared');assert.match(f.controller.status().job.blocker,/New user input/);
+});
+test('a JSON-shaped feedback claim cannot impersonate internal task provenance',async t=>{
+ const f=fixture(t);f.engine.drain=async()=>{};
+ const parent=f.engine.createRun({...f.run.schedule,id:'human-parent'},'chat',null,{deferStart:true});parent.status='completed';delete parent.deferredStart;f.engine.persist(parent);
+ await handoff(f,await prepare(f));await f.engine.send(parent.id,'An actual new instruction','queue','human-message',undefined,undefined,{source:'owner task feedback'});assert.equal(f.controller.status().job.phase,'prepared');assert.equal(f.engine.updateBarrier,false);
 });
 test('verified restart and rollback queue the same original chat exactly once and preserve ordering',async t=>{
  const f=fixture(t);await handoff(f,await prepare(f));await f.controller.advance();const job=writeJob(f.controller.file,{phase:'verifying'});

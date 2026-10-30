@@ -1,6 +1,7 @@
 import {verifyRelease,extractRelease} from './desktop-releases.js';
 import {DesktopReleaseFeed} from './desktop-release-feed.js';
 import {initializeFreshRecovery} from './recovery-inventory.js';
+import {taskFeedbackDelivery} from '../chats/task-feedback-kind.js';
 import {ensurePrivateHome} from '../../shared/private-paths.cjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -28,7 +29,7 @@ export class Updates {
    require('../../../desktop/updates/windows-installation.cjs').verifyRegistration(this.installation,this.inspect(this.installation).version);
    initializeFreshRecovery(this.policyFile,{home:this.ownerHome,installation:this.installation});
   }catch(error){this.error=error.message;}
-  service.engine.updateGuard=()=>this.newInput();
+  service.engine.updateGuard=input=>this.newInput(input);
   const file=process.env.PROTEUS_UPDATE_JOB;
   if(file&&this.owns(file)){const job=readJob(file);if(!terminal.has(job.phase)){this.file=file;service.engine.updateBarrier=true;}}
   if(!this.file)try{const ref=JSON.parse(fs.readFileSync(this.pointer,'utf8'));if(this.owns(ref.file))this.file=ref.file;}catch(error){if(error.code!=='ENOENT')this.error='The saved update reference needs inspection; it was preserved.';}
@@ -177,9 +178,13 @@ export class Updates {
    atomicJSON(file,job);atomicJSON(this.pointer,{schemaVersion:1,file});this.file=file;persisted=true;this.error=null;this.service.notify?.();return this.status();
   }finally{if(preparing&&!persisted)await fs.promises.rm(preparing,{recursive:true,force:true});this.busy=false;}
  }
- newInput(){
+ newInput({runId,source}={}){
   if(this.delivering)return;
   const job=this.job();if(!job||terminal.has(job.phase)||job.phase==='prepared')return;
+  // Status from another task is data rather than a new human instruction.
+  // Its work still blocks idle through waiting(); input into the updating chat
+  // itself continues to require a fresh checkpoint, regardless of provenance.
+  if(source===taskFeedbackDelivery&&runId&&runId!==job.runId)return;
   if(job.phase==='waiting-for-idle'){writeJob(this.file,{phase:'prepared',blocker:'New user input arrived. Review the checkpoint and hand off again.'});this.service.engine.updateBarrier=false;return;}
   // During verified restart, Engine persists queued input behind the barrier.
   // Recovery appends its single continuation after those messages.

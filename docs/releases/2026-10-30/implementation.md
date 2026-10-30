@@ -37,7 +37,7 @@ These are source/disposable-profile checks. Neither installed Mac profile has be
 The two unassigned update coordinators captured destination defaults and await destination tool
 approvals during read-only preflight. Final suite totals and package/source pins follow acceptance.
 
-## Accepted Mac candidate
+## Initial accepted Mac candidate — superseded before installation
 
 - Frozen source: `a79f584002141dfc0df38bddee7a6fb0396858f8`, pushed for review in [draft PR 24](https://github.com/mdpope/Proteus/pull/24).
 - Build: `a79f58400214+src.7cfbbe645830`; source fingerprint `7cfbbe6458309762345edaa83aed1a5e28aaffb29ccea3c1d88face66364857f` (427 runtime files).
@@ -56,6 +56,15 @@ The Build Mac coordinator has the exact accepted local path and hash pins queued
 pending human tool approval. HC has the same identities queued and waits for private transfer or
 a matching signed publication after preflight; artifact delivery there is not claimed. Neither
 installation, migration, installed-profile preservation nor real Slack/APNs delivery is verified.
+
+Follow-up preflight completed. The old 0.2.36 job was cancelled by its original owner chat and
+confirmed cancelled, revision 16. The fresh coordinator successfully prepared and handed off
+the a79f584 candidate, including staged identity/renderer/API checks. Automatic task feedback
+to the separate command-center chat then tripped the old global new-input guard and reverted
+the handoff to prepared. No app replacement occurred. The narrow provenance correction preserves
+other-chat task-data handoffs while leaving active work, human input and updater-chat checkpoint
+review intact. Regression/source validation and a new signed 0.2.39 package are required before
+continuing; prior package pins above are historical acceptance, not the next installation target.
 
 Final Mac source acceptance: **1,340 tests pass, four platform skips, zero failures**.
 Static and whitespace checks pass. Disposable native checks pass for the combined theme/attention/

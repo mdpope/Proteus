@@ -34,6 +34,19 @@ Every release keeps these repository records:
 
 ## Build once for each native target
 
+Before preparing another version, reconcile a superseded nonterminal job. An agent-bound job
+can be cancelled by its original update chat, not a new coordinator. Have the authorized command
+center request limited cancellation there and verify the owner result; keep the new coordinator
+responsible for the new installation. Do not move ownership by editing a journal or reopen an
+older release's implementation. The desktop Updates screen is the operator's cancellation path.
+
+Returned task feedback to a different chat is data, not a new human update-cancellation request.
+It must retain the checkpoint while its queued/running work still blocks idle. Real user input,
+or any new input into the updating chat itself, requires a reviewed handoff. On a downlevel
+command center with the old all-input guard, keep final local handoff feedback non-notifying and
+end the originating turn normally; do not force idle or cancel unrelated work. Verify the owner
+and resumed coordinator after restart rather than treating a pre-restart task report as success.
+
 1. Freeze a full repository commit for the requested version and record it. Synchronize the
    designated native builder directly from the authorized repository using its own existing
    authentication. Fetch and check out that exact commit in an isolated checkout; preserve its

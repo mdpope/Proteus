@@ -1,5 +1,11 @@
 ## October 30 — shared view residency and durable reading anchors
 
+Update input guards distinguish owner-generated task feedback using an internal non-JSON symbol.
+Only feedback to another chat preserves a pending handoff; its actual queued/running work still
+blocks restart. Human input cannot claim that provenance through API arguments. New input into
+the updating chat always requires a refreshed checkpoint. This prevents command-center feedback
+from repeatedly cancelling the very installation it is observing, without weakening idle checks.
+
 Use one renderer content budget across local/paired chats, with a separate document budget and
 one idle timeout. Small navigation metadata remains resident; loaded transcripts and detached DOM
 share the same eviction identity. Preserve reading anchors outside heavy content and page the

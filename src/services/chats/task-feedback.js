@@ -1,3 +1,4 @@
+import {taskFeedbackDelivery} from './task-feedback-kind.js';
 const inFlight=new WeakMap();
 const acceptsFeedback=run=>['running','queued','awaiting_input','completed'].includes(run.status)&&!run.archivedAt;
 
@@ -14,12 +15,12 @@ export async function sendTaskFeedback(engine,parent,text,delivery){
     if(['sending','failed'].includes(prior?.state))throw Error('Task feedback delivery is unconfirmed. Inspect the originating session before retrying.');
     const steer=parent.status==='running'&&engine.running.has(parent.id)&&typeof engine.providers[parent.schedule.provider]?.steer==='function';
     let mode=steer?'steer':'queue';
-    try{await engine.send(parent.id,text,mode,delivery.id);}
+    try{await engine.send(parent.id,text,mode,delivery.id,undefined,undefined,taskFeedbackDelivery);}
     catch(error){
       if(mode!=='steer'||receipt()||!acceptsFeedback(parent))throw error;
       // A turn can end before send's synchronous preflight. Queue only if no
       // user delivery was recorded and the human has not stopped the parent.
-      mode='queue';await engine.send(parent.id,text,mode,delivery.id);
+      mode='queue';await engine.send(parent.id,text,mode,delivery.id,undefined,undefined,taskFeedbackDelivery);
     }
     const result=receipt();if(['sending','failed'].includes(result?.state))throw Error('Task feedback delivery is unconfirmed. Inspect the originating session before retrying.');
     delivery.mode=result?.state==='steered'?'steer':mode;

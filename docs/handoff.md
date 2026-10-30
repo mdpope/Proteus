@@ -1,5 +1,14 @@
 ## October 30 full release implementation and staged rollout authorized
 
+Follow-up: both read-only preflights completed. The superseded Build Mac 0.2.36 preparation
+was cancelled by its original owner chat and independently verified cancelled, revision 16.
+The new 0.2.39 coordinator prepared/handoff-tested a79f584, but returned task feedback to the
+command-center chat reset its waiting-for-idle state to prepared. That installed/source guard
+bug is being corrected before shipping. Keep the a79f584 candidate/job prepared and do not hand
+it off again; it will be superseded by a newly signed and accepted 0.2.39 package. HC still waits
+for the exact package transfer and must not rebuild it. Use the documented authenticated private
+draft-release asset route after independently verifying repository privacy, IDs and hashes.
+
 The operator releases R1–R13 for implementation, build and installation on Build Mac and
 Work Mac. Keep version 0.2.39. Build/deploy applicable iOS/web/Linux/Windows work after Work Mac
 is updated and verified. Prior collection/implementation holds below are historical.

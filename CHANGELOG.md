@@ -1,5 +1,7 @@
 ## 0.2.39 — October thirtieth release open
 
+- Preserve a pending update handoff when another chat receives owner-delivered task feedback.
+  Keep human-input cancellation, updating-chat checkpoint review and all active-work idle barriers.
 - Add configurable shared chat/document memory limits and idle eviction in Resources. Reload
   evicted transcripts to the saved message/offset; preserve drafts, approvals and terminal sessions.
 - Route actual permitted website page notifications through the common history/native mechanism,
