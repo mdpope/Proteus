@@ -36,6 +36,9 @@ Untrusted certificates offer **Accept certificate and continue** directly on the
 with no additional confirmation or menu. Acceptance follows Chromium’s transient profile/host/
 certificate scope and ends at app restart. Other profiles and changed certificates stay blocked.
 Error pages follow the saved app palette, including live Emerald Canopy/Daylight changes.
+Add **View certificate information** directly on the bad-certificate page, showing observed
+identity, issuer, validity and fingerprint without accepting it. Notification banners keep
+their original colors; the operator explicitly rejects extending app-theme colors to them.
 
 Existing October 29 implementation and rollout records retain their own status. Current October 30
 authorization supersedes the earlier collection-only hold for the requests in this register.

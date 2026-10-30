@@ -13,7 +13,8 @@
   "sourceStatus": "Mac package accepted; rollout pending; original intranet network failure remains unresolved",
   "review": "https://github.com/mdpope/Proteus/pull/24",
   "relatedBranches": [
-    "codex/oct30-update-command-center"
+    "codex/oct30-update-command-center",
+    "codex/oct30-certificate-followup"
   ],
   "scope": {
     "implementing": [

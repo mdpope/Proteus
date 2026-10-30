@@ -9,6 +9,7 @@ function fixture(){
 }
 test('acceptance requires the exact blocked document and token; changed certificate, host or profile stays blocked',async()=>{
  const f=fixture();assert.equal(f.fail(),false);const token=f.page('https://consolefixture:8006/');assert.ok(token);
+ assert.match(f.review.information(f.tab,'https://consolefixture:8006/').fingerprint,/^(?:[A-F0-9]{2}:){31}[A-F0-9]{2}$/);assert.equal(f.review.information(f.tab,'https://different/'),null);
  assert.equal(await f.review.accept(f.tab,token+'bad'),false);assert.equal(f.navigations.length,0);
  assert.equal(await f.review.accept(f.tab,token),true);assert.deepEqual(f.navigations,[['tab','https://consolefixture:8006/']]);
  assert.equal(f.fail(),true);assert.equal(f.fail('https://consolefixture:8007/'),true);assert.equal(f.fail('https://different:8006/'),false);assert.equal(f.fail(undefined,{data:rootCertificates[1]}),false);

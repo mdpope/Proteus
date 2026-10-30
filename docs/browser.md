@@ -7,6 +7,9 @@ from DNS and TLS failures. Mac bundles explain local-network use in their privac
 this does not grant permission or bypass a denial.
 
 Failed main-frame certificates offer **Accept certificate and continue** on the error page.
+An adjacent **View certificate information** disclosure shows subject, issuer, validity dates,
+alternative names, serial number and SHA-256 fingerprint from the failed connection. Viewing
+details does not accept the certificate. Notification banners retain their original colors.
 A direct trusted click is required; a page-script click cannot grant an exception. There is no
 extra menu or confirmation. The native owner validates the exact main frame, error document and
 certificate token before retrying. Chromium shares the exact hostname/certificate decision within

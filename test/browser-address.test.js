@@ -13,3 +13,7 @@ test('network errors preserve the port and use app colors without accepting CSS 
  const html=decodeURIComponent(browserErrorDocument('https://consolefixture:8006/','ERR_ADDRESS_UNREACHABLE',{palette:{background:'#ffffff',text:'#18251e',accent:'red;display:none'}}).split(',').slice(1).join(','));
  assert.match(html,/<strong>consolefixture:8006<\/strong>/);assert.match(html,/Network access unavailable/);assert.match(html,/Local Network/);assert.match(html,/color-scheme:light/);assert.match(html,/background:#ffffff/);assert.doesNotMatch(html,/display:none|prefers-color-scheme/);assert.doesNotMatch(html,/Accept certificate/);
 });
+test('bad-certificate details display only observed fields and escape certificate text',()=>{
+ const html=decodeURIComponent(browserErrorDocument('https://consolefixture:8006/','ERR_CERT_AUTHORITY_INVALID',{certificateInformation:{subject:'CN=<script>alert(1)</script>',issuer:'Synthetic issuer',fingerprint:'AA:BB',secret:'not a certificate field'}}).split(',').slice(1).join(','));
+ assert.match(html,/View certificate information/);assert.match(html,/CN=&lt;script&gt;alert\(1\)&lt;\/script&gt;/);assert.match(html,/SHA-256 fingerprint/);assert.doesNotMatch(html,/<script>|not a certificate field|data-proteus-certificate-accept/);
+});

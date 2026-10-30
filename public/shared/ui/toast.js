@@ -17,7 +17,7 @@ export function createToast(element, {duration=5000, repeatWindow=10000}={}) {
   };
   const present=({value,text})=>{
     active=true;clearTimeout(timer);currentId=crypto.randomUUID();currentActions=value?.actions||[];currentValue=value;
-    if(window.desktop?.notice){const style=getComputedStyle(document.body),palette=Object.fromEntries([['background','menu'],['text','menuText'],['border','menuBorder']].map(([key,token])=>[key,style.getPropertyValue('--palette-'+token).trim()]).filter(([,color])=>/^#[a-f0-9]{6}$/i.test(color)));void window.desktop.notice({id:currentId,message:text,actions:currentActions.map(action=>action.label),palette}).catch(()=>{});timer=setTimeout(dismiss,duration);return;}
+    if(window.desktop?.notice){void window.desktop.notice({id:currentId,message:text,actions:currentActions.map(action=>action.label)}).catch(()=>{});timer=setTimeout(dismiss,duration);return;}
     const message=document.createElement('span');message.textContent=text;message.setAttribute('role','status');
     const close=document.createElement('button');close.type='button';close.className='toast-dismiss';close.setAttribute('aria-label','Dismiss notification');close.textContent='×';close.onclick=dismiss;
     const id=currentId,actions=(value?.actions||[]).map(action=>{const button=document.createElement('button');button.type='button';button.className='toast-action';button.textContent=action.label;button.onclick=async()=>{button.disabled=true;try{await action.run();if(currentId===id)dismiss();}catch(error){if(currentId===id)dismiss();show(error.message);}finally{button.disabled=false;}};return button;});

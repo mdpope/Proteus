@@ -1,5 +1,7 @@
 ## 0.2.39 — October thirtieth release open
 
+- Show observed certificate information directly on bad-certificate pages, independently of
+  one-click acceptance. Restore the original notification colors; error pages follow the app theme.
 - Recognize intranet host:port input, retain custom ports in error pages, explain network-access
   failures and declare Mac local-network use. Add one-click certificate acceptance on the app-themed error
   page. Native acceptance passes; reported installed-browser connectivity remains unverified.

@@ -1,5 +1,10 @@
 ## October 30 browser/custom-port follow-up
 
+The operator adds direct certificate-information disclosure and rejects notification recoloring.
+Show the observed failed certificate on the error page; keep acceptance one click and restore
+the original light-green notification banners. App-theme colors still apply to browser errors.
+Linux/Windows remain on preflight until this correction has a validated full source pin.
+
 R14 adds intranet address parsing and usable network/certificate failures to the authorized
 0.2.39 release. The replacement signed/extracted package passes five native UI fixtures and source validation.
 Build Mac prepared it; HC verified the exact private delivery and handed off its candidate.

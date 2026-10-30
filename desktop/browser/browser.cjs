@@ -41,7 +41,7 @@ class BrowserTabs {
     tab.reportedLoadError=true;
     const failedURL=safeHistoryURL(url,this.appOrigin)||safeHistoryURL(tab.pageNavigationURL,this.appOrigin)||safeHistoryURL(tab.logicalHistory?.entries[tab.logicalHistory.index]?.url,this.appOrigin);
     if(failedURL&&tab.view?.webContents&&!tab.view.webContents.isDestroyed()){
-      const documentURL=browserErrorDocument(failedURL,error,{certificateToken:this.certificateReview?.token(tab,failedURL),palette:this.options.errorPalette?.()});tab.errorPage={url:failedURL,documentURL,error};
+      const documentURL=browserErrorDocument(failedURL,error,{certificateToken:this.certificateReview?.token(tab,failedURL),certificateInformation:this.certificateReview?.information(tab,failedURL),palette:this.options.errorPalette?.()});tab.errorPage={url:failedURL,documentURL,error};
       void tab.view.webContents.loadURL(documentURL).catch(()=>{});
     }
     let site='this page';try{site=new URL(url||tab.view?.webContents?.getURL()).host;}catch{}

@@ -2,7 +2,7 @@ const {randomUUID,X509Certificate}=require('node:crypto');
 function identity(address,certificate,error){
  const url=new URL(address);if(url.protocol!=='https:'||url.username||url.password)throw Error('Invalid HTTPS address.');
  const cert=new X509Certificate(certificate.data);
- return {url:url.href,origin:url.origin,hostname:url.hostname,error:String(error).slice(0,200),fingerprint:cert.fingerprint256,subject:cert.subject,issuer:cert.issuer,validFrom:cert.validFrom,validTo:cert.validTo};
+ return {url:url.href,origin:url.origin,hostname:url.hostname,error:String(error).slice(0,200),fingerprint:cert.fingerprint256,subject:cert.subject,issuer:cert.issuer,validFrom:cert.validFrom,validTo:cert.validTo,subjectAltName:cert.subjectAltName||'',serialNumber:cert.serialNumber};
 }
 /** Certificate decisions originate on the exact owner-generated error page.
  * Chromium shares SSL decisions by profile, hostname and certificate, across
@@ -22,6 +22,7 @@ class BrowserCertificateReview {
   wc.on('ipc-message',(event,channel,token)=>{if(channel==='proteus:certificate-accept'&&event.senderFrame===wc.mainFrame)void this.accept(tab,token).catch(error=>this.browser.actions?.send({type:'error',id:tab.id,message:error.message}));});
  }
  token(tab,url){const failure=this.states.get(tab)?.failure;return failure&&failure.url===url?failure.token:null;}
+ information(tab,url){const failure=this.states.get(tab)?.failure;if(!failure||failure.url!==url)return null;return Object.fromEntries(['subject','issuer','validFrom','validTo','fingerprint','subjectAltName','serialNumber'].map(key=>[key,failure[key]]));}
  async accept(tab,token){
   const state=this.states.get(tab),failure=state?.failure,wc=tab.view?.webContents,page=tab.errorPage;
   if(!failure||state.accepting||typeof token!=='string'||token!==this.token(tab,page?.url)||!wc||wc.isDestroyed()||wc.getURL()!==page?.documentURL)return false;

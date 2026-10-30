@@ -6,7 +6,21 @@ The active branch is codex/oct30-update-command-center. The earlier R11-only sou
 `34419c1047f5a269ff37f42cc826161c4fb6158a`; later record-only commits do not
 change that implementation. A subsequent runtime change requires a new source/package pin.
 
-## Current accepted Mac package
+## Certificate details and notification appearance follow-up
+
+The operator requests **View certificate information** directly on a bad-certificate page.
+An inline disclosure shows the observed subject, issuer, validity dates, alternative names,
+serial number and SHA-256 fingerprint without accepting the certificate or opening another menu.
+Direct acceptance remains a separate one-click action. Certificate text is escaped and bound to
+the failed page; a native synthetic TLS fixture exercises disclosure and continued blocking.
+
+The operator rejects changing notification background colors. Restore the existing fixed
+light-green notification surface and remove the native notice's palette injection. App theme
+colors continue to apply to browser error pages. Banner expiry, deduplication and attention
+behavior remain implemented. These corrections require new desktop source/package pins; native
+Linux/Windows coordinators are held to preflight until the validated source is supplied.
+
+## Previously accepted Mac package (installed before this follow-up)
 
 - Source: `0a2b6a425c47bd3a704ffb390a1fdcc6bf6fb864`.
 - Build: `0a2b6a425c47+src.9af8d6057aac`; fingerprint
