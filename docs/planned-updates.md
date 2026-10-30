@@ -1,5 +1,9 @@
 ## October 30 browser/custom-port follow-up
 
+The Windows first builder found a removed provider-runtime path. A reviewed source CLI now
+plans and applies a hash-bound refresh to the currently signed Node in the same provider family,
+changing no other builder references. Native dry-run/apply verification is still required.
+
 The operator adds direct certificate-information disclosure and rejects notification recoloring.
 Show the observed failed certificate on the error page; keep acceptance one click and restore
 the original light-green notification banners. App-theme colors still apply to browser errors.

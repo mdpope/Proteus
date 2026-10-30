@@ -2,6 +2,8 @@
 
 - Show observed certificate information directly on bad-certificate pages, independently of
   one-click acceptance. Restore the original notification colors; error pages follow the app theme.
+- Add a digest-guarded Windows builder refresh for a removed provider Node runtime, preserving
+  the existing source, npm, Git and publisher-key references with private repair receipts.
 - Recognize intranet host:port input, retain custom ports in error pages, explain network-access
   failures and declare Mac local-network use. Add one-click certificate acceptance on the app-themed error
   page. Native acceptance passes; reported installed-browser connectivity remains unverified.

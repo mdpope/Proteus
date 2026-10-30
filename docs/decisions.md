@@ -1,3 +1,13 @@
+## October 30 — stale Windows builder runtime reference
+
+A provider update can remove the hash directory captured by the designated builder. Repair this
+with a repository-owned CLI that binds the live installation and prior policy hash, verifies the
+current signed provider Node family, refuses active/unreconciled builds, and changes only `node`.
+The read-only plan digest and stable operation receipt protect reviewed application and uncertain
+retries. Keep previous policy bytes in private intent/completion evidence; do not recreate provider
+caches or modify a builder policy by hand. Existing source, Git, npm, publisher key and unknown
+fields retain their exact values. This maintenance helper does not change a frozen consumer build.
+
 ## October 30 — direct certificate acceptance and themed browser failures
 
 Custom-port HTTP(S) addresses retain their port; a numeric port distinguishes single-label

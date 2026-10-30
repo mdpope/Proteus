@@ -132,6 +132,15 @@ ordinary user access, not elevation. It refuses a different source origin,
 unprotected key or a differing existing configuration. Use the existing account
 and protected key; never guess another account or initialize new signing trust.
 
+When a provider update removes the configured Node hash directory, use the reviewed
+`scripts/windows-builder-refresh.mjs` with the existing signed provider Node executable.
+Supply the owner-bound home/installation and independently observed policy SHA-256; the first
+run is read-only and returns a plan digest. After reviewing it, `--apply DIGEST --operation-id UUID`
+changes only `node`, preserving npm, source, Git, key and unknown fields. It rejects an existing
+working Node, another runtime family/publisher, policy drift and active/unreconciled builds.
+Its private intent/completion receipt retains the prior policy bytes for reconciliation; never
+replace policy JSON by hand, recreate a removed provider cache or replay a failed build operation.
+
 Workers derive a private child environment from those configured Node/Git
 directories plus the inherited search path. Windows `Path`/`PATH` variants are
 combined into one key. npm lifecycle scripts therefore find the same Node binary

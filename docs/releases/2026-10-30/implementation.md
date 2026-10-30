@@ -20,6 +20,20 @@ colors continue to apply to browser error pages. Banner expiry, deduplication an
 behavior remain implemented. These corrections require new desktop source/package pins; native
 Linux/Windows coordinators are held to preflight until the validated source is supplied.
 
+The correction is frozen as `df8f070265eb0631f0bb89159432846964bd85ef`.
+Its signed Mac build is `df8f070265eb+src.b6f9e913457e`, full installation hash
+`352bf0ed4537437c4f73f9573edbce6e788e321fa03976f4521ad42eb5b965f9`.
+Official extraction, corresponding source, targeted exact-package TLS/disclosure and notification
+appearance checks pass with unchanged hashes. Its source suite passes 1,348 tests/four skips.
+Both installed Macs remain on the earlier package until this accepted correction is rolled out.
+
+The Windows first-builder failure was a removed provider Node path. Read-only inspection found
+a currently signed Node in the same provider family and verified the other bound references.
+A separate repository maintenance helper plans a one-field refresh with an expected policy hash,
+unchanged plan digest and private intent/completion receipts. Its guard/source suite passes
+1,350 tests/four skips and static checks; native Windows application remains pending. This helper
+does not replace the frozen consumer source `df8f070`.
+
 ## Previously accepted Mac package (installed before this follow-up)
 
 - Source: `0a2b6a425c47bd3a704ffb390a1fdcc6bf6fb864`.
