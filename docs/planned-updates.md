@@ -2,7 +2,8 @@
 
 R14 adds intranet address parsing and usable network/certificate failures to the authorized
 0.2.39 release. The replacement signed/extracted package passes five native UI fixtures and source validation.
-Build Mac prepared it; HC private delivery is blocked by invalid saved GitHub credentials. Both preflights are complete; Build Mac remains on 0.2.33
+Build Mac prepared it; HC verified the exact private delivery and handed off its candidate.
+Actual installed identities and post-restart checks remain pending. Both preflights are complete; Build Mac remains on 0.2.33
 and Work Mac on 0.2.38. Other-platform work still follows verified HC installation.
 
 ## October 30 full release and tab-memory implementation authorized

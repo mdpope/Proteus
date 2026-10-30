@@ -27,9 +27,10 @@ outside source. Other package fixtures cover real video/downloads, document rest
 actual page notifications and one-click certificate/theme/profile/session behavior.
 
 Build Mac independently prepared this replacement without handoff; it remains on 0.2.33.
-HC remains on 0.2.38 and cannot yet download the private transfer using its invalid saved GitHub
-credentials; existing browser/private routes are being checked. No credential was copied or
-account changed. The accepted package/source/manifest are in an immutable private draft transfer;
+HC used its documented isolated proteus context successfully; the initial unscoped CLI check
+was not the selected repository context. It independently verified all assets/source/signing,
+prepared and handed off the candidate. Its relay is reconnecting; installed identity and live
+verification remain pending. No credential was copied or account changed. The accepted package/source/manifest are in an immutable private draft transfer;
 no public feed was activated. Task-created duplicate build and superseded payload retirement
 returned 1,558,646,784 observed free bytes; owner recovery data was untouched.
 

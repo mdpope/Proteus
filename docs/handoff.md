@@ -19,10 +19,11 @@ The broad fixture initially saw transient state-display failures; unchanged pack
 all assertions with owner diagnostics. Private receipts preserve both outcomes.
 
 Build Mac independently prepared this R14 candidate without handoff and remains on 0.2.33.
-Its superseded preparations were cancelled through their owner coordinators. HC remains on
-0.2.38: both saved GitHub credentials are invalid, so it has not received/prepared the exact
-private draft assets. An existing expected-account browser session or already documented private
-transfer route is being checked; do not copy credentials or change global logins. Two recovery
+Its superseded preparations were cancelled through their owner coordinators. HC independently verified all asset/source/signing pins using its documented isolated proteus
+context; the initial unscoped CLI failure was not evidence that this context was invalid. It
+prepared and handed off the exact candidate. Relay reconnection is in progress; last verified
+installed identity is still 0.2.38 pending post-restart verification. Do not copy credentials
+or change global logins. Two recovery
 generations and active work remain preserved. Task duplicate/superseded payload retirement freed
 1,558,646,784 observed bytes, retaining one accepted app/archive/source set plus receipts.
 
