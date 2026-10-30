@@ -6,7 +6,7 @@ Target labels are non-secret roles; exact IDs, paths and detailed receipts stay 
 | Machine or target | Platform | Stage | Evidence and remaining work |
 | --- | --- | --- | --- |
 | Build Mac command center | macOS arm64 | R14 0a2b6a4 candidate prepared; no handoff | Installed 0.2.33; old preparations cancelled by their owner chats; replacement staged signature/hash and isolated startup pass; no installation; original intranet issue unresolved |
-| Work Mac | macOS arm64 | Exact candidate handed off; restart/live verification pending | Installed 0.2.38; two verified recovery generations and ample space reported; existing isolated proteus context verified; exact assets/source/signing independently accepted; owner handed off; relay reconnecting; no installed identity yet |
+| Work Mac | macOS arm64 | Installed and core live checks verified | Exact 0.2.39 build/hash/Apple identity and owner health verified; 577 runs/45,004 events preserved; saved settings byte-identical; two verified recoveries; live lifecycle/shared-close/site delivery still unverified |
 | Linux laptop | Linux | Not started | Native package/public catalog required; no new coordinator dispatched |
 | Designated Windows builder | Windows x64 | Not selected | Select the intended builder and pin repository source when a build is authorized |
 | Windows client laptop | Windows | Not started | Consume the signed package after first-builder publication |

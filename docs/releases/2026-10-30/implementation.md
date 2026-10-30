@@ -29,8 +29,13 @@ actual page notifications and one-click certificate/theme/profile/session behavi
 Build Mac independently prepared this replacement without handoff; it remains on 0.2.33.
 HC used its documented isolated proteus context successfully; the initial unscoped CLI check
 was not the selected repository context. It independently verified all assets/source/signing,
-prepared and handed off the candidate. Its relay is reconnecting; installed identity and live
-verification remain pending. No credential was copied or account changed. The accepted package/source/manifest are in an immutable private draft transfer;
+prepared and handed off the candidate. It restarted on the exact accepted 0.2.39 build with independent installation hash/Apple identity
+and owner health verified. Saved settings are byte-identical to the pre-update snapshot;
+notification/browser-profile preferences match, and all prior site records survive with three
+additional entries. Owner preservation covers 577 runs/45,004 events. Two verified recovery
+generations remain after valid rotation. No separate migration outcome is recorded. Native
+shared-tab samples and certificate-button presentation pass; lifecycle/shared-close/site delivery
+remain unverified on the installed profile. No credential was copied or account changed. The accepted package/source/manifest are in an immutable private draft transfer;
 no public feed was activated. Task-created duplicate build and superseded payload retirement
 returned 1,558,646,784 observed free bytes; owner recovery data was untouched.
 
